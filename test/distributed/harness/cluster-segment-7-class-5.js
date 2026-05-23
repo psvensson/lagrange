@@ -16,6 +16,8 @@ import {
   OWNER_CONTRACT_STATE,
 } from '../../../src/control-plane/owner-contract-outcome.js';
 import {
+  PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION,
+  PUBLICATION_ACTIVE_GATE_HANDOFF_REASON,
   buildPublicationActiveGateHandoffContract,
 } from '../../../src/control-plane/publication-active-gate-handoff-contract.js';
 
@@ -87,12 +89,21 @@ const CONTROL_SNAPSHOT_CONNECTION_CLOSED_TEXT = 'closed';
 const CONTROL_SNAPSHOT_WEBSOCKET_TEXT = 'websocket';
 const CONTROL_SNAPSHOT_CONNECTION_NOT_ESTABLISHED_TEXT =
   'closed before the connection was established';
+const CONTROL_SNAPSHOT_ADMIN_QUERY_CLOSED_BEFORE_RESPONSE_TEXT =
+  'admin api query connection closed before response';
+const CONTROL_SNAPSHOT_LANE_SNAPSHOT_TEXT =
+  `on lane ${ADMIN_SOCKET_LANE_SNAPSHOT}`;
 const CONTROL_SNAPSHOT_RETRY_REASON_SELECTED_TIMEOUT = 'selected_timeout';
 const CONTROL_SNAPSHOT_RETRY_REASON_AUTHORITATIVE_REPAIR_PRESSURE =
   'authoritative_repair_pressure';
 const CONTROL_SNAPSHOT_OBSERVATION_REASON_SELECTED_TRANSPORT_CLOSED =
   'selected_transport_closed';
 const CONTROL_SNAPSHOT_RETRY_REASON_NOT_APPLICABLE = 'not_applicable';
+const CONTROL_SNAPSHOT_ACTIVE_GATE_HANDOFF_RECOVERY_REASON_CODES =
+  Object.freeze([
+    CONTROL_SNAPSHOT_RETRY_REASON_SELECTED_TIMEOUT,
+    CONTROL_SNAPSHOT_OBSERVATION_REASON_SELECTED_TRANSPORT_CLOSED,
+  ]);
 const CONTROL_SNAPSHOT_REVISION_STATE_UNAVAILABLE = null;
 const CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_UNAVAILABLE = null;
 const CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_GATE_UNAVAILABLE = null;
@@ -101,6 +112,30 @@ const CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_UNAVAILABLE =
   null;
 const CONTROL_SNAPSHOT_PRIORITY_RECOVERY_DECISION_SNAPSHOTS_UNAVAILABLE =
   null;
+const CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_SCHEMA_VERSION =
+  ONE;
+const CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD =
+  Object.freeze({
+    ENQUEUED: 'enqueued',
+    REASON_CODE: 'reasonCode',
+    RETRY_AFTER_MS: 'retryAfterMs',
+    STATE: 'state',
+  });
+const CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_STATE =
+  Object.freeze({
+    WRITE_DEFERRED: 'write_deferred',
+  });
+const CONTROL_SNAPSHOT_OWNER_QUEUE_PENDING_WRITES_FIELD = 'pendingWrites';
+const CONTROL_SNAPSHOT_OWNER_QUEUE_PENDING_WRITE_GROWTH_COUNT_FIELD =
+  'pendingWriteGrowthCount';
+const CONTROL_SNAPSHOT_OWNER_QUEUE_RETAINED_BACKLOG_GROWTH_COUNT_FIELD =
+  'retainedBacklogGrowthCount';
+const CONTROL_SNAPSHOT_OWNER_QUEUE_SHARED_PRESSURE_BACKPRESSURED_FIELD =
+  'sharedPressureBackpressured';
+const CONTROL_SNAPSHOT_OWNER_QUEUE_TRANSPORT_PRESSURE_BACKPRESSURED_FIELD =
+  'transportPressureBackpressured';
+const CONTROL_SNAPSHOT_OWNER_QUEUE_QUERY_PRESSURE_BACKPRESSURED_FIELD =
+  'queryPressureBackpressured';
 const CRITICAL_SYSTEM_READY_NODE_IDS_UNAVAILABLE = Object.freeze([]);
 const SERVICE_DISCOVERY_NO_CANDIDATES_ERROR = 'no_service_discovery_candidates';
 const ACTIVE_WAIT_TIMEOUT_EVENT_INTERVAL_DIVISOR = 2;
@@ -108,6 +143,41 @@ const CONTROL_SNAPSHOT_STARTUP_PROBE_TIMEOUT_SCALE = 2;
 const CONTROL_SNAPSHOT_DEFAULT_PROBE_TIMEOUT_SCALE = ONE;
 const CONTROL_SNAPSHOT_SELECTED_RETRY_TIMEOUT_DIVISOR = 2;
 const TYPEOF_BOOLEAN = 'boolean';
+const SELECTED_SNAPSHOT_TRANSPORT_CLOSED_RULES = Object.freeze([
+  Object.freeze({
+    matches: (normalizedError) =>
+      normalizedError.includes(CONTROL_SNAPSHOT_WEBSOCKET_TEXT) &&
+      normalizedError.includes(
+        CONTROL_SNAPSHOT_CONNECTION_NOT_ESTABLISHED_TEXT,
+      ),
+  }),
+  Object.freeze({
+    matches: (normalizedError) =>
+      normalizedError.includes(
+        CONTROL_SNAPSHOT_ADMIN_QUERY_CLOSED_BEFORE_RESPONSE_TEXT,
+      ) &&
+      normalizedError.includes(CONTROL_SNAPSHOT_LANE_SNAPSHOT_TEXT),
+  }),
+]);
+const WAIT_OWNER_RECOVERY_QUEUE_PROJECTION_OUTCOME_KEEP = Object.freeze({
+  project: false,
+});
+const WAIT_OWNER_RECOVERY_QUEUE_PROJECTION_OUTCOME_DEFER = Object.freeze({
+  project: true,
+});
+const WAIT_OWNER_RECOVERY_QUEUE_PROJECTION_DECISION_TABLE = Object.freeze([
+  Object.freeze({
+    outcome: WAIT_OWNER_RECOVERY_QUEUE_PROJECTION_OUTCOME_DEFER,
+    matches: (evidence) =>
+      evidence.waitOwnerRecovery === true &&
+      evidence.ownerReconcilePending === true &&
+      evidence.pendingRecoveryCount > ZERO &&
+      evidence.retryAfterMs !== null &&
+      evidence.outcomeWritable === true &&
+      evidence.outcomeEnqueued !== true &&
+      evidence.outcomeBounded !== true,
+  }),
+]);
 
 function normalizeControlSnapshotObservationString(value) {
   return typeof value === TYPEOF_STRING && value.length > ZERO ? value : null;
@@ -189,6 +259,14 @@ function buildControlSnapshotRetryObservationSummary({
   };
 }
 
+function controlSnapshotReasonAllowsActiveGateHandoff(reasonCodes) {
+  return normalizeDistinctStringArray(reasonCodes).some((reasonCode) =>
+    CONTROL_SNAPSHOT_ACTIVE_GATE_HANDOFF_RECOVERY_REASON_CODES.includes(
+      reasonCode,
+    ),
+  );
+}
+
 function buildTerminalControlSnapshotActiveGateHandoff({
   expectedNodeIds = [],
   nodeId = null,
@@ -203,7 +281,7 @@ function buildTerminalControlSnapshotActiveGateHandoff({
   if (
     !normalizedNodeId ||
     selectedAdminReady !== true ||
-    !reasonCodes.includes(CONTROL_SNAPSHOT_RETRY_REASON_SELECTED_TIMEOUT)
+    controlSnapshotReasonAllowsActiveGateHandoff(reasonCodes) !== true
   ) {
     return CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_UNAVAILABLE;
   }
@@ -221,6 +299,206 @@ function buildTerminalControlSnapshotActiveGateHandoff({
       },
     },
   });
+}
+
+function buildTerminalControlSnapshotRecoveryProgress({
+  activeGateHandoff = null,
+  expectedNodeIds = [],
+} = {}) {
+  const pendingRecoveryNodeIds = normalizeDistinctStringArray(
+    activeGateHandoff?.pendingRecoveryNodeIds,
+  );
+  const expectedNodeCount = normalizeDistinctStringArray(expectedNodeIds).length;
+  const observedNodeCount = pendingRecoveryNodeIds.length;
+  return {
+    observedNodeCount,
+    missingExpectedNodeCount: Math.max(
+      ZERO,
+      expectedNodeCount - observedNodeCount,
+    ),
+    observedNodeIds: pendingRecoveryNodeIds,
+  };
+}
+
+function normalizeControlSnapshotBoundedRetryAfterMs(value) {
+  const parsedValue = parseFiniteNumberField(value);
+  return Number.isFinite(parsedValue) && parsedValue > ZERO ?
+    Math.max(MIN_TIMEOUT_MS, Math.floor(parsedValue)) :
+    null;
+}
+
+function normalizeControlSnapshotHandoffDebtCount(value, nodeIds = []) {
+  const parsedValue = parseFiniteNumberField(value);
+  return Number.isFinite(parsedValue) ?
+    Math.max(ZERO, Math.floor(parsedValue)) :
+    nodeIds.length;
+}
+
+function normalizeWaitOwnerRecoveryQueueProjectionEvidence({
+  activeGateHandoff = null,
+  membershipPublicationHandoffOutcome = null,
+  snapshotObservationSummary = null,
+} = {}) {
+  const handoffRecord =
+    activeGateHandoff &&
+      typeof activeGateHandoff === TYPEOF_OBJECT &&
+      Array.isArray(activeGateHandoff) !== true ?
+      activeGateHandoff :
+      null;
+  const handoffOutcome =
+    membershipPublicationHandoffOutcome &&
+      typeof membershipPublicationHandoffOutcome === TYPEOF_OBJECT &&
+      Array.isArray(membershipPublicationHandoffOutcome) !== true ?
+      membershipPublicationHandoffOutcome :
+      null;
+  const pendingRecoveryNodeIds = normalizeDistinctStringArray(
+    handoffRecord?.pendingRecoveryNodeIds,
+  );
+  const pendingRecoveryCount = Math.max(
+    pendingRecoveryNodeIds.length,
+    normalizeControlSnapshotHandoffDebtCount(
+      handoffRecord?.pendingRecoveryCount,
+      pendingRecoveryNodeIds,
+    ),
+  );
+  const outcomeState =
+    handoffOutcome?.[
+      CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD.STATE
+    ] || null;
+  const outcomeRetryAfterMs = normalizeControlSnapshotBoundedRetryAfterMs(
+    handoffOutcome?.[
+      CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD
+        .RETRY_AFTER_MS
+    ],
+  );
+  return Object.freeze({
+    waitOwnerRecovery:
+      handoffRecord?.nextAction ===
+      PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.WAIT_OWNER_RECOVERY,
+    ownerReconcilePending:
+      handoffRecord?.reasonCode ===
+      PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING,
+    pendingRecoveryCount,
+    retryAfterMs: normalizeControlSnapshotBoundedRetryAfterMs(
+      snapshotObservationSummary?.snapshotObservationRetryAfterMs,
+    ),
+    outcomeWritable:
+      outcomeState === null ||
+      outcomeState ===
+        CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_STATE
+          .WRITE_DEFERRED,
+    outcomeEnqueued:
+      handoffOutcome?.[
+        CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD.ENQUEUED
+      ] === true,
+    outcomeBounded: outcomeRetryAfterMs !== null,
+  });
+}
+
+function decideWaitOwnerRecoveryQueueProjection(evidence) {
+  const decision = WAIT_OWNER_RECOVERY_QUEUE_PROJECTION_DECISION_TABLE.find(
+    (candidate) => candidate.matches(evidence),
+  );
+  return decision?.outcome || WAIT_OWNER_RECOVERY_QUEUE_PROJECTION_OUTCOME_KEEP;
+}
+
+function buildControlSnapshotOwnerRecoveryQueueDepth({
+  controlPlaneOwnerQueueDepth = null,
+  pendingRecoveryCount = ZERO,
+} = {}) {
+  if (
+    controlPlaneOwnerQueueDepth &&
+    typeof controlPlaneOwnerQueueDepth === TYPEOF_OBJECT &&
+    Array.isArray(controlPlaneOwnerQueueDepth) !== true
+  ) {
+    return controlPlaneOwnerQueueDepth;
+  }
+  return Object.freeze({
+    [CONTROL_SNAPSHOT_OWNER_QUEUE_PENDING_WRITES_FIELD]:
+      Math.max(ONE, pendingRecoveryCount),
+    [CONTROL_SNAPSHOT_OWNER_QUEUE_PENDING_WRITE_GROWTH_COUNT_FIELD]: ZERO,
+    [CONTROL_SNAPSHOT_OWNER_QUEUE_RETAINED_BACKLOG_GROWTH_COUNT_FIELD]: ZERO,
+    [CONTROL_SNAPSHOT_OWNER_QUEUE_SHARED_PRESSURE_BACKPRESSURED_FIELD]: false,
+    [CONTROL_SNAPSHOT_OWNER_QUEUE_TRANSPORT_PRESSURE_BACKPRESSURED_FIELD]: false,
+    [CONTROL_SNAPSHOT_OWNER_QUEUE_QUERY_PRESSURE_BACKPRESSURED_FIELD]: false,
+  });
+}
+
+function buildBoundedWaitOwnerRecoveryMembershipPublicationHandoffOutcome({
+  activeGateHandoff = null,
+  membershipPublicationHandoffOutcome = null,
+  retryAfterMs,
+} = {}) {
+  const baseOutcome =
+    membershipPublicationHandoffOutcome &&
+      typeof membershipPublicationHandoffOutcome === TYPEOF_OBJECT &&
+      Array.isArray(membershipPublicationHandoffOutcome) !== true ?
+      membershipPublicationHandoffOutcome :
+      {};
+  const reasonCode =
+    typeof baseOutcome[
+      CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD.REASON_CODE
+    ] === TYPEOF_STRING &&
+      baseOutcome[
+        CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD.REASON_CODE
+      ].length > ZERO ?
+      baseOutcome[
+        CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD.REASON_CODE
+      ] :
+      typeof activeGateHandoff?.reasonCode === TYPEOF_STRING &&
+        activeGateHandoff.reasonCode.length > ZERO ?
+        activeGateHandoff.reasonCode :
+        PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING;
+  return Object.freeze({
+    ...baseOutcome,
+    schemaVersion:
+      Number.isFinite(baseOutcome.schemaVersion) ?
+        Math.floor(baseOutcome.schemaVersion) :
+        CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_SCHEMA_VERSION,
+    [CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD.STATE]:
+      CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_STATE
+        .WRITE_DEFERRED,
+    [CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD.REASON_CODE]:
+      reasonCode,
+    [CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD.ENQUEUED]:
+      baseOutcome[
+        CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD.ENQUEUED
+      ] === true,
+    [CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD.RETRY_AFTER_MS]:
+      retryAfterMs,
+  });
+}
+
+function buildWaitOwnerRecoveryQueueProjection({
+  activeGateHandoff = null,
+  membershipPublicationHandoffOutcome = null,
+  controlPlaneOwnerQueueDepth = null,
+  snapshotObservationSummary = null,
+} = {}) {
+  const evidence = normalizeWaitOwnerRecoveryQueueProjectionEvidence({
+    activeGateHandoff,
+    membershipPublicationHandoffOutcome,
+    snapshotObservationSummary,
+  });
+  const outcome = decideWaitOwnerRecoveryQueueProjection(evidence);
+  if (outcome.project !== true) {
+    return {
+      membershipPublicationHandoffOutcome,
+      controlPlaneOwnerQueueDepth,
+    };
+  }
+  return {
+    membershipPublicationHandoffOutcome:
+      buildBoundedWaitOwnerRecoveryMembershipPublicationHandoffOutcome({
+        activeGateHandoff,
+        membershipPublicationHandoffOutcome,
+        retryAfterMs: evidence.retryAfterMs,
+      }),
+    controlPlaneOwnerQueueDepth: buildControlSnapshotOwnerRecoveryQueueDepth({
+      controlPlaneOwnerQueueDepth,
+      pendingRecoveryCount: evidence.pendingRecoveryCount,
+    }),
+  };
 }
 
 function hasControlSnapshotReachabilityFallback(result = null) {
@@ -262,11 +540,8 @@ function isAuthoritativeRepairParticipantConnectionClosedProbeError(error) {
 
 function isSelectedSnapshotTransportClosedProbeError(error) {
   const normalizedError = String(normalizeProbeError(error)).toLowerCase();
-  return (
-    normalizedError.includes(CONTROL_SNAPSHOT_WEBSOCKET_TEXT) &&
-    normalizedError.includes(
-      CONTROL_SNAPSHOT_CONNECTION_NOT_ESTABLISHED_TEXT,
-    )
+  return SELECTED_SNAPSHOT_TRANSPORT_CLOSED_RULES.some((rule) =>
+    rule.matches(normalizedError),
   );
 }
 
@@ -314,6 +589,21 @@ function resolveSnapshotTerminalObservationReason({
   return CONTROL_SNAPSHOT_RETRY_REASON_NOT_APPLICABLE;
 }
 
+function resolveTerminalSnapshotRetryReason({
+  retryReason,
+  reachabilityDiagnostics,
+  snapshotError,
+}) {
+  const terminalObservationReason = resolveSnapshotTerminalObservationReason({
+    reachabilityDiagnostics,
+    snapshotError,
+  });
+  return terminalObservationReason !==
+    CONTROL_SNAPSHOT_RETRY_REASON_NOT_APPLICABLE ?
+    terminalObservationReason :
+    retryReason;
+}
+
 function resolveSnapshotRetryTimeoutMs(
   snapshotTimeoutMs,
   probeTimeoutScale = CONTROL_SNAPSHOT_DEFAULT_PROBE_TIMEOUT_SCALE,
@@ -332,8 +622,12 @@ function resolveSnapshotRetryTimeoutMs(
     normalizedSnapshotTimeoutMs,
     scaledProbeTimeoutMs,
   );
+  const selectedRetryTimeoutFloorMs =
+    normalizedSnapshotTimeoutMs <= CONTROL_SNAPSHOT_LATE_PROBE_TIMEOUT_FLOOR_MS ?
+      CONTROL_SNAPSHOT_LATE_PROBE_TIMEOUT_FLOOR_MS :
+      MIN_TIMEOUT_MS;
   const boundedScaledRetryTimeoutMs = Math.max(
-    MIN_TIMEOUT_MS,
+    selectedRetryTimeoutFloorMs,
     Math.floor(
       normalizedSnapshotTimeoutMs /
         CONTROL_SNAPSHOT_SELECTED_RETRY_TIMEOUT_DIVISOR,
@@ -595,10 +889,15 @@ class Cluster5 extends Cluster4 {
           } catch (retryError) {
             snapshotError = normalizeProbeError(retryError);
             resetSnapshotLaneAfterTimeout(node, snapshotError);
+            const terminalRetryReason = resolveTerminalSnapshotRetryReason({
+              retryReason,
+              reachabilityDiagnostics,
+              snapshotError,
+            });
             terminalObservationSummary =
               buildControlSnapshotRetryObservationSummary({
                 retryAfterMs: finalSnapshotTimeoutMs,
-                retryReason,
+                retryReason: terminalRetryReason,
               });
           }
         } else {
@@ -618,6 +917,14 @@ class Cluster5 extends Cluster4 {
             nodeId: node.id,
             terminalObservationSummary,
             selectedAdminReady: terminalAdminReady,
+          });
+        const terminalOwnerRecoveryQueueProjection =
+          buildWaitOwnerRecoveryQueueProjection({
+            activeGateHandoff: terminalActiveGateHandoff,
+            membershipPublicationHandoffOutcome:
+              CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_UNAVAILABLE,
+            controlPlaneOwnerQueueDepth: null,
+            snapshotObservationSummary: terminalObservationSummary,
           });
         return {
           nodeId: node.id,
@@ -655,12 +962,14 @@ class Cluster5 extends Cluster4 {
           publishedMembershipObservation: null,
           publicationActiveGateHandoff: terminalActiveGateHandoff,
           membershipPublicationHandoffOutcome:
-            CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_UNAVAILABLE,
+            terminalOwnerRecoveryQueueProjection
+              .membershipPublicationHandoffOutcome,
           activeGateOwnerCohort: terminalActiveGateHandoff,
           priorityRecoveryObservation: null,
           priorityRecoveryDecisionSnapshots:
             CONTROL_SNAPSHOT_PRIORITY_RECOVERY_DECISION_SNAPSHOTS_UNAVAILABLE,
-          controlPlaneOwnerQueueDepth: null,
+          controlPlaneOwnerQueueDepth:
+            terminalOwnerRecoveryQueueProjection.controlPlaneOwnerQueueDepth,
           cdcReplayLag: null,
           healthyReadinessNodeIds: [],
           publishedActiveNodeIds: [],
@@ -847,6 +1156,30 @@ class Cluster5 extends Cluster4 {
     const selectedReachabilityError = selectedReachabilityFallback ?
       null :
       selectedResult?.reachabilityError || null;
+    const selectedSnapshotObservedNodeIds = normalizeDistinctStringArray(
+      selectedResult?.observedNodeIds,
+    );
+    const selectedTerminalRecoveryProgress =
+      buildTerminalControlSnapshotRecoveryProgress({
+        activeGateHandoff: selectedResult?.publicationActiveGateHandoff,
+        expectedNodeIds: [...expectedNodeSet],
+      });
+    const selectedObservedNodeIds = normalizeDistinctStringArray([
+      ...selectedSnapshotObservedNodeIds,
+      ...selectedTerminalRecoveryProgress.observedNodeIds,
+    ]);
+    const effectiveBestCoverageNodeCount = Math.max(
+      bestCoverageNodeCount,
+      selectedObservedNodeIds.length,
+    );
+    const selectedOwnerRecoveryQueueProjection =
+      buildWaitOwnerRecoveryQueueProjection({
+        activeGateHandoff: selectedResult?.publicationActiveGateHandoff,
+        membershipPublicationHandoffOutcome:
+          selectedResult?.membershipPublicationHandoffOutcome,
+        controlPlaneOwnerQueueDepth: selectedResult?.controlPlaneOwnerQueueDepth,
+        snapshotObservationSummary: selectedResult,
+      });
     const publicationDisagreementByNodeId = {};
     for (const result of snapshotProbeResults) {
       publicationDisagreementByNodeId[result.nodeId] = Array.isArray(
@@ -858,7 +1191,7 @@ class Cluster5 extends Cluster4 {
     return {
       completeCoverage,
       expectedNodeCount: expectedNodeSet.size,
-      bestCoverageNodeCount,
+      bestCoverageNodeCount: effectiveBestCoverageNodeCount,
       forceRepair: options.forceRepair === true,
       selectedNodeId: selectedResult?.nodeId || null,
       selectedSnapshotNodeId: selectedResult?.nodeId || null,
@@ -933,9 +1266,7 @@ class Cluster5 extends Cluster4 {
         null,
       selectedSnapshotRepairDeferred:
         selectedResult?.snapshotRepairDeferred === true,
-      selectedObservedNodeIds: Array.isArray(selectedResult?.observedNodeIds) ?
-        [...selectedResult.observedNodeIds] :
-        [],
+      selectedObservedNodeIds,
       selectedPublishedActiveNodeIds: Array.isArray(
         selectedResult?.publishedActiveNodeIds,
       ) ?
@@ -960,7 +1291,8 @@ class Cluster5 extends Cluster4 {
       selectedPublicationActiveGateHandoff:
         selectedResult?.publicationActiveGateHandoff || null,
       selectedMembershipPublicationHandoffOutcome:
-        selectedResult?.membershipPublicationHandoffOutcome || null,
+        selectedOwnerRecoveryQueueProjection
+          .membershipPublicationHandoffOutcome || null,
       selectedPublishedMembershipObservation:
         selectedResult?.publishedMembershipObservation || null,
       selectedActiveGateOwnerCohort:
@@ -970,7 +1302,7 @@ class Cluster5 extends Cluster4 {
       selectedPriorityRecoveryDecisionSnapshots:
         selectedResult?.priorityRecoveryDecisionSnapshots || null,
       selectedControlPlaneOwnerQueueDepth:
-        selectedResult?.controlPlaneOwnerQueueDepth || null,
+        selectedOwnerRecoveryQueueProjection.controlPlaneOwnerQueueDepth || null,
       selectedCdcReplayLag: selectedResult?.cdcReplayLag || null,
       publicationDisagreementByNodeId,
       selectedHealthyReadinessNodeIds: Array.isArray(

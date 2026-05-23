@@ -8,7 +8,7 @@ Theory under test: Snapshot coverage remains blocked because selected snapshot t
 
 Causal question: Selected snapshot timeout with repair_deferred, available alternate witness, and wait_owner_recovery must produce bounded snapshot coverage progress or an explicit owner-recovery outcome instead of retrying the same selected source until active-gate timeout.
 
-Implementation slice: Use canonical evidence from the fresh representative to implement the smallest startup_active_gate_owner snapshot_coverage fix for selected snapshot source timeout and repair-deferred owner recovery without widening timeouts or runtime promotion.
+Implementation slice: Close this package as reduced and activate the next startup_active_gate_owner / snapshot_coverage successor for the remaining one inactive node and selected snapshot timeout residual.
 
 Implementation files:
 
@@ -45,11 +45,11 @@ Boundary: `snapshot_coverage`
 
 Dominant reason: `active_gate_timed_out`
 
-Current state: Fresh rolling-restart representative evidence remains at active_gate_snapshot_coverage after publication blocker projection. Publication and priority recovery are satisfied, but active-gate progress has snapshotCoverage=1/5, selected_snapshot_source_timeout after 15000ms on an admin_health-ready selected node, selected snapshot observation repair_deferred/retry, alternativeSnapshotWitnessAvailable=true, and wait_owner_recovery pendingRecoveryCount=1.
+Current state: Focused proof and fresh rolling-restart evidence validated bounded progress for the selected snapshot timeout repair-deferred owner recovery path. The representative still fails at active_gate_snapshot_coverage, but inactive_nodes dropped from 5 to 1 and active membership reached 4/5 while publication missing count and priority residuals stayed at zero.
 
 ## Next Action
 
-Use canonical evidence from the fresh representative to implement the smallest startup_active_gate_owner snapshot_coverage fix for selected snapshot source timeout and repair-deferred owner recovery without widening timeouts or runtime promotion.
+Close this package as reduced and activate the next startup_active_gate_owner / snapshot_coverage successor for the remaining one inactive node and selected snapshot timeout residual.
 
 ## Proof Ladder
 
@@ -86,7 +86,7 @@ Status: `reduced`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-active-gate-publication-blocker-projection-20260523T054500Z.report.json`
+Artifact: `test-output/reports/rolling-restart-selected-snapshot-timeout-repair-deferred-owner-recovery-20260523T061500Z.report.json`
 
 Frontier: `active_gate_snapshot_coverage`
 
@@ -96,7 +96,7 @@ Boundary: `snapshot_coverage`
 
 Dominant reason: `active_gate_timed_out`
 
-Next action: `Implement the selected snapshot timeout and repair-deferred owner recovery path so snapshot coverage can make bounded progress or migrate.`
+Next action: `Activate the next startup_active_gate_owner / snapshot_coverage successor for the remaining one inactive node and selected snapshot timeout residual.`
 
 ## Causal Governance
 
@@ -106,9 +106,9 @@ Stop-condition check: `Run canonical evidence summary, active_gate_snapshot_cove
 
 Expected causal-model change: `Focused proof should show selected_snapshot_source_timeout plus repair_deferred/wait_owner_recovery emits bounded owner recovery or alternate witness progress without runtime promotion. Fresh representative should move snapshotCoverage above 1/5, clear selected snapshot timeout, migrate owner/boundary, or pass.`
 
-Representative outcome: `pending-before-rerun`
+Representative outcome: `reduced`
 
-Causal debt: `Fresh artifact has publication_ack_convergence satisfied, priority recovery satisfied, activeGateOwnerCohortMissingPublishedCount=0, but active-gate progress is timed_out with snapshotCoverage=1/5, selectedSnapshotSourceCause=selected_snapshot_source_timeout, selectedSnapshotObservationMode=repair_deferred, selectedSnapshotObservationNextAction=retry, alternativeSnapshotWitnessAvailable=true, pendingRecoveryCount=1, and runtimePromotionAllowed=false.`
+Causal debt: `Closed for this selected progress slice: focused proof validates repair-deferred wait_owner_recovery queue projection and selected-source transport/admin closure handling. Fresh artifact still has active_gate_snapshot_coverage timed_out with snapshotCoverage=1/5 and selected_snapshot_source_timeout, but inactive_nodes reduced from 5 to 1, active membership reached 4/5, publication missing count stayed 0, and priority residuals stayed 0.`
 
 Cross-boundary review: `Keep publication ownership, priority recovery, startup readiness support, timeout budgets, and runtime promotion frozen. This package may only change harness startup active-gate snapshot coverage selection/recovery behavior and focused proof.`
 
@@ -121,9 +121,11 @@ Phase chain:
 1. `publication ACK convergence is satisfied`
 2. `priority recovery is satisfied with no residuals`
 3. `stale publication_gate blockers are removed`
-4. `active gate times out with snapshotCoverage=1/5`
+4. `active gate timed out with snapshotCoverage=1/5 and inactive_nodes=5`
 5. `selected snapshot source is admin_health-ready but snapshot lane times out after 15000ms`
 6. `selected snapshot observation is repair_deferred/retry with wait_owner_recovery pendingRecoveryCount=1`
+7. `focused proof projected bounded wait_owner_recovery queue progress`
+8. `fresh representative reduced inactive_nodes to 1 while preserving publication and priority closure`
 
 Current first frontier: `active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out`
 
@@ -140,7 +142,7 @@ Bounded progress proof: `Focused proof must show selected_snapshot_source_timeou
 
 Bounded progress proof artifact: `test-output/reports/rolling-restart-active-gate-publication-blocker-projection-20260523T054500Z.report.json`
 
-Expected observable transition: `Fresh representative should clear selected_snapshot_source_timeout, move snapshotCoverage above 1/5, produce owner/boundary migration, or pass.`
+Expected observable transition: `Observed: fresh representative did not clear selected_snapshot_source_timeout or move snapshotCoverage above 1/5, but it reduced inactive_nodes from 5 to 1 and active membership reached 4/5 while publication missing and priority residuals stayed 0.`
 
 Max progress bound: `one runtime-owner-boundary package before representative rerun`
 
@@ -148,7 +150,7 @@ Same-frontier fallback: `If fresh representative remains active_gate_snapshot_co
 
 Expected next frontier: `snapshot coverage count movement, selected snapshot timeout cleared, owner/boundary migration, or rolling-restart green`
 
-Result classification: `pending-before-probe`
+Result classification: `reduced`
 
 Stop condition: `continue-local-fix`
 
@@ -168,13 +170,13 @@ Metric: `selected_snapshot_source_timeout presence and snapshotCoverageNodeCount
 
 Predicted: `Focused proof will convert selected_snapshot_source_timeout plus repair_deferred/wait_owner_recovery into bounded owner recovery or alternate witness progress while keeping runtimePromotionAllowed=false; fresh representative will clear selected_snapshot_source_timeout, move snapshotCoverageNodeCount above 1, migrate owner/boundary, or pass.`
 
-Observed: `pending-before-probe`
+Observed: `Focused proof passed and fresh representative reduced inactive_nodes from 5 to 1 / active nodes to 4 of 5, but selected_snapshot_source_timeout and snapshotCoverage=1/5 remain.`
 
-Accuracy: `pending-before-observation`
+Accuracy: `partial`
 
-Evidence: `npm test -- test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js # focused contract fixture and affected consumer proof`
+Evidence: `test-output/reports/rolling-restart-selected-snapshot-timeout-repair-deferred-owner-recovery-20260523T061500Z.report.json`
 
-Metric delta: `0`
+Metric delta: `4`
 
 ## Experiment Outcome
 
@@ -268,6 +270,7 @@ Write scope:
 Handoff files:
 
 1. `test-output/reports/rolling-restart-active-gate-publication-blocker-projection-20260523T054500Z.report.json`
+2. `test-output/reports/rolling-restart-selected-snapshot-timeout-repair-deferred-owner-recovery-20260523T061500Z.report.json`
 
 Generated files:
 

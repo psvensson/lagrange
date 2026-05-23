@@ -12,9 +12,9 @@
   "owner": "startup_active_gate_owner",
   "boundary": "snapshot_coverage",
   "dominantReason": "active_gate_timed_out",
-  "currentState": "Fresh rolling-restart representative evidence remains at active_gate_snapshot_coverage after publication blocker projection. Publication and priority recovery are satisfied, but active-gate progress has snapshotCoverage=1/5, selected_snapshot_source_timeout after 15000ms on an admin_health-ready selected node, selected snapshot observation repair_deferred/retry, alternativeSnapshotWitnessAvailable=true, and wait_owner_recovery pendingRecoveryCount=1.",
-  "nextAction": "Use canonical evidence from the fresh representative to implement the smallest startup_active_gate_owner snapshot_coverage fix for selected snapshot source timeout and repair-deferred owner recovery without widening timeouts or runtime promotion.",
-  "stabilityCredit": "local-proof-only",
+  "currentState": "Focused proof and fresh rolling-restart evidence validated bounded progress for the selected snapshot timeout repair-deferred owner recovery path. The representative still fails at active_gate_snapshot_coverage, but inactive_nodes dropped from 5 to 1 and active membership reached 4/5 while publication missing count and priority residuals stayed at zero.",
+  "nextAction": "Close this package as reduced and activate the next startup_active_gate_owner / snapshot_coverage successor for the remaining one inactive node and selected snapshot timeout residual.",
+  "stabilityCredit": "representative-reduced",
   "representativeRerunCadence": "scheduled-rerun-command",
   "whyHighestLeverageNow": "The previous package removed the stale publication_gate blocker family and left a narrower startup active-gate snapshot coverage blocker. The remaining canonical evidence names one selected-source timeout and repair-deferred owner recovery path with an available alternate witness, so the next highest-leverage action is a bounded startup_active_gate_owner / snapshot_coverage proof before another representative rerun.",
   "theoryLedgerRefs": [
@@ -35,7 +35,8 @@
     "test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js"
   ],
   "handoffFiles": [
-    "test-output/reports/rolling-restart-active-gate-publication-blocker-projection-20260523T054500Z.report.json"
+    "test-output/reports/rolling-restart-active-gate-publication-blocker-projection-20260523T054500Z.report.json",
+    "test-output/reports/rolling-restart-selected-snapshot-timeout-repair-deferred-owner-recovery-20260523T061500Z.report.json"
   ],
   "generatedFiles": [
     "work/sprints/current-blocker.md",
@@ -118,19 +119,19 @@
   "representativeResidual": {
     "status": "reduced",
     "scenario": "rolling-restart",
-    "artifact": "test-output/reports/rolling-restart-active-gate-publication-blocker-projection-20260523T054500Z.report.json",
+    "artifact": "test-output/reports/rolling-restart-selected-snapshot-timeout-repair-deferred-owner-recovery-20260523T061500Z.report.json",
     "frontier": "active_gate_snapshot_coverage",
     "owner": "startup_active_gate_owner",
     "boundary": "snapshot_coverage",
     "dominantReason": "active_gate_timed_out",
-    "nextAction": "Implement the selected snapshot timeout and repair-deferred owner recovery path so snapshot coverage can make bounded progress or migrate."
+    "nextAction": "Activate the next startup_active_gate_owner / snapshot_coverage successor for the remaining one inactive node and selected snapshot timeout residual."
   },
   "causalGovernance": {
     "hypothesis": "Snapshot coverage remains blocked because selected snapshot timeout evidence is classified as repair_deferred/retry even when admin_health reachability and an alternate snapshot witness are available, so active-gate owner recovery keeps waiting instead of making bounded selected-source recovery progress.",
     "stopConditionCheck": "Run canonical evidence summary, active_gate_snapshot_coverage explain, focused snapshot timeout repair proof, static guardrails, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-selected-snapshot-timeout-repair-deferred-owner-recovery-20260523T061500Z.report.json`, a fresh rolling-restart representative rerun, and evidence summary before closure.",
     "expectedCausalModelChange": "Focused proof should show selected_snapshot_source_timeout plus repair_deferred/wait_owner_recovery emits bounded owner recovery or alternate witness progress without runtime promotion. Fresh representative should move snapshotCoverage above 1/5, clear selected snapshot timeout, migrate owner/boundary, or pass.",
-    "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "Fresh artifact has publication_ack_convergence satisfied, priority recovery satisfied, activeGateOwnerCohortMissingPublishedCount=0, but active-gate progress is timed_out with snapshotCoverage=1/5, selectedSnapshotSourceCause=selected_snapshot_source_timeout, selectedSnapshotObservationMode=repair_deferred, selectedSnapshotObservationNextAction=retry, alternativeSnapshotWitnessAvailable=true, pendingRecoveryCount=1, and runtimePromotionAllowed=false.",
+    "representativeOutcome": "reduced",
+    "causalDebt": "Closed for this selected progress slice: focused proof validates repair-deferred wait_owner_recovery queue projection and selected-source transport/admin closure handling. Fresh artifact still has active_gate_snapshot_coverage timed_out with snapshotCoverage=1/5 and selected_snapshot_source_timeout, but inactive_nodes reduced from 5 to 1, active membership reached 4/5, publication missing count stayed 0, and priority residuals stayed 0.",
     "crossBoundaryReview": "Keep publication ownership, priority recovery, startup readiness support, timeout budgets, and runtime promotion frozen. This package may only change harness startup active-gate snapshot coverage selection/recovery behavior and focused proof."
   },
   "scenarioCausalClosure": {
@@ -139,9 +140,11 @@
       "publication ACK convergence is satisfied",
       "priority recovery is satisfied with no residuals",
       "stale publication_gate blockers are removed",
-      "active gate times out with snapshotCoverage=1/5",
+      "active gate timed out with snapshotCoverage=1/5 and inactive_nodes=5",
       "selected snapshot source is admin_health-ready but snapshot lane times out after 15000ms",
-      "selected snapshot observation is repair_deferred/retry with wait_owner_recovery pendingRecoveryCount=1"
+      "selected snapshot observation is repair_deferred/retry with wait_owner_recovery pendingRecoveryCount=1",
+      "focused proof projected bounded wait_owner_recovery queue progress",
+      "fresh representative reduced inactive_nodes to 1 while preserving publication and priority closure"
     ],
     "currentFirstFrontier": "active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out",
     "knownDownstreamBlockers": [
@@ -153,11 +156,11 @@
     "falsifyingProbe": "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-publication-blocker-projection-20260523T054500Z.report.json --explain active_gate_snapshot_coverage",
     "boundedProgressProof": "Focused proof must show selected_snapshot_source_timeout plus repair_deferred/wait_owner_recovery either selects a bounded alternate witness path or records bounded owner recovery progress while runtimePromotionAllowed remains false.",
     "boundedProgressProofArtifact": "test-output/reports/rolling-restart-active-gate-publication-blocker-projection-20260523T054500Z.report.json",
-    "expectedObservableTransition": "Fresh representative should clear selected_snapshot_source_timeout, move snapshotCoverage above 1/5, produce owner/boundary migration, or pass.",
+    "expectedObservableTransition": "Observed: fresh representative did not clear selected_snapshot_source_timeout or move snapshotCoverage above 1/5, but it reduced inactive_nodes from 5 to 1 and active membership reached 4/5 while publication missing and priority residuals stayed 0.",
     "maxProgressBound": "one runtime-owner-boundary package before representative rerun",
     "sameFrontierFallback": "If fresh representative remains active_gate_snapshot_coverage with selected_snapshot_source_timeout, repair_deferred, and no metric movement, stop for an autonomous architecture experiment instead of another local snapshot_coverage patch.",
     "expectedNextFrontier": "snapshot coverage count movement, selected snapshot timeout cleared, owner/boundary migration, or rolling-restart green",
-    "resultClassification": "pending-before-probe",
+    "resultClassification": "reduced",
     "stopCondition": "continue-local-fix",
     "recentFrontierHistory": [
       "done-20260523-rolling-restart-active-gate-publication-blocker-projection / startup_active_gate_owner / publication_gate_blocker_projection_contract / reduced",
@@ -207,10 +210,10 @@
   "observablePrediction": {
     "metric": "selected_snapshot_source_timeout presence and snapshotCoverageNodeCount",
     "predicted": "Focused proof will convert selected_snapshot_source_timeout plus repair_deferred/wait_owner_recovery into bounded owner recovery or alternate witness progress while keeping runtimePromotionAllowed=false; fresh representative will clear selected_snapshot_source_timeout, move snapshotCoverageNodeCount above 1, migrate owner/boundary, or pass.",
-    "observed": "pending-before-probe",
-    "accuracy": "pending-before-observation",
-    "evidence": "npm test -- test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js # focused contract fixture and affected consumer proof",
-    "metricDelta": 0
+    "observed": "Focused proof passed and fresh representative reduced inactive_nodes from 5 to 1 / active nodes to 4 of 5, but selected_snapshot_source_timeout and snapshotCoverage=1/5 remain.",
+    "accuracy": "partial",
+    "evidence": "test-output/reports/rolling-restart-selected-snapshot-timeout-repair-deferred-owner-recovery-20260523T061500Z.report.json",
+    "metricDelta": 4
   }
 }
 -->
@@ -358,12 +361,16 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use legacy subagent ledgers only when a reopened historical package already uses them.
 
-- [ ] implementation: status: validated; evidence: <focused proof commands and results>; parent revalidated focused proof: yes; next: closure or successor action.
-- [ ] verification-fix: status: validated; evidence: <verification/fix commands and results>; changed files: <paths or none>; parent revalidated focused proof: yes; next: closure or successor action.
-- [ ] repair: status: validated; evidence: `npm run work:repair` refreshed generated current-blocker and Current Edge Card when needed; next: validation.
+- [x] implementation: status: validated; evidence: `npm test -- test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js` passed 14/14 after fixing literal-audit counter constants; `npm run audit:guideline:literals -- test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/cluster-segment-7-class-5.js test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js` passed with 0 violations; `npm run audit:guideline:decision-boundaries -- test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/cluster-segment-7-class-5.js` passed with 0 violations; `npm run audit:runtime-grammar:file -- test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/cluster-segment-7-class-5.js` passed with 0 violations; fresh representative `test-output/reports/rolling-restart-selected-snapshot-timeout-repair-deferred-owner-recovery-20260523T061500Z.report.json` failed but reduced inactive_nodes from 5 to 1 and active membership to 4/5; parent revalidated focused proof: yes; next: verifier-fixer closure.
+- [x] verification-fix: status: validated; evidence: Lovelace `019e51f8-0cf1-7d72-b608-fb8908a36604` ran focused test (PASS 14/14), literal audit (PASS 0), decision-boundaries audit (PASS 0), runtime grammar audit (PASS 0), diff-check (PASS), and read-only canonical evidence summary/explain confirming reduced shape `inactive_nodes=1`, `snapshot_coverage=1/5`, no publication missing or priority residual blockers, and runtimePromotionAllowed=false; changed files: none; parent revalidated focused proof: yes; next: closure and successor action.
+- [x] repair: status: validated; evidence: `npm run work:repair` refreshed generated current-blocker and Current Edge Card after package metadata updates; next: validation.
 
 ## Validation
 
 1. npm run work:evidence-summary -- test-output/reports/rolling-restart-active-gate-publication-blocker-projection-20260523T054500Z.report.json
-2. npm run work:scenario-triage -- test-output/reports/rolling-restart-active-gate-publication-blocker-projection-20260523T054500Z.report.json --markdown
-3. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-active-gate-publication-blocker-projection-20260523T054500Z.report.json --markdown
+2. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-publication-blocker-projection-20260523T054500Z.report.json --explain active_gate_snapshot_coverage
+3. npm test -- test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js # focused contract fixture and affected consumer proof for selected snapshot timeout repair-deferred owner recovery
+4. npm run audit:guideline:literals -- test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/cluster-segment-7-class-5.js test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js
+5. npm run audit:runtime-grammar:file -- test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/cluster-segment-7-class-5.js
+6. node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-selected-snapshot-timeout-repair-deferred-owner-recovery-20260523T061500Z.report.json --fast-local --verbose
+7. npm run work:evidence-summary -- test-output/reports/rolling-restart-selected-snapshot-timeout-repair-deferred-owner-recovery-20260523T061500Z.report.json

@@ -58,6 +58,8 @@ const SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_REASON_READBACK =
   'durable_readback_pending';
 const SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_ENQUEUED = true;
 const SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_RETRY_AFTER_MS = 1000;
+const SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_ENQUEUED_FALSE = false;
+const SNAPSHOT_REPLAY_TEST_OWNER_QUEUE_PENDING_WRITES = 1;
 const SNAPSHOT_REPLAY_TEST_AUTHORITY_TEST_NAME =
   'Unit: _probeControlSnapshotCoverage keeps admin-ready authority over ' +
   'stronger publication when 102455Z coverage ties';
@@ -234,6 +236,9 @@ const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_TEST_NAME =
 const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RETRY_EXHAUSTED_TEST_NAME =
   'Unit: _probeControlSnapshotCoverage records deferred retry evidence ' +
   'after selected source retry timeout';
+const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LATE_RETRY_FLOOR_TEST_NAME =
+  'Unit: _probeControlSnapshotCoverage preserves late selected-source ' +
+  'retry floor after timeout';
 const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_RETRY_TEST_NAME =
   'Unit: _probeControlSnapshotCoverage keeps load selected source retry on ' +
   'base timeout';
@@ -243,6 +248,12 @@ const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_ALTERNATIVE_WITNESS_TEST_NAME =
 const SELECTED_SNAPSHOT_SOURCE_WEBSOCKET_CLOSED_HANDOFF_FIXTURE_TEST_NAME =
   'Unit: _probeControlSnapshotCoverage replays selected-source websocket ' +
   'closure evidence with an alternative witness available';
+const SELECTED_SNAPSHOT_SOURCE_ADMIN_CLOSED_HANDOFF_FIXTURE_TEST_NAME =
+  'Unit: _probeControlSnapshotCoverage replays selected-source admin ' +
+  'connection closure evidence with an alternative witness available';
+const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_THEN_ADMIN_CLOSED_TEST_NAME =
+  'Unit: _probeControlSnapshotCoverage reports terminal retry admin ' +
+  'transport closure while preserving wait-owner handoff';
 const SELECTED_SNAPSHOT_FORCE_REPAIR_TIMEOUT_FALLBACK_TEST_NAME =
   'Unit: _probeControlSnapshotCoverage keeps forced repair probes local-first ' +
   'for the selected source';
@@ -286,14 +297,28 @@ const SELECTED_SNAPSHOT_SOURCE_WEBSOCKET_CLOSED_ERROR =
   'Admin API query failed for node ' +
   SELECTED_SNAPSHOT_SOURCE_WEBSOCKET_CLOSED_SELECTED_NODE_ID +
   ' on lane snapshot: WebSocket was closed before the connection was established';
-const SELECTED_SNAPSHOT_SOURCE_WEBSOCKET_CLOSED_OBSERVATION_REASON =
+const SELECTED_SNAPSHOT_SOURCE_TRANSPORT_CLOSED_OBSERVATION_REASON =
   'selected_transport_closed';
+const SELECTED_SNAPSHOT_SOURCE_ADMIN_CLOSED_SELECTED_NODE_ID =
+  SNAPSHOT_REPLAY_TEST_NODE_ID.SEED;
+const SELECTED_SNAPSHOT_SOURCE_ADMIN_CLOSED_ERROR =
+  'Admin API query connection closed before response for node ' +
+  SELECTED_SNAPSHOT_SOURCE_ADMIN_CLOSED_SELECTED_NODE_ID +
+  ' on lane snapshot';
 const SELECTED_SNAPSHOT_SOURCE_WEBSOCKET_CLOSED_NODE_IDS = Object.freeze([
   SNAPSHOT_REPLAY_TEST_NODE_ID.SEED,
   SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE,
 ]);
+const SELECTED_SNAPSHOT_SOURCE_ADMIN_CLOSED_NODE_IDS = Object.freeze([
+  SNAPSHOT_REPLAY_TEST_NODE_ID.SEED,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE,
+]);
+const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_THEN_ADMIN_CLOSED_NODE_IDS =
+  SELECTED_SNAPSHOT_SOURCE_ADMIN_CLOSED_NODE_IDS;
 const SELECTED_SNAPSHOT_SOURCE_WEBSOCKET_CLOSED_ALTERNATIVE_ERROR =
   'snapshot lane unavailable for ' + SNAPSHOT_REPLAY_TEST_NODE_ID.SEED;
+const SELECTED_SNAPSHOT_SOURCE_ADMIN_CLOSED_ALTERNATIVE_ERROR =
+  SELECTED_SNAPSHOT_SOURCE_WEBSOCKET_CLOSED_ALTERNATIVE_ERROR;
 const SELECTED_SNAPSHOT_FORCE_REPAIR_TIMEOUT_ERROR =
   'Admin API query timed out for node ' +
   SELECTED_SNAPSHOT_FORCE_REPAIR_TIMEOUT_NODE_ID +
@@ -508,6 +533,8 @@ const SNAPSHOT_REPLAY_TEST_LATE_TIMEOUT_DEADLINE_EXTENSION_MS = 1;
 const SNAPSHOT_REPLAY_TEST_FIRST_CALL_INDEX = 0;
 const SNAPSHOT_REPLAY_TEST_RETRY_CALL_INDEX = 1;
 const SNAPSHOT_REPLAY_TEST_SINGLE_CALL_COUNT = 1;
+const SNAPSHOT_REPLAY_TEST_NO_PROBE_CALLS = 0;
+const SNAPSHOT_REPLAY_TEST_INITIAL_PROBE_CALL_COUNT = 1;
 const SNAPSHOT_REPLAY_TEST_BOUNDED_RETRY_CALL_COUNT = 2;
 const SNAPSHOT_REPLAY_TEST_LATE_TIMEOUT_FLOOR_MS = 100;
 const SNAPSHOT_REPLAY_TEST_FAST_PATH_TIMEOUT_BUFFER_MS = 50;
@@ -572,6 +599,8 @@ const SNAPSHOT_TIMEOUT_REPAIR_ASSERTION = Object.freeze({
     'retry-exhausted evidence should preserve the retry timeout error',
   STARTUP_RETRY_EXHAUSTED_TIMEOUT:
     'retry-exhausted evidence should report the retry timeout budget',
+  STARTUP_RETRY_LATE_TIMEOUT_FLOOR:
+    'late selected-source retry should preserve the active-gate retry floor',
   STARTUP_RETRY_EXHAUSTED_OBSERVATION:
     'retry-exhausted evidence should expose deferred owner retry observation',
   STARTUP_RETRY_EXHAUSTED_REASON:
@@ -580,6 +609,10 @@ const SNAPSHOT_TIMEOUT_REPAIR_ASSERTION = Object.freeze({
     'retry-exhausted evidence should mark selected snapshot repair deferred',
   STARTUP_RETRY_EXHAUSTED_HANDOFF:
     'retry-exhausted evidence should synthesize the active-gate handoff contract',
+  STARTUP_RETRY_EXHAUSTED_RECOVERY_PROGRESS:
+    'retry-exhausted wait-owner-recovery evidence should move bounded snapshot coverage progress',
+  STARTUP_RETRY_EXHAUSTED_OWNER_QUEUE:
+    'retry-exhausted wait-owner-recovery evidence should expose bounded owner queue defer',
   RETRY_SNAPSHOT_LANE:
     'selected-source retry proof should stay on the normal snapshot lane',
   LOAD_RETRY_SOURCE:
@@ -1232,6 +1265,130 @@ test(SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RETRY_EXHAUSTED_TEST_NAME, async () => {
     },
     SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.STARTUP_RETRY_EXHAUSTED_HANDOFF,
   );
+  assert.deepStrictEqual(
+    {
+      bestCoverageNodeCount: coverage.bestCoverageNodeCount,
+      selectedObservedNodeIds: coverage.selectedObservedNodeIds,
+    },
+    {
+      bestCoverageNodeCount:
+        SNAPSHOT_REPLAY_TEST_HANDOFF_PENDING_RECOVERY_COUNT,
+      selectedObservedNodeIds: [
+        SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_ID,
+      ],
+    },
+    SNAPSHOT_TIMEOUT_REPAIR_ASSERTION
+      .STARTUP_RETRY_EXHAUSTED_RECOVERY_PROGRESS,
+  );
+  assert.deepStrictEqual(
+    {
+      pendingWrites: coverage.selectedControlPlaneOwnerQueueDepth
+        ?.pendingWrites,
+      state: coverage.selectedMembershipPublicationHandoffOutcome?.state,
+      reasonCode:
+        coverage.selectedMembershipPublicationHandoffOutcome?.reasonCode,
+      enqueued:
+        coverage.selectedMembershipPublicationHandoffOutcome?.enqueued,
+      retryAfterMs:
+        coverage.selectedMembershipPublicationHandoffOutcome?.retryAfterMs,
+    },
+    {
+      pendingWrites: SNAPSHOT_REPLAY_TEST_OWNER_QUEUE_PENDING_WRITES,
+      state: SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_STATE_WRITE_DEFERRED,
+      reasonCode:
+        SNAPSHOT_REPLAY_TEST_HANDOFF_REASON_OWNER_RECONCILE_PENDING,
+      enqueued: SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_ENQUEUED_FALSE,
+      retryAfterMs: coverage.selectedSnapshotObservationRetryAfterMs,
+    },
+    SNAPSHOT_TIMEOUT_REPAIR_ASSERTION
+      .STARTUP_RETRY_EXHAUSTED_OWNER_QUEUE,
+  );
+});
+
+test(SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LATE_RETRY_FLOOR_TEST_NAME, async () => {
+  const cluster = createCluster({
+    size: SNAPSHOT_REPLAY_TEST_LATE_TIMEOUT_CLUSTER_SIZE,
+    docker: {socketPath: SNAPSHOT_REPLAY_TEST_DOCKER_SOCKET_PATH},
+    image: SNAPSHOT_REPLAY_TEST_IMAGE,
+  });
+  const snapshotProbeCalls = [];
+
+  for (const [index, nodeId] of SNAPSHOT_REPLAY_TEST_LATE_TIMEOUT_NODE_IDS.entries()) {
+    cluster._nodes.set(nodeId, {
+      id: nodeId,
+      role: index === SNAPSHOT_REPLAY_TEST_FIRST_CALL_INDEX ?
+        NODE_ROLES.SEED :
+        NODE_ROLES.JOINER,
+      _resetAdminSocket(_lane) {},
+      async getStatus() {
+        return {rows: [{status: SERVICE_STATUS.ACTIVE}]};
+      },
+      async getReachabilityDiagnostics() {
+        const selectedSource =
+          nodeId === SNAPSHOT_REPLAY_TEST_LATE_TIMEOUT_NODE_A;
+        return {
+          reachable: selectedSource,
+          adminReady: selectedSource,
+          reachableBy: selectedSource ?
+            SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE :
+            null,
+          lastError: null,
+        };
+      },
+      async getControlSnapshot(options = {}) {
+        snapshotProbeCalls.push({
+          nodeId,
+          timeoutMs: options.timeoutMs,
+        });
+        if (nodeId === SNAPSHOT_REPLAY_TEST_LATE_TIMEOUT_NODE_A) {
+          throw new Error(buildSelectedSnapshotSourceTimeoutError(
+            nodeId,
+            options.timeoutMs,
+          ));
+        }
+        throw new Error(
+          SELECTED_SNAPSHOT_SOURCE_TIMEOUT_UNSELECTED_ERROR_PREFIX + nodeId,
+        );
+      },
+      async getLogs(_options) {
+        return SNAPSHOT_REPLAY_TEST_EMPTY_LOG;
+      },
+    });
+  }
+
+  const coverage = await cluster._probeControlSnapshotCoverage(
+    Date.now() + SNAPSHOT_REPLAY_TEST_LATE_TIMEOUT_DEADLINE_EXTENSION_MS,
+    SNAPSHOT_REPLAY_TEST_LATE_TIMEOUT_NODE_IDS,
+  );
+  const selectedCalls = snapshotProbeCalls.filter((call) => {
+    return call.nodeId === SNAPSHOT_REPLAY_TEST_LATE_TIMEOUT_NODE_A;
+  });
+
+  assert.strictEqual(
+    selectedCalls.length,
+    SNAPSHOT_REPLAY_TEST_BOUNDED_RETRY_CALL_COUNT,
+    SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.STARTUP_RETRY_COUNT,
+  );
+  assert.ok(
+    selectedCalls[SNAPSHOT_REPLAY_TEST_FIRST_CALL_INDEX].timeoutMs >=
+      SNAPSHOT_REPLAY_TEST_LATE_TIMEOUT_FLOOR_MS,
+    SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.SNAPSHOT_TIMEOUT_FLOOR,
+  );
+  assert.ok(
+    selectedCalls[SNAPSHOT_REPLAY_TEST_RETRY_CALL_INDEX].timeoutMs >=
+      SNAPSHOT_REPLAY_TEST_LATE_TIMEOUT_FLOOR_MS,
+    SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.STARTUP_RETRY_LATE_TIMEOUT_FLOOR,
+  );
+  assert.strictEqual(
+    coverage.selectedSnapshotTimeoutMs,
+    selectedCalls[SNAPSHOT_REPLAY_TEST_RETRY_CALL_INDEX].timeoutMs,
+    SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.STARTUP_RETRY_EXHAUSTED_TIMEOUT,
+  );
+  assert.ok(
+    coverage.selectedSnapshotObservationRetryAfterMs >=
+      SNAPSHOT_REPLAY_TEST_LATE_TIMEOUT_FLOOR_MS,
+    SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.STARTUP_RETRY_LATE_TIMEOUT_FLOOR,
+  );
 });
 
 test(SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_RETRY_TEST_NAME, async () => {
@@ -1883,7 +2040,7 @@ test(
     );
     assert.ok(
       coverage.selectedSnapshotObservationReasonCodes.includes(
-        SELECTED_SNAPSHOT_SOURCE_WEBSOCKET_CLOSED_OBSERVATION_REASON,
+        SELECTED_SNAPSHOT_SOURCE_TRANSPORT_CLOSED_OBSERVATION_REASON,
       ),
       SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.WEBSOCKET_CLOSED_OBSERVATION_REASON,
     );
@@ -1892,9 +2049,12 @@ test(
       true,
       SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.WEBSOCKET_CLOSED_REPAIR_DEFERRED,
     );
-    assert.strictEqual(
-      coverage.selectedSnapshotObservationRetryAfterMs,
-      SELECTED_SNAPSHOT_SOURCE_TIMEOUT_STARTUP_RETRY_TIMEOUT_MS,
+    assert.ok(
+      coverage.selectedSnapshotObservationRetryAfterMs >=
+        SELECTED_SNAPSHOT_SOURCE_TIMEOUT_STARTUP_RETRY_TIMEOUT_MS -
+          SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RETRY_AFTER_TOLERANCE_MS &&
+        coverage.selectedSnapshotObservationRetryAfterMs <=
+          SELECTED_SNAPSHOT_SOURCE_TIMEOUT_STARTUP_RETRY_TIMEOUT_MS,
       SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.WEBSOCKET_CLOSED_RETRY_TIMEOUT,
     );
     assert.ok(
@@ -1903,6 +2063,275 @@ test(
         SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE,
       ),
       SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.WEBSOCKET_CLOSED_ALTERNATIVE_WITNESS,
+    );
+  },
+);
+
+test(
+  SELECTED_SNAPSHOT_SOURCE_ADMIN_CLOSED_HANDOFF_FIXTURE_TEST_NAME,
+  async () => {
+    const cluster = createCluster({
+      size: SNAPSHOT_REPLAY_TEST_CLUSTER_SIZE,
+      docker: {socketPath: SNAPSHOT_REPLAY_TEST_DOCKER_SOCKET_PATH},
+      image: SNAPSHOT_REPLAY_TEST_IMAGE,
+    });
+    let selectedSnapshotProbeCount = SNAPSHOT_REPLAY_TEST_NO_PROBE_CALLS;
+
+    for (const nodeId of SELECTED_SNAPSHOT_SOURCE_ADMIN_CLOSED_NODE_IDS) {
+      cluster._nodes.set(nodeId, {
+        id: nodeId,
+        role:
+          nodeId === SNAPSHOT_REPLAY_TEST_NODE_ID.SEED ?
+            NODE_ROLES.SEED :
+            NODE_ROLES.JOINER,
+        async getStatus() {
+          return {rows: [{status: SERVICE_STATUS.ACTIVE}]};
+        },
+        async getReachabilityDiagnostics() {
+          const selectedSourceNode =
+            nodeId === SELECTED_SNAPSHOT_SOURCE_ADMIN_CLOSED_SELECTED_NODE_ID;
+          return {
+            reachable: selectedSourceNode,
+            adminReady: selectedSourceNode,
+            reachableBy:
+              selectedSourceNode ?
+                SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE :
+                null,
+            lastError: null,
+          };
+        },
+        async getControlSnapshot() {
+          if (nodeId === SELECTED_SNAPSHOT_SOURCE_ADMIN_CLOSED_SELECTED_NODE_ID) {
+            selectedSnapshotProbeCount += SNAPSHOT_REPLAY_TEST_SINGLE_CALL_COUNT;
+            throw new Error(SELECTED_SNAPSHOT_SOURCE_ADMIN_CLOSED_ERROR);
+          }
+          throw new Error(
+            SELECTED_SNAPSHOT_SOURCE_ADMIN_CLOSED_ALTERNATIVE_ERROR,
+          );
+        },
+        async getLogs(_options) {
+          return SNAPSHOT_REPLAY_TEST_EMPTY_LOG;
+        },
+      });
+    }
+
+    const coverage = await cluster._probeControlSnapshotCoverage(
+      Date.now() + SNAPSHOT_REPLAY_TEST_DEADLINE_EXTENSION_MS,
+      SELECTED_SNAPSHOT_SOURCE_ADMIN_CLOSED_NODE_IDS,
+    );
+
+    assert.strictEqual(
+      selectedSnapshotProbeCount,
+      SNAPSHOT_REPLAY_TEST_BOUNDED_RETRY_CALL_COUNT,
+      SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.STARTUP_RETRY_COUNT,
+    );
+    assert.strictEqual(
+      coverage.selectedSnapshotNodeId,
+      SELECTED_SNAPSHOT_SOURCE_ADMIN_CLOSED_SELECTED_NODE_ID,
+      SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.WEBSOCKET_CLOSED_SELECTED_SOURCE,
+    );
+    assert.strictEqual(
+      coverage.selectedError,
+      SELECTED_SNAPSHOT_SOURCE_ADMIN_CLOSED_ERROR,
+      SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.WEBSOCKET_CLOSED_SELECTED_ERROR,
+    );
+    assert.strictEqual(
+      coverage.selectedSnapshotAdminReady,
+      true,
+      SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.WEBSOCKET_CLOSED_SELECTED_ADMIN_READY,
+    );
+    assert.strictEqual(
+      coverage.selectedSnapshotReachableBy,
+      SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE,
+      SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.WEBSOCKET_CLOSED_SELECTED_REACHABILITY,
+    );
+    assert.deepStrictEqual(
+      {
+        mode: coverage.selectedSnapshotObservationMode,
+        state: coverage.selectedSnapshotObservationState,
+        contractState: coverage.selectedSnapshotObservationContractState,
+        refreshState: coverage.selectedSnapshotObservationRefreshState,
+        nextAction: coverage.selectedSnapshotObservationNextAction,
+      },
+      {
+        mode: ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
+        state: CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE.DEFERRED_REFRESH,
+        contractState: OWNER_CONTRACT_STATE.DEFERRED,
+        refreshState: CONTROL_PLANE_SNAPSHOT_REFRESH_STATE.DEFERRED,
+        nextAction: OWNER_CONTRACT_NEXT_ACTION.RETRY,
+      },
+      SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.WEBSOCKET_CLOSED_OBSERVATION,
+    );
+    assert.ok(
+      coverage.selectedSnapshotObservationReasonCodes.includes(
+        SELECTED_SNAPSHOT_SOURCE_TRANSPORT_CLOSED_OBSERVATION_REASON,
+      ),
+      SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.WEBSOCKET_CLOSED_OBSERVATION_REASON,
+    );
+    assert.strictEqual(
+      coverage.selectedSnapshotRepairDeferred,
+      true,
+      SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.WEBSOCKET_CLOSED_REPAIR_DEFERRED,
+    );
+    assert.ok(
+      coverage.selectedSnapshotObservationRetryAfterMs >=
+        SELECTED_SNAPSHOT_SOURCE_TIMEOUT_STARTUP_RETRY_TIMEOUT_MS -
+          SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RETRY_AFTER_TOLERANCE_MS &&
+        coverage.selectedSnapshotObservationRetryAfterMs <=
+          SELECTED_SNAPSHOT_SOURCE_TIMEOUT_STARTUP_RETRY_TIMEOUT_MS,
+      SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.WEBSOCKET_CLOSED_RETRY_TIMEOUT,
+    );
+    assert.ok(
+      Object.hasOwn(
+        coverage.publicationDisagreementByNodeId,
+        SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE,
+      ),
+      SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.WEBSOCKET_CLOSED_ALTERNATIVE_WITNESS,
+    );
+  },
+);
+
+test(
+  SELECTED_SNAPSHOT_SOURCE_TIMEOUT_THEN_ADMIN_CLOSED_TEST_NAME,
+  async () => {
+    const cluster = createCluster({
+      size: SNAPSHOT_REPLAY_TEST_CLUSTER_SIZE,
+      docker: {socketPath: SNAPSHOT_REPLAY_TEST_DOCKER_SOCKET_PATH},
+      image: SNAPSHOT_REPLAY_TEST_IMAGE,
+    });
+    let selectedSnapshotProbeCount = SNAPSHOT_REPLAY_TEST_NO_PROBE_CALLS;
+
+    for (
+      const nodeId of
+      SELECTED_SNAPSHOT_SOURCE_TIMEOUT_THEN_ADMIN_CLOSED_NODE_IDS
+    ) {
+      cluster._nodes.set(nodeId, {
+        id: nodeId,
+        role:
+          nodeId === SNAPSHOT_REPLAY_TEST_NODE_ID.SEED ?
+            NODE_ROLES.SEED :
+            NODE_ROLES.JOINER,
+        async getStatus() {
+          return {rows: [{status: SERVICE_STATUS.ACTIVE}]};
+        },
+        async getReachabilityDiagnostics() {
+          const selectedSourceNode =
+            nodeId === SELECTED_SNAPSHOT_SOURCE_ADMIN_CLOSED_SELECTED_NODE_ID;
+          return {
+            reachable: selectedSourceNode,
+            adminReady: selectedSourceNode,
+            reachableBy:
+              selectedSourceNode ?
+                SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE :
+                null,
+            lastError: null,
+          };
+        },
+        async getControlSnapshot() {
+          if (nodeId === SELECTED_SNAPSHOT_SOURCE_ADMIN_CLOSED_SELECTED_NODE_ID) {
+            selectedSnapshotProbeCount += SNAPSHOT_REPLAY_TEST_SINGLE_CALL_COUNT;
+            if (
+              selectedSnapshotProbeCount ===
+                SNAPSHOT_REPLAY_TEST_INITIAL_PROBE_CALL_COUNT
+            ) {
+              throw new Error(SELECTED_SNAPSHOT_SOURCE_TIMEOUT_ERROR);
+            }
+            throw new Error(SELECTED_SNAPSHOT_SOURCE_ADMIN_CLOSED_ERROR);
+          }
+          throw new Error(
+            SELECTED_SNAPSHOT_SOURCE_ADMIN_CLOSED_ALTERNATIVE_ERROR,
+          );
+        },
+        async getLogs(_options) {
+          return SNAPSHOT_REPLAY_TEST_EMPTY_LOG;
+        },
+      });
+    }
+
+    const coverage = await cluster._probeControlSnapshotCoverage(
+      Date.now() + SNAPSHOT_REPLAY_TEST_DEADLINE_EXTENSION_MS,
+      SELECTED_SNAPSHOT_SOURCE_TIMEOUT_THEN_ADMIN_CLOSED_NODE_IDS,
+    );
+
+    assert.strictEqual(
+      selectedSnapshotProbeCount,
+      SNAPSHOT_REPLAY_TEST_BOUNDED_RETRY_CALL_COUNT,
+      SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.STARTUP_RETRY_COUNT,
+    );
+    assert.strictEqual(
+      coverage.selectedSnapshotNodeId,
+      SELECTED_SNAPSHOT_SOURCE_ADMIN_CLOSED_SELECTED_NODE_ID,
+      SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.WEBSOCKET_CLOSED_SELECTED_SOURCE,
+    );
+    assert.strictEqual(
+      coverage.selectedError,
+      SELECTED_SNAPSHOT_SOURCE_ADMIN_CLOSED_ERROR,
+      SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.WEBSOCKET_CLOSED_SELECTED_ERROR,
+    );
+    assert.ok(
+      coverage.selectedSnapshotObservationReasonCodes.includes(
+        SELECTED_SNAPSHOT_SOURCE_TRANSPORT_CLOSED_OBSERVATION_REASON,
+      ),
+      SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.WEBSOCKET_CLOSED_OBSERVATION_REASON,
+    );
+    assert.deepStrictEqual(
+      {
+        state: coverage.selectedPublicationActiveGateHandoff?.state,
+        reasonCode:
+          coverage.selectedPublicationActiveGateHandoff?.reasonCode,
+        nextAction:
+          coverage.selectedPublicationActiveGateHandoff?.nextAction,
+        runtimePromotionAllowed:
+          coverage.selectedPublicationActiveGateHandoff
+            ?.runtimePromotionAllowed,
+        pendingRecoveryNodeIds:
+          coverage.selectedPublicationActiveGateHandoff
+            ?.pendingRecoveryNodeIds,
+        pendingRecoveryCount:
+          coverage.selectedPublicationActiveGateHandoff?.pendingRecoveryCount,
+        pendingReconcileCount:
+          coverage.selectedPublicationActiveGateHandoff?.pendingReconcileCount,
+      },
+      {
+        state: SNAPSHOT_REPLAY_TEST_HANDOFF_STATE_PENDING,
+        reasonCode:
+          SNAPSHOT_REPLAY_TEST_HANDOFF_REASON_OWNER_RECONCILE_PENDING,
+        nextAction:
+          SNAPSHOT_REPLAY_TEST_HANDOFF_NEXT_ACTION_WAIT_OWNER_RECOVERY,
+        runtimePromotionAllowed:
+          SNAPSHOT_REPLAY_TEST_HANDOFF_RUNTIME_PROMOTION_ALLOWED_FALSE,
+        pendingRecoveryNodeIds: [
+          SELECTED_SNAPSHOT_SOURCE_ADMIN_CLOSED_SELECTED_NODE_ID,
+        ],
+        pendingRecoveryCount:
+          SNAPSHOT_REPLAY_TEST_HANDOFF_PENDING_RECOVERY_COUNT,
+        pendingReconcileCount:
+          SNAPSHOT_REPLAY_TEST_HANDOFF_PENDING_RECONCILE_COUNT,
+      },
+      SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.STARTUP_RETRY_EXHAUSTED_HANDOFF,
+    );
+    assert.deepStrictEqual(
+      {
+        pendingWrites: coverage.selectedControlPlaneOwnerQueueDepth
+          ?.pendingWrites,
+        state: coverage.selectedMembershipPublicationHandoffOutcome?.state,
+        reasonCode:
+          coverage.selectedMembershipPublicationHandoffOutcome?.reasonCode,
+        enqueued:
+          coverage.selectedMembershipPublicationHandoffOutcome?.enqueued,
+        retryAfterMs:
+          coverage.selectedMembershipPublicationHandoffOutcome?.retryAfterMs,
+      },
+      {
+        pendingWrites: SNAPSHOT_REPLAY_TEST_OWNER_QUEUE_PENDING_WRITES,
+        state: SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_STATE_WRITE_DEFERRED,
+        reasonCode:
+          SNAPSHOT_REPLAY_TEST_HANDOFF_REASON_OWNER_RECONCILE_PENDING,
+        enqueued: SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_ENQUEUED_FALSE,
+        retryAfterMs: coverage.selectedSnapshotObservationRetryAfterMs,
+      },
+      SNAPSHOT_TIMEOUT_REPAIR_ASSERTION
+        .STARTUP_RETRY_EXHAUSTED_OWNER_QUEUE,
     );
   },
 );

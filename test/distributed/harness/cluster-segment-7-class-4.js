@@ -39,6 +39,7 @@ const {
   STARTUP_ADMISSION_STATE_BLOCKED,
   STARTUP_ADMISSION_STATE_DEGRADED,
   STARTUP_ADMISSION_STATE_STRONG_ACTIVE,
+  ONE,
   ZERO,
   buildPublicationRecoveryGateSnapshot,
   canProjectStartupActiveFromTransientAdmin,
@@ -83,13 +84,44 @@ const PUBLICATION_HANDOFF_PENDING_RECONCILE_NODE_IDS_FIELD =
   'pendingReconcileNodeIds';
 const PUBLICATION_HANDOFF_PENDING_RECONCILE_NODE_IDS_SNAKE_FIELD =
   'pending_reconcile_node_ids';
+const PUBLICATION_HANDOFF_PENDING_RECOVERY_NODE_IDS_FIELD =
+  'pendingRecoveryNodeIds';
+const PUBLICATION_HANDOFF_PENDING_RECOVERY_NODE_IDS_SNAKE_FIELD =
+  'pending_recovery_node_ids';
 const PUBLICATION_HANDOFF_STATE_PENDING = 'pending';
 const PUBLICATION_HANDOFF_REASON_OWNER_RECONCILE_PENDING =
   'owner_reconcile_pending';
 const PUBLICATION_HANDOFF_NEXT_ACTION_RECONCILE_OWNER_MEMBERSHIP =
   'reconcile_owner_membership_publication';
+const PUBLICATION_HANDOFF_NEXT_ACTION_WAIT_OWNER_RECOVERY =
+  'wait_owner_recovery';
 const PUBLICATION_HANDOFF_RESIDUAL_RECONCILE_PROJECTION_LIMIT = 2;
+const PUBLICATION_PROJECTION_NODE_IDS_UNAVAILABLE = Object.freeze([]);
+const SELECTED_SNAPSHOT_OBSERVATION_MODE_REPAIR_DEFERRED = 'repair_deferred';
+const SELECTED_SNAPSHOT_OBSERVATION_NEXT_ACTION_RETRY = 'retry';
+const SELECTED_SNAPSHOT_OBSERVATION_REASON_SELECTED_TIMEOUT =
+  'selected_timeout';
+const SELECTED_SNAPSHOT_OWNER_QUEUE_PENDING_WRITES_FIELD = 'pendingWrites';
+const SELECTED_SNAPSHOT_OWNER_QUEUE_PENDING_WRITE_GROWTH_COUNT_FIELD =
+  'pendingWriteGrowthCount';
+const SELECTED_SNAPSHOT_HANDOFF_OUTCOME_STATE_FIELD = 'state';
+const SELECTED_SNAPSHOT_HANDOFF_OUTCOME_REASON_CODE_FIELD = 'reasonCode';
+const SELECTED_SNAPSHOT_HANDOFF_OUTCOME_ENQUEUED_FIELD = 'enqueued';
+const SELECTED_SNAPSHOT_HANDOFF_OUTCOME_RETRY_AFTER_MS_FIELD = 'retryAfterMs';
+const SELECTED_SNAPSHOT_HANDOFF_OUTCOME_STATE_WRITE_DEFERRED =
+  'write_deferred';
 const EMPTY_STRING = '';
+const ACTIVE_PROBE_PHASE_UNAVAILABLE = null;
+const ACTIVE_PROBE_REASONS_UNAVAILABLE = Object.freeze([]);
+const ACTIVE_PROBE_ADMISSION_REASON_UNAVAILABLE = null;
+const CONTROL_SNAPSHOT_SUMMARY_NODES_UNAVAILABLE = Object.freeze([]);
+const CONTROL_SNAPSHOT_SUMMARY_CAPTURED_AT_UNAVAILABLE = null;
+const CONTROL_SNAPSHOT_SUMMARY_REVISION_UNAVAILABLE = null;
+const CONTROL_SNAPSHOT_SUMMARY_REVISION_STATE_UNAVAILABLE = null;
+const CONTROL_SNAPSHOT_SUMMARY_EXPECTED_MINIMUM_REVISION_UNAVAILABLE = null;
+const CONTROL_SNAPSHOT_SUMMARY_REVISION_GAP_UNAVAILABLE = null;
+const CONTROL_SNAPSHOT_SUMMARY_RESUME_TOKEN_UNAVAILABLE = null;
+const CONTROL_SNAPSHOT_PUBLICATION_SUMMARY_UNAVAILABLE = null;
 const LOAD_PUBLICATION_GATE_WITNESS_READY = 'ready';
 const LOAD_PUBLICATION_GATE_WITNESS_CANONICAL_SNAPSHOT =
   'canonical_snapshot';
@@ -146,6 +178,23 @@ const LOAD_PUBLICATION_GATE_PROJECTION_DECISION_TABLE = Object.freeze([
       evidence.nodePublicationDisagreementCount === ZERO,
   }),
 ]);
+const SELECTED_SNAPSHOT_TIMEOUT_OWNER_RECOVERY_OUTCOME_KEEP = Object.freeze({
+  project: false,
+});
+const SELECTED_SNAPSHOT_TIMEOUT_OWNER_RECOVERY_OUTCOME_APPLY = Object.freeze({
+  project: true,
+});
+const SELECTED_SNAPSHOT_TIMEOUT_OWNER_RECOVERY_DECISION_TABLE = Object.freeze([
+  Object.freeze({
+    outcome: SELECTED_SNAPSHOT_TIMEOUT_OWNER_RECOVERY_OUTCOME_APPLY,
+    matches: (evidence) =>
+      evidence.selectedTimeoutRepairDeferred === true &&
+      evidence.waitOwnerRecoveryHandoff === true &&
+      evidence.pendingRecoveryNodeCount > ZERO &&
+      evidence.ownerQueueBounded === true &&
+      evidence.handoffOutcomeBounded === true,
+  }),
+]);
 const STARTUP_SNAPSHOT_PROJECTION_OUTCOME_KEEP = Object.freeze({
   project: false,
 });
@@ -157,6 +206,31 @@ const STARTUP_SNAPSHOT_PROJECTION_OUTCOME_APPLY = Object.freeze({
   admissionReason: ACTIVE_PROBE_REASON_STARTUP_SNAPSHOT_READY,
 });
 const STARTUP_SNAPSHOT_PROJECTION_DECISION_TABLE = Object.freeze([
+  Object.freeze({
+    outcome: STARTUP_SNAPSHOT_PROJECTION_OUTCOME_APPLY,
+    matches: (evidence) =>
+      evidence.readinessMode === CLUSTER_READINESS_MODE_STARTUP &&
+      evidence.diagnosticActive !== true &&
+      evidence.timeoutShaped === true &&
+      evidence.publicationGateReady === true &&
+      evidence.snapshotCoverageComplete !== true &&
+      evidence.selectedSnapshotAdminReady === true &&
+      evidence.selectedSnapshotTimeoutOwnerRecoveryProjectionReady === true &&
+      evidence.nodeSelectedOwnerRecoveryObserved === true &&
+      evidence.nodePublicationDisagreementCount === ZERO,
+  }),
+  Object.freeze({
+    outcome: STARTUP_SNAPSHOT_PROJECTION_OUTCOME_APPLY,
+    matches: (evidence) =>
+      evidence.readinessMode === CLUSTER_READINESS_MODE_STARTUP &&
+      evidence.diagnosticActive !== true &&
+      evidence.timeoutShaped === true &&
+      evidence.publicationGateReady === true &&
+      evidence.snapshotCoverageComplete !== true &&
+      evidence.selectedSnapshotAdminReady === true &&
+      evidence.selectedSnapshotTimeoutOwnerRecoveryProjectionReady === true &&
+      evidence.nodePublicationDisagreementCount === ZERO,
+  }),
   Object.freeze({
     outcome: STARTUP_SNAPSHOT_PROJECTION_OUTCOME_APPLY,
     matches: (evidence) =>
@@ -222,10 +296,155 @@ const PARTIAL_COVERAGE_CONVERGENCE_DECISION_TABLE = Object.freeze([
       evidence.selectedPendingAckCount === ZERO &&
       evidence.selectedMissingPublishedCount > ZERO,
   }),
+  Object.freeze({
+    outcome: PARTIAL_COVERAGE_CONVERGENCE_OUTCOME_APPLY,
+    matches: (evidence) =>
+      evidence.readinessMode === CLUSTER_READINESS_MODE_STARTUP &&
+      evidence.activeByStatus === true &&
+      evidence.publicationGateReady === true &&
+      evidence.snapshotCoverageComplete !== true &&
+      evidence.bestCoverageNodeCount > ZERO &&
+      evidence.selectedSnapshotAdminReady === true &&
+      evidence.selectedSnapshotTimeoutOwnerRecoveryProjectionReady === true &&
+      evidence.selectedPendingRecoveryCount > ZERO,
+  }),
 ]);
 
 function normalizeOptionalString(value) {
   return typeof value === TYPEOF_STRING && value.length > ZERO ? value : null;
+}
+
+function normalizeProjectionCount(value) {
+  const parsedValue = parseFiniteNumberField(value);
+  return Number.isFinite(parsedValue) ?
+    Math.max(ZERO, Math.floor(parsedValue)) :
+    ZERO;
+}
+
+function hasSelectedSnapshotBoundedRetry(value) {
+  const parsedValue = parseFiniteNumberField(value);
+  return Number.isFinite(parsedValue) && parsedValue > ZERO;
+}
+
+function normalizeSelectedSnapshotTimeoutOwnerRecoveryHandoff(
+  snapshotCoverage,
+) {
+  const handoff = snapshotCoverage?.selectedPublicationActiveGateHandoff;
+  return handoff &&
+    typeof handoff === TYPEOF_OBJECT &&
+    Array.isArray(handoff) !== true ?
+    handoff :
+    null;
+}
+
+function normalizeSelectedSnapshotTimeoutOwnerRecoveryOutcome(
+  snapshotCoverage,
+) {
+  const outcome = snapshotCoverage?.selectedMembershipPublicationHandoffOutcome;
+  return outcome &&
+    typeof outcome === TYPEOF_OBJECT &&
+    Array.isArray(outcome) !== true ?
+    outcome :
+    null;
+}
+
+function normalizeSelectedSnapshotOwnerQueueDepth(snapshotCoverage) {
+  const ownerQueueDepth = snapshotCoverage?.selectedControlPlaneOwnerQueueDepth;
+  return ownerQueueDepth &&
+    typeof ownerQueueDepth === TYPEOF_OBJECT &&
+    Array.isArray(ownerQueueDepth) !== true ?
+    ownerQueueDepth :
+    null;
+}
+
+function hasSelectedSnapshotTimeoutRepairDeferredEvidence(snapshotCoverage) {
+  return (
+    isTimeoutShapedProbeError(snapshotCoverage?.selectedError) === true &&
+    snapshotCoverage?.selectedSnapshotRepairDeferred === true &&
+    snapshotCoverage?.selectedSnapshotObservationMode ===
+      SELECTED_SNAPSHOT_OBSERVATION_MODE_REPAIR_DEFERRED &&
+    snapshotCoverage?.selectedSnapshotObservationNextAction ===
+      SELECTED_SNAPSHOT_OBSERVATION_NEXT_ACTION_RETRY &&
+    hasSelectedSnapshotBoundedRetry(
+      snapshotCoverage?.selectedSnapshotObservationRetryAfterMs,
+    ) &&
+    normalizeDistinctStringArray(
+      snapshotCoverage?.selectedSnapshotObservationReasonCodes,
+    ).includes(SELECTED_SNAPSHOT_OBSERVATION_REASON_SELECTED_TIMEOUT)
+  );
+}
+
+function isSelectedSnapshotOwnerQueueBounded({
+  ownerQueueDepth,
+  pendingRecoveryNodeIds,
+}) {
+  if (!ownerQueueDepth) {
+    return false;
+  }
+  const pendingWrites = normalizeProjectionCount(
+    ownerQueueDepth[SELECTED_SNAPSHOT_OWNER_QUEUE_PENDING_WRITES_FIELD],
+  );
+  const pendingWriteGrowthCount = normalizeProjectionCount(
+    ownerQueueDepth[
+      SELECTED_SNAPSHOT_OWNER_QUEUE_PENDING_WRITE_GROWTH_COUNT_FIELD
+    ],
+  );
+  return (
+    pendingWrites >= Math.max(ONE, pendingRecoveryNodeIds.length) &&
+    pendingWriteGrowthCount === ZERO
+  );
+}
+
+function isSelectedSnapshotHandoffOutcomeBounded(handoffOutcome) {
+  if (!handoffOutcome) {
+    return false;
+  }
+  return (
+    handoffOutcome[SELECTED_SNAPSHOT_HANDOFF_OUTCOME_STATE_FIELD] ===
+      SELECTED_SNAPSHOT_HANDOFF_OUTCOME_STATE_WRITE_DEFERRED &&
+    handoffOutcome[SELECTED_SNAPSHOT_HANDOFF_OUTCOME_REASON_CODE_FIELD] ===
+      PUBLICATION_HANDOFF_REASON_OWNER_RECONCILE_PENDING &&
+    handoffOutcome[SELECTED_SNAPSHOT_HANDOFF_OUTCOME_ENQUEUED_FIELD] !== true &&
+    hasSelectedSnapshotBoundedRetry(
+      handoffOutcome[SELECTED_SNAPSHOT_HANDOFF_OUTCOME_RETRY_AFTER_MS_FIELD],
+    )
+  );
+}
+
+function normalizeSelectedSnapshotTimeoutOwnerRecoveryEvidence(
+  snapshotCoverage,
+) {
+  const handoff =
+    normalizeSelectedSnapshotTimeoutOwnerRecoveryHandoff(snapshotCoverage);
+  const pendingRecoveryNodeIds =
+    normalizeOwnerReconcileHandoffPendingRecoveryNodeIds(handoff);
+  const handoffOutcome =
+    normalizeSelectedSnapshotTimeoutOwnerRecoveryOutcome(snapshotCoverage);
+  const ownerQueueDepth =
+    normalizeSelectedSnapshotOwnerQueueDepth(snapshotCoverage);
+  return Object.freeze({
+    pendingRecoveryNodeIds,
+    pendingRecoveryNodeCount: pendingRecoveryNodeIds.length,
+    selectedTimeoutRepairDeferred:
+      hasSelectedSnapshotTimeoutRepairDeferredEvidence(snapshotCoverage),
+    waitOwnerRecoveryHandoff:
+      isPendingOwnerReconcileActiveGateHandoff(handoff),
+    ownerQueueBounded: isSelectedSnapshotOwnerQueueBounded({
+      ownerQueueDepth,
+      pendingRecoveryNodeIds,
+    }),
+    handoffOutcomeBounded:
+      isSelectedSnapshotHandoffOutcomeBounded(handoffOutcome),
+  });
+}
+
+function decideSelectedSnapshotTimeoutOwnerRecoveryProjection(evidence) {
+  const decision =
+    SELECTED_SNAPSHOT_TIMEOUT_OWNER_RECOVERY_DECISION_TABLE.find(
+      (candidate) => candidate.matches(evidence),
+    );
+  return decision?.outcome ||
+    SELECTED_SNAPSHOT_TIMEOUT_OWNER_RECOVERY_OUTCOME_KEEP;
 }
 
 function extractPublicationProjectionNodeIds(row) {
@@ -266,6 +485,18 @@ function extractPublicationProjectionNodeIds(row) {
       ],
     ),
   ]);
+  const pendingRecoveryNodeIds = normalizeDistinctStringArray([
+    ...parseJsonArrayField(
+      publicationActiveGateHandoff?.[
+        PUBLICATION_HANDOFF_PENDING_RECOVERY_NODE_IDS_FIELD
+      ],
+    ),
+    ...parseJsonArrayField(
+      publicationActiveGateHandoff?.[
+        PUBLICATION_HANDOFF_PENDING_RECOVERY_NODE_IDS_SNAKE_FIELD
+      ],
+    ),
+  ]);
   const reasonCode =
     normalizeOptionalString(
       publicationActiveGateHandoff?.[PUBLICATION_HANDOFF_REASON_CODE_FIELD],
@@ -291,22 +522,27 @@ function extractPublicationProjectionNodeIds(row) {
     publicationActiveGateHandoff?.[
       PUBLICATION_HANDOFF_RUNTIME_PROMOTION_ALLOWED_SNAKE_FIELD
     ] === true;
+  const pendingHandoffNodeIds =
+    nextAction ===
+      PUBLICATION_HANDOFF_NEXT_ACTION_RECONCILE_OWNER_MEMBERSHIP ?
+      pendingReconcileNodeIds :
+      nextAction === PUBLICATION_HANDOFF_NEXT_ACTION_WAIT_OWNER_RECOVERY ?
+        pendingRecoveryNodeIds :
+        PUBLICATION_PROJECTION_NODE_IDS_UNAVAILABLE;
   const projectionAllowed =
     publicationActiveGateHandoff?.[PUBLICATION_HANDOFF_STATE_FIELD] ===
       PUBLICATION_HANDOFF_STATE_PENDING &&
     reasonCode === PUBLICATION_HANDOFF_REASON_OWNER_RECONCILE_PENDING &&
-    nextAction ===
-      PUBLICATION_HANDOFF_NEXT_ACTION_RECONCILE_OWNER_MEMBERSHIP &&
     runtimePromotionAllowed !== true &&
-    pendingReconcileNodeIds.length > ZERO;
+    pendingHandoffNodeIds.length > ZERO;
   if (projectionAllowed !== true) {
-    return [];
+    return PUBLICATION_PROJECTION_NODE_IDS_UNAVAILABLE;
   }
   const residualReconcileProjectionNodeIds =
-    pendingReconcileNodeIds.length <=
+    pendingHandoffNodeIds.length <=
       PUBLICATION_HANDOFF_RESIDUAL_RECONCILE_PROJECTION_LIMIT ?
-      pendingReconcileNodeIds :
-      [];
+      pendingHandoffNodeIds :
+      PUBLICATION_PROJECTION_NODE_IDS_UNAVAILABLE;
   return normalizeDistinctStringArray([
     ...parseJsonArrayField(
       publicationConvergence?.[PUBLICATION_PUBLISHED_ACTIVE_NODE_IDS_FIELD],
@@ -503,6 +739,12 @@ function buildStartupSnapshotProjectionContext(
     Array.isArray(snapshotCoverage.publicationDisagreementByNodeId) !== true ?
       snapshotCoverage.publicationDisagreementByNodeId :
       {};
+  const selectedTimeoutOwnerRecoveryEvidence =
+    normalizeSelectedSnapshotTimeoutOwnerRecoveryEvidence(snapshotCoverage);
+  const selectedTimeoutOwnerRecoveryOutcome =
+    decideSelectedSnapshotTimeoutOwnerRecoveryProjection(
+      selectedTimeoutOwnerRecoveryEvidence,
+    );
   return Object.freeze({
     readinessMode,
     publicationGateReady: publicationConvergenceGate?.ready === true,
@@ -518,6 +760,10 @@ function buildStartupSnapshotProjectionContext(
     selectedObservedNodeIds: normalizeDistinctStringArray(
       snapshotCoverage?.selectedObservedNodeIds,
     ),
+    selectedTimeoutOwnerRecoveryProjectionReady:
+      selectedTimeoutOwnerRecoveryOutcome.project === true,
+    selectedTimeoutOwnerRecoveryNodeIds:
+      selectedTimeoutOwnerRecoveryEvidence.pendingRecoveryNodeIds,
     healthyReadinessNodeIds: normalizeDistinctStringArray(
       snapshotCoverage?.selectedHealthyReadinessNodeIds,
     ),
@@ -560,6 +806,10 @@ function normalizeStartupSnapshotProjectionEvidence(
       projectionContext.healthyReadinessNodeIds.includes(nodeId),
     nodeSelectedSnapshotObserved:
       projectionContext.selectedObservedNodeIds.includes(nodeId),
+    selectedSnapshotTimeoutOwnerRecoveryProjectionReady:
+      projectionContext.selectedTimeoutOwnerRecoveryProjectionReady === true,
+    nodeSelectedOwnerRecoveryObserved:
+      projectionContext.selectedTimeoutOwnerRecoveryNodeIds.includes(nodeId),
     nodePublicationDisagreementCount: normalizeDistinctStringArray(
       publicationDisagreements,
     ).length,
@@ -628,8 +878,27 @@ function isPendingOwnerReconcileActiveGateHandoff(handoff = null) {
   if (!handoff || typeof handoff !== TYPEOF_OBJECT) {
     return false;
   }
+  const nextAction = normalizeOptionalString(
+    handoff[PUBLICATION_HANDOFF_NEXT_ACTION_FIELD] ??
+      handoff[PUBLICATION_HANDOFF_NEXT_ACTION_SNAKE_FIELD],
+  );
   const pendingReconcileNodeIds =
-    normalizeOwnerReconcileHandoffPendingNodeIds(handoff);
+    normalizeOwnerReconcileHandoffPendingReconcileNodeIds(handoff);
+  const pendingRecoveryNodeIds =
+    normalizeOwnerReconcileHandoffPendingRecoveryNodeIds(handoff);
+  const pendingHandoffNodeIds = normalizeOwnerReconcileHandoffPendingNodeIds(
+    handoff,
+  );
+  const handoffActionHasPendingNodes =
+    (
+      nextAction ===
+        PUBLICATION_HANDOFF_NEXT_ACTION_RECONCILE_OWNER_MEMBERSHIP &&
+      pendingReconcileNodeIds.length > ZERO
+    ) ||
+    (
+      nextAction === PUBLICATION_HANDOFF_NEXT_ACTION_WAIT_OWNER_RECOVERY &&
+      pendingRecoveryNodeIds.length > ZERO
+    );
   return (
     normalizeOptionalString(handoff[PUBLICATION_HANDOFF_STATE_FIELD]) ===
       PUBLICATION_HANDOFF_STATE_PENDING &&
@@ -637,23 +906,51 @@ function isPendingOwnerReconcileActiveGateHandoff(handoff = null) {
       handoff[PUBLICATION_HANDOFF_REASON_CODE_FIELD] ??
         handoff[PUBLICATION_HANDOFF_REASON_CODE_SNAKE_FIELD],
     ) === PUBLICATION_HANDOFF_REASON_OWNER_RECONCILE_PENDING &&
-    normalizeOptionalString(
-      handoff[PUBLICATION_HANDOFF_NEXT_ACTION_FIELD] ??
-        handoff[PUBLICATION_HANDOFF_NEXT_ACTION_SNAKE_FIELD],
-    ) === PUBLICATION_HANDOFF_NEXT_ACTION_RECONCILE_OWNER_MEMBERSHIP &&
     (
       handoff[PUBLICATION_HANDOFF_RUNTIME_PROMOTION_ALLOWED_FIELD] ??
       handoff[PUBLICATION_HANDOFF_RUNTIME_PROMOTION_ALLOWED_SNAKE_FIELD]
     ) !== true &&
-    pendingReconcileNodeIds.length > ZERO
+    pendingHandoffNodeIds.length > ZERO &&
+    handoffActionHasPendingNodes === true
   );
 }
 
-function normalizeOwnerReconcileHandoffPendingNodeIds(handoff = null) {
+function normalizeOwnerReconcileHandoffPendingReconcileNodeIds(handoff = null) {
   return normalizeDistinctStringArray(
     handoff?.[PUBLICATION_HANDOFF_PENDING_RECONCILE_NODE_IDS_FIELD] ??
       handoff?.[PUBLICATION_HANDOFF_PENDING_RECONCILE_NODE_IDS_SNAKE_FIELD],
   );
+}
+
+function normalizeOwnerReconcileHandoffPendingRecoveryNodeIds(handoff = null) {
+  return normalizeDistinctStringArray(
+    handoff?.[PUBLICATION_HANDOFF_PENDING_RECOVERY_NODE_IDS_FIELD] ??
+      handoff?.[PUBLICATION_HANDOFF_PENDING_RECOVERY_NODE_IDS_SNAKE_FIELD],
+  );
+}
+
+function normalizeOwnerReconcileHandoffPendingNodeIds(handoff = null) {
+  const nextAction = normalizeOptionalString(
+    handoff?.[PUBLICATION_HANDOFF_NEXT_ACTION_FIELD] ??
+      handoff?.[PUBLICATION_HANDOFF_NEXT_ACTION_SNAKE_FIELD],
+  );
+  const pendingReconcileNodeIds =
+    normalizeOwnerReconcileHandoffPendingReconcileNodeIds(handoff);
+  const pendingRecoveryNodeIds =
+    normalizeOwnerReconcileHandoffPendingRecoveryNodeIds(handoff);
+  if (
+    nextAction ===
+    PUBLICATION_HANDOFF_NEXT_ACTION_RECONCILE_OWNER_MEMBERSHIP
+  ) {
+    return pendingReconcileNodeIds;
+  }
+  if (nextAction === PUBLICATION_HANDOFF_NEXT_ACTION_WAIT_OWNER_RECOVERY) {
+    return pendingRecoveryNodeIds;
+  }
+  return normalizeDistinctStringArray([
+    ...pendingReconcileNodeIds,
+    ...pendingRecoveryNodeIds,
+  ]);
 }
 
 function normalizeOwnerReconcileHandoffMissingNodeIds(handoff = null) {
@@ -798,6 +1095,12 @@ function normalizePartialCoverageConvergenceEvidence({
           TYPEOF_OBJECT ?
         snapshotCoverage.selectedActiveGateOwnerCohort :
         null;
+  const selectedTimeoutOwnerRecoveryEvidence =
+    normalizeSelectedSnapshotTimeoutOwnerRecoveryEvidence(snapshotCoverage);
+  const selectedTimeoutOwnerRecoveryOutcome =
+    decideSelectedSnapshotTimeoutOwnerRecoveryProjection(
+      selectedTimeoutOwnerRecoveryEvidence,
+    );
   const selectedPendingAckResolvedByOwnerReconcile =
     canResolveSelectedPendingAckThroughOwnerReconcile({
       publicationConvergenceGate,
@@ -836,6 +1139,10 @@ function normalizePartialCoverageConvergenceEvidence({
         ZERO :
         selectedPendingAckNodeIds.length,
     selectedMissingPublishedCount: selectedMissingPublishedNodeIds.length,
+    selectedSnapshotTimeoutOwnerRecoveryProjectionReady:
+      selectedTimeoutOwnerRecoveryOutcome.project === true,
+    selectedPendingRecoveryCount:
+      selectedTimeoutOwnerRecoveryEvidence.pendingRecoveryNodeCount,
   });
 }
 
@@ -873,7 +1180,8 @@ class Cluster4 extends Cluster3 {
         CLUSTER_READINESS_MODE_LOAD :
         CLUSTER_READINESS_MODE_STARTUP;
     const nodes = [...this._nodes.values()];
-    const nodeDiagnostics = await Promise.all(
+    const expectedNodeIds = nodes.map((node) => node.id);
+    const nodeDiagnosticsPromise = Promise.all(
       nodes.map(async (node) => {
         const remainingMs = Math.max(MIN_TIMEOUT_MS, deadline - Date.now());
         const probeTimeoutMs = Math.min(
@@ -903,8 +1211,10 @@ class Cluster4 extends Cluster3 {
             nodeId: node.id,
             active,
             state,
-            phase: null,
-            reasons: statusReason ? [statusReason] : [],
+            phase: ACTIVE_PROBE_PHASE_UNAVAILABLE,
+            reasons: statusReason ?
+              [statusReason] :
+              ACTIVE_PROBE_REASONS_UNAVAILABLE,
             activitySource,
             admissionState:
               status.active === true ?
@@ -916,11 +1226,11 @@ class Cluster4 extends Cluster3 {
         try {
           let active = false;
           let state = INACTIVE_STATE;
-          let phase = null;
-          let reasons = [];
+          let phase = ACTIVE_PROBE_PHASE_UNAVAILABLE;
+          let reasons = ACTIVE_PROBE_REASONS_UNAVAILABLE;
           let activitySource = ACTIVE_PROBE_ACTIVITY_SOURCE_STATUS;
           let admissionState = STARTUP_ADMISSION_STATE_BLOCKED;
-          let admissionReason = null;
+          let admissionReason = ACTIVE_PROBE_ADMISSION_REASON_UNAVAILABLE;
 
           const readinessProbeOrder =
             readinessMode === CLUSTER_READINESS_MODE_LOAD ?
@@ -1078,7 +1388,7 @@ class Cluster4 extends Cluster3 {
               nodeId: node.id,
               active: false,
               state: INACTIVE_STATE,
-              phase: null,
+              phase: ACTIVE_PROBE_PHASE_UNAVAILABLE,
               reasons: [timeoutReason],
               activitySource: attemptedReadinessProbeSource,
               admissionState: STARTUP_ADMISSION_STATE_BLOCKED,
@@ -1090,8 +1400,8 @@ class Cluster4 extends Cluster3 {
             nodeId: node.id,
             active: false,
             state: INACTIVE_STATE,
-            phase: null,
-            reasons: [],
+            phase: ACTIVE_PROBE_PHASE_UNAVAILABLE,
+            reasons: ACTIVE_PROBE_REASONS_UNAVAILABLE,
             activitySource: ACTIVE_PROBE_ACTIVITY_SOURCE_STATUS,
             admissionState: STARTUP_ADMISSION_STATE_BLOCKED,
             admissionReason:
@@ -1102,19 +1412,23 @@ class Cluster4 extends Cluster3 {
         }
       }),
     );
-    const snapshotCoverage = await this._probeControlSnapshotCoverage(
+    const snapshotCoveragePromise = this._probeControlSnapshotCoverage(
       deadline,
-      nodes.map((node) => node.id),
+      expectedNodeIds,
       {
         forceRepair: options.forceRepair === true,
         readinessMode,
       },
     );
+    const [nodeDiagnostics, snapshotCoverage] = await Promise.all([
+      nodeDiagnosticsPromise,
+      snapshotCoveragePromise,
+    ]);
     const publicationConvergenceGate =
       readinessMode === CLUSTER_READINESS_MODE_LOAD ?
         evaluateLoadPublishedConvergence(
           snapshotCoverage,
-          nodes.map((node) => node.id),
+          expectedNodeIds,
         ) :
         {
           ready: true,
@@ -1192,13 +1506,16 @@ class Cluster4 extends Cluster3 {
     const rows = Array.isArray(snapshotResult?.rows) ? snapshotResult.rows : [];
     if (rows.length === ZERO) {
       return {
-        nodes: [],
-        capturedAtMs: null,
-        snapshotRevision: null,
-        snapshotRevisionState: null,
-        snapshotExpectedMinimumRevision: null,
-        snapshotRevisionGap: null,
-        snapshotResumeToken: null,
+        nodes: CONTROL_SNAPSHOT_SUMMARY_NODES_UNAVAILABLE,
+        capturedAtMs: CONTROL_SNAPSHOT_SUMMARY_CAPTURED_AT_UNAVAILABLE,
+        snapshotRevision: CONTROL_SNAPSHOT_SUMMARY_REVISION_UNAVAILABLE,
+        snapshotRevisionState:
+          CONTROL_SNAPSHOT_SUMMARY_REVISION_STATE_UNAVAILABLE,
+        snapshotExpectedMinimumRevision:
+          CONTROL_SNAPSHOT_SUMMARY_EXPECTED_MINIMUM_REVISION_UNAVAILABLE,
+        snapshotRevisionGap:
+          CONTROL_SNAPSHOT_SUMMARY_REVISION_GAP_UNAVAILABLE,
+        snapshotResumeToken: CONTROL_SNAPSHOT_SUMMARY_RESUME_TOKEN_UNAVAILABLE,
       };
     }
     const row = rows[0];
@@ -1244,12 +1561,12 @@ class Cluster4 extends Cluster3 {
       typeof row?.[CONTROL_SNAPSHOT_REVISION_STATE_FIELD] === 'string' &&
       row[CONTROL_SNAPSHOT_REVISION_STATE_FIELD].length > ZERO ?
         row[CONTROL_SNAPSHOT_REVISION_STATE_FIELD] :
-        null;
+        CONTROL_SNAPSHOT_SUMMARY_REVISION_STATE_UNAVAILABLE;
     const snapshotResumeToken =
       typeof row?.[CONTROL_SNAPSHOT_RESUME_TOKEN_FIELD] === 'string' &&
       row[CONTROL_SNAPSHOT_RESUME_TOKEN_FIELD].length > ZERO ?
         row[CONTROL_SNAPSHOT_RESUME_TOKEN_FIELD] :
-        null;
+        CONTROL_SNAPSHOT_SUMMARY_RESUME_TOKEN_UNAVAILABLE;
     return {
       nodes,
       capturedAtMs,
@@ -1263,7 +1580,7 @@ class Cluster4 extends Cluster3 {
 
   _summarizeControlSnapshotPublication(publication) {
     if (!publication || typeof publication !== TYPEOF_OBJECT) {
-      return null;
+      return CONTROL_SNAPSHOT_PUBLICATION_SUMMARY_UNAVAILABLE;
     }
     const publishedActiveNodeIds = parseJsonArrayField(
       publication.publishedActiveNodeIds ??
