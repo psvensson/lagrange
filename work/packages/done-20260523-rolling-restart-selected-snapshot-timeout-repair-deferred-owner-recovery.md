@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-23",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -51,7 +51,7 @@
     "test/distributed/harness/cluster-segment-7-class-4.js",
     "test/distributed/harness/cluster-segment-7-class-5.js",
     "test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js",
-    "work/packages/active-20260523-rolling-restart-selected-snapshot-timeout-repair-deferred-owner-recovery.md",
+    "work/packages/done-20260523-rolling-restart-selected-snapshot-timeout-repair-deferred-owner-recovery.md",
     "work/sprints/current-blocker.md",
     "work/sprints/current-blocker.json"
   ],
@@ -214,7 +214,10 @@
     "accuracy": "partial",
     "evidence": "test-output/reports/rolling-restart-selected-snapshot-timeout-repair-deferred-owner-recovery-20260523T061500Z.report.json",
     "metricDelta": 4
-  }
+  },
+  "closed": "2026-05-23",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260523-rolling-restart-single-inactive-admin-probe-snapshot-residual.md"
 }
 -->
 
@@ -374,3 +377,9 @@ Agent identity is optional provenance. Use legacy subagent ledgers only when a r
 5. npm run audit:runtime-grammar:file -- test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/cluster-segment-7-class-5.js
 6. node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-selected-snapshot-timeout-repair-deferred-owner-recovery-20260523T061500Z.report.json --fast-local --verbose
 7. npm run work:evidence-summary -- test-output/reports/rolling-restart-selected-snapshot-timeout-repair-deferred-owner-recovery-20260523T061500Z.report.json
+
+## Commit And Push Ledger
+
+1. Focused package commit: a5831efbae2440f57b73247154a0442ceb81138d
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

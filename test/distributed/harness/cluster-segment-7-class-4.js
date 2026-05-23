@@ -211,7 +211,10 @@ const STARTUP_SNAPSHOT_PROJECTION_DECISION_TABLE = Object.freeze([
     matches: (evidence) =>
       evidence.readinessMode === CLUSTER_READINESS_MODE_STARTUP &&
       evidence.diagnosticActive !== true &&
-      evidence.timeoutShaped === true &&
+      (
+        evidence.timeoutShaped === true ||
+        evidence.adminProbeTimeoutShaped === true
+      ) &&
       evidence.publicationGateReady === true &&
       evidence.snapshotCoverageComplete !== true &&
       evidence.selectedSnapshotAdminReady === true &&
@@ -224,7 +227,10 @@ const STARTUP_SNAPSHOT_PROJECTION_DECISION_TABLE = Object.freeze([
     matches: (evidence) =>
       evidence.readinessMode === CLUSTER_READINESS_MODE_STARTUP &&
       evidence.diagnosticActive !== true &&
-      evidence.timeoutShaped === true &&
+      (
+        evidence.timeoutShaped === true ||
+        evidence.adminProbeTimeoutShaped === true
+      ) &&
       evidence.publicationGateReady === true &&
       evidence.snapshotCoverageComplete !== true &&
       evidence.selectedSnapshotAdminReady === true &&
@@ -781,6 +787,17 @@ function hasDiagnosticReadinessTimeoutSignal(diagnostic) {
   );
 }
 
+function hasDiagnosticAdminProbeTimeoutSignal(diagnostic) {
+  return normalizeDistinctStringArray(diagnostic?.reasons).some((reason) => {
+    if (!reason.startsWith(ACTIVE_PROBE_REASON_ADMIN_PROBE_ERROR_PREFIX)) {
+      return false;
+    }
+    return isTimeoutShapedProbeError(
+      reason.slice(ACTIVE_PROBE_REASON_ADMIN_PROBE_ERROR_PREFIX.length),
+    );
+  });
+}
+
 function normalizeStartupSnapshotProjectionEvidence(
   diagnostic,
   projectionContext,
@@ -801,6 +818,7 @@ function normalizeStartupSnapshotProjectionEvidence(
     snapshotWitnessClean: projectionContext.snapshotWitnessClean === true,
     diagnosticActive: diagnostic?.active === true,
     timeoutShaped: hasDiagnosticReadinessTimeoutSignal(diagnostic),
+    adminProbeTimeoutShaped: hasDiagnosticAdminProbeTimeoutSignal(diagnostic),
     nodeCanonicalActive:
       projectionContext.publishedActiveNodeIds.includes(nodeId) ||
       projectionContext.healthyReadinessNodeIds.includes(nodeId),
