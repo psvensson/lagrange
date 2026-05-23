@@ -1,0 +1,313 @@
+# Runtime Components
+
+Node-local components, replicated service owners, metadata services, and core runtime service components.
+
+## Component Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              Node                                            │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────┐  │
+│  │   Admin API     │  │  Bootstrap API  │  │      SQL Query Engine       │  │
+│  │  (WebSocket)    │  │    (HTTP)       │  │                             │  │
+│  └────────┬────────┘  └────────┬────────┘  └──────────────┬──────────────┘  │
+│           │                    │                          │                  │
+│           ▼                    ▼                          ▼                  │
+│  ┌──────────────────────────────────────────────────────────────────────┐   │
+│  │                        System Table Cache                             │   │
+│  │              (In-memory, updated by CDC events only)                  │   │
+│  └──────────────────────────────────────────────────────────────────────┘   │
+│           │                    │                          │                  │
+│           ▼                    ▼                          ▼                  │
+│  ┌──────────────────────────────────────────────────────────────────────┐   │
+│  │                         Message Router                                │   │
+│  │           (WebSocket-based, handles local and remote)                 │   │
+│  └──────────────────────────────────────────────────────────────────────┘   │
+│           │                    │                          │                  │
+│           ▼                    ▼                          ▼                  │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────┐  │
+│  │ Message Group   │  │ Message Group   │  │    Partition Services       │  │
+│  │ Replica 1       │  │ Replica 2       │  │    (SQLite + Raft)          │  │
+│  │ (Raft)          │  │ (Raft)          │  │                             │  │
+│  └─────────────────┘  └─────────────────┘  └─────────────────────────────┘  │
+│                                            ┌─────────────────────────────┐  │
+│                                            │ Replicated Service Groups   │  │
+│                                            │(SQLite + Raft + Runtime)    │  │
+│                                            └─────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+Versioned management APIs are serviceized. Node-local admin and WASM API
+routes are compatibility adapters forwarding to:
+- `sys-wasm-meta` (WASM module/service ownership)
+- `sys-admin-meta` (broader admin surfaces, delegates WASM ownership)
+- `sys-postgres-wire` (PostgreSQL wire protocol ingress)
+All three services are provisioned during seed bootstrap.
+Under the unified runtime target, these services are runtime-selected via
+`service_definitions.runtime_kind` and orchestrated through one lifecycle
+owner.
+
+## Key Components
+
+### AdminWebSocketAPI
+- Node-local compatibility adapter for administrative SQL/cache operations
+- WebSocket endpoint: `/api/admin/stream`
+- HTTP landing and test admin endpoints:
+  - `/` and `/ui/tests` for operator dashboard
+  - `/api/admin/tests` and `/api/admin/test-runs*` for test administration
+  - `/ui/playback-viewer` and `/ui/test-output/*` for run artifact access
+- Fixed listening port: `ADMIN_DEFAULT.WEBSOCKET_PORT`
+  (`src/admin/admin-constants.js`) on every node
+- Port is intentionally fixed for operator predictability and is not
+  configuration-driven in node startup
+- Live run output stream uses SSE endpoint:
+  `/api/admin/test-runs/:runId/stream`
+- Test-run process orchestration and saved-run indexing is owned by
+  `AdminTestRunService` (`src/admin/admin-test-run-service.js`)
+- Standalone userland launcher (`scripts/start-test-run-dashboard.js`) starts
+  the same HTTP test admin surface without bootstrap/node lifecycle coupling
+
+### Debug Runtime Foundation Ownership
+- Debug ingress is exposed on existing admin adapter routes:
+  - `/api/admin/debug/sessions*`
+  - `/api/admin/debug/snapshots/:snapshotId`
+  - `/api/admin/debug/dap/request`
+- Required debug ingress headers are:
+  - `x-tenant-id`
+  - `x-principal`
+  - `x-roles`
+- `DebugMetadataStore` is the single owner for debug metadata operations:
+  - `debug_sessions`
+  - `debug_breakpoints`
+  - `debug_snapshots`
+- Metadata persistence/reads are SQL/CDC-only through
+  `SqlCore.executeRequest(SqlRequest)`; direct cache mutation is forbidden.
+- `AdminWebSocketAPI` may route DAP envelopes, but DAP request handling is owned
+  by the injected debug DAP router backend.
+- Distributed stage handoff ownership is handled by `DebugCoordinator` using
+  metadata + CDC updates for endpoint transitions.
+
+Debug ownership flow:
+
+```
+Client (debug headers)
+      │
+      ▼
+AdminWebSocketAPI debug route adapter
+      │
+      ├── metadata ops ─► DebugMetadataStore
+      │                    │
+      │                    ▼
+      │              SqlCore.executeRequest(SqlRequest)
+      │                    │
+      │                    ▼
+      │                SQL write/read + CDC propagation
+      │
+      └── DAP request ─► Debug DAP Router (backend owner)
+```
+
+### NodeService (Singleton)
+- Administrative component present on every node
+- Manages service lifecycle and health monitoring
+- Owns the system table cache (singleton per node)
+
+### NodeLifecycleStateMachine
+- Unified state machine for all node lifecycle states using NODE_STATE enum
+- Supports sub-phases within STARTING (bootstrap) and JOINING states
+- Bootstrap sub-phases: INFRASTRUCTURE -> MESSAGE_GROUPS -> PARTITIONS -> REGISTRATION -> CACHE_HYDRATION
+- Joining sub-phases: CONTACTING_SEED -> CONNECTING_WEBSOCKET -> CREATING/JOINING_MG -> WAITING_LEADERSHIP -> QUERYING_STATE
+- Phase gates can be registered per sub-phase for validation
+- Terminal sub-phases auto-advance the parent state
+- Replaces the former independent BootstrapPhaseStateMachine, JoiningPhaseStateMachine, and EnhancedBootstrapStateMachine
+
+### FailureDetector (Single Instance)
+- Single failure detection component (no duplicate detection in NodeLifecycleService)
+- Reads node state via SQL engine (not direct cache access)
+- Writes status changes via CDC (single write per status change)
+- Supports adaptive thresholds for flapping nodes
+- Detects recovery when failed nodes resume heartbeating
+
+### MessageRouter
+- Unified message routing for local and remote communication
+- WebSocket-based transport (mandatory)
+- Self-connection for uniform routing (all messages go through WebSocket)
+- Address format: `{nodeId}/{entityType}/{entityId}`
+
+### SystemTableCache
+- In-memory cache of all system tables
+- Updated ONLY by CDC events (single source of truth)
+- Provides read-only wrapper for safe access
+- Supports cache change listeners for reactive updates
+
+#### Sanctioned direct applySystemTableChange call sites
+
+Direct `applySystemTableChange` usage is constrained to the following paths:
+
+1. `src/message-group/cdc-handler.js` (`CDCHandler.applyEvent`) -
+   canonical CDC cache-apply owner path.
+2. `src/cache/cache-hydration-service.js`
+   (`CacheHydrationService` default `cdcEventApplier`) -
+   bootstrap hydration exception while seeding cache state.
+3. `src/bootstrap/node-joining-service.js`
+   (`NodeJoiningService.hydrateSystemCacheFromSnapshots`) -
+   join-time bootstrap hydration exception before CDC subscriptions activate.
+4. `src/bootstrap/node-joining-service.js`
+   (`NodeJoiningService.registerMessageGroupService`) -
+   bootstrap timing exception: eagerly seed local services cache after seed
+   registration to avoid join-time cache races before CDC fanout arrives.
+
+No other source file may call `applySystemTableChange` directly.
+
+### CDCIntegrationService
+- Routes all system table writes through SQL
+- Bootstrap mode for seed node direct writes (temporary, cleared after registration)
+- Normal mode routes through SQL engine to partition leaders
+- Generates CDC events that update all node caches
+- Single bootstrap writer: replaces the former BootstrapPartitionWriter and BootstrapSystemTableWriter
+- Runtime CDC event processing is instantiated once via `CDCEventHandler`
+- `handleEpochChangeCDC` and `handleNodeStateCDC` delegate to that single runtime handler path
+- Epoch propagation is cluster-scoped via `config.current_epoch` and `setEpochManager(...)`
+
+### PartitionService
+- SQLite-backed Raft group for data storage
+- Uses liferaft library for Raft consensus
+- Generates CDC events on writes
+- Owns participant-side distributed transaction behavior (`BEGIN`, `PREPARE`,
+  `COMMIT`, `ROLLBACK`) for partition-local state
+- `prepareTransaction()` validates write conflicts and durably appends a
+  `PREPARE_TRANSACTION` Raft log entry before acknowledging prepare success
+- Reconstructs prepared transaction state from Raft log entries on leader
+  election and keeps prepared writes durable across failover
+- Enforces participant prepared-state hold timeout and emits typed
+  `PREPARE_LOST` responses after autonomous timeout release
+- Implements epoch-based snapshot isolation on reads (committed-before-epoch
+  visibility + read-your-own-writes) and first-committer-wins write-conflict
+  detection at prepare
+
+### MessageGroupService
+- Reliable inter-service communication
+- 3-replica Raft groups using liferaft
+- Ensures message delivery with retry logic
+- Every node has at least one message group replica
+
+### Runtime_Driver_Registry (Target Owner)
+- Single owner mapping `runtime_kind` to runtime driver implementation
+- Deterministic lookup; unknown kinds fail closed with typed errors
+- No fallback to alternate runtime drivers
+
+### Service_Runtime_Lifecycle (Target Owner)
+- Single owner for runtime `prepare/start/stop/health` orchestration
+- Coordinates endpoint intent registration through one write path
+- Coordinates operation lifecycle transitions through SQL/CDC-owned records
+- Shared owner across `native_js`, `wasm_component`, and `oci_container`
+- Injects service-scoped query executors into replica contexts during `start()`
+  so service replicas can query tables through the standard SQL execution path.
+  The query executor factory is owned by `SQLQueryEngine` and wired via
+  `setQueryExecutorFactory()`. This is the single injection point for
+  service-to-table query access — no driver or lifecycle module may create
+  its own query path.
+
+### Runtime Drivers (Target Model)
+- `Native_JS_Driver`:
+  runs existing admin/service handlers in replicated runtime execution
+- `Wasm_Component_Driver`:
+  runs WASM component/module workloads with existing policy checks
+- `OCI_Container_Driver`:
+  runs digest-pinned OCI workloads under feature gate and policy controls
+
+### WasmServiceReplica
+- Third Raft group type alongside partitions and message groups
+- Extends `RaftReplicaBase` with `entityType` set to `WASM_SERVICE`
+- Integrates SessionKVStore (replicated KV), SafetyInterval (read consistency), TimerManager (persistent timers), and WasmExecutor (WASM function execution)
+- Registers in `services` table with `service_type` set to `wasm_service`
+- Managed by `UnifiedRebalancer` for replica placement using the same policy-based approach as other entity types
+
+### WasmMetaService (`sys-wasm-meta`)
+- Built-in replicated WASM service for external WASM entity management
+- Provisioned during seed bootstrap via `MetaServiceFactory`
+  (`src/wasm-service/meta-service-factory.js`)
+- Lifecycle integration via `MetaServiceLifecycle`
+  (`src/wasm-service/meta-service-lifecycle.js`)
+- Routing and availability via `MetaServiceRouter`
+  (`src/wasm-service/meta-service-router.js`)
+- Command handlers (`src/wasm-service/meta-command-handlers.js`):
+  `publishModule`, `getModule`, `listModules`, `createService`,
+  `updateService`, `scaleService`, `rolloutService`, `deleteService`,
+  `getOperation`, `listOperations`
+- Validation pipeline (`src/wasm-service/meta-validation-pipeline.js`)
+  reuses existing validators without duplication
+- Write executor (`src/wasm-service/meta-write-executor.js`) routes all
+  mutations through SQL/CDC ownership paths
+- Operation lifecycle (`src/wasm-service/operation-lifecycle.js`) persists
+  async workflow state in `wasm_operations` table
+- Operation stream (`src/wasm-service/operation-stream.js`) publishes
+  status updates for async command tracking
+- Returns operation IDs for async workflows; no direct partition mutation
+  path outside bootstrap exception rules
+
+### AdminMetaService (`sys-admin-meta`)
+- Built-in replicated service for generalized admin control surfaces
+- Provisioned during seed bootstrap alongside `sys-wasm-meta`
+- Command handlers (`src/admin/admin-meta-command-handlers.js`):
+  `getCacheState`, `getClusterState`, `getNodeState`,
+  `getReplicaOperations`, `getSystemLogs`, `getConfig`,
+  `publishModule`, `createService`, `updateService`,
+  `scaleService`, `rolloutService`, `deleteService`
+- WASM-owned commands delegate to `sys-wasm-meta` via
+  `AdminMetaDelegator` (`src/admin/admin-meta-delegator.js`)
+- Endpoint records built by `AdminMetaEndpointBuilder`
+  (`src/admin/admin-meta-endpoint-builder.js`)
+- Existing admin CLI/API entrypoints are thin adapters via
+  `AdminApiAdapter` (`src/admin/admin-api-adapter.js`)
+- CLI compatibility preserved via `AdminCliCompat`
+  (`src/admin/admin-cli-compat.js`)
+- Deprecation warnings for direct node-local mutation paths via
+  `AdminDeprecation` (`src/admin/admin-deprecation.js`)
+- Mutation guard (`src/admin/admin-mutation-guard.js`) rejects
+  bypass attempts in `reject` mode
+- Preserves single-path mutation ownership in service handlers
+
+### PostgresWireService (`sys-postgres-wire`)
+- Built-in replicated runtime service for PostgreSQL wire protocol
+  ingress (`META_SERVICE_ID.POSTGRES_WIRE = 'sys-postgres-wire'`)
+- Provisioned during seed bootstrap alongside `sys-admin-meta` and
+  `sys-wasm-meta` via `MetaServiceFactory`
+- `service_type = runtime_service`, `runtime_kind = native_js`,
+  `runtime_ref = postgres-wire-runtime`
+  (`META_SERVICE_RUNTIME_REF.POSTGRES_WIRE`)
+- Cluster-global `replica_count` semantics: the rebalancer treats
+  the service as a single entity with a target replica count spread
+  across nodes (not per-node)
+- Placement managed by `UnifiedRebalancer` with entity type
+  `REBALANCER_ENTITY_TYPE.RUNTIME_SERVICE`
+- Replica operations (`ADD/REMOVE/REPLACE`) execute through
+  `RuntimeServiceHandler` via `ServiceLifecycleManager`
+- Endpoint publication: each replica writes a `service_endpoints`
+  row with `protocol = postgresql`
+  (`WASM_SERVICE_PROTOCOL.POSTGRESQL`) for client discovery
+
+Key components:
+- `PostgresWireRuntimeModule` — native runtime module implementing
+  `prepare/start/stop/health`; `start()` binds TCP listener and
+  returns endpoint intent
+- `PgWireProtocolHandler` — wire protocol message handling
+  (startup, auth handshake, simple/extended query protocol)
+- `PgWireSession` — per-connection session state and lifecycle
+- `PgWireAuthHandler` — authentication and tenant/principal context
+  mapping for authorization before query execution
+- `PgwirePortAllocator` — port allocation with fixed-port and
+  dynamic-range modes; bind conflicts produce typed errors
+- `PgWireStartupSafetyGate` — ensures control-plane readiness
+  before PG wire startup; prevents bootstrap/join deadlocks on
+  PG wire failure
+- `PgWireCutoverGuard` — hard cutover verification; rejects any
+  standalone listener startup path outside the replicated service
+
+Ownership rules:
+- No standalone PG wire TCP listener path exists. The replicated
+  service path is the only listener owner (hard cutover).
+- Session state is replica-local by design. Horizontal scaling
+  works through endpoint discovery and client reconnect.
+- All metadata writes flow through SQL/CDC; the runtime module
+  does not write system tables directly.

@@ -244,7 +244,7 @@ correctness risks for both LLM agents and human reviewers. Round 3 is
 mostly mechanical-maintenance / test-only-proof, so it does not block
 Round 1 or Round 2.
 
-12. [Architecture Document Slicing](../packages/todo-20260523-architecture-document-slicing.md)
+12. [Architecture Document Slicing](../packages/done-20260523-architecture-document-slicing.md)
     - Lane: `mechanical-maintenance`
     - Owner boundary: `steering_governance_owner / architecture_index`
     - Purpose: slice the 132 KB `architecture.md` into

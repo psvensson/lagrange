@@ -1,11 +1,15 @@
 # Architecture Support Documents
 
-This directory is for supporting system-description documents that expand on
-the root [architecture.md](../architecture.md).
+This directory contains the current architecture index and supporting
+system-description documents.
 
-`architecture.md` remains the canonical root entrypoint. Add detailed
-subsystem documents here only when the material is architectural and link them
-from the root document.
+[`INDEX.md`](INDEX.md) is the canonical architecture entrypoint. The root
+[`architecture.md`](../architecture.md) file remains a compatibility pointer
+for existing links.
+Canonical repo-relative path: `architecture/INDEX.md`.
+
+Add detailed subsystem documents here only when the material is architectural
+and link them from `INDEX.md`.
 
 ## Diagram Packs
 
@@ -13,7 +17,7 @@ from the root document.
 - [Lagrange Advanced Architecture Diagrams](lagrange_advanced_architecture_diagrams.md)
 
 These two files are the primary visual architecture references and should stay
-aligned with the ownership and execution model in `../architecture.md`.
+aligned with the ownership and execution model in `INDEX.md`.
 
 ## Current Supporting Documents
 
@@ -25,7 +29,7 @@ aligned with the ownership and execution model in `../architecture.md`.
 
 The `future/` subdirectory contains forward-looking architecture documents
 for planned features. When a feature moves to in-progress, promote its
-document to this directory and link from `architecture.md`.
+document to this directory and link from `INDEX.md`.
 
 - [Activation-Cost-Aware Placement](future/activation-cost-aware-placement.md)
 - [Native Artifact Store](future/native-artifact-store.md)

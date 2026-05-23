@@ -13,7 +13,7 @@ Recommended load strategy:
 1. Load `lite.md` for a 30-second cold-start checklist.
 2. Always load `core.md` for non-trivial implementation work.
 3. Load one domain pack based on task:
-   - `architecture.md` for runtime/control-plane/bootstrap/join/rebalance work
+   - `architecture/INDEX.md` for runtime/control-plane/bootstrap/join/rebalance work
    - `testing.md` for test design and regression policy
    - `style.md` for lint/style/naming policy
    - `governance.md` for roadmap/scope checks

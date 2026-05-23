@@ -12,6 +12,7 @@ To align with this repository's structure, read and defer to the following canon
     *   Load the primary domain pack named by `npm run work:context`.
 2.  **Workflow Rules & Coding Constraints**:
     *   Refer to [work/RULES.md](file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/work/RULES.md) for the single canon of rules.
+    *   Use [architecture/INDEX.md](file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/architecture/INDEX.md) as the architecture entrypoint before reading subsystem detail.
     *   [Lane Definitions](file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/work/RULES.md#lane-definitions)
     *   [Validator Phases](file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/work/RULES.md#validator-phases)
     *   [Proof Requirements](file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/work/RULES.md#proof-requirements)
