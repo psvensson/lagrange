@@ -212,3 +212,9 @@ Agent identity is optional provenance. Use legacy subagent ledgers only when a r
 1. npm run work:package:doctor -- --suggest work/packages/done-20260523-workflow-package-tooling-reliability.md
 2. npm run work:validate -- --pre-impl work/packages/done-20260523-workflow-package-tooling-reliability.md
 3. npm test -- test/scripts/work-llm-usability-tools.test.js test/scripts/work-tracker-subagent-ledger.test.js
+
+## Commit And Push Ledger
+
+- Focused package commit: 69275150c9f9ffc41a7f3385655d7a6453eca4f6
+- Pushed to: origin/codex/pending-ack-eligibility-filter
+- Commit contains only package-owned files/package-status/allowed sprint handoff: yes
