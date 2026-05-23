@@ -48,6 +48,7 @@ const {
 
 const TYPEOF_OBJECT = 'object';
 const TYPEOF_STRING = 'string';
+const TYPEOF_FUNCTION = 'function';
 const PRIORITY_RECOVERY_DECISION_SNAPSHOT_PROGRESS_FIELD = Object.freeze({
   COMPLETED_AT_MS: 'completedAtMs',
   CREATED_AT_MS: 'createdAtMs',
@@ -71,6 +72,39 @@ const PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT = Object.freeze({
   STATUS_PREFIX: 'status=',
   STRING_TYPE: 'string',
 });
+const ACTIVE_WAIT_DIAGNOSTIC_TEXT = Object.freeze({
+  ADMIN_READY_PREFIX: '#adminReady=',
+  CAPTURED_AT_PREFIX: '#ts=',
+  COUNT_SEPARATOR: '/',
+  ENTRY_SEPARATOR: ', ',
+  ERROR_STATE_PREFIX: '=error:',
+  KEY_VALUE_SEPARATOR: ':',
+  NODE_ACTIVE_SUFFIX: '=active',
+  NODE_STATE_SEPARATOR: '=',
+  PRIORITY_RECOVERY_PREFIX: '#priorityRecovery=',
+  PRIORITY_SPREAD_PENDING: '#prioritySpread=pending',
+  PRIORITY_SPREAD_READY: '#prioritySpread=ready',
+  PROBE_TIMEOUT_PREFIX: '#probeMs=',
+  PUBLICATION_EPOCH_PREFIX: '#epoch=',
+  PUBLICATION_MISSING_PREFIX: '#missingPublished=',
+  PUBLICATION_PENDING_ACK_PREFIX: '#pendingAck=',
+  PUBLICATION_STATUS_PREFIX: '#pub=',
+  REACHABILITY_ERROR_PREFIX: '#adminError=',
+  REACHABILITY_TIMEOUT_PREFIX: '#reachabilityProbeMs=',
+  REACHABLE_BY_PREFIX: '#via=',
+  SELECTED_NODE_PREFIX: '@',
+  UNKNOWN_NODE_ID: 'unknown-node',
+});
+const ACTIVE_WAIT_PUBLICATION_STATUS_UNKNOWN = UNKNOWN_STATE;
+const ACTIVE_WAIT_PUBLICATION_STATUS_RANK = Object.freeze({
+  PUBLISHED: 3,
+  ACK_PENDING: 2,
+  PUBLISHING_OR_PREPARED: 1,
+});
+const ACTIVE_WAIT_PUBLICATION_CONVERGENCE_REASONS_EMPTY = Object.freeze([]);
+const ACTIVE_WAIT_BLOCKER_SIGNATURE_SEPARATOR = '|';
+const PRIORITY_RECOVERY_SEMANTIC_STATE_ID_UNKNOWN = UNKNOWN_STATE;
+const PRIORITY_RECOVERY_DECISION_SNAPSHOT_UNKNOWN_EPOCH = -1;
 const PUBLICATION_CONVERGENCE_GATE_SUMMARY_DECISION_TABLE = Object.freeze([
   Object.freeze({
     summary: PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.NONE,
@@ -101,6 +135,7 @@ const ACTIVE_GATE_OWNER_COHORT_FIELD = Object.freeze({
     'membershipPublicationHandoffOutcome',
   MISSING_PUBLISHED_COUNT: 'missingPublishedCount',
   MISSING_PUBLISHED_NODE_IDS: 'missingPublishedNodeIds',
+  PUBLISHED_ACTIVE_NODE_IDS: 'publishedActiveNodeIds',
   PENDING_RECOVERY_COUNT: 'pendingRecoveryCount',
   PENDING_RECOVERY_NODE_IDS: 'pendingRecoveryNodeIds',
   PENDING_RECONCILE_COUNT: 'pendingReconcileCount',
@@ -155,10 +190,20 @@ function normalizeDistinctStringArray(values) {
   return [
     ...new Set(
       values
-        .map((value) => String(value || '').trim())
+        .map((value) => String(value || PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.EMPTY).trim())
         .filter((value) => value.length > ZERO),
     ),
   ].sort((left, right) => left.localeCompare(right));
+}
+
+function normalizeFirstNonEmptyDistinctStringArray(...candidates) {
+  for (const candidate of candidates) {
+    const normalized = normalizeDistinctStringArray(candidate);
+    if (normalized.length > ZERO) {
+      return normalized;
+    }
+  }
+  return [];
 }
 
 function normalizeActiveGateOwnerCohortRecord(value) {
@@ -260,7 +305,7 @@ function resolveStartupPublicationLagSelectedMissingCount({
  * @returns {Promise<*>}
  */
 function withTimeout(promise, timeoutMs, timeoutMessage) {
-  const boundedTimeoutMs = Math.max(MIN_TIMEOUT_MS, Number(timeoutMs) || 0);
+  const boundedTimeoutMs = Math.max(MIN_TIMEOUT_MS, Number(timeoutMs) || ZERO);
   return new Promise((resolve, reject) => {
     let settled = false;
     const timer = setTimeout(() => {
@@ -270,7 +315,7 @@ function withTimeout(promise, timeoutMs, timeoutMessage) {
       settled = true;
       reject(new Error(timeoutMessage));
     }, boundedTimeoutMs);
-    if (typeof timer.unref === 'function') {
+    if (typeof timer.unref === TYPEOF_FUNCTION) {
       timer.unref();
     }
     Promise.resolve(promise)
@@ -300,8 +345,11 @@ function withTimeout(promise, timeoutMs, timeoutMessage) {
  */
 function formatCountSummary(counts) {
   return Array.from(counts.entries())
-    .map(([key, count]) => String(key) + ':' + String(count))
-    .join(', ');
+    .map(([key, count]) =>
+      String(key) +
+        ACTIVE_WAIT_DIAGNOSTIC_TEXT.KEY_VALUE_SEPARATOR +
+        String(count))
+    .join(ACTIVE_WAIT_DIAGNOSTIC_TEXT.ENTRY_SEPARATOR);
 }
 
 /**
@@ -312,20 +360,30 @@ function formatCountSummary(counts) {
 function formatNodeDiagnostics(nodeDiagnostics = []) {
   return nodeDiagnostics
     .map((diagnostic) => {
-      const nodeId = String(diagnostic.nodeId || 'unknown-node');
+      const nodeId = String(
+        diagnostic.nodeId || ACTIVE_WAIT_DIAGNOSTIC_TEXT.UNKNOWN_NODE_ID,
+      );
       if (diagnostic.active === true) {
-        return nodeId + '=active';
+        return nodeId + ACTIVE_WAIT_DIAGNOSTIC_TEXT.NODE_ACTIVE_SUFFIX;
       }
-      if (typeof diagnostic.error === 'string' && diagnostic.error.length > 0) {
-        return nodeId + '=error:' + diagnostic.error;
+      if (
+        typeof diagnostic.error === TYPEOF_STRING &&
+        diagnostic.error.length > ZERO
+      ) {
+        return nodeId +
+          ACTIVE_WAIT_DIAGNOSTIC_TEXT.ERROR_STATE_PREFIX +
+          diagnostic.error;
       }
       const stateValue =
-        typeof diagnostic.state === 'string' && diagnostic.state.length > 0 ?
+        typeof diagnostic.state === TYPEOF_STRING &&
+        diagnostic.state.length > ZERO ?
           diagnostic.state :
           UNKNOWN_STATE;
-      return nodeId + '=' + stateValue;
+      return nodeId +
+        ACTIVE_WAIT_DIAGNOSTIC_TEXT.NODE_STATE_SEPARATOR +
+        stateValue;
     })
-    .join(', ');
+    .join(ACTIVE_WAIT_DIAGNOSTIC_TEXT.ENTRY_SEPARATOR);
 }
 
 /**
@@ -334,14 +392,14 @@ function formatNodeDiagnostics(nodeDiagnostics = []) {
  * @returns {string}
  */
 function formatSnapshotCoverage(snapshotCoverage) {
-  if (!snapshotCoverage || typeof snapshotCoverage !== 'object') {
-    return 'none';
+  if (!snapshotCoverage || typeof snapshotCoverage !== TYPEOF_OBJECT) {
+    return PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.NONE;
   }
-  const expectedNodeCount = Number(snapshotCoverage.expectedNodeCount) || 0;
+  const expectedNodeCount = Number(snapshotCoverage.expectedNodeCount) || ZERO;
   const bestCoverageNodeCount =
-    Number(snapshotCoverage.bestCoverageNodeCount) || 0;
+    Number(snapshotCoverage.bestCoverageNodeCount) || ZERO;
   const selectedNodeId =
-    typeof snapshotCoverage.selectedNodeId === 'string' &&
+    typeof snapshotCoverage.selectedNodeId === TYPEOF_STRING &&
     snapshotCoverage.selectedNodeId.length > ZERO ?
       snapshotCoverage.selectedNodeId :
       null;
@@ -357,12 +415,12 @@ function formatSnapshotCoverage(snapshotCoverage) {
         false :
         null;
   const selectedReachableBy =
-    typeof snapshotCoverage.selectedReachableBy === 'string' &&
+    typeof snapshotCoverage.selectedReachableBy === TYPEOF_STRING &&
     snapshotCoverage.selectedReachableBy.length > ZERO ?
       snapshotCoverage.selectedReachableBy :
       null;
   const selectedReachabilityError =
-    typeof snapshotCoverage.selectedReachabilityError === 'string' &&
+    typeof snapshotCoverage.selectedReachabilityError === TYPEOF_STRING &&
     snapshotCoverage.selectedReachabilityError.length > ZERO ?
       snapshotCoverage.selectedReachabilityError :
       null;
@@ -384,7 +442,7 @@ function formatSnapshotCoverage(snapshotCoverage) {
     null;
   const selectedPublicationConvergence =
     snapshotCoverage.selectedPublicationConvergence &&
-    typeof snapshotCoverage.selectedPublicationConvergence === 'object' ?
+    typeof snapshotCoverage.selectedPublicationConvergence === TYPEOF_OBJECT ?
       snapshotCoverage.selectedPublicationConvergence :
       null;
   const publicationEpoch = Number.isFinite(
@@ -393,7 +451,7 @@ function formatSnapshotCoverage(snapshotCoverage) {
     Math.floor(selectedPublicationConvergence.publicationEpoch) :
     null;
   const publicationStatus =
-    typeof selectedPublicationConvergence?.publicationStatus === 'string' ?
+    typeof selectedPublicationConvergence?.publicationStatus === TYPEOF_STRING ?
       selectedPublicationConvergence.publicationStatus.toUpperCase() :
       null;
   const pendingAckCount = Array.isArray(
@@ -408,7 +466,8 @@ function formatSnapshotCoverage(snapshotCoverage) {
     ZERO;
   const prioritySpreadSatisfied =
     selectedPublicationConvergence?.priorityPartitionSummary &&
-    typeof selectedPublicationConvergence.priorityPartitionSummary === 'object' ?
+    typeof selectedPublicationConvergence.priorityPartitionSummary ===
+      TYPEOF_OBJECT ?
       selectedPublicationConvergence.priorityPartitionSummary.satisfied :
       null;
   const priorityRecoveryProgressClassCount =
@@ -417,43 +476,63 @@ function formatSnapshotCoverage(snapshotCoverage) {
     ).unresolvedClassCount;
   return (
     String(bestCoverageNodeCount) +
-    '/' +
+    ACTIVE_WAIT_DIAGNOSTIC_TEXT.COUNT_SEPARATOR +
     String(expectedNodeCount) +
-    (selectedNodeId ? '@' + selectedNodeId : '') +
+    (selectedNodeId ?
+      ACTIVE_WAIT_DIAGNOSTIC_TEXT.SELECTED_NODE_PREFIX + selectedNodeId :
+      PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.EMPTY) +
     (selectedCapturedAtMs !== null ?
-      '#ts=' + String(selectedCapturedAtMs) :
-      '') +
+      ACTIVE_WAIT_DIAGNOSTIC_TEXT.CAPTURED_AT_PREFIX +
+        String(selectedCapturedAtMs) :
+      PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.EMPTY) +
     (selectedAdminReady !== null ?
-      '#adminReady=' + String(selectedAdminReady) :
-      '') +
-    (selectedReachableBy ? '#via=' + selectedReachableBy : '') +
+      ACTIVE_WAIT_DIAGNOSTIC_TEXT.ADMIN_READY_PREFIX +
+        String(selectedAdminReady) :
+      PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.EMPTY) +
+    (selectedReachableBy ?
+      ACTIVE_WAIT_DIAGNOSTIC_TEXT.REACHABLE_BY_PREFIX + selectedReachableBy :
+      PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.EMPTY) +
     (selectedReachabilityError ?
-      '#adminError=' + selectedReachabilityError :
-      '') +
+      ACTIVE_WAIT_DIAGNOSTIC_TEXT.REACHABILITY_ERROR_PREFIX +
+        selectedReachabilityError :
+      PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.EMPTY) +
     (selectedSnapshotTimeoutMs !== null &&
     selectedSnapshotTimeoutMs < CONTROL_SNAPSHOT_PROBE_TIMEOUT_MS ?
-      '#probeMs=' + String(selectedSnapshotTimeoutMs) :
-      '') +
+      ACTIVE_WAIT_DIAGNOSTIC_TEXT.PROBE_TIMEOUT_PREFIX +
+        String(selectedSnapshotTimeoutMs) :
+      PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.EMPTY) +
     (selectedReachabilityTimeoutMs !== null &&
     selectedReachabilityTimeoutMs <
       CONTROL_SNAPSHOT_REACHABILITY_PROBE_TIMEOUT_MS ?
-      '#reachabilityProbeMs=' + String(selectedReachabilityTimeoutMs) :
-      '') +
-    (publicationEpoch !== null ? '#epoch=' + String(publicationEpoch) : '') +
-    (publicationStatus ? '#pub=' + publicationStatus : '') +
-    (pendingAckCount > ZERO ? '#pendingAck=' + String(pendingAckCount) : '') +
+      ACTIVE_WAIT_DIAGNOSTIC_TEXT.REACHABILITY_TIMEOUT_PREFIX +
+        String(selectedReachabilityTimeoutMs) :
+      PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.EMPTY) +
+    (publicationEpoch !== null ?
+      ACTIVE_WAIT_DIAGNOSTIC_TEXT.PUBLICATION_EPOCH_PREFIX +
+        String(publicationEpoch) :
+      PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.EMPTY) +
+    (publicationStatus ?
+      ACTIVE_WAIT_DIAGNOSTIC_TEXT.PUBLICATION_STATUS_PREFIX +
+        publicationStatus :
+      PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.EMPTY) +
+    (pendingAckCount > ZERO ?
+      ACTIVE_WAIT_DIAGNOSTIC_TEXT.PUBLICATION_PENDING_ACK_PREFIX +
+        String(pendingAckCount) :
+      PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.EMPTY) +
     (missingPublishedCount > ZERO ?
-      '#missingPublished=' + String(missingPublishedCount) :
-      '') +
+      ACTIVE_WAIT_DIAGNOSTIC_TEXT.PUBLICATION_MISSING_PREFIX +
+        String(missingPublishedCount) :
+      PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.EMPTY) +
     (prioritySpreadSatisfied === false ?
-      '#prioritySpread=pending' :
+      ACTIVE_WAIT_DIAGNOSTIC_TEXT.PRIORITY_SPREAD_PENDING :
       prioritySpreadSatisfied === true ?
-        '#prioritySpread=ready' :
-        '') +
+        ACTIVE_WAIT_DIAGNOSTIC_TEXT.PRIORITY_SPREAD_READY :
+        PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.EMPTY) +
     (Number.isInteger(priorityRecoveryProgressClassCount) &&
     priorityRecoveryProgressClassCount > ZERO ?
-      '#priorityRecovery=' + String(priorityRecoveryProgressClassCount) :
-      '')
+      ACTIVE_WAIT_DIAGNOSTIC_TEXT.PRIORITY_RECOVERY_PREFIX +
+        String(priorityRecoveryProgressClassCount) :
+      PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.EMPTY)
   );
 }
 
@@ -485,6 +564,19 @@ function evaluateLoadPublishedConvergence(
     typeof snapshotCoverage.selectedPublicationConvergence === 'object' ?
       snapshotCoverage.selectedPublicationConvergence :
       null;
+  const publicationActiveGateHandoff = normalizeActiveGateOwnerCohortRecord(
+    snapshotCoverage?.selectedPublicationActiveGateHandoff,
+  );
+  const publicationActiveGateHandoffPublishedActiveNodeIds =
+    normalizeActiveGateOwnerCohortNodeIds(
+      publicationActiveGateHandoff,
+      ACTIVE_GATE_OWNER_COHORT_FIELD.PUBLISHED_ACTIVE_NODE_IDS,
+    );
+  const publicationActiveGateHandoffMissingPublishedNodeIds =
+    normalizeActiveGateOwnerCohortNodeIds(
+      publicationActiveGateHandoff,
+      ACTIVE_GATE_OWNER_COHORT_FIELD.MISSING_PUBLISHED_NODE_IDS,
+    );
   const publicationRecoveryGate = selectedPublicationConvergenceGate ?
     buildPublicationRecoveryGateSnapshot({
       ...selectedPublicationConvergenceGate,
@@ -530,18 +622,17 @@ function evaluateLoadPublishedConvergence(
       typeof publicationConvergence?.publicationStatus === 'string' ?
         publicationConvergence.publicationStatus.toUpperCase() :
         null;
-  const publishedActiveNodeIds = normalizeDistinctStringArray(
+  const publishedActiveNodeIds = normalizeFirstNonEmptyDistinctStringArray(
     publicationConvergence?.publishedActiveNodeIds,
+    publicationActiveGateHandoffPublishedActiveNodeIds,
   );
-  const recoveryActiveNodeIds = normalizeDistinctStringArray(
-    publicationConvergence?.recoveryActiveNodeIds ??
-      publicationConvergence?.membershipLifecycleSummary
-        ?.recoveryActiveNodeIds ??
-      publicationConvergence?.membershipLifecycleSummary
-        ?.locallyEligibleNodeIds ??
-      publicationConvergence?.membershipLifecycleSummary
-        ?.projectedServingNodeIds ??
-      publicationConvergence?.publishedActiveNodeIds,
+  const recoveryActiveNodeIds = normalizeFirstNonEmptyDistinctStringArray(
+    publicationConvergence?.recoveryActiveNodeIds,
+    publicationConvergence?.membershipLifecycleSummary?.recoveryActiveNodeIds,
+    publicationConvergence?.membershipLifecycleSummary?.locallyEligibleNodeIds,
+    publicationConvergence?.membershipLifecycleSummary?.projectedServingNodeIds,
+    publicationConvergence?.publishedActiveNodeIds,
+    publicationActiveGateHandoffPublishedActiveNodeIds,
   );
   const pendingAckNodeIds = normalizeDistinctStringArray(
     publicationRecoveryGate?.pendingAckNodeIds ??
@@ -593,6 +684,8 @@ function evaluateLoadPublishedConvergence(
     ...normalizeDistinctStringArray(
       publicationConvergence?.membershipLifecycleSummary?.projectedServingNodeIds,
     ),
+    ...publicationActiveGateHandoffPublishedActiveNodeIds,
+    ...publicationActiveGateHandoffMissingPublishedNodeIds,
   ]);
   const effectivePublishedNodeIds =
     requiredPublishedNodeIds.length > ZERO ?
@@ -607,15 +700,35 @@ function evaluateLoadPublishedConvergence(
     ...missingPublishedNodeIds,
     ...publicationRecoveryGateMissingPublishedNodeIds,
   ]);
-  const reasons = [];
+  const publicationActiveGateHandoffMissingPublishedCount =
+    normalizeActiveGateOwnerCohortCount(
+      publicationActiveGateHandoff,
+      ACTIVE_GATE_OWNER_COHORT_FIELD.MISSING_PUBLISHED_COUNT,
+      publicationActiveGateHandoffMissingPublishedNodeIds,
+    );
+  const publicationActiveGateHandoffCoversExpectedNodes =
+    publicationActiveGateHandoff !== null &&
+    expectedPublishedNodeIds.length > ZERO &&
+    publicationActiveGateHandoffPublishedActiveNodeIds.length >=
+      expectedPublishedNodeIds.length &&
+    publicationActiveGateHandoffMissingPublishedCount === ZERO &&
+    pendingAckNodeIds.length === ZERO;
+  const reasons = Array.from(ACTIVE_WAIT_PUBLICATION_CONVERGENCE_REASONS_EMPTY);
 
-  if (!publicationConvergence && !selectedPublicationConvergenceGate) {
+  if (
+    !publicationConvergence &&
+    !selectedPublicationConvergenceGate &&
+    publicationActiveGateHandoffCoversExpectedNodes !== true
+  ) {
     reasons.push(ACTIVE_PROBE_REASON_PUBLICATION_CONVERGENCE_MISSING);
   }
-  if (publicationStatus !== 'PUBLISHED') {
+  if (
+    publicationStatus !== ACTIVE_WAIT_PUBLICATION_STATUS_PUBLISHED &&
+    publicationActiveGateHandoffCoversExpectedNodes !== true
+  ) {
     reasons.push(
       ACTIVE_PROBE_REASON_PUBLICATION_NOT_PUBLISHED_PREFIX +
-        String(publicationStatus || 'unknown'),
+        String(publicationStatus || UNKNOWN_STATE),
     );
   }
   if (pendingAckNodeIds.length > ZERO) {
@@ -653,7 +766,8 @@ function evaluateLoadPublishedConvergence(
     priorityRecoveryDecisionSnapshots: selectedPriorityRecoveryDecisionSnapshots,
     recoveryActiveNodeIds,
     recoveryActiveNodeSource:
-      typeof publicationConvergence?.recoveryActiveNodeSource === 'string' &&
+      typeof publicationConvergence?.recoveryActiveNodeSource ===
+        TYPEOF_STRING &&
       publicationConvergence.recoveryActiveNodeSource.length > ZERO ?
         publicationConvergence.recoveryActiveNodeSource :
         null,
@@ -1106,26 +1220,28 @@ function formatPublicationConvergenceGate(
 }
 
 function normalizeActiveWaitPublicationStatus(status) {
-  if (typeof status !== 'string') {
-    return null;
+  if (typeof status !== TYPEOF_STRING) {
+    return ACTIVE_WAIT_PUBLICATION_STATUS_UNKNOWN;
   }
   const normalized = status.trim().toUpperCase();
-  return normalized.length > ZERO ? normalized : null;
+  return normalized.length > ZERO ?
+    normalized :
+    ACTIVE_WAIT_PUBLICATION_STATUS_UNKNOWN;
 }
 
 function resolveActiveWaitPublicationStatusRank(status) {
   const normalizedStatus = normalizeActiveWaitPublicationStatus(status);
   if (normalizedStatus === ACTIVE_WAIT_PUBLICATION_STATUS_PUBLISHED) {
-    return 3;
+    return ACTIVE_WAIT_PUBLICATION_STATUS_RANK.PUBLISHED;
   }
   if (normalizedStatus === ACTIVE_WAIT_PUBLICATION_STATUS_ACK_PENDING) {
-    return 2;
+    return ACTIVE_WAIT_PUBLICATION_STATUS_RANK.ACK_PENDING;
   }
   if (
     normalizedStatus === ACTIVE_WAIT_PUBLICATION_STATUS_PUBLISHING ||
     normalizedStatus === ACTIVE_WAIT_PUBLICATION_STATUS_PREPARED
   ) {
-    return 1;
+    return ACTIVE_WAIT_PUBLICATION_STATUS_RANK.PUBLISHING_OR_PREPARED;
   }
   return ZERO;
 }
@@ -1390,11 +1506,16 @@ function buildActiveWaitProgressSnapshot(
           .filter(([nodeId]) => nodeId.length > ZERO),
       ) :
       {};
-  const selectedPublishedActiveNodeIds = normalizeDistinctStringArray(
-    snapshotCoverage?.selectedPublishedActiveNodeIds ||
-      publicationActiveGateHandoff?.publishedActiveNodeIds ||
+  const publicationActiveGateHandoffPublishedActiveNodeIds =
+    normalizeDistinctStringArray(
+      publicationActiveGateHandoff?.publishedActiveNodeIds,
+    );
+  const selectedPublishedActiveNodeIds =
+    normalizeFirstNonEmptyDistinctStringArray(
+      snapshotCoverage?.selectedPublishedActiveNodeIds,
+      publicationActiveGateHandoffPublishedActiveNodeIds,
       publicationConvergence?.publishedActiveNodeIds,
-  );
+    );
   const selectedMissingPublishedNodeIds =
     Array.isArray(snapshotCoverage?.selectedMissingPublishedNodeIds) ?
       normalizeDistinctStringArray(snapshotCoverage.selectedMissingPublishedNodeIds) :
@@ -1413,13 +1534,22 @@ function buildActiveWaitProgressSnapshot(
   const missingPublishedNodeIds = normalizeDistinctStringArray(
     publicationConvergenceGate?.missingPublishedNodeIds,
   );
-  const missingPublishedCount = Math.max(
-    missingPublishedNodeIds.length,
-    Number.isInteger(publicationConvergenceGate?.missingPublishedCount) &&
-      publicationConvergenceGate.missingPublishedCount >= ZERO ?
-      publicationConvergenceGate.missingPublishedCount :
-      ZERO,
-  );
+  const publicationActiveGateHandoffCoversExpectedNodes =
+    publicationActiveGateHandoff !== null &&
+    normalizedExpectedNodeCount > ZERO &&
+    publicationActiveGateHandoffPublishedActiveNodeIds.length >=
+      normalizedExpectedNodeCount &&
+    activeGateOwnerCohortMissingPublishedCount === ZERO;
+  const missingPublishedCount =
+    publicationActiveGateHandoffCoversExpectedNodes === true ?
+      ZERO :
+      Math.max(
+        missingPublishedNodeIds.length,
+        Number.isInteger(publicationConvergenceGate?.missingPublishedCount) &&
+          publicationConvergenceGate.missingPublishedCount >= ZERO ?
+          publicationConvergenceGate.missingPublishedCount :
+          ZERO,
+      );
   const gateReasons = normalizeDistinctStringArray(
     publicationConvergenceGate?.reasons,
   ).sort();
@@ -1496,12 +1626,12 @@ function buildActiveWaitProgressSnapshot(
     blockers.push(
       ACTIVE_WAIT_BLOCKER_SNAPSHOT_COVERAGE_PREFIX +
         String(snapshotCoverageNodeCount) +
-        '/' +
+        ACTIVE_WAIT_DIAGNOSTIC_TEXT.COUNT_SEPARATOR +
         String(normalizedExpectedNodeCount),
     );
   }
   if (
-    typeof snapshotCoverage?.selectedError === 'string' &&
+    typeof snapshotCoverage?.selectedError === TYPEOF_STRING &&
     snapshotCoverage.selectedError.length > ZERO
   ) {
     blockers.push(ACTIVE_WAIT_BLOCKER_SNAPSHOT_ERROR);
@@ -1681,18 +1811,24 @@ function buildActiveWaitProgressSnapshot(
       selectedSnapshotReachabilityError,
     }),
     blockers,
-    blockerSignature: blockers.join('|'),
+    blockerSignature: blockers.join(ACTIVE_WAIT_BLOCKER_SIGNATURE_SEPARATOR),
   };
 }
 
 function normalizePriorityRecoverySemanticStateId(semanticState) {
-  const normalizedSemanticState = String(semanticState || '').trim();
+  const normalizedSemanticState = String(
+    semanticState || PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.EMPTY,
+  ).trim();
   if (normalizedSemanticState.length === ZERO) {
-    return null;
+    return PRIORITY_RECOVERY_SEMANTIC_STATE_ID_UNKNOWN;
   }
   return PRIORITY_RECOVERY_SEMANTIC_STATE_IDS.includes(normalizedSemanticState) ?
     normalizedSemanticState :
-    null;
+    PRIORITY_RECOVERY_SEMANTIC_STATE_ID_UNKNOWN;
+}
+
+function isPriorityRecoverySemanticStateId(semanticState) {
+  return PRIORITY_RECOVERY_SEMANTIC_STATE_IDS.includes(semanticState);
 }
 
 function buildPriorityRecoveryExplicitSemanticStateByPartitionId(
@@ -1701,7 +1837,7 @@ function buildPriorityRecoveryExplicitSemanticStateByPartitionId(
   const explicitSemanticStateByPartitionId = new Map();
   if (
     !partitionIdsBySemanticState ||
-    typeof partitionIdsBySemanticState !== 'object' ||
+    typeof partitionIdsBySemanticState !== TYPEOF_OBJECT ||
     Array.isArray(partitionIdsBySemanticState)
   ) {
     return explicitSemanticStateByPartitionId;
@@ -1711,7 +1847,7 @@ function buildPriorityRecoveryExplicitSemanticStateByPartitionId(
   )) {
     const normalizedSemanticState =
       normalizePriorityRecoverySemanticStateId(semanticState);
-    if (!normalizedSemanticState) {
+    if (!isPriorityRecoverySemanticStateId(normalizedSemanticState)) {
       continue;
     }
     for (const partitionId of normalizeDistinctStringArray(partitionIds)) {
@@ -1730,20 +1866,31 @@ function resolvePriorityRecoveryExplicitSemanticState(
   snapshot,
   explicitSemanticStateByPartitionId,
 ) {
+  const explicitSemanticStateId =
+    normalizePriorityRecoverySemanticStateId(snapshot?.semanticStateId);
+  if (isPriorityRecoverySemanticStateId(explicitSemanticStateId)) {
+    return explicitSemanticStateId;
+  }
   const explicitSemanticState =
-    normalizePriorityRecoverySemanticStateId(snapshot?.semanticStateId) ||
     normalizePriorityRecoverySemanticStateId(snapshot?.semanticState);
-  if (explicitSemanticState) {
+  if (isPriorityRecoverySemanticStateId(explicitSemanticState)) {
     return explicitSemanticState;
   }
-  const partitionId = String(snapshot?.partitionId || '').trim();
+  const partitionId = String(
+    snapshot?.partitionId || PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.EMPTY,
+  ).trim();
   if (
     partitionId.length === ZERO ||
     !(explicitSemanticStateByPartitionId instanceof Map)
   ) {
-    return null;
+    return PRIORITY_RECOVERY_SEMANTIC_STATE_ID_UNKNOWN;
   }
-  return explicitSemanticStateByPartitionId.get(partitionId) || null;
+  const partitionSemanticState =
+    explicitSemanticStateByPartitionId.get(partitionId) ||
+    PRIORITY_RECOVERY_SEMANTIC_STATE_ID_UNKNOWN;
+  return isPriorityRecoverySemanticStateId(partitionSemanticState) ?
+    partitionSemanticState :
+    PRIORITY_RECOVERY_SEMANTIC_STATE_ID_UNKNOWN;
 }
 
 function resolvePriorityRecoveryDecisionSnapshotProgressSortTimestamp(
@@ -1785,8 +1932,12 @@ function resolvePriorityRecoveryDecisionSnapshotSortTimestamp(snapshot) {
 }
 
 function comparePriorityRecoveryDecisionSummarySnapshots(left, right) {
-  const leftEpoch = Number.isFinite(left?.epoch) ? left.epoch : -1;
-  const rightEpoch = Number.isFinite(right?.epoch) ? right.epoch : -1;
+  const leftEpoch = Number.isFinite(left?.epoch) ?
+    left.epoch :
+    PRIORITY_RECOVERY_DECISION_SNAPSHOT_UNKNOWN_EPOCH;
+  const rightEpoch = Number.isFinite(right?.epoch) ?
+    right.epoch :
+    PRIORITY_RECOVERY_DECISION_SNAPSHOT_UNKNOWN_EPOCH;
   if (leftEpoch !== rightEpoch) {
     return leftEpoch - rightEpoch;
   }
@@ -1799,18 +1950,26 @@ function comparePriorityRecoveryDecisionSummarySnapshots(left, right) {
   if (leftTimestamp !== rightTimestamp) {
     return leftTimestamp - rightTimestamp;
   }
-  return String(left?.correlationKey || '').localeCompare(
-    String(right?.correlationKey || ''),
+  return String(
+    left?.correlationKey || PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.EMPTY,
+  ).localeCompare(
+    String(
+      right?.correlationKey ||
+        PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.EMPTY,
+    ),
   );
 }
 
 function selectPriorityRecoveryDecisionSummarySnapshots(snapshots) {
   const latestSnapshotByPartitionId = new Map();
   for (const snapshot of Array.isArray(snapshots) ? snapshots : []) {
-    if (!snapshot || typeof snapshot !== 'object') {
+    if (!snapshot || typeof snapshot !== TYPEOF_OBJECT) {
       continue;
     }
-    const partitionId = String(snapshot.partitionId || '').trim();
+    const partitionId = String(
+      snapshot.partitionId ||
+        PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.EMPTY,
+    ).trim();
     if (partitionId.length === ZERO) {
       continue;
     }

@@ -108,6 +108,10 @@ const ACTIVE_GATE_STARTUP_PUBLICATION_LAG_TEST_NAME =
   'active gate classifies startup publication lag as CL-006 witness when snapshot covers partial nodes and publication gate is stub';
 const ACTIVE_GATE_STARTUP_PUBLICATION_LAG_OWNER_PATH_TEST_NAME =
   'active gate owner path preserves selected missing published nodes for startup publication lag';
+const ACTIVE_GATE_OWNER_RECOVERY_HANDOFF_SELECTED_COVERAGE_TEST_NAME =
+  'active gate progress prefers owner-recovery handoff publication coverage over empty selected snapshot coverage';
+const ACTIVE_GATE_PUBLICATION_BLOCKER_PROJECTION_TEST_NAME =
+  'active gate publication blocker projection consumes complete owner handoff coverage';
 const ACTIVE_GATE_SELECTED_SNAPSHOT_NODE_ID =
   '8be8d30f-4499-5eed-865c-71b4d529a67a';
 const ACTIVE_GATE_PUBLISHED_NODE_IDS = Object.freeze([
@@ -119,6 +123,18 @@ const ACTIVE_GATE_MISSING_PUBLISHED_NODE_IDS = Object.freeze([
   '8be8d30f-4499-5eed-865c-71b4d529a67a',
   'ebc4aa0b-06c6-506d-93ea-1dd2deca3f58',
 ]);
+const ACTIVE_GATE_ALL_PUBLISHED_NODE_IDS = Object.freeze([
+  ...ACTIVE_GATE_MISSING_PUBLISHED_NODE_IDS,
+  ...ACTIVE_GATE_PUBLISHED_NODE_IDS,
+].sort((left, right) => left.localeCompare(right)));
+const ACTIVE_GATE_EMPTY_NODE_IDS = Object.freeze([]);
+const ACTIVE_GATE_OWNER_RECOVERY_HANDOFF_PENDING_COUNT = 1;
+const ACTIVE_GATE_OWNER_RECOVERY_HANDOFF_PENDING_NODE_IDS = Object.freeze([
+  ACTIVE_GATE_SELECTED_SNAPSHOT_NODE_ID,
+]);
+const ACTIVE_GATE_STALE_MISSING_PUBLISHED_COUNT =
+  ACTIVE_GATE_EXPECTED_NODE_COUNT;
+const ACTIVE_GATE_PUBLICATION_GATE_BLOCKER_PREFIX = 'publication_gate=';
 
 function buildTopologyReplaySourceArtifact() {
   return {
@@ -380,6 +396,158 @@ test(ACTIVE_GATE_STARTUP_PUBLICATION_LAG_OWNER_PATH_TEST_NAME,
     assert.equal(
       progressSnapshot.membershipPublicationHandoffOutcomeRetryAfterMs,
       ACTIVE_GATE_HANDOFF_OUTCOME_RETRY_AFTER_MS,
+    );
+  });
+
+test(ACTIVE_GATE_OWNER_RECOVERY_HANDOFF_SELECTED_COVERAGE_TEST_NAME,
+  () => {
+    const progressSnapshot = CLUSTER_SEGMENT_2.buildActiveWaitProgressSnapshot(
+      {
+        allActive: true,
+        nodeDiagnostics: ACTIVE_GATE_ALL_PUBLISHED_NODE_IDS.map(
+          (nodeId) => ({
+            nodeId,
+            active: true,
+          }),
+        ),
+        publicationConvergenceGate: {
+          ready: false,
+          reasons: ACTIVE_GATE_EMPTY_NODE_IDS,
+          missingPublishedNodeIds: ACTIVE_GATE_EMPTY_NODE_IDS,
+          missingPublishedCount: ACTIVE_GATE_STALE_MISSING_PUBLISHED_COUNT,
+        },
+        snapshotCoverage: {
+          expectedNodeCount: ACTIVE_GATE_EXPECTED_NODE_COUNT,
+          bestCoverageNodeCount: ACTIVE_GATE_OWNER_RECOVERY_HANDOFF_PENDING_COUNT,
+          completeCoverage: false,
+          selectedNodeId: ACTIVE_GATE_SELECTED_SNAPSHOT_NODE_ID,
+          selectedAdminReady: true,
+          selectedPublishedActiveNodeIds: ACTIVE_GATE_EMPTY_NODE_IDS,
+          selectedMissingPublishedNodeIds: ACTIVE_GATE_EMPTY_NODE_IDS,
+          selectedPublicationActiveGateHandoff: {
+            state: PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,
+            reasonCode:
+              PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING,
+            nextAction:
+              PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.WAIT_OWNER_RECOVERY,
+            runtimePromotionAllowed:
+              ACTIVE_GATE_HANDOFF_RUNTIME_PROMOTION_ALLOWED_FALSE,
+            publishedActiveNodeIds: ACTIVE_GATE_ALL_PUBLISHED_NODE_IDS,
+            missingPublishedNodeIds: ACTIVE_GATE_EMPTY_NODE_IDS,
+            missingPublishedCount: ACTIVE_GATE_ZERO,
+            pendingRecoveryNodeIds:
+              ACTIVE_GATE_OWNER_RECOVERY_HANDOFF_PENDING_NODE_IDS,
+            pendingRecoveryCount:
+              ACTIVE_GATE_OWNER_RECOVERY_HANDOFF_PENDING_COUNT,
+            pendingReconcileNodeIds: ACTIVE_GATE_EMPTY_NODE_IDS,
+            pendingReconcileCount: ACTIVE_GATE_ZERO,
+          },
+        },
+      },
+      ACTIVE_GATE_EXPECTED_NODE_COUNT,
+      {readinessMode: ACTIVE_GATE_READINESS_MODE_STARTUP},
+    );
+
+    assert.deepEqual(
+      progressSnapshot.selectedPublishedActiveNodeIds,
+      ACTIVE_GATE_ALL_PUBLISHED_NODE_IDS,
+    );
+    assert.deepEqual(
+      progressSnapshot.selectedMissingPublishedNodeIds,
+      ACTIVE_GATE_EMPTY_NODE_IDS,
+    );
+    assert.equal(
+      progressSnapshot.missingPublishedCount,
+      ACTIVE_GATE_ZERO,
+    );
+    assert.equal(
+      progressSnapshot.activeGateOwnerCohortMissingPublishedCount,
+      ACTIVE_GATE_ZERO,
+    );
+    assert.equal(
+      progressSnapshot.activeGateOwnerCohortPendingRecoveryCount,
+      ACTIVE_GATE_OWNER_RECOVERY_HANDOFF_PENDING_COUNT,
+    );
+    assert.deepEqual(
+      progressSnapshot.activeGateOwnerCohortPendingRecoveryNodeIds,
+      ACTIVE_GATE_OWNER_RECOVERY_HANDOFF_PENDING_NODE_IDS,
+    );
+    assert.equal(
+      progressSnapshot.publicationActiveGateHandoffNextAction,
+      PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.WAIT_OWNER_RECOVERY,
+    );
+    assert.equal(
+      progressSnapshot.publicationActiveGateHandoffRuntimePromotionAllowed,
+      ACTIVE_GATE_HANDOFF_RUNTIME_PROMOTION_ALLOWED_FALSE,
+    );
+  });
+
+test(ACTIVE_GATE_PUBLICATION_BLOCKER_PROJECTION_TEST_NAME,
+  () => {
+    const snapshotCoverage = {
+      expectedNodeCount: ACTIVE_GATE_EXPECTED_NODE_COUNT,
+      bestCoverageNodeCount:
+        ACTIVE_GATE_OWNER_RECOVERY_HANDOFF_PENDING_COUNT,
+      completeCoverage: false,
+      selectedNodeId: ACTIVE_GATE_SELECTED_SNAPSHOT_NODE_ID,
+      selectedAdminReady: true,
+      selectedPublishedActiveNodeIds: ACTIVE_GATE_EMPTY_NODE_IDS,
+      selectedMissingPublishedNodeIds: ACTIVE_GATE_EMPTY_NODE_IDS,
+      selectedPublicationActiveGateHandoff: {
+        state: PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,
+        reasonCode:
+          PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING,
+        nextAction:
+          PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.WAIT_OWNER_RECOVERY,
+        runtimePromotionAllowed:
+          ACTIVE_GATE_HANDOFF_RUNTIME_PROMOTION_ALLOWED_FALSE,
+        publishedActiveNodeIds: ACTIVE_GATE_ALL_PUBLISHED_NODE_IDS,
+        missingPublishedNodeIds: ACTIVE_GATE_EMPTY_NODE_IDS,
+        missingPublishedCount: ACTIVE_GATE_ZERO,
+        pendingRecoveryNodeIds:
+          ACTIVE_GATE_OWNER_RECOVERY_HANDOFF_PENDING_NODE_IDS,
+        pendingRecoveryCount:
+          ACTIVE_GATE_OWNER_RECOVERY_HANDOFF_PENDING_COUNT,
+        pendingReconcileNodeIds: ACTIVE_GATE_EMPTY_NODE_IDS,
+        pendingReconcileCount: ACTIVE_GATE_ZERO,
+      },
+    };
+    const publicationConvergenceGate =
+      CLUSTER_SEGMENT_2.evaluateLoadPublishedConvergence(
+        snapshotCoverage,
+        ACTIVE_GATE_ALL_PUBLISHED_NODE_IDS,
+      );
+    const progressSnapshot = CLUSTER_SEGMENT_2.buildActiveWaitProgressSnapshot(
+      {
+        allActive: true,
+        nodeDiagnostics: ACTIVE_GATE_ALL_PUBLISHED_NODE_IDS.map(
+          (nodeId) => ({
+            nodeId,
+            active: true,
+          }),
+        ),
+        publicationConvergenceGate,
+        snapshotCoverage,
+      },
+      ACTIVE_GATE_EXPECTED_NODE_COUNT,
+      {readinessMode: ACTIVE_GATE_READINESS_MODE_LOAD},
+    );
+
+    assert.equal(publicationConvergenceGate.ready, true);
+    assert.deepEqual(publicationConvergenceGate.reasons, ACTIVE_GATE_EMPTY_NODE_IDS);
+    assert.deepEqual(
+      publicationConvergenceGate.missingPublishedNodeIds,
+      ACTIVE_GATE_EMPTY_NODE_IDS,
+    );
+    assert.equal(progressSnapshot.missingPublishedCount, ACTIVE_GATE_ZERO);
+    assert.equal(
+      progressSnapshot.blockers.some((blocker) =>
+        blocker.startsWith(ACTIVE_GATE_PUBLICATION_GATE_BLOCKER_PREFIX)),
+      false,
+    );
+    assert.equal(
+      progressSnapshot.publicationActiveGateHandoffRuntimePromotionAllowed,
+      ACTIVE_GATE_HANDOFF_RUNTIME_PROMOTION_ALLOWED_FALSE,
     );
   });
 
