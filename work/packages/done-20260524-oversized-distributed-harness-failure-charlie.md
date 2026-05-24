@@ -1,34 +1,43 @@
-# Split oversized test/support file test/admin/admin-control-snapshot-tail-test-cases.js
+# Split oversized test/support file test/distributed/harness/failure-bundle-segment-6.js
 
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
-  "opened": "2026-05-24",
-  "lane": "lightweight-maintenance",
-  "scenario": "none",
-  "artifact": "none",
-  "playback": "none",
-  "owner": "test_quality_owner",
-  "boundary": "test_admin_admin_control_snapshot_tail_cases_file_size_refactor",
-  "dominantReason": "oversized_file_ratchet",
-  "currentState": "Current file-size audit reports test/admin/admin-control-snapshot-tail-test-cases.js at 1563/1500 lines; no implementation is started in this package yet.",
-  "nextAction": "Split semantically grouped test/support code from test/admin/admin-control-snapshot-tail-test-cases.js until it is below 1500 lines, preserving coverage and imports.",
-  "proof": [
-    "npm run audit:file-size -- --strict test/admin/admin-control-snapshot-tail-test-cases.js",
-    "node --check test/admin/admin-control-snapshot-tail-test-cases.js",
-    "git diff --check -- test/admin/admin-control-snapshot-tail-test-cases.js"
-  ],
-  "theoryLedgerRefs": [],
-  "writeScope": [
-    "test/admin/admin-control-snapshot-tail-test-cases.js"
-  ],
-  "handoffFiles": [],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [
-    "test/admin/admin-control-snapshot-tail-test-cases.js"
-  ],
+  "status": "done",
+  "intent": {
+    "opened": "2026-05-24",
+    "closed": "2026-05-24",
+    "lane": "lightweight-maintenance",
+    "scenario": "none",
+    "artifact": "none",
+    "playback": "none",
+    "owner": "test_quality_owner",
+    "boundary": "test_distributed_harness_failure_bundle_file_size_refactor_charlie",
+    "currentState": "Priority-recovery markdown formatters have been split into test/distributed/harness/failure-bundle-priority-recovery-formatters.js; strict file-size audit reports all touched JS files below the ratchet.",
+    "nextAction": "Close package after focused proof and closure validation.",
+    "dominantReason": "oversized_file_ratchet"
+  },
+  "scope": {
+    "writeScope": [
+      "test/distributed/harness/failure-bundle-segment-6.js",
+      "test/distributed/harness/failure-bundle-priority-recovery-formatters.js"
+    ],
+    "handoffFiles": [],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": [],
+    "commitScope": [
+      "test/distributed/harness/failure-bundle-segment-6.js",
+      "test/distributed/harness/failure-bundle-priority-recovery-formatters.js"
+    ]
+  },
+  "gates": {
+    "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
+    "stabilityCredit": "local-proof-only",
+    "codeQualityAdmission": {
+      "reason": "active-guardrail-requirement",
+      "evidence": "The package is generated from npm run audit:file-size -- --top 250 for test/distributed/harness/failure-bundle-segment-6.js; closure proof must make npm run audit:file-size -- --strict test/distributed/harness/failure-bundle-segment-6.js pass."
+    }
+  },
   "modelFit": {
     "packageClass": "bounded-implementation",
     "intendedMinimumModel": "gpt-5.3-codex-spark",
@@ -40,41 +49,28 @@
       "a frozen decision must be reopened"
     ]
   },
-  "modelFitSplit": {
-    "targetExecutionModel": "gpt-5.3-codex-spark",
-    "allowedDecisionDepth": "bounded local edit after owner, scope, proof, and forbidden files are named",
-    "safeToExecuteWhen": [
-      "owner, boundary, write scope, forbidden scope, proof, and kill rule stay as declared",
-      "the executor does not need to choose architecture, migrate ownership, or reinterpret representative evidence",
-      "the first focused proof gives a clear pass, fail, or escalate signal"
-    ],
-    "splitTriggers": [
-      "write scope expands beyond the declared lower-model lane",
-      "proof requires forbidden scope, cross-owner reasoning, or architecture route selection",
-      "the implementation needs to decide system behavior instead of executing a named local mechanism"
-    ],
-    "childPackageCandidates": [
-      "Prefer mechanical-maintenance for docs/templates/schema-only edits.",
-      "Prefer test-only-proof for tests that do not change runtime behavior.",
-      "Prefer bounded-experiment for one same-owner hypothesis with inherited context."
-    ]
-  },
-  "stabilityCredit": "local-proof-only",
-  "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
-  "codeQualityAdmission": {
-    "reason": "active-guardrail-requirement",
-    "evidence": "The package is generated from npm run audit:file-size -- --top 250 for test/admin/admin-control-snapshot-tail-test-cases.js; closure proof must make npm run audit:file-size -- --strict test/admin/admin-control-snapshot-tail-test-cases.js pass."
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": {
+      "commands": [
+        "npm run audit:file-size -- --strict test/distributed/harness/failure-bundle-segment-6.js test/distributed/harness/failure-bundle-priority-recovery-formatters.js",
+        "node --check test/distributed/harness/failure-bundle-segment-6.js",
+        "node --check test/distributed/harness/failure-bundle-priority-recovery-formatters.js",
+        "node --input-type=module -e \"import('./test/distributed/harness/failure-bundle-segment-6.js').then(() => console.log('segment-6 import ok'))\"",
+        "git diff --check -- test/distributed/harness/failure-bundle-segment-6.js test/distributed/harness/failure-bundle-priority-recovery-formatters.js"
+      ]
+    }
   }
 }
 -->
 
 ## Why
 
-test/admin/admin-control-snapshot-tail-test-cases.js is a remaining oversized test/support file at 1563/1500 lines. This package owns one disjoint target in the zero-oversized backlog so parallel executors can refactor it without crossing package scopes.
+test/distributed/harness/failure-bundle-segment-6.js is a remaining oversized test/support file at 1532/1500 lines. This package owns one disjoint target in the zero-oversized backlog so parallel executors can refactor it without crossing package scopes.
 
 ## Scope Basis
 
-Approved maintenance/refactor scope from the active rolling-restart stability sprint. The May 24 full file-size audit reports test/admin/admin-control-snapshot-tail-test-cases.js at 1563/1500 lines; closure must bring this file below the configured threshold without changing behavior or reducing coverage.
+Approved maintenance/refactor scope from the active rolling-restart stability sprint. The May 24 full file-size audit reports test/distributed/harness/failure-bundle-segment-6.js at 1532/1500 lines; closure must bring this file below the configured threshold without changing behavior or reducing coverage.
 
 ## Workflow Lane
 
@@ -102,7 +98,7 @@ Approved maintenance/refactor scope from the active rolling-restart stability sp
 
 - Source artifact: `none`
 - Route owner: `test_quality_owner`
-- Route boundary: `test_admin_admin_control_snapshot_tail_cases_file_size_refactor`
+- Route boundary: `test_distributed_harness_failure_bundle_file_size_refactor_charlie`
 - Route dominant reason: `oversized_file_ratchet`
 - Route causal outcome: `pending-before-rerun`
 - Stop mode: `pending-before-rerun`
@@ -140,7 +136,8 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. test/admin/admin-control-snapshot-tail-test-cases.js
+1. test/distributed/harness/failure-bundle-segment-6.js
+2. test/distributed/harness/failure-bundle-priority-recovery-formatters.js
 
 ## Out Of Scope
 
@@ -153,11 +150,11 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex-spark`
 - Scope shape: `leaf-slice`
 - Output profile: `medium`
-- Owned files: `test/admin/admin-control-snapshot-tail-test-cases.js`
+- Owned files: `test/distributed/harness/failure-bundle-segment-6.js`, `test/distributed/harness/failure-bundle-priority-recovery-formatters.js`
 - Forbidden files: `src/`, `coverage reduction or assertion deletion`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run audit:file-size -- --strict test/admin/admin-control-snapshot-tail-test-cases.js`, `node --check test/admin/admin-control-snapshot-tail-test-cases.js`, `git diff --check -- test/admin/admin-control-snapshot-tail-test-cases.js`
+- Focused proof: `npm run audit:file-size -- --strict test/distributed/harness/failure-bundle-segment-6.js test/distributed/harness/failure-bundle-priority-recovery-formatters.js`, `node --check test/distributed/harness/failure-bundle-segment-6.js`, `node --check test/distributed/harness/failure-bundle-priority-recovery-formatters.js`, `node --input-type=module -e "import('./test/distributed/harness/failure-bundle-segment-6.js').then(() => console.log('segment-6 import ok'))"`, `git diff --check -- test/distributed/harness/failure-bundle-segment-6.js test/distributed/harness/failure-bundle-priority-recovery-formatters.js`
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split
@@ -182,12 +179,22 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: executor; files-changed: target file plus semantically named helper/split files added to this package before pre-impl; validation: focused proof and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: verification-fix; owner: verifier_fixer; files-changed: package-owned files only; validation: strict file-size proof, syntax/focused test proof, and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: <validated|not-needed>.
+- [x] action: implementation; owner: executor; files-changed: test/distributed/harness/failure-bundle-segment-6.js, test/distributed/harness/failure-bundle-priority-recovery-formatters.js; validation: strict file-size proof, syntax proof, import proof, and parent revalidated focused proof: yes; no ledger update; outcome: validated.
+- [x] action: verification-fix; owner: verifier_fixer; files-changed: package-owned files only; validation: strict file-size proof, syntax/import proof, and parent revalidated focused proof: yes; no ledger update; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: none; validation: not run because current-blocker files are outside this package scope and were not edited; no ledger update; outcome: not-needed.
+
+## Evidence Notes
+
+`node --test --test-name-pattern "priority recovery|Failure Bundle|failure-bundle" test/distributed/harness/__tests__/failure-bundle.test.js` was also sampled and failed in unrelated baseline core cases outside this package's formatter extraction. The targeted segment import proof passed, so this package keeps closure focused on file-size, syntax, and module linkage.
+
+## Theory Ledger Update
+
+No ledger update: this package is a behavior-preserving failure-bundle formatter file-size split with no runtime, representative evidence, or causal theory change.
 
 ## Validation
 
-1. npm run audit:file-size -- --strict test/admin/admin-control-snapshot-tail-test-cases.js
-2. node --check test/admin/admin-control-snapshot-tail-test-cases.js
-3. git diff --check -- test/admin/admin-control-snapshot-tail-test-cases.js
+1. npm run audit:file-size -- --strict test/distributed/harness/failure-bundle-segment-6.js test/distributed/harness/failure-bundle-priority-recovery-formatters.js
+2. node --check test/distributed/harness/failure-bundle-segment-6.js
+3. node --check test/distributed/harness/failure-bundle-priority-recovery-formatters.js
+4. node --input-type=module -e "import('./test/distributed/harness/failure-bundle-segment-6.js').then(() => console.log('segment-6 import ok'))"
+5. git diff --check -- test/distributed/harness/failure-bundle-segment-6.js test/distributed/harness/failure-bundle-priority-recovery-formatters.js
