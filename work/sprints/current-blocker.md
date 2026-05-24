@@ -8,31 +8,29 @@ Theory under test: New package scaffolded from the shared work-package schema.
 
 Causal question: oversized_file_ratchet
 
-Implementation slice: Extract semantically named publication active-gate handoff contract modules until src/control-plane/publication-active-gate-handoff-contract.js is below the configured source file-size limit without changing contract behavior.
+Implementation slice: Extract semantically named CDC integration service modules until src/cdc/cdc-integration-service-segment-3.js is below the configured source file-size limit without changing behavior.
 
 Implementation files:
 
-1. `src/control-plane/publication-active-gate-handoff-contract.js`
-2. `scripts/check-guideline-decision-boundaries-baseline.json`
-3. `src/admin/admin-websocket-api-segment-3.js`
-4. `src/control-plane/publication-recovery-evidence.js`
-5. `src/admin/admin-websocket-diagnostics-route-methods.js`
-6. `src/admin/admin-websocket-lifecycle-methods.js`
-7. `src/admin/admin-websocket-message-dispatch-methods.js`
-8. `src/admin/admin-websocket-observation-methods.js`
-9. `src/admin/admin-websocket-query-execution-methods.js`
-10. `src/control-plane/publication-recovery-evidence-builders.js`
-11. `src/control-plane/publication-recovery-evidence-normalizers.js`
+1. `src/cdc/cdc-integration-service-segment-3.js`
+2. `src/control-plane/publication-active-gate-handoff-contract.js`
+3. `src/control-plane/publication-active-gate-handoff-contract-constants.js`
+4. `src/control-plane/publication-active-gate-handoff-contract-decision.js`
+5. `src/control-plane/publication-active-gate-handoff-contract-evidence.js`
+6. `src/control-plane/publication-active-gate-handoff-contract-fence.js`
+7. `src/control-plane/publication-active-gate-handoff-contract-helpers.js`
+8. `src/control-plane/publication-active-gate-handoff-contract-selection.js`
+9. `src/control-plane/publication-active-gate-handoff-contract-workflow.js`
 
 Expected implementation delta: unknown
 
-Falsifying probe: npm run audit:file-size -- src/control-plane/publication-active-gate-handoff-contract.js
+Falsifying probe: npm run audit:owner-boundary-segments -- src/cdc/cdc-integration-service-segment-3.js
 
 Stop rule: No architecture decision gate is required for this package.
 
 Sprint: `work/sprints/active-2026-q2-rolling-restart-stability-hardening-final.md`
 
-Package: `work/packages/active-20260524-publication-active-gate-handoff-contract-modules.md`
+Package: `work/packages/active-20260524-cdc-integration-service-semantic-modules.md`
 
 Workflow lane: `lightweight-maintenance`
 
@@ -44,9 +42,9 @@ Playback: `none`
 
 ## Boundary
 
-Owner: `topology_publication_owner`
+Owner: `cdc_integration_service_owner`
 
-Boundary: `active_gate_handoff_contract`
+Boundary: `semantic_service_modules`
 
 Dominant reason: `oversized_file_ratchet`
 
@@ -54,11 +52,11 @@ Current state: New package scaffolded from the shared work-package schema.
 
 ## Next Action
 
-Extract semantically named publication active-gate handoff contract modules until src/control-plane/publication-active-gate-handoff-contract.js is below the configured source file-size limit without changing contract behavior.
+Extract semantically named CDC integration service modules until src/cdc/cdc-integration-service-segment-3.js is below the configured source file-size limit without changing behavior.
 
 ## Proof Ladder
 
-1. `npm run audit:file-size -- src/control-plane/publication-active-gate-handoff-contract.js`
+1. `npm run audit:owner-boundary-segments -- src/cdc/cdc-integration-service-segment-3.js`
 
 ## Model Fit
 
@@ -243,17 +241,15 @@ Gate next action: No architecture decision gate is required for this package.
 
 Write scope:
 
-1. `src/control-plane/publication-active-gate-handoff-contract.js`
-2. `scripts/check-guideline-decision-boundaries-baseline.json`
-3. `src/admin/admin-websocket-api-segment-3.js`
-4. `src/control-plane/publication-recovery-evidence.js`
-5. `src/admin/admin-websocket-diagnostics-route-methods.js`
-6. `src/admin/admin-websocket-lifecycle-methods.js`
-7. `src/admin/admin-websocket-message-dispatch-methods.js`
-8. `src/admin/admin-websocket-observation-methods.js`
-9. `src/admin/admin-websocket-query-execution-methods.js`
-10. `src/control-plane/publication-recovery-evidence-builders.js`
-11. `src/control-plane/publication-recovery-evidence-normalizers.js`
+1. `src/cdc/cdc-integration-service-segment-3.js`
+2. `src/control-plane/publication-active-gate-handoff-contract.js`
+3. `src/control-plane/publication-active-gate-handoff-contract-constants.js`
+4. `src/control-plane/publication-active-gate-handoff-contract-decision.js`
+5. `src/control-plane/publication-active-gate-handoff-contract-evidence.js`
+6. `src/control-plane/publication-active-gate-handoff-contract-fence.js`
+7. `src/control-plane/publication-active-gate-handoff-contract-helpers.js`
+8. `src/control-plane/publication-active-gate-handoff-contract-selection.js`
+9. `src/control-plane/publication-active-gate-handoff-contract-workflow.js`
 
 Handoff files:
 
@@ -269,18 +265,16 @@ Candidate runtime files:
 
 Commit scope:
 
-1. `src/control-plane/publication-active-gate-handoff-contract.js`
-2. `scripts/check-guideline-decision-boundaries-baseline.json`
-3. `src/admin/admin-websocket-api-segment-3.js`
-4. `src/control-plane/publication-recovery-evidence.js`
-5. `src/admin/admin-websocket-diagnostics-route-methods.js`
-6. `src/admin/admin-websocket-lifecycle-methods.js`
-7. `src/admin/admin-websocket-message-dispatch-methods.js`
-8. `src/admin/admin-websocket-observation-methods.js`
-9. `src/admin/admin-websocket-query-execution-methods.js`
-10. `src/control-plane/publication-recovery-evidence-builders.js`
-11. `src/control-plane/publication-recovery-evidence-normalizers.js`
-12. `work/packages/active-20260524-publication-active-gate-handoff-contract-modules.md`
+1. `src/cdc/cdc-integration-service-segment-3.js`
+2. `src/control-plane/publication-active-gate-handoff-contract.js`
+3. `src/control-plane/publication-active-gate-handoff-contract-constants.js`
+4. `src/control-plane/publication-active-gate-handoff-contract-decision.js`
+5. `src/control-plane/publication-active-gate-handoff-contract-evidence.js`
+6. `src/control-plane/publication-active-gate-handoff-contract-fence.js`
+7. `src/control-plane/publication-active-gate-handoff-contract-helpers.js`
+8. `src/control-plane/publication-active-gate-handoff-contract-selection.js`
+9. `src/control-plane/publication-active-gate-handoff-contract-workflow.js`
+10. `work/packages/active-20260524-cdc-integration-service-semantic-modules.md`
 
 Legacy touched files:
 

@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "active",
+  "status": "done",
   "intent": {
     "opened": "2026-05-24",
     "lane": "lightweight-maintenance",
@@ -28,7 +28,14 @@
       "src/admin/admin-websocket-observation-methods.js",
       "src/admin/admin-websocket-query-execution-methods.js",
       "src/control-plane/publication-recovery-evidence-builders.js",
-      "src/control-plane/publication-recovery-evidence-normalizers.js"
+      "src/control-plane/publication-recovery-evidence-normalizers.js",
+      "src/control-plane/publication-active-gate-handoff-contract-constants.js",
+      "src/control-plane/publication-active-gate-handoff-contract-decision.js",
+      "src/control-plane/publication-active-gate-handoff-contract-evidence.js",
+      "src/control-plane/publication-active-gate-handoff-contract-fence.js",
+      "src/control-plane/publication-active-gate-handoff-contract-helpers.js",
+      "src/control-plane/publication-active-gate-handoff-contract-selection.js",
+      "src/control-plane/publication-active-gate-handoff-contract-workflow.js"
     ],
     "handoffFiles": [],
     "generatedFiles": [],
@@ -45,7 +52,14 @@
       "src/admin/admin-websocket-query-execution-methods.js",
       "src/control-plane/publication-recovery-evidence-builders.js",
       "src/control-plane/publication-recovery-evidence-normalizers.js",
-      "work/packages/active-20260524-publication-active-gate-handoff-contract-modules.md"
+      "work/packages/done-20260524-publication-active-gate-handoff-contract-modules.md",
+      "src/control-plane/publication-active-gate-handoff-contract-constants.js",
+      "src/control-plane/publication-active-gate-handoff-contract-decision.js",
+      "src/control-plane/publication-active-gate-handoff-contract-evidence.js",
+      "src/control-plane/publication-active-gate-handoff-contract-fence.js",
+      "src/control-plane/publication-active-gate-handoff-contract-helpers.js",
+      "src/control-plane/publication-active-gate-handoff-contract-selection.js",
+      "src/control-plane/publication-active-gate-handoff-contract-workflow.js"
     ]
   },
   "gates": {
@@ -90,7 +104,7 @@ Approved maintenance/refactor scope from the active sprint's front-loaded oversi
 
 ## Core Logic Brief
 
-- Status: `not-needed` - no runtime, scenario, or shared contract decision changes.
+- Status: `not-needed` - no runtime, scenario, or shared contract decision changes; no ledger update.
 
 
 
@@ -187,9 +201,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: <owner>; files-changed: <paths or none>; validation: <focused proof and parent revalidated focused proof: yes>; outcome: <validated|blocked>.
-- [ ] action: verification-fix; owner: <owner>; files-changed: <paths or none>; validation: <verification proof and parent revalidated focused proof: yes>; outcome: <validated|blocked>.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: <validated|not-needed>.
+- [x] action: implementation; owner: topology_publication_owner; files-changed: src/control-plane/publication-active-gate-handoff-contract.js, src/control-plane/publication-active-gate-handoff-contract-constants.js, src/control-plane/publication-active-gate-handoff-contract-decision.js, src/control-plane/publication-active-gate-handoff-contract-evidence.js, src/control-plane/publication-active-gate-handoff-contract-fence.js, src/control-plane/publication-active-gate-handoff-contract-helpers.js, src/control-plane/publication-active-gate-handoff-contract-selection.js, src/control-plane/publication-active-gate-handoff-contract-workflow.js; validation: npm run audit:file-size -- src/control-plane/publication-active-gate-handoff-contract.js and parent revalidated focused proof: yes; outcome: validated.
+- [x] action: verification-fix; owner: topology_publication_owner; files-changed: none; validation: npm test test/control-plane/publication-active-gate-handoff-contract.test.js and parent revalidated focused proof: yes; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: validated.
 
 ## Validation
 
