@@ -2,59 +2,28 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-rolling-restart-stability-hardening-final.md",
-  "package": "work/packages/active-20260524-cdc-integration-service-semantic-modules.md",
-  "status": "active",
-  "lane": "lightweight-maintenance",
+  "package": "none",
+  "status": "none",
+  "lane": "none",
   "scenario": "none",
   "artifact": "none",
   "playback": "none",
-  "owner": "cdc_integration_service_owner",
-  "boundary": "semantic_service_modules",
-  "dominantReason": "oversized_file_ratchet",
-  "currentState": "New package scaffolded from the shared work-package schema.",
-  "nextAction": "Extract semantically named CDC integration service modules until src/cdc/cdc-integration-service-segment-3.js is below the configured source file-size limit without changing behavior.",
-  "proof": [
-    "npm run audit:owner-boundary-segments -- src/cdc/cdc-integration-service-segment-3.js"
-  ],
-  "writeScope": [
-    "src/cdc/cdc-integration-service-segment-3.js",
-    "src/control-plane/publication-active-gate-handoff-contract.js",
-    "src/control-plane/publication-active-gate-handoff-contract-constants.js",
-    "src/control-plane/publication-active-gate-handoff-contract-decision.js",
-    "src/control-plane/publication-active-gate-handoff-contract-evidence.js",
-    "src/control-plane/publication-active-gate-handoff-contract-fence.js",
-    "src/control-plane/publication-active-gate-handoff-contract-helpers.js",
-    "src/control-plane/publication-active-gate-handoff-contract-selection.js",
-    "src/control-plane/publication-active-gate-handoff-contract-workflow.js"
-  ],
+  "owner": "none",
+  "boundary": "none",
+  "dominantReason": "none",
+  "currentState": "No active work package. Start a new package when implementation resumes.",
+  "nextAction": "Create or activate one focused package for the next executable concern.",
+  "proof": [],
+  "writeScope": [],
   "handoffFiles": [],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [
-    "src/cdc/cdc-integration-service-segment-3.js",
-    "src/control-plane/publication-active-gate-handoff-contract.js",
-    "src/control-plane/publication-active-gate-handoff-contract-constants.js",
-    "src/control-plane/publication-active-gate-handoff-contract-decision.js",
-    "src/control-plane/publication-active-gate-handoff-contract-evidence.js",
-    "src/control-plane/publication-active-gate-handoff-contract-fence.js",
-    "src/control-plane/publication-active-gate-handoff-contract-helpers.js",
-    "src/control-plane/publication-active-gate-handoff-contract-selection.js",
-    "src/control-plane/publication-active-gate-handoff-contract-workflow.js",
-    "work/packages/active-20260524-cdc-integration-service-semantic-modules.md"
+  "generatedFiles": [
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md"
   ],
+  "candidateRuntimeFiles": [],
+  "commitScope": [],
   "touchedFiles": [],
-  "theoryLedgerRefs": [],
-  "modelFit": {
-    "packageClass": "bounded-implementation",
-    "intendedMinimumModel": "gpt-5.3-codex-spark",
-    "scopeShape": "leaf-slice",
-    "outputProfile": "medium",
-    "ambiguityScore": 2,
-    "escalationTriggers": [
-      "owned files expand beyond this package",
-      "a frozen decision must be reopened"
-    ]
-  },
+  "modelFit": {},
   "representativeResidual": {},
   "causalGovernance": {},
   "scenarioCausalClosure": {},
@@ -62,13 +31,7 @@
   "experimentOutcome": {},
   "rerunDecision": {},
   "classificationEfficiency": {},
-  "architectureDecisionGate": {
-    "status": "not-required",
-    "trigger": "none",
-    "triggerEvidence": [],
-    "choices": [],
-    "selectedChoice": null,
-    "nextAction": "No architecture decision gate is required for this package."
-  },
-  "predecessor": null
+  "architectureDecisionGate": {},
+  "predecessor": null,
+  "theoryLedgerRefs": []
 }

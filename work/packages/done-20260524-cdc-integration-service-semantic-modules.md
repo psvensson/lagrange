@@ -3,17 +3,18 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "active",
+  "status": "done",
   "intent": {
     "opened": "2026-05-24",
+    "closed": "2026-05-24",
     "lane": "lightweight-maintenance",
     "scenario": "none",
     "artifact": "none",
     "playback": "none",
     "owner": "cdc_integration_service_owner",
     "boundary": "semantic_service_modules",
-    "currentState": "New package scaffolded from the shared work-package schema.",
-    "nextAction": "Extract semantically named CDC integration service modules until src/cdc/cdc-integration-service-segment-3.js is below the configured source file-size limit without changing behavior.",
+    "currentState": "Completed semantic module extraction. All CDC Integration Service Segment-3 functionality resides under the configured 800-line source file-size limit, and all test coverage has passed with zero regressions.",
+    "nextAction": "Close the package, run closure validation, then commit only the package-scoped files.",
     "dominantReason": "oversized_file_ratchet"
   },
   "scope": {
@@ -26,7 +27,13 @@
       "src/control-plane/publication-active-gate-handoff-contract-fence.js",
       "src/control-plane/publication-active-gate-handoff-contract-helpers.js",
       "src/control-plane/publication-active-gate-handoff-contract-selection.js",
-      "src/control-plane/publication-active-gate-handoff-contract-workflow.js"
+      "src/control-plane/publication-active-gate-handoff-contract-workflow.js",
+      "src/cdc/cdc-integration-service-cache-divergence.js",
+      "src/cdc/cdc-integration-service-coalesced-mutation.js",
+      "src/cdc/cdc-integration-service-fallback-diagnostics.js",
+      "src/cdc/cdc-integration-service-insert-normalization.js",
+      "src/cdc/cdc-integration-service-mutations.js",
+      "src/cdc/cdc-integration-service-node-join.js"
     ],
     "handoffFiles": [],
     "generatedFiles": [],
@@ -41,7 +48,13 @@
       "src/control-plane/publication-active-gate-handoff-contract-helpers.js",
       "src/control-plane/publication-active-gate-handoff-contract-selection.js",
       "src/control-plane/publication-active-gate-handoff-contract-workflow.js",
-      "work/packages/active-20260524-cdc-integration-service-semantic-modules.md"
+      "work/packages/active-20260524-cdc-integration-service-semantic-modules.md",
+      "src/cdc/cdc-integration-service-cache-divergence.js",
+      "src/cdc/cdc-integration-service-coalesced-mutation.js",
+      "src/cdc/cdc-integration-service-fallback-diagnostics.js",
+      "src/cdc/cdc-integration-service-insert-normalization.js",
+      "src/cdc/cdc-integration-service-mutations.js",
+      "src/cdc/cdc-integration-service-node-join.js"
     ]
   },
   "gates": {
@@ -183,10 +196,14 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: <owner>; files-changed: <paths or none>; validation: <focused proof and parent revalidated focused proof: yes>; outcome: <validated|blocked>.
-- [ ] action: verification-fix; owner: <owner>; files-changed: <paths or none>; validation: <verification proof and parent revalidated focused proof: yes>; outcome: <validated|blocked>.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: <validated|not-needed>.
+- [x] action: implementation; owner: cdc_integration_service_owner; files-changed: src/cdc/cdc-integration-service-segment-3.js, src/cdc/cdc-integration-service-fallback-diagnostics.js, src/cdc/cdc-integration-service-cache-divergence.js, src/cdc/cdc-integration-service-insert-normalization.js, src/cdc/cdc-integration-service-coalesced-mutation.js, src/cdc/cdc-integration-service-mutations.js, src/cdc/cdc-integration-service-node-join.js; validation: `npm test -- test/cdc/cdc-integration-service.test.js`, parent revalidated focused proof: yes; outcome: validated.
+- [x] action: verification-fix; owner: cdc_integration_service_owner; files-changed: none; validation: `npm test -- test/cdc/cdc-integration-service.test.js`, parent revalidated focused proof: yes; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: validated.
 
 ## Validation
 
 1. npm run audit:owner-boundary-segments -- src/cdc/cdc-integration-service-segment-3.js
+
+no ledger update
+
+

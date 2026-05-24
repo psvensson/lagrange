@@ -25,7 +25,7 @@ Make the system stable under rolling-restart: change the core logic of the syste
 ```text
 Representative artifact: none
 Visible first frontier: unknown
-Active package: work/packages/active-20260524-cdc-integration-service-semantic-modules.md
+Active package: none
 Active package owner: cdc_integration_service_owner
 Active package boundary: semantic_service_modules
 Selected cause: oversized_file_ratchet
@@ -34,8 +34,8 @@ Representative status: unknown
 Causal outcome: unknown
 Architecture gate: not-required / unknown
 Expected delta: unknown
-Current state: New package scaffolded from the shared work-package schema.
-Allowed edits: src/cdc/cdc-integration-service-segment-3.js, src/control-plane/publication-active-gate-handoff-contract.js, src/control-plane/publication-active-gate-handoff-contract-constants.js, src/control-plane/publication-active-gate-handoff-contract-decision.js, src/control-plane/publication-active-gate-handoff-contract-evidence.js, src/control-plane/publication-active-gate-handoff-contract-fence.js, src/control-plane/publication-active-gate-handoff-contract-helpers.js, src/control-plane/publication-active-gate-handoff-contract-selection.js, src/control-plane/publication-active-gate-handoff-contract-workflow.js
+Current state: Completed semantic module extraction. All CDC Integration Service Segment-3 functionality resides under the configured 800-line source file-size limit, and all test coverage has passed with zero regressions.
+Allowed edits: src/cdc/cdc-integration-service-segment-3.js, src/control-plane/publication-active-gate-handoff-contract.js, src/control-plane/publication-active-gate-handoff-contract-constants.js, src/control-plane/publication-active-gate-handoff-contract-decision.js, src/control-plane/publication-active-gate-handoff-contract-evidence.js, src/control-plane/publication-active-gate-handoff-contract-fence.js, src/control-plane/publication-active-gate-handoff-contract-helpers.js, src/control-plane/publication-active-gate-handoff-contract-selection.js, src/control-plane/publication-active-gate-handoff-contract-workflow.js, src/cdc/cdc-integration-service-cache-divergence.js, src/cdc/cdc-integration-service-coalesced-mutation.js, src/cdc/cdc-integration-service-fallback-diagnostics.js, src/cdc/cdc-integration-service-insert-normalization.js, src/cdc/cdc-integration-service-mutations.js, src/cdc/cdc-integration-service-node-join.js
 Candidate runtime files: unknown
 Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
 Required latest proof: npm run audit:owner-boundary-segments -- src/cdc/cdc-integration-service-segment-3.js
@@ -72,7 +72,8 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Purpose: Extract semantically named publication active-gate handoff contract modules until `src/control-plane/publication-active-gate-handoff-contract.js` is below the source file-size limit.
    - First-run reason: next largest source oversized file in the current audit.
 
-5. [Bring CDC integration service API below file-size limit](../packages/active-20260524-cdc-integration-service-semantic-modules.md)
+5. [Bring CDC integration service API below file-size limit](../packages/done-20260524-cdc-integration-service-semantic-modules.md)
+
    - Lane: `lightweight-maintenance`
    - Purpose: Extract semantically named CDC integration service modules until `src/cdc/cdc-integration-service-segment-3.js` is below the source file-size limit.
    - First-run reason: next top owner-boundary segment candidate from `npm run work:oversized-next -- --markdown`.
