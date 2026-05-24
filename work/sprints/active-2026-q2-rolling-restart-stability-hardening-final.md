@@ -111,6 +111,19 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
      - [Extract local serve readiness helper from unified rebalancer](../packages/done-20260524-unified-rebalancer-local-serve-readiness.md)
      - [Extract coordinator handoff retry helper from operation workflow owner](../packages/done-20260524-operation-workflow-coordinator-handoff-retry.md)
      - [Extract concurrent add budget helper from rebalance coordinator](../packages/done-20260524-rebalance-coordinator-concurrent-add-budget.md)
+   - Inserted source ratchet tranche from the May 24 owner-boundary audit:
+     - [Extract routed mutation readiness helper from CDC integration service](../packages/done-20260524-cdc-integration-service-routed-mutation-readiness.md)
+     - [Extract dispatch response reconcile helper from operation workflow owner](../packages/done-20260524-operation-workflow-dispatch-response-reconcile.md)
+     - [Extract replay and health readiness helper from replica dispatch service](../packages/done-20260524-replica-dispatch-replay-and-health-readiness.md)
+     - [Extract dispatch rearm evidence helper from operation workflow owner](../packages/done-20260524-operation-workflow-dispatch-rearm-evidence.md)
+     - [Extract admission readiness helper from node joining service](../packages/done-20260524-node-joining-admission-readiness.md)
+     - [Extract publication activation helper from node joining service](../packages/done-20260524-node-joining-publication-activation.md)
+     - [Extract priority budget admission helper from rebalance coordinator](../packages/done-20260524-rebalance-coordinator-priority-budget-admission.md)
+     - [Extract owner handoff state helper from operation workflow owner](../packages/done-20260524-operation-workflow-owner-handoff-state.md)
+     - [Extract priority readiness helper from unified rebalancer](../packages/done-20260524-unified-rebalancer-priority-readiness.md)
+     - [Extract delivery pressure routing helper from message router](../packages/done-20260524-message-router-delivery-pressure-routing.md)
+     - [Extract transition orchestration helper from operation workflow owner](../packages/done-20260524-operation-workflow-transition-orchestration.md)
+     - [Extract state publication helper from replica dispatch service](../packages/done-20260524-replica-dispatch-state-publication.md)
 
 11. [Split replica-dispatch-node-state-update test-part-2 below file-size limit](../packages/done-20260524-replica-dispatch-node-state-update-test-part-2-suites.md)
    - Lane: `lightweight-maintenance`

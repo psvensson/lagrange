@@ -1,4 +1,7 @@
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
+import {
+  MESSAGE_ROUTER_DELIVERY_PRESSURE_ROUTING_METHODS,
+} from './message-router-delivery-pressure-routing.js';
 import {MessageRouterSegment1} from './message-router-segment-1.js';
 
 const LOCAL_NUM_ZERO = 0;
@@ -8,26 +11,19 @@ const {
   ConnectionState,
   INLINE_ACK_PASSTHROUGH_KEYS,
   MESSAGE_ROUTER_LITERAL,
-  QUERY_DATA_PLANE_MESSAGE_TYPE,
-  QUERY_TRANSPORT_DELIVERY_STATE,
-  QUERY_TRANSPORT_SELECTION,
   RECONNECT_DISPOSITION,
   RETIRED_PENDING_RESPONSE_REASON,
   ROUTER_ADDRESS,
   ROUTER_ERROR_MSG,
   ROUTER_LOG_MSG,
-  ROUTER_QUERY_TRANSPORT_NOT_READY_ERROR_CODE,
   ROUTER_VALID_ENTITY_TYPES,
   RouterMessageType,
   SERVICE_RESPONSE_DISPOSITION_KIND,
   TRANSPORT_ERROR_MSG,
   TRANSPORT_EVENT,
-  TRANSPORT_METRIC,
-  TRANSPORT_METRIC_TRIGGER,
   TRANSPORT_NUM,
   TRANSPORT_TYPEOF,
   WebSocket,
-  buildQueryTransportSemanticOutcome,
   buildRetiredPendingClassification,
   buildServiceResponseDisposition,
   normalizeIdentifier,
@@ -764,503 +760,6 @@ class MessageRouterSegment2 extends MessageRouterSegment1 {
     return this.handlers.has(address);
   }
   /**
-   * Set the function to resolve service address to node ID.
-   * @param {Function} resolver - Function(address) => nodeId or null.
-   */
-  setServiceNodeResolver(resolver) {
-    this.resolveServiceNode = resolver;
-  }
-  /**
-   * Set the function to resolve node ID to a WebSocket address.
-   * @param {Function|null} resolver - Function(nodeId) => wsAddress or null.
-   */
-  setNodeAddressResolver(resolver) {
-    this.resolveNodeAddress = resolver || null;
-  }
-  /**
-   * Set resolver for query/data-plane message-group transport.
-   * Resolver must return a local MessageGroupService with sendMessage().
-   * @param {Function|null} resolver - Resolver function.
-   */
-  setQueryMessageGroupServiceResolver(resolver) {
-    this.resolveQueryMessageGroupService = resolver || null;
-  }
-  /**
-   * Return the canonical local query/data-plane transport readiness snapshot.
-   * Reuses the existing query transport selection owner instead of duplicating
-   * resolver logic in callers.
-   * @return {{ready:boolean,reason:string|null,retryAfterMs:number}}
-   */
-  getQueryDataPlaneTransportReadiness() {
-    return this.resolveQueryDataPlaneTransportSelection();
-  }
-  /**
-   * Check whether a payload is a query/data-plane message.
-   * @param {Object} message - Delivery payload.
-   * @return {boolean} True for query/data-plane payloads.
-   * @private
-   */
-  isQueryDataPlaneMessage(message) {
-    return Boolean(
-      message &&
-      typeof message === TRANSPORT_TYPEOF.OBJECT &&
-      message.type === QUERY_DATA_PLANE_MESSAGE_TYPE,
-    );
-  }
-  /**
-   * Resolve the query/data-plane transport selection.
-   * Resolver may return a service directly or a typed selection object.
-   * @return {{service:Object|null, reason:string, retryAfterMs:number}}
-   * @private
-   */
-  resolveQueryDataPlaneTransportSelection() {
-    let selectionResult;
-    if (
-      typeof this.resolveQueryMessageGroupService !== TRANSPORT_TYPEOF.FUNCTION
-    ) {
-      selectionResult = this.buildQueryTransportSelectionResult(
-        QUERY_TRANSPORT_SELECTION.UNAVAILABLE,
-      );
-    } else {
-      const selection = this.resolveQueryMessageGroupService();
-      if (
-        selection &&
-        typeof selection.sendMessage === TRANSPORT_TYPEOF.FUNCTION
-      ) {
-        selectionResult = this.buildQueryTransportSelectionResult(
-          QUERY_TRANSPORT_SELECTION.DIRECT_SERVICE,
-          {
-            service: selection,
-          },
-        );
-      } else if (
-        selection?.service &&
-        typeof selection.service.sendMessage === TRANSPORT_TYPEOF.FUNCTION
-      ) {
-        selectionResult = this.buildQueryTransportSelectionResult(
-          QUERY_TRANSPORT_SELECTION.SELECTION_SERVICE,
-          selection,
-        );
-      } else {
-        selectionResult = this.buildQueryTransportSelectionResult(
-          QUERY_TRANSPORT_SELECTION.UNAVAILABLE,
-          selection,
-        );
-      }
-    }
-    return selectionResult;
-  }
-  buildQueryTransportSelectionResult(kind, selection = {}) {
-    if (kind === QUERY_TRANSPORT_SELECTION.DIRECT_SERVICE) {
-      return buildQueryTransportSemanticOutcome({
-        service: selection.service,
-        retryAfterMs: TRANSPORT_NUM.ZERO,
-      });
-    } else if (kind === QUERY_TRANSPORT_SELECTION.SELECTION_SERVICE) {
-      return buildQueryTransportSemanticOutcome({
-        service: selection.service,
-        retryAfterMs:
-          Number.isFinite(selection.retryAfterMs) &&
-          selection.retryAfterMs > TRANSPORT_NUM.ZERO ?
-            Math.floor(selection.retryAfterMs) :
-            TRANSPORT_NUM.ZERO,
-      });
-    }
-    return buildQueryTransportSemanticOutcome(
-      {
-        reason:
-          typeof selection?.reason === TRANSPORT_TYPEOF.STRING &&
-          selection.reason.length > TRANSPORT_NUM.ZERO ?
-            selection.reason :
-            ROUTER_ERROR_MSG.QUERY_MESSAGE_GROUP_TRANSPORT_REQUIRED,
-        errorCode: ROUTER_QUERY_TRANSPORT_NOT_READY_ERROR_CODE,
-        retryAfterMs:
-          Number.isFinite(selection?.retryAfterMs) &&
-          selection.retryAfterMs > TRANSPORT_NUM.ZERO ?
-            Math.floor(selection.retryAfterMs) :
-            this.reconnectIntervalMs,
-        deferRetry: true,
-      },
-      {
-        defaultRetryAfterMs: this.reconnectIntervalMs,
-      },
-    );
-  }
-  /**
-   * Build a typed deferred outcome for query/data-plane transport misses.
-   * @param {{reason:string,retryAfterMs:number}} selection
-   * @return {Object}
-   * @private
-   */
-  buildDeferredQueryTransportOutcome(selection = {}) {
-    const retryAfterMs =
-      Number.isFinite(selection.retryAfterMs) &&
-      selection.retryAfterMs > TRANSPORT_NUM.ZERO ?
-        Math.floor(selection.retryAfterMs) :
-        this.reconnectIntervalMs;
-    return {
-      acknowledged: false,
-      error:
-        selection.reason ||
-        ROUTER_ERROR_MSG.QUERY_MESSAGE_GROUP_TRANSPORT_REQUIRED,
-      errorCode: MESSAGE_ROUTER_LITERAL.STRING_ROUTER_QUERY_TRANSPORT_NOT_READY,
-      deferRetry: true,
-      retryAfterMs,
-    };
-  }
-  buildCanonicalDeferredQueryTransportOutcome(
-    messageId,
-    correlationId,
-    failure,
-  ) {
-    return this.buildDeferredDeliveryFailure(
-      messageId,
-      correlationId,
-      failure?.error ||
-        failure?.message ||
-        ROUTER_ERROR_MSG.QUERY_MESSAGE_GROUP_TRANSPORT_REQUIRED,
-      {
-        errorCode:
-          typeof failure?.errorCode === TRANSPORT_TYPEOF.STRING &&
-          failure.errorCode.length > TRANSPORT_NUM.ZERO ?
-            failure.errorCode :
-            typeof failure?.code === TRANSPORT_TYPEOF.STRING &&
-                failure.code.length > TRANSPORT_NUM.ZERO ?
-              failure.code :
-              null,
-        retryAfterMs: Number.isFinite(failure?.retryAfterMs) ?
-          failure.retryAfterMs :
-          this.reconnectIntervalMs,
-      },
-    );
-  }
-  buildQueryTransportFailureError(failure, _targetNodeId) {
-    const normalizedMessage =
-      typeof failure?.error === TRANSPORT_TYPEOF.STRING &&
-      failure.error.length > TRANSPORT_NUM.ZERO ?
-        failure.error :
-        typeof failure?.message === TRANSPORT_TYPEOF.STRING &&
-            failure.message.length > TRANSPORT_NUM.ZERO ?
-          failure.message :
-          ROUTER_ERROR_MSG.QUERY_MESSAGE_GROUP_TRANSPORT_REQUIRED;
-    const error =
-      failure instanceof Error ? failure : new Error(normalizedMessage);
-    error.message = normalizedMessage;
-    if (
-      typeof failure?.errorCode === TRANSPORT_TYPEOF.STRING &&
-      failure.errorCode.length > TRANSPORT_NUM.ZERO
-    ) {
-      error.code = failure.errorCode;
-    } else if (
-      typeof failure?.code === TRANSPORT_TYPEOF.STRING &&
-      failure.code.length > TRANSPORT_NUM.ZERO
-    ) {
-      error.code = failure.code;
-    }
-    if (failure?.deferRetry === true) {
-      error.deferRetry = true;
-    }
-    if (Number.isFinite(failure?.retryAfterMs)) {
-      error.retryAfterMs = Math.max(
-        TRANSPORT_NUM.ZERO,
-        Math.floor(failure.retryAfterMs),
-      );
-    }
-    if (failure?.recoverableBeforeSend === true) {
-      error.recoverableBeforeSend = true;
-    }
-    return error;
-  }
-  resolveQueryTransportDeliveryState(failure) {
-    if (failure?.acknowledged === true) {
-      return QUERY_TRANSPORT_DELIVERY_STATE.SUCCESS;
-    }
-    if (failure?.deferRetry === true) {
-      return QUERY_TRANSPORT_DELIVERY_STATE.DEFER_RETRY;
-    }
-    return QUERY_TRANSPORT_DELIVERY_STATE.HARD_FAILURE;
-  }
-  async normalizeQueryTransportFailure({
-    failure,
-    targetNodeId,
-    targetAddress,
-    messageId,
-    message,
-    correlationId,
-  }) {
-    const deliveryState = this.resolveQueryTransportDeliveryState(failure);
-    if (deliveryState === QUERY_TRANSPORT_DELIVERY_STATE.DEFER_RETRY) {
-      return this.buildCanonicalDeferredQueryTransportOutcome(
-        messageId,
-        correlationId,
-        failure,
-      );
-    }
-    const transportError = this.buildQueryTransportFailureError(
-      failure,
-      targetNodeId,
-    );
-    const recoverableFailure = await this.resolveRecoverableDeliveryError({
-      error: transportError,
-      targetNodeId,
-      targetAddress,
-      messageId,
-      payload: message,
-      correlationId,
-    });
-    if (recoverableFailure) {
-      return recoverableFailure;
-    }
-    if (
-      deliveryState === QUERY_TRANSPORT_DELIVERY_STATE.HARD_FAILURE &&
-      failure instanceof Error
-    ) {
-      throw failure;
-    }
-    return failure;
-  }
-  buildQueryTransportSendOptions(options = {}) {
-    const transportDeliveryOptions = {};
-    if (
-      Number.isFinite(options?.timeoutMs) &&
-      options.timeoutMs > TRANSPORT_NUM.ZERO
-    ) {
-      transportDeliveryOptions.timeoutMs = Math.floor(options.timeoutMs);
-    }
-    if (
-      typeof options?.deliveryPriority === TRANSPORT_TYPEOF.STRING &&
-      options.deliveryPriority.length > TRANSPORT_NUM.ZERO
-    ) {
-      transportDeliveryOptions.deliveryPriority = options.deliveryPriority;
-    }
-    if (
-      typeof options?.deliverySource === TRANSPORT_TYPEOF.STRING &&
-      options.deliverySource.length > TRANSPORT_NUM.ZERO
-    ) {
-      transportDeliveryOptions.deliverySource = options.deliverySource;
-    }
-    if (Object.keys(transportDeliveryOptions).length === TRANSPORT_NUM.ZERO) {
-      return {};
-    }
-    return {
-      transportDeliveryOptions,
-    };
-  }
-  async resolveQueryTransportDeliveryOutcome(
-    targetAddress,
-    message,
-    targetNodeId,
-    messageId,
-    correlationId,
-    queryTransportSelection,
-    options = {},
-  ) {
-    const queryTransport = queryTransportSelection.service;
-    if (!queryTransport) {
-      return this.buildDeferredQueryTransportOutcome(queryTransportSelection);
-    }
-    try {
-      const queryResult = await queryTransport.sendMessage(
-        targetAddress,
-        message,
-        this.buildQueryTransportSendOptions(options),
-      );
-      return await this.normalizeQueryTransportFailure({
-        failure: queryResult,
-        targetNodeId,
-        targetAddress,
-        messageId,
-        message,
-        correlationId,
-      });
-    } catch (error) {
-      return this.normalizeQueryTransportFailure({
-        failure: error,
-        targetNodeId,
-        targetAddress,
-        messageId,
-        message,
-        correlationId,
-      });
-    }
-  }
-  buildDeliveryOutcomeResult(result) {
-    return {
-      result,
-      queueWaitMs: TRANSPORT_NUM.ZERO,
-    };
-  }
-  async resolveDeliveryOutcome(
-    targetAddress,
-    message,
-    messageId,
-    targetNodeId,
-    correlationId,
-    options,
-  ) {
-    if (this.isQueryDataPlaneMessage(message)) {
-      const queryTransportSelection =
-        this.resolveQueryDataPlaneTransportSelection();
-      const queryResult = await this.resolveQueryTransportDeliveryOutcome(
-        targetAddress,
-        message,
-        targetNodeId,
-        messageId,
-        correlationId,
-        queryTransportSelection,
-        options,
-      );
-      return this.buildDeliveryOutcomeResult(queryResult);
-    }
-    if (targetNodeId === this.nodeId) {
-      return this.deliverLocal(
-        targetAddress,
-        messageId,
-        message,
-        correlationId,
-      );
-    }
-    return this.deliverRemote(
-      targetAddress,
-      messageId,
-      message,
-      targetNodeId,
-      correlationId,
-      options,
-    );
-  }
-  /**
-   * Get or create outbound queue for a node.
-   * @param {string} nodeId - Target node ID.
-   * @return {Object} Queue state.
-   * @private
-   */
-  getOutboundQueue(nodeId) {
-    return this.outboundDeliveryRegistryOwner.getOutboundQueue(nodeId);
-  }
-  /**
-   * Check if the outbound queue has immediate capacity for a node.
-   * @param {string} nodeId - Target node ID.
-   * @return {boolean} True if capacity is available.
-   */
-  isOutboundQueueAvailable(nodeId) {
-    return this.outboundDeliveryRegistryOwner.isOutboundQueueAvailable(nodeId);
-  }
-  /**
-   * Enqueue a delivery for a node with per-node concurrency limits.
-   * @param {string} nodeId - Target node ID.
-   * @param {Function} deliverFn - Function that returns a Promise result.
-   * @return {Promise<Object>} Delivery result.
-   * @private
-   */
-  enqueueOutbound(nodeId, deliverFn, options = {}) {
-    return this.outboundDeliveryRegistryOwner.enqueue(
-      nodeId,
-      deliverFn,
-      options,
-    );
-  }
-  /**
-   * Process queued outbound deliveries for a node.
-   * @param {string} nodeId - Target node ID.
-   * @private
-   */
-  processOutboundQueue(nodeId) {
-    this.outboundDeliveryRegistryOwner.process(nodeId);
-  }
-  /**
-   * Fail queued outbound deliveries for a node.
-   * @param {string} nodeId - Target node ID.
-   * @param {Error} error - Error to reject with.
-   * @private
-   */
-  failOutboundQueue(nodeId, error) {
-    this.outboundDeliveryRegistryOwner.fail(nodeId, error);
-  }
-  /**
-   * Gracefully fail queued outbound deliveries (no rejection).
-   * Used during shutdown to avoid unhandled rejections from fire-and-forget tasks.
-   * @param {string} nodeId - Target node ID.
-   * @param {Error} error - Error to return as a failed delivery.
-   * @private
-   */
-  failOutboundQueueGracefully(nodeId, error) {
-    this.outboundDeliveryRegistryOwner.failGracefully(nodeId, error);
-  }
-  /**
-   * Fail pending in-flight messages for a node.
-   * @param {string} nodeId - Target node ID.
-   * @param {Error} error - Error to reject with.
-   * @private
-   */
-  failPendingMessagesForNode(nodeId, error) {
-    for (const [messageId, pending] of this.pendingMessages) {
-      if (pending.targetNodeId === nodeId) {
-        clearTimeout(pending.timeout);
-        this.pendingMessages.delete(messageId);
-        pending.reject(error);
-      }
-    }
-  }
-  /**
-   * Decide whether a transport-deliver metric should be emitted.
-   * Emits immediately for faults, slow deliveries, and meaningful
-   * queue-depth transitions; samples steady-state successful traffic.
-   * @param {string} targetNodeId - Target node ID.
-   * @param {number} durationMs - Delivery duration in milliseconds.
-   * @param {number} queueDepth - Pending outbound queue depth.
-   * @param {boolean} acknowledged - Whether delivery was acknowledged.
-   * @return {string|null} Trigger code when metric should be emitted.
-   * @private
-   */
-  getDeliverMetricTrigger(targetNodeId, durationMs, queueDepth, acknowledged) {
-    if (!acknowledged) {
-      const faultSampleCount =
-        (this.deliverMetricFaultSampleByTarget.get(targetNodeId) ||
-          TRANSPORT_NUM.ZERO) + TRANSPORT_NUM.ONE;
-      this.deliverMetricFaultSampleByTarget.set(targetNodeId, faultSampleCount);
-      if (
-        faultSampleCount === TRANSPORT_NUM.ONE ||
-        faultSampleCount % TRANSPORT_METRIC.DELIVER_FAULT_SAMPLE_EVERY ===
-          TRANSPORT_NUM.ZERO
-      ) {
-        return TRANSPORT_METRIC_TRIGGER.FAULT;
-      }
-      return null;
-    }
-    this.deliverMetricFaultSampleByTarget.set(targetNodeId, TRANSPORT_NUM.ZERO);
-    if (durationMs >= TRANSPORT_METRIC.DELIVER_SLOW_THRESHOLD_MS) {
-      return TRANSPORT_METRIC_TRIGGER.SLOW;
-    }
-    const previousQueueDepth =
-      this.deliverMetricQueueDepthByTarget.get(targetNodeId) ||
-      TRANSPORT_NUM.ZERO;
-    if (queueDepth >= TRANSPORT_METRIC.DELIVER_QUEUE_BACKPRESSURE_THRESHOLD) {
-      const queueDepthDelta = Math.abs(queueDepth - previousQueueDepth);
-      if (
-        previousQueueDepth <
-          TRANSPORT_METRIC.DELIVER_QUEUE_BACKPRESSURE_THRESHOLD ||
-        queueDepthDelta >= TRANSPORT_METRIC.DELIVER_QUEUE_CHANGE_THRESHOLD
-      ) {
-        return TRANSPORT_METRIC_TRIGGER.BACKPRESSURE;
-      }
-    } else if (
-      previousQueueDepth >=
-      TRANSPORT_METRIC.DELIVER_QUEUE_BACKPRESSURE_THRESHOLD
-    ) {
-      return TRANSPORT_METRIC_TRIGGER.QUEUE_DRAINED;
-    }
-    const sampleCount =
-      (this.deliverMetricSampleByTarget.get(targetNodeId) ||
-        TRANSPORT_NUM.ZERO) + TRANSPORT_NUM.ONE;
-    this.deliverMetricSampleByTarget.set(targetNodeId, sampleCount);
-    if (sampleCount >= TRANSPORT_METRIC.DELIVER_SUCCESS_SAMPLE_EVERY) {
-      this.deliverMetricSampleByTarget.set(targetNodeId, TRANSPORT_NUM.ZERO);
-      return TRANSPORT_METRIC_TRIGGER.SAMPLE;
-    }
-    return null;
-  }
-  /**
    * Deliver message locally by invoking the registered handler directly,
    * bypassing WebSocket serialization. Falls back to deliverRemote when
    * no handler is registered (e.g. join request/complete special handlers).
@@ -1270,7 +769,23 @@ class MessageRouterSegment2 extends MessageRouterSegment1 {
    * @param {string} correlationId - Correlation ID.
    * @return {Promise<Object>} Delivery outcome with result and queueWaitMs.
    * @private
-   */
+  */
 }
+
+Object.defineProperties(
+  MessageRouterSegment2.prototype,
+  Object.fromEntries(
+    Object.entries(MESSAGE_ROUTER_DELIVERY_PRESSURE_ROUTING_METHODS).map(
+      ([name, value]) => [
+        name,
+        {
+          value,
+          configurable: true,
+          writable: true,
+        },
+      ],
+    ),
+  ),
+);
 
 export {MessageRouterSegment2};
