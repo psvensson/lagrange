@@ -8,7 +8,6 @@ import {createSqlRequest} from '../query/sql-request.js';
 import {
   authorizeAction,
   validateSecurityContext,
-  WILDCARD_POLICY,
 } from '../admin/admin-auth-middleware.js';
 import {
   DEBUG_METADATA_TABLE as DT,
@@ -19,13 +18,31 @@ import {
 } from './debug-metadata-constants.js';
 import {
   DEBUG_METADATA_ACTION as ACTION,
-  DEBUG_METADATA_ROLE as ROLE,
   DEBUG_METADATA_DEFAULT as DEF,
   DEBUG_METADATA_ERROR_CODE as CODE,
   DEBUG_METADATA_ERROR_MSG as ERR,
   DEBUG_METADATA_SQL as DSQL,
   DEBUG_METADATA_ROW_LIMIT as LIMIT,
 } from './debug-metadata-service-constants.js';
+import {
+  defaultDebugPolicyResolver,
+} from './debug-metadata-service-policy.js';
+import {
+  normalizeBreakpointRow,
+  normalizeSessionRow,
+  normalizeSnapshotRow,
+} from './debug-metadata-service-row-normalizers.js';
+import {
+  assertNonEmptyString,
+  assertRequestObject,
+  buildBreakpointId,
+  buildPlaceholders,
+  createDebugMetadataError,
+  normalizeEnvelopeBuffer,
+  normalizeLimit,
+  toNullableInteger,
+  toResolvedFlag,
+} from './debug-metadata-service-value-helpers.js';
 
 const LOCAL_STR_I8FSF = 'lineNumber is required for each breakpoint';
 const LOCAL_STR_1XM6O = 'moduleRef is required for breakpoints';
@@ -34,9 +51,6 @@ const LOCAL_STR_J82AO = 'moduleRef is required for snapshot metadata';
 const LOCAL_STR_D1ZDM = 'moduleDigest is required for snapshot metadata';
 const LOCAL_STR_YWKFO = 'snapshotId is required';
 const LOCAL_STR_SQL_REQUEST_FAILED = 'SQL request failed';
-const LOCAL_STR_128KJ = ', ';
-const LOCAL_STR_BASE64 = 'base64';
-const LOCAL_STR_EMPTY = '';
 
 const SESSION_COLUMNS = Object.freeze([
   DSF.SESSION_ID,
@@ -81,29 +95,6 @@ const SNAPSHOT_COLUMNS = Object.freeze([
   DPF.CREATED_AT,
   DPF.UPDATED_AT,
 ]);
-
-const ROLE_ACTIONS = Object.freeze({
-  [ROLE.ATTACH]: Object.freeze([
-    ACTION.ATTACH_SESSION,
-    ACTION.LIST_SESSIONS,
-  ]),
-  [ROLE.READ]: Object.freeze([
-    ACTION.ATTACH_SESSION,
-    ACTION.LIST_SESSIONS,
-    ACTION.READ_BREAKPOINTS,
-    ACTION.READ_SNAPSHOT,
-    ACTION.LIST_SNAPSHOTS,
-  ]),
-  [ROLE.WRITE]: Object.freeze([
-    ACTION.CREATE_SESSION,
-    ACTION.UPDATE_SESSION,
-    ACTION.DETACH_SESSION,
-    ACTION.WRITE_BREAKPOINTS,
-    ACTION.WRITE_SNAPSHOT,
-    ACTION.LIST_SESSIONS,
-    ACTION.ATTACH_SESSION,
-  ]),
-});
 
 const ORDER_BY_UPDATED_DESC = `${SQL.ORDER_BY} ${DSF.UPDATED_AT} DESC`;
 const ORDER_BY_CREATED_ASC = `${SQL.ORDER_BY} ${DBF.CREATED_AT} ASC`;
@@ -716,231 +707,6 @@ class DebugMetadataStore {
     const rows = Array.isArray(result.rows) ? result.rows : [];
     return rows[NUM.ZERO] || null;
   }
-}
-
-/**
- * Default policy resolver based on debug roles.
- * @param {Object} validation
- * @return {{allowedActions: Set|string}}
- */
-function defaultDebugPolicyResolver(validation) {
-  const roles = Array.isArray(validation.roles) ? validation.roles : [];
-  if (roles.includes(ROLE.ADMIN)) {
-    return WILDCARD_POLICY;
-  }
-
-  const allowedActions = new Set();
-  for (const role of roles) {
-    const actions = ROLE_ACTIONS[role];
-    if (!actions) {
-      continue;
-    }
-    for (const action of actions) {
-      allowedActions.add(action);
-    }
-  }
-
-  return {allowedActions};
-}
-
-/**
- * @param {string} sessionId
- * @param {number} index
- * @param {number} lineNumber
- * @param {number} columnNumber
- * @return {string}
- */
-function buildBreakpointId(sessionId, index, lineNumber, columnNumber) {
-  return `${sessionId}:bp:${index}:${lineNumber}:${columnNumber}`;
-}
-
-/**
- * @param {number} count
- * @return {string}
- */
-function buildPlaceholders(count) {
-  const placeholders = [];
-  for (let index = NUM.ONE; index <= count; index++) {
-    placeholders.push(`?${index}`);
-  }
-  return placeholders.join(LOCAL_STR_128KJ);
-}
-
-/**
- * @param {*} value
- * @return {number|null}
- */
-function toNullableInteger(value) {
-  if (value === null || value === undefined) {
-    return null;
-  }
-  if (!Number.isInteger(value)) {
-    return null;
-  }
-  return value;
-}
-
-/**
- * @param {*} value
- * @return {number}
- */
-function toResolvedFlag(value) {
-  return value === true || value === DEF.RESOLVED_TRUE ?
-    DEF.RESOLVED_TRUE :
-    DEF.RESOLVED_FALSE;
-}
-
-/**
- * @param {*} value
- * @return {Buffer}
- */
-function normalizeEnvelopeBuffer(value) {
-  if (!value) {
-    throw createDebugMetadataError(CODE.INVALID_REQUEST, ERR.SNAPSHOT_REQUIRED);
-  }
-  if (typeof value === TYPEOF.STRING) {
-    return Buffer.from(value, LOCAL_STR_BASE64);
-  }
-  if (Buffer.isBuffer(value)) {
-    return value;
-  }
-  if (Array.isArray(value)) {
-    return Buffer.from(value);
-  }
-  if (value instanceof Uint8Array) {
-    return Buffer.from(value);
-  }
-  if (value && Array.isArray(value.data)) {
-    return Buffer.from(value.data);
-  }
-  throw createDebugMetadataError(CODE.INVALID_REQUEST, ERR.SNAPSHOT_REQUIRED);
-}
-
-/**
- * @param {Object} row
- * @return {Object}
- */
-function normalizeSessionRow(row) {
-  return {
-    sessionId: row[DSF.SESSION_ID],
-    tenantId: row[DSF.TENANT_ID],
-    serviceName: row[DSF.SERVICE_NAME],
-    lineageId: row[DSF.LINEAGE_ID],
-    stageId: row[DSF.STAGE_ID],
-    nodeId: row[DSF.NODE_ID],
-    endpoint: row[DSF.ENDPOINT],
-    status: row[DSF.STATUS],
-    createdAt: row[DSF.CREATED_AT],
-    updatedAt: row[DSF.UPDATED_AT],
-  };
-}
-
-/**
- * @param {Object} row
- * @return {Object}
- */
-function normalizeBreakpointRow(row) {
-  return {
-    breakpointId: row[DBF.BREAKPOINT_ID],
-    sessionId: row[DBF.SESSION_ID],
-    tenantId: row[DBF.TENANT_ID],
-    moduleRef: row[DBF.MODULE_REF],
-    sourceFileUrl: row[DBF.SOURCE_FILE_URL],
-    lineNumber: row[DBF.LINE_NUMBER],
-    columnNumber: row[DBF.COLUMN_NUMBER],
-    condition: row[DBF.CONDITION],
-    resolved: row[DBF.RESOLVED] === DEF.RESOLVED_TRUE,
-    createdAt: row[DBF.CREATED_AT],
-    updatedAt: row[DBF.UPDATED_AT],
-  };
-}
-
-/**
- * @param {Object} row
- * @param {boolean} includeEnvelope
- * @return {Object}
- */
-function normalizeSnapshotRow(row, includeEnvelope) {
-  let envelope = null;
-  if (includeEnvelope) {
-    envelope = Buffer.from(row[DPF.SNAPSHOT_BYTES_BASE64] || LOCAL_STR_EMPTY, LOCAL_STR_BASE64);
-  }
-
-  return {
-    snapshotId: row[DPF.SNAPSHOT_ID],
-    sessionId: row[DPF.SESSION_ID],
-    tenantId: row[DSF.TENANT_ID],
-    moduleRef: row[DPF.MODULE_REF],
-    moduleDigest: row[DPF.MODULE_DIGEST],
-    capturedAt: row[DPF.CAPTURED_AT],
-    formatVersion: row[DPF.FORMAT_VERSION],
-    totalBytes: row[DPF.TOTAL_BYTES],
-    frameCount: row[DPF.FRAME_COUNT],
-    hostCallCount: row[DPF.HOST_CALL_COUNT],
-    createdAt: row[DPF.CREATED_AT],
-    updatedAt: row[DPF.UPDATED_AT],
-    manifest: parseJson(row[DPF.MANIFEST_JSON], {}),
-    envelope,
-  };
-}
-
-/**
- * @param {string} value
- * @param {*} fallback
- * @return {*}
- */
-function parseJson(value, fallback) {
-  if (typeof value !== TYPEOF.STRING) {
-    return fallback;
-  }
-  try {
-    return JSON.parse(value);
-  } catch {
-    return fallback;
-  }
-}
-
-/**
- * @param {*} value
- */
-function assertRequestObject(value) {
-  if (!value || typeof value !== TYPEOF.OBJECT) {
-    throw createDebugMetadataError(CODE.INVALID_REQUEST, ERR.REQUEST_REQUIRED);
-  }
-}
-
-/**
- * @param {*} value
- * @param {string} message
- * @param {string} code
- */
-function assertNonEmptyString(value, message, code) {
-  if (typeof value !== TYPEOF.STRING || value.trim().length === NUM.ZERO) {
-    throw createDebugMetadataError(code, message);
-  }
-}
-
-/**
- * @param {*} value
- * @param {number} fallback
- * @return {number}
- */
-function normalizeLimit(value, fallback) {
-  if (!Number.isInteger(value) || value <= NUM.ZERO) {
-    return fallback;
-  }
-  return Math.min(value, DEF.MAX_LIMIT);
-}
-
-/**
- * @param {string} code
- * @param {string} message
- * @return {Error}
- */
-function createDebugMetadataError(code, message) {
-  const error = new Error(message);
-  error.code = code;
-  return error;
 }
 
 export {

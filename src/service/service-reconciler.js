@@ -6,204 +6,33 @@ import {EventEmitter} from 'node:events';
 import {LoggingService} from '../logging/logging-service.js';
 import {
   SERVICE_DESCRIPTOR_FIELD,
-  SERVICE_LIFECYCLE_STATE,
   SUBSYSTEM,
   TYPEOF,
 } from '../constants/index.js';
 import {ServiceLifecycleManager} from './service-lifecycle-manager.js';
 import {ServicePolicyViolationError} from './service-lifecycle-errors.js';
-
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_STR_EMPTY = '';
-const LOCAL_STR_INTERVAL = 'interval';
-const LOCAL_STR_STARTUP = 'startup';
-const LOCAL_NUM_ONE = 1;
-const LOCAL_STR_RECONCILE = 'reconcile';
-
-const SERVICE_RECONCILER_DEFAULT = Object.freeze({
-  CHECK_INTERVAL_MS: 5000,
-  MAX_CONCURRENT_SERVICE_ACTIONS: 1,
-});
-
-const RECONCILER_EVENT = Object.freeze({
-  CYCLE_START: 'reconciler:cycle:start',
-  CYCLE_COMPLETE: 'reconciler:cycle:complete',
-  CYCLE_ERROR: 'reconciler:cycle:error',
-  PLAN_READY: 'reconciler:plan:ready',
-  DECISION: 'reconciler:decision',
-});
-
-const RECONCILER_ACTION_TYPE = Object.freeze({
-  CREATE_START_REPLICA: 'create_start_replica',
-  START_REPLICA: 'start_replica',
-  STOP_REPLICA: 'stop_replica',
-});
-
-const RECONCILER_DRIFT_REASON = Object.freeze({
-  BELOW_TARGET: 'below_target_replica_count',
-  ABOVE_TARGET: 'above_target_replica_count',
-  NON_RUNNING_REPLICA: 'non_running_replica',
-  SERVICE_REMOVED: 'service_removed_from_desired_state',
-});
-
-const RECONCILER_ACTION_PRIORITY = Object.freeze({
-  [RECONCILER_ACTION_TYPE.STOP_REPLICA]: 1,
-  [RECONCILER_ACTION_TYPE.START_REPLICA]: 2,
-  [RECONCILER_ACTION_TYPE.CREATE_START_REPLICA]: 3,
-});
-
-const RECONCILER_ERROR = Object.freeze({
-  LIFECYCLE_MANAGER_REQUIRED:
-    'lifecycleManager must be an instance of ServiceLifecycleManager',
-  DESIRED_STATE_READER_REQUIRED:
-    'desiredStateReader must be a function',
-  ACTUAL_STATE_READER_REQUIRED:
-    'actualStateReader must be a function',
-  TELEMETRY_SINK_REQUIRED:
-    'telemetrySink must be a function',
-  EVENT_SOURCE_REQUIRED:
-    'eventSource must provide on() and off() methods',
-  EVENT_NAME_REQUIRED:
-    'eventNames entries must be non-empty strings',
-  PLACEMENT_POLICY_CHECK_REQUIRED:
-    'placementPolicyCheck must be a function',
-  INTERVAL_REQUIRED:
-    'checkIntervalMs must be a positive finite number',
-  MAX_CONCURRENT_ACTIONS_REQUIRED:
-    'maxConcurrentServiceActions must be a positive finite number',
-});
-
-const RECONCILER_POLICY_TYPE = Object.freeze({
-  PLACEMENT: 'placement',
-});
-
-const RECONCILER_LOG = Object.freeze({
-  CYCLE_START: 'Service reconciliation cycle started',
-  CYCLE_COMPLETE: 'Service reconciliation cycle completed',
-  CYCLE_ERROR: 'Service reconciliation cycle failed',
-  DECISION: 'Service reconciliation decision recorded',
-});
-
-const DEFAULT_DECISION_HISTORY_LIMIT = 100;
-const MAX_DECISION_HISTORY_LIMIT = 500;
-
-const RECONCILER_PLACEMENT_POLICY_ERROR = Object.freeze({
-  ACTION_REQUIRED: 'reconcile action must be an object',
-  ACTION_SERVICE_ID_REQUIRED: 'reconcile action must resolve serviceId',
-  ACTION_SERVICE_TYPE_REQUIRED: 'reconcile action must resolve serviceType',
-  ACTION_REPLICA_ID_REQUIRED:
-    'reconcile action must include replicaId for replica mutations',
-});
-
-function resolveServiceId(entity) {
-  return entity?.[SERVICE_DESCRIPTOR_FIELD.SERVICE_ID] ||
-    entity?.definition?.[SERVICE_DESCRIPTOR_FIELD.SERVICE_ID] ||
-    null;
-}
-
-function resolveServiceType(entity) {
-  return entity?.[SERVICE_DESCRIPTOR_FIELD.SERVICE_TYPE] ||
-    entity?.definition?.[SERVICE_DESCRIPTOR_FIELD.SERVICE_TYPE] ||
-    null;
-}
-
-function resolveReplicaId(entity) {
-  return entity?.[SERVICE_DESCRIPTOR_FIELD.REPLICA_ID] ||
-    entity?.definition?.[SERVICE_DESCRIPTOR_FIELD.REPLICA_ID] ||
-    null;
-}
-
-function resolveTenantId(entity) {
-  return entity?.[SERVICE_DESCRIPTOR_FIELD.TENANT_ID] ||
-    entity?.definition?.[SERVICE_DESCRIPTOR_FIELD.TENANT_ID] ||
-    resolveServiceId(entity);
-}
-
-function resolveRuntimeKind(entity) {
-  return entity?.[SERVICE_DESCRIPTOR_FIELD.RUNTIME_KIND] ||
-    entity?.runtime_kind ||
-    entity?.definition?.[SERVICE_DESCRIPTOR_FIELD.RUNTIME_KIND] ||
-    entity?.definition?.runtime_kind ||
-    null;
-}
-
-function resolveReplicaCount(definition) {
-  const count = definition?.[SERVICE_DESCRIPTOR_FIELD.REPLICA_COUNT];
-  if (!Number.isFinite(count)) {
-    return LOCAL_NUM_ZERO;
-  }
-  return Math.max(LOCAL_NUM_ZERO, Math.floor(count));
-}
-
-function resolveLifecycleState(replica) {
-  return replica?.[SERVICE_DESCRIPTOR_FIELD.LIFECYCLE_STATE] ||
-    SERVICE_LIFECYCLE_STATE.CREATED;
-}
-
-function cloneReplicaHandle(replica) {
-  return {
-    [SERVICE_DESCRIPTOR_FIELD.SERVICE_ID]: resolveServiceId(replica),
-    [SERVICE_DESCRIPTOR_FIELD.SERVICE_TYPE]: resolveServiceType(replica),
-    [SERVICE_DESCRIPTOR_FIELD.TENANT_ID]: resolveTenantId(replica),
-    [SERVICE_DESCRIPTOR_FIELD.REPLICA_ID]: resolveReplicaId(replica),
-    [SERVICE_DESCRIPTOR_FIELD.LIFECYCLE_STATE]: resolveLifecycleState(replica),
-  };
-}
-
-function compareReplicasByReplicaId(leftReplica, rightReplica) {
-  const leftId = resolveReplicaId(leftReplica) || '';
-  const rightId = resolveReplicaId(rightReplica) || '';
-  return leftId.localeCompare(rightId);
-}
-
-function compareActionsDeterministically(leftAction, rightAction) {
-  const typeCompare = (resolveServiceType(leftAction) || '')
-    .localeCompare(resolveServiceType(rightAction) || '');
-  if (typeCompare !== LOCAL_NUM_ZERO) {
-    return typeCompare;
-  }
-
-  const serviceCompare = (resolveServiceId(leftAction) || '')
-    .localeCompare(resolveServiceId(rightAction) || '');
-  if (serviceCompare !== LOCAL_NUM_ZERO) {
-    return serviceCompare;
-  }
-
-  const leftPriority = RECONCILER_ACTION_PRIORITY[leftAction.type] || 999;
-  const rightPriority = RECONCILER_ACTION_PRIORITY[rightAction.type] || 999;
-  if (leftPriority !== rightPriority) {
-    return leftPriority - rightPriority;
-  }
-
-  return (resolveReplicaId(leftAction.replica) || LOCAL_STR_EMPTY)
-    .localeCompare(resolveReplicaId(rightAction.replica) || LOCAL_STR_EMPTY);
-}
-
-async function defaultPlacementPolicyCheck(policyContext) {
-  const action = policyContext?.action;
-  if (!action || typeof action !== TYPEOF.OBJECT) {
-    throw new Error(RECONCILER_PLACEMENT_POLICY_ERROR.ACTION_REQUIRED);
-  }
-
-  const serviceId = resolveServiceId(action.definition || action.replica);
-  if (!serviceId) {
-    throw new Error(RECONCILER_PLACEMENT_POLICY_ERROR.ACTION_SERVICE_ID_REQUIRED);
-  }
-
-  const serviceType = resolveServiceType(action.definition || action.replica);
-  if (!serviceType) {
-    throw new Error(RECONCILER_PLACEMENT_POLICY_ERROR.ACTION_SERVICE_TYPE_REQUIRED);
-  }
-
-  if (action.type === RECONCILER_ACTION_TYPE.START_REPLICA ||
-    action.type === RECONCILER_ACTION_TYPE.STOP_REPLICA ||
-    action.type === RECONCILER_ACTION_TYPE.CREATE_START_REPLICA) {
-    const replicaId = resolveReplicaId(action.replica);
-    if (!replicaId) {
-      throw new Error(RECONCILER_PLACEMENT_POLICY_ERROR.ACTION_REPLICA_ID_REQUIRED);
-    }
-  }
-}
+import {
+  DEFAULT_DECISION_HISTORY_LIMIT,
+  LOCAL_NUM_ONE,
+  LOCAL_NUM_ZERO,
+  LOCAL_STR_INTERVAL,
+  LOCAL_STR_RECONCILE,
+  LOCAL_STR_STARTUP,
+  MAX_DECISION_HISTORY_LIMIT,
+  RECONCILER_ACTION_TYPE,
+  RECONCILER_DRIFT_REASON,
+  RECONCILER_ERROR,
+  RECONCILER_EVENT,
+  RECONCILER_LOG,
+  RECONCILER_POLICY_TYPE,
+  SERVICE_RECONCILER_DEFAULT,
+  defaultPlacementPolicyCheck,
+  resolveReplicaId,
+  resolveRuntimeKind,
+  resolveServiceId,
+  resolveServiceType,
+} from './service-reconciler-contract.js';
+import {planReconcilerActions} from './service-reconciler-planner.js';
 
 /**
  * ServiceReconciler computes drift and converges state using one lifecycle owner.
@@ -582,144 +411,7 @@ class ServiceReconciler extends EventEmitter {
    * @return {Object[]}
    */
   planActions(desiredRows = [], actualRows = []) {
-    const desiredByServiceId = new Map();
-    for (const definition of desiredRows) {
-      const serviceId = resolveServiceId(definition);
-      const serviceType = resolveServiceType(definition);
-      if (!serviceId || !serviceType) {
-        continue;
-      }
-      desiredByServiceId.set(serviceId, {
-        ...definition,
-        [SERVICE_DESCRIPTOR_FIELD.SERVICE_ID]: serviceId,
-        [SERVICE_DESCRIPTOR_FIELD.SERVICE_TYPE]: serviceType,
-      });
-    }
-
-    const actualByServiceId = new Map();
-    for (const replica of actualRows) {
-      const serviceId = resolveServiceId(replica);
-      const serviceType = resolveServiceType(replica);
-      const replicaId = resolveReplicaId(replica);
-      if (!serviceId || !serviceType || !replicaId) {
-        continue;
-      }
-      const normalizedReplica = cloneReplicaHandle(replica);
-      if (!actualByServiceId.has(serviceId)) {
-        actualByServiceId.set(serviceId, []);
-      }
-      actualByServiceId.get(serviceId).push(normalizedReplica);
-    }
-
-    const actions = [];
-
-    for (const [serviceId, definition] of desiredByServiceId.entries()) {
-      const replicas = (actualByServiceId.get(serviceId) || [])
-        .slice()
-        .sort(compareReplicasByReplicaId);
-      const runningReplicas = replicas
-        .filter((replica) =>
-          resolveLifecycleState(replica) === SERVICE_LIFECYCLE_STATE.RUNNING,
-        );
-      const nonRunningReplicas = replicas
-        .filter((replica) =>
-          resolveLifecycleState(replica) !== SERVICE_LIFECYCLE_STATE.RUNNING,
-        );
-      const desiredReplicaCount = resolveReplicaCount(definition);
-
-      if (runningReplicas.length > desiredReplicaCount) {
-        const stopCandidates = runningReplicas
-          .slice()
-          .sort(compareReplicasByReplicaId)
-          .reverse()
-          .slice(0, runningReplicas.length - desiredReplicaCount);
-
-        for (const replica of stopCandidates) {
-          actions.push({
-            type: RECONCILER_ACTION_TYPE.STOP_REPLICA,
-            driftReason: RECONCILER_DRIFT_REASON.ABOVE_TARGET,
-            definition,
-            replica,
-          });
-        }
-      }
-
-      if (runningReplicas.length < desiredReplicaCount) {
-        let missingCount = desiredReplicaCount - runningReplicas.length;
-
-        for (const replica of nonRunningReplicas) {
-          if (missingCount <= LOCAL_NUM_ZERO) {
-            break;
-          }
-          actions.push({
-            type: RECONCILER_ACTION_TYPE.START_REPLICA,
-            driftReason: RECONCILER_DRIFT_REASON.NON_RUNNING_REPLICA,
-            definition,
-            replica,
-          });
-          missingCount -= LOCAL_NUM_ONE;
-        }
-
-        if (missingCount > LOCAL_NUM_ZERO) {
-          const knownReplicaIds = new Set(
-            replicas.map((replica) => resolveReplicaId(replica)),
-          );
-
-          for (let index = LOCAL_NUM_ONE; index <= missingCount; index++) {
-            let suffix = index;
-            let candidateReplicaId = `${serviceId}-replica-${suffix}`;
-            while (knownReplicaIds.has(candidateReplicaId)) {
-              suffix += LOCAL_NUM_ONE;
-              candidateReplicaId = `${serviceId}-replica-${suffix}`;
-            }
-            knownReplicaIds.add(candidateReplicaId);
-
-            const newReplica = {
-              [SERVICE_DESCRIPTOR_FIELD.SERVICE_ID]: serviceId,
-              [SERVICE_DESCRIPTOR_FIELD.SERVICE_TYPE]:
-                resolveServiceType(definition),
-              [SERVICE_DESCRIPTOR_FIELD.TENANT_ID]:
-                resolveTenantId(definition),
-              [SERVICE_DESCRIPTOR_FIELD.REPLICA_ID]: candidateReplicaId,
-              [SERVICE_DESCRIPTOR_FIELD.LIFECYCLE_STATE]:
-                SERVICE_LIFECYCLE_STATE.CREATED,
-            };
-
-            actions.push({
-              type: RECONCILER_ACTION_TYPE.CREATE_START_REPLICA,
-              driftReason: RECONCILER_DRIFT_REASON.BELOW_TARGET,
-              definition,
-              replica: newReplica,
-            });
-          }
-        }
-      }
-    }
-
-    for (const [serviceId, replicas] of actualByServiceId.entries()) {
-      if (desiredByServiceId.has(serviceId)) {
-        continue;
-      }
-
-      for (const replica of replicas.slice().sort(compareReplicasByReplicaId)) {
-        if (resolveLifecycleState(replica) !== SERVICE_LIFECYCLE_STATE.RUNNING) {
-          continue;
-        }
-        actions.push({
-          type: RECONCILER_ACTION_TYPE.STOP_REPLICA,
-          driftReason: RECONCILER_DRIFT_REASON.SERVICE_REMOVED,
-          definition: {
-            [SERVICE_DESCRIPTOR_FIELD.SERVICE_ID]: resolveServiceId(replica),
-            [SERVICE_DESCRIPTOR_FIELD.SERVICE_TYPE]: resolveServiceType(replica),
-            [SERVICE_DESCRIPTOR_FIELD.TENANT_ID]: resolveTenantId(replica),
-            [SERVICE_DESCRIPTOR_FIELD.REPLICA_COUNT]: LOCAL_NUM_ZERO,
-          },
-          replica,
-        });
-      }
-    }
-
-    return actions.sort(compareActionsDeterministically);
+    return planReconcilerActions(desiredRows, actualRows);
   }
 
   /**
