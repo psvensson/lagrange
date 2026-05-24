@@ -13,185 +13,28 @@ import {
   QUERY_DEFAULTS,
   QUERY_ERROR_MSG,
   QUERY_LOG_MSG,
-  QUERY_STATUS,
   QUERY_SUBSYSTEM,
 } from '../query-constants.js';
+import {
+  estimateResultBytes,
+  formatQueryExecutionMetrics,
+  PartitionQueryMetrics,
+  QueryExecutionMetrics,
+} from './parallel-query-execution-metrics.js';
+import {
+  buildPartitionExecutionFailureOutcome,
+  buildPartitionExecutionSuccessOutcome,
+  normalizePartitionExecutionFailureSnapshot,
+} from './parallel-query-partition-outcomes.js';
 
 const LOCAL_NUM_ZERO = 0;
 
 const QUERY_ID_PREFIX = 'q-';
 const QUERY_CANCELLED_ERROR = 'Query cancelled';
 
-const RESULT_ESTIMATE = Object.freeze({
-  UTF16_BYTES_PER_CHAR: NUM.TWO,
-  FALLBACK_ROW_BYTES: NUM.HUNDRED,
-});
-
 const REPLICA_STATUS = Object.freeze({
   ACTIVE: 'active',
 });
-
-function normalizeRetryAfterMs(value) {
-  return Number.isFinite(value) && value >= NUM.ZERO ?
-    Math.floor(value) :
-    null;
-}
-
-function normalizeFailureString(value) {
-  return typeof value === TYPEOF.STRING && value.length > NUM.ZERO ?
-    value :
-    null;
-}
-
-function resolveFailureBackpressureState(diagnostics = {}) {
-  if (typeof diagnostics?.backpressured === TYPEOF.BOOLEAN) {
-    return diagnostics.backpressured;
-  }
-  if (diagnostics?.deferRetry === true) {
-    return true;
-  }
-  return Number.isFinite(diagnostics?.retryAfterMs) &&
-    diagnostics.retryAfterMs > NUM.ZERO;
-}
-
-/**
- * Tracks execution metrics for a single partition query.
- */
-class PartitionQueryMetrics {
-  /**
-   * Create partition query metrics.
-   * @param {string} partitionId - Partition ID.
-   */
-  constructor(partitionId) {
-    this.partitionId = partitionId;
-    this.startTime = null;
-    this.endTime = null;
-    this.latencyMs = null;
-    this.rowCount = NUM.ZERO;
-    this.bytesRead = NUM.ZERO;
-    this.status = QUERY_STATUS.PENDING; // pending, running, completed, failed, timeout
-    this.error = null;
-    this.isSpeculative = false;
-    this.errorCode = null;
-    this.retryAfterMs = null;
-    this.deferRetry = false;
-    this.participantNodeId = null;
-    this.participantAddress = null;
-    this.backpressured = false;
-    this.failedTable = null;
-  }
-
-  /**
-   * Mark query as started.
-   */
-  start() {
-    this.startTime = Date.now();
-    this.status = QUERY_STATUS.RUNNING;
-  }
-
-  /**
-   * Mark query as completed.
-   * @param {number} rowCount - Number of rows returned.
-   * @param {number} bytesRead - Estimated bytes read.
-   */
-  complete(rowCount, bytesRead = NUM.ZERO) {
-    this.endTime = Date.now();
-    this.latencyMs = this.endTime - this.startTime;
-    this.rowCount = rowCount;
-    this.bytesRead = bytesRead;
-    this.status = QUERY_STATUS.COMPLETED;
-  }
-
-  /**
-   * Mark query as failed.
-   * @param {Error} error - Error that occurred.
-   */
-  fail(error, diagnostics = {}) {
-    this.endTime = Date.now();
-    this.latencyMs = this.endTime - this.startTime;
-    this.status = QUERY_STATUS.FAILED;
-    this.error = error.message;
-    this.errorCode = normalizeFailureString(diagnostics?.errorCode);
-    this.retryAfterMs = normalizeRetryAfterMs(diagnostics?.retryAfterMs);
-    this.deferRetry = diagnostics?.deferRetry === true;
-    this.participantNodeId =
-      normalizeFailureString(diagnostics?.participantNodeId);
-    this.participantAddress =
-      normalizeFailureString(diagnostics?.participantAddress);
-    this.backpressured = resolveFailureBackpressureState(diagnostics);
-    this.failedTable = normalizeFailureString(diagnostics?.failedTable);
-  }
-
-  /**
-   * Mark query as timed out.
-   */
-  timeout() {
-    this.endTime = Date.now();
-    this.latencyMs = this.endTime - this.startTime;
-    this.status = QUERY_STATUS.TIMEOUT;
-  }
-}
-
-/**
- * Tracks overall query execution metrics.
- */
-class QueryExecutionMetrics {
-  /**
-   * Create query execution metrics.
-   * @param {string} queryId - Query ID.
-   * @param {number} partitionCount - Number of partitions.
-   */
-  constructor(queryId, partitionCount) {
-    this.queryId = queryId;
-    this.partitionCount = partitionCount;
-    this.startTime = Date.now();
-    this.endTime = null;
-    this.totalLatencyMs = null;
-    this.partitionMetrics = new Map();
-    this.totalRows = NUM.ZERO;
-    this.totalBytes = NUM.ZERO;
-    this.stragglers = [];
-    this.speculativeExecutions = NUM.ZERO;
-  }
-
-  /**
-   * Add partition metrics.
-   * @param {PartitionQueryMetrics} metrics - Partition metrics.
-   */
-  addPartitionMetrics(metrics) {
-    this.partitionMetrics.set(metrics.partitionId, metrics);
-    if (metrics.status === QUERY_STATUS.COMPLETED) {
-      this.totalRows += metrics.rowCount;
-      this.totalBytes += metrics.bytesRead;
-    }
-  }
-
-  /**
-   * Calculate median latency of completed partitions.
-   * @return {number} Median latency in ms.
-   */
-  getMedianLatency() {
-    const latencies = Array.from(this.partitionMetrics.values())
-      .filter((m) => m.status === QUERY_STATUS.COMPLETED && m.latencyMs !== null)
-      .map((m) => m.latencyMs)
-      .sort((a, b) => a - b);
-
-    if (latencies.length === NUM.ZERO) return NUM.ZERO;
-
-    const mid = Math.floor(latencies.length / NUM.TWO);
-    return latencies.length % NUM.TWO === NUM.ZERO ?
-      (latencies[mid - NUM.ONE] + latencies[mid]) / NUM.TWO :
-      latencies[mid];
-  }
-
-  /**
-   * Finalize metrics.
-   */
-  finalize() {
-    this.endTime = Date.now();
-    this.totalLatencyMs = this.endTime - this.startTime;
-  }
-}
 
 /**
  * ParallelQueryCoordinator handles parallel query execution across partitions
@@ -363,7 +206,7 @@ class ParallelQueryCoordinator {
       this.validateResultBufferSize(results, metrics);
 
       metrics.finalize();
-      const formatted = this.formatMetrics(metrics);
+      const formatted = formatQueryExecutionMetrics(metrics);
 
       try {
         const latencies = formatted.partitionLatencies
@@ -709,89 +552,6 @@ class ParallelQueryCoordinator {
   }
 
   /**
-   * Normalize one partition-execution failure snapshot.
-   * @param {string} partitionId - Partition ID.
-   * @param {PartitionQueryMetrics} partitionMetrics - Partition metrics.
-   * @param {Object} failure - Failure-like object or error.
-   * @param {string} fallbackErrorMessage - Fallback error text.
-   * @return {Object} Normalized failure snapshot.
-   * @private
-   */
-  normalizePartitionExecutionFailureSnapshot(
-    partitionId,
-    partitionMetrics,
-    failure,
-    fallbackErrorMessage,
-  ) {
-    return {
-      partitionId,
-      status: partitionMetrics.status,
-      error: normalizeFailureString(failure?.error) ||
-        normalizeFailureString(failure?.message) ||
-        fallbackErrorMessage,
-      errorCode: normalizeFailureString(
-        failure?.errorCode || failure?.code,
-      ),
-      retryAfterMs: normalizeRetryAfterMs(failure?.retryAfterMs),
-      deferRetry: failure?.deferRetry === true,
-      participantNodeId:
-        normalizeFailureString(failure?.participantNodeId),
-      participantAddress:
-        normalizeFailureString(failure?.participantAddress),
-      backpressured: resolveFailureBackpressureState(failure),
-      failedTable: normalizeFailureString(failure?.failedTable),
-      durationMs: partitionMetrics.latencyMs,
-      rows: failure?.rows || [],
-    };
-  }
-
-  /**
-   * Build the canonical partition-execution failure outcome.
-   * @param {Object} snapshot - Normalized failure snapshot.
-   * @return {Object} Failure result.
-   * @private
-   */
-  buildPartitionExecutionFailureOutcome(snapshot) {
-    return {
-      partitionId: snapshot.partitionId,
-      success: false,
-      status: snapshot.status,
-      error: snapshot.error,
-      errorCode: snapshot.errorCode,
-      retryAfterMs: snapshot.retryAfterMs,
-      deferRetry: snapshot.deferRetry,
-      participantNodeId: snapshot.participantNodeId,
-      participantAddress: snapshot.participantAddress,
-      backpressured: snapshot.backpressured,
-      failedTable: snapshot.failedTable,
-      durationMs: snapshot.durationMs,
-      rows: snapshot.rows,
-    };
-  }
-
-  /**
-   * Build the canonical partition-execution success outcome.
-   * @param {string} partitionId - Partition ID.
-   * @param {PartitionQueryMetrics} partitionMetrics - Partition metrics.
-   * @param {Object} result - Query result.
-   * @return {Object} Success result.
-   * @private
-   */
-  buildPartitionExecutionSuccessOutcome(
-    partitionId,
-    partitionMetrics,
-    result,
-  ) {
-    return {
-      partitionId,
-      success: true,
-      status: partitionMetrics.status,
-      rows: result.rows || [],
-      changes: result.changes,
-    };
-  }
-
-  /**
    * Execute query on a single partition with metrics tracking.
    * @param {string} sql - SQL query.
    * @param {string} partitionId - Partition ID.
@@ -816,8 +576,8 @@ class ParallelQueryCoordinator {
     if (!this.partitionQueryExecutor && !partition) {
       partitionMetrics.fail(new Error(QUERY_ERROR_MSG.PARTITION_NOT_FOUND));
       metrics.addPartitionMetrics(partitionMetrics);
-      return this.buildPartitionExecutionFailureOutcome(
-        this.normalizePartitionExecutionFailureSnapshot(
+      return buildPartitionExecutionFailureOutcome(
+        normalizePartitionExecutionFailureSnapshot(
           partitionId,
           partitionMetrics,
           {error: QUERY_ERROR_MSG.PARTITION_NOT_FOUND},
@@ -840,8 +600,8 @@ class ParallelQueryCoordinator {
           result,
         );
         metrics.addPartitionMetrics(partitionMetrics);
-        return this.buildPartitionExecutionFailureOutcome(
-          this.normalizePartitionExecutionFailureSnapshot(
+        return buildPartitionExecutionFailureOutcome(
+          normalizePartitionExecutionFailureSnapshot(
             partitionId,
             partitionMetrics,
             result,
@@ -850,11 +610,11 @@ class ParallelQueryCoordinator {
         );
       }
       const rowCount = result.rows?.length || NUM.ZERO;
-      const bytesRead = this.estimateResultBytes(result.rows);
+      const bytesRead = estimateResultBytes(result.rows);
       partitionMetrics.complete(rowCount, bytesRead);
       metrics.addPartitionMetrics(partitionMetrics);
 
-      return this.buildPartitionExecutionSuccessOutcome(
+      return buildPartitionExecutionSuccessOutcome(
         partitionId,
         partitionMetrics,
         result,
@@ -863,8 +623,8 @@ class ParallelQueryCoordinator {
       partitionMetrics.fail(error, error);
       metrics.addPartitionMetrics(partitionMetrics);
 
-      return this.buildPartitionExecutionFailureOutcome(
-        this.normalizePartitionExecutionFailureSnapshot(
+      return buildPartitionExecutionFailureOutcome(
+        normalizePartitionExecutionFailureSnapshot(
           partitionId,
           partitionMetrics,
           error,
@@ -933,22 +693,6 @@ class ParallelQueryCoordinator {
   }
 
   /**
-   * Estimate bytes in result rows.
-   * @param {Array} rows - Result rows.
-   * @return {number} Estimated bytes.
-   * @private
-   */
-  estimateResultBytes(rows) {
-    if (!rows || rows.length === NUM.ZERO) return NUM.ZERO;
-    // Rough estimate: JSON stringify length * 2 for UTF-16
-    try {
-      return JSON.stringify(rows).length * RESULT_ESTIMATE.UTF16_BYTES_PER_CHAR;
-    } catch (_estimateErr) {
-      return rows.length * RESULT_ESTIMATE.FALLBACK_ROW_BYTES;
-    }
-  }
-
-  /**
    * Validate result buffer size.
    * Requirements: 26.3
    * @param {Array} results - Query results.
@@ -995,50 +739,6 @@ class ParallelQueryCoordinator {
         });
       }
     }
-  }
-
-  /**
-   * Format metrics for response.
-   * @param {QueryExecutionMetrics} metrics - Metrics tracker.
-   * @return {Object} Formatted metrics.
-   * @private
-   */
-  formatMetrics(metrics) {
-    const participantFailures = Array.from(metrics.partitionMetrics.values())
-      .filter((metric) => metric.status === QUERY_STATUS.FAILED)
-      .map((metric) => ({
-        partitionId: metric.partitionId,
-        participantNodeId: metric.participantNodeId,
-        participantAddress: metric.participantAddress,
-        errorCode: metric.errorCode,
-        error: metric.error,
-        durationMs: metric.latencyMs,
-        retryAfterMs: metric.retryAfterMs,
-        deferRetry: metric.deferRetry,
-        backpressured: metric.backpressured,
-        failedTable: metric.failedTable,
-      }));
-    return {
-      queryId: metrics.queryId,
-      partitionCount: metrics.partitionCount,
-      totalLatencyMs: metrics.totalLatencyMs,
-      medianLatencyMs: metrics.getMedianLatency(),
-      totalRows: metrics.totalRows,
-      totalBytes: metrics.totalBytes,
-      stragglers: metrics.stragglers,
-      speculativeExecutions: metrics.speculativeExecutions,
-      participantFailures,
-      firstFailedParticipant:
-        participantFailures.length > NUM.ZERO ?
-          participantFailures[NUM.ZERO] :
-          null,
-      partitionLatencies: Array.from(metrics.partitionMetrics.values()).map((m) => ({
-        partitionId: m.partitionId,
-        latencyMs: m.latencyMs,
-        status: m.status,
-        rowCount: m.rowCount,
-      })),
-    };
   }
 
   /**

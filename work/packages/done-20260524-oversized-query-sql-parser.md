@@ -1,34 +1,43 @@
-# Refactor oversized source file src/rebalancer/rebalance-coordinator-segment-1.js
+# Refactor oversized source file src/query/sql-parser.js
 
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
-  "opened": "2026-05-24",
-  "lane": "lightweight-maintenance",
-  "scenario": "none",
-  "artifact": "none",
-  "playback": "none",
-  "owner": "rebalancer_file_size_owner",
-  "boundary": "source_rebalancer_rebalance_coordinator_file_size_refactor_alpha",
-  "dominantReason": "oversized_file_ratchet",
-  "currentState": "Current file-size audit reports src/rebalancer/rebalance-coordinator-segment-1.js at 1051/800 lines; no implementation is started in this package yet.",
-  "nextAction": "Extract semantically named helper modules from src/rebalancer/rebalance-coordinator-segment-1.js until it is below 800 lines, preserving behavior and the public entrypoint.",
-  "proof": [
-    "npm run audit:file-size -- --strict src/rebalancer/rebalance-coordinator-segment-1.js",
-    "node --check src/rebalancer/rebalance-coordinator-segment-1.js",
-    "git diff --check -- src/rebalancer/rebalance-coordinator-segment-1.js"
-  ],
-  "theoryLedgerRefs": [],
-  "writeScope": [
-    "src/rebalancer/rebalance-coordinator-segment-1.js"
-  ],
-  "handoffFiles": [],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [
-    "src/rebalancer/rebalance-coordinator-segment-1.js"
-  ],
+  "status": "done",
+  "intent": {
+    "opened": "2026-05-24",
+    "closed": "2026-05-24",
+    "lane": "lightweight-maintenance",
+    "scenario": "none",
+    "artifact": "none",
+    "playback": "none",
+    "owner": "query_file_size_owner",
+    "boundary": "source_query_sql_parser_file_size_refactor",
+    "currentState": "src/query/sql-parser.js now delegates PG/general expression conversion methods to src/query/sql-parser-expression-methods.js; both touched source files are below the 800-line source threshold.",
+    "nextAction": "Parent revalidates focused proof, then closes the package when sprint/package sequencing allows.",
+    "dominantReason": "oversized_file_ratchet"
+  },
+  "scope": {
+    "writeScope": [
+      "src/query/sql-parser.js",
+      "src/query/sql-parser-expression-methods.js"
+    ],
+    "handoffFiles": [],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": [],
+    "commitScope": [
+      "src/query/sql-parser.js",
+      "src/query/sql-parser-expression-methods.js"
+    ]
+  },
+  "gates": {
+    "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
+    "stabilityCredit": "local-proof-only",
+    "codeQualityAdmission": {
+      "reason": "active-guardrail-requirement",
+      "evidence": "The package is generated from npm run audit:file-size -- --top 250 for src/query/sql-parser.js; closure proof must make npm run audit:file-size -- --strict src/query/sql-parser.js pass."
+    }
+  },
   "modelFit": {
     "packageClass": "bounded-implementation",
     "intendedMinimumModel": "gpt-5.3-codex-spark",
@@ -40,41 +49,28 @@
       "a frozen decision must be reopened"
     ]
   },
-  "modelFitSplit": {
-    "targetExecutionModel": "gpt-5.3-codex-spark",
-    "allowedDecisionDepth": "bounded local edit after owner, scope, proof, and forbidden files are named",
-    "safeToExecuteWhen": [
-      "owner, boundary, write scope, forbidden scope, proof, and kill rule stay as declared",
-      "the executor does not need to choose architecture, migrate ownership, or reinterpret representative evidence",
-      "the first focused proof gives a clear pass, fail, or escalate signal"
-    ],
-    "splitTriggers": [
-      "write scope expands beyond the declared lower-model lane",
-      "proof requires forbidden scope, cross-owner reasoning, or architecture route selection",
-      "the implementation needs to decide system behavior instead of executing a named local mechanism"
-    ],
-    "childPackageCandidates": [
-      "Prefer mechanical-maintenance for docs/templates/schema-only edits.",
-      "Prefer test-only-proof for tests that do not change runtime behavior.",
-      "Prefer bounded-experiment for one same-owner hypothesis with inherited context."
-    ]
-  },
-  "stabilityCredit": "local-proof-only",
-  "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
-  "codeQualityAdmission": {
-    "reason": "active-guardrail-requirement",
-    "evidence": "The package is generated from npm run audit:file-size -- --top 250 for src/rebalancer/rebalance-coordinator-segment-1.js; closure proof must make npm run audit:file-size -- --strict src/rebalancer/rebalance-coordinator-segment-1.js pass."
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": {
+      "commands": [
+        "npm run audit:file-size -- --strict src/query/sql-parser.js src/query/sql-parser-expression-methods.js",
+        "node --check src/query/sql-parser.js",
+        "node --check src/query/sql-parser-expression-methods.js",
+        "node --test test/query/sql-parser.test.js test/query/sql-parser-pg.test.js",
+        "git diff --check -- src/query/sql-parser.js src/query/sql-parser-expression-methods.js work/packages/done-20260524-oversized-query-sql-parser.md"
+      ]
+    }
   }
 }
 -->
 
 ## Why
 
-src/rebalancer/rebalance-coordinator-segment-1.js is a remaining oversized source file at 1051/800 lines. This package owns one disjoint target in the zero-oversized backlog so parallel executors can refactor it without crossing package scopes.
+src/query/sql-parser.js is a remaining oversized source file at 1047/800 lines. This package owns one disjoint target in the zero-oversized backlog so parallel executors can refactor it without crossing package scopes.
 
 ## Scope Basis
 
-Approved maintenance/refactor scope from the active rolling-restart stability sprint. The May 24 full file-size audit reports src/rebalancer/rebalance-coordinator-segment-1.js at 1051/800 lines; closure must bring this file below the configured threshold without changing behavior or reducing coverage.
+Approved maintenance/refactor scope from the active rolling-restart stability sprint. The May 24 full file-size audit reports src/query/sql-parser.js at 1047/800 lines; closure must bring this file below the configured threshold without changing behavior or reducing coverage.
 
 ## Workflow Lane
 
@@ -101,8 +97,8 @@ Approved maintenance/refactor scope from the active rolling-restart stability sp
 ## Rerun Decision Gate
 
 - Source artifact: `none`
-- Route owner: `rebalancer_file_size_owner`
-- Route boundary: `source_rebalancer_rebalance_coordinator_file_size_refactor_alpha`
+- Route owner: `query_file_size_owner`
+- Route boundary: `source_query_sql_parser_file_size_refactor`
 - Route dominant reason: `oversized_file_ratchet`
 - Route causal outcome: `pending-before-rerun`
 - Stop mode: `pending-before-rerun`
@@ -140,7 +136,8 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. src/rebalancer/rebalance-coordinator-segment-1.js
+1. src/query/sql-parser.js
+2. src/query/sql-parser-expression-methods.js
 
 ## Out Of Scope
 
@@ -153,11 +150,11 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex-spark`
 - Scope shape: `leaf-slice`
 - Output profile: `medium`
-- Owned files: `src/rebalancer/rebalance-coordinator-segment-1.js`
+- Owned files: `src/query/sql-parser.js`, `src/query/sql-parser-expression-methods.js`
 - Forbidden files: `test/`, `runtime ownership or public contract changes`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run audit:file-size -- --strict src/rebalancer/rebalance-coordinator-segment-1.js`, `node --check src/rebalancer/rebalance-coordinator-segment-1.js`, `git diff --check -- src/rebalancer/rebalance-coordinator-segment-1.js`
+- Focused proof: `npm run audit:file-size -- --strict src/query/sql-parser.js src/query/sql-parser-expression-methods.js`, `node --check src/query/sql-parser.js`, `node --check src/query/sql-parser-expression-methods.js`, `node --test test/query/sql-parser.test.js test/query/sql-parser-pg.test.js`, `git diff --check -- src/query/sql-parser.js src/query/sql-parser-expression-methods.js work/packages/done-20260524-oversized-query-sql-parser.md`
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split
@@ -182,12 +179,14 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: executor; files-changed: target file plus semantically named helper/split files added to this package before pre-impl; validation: focused proof and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: verification-fix; owner: verifier_fixer; files-changed: package-owned files only; validation: strict file-size proof, syntax/focused test proof, and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: <validated|not-needed>.
+- [x] action: implementation; owner: executor; files-changed: `src/query/sql-parser.js`, `src/query/sql-parser-expression-methods.js`, `work/packages/done-20260524-oversized-query-sql-parser.md`; validation: pre-impl validation passed; line counts now 669 and 407; `npm run audit:file-size -- --strict src/query/sql-parser.js src/query/sql-parser-expression-methods.js` passed with source oversized-file ratchet 0/144 and test oversized-file ratchet 0/60 for scoped files; `node --check` passed for both touched source files; import smoke passed for `SQLParser` and `AST_TYPE.SELECT`; `node --test test/query/sql-parser.test.js test/query/sql-parser-pg.test.js` passed 363/363; scoped `git diff --check` passed; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: verification-fix; owner: verifier_fixer; files-changed: package-owned files only; validation: parent `npm run audit:file-size -- --strict` over wave files PASS, parent import smoke PASS 16 modules, `node --test test/admin/admin-websocket-api.test.js` PASS 55/55, grouped query focused tests PASS 592/592, rebalancer focused test PASS 168/168, wave scoped `git diff --check` PASS; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: none; validation: no tracker-generated repair needed before package close; no ledger update; outcome: not-needed.
 
 ## Validation
 
-1. npm run audit:file-size -- --strict src/rebalancer/rebalance-coordinator-segment-1.js
-2. node --check src/rebalancer/rebalance-coordinator-segment-1.js
-3. git diff --check -- src/rebalancer/rebalance-coordinator-segment-1.js
+1. npm run audit:file-size -- --strict src/query/sql-parser.js src/query/sql-parser-expression-methods.js
+2. node --check src/query/sql-parser.js
+3. node --check src/query/sql-parser-expression-methods.js
+4. node --test test/query/sql-parser.test.js test/query/sql-parser-pg.test.js
+5. git diff --check -- src/query/sql-parser.js src/query/sql-parser-expression-methods.js work/packages/done-20260524-oversized-query-sql-parser.md
