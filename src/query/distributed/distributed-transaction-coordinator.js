@@ -1,4 +1,3 @@
-import {createHash} from 'node:crypto';
 import {
   QUERY_ERROR_CODE,
   QUERY_ERROR_MSG,
@@ -7,41 +6,63 @@ import {
 import {
   TIMEOUT_BUDGET_DEFAULT,
   createTopLevelOperationBudget,
-  getRemainingBudgetMs,
 } from '../../control-plane/timeout-budget.js';
-import {
-  getControlPlaneRetryAfterMs,
-  isRetryableControlPlaneError,
-} from '../../control-plane/control-plane-error-classification.js';
 import {DurableWorkflowCoordinator} from '../../workflow/durable-workflow-coordinator.js';
 import {
-  IDEMPOTENT_COMMIT_MISS_ERROR_MESSAGES,
   PARTICIPANT_RETRY_DEFAULT,
-  PARTICIPANT_RETRY_LOG_MSG,
   PARTICIPANT_STATUS,
-  RECOVERY_COMMIT_TRANSACTION_STATUS,
-  RECOVERY_ROLLBACK_TRANSACTION_STATUS,
   RECOVERY_SWEEP_DEFAULT_INTERVAL_MS,
-  RECOVERY_SWEEP_DEFER_BASE_MS,
-  RECOVERY_SWEEP_DEFER_MAX_MS,
-  RECOVERY_SWEEP_LOG_MSG,
-  TERMINAL_TRANSACTION_STATUS,
-  TIMEOUT_ERROR_MESSAGES,
   TRANSACTION_STATUS,
   WRITE_OPERATION_STATUS,
 } from './distributed-transaction-coordinator-constants.js';
+import {
+  recover,
+  resumeRecoveredTransactions,
+  runRecoverySweep,
+  startRecoverySweep,
+  stopRecoverySweep,
+  isRecoverySweepDeferred,
+  shouldDeferRecoverySweepError,
+  deferRecoverySweep,
+  clearRecoverySweepDeferState,
+  buildDeferredRecoverySweepResult,
+  recoverFromSystemTables,
+} from './distributed-transaction-recovery.js';
+import {
+  setTransactionStatus,
+  getRemainingTransactionBudgetMs,
+  isTransactionBudgetExceeded,
+  hasTimeoutFailure,
+  abortTimedOutTransaction,
+  runCommitProtocol,
+  runRollbackProtocol,
+  buildParticipantFailureResult,
+  getPrepareParticipantKeys,
+  getCommitParticipantKeys,
+  getRollbackParticipantKeys,
+  executeParticipantStage,
+  executeParticipantOperationWithRetry,
+  createTransactionTimeoutError,
+  shouldTreatParticipantCommitMissAsSuccess,
+  emitParticipantRetryDiagnostic,
+  calculateParticipantRetryDelay,
+} from './distributed-transaction-protocol.js';
+import {
+  persistTransactionRecord,
+  persistParticipants,
+  persistParticipantRecord,
+  persistWriteOperationRecord,
+  createTransactionId,
+  createParticipantId,
+  createWritePayloadHash,
+  parseJsonArrayField,
+  resolveFiniteNumberField,
+  getOrderedParticipantIds,
+  getOrderedParticipantDetails,
+} from './distributed-transaction-records.js';
 
 const LOCAL_NUM_ONE = 1;
 const LOCAL_NUM_ZERO = 0;
-const LOCAL_STR_FUNCTION = 'function';
-const LOCAL_STR_OBJECT = 'object';
-const LOCAL_STR_TRANSACTION_EPOCH = 'transaction_epoch';
-const LOCAL_STR_TRANSACTIONEPOCH = 'transactionEpoch';
-const LOCAL_STR_TIMEOUT_DEADLINE = 'timeout_deadline';
-const LOCAL_STR_TIMEOUTDEADLINE = 'timeoutDeadline';
-const LOCAL_STR_SHA1 = 'sha1';
-const LOCAL_STR_HEX = 'hex';
-const LOCAL_STR_STRING = 'string';
 
 /**
  * Distributed transaction coordinator with participant state persistence hooks.
@@ -401,827 +422,100 @@ class DistributedTransactionCoordinator {
     return this.transactionsBySession.has(sessionId);
   }
 
-  /**
-   * Recover in-flight transactions after restart.
-   * Accepts canonical system-table row arrays.
-   *
-   * @param {Object[]|Object} rows - Transaction rows in
-   *   canonical system-table shape.
-   */
   recover(rows) {
-    if (!Array.isArray(rows)) {
-      return;
-    }
-
-    this.recoverFromSystemTables({
-      transactions: rows,
-      participants: rows.flatMap((row) => {
-        const transactionId = row.transaction_id || row.transactionId;
-        const participants = Array.isArray(row.participants) ?
-          row.participants :
-          [];
-        return participants.map((partitionId) => ({
-          transaction_id: transactionId,
-          partition_id: partitionId,
-        }));
-      }),
-      writeOperations: rows.flatMap((row) => {
-        const transactionId = row.transaction_id || row.transactionId;
-        const writeOperations = Array.isArray(row.writeOperations) ?
-          row.writeOperations :
-          [];
-        return writeOperations.map((operation) => ({
-          ...operation,
-          transaction_id: transactionId,
-        }));
-      }),
-    });
+    return recover.call(this, rows);
   }
 
-  /**
-   * Resume all transactions recovered from system-table snapshots.
-   * Transactions recovered in ACTIVE status are rolled back; transactions
-   * recovered mid-commit are advanced to COMMITTED.
-   *
-   * @return {Promise<Object>} Replay summary.
-   */
   async resumeRecoveredTransactions() {
-    const recoveredWorkflowIds = Array.from(this.recoveredTransactionIds);
-    const results = [];
-
-    for (const workflowId of recoveredWorkflowIds) {
-      const tx = this.workflowCoordinator.getWorkflowById(workflowId);
-      if (!tx) {
-        this.recoveredTransactionIds.delete(workflowId);
-        continue;
-      }
-
-      const statusBefore = tx.status;
-      let protocolResult;
-      let replayPath = null;
-      let skipped = false;
-
-      await this.workflowCoordinator.runExclusive(tx.ownerKey, async () => {
-        if (TERMINAL_TRANSACTION_STATUS.has(tx.status)) {
-          skipped = true;
-          protocolResult = {
-            success: true,
-            operation: null,
-            transactionId: tx.transactionId,
-            participants: this.getOrderedParticipantIds(tx),
-            failedParticipants: [],
-          };
-          return;
-        }
-        if (tx.status === TRANSACTION_STATUS.FAILED) {
-          skipped = true;
-          protocolResult = {
-            success: false,
-            operation: null,
-            transactionId: tx.transactionId,
-            participants: this.getOrderedParticipantIds(tx),
-            failedParticipants: [],
-            errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
-            error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
-          };
-          return;
-        }
-        if (RECOVERY_ROLLBACK_TRANSACTION_STATUS.has(tx.status)) {
-          replayPath = QUERY_OPERATION.ROLLBACK;
-          protocolResult = await this.runRollbackProtocol(tx);
-          return;
-        }
-        if (RECOVERY_COMMIT_TRANSACTION_STATUS.has(tx.status)) {
-          replayPath = QUERY_OPERATION.COMMIT;
-          protocolResult = await this.runCommitProtocol(tx, {
-            allowTimedOutCommitStatuses: true,
-          });
-          return;
-        }
-        await this.setTransactionStatus(tx, TRANSACTION_STATUS.FAILED);
-        protocolResult = {
-          success: false,
-          operation: QUERY_OPERATION.ROLLBACK,
-          transactionId: tx.transactionId,
-          participants: this.getOrderedParticipantIds(tx),
-          failedParticipants: [],
-          errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
-          error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
-        };
-      });
-
-      results.push({
-        transactionId: tx.transactionId,
-        sessionId: tx.sessionId,
-        statusBefore,
-        statusAfter: tx.status,
-        replayPath,
-        skipped,
-        success: protocolResult?.success === true,
-        error: protocolResult?.error || null,
-        failedParticipants: protocolResult?.failedParticipants || [],
-      });
-      this.recoveredTransactionIds.delete(workflowId);
-    }
-
-    const resumed = results.filter(
-      (entry) => entry.success && !entry.skipped,
-    ).length;
-    const failed = results.filter((entry) => !entry.success).length;
-    return {
-      totalRecovered: recoveredWorkflowIds.length,
-      resumed,
-      failed,
-      results,
-    };
+    return resumeRecoveredTransactions.call(this);
   }
 
-  /**
-   * Run one recovery sweep cycle for timed-out non-terminal transactions.
-   * @return {Promise<Object>} Sweep summary.
-   */
   async runRecoverySweep() {
-    if (this.recoverySweepInFlight) {
-      return {
-        swept: LOCAL_NUM_ZERO,
-        resolved: LOCAL_NUM_ZERO,
-        failed: LOCAL_NUM_ZERO,
-        skipped: true,
-        deferred: LOCAL_NUM_ZERO,
-        results: [],
-      };
-    }
-    if (this.isRecoverySweepDeferred()) {
-      return {
-        swept: LOCAL_NUM_ZERO,
-        resolved: LOCAL_NUM_ZERO,
-        failed: LOCAL_NUM_ZERO,
-        skipped: false,
-        deferred: LOCAL_NUM_ONE,
-        deferredUntilMs: this.recoverySweepDeferredUntilMs,
-        results: [],
-      };
-    }
-    this.recoverySweepInFlight = true;
-    try {
-      if (typeof this.loadRecoveryStateForSweep === LOCAL_STR_FUNCTION) {
-        let payload;
-        try {
-          payload = await this.loadRecoveryStateForSweep();
-        } catch (error) {
-          if (this.shouldDeferRecoverySweepError(error)) {
-            return this.buildDeferredRecoverySweepResult(error);
-          }
-          throw error;
-        }
-        if (payload && typeof payload === LOCAL_STR_OBJECT) {
-          this.recoverFromSystemTables(payload);
-        }
-      }
-
-      const stuckTransactions = Array.from(
-        this.transactionsBySession.values(),
-      ).filter(
-        (tx) =>
-          !TERMINAL_TRANSACTION_STATUS.has(tx.status) &&
-          tx.status !== TRANSACTION_STATUS.FAILED &&
-          this.isTransactionBudgetExceeded(tx),
-      );
-      const results = [];
-      let deferred = LOCAL_NUM_ZERO;
-
-      for (const tx of stuckTransactions) {
-        let protocolResult = null;
-        let sweepPath = null;
-        try {
-          await this.workflowCoordinator.runExclusive(tx.ownerKey, async () => {
-            if (RECOVERY_COMMIT_TRANSACTION_STATUS.has(tx.status)) {
-              sweepPath = QUERY_OPERATION.COMMIT;
-              protocolResult = await this.runCommitProtocol(tx, {
-                allowTimedOutCommitStatuses: true,
-              });
-              return;
-            }
-            sweepPath = QUERY_OPERATION.ROLLBACK;
-            protocolResult = await this.runRollbackProtocol(tx);
-          });
-        } catch (error) {
-          if (this.shouldDeferRecoverySweepError(error)) {
-            deferred += LOCAL_NUM_ONE;
-            const deferredResult = this.buildDeferredRecoverySweepResult(
-              error,
-              {
-                swept: stuckTransactions.length,
-                results: [
-                  {
-                    transactionId: tx.transactionId,
-                    sessionId: tx.sessionId,
-                    sweepPath,
-                    statusAfter: tx.status,
-                    success: false,
-                    deferred: true,
-                    error: error?.message || String(error),
-                  },
-                ],
-              },
-            );
-            results.push(...deferredResult.results);
-            continue;
-          }
-          throw error;
-        }
-
-        if (
-          protocolResult?.success !== true &&
-          this.shouldDeferRecoverySweepError(protocolResult)
-        ) {
-          deferred += LOCAL_NUM_ONE;
-          this.deferRecoverySweep(protocolResult);
-          results.push({
-            transactionId: tx.transactionId,
-            sessionId: tx.sessionId,
-            sweepPath,
-            statusAfter: tx.status,
-            success: false,
-            deferred: true,
-            error: protocolResult?.error || null,
-          });
-          continue;
-        }
-
-        results.push({
-          transactionId: tx.transactionId,
-          sessionId: tx.sessionId,
-          sweepPath,
-          statusAfter: tx.status,
-          success: protocolResult?.success === true,
-          error: protocolResult?.error || null,
-        });
-      }
-
-      const resolved = results.filter((entry) => entry.success).length;
-      const failed = results.filter(
-        (entry) => entry.success !== true && entry.deferred !== true,
-      ).length;
-      if (deferred === LOCAL_NUM_ZERO) {
-        this.clearRecoverySweepDeferState();
-      }
-      return {
-        swept: stuckTransactions.length,
-        resolved,
-        failed,
-        deferred,
-        deferredUntilMs: deferred > LOCAL_NUM_ZERO ? this.recoverySweepDeferredUntilMs : LOCAL_NUM_ZERO,
-        skipped: false,
-        results,
-      };
-    } finally {
-      this.recoverySweepInFlight = false;
-    }
+    return runRecoverySweep.call(this);
   }
 
-  /**
-   * Start periodic transaction recovery sweep.
-   */
   startRecoverySweep() {
-    if (this.recoverySweepTimer) {
-      return;
-    }
-    this.recoverySweepTimer = setInterval(() => {
-      void this.runRecoverySweep().catch((error) => {
-        this.logger?.error?.(RECOVERY_SWEEP_LOG_MSG, {
-          error: error?.message || String(error),
-        });
-      });
-    }, this.recoverySweepIntervalMs);
-    this.recoverySweepTimer.unref();
+    return startRecoverySweep.call(this);
   }
 
-  /**
-   * Stop periodic transaction recovery sweep.
-   */
   stopRecoverySweep() {
-    if (!this.recoverySweepTimer) {
-      return;
-    }
-    clearInterval(this.recoverySweepTimer);
-    this.recoverySweepTimer = null;
+    return stopRecoverySweep.call(this);
   }
 
-  /**
-   * @return {boolean}
-   * @private
-   */
   isRecoverySweepDeferred() {
-    return (
-      Number.isFinite(this.recoverySweepDeferredUntilMs) &&
-      this.recoverySweepDeferredUntilMs > this.now()
-    );
+    return isRecoverySweepDeferred.call(this);
   }
 
-  /**
-   * @param {*} errorLike
-   * @return {boolean}
-   * @private
-   */
   shouldDeferRecoverySweepError(errorLike) {
-    return isRetryableControlPlaneError(errorLike);
+    return shouldDeferRecoverySweepError.call(this, errorLike);
   }
 
-  /**
-   * @param {*} errorLike
-   * @return {{delayMs: number, deferredUntilMs: number}}
-   * @private
-   */
   deferRecoverySweep(errorLike) {
-    const retryAfterMs = getControlPlaneRetryAfterMs(errorLike);
-    const backoffMs =
-      retryAfterMs > 0 ?
-        retryAfterMs :
-        Math.min(
-          RECOVERY_SWEEP_DEFER_MAX_MS,
-          Math.max(
-            this.recoverySweepIntervalMs,
-            RECOVERY_SWEEP_DEFER_BASE_MS *
-                2 ** this.recoverySweepDeferredAttempts,
-          ),
-        );
-    this.recoverySweepDeferredAttempts += LOCAL_NUM_ONE;
-    this.recoverySweepDeferredUntilMs = this.now() + backoffMs;
-    return {
-      delayMs: backoffMs,
-      deferredUntilMs: this.recoverySweepDeferredUntilMs,
-    };
+    return deferRecoverySweep.call(this, errorLike);
   }
 
-  /**
-   * @return {void}
-   * @private
-   */
   clearRecoverySweepDeferState() {
-    this.recoverySweepDeferredUntilMs = LOCAL_NUM_ZERO;
-    this.recoverySweepDeferredAttempts = LOCAL_NUM_ZERO;
+    return clearRecoverySweepDeferState.call(this);
   }
 
-  /**
-   * @param {*} errorLike
-   * @param {Object} [overrides={}]
-   * @return {Object}
-   * @private
-   */
   buildDeferredRecoverySweepResult(errorLike, overrides = {}) {
-    this.deferRecoverySweep(errorLike);
-    return {
-      swept: overrides.swept || LOCAL_NUM_ZERO,
-      resolved: LOCAL_NUM_ZERO,
-      failed: LOCAL_NUM_ZERO,
-      skipped: false,
-      deferred: Number.isFinite(overrides.deferred) ? overrides.deferred : LOCAL_NUM_ONE,
-      deferredUntilMs: this.recoverySweepDeferredUntilMs,
-      error: errorLike?.message || String(errorLike),
-      results: Array.isArray(overrides.results) ? overrides.results : [],
-    };
+    return buildDeferredRecoverySweepResult.call(this, errorLike, overrides);
   }
 
-  /**
-   * Recover coordinator state from canonical system-table rows.
-   *
-   * @param {Object} payload - Recovery payload.
-   * @param {Object[]} [payload.transactions] - sql_transactions rows.
-   * @param {Object[]} [payload.participants] - sql_transaction_participants rows.
-   * @param {Object[]} [payload.writeOperations] - sql_write_operations rows.
-   */
   recoverFromSystemTables(payload = {}) {
-    const transactionRows = Array.isArray(payload.transactions) ?
-      payload.transactions :
-      [];
-    const participantRows = Array.isArray(payload.participants) ?
-      payload.participants :
-      [];
-    const writeOperationRows = Array.isArray(payload.writeOperations) ?
-      payload.writeOperations :
-      [];
-
-    this.workflowCoordinator.recover({
-      workflows: transactionRows,
-      participants: participantRows,
-      loadWorkflow: (row) => {
-        const sessionId = row.session_id || row.sessionId;
-        const transactionId = row.transaction_id || row.transactionId;
-        const status = row.status || TRANSACTION_STATUS.FAILED;
-        if (!sessionId || !transactionId) {
-          return null;
-        }
-        return {
-          sessionId,
-          ownerKey: sessionId,
-          transactionId,
-          workflowId: transactionId,
-          status,
-          transactionEpoch: this.resolveFiniteNumberField(
-            row,
-            LOCAL_STR_TRANSACTION_EPOCH,
-            LOCAL_STR_TRANSACTIONEPOCH,
-          ),
-          timeoutDeadline: this.resolveFiniteNumberField(
-            row,
-            LOCAL_STR_TIMEOUT_DEADLINE,
-            LOCAL_STR_TIMEOUTDEADLINE,
-          ),
-          writeOperations: [],
-          createdAt: row.created_at || row.createdAt || this.now(),
-          updatedAt: row.updated_at || row.updatedAt || this.now(),
-        };
-      },
-      loadParticipant: (row) => {
-        const transactionId = row.transaction_id || row.transactionId;
-        const partitionId = row.partition_id || row.partitionId;
-        if (!transactionId || !partitionId) {
-          return null;
-        }
-        return {
-          workflowId: transactionId,
-          transactionId,
-          participantId:
-            row.participant_id ||
-            row.participantId ||
-            this.createParticipantId(transactionId, partitionId),
-          participantKey: partitionId,
-          partitionId,
-          status: row.status || PARTICIPANT_STATUS.FAILED,
-          lastError: row.last_error || row.lastError || null,
-          createdAt: row.created_at || row.createdAt || this.now(),
-          updatedAt: row.updated_at || row.updatedAt || this.now(),
-        };
-      },
-      isTerminalWorkflow: (workflow) =>
-        TERMINAL_TRANSACTION_STATUS.has(workflow.status),
-    });
-
-    for (const row of transactionRows) {
-      const transactionId = row.transaction_id || row.transactionId;
-      if (!transactionId) {
-        continue;
-      }
-      const tx = this.workflowCoordinator.getWorkflowById(transactionId);
-      if (!tx) {
-        continue;
-      }
-      this.recoveredTransactionIds.add(transactionId);
-    }
-
-    for (const row of writeOperationRows) {
-      const transactionId = row.transaction_id || row.transactionId;
-      if (!transactionId) {
-        continue;
-      }
-      const tx = this.workflowCoordinator.getWorkflowById(transactionId);
-      if (!tx) {
-        continue;
-      }
-      tx.writeOperations.push({
-        operationId: row.operation_id || row.operationId,
-        statementType: row.statement_type || row.statementType,
-        partitionIds: this.parseJsonArrayField(
-          row.partition_ids || row.partitionIds,
-        ),
-        idempotencyKey: row.idempotency_key || row.idempotencyKey,
-        payloadHash: row.payload_hash || row.payloadHash,
-        status: row.status || WRITE_OPERATION_STATUS.PENDING,
-        retryCount: row.retry_count || row.retryCount || LOCAL_NUM_ZERO,
-        lastError: row.last_error || row.lastError || null,
-        createdAt: row.created_at || row.createdAt || tx.createdAt,
-        updatedAt: row.updated_at || row.updatedAt || tx.updatedAt,
-      });
-    }
+    return recoverFromSystemTables.call(this, payload);
   }
 
-  /**
-   * Persist one transaction status transition.
-   * @param {Object} tx - Transaction state.
-   * @param {string} status - Next status.
-   * @return {Promise<void>}
-   * @private
-   */
   async setTransactionStatus(tx, status) {
-    tx.status = status;
-    tx.updatedAt = this.now();
-    await this.persistTransactionRecord(tx);
+    return setTransactionStatus.call(this, tx, status);
   }
 
-  /**
-   * Resolve remaining timeout budget for one transaction.
-   * @param {Object} tx - Transaction state.
-   * @return {number} Remaining budget in milliseconds.
-   * @private
-   */
   getRemainingTransactionBudgetMs(tx) {
-    if (tx?.timeoutBudget && Number.isFinite(tx.timeoutBudget.deadlineMs)) {
-      return getRemainingBudgetMs(tx.timeoutBudget, {now: this.now});
-    }
-    if (Number.isFinite(tx?.timeoutDeadline)) {
-      return Math.max(LOCAL_NUM_ZERO, tx.timeoutDeadline - this.now());
-    }
-    return Number.POSITIVE_INFINITY;
+    return getRemainingTransactionBudgetMs.call(this, tx);
   }
 
-  /**
-   * Determine whether one transaction exceeded its timeout budget.
-   * @param {Object} tx - Transaction state.
-   * @return {boolean} True when timeout budget is exhausted.
-   * @private
-   */
   isTransactionBudgetExceeded(tx) {
-    return this.getRemainingTransactionBudgetMs(tx) <= LOCAL_NUM_ZERO;
+    return isTransactionBudgetExceeded.call(this, tx);
   }
 
-  /**
-   * Check whether participant failures include a timeout condition.
-   * @param {Object[]} failedParticipants - Failed participants.
-   * @return {boolean} True when at least one failure is timeout-related.
-   * @private
-   */
   hasTimeoutFailure(failedParticipants) {
-    return failedParticipants.some((entry) =>
-      TIMEOUT_ERROR_MESSAGES.has(entry.error),
-    );
+    return hasTimeoutFailure.call(this, failedParticipants);
   }
 
-  /**
-   * Abort one transaction due to timeout budget exhaustion.
-   * @param {Object} tx - Transaction state.
-   * @param {string} stage - Protocol stage where timeout happened.
-   * @return {Promise<Object>} Timeout failure payload.
-   * @private
-   */
   async abortTimedOutTransaction(tx, stage) {
-    if (tx.status !== TRANSACTION_STATUS.ROLLING_BACK) {
-      await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLING_BACK);
-    }
-    const rollbackResult = await this.runRollbackProtocol(tx);
-    return {
-      success: false,
-      operation: QUERY_OPERATION.COMMIT,
-      transactionId: tx.transactionId,
-      participants: this.getOrderedParticipantIds(tx),
-      failedParticipants: [],
-      rollbackFailedParticipants: rollbackResult.failedParticipants || [],
-      stage,
-      errorCode: QUERY_ERROR_CODE.TIMEOUT,
-      error: QUERY_ERROR_MSG.QUERY_TIMEOUT,
-    };
+    return abortTimedOutTransaction.call(this, tx, stage);
   }
 
-  /**
-   * Drive one transaction through the commit protocol.
-   * Supports replay from PREPARING/PREPARED/COMMITTING statuses.
-   *
-   * @param {Object} tx - Transaction state.
-   * @param {Object} [options] - Commit options.
-   * @param {boolean} [options.allowTimedOutCommitStatuses] - Allow commit
-   *   continuation for PREPARED/COMMITTING transactions after timeout.
-   * @return {Promise<Object>} Commit result.
-   * @private
-   */
   async runCommitProtocol(tx, options = {}) {
-    const commitStatusAllowsTimeout =
-      options.allowTimedOutCommitStatuses === true &&
-      (tx.status === TRANSACTION_STATUS.PREPARED ||
-        tx.status === TRANSACTION_STATUS.COMMITTING);
-
-    if (!commitStatusAllowsTimeout && this.isTransactionBudgetExceeded(tx)) {
-      return this.abortTimedOutTransaction(tx, tx.status);
-    }
-
-    if (
-      tx.status === TRANSACTION_STATUS.ACTIVE ||
-      tx.status === TRANSACTION_STATUS.FAILED
-    ) {
-      await this.setTransactionStatus(tx, TRANSACTION_STATUS.PREPARING);
-    }
-
-    if (tx.status === TRANSACTION_STATUS.PREPARING) {
-      if (!commitStatusAllowsTimeout && this.isTransactionBudgetExceeded(tx)) {
-        return this.abortTimedOutTransaction(tx, TRANSACTION_STATUS.PREPARING);
-      }
-      const prepareFailures = await this.executeParticipantStage(
-        tx,
-        PARTICIPANT_STATUS.PREPARING,
-        PARTICIPANT_STATUS.PREPARED,
-        (partitionId) => this.prepareParticipant(tx.sessionId, partitionId),
-        {participantKeys: this.getPrepareParticipantKeys(tx)},
-      );
-      if (prepareFailures.length > LOCAL_NUM_ZERO) {
-        if (this.hasTimeoutFailure(prepareFailures)) {
-          return this.abortTimedOutTransaction(
-            tx,
-            TRANSACTION_STATUS.PREPARING,
-          );
-        }
-        await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLING_BACK);
-        const rollbackResult = await this.runRollbackProtocol(tx);
-        return {
-          success: false,
-          operation: QUERY_OPERATION.COMMIT,
-          transactionId: tx.transactionId,
-          participants: this.getOrderedParticipantIds(tx),
-          failedParticipants: prepareFailures,
-          rollbackFailedParticipants: rollbackResult.failedParticipants || [],
-          stage: TRANSACTION_STATUS.PREPARING,
-          errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
-          error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
-        };
-      }
-      if (!commitStatusAllowsTimeout && this.isTransactionBudgetExceeded(tx)) {
-        return this.abortTimedOutTransaction(tx, TRANSACTION_STATUS.PREPARING);
-      }
-      await this.setTransactionStatus(tx, TRANSACTION_STATUS.PREPARED);
-    }
-
-    if (tx.status === TRANSACTION_STATUS.PREPARED) {
-      if (!commitStatusAllowsTimeout && this.isTransactionBudgetExceeded(tx)) {
-        return this.abortTimedOutTransaction(tx, TRANSACTION_STATUS.PREPARED);
-      }
-      await this.setTransactionStatus(tx, TRANSACTION_STATUS.COMMITTING);
-    }
-
-    if (tx.status !== TRANSACTION_STATUS.COMMITTING) {
-      return this.buildParticipantFailureResult(
-        tx,
-        QUERY_OPERATION.COMMIT,
-        tx.status,
-        [],
-      );
-    }
-
-    if (!commitStatusAllowsTimeout && this.isTransactionBudgetExceeded(tx)) {
-      return this.abortTimedOutTransaction(tx, TRANSACTION_STATUS.COMMITTING);
-    }
-    const commitFailures = await this.executeParticipantStage(
-      tx,
-      PARTICIPANT_STATUS.COMMITTING,
-      PARTICIPANT_STATUS.COMMITTED,
-      (partitionId) => this.commitParticipant(tx.sessionId, partitionId),
-      {
-        participantKeys: this.getCommitParticipantKeys(tx),
-        skipBudgetEnforcement: commitStatusAllowsTimeout,
-      },
-    );
-    if (commitFailures.length > LOCAL_NUM_ZERO) {
-      if (
-        !commitStatusAllowsTimeout &&
-        this.hasTimeoutFailure(commitFailures)
-      ) {
-        return this.abortTimedOutTransaction(tx, TRANSACTION_STATUS.COMMITTING);
-      }
-      await this.setTransactionStatus(tx, TRANSACTION_STATUS.FAILED);
-      return this.buildParticipantFailureResult(
-        tx,
-        QUERY_OPERATION.COMMIT,
-        TRANSACTION_STATUS.COMMITTING,
-        commitFailures,
-      );
-    }
-
-    await this.setTransactionStatus(tx, TRANSACTION_STATUS.COMMITTED);
-    this.transactionsBySession.delete(tx.sessionId);
-    return {
-      success: true,
-      operation: QUERY_OPERATION.COMMIT,
-      transactionId: tx.transactionId,
-      participants: this.getOrderedParticipantIds(tx),
-    };
+    return runCommitProtocol.call(this, tx, options);
   }
 
-  /**
-   * Drive one transaction through rollback.
-   * Supports replay from ACTIVE/ROLLING_BACK statuses.
-   *
-   * @param {Object} tx - Transaction state.
-   * @return {Promise<Object>} Rollback result.
-   * @private
-   */
   async runRollbackProtocol(tx) {
-    if (tx.status !== TRANSACTION_STATUS.ROLLING_BACK) {
-      await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLING_BACK);
-    }
-
-    const rollbackFailures = await this.executeParticipantStage(
-      tx,
-      PARTICIPANT_STATUS.ROLLING_BACK,
-      PARTICIPANT_STATUS.ROLLED_BACK,
-      (partitionId) => this.rollbackParticipant(tx.sessionId, partitionId),
-      {participantKeys: this.getRollbackParticipantKeys(tx)},
-    );
-
-    if (rollbackFailures.length > LOCAL_NUM_ZERO) {
-      await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLING_BACK);
-    } else {
-      await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLED_BACK);
-      this.transactionsBySession.delete(tx.sessionId);
-    }
-
-    return {
-      success: rollbackFailures.length === LOCAL_NUM_ZERO,
-      operation: QUERY_OPERATION.ROLLBACK,
-      transactionId: tx.transactionId,
-      participants: this.getOrderedParticipantIds(tx),
-      failedParticipants: rollbackFailures,
-      errorCode:
-        rollbackFailures.length > LOCAL_NUM_ZERO ?
-          QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE :
-          undefined,
-      error:
-        rollbackFailures.length > LOCAL_NUM_ZERO ?
-          QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE :
-          undefined,
-    };
+    return runRollbackProtocol.call(this, tx);
   }
 
-  /**
-   * Build a consistent participant-failure result payload.
-   *
-   * @param {Object} tx - Transaction state.
-   * @param {string} operation - Operation type.
-   * @param {string} stage - Current stage.
-   * @param {Object[]} failedParticipants - Failed participant entries.
-   * @return {Object} Failure payload.
-   * @private
-   */
   buildParticipantFailureResult(tx, operation, stage, failedParticipants) {
-    return {
-      success: false,
+    return buildParticipantFailureResult.call(
+      this,
+      tx,
       operation,
-      transactionId: tx.transactionId,
-      participants: this.getOrderedParticipantIds(tx),
-      failedParticipants,
       stage,
-      errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
-      error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
-    };
+      failedParticipants,
+    );
   }
 
-  /**
-   * Resolve prepare-stage participant keys.
-   * @param {Object} tx - Transaction state.
-   * @return {string[]} Participant keys.
-   * @private
-   */
   getPrepareParticipantKeys(tx) {
-    return Array.from(tx.participants.values())
-      .filter(
-        (participant) =>
-          participant.status !== PARTICIPANT_STATUS.PREPARED &&
-          participant.status !== PARTICIPANT_STATUS.COMMITTED,
-      )
-      .map((participant) => participant.partitionId)
-      .sort();
+    return getPrepareParticipantKeys.call(this, tx);
   }
 
-  /**
-   * Resolve commit-stage participant keys.
-   * @param {Object} tx - Transaction state.
-   * @return {string[]} Participant keys.
-   * @private
-   */
   getCommitParticipantKeys(tx) {
-    return Array.from(tx.participants.values())
-      .filter(
-        (participant) => participant.status !== PARTICIPANT_STATUS.COMMITTED,
-      )
-      .map((participant) => participant.partitionId)
-      .sort();
+    return getCommitParticipantKeys.call(this, tx);
   }
 
-  /**
-   * Resolve rollback-stage participant keys.
-   * @param {Object} tx - Transaction state.
-   * @return {string[]} Participant keys.
-   * @private
-   */
   getRollbackParticipantKeys(tx) {
-    return Array.from(tx.participants.values())
-      .filter(
-        (participant) => participant.status !== PARTICIPANT_STATUS.ROLLED_BACK,
-      )
-      .map((participant) => participant.partitionId)
-      .sort();
+    return getRollbackParticipantKeys.call(this, tx);
   }
 
-  /**
-   * Execute one participant stage and persist participant state updates.
-   *
-   * @param {Object} tx - Transaction state object.
-   * @param {string} transientStatus - Status while stage is running.
-   * @param {string} successStatus - Status on success.
-   * @param {Function} operation - Async participant operation callback.
-   * @param {Object} [options] - Stage options.
-   * @param {string[]} [options.participantKeys] - Participant keys.
-   * @param {boolean} [options.skipBudgetEnforcement] - Skip budget timeout
-   *   checks during participant operation retries.
-   * @return {Promise<Object[]>} Failed participant entries.
-   * @private
-   */
   async executeParticipantStage(
     tx,
     transientStatus,
@@ -1229,48 +523,16 @@ class DistributedTransactionCoordinator {
     operation,
     options = {},
   ) {
-    const stageOptions = {
-      failureStatus: PARTICIPANT_STATUS.FAILED,
-    };
-    if (Array.isArray(options.participantKeys)) {
-      stageOptions.participantKeys = options.participantKeys;
-    }
-    const failedParticipants =
-      await this.workflowCoordinator.executeParticipantStage(
-        tx.workflowId,
-        transientStatus,
-        successStatus,
-        (partitionId) =>
-          this.executeParticipantOperationWithRetry(
-            tx,
-            transientStatus,
-            partitionId,
-            operation,
-            {
-              skipBudgetEnforcement: options.skipBudgetEnforcement === true,
-            },
-          ),
-        stageOptions,
-      );
-    return failedParticipants.map((entry) => ({
-      partitionId: entry.participantKey,
-      error: entry.error,
-    }));
+    return executeParticipantStage.call(
+      this,
+      tx,
+      transientStatus,
+      successStatus,
+      operation,
+      options,
+    );
   }
 
-  /**
-   * Execute one participant operation with bounded exponential retry.
-   *
-   * @param {Object} tx - Transaction state.
-   * @param {string} stage - Participant stage.
-   * @param {string} partitionId - Participant partition ID.
-   * @param {Function} operation - Participant callback.
-   * @param {Object} [options] - Retry options.
-   * @param {boolean} [options.skipBudgetEnforcement] - Skip budget timeout
-   *   checks before attempts and retries.
-   * @return {Promise<void>}
-   * @private
-   */
   async executeParticipantOperationWithRetry(
     tx,
     stage,
@@ -1278,271 +540,74 @@ class DistributedTransactionCoordinator {
     operation,
     options = {},
   ) {
-    let attempt = LOCAL_NUM_ZERO;
-    const skipBudgetEnforcement = options.skipBudgetEnforcement === true;
-    while (true) {
-      if (
-        !skipBudgetEnforcement &&
-        stage !== PARTICIPANT_STATUS.ROLLING_BACK &&
-        this.isTransactionBudgetExceeded(tx)
-      ) {
-        throw this.createTransactionTimeoutError();
-      }
-      try {
-        await operation(partitionId);
-        return;
-      } catch (error) {
-        if (this.shouldTreatParticipantCommitMissAsSuccess(stage, error)) {
-          return;
-        }
-        if (attempt >= this.participantRetryMaxRetries) {
-          throw error;
-        }
-
-        attempt += LOCAL_NUM_ONE;
-        const retryDelayMs = this.calculateParticipantRetryDelay(attempt);
-        this.emitParticipantRetryDiagnostic({
-          transactionId: tx.transactionId,
-          sessionId: tx.sessionId,
-          partitionId,
-          stage,
-          duringRecovery: this.recoveredTransactionIds.has(tx.workflowId),
-          attempt,
-          retryDelayMs,
-          error: error.message,
-        });
-        if (
-          !skipBudgetEnforcement &&
-          stage !== PARTICIPANT_STATUS.ROLLING_BACK &&
-          this.isTransactionBudgetExceeded(tx)
-        ) {
-          throw this.createTransactionTimeoutError();
-        }
-        await this.sleep(retryDelayMs);
-      }
-    }
-  }
-
-  /**
-   * Build one timeout error for participant-stage execution.
-   * @return {Error} Timeout error.
-   * @private
-   */
-  createTransactionTimeoutError() {
-    const timeoutError = new Error(QUERY_ERROR_MSG.QUERY_TIMEOUT);
-    timeoutError.errorCode = QUERY_ERROR_CODE.TIMEOUT;
-    return timeoutError;
-  }
-
-  /**
-   * Treat replayed participant commits that already cleared local transaction
-   * state as idempotent success so recovery can converge after ambiguous ACK
-   * loss or duplicate commit delivery.
-   * @param {string} stage
-   * @param {Error|Object} error
-   * @return {boolean}
-   * @private
-   */
-  shouldTreatParticipantCommitMissAsSuccess(stage, error) {
-    if (stage !== PARTICIPANT_STATUS.COMMITTING) {
-      return false;
-    }
-    const errorCode = error?.errorCode || error?.code || null;
-    if (errorCode === QUERY_ERROR_CODE.NO_TRANSACTION) {
-      return true;
-    }
-    const errorMessage = String(error?.message || error?.error || '');
-    return IDEMPOTENT_COMMIT_MISS_ERROR_MESSAGES.has(errorMessage);
-  }
-
-  /**
-   * Emit one structured participant retry diagnostic.
-   * @param {Object} diagnostic - Retry diagnostic payload.
-   * @private
-   */
-  emitParticipantRetryDiagnostic(diagnostic) {
-    if (typeof this.onParticipantRetry === LOCAL_STR_FUNCTION) {
-      this.onParticipantRetry(diagnostic);
-    }
-    if (diagnostic?.duringRecovery !== true) {
-      return;
-    }
-    if (typeof this.logger?.warn === LOCAL_STR_FUNCTION) {
-      this.logger.warn(PARTICIPANT_RETRY_LOG_MSG, diagnostic);
-    }
-  }
-
-  /**
-   * Compute bounded exponential backoff delay for participant retries.
-   * @param {number} attempt - Retry attempt index (1-based).
-   * @return {number} Delay in milliseconds.
-   * @private
-   */
-  calculateParticipantRetryDelay(attempt) {
-    const exponentialDelay =
-      this.participantRetryBaseDelayMs * 2 ** Math.max(attempt - 1, 0);
-    return Math.min(this.participantRetryMaxDelayMs, exponentialDelay);
-  }
-
-  /**
-   * Persist transaction record through callback.
-   * @param {Object} tx - Transaction state.
-   * @return {Promise<void>}
-   * @private
-   */
-  async persistTransactionRecord(tx) {
-    await this.workflowCoordinator.persistWorkflowState(tx.workflowId);
-  }
-
-  /**
-   * Persist selected participants for a transaction.
-   * @param {Object} tx - Transaction state.
-   * @param {string[]} partitionIds - Participant IDs to persist.
-   * @return {Promise<void>}
-   * @private
-   */
-  async persistParticipants(tx, partitionIds) {
-    for (const partitionId of partitionIds) {
-      const participant = tx.participants.get(partitionId);
-      if (!participant) {
-        continue;
-      }
-      await this.persistParticipantRecord(tx, participant);
-    }
-  }
-
-  /**
-   * Persist one participant record through callback.
-   * @param {Object} tx - Transaction state.
-   * @param {Object} participant - Participant state.
-   * @return {Promise<void>}
-   * @private
-   */
-  async persistParticipantRecord(tx, participant) {
-    await this.workflowCoordinator.persistParticipantState(
-      tx.workflowId,
-      participant.partitionId,
+    return executeParticipantOperationWithRetry.call(
+      this,
+      tx,
+      stage,
+      partitionId,
+      operation,
+      options,
     );
   }
 
-  /**
-   * Persist one write-operation record through callback.
-   * @param {Object} tx - Transaction state.
-   * @param {Object} operation - Write operation metadata.
-   * @return {Promise<void>}
-   * @private
-   */
+  createTransactionTimeoutError() {
+    return createTransactionTimeoutError.call(this);
+  }
+
+  shouldTreatParticipantCommitMissAsSuccess(stage, error) {
+    return shouldTreatParticipantCommitMissAsSuccess.call(this, stage, error);
+  }
+
+  emitParticipantRetryDiagnostic(diagnostic) {
+    return emitParticipantRetryDiagnostic.call(this, diagnostic);
+  }
+
+  calculateParticipantRetryDelay(attempt) {
+    return calculateParticipantRetryDelay.call(this, attempt);
+  }
+
+  async persistTransactionRecord(tx) {
+    return persistTransactionRecord.call(this, tx);
+  }
+
+  async persistParticipants(tx, partitionIds) {
+    return persistParticipants.call(this, tx, partitionIds);
+  }
+
+  async persistParticipantRecord(tx, participant) {
+    return persistParticipantRecord.call(this, tx, participant);
+  }
+
   async persistWriteOperationRecord(tx, operation) {
-    await this.persistWriteOperation({
-      operationId: operation.operationId,
-      transactionId: tx.transactionId,
-      statementType: operation.statementType,
-      status: operation.status,
-      idempotencyKey: operation.idempotencyKey,
-      payloadHash: operation.payloadHash,
-      partitionIds: operation.partitionIds,
-      retryCount: operation.retryCount,
-      lastError: operation.lastError,
-      createdAt: operation.createdAt,
-      updatedAt: operation.updatedAt,
-    });
+    return persistWriteOperationRecord.call(this, tx, operation);
   }
 
-  /**
-   * Build transaction ID.
-   * @param {string} sessionId - Session ID.
-   * @return {string} Transaction ID.
-   * @private
-   */
   createTransactionId(sessionId) {
-    return `tx-${sessionId}-${this.now()}`;
+    return createTransactionId.call(this, sessionId);
   }
 
-  /**
-   * Build a deterministic participant ID.
-   * @param {string} transactionId - Transaction ID.
-   * @param {string} partitionId - Partition ID.
-   * @return {string} Participant ID.
-   * @private
-   */
   createParticipantId(transactionId, partitionId) {
-    return `${transactionId}:${partitionId}`;
+    return createParticipantId.call(this, transactionId, partitionId);
   }
 
-  /**
-   * Build payload hash for write operation persistence.
-   * @param {Object} operation - Write operation metadata.
-   * @return {string} Payload hash.
-   * @private
-   */
   createWritePayloadHash(operation) {
-    const payload = JSON.stringify({
-      operationId: operation.operationId,
-      statementType: operation.statementType,
-      partitionIds: operation.partitionIds || [],
-    });
-    return createHash(LOCAL_STR_SHA1).update(payload).digest(LOCAL_STR_HEX);
+    return createWritePayloadHash.call(this, operation);
   }
 
-  /**
-   * Parse serialized JSON array payloads.
-   * @param {*} value - Raw value.
-   * @return {string[]} Parsed array.
-   * @private
-   */
   parseJsonArrayField(value) {
-    if (Array.isArray(value)) {
-      return value.map((entry) => String(entry));
-    }
-    if (typeof value !== LOCAL_STR_STRING || !value.trim()) {
-      return [];
-    }
-    try {
-      const parsed = JSON.parse(value);
-      return Array.isArray(parsed) ? parsed.map((entry) => String(entry)) : [];
-    } catch (_parseErr) {
-      return [];
-    }
+    return parseJsonArrayField.call(this, value);
   }
 
-  /**
-   * Resolve one numeric field from snake_case/camelCase row keys.
-   * @param {Object} row - Source row.
-   * @param {string} snakeKey - Snake-case key.
-   * @param {string} camelKey - Camel-case key.
-   * @return {number|null} Parsed numeric value.
-   * @private
-   */
   resolveFiniteNumberField(row, snakeKey, camelKey) {
-    if (Number.isFinite(row?.[snakeKey])) {
-      return row[snakeKey];
-    }
-    if (Number.isFinite(row?.[camelKey])) {
-      return row[camelKey];
-    }
-    return null;
+    return resolveFiniteNumberField.call(this, row, snakeKey, camelKey);
   }
 
-  /**
-   * Return ordered participant IDs for API responses.
-   * @param {Object} tx - Transaction state.
-   * @return {string[]} Ordered participant IDs.
-   * @private
-   */
   getOrderedParticipantIds(tx) {
-    return Array.from(tx.participants.keys()).sort();
+    return getOrderedParticipantIds.call(this, tx);
   }
 
-  /**
-   * Return ordered participant details for API responses.
-   * @param {Object} tx - Transaction state.
-   * @return {Object[]} Ordered participant records.
-   * @private
-   */
   getOrderedParticipantDetails(tx) {
-    return Array.from(tx.participants.values())
-      .map((participant) => ({...participant}))
-      .sort((left, right) => left.partitionId.localeCompare(right.partitionId));
+    return getOrderedParticipantDetails.call(this, tx);
   }
 }
 

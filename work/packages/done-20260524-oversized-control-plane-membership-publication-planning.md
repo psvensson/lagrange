@@ -3,32 +3,51 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
-  "opened": "2026-05-24",
-  "lane": "lightweight-maintenance",
-  "scenario": "none",
-  "artifact": "none",
-  "playback": "none",
-  "owner": "control_plane_file_size_owner",
-  "boundary": "source_control_plane_membership_publication_planning_file_size_refactor",
-  "dominantReason": "oversized_file_ratchet",
-  "currentState": "Current file-size audit reports src/control-plane/membership-publication-planning.js at 1759/800 lines; no implementation is started in this package yet.",
-  "nextAction": "Extract semantically named helper modules from src/control-plane/membership-publication-planning.js until it is below 800 lines, preserving behavior and the public entrypoint.",
-  "proof": [
-    "npm run audit:file-size -- --strict src/control-plane/membership-publication-planning.js",
-    "node --check src/control-plane/membership-publication-planning.js",
-    "git diff --check -- src/control-plane/membership-publication-planning.js"
-  ],
-  "theoryLedgerRefs": [],
-  "writeScope": [
-    "src/control-plane/membership-publication-planning.js"
-  ],
-  "handoffFiles": [],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [
-    "src/control-plane/membership-publication-planning.js"
-  ],
+  "status": "done",
+  "intent": {
+    "opened": "2026-05-24",
+    "closed": "2026-05-24",
+    "lane": "lightweight-maintenance",
+    "scenario": "none",
+    "artifact": "none",
+    "playback": "none",
+    "owner": "control_plane_file_size_owner",
+    "boundary": "source_control_plane_membership_publication_planning_file_size_refactor",
+    "currentState": "Current file-size audit reports src/control-plane/membership-publication-planning.js at 1759/800 lines; no implementation is started in this package yet.",
+    "nextAction": "Extract semantically named helper modules from src/control-plane/membership-publication-planning.js until it is below 800 lines, preserving behavior and the public entrypoint.",
+    "dominantReason": "oversized_file_ratchet"
+  },
+  "scope": {
+    "writeScope": [
+      "src/control-plane/membership-publication-planning.js",
+      "src/control-plane/membership-publication-candidate-derivation.js",
+      "src/control-plane/membership-publication-priority-partition-summary.js",
+      "src/control-plane/membership-publication-lifecycle-summary.js",
+      "src/control-plane/membership-publication-readiness-repair.js",
+      "src/control-plane/membership-publication-target-selection.js",
+      "src/control-plane/membership-publication-normalizers.js"
+    ],
+    "handoffFiles": [],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": [],
+    "commitScope": [
+      "src/control-plane/membership-publication-planning.js",
+      "src/control-plane/membership-publication-candidate-derivation.js",
+      "src/control-plane/membership-publication-priority-partition-summary.js",
+      "src/control-plane/membership-publication-lifecycle-summary.js",
+      "src/control-plane/membership-publication-readiness-repair.js",
+      "src/control-plane/membership-publication-target-selection.js",
+      "src/control-plane/membership-publication-normalizers.js"
+    ]
+  },
+  "gates": {
+    "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
+    "stabilityCredit": "local-proof-only",
+    "codeQualityAdmission": {
+      "reason": "active-guardrail-requirement",
+      "evidence": "The package is generated from npm run audit:file-size -- --top 250 for src/control-plane/membership-publication-planning.js; closure proof must make npm run audit:file-size -- --strict src/control-plane/membership-publication-planning.js pass."
+    }
+  },
   "modelFit": {
     "packageClass": "bounded-implementation",
     "intendedMinimumModel": "gpt-5.3-codex-spark",
@@ -40,30 +59,15 @@
       "a frozen decision must be reopened"
     ]
   },
-  "modelFitSplit": {
-    "targetExecutionModel": "gpt-5.3-codex-spark",
-    "allowedDecisionDepth": "bounded local edit after owner, scope, proof, and forbidden files are named",
-    "safeToExecuteWhen": [
-      "owner, boundary, write scope, forbidden scope, proof, and kill rule stay as declared",
-      "the executor does not need to choose architecture, migrate ownership, or reinterpret representative evidence",
-      "the first focused proof gives a clear pass, fail, or escalate signal"
-    ],
-    "splitTriggers": [
-      "write scope expands beyond the declared lower-model lane",
-      "proof requires forbidden scope, cross-owner reasoning, or architecture route selection",
-      "the implementation needs to decide system behavior instead of executing a named local mechanism"
-    ],
-    "childPackageCandidates": [
-      "Prefer mechanical-maintenance for docs/templates/schema-only edits.",
-      "Prefer test-only-proof for tests that do not change runtime behavior.",
-      "Prefer bounded-experiment for one same-owner hypothesis with inherited context."
-    ]
-  },
-  "stabilityCredit": "local-proof-only",
-  "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
-  "codeQualityAdmission": {
-    "reason": "active-guardrail-requirement",
-    "evidence": "The package is generated from npm run audit:file-size -- --top 250 for src/control-plane/membership-publication-planning.js; closure proof must make npm run audit:file-size -- --strict src/control-plane/membership-publication-planning.js pass."
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": {
+      "commands": [
+        "npm run audit:file-size -- --strict src/control-plane/membership-publication-planning.js",
+        "node --check src/control-plane/membership-publication-planning.js && node --check src/control-plane/membership-publication-candidate-derivation.js && node --check src/control-plane/membership-publication-priority-partition-summary.js && node --check src/control-plane/membership-publication-lifecycle-summary.js && node --check src/control-plane/membership-publication-readiness-repair.js && node --check src/control-plane/membership-publication-target-selection.js && node --check src/control-plane/membership-publication-normalizers.js",
+        "git diff --check -- src/control-plane/membership-publication-planning.js src/control-plane/membership-publication-candidate-derivation.js src/control-plane/membership-publication-priority-partition-summary.js src/control-plane/membership-publication-lifecycle-summary.js src/control-plane/membership-publication-readiness-repair.js src/control-plane/membership-publication-target-selection.js src/control-plane/membership-publication-normalizers.js work/packages/done-20260524-oversized-control-plane-membership-publication-planning.md"
+      ]
+    }
   }
 }
 -->
@@ -182,12 +186,20 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: executor; files-changed: target file plus semantically named helper/split files added to this package before pre-impl; validation: focused proof and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: verification-fix; owner: verifier_fixer; files-changed: package-owned files only; validation: strict file-size proof, syntax/focused test proof, and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: <validated|not-needed>.
+- [x] action: implementation; owner: worker_b; files-changed: target file plus semantic membership publication helper modules; validation: strict file-size audit, node syntax checks for changed JS, focused membership publication smoke tests, final diff check, and parent revalidated focused proof: yes; outcome: validated.
+- [x] action: verification-fix; owner: parent_verifier_fixer; files-changed: work/packages/done-20260524-oversized-control-plane-membership-publication-planning.md; validation: strict file-size audit over owned membership-publication files passed with 0/144 source oversized and 0/60 test oversized, node --check passed for all seven owned JS files, git diff --check over package scope passed, wc -l reports 5/678/363/243/200/351/15 lines, parent revalidated focused proof: yes; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: none; validation: current-blocker repair not needed because no active package state was created for this leaf package; outcome: not-needed.
+
+Theory ledger: no ledger update; behavior-preserving oversized-file refactor only.
 
 ## Validation
 
 1. npm run audit:file-size -- --strict src/control-plane/membership-publication-planning.js
 2. node --check src/control-plane/membership-publication-planning.js
-3. git diff --check -- src/control-plane/membership-publication-planning.js
+3. node --check src/control-plane/membership-publication-candidate-derivation.js
+4. node --check src/control-plane/membership-publication-priority-partition-summary.js
+5. node --check src/control-plane/membership-publication-lifecycle-summary.js
+6. node --check src/control-plane/membership-publication-readiness-repair.js
+7. node --check src/control-plane/membership-publication-target-selection.js
+8. node --check src/control-plane/membership-publication-normalizers.js
+9. git diff --check -- src/control-plane/membership-publication-planning.js src/control-plane/membership-publication-candidate-derivation.js src/control-plane/membership-publication-priority-partition-summary.js src/control-plane/membership-publication-lifecycle-summary.js src/control-plane/membership-publication-readiness-repair.js src/control-plane/membership-publication-target-selection.js src/control-plane/membership-publication-normalizers.js work/packages/done-20260524-oversized-control-plane-membership-publication-planning.md
