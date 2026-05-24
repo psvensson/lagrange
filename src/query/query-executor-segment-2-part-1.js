@@ -1,37 +1,34 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 import {QueryExecutorSegment1} from './query-executor-segment-1.js';
+import {
+  buildPartitionExecutionFailureResult,
+  resolvePartitionRetryDelayMs,
+} from './query-execution-budget.js';
+import {
+  createPartitionAttemptBudget,
+} from './query-executor-partition-attempt-budget.js';
+import {
+  createPartitionCandidateDeliveryState,
+} from './query-executor-partition-candidate-state.js';
+import {
+  buildQueryPartitionCandidateFailureDetails,
+} from './query-executor-partition-failure.js';
+import {
+  resolvePartitionExecutionBuilders,
+} from './query-executor-partition-request-builders.js';
 
 const {
-  CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_WRITE_RETRY_DECISION_STATE,
   ERRORS,
   LOG_MSG,
-  MIGRATION_PARTITION_OPERATION,
   NUM,
   QUERY_ERROR_MSG,
   QUERY_EXECUTOR_LITERAL,
   QUERY_LOG_MSG,
-  QUERY_MESSAGE_FIELD_MIGRATION_ID,
-  QUERY_MESSAGE_FIELD_MIGRATION_OPERATION,
-  QUERY_MESSAGE_FIELD_SESSION_ID,
-  QUERY_MESSAGE_FIELD_SPLIT_MIRROR_ORIGIN,
-  QUERY_MESSAGE_TYPE,
   QUERY_RESPONSE_TYPE,
-  QUERY_ROUTING_REPAIR_REASON,
-  isPriorityControlPlanePartition,
   normalizeParticipantFailureString,
-  normalizeParticipantRetryAfterMs,
   resolveParticipantBackpressureState,
 } = QUERY_EXECUTOR_SHARED;
-
-const READ_CANDIDATE_MIN_DELIVERY_TIMEOUT_MS = NUM.ONE;
-const READ_CANDIDATE_COLD_RECONNECT_DEFER_TIMEOUT_MS =
-  READ_CANDIDATE_MIN_DELIVERY_TIMEOUT_MS;
-const RECOVERY_CANDIDATE_COLD_RECONNECT_DEFER_TIMEOUT_MS =
-  READ_CANDIDATE_MIN_DELIVERY_TIMEOUT_MS;
-const RECOVERY_CANDIDATE_CONNECTED_CONNECTION_STATE = 'connected';
-const RECOVERY_CANDIDATE_CONNECTING_CONNECTION_STATE = 'connecting';
-const RECOVERY_CANDIDATE_UNOBSERVED_CONNECTION_STATE = 'unobserved';
 
 class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
   async executeOnPartition(
@@ -47,313 +44,32 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
     const failedTable = normalizeParticipantFailureString(
       executionOptions?.tableName,
     );
-    const executionTimeoutMs =
-      Number.isFinite(executionOptions?.timeoutMs) &&
-      executionOptions.timeoutMs > NUM.ZERO ?
-        Math.floor(executionOptions.timeoutMs) :
-        null;
-    const executionDeadlineMs =
-      executionTimeoutMs === null ? null : Date.now() + executionTimeoutMs;
-    const getRemainingExecutionBudgetMs = () => {
-      if (executionDeadlineMs === null) {
-        return null;
-      }
-      return Math.max(NUM.ZERO, executionDeadlineMs - Date.now());
-    };
-    const countRemainingReadCandidates = (
-      candidateQueue,
-      currentCandidateIndex,
-      attemptedAddresses,
-    ) => {
-      if (!forRead || !Array.isArray(candidateQueue)) {
-        return NUM.ONE;
-      }
-      let remainingCount = NUM.ONE;
-      for (
-        let index = currentCandidateIndex + NUM.ONE;
-        index < candidateQueue.length;
-        index += NUM.ONE
-      ) {
-        const address = candidateQueue[index]?.address;
-        if (
-          typeof address === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
-          address.length > NUM.ZERO &&
-          !attemptedAddresses.has(address)
-        ) {
-          remainingCount += NUM.ONE;
-        }
-      }
-      return remainingCount;
-    };
-    const resolveRouterDeliveryTimeoutMs = (
-      remainingBudgetMs,
-      candidateQueue,
-      currentCandidateIndex,
-      attemptedAddresses,
-    ) => {
-      const candidate = Array.isArray(candidateQueue) ?
-        candidateQueue[currentCandidateIndex] :
-        null;
-      if (shouldDeferRecoveryCandidateColdReconnect(candidate, candidateQueue)) {
-        return Math.min(
-          remainingBudgetMs,
-          forRead ?
-            READ_CANDIDATE_COLD_RECONNECT_DEFER_TIMEOUT_MS :
-            RECOVERY_CANDIDATE_COLD_RECONNECT_DEFER_TIMEOUT_MS,
-        );
-      }
-      const remainingReadCandidates = countRemainingReadCandidates(
-        candidateQueue,
-        currentCandidateIndex,
-        attemptedAddresses,
-      );
-      const capRecoveryCandidateBudget = (deliveryTimeoutMs) => {
-        if (!shouldBoundRecoveryCandidateAckTimeout(candidate)) {
-          return deliveryTimeoutMs;
-        }
-        const reconnectIntervalMs = Number(
-          this.messageRouter?.reconnectIntervalMs,
-        );
-        if (
-          !Number.isFinite(reconnectIntervalMs) ||
-          reconnectIntervalMs <= NUM.ZERO
-        ) {
-          return deliveryTimeoutMs;
-        }
-        return Math.min(
-          deliveryTimeoutMs,
-          Math.max(
-            READ_CANDIDATE_MIN_DELIVERY_TIMEOUT_MS,
-            Math.floor(reconnectIntervalMs),
-          ),
-        );
-      };
-      if (remainingReadCandidates <= NUM.ONE) {
-        return capRecoveryCandidateBudget(remainingBudgetMs);
-      }
-      return capRecoveryCandidateBudget(Math.max(
-        READ_CANDIDATE_MIN_DELIVERY_TIMEOUT_MS,
-        Math.floor(remainingBudgetMs / remainingReadCandidates),
-      ));
-    };
-    const resolveRecoveryCandidateConnectionState = (candidate) => {
-      const candidateNodeId =
-        typeof candidate?.nodeId === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
-        candidate.nodeId.length > NUM.ZERO ?
-          candidate.nodeId :
-          typeof candidate?.node_id === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
-          candidate.node_id.length > NUM.ZERO ?
-            candidate.node_id :
-            null;
-      if (candidateNodeId && candidateNodeId === this.nodeId) {
-        return RECOVERY_CANDIDATE_CONNECTED_CONNECTION_STATE;
-      }
-      if (
-        !candidateNodeId ||
-        typeof this.messageRouter?.getConnectionState !==
-          QUERY_EXECUTOR_LITERAL.STRING_FUNCTION
-      ) {
-        return RECOVERY_CANDIDATE_UNOBSERVED_CONNECTION_STATE;
-      }
-      return this.messageRouter.getConnectionState(candidateNodeId);
-    };
-    const shouldUseRecoveryCandidateReconnectBudget = () => {
-      if (
-        routingReadinessDimension !==
-          CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE
-      ) {
-        return false;
-      }
-      if (forRead) {
-        return true;
-      }
-      return isPriorityControlPlanePartition({
-        partitionId,
-        partitionRow: this.getPartitionRecord(partitionId),
-      });
-    };
-    const shouldDeferRecoveryCandidateColdReconnect = (candidate, queue = null) => {
-      if (!shouldUseRecoveryCandidateReconnectBudget()) {
-        return false;
-      }
-      const connectionState = resolveRecoveryCandidateConnectionState(candidate);
-      const isRecoveryRead =
-        forRead &&
-        routingReadinessDimension ===
-          CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
-      if (
-        isRecoveryRead &&
-        connectionState !== RECOVERY_CANDIDATE_CONNECTED_CONNECTION_STATE
-      ) {
-        return true;
-      }
-      if (Array.isArray(queue) && queue.length > 1) {
-        const hasConnected = queue.some((cand) => {
-          const state = resolveRecoveryCandidateConnectionState(cand);
-          return state === RECOVERY_CANDIDATE_CONNECTED_CONNECTION_STATE;
-        });
-        if (!hasConnected) {
-          return false;
-        }
-      }
-      return (
-        connectionState === null ||
-        connectionState === RECOVERY_CANDIDATE_CONNECTING_CONNECTION_STATE ||
-        connectionState === QUERY_EXECUTOR_LITERAL.STRING_RECONNECTING ||
-        connectionState === QUERY_EXECUTOR_LITERAL.STRING_DISCONNECTED ||
-        connectionState === QUERY_EXECUTOR_LITERAL.STRING_CLOSED
-      ) && connectionState !== RECOVERY_CANDIDATE_UNOBSERVED_CONNECTION_STATE;
-    };
-    const shouldBoundRecoveryCandidateAckTimeout = (candidate) => {
-      if (!shouldUseRecoveryCandidateReconnectBudget()) {
-        return false;
-      }
-      const connectionState = resolveRecoveryCandidateConnectionState(candidate);
-      return connectionState === RECOVERY_CANDIDATE_CONNECTED_CONNECTION_STATE;
-    };
-    const buildRouterDeliveryOptions = (
-      candidateQueue = null,
-      currentCandidateIndex = NUM.ZERO,
-      attemptedAddresses = new Set(),
-    ) => {
-      const routerOptions = {};
-      if (
-        typeof executionOptions?.deliveryPriority ===
-          QUERY_EXECUTOR_LITERAL.STRING_STRING &&
-        executionOptions.deliveryPriority.length > NUM.ZERO
-      ) {
-        routerOptions.deliveryPriority = executionOptions.deliveryPriority;
-      }
-      if (
-        typeof executionOptions?.deliverySource ===
-          QUERY_EXECUTOR_LITERAL.STRING_STRING &&
-        executionOptions.deliverySource.length > NUM.ZERO
-      ) {
-        routerOptions.deliverySource = executionOptions.deliverySource;
-      }
-      if (
-        typeof executionOptions?.replacePendingKey ===
-          QUERY_EXECUTOR_LITERAL.STRING_STRING &&
-        executionOptions.replacePendingKey.length > NUM.ZERO
-      ) {
-        routerOptions.replacePendingKey = executionOptions.replacePendingKey;
-      }
-      const remainingBudgetMs = getRemainingExecutionBudgetMs();
-      if (remainingBudgetMs !== null) {
-        if (remainingBudgetMs <= NUM.ZERO) {
-          return null;
-        }
-        routerOptions.timeoutMs = resolveRouterDeliveryTimeoutMs(
-          remainingBudgetMs,
-          candidateQueue,
-          currentCandidateIndex,
-          attemptedAddresses,
-        );
-      }
-      if (Object.keys(routerOptions).length === NUM.ZERO) {
-        return undefined;
-      }
-      return routerOptions;
-    };
-    const waitForRetryBudget = async (retryDelayMs) => {
-      const normalizedRetryDelayMs =
-        Number.isFinite(retryDelayMs) && retryDelayMs > NUM.ZERO ?
-          Math.floor(retryDelayMs) :
-          NUM.ZERO;
-      const remainingBudgetMs = getRemainingExecutionBudgetMs();
-      if (remainingBudgetMs === null) {
-        if (normalizedRetryDelayMs > NUM.ZERO) {
-          await this.delay(normalizedRetryDelayMs);
-          this.throwIfCancelled(cancellationToken);
-        }
-        return true;
-      }
-      if (remainingBudgetMs <= NUM.ZERO) {
-        return false;
-      }
-      if (normalizedRetryDelayMs > remainingBudgetMs) {
-        return false;
-      }
-      if (normalizedRetryDelayMs > NUM.ZERO) {
-        await this.delay(normalizedRetryDelayMs);
-        this.throwIfCancelled(cancellationToken);
-      }
-      const nextRemainingBudgetMs = getRemainingExecutionBudgetMs();
-      return nextRemainingBudgetMs === null || nextRemainingBudgetMs > NUM.ZERO;
-    };
-    this.throwIfCancelled(cancellationToken);
-    const buildFailureResult = (errorMessage, details = {}) => ({
+    const routingReadinessDimension =
+      executionOptions.routingReadinessDimension ||
+      this.defaultRoutingReadinessDimension;
+    const allowReadinessAuthoritativeRefresh =
+      this.shouldAllowRoutingAuthoritativeRefresh(executionOptions);
+    const attemptBudget = createPartitionAttemptBudget({
+      executor: this,
       partitionId,
-      success: false,
-      error: errorMessage || ERRORS.QUERY_FAILED,
-      errorCode: normalizeParticipantFailureString(
-        details?.errorCode || details?.code,
-      ),
-      retryAfterMs: normalizeParticipantRetryAfterMs(details?.retryAfterMs),
-      deferRetry: details?.deferRetry === true,
-      participantNodeId: normalizeParticipantFailureString(
-        details?.participantNodeId,
-      ),
-      participantAddress: normalizeParticipantFailureString(
-        details?.participantAddress,
-      ),
-      backpressured: resolveParticipantBackpressureState(details),
-      failedTable,
-      rows: [],
+      forRead,
+      executionOptions,
+      routingReadinessDimension,
+      cancellationToken,
     });
-    const resolveRetryableLeaderFailureRetryAfterMs = (
-      failure,
-      participantNodeId,
-    ) => {
-      const explicitRetryAfterMs = normalizeParticipantRetryAfterMs(
-        failure?.retryAfterMs,
-      );
-      if (explicitRetryAfterMs !== null) {
-        return explicitRetryAfterMs;
-      }
-      if (
-        typeof participantNodeId !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
-        participantNodeId.length === NUM.ZERO ||
-        forRead ||
-        typeof this.messageRouter?.getConnectionState !==
-          QUERY_EXECUTOR_LITERAL.STRING_FUNCTION
-      ) {
-        return null;
-      }
-      const errorMessage =
-        typeof failure?.error === QUERY_EXECUTOR_LITERAL.STRING_STRING ?
-          failure.error :
-          typeof failure?.message === QUERY_EXECUTOR_LITERAL.STRING_STRING ?
-            failure.message :
-            QUERY_EXECUTOR_LITERAL.STRING_VALUE;
-      const errorCode =
-        typeof failure?.errorCode === QUERY_EXECUTOR_LITERAL.STRING_STRING ?
-          failure.errorCode :
-          typeof failure?.code === QUERY_EXECUTOR_LITERAL.STRING_STRING ?
-            failure.code :
-            null;
-      if (!this.isLeaderUnavailable(errorMessage, errorCode)) {
-        return null;
-      }
-      const connectionState =
-        this.messageRouter.getConnectionState(participantNodeId);
-      if (
-        connectionState !== QUERY_EXECUTOR_LITERAL.STRING_RECONNECTING &&
-        connectionState !== QUERY_EXECUTOR_LITERAL.STRING_DISCONNECTED
-      ) {
-        return null;
-      }
-      const reconnectIntervalMs = Number(
-        this.messageRouter?.reconnectIntervalMs,
-      );
-      if (
-        !Number.isFinite(reconnectIntervalMs) ||
-        reconnectIntervalMs <= NUM.ZERO
-      ) {
-        return null;
-      }
-      return Math.floor(reconnectIntervalMs);
-    };
+    const {
+      buildRouterDeliveryOptions,
+      getRemainingExecutionBudgetMs,
+      waitForRetryBudget,
+    } = attemptBudget;
+    this.throwIfCancelled(cancellationToken);
+    const buildFailureResult = (errorMessage, details = {}) =>
+      buildPartitionExecutionFailureResult({
+        partitionId,
+        failedTable,
+        errorMessage,
+        details,
+      });
 
     // Validate dependencies
     if (!this.messageRouter) {
@@ -378,58 +94,28 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
     let lastError = null;
     let lastFailureDetails = null;
     let awaitedRoutingRepair = false;
-    let awaitedRuntimeRoutingRepair = false;
-    const routingReadinessDimension =
-      executionOptions.routingReadinessDimension ||
-      this.defaultRoutingReadinessDimension;
-    const allowReadinessAuthoritativeRefresh =
-      this.shouldAllowRoutingAuthoritativeRefresh(executionOptions);
-    const buildRequest =
-      typeof executionOptions.buildRequest === 'function' ?
-        executionOptions.buildRequest :
-        () => {
-          const request = {
-            type: QUERY_MESSAGE_TYPE.QUERY,
-            sql,
-            params,
-          };
-          if (
-            typeof executionOptions.sessionId === 'string' &&
-              executionOptions.sessionId.length > NUM.ZERO
-          ) {
-            request[QUERY_MESSAGE_FIELD_SESSION_ID] =
-                executionOptions.sessionId;
-          }
-          if (executionOptions.splitMirrorOrigin) {
-            request[QUERY_MESSAGE_FIELD_SPLIT_MIRROR_ORIGIN] =
-                executionOptions.splitMirrorOrigin;
-          }
-          if (
-            executionOptions.migrationOperation ===
-              MIGRATION_PARTITION_OPERATION.ALTER_TABLE
-          ) {
-            request[QUERY_MESSAGE_FIELD_MIGRATION_OPERATION] =
-                executionOptions.migrationOperation;
-            if (executionOptions.migrationId) {
-              request[QUERY_MESSAGE_FIELD_MIGRATION_ID] =
-                  executionOptions.migrationId;
-            }
-          }
-          return request;
-        };
-    const isSuccessfulResponse =
-      typeof executionOptions.isSuccessfulResponse === 'function' ?
-        executionOptions.isSuccessfulResponse :
-        (response) => response?.acknowledged && response?.success;
-    const buildSuccessResult =
-      typeof executionOptions.buildSuccessResult === 'function' ?
-        executionOptions.buildSuccessResult :
-        (response) => ({
-          partitionId,
-          success: true,
-          rows: response.rows || [],
-          changes: response.changes,
-        });
+    const runtimeRoutingRepairState = {
+      awaited: false,
+    };
+    const {
+      buildRequest,
+      buildSuccessResult,
+      isSuccessfulResponse,
+    } = resolvePartitionExecutionBuilders({
+      executionOptions,
+      params,
+      partitionId,
+      sql,
+    });
+    const buildLastFailureResult = () => ({
+      ...buildFailureResult(
+        lastError || ERRORS.QUERY_FAILED,
+        lastFailureDetails,
+      ),
+    });
+    const waitForLeaderRetryBudget = async () => waitForRetryBudget(
+      resolvePartitionRetryDelayMs(this.leaderRetryDelayMs, lastFailureDetails),
+    );
     for (let attempt = NUM.ONE; attempt <= maxAttempts; attempt++) {
       this.throwIfCancelled(cancellationToken);
       const attemptBudgetMs = getRemainingExecutionBudgetMs();
@@ -545,94 +231,20 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
           };
         }
       }
-      const candidateQueue = [...serviceCandidates];
-      const attemptedAddresses = new Set();
-      let retryCurrentAddressOnNextAttempt = false;
-      let deferPartitionRetryOnNextAttempt = false;
-      let leaderRecoveryQueued = false;
-      const shouldSkipCandidateDelivery = (serviceInfo, address) => {
-        if (
-          typeof address !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
-          address.length === NUM.ZERO ||
-          attemptedAddresses.has(address)
-        ) {
-          return true;
-        }
-        const witnessedService = this.findRoutingSnapshotService(
-          routingSnapshot,
-          serviceInfo,
-          address,
-        );
-        return this.isTemporarilyUnroutableAddress(
-          partitionId,
-          address,
-          witnessedService,
-        );
-      };
-      const queueLeaderRecoveryCandidates = (
-        currentCandidateIndex = null,
-        participantNodeId = null,
-      ) => {
-        if (leaderRecoveryQueued) {
-          return;
-        }
-        const recoveryCandidates = this.getLeaderRecoveryCandidates(
-          routingSnapshot,
-          attemptedAddresses,
-          preferSameLatencyGroup,
-          {
-            recoveryCandidateSelectionKey:
-              executionOptions.recoveryCandidateSelectionKey,
-          },
-        );
-        if (recoveryCandidates.length === 0) {
-          return;
-        }
-        leaderRecoveryQueued = true;
-        const recoveryRoutingContract =
-          this.resolveCanonicalLeaderGapRecoveryRoutingContract(
-            partitionId,
-            routingSnapshot,
-            routingReadinessDimension,
-            allowReadinessAuthoritativeRefresh,
-          );
-        const shouldDeprioritizeSameNodeCandidates =
-          recoveryRoutingContract.preferDifferentNodeAfterRuntimeWitness ===
-            true &&
-          typeof participantNodeId === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
-          participantNodeId.length > NUM.ZERO &&
-          Number.isInteger(currentCandidateIndex) &&
-          currentCandidateIndex >= NUM.ZERO;
-        if (!shouldDeprioritizeSameNodeCandidates) {
-          candidateQueue.push(...recoveryCandidates);
-          return;
-        }
-        const nextCandidateIndex = currentCandidateIndex + NUM.ONE;
-        const retainedTailCandidates = candidateQueue
-          .slice(nextCandidateIndex)
-          .filter((candidate) => candidate?.nodeId !== participantNodeId);
-        candidateQueue.splice(
-          nextCandidateIndex,
-          candidateQueue.length - nextCandidateIndex,
-          ...recoveryCandidates,
-          ...retainedTailCandidates,
-        );
-      };
-      const buildCandidateFailureDetails = (
-        failure,
-        participantNodeId,
-        participantAddress,
-      ) => ({
-        errorCode: failure?.errorCode || failure?.code,
-        retryAfterMs: resolveRetryableLeaderFailureRetryAfterMs(
-          failure,
-          participantNodeId,
-        ),
-        deferRetry: failure?.deferRetry,
-        participantNodeId,
-        participantAddress,
-        backpressured: resolveParticipantBackpressureState(failure),
+      const candidateState = createPartitionCandidateDeliveryState({
+        allowReadinessAuthoritativeRefresh,
+        candidateQueue: [...serviceCandidates],
+        executionOptions,
+        executor: this,
+        forRead,
+        partitionId,
+        preferLeader,
+        preferSameLatencyGroup,
+        routingReadinessDimension,
+        routingSnapshot,
+        runtimeRoutingRepairState,
       });
+      const {attemptedAddresses, candidateQueue} = candidateState;
       const recordCandidateFailure = (
         errorMessage,
         failure,
@@ -640,17 +252,13 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
         participantAddress,
       ) => {
         lastError = errorMessage;
-        lastFailureDetails = buildCandidateFailureDetails(
+        lastFailureDetails = buildQueryPartitionCandidateFailureDetails({
+          executor: this,
           failure,
+          forRead,
           participantNodeId,
           participantAddress,
-        );
-      };
-      const requestRetryCurrentAddress = () => {
-        retryCurrentAddressOnNextAttempt = true;
-      };
-      const requestDeferredPartitionRetry = () => {
-        deferPartitionRetryOnNextAttempt = true;
+        });
       };
       for (
         let candidateIndex = NUM.ZERO;
@@ -659,10 +267,10 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
       ) {
         const serviceInfo = candidateQueue[candidateIndex];
         const {address} = serviceInfo;
-        if (shouldSkipCandidateDelivery(serviceInfo, address)) {
+        if (candidateState.shouldSkipCandidateDelivery(serviceInfo, address)) {
           continue;
         }
-        attemptedAddresses.add(address);
+        candidateState.markAttemptedAddress(address);
         this.logger.debug(QUERY_LOG_MSG.ROUTING_QUERY_TO_PARTITION, {
           partitionId,
           address,
@@ -802,21 +410,21 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
               redirectRetryDecision.state ===
               CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.RETRY_SAME_ADDRESS
             ) {
-              requestRetryCurrentAddress();
+              candidateState.requestRetryCurrentAddress();
               break;
             }
             if (
               redirectRetryDecision.state ===
               CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.DEFER_PARTITION_RETRY
             ) {
-              requestDeferredPartitionRetry();
+              candidateState.requestDeferredPartitionRetry();
               break;
             }
             if (
               redirectRetryDecision.state ===
               CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.WIDEN_TO_RECOVERY_CANDIDATE
             ) {
-              queueLeaderRecoveryCandidates(
+              candidateState.queueLeaderRecoveryCandidates(
                 candidateIndex,
                 serviceInfo?.nodeId || null,
               );
@@ -826,78 +434,17 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
           if (response.noHandler) {
             const errorMessage =
               response.error || `${ERRORS.NO_HANDLER_FOR_ADDRESS} ${address}`;
-            const witnessedService = this.findRoutingSnapshotService(
-              routingSnapshot,
+            await candidateState.handleNoHandlerCandidate(
               serviceInfo,
               address,
             );
-            this.logger.warn(QUERY_LOG_MSG.NO_HANDLER_FOR_PARTITION, {
-              partitionId,
-              address,
-            });
-            this.markTemporarilyUnroutableAddress(
-              partitionId,
-              address,
-              witnessedService,
-            );
-            if (
-              this.getSessionPartitionAddress(
-                executionOptions.sessionId,
-                partitionId,
-              ) === address
-            ) {
-              this.clearSessionPartitionAddress(
-                executionOptions.sessionId,
-                partitionId,
-              );
-            }
-            if (
-              !awaitedRuntimeRoutingRepair &&
-              (await this.maybeAwaitRuntimeRoutingRepair(routingSnapshot, {
-                partitionId,
-                participantNodeId: serviceInfo?.nodeId || null,
-                routingReadinessDimension,
-                allowReadinessAuthoritativeRefresh,
-                refreshReason:
-                  QUERY_ROUTING_REPAIR_REASON.NO_HANDLER_STALE_SERVICE,
-              }))
-            ) {
-              awaitedRuntimeRoutingRepair = true;
-              const refreshedResolution =
-                this.resolvePartitionServiceCandidates(
-                  partitionId,
-                  forRead,
-                  preferLeader,
-                  preferSameLatencyGroup,
-                  routingReadinessDimension,
-                  {
-                    allowReadinessAuthoritativeRefresh,
-                    recoveryCandidateSelectionKey:
-                      executionOptions.recoveryCandidateSelectionKey,
-                  },
-                );
-              routingSnapshot = refreshedResolution.routingSnapshot;
-              const refreshedRecoveryCandidates =
-                this.getLeaderRecoveryCandidates(
-                  routingSnapshot,
-                  attemptedAddresses,
-                  preferSameLatencyGroup,
-                  {
-                    recoveryCandidateSelectionKey:
-                      executionOptions.recoveryCandidateSelectionKey,
-                  },
-                );
-              if (refreshedRecoveryCandidates.length > NUM.ZERO) {
-                candidateQueue.push(...refreshedRecoveryCandidates);
-              }
-            }
             recordCandidateFailure(
               errorMessage,
               response,
               serviceInfo?.nodeId,
               address,
             );
-            queueLeaderRecoveryCandidates(
+            candidateState.queueLeaderRecoveryCandidates(
               candidateIndex,
               serviceInfo?.nodeId || null,
             );
@@ -936,17 +483,17 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
               controlPlaneWriteRetryDecision.state ===
               CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.RETRY_SAME_ADDRESS
             ) {
-              requestRetryCurrentAddress();
+              candidateState.requestRetryCurrentAddress();
               break;
             }
             if (
               controlPlaneWriteRetryDecision.state ===
               CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.DEFER_PARTITION_RETRY
             ) {
-              requestDeferredPartitionRetry();
+              candidateState.requestDeferredPartitionRetry();
               break;
             }
-            queueLeaderRecoveryCandidates(
+            candidateState.queueLeaderRecoveryCandidates(
               candidateIndex,
               serviceInfo?.nodeId || null,
             );
@@ -973,7 +520,7 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
                 partitionId,
               );
             }
-            queueLeaderRecoveryCandidates(
+            candidateState.queueLeaderRecoveryCandidates(
               candidateIndex,
               serviceInfo?.nodeId || null,
             );
@@ -1012,78 +559,17 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
               error.message :
               ERRORS.QUERY_FAILED;
           if (this.isNoHandlerFailure(errorMessage)) {
-            const witnessedService = this.findRoutingSnapshotService(
-              routingSnapshot,
+            await candidateState.handleNoHandlerCandidate(
               serviceInfo,
               address,
             );
-            this.logger.warn(QUERY_LOG_MSG.NO_HANDLER_FOR_PARTITION, {
-              partitionId,
-              address,
-            });
-            this.markTemporarilyUnroutableAddress(
-              partitionId,
-              address,
-              witnessedService,
-            );
-            if (
-              this.getSessionPartitionAddress(
-                executionOptions.sessionId,
-                partitionId,
-              ) === address
-            ) {
-              this.clearSessionPartitionAddress(
-                executionOptions.sessionId,
-                partitionId,
-              );
-            }
-            if (
-              !awaitedRuntimeRoutingRepair &&
-              (await this.maybeAwaitRuntimeRoutingRepair(routingSnapshot, {
-                partitionId,
-                participantNodeId: serviceInfo?.nodeId || null,
-                routingReadinessDimension,
-                allowReadinessAuthoritativeRefresh,
-                refreshReason:
-                  QUERY_ROUTING_REPAIR_REASON.NO_HANDLER_STALE_SERVICE,
-              }))
-            ) {
-              awaitedRuntimeRoutingRepair = true;
-              const refreshedResolution =
-                this.resolvePartitionServiceCandidates(
-                  partitionId,
-                  forRead,
-                  preferLeader,
-                  preferSameLatencyGroup,
-                  routingReadinessDimension,
-                  {
-                    allowReadinessAuthoritativeRefresh,
-                    recoveryCandidateSelectionKey:
-                      executionOptions.recoveryCandidateSelectionKey,
-                  },
-                );
-              routingSnapshot = refreshedResolution.routingSnapshot;
-              const refreshedRecoveryCandidates =
-                this.getLeaderRecoveryCandidates(
-                  routingSnapshot,
-                  attemptedAddresses,
-                  preferSameLatencyGroup,
-                  {
-                    recoveryCandidateSelectionKey:
-                      executionOptions.recoveryCandidateSelectionKey,
-                  },
-                );
-              if (refreshedRecoveryCandidates.length > NUM.ZERO) {
-                candidateQueue.push(...refreshedRecoveryCandidates);
-              }
-            }
             recordCandidateFailure(
               errorMessage,
               error,
               serviceInfo?.nodeId,
               address,
             );
-            queueLeaderRecoveryCandidates(
+            candidateState.queueLeaderRecoveryCandidates(
               candidateIndex,
               serviceInfo?.nodeId || null,
             );
@@ -1099,7 +585,7 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
                   partitionId,
                 );
               }
-              queueLeaderRecoveryCandidates(
+              candidateState.queueLeaderRecoveryCandidates(
                 candidateIndex,
                 serviceInfo?.nodeId || null,
               );
@@ -1134,17 +620,17 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
                 controlPlaneWriteRetryDecision.state ===
                 CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.RETRY_SAME_ADDRESS
               ) {
-                requestRetryCurrentAddress();
+                candidateState.requestRetryCurrentAddress();
                 break;
               }
               if (
                 controlPlaneWriteRetryDecision.state ===
                 CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.DEFER_PARTITION_RETRY
               ) {
-                requestDeferredPartitionRetry();
+                candidateState.requestDeferredPartitionRetry();
                 break;
               }
-              queueLeaderRecoveryCandidates(
+              candidateState.queueLeaderRecoveryCandidates(
                 candidateIndex,
                 serviceInfo?.nodeId || null,
               );
@@ -1167,7 +653,7 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
                 partitionId,
               );
             }
-            queueLeaderRecoveryCandidates(
+            candidateState.queueLeaderRecoveryCandidates(
               candidateIndex,
               serviceInfo?.nodeId || null,
             );
@@ -1194,17 +680,17 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
               controlPlaneWriteRetryDecision.state ===
               CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.RETRY_SAME_ADDRESS
             ) {
-              requestRetryCurrentAddress();
+              candidateState.requestRetryCurrentAddress();
               break;
             }
             if (
               controlPlaneWriteRetryDecision.state ===
               CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.DEFER_PARTITION_RETRY
             ) {
-              requestDeferredPartitionRetry();
+              candidateState.requestDeferredPartitionRetry();
               break;
             }
-            queueLeaderRecoveryCandidates(
+            candidateState.queueLeaderRecoveryCandidates(
               candidateIndex,
               serviceInfo?.nodeId || null,
             );
@@ -1235,73 +721,27 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
           throw error;
         }
       }
-      if (retryCurrentAddressOnNextAttempt) {
+      if (candidateState.shouldRetryCurrentAddress()) {
         if (attempt < maxAttempts) {
-          const retryDelayMs =
-            Number.isFinite(lastFailureDetails?.retryAfterMs) &&
-            lastFailureDetails.retryAfterMs > NUM.ZERO ?
-              Math.max(
-                this.leaderRetryDelayMs,
-                lastFailureDetails.retryAfterMs,
-              ) :
-              this.leaderRetryDelayMs;
-          if (!(await waitForRetryBudget(retryDelayMs))) {
-            return {
-              ...buildFailureResult(
-                lastError || ERRORS.QUERY_FAILED,
-                lastFailureDetails,
-              ),
-            };
+          if (!(await waitForLeaderRetryBudget())) {
+            return buildLastFailureResult();
           }
           continue;
         }
-        return {
-          ...buildFailureResult(
-            lastError || ERRORS.QUERY_FAILED,
-            lastFailureDetails,
-          ),
-        };
+        return buildLastFailureResult();
       }
-      if (deferPartitionRetryOnNextAttempt) {
+      if (candidateState.shouldDeferPartitionRetry()) {
         if (attempt < maxAttempts) {
-          const retryDelayMs =
-            Number.isFinite(lastFailureDetails?.retryAfterMs) &&
-            lastFailureDetails.retryAfterMs > NUM.ZERO ?
-              Math.max(
-                this.leaderRetryDelayMs,
-                lastFailureDetails.retryAfterMs,
-              ) :
-              this.leaderRetryDelayMs;
-          if (!(await waitForRetryBudget(retryDelayMs))) {
-            return {
-              ...buildFailureResult(
-                lastError || ERRORS.QUERY_FAILED,
-                lastFailureDetails,
-              ),
-            };
+          if (!(await waitForLeaderRetryBudget())) {
+            return buildLastFailureResult();
           }
           continue;
         }
-        return {
-          ...buildFailureResult(
-            lastError || ERRORS.QUERY_FAILED,
-            lastFailureDetails,
-          ),
-        };
+        return buildLastFailureResult();
       }
       if (attempt < maxAttempts) {
-        const retryDelayMs =
-          Number.isFinite(lastFailureDetails?.retryAfterMs) &&
-          lastFailureDetails.retryAfterMs > NUM.ZERO ?
-            Math.max(this.leaderRetryDelayMs, lastFailureDetails.retryAfterMs) :
-            this.leaderRetryDelayMs;
-        if (!(await waitForRetryBudget(retryDelayMs))) {
-          return {
-            ...buildFailureResult(
-              lastError || ERRORS.QUERY_FAILED,
-              lastFailureDetails,
-            ),
-          };
+        if (!(await waitForLeaderRetryBudget())) {
+          return buildLastFailureResult();
         }
       }
     }
