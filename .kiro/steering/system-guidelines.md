@@ -1,6 +1,14 @@
 ---
+scope: architecture
+status: canonical
+always_load: true
+source_of_truth: self
+compiled_pack: .kiro/steering/llm/architecture.md
 inclusion: always
+last_reviewed: 2026-05-23
 ---
+
+> **Canonical source.** Generated packs at `.kiro/steering/llm/` derive rules from this file. Regenerate with `npm run steering:llm:pack` after edits.
 
 # System Guidelines — Mandatory Implementation Contract
 

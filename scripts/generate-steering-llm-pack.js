@@ -809,27 +809,83 @@ function countMarkdownRules(content = LOCAL_STR_EMPTY) {
 function renderPackMarkdown(output = {}, rules = []) {
   validateCompleteRules(rules, output.name);
 
-  const ruleLines = rules.map((rule, index) =>
-    `${index + 1}. [${rule.id}] ${rule.text}`,
-  );
+  // Group rules by primary tag (or first tag in list), falling back to 'general'
+  const groups = new Map();
+  groups.set('general', []);
+  for (const tag of Object.keys(DOMAIN_TAG_KEYWORDS)) {
+    groups.set(tag, []);
+  }
+
+  for (const rule of rules) {
+    const primaryTag = rule.tags && rule.tags.length > 0 ? rule.tags[0] : 'general';
+    if (groups.has(primaryTag)) {
+      groups.get(primaryTag).push(rule);
+    } else {
+      groups.get('general').push(rule);
+    }
+  }
+
+  const tagTitles = {
+    general: 'General Guidelines',
+    ownership: 'Ownership & Authority Policies',
+    lifecycle: 'Lifecycle & State Machine Rules',
+    readiness: 'Readiness & Health Contracts',
+    cdc: 'Change Data Capture (CDC) Policies',
+    cache: 'Caching & Observation Rules',
+    rebalancing: 'Rebalancing & Replica Constraints',
+    routing: 'Routing & Message Dissemination',
+    timeout: 'Timeouts & Budget Management',
+    testing: 'Testing & Harness Guidelines',
+    style: 'Code Style & Formatting Guidelines',
+    governance: 'Governance & Scope Controls'
+  };
+
+  const rulesBody = [];
+  let absoluteIndex = 1;
+
+  // Order sections according to DOMAIN_TAG_KEYWORDS order
+  const order = ['general', ...Object.keys(DOMAIN_TAG_KEYWORDS)];
+  for (const tag of order) {
+    const groupRules = groups.get(tag) || [];
+    if (groupRules.length === 0) {
+      continue;
+    }
+    const title = tagTitles[tag] || 'General Rules';
+    rulesBody.push(`### ${title}`, '');
+    for (const rule of groupRules) {
+      rulesBody.push(`${absoluteIndex}. [${rule.id}] ${rule.text}`);
+      absoluteIndex++;
+    }
+    rulesBody.push('');
+  }
 
   const domainSummary = [...new Set(rules.map((rule) => rule.domain))]
     .sort()
     .join(', ');
 
+  const sourceForScope = output.name || 'pack';
   const body = [
+    '---',
+    `scope: ${sourceForScope}`,
+    'status: compiled',
+    'always_load: false',
+    `source_of_truth: .kiro/steering/ (see llm-pack.config.json sources for ${sourceForScope})`,
+    'regenerate_with: npm run steering:llm:pack',
+    '---',
+    '',
+    `> **Compiled pack — do not hand-edit.** Regenerate with \`npm run steering:llm:pack\` after editing canonical sources under \`.kiro/steering/\`.`,
+    '',
     `# ${output.title || 'LLM Steering Pack'}`,
     '',
     output.description || '',
     '',
     `Generated rules: ${rules.length}`,
-    `Estimated tokens: ${estimateTokens(ruleLines.join('\n'))}`,
+    `Estimated tokens: ${estimateTokens(rulesBody.join('\n'))}`,
     `Domains: ${domainSummary || 'none'}`,
     '',
     '## Rules',
     '',
-    ...ruleLines,
-    '',
+    ...rulesBody,
   ];
 
   return body.join(LOCAL_STR_NEWLINE);
@@ -874,46 +930,57 @@ function buildManifest(
 }
 
 function renderReadme(manifestEntries = []) {
+  // Pure index. Load order is owned by AGENTS.md; do not duplicate it here.
+  // Pack sizes live in manifest.json (regenerated alongside this file).
+  const purpose = {
+    core: 'Always-load operating contract, must-not checklist, template picker.',
+    boot: 'Authority order, lane vocabulary aliases, per-lane first commands, conflict rule.',
+    architecture: 'Runtime/control-plane/bootstrap/join/rebalance/lifecycle policy.',
+    testing: 'Test design, fixtures, regression policy, harness rules.',
+    style: 'Lint, formatting, naming policy.',
+    governance: 'Roadmap, scope, edition-boundary policy.',
+  };
   const lines = [
-    '# Steering LLM Pack',
+    '---',
+    'scope: index',
+    'status: manual-pack',
+    'always_load: false',
+    'source_of_truth: self',
+    '---',
     '',
-    'This directory contains curated and generated low-token steering artifacts.',
+    '> **Manual pack — edit here directly.** This is a pure file index for the LLM steering pack directory. Load order is owned by [`AGENTS.md`](../../../AGENTS.md). Do not duplicate the load sequence here.',
     '',
-    'Generation command:',
+    '# Steering LLM Pack — Index',
+    '',
+    'Regenerate the generated packs with:',
     '',
     '```bash',
     'npm run steering:llm:pack',
     '```',
     '',
-    'Recommended load strategy:',
+    '## Files',
     '',
-    '1. Use this README as the index only.',
-    '2. Load `boot.md` for precedence, lane vocabulary, and per-lane first commands.',
-    '3. Load `lite.md` only when a 30-second must-not checklist is useful.',
-    '4. Always load `core.md` for non-trivial implementation work.',
-    '5. Load one domain pack based on task:',
-    '   - `architecture.md` for runtime/control-plane/bootstrap/join/rebalance work',
-    '   - `testing.md` for test design and regression policy',
-    '   - `style.md` for lint/style/naming policy',
-    '   - `governance.md` for roadmap/scope checks',
-    '6. Use `rules.json` when you need IDs + source traceability.',
+    '| File | Mode | Purpose |',
+    '| --- | --- | --- |',
+    '| `core.md` | manual | Always-load operating contract, must-not checklist, template picker. |',
+    '| `boot.md` | manual | Authority order, lane vocabulary aliases, per-lane first commands, conflict rule. |',
+    ...manifestEntries
+      .filter((entry) => entry.name !== 'core')
+      .map((entry) =>
+        `| \`${entry.name}.md\` | ${entry.mode || LOCAL_STR_GENERATED} | ${purpose[entry.name] || entry.description || ''} |`,
+      ),
+    '| `rules.json` | generated | Complete generated rule corpus with IDs and source citations. |',
+    '| `manifest.json` | generated | Pack metadata (rule counts, token estimates, domains, mode). |',
     '',
-    '## Pack Sizes',
+    '## Conflict Resolution',
     '',
-    '| Pack | Mode | Rules | Estimated Tokens |',
-    '| --- | --- | ---: | ---: |',
-    ...manifestEntries.map((entry) =>
-      `| ${entry.name} | ${entry.mode || LOCAL_STR_GENERATED} | ` +
-      `${entry.ruleCount} | ${entry.estimatedTokens} |`,
-    ),
+    'If a generated pack disagrees with its canonical source under `.kiro/steering/`, the source wins. Regenerate the pack with `npm run steering:llm:pack`. For policy conflicts between sources, follow the Authority Order in [`boot.md`](boot.md).',
     '',
     '## Notes',
     '',
-    '- `boot.md` is the manual LLM precedence and lane-routing contract.',
-    '- `lite.md` is a manual must-not checklist for cold starts and template choice.',
-    '- `rules.json` is the complete generated domain source with IDs and citations.',
-    '- `core.md` is manually curated so the always-load contract stays memorable.',
+    '- `core.md` and `boot.md` are manually curated so the always-load contract stays memorable.',
     '- Domain Markdown packs are generated and compact for prompt loading.',
+    '- Pack sizes (rule counts, token estimates) are recorded in `manifest.json` at generation time; do not maintain a separate static table.',
     '',
   ];
 

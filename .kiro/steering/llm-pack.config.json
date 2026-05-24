@@ -9,7 +9,7 @@
   },
   "sources": [
     {
-      "file": "system guidelines.md",
+      "file": "system-guidelines.md",
       "domain": "architecture",
       "priority": 150
     },
@@ -19,7 +19,22 @@
       "priority": 135
     },
     {
-      "file": "doctrine.md",
+      "file": "doctrine/owner-boundaries.md",
+      "domain": "architecture",
+      "priority": 120
+    },
+    {
+      "file": "doctrine/single-path.md",
+      "domain": "architecture",
+      "priority": 120
+    },
+    {
+      "file": "doctrine/state-encoding.md",
+      "domain": "architecture",
+      "priority": 120
+    },
+    {
+      "file": "doctrine/decision-experiments.md",
       "domain": "architecture",
       "priority": 120
     },
@@ -29,7 +44,27 @@
       "priority": 100
     },
     {
-      "file": "testing-guidelines.md",
+      "file": "testing-guidelines/harness.md",
+      "domain": "testing",
+      "priority": 130
+    },
+    {
+      "file": "testing-guidelines/fixtures.md",
+      "domain": "testing",
+      "priority": 130
+    },
+    {
+      "file": "testing-guidelines/regression-policy.md",
+      "domain": "testing",
+      "priority": 130
+    },
+    {
+      "file": "testing-guidelines/release-gate.md",
+      "domain": "testing",
+      "priority": 130
+    },
+    {
+      "file": "testing-guidelines/proof-ladders.md",
       "domain": "testing",
       "priority": 130
     },
@@ -44,7 +79,27 @@
       "priority": 120
     },
     {
-      "file": "workflow-guidelines.md",
+      "file": "workflow-guidelines/lifecycle.md",
+      "domain": "governance",
+      "priority": 115
+    },
+    {
+      "file": "workflow-guidelines/validators.md",
+      "domain": "governance",
+      "priority": 115
+    },
+    {
+      "file": "workflow-guidelines/packages.md",
+      "domain": "governance",
+      "priority": 115
+    },
+    {
+      "file": "workflow-guidelines/closure.md",
+      "domain": "governance",
+      "priority": 115
+    },
+    {
+      "file": "workflow-guidelines/subagents.md",
       "domain": "governance",
       "priority": 115
     }
@@ -76,7 +131,7 @@
       "domains": [
         "architecture"
       ],
-      "maxRules": 140
+      "maxRules": 40
     },
     {
       "name": "testing",
@@ -85,7 +140,7 @@
       "domains": [
         "testing"
       ],
-      "maxRules": 120
+      "maxRules": 35
     },
     {
       "name": "style",
@@ -94,7 +149,7 @@
       "domains": [
         "style"
       ],
-      "maxRules": 80
+      "maxRules": 25
     },
     {
       "name": "governance",
@@ -103,7 +158,7 @@
       "domains": [
         "governance"
       ],
-      "maxRules": 80
+      "maxRules": 30
     }
   ]
 }

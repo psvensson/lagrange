@@ -122,7 +122,7 @@ Each entry must include these labels:
 
 ## theory-20260523-rolling-restart-recovery-reconcile-recursion-fix
 
-- Status: proved
+- Status: supported
 - Scenario/gate: rolling-restart / release_gate
 - Owner/boundary: operation_workflow_owner / workflow_progress
 - Hypothesis: The sequential rolling restart triggers an infinite loop or call stack exhaustion in OperationWorkflowRecoveryReconcile getPriorityRecoveryDecisionSnapshotForPartitionOperations during re-entry reconcile checks.

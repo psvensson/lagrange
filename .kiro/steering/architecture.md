@@ -1,3 +1,14 @@
+---
+scope: architecture
+status: canonical
+always_load: false
+source_of_truth: self
+compiled_pack: .kiro/steering/llm/architecture.md
+last_reviewed: 2026-05-23
+---
+
+> **Canonical source.** Architecture document tree pointer.
+
 # Architecture Steering Pointer
 
 ## Document Role

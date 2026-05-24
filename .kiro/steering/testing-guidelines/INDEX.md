@@ -1,0 +1,40 @@
+---
+scope: testing
+status: canonical
+always_load: false
+source_of_truth: self
+compiled_pack: .kiro/steering/llm/testing.md
+last_reviewed: 2026-05-23
+---
+
+> **Canonical source — index.** This is the navigation index for testing policy. Rule content lives in the sub-files; the LLM pack generator reads them via `llm-pack.config.json`.
+
+# Testing Guidelines
+
+## Document Role
+
+This document tree governs the test, harness, and proof workflow for the repository.
+
+Use this tree for:
+
+- test-first regression policy
+- harness/runner discipline
+- fixtures and mutation requirements
+- distributed validation and release-gate ladders
+- proof-ladder and static-guardrail expectations
+
+Do not use this tree for:
+
+- runtime/contract policy (see [`../system-guidelines.md`](../system-guidelines.md) and [`../doctrine/INDEX.md`](../doctrine/INDEX.md))
+- workflow/package lifecycle (see [`../workflow-guidelines/INDEX.md`](../workflow-guidelines/INDEX.md))
+- lint/style (see [`../code-style.md`](../code-style.md))
+
+## Files
+
+| File | Topics covered |
+| --- | --- |
+| [`harness.md`](harness.md) | Runner stability/parallelism, test duration, timeout budget, execution strategy, output management, distributed harness, external resources. |
+| [`fixtures.md`](fixtures.md) | System-table mutation requirements, no skipped tests, no test-only production paths, system-guideline conformance gate. |
+| [`regression-policy.md`](regression-policy.md) | Test-first/reuse-first fix, bug-cluster escalation, owner-path/gateway/control-loop/temporal/continuity/memory/deferred-outcome/read-side-repair regression policies, availability under pressure, baseline-discovered closure. |
+| [`release-gate.md`](release-gate.md) | Scenario-driven failure migration, distributed validation ladder, artifact-first triage, boundary-transition scenario layer, agent/sub-agent validation handoff. |
+| [`proof-ladders.md`](proof-ladders.md) | Package-driven validation, static guardrail preflight & closure, file-size ratchet. |

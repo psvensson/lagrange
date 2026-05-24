@@ -1,3 +1,14 @@
+---
+scope: governance
+status: canonical
+always_load: false
+source_of_truth: self
+compiled_pack: .kiro/steering/llm/governance.md
+last_reviewed: 2026-05-23
+---
+
+> **Canonical source.** Roadmap and edition-scope pointer.
+
 # Roadmap Steering Pointer
 
 ## Document Role
@@ -41,7 +52,7 @@ Use the repository documents according to this ownership split:
 | Document class | Canonical location | Primary concern |
 | --- | --- | --- |
 | Implementation doctrine | `.kiro/steering/doctrine.md` | Short repo-wide architectural intent |
-| Stable implementation contract | `.kiro/steering/system guidelines.md` | Compact repo-wide hard stops |
+| Stable implementation contract | `.kiro/steering/system-guidelines.md` | Compact repo-wide hard stops |
 | Runtime contract detail | `.kiro/steering/runtime-contracts.md` | Control-plane, cache, metadata, pressure, and transport rules |
 | Workflow contract detail | `.kiro/steering/workflow-guidelines.md` | Package, sprint, sub-agent, guardrail, and causal-closure workflow |
 | Stable testing policy | `.kiro/steering/testing-guidelines.md` | Durable repo-wide testing rules |

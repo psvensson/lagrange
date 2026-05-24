@@ -15,9 +15,9 @@ Make the system stable under rolling-restart: change the core logic of the syste
   - H2: Missing publication convergence is a result of uncoordinated reconcile-queue retry pacing.
   - H3: Stability requires both transport-dampening grace periods and robust active-node eligibility evaluation.
 - Confidence and evidence: High. Recent package work resolved multiple specific edge cases, but unified rolling-restart stability under varied restart sequences requires integrated validation of recovery taxonomy and rebalancer gates.
-- Expected green path: Activate and execute focused runtime stability packages, verify with targeted multi-node restart tests, and run representative reruns to prove stability.
+- Expected green path: First drain the oversized-file refactor tranche so the next runtime stability work starts from smaller, semantically named source and test surfaces; then activate focused runtime stability packages, verify with targeted multi-node restart tests, and run representative reruns to prove stability.
 - Wrong direction signals: Simply raising timeouts, relaxing active-gate admission policies, or ignoring low-confidence recovery signals.
-- Next best package: `work/packages/done-20260523-rolling-restart-active-gate-snapshot-coverage-repair.md`.
+- Next best package: `work/packages/done-20260524-admin-websocket-api-method-modules.md`.
 - Stop or escalate rule: Escalated to a causal governance gate if frontier oscillations persist after focused boundary adjustments.
 
 ## Current Edge Card
@@ -25,20 +25,20 @@ Make the system stable under rolling-restart: change the core logic of the syste
 ```text
 Representative artifact: none
 Visible first frontier: unknown
-Active package: work/packages/done-20260523-rolling-restart-recovery-reconcile-recursion-fix.md
-Active package owner: operation_workflow_owner
-Active package boundary: workflow_progress
-Selected cause: priority_recovery_progress_blocked
-Required action: Identify and fix the re-entry infinite loop or call stack exhaustion in OperationWorkflowRecoveryReconcile getPriorityRecoveryDecisionSnapshotForPartitionOperations
+Active package: work/packages/active-20260524-publication-recovery-evidence-normalizers.md
+Active package owner: topology_publication_owner
+Active package boundary: publication_recovery_evidence
+Selected cause: oversized_file_ratchet
+Required action: Extract semantically named publication recovery evidence modules until src/control-plane/publication-recovery-evidence.js is below the configured source file-size limit without changing evidence behavior.
 Representative status: unknown
 Causal outcome: unknown
 Architecture gate: not-required / unknown
 Expected delta: unknown
 Current state: New package scaffolded from the shared work-package schema.
-Allowed edits: src/rebalancer/operation-workflow-recovery-reconcile.js, src/rebalancer/operation-workflow-owner.js, src/control-plane/control-plane-readiness-service-segment-2.js, src/control-plane/control-plane-readiness-service-segment-3.js, .kiro/steering/llm/architecture.md, .kiro/steering/llm/core.md, .kiro/steering/llm/governance.md, .kiro/steering/llm/manifest.json, .kiro/steering/llm/rules.json, .kiro/steering/testing-guidelines.md, roadmap.md, scripts/analyze-priority-recovery-residuals.js, scripts/analyze-topology-convergence.js, scripts/work-scenario-triage.js, scripts/work-theory-ledger.js, src/bootstrap/owners/bootstrap-readiness-owner-class-part-2.js, src/control-plane/publication-active-gate-handoff-contract.js, src/diagnostics/topology-convergence-graph.js, src/rebalancer/operation-lifecycle.js, src/rebalancer/operation-workflow-owner-ports.js, src/rebalancer/rebalancer-planning-gate-methods.js, src/rebalancer/unified-rebalancer-segment-1.js, src/rebalancer/unified-rebalancer-segment-5.js, test/distributed/harness/__tests__/cluster-active-gate-startup-acknowledgement-test-cases.js, test/distributed/harness/__tests__/cluster.test-part-4.js, test/distributed/harness/cluster-segment-7-class-4.js, test/rebalancer/cluster-readiness-gate.test.js, test/rebalancer/operation-workflow-owner-adapter.test.js, test/rebalancer/operation-workflow-owner-decision.test.js, test/rebalancer/unified-rebalancer-part-5-2-stage-2.js, test/rebalancer/unified-rebalancer.test-part-5.js, test/scripts/analyze-topology-convergence.test.js, test/scripts/work-theory-ledger.test.js, work/tracks/topology-convergence.md, test/bootstrap/owners/, test/distributed/harness/__tests__/cluster-active-gate-selected-transport-closed-owner-recovery-projection.test.js, test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js, test/scripts/analyze-priority-recovery-residuals.test.js, test/scripts/work-scenario-triage.test.js, work/RULES.md
+Allowed edits: src/control-plane/publication-recovery-evidence.js, .kiro/steering/architecture.md, .kiro/steering/code-style.md, .kiro/steering/doctrine.md, .kiro/steering/doctrine/INDEX.md, .kiro/steering/doctrine/decision-experiments.md, .kiro/steering/doctrine/owner-boundaries.md, .kiro/steering/doctrine/single-path.md, .kiro/steering/doctrine/state-encoding.md, .kiro/steering/llm-pack.config.json, .kiro/steering/llm/README.md, .kiro/steering/llm/architecture.md, .kiro/steering/llm/boot.md, .kiro/steering/llm/core.md, .kiro/steering/llm/governance.md, .kiro/steering/llm/lite.md, .kiro/steering/llm/manifest.json, .kiro/steering/llm/rules.json, .kiro/steering/llm/style.md, .kiro/steering/llm/testing.md, .kiro/steering/roadmap.md, .kiro/steering/runtime-contracts.md, ".kiro/steering/system guidelines.md" -> .kiro/steering/system-guidelines.md, .kiro/steering/testing-guidelines.md, .kiro/steering/testing-guidelines/INDEX.md, .kiro/steering/testing-guidelines/fixtures.md, .kiro/steering/testing-guidelines/harness.md, .kiro/steering/testing-guidelines/proof-ladders.md, .kiro/steering/testing-guidelines/regression-policy.md, .kiro/steering/testing-guidelines/release-gate.md, .kiro/steering/workflow-guidelines.md, .kiro/steering/workflow-guidelines/INDEX.md, .kiro/steering/workflow-guidelines/closure.md, .kiro/steering/workflow-guidelines/lifecycle.md, .kiro/steering/workflow-guidelines/packages.md, .kiro/steering/workflow-guidelines/subagents.md, .kiro/steering/workflow-guidelines/validators.md, AGENTS.md, scripts/check-guideline-decision-boundaries-baseline.json, scripts/generate-steering-llm-pack.js, src/admin/admin-websocket-api-segment-3.js, src/diagnostics/topology-convergence-graph.js, src/admin/admin-websocket-diagnostics-route-methods.js, src/admin/admin-websocket-lifecycle-methods.js, src/admin/admin-websocket-message-dispatch-methods.js, src/admin/admin-websocket-observation-methods.js, src/admin/admin-websocket-query-execution-methods.js, src/diagnostics/topology-convergence-constants.js, src/diagnostics/topology-convergence-edge-resolvers.js, src/diagnostics/topology-convergence-normalizers.js, src/diagnostics/topology-convergence-owner-witness.js, src/diagnostics/topology-convergence-replay.js
 Candidate runtime files: unknown
 Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
-Required latest proof: npm run work:advance -- --check, npm test -- test/rebalancer/operation-workflow-owner-decision.test.js # focused contract fixture, npm test -- test/rebalancer/operation-workflow-owner-adapter.test.js # transition outcome, npm test -- test/rebalancer/unified-rebalancer.test-part-5.js # affected consumer proof
+Required latest proof: npm run audit:file-size -- src/control-plane/publication-recovery-evidence.js
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -52,7 +52,57 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
 
 ## Package Queue
 
-1. [Rolling Restart Active Gate Snapshot Coverage Repair](../packages/done-20260523-rolling-restart-active-gate-snapshot-coverage-repair.md)
+1. [Bring admin websocket API below file-size limit](../packages/done-20260524-admin-websocket-api-method-modules.md)
+   - Lane: `lightweight-maintenance`
+   - Purpose: Extract semantically named admin websocket method modules until `src/admin/admin-websocket-api-segment-3.js` is below the source file-size limit.
+   - First-run reason: current top owner-boundary segment candidate from `npm run work:oversized-next -- --markdown`.
+
+2. [Bring topology convergence graph below file-size limit](../packages/done-20260524-topology-convergence-graph-boundary-modules.md)
+   - Lane: `lightweight-maintenance`
+   - Purpose: Extract semantically named topology convergence graph modules until `src/diagnostics/topology-convergence-graph.js` is below the source file-size limit.
+   - First-run reason: largest oversized source file reported by `npm run audit:file-size`.
+
+3. [Bring publication recovery evidence below file-size limit](../packages/active-20260524-publication-recovery-evidence-normalizers.md)
+   - Lane: `lightweight-maintenance`
+   - Purpose: Extract semantically named publication recovery evidence modules until `src/control-plane/publication-recovery-evidence.js` is below the source file-size limit.
+   - First-run reason: next largest source oversized file in the current audit.
+
+4. [Bring publication active gate handoff contract below file-size limit](../packages/todo-20260524-publication-active-gate-handoff-contract-modules.md)
+   - Lane: `lightweight-maintenance`
+   - Purpose: Extract semantically named publication active-gate handoff contract modules until `src/control-plane/publication-active-gate-handoff-contract.js` is below the source file-size limit.
+   - First-run reason: next largest source oversized file in the current audit.
+
+5. [Bring CDC integration service API below file-size limit](../packages/todo-20260524-cdc-integration-service-semantic-modules.md)
+   - Lane: `lightweight-maintenance`
+   - Purpose: Extract semantically named CDC integration service modules until `src/cdc/cdc-integration-service-segment-3.js` is below the source file-size limit.
+   - First-run reason: next top owner-boundary segment candidate from `npm run work:oversized-next -- --markdown`.
+
+6. [Bring operation workflow owner below file-size limit](../packages/todo-20260524-operation-workflow-owner-semantic-modules.md)
+   - Lane: `lightweight-maintenance`
+   - Purpose: Extract semantically named operation workflow owner modules until `src/rebalancer/operation-workflow-owner-segment-6.js` is below the source file-size limit.
+   - First-run reason: next top owner-boundary segment candidate from `npm run work:oversized-next -- --markdown`.
+
+7. [Split quorum conditioned remove safety tail tests below file-size limit](../packages/todo-20260524-quorum-conditioned-remove-safety-test-suites.md)
+   - Lane: `lightweight-maintenance`
+   - Purpose: Split semantically grouped quorum conditioned remove-safety test suites until `test/rebalancer/quorum-conditioned-remove-safety-tail-test-cases.js` is below the test file-size limit.
+   - First-run reason: largest oversized test file reported by `npm run audit:file-size`.
+
+8. [Split node joining service tests below file-size limit](../packages/todo-20260524-node-joining-service-test-suites.md)
+   - Lane: `lightweight-maintenance`
+   - Purpose: Split semantically grouped node joining service test suites until `test/bootstrap/node-joining-service.test.js` is below the test file-size limit.
+   - First-run reason: next largest oversized test file in the current audit.
+
+9. [Split membership publication coordinator tests below file-size limit](../packages/todo-20260524-membership-publication-coordinator-test-suites.md)
+   - Lane: `lightweight-maintenance`
+   - Purpose: Split semantically grouped membership publication coordinator test suites until `test/control-plane/membership-publication-coordinator-main-stage-2.js` is below the test file-size limit.
+   - First-run reason: next largest oversized test file in the current audit.
+
+10. Rerun `npm run audit:file-size` and `npm run work:oversized-next -- --markdown`; if any oversized files remain, insert the next concrete oversized-file packages here before resuming runtime stability work.
+   - Lane: `lightweight-maintenance`
+   - Purpose: Keep the sprint's front of queue pointed at the current largest source/test and owner-boundary oversized files until the audit reaches zero oversized files.
+   - First-run reason: the current audit reports 154 source oversized files and 60 test oversized files, so this first tranche cannot complete the full backlog by itself.
+
+11. [Rolling Restart Active Gate Snapshot Coverage Repair](../packages/done-20260523-rolling-restart-active-gate-snapshot-coverage-repair.md)
    - Lane: `runtime-owner-boundary`
    - Purpose: Align active-gate cohort fallbacks and repair snapshot recovery projection logic.
 
@@ -70,3 +120,4 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
 1. The sprint closes only after all queued packages are completed (renamed to `done-...`) or explicitly superseded.
 2. Stability must be proven by a green representative rerun or a clear, bounded successor blocker.
 3. All commits must be focused, clean, and contain only package-owned files and allowed sprint handoffs.
+4. The sprint must not resume runtime stability package execution while `npm run audit:file-size` or `npm run work:oversized-next -- --markdown` still names oversized-file candidates without a concrete front-of-queue cleanup package.

@@ -1,9 +1,20 @@
+---
+scope: architecture
+status: canonical
+always_load: false
+source_of_truth: self
+compiled_pack: .kiro/steering/llm/architecture.md
+last_reviewed: 2026-05-23
+---
+
+> **Canonical source.** Detail expands `system-guidelines.md`. Regenerate packs with `npm run steering:llm:pack`.
+
 # Runtime Contracts Detail
 
 ## Document Role
 
 This file expands the runtime, control-plane, data, cache, and transport
-contracts summarized by [`system guidelines.md`](system%20guidelines.md).
+contracts summarized by [`system-guidelines.md`](system-guidelines.md).
 
 Use this file when a package touches:
 

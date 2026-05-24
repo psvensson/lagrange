@@ -1,40 +1,39 @@
-# Steering LLM Pack
+---
+scope: index
+status: manual-pack
+always_load: false
+source_of_truth: self
+---
 
-This directory contains curated and generated low-token steering artifacts.
+> **Manual pack — edit here directly.** This is a pure file index for the LLM steering pack directory. Load order is owned by [`AGENTS.md`](../../../AGENTS.md). Do not duplicate the load sequence here.
 
-Generation command:
+# Steering LLM Pack — Index
+
+Regenerate the generated packs with:
 
 ```bash
 npm run steering:llm:pack
 ```
 
-Recommended load strategy:
+## Files
 
-1. Use this README as the index only.
-2. Load `boot.md` for precedence, lane vocabulary, and per-lane first commands.
-3. Load `lite.md` only when a 30-second must-not checklist is useful.
-4. Always load `core.md` for non-trivial implementation work.
-5. Load one domain pack based on task:
-   - `architecture.md` for runtime/control-plane/bootstrap/join/rebalance work
-   - `testing.md` for test design and regression policy
-   - `style.md` for lint/style/naming policy
-   - `governance.md` for roadmap/scope checks
-6. Use `rules.json` when you need IDs + source traceability.
+| File | Mode | Purpose |
+| --- | --- | --- |
+| `core.md` | manual | Always-load operating contract, must-not checklist, template picker. |
+| `boot.md` | manual | Authority order, lane vocabulary aliases, per-lane first commands, conflict rule. |
+| `architecture.md` | generated | Runtime/control-plane/bootstrap/join/rebalance/lifecycle policy. |
+| `testing.md` | generated | Test design, fixtures, regression policy, harness rules. |
+| `style.md` | generated | Lint, formatting, naming policy. |
+| `governance.md` | generated | Roadmap, scope, edition-boundary policy. |
+| `rules.json` | generated | Complete generated rule corpus with IDs and source citations. |
+| `manifest.json` | generated | Pack metadata (rule counts, token estimates, domains, mode). |
 
-## Pack Sizes
+## Conflict Resolution
 
-| Pack | Mode | Rules | Estimated Tokens |
-| --- | --- | ---: | ---: |
-| core | manual | 7 | 946 |
-| architecture | generated | 107 | 3674 |
-| testing | generated | 97 | 4153 |
-| style | generated | 10 | 294 |
-| governance | generated | 80 | 3378 |
+If a generated pack disagrees with its canonical source under `.kiro/steering/`, the source wins. Regenerate the pack with `npm run steering:llm:pack`. For policy conflicts between sources, follow the Authority Order in [`boot.md`](boot.md).
 
 ## Notes
 
-- `boot.md` is the manual LLM precedence and lane-routing contract.
-- `lite.md` is a manual must-not checklist for cold starts and template choice.
-- `rules.json` is the complete generated domain source with IDs and citations.
-- `core.md` is manually curated so the always-load contract stays memorable.
+- `core.md` and `boot.md` are manually curated so the always-load contract stays memorable.
 - Domain Markdown packs are generated and compact for prompt loading.
+- Pack sizes (rule counts, token estimates) are recorded in `manifest.json` at generation time; do not maintain a separate static table.

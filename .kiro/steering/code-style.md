@@ -1,3 +1,14 @@
+---
+scope: style
+status: canonical
+always_load: false
+source_of_truth: self
+compiled_pack: .kiro/steering/llm/style.md
+last_reviewed: 2026-05-23
+---
+
+> **Canonical source.** Lint, formatting, naming. Regenerate the style pack with `npm run steering:llm:pack`.
+
 # Code Style Guidelines
 
 ## Document Role
@@ -20,7 +31,7 @@ Do not use this file for:
 For those concerns, use:
 
 - [`.kiro/steering/doctrine.md`](doctrine.md)
-- [`.kiro/steering/system guidelines.md`](system%20guidelines.md)
+- [`.kiro/steering/system-guidelines.md`](system-guidelines.md)
 - [`.kiro/steering/testing-guidelines.md`](testing-guidelines.md)
 - [`../../architecture.md`](../../architecture.md)
 - [`../../roadmap.md`](../../roadmap.md)
@@ -59,7 +70,7 @@ When writing or modifying code:
 ## Constants And Naming
 
 - Follow the scalar/state generation contract from
-  [`.kiro/steering/system guidelines.md`](system%20guidelines.md).
+  [`.kiro/steering/system-guidelines.md`](system-guidelines.md).
 - Shared domain literals belong in their canonical owner module and must be
   imported from there.
 - File-local named constants are allowed when the value is private to one file.
@@ -95,7 +106,7 @@ After writing or modifying code, also review the adjacent steering documents for
 non-style concerns:
 
 - [`.kiro/steering/doctrine.md`](doctrine.md)
-- [`.kiro/steering/system guidelines.md`](system%20guidelines.md)
+- [`.kiro/steering/system-guidelines.md`](system-guidelines.md)
 - [`.kiro/steering/testing-guidelines.md`](testing-guidelines.md)
 
 ## Common Patterns
