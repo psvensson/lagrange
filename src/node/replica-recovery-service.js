@@ -30,6 +30,10 @@ import {
   REPLICA_RECOVERY_REPLICA_STATUS,
   REPLICA_RECOVERY_SUBSYSTEM,
 } from './replica-recovery-constants.js';
+import {
+  selectReplicaRecoveryTargetNodes,
+  sortReplicaRecoveryNodesByLoad,
+} from './replica-recovery-placement.js';
 
 const LOCAL_NUM_ZERO = 0;
 const LOCAL_NUM_ONE = 1;
@@ -476,74 +480,17 @@ class ReplicaRecoveryService extends EventEmitter {
     }
   }
 
-  /**
-   * Select target nodes for replica placement.
-   * @param {Array<Object>} preferredNodes - Nodes without existing replicas.
-   * @param {Array<Object>} allNodes - All healthy nodes.
-   * @param {number} needed - Number of replicas needed.
-   * @return {Array<Object>} Selected target nodes.
-   * @private
-   */
   selectTargetNodes(preferredNodes, allNodes, needed) {
-    const selected = [];
-    const selectedNodeIds = new Set();
-    const pushDistinctNode = (node) => {
-      if (!node?.node_id || selectedNodeIds.has(node.node_id)) {
-        return false;
-      }
-      selected.push(node);
-      selectedNodeIds.add(node.node_id);
-      return true;
-    };
-
-    // First, use preferred nodes (no existing replicas)
-    for (let i = REPLICA_RECOVERY_NUM.ZERO;
-      i < Math.min(needed, preferredNodes.length);
-      i++) {
-      pushDistinctNode(preferredNodes[i]);
-    }
-
-    // If still need more, use other healthy nodes before duplicating.
-    const remaining = needed - selected.length;
-    if (remaining > REPLICA_RECOVERY_NUM.ZERO &&
-      allNodes.length > REPLICA_RECOVERY_NUM.ZERO) {
-      const sortedNodes = this.sortNodesByLoad(allNodes);
-      for (const node of sortedNodes) {
-        if (selected.length >= needed) {
-          break;
-        }
-        pushDistinctNode(node);
-      }
-
-      // Only duplicate placements when the cluster cannot satisfy the request
-      // with distinct healthy nodes.
-      for (const node of sortedNodes) {
-        if (selected.length >= needed) {
-          break;
-        }
-        selected.push(node);
-      }
-    }
-
-    return selected;
+    return selectReplicaRecoveryTargetNodes(
+      preferredNodes,
+      allNodes,
+      needed,
+      (nodes) => this.sortNodesByLoad(nodes),
+    );
   }
 
-  /**
-   * Sort nodes by load (prefer less loaded nodes).
-   * @param {Array<Object>} nodes - Nodes to sort.
-   * @return {Array<Object>} Sorted nodes.
-   * @private
-   */
   sortNodesByLoad(nodes) {
-    return [...nodes].sort((a, b) => {
-      const loadA = (a.cpu_usage_percent || NUM.ZERO) +
-        (a.memory_usage_percent || NUM.ZERO) +
-        (a.disk_usage_percent || NUM.ZERO);
-      const loadB = (b.cpu_usage_percent || NUM.ZERO) +
-        (b.memory_usage_percent || NUM.ZERO) +
-        (b.disk_usage_percent || NUM.ZERO);
-      return loadA - loadB;
-    });
+    return sortReplicaRecoveryNodesByLoad(nodes);
   }
 
   /**

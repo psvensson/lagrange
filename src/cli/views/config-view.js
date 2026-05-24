@@ -9,6 +9,12 @@
  */
 
 import {BaseView, ROW_STATUS} from '../core/base-view.js';
+import {
+  formatConfigValue,
+  formatFullConfigValue,
+  isConfigDifferentFromDefault,
+  validateConfigValue,
+} from './config-value-helpers.js';
 
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_NUMBER = 'number';
@@ -30,14 +36,7 @@ const LOCAL_STR_RESTART = 'Restart';
 const LOCAL_STR_UPDATED_AT = 'updated_at';
 const LOCAL_STR_LAST_MODIFIED = 'Last Modified';
 const LOCAL_STR_N_A = 'N/A';
-const LOCAL_STR_NULL = 'null';
-const LOCAL_STR_OBJECT = 'object';
-const LOCAL_NUM_40 = 40;
 const LOCAL_NUM_ZERO = 0;
-const LOCAL_NUM_37 = 37;
-const LOCAL_STR_2ZI04 = '...';
-const LOCAL_STR_TRUE = 'true';
-const LOCAL_STR_FALSE = 'false';
 const LOCAL_STR_YES = 'Yes (!)';
 const LOCAL_STR_YES_2 = 'Yes';
 const LOCAL_STR_NO = 'No';
@@ -64,13 +63,6 @@ const LOCAL_STR_2R3CU = 'Value differs from default';
 const LOCAL_STR_RESTART_REQUIRED = 'Restart Required';
 const LOCAL_STR_D2EP5 = 'Node restart required for changes to take effect';
 const LOCAL_STR_UNKNOWN = 'Unknown';
-const LOCAL_NUM_TWO = 2;
-const LOCAL_STR_OANV2 = 'Number value cannot be empty';
-const LOCAL_STR_1 = '1';
-const LOCAL_STR_YES_3 = 'yes';
-const LOCAL_STR_0 = '0';
-const LOCAL_STR_NO_2 = 'no';
-const LOCAL_STR_8FSYG = 'JSON value cannot be empty';
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_ALL = 'all';
 const LOCAL_STR_TO60Q = '⚠️  WARNING: This change requires a node restart to take effect.';
@@ -157,21 +149,7 @@ export class ConfigView extends BaseView {
    * @return {string} Formatted value
    */
   formatValue(value, type) {
-    if (value === null || value === undefined) {
-      return LOCAL_STR_NULL;
-    }
-
-    if (type === LOCAL_STR_JSON && typeof value === LOCAL_STR_OBJECT) {
-      const str = JSON.stringify(value);
-      return str.length > LOCAL_NUM_40 ? str.substring(LOCAL_NUM_ZERO, LOCAL_NUM_37) + LOCAL_STR_2ZI04 : str;
-    }
-
-    if (type === LOCAL_STR_BOOLEAN) {
-      return value ? LOCAL_STR_TRUE : LOCAL_STR_FALSE;
-    }
-
-    const str = String(value);
-    return str.length > LOCAL_NUM_40 ? str.substring(LOCAL_NUM_ZERO, LOCAL_NUM_37) + LOCAL_STR_2ZI04 : str;
+    return formatConfigValue(value, type);
   }
 
   /**
@@ -206,7 +184,9 @@ export class ConfigView extends BaseView {
       if (isNaN(date.getTime())) {
         return LOCAL_STR_N_A;
       }
-      return date.toISOString().replace(LOCAL_STR_T, LOCAL_STR_SPACE).substring(LOCAL_NUM_ZERO, LOCAL_NUM_19);
+      return date.toISOString()
+        .replace(LOCAL_STR_T, LOCAL_STR_SPACE)
+        .substring(LOCAL_NUM_ZERO, LOCAL_NUM_19);
     } catch (_err) {
       return LOCAL_STR_N_A;
     }
@@ -240,29 +220,7 @@ export class ConfigView extends BaseView {
    * @return {boolean} True if value differs from default
    */
   isDifferentFromDefault(config) {
-    // If no default_value is defined, consider it as matching
-    if (!Object.prototype.hasOwnProperty.call(config, LOCAL_STR_DEFAULT_VALUE)) {
-      return false;
-    }
-
-    const currentValue = config.config_value;
-    const defaultValue = config.default_value;
-
-    // Handle null/undefined cases
-    if (currentValue === null || currentValue === undefined) {
-      return defaultValue !== null && defaultValue !== undefined;
-    }
-    if (defaultValue === null || defaultValue === undefined) {
-      return true;
-    }
-
-    // For objects/arrays, compare JSON strings
-    if (typeof currentValue === LOCAL_STR_OBJECT || typeof defaultValue === LOCAL_STR_OBJECT) {
-      return JSON.stringify(currentValue) !== JSON.stringify(defaultValue);
-    }
-
-    // Direct comparison for primitives
-    return currentValue !== defaultValue;
+    return isConfigDifferentFromDefault(config);
   }
 
   /**
@@ -515,19 +473,7 @@ export class ConfigView extends BaseView {
    * @return {string} Formatted value
    */
   formatFullValue(value, type) {
-    if (value === null || value === undefined) {
-      return LOCAL_STR_NULL;
-    }
-
-    if (type === LOCAL_STR_JSON && typeof value === LOCAL_STR_OBJECT) {
-      return JSON.stringify(value, null, LOCAL_NUM_TWO);
-    }
-
-    if (type === LOCAL_STR_BOOLEAN) {
-      return value ? LOCAL_STR_TRUE : LOCAL_STR_FALSE;
-    }
-
-    return String(value);
+    return formatFullConfigValue(value, type);
   }
 
   /**
@@ -582,57 +528,7 @@ export class ConfigView extends BaseView {
    * @return {ValidationResult} Validation result
    */
   validateValue(inputValue, type) {
-    if (inputValue === null || inputValue === undefined) {
-      return {valid: true, parsedValue: null};
-    }
-
-    const trimmedInput = String(inputValue).trim();
-
-    switch (type) {
-    case LOCAL_STR_STRING:
-      return {valid: true, parsedValue: trimmedInput};
-
-    case LOCAL_STR_NUMBER: {
-      if (trimmedInput === LOCAL_STR_EMPTY) {
-        return {valid: false, error: LOCAL_STR_OANV2};
-      }
-      const num = Number(trimmedInput);
-      if (isNaN(num)) {
-        return {valid: false, error: `Invalid number: "${trimmedInput}"`};
-      }
-      return {valid: true, parsedValue: num};
-    }
-
-    case LOCAL_STR_BOOLEAN: {
-      const lower = trimmedInput.toLowerCase();
-      if (lower === LOCAL_STR_TRUE || lower === LOCAL_STR_1 || lower === LOCAL_STR_YES_3) {
-        return {valid: true, parsedValue: true};
-      }
-      if (lower === LOCAL_STR_FALSE || lower === LOCAL_STR_0 || lower === LOCAL_STR_NO_2) {
-        return {valid: true, parsedValue: false};
-      }
-      return {
-        valid: false,
-        error: `Invalid boolean: "${trimmedInput}". Use true/false, yes/no, or 1/0`,
-      };
-    }
-
-    case LOCAL_STR_JSON: {
-      if (trimmedInput === LOCAL_STR_EMPTY) {
-        return {valid: false, error: LOCAL_STR_8FSYG};
-      }
-      try {
-        const parsed = JSON.parse(trimmedInput);
-        return {valid: true, parsedValue: parsed};
-      } catch (err) {
-        return {valid: false, error: `Invalid JSON: ${err.message}`};
-      }
-    }
-
-    default:
-      // Unknown type, accept as string
-      return {valid: true, parsedValue: trimmedInput};
-    }
+    return validateConfigValue(inputValue, type);
   }
 
   /**

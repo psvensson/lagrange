@@ -1,4 +1,7 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {
+  reconcileRaftPeersFromCacheForService,
+} from './partition-service-raft-peer-cache-reconciliation.js';
 import {PartitionServiceSegment1Part1} from './partition-service-segment-1-part-1.js';
 
 const {
@@ -53,104 +56,7 @@ class PartitionServiceSegment1Part2 extends PartitionServiceSegment1Part1 {
    * @private
    */
   reconcileRaftPeersFromCache() {
-    if (
-      !this.raft ||
-      !this.systemTableCache ||
-      typeof this.systemTableCache.filter !== PARTITION_SERVICE_TYPE.FUNCTION
-    ) {
-      return;
-    }
-    const services = this.systemTableCache.filter(
-      TABLES.SERVICES,
-      (service) => {
-        return (
-          service.partition_id === this.partitionId &&
-          service.service_type === SERVICE_TYPE.PARTITION
-        );
-      },
-    );
-    if (services.length === NUM.ZERO) {
-      return;
-    }
-    const addressManager = AddressManager.getInstance();
-    const expectedAddressesByReplicaId = /* @__PURE__ */ new Map();
-    for (const service of services) {
-      const replicaId = service.service_id || service.replica_id;
-      if (!replicaId || replicaId === this.replicaId) {
-        continue;
-      }
-      const status = service.status || ReplicaStatus.ACTIVE;
-      if (
-        status === ReplicaStatus.FAILED ||
-        status === ReplicaStatus.REMOVING ||
-        status === ReplicaStatus.REMOVED
-      ) {
-        continue;
-      }
-      const peerAddress =
-        typeof service.address === 'string' && service.address.length > NUM.ZERO ?
-          service.address :
-          typeof service.node_id === 'string' &&
-              service.node_id.length > NUM.ZERO ?
-            addressManager.format(
-              service.node_id,
-              ENTITY_TYPE.PARTITION,
-              replicaId,
-            ) :
-            null;
-      if (!peerAddress) {
-        continue;
-      }
-      expectedAddressesByReplicaId.set(replicaId, peerAddress);
-      if (!this.replicaIds.includes(replicaId)) {
-        this.replicaIds.push(replicaId);
-      }
-    }
-    const currentNodes = Array.isArray(this.raft.nodes) ?
-      [...this.raft.nodes] :
-      [];
-    const currentAddresses = new Set(
-      currentNodes
-        .map((node) => node?.address)
-        .filter(
-          (address) => typeof address === 'string' && address.length > NUM.ZERO,
-        ),
-    );
-    for (const [
-      replicaId,
-      expectedAddress,
-    ] of expectedAddressesByReplicaId.entries()) {
-      const staleAddresses = currentNodes
-        .map((node) => node?.address)
-        .filter((address) => {
-          if (
-            typeof address !== 'string' ||
-            address.length === NUM.ZERO ||
-            address === expectedAddress
-          ) {
-            return false;
-          }
-          try {
-            const parsed = addressManager.parse(address);
-            return (
-              parsed.serviceType === ENTITY_TYPE.PARTITION &&
-              parsed.serviceId === replicaId
-            );
-          } catch (_error) {
-            return false;
-          }
-        });
-      if (typeof this.raft.leave === PARTITION_SERVICE_TYPE.FUNCTION) {
-        for (const staleAddress of staleAddresses) {
-          this.raft.leave(staleAddress);
-          currentAddresses.delete(staleAddress);
-        }
-      }
-      if (!currentAddresses.has(expectedAddress)) {
-        this.raftProvider.joinPeer(this.raft, expectedAddress);
-        currentAddresses.add(expectedAddress);
-      }
-    }
+    reconcileRaftPeersFromCacheForService(this);
   }
   /**
    * Read one system table row from the local cache when present.

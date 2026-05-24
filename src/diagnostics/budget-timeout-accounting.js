@@ -14,8 +14,15 @@ import {
   textOrUnknown,
 } from './causal-analysis-schema.js';
 import {normalizeCausalInput} from './causal-graph-builder.js';
+import {
+  budgetRatio,
+  buildBudgetEvidence,
+  parseTimeoutLimit,
+  remainingBudget,
+  selectPresentValue,
+  uniqueValues,
+} from './budget-timeout-accounting-helpers.js';
 
-const ERROR_TIMEOUT_PATTERN = /within (\d+)ms/u;
 const CASCADE_REASON_ACTIVE_GATE_EXHAUSTED = 'active_gate_timeout_exhausted';
 const CASCADE_REASON_WORKFLOW_STEP_NEAR_LIMIT = 'workflow_step_near_timeout';
 const CASCADE_REASON_WORKFLOW_STEP_UNKNOWN = 'workflow_step_timeout_unknown';
@@ -49,10 +56,8 @@ const EVIDENCE_PATH_READINESS_PROGRESS_SIGNAL =
   'summary.readinessFailure.progressSignal';
 const EVIDENCE_PATH_READINESS_TERMINAL =
   'summary.readinessFailure.terminalReason';
-const TYPE_NUMBER = 'number';
 const HALF_RATIO = 0.5;
 const RATIO_FULL = 1;
-const ONE_COUNT = 1;
 const WAIT_MODE_RETRY_SCHEDULED = 'retry_scheduled';
 const ACTIVE_GATE_STATE_TIMED_OUT = 'timed_out';
 const ACTIVE_GATE_REASON_CODE_STALLED_NO_PROGRESS = 'stalled_no_progress';
@@ -598,19 +603,6 @@ const READINESS_RETRY_BUDGET_RULES = Object.freeze([
   }),
 ]);
 
-function buildBudgetEvidence({observed, limit, evidencePath, progressEvidence}) {
-  return {
-    observed,
-    limit,
-    evidencePath,
-    progressEvidence,
-  };
-}
-
-function selectPresentValue(primaryValue, fallbackValue) {
-  return primaryValue !== ABSENT_VALUE ? primaryValue : fallbackValue;
-}
-
 function buildObservedLimitProgressEvidence(observed, limit) {
   const snapshot = {
     observed,
@@ -724,28 +716,6 @@ function resolveBudgetState({observed, limit, reportOutcome, terminalState}) {
   return BUDGET_STATE_RULES.find((rule) => rule.matches(snapshot)).state;
 }
 
-function remainingBudget(observed, limit) {
-  if (typeof observed !== TYPE_NUMBER || typeof limit !== TYPE_NUMBER) {
-    return UNKNOWN_VALUE;
-  }
-  return limit - observed;
-}
-
-function budgetRatio(observed, limit) {
-  if (typeof observed !== TYPE_NUMBER || typeof limit !== TYPE_NUMBER || limit === ZERO_COUNT) {
-    return UNKNOWN_VALUE;
-  }
-  return observed / limit;
-}
-
-function parseTimeoutLimit(errorText) {
-  const match = textOrUnknown(errorText).match(ERROR_TIMEOUT_PATTERN);
-  if (!match) {
-    return ABSENT_VALUE;
-  }
-  return Number(match[ONE_COUNT]);
-}
-
 function buildCascades(budgets) {
   return CASCADE_RULES.flatMap((rule) => {
     const matches = rule.select(budgets);
@@ -763,10 +733,6 @@ function buildCascades(budgets) {
       nextRequiredActions: uniqueValues(matches.map((budget) => budget.nextRequiredAction)),
     }];
   });
-}
-
-function uniqueValues(values) {
-  return [...new Set(values)];
 }
 
 const CASCADE_RULES = Object.freeze([

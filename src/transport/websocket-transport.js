@@ -23,6 +23,22 @@ import {
   WS_LOG_MSG,
   WS_MESSAGE_TYPE,
 } from '../constants/transport.js';
+import {
+  buildTransportStats,
+  createIncomingConnectionRecord,
+  createOutgoingConnectionRecord,
+  findConnectedConnection,
+} from './websocket-transport-connection-records.js';
+import {
+  buildDeliveryMessage,
+  buildIdentificationMessage,
+  buildMessageTimeoutResult,
+  buildNoConnectionResult,
+  buildPendingMessageRecord,
+  buildPongMessage,
+  buildServiceAcknowledgment,
+  buildServiceFailureAcknowledgment,
+} from './websocket-transport-messages.js';
 
 const ConnectionState = CONNECTION_STATE;
 const WSMessageType = WS_MESSAGE_TYPE;
@@ -193,15 +209,10 @@ class WebSocketTransport extends EventEmitter {
       });
     });
 
+    const connection = createIncomingConnectionRecord(connectionId, ws);
+
     // Store connection temporarily until we know the peer node ID
-    this.connections.set(connectionId, {
-      connectionId,
-      ws,
-      state: ConnectionState.CONNECTED,
-      nodeId: null,
-      isIncoming: true,
-      createdAt: Date.now(),
-    });
+    this.connections.set(connectionId, connection);
 
     this.emit(TRANSPORT_EVENT.CONNECTION_ESTABLISHED, {
       connectionId,
@@ -234,16 +245,11 @@ class WebSocketTransport extends EventEmitter {
       transportId: this.transportId,
     });
 
-    const connectionInfo = {
+    const connectionInfo = createOutgoingConnectionRecord({
       connectionId: uuidv4(),
       nodeId,
       address,
-      ws: null,
-      state: ConnectionState.CONNECTING,
-      reconnectAttempts: TRANSPORT_NUM.ZERO,
-      isIncoming: false,
-      createdAt: Date.now(),
-    };
+    });
 
     this.connections.set(nodeId, connectionInfo);
 
@@ -316,14 +322,10 @@ class WebSocketTransport extends EventEmitter {
    * @private
    */
   sendIdentification(connectionInfo) {
-    const message = {
-      type: WSMessageType.IDENTIFY,
-      nodeId: this.localNodeId,
-      address: this.localAddress,
-      timestamp: Date.now(),
-    };
-
-    this.sendRaw(connectionInfo.ws, message);
+    this.sendRaw(
+      connectionInfo.ws,
+      buildIdentificationMessage(this.localNodeId, this.localAddress),
+    );
   }
 
   /**
@@ -351,7 +353,7 @@ class WebSocketTransport extends EventEmitter {
 
       // Handle ping/pong
       if (message.type === WSMessageType.PING) {
-        this.sendRaw(ws, {type: WSMessageType.PONG, timestamp: Date.now()});
+        this.sendRaw(ws, buildPongMessage());
         return;
       }
 
@@ -437,27 +439,9 @@ class WebSocketTransport extends EventEmitter {
           sourceNodeId: message.sourceNodeId,
         });
 
-        // Send acknowledgment with flat structure - spread handler result directly
-        const ack = {
-          type: WSMessageType.ACK,
-          messageId,
-          acknowledged: true,
-        };
-        if (result && typeof result === TRANSPORT_TYPEOF.OBJECT) {
-          const {acknowledged: _ack, type: handlerType, ...rest} = result;
-          Object.assign(ack, rest);
-          if (handlerType) {
-            ack.responseType = handlerType;
-          }
-        }
-        this.sendRaw(ws, ack);
+        this.sendRaw(ws, buildServiceAcknowledgment(messageId, result));
       } catch (error) {
-        this.sendRaw(ws, {
-          type: WSMessageType.ACK,
-          messageId,
-          acknowledged: false,
-          error: error.message,
-        });
+        this.sendRaw(ws, buildServiceFailureAcknowledgment(messageId, error));
       }
     } else {
       // No handler - emit event for external handling
@@ -470,11 +454,7 @@ class WebSocketTransport extends EventEmitter {
       });
 
       // Send acknowledgment
-      this.sendRaw(ws, {
-        type: WSMessageType.ACK,
-        messageId,
-        acknowledged: true,
-      });
+      this.sendRaw(ws, buildServiceAcknowledgment(messageId));
     }
   }
 
@@ -632,26 +612,12 @@ class WebSocketTransport extends EventEmitter {
     const messageId = message.messageId || uuidv4();
     this.messageCount += TRANSPORT_NUM.ONE;
 
-    // Find connection to target node
-    let connection = null;
-    if (targetNodeId) {
-      connection = this.connections.get(targetNodeId);
-    } else {
-      // Try to find connection by iterating
-      for (const [, conn] of this.connections) {
-        if (conn.state === ConnectionState.CONNECTED) {
-          connection = conn;
-          break;
-        }
-      }
-    }
+    const connection = targetNodeId ?
+      this.connections.get(targetNodeId) :
+      findConnectedConnection(this.connections);
 
     if (!connection || connection.state !== ConnectionState.CONNECTED) {
-      return {
-        messageId,
-        acknowledged: false,
-        error: WS_ERROR_MSG.NO_CONNECTION,
-      };
+      return buildNoConnectionResult(messageId);
     }
 
     return this.sendMessage(connection, targetAddress, messageId, message);
@@ -668,34 +634,27 @@ class WebSocketTransport extends EventEmitter {
    */
   sendMessage(connection, targetAddress, messageId, payload) {
     return new Promise((resolve, reject) => {
-      const message = {
-        type: WSMessageType.SERVICE_MESSAGE,
+      const message = buildDeliveryMessage({
         messageId,
         targetAddress,
         sourceAddress: this.localAddress,
         sourceNodeId: this.localNodeId,
         payload,
-        timestamp: Date.now(),
-      };
+      });
 
       // Set up timeout
       const timeout = setTimeout(() => {
         this.pendingMessages.delete(messageId);
-        resolve({
-          messageId,
-          acknowledged: false,
-          error: TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT,
-        });
+        resolve(buildMessageTimeoutResult(messageId));
       }, this.messageTimeoutMs);
 
       // Track pending message
-      this.pendingMessages.set(messageId, {
+      this.pendingMessages.set(messageId, buildPendingMessageRecord({
         messageId,
         resolve,
         reject,
         timeout,
-        sentAt: Date.now(),
-      });
+      }));
 
       // Send message
       this.sendRaw(connection.ws, message);
@@ -743,25 +702,16 @@ class WebSocketTransport extends EventEmitter {
    * @return {Object} Transport stats.
    */
   getStats() {
-    const connectionStats = {};
-    for (const [nodeId, connection] of this.connections) {
-      connectionStats[nodeId] = {
-        state: connection.state,
-        isIncoming: connection.isIncoming,
-        reconnectAttempts: connection.reconnectAttempts,
-      };
-    }
-
-    return {
+    return buildTransportStats({
       transportId: this.transportId,
       localNodeId: this.localNodeId,
       localAddress: this.localAddress,
       initialized: this.initialized,
       messageCount: this.messageCount,
-      pendingMessages: this.pendingMessages.size,
-      connections: connectionStats,
-      connectedNodes: this.getConnectedNodes().length,
-    };
+      pendingMessageCount: this.pendingMessages.size,
+      connections: this.connections,
+      connectedNodeCount: this.getConnectedNodes().length,
+    });
   }
 
   /**

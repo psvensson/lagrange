@@ -29,6 +29,15 @@ import {SQLiteLogAdapter} from '../raft/sqlite-log-adapter.js';
 import {HLCClockService} from '../hlc/hlc-clock-service.js';
 import {isRaftPacket} from '../raft/raft-packet-utils.js';
 import {WORKER_RAFT_RUNTIME_DEFAULT} from './worker-raft-runtime-defaults.js';
+import {
+  buildLeadershipStatusSnapshot,
+  buildPartitionWorkerStats,
+} from './partition-worker-service-snapshots.js';
+import {
+  deliverPartitionCDCEventToSubscriber,
+  ensurePartitionCDCForwarder,
+  removePartitionCDCForwarder,
+} from './partition-worker-cdc-forwarding.js';
 
 
 const LOCAL_STR_START_ELECTION = 'START_ELECTION';
@@ -597,18 +606,7 @@ class PartitionWorkerService extends ReplicaWorkerBase {
    * @private
    */
   ensureCDCForwarder() {
-    if (!this.cdcEmitter || !this.messageBridge || this.cdcSubscriberForwarder) {
-      return;
-    }
-
-    this.cdcSubscriberForwarder = (event) => {
-      const subscriberAddresses = Array.from(this.cdcSubscribers);
-      for (const subscriberAddress of subscriberAddresses) {
-        this.deliverCDCEventToSubscriber(subscriberAddress, event);
-      }
-    };
-
-    this.cdcEmitter.subscribe(this.cdcSubscriberForwarder);
+    ensurePartitionCDCForwarder(this);
   }
 
   /**
@@ -616,11 +614,7 @@ class PartitionWorkerService extends ReplicaWorkerBase {
    * @private
    */
   removeCDCForwarder() {
-    if (!this.cdcEmitter || !this.cdcSubscriberForwarder) {
-      return;
-    }
-    this.cdcEmitter.unsubscribe(this.cdcSubscriberForwarder);
-    this.cdcSubscriberForwarder = null;
+    removePartitionCDCForwarder(this);
   }
 
   /**
@@ -630,24 +624,12 @@ class PartitionWorkerService extends ReplicaWorkerBase {
    * @private
    */
   deliverCDCEventToSubscriber(subscriberAddress, event) {
-    if (!this.messageBridge) {
-      return;
-    }
-    try {
-      this.messageBridge.sendFireAndForget(subscriberAddress, {
-        type: CDC_MESSAGE_TYPE.CDC_EVENT,
-        cdcEvent: event,
-      });
-    } catch (error) {
-      this.logger.error(
-        PARTITION_WORKER_ERROR_MSG.CDC_DELIVERY_FAILED,
-        {
-          partitionId: this.partitionId,
-          subscriberAddress,
-          error: error.message,
-        },
-      );
-    }
+    deliverPartitionCDCEventToSubscriber(
+      this,
+      subscriberAddress,
+      event,
+      PARTITION_WORKER_ERROR_MSG.CDC_DELIVERY_FAILED,
+    );
   }
 
   /**
@@ -656,17 +638,11 @@ class PartitionWorkerService extends ReplicaWorkerBase {
    * @private
    */
   handleGetLeadershipStatus() {
-    return {
-      type: LEADERSHIP_MESSAGE_TYPE.LEADERSHIP_STATUS,
-      isLeader: this.raftGroup ?
-        this.raftGroup.isLeaderReplica() : false,
+    return buildLeadershipStatusSnapshot({
+      raftGroup: this.raftGroup,
       leaderActivated: this.isLeaderActivated(),
-      term: this.raftGroup ?
-        this.raftGroup.getCurrentTerm() : NUM.ZERO,
-      leaderId: this.raftGroup ?
-        this.raftGroup.getLeaderId() : null,
       replicaId: this.replicaId,
-    };
+    });
   }
 
   /**
@@ -792,9 +768,8 @@ class PartitionWorkerService extends ReplicaWorkerBase {
    * @return {Object} Partition worker statistics.
    */
   getStats() {
-    const baseStats = super.getStats();
-    return {
-      ...baseStats,
+    return buildPartitionWorkerStats({
+      baseStats: super.getStats(),
       partitionId: this.partitionId,
       tableId: this.tableId,
       role: this.getRole(),
@@ -804,7 +779,7 @@ class PartitionWorkerService extends ReplicaWorkerBase {
       term: this.getCurrentTerm(),
       replicaCount: this.replicaIds.length,
       cdcSubscriberCount: this.cdcSubscribers.size,
-    };
+    });
   }
 }
 
