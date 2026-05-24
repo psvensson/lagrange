@@ -1,4 +1,4 @@
-# Split membership publication coordinator tests below file-size limit
+# Split replica-dispatch-node-state-update test-part-2 below file-size limit
 
 <!-- work-package
 {
@@ -11,16 +11,17 @@
     "artifact": "none",
     "playback": "none",
     "owner": "test_quality_owner",
-    "boundary": "membership_publication_coordinator_suites",
+    "boundary": "replica_dispatch_node_state_update_suites",
     "currentState": "New package scaffolded from the shared work-package schema.",
-    "nextAction": "Split semantically grouped membership publication coordinator test suites until test/control-plane/membership-publication-coordinator-main-stage-2.js is below the configured test file-size limit without reducing coverage.",
+    "nextAction": "Split semantically grouped replica-dispatch-node-state-update test-part-2 suites until test/control-plane/replica-dispatch-node-state-update.test-part-2.js is below the configured test file-size limit without reducing coverage.",
     "dominantReason": "oversized_file_ratchet"
   },
   "scope": {
     "writeScope": [
-      "test/control-plane/membership-publication-coordinator-main-stage-2.js",
+      "test/control-plane/replica-dispatch-node-state-update.test-part-2.js",
       "src/rebalancer/operation-workflow-owner-segment-6.js",
-      "test/bootstrap/node-joining-service.test.js",
+      "test/control-plane/membership-publication-coordinator-main-stage-2.js",
+      "test/control-plane/membership-publication-coordinator.test.js",
       "test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js",
       "src/rebalancer/operation-workflow-observed-state.js",
       "src/rebalancer/operation-workflow-priority-recovery-errors.js",
@@ -29,16 +30,17 @@
       "src/rebalancer/operation-workflow-replace-replay.js",
       "src/rebalancer/operation-workflow-replacement-leader-resolution.js",
       "src/rebalancer/operation-workflow-replacement-leader-state.js",
-      "test/bootstrap/node-joining-service.test-part-7.js",
-      "test/bootstrap/node-joining-service.test-part-8.js"
+      "test/control-plane/membership-publication-coordinator-main-stage-2b.js",
+      "test/control-plane/membership-publication-coordinator-main-stage-2c.js"
     ],
     "handoffFiles": [],
     "generatedFiles": [],
     "candidateRuntimeFiles": [],
     "commitScope": [
-      "test/control-plane/membership-publication-coordinator-main-stage-2.js",
+      "test/control-plane/replica-dispatch-node-state-update.test-part-2.js",
       "src/rebalancer/operation-workflow-owner-segment-6.js",
-      "test/bootstrap/node-joining-service.test.js",
+      "test/control-plane/membership-publication-coordinator-main-stage-2.js",
+      "test/control-plane/membership-publication-coordinator.test.js",
       "test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js",
       "src/rebalancer/operation-workflow-observed-state.js",
       "src/rebalancer/operation-workflow-priority-recovery-errors.js",
@@ -47,13 +49,13 @@
       "src/rebalancer/operation-workflow-replace-replay.js",
       "src/rebalancer/operation-workflow-replacement-leader-resolution.js",
       "src/rebalancer/operation-workflow-replacement-leader-state.js",
-      "test/bootstrap/node-joining-service.test-part-7.js",
-      "test/bootstrap/node-joining-service.test-part-8.js",
-      "work/packages/active-20260524-membership-publication-coordinator-test-suites.md"
+      "test/control-plane/membership-publication-coordinator-main-stage-2b.js",
+      "test/control-plane/membership-publication-coordinator-main-stage-2c.js",
+      "work/packages/active-20260524-replica-dispatch-node-state-update-test-part-2-suites.md"
     ]
   },
   "gates": {
-    "whyHighestLeverageNow": "This package is front-loaded in the active sprint to reduce LLM and human confusion from oversized files before more rolling-restart runtime work resumes; it preserves behavior while forcing semantic helper names and file-size proof.",
+    "whyHighestLeverageNow": "This package advances the active sprint goal and current first frontier.",
     "stabilityCredit": "local-proof-only"
   },
   "modelFit": {
@@ -61,17 +63,19 @@
     "intendedMinimumModel": "gpt-5.3-codex-spark",
     "scopeShape": "leaf-slice",
     "outputProfile": "medium",
-    "ambiguityScore": 2,
     "escalationTriggers": [
       "owned files expand beyond this package",
       "a frozen decision must be reopened"
-    ]
+    ],
+    "ambiguityScore": 1
   },
   "execution": {
-    "theoryLedgerRefs": [],
+    "theoryLedgerRefs": [
+      "none"
+    ],
     "proof": {
       "commands": [
-        "npm run audit:file-size -- test/control-plane/membership-publication-coordinator-main-stage-2.js"
+        "npm run audit:file-size -- test/control-plane/replica-dispatch-node-state-update.test-part-2.js"
       ]
     }
   }
@@ -80,11 +84,11 @@
 
 ## Why
 
-`test/control-plane/membership-publication-coordinator-main-stage-2.js` is one of the largest oversized test files in the current audit. This package owns splitting it into semantically grouped suites below the configured test threshold without reducing coverage.
+State the focused concern and why this package owns it.
 
 ## Scope Basis
 
-Approved maintenance/refactor scope from the active sprint's front-loaded oversized-file tranche. `npm run audit:file-size` reports this file at 3443/1500 lines.
+Approved maintenance scope or roadmap row.
 
 ## Workflow Lane
 
@@ -112,7 +116,7 @@ Approved maintenance/refactor scope from the active sprint's front-loaded oversi
 
 - Source artifact: `none`
 - Route owner: `test_quality_owner`
-- Route boundary: `membership_publication_coordinator_suites`
+- Route boundary: `replica_dispatch_node_state_update_suites`
 - Route dominant reason: `oversized_file_ratchet`
 - Route causal outcome: `pending-before-rerun`
 - Stop mode: `pending-before-rerun`
@@ -150,7 +154,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. test/control-plane/membership-publication-coordinator-main-stage-2.js
+1. test/control-plane/replica-dispatch-node-state-update.test-part-2.js
 
 ## Out Of Scope
 
@@ -162,11 +166,11 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex-spark`
 - Scope shape: `leaf-slice`
 - Output profile: `medium`
-- Owned files: `test/control-plane/membership-publication-coordinator-main-stage-2.js`
+- Owned files: `test/control-plane/replica-dispatch-node-state-update.test-part-2.js`
 - Forbidden files: `src/`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run audit:file-size -- test/control-plane/membership-publication-coordinator-main-stage-2.js`
+- Focused proof: `npm run audit:file-size -- test/control-plane/replica-dispatch-node-state-update.test-part-2.js`
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split
@@ -197,4 +201,5 @@ Agent identity is optional provenance. Use the compact five-field shape for new 
 
 ## Validation
 
-1. npm run audit:file-size -- test/control-plane/membership-publication-coordinator-main-stage-2.js
+1. npm run audit:file-size -- test/control-plane/replica-dispatch-node-state-update.test-part-2.js
+
