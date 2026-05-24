@@ -1,3 +1,8 @@
+import {
+  cloneDecisionTableRows as cloneTopologyDecisionTableRows,
+  glossaryEntries as buildGlossaryEntries,
+} from './topology-convergence-constant-helpers.js';
+
 export const ABSENT_VALUE = 'absent';
 export const UNKNOWN_VALUE = 'unknown';
 export const PATH_SEPARATOR = '.';
@@ -785,22 +790,9 @@ export const NODE_DEFINITIONS = Object.freeze([
 ]);
 
 export function glossaryEntries(values) {
-  return Object.entries(values).map(([name, value]) => ({
-    name,
-    value,
-  }));
+  return buildGlossaryEntries(values);
 }
 
 export function cloneDecisionTableRows() {
-  return DECISION_TABLE_ROWS.map((row) => ({
-    edgeId: row.edgeId,
-    owner: row.owner,
-    boundary: row.boundary,
-    evidenceInputs: [...row.evidenceInputs],
-    outcomes: row.outcomes.map((outcome) => ({
-      condition: outcome.condition,
-      state: outcome.state,
-      reasons: [...outcome.reasons],
-    })),
-  }));
+  return cloneTopologyDecisionTableRows(DECISION_TABLE_ROWS);
 }

@@ -9,7 +9,6 @@ import {LoggingService} from '../logging/logging-service.js';
 import {COLUMN, NUM, STATE, TABLES, TYPEOF} from '../constants/index.js';
 import {assertCritical} from '../utils/assert.js';
 import {normalizeCauseId} from '../utils/cause-id.js';
-import {isNodeHeartbeatWatermarkRegression} from '../node/node-readiness-policy.js';
 import {
   CACHE_CDC_OPERATIONS,
   CACHE_DEFAULT,
@@ -22,10 +21,17 @@ import {
   SYSTEM_CACHE_KEY_DESCRIPTOR,
   getSystemCachePrimaryKeyField,
 } from './system-cache-key-descriptor.js';
-import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
 import {
-  mergeControlPlanePublicationRows,
-} from '../control-plane/control-plane-publication-merge.js';
+  applyStaleRowBackfill,
+  cloneFieldValue,
+  compareSchemaVersions,
+  getRecordTimestamp,
+  isStaleForExistingRecord,
+  mergeRecords,
+  shouldBackfillMissingField,
+  shouldUsePublicationMerge,
+  tryParseHLCTimestamp,
+} from './system-table-cache-row-merge.js';
 
 /**
  * System table names that are cached.
@@ -636,15 +642,7 @@ class SystemTableCache {
    * @private
    */
   getRecordTimestamp(record) {
-    const updatedAt = Number(record?.[COLUMN.UPDATED_AT]);
-    if (Number.isFinite(updatedAt) && updatedAt > NUM.ZERO) {
-      return updatedAt;
-    }
-    const createdAt = Number(record?.[COLUMN.CREATED_AT]);
-    if (Number.isFinite(createdAt) && createdAt > NUM.ZERO) {
-      return createdAt;
-    }
-    return null;
+    return getRecordTimestamp(record);
   }
 
   /**
@@ -656,25 +654,7 @@ class SystemTableCache {
    * @private
    */
   isStaleForExistingRecord(tableName, existing, incoming) {
-    const existingTimestamp = this.getRecordTimestamp(existing);
-    const incomingTimestamp = this.getRecordTimestamp(incoming);
-
-    if (!Number.isFinite(existingTimestamp) ||
-        !Number.isFinite(incomingTimestamp)) {
-      return tableName === TABLES.NODES &&
-        isNodeHeartbeatWatermarkRegression(existing, incoming);
-    }
-
-    if (incomingTimestamp < existingTimestamp) {
-      return true;
-    }
-
-    if (incomingTimestamp > existingTimestamp) {
-      return false;
-    }
-
-    return tableName === TABLES.NODES &&
-      isNodeHeartbeatWatermarkRegression(existing, incoming);
+    return isStaleForExistingRecord(tableName, existing, incoming);
   }
 
   /**
@@ -687,46 +667,7 @@ class SystemTableCache {
    * @private
    */
   applyStaleRowBackfill(table, key, existing, incoming) {
-    if (this.shouldUsePublicationMerge(existing, incoming)) {
-      const mergedRecord = mergeControlPlanePublicationRows(existing, incoming);
-      if (JSON.stringify(mergedRecord) === JSON.stringify(existing)) {
-        return {
-          applied: false,
-          record: existing,
-          backfilledFields: [],
-        };
-      }
-      table.set(key, mergedRecord);
-      return {
-        applied: true,
-        record: mergedRecord,
-        backfilledFields: Object.keys(incoming),
-      };
-    }
-    const merged = this.deepClone(existing);
-    const backfilledFields = [];
-
-    for (const [field, incomingValue] of Object.entries(incoming)) {
-      if (this.shouldBackfillMissingField(merged[field], incomingValue)) {
-        merged[field] = this.cloneFieldValue(incomingValue);
-        backfilledFields.push(field);
-      }
-    }
-
-    if (backfilledFields.length === NUM.ZERO) {
-      return {
-        applied: false,
-        record: existing,
-        backfilledFields,
-      };
-    }
-
-    table.set(key, merged);
-    return {
-      applied: true,
-      record: merged,
-      backfilledFields,
-    };
+    return applyStaleRowBackfill(table, key, existing, incoming);
   }
 
   /**
@@ -736,10 +677,7 @@ class SystemTableCache {
    * @private
    */
   cloneFieldValue(value) {
-    if (value === null || typeof value !== TYPEOF.OBJECT) {
-      return value;
-    }
-    return this.deepClone(value);
+    return cloneFieldValue(value);
   }
 
   /**
@@ -750,11 +688,7 @@ class SystemTableCache {
    * @private
    */
   shouldBackfillMissingField(existingValue, incomingValue) {
-    const existingMissing = existingValue === null ||
-      typeof existingValue === TYPEOF.UNDEFINED;
-    const incomingPresent = incomingValue !== null &&
-      typeof incomingValue !== TYPEOF.UNDEFINED;
-    return existingMissing && incomingPresent;
+    return shouldBackfillMissingField(existingValue, incomingValue);
   }
 
   /**
@@ -766,10 +700,7 @@ class SystemTableCache {
    * @private
    */
   mergeRecords(tableName, existing, incoming) {
-    if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
-      return mergeControlPlanePublicationRows(incoming, existing);
-    }
-    return {...existing, ...this.deepClone(incoming)};
+    return mergeRecords(tableName, existing, incoming);
   }
 
   /**
@@ -780,7 +711,7 @@ class SystemTableCache {
    * @private
    */
   shouldUsePublicationMerge(existing, incoming) {
-    return Boolean(existing?.publication_id || incoming?.publication_id);
+    return shouldUsePublicationMerge(existing, incoming);
   }
 
   /**
@@ -792,23 +723,7 @@ class SystemTableCache {
    * @private
    */
   compareSchemaVersions(incomingVersion, currentVersion) {
-    if (incomingVersion === currentVersion) {
-      return NUM.ZERO;
-    }
-
-    const incomingHlc = this.tryParseHLCTimestamp(incomingVersion);
-    const currentHlc = this.tryParseHLCTimestamp(currentVersion);
-    if (incomingHlc && currentHlc) {
-      return incomingHlc.compare(currentHlc);
-    }
-
-    const incomingNumber = Number(incomingVersion);
-    const currentNumber = Number(currentVersion);
-    if (Number.isFinite(incomingNumber) && Number.isFinite(currentNumber)) {
-      return incomingNumber - currentNumber;
-    }
-
-    return String(incomingVersion).localeCompare(String(currentVersion));
+    return compareSchemaVersions(incomingVersion, currentVersion);
   }
 
   /**
@@ -818,15 +733,7 @@ class SystemTableCache {
    * @private
    */
   tryParseHLCTimestamp(value) {
-    if (typeof value === TYPEOF.UNDEFINED || value === null) {
-      return null;
-    }
-
-    try {
-      return HLCTimestamp.fromString(String(value));
-    } catch {
-      return null;
-    }
+    return tryParseHLCTimestamp(value);
   }
 }
 

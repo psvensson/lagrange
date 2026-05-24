@@ -3,32 +3,43 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
-  "opened": "2026-05-24",
-  "lane": "lightweight-maintenance",
-  "scenario": "none",
-  "artifact": "none",
-  "playback": "none",
-  "owner": "cache_file_size_owner",
-  "boundary": "source_cache_system_table_cache_file_size_refactor",
-  "dominantReason": "oversized_file_ratchet",
-  "currentState": "Current file-size audit reports src/cache/system-table-cache.js at 834/800 lines; no implementation is started in this package yet.",
-  "nextAction": "Extract semantically named helper modules from src/cache/system-table-cache.js until it is below 800 lines, preserving behavior and the public entrypoint.",
-  "proof": [
-    "npm run audit:file-size -- --strict src/cache/system-table-cache.js",
-    "node --check src/cache/system-table-cache.js",
-    "git diff --check -- src/cache/system-table-cache.js"
-  ],
-  "theoryLedgerRefs": [],
-  "writeScope": [
-    "src/cache/system-table-cache.js"
-  ],
-  "handoffFiles": [],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [
-    "src/cache/system-table-cache.js"
-  ],
+  "status": "done",
+  "intent": {
+    "opened": "2026-05-24",
+    "closed": "2026-05-24",
+    "lane": "lightweight-maintenance",
+    "scenario": "none",
+    "artifact": "none",
+    "playback": "none",
+    "owner": "cache_file_size_owner",
+    "boundary": "source_cache_system_table_cache_file_size_refactor",
+    "currentState": "Implementation extracted row timestamp, stale-row backfill, merge, and schema-version comparison helpers into src/cache/system-table-cache-row-merge.js; src/cache/system-table-cache.js is now 740 lines and the helper is 158 lines.",
+    "nextAction": "Run or review focused proof, then use verifier-fixer evidence before package closure.",
+    "dominantReason": "oversized_file_ratchet"
+  },
+  "scope": {
+    "writeScope": [
+      "src/cache/system-table-cache.js",
+      "src/cache/system-table-cache-row-merge.js",
+      "work/packages/done-20260524-oversized-cache-system-table-cache.md"
+    ],
+    "handoffFiles": [],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": [],
+    "commitScope": [
+      "src/cache/system-table-cache.js",
+      "src/cache/system-table-cache-row-merge.js",
+      "work/packages/done-20260524-oversized-cache-system-table-cache.md"
+    ]
+  },
+  "gates": {
+    "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
+    "stabilityCredit": "local-proof-only",
+    "codeQualityAdmission": {
+      "reason": "active-guardrail-requirement",
+      "evidence": "The package is generated from npm run audit:file-size -- --top 250 for src/cache/system-table-cache.js; closure proof must make npm run audit:file-size -- --strict src/cache/system-table-cache.js src/cache/system-table-cache-row-merge.js pass."
+    }
+  },
   "modelFit": {
     "packageClass": "bounded-implementation",
     "intendedMinimumModel": "gpt-5.3-codex-spark",
@@ -40,30 +51,17 @@
       "a frozen decision must be reopened"
     ]
   },
-  "modelFitSplit": {
-    "targetExecutionModel": "gpt-5.3-codex-spark",
-    "allowedDecisionDepth": "bounded local edit after owner, scope, proof, and forbidden files are named",
-    "safeToExecuteWhen": [
-      "owner, boundary, write scope, forbidden scope, proof, and kill rule stay as declared",
-      "the executor does not need to choose architecture, migrate ownership, or reinterpret representative evidence",
-      "the first focused proof gives a clear pass, fail, or escalate signal"
-    ],
-    "splitTriggers": [
-      "write scope expands beyond the declared lower-model lane",
-      "proof requires forbidden scope, cross-owner reasoning, or architecture route selection",
-      "the implementation needs to decide system behavior instead of executing a named local mechanism"
-    ],
-    "childPackageCandidates": [
-      "Prefer mechanical-maintenance for docs/templates/schema-only edits.",
-      "Prefer test-only-proof for tests that do not change runtime behavior.",
-      "Prefer bounded-experiment for one same-owner hypothesis with inherited context."
-    ]
-  },
-  "stabilityCredit": "local-proof-only",
-  "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
-  "codeQualityAdmission": {
-    "reason": "active-guardrail-requirement",
-    "evidence": "The package is generated from npm run audit:file-size -- --top 250 for src/cache/system-table-cache.js; closure proof must make npm run audit:file-size -- --strict src/cache/system-table-cache.js pass."
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": {
+      "commands": [
+        "npm run audit:file-size -- --strict src/cache/system-table-cache.js src/cache/system-table-cache-row-merge.js",
+        "node --check src/cache/system-table-cache.js",
+        "node --check src/cache/system-table-cache-row-merge.js",
+        "node --input-type=module -e \"import {SystemTableCache, CDC_OPERATIONS} from './src/cache/system-table-cache.js'; import {TABLES, COLUMN, STATE} from './src/constants/index.js'; const cache = new SystemTableCache(); cache.applySystemTableChange(TABLES.NODES, CDC_OPERATIONS.INSERT, {[COLUMN.NODE_ID]: 'node-a', [COLUMN.CONNECTION_STATE]: STATE.READY, [COLUMN.READY_LEASE_EXPIRES_AT]: Date.now() + 10000, [COLUMN.UPDATED_AT]: 10}); if (!cache.getReadyNodes().includes('node-a')) throw new Error('ready node missing'); cache.applySystemTableChange(TABLES.NODES, CDC_OPERATIONS.UPDATE, {[COLUMN.NODE_ID]: 'node-a', [COLUMN.CONNECTION_STATE]: STATE.READY, [COLUMN.READY_LEASE_EXPIRES_AT]: Date.now() + 10000, [COLUMN.UPDATED_AT]: 5, extra: 'stale'}); if (cache.get(TABLES.NODES, 'node-a').extra !== 'stale') throw new Error('stale backfill missing');\"",
+        "git diff --check -- src/cache/system-table-cache.js src/cache/system-table-cache-row-merge.js work/packages/done-20260524-oversized-cache-system-table-cache.md"
+      ]
+    }
   }
 }
 -->
@@ -141,6 +139,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 ## In Scope
 
 1. src/cache/system-table-cache.js
+2. src/cache/system-table-cache-row-merge.js
 
 ## Out Of Scope
 
@@ -153,11 +152,11 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex-spark`
 - Scope shape: `leaf-slice`
 - Output profile: `medium`
-- Owned files: `src/cache/system-table-cache.js`
+- Owned files: `src/cache/system-table-cache.js`, `src/cache/system-table-cache-row-merge.js`
 - Forbidden files: `test/`, `runtime ownership or public contract changes`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run audit:file-size -- --strict src/cache/system-table-cache.js`, `node --check src/cache/system-table-cache.js`, `git diff --check -- src/cache/system-table-cache.js`
+- Focused proof: `npm run audit:file-size -- --strict src/cache/system-table-cache.js src/cache/system-table-cache-row-merge.js`, `node --check src/cache/system-table-cache.js`, `node --check src/cache/system-table-cache-row-merge.js`, `node --input-type=module -e "import {SystemTableCache, CDC_OPERATIONS} from './src/cache/system-table-cache.js'; import {TABLES, COLUMN, STATE} from './src/constants/index.js'; const cache = new SystemTableCache(); cache.applySystemTableChange(TABLES.NODES, CDC_OPERATIONS.INSERT, {[COLUMN.NODE_ID]: 'node-a', [COLUMN.CONNECTION_STATE]: STATE.READY, [COLUMN.READY_LEASE_EXPIRES_AT]: Date.now() + 10000, [COLUMN.UPDATED_AT]: 10}); if (!cache.getReadyNodes().includes('node-a')) throw new Error('ready node missing'); cache.applySystemTableChange(TABLES.NODES, CDC_OPERATIONS.UPDATE, {[COLUMN.NODE_ID]: 'node-a', [COLUMN.CONNECTION_STATE]: STATE.READY, [COLUMN.READY_LEASE_EXPIRES_AT]: Date.now() + 10000, [COLUMN.UPDATED_AT]: 5, extra: 'stale'}); if (cache.get(TABLES.NODES, 'node-a').extra !== 'stale') throw new Error('stale backfill missing');"`, `git diff --check -- src/cache/system-table-cache.js src/cache/system-table-cache-row-merge.js work/packages/done-20260524-oversized-cache-system-table-cache.md`
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split
@@ -182,12 +181,14 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: executor; files-changed: target file plus semantically named helper/split files added to this package before pre-impl; validation: focused proof and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: verification-fix; owner: verifier_fixer; files-changed: package-owned files only; validation: strict file-size proof, syntax/focused test proof, and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: <validated|not-needed>.
+- [x] action: implementation; owner: executor; files-changed: src/cache/system-table-cache.js, src/cache/system-table-cache-row-merge.js, work/packages/done-20260524-oversized-cache-system-table-cache.md; validation: pre-impl package validation OK, strict file-size audit OK, node --check both touched JS files OK, focused cache smoke OK, whitespace diff checks run; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: verification-fix; owner: verifier_fixer; files-changed: package-owned files only; validation: parent revalidated strict file-size proof, syntax proof, focused cache smoke, and whitespace proof passed; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: none; validation: no ledger update needed before package closure; outcome: not-needed.
 
 ## Validation
 
-1. npm run audit:file-size -- --strict src/cache/system-table-cache.js
+1. npm run audit:file-size -- --strict src/cache/system-table-cache.js src/cache/system-table-cache-row-merge.js
 2. node --check src/cache/system-table-cache.js
-3. git diff --check -- src/cache/system-table-cache.js
+3. node --check src/cache/system-table-cache-row-merge.js
+4. node --input-type=module -e "import {SystemTableCache, CDC_OPERATIONS} from './src/cache/system-table-cache.js'; import {TABLES, COLUMN, STATE} from './src/constants/index.js'; const cache = new SystemTableCache(); cache.applySystemTableChange(TABLES.NODES, CDC_OPERATIONS.INSERT, {[COLUMN.NODE_ID]: 'node-a', [COLUMN.CONNECTION_STATE]: STATE.READY, [COLUMN.READY_LEASE_EXPIRES_AT]: Date.now() + 10000, [COLUMN.UPDATED_AT]: 10}); if (!cache.getReadyNodes().includes('node-a')) throw new Error('ready node missing'); cache.applySystemTableChange(TABLES.NODES, CDC_OPERATIONS.UPDATE, {[COLUMN.NODE_ID]: 'node-a', [COLUMN.CONNECTION_STATE]: STATE.READY, [COLUMN.READY_LEASE_EXPIRES_AT]: Date.now() + 10000, [COLUMN.UPDATED_AT]: 5, extra: 'stale'}); if (cache.get(TABLES.NODES, 'node-a').extra !== 'stale') throw new Error('stale backfill missing');"
+5. git diff --check -- src/cache/system-table-cache.js src/cache/system-table-cache-row-merge.js work/packages/done-20260524-oversized-cache-system-table-cache.md

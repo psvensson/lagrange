@@ -6,13 +6,13 @@
  */
 
 import {NUM} from '../constants/index.js';
+import {
+  isCanonicalLogEntryShape,
+  normalizeLogEntry,
+} from './sqlite-log-entry-shape.js';
 
 const LOCAL_STR_1BT83 = 'Database instance is required';
 const LOCAL_STR_1GJYB = 'Legacy raft log schema detected; manual migration required';
-const LOCAL_STR_OBJECT = 'object';
-const LOCAL_STR_COMMAND = 'command';
-const LOCAL_STR_RESPONSES = 'responses';
-const LOCAL_STR_COMMITTED = 'committed';
 const LOCAL_STR_EVRPI = 'INSERT OR REPLACE INTO _raft_log (log_index, term, command, timestamp) VALUES (?, ?, ?, ?)';
 const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_8WQ9L = 'DELETE FROM _raft_log WHERE log_index >= ?';
@@ -95,57 +95,12 @@ class SQLiteLogAdapter {
     `);
   }
 
-  /**
-   * Check whether a persisted payload already uses the canonical entry shape.
-   * @param {*} entry
-   * @return {boolean}
-   * @private
-   */
   isCanonicalEntryShape(entry) {
-    return !!entry &&
-      typeof entry === LOCAL_STR_OBJECT &&
-      (
-        Object.prototype.hasOwnProperty.call(entry, LOCAL_STR_COMMAND) ||
-        Object.prototype.hasOwnProperty.call(entry, LOCAL_STR_RESPONSES) ||
-        Object.prototype.hasOwnProperty.call(entry, LOCAL_STR_COMMITTED)
-      );
+    return isCanonicalLogEntryShape(entry);
   }
 
-  /**
-   * Normalize any stored or incoming entry to the canonical raft entry shape.
-   * Legacy rows that stored only the command payload are wrapped without
-   * rewriting metadata outside the adapter owner path.
-   * @param {*} entry
-   * @param {Object} [fallback]
-   * @param {number} [fallback.index]
-   * @param {number} [fallback.term]
-   * @param {number} [fallback.committedIndex]
-   * @return {Object}
-   * @private
-   */
   normalizeEntry(entry, fallback = {}) {
-    const hasCanonicalShape = this.isCanonicalEntryShape(entry);
-    const committedIndex = Number.isFinite(fallback.committedIndex) ?
-      fallback.committedIndex :
-      NUM.ZERO;
-    const index = hasCanonicalShape && Number.isFinite(entry?.index) ?
-      entry.index :
-      fallback.index;
-    const term = hasCanonicalShape && Number.isFinite(entry?.term) ?
-      entry.term :
-      fallback.term;
-
-    return {
-      index,
-      term,
-      committed: hasCanonicalShape ?
-        entry.committed === true :
-        Number.isFinite(index) && index <= committedIndex,
-      responses: hasCanonicalShape && Array.isArray(entry.responses) ?
-        entry.responses.map((response) => ({...response})) :
-        [],
-      command: hasCanonicalShape ? entry.command : entry,
-    };
+    return normalizeLogEntry(entry, fallback);
   }
 
   /**

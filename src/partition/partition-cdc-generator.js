@@ -5,15 +5,20 @@
  */
 
 import {CDC_OPERATION, NUM, SQL, TYPEOF} from '../constants/index.js';
-import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
-  extractConjunctiveWhereColumns,
   extractDeleteDataFromSQL as extractDeleteDataFromSQLImpl,
   extractInsertDataFromSQL as extractInsertDataFromSQLImpl,
   parseValue as parseValueImpl,
   parseValuesFromSQL as parseValuesFromSQLImpl,
   extractUpdateDataFromSQL as extractUpdateDataFromSQLImpl,
 } from './partition-sql-parser.js';
+import {
+  extractParamDeleteData as extractParamDeleteDataImpl,
+  extractParamInsertData as extractParamInsertDataImpl,
+  extractParamUpdateData as extractParamUpdateDataImpl,
+  fetchInsertRow as fetchInsertRowImpl,
+  fetchUpdatedRow as fetchUpdatedRowImpl,
+} from './partition-cdc-parameterized-sql.js';
 import {
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_EVENT,
@@ -563,48 +568,13 @@ class PartitionCDCGenerator {
    * @private
    */
   extractParamInsertData(sql, params, tableName) {
-    // Parse INSERT INTO table (col1, col2, ...) VALUES (?, ?, ...)
-    const columnsMatch = sql.match(
-      /INSERT\s+(?:OR\s+REPLACE\s+)?INTO\s+\w+\s*\(([^)]+)\)/i,
-    );
-    if (!columnsMatch) {
-      this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_PARAM_INSERT_COLUMNS_FAILED, {
-        sql: sql.substring(
-          NUM.ZERO,
-          PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
-        ),
-      });
-      return {};
-    }
-
-    const columns = columnsMatch[NUM.ONE].split(
-      PARTITION_SERVICE_SQL_FRAGMENT.COMMA,
-    ).map((c) => c.trim());
-    if (columns.length !== params.length) {
-      this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_PARAM_INSERT_MISMATCH, {
-        columns: columns.length,
-        params: params.length,
-      });
-      return {};
-    }
-
-    // Build data object from columns and params
-    const data = {};
-    for (let i = NUM.ZERO; i < columns.length; i++) {
-      data[columns[i]] = params[i];
-    }
-
-    this.logger.debug(PARTITION_SERVICE_LOG_MSG.EXTRACTED_PARAM_INSERT, {
+    return extractParamInsertDataImpl({
+      sql,
+      params,
       tableName,
-      dataKeys: Object.keys(data),
+      logger: this.logger,
+      fetchInsertRow: (...args) => this.fetchInsertRow(...args),
     });
-
-    return this.fetchInsertRow(
-      tableName,
-      columns[NUM.ZERO],
-      data[columns[NUM.ZERO]],
-      data,
-    );
   }
 
   /**
@@ -616,76 +586,13 @@ class PartitionCDCGenerator {
    * @private
    */
   extractParamUpdateData(sql, params, tableName) {
-    // Parse UPDATE table SET col1 = ?, col2 = ? WHERE pk = ?
-    // Use [\s\S] so multiline SQL emitted by query builders stays parseable.
-    const setMatch = sql.match(/\bSET\s+([\s\S]+?)\s+\bWHERE\b/i);
-    const whereMatch = sql.match(/\bWHERE\s+([\s\S]+)$/i);
-
-    if (!setMatch) {
-      this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_PARAM_UPDATE_SET_FAILED, {
-        sql: sql.substring(
-          NUM.ZERO,
-          PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
-        ),
-      });
-      return {};
-    }
-
-    // Extract column names from SET clause
-    const setColumns = setMatch[NUM.ONE].split(
-      PARTITION_SERVICE_SQL_FRAGMENT.COMMA,
-    ).map((part) => {
-      const match = part.trim().match(/^(\w+)\s*=/);
-      return match ? match[NUM.ONE] : null;
-    }).filter(Boolean);
-
-    // Extract column names from WHERE clause
-    // Handle parentheses around the WHERE clause: WHERE (col = ?)
-    const whereColumns = whereMatch ?
-      extractConjunctiveWhereColumns(whereMatch[NUM.ONE]) :
-      [];
-
-    const allColumns = [...setColumns, ...whereColumns];
-    if (allColumns.length !== params.length) {
-      this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_PARAM_UPDATE_MISMATCH, {
-        columns: allColumns.length,
-        params: params.length,
-      });
-      return {};
-    }
-
-    // Build data object while preserving UPDATE semantics:
-    // SET-column values are authoritative; WHERE-only columns backfill keys.
-    const data = {};
-    let paramIndex = NUM.ZERO;
-    for (const column of setColumns) {
-      data[column] = params[paramIndex];
-      paramIndex += NUM.ONE;
-    }
-    for (const column of whereColumns) {
-      const value = params[paramIndex];
-      paramIndex += NUM.ONE;
-      if (!Object.prototype.hasOwnProperty.call(data, column)) {
-        data[column] = value;
-      }
-    }
-
-    this.logger.debug(PARTITION_SERVICE_LOG_MSG.EXTRACTED_PARAM_UPDATE, {
+    return extractParamUpdateDataImpl({
+      sql,
+      params,
       tableName,
-      dataKeys: Object.keys(data),
+      logger: this.logger,
+      fetchUpdatedRow: (...args) => this.fetchUpdatedRow(...args),
     });
-
-    const whereClause = {};
-    for (let i = NUM.ZERO; i < whereColumns.length; i++) {
-      whereClause[whereColumns[i]] = params[setColumns.length + i];
-    }
-
-    const authoritativeRow = this.fetchUpdatedRow(tableName, whereClause);
-    if (authoritativeRow) {
-      return authoritativeRow;
-    }
-
-    return data;
   }
 
   /**
@@ -697,42 +604,12 @@ class PartitionCDCGenerator {
    * @private
    */
   extractParamDeleteData(sql, params, tableName) {
-    // Parse DELETE FROM table WHERE pk = ? or WHERE (pk = ?)
-    // Use [\s\S] for multiline predicates.
-    const whereMatch = sql.match(/\bWHERE\s+([\s\S]+)$/i);
-    if (!whereMatch) {
-      this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_PARAM_DELETE_WHERE_FAILED, {
-        sql: sql.substring(
-          NUM.ZERO,
-          PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
-        ),
-      });
-      return {};
-    }
-
-    const whereContent = whereMatch[NUM.ONE].trim();
-    const whereColumns = extractConjunctiveWhereColumns(whereContent);
-
-    if (whereColumns.length !== params.length) {
-      this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_PARAM_DELETE_MISMATCH, {
-        columns: whereColumns.length,
-        params: params.length,
-        whereContent,
-      });
-      return {};
-    }
-
-    const data = {};
-    for (let i = NUM.ZERO; i < whereColumns.length; i++) {
-      data[whereColumns[i]] = params[i];
-    }
-
-    this.logger.debug(PARTITION_SERVICE_LOG_MSG.EXTRACTED_PARAM_DELETE, {
+    return extractParamDeleteDataImpl({
+      sql,
+      params,
       tableName,
-      dataKeys: Object.keys(data),
+      logger: this.logger,
     });
-
-    return data;
   }
 
   /**
@@ -745,33 +622,14 @@ class PartitionCDCGenerator {
    * @private
    */
   fetchInsertRow(tableName, keyColumn, keyValue, fallbackData) {
-    if (!keyColumn || keyValue === null || keyValue === undefined || !this.db) {
-      return fallbackData;
-    }
-
-    try {
-      const stmt = this.db.prepare(
-        `SELECT * FROM ${tableName} WHERE ${keyColumn} = ?`,
-      );
-      const row = stmt.get(keyValue);
-      if (row) {
-        if (tableName !== SYSTEM_TABLE_NAME.LOGS) {
-          this.logger.info(PARTITION_SERVICE_LOG_MSG.FETCHED_INSERT_ROW, {
-            tableName,
-            rowKeys: Object.keys(row),
-          });
-        }
-        return row;
-      }
-    } catch (err) {
-      this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_FETCH_INSERT_FAILED, {
-        tableName,
-        error: err.message,
-      });
-      throw err;
-    }
-
-    return fallbackData;
+    return fetchInsertRowImpl({
+      tableName,
+      keyColumn,
+      keyValue,
+      fallbackData,
+      db: this.db,
+      logger: this.logger,
+    });
   }
 
   /**
@@ -782,65 +640,12 @@ class PartitionCDCGenerator {
    * @private
    */
   fetchUpdatedRow(tableName, whereClause) {
-    if (!this.db ||
-      !whereClause ||
-      typeof whereClause !== TYPEOF.OBJECT ||
-      Object.keys(whereClause).length === NUM.ZERO) {
-      return null;
-    }
-
-    const entries = Object.entries(whereClause)
-      .filter(([_key, value]) => value !== null && value !== undefined);
-    if (entries.length === NUM.ZERO) {
-      return null;
-    }
-
-    if (tableName !== SYSTEM_TABLE_NAME.LOGS) {
-      const [keyColumn, keyValue] = entries[NUM.ZERO];
-      this.logger.info(PARTITION_SERVICE_LOG_MSG.FETCHING_UPDATE_ROW, {
-        tableName,
-        keyColumn,
-        keyValue,
-      });
-    }
-
-    const whereSql = entries
-      .map(([key]) => `${key} = ?`)
-      .join(' AND ');
-    const whereValues = entries.map(([_key, value]) => value);
-
-    try {
-      const stmt = this.db.prepare(
-        `SELECT * FROM ${tableName} WHERE ${whereSql}`,
-      );
-      const row = stmt.get(...whereValues);
-      if (row) {
-        if (tableName !== SYSTEM_TABLE_NAME.LOGS) {
-          this.logger.info(PARTITION_SERVICE_LOG_MSG.FETCHED_UPDATE_ROW, {
-            tableName,
-            rowKeys: Object.keys(row),
-          });
-        }
-        return row;
-      }
-
-      if (tableName !== SYSTEM_TABLE_NAME.LOGS) {
-        const [keyColumn, keyValue] = entries[NUM.ZERO];
-        this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_NO_ROW_UPDATE, {
-          tableName,
-          keyColumn,
-          keyValue,
-        });
-      }
-    } catch (err) {
-      this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_FETCH_UPDATE_FAILED, {
-        tableName,
-        error: err.message,
-      });
-      throw err;
-    }
-
-    return null;
+    return fetchUpdatedRowImpl({
+      tableName,
+      whereClause,
+      db: this.db,
+      logger: this.logger,
+    });
   }
 }
 
