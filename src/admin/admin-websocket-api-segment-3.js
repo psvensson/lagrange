@@ -5,6 +5,7 @@ import {
   CONTROL_SNAPSHOT_RETRY_DELAY_MS,
   evaluateControlSnapshotRetryDecision,
 } from './admin-control-snapshot-retry-decision.js';
+import {createAdminQueryResultMessageEnvelope} from './admin-query-result-message-envelope.js';
 import {resolveControlSnapshotQueryResult} from './admin-control-snapshot-query-result-helper.js';
 
 const LOCAL_STR_I = 'i';
@@ -24,7 +25,6 @@ const {
   ADMIN_LOG_MSG,
   ADMIN_META_ACTION,
   ADMIN_PREFLIGHT_CRITICAL_PATH_SNAPSHOT,
-  ADMIN_QUERY_RESULT,
   ADMIN_SERVICE_DISCOVERY,
   ADMIN_SERVICE_OPERATION,
   CancellationToken,
@@ -38,8 +38,6 @@ const {
   MUTATION_GUARD_MODE,
   MessageType,
   NUM,
-  QUERY_RESULT_MESSAGE_KIND,
-  QUERY_RESULT_WRITE_OPERATIONS,
   SQLParser,
   TABLES,
   TIMEOUT_BUDGET_CLASSIFICATION,
@@ -1369,11 +1367,7 @@ class AdminWebSocketAPISegment3 extends AdminWebSocketAPISegment2 {
    * @private
    */
   sendQueryResult(clientInfo, queryId, result) {
-    const message = this.createQueryResultMessageEnvelope(queryId);
-    const payloadContext = this.resolveQueryResultPayloadContext(result);
-    this.applyQueryResultMessagePayload(message, result, payloadContext);
-    this.applyOptionalQueryResultWarning(message, result);
-    appendStructuredQueryMetadata(message, result);
+    const message = createAdminQueryResultMessageEnvelope(queryId, result);
 
     this.sendToClient(clientInfo, message);
 
@@ -1382,145 +1376,6 @@ class AdminWebSocketAPISegment3 extends AdminWebSocketAPISegment2 {
       queryId,
       success: result.success !== false,
     });
-  }
-
-  createQueryResultMessageEnvelope(queryId) {
-    return {
-      type: MessageType.QUERY_RESULT,
-      queryId,
-      timestamp: Date.now(),
-    };
-  }
-
-  resolveQueryResultPayloadContext(result) {
-    const operation =
-      typeof result?.operation === TYPEOF.STRING ?
-        result.operation.trim().toLowerCase() :
-        EMPTY_STRING;
-    const hasAffectedRows = Number.isFinite(Number(result?.affectedRows));
-    const hasRowPayload =
-      result.rows !== undefined || result.results !== undefined;
-    if (result.success === false) {
-      return {kind: QUERY_RESULT_MESSAGE_KIND.ERROR, hasRowPayload};
-    } else if (
-      result.hostResult ||
-      result.executionMode === EXECUTION_MODE.PARTITION_CALLBACK
-    ) {
-      return {kind: QUERY_RESULT_MESSAGE_KIND.HOST_CALLBACK, hasRowPayload};
-    } else if (QUERY_RESULT_WRITE_OPERATIONS.has(operation) || hasAffectedRows) {
-      return {kind: QUERY_RESULT_MESSAGE_KIND.WRITE, hasRowPayload};
-    } else if (hasRowPayload) {
-      return {kind: QUERY_RESULT_MESSAGE_KIND.ROWS, hasRowPayload};
-    }
-    return {kind: QUERY_RESULT_MESSAGE_KIND.DEFAULT_WRITE, hasRowPayload};
-  }
-
-  applyQueryResultMessagePayload(message, result, payloadContext) {
-    switch (payloadContext.kind) {
-    case QUERY_RESULT_MESSAGE_KIND.ERROR:
-      this.applyErrorQueryResultMessagePayload(message, result);
-      return;
-    case QUERY_RESULT_MESSAGE_KIND.HOST_CALLBACK:
-      this.applyHostCallbackQueryResultMessagePayload(message, result);
-      return;
-    case QUERY_RESULT_MESSAGE_KIND.WRITE:
-      this.applyWriteQueryResultMessagePayload(
-        message,
-        result,
-        payloadContext,
-      );
-      return;
-    case QUERY_RESULT_MESSAGE_KIND.ROWS:
-      this.applyRowsQueryResultMessagePayload(message, result);
-      return;
-    default:
-      this.applyDefaultWriteQueryResultMessagePayload(message, result);
-    }
-  }
-
-  applyErrorQueryResultMessagePayload(message, result) {
-    message.error = result.error;
-    message.errorCode = result.errorCode || ErrorCode.INTERNAL_ERROR;
-    if (result.hint) {
-      message.hint = result.hint;
-    }
-    if (result.details && typeof result.details === TYPEOF.OBJECT) {
-      message.details = result.details;
-    }
-    if (result.deferRetry === true) {
-      message.deferRetry = true;
-    }
-    if (Number.isFinite(result.retryAfterMs)) {
-      message.retryAfterMs = Math.max(
-        NUM.ZERO,
-        Math.floor(result.retryAfterMs),
-      );
-    }
-  }
-
-  applyHostCallbackQueryResultMessagePayload(message, result) {
-    message.operation = EXECUTION_MODE.PARTITION_CALLBACK;
-    message.results = Array.isArray(result.results) ?
-      result.results :
-      ADMIN_CACHE_DUMP.EMPTY;
-    message.hostResult = result.hostResult || null;
-    message.callbackModuleRef = result.callbackModuleRef || null;
-    message.callbackExport = result.callbackExport || null;
-  }
-
-  applyWriteQueryResultMessagePayload(message, result, payloadContext) {
-    message.operation = result.operation || null;
-    message.affectedRows = this.resolveQueryResultAffectedRows(
-      result.affectedRows,
-      false,
-    );
-    this.applyQueryResultTableScope(message, result);
-    if (payloadContext.hasRowPayload) {
-      message.results = this.resolveQueryResultRows(result);
-      message.count = message.results.length;
-    }
-  }
-
-  applyRowsQueryResultMessagePayload(message, result) {
-    message.results = this.resolveQueryResultRows(result);
-    message.count =
-      result.count !== undefined ? result.count : message.results.length;
-    this.applyQueryResultTableScope(message, result);
-  }
-
-  applyDefaultWriteQueryResultMessagePayload(message, result) {
-    message.operation = result.operation;
-    message.affectedRows = this.resolveQueryResultAffectedRows(
-      result.affectedRows,
-      true,
-    );
-    this.applyQueryResultTableScope(message, result);
-  }
-
-  resolveQueryResultAffectedRows(affectedRows, preserveOriginalValue) {
-    const parsedAffectedRows = Number(affectedRows);
-    if (Number.isFinite(parsedAffectedRows)) {
-      return parsedAffectedRows;
-    }
-    if (preserveOriginalValue && affectedRows) {
-      return affectedRows;
-    }
-    return ADMIN_QUERY_RESULT.AFFECTED_ROWS_DEFAULT;
-  }
-
-  applyQueryResultTableScope(message, result) {
-    message.partitions = result.partitions || ADMIN_CACHE_DUMP.EMPTY;
-    message.tableName = result.tableName || null;
-  }
-
-  resolveQueryResultRows(result) {
-    return result.rows || result.results || ADMIN_CACHE_DUMP.EMPTY;
-  }
-
-  applyOptionalQueryResultWarning(message, result) {
-    if (result.warning) {
-      message.warning = result.warning;
-    }
   }
 
   /**
