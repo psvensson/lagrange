@@ -34,6 +34,15 @@ import {NUM} from '../constants/index.js';
 import {
   ReplicaCreationProgressReporter,
 } from '../utils/replica-creation-progress-reporter.js';
+import {
+  createReplicaWorkerManagerProgressMethods,
+} from './replica-worker-manager-progress.js';
+import {
+  createReplicaWorkerManagerPoolRoutingMethods,
+} from './replica-worker-manager-pool-routing.js';
+import {
+  createReplicaWorkerManagerReplicaCreationMethods,
+} from './replica-worker-manager-replica-creation.js';
 
 const LOCAL_STR_REPLICA_WORKER_JS = 'replica-worker.js';
 const LOCAL_STR_1P56U = 'replica-worker.bundle.cjs';
@@ -144,6 +153,50 @@ const REPLICA_CREATE_PROGRESS = Object.freeze({
   STATE_FAILED: 'failed',
 });
 
+const REPLICA_WORKER_MANAGER_PROGRESS_METHODS =
+  createReplicaWorkerManagerProgressMethods({
+    REPLICA_CREATE_PROGRESS,
+    LOCAL_STR_EMPTY,
+    LOCAL_STR_STRING,
+  });
+
+const REPLICA_WORKER_MANAGER_POOL_ROUTING_METHODS =
+  createReplicaWorkerManagerPoolRoutingMethods({
+    Piscina,
+    MANAGER_DEFAULT,
+    MANAGER_LOG_MSG,
+    NUM,
+    WORKER_MANAGER_ADDRESS_SEGMENT,
+    LOCAL_STR_ERROR,
+    LOCAL_STR_MESSAGE,
+    LOCAL_STR_12101,
+    LOCAL_STR_O3DH7,
+    LOCAL_STR_WORKER_SEND,
+    LOCAL_STR_1HK0P,
+    LOCAL_STR_SVWDT,
+    LOCAL_STR_9XUGG,
+    LOCAL_STR_7II3O,
+    LOCAL_STR_J1K7I,
+    LOCAL_STR_1J4DX,
+  });
+
+const REPLICA_WORKER_MANAGER_REPLICA_CREATION_METHODS =
+  createReplicaWorkerManagerReplicaCreationMethods({
+    FACADE_MESSAGE_TYPE,
+    MANAGER_DEFAULT,
+    MANAGER_ERROR_MSG,
+    MANAGER_LOG_MSG,
+    NUM,
+    REPLICA_CREATE_PROGRESS,
+    WORKER_ENTITY_TYPE,
+    WORKER_EVENT,
+    WORKER_HEALTH_STATUS,
+    WORKER_OPERATION,
+    WORKER_STATUS,
+    LOCAL_STR_STRING,
+    LOCAL_STR_TIMEOUT,
+  });
+
 const REPLICA_WORKER_MODULE_DIR = resolveModuleDirectory(resolveModuleDirectory);
 
 function resolveReplicaWorkerPath() {
@@ -244,120 +297,6 @@ class ReplicaWorkerManager extends EventEmitter {
   }
 
   /**
-   * Start a replica creation progress line.
-   * Falls back to structured logs when terminal control is unavailable.
-   * @param {Object} details - Progress details.
-   * @param {string} details.entityType - Replica entity type.
-   * @param {string} details.replicaId - Replica ID.
-   * @param {string} details.serviceId - Parent service ID.
-   * @return {Object} Progress context.
-   * @private
-   */
-  startReplicaCreationProgress(details) {
-    return this.creationProgressReporter.start({
-      ...details,
-      state: REPLICA_CREATE_PROGRESS.STATE_STARTING,
-    });
-  }
-
-  /**
-   * Update the state of an existing replica creation progress line.
-   * @param {Object|null} progress - Progress context.
-   * @param {string} nextState - Next state label.
-   * @private
-   */
-  updateReplicaCreationProgress(progress, nextState) {
-    this.creationProgressReporter.update(progress, {state: nextState});
-  }
-
-  /**
-   * Complete a replica creation progress line.
-   * @param {Object|null} progress - Progress context.
-   * @param {string} finalState - Final state label.
-   * @private
-   */
-  finishReplicaCreationProgress(progress, finalState) {
-    this.creationProgressReporter.finish(progress, {state: finalState});
-  }
-
-  /**
-   * Mark a replica creation progress line as failed.
-   * @param {Object|null} progress - Progress context.
-   * @param {string} finalState - Final state label.
-   * @param {Error|string|null} error - Failure reason.
-   * @private
-   */
-  failReplicaCreationProgress(progress, finalState, error) {
-    this.creationProgressReporter.fail(progress, error, {state: finalState});
-  }
-
-  /**
-   * Build the formatted line shown in interactive and fallback modes.
-   * @param {Object} progress - Progress context.
-   * @param {string|null} status - Optional terminal status.
-   * @param {Error|string|null} error - Optional error.
-   * @return {string} Formatted progress line.
-   * @private
-   */
-  formatReplicaCreationProgressLine(progress, status, error) {
-    const spinner = progress.spinnerFrame || REPLICA_CREATE_PROGRESS.SPINNER_IDLE;
-    const totalLocal = this.getWorkerCount();
-    const localByType = this.getWorkersByType(progress.entityType).length;
-    const statusText = status ? ` status=${status}` : '';
-    const errorText = error ?
-      ` error=${this.formatReplicaCreationError(error)}` :
-      '';
-
-    return (
-      `${REPLICA_CREATE_PROGRESS.PREFIX} ${spinner} ` +
-      `service=${progress.serviceId} replica=${progress.replicaId} ` +
-      `type=${progress.entityType} state=${progress.state} ` +
-      `local_replicas=${totalLocal} type_replicas=${localByType}` +
-      `${statusText}${errorText}`
-    );
-  }
-
-  /**
-   * Build structured context for fallback log output.
-   * @param {Object} progress - Progress context.
-   * @param {string|null} status - Optional terminal status.
-   * @param {Error|string|null} error - Optional error.
-   * @return {Object} Structured context object.
-   * @private
-   */
-  buildReplicaCreationProgressContext(progress, status = null, error = null) {
-    const context = {
-      nodeId: this.nodeId,
-      serviceId: progress.serviceId,
-      replicaId: progress.replicaId,
-      entityType: progress.entityType,
-      state: progress.state,
-      localReplicas: this.getWorkerCount(),
-      typeReplicas: this.getWorkersByType(progress.entityType).length,
-    };
-    if (status) {
-      context.status = status;
-    }
-    if (error) {
-      context.error = this.formatReplicaCreationError(error);
-    }
-    return context;
-  }
-
-  /**
-   * Normalize replica creation errors for display.
-   * @param {Error|string|null} error - Error value.
-   * @return {string} Error message.
-   * @private
-   */
-  formatReplicaCreationError(error) {
-    if (!error) {
-      return LOCAL_STR_EMPTY;
-    }
-    return typeof error === LOCAL_STR_STRING ? error : error.message;
-  }
-
-  /**
    * Initialize the worker manager.
    * Creates the piscina worker pool.
    * @return {Promise<void>}
@@ -396,194 +335,6 @@ class ReplicaWorkerManager extends EventEmitter {
   }
 
   /**
-   * Set up piscina pool event handlers.
-   * @private
-   */
-  setupPoolEventHandlers() {
-    this.setupPoolEventHandlersFor(this.pool);
-  }
-
-  /**
-   * Set up piscina pool event handlers for a specific pool.
-   * @param {Piscina} pool - Piscina pool to wire.
-   * @private
-   */
-  setupPoolEventHandlersFor(pool) {
-    if (!pool) {
-      return;
-    }
-
-    // Handle worker errors
-    pool.on(LOCAL_STR_ERROR, (error) => {
-      this.logger.error(MANAGER_LOG_MSG.WORKER_CRASHED, {
-        nodeId: this.nodeId,
-        error: error.message,
-      });
-    });
-
-    // Handle messages from workers (IPC messages for Raft packet routing)
-    // Workers send WORKER_SEND messages via parentPort.postMessage()
-    // Piscina emits these as 'message' events on the pool
-    pool.on(LOCAL_STR_MESSAGE, (message) => {
-      this.handleWorkerMessage(message).catch((error) => {
-        this.logger.error(LOCAL_STR_12101, {
-          nodeId: this.nodeId,
-          error: error.message,
-          messageType: message?.type,
-        });
-      });
-    });
-  }
-
-  /**
-   * Check if manager should use dedicated per-replica pools.
-   * Real Piscina instances use dedicated pools; mocked pools in unit tests do not.
-   * @return {boolean} True if dedicated pools should be used.
-   * @private
-   */
-  usesDedicatedReplicaPools() {
-    return this.pool instanceof Piscina;
-  }
-
-  /**
-   * Create a dedicated single-thread pool for one replica.
-   * @param {string} replicaId - Replica ID for logging.
-   * @return {Piscina} Dedicated pool.
-   * @private
-   */
-  createDedicatedReplicaPool(replicaId) {
-    const pool = new Piscina({
-      filename: this.workerPath,
-      maxThreads: NUM.ONE,
-      minThreads: NUM.ONE,
-      idleTimeout: MANAGER_DEFAULT.IDLE_TIMEOUT_MS,
-    });
-    this.setupPoolEventHandlersFor(pool);
-    this.logger.debug(LOCAL_STR_O3DH7, {
-      nodeId: this.nodeId,
-      replicaId,
-    });
-    return pool;
-  }
-
-  /**
-   * Resolve execution pool for a replica operation.
-   * @param {string} replicaId - Replica ID.
-   * @return {Piscina|Object|null} Pool-like object with run().
-   * @private
-   */
-  getReplicaExecutionPool(replicaId) {
-    return this.replicaPools.get(replicaId) || this.pool;
-  }
-
-  /**
-   * Destroy dedicated pool for a replica if present.
-   * @param {string} replicaId - Replica ID.
-   * @return {Promise<void>}
-   * @private
-   */
-  async destroyDedicatedReplicaPool(replicaId) {
-    const pool = this.replicaPools.get(replicaId);
-    if (!pool) {
-      return;
-    }
-    this.replicaPools.delete(replicaId);
-    await pool.destroy();
-  }
-
-  /**
-   * Handle IPC message from a worker process.
-   * Routes messages between workers via the MessageRouter.
-   * @param {Object} message - IPC message from worker.
-   * @return {Promise<void>}
-   * @private
-   */
-  async handleWorkerMessage(message) {
-    if (!message || !message.type) {
-      return;
-    }
-
-    // Handle WORKER_SEND messages - route to target worker
-    if (message.type === LOCAL_STR_WORKER_SEND) {
-      await this.routeWorkerMessage(message);
-      return;
-    }
-  }
-
-  /**
-   * Route a message from one worker to another.
-   * @param {Object} envelope - Message envelope with source, target, and payload.
-   * @return {Promise<void>}
-   * @private
-   */
-  async routeWorkerMessage(envelope) {
-    const {targetAddress, sourceAddress, payload, messageId, correlationId} = envelope;
-
-    this.logger.debug(LOCAL_STR_1HK0P, {
-      nodeId: this.nodeId,
-      sourceAddress,
-      targetAddress,
-      messageId,
-    });
-
-    // Extract replica ID from target address (format: nodeId/entityType/replicaId)
-    const targetParts = targetAddress.split('/');
-    if (targetParts.length < WORKER_MANAGER_ADDRESS_SEGMENT.MIN_LENGTH) {
-      this.logger.warn(LOCAL_STR_SVWDT, {
-        targetAddress,
-        messageId,
-      });
-      return;
-    }
-
-    const targetReplicaId = targetParts[WORKER_MANAGER_ADDRESS_SEGMENT.REPLICA_INDEX];
-
-    // Check if target replica exists in this manager
-    const targetHandle = this.workers.get(targetReplicaId);
-    if (!targetHandle) {
-      this.logger.debug(LOCAL_STR_9XUGG, {
-        targetReplicaId,
-        messageId,
-      });
-      // If we have a messageRouter, try to route externally
-      if (this.messageRouter) {
-        try {
-          await this.messageRouter.deliver(targetAddress, payload);
-        } catch (error) {
-          this.logger.warn(LOCAL_STR_7II3O, {
-            nodeId: this.nodeId,
-            sourceAddress,
-            targetAddress,
-            messageId,
-            correlationId,
-            error: error.message,
-          });
-        }
-      }
-      return;
-    }
-    try {
-      await this.deliverMessage(targetReplicaId, payload);
-
-      this.logger.debug(LOCAL_STR_J1K7I, {
-        nodeId: this.nodeId,
-        targetReplicaId,
-        messageId,
-      });
-    } catch (error) {
-      this.logger.warn(LOCAL_STR_1J4DX, {
-        nodeId: this.nodeId,
-        sourceAddress,
-        targetAddress,
-        targetReplicaId,
-        messageId,
-        correlationId,
-        error: error.message,
-      });
-    }
-  }
-
-  /**
    * Start the health check timer.
    * @private
    */
@@ -611,74 +362,6 @@ class ReplicaWorkerManager extends EventEmitter {
       clearInterval(this.healthCheckTimer);
       this.healthCheckTimer = null;
     }
-  }
-
-  /**
-   * Execute a promise with a timeout.
-   * @param {Promise} promise - Promise to execute.
-   * @param {number} timeoutMs - Timeout in milliseconds.
-   * @return {Promise} Result of the promise or timeout error.
-   * @private
-   * @see Requirements 7.1, 7.2 - CREATE_REPLICA timeout handling
-   */
-  withTimeout(promise, timeoutMs) {
-    let timeoutId;
-    const timeoutPromise = new Promise((_, reject) => {
-      timeoutId = setTimeout(() => {
-        reject(new Error(`timeout after ${timeoutMs}ms`));
-      }, timeoutMs);
-    });
-
-    return Promise.race([promise, timeoutPromise]).finally(() => {
-      clearTimeout(timeoutId);
-    });
-  }
-
-  /**
-   * Clean up a partially created replica after timeout.
-   * Removes the replica from the workers map and unregisters from router.
-   * @param {string} replicaId - Replica ID to clean up.
-   * @return {Promise<void>}
-   * @private
-   * @see Requirement 7.3 - Clean up partial resources on timeout
-   */
-  async cleanupPartialReplica(replicaId) {
-    this.logger.info(MANAGER_LOG_MSG.TIMEOUT_CLEANUP_STARTED, {
-      nodeId: this.nodeId,
-      replicaId,
-    });
-
-    const handle = this.workers.get(replicaId);
-    if (handle) {
-      // Unregister handler from MessageRouter if it was registered
-      if (handle.unifiedAddress) {
-        try {
-          this.unregisterWorkerFromRouter(handle.unifiedAddress);
-        } catch (error) {
-          this.logger.warn(MANAGER_LOG_MSG.TIMEOUT_CLEANUP_FAILED, {
-            nodeId: this.nodeId,
-            replicaId,
-            error: error.message,
-          });
-        }
-      }
-
-      // Remove from workers map
-      this.workers.delete(replicaId);
-    }
-
-    await this.destroyDedicatedReplicaPool(replicaId).catch((error) => {
-      this.logger.warn(MANAGER_LOG_MSG.TIMEOUT_CLEANUP_FAILED, {
-        nodeId: this.nodeId,
-        replicaId,
-        error: error.message,
-      });
-    });
-
-    this.logger.info(MANAGER_LOG_MSG.TIMEOUT_CLEANUP_COMPLETED, {
-      nodeId: this.nodeId,
-      replicaId,
-    });
   }
 
   /**
@@ -740,355 +423,6 @@ class ReplicaWorkerManager extends EventEmitter {
         replicaId,
         error: error.message,
       });
-    }
-  }
-
-  /**
-   * Start one replica group's deferred elections once every expected replica
-   * exists and is routable.
-   * @param {Array<string>} replicaIds
-   * @return {Promise<void>}
-   * @private
-   */
-  async maybeStartReplicaGroupElection(replicaIds) {
-    const expectedReplicaIds = Array.isArray(replicaIds) ?
-      [...new Set(replicaIds.filter((replicaId) =>
-        typeof replicaId === 'string' && replicaId.length > 0,
-      ))] :
-      [];
-    if (expectedReplicaIds.length <= NUM.ONE) {
-      return;
-    }
-
-    const allReplicasReady = expectedReplicaIds.every((replicaId) => {
-      const handle = this.workers.get(replicaId);
-      return handle?.status === WORKER_STATUS.RUNNING;
-    });
-    if (!allReplicasReady) {
-      return;
-    }
-
-    await Promise.all(expectedReplicaIds.map((replicaId) => {
-      return this.deliverMessage(replicaId, {
-        type: FACADE_MESSAGE_TYPE.START_ELECTION,
-      });
-    }));
-  }
-
-  /**
-   * Create a new partition replica in a worker process.
-   * After successful creation, registers handler with MessageRouter.
-   * @param {Object} options - Partition configuration.
-   * @param {string} options.partitionId - Partition ID.
-   * @param {string} options.replicaId - Replica ID.
-   * @param {string} options.tableId - Table ID.
-   * @param {string} options.tableName - Table name.
-   * @param {Object} options.schema - Table schema.
-   * @param {string} options.dbPath - SQLite database path.
-   * @param {Array<string>} [options.replicaIds] - All replica IDs.
-   * @param {Array<string>} [options.peerAddresses] - Peer unified addresses.
-   * @param {number} [options.timeoutMs] - Operation timeout in milliseconds.
-   * @return {Promise<WorkerReplicaHandle|Object>} Handle to the worker replica or error object.
-   * @see Requirements 7.1, 7.2, 7.3 - CREATE_REPLICA timeout handling
-   */
-  async createPartitionReplica(options) {
-    if (!this.initialized) {
-      throw new Error(MANAGER_ERROR_MSG.NOT_INITIALIZED);
-    }
-
-    if (!options.partitionId) {
-      throw new Error(MANAGER_ERROR_MSG.MISSING_PARTITION_ID);
-    }
-
-    if (!options.replicaId) {
-      throw new Error(MANAGER_ERROR_MSG.MISSING_REPLICA_ID);
-    }
-
-    if (this.workers.has(options.replicaId)) {
-      throw new Error(MANAGER_ERROR_MSG.REPLICA_ALREADY_EXISTS);
-    }
-
-    const now = Date.now();
-    const unifiedAddress = `${this.nodeId}/${WORKER_ENTITY_TYPE.PARTITION}/${options.replicaId}`;
-    const timeoutMs = options.timeoutMs || MANAGER_DEFAULT.CREATE_REPLICA_TIMEOUT_MS;
-    const shouldDeferElection = Array.isArray(options.replicaIds) &&
-      options.replicaIds.length > NUM.ONE;
-
-    // Create worker handle
-    const handle = {
-      replicaId: options.replicaId,
-      workerId: NUM.ZERO, // Will be set by piscina
-      entityType: WORKER_ENTITY_TYPE.PARTITION,
-      unifiedAddress,
-      status: WORKER_STATUS.STARTING,
-      createdAt: now,
-      lastHealthCheck: now,
-      healthStatus: WORKER_HEALTH_STATUS.UNKNOWN,
-      partitionId: options.partitionId,
-      tableId: options.tableId,
-      tableName: options.tableName,
-    };
-
-    // Store handle before spawning
-    this.workers.set(options.replicaId, handle);
-    const creationProgress = this.startReplicaCreationProgress({
-      entityType: WORKER_ENTITY_TYPE.PARTITION,
-      replicaId: options.replicaId,
-      serviceId: options.partitionId,
-    });
-    this.updateReplicaCreationProgress(
-      creationProgress,
-      REPLICA_CREATE_PROGRESS.STATE_SPAWNING,
-    );
-
-    let dedicatedPool = null;
-
-    try {
-      dedicatedPool = this.usesDedicatedReplicaPools() ?
-        this.createDedicatedReplicaPool(options.replicaId) :
-        null;
-      const executionPool = dedicatedPool || this.pool;
-
-      // Spawn worker and create replica with timeout
-      const result = await this.withTimeout(
-        executionPool.run({
-          operation: WORKER_OPERATION.CREATE_PARTITION_REPLICA,
-          nodeId: this.nodeId,
-          partitionId: options.partitionId,
-          replicaId: options.replicaId,
-          tableId: options.tableId,
-          tableName: options.tableName,
-          schema: options.schema,
-          dbPath: options.dbPath,
-          replicaIds: options.replicaIds,
-          peerAddresses: options.peerAddresses,
-          deferElection: shouldDeferElection,
-        }),
-        timeoutMs,
-      );
-
-      handle.workerId = result.workerId || NUM.ZERO;
-      handle.status = WORKER_STATUS.RUNNING;
-      handle.healthStatus = WORKER_HEALTH_STATUS.HEALTHY;
-      this.updateReplicaCreationProgress(
-        creationProgress,
-        REPLICA_CREATE_PROGRESS.STATE_WORKER_READY,
-      );
-
-      if (dedicatedPool) {
-        this.replicaPools.set(options.replicaId, dedicatedPool);
-      }
-
-      this.updateReplicaCreationProgress(
-        creationProgress,
-        REPLICA_CREATE_PROGRESS.STATE_REGISTERING,
-      );
-      // Register handler with MessageRouter to forward messages to this worker
-      // Requirements 11.1, 11.2 - Manager-based registration
-      this.registerWorkerWithRouter(options.replicaId, unifiedAddress);
-      await this.maybeStartReplicaGroupElection(options.replicaIds);
-
-      this.emit(WORKER_EVENT.REPLICA_CREATED, {
-        replicaId: options.replicaId,
-        entityType: WORKER_ENTITY_TYPE.PARTITION,
-        unifiedAddress,
-      });
-
-      this.finishReplicaCreationProgress(
-        creationProgress,
-        REPLICA_CREATE_PROGRESS.STATE_RUNNING,
-      );
-      return handle;
-    } catch (error) {
-      // Check if this is a timeout error - Requirements 7.1, 7.2, 7.3
-      if (error.message.includes(LOCAL_STR_TIMEOUT)) {
-        // Clean up any partially created resources
-        await this.cleanupPartialReplica(options.replicaId);
-        this.failReplicaCreationProgress(
-          creationProgress,
-          REPLICA_CREATE_PROGRESS.STATE_TIMEOUT,
-          error,
-        );
-
-        return {
-          success: false,
-          error: MANAGER_ERROR_MSG.createReplicaTimeout(timeoutMs),
-          replicaId: options.replicaId,
-        };
-      }
-
-      // Clean up on other failures
-      this.workers.delete(options.replicaId);
-      if (dedicatedPool) {
-        await dedicatedPool.destroy().catch(() => {});
-      }
-      this.failReplicaCreationProgress(
-        creationProgress,
-        REPLICA_CREATE_PROGRESS.STATE_FAILED,
-        error,
-      );
-
-      this.logger.error(MANAGER_ERROR_MSG.WORKER_SPAWN_FAILED, {
-        nodeId: this.nodeId,
-        replicaId: options.replicaId,
-        error: error.message,
-      });
-
-      throw new Error(`${MANAGER_ERROR_MSG.WORKER_SPAWN_FAILED}: ${error.message}`);
-    }
-  }
-
-  /**
-   * Create a new message group replica in a worker process.
-   * After successful creation, registers handler with MessageRouter.
-   * @param {Object} options - Message group configuration.
-   * @param {string} options.groupId - Message group ID.
-   * @param {string} options.replicaId - Replica ID.
-   * @param {Array<string>} [options.replicaIds] - All replica IDs in group.
-   * @param {Array<string>} [options.peerAddresses] - Peer unified addresses.
-   * @param {number} [options.timeoutMs] - Operation timeout in milliseconds.
-   * @return {Promise<WorkerReplicaHandle|Object>} Handle to the worker replica or error object.
-   * @see Requirements 7.1, 7.2, 7.3 - CREATE_REPLICA timeout handling
-   */
-  async createMessageGroupReplica(options) {
-    if (!this.initialized) {
-      throw new Error(MANAGER_ERROR_MSG.NOT_INITIALIZED);
-    }
-
-    if (!options.groupId) {
-      throw new Error(MANAGER_ERROR_MSG.MISSING_GROUP_ID);
-    }
-
-    if (!options.replicaId) {
-      throw new Error(MANAGER_ERROR_MSG.MISSING_REPLICA_ID);
-    }
-
-    if (this.workers.has(options.replicaId)) {
-      throw new Error(MANAGER_ERROR_MSG.REPLICA_ALREADY_EXISTS);
-    }
-
-    const now = Date.now();
-    const unifiedAddress =
-      `${this.nodeId}/${WORKER_ENTITY_TYPE.MESSAGE_GROUP}/${options.replicaId}`;
-    const timeoutMs = options.timeoutMs || MANAGER_DEFAULT.CREATE_REPLICA_TIMEOUT_MS;
-    const shouldDeferElection = Array.isArray(options.replicaIds) &&
-      options.replicaIds.length > NUM.ONE;
-
-    // Create worker handle
-    const handle = {
-      replicaId: options.replicaId,
-      workerId: NUM.ZERO, // Will be set by piscina
-      entityType: WORKER_ENTITY_TYPE.MESSAGE_GROUP,
-      unifiedAddress,
-      status: WORKER_STATUS.STARTING,
-      createdAt: now,
-      lastHealthCheck: now,
-      healthStatus: WORKER_HEALTH_STATUS.UNKNOWN,
-      groupId: options.groupId,
-    };
-
-    // Store handle before spawning
-    this.workers.set(options.replicaId, handle);
-    const creationProgress = this.startReplicaCreationProgress({
-      entityType: WORKER_ENTITY_TYPE.MESSAGE_GROUP,
-      replicaId: options.replicaId,
-      serviceId: options.groupId,
-    });
-    this.updateReplicaCreationProgress(
-      creationProgress,
-      REPLICA_CREATE_PROGRESS.STATE_SPAWNING,
-    );
-
-    let dedicatedPool = null;
-
-    try {
-      dedicatedPool = this.usesDedicatedReplicaPools() ?
-        this.createDedicatedReplicaPool(options.replicaId) :
-        null;
-      const executionPool = dedicatedPool || this.pool;
-
-      // Spawn worker and create replica with timeout
-      const result = await this.withTimeout(
-        executionPool.run({
-          operation: WORKER_OPERATION.CREATE_MESSAGE_GROUP_REPLICA,
-          nodeId: this.nodeId,
-          groupId: options.groupId,
-          replicaId: options.replicaId,
-          replicaIds: options.replicaIds,
-          peerAddresses: options.peerAddresses,
-          deferElection: shouldDeferElection,
-        }),
-        timeoutMs,
-      );
-
-      handle.workerId = result.workerId || NUM.ZERO;
-      handle.status = WORKER_STATUS.RUNNING;
-      handle.healthStatus = WORKER_HEALTH_STATUS.HEALTHY;
-      this.updateReplicaCreationProgress(
-        creationProgress,
-        REPLICA_CREATE_PROGRESS.STATE_WORKER_READY,
-      );
-
-      if (dedicatedPool) {
-        this.replicaPools.set(options.replicaId, dedicatedPool);
-      }
-
-      this.updateReplicaCreationProgress(
-        creationProgress,
-        REPLICA_CREATE_PROGRESS.STATE_REGISTERING,
-      );
-      // Register handler with MessageRouter to forward messages to this worker
-      // Requirements 11.1, 11.2 - Manager-based registration
-      this.registerWorkerWithRouter(options.replicaId, unifiedAddress);
-      await this.maybeStartReplicaGroupElection(options.replicaIds);
-
-      this.emit(WORKER_EVENT.REPLICA_CREATED, {
-        replicaId: options.replicaId,
-        entityType: WORKER_ENTITY_TYPE.MESSAGE_GROUP,
-        unifiedAddress,
-      });
-
-      this.finishReplicaCreationProgress(
-        creationProgress,
-        REPLICA_CREATE_PROGRESS.STATE_RUNNING,
-      );
-      return handle;
-    } catch (error) {
-      // Check if this is a timeout error - Requirements 7.1, 7.2, 7.3
-      if (error.message.includes(LOCAL_STR_TIMEOUT)) {
-        // Clean up any partially created resources
-        await this.cleanupPartialReplica(options.replicaId);
-        this.failReplicaCreationProgress(
-          creationProgress,
-          REPLICA_CREATE_PROGRESS.STATE_TIMEOUT,
-          error,
-        );
-
-        return {
-          success: false,
-          error: MANAGER_ERROR_MSG.createReplicaTimeout(timeoutMs),
-          replicaId: options.replicaId,
-        };
-      }
-
-      // Clean up on other failures
-      this.workers.delete(options.replicaId);
-      if (dedicatedPool) {
-        await dedicatedPool.destroy().catch(() => {});
-      }
-      this.failReplicaCreationProgress(
-        creationProgress,
-        REPLICA_CREATE_PROGRESS.STATE_FAILED,
-        error,
-      );
-
-      this.logger.error(MANAGER_ERROR_MSG.WORKER_SPAWN_FAILED, {
-        nodeId: this.nodeId,
-        replicaId: options.replicaId,
-        error: error.message,
-      });
-
-      throw new Error(`${MANAGER_ERROR_MSG.WORKER_SPAWN_FAILED}: ${error.message}`);
     }
   }
 
@@ -1294,45 +628,6 @@ class ReplicaWorkerManager extends EventEmitter {
   }
 
   /**
-   * Register a worker with MessageRouter.
-   * Creates a handler that forwards messages to the worker via deliverMessage().
-   * Requirements 11.1, 11.2 - Manager-based registration.
-   * @param {string} replicaId - Replica ID.
-   * @param {string} unifiedAddress - Worker unified address.
-   * @private
-   */
-  registerWorkerWithRouter(replicaId, unifiedAddress) {
-    // Create handler that forwards messages to this worker via deliverMessage
-    const deliverToWorker = async (envelope) => {
-      return this.deliverMessage(replicaId, envelope?.payload || envelope);
-    };
-
-    this.messageRouter.registerWorkerHandler(unifiedAddress, deliverToWorker);
-
-    this.logger.debug(MANAGER_LOG_MSG.HANDLER_REGISTERED, {
-      nodeId: this.nodeId,
-      replicaId,
-      unifiedAddress,
-    });
-  }
-
-  /**
-   * Unregister a worker from MessageRouter.
-   * Removes the handler that forwards messages to the worker.
-   * Requirements 11.4, 11.5 - Unregister handler on stop/crash.
-   * @param {string} unifiedAddress - Worker unified address.
-   * @private
-   */
-  unregisterWorkerFromRouter(unifiedAddress) {
-    this.messageRouter.unregisterWorkerHandler(unifiedAddress);
-
-    this.logger.debug(MANAGER_LOG_MSG.HANDLER_UNREGISTERED, {
-      nodeId: this.nodeId,
-      unifiedAddress,
-    });
-  }
-
-  /**
    * Handle worker process crash.
    * Unregisters from MessageRouter and emits failure event.
    * @param {string} replicaId - Crashed replica ID.
@@ -1483,6 +778,13 @@ class ReplicaWorkerManager extends EventEmitter {
     this.emit(WORKER_EVENT.STOPPED, {nodeId: this.nodeId});
   }
 }
+
+Object.assign(
+  ReplicaWorkerManager.prototype,
+  REPLICA_WORKER_MANAGER_PROGRESS_METHODS,
+  REPLICA_WORKER_MANAGER_POOL_ROUTING_METHODS,
+  REPLICA_WORKER_MANAGER_REPLICA_CREATION_METHODS,
+);
 
 export {
   ReplicaWorkerManager,

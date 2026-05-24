@@ -3,32 +3,39 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
-  "opened": "2026-05-24",
-  "lane": "lightweight-maintenance",
-  "scenario": "none",
-  "artifact": "none",
-  "playback": "none",
-  "owner": "worker_file_size_owner",
-  "boundary": "source_worker_replica_worker_manager_file_size_refactor",
-  "dominantReason": "oversized_file_ratchet",
-  "currentState": "Current file-size audit reports src/worker/replica-worker-manager.js at 1493/800 lines; no implementation is started in this package yet.",
-  "nextAction": "Extract semantically named helper modules from src/worker/replica-worker-manager.js until it is below 800 lines, preserving behavior and the public entrypoint.",
-  "proof": [
-    "npm run audit:file-size -- --strict src/worker/replica-worker-manager.js",
-    "node --check src/worker/replica-worker-manager.js",
-    "git diff --check -- src/worker/replica-worker-manager.js"
-  ],
-  "theoryLedgerRefs": [],
-  "writeScope": [
-    "src/worker/replica-worker-manager.js"
-  ],
-  "handoffFiles": [],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [
-    "src/worker/replica-worker-manager.js"
-  ],
+  "status": "done",
+  "intent": {
+    "opened": "2026-05-24",
+    "closed": "2026-05-24",
+    "lane": "lightweight-maintenance",
+    "scenario": "none",
+    "artifact": "none",
+    "playback": "none",
+    "owner": "worker_file_size_owner",
+    "boundary": "source_worker_replica_worker_manager_file_size_refactor",
+    "currentState": "Current file-size audit reports src/worker/replica-worker-manager.js at 1493/800 lines; no implementation is started in this package yet.",
+    "nextAction": "Extract semantically named helper modules from src/worker/replica-worker-manager.js until it is below 800 lines, preserving behavior and the public entrypoint.",
+    "dominantReason": "oversized_file_ratchet"
+  },
+  "scope": {
+    "writeScope": [
+      "src/worker/replica-worker-manager.js"
+    ],
+    "handoffFiles": [],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": [],
+    "commitScope": [
+      "src/worker/replica-worker-manager.js"
+    ]
+  },
+  "gates": {
+    "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
+    "stabilityCredit": "local-proof-only",
+    "codeQualityAdmission": {
+      "reason": "active-guardrail-requirement",
+      "evidence": "The package is generated from npm run audit:file-size -- --top 250 for src/worker/replica-worker-manager.js; closure proof must make npm run audit:file-size -- --strict src/worker/replica-worker-manager.js pass."
+    }
+  },
   "modelFit": {
     "packageClass": "bounded-implementation",
     "intendedMinimumModel": "gpt-5.3-codex-spark",
@@ -40,30 +47,15 @@
       "a frozen decision must be reopened"
     ]
   },
-  "modelFitSplit": {
-    "targetExecutionModel": "gpt-5.3-codex-spark",
-    "allowedDecisionDepth": "bounded local edit after owner, scope, proof, and forbidden files are named",
-    "safeToExecuteWhen": [
-      "owner, boundary, write scope, forbidden scope, proof, and kill rule stay as declared",
-      "the executor does not need to choose architecture, migrate ownership, or reinterpret representative evidence",
-      "the first focused proof gives a clear pass, fail, or escalate signal"
-    ],
-    "splitTriggers": [
-      "write scope expands beyond the declared lower-model lane",
-      "proof requires forbidden scope, cross-owner reasoning, or architecture route selection",
-      "the implementation needs to decide system behavior instead of executing a named local mechanism"
-    ],
-    "childPackageCandidates": [
-      "Prefer mechanical-maintenance for docs/templates/schema-only edits.",
-      "Prefer test-only-proof for tests that do not change runtime behavior.",
-      "Prefer bounded-experiment for one same-owner hypothesis with inherited context."
-    ]
-  },
-  "stabilityCredit": "local-proof-only",
-  "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
-  "codeQualityAdmission": {
-    "reason": "active-guardrail-requirement",
-    "evidence": "The package is generated from npm run audit:file-size -- --top 250 for src/worker/replica-worker-manager.js; closure proof must make npm run audit:file-size -- --strict src/worker/replica-worker-manager.js pass."
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": {
+      "commands": [
+        "npm run audit:file-size -- --strict src/worker/replica-worker-manager.js",
+        "node --check src/worker/replica-worker-manager.js",
+        "git diff --check -- src/worker/replica-worker-manager.js"
+      ]
+    }
   }
 }
 -->
@@ -182,9 +174,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: executor; files-changed: target file plus semantically named helper/split files added to this package before pre-impl; validation: focused proof and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: verification-fix; owner: verifier_fixer; files-changed: package-owned files only; validation: strict file-size proof, syntax/focused test proof, and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: <validated|not-needed>.
+- [x] action: implementation; owner: executor; files-changed: src/worker/replica-worker-manager.js, src/worker/replica-worker-manager-progress.js, src/worker/replica-worker-manager-pool-routing.js, src/worker/replica-worker-manager-replica-creation.js; validation: pre-impl OK before edits; `npm run audit:file-size -- --strict src/worker/replica-worker-manager.js src/worker/replica-worker-manager-progress.js src/worker/replica-worker-manager-pool-routing.js src/worker/replica-worker-manager-replica-creation.js` OK (source oversized-file ratchet 0/144 over 800; line counts 794/135/257/436); `node --check` OK for all changed JS; `node --test test/worker/replica-worker-manager.test.js` OK (57 pass); import smoke OK; scoped `git diff --check` OK for owned tracked files and no-index helper checks produced no whitespace diagnostics; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: verification-fix; owner: verifier_fixer; files-changed: work/packages/done-20260524-oversized-worker-replica-worker-manager.md only; validation: `npm run audit:file-size -- --strict src/worker/replica-worker-manager.js src/worker/replica-worker-manager-progress.js src/worker/replica-worker-manager-pool-routing.js src/worker/replica-worker-manager-replica-creation.js` OK (source oversized-file ratchet 0/144 over 800; test oversized-file ratchet 0/60 over 1500; line counts 794/135/257/436); `node --check` OK for all four JS files; `node --test test/worker/replica-worker-manager.test.js` OK (57 pass); import smoke OK for manager and helper modules; scoped `git diff --check` OK for owned files; no-index helper whitespace diagnostics emitted no messages; parent revalidated focused proof: yes; no ledger update; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: none; validation: not-needed; outcome: not-needed.
 
 ## Validation
 
