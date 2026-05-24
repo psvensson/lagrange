@@ -3,33 +3,43 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
-  "opened": "2026-05-24",
-  "lane": "lightweight-maintenance",
-  "scenario": "none",
-  "artifact": "none",
-  "playback": "none",
-  "owner": "test_quality_owner",
-  "boundary": "test_control_plane_active_node_projection_file_size_refactor",
-  "dominantReason": "oversized_file_ratchet",
-  "currentState": "Current file-size audit reports test/control-plane/active-node-projection.test.js at 1649/1500 lines; no implementation is started in this package yet.",
-  "nextAction": "Split semantically grouped test/support code from test/control-plane/active-node-projection.test.js until it is below 1500 lines, preserving coverage and imports.",
-  "proof": [
-    "npm run audit:file-size -- --strict test/control-plane/active-node-projection.test.js",
-    "node --check test/control-plane/active-node-projection.test.js",
-    "npm test -- test/control-plane/active-node-projection.test.js",
-    "git diff --check -- test/control-plane/active-node-projection.test.js"
-  ],
-  "theoryLedgerRefs": [],
-  "writeScope": [
-    "test/control-plane/active-node-projection.test.js"
-  ],
-  "handoffFiles": [],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [
-    "test/control-plane/active-node-projection.test.js"
-  ],
+  "status": "done",
+  "intent": {
+    "opened": "2026-05-24",
+    "closed": "2026-05-24",
+    "lane": "lightweight-maintenance",
+    "scenario": "none",
+    "artifact": "none",
+    "playback": "none",
+    "owner": "test_quality_owner",
+    "boundary": "test_control_plane_active_node_projection_file_size_refactor",
+    "currentState": "Current file-size audit reports test/control-plane/active-node-projection.test.js at 1649/1500 lines; no implementation is started in this package yet.",
+    "nextAction": "Split semantically grouped test/support code from test/control-plane/active-node-projection.test.js until it is below 1500 lines, preserving coverage and imports.",
+    "dominantReason": "oversized_file_ratchet"
+  },
+  "scope": {
+    "writeScope": [
+      "test/control-plane/active-node-projection.test.js",
+      "test/control-plane/active-node-projection-lagging-evidence-test-cases.js",
+      "test/control-plane/active-node-projection-membership-publication-test-cases.js"
+    ],
+    "handoffFiles": [],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": [],
+    "commitScope": [
+      "test/control-plane/active-node-projection.test.js",
+      "test/control-plane/active-node-projection-lagging-evidence-test-cases.js",
+      "test/control-plane/active-node-projection-membership-publication-test-cases.js"
+    ]
+  },
+  "gates": {
+    "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
+    "stabilityCredit": "local-proof-only",
+    "codeQualityAdmission": {
+      "reason": "active-guardrail-requirement",
+      "evidence": "The package is generated from npm run audit:file-size -- --top 250 for test/control-plane/active-node-projection.test.js; closure proof must make npm run audit:file-size -- --strict test/control-plane/active-node-projection.test.js pass."
+    }
+  },
   "modelFit": {
     "packageClass": "bounded-implementation",
     "intendedMinimumModel": "gpt-5.3-codex-spark",
@@ -41,30 +51,17 @@
       "a frozen decision must be reopened"
     ]
   },
-  "modelFitSplit": {
-    "targetExecutionModel": "gpt-5.3-codex-spark",
-    "allowedDecisionDepth": "bounded local edit after owner, scope, proof, and forbidden files are named",
-    "safeToExecuteWhen": [
-      "owner, boundary, write scope, forbidden scope, proof, and kill rule stay as declared",
-      "the executor does not need to choose architecture, migrate ownership, or reinterpret representative evidence",
-      "the first focused proof gives a clear pass, fail, or escalate signal"
-    ],
-    "splitTriggers": [
-      "write scope expands beyond the declared lower-model lane",
-      "proof requires forbidden scope, cross-owner reasoning, or architecture route selection",
-      "the implementation needs to decide system behavior instead of executing a named local mechanism"
-    ],
-    "childPackageCandidates": [
-      "Prefer mechanical-maintenance for docs/templates/schema-only edits.",
-      "Prefer test-only-proof for tests that do not change runtime behavior.",
-      "Prefer bounded-experiment for one same-owner hypothesis with inherited context."
-    ]
-  },
-  "stabilityCredit": "local-proof-only",
-  "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
-  "codeQualityAdmission": {
-    "reason": "active-guardrail-requirement",
-    "evidence": "The package is generated from npm run audit:file-size -- --top 250 for test/control-plane/active-node-projection.test.js; closure proof must make npm run audit:file-size -- --strict test/control-plane/active-node-projection.test.js pass."
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": {
+      "commands": [
+        "npm run audit:file-size -- --strict test/control-plane/active-node-projection.test.js test/control-plane/active-node-projection-lagging-evidence-test-cases.js test/control-plane/active-node-projection-membership-publication-test-cases.js",
+        "node --check test/control-plane/active-node-projection.test.js && node --check test/control-plane/active-node-projection-lagging-evidence-test-cases.js && node --check test/control-plane/active-node-projection-membership-publication-test-cases.js",
+        "npm test -- test/control-plane/active-node-projection.test.js",
+        "git diff --check -- test/control-plane/active-node-projection.test.js work/packages/done-20260524-oversized-control-plane-active-node-alpha.md",
+        "bash -lc 'for path in test/control-plane/active-node-projection-lagging-evidence-test-cases.js test/control-plane/active-node-projection-membership-publication-test-cases.js; do out=$(git diff --check --no-index -- /dev/null $path 2>&1); status=$?; printf %s \"$out\"; [ $status -eq 1 ] && [ -z \"$out\" ] || exit 1; done'"
+      ]
+    }
   }
 }
 -->
@@ -142,6 +139,8 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 ## In Scope
 
 1. test/control-plane/active-node-projection.test.js
+2. test/control-plane/active-node-projection-lagging-evidence-test-cases.js
+3. test/control-plane/active-node-projection-membership-publication-test-cases.js
 
 ## Out Of Scope
 
@@ -154,11 +153,11 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex-spark`
 - Scope shape: `leaf-slice`
 - Output profile: `medium`
-- Owned files: `test/control-plane/active-node-projection.test.js`
+- Owned files: `test/control-plane/active-node-projection.test.js`, `test/control-plane/active-node-projection-lagging-evidence-test-cases.js`, `test/control-plane/active-node-projection-membership-publication-test-cases.js`
 - Forbidden files: `src/`, `coverage reduction or assertion deletion`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run audit:file-size -- --strict test/control-plane/active-node-projection.test.js`, `node --check test/control-plane/active-node-projection.test.js`, `npm test -- test/control-plane/active-node-projection.test.js`, `git diff --check -- test/control-plane/active-node-projection.test.js`
+- Focused proof: `npm run audit:file-size -- --strict test/control-plane/active-node-projection.test.js test/control-plane/active-node-projection-lagging-evidence-test-cases.js test/control-plane/active-node-projection-membership-publication-test-cases.js`, `node --check test/control-plane/active-node-projection.test.js && node --check test/control-plane/active-node-projection-lagging-evidence-test-cases.js && node --check test/control-plane/active-node-projection-membership-publication-test-cases.js`, `npm test -- test/control-plane/active-node-projection.test.js`, `git diff --check -- test/control-plane/active-node-projection.test.js work/packages/done-20260524-oversized-control-plane-active-node-alpha.md`, `bash -lc 'for path in test/control-plane/active-node-projection-lagging-evidence-test-cases.js test/control-plane/active-node-projection-membership-publication-test-cases.js; do out=$(git diff --check --no-index -- /dev/null $path 2>&1); status=$?; printf %s "$out"; [ $status -eq 1 ] && [ -z "$out" ] || exit 1; done'`
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split
@@ -178,18 +177,23 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 2. Prefer test-only-proof for tests that do not change runtime behavior.
 3. Prefer bounded-experiment for one same-owner hypothesis with inherited context.
 
+## Theory Ledger
+
+- No ledger update: this is an oversized-file maintenance split only; runtime behavior, representative evidence, and owner routes are unchanged.
+
 ## Execution Evidence
 
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: executor; files-changed: target file plus semantically named helper/split files added to this package before pre-impl; validation: focused proof and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: verification-fix; owner: verifier_fixer; files-changed: package-owned files only; validation: strict file-size proof, syntax/focused test proof, and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: <validated|not-needed>.
+- [x] action: implementation; owner: executor; files-changed: `test/control-plane/active-node-projection.test.js`, `test/control-plane/active-node-projection-lagging-evidence-test-cases.js`, `test/control-plane/active-node-projection-membership-publication-test-cases.js`, `work/packages/done-20260524-oversized-control-plane-active-node-alpha.md`; validation: strict file-size audit pass 0/60 tests over 1500, `node --check` pass for all touched JS, focused wrapper test pass 55/55 assertions, parent revalidated focused proof: yes; outcome: validated.
+- [x] action: verification-fix; owner: verifier_fixer; files-changed: package-owned files only; validation: tracked `git diff --check` pass, untracked helper `--no-index` whitespace checks emitted no diagnostics, parent revalidated focused proof: yes; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: none; validation: not run because assignment forbids `work/sprints/current-blocker*` edits; outcome: not-needed.
 
 ## Validation
 
-1. npm run audit:file-size -- --strict test/control-plane/active-node-projection.test.js
-2. node --check test/control-plane/active-node-projection.test.js
+1. npm run audit:file-size -- --strict test/control-plane/active-node-projection.test.js test/control-plane/active-node-projection-lagging-evidence-test-cases.js test/control-plane/active-node-projection-membership-publication-test-cases.js
+2. node --check test/control-plane/active-node-projection.test.js && node --check test/control-plane/active-node-projection-lagging-evidence-test-cases.js && node --check test/control-plane/active-node-projection-membership-publication-test-cases.js
 3. npm test -- test/control-plane/active-node-projection.test.js
-4. git diff --check -- test/control-plane/active-node-projection.test.js
+4. git diff --check -- test/control-plane/active-node-projection.test.js work/packages/done-20260524-oversized-control-plane-active-node-alpha.md
+5. bash -lc 'for path in test/control-plane/active-node-projection-lagging-evidence-test-cases.js test/control-plane/active-node-projection-membership-publication-test-cases.js; do out=$(git diff --check --no-index -- /dev/null $path 2>&1); status=$?; printf %s "$out"; [ $status -eq 1 ] && [ -z "$out" ] || exit 1; done'
