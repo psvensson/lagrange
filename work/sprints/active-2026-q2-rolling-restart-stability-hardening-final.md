@@ -25,20 +25,20 @@ Make the system stable under rolling-restart: change the core logic of the syste
 ```text
 Representative artifact: none
 Visible first frontier: unknown
-Active package: work/packages/active-20260524-publication-recovery-evidence-normalizers.md
+Active package: work/packages/active-20260524-publication-active-gate-handoff-contract-modules.md
 Active package owner: topology_publication_owner
-Active package boundary: publication_recovery_evidence
+Active package boundary: active_gate_handoff_contract
 Selected cause: oversized_file_ratchet
-Required action: Extract semantically named publication recovery evidence modules until src/control-plane/publication-recovery-evidence.js is below the configured source file-size limit without changing evidence behavior.
+Required action: Extract semantically named publication active-gate handoff contract modules until src/control-plane/publication-active-gate-handoff-contract.js is below the configured source file-size limit without changing contract behavior.
 Representative status: unknown
 Causal outcome: unknown
 Architecture gate: not-required / unknown
 Expected delta: unknown
 Current state: New package scaffolded from the shared work-package schema.
-Allowed edits: src/control-plane/publication-recovery-evidence.js, .kiro/steering/architecture.md, .kiro/steering/code-style.md, .kiro/steering/doctrine.md, .kiro/steering/doctrine/INDEX.md, .kiro/steering/doctrine/decision-experiments.md, .kiro/steering/doctrine/owner-boundaries.md, .kiro/steering/doctrine/single-path.md, .kiro/steering/doctrine/state-encoding.md, .kiro/steering/llm-pack.config.json, .kiro/steering/llm/README.md, .kiro/steering/llm/architecture.md, .kiro/steering/llm/boot.md, .kiro/steering/llm/core.md, .kiro/steering/llm/governance.md, .kiro/steering/llm/lite.md, .kiro/steering/llm/manifest.json, .kiro/steering/llm/rules.json, .kiro/steering/llm/style.md, .kiro/steering/llm/testing.md, .kiro/steering/roadmap.md, .kiro/steering/runtime-contracts.md, ".kiro/steering/system guidelines.md" -> .kiro/steering/system-guidelines.md, .kiro/steering/testing-guidelines.md, .kiro/steering/testing-guidelines/INDEX.md, .kiro/steering/testing-guidelines/fixtures.md, .kiro/steering/testing-guidelines/harness.md, .kiro/steering/testing-guidelines/proof-ladders.md, .kiro/steering/testing-guidelines/regression-policy.md, .kiro/steering/testing-guidelines/release-gate.md, .kiro/steering/workflow-guidelines.md, .kiro/steering/workflow-guidelines/INDEX.md, .kiro/steering/workflow-guidelines/closure.md, .kiro/steering/workflow-guidelines/lifecycle.md, .kiro/steering/workflow-guidelines/packages.md, .kiro/steering/workflow-guidelines/subagents.md, .kiro/steering/workflow-guidelines/validators.md, AGENTS.md, scripts/check-guideline-decision-boundaries-baseline.json, scripts/generate-steering-llm-pack.js, src/admin/admin-websocket-api-segment-3.js, src/diagnostics/topology-convergence-graph.js, src/admin/admin-websocket-diagnostics-route-methods.js, src/admin/admin-websocket-lifecycle-methods.js, src/admin/admin-websocket-message-dispatch-methods.js, src/admin/admin-websocket-observation-methods.js, src/admin/admin-websocket-query-execution-methods.js, src/diagnostics/topology-convergence-constants.js, src/diagnostics/topology-convergence-edge-resolvers.js, src/diagnostics/topology-convergence-normalizers.js, src/diagnostics/topology-convergence-owner-witness.js, src/diagnostics/topology-convergence-replay.js
+Allowed edits: src/control-plane/publication-active-gate-handoff-contract.js, scripts/check-guideline-decision-boundaries-baseline.json, src/admin/admin-websocket-api-segment-3.js, src/control-plane/publication-recovery-evidence.js, src/admin/admin-websocket-diagnostics-route-methods.js, src/admin/admin-websocket-lifecycle-methods.js, src/admin/admin-websocket-message-dispatch-methods.js, src/admin/admin-websocket-observation-methods.js, src/admin/admin-websocket-query-execution-methods.js, src/control-plane/publication-recovery-evidence-builders.js, src/control-plane/publication-recovery-evidence-normalizers.js
 Candidate runtime files: unknown
 Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
-Required latest proof: npm run audit:file-size -- src/control-plane/publication-recovery-evidence.js
+Required latest proof: npm run audit:file-size -- src/control-plane/publication-active-gate-handoff-contract.js
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -62,12 +62,12 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Purpose: Extract semantically named topology convergence graph modules until `src/diagnostics/topology-convergence-graph.js` is below the source file-size limit.
    - First-run reason: largest oversized source file reported by `npm run audit:file-size`.
 
-3. [Bring publication recovery evidence below file-size limit](../packages/active-20260524-publication-recovery-evidence-normalizers.md)
+3. [Bring publication recovery evidence below file-size limit](../packages/done-20260524-publication-recovery-evidence-normalizers.md)
    - Lane: `lightweight-maintenance`
    - Purpose: Extract semantically named publication recovery evidence modules until `src/control-plane/publication-recovery-evidence.js` is below the source file-size limit.
    - First-run reason: next largest source oversized file in the current audit.
 
-4. [Bring publication active gate handoff contract below file-size limit](../packages/todo-20260524-publication-active-gate-handoff-contract-modules.md)
+4. [Bring publication active gate handoff contract below file-size limit](../packages/active-20260524-publication-active-gate-handoff-contract-modules.md)
    - Lane: `lightweight-maintenance`
    - Purpose: Extract semantically named publication active-gate handoff contract modules until `src/control-plane/publication-active-gate-handoff-contract.js` is below the source file-size limit.
    - First-run reason: next largest source oversized file in the current audit.

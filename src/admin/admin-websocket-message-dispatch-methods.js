@@ -1,0 +1,433 @@
+import {createAdminQueryResultMessageEnvelope} from './admin-query-result-message-envelope.js';
+import {ADMIN_WEBSOCKET_API_SHARED} from './admin-websocket-api-shared.js';
+import {AdminWebSocketAPISegment2} from './admin-websocket-api-segment-2.js';
+
+const STALE_SOCKET_LOG_MSG = 'Closing stale admin socket connection on lane';
+
+const {
+  ADMIN_ERROR_HINT,
+  ADMIN_ERROR_MATCH,
+  ADMIN_ERROR_MESSAGE,
+  ADMIN_LOG_MSG,
+  ADMIN_SERVICE_OPERATION,
+  ADMIN_STREAM_LANE_SNAPSHOT,
+  ErrorCode,
+  MessageType,
+  NUM,
+  SQLParser,
+  TYPEOF,
+  adaptAdminMessageToServiceMessage,
+  appendStructuredQueryMetadata,
+  isAdminMessageDispatchable,
+  parseLiveSelect,
+} = ADMIN_WEBSOCKET_API_SHARED;
+
+const ADMIN_WEBSOCKET_MESSAGE_DISPATCH_METHODS = {
+  handleConnection(socket, request = null) {
+    const lane = this.resolveAdminClientLane(request?.query?.lane);
+
+    if (lane === ADMIN_STREAM_LANE_SNAPSHOT) {
+      for (const clientInfo of [...this.clients]) {
+        if (clientInfo.lane === lane) {
+          this.logger.info(STALE_SOCKET_LOG_MSG, {
+            clientId: clientInfo.id,
+            lane,
+          });
+          try {
+            clientInfo.socket.close();
+          } catch (_closeErr) {
+            // Ignore close errors for stale clients
+          }
+          this.handleDisconnection(clientInfo);
+        }
+      }
+    }
+
+    AdminWebSocketAPISegment2.prototype.handleConnection.call(this, socket, request);
+  },
+
+  handleMessage(clientInfo, data) {
+    let message;
+
+    try {
+      const messageStr = data.toString();
+      message = JSON.parse(messageStr);
+    } catch (_error) {
+      this.sendError(
+        clientInfo,
+        null,
+        ErrorCode.MALFORMED_JSON,
+        ADMIN_ERROR_MESSAGE.INVALID_JSON,
+        ADMIN_ERROR_HINT.INVALID_JSON,
+      );
+      return;
+    }
+
+    if (!message || typeof message.type !== TYPEOF.STRING) {
+      this.sendError(
+        clientInfo,
+        null,
+        ErrorCode.MALFORMED_JSON,
+        ADMIN_ERROR_MESSAGE.MISSING_TYPE,
+        ADMIN_ERROR_HINT.MISSING_TYPE,
+      );
+      return;
+    }
+
+    this.logger.debug(ADMIN_LOG_MSG.RECEIVED_MESSAGE, {
+      clientId: clientInfo.id,
+      type: message.type,
+    });
+
+    switch (message.type) {
+    case MessageType.QUERY:
+      this.handleDispatchableAdminMessage(clientInfo, message);
+      break;
+
+    case MessageType.PARTITION_CALLBACK:
+      this.handleDispatchableAdminMessage(clientInfo, message);
+      break;
+
+    case MessageType.REFRESH:
+      this.handleDispatchableAdminMessage(clientInfo, message);
+      break;
+
+    case MessageType.LIVE_QUERY_SUBSCRIBE:
+      this.handleLiveQuerySubscribe(clientInfo, message);
+      break;
+
+    case MessageType.LIVE_QUERY_UNSUBSCRIBE:
+      this.handleLiveQueryUnsubscribe(clientInfo, message);
+      break;
+
+    default:
+      this.logger.debug(ADMIN_LOG_MSG.UNKNOWN_MESSAGE, {
+        clientId: clientInfo.id,
+        type: message.type,
+      });
+      break;
+    }
+  },
+
+  async handleLiveQuerySubscribe(clientInfo, message) {
+    const subscriptionId = message.subscriptionId;
+    const sql = message.sql;
+
+    if (!subscriptionId) {
+      this.sendError(
+        clientInfo,
+        null,
+        ErrorCode.MALFORMED_JSON,
+        ADMIN_ERROR_MESSAGE.LIVE_QUERY_MISSING_SUBSCRIPTION_ID,
+        ADMIN_ERROR_HINT.LIVE_QUERY_MISSING_SUBSCRIPTION_ID,
+      );
+      return;
+    }
+    if (!sql || typeof sql !== TYPEOF.STRING) {
+      this.sendError(
+        clientInfo,
+        null,
+        ErrorCode.MALFORMED_JSON,
+        ADMIN_ERROR_MESSAGE.LIVE_QUERY_MISSING_SQL,
+        ADMIN_ERROR_HINT.LIVE_QUERY_MISSING_SQL,
+      );
+      return;
+    }
+    if (!this.liveQueryManager) {
+      this.sendError(
+        clientInfo,
+        null,
+        ErrorCode.INTERNAL_ERROR,
+        ADMIN_ERROR_MESSAGE.LIVE_QUERY_MANAGER_UNAVAILABLE,
+      );
+      return;
+    }
+
+    try {
+      const parsed = parseLiveSelect(sql);
+      const selectSql = parsed.isLive ? parsed.sql : sql;
+      const parser = new SQLParser(selectSql);
+      const ast = parser.parse();
+
+      const registrationResult = {partitions: []};
+      const liveClient = {
+        id: clientInfo.id,
+        send: (data) => {
+          const payload =
+            typeof data === TYPEOF.STRING ? JSON.parse(data) : data;
+          const innerType = payload.type;
+          this.sendToClient(clientInfo, {
+            type: MessageType.LIVE_QUERY_EVENT,
+            subscriptionId,
+            eventType: innerType,
+            data: payload.row || payload.new || payload.rows || null,
+            oldData: payload.old || null,
+            queryId: payload.queryId || null,
+            partitions: registrationResult.partitions || [],
+          });
+        },
+      };
+
+      const result = await this.liveQueryManager.registerLiveQuery(
+        ast,
+        liveClient,
+      );
+      registrationResult.partitions = result.partitions || [];
+
+      clientInfo.liveQueryMap.set(subscriptionId, result.queryId);
+
+      this.sendToClient(clientInfo, {
+        type: MessageType.LIVE_QUERY_EVENT,
+        subscriptionId,
+        queryId: result.queryId,
+        partitions: result.partitions,
+        expiresAt: result.expiresAt,
+      });
+
+      this.logger.info(ADMIN_LOG_MSG.LIVE_QUERY_SUBSCRIBED, {
+        clientId: clientInfo.id,
+        subscriptionId,
+        queryId: result.queryId,
+      });
+    } catch (error) {
+      this.logger.error(ADMIN_LOG_MSG.LIVE_QUERY_SUBSCRIBE_FAILED, {
+        clientId: clientInfo.id,
+        subscriptionId,
+        error: error.message,
+      });
+      this.sendError(
+        clientInfo,
+        null,
+        ErrorCode.INTERNAL_ERROR,
+        `${ADMIN_ERROR_MESSAGE.LIVE_QUERY_PARSE_FAILED}: ${error.message}`,
+      );
+    }
+  },
+
+  handleLiveQueryUnsubscribe(clientInfo, message) {
+    const subscriptionId = message.subscriptionId;
+    if (!subscriptionId) {
+      return;
+    }
+
+    const queryId = clientInfo.liveQueryMap.get(subscriptionId);
+    if (queryId && this.liveQueryManager) {
+      this.liveQueryManager.unregisterLiveQuery(queryId, clientInfo.id);
+      clientInfo.liveQueryMap.delete(subscriptionId);
+
+      this.logger.info(ADMIN_LOG_MSG.LIVE_QUERY_UNSUBSCRIBED, {
+        clientId: clientInfo.id,
+        subscriptionId,
+        queryId,
+      });
+    }
+  },
+
+  async handleDispatchableAdminMessage(clientInfo, message) {
+    if (!isAdminMessageDispatchable(message.type)) {
+      return;
+    }
+
+    const envelope = adaptAdminMessageToServiceMessage(message, {
+      clientId: clientInfo.id,
+      lane: this.resolveAdminClientLane(clientInfo?.lane),
+      tenantId: message.tenantId || null,
+      principal: message.principal || null,
+      traceId: message.traceId || null,
+    });
+    await this.handleServiceDispatchEnvelope(clientInfo, message, envelope);
+  },
+
+  async handleServiceDispatchMessage(clientInfo, message) {
+    const envelope = adaptAdminMessageToServiceMessage(message, {
+      clientId: clientInfo.id,
+      lane: this.resolveAdminClientLane(clientInfo?.lane),
+      tenantId: message.tenantId || null,
+      principal: message.principal || null,
+      traceId: message.traceId || null,
+    });
+    return this.handleServiceDispatchEnvelope(clientInfo, message, envelope);
+  },
+
+  async handleServiceDispatchEnvelope(clientInfo, message, envelope) {
+    const queryId = message.queryId || message.messageId || null;
+
+    try {
+      const dispatchResult = await this.serviceDispatcher.dispatch(envelope, {
+        clientInfo,
+        nodeId: this.nodeId,
+        traceId: envelope.traceId || null,
+        tenantId: envelope.tenantId || null,
+        principal: envelope.principal || null,
+      });
+
+      const deliveryPayload = dispatchResult.delivery?.payload || {};
+      const operation = dispatchResult.envelope.operation;
+
+      if (operation === ADMIN_SERVICE_OPERATION.GET_CACHE_DUMP) {
+        const cacheDump =
+          deliveryPayload.cacheDump || deliveryPayload.data || null;
+        if (!cacheDump || typeof cacheDump !== TYPEOF.OBJECT) {
+          throw new Error(ADMIN_ERROR_MESSAGE.SYSTEM_CACHE_EMPTY);
+        }
+        this.sendCacheDumpPayload(clientInfo, cacheDump);
+        return;
+      }
+
+      if (
+        deliveryPayload.queryResult &&
+        typeof deliveryPayload.queryResult === TYPEOF.OBJECT
+      ) {
+        this.sendQueryResult(
+          clientInfo,
+          queryId || envelope.messageId,
+          deliveryPayload.queryResult,
+        );
+        return;
+      }
+
+      const deliveryResults = Array.isArray(deliveryPayload.results) ?
+        deliveryPayload.results :
+        [];
+      this.sendQueryResult(clientInfo, queryId || envelope.messageId, {
+        operation,
+        results: deliveryResults,
+        count: deliveryResults.length,
+      });
+    } catch (error) {
+      const errorCode = this.getErrorCode(error);
+      this.sendError(
+        clientInfo,
+        queryId,
+        errorCode,
+        error.message,
+        error.adminHint,
+        error,
+      );
+    }
+  },
+
+  sendQueryResult(clientInfo, queryId, result) {
+    const message = createAdminQueryResultMessageEnvelope(queryId, result);
+
+    this.sendToClient(clientInfo, message);
+
+    this.logger.debug(ADMIN_LOG_MSG.QUERY_RESULT_SENT, {
+      clientId: clientInfo.id,
+      queryId,
+      success: result.success !== false,
+    });
+  },
+
+  handleRefreshMessage(clientInfo, _message) {
+    this.logger.debug(ADMIN_LOG_MSG.REFRESH_REQUESTED, {
+      clientId: clientInfo.id,
+    });
+
+    try {
+      this.sendCacheDumpPayload(
+        clientInfo,
+        this.executeLocalCacheDumpEnvelope(),
+      );
+    } catch (error) {
+      const errorCode = this.getErrorCode(error);
+      this.sendError(
+        clientInfo,
+        null,
+        errorCode,
+        error.message,
+        error.adminHint,
+        error,
+      );
+    }
+  },
+
+  sendError(clientInfo, queryId, errorCode, errorMessage, hint, options = {}) {
+    const message = {
+      type: queryId ? MessageType.QUERY_RESULT : MessageType.ERROR,
+      timestamp: Date.now(),
+      error: errorMessage,
+      errorCode,
+    };
+
+    if (queryId) {
+      message.queryId = queryId;
+    }
+
+    if (hint) {
+      message.hint = hint;
+    }
+    if (options?.adminDetails && typeof options.adminDetails === TYPEOF.OBJECT) {
+      message.details = options.adminDetails;
+    } else if (options?.details && typeof options.details === TYPEOF.OBJECT) {
+      message.details = options.details;
+    }
+
+    if (options?.deferRetry === true) {
+      message.deferRetry = true;
+    }
+    if (Number.isFinite(options?.retryAfterMs)) {
+      message.retryAfterMs = Math.max(
+        NUM.ZERO,
+        Math.floor(options.retryAfterMs),
+      );
+    }
+    appendStructuredQueryMetadata(message, options);
+
+    this.sendToClient(clientInfo, message);
+  },
+
+  sendToClient(clientInfo, message) {
+    try {
+      const json = JSON.stringify(message);
+      clientInfo.socket.send(json);
+    } catch (error) {
+      this.logger.error(ADMIN_LOG_MSG.SEND_FAILED, {
+        clientId: clientInfo.id,
+        error: error.message,
+      });
+      throw error;
+    }
+  },
+
+  broadcastCDCEvent(tableName, operation, record) {
+    const message = {
+      type: MessageType.CDC_EVENT,
+      timestamp: Date.now(),
+      table: tableName,
+      operation: operation.toLowerCase(),
+      record,
+    };
+
+    for (const clientInfo of this.clients) {
+      this.sendToClient(clientInfo, message);
+    }
+  },
+
+  getErrorCode(error) {
+    if (error && typeof error.adminErrorCode === TYPEOF.STRING) {
+      return error.adminErrorCode;
+    }
+    const message = error.message.toLowerCase();
+
+    if (
+      message.includes(ADMIN_ERROR_MATCH.PARSE) ||
+      message.includes(ADMIN_ERROR_MATCH.SYNTAX)
+    ) {
+      return ErrorCode.SYNTAX_ERROR;
+    }
+    if (
+      message.includes(ADMIN_ERROR_MATCH.TABLE_NOT_FOUND) ||
+      message.includes(ADMIN_ERROR_MATCH.TABLE_NOT_FOUND_CODE)
+    ) {
+      return ErrorCode.TABLE_NOT_FOUND;
+    }
+    if (message.includes(ADMIN_ERROR_MATCH.TIMEOUT)) {
+      return ErrorCode.TIMEOUT;
+    }
+
+    return ErrorCode.INTERNAL_ERROR;
+  },
+};
+
+export {ADMIN_WEBSOCKET_MESSAGE_DISPATCH_METHODS};

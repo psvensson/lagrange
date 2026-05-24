@@ -8,35 +8,31 @@ Theory under test: New package scaffolded from the shared work-package schema.
 
 Causal question: oversized_file_ratchet
 
-Implementation slice: Extract semantically named publication recovery evidence modules until src/control-plane/publication-recovery-evidence.js is below the configured source file-size limit without changing evidence behavior.
+Implementation slice: Extract semantically named publication active-gate handoff contract modules until src/control-plane/publication-active-gate-handoff-contract.js is below the configured source file-size limit without changing contract behavior.
 
 Implementation files:
 
-1. `src/control-plane/publication-recovery-evidence.js`
+1. `src/control-plane/publication-active-gate-handoff-contract.js`
 2. `scripts/check-guideline-decision-boundaries-baseline.json`
-3. `scripts/generate-steering-llm-pack.js`
-4. `src/admin/admin-websocket-api-segment-3.js`
-5. `src/diagnostics/topology-convergence-graph.js`
-6. `src/admin/admin-websocket-diagnostics-route-methods.js`
-7. `src/admin/admin-websocket-lifecycle-methods.js`
-8. `src/admin/admin-websocket-message-dispatch-methods.js`
-9. `src/admin/admin-websocket-observation-methods.js`
-10. `src/admin/admin-websocket-query-execution-methods.js`
-11. `src/diagnostics/topology-convergence-constants.js`
-12. `src/diagnostics/topology-convergence-edge-resolvers.js`
-13. `src/diagnostics/topology-convergence-normalizers.js`
-14. `src/diagnostics/topology-convergence-owner-witness.js`
-15. `src/diagnostics/topology-convergence-replay.js`
+3. `src/admin/admin-websocket-api-segment-3.js`
+4. `src/control-plane/publication-recovery-evidence.js`
+5. `src/admin/admin-websocket-diagnostics-route-methods.js`
+6. `src/admin/admin-websocket-lifecycle-methods.js`
+7. `src/admin/admin-websocket-message-dispatch-methods.js`
+8. `src/admin/admin-websocket-observation-methods.js`
+9. `src/admin/admin-websocket-query-execution-methods.js`
+10. `src/control-plane/publication-recovery-evidence-builders.js`
+11. `src/control-plane/publication-recovery-evidence-normalizers.js`
 
 Expected implementation delta: unknown
 
-Falsifying probe: npm run audit:file-size -- src/control-plane/publication-recovery-evidence.js
+Falsifying probe: npm run audit:file-size -- src/control-plane/publication-active-gate-handoff-contract.js
 
 Stop rule: No architecture decision gate is required for this package.
 
 Sprint: `work/sprints/active-2026-q2-rolling-restart-stability-hardening-final.md`
 
-Package: `work/packages/active-20260524-publication-recovery-evidence-normalizers.md`
+Package: `work/packages/active-20260524-publication-active-gate-handoff-contract-modules.md`
 
 Workflow lane: `lightweight-maintenance`
 
@@ -50,7 +46,7 @@ Playback: `none`
 
 Owner: `topology_publication_owner`
 
-Boundary: `publication_recovery_evidence`
+Boundary: `active_gate_handoff_contract`
 
 Dominant reason: `oversized_file_ratchet`
 
@@ -58,11 +54,11 @@ Current state: New package scaffolded from the shared work-package schema.
 
 ## Next Action
 
-Extract semantically named publication recovery evidence modules until src/control-plane/publication-recovery-evidence.js is below the configured source file-size limit without changing evidence behavior.
+Extract semantically named publication active-gate handoff contract modules until src/control-plane/publication-active-gate-handoff-contract.js is below the configured source file-size limit without changing contract behavior.
 
 ## Proof Ladder
 
-1. `npm run audit:file-size -- src/control-plane/publication-recovery-evidence.js`
+1. `npm run audit:file-size -- src/control-plane/publication-active-gate-handoff-contract.js`
 
 ## Model Fit
 
@@ -247,58 +243,17 @@ Gate next action: No architecture decision gate is required for this package.
 
 Write scope:
 
-1. `src/control-plane/publication-recovery-evidence.js`
-2. `.kiro/steering/architecture.md`
-3. `.kiro/steering/code-style.md`
-4. `.kiro/steering/doctrine.md`
-5. `.kiro/steering/doctrine/INDEX.md`
-6. `.kiro/steering/doctrine/decision-experiments.md`
-7. `.kiro/steering/doctrine/owner-boundaries.md`
-8. `.kiro/steering/doctrine/single-path.md`
-9. `.kiro/steering/doctrine/state-encoding.md`
-10. `.kiro/steering/llm-pack.config.json`
-11. `.kiro/steering/llm/README.md`
-12. `.kiro/steering/llm/architecture.md`
-13. `.kiro/steering/llm/boot.md`
-14. `.kiro/steering/llm/core.md`
-15. `.kiro/steering/llm/governance.md`
-16. `.kiro/steering/llm/lite.md`
-17. `.kiro/steering/llm/manifest.json`
-18. `.kiro/steering/llm/rules.json`
-19. `.kiro/steering/llm/style.md`
-20. `.kiro/steering/llm/testing.md`
-21. `.kiro/steering/roadmap.md`
-22. `.kiro/steering/runtime-contracts.md`
-23. `".kiro/steering/system guidelines.md" -> .kiro/steering/system-guidelines.md`
-24. `.kiro/steering/testing-guidelines.md`
-25. `.kiro/steering/testing-guidelines/INDEX.md`
-26. `.kiro/steering/testing-guidelines/fixtures.md`
-27. `.kiro/steering/testing-guidelines/harness.md`
-28. `.kiro/steering/testing-guidelines/proof-ladders.md`
-29. `.kiro/steering/testing-guidelines/regression-policy.md`
-30. `.kiro/steering/testing-guidelines/release-gate.md`
-31. `.kiro/steering/workflow-guidelines.md`
-32. `.kiro/steering/workflow-guidelines/INDEX.md`
-33. `.kiro/steering/workflow-guidelines/closure.md`
-34. `.kiro/steering/workflow-guidelines/lifecycle.md`
-35. `.kiro/steering/workflow-guidelines/packages.md`
-36. `.kiro/steering/workflow-guidelines/subagents.md`
-37. `.kiro/steering/workflow-guidelines/validators.md`
-38. `AGENTS.md`
-39. `scripts/check-guideline-decision-boundaries-baseline.json`
-40. `scripts/generate-steering-llm-pack.js`
-41. `src/admin/admin-websocket-api-segment-3.js`
-42. `src/diagnostics/topology-convergence-graph.js`
-43. `src/admin/admin-websocket-diagnostics-route-methods.js`
-44. `src/admin/admin-websocket-lifecycle-methods.js`
-45. `src/admin/admin-websocket-message-dispatch-methods.js`
-46. `src/admin/admin-websocket-observation-methods.js`
-47. `src/admin/admin-websocket-query-execution-methods.js`
-48. `src/diagnostics/topology-convergence-constants.js`
-49. `src/diagnostics/topology-convergence-edge-resolvers.js`
-50. `src/diagnostics/topology-convergence-normalizers.js`
-51. `src/diagnostics/topology-convergence-owner-witness.js`
-52. `src/diagnostics/topology-convergence-replay.js`
+1. `src/control-plane/publication-active-gate-handoff-contract.js`
+2. `scripts/check-guideline-decision-boundaries-baseline.json`
+3. `src/admin/admin-websocket-api-segment-3.js`
+4. `src/control-plane/publication-recovery-evidence.js`
+5. `src/admin/admin-websocket-diagnostics-route-methods.js`
+6. `src/admin/admin-websocket-lifecycle-methods.js`
+7. `src/admin/admin-websocket-message-dispatch-methods.js`
+8. `src/admin/admin-websocket-observation-methods.js`
+9. `src/admin/admin-websocket-query-execution-methods.js`
+10. `src/control-plane/publication-recovery-evidence-builders.js`
+11. `src/control-plane/publication-recovery-evidence-normalizers.js`
 
 Handoff files:
 
@@ -314,59 +269,18 @@ Candidate runtime files:
 
 Commit scope:
 
-1. `src/control-plane/publication-recovery-evidence.js`
-2. `.kiro/steering/architecture.md`
-3. `.kiro/steering/code-style.md`
-4. `.kiro/steering/doctrine.md`
-5. `.kiro/steering/doctrine/INDEX.md`
-6. `.kiro/steering/doctrine/decision-experiments.md`
-7. `.kiro/steering/doctrine/owner-boundaries.md`
-8. `.kiro/steering/doctrine/single-path.md`
-9. `.kiro/steering/doctrine/state-encoding.md`
-10. `.kiro/steering/llm-pack.config.json`
-11. `.kiro/steering/llm/README.md`
-12. `.kiro/steering/llm/architecture.md`
-13. `.kiro/steering/llm/boot.md`
-14. `.kiro/steering/llm/core.md`
-15. `.kiro/steering/llm/governance.md`
-16. `.kiro/steering/llm/lite.md`
-17. `.kiro/steering/llm/manifest.json`
-18. `.kiro/steering/llm/rules.json`
-19. `.kiro/steering/llm/style.md`
-20. `.kiro/steering/llm/testing.md`
-21. `.kiro/steering/roadmap.md`
-22. `.kiro/steering/runtime-contracts.md`
-23. `".kiro/steering/system guidelines.md" -> .kiro/steering/system-guidelines.md`
-24. `.kiro/steering/testing-guidelines.md`
-25. `.kiro/steering/testing-guidelines/INDEX.md`
-26. `.kiro/steering/testing-guidelines/fixtures.md`
-27. `.kiro/steering/testing-guidelines/harness.md`
-28. `.kiro/steering/testing-guidelines/proof-ladders.md`
-29. `.kiro/steering/testing-guidelines/regression-policy.md`
-30. `.kiro/steering/testing-guidelines/release-gate.md`
-31. `.kiro/steering/workflow-guidelines.md`
-32. `.kiro/steering/workflow-guidelines/INDEX.md`
-33. `.kiro/steering/workflow-guidelines/closure.md`
-34. `.kiro/steering/workflow-guidelines/lifecycle.md`
-35. `.kiro/steering/workflow-guidelines/packages.md`
-36. `.kiro/steering/workflow-guidelines/subagents.md`
-37. `.kiro/steering/workflow-guidelines/validators.md`
-38. `AGENTS.md`
-39. `scripts/check-guideline-decision-boundaries-baseline.json`
-40. `scripts/generate-steering-llm-pack.js`
-41. `src/admin/admin-websocket-api-segment-3.js`
-42. `src/diagnostics/topology-convergence-graph.js`
-43. `src/admin/admin-websocket-diagnostics-route-methods.js`
-44. `src/admin/admin-websocket-lifecycle-methods.js`
-45. `src/admin/admin-websocket-message-dispatch-methods.js`
-46. `src/admin/admin-websocket-observation-methods.js`
-47. `src/admin/admin-websocket-query-execution-methods.js`
-48. `src/diagnostics/topology-convergence-constants.js`
-49. `src/diagnostics/topology-convergence-edge-resolvers.js`
-50. `src/diagnostics/topology-convergence-normalizers.js`
-51. `src/diagnostics/topology-convergence-owner-witness.js`
-52. `src/diagnostics/topology-convergence-replay.js`
-53. `work/packages/active-20260524-publication-recovery-evidence-normalizers.md`
+1. `src/control-plane/publication-active-gate-handoff-contract.js`
+2. `scripts/check-guideline-decision-boundaries-baseline.json`
+3. `src/admin/admin-websocket-api-segment-3.js`
+4. `src/control-plane/publication-recovery-evidence.js`
+5. `src/admin/admin-websocket-diagnostics-route-methods.js`
+6. `src/admin/admin-websocket-lifecycle-methods.js`
+7. `src/admin/admin-websocket-message-dispatch-methods.js`
+8. `src/admin/admin-websocket-observation-methods.js`
+9. `src/admin/admin-websocket-query-execution-methods.js`
+10. `src/control-plane/publication-recovery-evidence-builders.js`
+11. `src/control-plane/publication-recovery-evidence-normalizers.js`
+12. `work/packages/active-20260524-publication-active-gate-handoff-contract-modules.md`
 
 Legacy touched files:
 

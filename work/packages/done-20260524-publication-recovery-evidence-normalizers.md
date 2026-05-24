@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "active",
+  "status": "done",
   "intent": {
     "opened": "2026-05-24",
     "lane": "lightweight-maintenance",
@@ -19,6 +19,8 @@
   "scope": {
     "writeScope": [
       "src/control-plane/publication-recovery-evidence.js",
+      "src/control-plane/publication-recovery-evidence-normalizers.js",
+      "src/control-plane/publication-recovery-evidence-builders.js",
       ".kiro/steering/architecture.md",
       ".kiro/steering/code-style.md",
       ".kiro/steering/doctrine.md",
@@ -76,6 +78,8 @@
     "candidateRuntimeFiles": [],
     "commitScope": [
       "src/control-plane/publication-recovery-evidence.js",
+      "src/control-plane/publication-recovery-evidence-normalizers.js",
+      "src/control-plane/publication-recovery-evidence-builders.js",
       ".kiro/steering/architecture.md",
       ".kiro/steering/code-style.md",
       ".kiro/steering/doctrine.md",
@@ -127,7 +131,7 @@
       "src/diagnostics/topology-convergence-normalizers.js",
       "src/diagnostics/topology-convergence-owner-witness.js",
       "src/diagnostics/topology-convergence-replay.js",
-      "work/packages/active-20260524-publication-recovery-evidence-normalizers.md"
+      "work/packages/done-20260524-publication-recovery-evidence-normalizers.md"
     ]
   },
   "gates": {
@@ -172,7 +176,7 @@ Approved maintenance/refactor scope from the active sprint's front-loaded oversi
 
 ## Core Logic Brief
 
-- Status: `not-needed` - no runtime, scenario, or shared contract decision changes.
+- Status: `not-needed` - no runtime, scenario, or shared contract decision changes; no ledger update.
 
 
 
@@ -269,9 +273,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: <owner>; files-changed: <paths or none>; validation: <focused proof and parent revalidated focused proof: yes>; outcome: <validated|blocked>.
-- [ ] action: verification-fix; owner: <owner>; files-changed: <paths or none>; validation: <verification proof and parent revalidated focused proof: yes>; outcome: <validated|blocked>.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: <validated|not-needed>.
+- [x] action: implementation; owner: topology_publication_owner; files-changed: src/control-plane/publication-recovery-evidence.js, src/control-plane/publication-recovery-evidence-normalizers.js, src/control-plane/publication-recovery-evidence-builders.js; validation: npm run audit:file-size -- src/control-plane/publication-recovery-evidence.js and parent revalidated focused proof: yes; outcome: validated.
+- [x] action: verification-fix; owner: topology_publication_owner; files-changed: none; validation: node --test test/control-plane/publication-recovery-evidence.test.js test/control-plane/publication-recovery-evidence-open-membership.test.js and parent revalidated focused proof: yes; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: validated.
 
 ## Validation
 

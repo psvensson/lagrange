@@ -648,35 +648,35 @@
       "ruleReference": "system-guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
-      "filePath": "src/admin/admin-websocket-api-segment-3.js",
-      "line": 357,
+      "filePath": "src/admin/admin-websocket-query-execution-methods.js",
+      "line": 103,
       "column": 1,
       "functionName": "executeLocalQueryEnvelope",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 357) and SQL/DB (line 383) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 103) and SQL/DB (line 129) as equivalent truth for one meaning",
       "ruleReference": "system-guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
-      "filePath": "src/admin/admin-websocket-api-segment-3.js",
-      "line": 494,
+      "filePath": "src/admin/admin-websocket-query-execution-methods.js",
+      "line": 228,
       "column": 1,
       "functionName": "executeLocalCacheDumpEnvelope",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 494) and SQL/DB (line 491) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 228) and SQL/DB (line 225) as equivalent truth for one meaning",
       "ruleReference": "system-guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
-      "filePath": "src/admin/admin-websocket-api-segment-3.js",
-      "line": 796,
+      "filePath": "src/admin/admin-websocket-message-dispatch-methods.js",
+      "line": 273,
       "column": 1,
       "functionName": "handleServiceDispatchEnvelope",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 796) and SQL/DB (line 824) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 273) and SQL/DB (line 301) as equivalent truth for one meaning",
       "ruleReference": "system-guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
-      "filePath": "src/admin/admin-websocket-api-segment-3.js",
-      "line": 1244,
+      "filePath": "src/admin/admin-websocket-diagnostics-route-methods.js",
+      "line": 292,
       "column": 5,
       "functionName": "buildControlSnapshotQueryResult",
       "kind": "local_retry_loop",
@@ -684,21 +684,21 @@
       "ruleReference": "system-guidelines.md §7.1 and §9.7 Local retry loop guardrails"
     },
     {
-      "filePath": "src/admin/admin-websocket-api-segment-3.js",
-      "line": 1265,
-      "column": 40,
+      "filePath": "src/admin/admin-websocket-diagnostics-route-methods.js",
+      "line": 318,
+      "column": 11,
       "functionName": "buildControlSnapshotQueryResult",
       "kind": "local_retry_loop",
       "reason": "local retry loops using setTimeout or setInterval are forbidden; use canonical retry registries or owners instead",
       "ruleReference": "system-guidelines.md §7.1 and §9.7 Local retry loop guardrails"
     },
     {
-      "filePath": "src/admin/admin-websocket-api-segment-3.js",
-      "line": 1647,
+      "filePath": "src/admin/admin-websocket-message-dispatch-methods.js",
+      "line": 330,
       "column": 1,
       "functionName": "handleRefreshMessage",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 1647) and SQL/DB (line 1647) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 330) and SQL/DB (line 330) as equivalent truth for one meaning",
       "ruleReference": "system-guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
