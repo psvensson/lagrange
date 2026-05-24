@@ -1,0 +1,894 @@
+export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionTests({
+  test,
+  RebalanceCoordinator,
+  WORKFLOW_STEP,
+  REBALANCER_SKIP_REASON,
+  OperationType,
+  createWorkflowCoordinatorSpy,
+  createStorageOwners,
+  createTransactionCoordinator,
+  createCoordinator,
+  disablePersistenceConfirmation,
+}) {
+  const REBALANCE_OPERATION_BUDGET_MS = 300000;
+
+  test('RebalanceCoordinator bypasses empty-cache admission backoff for critical partition create',
+    async (t) => {
+      let sqlQueryCalls = 0;
+      const coordinator = createCoordinator({
+        nodeId: 'node-local',
+        transactionCoordinator: createTransactionCoordinator(),
+        systemTableCache: {
+          get() {
+            return null;
+          },
+          filter() {
+            return [];
+          },
+        },
+        cdcIntegrationService: {
+          async waitForCacheUpdate() {},
+        },
+        tablePolicyService: {
+          async getPolicyForPartition() {
+            return {minReplicaCount: 1};
+          },
+        },
+        messageRouter: {
+          async deliver() {
+            return {acknowledged: true, status: 'completed'};
+          },
+        },
+        sqlQueryEngine: {
+          async executeQuery() {
+            sqlQueryCalls += 1;
+            return {success: true, rows: [], changes: 1};
+          },
+        },
+        ...createStorageOwners(),
+        enableTimeouts: false,
+      });
+      coordinator.initialize();
+      coordinator.repository.getOperationsByEntityAuthoritative = async () => [];
+      coordinator.workflowOwner.incompleteOperationQueryEmptyBackoffMs = 60_000;
+      coordinator.workflowOwner.lastEmptyIncompleteOperationQueryAtMs = Date.now();
+
+      try {
+        let nonCriticalError = null;
+        try {
+          await coordinator.ensureConcurrentOperationBudgetAllowed(
+            OperationType.REPLACE,
+            {
+              partitionId: 'users-p1',
+            },
+          );
+        } catch (error) {
+          nonCriticalError = error;
+        }
+        t.equal(
+          nonCriticalError?.rebalanceSkipReason,
+          REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
+          'non-critical partitions should still respect empty-cache admission backoff',
+        );
+
+        await coordinator.ensureConcurrentOperationBudgetAllowed(
+          OperationType.REPLACE,
+          {
+            partitionId: 'control_plane_publications-p1',
+          },
+        );
+        t.ok(
+          sqlQueryCalls > 0,
+          'critical partition create admission should issue authoritative operation-count reads',
+        );
+      } finally {
+        await coordinator.shutdown();
+      }
+    });
+
+  test(
+    'RebalanceCoordinator keeps priority add budget independent from ' +
+    'non-priority in-flight adds',
+    async (t) => {
+      const coordinator = new RebalanceCoordinator({
+        nodeId: 'node-local',
+        transactionCoordinator: createTransactionCoordinator(),
+        systemTableCache: {
+          get() {
+            return null;
+          },
+          filter(tableName) {
+            if (tableName !== 'replica_operations') {
+              return [];
+            }
+            return [{
+              operation_id: 'op-non-priority',
+              type: 'REPLACE',
+              partition_id: 'users-p1',
+              source_node_id: 'node-local',
+              target_node_id: 'node-remote',
+              replica_id: 'users-p1-r2',
+              status: 'syncing',
+              workflow_step: 'SYNCING',
+              created_at: 100,
+              updated_at: 101,
+              completed_at: null,
+              error_message: null,
+              steps_history: '[]',
+            }];
+          },
+        },
+        cdcIntegrationService: {
+          async waitForCacheUpdate() {},
+        },
+        tablePolicyService: {
+          async getPolicyForPartition() {
+            return {minReplicaCount: 1};
+          },
+        },
+        messageRouter: {
+          async deliver() {
+            return {acknowledged: true, status: 'completed'};
+          },
+        },
+        sqlQueryEngine: {
+          async executeQuery() {
+            return {success: true, rows: [], changes: 1};
+          },
+        },
+        ...createStorageOwners(),
+        enableTimeouts: false,
+      });
+      coordinator.initialize();
+      coordinator.config.maxConcurrentAdds = 1;
+
+      try {
+        let nonPriorityError = null;
+        try {
+          await coordinator.ensureConcurrentOperationBudgetAllowed(
+            OperationType.REPLACE,
+            {
+              partitionId: 'users-p2',
+            },
+          );
+        } catch (error) {
+          nonPriorityError = error;
+        }
+        t.equal(
+          nonPriorityError?.rebalanceSkipReason,
+          REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
+          'non-priority add/replace should still respect shared add budget',
+        );
+
+        await coordinator.ensureConcurrentOperationBudgetAllowed(
+          OperationType.REPLACE,
+          {
+            partitionId: 'control_plane_publications-p1',
+          },
+        );
+        t.pass(
+          'priority control-plane add/replace should use its dedicated add budget lane',
+        );
+      } finally {
+        await coordinator.shutdown();
+      }
+    },
+  );
+
+  test(
+    'RebalanceCoordinator lets repeated critical dispatch retry grace consume the enclosing operation budget',
+    async (t) => {
+      const TRANSITION_GRACE_OPERATION_ID = 'op-priority-sending-grace-budget';
+      const PRIORITY_PARTITION_ID = 'replica_operations-p1';
+      const BASE_CREATED_AT_MS = 1_000_000;
+      const BASE_UPDATED_AT_MS = BASE_CREATED_AT_MS + 10_000;
+      const FIRST_GRACE_RECORDED_AT_MS = BASE_UPDATED_AT_MS + 10_000;
+      const SECOND_GRACE_RECORDED_AT_MS = BASE_UPDATED_AT_MS + 55_000;
+      const RETRY_DELAY_MS = 5_000;
+      const originalDateNow = Date.now;
+      let nowMs = FIRST_GRACE_RECORDED_AT_MS;
+      Date.now = () => nowMs;
+
+      const coordinator = new RebalanceCoordinator({
+        nodeId: 'node-local',
+        transactionCoordinator: createTransactionCoordinator(),
+        systemTableCache: {
+          get() {
+            return null;
+          },
+        },
+        cdcIntegrationService: {
+          async waitForCacheUpdate() {},
+        },
+        tablePolicyService: {
+          async getPolicyForPartition() {
+            return {minReplicaCount: 1};
+          },
+        },
+        messageRouter: {
+          async deliver() {
+            return {acknowledged: true, status: 'completed'};
+          },
+        },
+        sqlQueryEngine: {
+          async executeQuery() {
+            return {success: true, rows: [], changes: 1};
+          },
+        },
+        ...createStorageOwners(),
+        enableTimeouts: false,
+      });
+      coordinator.initialize();
+
+      try {
+        coordinator.workflowOwner.recordTransitionRetryGrace(
+          TRANSITION_GRACE_OPERATION_ID,
+          {
+            workflowStep: WORKFLOW_STEP.SENDING,
+            partitionId: PRIORITY_PARTITION_ID,
+            updatedAt: BASE_UPDATED_AT_MS,
+            createdAt: BASE_CREATED_AT_MS,
+          },
+          RETRY_DELAY_MS,
+        );
+
+        nowMs = SECOND_GRACE_RECORDED_AT_MS;
+        coordinator.workflowOwner.recordTransitionRetryGrace(
+          TRANSITION_GRACE_OPERATION_ID,
+          {
+            workflowStep: WORKFLOW_STEP.SENDING,
+            partitionId: PRIORITY_PARTITION_ID,
+            updatedAt: BASE_UPDATED_AT_MS,
+            createdAt: BASE_CREATED_AT_MS,
+          },
+          RETRY_DELAY_MS,
+        );
+
+        const sendingTimeoutMs = coordinator.getTimeoutForStep(
+          WORKFLOW_STEP.SENDING,
+          {partitionId: PRIORITY_PARTITION_ID},
+        );
+
+        t.equal(
+          coordinator.workflowOwner.hasActiveTransitionRetryGrace(
+            TRANSITION_GRACE_OPERATION_ID,
+            BASE_UPDATED_AT_MS + sendingTimeoutMs + 1,
+          ),
+          true,
+        );
+        t.equal(
+          coordinator.workflowOwner.hasActiveTransitionRetryGrace(
+            TRANSITION_GRACE_OPERATION_ID,
+            BASE_CREATED_AT_MS + REBALANCE_OPERATION_BUDGET_MS + 1,
+          ),
+          false,
+        );
+      } finally {
+        Date.now = originalDateNow;
+        await coordinator.shutdown();
+      }
+    },
+  );
+
+  test(
+    'RebalanceCoordinator reserves one shared add slot for priority recovery ' +
+    'while non-priority scheduling remains capped below the full add budget',
+    async (t) => {
+      const coordinator = new RebalanceCoordinator({
+        nodeId: 'node-local',
+        transactionCoordinator: createTransactionCoordinator(),
+        systemTableCache: {
+          get() {
+            return null;
+          },
+        },
+        cdcIntegrationService: {
+          async waitForCacheUpdate() {},
+        },
+        tablePolicyService: {
+          async getPolicyForPartition() {
+            return {minReplicaCount: 1};
+          },
+        },
+        messageRouter: {
+          async deliver() {
+            return {acknowledged: true, status: 'completed'};
+          },
+        },
+        sqlQueryEngine: {
+          async executeQuery() {
+            return {success: true, rows: [], changes: 1};
+          },
+        },
+        ...createStorageOwners(),
+        enableTimeouts: false,
+      });
+      coordinator.initialize();
+      coordinator.config.maxConcurrentAdds = 2;
+      coordinator.controlPlaneReadinessService.membershipPublicationService = {
+        getLatestClusterPublicationSync() {
+          return {
+            status: 'PUBLISHED',
+            priorityPartitionSummary: {
+              satisfied: false,
+            },
+          };
+        },
+      };
+      coordinator.queryIncompleteOperations = async () => ([{
+        operationId: 'op-non-priority-inflight',
+        type: OperationType.ADD,
+        partitionId: 'users-p1',
+        sourceNodeId: 'node-local',
+        targetNodeId: 'node-remote-a',
+        replicaId: 'users-p1-r2',
+        workflowStep: WORKFLOW_STEP.CREATING,
+        status: 'creating',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        completedAt: null,
+        errorMessage: null,
+        stepsHistory: [],
+      }]);
+
+      try {
+        let nonPriorityError = null;
+        try {
+          await coordinator.ensureConcurrentOperationBudgetAllowed(
+            OperationType.ADD,
+            {
+              partitionId: 'users-p2',
+            },
+          );
+        } catch (error) {
+          nonPriorityError = error;
+        }
+        t.equal(
+          nonPriorityError?.rebalanceSkipReason,
+          REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
+          'non-priority add scheduling should preserve one reserved slot for priority recovery',
+        );
+
+        await coordinator.ensureConcurrentOperationBudgetAllowed(
+          OperationType.ADD,
+          {
+            partitionId: 'control_plane_publications-p1',
+          },
+        );
+        t.pass(
+          'priority control-plane add scheduling should still consume the reserved recovery slot',
+        );
+      } finally {
+        await coordinator.shutdown();
+      }
+    },
+  );
+
+  test(
+    'RebalanceCoordinator keeps reserved priority add capacity during transient publication-summary gaps and after immediate summary recovery',
+    async (t) => {
+      let now = 10_000;
+      let publicationRow = {
+        status: 'PUBLISHED',
+        priorityPartitionSummary: {
+          satisfied: false,
+        },
+      };
+      const coordinator = new RebalanceCoordinator({
+        nodeId: 'node-local',
+        transactionCoordinator: createTransactionCoordinator(),
+        nowFn: () => now,
+        priorityRecoveryActivityStaleGraceMs: 15_000,
+        systemTableCache: {
+          get() {
+            return null;
+          },
+        },
+        cdcIntegrationService: {
+          async waitForCacheUpdate() {},
+        },
+        tablePolicyService: {
+          async getPolicyForPartition() {
+            return {minReplicaCount: 1};
+          },
+        },
+        messageRouter: {
+          async deliver() {
+            return {acknowledged: true, status: 'completed'};
+          },
+        },
+        sqlQueryEngine: {
+          async executeQuery() {
+            return {success: true, rows: [], changes: 1};
+          },
+        },
+        ...createStorageOwners(),
+        enableTimeouts: false,
+      });
+      coordinator.initialize();
+      coordinator.config.maxConcurrentAdds = 2;
+      coordinator.getLatestMembershipPublicationRow = () => publicationRow;
+      coordinator.queryIncompleteOperations = async () => ([{
+        operationId: 'op-non-priority-inflight',
+        type: OperationType.ADD,
+        partitionId: 'users-p1',
+        sourceNodeId: 'node-local',
+        targetNodeId: 'node-remote-a',
+        replicaId: 'users-p1-r2',
+        workflowStep: WORKFLOW_STEP.CREATING,
+        status: 'creating',
+        createdAt: now,
+        updatedAt: now,
+        completedAt: null,
+        errorMessage: null,
+        stepsHistory: [],
+      }]);
+
+      try {
+        let activeRecoveryError = null;
+        try {
+          await coordinator.ensureConcurrentOperationBudgetAllowed(
+            OperationType.ADD,
+            {
+              partitionId: 'users-p2',
+            },
+          );
+        } catch (error) {
+          activeRecoveryError = error;
+        }
+        t.equal(
+          activeRecoveryError?.rebalanceSkipReason,
+          REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
+          'active recovery should reserve one shared add slot from non-priority scheduling',
+        );
+
+        publicationRow = null;
+        now += 5_000;
+
+        let staleSummaryError = null;
+        try {
+          await coordinator.ensureConcurrentOperationBudgetAllowed(
+            OperationType.ADD,
+            {
+              partitionId: 'users-p3',
+            },
+          );
+        } catch (error) {
+          staleSummaryError = error;
+        }
+        t.equal(
+          staleSummaryError?.rebalanceSkipReason,
+          REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
+          'transient summary loss should keep the reserved slot active during stale-grace window',
+        );
+
+        publicationRow = {
+          status: 'PUBLISHED',
+          priorityPartitionSummary: {
+            satisfied: true,
+          },
+        };
+        now += 1_000;
+        let satisfiedSummaryError = null;
+        try {
+          await coordinator.ensureConcurrentOperationBudgetAllowed(
+            OperationType.ADD,
+            {
+              partitionId: 'users-p4',
+            },
+          );
+        } catch (error) {
+          satisfiedSummaryError = error;
+        }
+        t.equal(
+          satisfiedSummaryError?.rebalanceSkipReason,
+          REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
+          'an immediately satisfied summary does not clear the reserved slot while the in-flight recovery signal is still active',
+        );
+      } finally {
+        await coordinator.shutdown();
+      }
+    },
+  );
+
+  test(
+    'RebalanceCoordinator caps repeated transition retry grace at the durable creating timeout ceiling',
+    async (t) => {
+      const TRANSITION_GRACE_OPERATION_ID = 'op-priority-creating-grace-cap';
+      const PRIORITY_PARTITION_ID = 'replica_operations-p1';
+      const BASE_UPDATED_AT_MS = 1_000_000;
+      const FIRST_GRACE_RECORDED_AT_MS = BASE_UPDATED_AT_MS + 10_000;
+      const SECOND_GRACE_RECORDED_AT_MS = BASE_UPDATED_AT_MS + 55_000;
+      const RETRY_DELAY_MS = 5_000;
+      const originalDateNow = Date.now;
+      let nowMs = FIRST_GRACE_RECORDED_AT_MS;
+      Date.now = () => nowMs;
+
+      const coordinator = new RebalanceCoordinator({
+        nodeId: 'node-local',
+        transactionCoordinator: createTransactionCoordinator(),
+        systemTableCache: {
+          get() {
+            return null;
+          },
+        },
+        cdcIntegrationService: {
+          async waitForCacheUpdate() {},
+        },
+        tablePolicyService: {
+          async getPolicyForPartition() {
+            return {minReplicaCount: 1};
+          },
+        },
+        messageRouter: {
+          async deliver() {
+            return {acknowledged: true, status: 'completed'};
+          },
+        },
+        sqlQueryEngine: {
+          async executeQuery() {
+            return {success: true, rows: [], changes: 1};
+          },
+        },
+        ...createStorageOwners(),
+        enableTimeouts: false,
+      });
+      coordinator.initialize();
+
+      try {
+        coordinator.workflowOwner.recordTransitionRetryGrace(
+          TRANSITION_GRACE_OPERATION_ID,
+          {
+            workflowStep: WORKFLOW_STEP.CREATING,
+            partitionId: PRIORITY_PARTITION_ID,
+            updatedAt: BASE_UPDATED_AT_MS,
+          },
+          RETRY_DELAY_MS,
+        );
+
+        nowMs = SECOND_GRACE_RECORDED_AT_MS;
+        coordinator.workflowOwner.recordTransitionRetryGrace(
+          TRANSITION_GRACE_OPERATION_ID,
+          {
+            workflowStep: WORKFLOW_STEP.CREATING,
+            partitionId: PRIORITY_PARTITION_ID,
+            updatedAt: BASE_UPDATED_AT_MS,
+          },
+          RETRY_DELAY_MS,
+        );
+
+        const creatingTimeoutMs = coordinator.getTimeoutForStep(
+          WORKFLOW_STEP.CREATING,
+          {partitionId: PRIORITY_PARTITION_ID},
+        );
+
+        t.equal(
+          coordinator.workflowOwner.hasActiveTransitionRetryGrace(
+            TRANSITION_GRACE_OPERATION_ID,
+            BASE_UPDATED_AT_MS + creatingTimeoutMs - 1,
+          ),
+          true,
+        );
+        t.equal(
+          coordinator.workflowOwner.hasActiveTransitionRetryGrace(
+            TRANSITION_GRACE_OPERATION_ID,
+            BASE_UPDATED_AT_MS + creatingTimeoutMs + 1,
+          ),
+          false,
+        );
+      } finally {
+        Date.now = originalDateNow;
+        await coordinator.shutdown();
+      }
+    },
+  );
+
+  test(
+    'RebalanceCoordinator reserves one emergency priority add slot for ' +
+    'transport-critical recovery while ordinary priority work is already in flight',
+    async (t) => {
+      const coordinator = new RebalanceCoordinator({
+        nodeId: 'node-local',
+        transactionCoordinator: createTransactionCoordinator(),
+        systemTableCache: {
+          get() {
+            return null;
+          },
+        },
+        cdcIntegrationService: {
+          async waitForCacheUpdate() {},
+        },
+        tablePolicyService: {
+          async getPolicyForPartition() {
+            return {minReplicaCount: 1};
+          },
+        },
+        messageRouter: {
+          async deliver() {
+            return {acknowledged: true, status: 'completed'};
+          },
+        },
+        sqlQueryEngine: {
+          async executeQuery() {
+            return {success: true, rows: [], changes: 1};
+          },
+        },
+        ...createStorageOwners(),
+        enableTimeouts: false,
+      });
+      coordinator.initialize();
+      coordinator.config.maxConcurrentAdds = 1;
+      coordinator.controlPlaneReadinessService.membershipPublicationService = {
+        getLatestClusterPublicationSync() {
+          return {
+            status: 'PUBLISHED',
+            priorityPartitionSummary: {
+              satisfied: false,
+            },
+          };
+        },
+      };
+      coordinator.queryIncompleteOperations = async () => ([{
+        operationId: 'op-priority-sql-write',
+        type: OperationType.ADD,
+        partitionId: 'sql_write_operations-p1',
+        sourceNodeId: 'node-local',
+        targetNodeId: 'node-remote-a',
+        replicaId: 'sql_write_operations-p1-r4',
+        workflowStep: WORKFLOW_STEP.CREATING,
+        status: 'creating',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        completedAt: null,
+        errorMessage: null,
+        stepsHistory: [],
+      }]);
+
+      try {
+        let ordinaryPriorityError = null;
+        try {
+          await coordinator.ensureConcurrentOperationBudgetAllowed(
+            OperationType.ADD,
+            {
+              partitionId: 'sql_transactions-p1',
+            },
+          );
+        } catch (error) {
+          ordinaryPriorityError = error;
+        }
+        t.equal(
+          ordinaryPriorityError?.rebalanceSkipReason,
+          REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
+          'ordinary priority add scheduling should preserve the emergency transport recovery slot',
+        );
+
+        await coordinator.ensureConcurrentOperationBudgetAllowed(
+          OperationType.ADD,
+          {
+            partitionId: 'control_plane_publications-p1',
+          },
+        );
+        t.pass(
+          'transport-critical control-plane add scheduling should still use the reserved emergency slot',
+        );
+      } finally {
+        await coordinator.shutdown();
+      }
+    },
+  );
+
+  test(
+    'RebalanceCoordinator keeps priority add admission on the critical pressure lane',
+    async (t) => {
+      const coordinator = new RebalanceCoordinator({
+        nodeId: 'node-local',
+        transactionCoordinator: createTransactionCoordinator(),
+        systemTableCache: {
+          get() {
+            return null;
+          },
+        },
+        cdcIntegrationService: {
+          async waitForCacheUpdate() {},
+        },
+        tablePolicyService: {
+          async getPolicyForPartition() {
+            return {minReplicaCount: 1};
+          },
+        },
+        messageRouter: {
+          getStats() {
+            return {
+              outboundQueues: {
+                'node-remote-a': {
+                  pending: 10,
+                  pendingCritical: 0,
+                  pendingBackground: 10,
+                  maxPending: 10,
+                  criticalReserve: 1,
+                  backgroundPendingLimit: 9,
+                },
+              },
+            };
+          },
+          async deliver() {
+            return {acknowledged: true, status: 'completed'};
+          },
+        },
+        sqlQueryEngine: {
+          async executeQuery() {
+            return {success: true, rows: [], changes: 1};
+          },
+        },
+        ...createStorageOwners(),
+        enableTimeouts: false,
+      });
+      coordinator.initialize();
+
+      try {
+        let ordinaryAddError = null;
+        try {
+          await coordinator.ensureConcurrentOperationBudgetAllowed(
+            OperationType.ADD,
+            {
+              partitionId: 'users-p1',
+            },
+          );
+        } catch (error) {
+          ordinaryAddError = error;
+        }
+
+        t.equal(
+          ordinaryAddError?.rebalanceSkipReason,
+          REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
+          'ordinary add admission should still defer when the local router is saturated',
+        );
+
+        await coordinator.ensureConcurrentOperationBudgetAllowed(
+          OperationType.ADD,
+          {
+            partitionId: 'control_plane_publications-p1',
+          },
+        );
+        t.pass(
+          'priority control-plane add admission should bypass background router pressure',
+        );
+      } finally {
+        await coordinator.shutdown();
+      }
+    },
+  );
+
+  test(
+    'RebalanceCoordinator uses a dedicated emergency create-budget scope for ' +
+    'transport-critical priority recovery',
+    async (t) => {
+      const workflowCoordinator = createWorkflowCoordinatorSpy();
+      const coordinator = createCoordinator({
+        nodeId: 'node-local',
+        transactionCoordinator: createTransactionCoordinator(),
+        operationWorkflowCoordinator: workflowCoordinator,
+        systemTableCache: {
+          get() {
+            return null;
+          },
+        },
+        cdcIntegrationService: {
+          async waitForCacheUpdate() {},
+        },
+        tablePolicyService: {
+          async getPolicyForPartition() {
+            return {minReplicaCount: 1};
+          },
+        },
+        messageRouter: {
+          async deliver() {
+            return {acknowledged: true, status: 'completed'};
+          },
+        },
+        sqlQueryEngine: {
+          async executeQuery(_sql) {
+            return {success: true, rows: [], changes: 1};
+          },
+        },
+        ...createStorageOwners(),
+        enableTimeouts: false,
+      });
+      coordinator.initialize();
+      disablePersistenceConfirmation(coordinator);
+      coordinator.getLatestMembershipPublicationRow = () => ({
+        priorityPartitionSummary: {
+          satisfied: false,
+        },
+      });
+
+      try {
+        await coordinator.createOperation({
+          type: OperationType.ADD,
+          partitionId: 'control_plane_publications-p1',
+          entityType: 'partition',
+          entityId: 'control_plane_publications-p1',
+          nodeId: 'node-remote',
+          enforceConcurrentOperationBudget: true,
+        });
+
+        t.equal(
+          workflowCoordinator.ownerKeys.includes(
+            'create-budget:emergency_priority_add',
+          ),
+          true,
+          'transport-critical priority recovery should bypass the shared add budget gate',
+        );
+      } finally {
+        await coordinator.shutdown();
+      }
+    },
+  );
+
+  test(
+    'RebalanceCoordinator does not treat REPLACE STOPPING phase as ' +
+    'add-budget in-flight for priority recovery',
+    async (t) => {
+      const coordinator = new RebalanceCoordinator({
+        nodeId: 'node-local',
+        transactionCoordinator: createTransactionCoordinator(),
+        systemTableCache: {
+          get() {
+            return null;
+          },
+        },
+        cdcIntegrationService: {
+          async waitForCacheUpdate() {},
+        },
+        tablePolicyService: {
+          async getPolicyForPartition() {
+            return {minReplicaCount: 1};
+          },
+        },
+        messageRouter: {
+          async deliver() {
+            return {acknowledged: true, status: 'completed'};
+          },
+        },
+        sqlQueryEngine: {
+          async executeQuery() {
+            return {success: true, rows: [], changes: 1};
+          },
+        },
+        ...createStorageOwners(),
+        enableTimeouts: false,
+      });
+      coordinator.initialize();
+      coordinator.config.maxConcurrentAdds = 1;
+      coordinator.queryIncompleteOperations = async () => ([{
+        operationId: 'op-priority-remove-phase',
+        type: 'REPLACE',
+        partitionId: 'sql_write_operations-p1',
+        sourceNodeId: 'node-local',
+        targetNodeId: 'node-remote-a',
+        replicaId: 'sql_write_operations-p1-r4',
+        status: 'removing',
+        workflowStep: 'STOPPING',
+        createdAt: 100,
+        updatedAt: 101,
+        completedAt: null,
+        errorMessage: null,
+        stepsHistory: [],
+      }]);
+
+      try {
+        await coordinator.ensureConcurrentOperationBudgetAllowed(
+          OperationType.REPLACE,
+          {
+            partitionId: 'sql_transaction_participants-p1',
+          },
+        );
+        t.pass(
+          'priority recovery should continue while prior REPLACE source-removal is still reconciling',
+        );
+      } finally {
+        await coordinator.shutdown();
+      }
+    },
+  );
+}

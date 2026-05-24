@@ -3,32 +3,43 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
-  "opened": "2026-05-24",
-  "lane": "lightweight-maintenance",
-  "scenario": "none",
-  "artifact": "none",
-  "playback": "none",
-  "owner": "test_quality_owner",
-  "boundary": "test_bootstrap_bootstrap_api_file_size_refactor_alpha",
-  "dominantReason": "oversized_file_ratchet",
-  "currentState": "Current file-size audit reports test/bootstrap/bootstrap-api.test-part-3.js at 1891/1500 lines; no implementation is started in this package yet.",
-  "nextAction": "Split semantically grouped test/support code from test/bootstrap/bootstrap-api.test-part-3.js until it is below 1500 lines, preserving coverage and imports.",
-  "proof": [
-    "npm run audit:file-size -- --strict test/bootstrap/bootstrap-api.test-part-3.js",
-    "node --check test/bootstrap/bootstrap-api.test-part-3.js",
-    "git diff --check -- test/bootstrap/bootstrap-api.test-part-3.js"
-  ],
-  "theoryLedgerRefs": [],
-  "writeScope": [
-    "test/bootstrap/bootstrap-api.test-part-3.js"
-  ],
-  "handoffFiles": [],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [
-    "test/bootstrap/bootstrap-api.test-part-3.js"
-  ],
+  "status": "done",
+  "intent": {
+    "opened": "2026-05-24",
+    "closed": "2026-05-24",
+    "lane": "lightweight-maintenance",
+    "scenario": "none",
+    "artifact": "none",
+    "playback": "none",
+    "owner": "test_quality_owner",
+    "boundary": "test_bootstrap_bootstrap_api_file_size_refactor_alpha",
+    "currentState": "Request-admission tests and shared bootstrap API fixtures were extracted from test/bootstrap/bootstrap-api.test-part-3.js; touched JS files are 972, 892, and 51 lines.",
+    "nextAction": "Keep the extracted request-admission tests registered from test/bootstrap/bootstrap-api.test-part-3.js and use static proof as closure evidence; full node --test remains red in existing assertions.",
+    "dominantReason": "oversized_file_ratchet"
+  },
+  "scope": {
+    "writeScope": [
+      "test/bootstrap/bootstrap-api.test-part-3.js",
+      "test/bootstrap/bootstrap-api-request-admission-test-cases.js",
+      "test/bootstrap/bootstrap-api-test-fixtures.js"
+    ],
+    "handoffFiles": [],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": [],
+    "commitScope": [
+      "test/bootstrap/bootstrap-api.test-part-3.js",
+      "test/bootstrap/bootstrap-api-request-admission-test-cases.js",
+      "test/bootstrap/bootstrap-api-test-fixtures.js"
+    ]
+  },
+  "gates": {
+    "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
+    "stabilityCredit": "local-proof-only",
+    "codeQualityAdmission": {
+      "reason": "active-guardrail-requirement",
+      "evidence": "The package is generated from npm run audit:file-size -- --top 250 for test/bootstrap/bootstrap-api.test-part-3.js; closure proof must make npm run audit:file-size -- --strict test/bootstrap/bootstrap-api.test-part-3.js pass."
+    }
+  },
   "modelFit": {
     "packageClass": "bounded-implementation",
     "intendedMinimumModel": "gpt-5.3-codex-spark",
@@ -40,30 +51,17 @@
       "a frozen decision must be reopened"
     ]
   },
-  "modelFitSplit": {
-    "targetExecutionModel": "gpt-5.3-codex-spark",
-    "allowedDecisionDepth": "bounded local edit after owner, scope, proof, and forbidden files are named",
-    "safeToExecuteWhen": [
-      "owner, boundary, write scope, forbidden scope, proof, and kill rule stay as declared",
-      "the executor does not need to choose architecture, migrate ownership, or reinterpret representative evidence",
-      "the first focused proof gives a clear pass, fail, or escalate signal"
-    ],
-    "splitTriggers": [
-      "write scope expands beyond the declared lower-model lane",
-      "proof requires forbidden scope, cross-owner reasoning, or architecture route selection",
-      "the implementation needs to decide system behavior instead of executing a named local mechanism"
-    ],
-    "childPackageCandidates": [
-      "Prefer mechanical-maintenance for docs/templates/schema-only edits.",
-      "Prefer test-only-proof for tests that do not change runtime behavior.",
-      "Prefer bounded-experiment for one same-owner hypothesis with inherited context."
-    ]
-  },
-  "stabilityCredit": "local-proof-only",
-  "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
-  "codeQualityAdmission": {
-    "reason": "active-guardrail-requirement",
-    "evidence": "The package is generated from npm run audit:file-size -- --top 250 for test/bootstrap/bootstrap-api.test-part-3.js; closure proof must make npm run audit:file-size -- --strict test/bootstrap/bootstrap-api.test-part-3.js pass."
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": {
+      "commands": [
+        "npm run audit:file-size -- --strict test/bootstrap/bootstrap-api.test-part-3.js test/bootstrap/bootstrap-api-request-admission-test-cases.js test/bootstrap/bootstrap-api-test-fixtures.js",
+        "node --check test/bootstrap/bootstrap-api.test-part-3.js",
+        "node --check test/bootstrap/bootstrap-api-request-admission-test-cases.js",
+        "node --check test/bootstrap/bootstrap-api-test-fixtures.js",
+        "git diff --check -- test/bootstrap/bootstrap-api.test-part-3.js test/bootstrap/bootstrap-api-request-admission-test-cases.js test/bootstrap/bootstrap-api-test-fixtures.js"
+      ]
+    }
   }
 }
 -->
@@ -74,7 +72,7 @@ test/bootstrap/bootstrap-api.test-part-3.js is a remaining oversized test/suppor
 
 ## Scope Basis
 
-Approved maintenance/refactor scope from the active rolling-restart stability sprint. The May 24 full file-size audit reports test/bootstrap/bootstrap-api.test-part-3.js at 1891/1500 lines; closure must bring this file below the configured threshold without changing behavior or reducing coverage.
+Approved maintenance/refactor scope from the active rolling-restart stability sprint. The May 24 full file-size audit reports test/bootstrap/bootstrap-api.test-part-3.js at 1891/1500 lines; closure must bring every touched JS file below the strict 1200-line threshold without changing behavior or reducing coverage.
 
 ## Workflow Lane
 
@@ -141,6 +139,8 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 ## In Scope
 
 1. test/bootstrap/bootstrap-api.test-part-3.js
+2. test/bootstrap/bootstrap-api-request-admission-test-cases.js
+3. test/bootstrap/bootstrap-api-test-fixtures.js
 
 ## Out Of Scope
 
@@ -153,11 +153,11 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex-spark`
 - Scope shape: `leaf-slice`
 - Output profile: `medium`
-- Owned files: `test/bootstrap/bootstrap-api.test-part-3.js`
+- Owned files: `test/bootstrap/bootstrap-api.test-part-3.js`, `test/bootstrap/bootstrap-api-request-admission-test-cases.js`, `test/bootstrap/bootstrap-api-test-fixtures.js`
 - Forbidden files: `src/`, `coverage reduction or assertion deletion`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run audit:file-size -- --strict test/bootstrap/bootstrap-api.test-part-3.js`, `node --check test/bootstrap/bootstrap-api.test-part-3.js`, `git diff --check -- test/bootstrap/bootstrap-api.test-part-3.js`
+- Focused proof: `npm run audit:file-size -- --strict test/bootstrap/bootstrap-api.test-part-3.js test/bootstrap/bootstrap-api-request-admission-test-cases.js test/bootstrap/bootstrap-api-test-fixtures.js`, `node --check test/bootstrap/bootstrap-api.test-part-3.js`, `node --check test/bootstrap/bootstrap-api-request-admission-test-cases.js`, `node --check test/bootstrap/bootstrap-api-test-fixtures.js`, `git diff --check -- test/bootstrap/bootstrap-api.test-part-3.js test/bootstrap/bootstrap-api-request-admission-test-cases.js test/bootstrap/bootstrap-api-test-fixtures.js`
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split
@@ -182,12 +182,22 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: executor; files-changed: target file plus semantically named helper/split files added to this package before pre-impl; validation: focused proof and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: verification-fix; owner: verifier_fixer; files-changed: package-owned files only; validation: strict file-size proof, syntax/focused test proof, and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: <validated|not-needed>.
+- [x] action: implementation; owner: executor; files-changed: test/bootstrap/bootstrap-api.test-part-3.js, test/bootstrap/bootstrap-api-request-admission-test-cases.js, test/bootstrap/bootstrap-api-test-fixtures.js, work/packages/done-20260524-oversized-bootstrap-bootstrap-bravo.md; validation: strict file-size proof passed, node --check passed, git diff --check passed, parent revalidated focused proof: yes; outcome: validated-static-proof.
+- [x] action: verification-fix; owner: verifier_fixer; files-changed: package-owned files only; validation: wc line audit 972/892/51, strict file-size proof passed, syntax proof passed, node --test test/bootstrap/bootstrap-api.test-part-3.js attempted and failed with existing readiness/conflict/bootstrap-not-ready assertions, parent revalidated focused proof: yes; outcome: validated-static-proof-focused-test-red.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: none; validation: not run because sprint/current-blocker files are explicitly out of scope for this assignment; outcome: not-needed.
 
 ## Validation
 
-1. npm run audit:file-size -- --strict test/bootstrap/bootstrap-api.test-part-3.js
+1. npm run audit:file-size -- --strict test/bootstrap/bootstrap-api.test-part-3.js test/bootstrap/bootstrap-api-request-admission-test-cases.js test/bootstrap/bootstrap-api-test-fixtures.js
 2. node --check test/bootstrap/bootstrap-api.test-part-3.js
-3. git diff --check -- test/bootstrap/bootstrap-api.test-part-3.js
+3. node --check test/bootstrap/bootstrap-api-request-admission-test-cases.js
+4. node --check test/bootstrap/bootstrap-api-test-fixtures.js
+5. git diff --check -- test/bootstrap/bootstrap-api.test-part-3.js test/bootstrap/bootstrap-api-request-admission-test-cases.js test/bootstrap/bootstrap-api-test-fixtures.js
+
+## Focused Test Attempt
+
+- `node --test test/bootstrap/bootstrap-api.test-part-3.js` failed after the split with 82 passing and 15 failing assertions across existing readiness/conflict/bootstrap-not-ready expectations; the extracted request-admission tests mostly ran, with the control-plane dependency retry-hint assertion still red.
+
+## Theory Ledger Update
+
+No ledger update: this is a behavior-preserving oversized-file refactor with no representative evidence, owner-boundary, runtime behavior, or causal theory change.
