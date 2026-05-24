@@ -3,32 +3,43 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
-  "opened": "2026-05-24",
-  "lane": "lightweight-maintenance",
-  "scenario": "none",
-  "artifact": "none",
-  "playback": "none",
-  "owner": "rebalancer_file_size_owner",
-  "boundary": "source_rebalancer_storage_admission_service_file_size_refactor",
-  "dominantReason": "oversized_file_ratchet",
-  "currentState": "Current file-size audit reports src/rebalancer/storage-admission-service.js at 837/800 lines; no implementation is started in this package yet.",
-  "nextAction": "Extract semantically named helper modules from src/rebalancer/storage-admission-service.js until it is below 800 lines, preserving behavior and the public entrypoint.",
-  "proof": [
-    "npm run audit:file-size -- --strict src/rebalancer/storage-admission-service.js",
-    "node --check src/rebalancer/storage-admission-service.js",
-    "git diff --check -- src/rebalancer/storage-admission-service.js"
-  ],
-  "theoryLedgerRefs": [],
-  "writeScope": [
-    "src/rebalancer/storage-admission-service.js"
-  ],
-  "handoffFiles": [],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [
-    "src/rebalancer/storage-admission-service.js"
-  ],
+  "status": "done",
+  "intent": {
+    "opened": "2026-05-24",
+    "closed": "2026-05-24",
+    "lane": "lightweight-maintenance",
+    "scenario": "none",
+    "artifact": "none",
+    "playback": "none",
+    "owner": "rebalancer_file_size_owner",
+    "boundary": "source_rebalancer_storage_admission_service_file_size_refactor",
+    "currentState": "src/rebalancer/storage-admission-service.js now delegates immutable admission result construction to src/rebalancer/storage-admission-result.js and is below the strict 800-line source threshold.",
+    "nextAction": "Keep the package open for handoff; do not rename, close, commit, push, or stage from this package execution pass.",
+    "dominantReason": "oversized_file_ratchet"
+  },
+  "scope": {
+    "writeScope": [
+      "src/rebalancer/storage-admission-service.js",
+      "src/rebalancer/storage-admission-result.js",
+      "work/packages/done-20260524-oversized-rebalancer-storage-admission-service.md"
+    ],
+    "handoffFiles": [],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": [],
+    "commitScope": [
+      "src/rebalancer/storage-admission-service.js",
+      "src/rebalancer/storage-admission-result.js",
+      "work/packages/done-20260524-oversized-rebalancer-storage-admission-service.md"
+    ]
+  },
+  "gates": {
+    "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
+    "stabilityCredit": "local-proof-only",
+    "codeQualityAdmission": {
+      "reason": "active-guardrail-requirement",
+      "evidence": "The package is generated from npm run audit:file-size -- --top 250 for src/rebalancer/storage-admission-service.js; closure proof must make npm run audit:file-size -- --strict src/rebalancer/storage-admission-service.js src/rebalancer/storage-admission-result.js pass."
+    }
+  },
   "modelFit": {
     "packageClass": "bounded-implementation",
     "intendedMinimumModel": "gpt-5.3-codex-spark",
@@ -40,30 +51,17 @@
       "a frozen decision must be reopened"
     ]
   },
-  "modelFitSplit": {
-    "targetExecutionModel": "gpt-5.3-codex-spark",
-    "allowedDecisionDepth": "bounded local edit after owner, scope, proof, and forbidden files are named",
-    "safeToExecuteWhen": [
-      "owner, boundary, write scope, forbidden scope, proof, and kill rule stay as declared",
-      "the executor does not need to choose architecture, migrate ownership, or reinterpret representative evidence",
-      "the first focused proof gives a clear pass, fail, or escalate signal"
-    ],
-    "splitTriggers": [
-      "write scope expands beyond the declared lower-model lane",
-      "proof requires forbidden scope, cross-owner reasoning, or architecture route selection",
-      "the implementation needs to decide system behavior instead of executing a named local mechanism"
-    ],
-    "childPackageCandidates": [
-      "Prefer mechanical-maintenance for docs/templates/schema-only edits.",
-      "Prefer test-only-proof for tests that do not change runtime behavior.",
-      "Prefer bounded-experiment for one same-owner hypothesis with inherited context."
-    ]
-  },
-  "stabilityCredit": "local-proof-only",
-  "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
-  "codeQualityAdmission": {
-    "reason": "active-guardrail-requirement",
-    "evidence": "The package is generated from npm run audit:file-size -- --top 250 for src/rebalancer/storage-admission-service.js; closure proof must make npm run audit:file-size -- --strict src/rebalancer/storage-admission-service.js pass."
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": {
+      "commands": [
+        "npm run audit:file-size -- --strict src/rebalancer/storage-admission-service.js src/rebalancer/storage-admission-result.js",
+        "node --check src/rebalancer/storage-admission-service.js",
+        "node --check src/rebalancer/storage-admission-result.js",
+        "node --test test/rebalancer/storage-admission-service.test.js",
+        "git diff --check -- src/rebalancer/storage-admission-service.js work/packages/done-20260524-oversized-rebalancer-storage-admission-service.md"
+      ]
+    }
   }
 }
 -->
@@ -79,7 +77,7 @@ Approved maintenance/refactor scope from the active rolling-restart stability sp
 ## Workflow Lane
 
 - Selected lane: `lightweight-maintenance`
-- Why this lane is sufficient: bounded workflow/tooling scope unless changed.
+- Why this lane is sufficient: bounded file-size refactor with no runtime ownership or public contract change.
 - Escalation trigger to a heavier lane: runtime ownership, shared contract, or representative scenario evidence changes.
 
 ## Core Logic Brief
@@ -141,6 +139,8 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 ## In Scope
 
 1. src/rebalancer/storage-admission-service.js
+2. src/rebalancer/storage-admission-result.js
+3. work/packages/done-20260524-oversized-rebalancer-storage-admission-service.md
 
 ## Out Of Scope
 
@@ -153,11 +153,11 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex-spark`
 - Scope shape: `leaf-slice`
 - Output profile: `medium`
-- Owned files: `src/rebalancer/storage-admission-service.js`
+- Owned files: `src/rebalancer/storage-admission-service.js`, `src/rebalancer/storage-admission-result.js`, `work/packages/done-20260524-oversized-rebalancer-storage-admission-service.md`
 - Forbidden files: `test/`, `runtime ownership or public contract changes`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run audit:file-size -- --strict src/rebalancer/storage-admission-service.js`, `node --check src/rebalancer/storage-admission-service.js`, `git diff --check -- src/rebalancer/storage-admission-service.js`
+- Focused proof: `npm run audit:file-size -- --strict src/rebalancer/storage-admission-service.js src/rebalancer/storage-admission-result.js`, `node --check src/rebalancer/storage-admission-service.js`, `node --check src/rebalancer/storage-admission-result.js`, `node --test test/rebalancer/storage-admission-service.test.js`, `git diff --check -- src/rebalancer/storage-admission-service.js work/packages/done-20260524-oversized-rebalancer-storage-admission-service.md`
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split
@@ -182,12 +182,17 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: executor; files-changed: target file plus semantically named helper/split files added to this package before pre-impl; validation: focused proof and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: verification-fix; owner: verifier_fixer; files-changed: package-owned files only; validation: strict file-size proof, syntax/focused test proof, and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: <validated|not-needed>.
+- [x] action: implementation; owner: executor; files-changed: src/rebalancer/storage-admission-service.js, src/rebalancer/storage-admission-result.js, work/packages/done-20260524-oversized-rebalancer-storage-admission-service.md; validation: `npm run work:validate -- --pre-impl work/packages/done-20260524-oversized-rebalancer-storage-admission-service.md` passed before implementation and after helper scope update; strict file-size audit passed for both touched source files; `node --check` passed for both touched JS files; public API import smoke passed; `node --test test/rebalancer/storage-admission-service.test.js` passed 34 suites / 97 tests; parent revalidated focused proof: yes; no ledger update; outcome: validated.
+- [x] action: verification-fix; owner: verifier_fixer; files-changed: package-owned files only; validation: strict file-size proof, syntax proof, public API import smoke, focused storage admission test, package closure validation, tracked whitespace diff check, and untracked helper whitespace check pass; parent revalidated focused proof: yes; no ledger update; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: none; validation: not needed because this pass did not close/rename the package or update current-blocker; no ledger update; outcome: not-needed.
+
+No ledger update: this is a behavior-preserving oversized-file refactor with no representative evidence or theory-ledger truth change.
 
 ## Validation
 
-1. npm run audit:file-size -- --strict src/rebalancer/storage-admission-service.js
+1. npm run audit:file-size -- --strict src/rebalancer/storage-admission-service.js src/rebalancer/storage-admission-result.js
 2. node --check src/rebalancer/storage-admission-service.js
-3. git diff --check -- src/rebalancer/storage-admission-service.js
+3. node --check src/rebalancer/storage-admission-result.js
+4. node --test test/rebalancer/storage-admission-service.test.js
+5. git diff --check -- src/rebalancer/storage-admission-service.js work/packages/done-20260524-oversized-rebalancer-storage-admission-service.md
+6. git diff --check --no-index /dev/null src/rebalancer/storage-admission-result.js
