@@ -224,7 +224,7 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
      - [Refactor oversized source file src/debug-runtime/debug-metadata-service.js](../packages/done-20260524-oversized-debug-runtime-debug-metadata-service.md)
      - [Refactor oversized source file src/bootstrap/shared/node-registration-owner.js](../packages/done-20260524-oversized-bootstrap-shared-node-registration-owner.md)
      - [Refactor oversized source file src/topology/latency-group-manager.js](../packages/done-20260524-oversized-topology-latency-group-manager.md)
-     - [Refactor oversized source file src/message-group/message-group-service-runtime-methods-class-part-1.js](../packages/todo-20260524-oversized-message-group-message-group-service-runtime-alpha.md)
+     - [Refactor oversized source file src/message-group/message-group-service-runtime-methods-class-part-1.js](../packages/done-20260524-oversized-message-group-message-group-service-runtime-alpha.md)
      - [Refactor oversized source file src/control-plane/priority-recovery-dispatch-snapshot.js](../packages/done-20260524-oversized-control-plane-priority-recovery-dispatch-snapshot.md)
      - [Refactor oversized source file src/logging/logging-service.js](../packages/done-20260524-oversized-logging-logging-service.md)
      - [Refactor oversized source file src/message-group/message-group-service-class-part-1.js](../packages/todo-20260524-oversized-message-group-message-group-alpha.md)

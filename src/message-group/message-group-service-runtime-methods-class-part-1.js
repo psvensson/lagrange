@@ -1,3 +1,11 @@
+import {
+  applyCDCEvent as runApplyCDCEvent,
+  emitCDCAppliedEvents as runEmitCDCAppliedEvents,
+  handleLatencyCdcPropagationBatchMessage as runHandleLatencyBatchMessage,
+  handleLatencyCdcPropagationMessage as runHandleLatencyMessage,
+  normalizeCDCBatchEvents as runNormalizeCDCBatchEvents,
+} from './message-group-service-cdc-propagation-runtime-methods.js';
+
 const LOCAL_STR_WWEY1 = 'Deferred Raft response delivery';
 const LOCAL_STR_OMLJF = 'Failed to send Raft response';
 
@@ -28,6 +36,17 @@ function createMessageGroupServiceRuntimeMethodsClassPart1(deps = {}) {
     shouldDeferImmediateDeliveryRetry,
     uuidv4,
   } = deps;
+  const cdcPropagationRuntimeDeps = {
+    CDC_FORWARD_MAX_RELAY_DEPTH,
+    MESSAGE_GROUP_APPLICATION_ERROR_MSG,
+    MESSAGE_GROUP_APPLICATION_STATUS,
+    MESSAGE_GROUP_CDC_ERROR_MSG,
+    MESSAGE_GROUP_CDC_INGRESS_ACTION,
+    MESSAGE_GROUP_SERVICE_LITERAL,
+    NUM,
+    buildLatencyCdcPropagationResult,
+    normalizeCauseId,
+  };
 
   class MessageGroupServiceRuntimeMethodsPart1 {
     async sendMessage(targetService, message, options = {}) {
@@ -577,120 +596,12 @@ function createMessageGroupServiceRuntimeMethodsClassPart1(deps = {}) {
      * @private
      */
     async handleLatencyCdcPropagationMessage(messageId, payload) {
-      const tableName = payload.tableName;
-      const operation = payload.operation;
-      const data = payload.data;
-      const eventTimestamp =
-        typeof payload.timestamp === 'string' &&
-        payload.timestamp.length > NUM.ZERO ?
-          payload.timestamp :
-          null;
-      const causeId = normalizeCauseId(payload.causeId);
-      const replayOnly = payload?.replayOnly === true;
-      const relayDepth =
-        Number.isInteger(payload.relayDepth) && payload.relayDepth >= NUM.ZERO ?
-          payload.relayDepth :
-          NUM.ZERO;
-      if (!tableName || !operation || !data) {
-        throw new Error(
-          MESSAGE_GROUP_APPLICATION_ERROR_MSG.INVALID_LATENCY_CDC_PAYLOAD,
-        );
-      }
-      // Followers relay toward the current leader without applying locally.
-      // Allow one additional bounded hop so stale first-hop routing can
-      // converge during elections without creating open-ended loops.
-      if (!this.isCurrentRaftLeader()) {
-        if (
-          this.shouldUseStrictCDCForwarding({
-            tableName,
-            operation,
-          })
-        ) {
-          const ingressDecision = this.resolveCdcIngressDecision({
-            tableName,
-            operation,
-            relayDepth,
-          });
-          if (
-            ingressDecision.action === MESSAGE_GROUP_CDC_INGRESS_ACTION.DEFER
-          ) {
-            return buildLatencyCdcPropagationResult({
-              messageId,
-              status: MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_PROPAGATED,
-              acknowledged: true,
-              success: false,
-              error:
-                ingressDecision.reason ||
-                MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
-              deferRetry: true,
-              retryAfterMs: Number.isFinite(
-                ingressDecision.strictForwardRetryAfterMs,
-              ) ?
-                ingressDecision.strictForwardRetryAfterMs :
-                this.resolveStrictCdcForwardRetryAfterMs(),
-              tableName,
-              operation,
-            });
-          }
-          if (
-            ingressDecision.action ===
-            MESSAGE_GROUP_CDC_INGRESS_ACTION.APPLY_LOCAL
-          ) {
-            const applyOptions = {
-              skipSubscriptionCheck: true,
-              relayDepth,
-            };
-            if (eventTimestamp) {
-              applyOptions.timestamp = eventTimestamp;
-            }
-            if (causeId) {
-              applyOptions.causeId = causeId;
-            }
-            if (replayOnly) {
-              applyOptions.replayOnly = true;
-            }
-            await this.applyCDCEvent(tableName, operation, data, applyOptions);
-            return buildLatencyCdcPropagationResult({
-              messageId,
-              status: MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_PROPAGATED,
-              acknowledged: true,
-              tableName,
-              operation,
-            });
-          }
-        }
-        if (relayDepth >= CDC_FORWARD_MAX_RELAY_DEPTH) {
-          throw new Error(MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN);
-        }
-        await this.forwardCDCEventToLeader(tableName, operation, data, {
-          timestamp: eventTimestamp || undefined,
-          relayDepth: relayDepth + NUM.ONE,
-          causeId,
-          replayOnly,
-        });
-        return buildLatencyCdcPropagationResult({
-          messageId,
-          status: MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_PROPAGATED,
-          acknowledged: true,
-          tableName,
-          operation,
-        });
-      }
-      const applyOptions = {skipSubscriptionCheck: true};
-      if (eventTimestamp) {
-        applyOptions.timestamp = eventTimestamp;
-      }
-      if (causeId) {
-        applyOptions.causeId = causeId;
-      }
-      await this.applyCDCEvent(tableName, operation, data, applyOptions);
-      return buildLatencyCdcPropagationResult({
+      return runHandleLatencyMessage(
+        this,
+        cdcPropagationRuntimeDeps,
         messageId,
-        status: MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_PROPAGATED,
-        acknowledged: true,
-        tableName,
-        operation,
-      });
+        payload,
+      );
     }
     /**
      * Handle grouped-latency CDC batch propagation message.
@@ -700,95 +611,12 @@ function createMessageGroupServiceRuntimeMethodsClassPart1(deps = {}) {
      * @private
      */
     async handleLatencyCdcPropagationBatchMessage(messageId, payload) {
-      const events = Array.isArray(payload.events) ? payload.events : [];
-      const replayOnly = payload?.replayOnly === true;
-      const relayDepth =
-        Number.isInteger(payload.relayDepth) && payload.relayDepth >= NUM.ZERO ?
-          payload.relayDepth :
-          NUM.ZERO;
-      if (
-        events.length === NUM.ZERO ||
-        events.some(
-          (event) => !event?.tableName || !event?.operation || !event?.data,
-        )
-      ) {
-        throw new Error(
-          MESSAGE_GROUP_APPLICATION_ERROR_MSG.INVALID_LATENCY_CDC_BATCH_PAYLOAD,
-        );
-      }
-      if (!this.isCurrentRaftLeader()) {
-        const strictEvent = events.find((event) => {
-          return this.shouldUseStrictCDCForwarding({
-            tableName: event?.tableName || null,
-            operation: event?.operation || null,
-          });
-        });
-        if (strictEvent) {
-          const ingressDecision = this.resolveCdcIngressDecision({
-            tableName: strictEvent.tableName,
-            operation: strictEvent.operation,
-            relayDepth,
-          });
-          if (
-            ingressDecision.action === MESSAGE_GROUP_CDC_INGRESS_ACTION.DEFER
-          ) {
-            return buildLatencyCdcPropagationResult({
-              messageId,
-              status:
-                MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_BATCH_PROPAGATED,
-              acknowledged: true,
-              success: false,
-              error:
-                ingressDecision.reason ||
-                MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
-              deferRetry: true,
-              retryAfterMs: Number.isFinite(
-                ingressDecision.strictForwardRetryAfterMs,
-              ) ?
-                ingressDecision.strictForwardRetryAfterMs :
-                this.resolveStrictCdcForwardRetryAfterMs(),
-              eventCount: events.length,
-            });
-          }
-          if (
-            ingressDecision.action ===
-            MESSAGE_GROUP_CDC_INGRESS_ACTION.APPLY_LOCAL
-          ) {
-            await this.applyCDCBatch(events, {
-              skipSubscriptionCheck: true,
-              replayOnly,
-              relayDepth,
-            });
-            return buildLatencyCdcPropagationResult({
-              messageId,
-              status:
-                MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_BATCH_PROPAGATED,
-              acknowledged: true,
-              eventCount: events.length,
-            });
-          }
-        }
-        if (relayDepth >= CDC_FORWARD_MAX_RELAY_DEPTH) {
-          throw new Error(MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN);
-        }
-        await this.forwardCDCBatchToLeader(events, {
-          relayDepth: relayDepth + NUM.ONE,
-          replayOnly,
-        });
-        return buildLatencyCdcPropagationResult({
-          messageId,
-          status: MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_BATCH_PROPAGATED,
-          acknowledged: true,
-          eventCount: events.length,
-        });
-      }
-      await this.applyCDCBatch(events, {skipSubscriptionCheck: true});
-      return {
+      return runHandleLatencyBatchMessage(
+        this,
+        cdcPropagationRuntimeDeps,
         messageId,
-        status: MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_BATCH_PROPAGATED,
-        acknowledged: true,
-        eventCount: events.length,
-      };
+        payload,
+      );
     }
     /**
      * Acknowledge a message as successfully processed.
@@ -860,15 +688,11 @@ function createMessageGroupServiceRuntimeMethodsClassPart1(deps = {}) {
      * @return {Promise<void>}
      */
     async applyCDCEvent(tableName, operation, data, options = {}) {
-      return this.applyCDCBatch(
-        [
-          {
-            tableName,
-            operation,
-            data,
-            ...options,
-          },
-        ],
+      return runApplyCDCEvent(
+        this,
+        tableName,
+        operation,
+        data,
         options,
       );
     }
@@ -880,28 +704,12 @@ function createMessageGroupServiceRuntimeMethodsClassPart1(deps = {}) {
      * @private
      */
     normalizeCDCBatchEvents(events, options = {}) {
-      return (Array.isArray(events) ? events : [])
-        .filter((event) => event?.tableName && event?.operation && event?.data)
-        .map((event) => {
-          const timestamp =
-            typeof event.timestamp === 'string' &&
-            event.timestamp.length > NUM.ZERO ?
-              event.timestamp :
-              typeof options.timestamp === 'string' &&
-                  options.timestamp.length > NUM.ZERO ?
-                options.timestamp :
-                this.hlcClock.now().toString();
-          const causeId = normalizeCauseId(event.causeId ?? options.causeId);
-          return {
-            tableName: event.tableName,
-            operation: event.operation,
-            data: event.data,
-            timestamp,
-            causeId,
-            replayOnly:
-              event.replayOnly === true || options.replayOnly === true,
-          };
-        });
+      return runNormalizeCDCBatchEvents(
+        this,
+        cdcPropagationRuntimeDeps,
+        events,
+        options,
+      );
     }
     /**
      * Emit canonical cdcApplied notifications for one or more events.
@@ -910,15 +718,12 @@ function createMessageGroupServiceRuntimeMethodsClassPart1(deps = {}) {
      * @private
      */
     emitCDCAppliedEvents(events, logIndex = null) {
-      for (const event of events) {
-        this.emit(MESSAGE_GROUP_SERVICE_LITERAL.CDCAPPLIED, {
-          tableName: event.tableName,
-          operation: event.operation,
-          data: event.data,
-          logIndex,
-          causeId: normalizeCauseId(event.causeId),
-        });
-      }
+      return runEmitCDCAppliedEvents(
+        this,
+        cdcPropagationRuntimeDeps,
+        events,
+        logIndex,
+      );
     }
     normalizeLeaderReplicaId(candidate) {
       return this.forwardingOwner.normalizeLeaderReplicaId(candidate);
