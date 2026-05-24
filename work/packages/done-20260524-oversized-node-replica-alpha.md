@@ -3,32 +3,43 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
-  "opened": "2026-05-24",
-  "lane": "lightweight-maintenance",
-  "scenario": "none",
-  "artifact": "none",
-  "playback": "none",
-  "owner": "node_file_size_owner",
-  "boundary": "source_node_replica_handler_file_size_refactor_alpha",
-  "dominantReason": "oversized_file_ratchet",
-  "currentState": "Current file-size audit reports src/node/replica-handler-class-part-2.js at 978/800 lines; no implementation is started in this package yet.",
-  "nextAction": "Extract semantically named helper modules from src/node/replica-handler-class-part-2.js until it is below 800 lines, preserving behavior and the public entrypoint.",
-  "proof": [
-    "npm run audit:file-size -- --strict src/node/replica-handler-class-part-2.js",
-    "node --check src/node/replica-handler-class-part-2.js",
-    "git diff --check -- src/node/replica-handler-class-part-2.js"
-  ],
-  "theoryLedgerRefs": [],
-  "writeScope": [
-    "src/node/replica-handler-class-part-2.js"
-  ],
-  "handoffFiles": [],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [
-    "src/node/replica-handler-class-part-2.js"
-  ],
+  "status": "done",
+  "intent": {
+    "opened": "2026-05-24",
+    "closed": "2026-05-24",
+    "lane": "lightweight-maintenance",
+    "scenario": "none",
+    "artifact": "none",
+    "playback": "none",
+    "owner": "node_file_size_owner",
+    "boundary": "source_node_replica_handler_file_size_refactor_alpha",
+    "currentState": "src/node/replica-handler-class-part-2.js is refactored to 617 lines by extracting REMOVE execution methods into src/node/replica-handler-remove-execution-methods.js; parent revalidated focused proof is green.",
+    "nextAction": "Close this package atomically with the thirteenth oversized-file wave.",
+    "dominantReason": "oversized_file_ratchet"
+  },
+  "scope": {
+    "writeScope": [
+      "src/node/replica-handler-class-part-2.js",
+      "src/node/replica-handler-remove-execution-methods.js",
+      "work/packages/done-20260524-oversized-node-replica-alpha.md"
+    ],
+    "handoffFiles": [],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": [],
+    "commitScope": [
+      "src/node/replica-handler-class-part-2.js",
+      "src/node/replica-handler-remove-execution-methods.js",
+      "work/packages/done-20260524-oversized-node-replica-alpha.md"
+    ]
+  },
+  "gates": {
+    "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
+    "stabilityCredit": "local-proof-only",
+    "codeQualityAdmission": {
+      "reason": "active-guardrail-requirement",
+      "evidence": "The package is generated from npm run audit:file-size -- --top 250 for src/node/replica-handler-class-part-2.js; closure proof must make npm run audit:file-size -- --strict src/node/replica-handler-class-part-2.js pass."
+    }
+  },
   "modelFit": {
     "packageClass": "bounded-implementation",
     "intendedMinimumModel": "gpt-5.3-codex-spark",
@@ -40,30 +51,18 @@
       "a frozen decision must be reopened"
     ]
   },
-  "modelFitSplit": {
-    "targetExecutionModel": "gpt-5.3-codex-spark",
-    "allowedDecisionDepth": "bounded local edit after owner, scope, proof, and forbidden files are named",
-    "safeToExecuteWhen": [
-      "owner, boundary, write scope, forbidden scope, proof, and kill rule stay as declared",
-      "the executor does not need to choose architecture, migrate ownership, or reinterpret representative evidence",
-      "the first focused proof gives a clear pass, fail, or escalate signal"
-    ],
-    "splitTriggers": [
-      "write scope expands beyond the declared lower-model lane",
-      "proof requires forbidden scope, cross-owner reasoning, or architecture route selection",
-      "the implementation needs to decide system behavior instead of executing a named local mechanism"
-    ],
-    "childPackageCandidates": [
-      "Prefer mechanical-maintenance for docs/templates/schema-only edits.",
-      "Prefer test-only-proof for tests that do not change runtime behavior.",
-      "Prefer bounded-experiment for one same-owner hypothesis with inherited context."
-    ]
-  },
-  "stabilityCredit": "local-proof-only",
-  "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
-  "codeQualityAdmission": {
-    "reason": "active-guardrail-requirement",
-    "evidence": "The package is generated from npm run audit:file-size -- --top 250 for src/node/replica-handler-class-part-2.js; closure proof must make npm run audit:file-size -- --strict src/node/replica-handler-class-part-2.js pass."
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": {
+      "commands": [
+        "npm run audit:file-size -- --strict src/node/replica-handler-class-part-2.js src/node/replica-handler-remove-execution-methods.js",
+        "node --check src/node/replica-handler-class-part-2.js && node --check src/node/replica-handler-remove-execution-methods.js",
+        "node --input-type=module -e \"import {ReplicaHandler} from './src/node/replica-handler.js'; const methods = ['removeReplicaAsync', 'reconcileRemovedReplicaCleanup', 'buildReplicaRemovalLifecycleSnapshot', 'shouldSkipReplicaRemovalLifecycleWrite']; for (const method of methods) { if (typeof ReplicaHandler.prototype[method] !== 'function') { throw new Error('missing prototype method ' + method); } } console.log('ReplicaHandler prototype smoke OK:', methods.join(', '));\"",
+        "node --test test/node/replica-handler.test.js test/node/replica-handler-cache-state.test.js test/node/replica-handler-idempotency.property.test.js test/node/replica-handler-owner-path-bypass.test.js test/node/replica-removal-graceful-shutdown.property.test.js",
+        "git diff --check -- src/node/replica-handler-class-part-2.js work/packages/done-20260524-oversized-node-replica-alpha.md",
+        "bash -lc 'git diff --no-index --check /dev/null src/node/replica-handler-remove-execution-methods.js; status=$?; if [ \"$status\" -eq 1 ]; then exit 0; fi; exit \"$status\"'"
+      ]
+    }
   }
 }
 -->
@@ -153,11 +152,11 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex-spark`
 - Scope shape: `leaf-slice`
 - Output profile: `medium`
-- Owned files: `src/node/replica-handler-class-part-2.js`
+- Owned files: `src/node/replica-handler-class-part-2.js`, `src/node/replica-handler-remove-execution-methods.js`, `work/packages/done-20260524-oversized-node-replica-alpha.md`
 - Forbidden files: `test/`, `runtime ownership or public contract changes`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run audit:file-size -- --strict src/node/replica-handler-class-part-2.js`, `node --check src/node/replica-handler-class-part-2.js`, `git diff --check -- src/node/replica-handler-class-part-2.js`
+- Focused proof: `npm run audit:file-size -- --strict src/node/replica-handler-class-part-2.js src/node/replica-handler-remove-execution-methods.js`, `node --check` on both touched JS files, import/prototype smoke, focused node/replica tests, scoped `git diff --check`, and no-index diff-check for the untracked helper
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split
@@ -182,12 +181,15 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: executor; files-changed: target file plus semantically named helper/split files added to this package before pre-impl; validation: focused proof and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: verification-fix; owner: verifier_fixer; files-changed: package-owned files only; validation: strict file-size proof, syntax/focused test proof, and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: <validated|not-needed>.
+- [x] action: implementation; owner: executor; files-changed: src/node/replica-handler-class-part-2.js, src/node/replica-handler-remove-execution-methods.js, work/packages/done-20260524-oversized-node-replica-alpha.md; validation: strict file-size proof, syntax proof, import/prototype smoke, focused node/replica tests, and scoped diff-check; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: verification-fix; owner: verifier_fixer; files-changed: package metadata only; validation: parent revalidated focused proof: yes; strict wave file-size/import smoke and parent node replica focused suite passed with 276/276 tests; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: none; validation: no ledger update needed before wave closure; outcome: not-needed.
 
 ## Validation
 
-1. npm run audit:file-size -- --strict src/node/replica-handler-class-part-2.js
-2. node --check src/node/replica-handler-class-part-2.js
-3. git diff --check -- src/node/replica-handler-class-part-2.js
+1. npm run audit:file-size -- --strict src/node/replica-handler-class-part-2.js src/node/replica-handler-remove-execution-methods.js
+2. node --check src/node/replica-handler-class-part-2.js && node --check src/node/replica-handler-remove-execution-methods.js
+3. node --input-type=module -e "import {ReplicaHandler} from './src/node/replica-handler.js'; const methods = ['removeReplicaAsync', 'reconcileRemovedReplicaCleanup', 'buildReplicaRemovalLifecycleSnapshot', 'shouldSkipReplicaRemovalLifecycleWrite']; for (const method of methods) { if (typeof ReplicaHandler.prototype[method] !== 'function') { throw new Error('missing prototype method ' + method); } } console.log('ReplicaHandler prototype smoke OK:', methods.join(', '));"
+4. node --test test/node/replica-handler.test.js test/node/replica-handler-cache-state.test.js test/node/replica-handler-idempotency.property.test.js test/node/replica-handler-owner-path-bypass.test.js test/node/replica-removal-graceful-shutdown.property.test.js
+5. git diff --check -- src/node/replica-handler-class-part-2.js work/packages/done-20260524-oversized-node-replica-alpha.md
+6. bash -lc 'git diff --no-index --check /dev/null src/node/replica-handler-remove-execution-methods.js; status=$?; if [ "$status" -eq 1 ]; then exit 0; fi; exit "$status"'

@@ -1,6 +1,7 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
+import {initializeSqlQueryEngineInstance} from
+  './sql-query-engine-instance-initializer.js';
 
-const LOCAL_STR_SQL_CONTROL_PLANE = 'sql_control_plane';
 const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_NUM_100 = 100;
@@ -19,285 +20,27 @@ const {
   CODE_LOOKUP_BY_FUNCTION_NAME_SQL,
   CONTROL_PLANE_READINESS_DIMENSION,
   CallbackExecutionHost,
-  ConfigurationManager,
-  DistributedQueryPlanner,
-  DistributedTransactionCoordinator,
-  DistributedWriteCoordinator,
   EXECUTION_MODE,
   LoggingService,
   METRICS_LOG_TAG,
   MODULE_MANIFEST_LOOKUP_BY_ARTIFACT_POINTER_SQL,
-  ManagedSplitTopologyAdapter,
-  ManagedSplitWorkflow,
   MigrationCoordinator,
   MigrationPipeline,
   NATIVE_CALLBACK_EXPORTS_ARG,
   NATIVE_CALLBACK_MODULE_ARG,
   NATIVE_CALLBACK_RETURN_LINE,
-  PRESSURE_WORK_CLASS,
-  PartitionCallbackDispatcher,
-  PartitionResolver,
-  QUERY_CONFIG_KEY,
   QUERY_DEFAULTS,
   QUERY_LOG_MSG,
-  QUERY_OPERATION,
   QUERY_SESSION,
   QUERY_SUBSYSTEM,
-  QueryExecutor,
-  SQL_PARSE_CACHE,
-  SqlParseCache,
-  TableCreationService,
-  TimeoutPolicy,
   ZERO_SHA256_DIGEST,
   createCallbackDriverRegistry,
-  createControlPlaneRuntimeBundle,
-  createEmptyTransactionRecoveryReplaySummary,
   isSqlRequest,
 } = SQL_QUERY_ENGINE_SHARED;
 
 class SQLQueryEngineSegment1 {
   constructor(options = {}) {
-    this.systemCache = options.systemCache || null;
-    this.messageRouter = options.messageRouter || null;
-    this.cdcIntegrationService = options.cdcIntegrationService || null;
-    this.nodeId = options.nodeId || QUERY_SUBSYSTEM.SQL_QUERY_ENGINE;
-    this.controlPlaneSystemTableGateway =
-      options.controlPlaneSystemTableGateway ||
-      createControlPlaneRuntimeBundle({
-        nodeId: this.nodeId,
-        getSqlQueryEngine: () => this,
-        getCdcIntegrationService: () => this.cdcIntegrationService,
-        getSystemTableCache: () => this.systemCache,
-        getMessageRouter: () => this.messageRouter,
-        getControlPlaneReadinessService: () =>
-          this.controlPlaneReadinessService,
-      }).controlPlaneSystemTableGateway;
-    this.rebalanceCoordinator = options.rebalanceCoordinator || null;
-    this.controlPlaneReadinessService =
-      options.controlPlaneReadinessService ||
-      this.rebalanceCoordinator?.controlPlaneReadinessService ||
-      null;
-    this.defaultRoutingReadinessDimension =
-      options.defaultRoutingReadinessDimension ||
-      CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE;
-    this.routingMetadataOverlay = options.routingMetadataOverlay || null;
-    this.authoritativeRoutingOverlayEntries = new Map();
-    this.bootstrapRoutingOverlayEntries = new Map();
-    this.authoritativeRoutingOverlay = {
-      getPartitionById: (partitionId) =>
-        this.getAuthoritativeRoutingOverlayPartition(partitionId),
-      getServicesForPartition: (partitionId) =>
-        this.getAuthoritativeRoutingOverlayServices(partitionId),
-      shouldMaskCacheServicesForPartition: (partitionId) =>
-        this.shouldAuthoritativeRoutingOverlayMaskCacheServices(partitionId),
-      refreshPartitionRouting: async (partitionId, overlayOptions = {}) =>
-        this.refreshAuthoritativeRoutingOverlay(partitionId, overlayOptions),
-    };
-    this.lastWriteSplitEvaluationByTable = new Map();
-    this.bootstrapRoutingOverlay = {
-      getPartitionById: (partitionId) =>
-        this.getBootstrapRoutingOverlayPartition(partitionId),
-      getServicesForPartition: (partitionId) =>
-        this.getBootstrapRoutingOverlayServices(partitionId),
-    };
-    this.nowFn = options.nowFn || (() => Date.now());
-    this.authoritativeControlPlaneView =
-      options.authoritativeControlPlaneView || null;
-    this.controlPlaneTimeoutPolicy =
-      options.controlPlaneTimeoutPolicy ||
-      new TimeoutPolicy({
-        operationName: LOCAL_STR_SQL_CONTROL_PLANE,
-        now: this.nowFn,
-      });
-    this.tablePartitionProvisioningTimeoutMs =
-      Number.isFinite(options.tablePartitionProvisioningTimeoutMs) &&
-      options.tablePartitionProvisioningTimeoutMs > LOCAL_NUM_ZERO ?
-        Math.floor(options.tablePartitionProvisioningTimeoutMs) :
-        QUERY_DEFAULTS.TABLE_CREATE_PROVISION_TIMEOUT_MS;
-    this.tablePartitionProvisioningPollIntervalMs =
-      Number.isFinite(options.tablePartitionProvisioningPollIntervalMs) &&
-      options.tablePartitionProvisioningPollIntervalMs > LOCAL_NUM_ZERO ?
-        Math.floor(options.tablePartitionProvisioningPollIntervalMs) :
-        QUERY_DEFAULTS.TABLE_CREATE_PROVISION_POLL_INTERVAL_MS;
-    this.tablePartitionTargetNodeConvergenceTimeoutMs =
-      Number.isFinite(options.tablePartitionTargetNodeConvergenceTimeoutMs) &&
-      options.tablePartitionTargetNodeConvergenceTimeoutMs > LOCAL_NUM_ZERO ?
-        Math.floor(options.tablePartitionTargetNodeConvergenceTimeoutMs) :
-        QUERY_DEFAULTS.TABLE_CREATE_TARGET_NODE_CONVERGENCE_TIMEOUT_MS;
-
-    this.partitionResolver = new PartitionResolver({
-      systemCache: this.systemCache,
-    });
-    this.distributedQueryPlanner =
-      options.distributedQueryPlanner ||
-      new DistributedQueryPlanner({
-        partitionResolver: this.partitionResolver,
-        getTablePartitions: (tableName) => this.getTablePartitions(tableName),
-        getTableInfo: (tableName) => this.getTableInfo(tableName),
-      });
-
-    this.queryExecutor = new QueryExecutor({
-      messageRouter: this.messageRouter,
-      systemCache: this.systemCache,
-      bootstrapTopologySnapshotOwner:
-        options.bootstrapTopologySnapshotOwner || null,
-      controlPlaneReadinessService: this.controlPlaneReadinessService,
-      defaultRoutingReadinessDimension: this.defaultRoutingReadinessDimension,
-      nodeId: this.nodeId,
-      unrefRetryDelayTimers: options.unrefRetryDelayTimers === true,
-    });
-    this.queryExecutor.setRoutingMetadataOverlay(
-      this.composeRoutingMetadataOverlay(
-        this.routingMetadataOverlay,
-        this.composeRoutingMetadataOverlay(
-          this.authoritativeRoutingOverlay,
-          this.bootstrapRoutingOverlay,
-        ),
-      ),
-    );
-    this.distributedWriteCoordinator =
-      options.distributedWriteCoordinator ||
-      new DistributedWriteCoordinator({
-        partitionResolver: this.partitionResolver,
-        queryExecutor: this.queryExecutor,
-        getTablePartitions: (tableName) => this.getTablePartitions(tableName),
-        getTableInfo: (tableName) => this.getTableInfo(tableName),
-      });
-    this.transactionCoordinator =
-      options.transactionCoordinator ||
-      new DistributedTransactionCoordinator({
-        beginParticipant: async (sessionId, partitionId, transactionEpoch) =>
-          this.deliverTransactionOperation(
-            sessionId,
-            partitionId,
-            QUERY_OPERATION.BEGIN,
-            {transactionEpoch},
-          ),
-        prepareParticipant: async (sessionId, partitionId) =>
-          this.deliverTransactionOperation(
-            sessionId,
-            partitionId,
-            QUERY_OPERATION.PREPARE,
-          ),
-        commitParticipant: async (sessionId, partitionId) =>
-          this.deliverTransactionOperation(
-            sessionId,
-            partitionId,
-            QUERY_OPERATION.COMMIT,
-          ),
-        rollbackParticipant: async (sessionId, partitionId) =>
-          this.deliverTransactionOperation(
-            sessionId,
-            partitionId,
-            QUERY_OPERATION.ROLLBACK,
-          ),
-        persistTransaction: async (record) =>
-          this.persistDistributedTransactionRow(record),
-        persistParticipant: async (record) =>
-          this.persistDistributedTransactionParticipantRow(record),
-        persistWriteOperation: async (record) =>
-          this.persistDistributedWriteOperationRow({
-            ...record,
-            workClass: PRESSURE_WORK_CLASS.CRITICAL,
-          }),
-        epochSource: options.transactionEpochSource,
-        loadRecoveryStateForSweep: async () =>
-          this.loadDistributedTransactionRecoveryState(),
-      });
-    this.managedSplitWorkflow = options.managedSplitWorkflow || null;
-
-    const tablePartitionProvisioner =
-      typeof options.tablePartitionProvisioner === 'function' ?
-        options.tablePartitionProvisioner :
-        this.rebalanceCoordinator ?
-          (context) => this.provisionInitialTablePartition(context) :
-          null;
-    this.partitionSplitMergeManager =
-      options.partitionSplitMergeManager || null;
-    this.tableCreationService = new TableCreationService({
-      systemCache: this.systemCache,
-      cdcIntegrationService: this.cdcIntegrationService,
-      controlPlaneSystemTableGateway: this.controlPlaneSystemTableGateway,
-      partitionSplitMergeManager: this.partitionSplitMergeManager,
-      calculateQuorumReplicaCount: (replicaCount) =>
-        this.calculateQuorumReplicaCount(replicaCount),
-      partitionProvisioner: tablePartitionProvisioner,
-    });
-
-    this.partitionCallbackDispatcher = new PartitionCallbackDispatcher({
-      sqlParser: {parse: (sql) => this.parse(sql)},
-      partitionResolver: this.partitionResolver,
-      queryExecutor: this.queryExecutor,
-      getTablePartitions: (name) => this.getTablePartitions(name),
-      isSystemTable: (name) => this.isSystemTable(name),
-    });
-
-    this.parseCache = new SqlParseCache(SQL_PARSE_CACHE.DEFAULT_MAX_SIZE);
-
-    this.logger = this.initLogger();
-    this.migrationAutoWireEnabled = options.migrationAutoWire !== false;
-    this.migrationCoordinator = options.migrationCoordinator || null;
-    if (
-      this.migrationAutoWireEnabled &&
-      !this.migrationCoordinator &&
-      this.systemCache
-    ) {
-      this.migrationCoordinator = new MigrationCoordinator({
-        sqlCore: this,
-        systemTableCache: this.systemCache,
-        transactionCoordinator: this.transactionCoordinator,
-        logger: this.logger,
-        now: this.nowFn,
-      });
-    }
-    this.migrationPipeline = options.migrationPipeline || null;
-    if (
-      this.migrationAutoWireEnabled &&
-      !this.migrationPipeline &&
-      this.migrationCoordinator
-    ) {
-      this.migrationPipeline = new MigrationPipeline({
-        migrationCoordinator: this.migrationCoordinator,
-        logger: this.logger,
-      });
-    }
-    this.managedSplitWorkflow =
-      this.managedSplitWorkflow ||
-      new ManagedSplitWorkflow({
-        nodeId: this.nodeId,
-        topologyAdapter: new ManagedSplitTopologyAdapter({
-          sqlQueryEngine: this,
-        }),
-      });
-
-    // Configuration
-    const config = ConfigurationManager.getInstance();
-    this.queryTimeoutMs =
-      config.get(QUERY_CONFIG_KEY.QUERY_TIMEOUT_MS) ||
-      QUERY_DEFAULTS.QUERY_TIMEOUT_MS;
-
-    // Unified runtime ownership components (startup-wired).
-    this.runtimeDriverRegistry = options.runtimeDriverRegistry || null;
-    this.serviceRuntimeLifecycle = options.serviceRuntimeLifecycle || null;
-    this.debugSessionResolver = options.debugSessionResolver || null;
-    this.traceCollector = options.traceCollector || null;
-    this.wasmExecutor = options.wasmExecutor || null;
-
-    // Wire query executor factory into lifecycle owner so service
-    // replicas can query tables through the standard SQL path.
-    this._wireQueryExecutorFactory(this.serviceRuntimeLifecycle);
-
-    // Backward-compatible alias for callers/tests expecting transaction state map.
-    this.activeTransactions = this.transactionCoordinator.transactionsBySession;
-    this.transactionStateRecovered = false;
-    this.transactionRecoveryReplayPromise = null;
-    this.lastTransactionRecoveryReplayResult =
-      createEmptyTransactionRecoveryReplaySummary();
-    this.distributedTransactionRecoveryActivated =
-      options.autoStartDistributedTransactionRecovery !== false;
-    if (this.distributedTransactionRecoveryActivated) {
-      void this.activateDistributedTransactionRecovery();
-    }
+    initializeSqlQueryEngineInstance(this, options);
   }
 
   /**

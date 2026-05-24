@@ -1,3 +1,5 @@
+import {defineMessageGroupServiceForwardingRuntimeMethods} from './message-group-service-forwarding-runtime-methods.js';
+import {defineMessageGroupServiceRebalancerRuntimeMethods} from './message-group-service-rebalancer-runtime-methods.js';
 import {createMessageGroupServiceRuntimeMethodsClassPart1} from './message-group-service-runtime-methods-class-part-1.js';
 
 function createMessageGroupServiceRuntimeMethodsClassPart2(deps = {}) {
@@ -8,16 +10,13 @@ function createMessageGroupServiceRuntimeMethodsClassPart2(deps = {}) {
     LifeRaft,
     MESSAGE_GROUP_CDC_ERROR_MSG,
     MESSAGE_GROUP_CDC_LOG_CONTEXT_FIELD,
-    MESSAGE_GROUP_SERVICE_ERROR_MSG,
     MESSAGE_GROUP_SERVICE_LITERAL,
     MESSAGE_GROUP_SERVICE_LOG_MSG,
     METRICS_LOG_TAG,
     NUM,
-    RebalancerEntityType,
     SYSTEM_TABLE_NAME,
     TIME_MS,
     TYPEOF,
-    UnifiedRebalancer,
     boundCdcForwardErrorDetail,
     buildDeferredCdcForwardError,
     getOrCreateCauseId,
@@ -343,161 +342,6 @@ function createMessageGroupServiceRuntimeMethodsClassPart2(deps = {}) {
       );
     }
     /**
-     * Resolve the current live Raft leader target without using bootstrap
-     * transport hints. This lets strict system-table forwarding honor the
-     * owner's current leader state without waiting for the control-plane echo.
-     * @return {{serviceId: string, address: string}|null}
-     * @private
-     */
-    resolveLiveLeaderForwardTarget() {
-      return this.forwardingOwner.resolveLiveLeaderForwardTarget();
-    }
-    resolveCdcIngressDecision(logContext = {}, options = {}) {
-      return this.forwardingOwner.resolveCdcIngressDecision(
-        logContext,
-        options,
-      );
-    }
-    async resolveCdcIngressDecisionWithRepair(logContext = {}, options = {}) {
-      return this.forwardingOwner.resolveCdcIngressDecisionWithRepair(
-        logContext,
-        options,
-      );
-    }
-    buildCDCForwardTargets(
-      cacheLeaderService,
-      cacheForwardService,
-      options = {},
-    ) {
-      return this.forwardingOwner.buildCDCForwardTargets(
-        cacheLeaderService,
-        cacheForwardService,
-        options,
-      );
-    }
-    shouldUseStrictCDCForwarding(logContext = {}) {
-      return this.forwardingOwner.shouldUseStrictCDCForwarding(logContext);
-    }
-    canAcceptCDCEvent(cdcEvent = {}) {
-      return this.forwardingOwner.canAcceptCDCEvent(cdcEvent);
-    }
-    getMetadataIngressReadiness(options = {}) {
-      return this.forwardingOwner.getMetadataIngressReadiness(options);
-    }
-    async resolveMetadataIngressForwardSelection(options = {}) {
-      return this.forwardingOwner.resolveMetadataIngressForwardSelection(
-        options,
-      );
-    }
-    async forwardMetadataIngressPayloadToLeader(payload, options = {}) {
-      return this.forwardingOwner.forwardMetadataIngressPayloadToLeader(
-        payload,
-        options,
-      );
-    }
-    isMetadataIngressReady(options = {}) {
-      return this.forwardingOwner.isMetadataIngressReady(options);
-    }
-    isStrictForwardTargetEligible(target = null) {
-      return this.forwardingOwner.isStrictForwardTargetEligible(target);
-    }
-    shouldAllowJoinConvergenceStrictTargeting() {
-      return this.forwardingOwner.shouldAllowJoinConvergenceStrictTargeting();
-    }
-    resolveJoinConvergenceBootstrapForwardTarget() {
-      return this.forwardingOwner.resolveJoinConvergenceBootstrapForwardTarget();
-    }
-    resolveCanonicalLeaderNodeIdFromCache() {
-      return this.forwardingOwner.resolveCanonicalLeaderNodeIdFromCache();
-    }
-    isLocalForwardTarget(serviceId, address = null) {
-      return this.forwardingOwner.isLocalForwardTarget(serviceId, address);
-    }
-    resolveForwardTargetNodeId(target = null) {
-      return this.forwardingOwner.resolveForwardTargetNodeId(target);
-    }
-    isStrictForwardNodeReady(nodeId) {
-      return this.forwardingOwner.isStrictForwardNodeReady(nodeId);
-    }
-    isStrictForwardNodeConnected(nodeId) {
-      return this.forwardingOwner.isStrictForwardNodeConnected(nodeId);
-    }
-    getForwardTargetSuppressionKeys(target = {}) {
-      return this.forwardingOwner.getForwardTargetSuppressionKeys(target);
-    }
-    pruneForwardTargetSuppressions(nowMs = this.now()) {
-      return this.forwardingOwner.pruneForwardTargetSuppressions(nowMs);
-    }
-    isForwardTargetSuppressed(target = {}) {
-      return this.forwardingOwner.isForwardTargetSuppressed(target);
-    }
-    suppressForwardTarget(target = {}) {
-      return this.forwardingOwner.suppressForwardTarget(target);
-    }
-    clearForwardTargetSuppression(target = {}) {
-      return this.forwardingOwner.clearForwardTargetSuppression(target);
-    }
-    shouldRepairForwardTopology(errorMessage) {
-      return this.forwardingOwner.shouldRepairForwardTopology(errorMessage);
-    }
-    canRepairAuthoritativeForwardTopology() {
-      return this.forwardingOwner.canRepairAuthoritativeForwardTopology();
-    }
-    async maybeRepairAuthoritativeForwardTopology(context = {}) {
-      return this.forwardingOwner.maybeRepairAuthoritativeForwardTopology(
-        context,
-      );
-    }
-    async repairAuthoritativeForwardTopology(context = {}) {
-      return this.forwardingOwner.repairAuthoritativeForwardTopology(context);
-    }
-    async applyAuthoritativeForwardTopologyRows(tableName, rows = []) {
-      return this.forwardingOwner.applyAuthoritativeForwardTopologyRows(
-        tableName,
-        rows,
-      );
-    }
-    async reconcileAuthoritativeForwardServiceRows(authoritativeRows = []) {
-      return this.forwardingOwner.reconcileAuthoritativeForwardServiceRows(
-        authoritativeRows,
-      );
-    }
-    getControlPlaneSystemTableGateway() {
-      return this.controlPlaneSystemTableGateway;
-    }
-    areForwardTopologyRowsEqual(left, right) {
-      return this.forwardingOwner.areForwardTopologyRowsEqual(left, right);
-    }
-    shouldSuppressForwardTarget(deliveryResult, errorMessage) {
-      return this.forwardingOwner.shouldSuppressForwardTarget(
-        deliveryResult,
-        errorMessage,
-      );
-    }
-    isForwardTargetBackpressured(deliveryResult, errorMessage) {
-      return this.forwardingOwner.isForwardTargetBackpressured(
-        deliveryResult,
-        errorMessage,
-      );
-    }
-    async forwardCDCEventToLeader(tableName, operation, data, options = {}) {
-      return this.forwardingOwner.forwardCDCEventToLeader(
-        tableName,
-        operation,
-        data,
-        options,
-      );
-    }
-    async forwardCDCBatchToLeader(events, options = {}) {
-      return this.forwardingOwner.forwardCDCBatchToLeader(events, options);
-    }
-    async forwardCDCPayloadToLeader(payload, logContext = {}) {
-      return this.forwardingOwner.forwardCDCPayloadToLeader(
-        payload,
-        logContext,
-      );
-    }
-    /**
      * Compute retry delay for CDC forward attempts.
      * @param {number} attempt
      * @return {number}
@@ -603,113 +447,6 @@ function createMessageGroupServiceRuntimeMethodsClassPart2(deps = {}) {
      */
     getWritableCache() {
       return this.systemTableCache;
-    }
-    /**
-     * Set the CDC integration service for raft role updates.
-     * @param {Object} cdcIntegrationService - CDC integration service.
-     */
-    setCdcIntegrationService(cdcIntegrationService) {
-      this.cdcIntegrationService = cdcIntegrationService;
-      this.maybeInitializeRebalancer();
-      this.flushRoleUpdate().catch((error) => {
-        this.logger.warn(
-          MESSAGE_GROUP_SERVICE_LITERAL.FAILED_TO_PERSIST_ROLE_UPDATE_AFTER_CDC_SERVICE_SET,
-          {
-            groupId: this.groupId,
-            replicaId: this.replicaId,
-            error: error.message,
-          },
-        );
-      });
-      this.flushLeaderNodeUpdate().catch((error) => {
-        this.logger.warn(
-          MESSAGE_GROUP_SERVICE_LITERAL.FAILED_TO_PERSIST_LEADER_UPDATE_AFTER_CDC_SERVICE_SET,
-          {
-            groupId: this.groupId,
-            replicaId: this.replicaId,
-            error: error.message,
-          },
-        );
-      });
-    }
-    /**
-     * Set table policy service for message-group rebalancing.
-     * @param {Object} tablePolicyService - Table policy service.
-     */
-    setTablePolicyService(tablePolicyService) {
-      this.tablePolicyService = tablePolicyService;
-      this.maybeInitializeRebalancer();
-    }
-    /**
-     * Set rebalance coordinator for message-group rebalancing.
-     * @param {Object} rebalanceCoordinator - Rebalance coordinator.
-     */
-    setRebalanceCoordinator(rebalanceCoordinator) {
-      this.rebalanceCoordinator = rebalanceCoordinator;
-      this.maybeInitializeRebalancer();
-    }
-    /**
-     * Initialize message-group rebalancer when leader and dependencies are ready.
-     * @private
-     */
-    maybeInitializeRebalancer() {
-      const backgroundReady = this.isBackgroundWorkReady();
-      if (this.rebalancer) {
-        this.rebalancer.systemTableCache = this.systemTableCache;
-        this.rebalancer.cdcIntegrationService = this.cdcIntegrationService;
-        this.rebalancer.tablePolicyService = this.tablePolicyService;
-        if (
-          typeof this.rebalancer.setRebalanceCoordinator !== TYPEOF.FUNCTION
-        ) {
-          throw new Error(
-            MESSAGE_GROUP_SERVICE_ERROR_MSG.MISSING_REBALANCER_SET_COORDINATOR,
-          );
-        }
-        this.rebalancer.setRebalanceCoordinator(this.rebalanceCoordinator);
-        this.rebalancer.messageRouter = this.transport;
-        this.rebalancer.sqlQueryEngine =
-          this.cdcIntegrationService?.sqlQueryEngine || null;
-        this.rebalancer.setLeader(backgroundReady && this.isLeaderReplica());
-        return;
-      }
-      if (!backgroundReady || !this.initialized || !this.isLeaderReplica()) {
-        return;
-      }
-      if (
-        !this.systemTableCache ||
-        !this.cdcIntegrationService ||
-        !this.tablePolicyService ||
-        !this.rebalanceCoordinator ||
-        !this.transport
-      ) {
-        return;
-      }
-      this.rebalancer = new UnifiedRebalancer({
-        entityId: this.groupId,
-        entityType: RebalancerEntityType.MESSAGE_GROUP,
-        systemTableCache: this.systemTableCache,
-        cdcIntegrationService: this.cdcIntegrationService,
-        tablePolicyService: this.tablePolicyService,
-        nodeId: this.nodeId,
-        messageRouter: this.transport,
-        sqlQueryEngine: this.cdcIntegrationService.sqlQueryEngine,
-        rebalanceCoordinator: this.rebalanceCoordinator,
-      });
-      this.rebalancer.initialize();
-      this.rebalancer.setLeader(backgroundReady && this.isLeaderReplica());
-    }
-    /**
-     * Update rebalancer leadership when raft role changes.
-     * @private
-     */
-    updateRebalancerLeadership() {
-      if (this.rebalancer) {
-        this.rebalancer.setLeader(
-          this.isBackgroundWorkReady() && this.isLeaderReplica(),
-        );
-        return;
-      }
-      this.maybeInitializeRebalancer();
     }
     cancelLeaderOwnedActivation() {
       this.leaderActivationGate.cancel({clearActivatedTerm: true});
@@ -922,17 +659,6 @@ function createMessageGroupServiceRuntimeMethodsClassPart2(deps = {}) {
       return new Promise((resolve) => setTimeout(resolve, ms));
     }
     /**
-     * Stop message-group rebalancing activity.
-     * @return {Promise<void>}
-     */
-    async quiesceRebalancing() {
-      if (this.rebalancer) {
-        this.rebalancer.setLeader(false);
-        this.rebalancer.shutdown();
-        this.rebalancer = null;
-      }
-    }
-    /**
      * Shutdown the message group service.
      * @return {Promise<void>}
      */
@@ -982,6 +708,14 @@ function createMessageGroupServiceRuntimeMethodsClassPart2(deps = {}) {
       });
     }
   }
+
+  defineMessageGroupServiceForwardingRuntimeMethods(
+    MessageGroupServiceRuntimeMethods.prototype,
+  );
+  defineMessageGroupServiceRebalancerRuntimeMethods(
+    MessageGroupServiceRuntimeMethods.prototype,
+    deps,
+  );
 
   return MessageGroupServiceRuntimeMethods;
 }
