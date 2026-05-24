@@ -1,34 +1,43 @@
-# Refactor oversized source file src/partition/managed-split-workflow-provisioning-methods.js
+# Refactor oversized source file src/query/sql-query-engine.js
 
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
-  "opened": "2026-05-24",
-  "lane": "lightweight-maintenance",
-  "scenario": "none",
-  "artifact": "none",
-  "playback": "none",
-  "owner": "partition_file_size_owner",
-  "boundary": "source_partition_managed_split_workflow_provisioning_methods_file_size_refactor",
-  "dominantReason": "oversized_file_ratchet",
-  "currentState": "Current file-size audit reports src/partition/managed-split-workflow-provisioning-methods.js at 1081/800 lines; no implementation is started in this package yet.",
-  "nextAction": "Extract semantically named helper modules from src/partition/managed-split-workflow-provisioning-methods.js until it is below 800 lines, preserving behavior and the public entrypoint.",
-  "proof": [
-    "npm run audit:file-size -- --strict src/partition/managed-split-workflow-provisioning-methods.js",
-    "node --check src/partition/managed-split-workflow-provisioning-methods.js",
-    "git diff --check -- src/partition/managed-split-workflow-provisioning-methods.js"
-  ],
-  "theoryLedgerRefs": [],
-  "writeScope": [
-    "src/partition/managed-split-workflow-provisioning-methods.js"
-  ],
-  "handoffFiles": [],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [
-    "src/partition/managed-split-workflow-provisioning-methods.js"
-  ],
+  "status": "done",
+  "intent": {
+    "opened": "2026-05-24",
+    "closed": "2026-05-24",
+    "lane": "lightweight-maintenance",
+    "scenario": "none",
+    "artifact": "none",
+    "playback": "none",
+    "owner": "query_file_size_owner",
+    "boundary": "source_query_sql_query_engine_file_size_refactor_alpha",
+    "currentState": "src/query/sql-query-engine.js is reduced from 1161 lines to 738 lines by extracting table/partition routing methods into src/query/sql-query-engine-table-routing-methods.js at 487 lines; focused proof and parent revalidation are green.",
+    "nextAction": "Close through the sprint workflow.",
+    "dominantReason": "oversized_file_ratchet"
+  },
+  "scope": {
+    "writeScope": [
+      "src/query/sql-query-engine.js",
+      "src/query/sql-query-engine-table-routing-methods.js"
+    ],
+    "handoffFiles": [],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": [],
+    "commitScope": [
+      "src/query/sql-query-engine.js",
+      "src/query/sql-query-engine-table-routing-methods.js"
+    ]
+  },
+  "gates": {
+    "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
+    "stabilityCredit": "local-proof-only",
+    "codeQualityAdmission": {
+      "reason": "active-guardrail-requirement",
+      "evidence": "The package is generated from npm run audit:file-size -- --top 250 for src/query/sql-query-engine.js; closure proof must make npm run audit:file-size -- --strict src/query/sql-query-engine.js pass."
+    }
+  },
   "modelFit": {
     "packageClass": "bounded-implementation",
     "intendedMinimumModel": "gpt-5.3-codex-spark",
@@ -40,41 +49,27 @@
       "a frozen decision must be reopened"
     ]
   },
-  "modelFitSplit": {
-    "targetExecutionModel": "gpt-5.3-codex-spark",
-    "allowedDecisionDepth": "bounded local edit after owner, scope, proof, and forbidden files are named",
-    "safeToExecuteWhen": [
-      "owner, boundary, write scope, forbidden scope, proof, and kill rule stay as declared",
-      "the executor does not need to choose architecture, migrate ownership, or reinterpret representative evidence",
-      "the first focused proof gives a clear pass, fail, or escalate signal"
-    ],
-    "splitTriggers": [
-      "write scope expands beyond the declared lower-model lane",
-      "proof requires forbidden scope, cross-owner reasoning, or architecture route selection",
-      "the implementation needs to decide system behavior instead of executing a named local mechanism"
-    ],
-    "childPackageCandidates": [
-      "Prefer mechanical-maintenance for docs/templates/schema-only edits.",
-      "Prefer test-only-proof for tests that do not change runtime behavior.",
-      "Prefer bounded-experiment for one same-owner hypothesis with inherited context."
-    ]
-  },
-  "stabilityCredit": "local-proof-only",
-  "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
-  "codeQualityAdmission": {
-    "reason": "active-guardrail-requirement",
-    "evidence": "The package is generated from npm run audit:file-size -- --top 250 for src/partition/managed-split-workflow-provisioning-methods.js; closure proof must make npm run audit:file-size -- --strict src/partition/managed-split-workflow-provisioning-methods.js pass."
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": {
+      "commands": [
+        "npm run audit:file-size -- --strict src/query/sql-query-engine.js src/query/sql-query-engine-table-routing-methods.js",
+        "node --check src/query/sql-query-engine.js",
+        "node --check src/query/sql-query-engine-table-routing-methods.js",
+        "git diff --check -- src/query/sql-query-engine.js src/query/sql-query-engine-table-routing-methods.js"
+      ]
+    }
   }
 }
 -->
 
 ## Why
 
-src/partition/managed-split-workflow-provisioning-methods.js is a remaining oversized source file at 1081/800 lines. This package owns one disjoint target in the zero-oversized backlog so parallel executors can refactor it without crossing package scopes.
+src/query/sql-query-engine.js is a remaining oversized source file at 1162/800 lines. This package owns one disjoint target in the zero-oversized backlog so parallel executors can refactor it without crossing package scopes.
 
 ## Scope Basis
 
-Approved maintenance/refactor scope from the active rolling-restart stability sprint. The May 24 full file-size audit reports src/partition/managed-split-workflow-provisioning-methods.js at 1081/800 lines; closure must bring this file below the configured threshold without changing behavior or reducing coverage.
+Approved maintenance/refactor scope from the active rolling-restart stability sprint. The May 24 full file-size audit reports src/query/sql-query-engine.js at 1162/800 lines; closure must bring this file below the configured threshold without changing behavior or reducing coverage.
 
 ## Workflow Lane
 
@@ -101,8 +96,8 @@ Approved maintenance/refactor scope from the active rolling-restart stability sp
 ## Rerun Decision Gate
 
 - Source artifact: `none`
-- Route owner: `partition_file_size_owner`
-- Route boundary: `source_partition_managed_split_workflow_provisioning_methods_file_size_refactor`
+- Route owner: `query_file_size_owner`
+- Route boundary: `source_query_sql_query_engine_file_size_refactor_alpha`
 - Route dominant reason: `oversized_file_ratchet`
 - Route causal outcome: `pending-before-rerun`
 - Stop mode: `pending-before-rerun`
@@ -140,7 +135,8 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. src/partition/managed-split-workflow-provisioning-methods.js
+1. src/query/sql-query-engine.js
+2. src/query/sql-query-engine-table-routing-methods.js
 
 ## Out Of Scope
 
@@ -153,11 +149,11 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex-spark`
 - Scope shape: `leaf-slice`
 - Output profile: `medium`
-- Owned files: `src/partition/managed-split-workflow-provisioning-methods.js`
+- Owned files: `src/query/sql-query-engine.js`, `src/query/sql-query-engine-table-routing-methods.js`
 - Forbidden files: `test/`, `runtime ownership or public contract changes`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run audit:file-size -- --strict src/partition/managed-split-workflow-provisioning-methods.js`, `node --check src/partition/managed-split-workflow-provisioning-methods.js`, `git diff --check -- src/partition/managed-split-workflow-provisioning-methods.js`
+- Focused proof: `npm run audit:file-size -- --strict src/query/sql-query-engine.js src/query/sql-query-engine-table-routing-methods.js`, `node --check src/query/sql-query-engine.js`, `node --check src/query/sql-query-engine-table-routing-methods.js`, `git diff --check -- src/query/sql-query-engine.js src/query/sql-query-engine-table-routing-methods.js`
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split
@@ -182,12 +178,14 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: executor; files-changed: target file plus semantically named helper/split files added to this package before pre-impl; validation: focused proof and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: verification-fix; owner: verifier_fixer; files-changed: package-owned files only; validation: strict file-size proof, syntax/focused test proof, and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: <validated|not-needed>.
+- [x] action: implementation; owner: executor; files-changed: `src/query/sql-query-engine.js`, `src/query/sql-query-engine-table-routing-methods.js`, `work/packages/done-20260524-oversized-query-sql-query-alpha.md`; validation: `npm run work:validate -- --pre-impl work/packages/done-20260524-oversized-query-sql-query-alpha.md` passed; line counts `src/query/sql-query-engine.js` 738 and `src/query/sql-query-engine-table-routing-methods.js` 487; `npm run audit:file-size -- --strict src/query/sql-query-engine.js src/query/sql-query-engine-table-routing-methods.js` passed with source oversized-file ratchet 0/144 and test oversized-file ratchet 0/60 for scoped files; `node --check src/query/sql-query-engine.js` passed; `node --check src/query/sql-query-engine-table-routing-methods.js` passed; import smoke for `SQLQueryEngine`, helper descriptors, and prototype attachment passed; `node --test test/query/sql-query-engine.test.js test/migration/sql-query-engine-dual-write-mode.test.js` passed 120/120; scoped `git diff --check` passed; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: verification-fix; owner: parent; files-changed: package-owned files only; validation: strict scoped file-size audit passed, syntax checks passed, `node --test test/query/sql-query-engine.test.js test/migration/sql-query-engine-dual-write-mode.test.js` passed 120/120, and scoped `git diff --check` passed; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: none; validation: not run because this package was not closed and tracker files were not changed; outcome: not-needed.
+- [x] action: ledger; owner: executor; files-changed: none; validation: no ledger update required for this lightweight file-size split; outcome: not-needed.
 
 ## Validation
 
-1. npm run audit:file-size -- --strict src/partition/managed-split-workflow-provisioning-methods.js
-2. node --check src/partition/managed-split-workflow-provisioning-methods.js
-3. git diff --check -- src/partition/managed-split-workflow-provisioning-methods.js
+1. npm run audit:file-size -- --strict src/query/sql-query-engine.js src/query/sql-query-engine-table-routing-methods.js
+2. node --check src/query/sql-query-engine.js
+3. node --check src/query/sql-query-engine-table-routing-methods.js
+4. git diff --check -- src/query/sql-query-engine.js src/query/sql-query-engine-table-routing-methods.js
