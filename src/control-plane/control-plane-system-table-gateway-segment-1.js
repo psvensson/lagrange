@@ -4,36 +4,30 @@ import {
   CONTROL_PLANE_GATEWAY_LIMIT,
   CONTROL_PLANE_MUTATION_OUTCOME,
   CONTROL_PLANE_OPERATION_LEDGER_LIMIT,
-  CONTROL_PLANE_READINESS_DIMENSION,
-  CONTROL_PLANE_ROUTING_SNAPSHOT_FIELD,
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL,
-  CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_SOURCE,
   ControlPlaneDiagnosticsLedger,
-  INITIAL_PARTITION_IDS,
   NUM,
   PressureGovernor,
-  SYSTEM_TABLE_NAME,
   TYPEOF,
-  applyMutationWorkloadProfileDefaults,
   areCanonicalSystemTableRowsEqual,
   buildControlPlaneCacheReconcileContract,
-  buildControlPlaneQueryOptions,
   buildLocalControlPlaneMutationReadinessFailure,
   canonicalizeSystemTableRow,
-  copyOption,
-  getControlPlaneErrorCode,
-  getControlPlaneFailureSummary,
-  getControlPlaneRetryAfterMs,
   getLocalControlPlaneMutationReadinessBlocker,
-  getRemainingBudgetMs,
   getSystemCachePrimaryKeyFieldOrFallback,
   hasUsablePrimaryKeyValue,
   normalizePositiveInteger,
   requiresStableLocalControlPlaneMutationReadiness,
-  resolveCanonicalLeaderIdentitySnapshot,
-  resolveCanonicalLeaderRoutingGapState,
-  resolveControlPlaneSystemTableDeliverySource,
 } from './control-plane-system-table-gateway-shared.js';
+import {
+  buildGatewayFallbackSystemTableRoutingDiagnostics,
+  buildGatewayOperationLedgerDiagnostics,
+  resolveGatewaySystemTablePartitionId,
+} from './control-plane-system-table-gateway-diagnostics.js';
+import {
+  buildGatewayQueryOptions,
+  buildGatewayWriteOptions,
+} from './control-plane-system-table-gateway-options.js';
 
 class ControlPlaneSystemTableGatewaySegment1 {
   constructor(options = {}) {
@@ -453,28 +447,7 @@ class ControlPlaneSystemTableGatewaySegment1 {
    * @private
    */
   resolveSystemTablePartitionId(tableName) {
-    if (typeof tableName !== TYPEOF.STRING || tableName.length === NUM.ZERO) {
-      return null;
-    }
-    const cdcIntegrationService = this.resolveCdcIntegrationService();
-    if (
-      typeof cdcIntegrationService?.resolveSystemTablePartitionIds ===
-      TYPEOF.FUNCTION
-    ) {
-      const partitionIds =
-        cdcIntegrationService.resolveSystemTablePartitionIds(tableName);
-      if (Array.isArray(partitionIds)) {
-        const partitionId =
-          partitionIds.find(
-            (entry) =>
-              typeof entry === TYPEOF.STRING && entry.length > NUM.ZERO,
-          ) || null;
-        if (partitionId) {
-          return partitionId;
-        }
-      }
-    }
-    return INITIAL_PARTITION_IDS[tableName] || null;
+    return resolveGatewaySystemTablePartitionId(this, tableName);
   }
 
   /**
@@ -487,134 +460,11 @@ class ControlPlaneSystemTableGatewaySegment1 {
     tableName,
     routingReadinessDimension = null,
   ) {
-    const partitionId = this.resolveSystemTablePartitionId(tableName);
-    let routingSnapshot = null;
-    const sqlQueryEngine = this.resolveSqlQueryEngine();
-    if (
-      partitionId &&
-      sqlQueryEngine?.queryExecutor &&
-      typeof sqlQueryEngine.queryExecutor.getPartitionRoutingSnapshot ===
-        TYPEOF.FUNCTION
-    ) {
-      try {
-        routingSnapshot =
-          sqlQueryEngine.queryExecutor.getPartitionRoutingSnapshot(
-            partitionId,
-            routingReadinessDimension ||
-              CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-          );
-      } catch (_error) {
-        routingSnapshot = null;
-      }
-    }
-
-    let partitionRow = null;
-    let serviceRows = [];
-    const systemTableCache = this.resolveSystemTableCache();
-    if (
-      systemTableCache &&
-      typeof systemTableCache.filter === TYPEOF.FUNCTION
-    ) {
-      const partitionRows =
-        systemTableCache.filter(SYSTEM_TABLE_NAME.PARTITIONS, (row) => {
-          const rowPartitionId =
-            row?.partition_id || row?.partitionId || row?.id || null;
-          if (partitionId && rowPartitionId === partitionId) {
-            return true;
-          }
-          return row?.table_name === tableName || row?.tableName === tableName;
-        }) || [];
-      partitionRow = partitionRows[NUM.ZERO] || null;
-      if (partitionId) {
-        serviceRows =
-          systemTableCache.filter(SYSTEM_TABLE_NAME.SERVICES, (row) => {
-            return (
-              row?.partition_id === partitionId &&
-              row?.service_type ===
-                CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.PARTITION
-            );
-          }) || [];
-      }
-    }
-
-    const hasRoutingSnapshot =
-      routingSnapshot && typeof routingSnapshot === TYPEOF.OBJECT;
-    const fallbackCanonicalLeaderIdentity = hasRoutingSnapshot ?
-      null :
-      resolveCanonicalLeaderIdentitySnapshot({
-        partition: partitionRow || null,
-        partitionPresent: partitionRow !== null,
-        serviceRows,
-      });
-    const leaderNodeId = hasRoutingSnapshot ?
-      routingSnapshot[
-        CONTROL_PLANE_ROUTING_SNAPSHOT_FIELD.CANONICAL_LEADER_NODE_ID
-      ] :
-      fallbackCanonicalLeaderIdentity?.leaderNodeId;
-    const canonicalLeaderIdentityState = hasRoutingSnapshot ?
-      typeof routingSnapshot[
-        CONTROL_PLANE_ROUTING_SNAPSHOT_FIELD.CANONICAL_LEADER_IDENTITY_STATE
-      ] === TYPEOF.STRING ?
-        routingSnapshot[
-          CONTROL_PLANE_ROUTING_SNAPSHOT_FIELD.CANONICAL_LEADER_IDENTITY_STATE
-        ] :
-        null :
-      fallbackCanonicalLeaderIdentity?.state || null;
-    const routableServiceCount = Number.isFinite(
-      routingSnapshot?.routableServiceCount,
-    ) ?
-      routingSnapshot.routableServiceCount :
-      serviceRows.filter(
-        (row) =>
-          row?.status === CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ACTIVE &&
-            typeof row?.address === TYPEOF.STRING &&
-            row.address.length > NUM.ZERO,
-      ).length;
-    const serviceRowCount = Number.isFinite(routingSnapshot?.serviceRowCount) ?
-      routingSnapshot.serviceRowCount :
-      serviceRows.length;
-    const canonicalLeaderRoutingGapState = hasRoutingSnapshot ?
-      typeof routingSnapshot[
-        CONTROL_PLANE_ROUTING_SNAPSHOT_FIELD
-          .CANONICAL_LEADER_ROUTING_GAP_STATE
-      ] === TYPEOF.STRING ?
-        routingSnapshot[
-          CONTROL_PLANE_ROUTING_SNAPSHOT_FIELD
-            .CANONICAL_LEADER_ROUTING_GAP_STATE
-        ] :
-        null :
-      resolveCanonicalLeaderRoutingGapState({
-        canonicalLeaderIdentityState,
-        canonicalLeaderNodeId: leaderNodeId,
-        serviceRowCount,
-        activeAddressedServiceCount: routableServiceCount,
-      });
-    return {
-      partitionId,
-      ...(typeof canonicalLeaderIdentityState === TYPEOF.STRING ?
-        {
-          canonicalLeaderIdentityState,
-        } :
-        {}),
-      ...(typeof canonicalLeaderRoutingGapState === TYPEOF.STRING ?
-        {
-          canonicalLeaderRoutingGapState,
-        } :
-        {}),
-      ...(typeof leaderNodeId === TYPEOF.STRING &&
-      leaderNodeId.length > NUM.ZERO ?
-        {
-          leaderNodeId,
-        } :
-        {}),
-      serviceRowCount,
-      routableServiceCount,
-      deniedByReadiness:
-        routingSnapshot &&
-        typeof routingSnapshot.deniedByNodeId === TYPEOF.OBJECT ?
-          Object.keys(routingSnapshot.deniedByNodeId).length > NUM.ZERO :
-          false,
-    };
+    return buildGatewayFallbackSystemTableRoutingDiagnostics(
+      this,
+      tableName,
+      routingReadinessDimension,
+    );
   }
 
   /**
@@ -625,159 +475,12 @@ class ControlPlaneSystemTableGatewaySegment1 {
    * @private
    */
   buildOperationLedgerDiagnostics(tableName, result = null, options = {}) {
-    const routingReadinessDimension =
-      options?.routingReadinessDimension ||
-      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
-    const hasFailureSignals =
-      result?.success === false ||
-      typeof result?.error === TYPEOF.STRING ||
-      typeof result?.message === TYPEOF.STRING ||
-      Array.isArray(result?.participantFailures);
-    const systemTableDiagnostics =
-      result?.systemTableDiagnostics &&
-      typeof result.systemTableDiagnostics === TYPEOF.OBJECT ?
-        result.systemTableDiagnostics :
-        {};
-    const failureSummary = hasFailureSignals ?
-      getControlPlaneFailureSummary(result) :
-      null;
-    const retryAfterMs = hasFailureSignals ?
-      getControlPlaneRetryAfterMs(result) :
-      NUM.ZERO;
-    const errorCode = hasFailureSignals ?
-      getControlPlaneErrorCode(result) || null :
-      null;
-    const fallbackDiagnostics = this.buildFallbackSystemTableRoutingDiagnostics(
+    return buildGatewayOperationLedgerDiagnostics(
+      this,
       tableName,
-      routingReadinessDimension,
+      result,
+      options,
     );
-    const canonicalLeaderIdentityState =
-      systemTableDiagnostics.canonicalLeaderIdentityState ||
-      fallbackDiagnostics.canonicalLeaderIdentityState ||
-      null;
-    const canonicalLeaderRoutingGapState =
-      systemTableDiagnostics.canonicalLeaderRoutingGapState ||
-      fallbackDiagnostics.canonicalLeaderRoutingGapState ||
-      null;
-    const leaderNodeId =
-      typeof systemTableDiagnostics.leaderNodeId === TYPEOF.STRING &&
-      systemTableDiagnostics.leaderNodeId.length > NUM.ZERO ?
-        systemTableDiagnostics.leaderNodeId :
-        typeof fallbackDiagnostics.leaderNodeId === TYPEOF.STRING &&
-            fallbackDiagnostics.leaderNodeId.length > NUM.ZERO ?
-          fallbackDiagnostics.leaderNodeId :
-          null;
-    const queryTimeoutMs = Number.isFinite(
-      systemTableDiagnostics.queryTimeoutMs,
-    ) ?
-      systemTableDiagnostics.queryTimeoutMs :
-      Number.isFinite(result?.queryTimeoutMs) ?
-        result.queryTimeoutMs :
-        Number.isFinite(options?.timeoutMs) ?
-          options.timeoutMs :
-          Number.isFinite(options?.queryTimeoutMs) ?
-            options.queryTimeoutMs :
-            Number.isFinite(options?.requestedTimeoutMs) ?
-              options.requestedTimeoutMs :
-              null;
-    const routedToNode =
-      systemTableDiagnostics.routedToNode ||
-      (result?.source ===
-        CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_SOURCE.SQL_QUERY_ENGINE ||
-      result?.source ===
-        CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.OWNER_RPC_LANE ||
-      options?.operationClass ===
-        CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.MUTATION ||
-      options?.operationClass ===
-        CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.QUERY ?
-        leaderNodeId :
-        null);
-    return {
-      partitionId:
-        systemTableDiagnostics.partitionId ||
-        fallbackDiagnostics.partitionId ||
-        null,
-      localReadHit:
-        result?.localReadHit === true ||
-        systemTableDiagnostics.localReadHit === true ||
-        result?.source ===
-          CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.LOCAL_PARTITION_REPLICA,
-      localReplicaFallbackHit:
-        result?.localReplicaFallbackHit === true ||
-        systemTableDiagnostics.localReplicaFallbackHit === true,
-      ...(typeof routedToNode === TYPEOF.STRING &&
-      routedToNode.length > NUM.ZERO ?
-        {
-          routedToNode,
-        } :
-        {}),
-      deniedByReadiness:
-        systemTableDiagnostics.deniedByReadiness === true ||
-        fallbackDiagnostics.deniedByReadiness === true ||
-        result?.errorCode ===
-          CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ROUTER_QUERY_TRANSPORT_NOT_READY ||
-        (result?.success === false && result?.deferRetry === true),
-      ...(typeof canonicalLeaderIdentityState === TYPEOF.STRING ?
-        {
-          canonicalLeaderIdentityState,
-        } :
-        {}),
-      ...(typeof canonicalLeaderRoutingGapState === TYPEOF.STRING ?
-        {
-          canonicalLeaderRoutingGapState,
-        } :
-        {}),
-      ...(typeof leaderNodeId === TYPEOF.STRING &&
-      leaderNodeId.length > NUM.ZERO ?
-        {
-          leaderNodeId,
-        } :
-        {}),
-      serviceRowCount: Number.isFinite(systemTableDiagnostics.serviceRowCount) ?
-        systemTableDiagnostics.serviceRowCount :
-        fallbackDiagnostics.serviceRowCount,
-      routableServiceCount: Number.isFinite(
-        systemTableDiagnostics.routableServiceCount,
-      ) ?
-        systemTableDiagnostics.routableServiceCount :
-        fallbackDiagnostics.routableServiceCount,
-      queryTimeoutMs:
-        Number.isFinite(queryTimeoutMs) && queryTimeoutMs > NUM.ZERO ?
-          Math.floor(queryTimeoutMs) :
-          null,
-      ...(typeof errorCode === TYPEOF.STRING && errorCode.length > NUM.ZERO ?
-        {
-          errorCode,
-        } :
-        {}),
-      ...(retryAfterMs > NUM.ZERO ?
-        {
-          retryAfterMs,
-        } :
-        {}),
-      ...(failureSummary && failureSummary.linkedFailureCount > NUM.ZERO ?
-        {
-          canonicalFailureReason: failureSummary.primaryReason,
-          linkedFailureCount: failureSummary.linkedFailureCount,
-          authoritativeRowSourceUnavailableCount:
-              failureSummary.authoritativeRowSourceUnavailableCount,
-          distributedParticipantFailureCount:
-              failureSummary.distributedParticipantFailureCount,
-          reconnectDeliveryFailureCount:
-              failureSummary.reconnectDeliveryFailureCount,
-        } :
-        {}),
-      ...(Number.isFinite(result?.queueWaitMs) ?
-        {
-          queueWaitMs: Math.max(NUM.ZERO, Math.floor(result.queueWaitMs)),
-        } :
-        {}),
-      ...(typeof result?.queueState === TYPEOF.STRING ?
-        {
-          queueState: result.queueState,
-        } :
-        {}),
-    };
   }
 
   /**
@@ -814,51 +517,7 @@ class ControlPlaneSystemTableGatewaySegment1 {
    * @private
    */
   buildQueryOptions(options = {}, context = {}) {
-    const requestedTimeoutMs = Number.isFinite(options?.timeoutMs) ?
-      options.timeoutMs :
-      Number.isFinite(options?.queryTimeoutMs) ?
-        options.queryTimeoutMs :
-        options?.requestedTimeoutMs;
-    const deliverySource = resolveControlPlaneSystemTableDeliverySource({
-      deliverySource: options?.deliverySource,
-      tableName: context?.tableName || null,
-      sql: context?.sql || null,
-      operationKind: context?.operationKind || null,
-      coalescingKey: options?.coalescingKey || null,
-    });
-    let queryOptions = {
-      ...buildControlPlaneQueryOptions({
-        requestedTimeoutMs,
-        timeoutBudget: options?.timeoutBudget,
-        now: this.now,
-      }),
-      routingReadinessDimension:
-        options?.routingReadinessDimension ||
-        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-    };
-    if (
-      typeof options?.sessionId === TYPEOF.STRING &&
-      options.sessionId.length > CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ZERO
-    ) {
-      queryOptions.sessionId = options.sessionId;
-    }
-    if (options?.cancellationToken) {
-      queryOptions.cancellationToken = options.cancellationToken;
-    }
-    if (typeof options?.preferLeader === TYPEOF.BOOLEAN) {
-      queryOptions.preferLeader = options.preferLeader;
-    }
-    queryOptions = copyOption(
-      queryOptions,
-      options,
-      CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.DELIVERYPRIORITY,
-    );
-    if (typeof deliverySource === TYPEOF.STRING &&
-      deliverySource.length > CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ZERO) {
-      queryOptions[CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.DELIVERYSOURCE] =
-        deliverySource;
-    }
-    return queryOptions;
+    return buildGatewayQueryOptions(this, options, context);
   }
 
   /**
@@ -867,153 +526,7 @@ class ControlPlaneSystemTableGatewaySegment1 {
    * @private
    */
   buildWriteOptions(options = {}, context = {}) {
-    const deliverySource = resolveControlPlaneSystemTableDeliverySource({
-      deliverySource: options?.deliverySource,
-      tableName: context?.tableName || null,
-      operationKind: context?.operationKind || null,
-      coalescingKey: options?.coalescingKey || null,
-    });
-    let writeOptions = {
-      routingReadinessDimension:
-        options?.routingReadinessDimension ||
-        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-    };
-    const queryTimeoutMs = Number.isFinite(options?.queryTimeoutMs) ?
-      options.queryTimeoutMs :
-      options?.timeoutMs;
-    if (Number.isFinite(queryTimeoutMs)) {
-      writeOptions.queryTimeoutMs = queryTimeoutMs;
-    } else if (
-      options?.timeoutBudget &&
-      typeof options.timeoutBudget === TYPEOF.OBJECT
-    ) {
-      const remainingBudgetMs = getRemainingBudgetMs(options.timeoutBudget, {
-        now: this.now,
-      });
-      if (remainingBudgetMs > NUM.ZERO) {
-        writeOptions.queryTimeoutMs = Math.max(
-          NUM.ONE,
-          Math.floor(remainingBudgetMs),
-        );
-      }
-    }
-    writeOptions = copyOption(
-      writeOptions,
-      options,
-      CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.CANCELLATIONTOKEN,
-    );
-    writeOptions = copyOption(
-      writeOptions,
-      options,
-      CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.TIMEOUTBUDGET,
-    );
-    writeOptions = copyOption(
-      writeOptions,
-      options,
-      CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.SKIPCACHEWAIT,
-    );
-    writeOptions = copyOption(
-      writeOptions,
-      options,
-      CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ALLOWPENDINGVISIBILITY,
-    );
-    writeOptions = copyOption(
-      writeOptions,
-      options,
-      CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.EXPECTEDCACHEFIELDS,
-    );
-    writeOptions = copyOption(
-      writeOptions,
-      options,
-      CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.MINIMUMCACHEFIELDS,
-    );
-    writeOptions = copyOption(
-      writeOptions,
-      options,
-      CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.FALLBACKPHASE,
-    );
-    writeOptions = copyOption(
-      writeOptions,
-      options,
-      CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.DISABLESYSTEMWRITESESSION,
-    );
-    writeOptions = copyOption(
-      writeOptions,
-      options,
-      CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.SESSIONID,
-    );
-    writeOptions = copyOption(
-      writeOptions,
-      options,
-      CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.DELIVERYPRIORITY,
-    );
-    writeOptions = copyOption(
-      writeOptions,
-      options,
-      CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.WORKCLASS,
-    );
-    writeOptions = copyOption(
-      writeOptions,
-      options,
-      CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.WORKLOADCLASS,
-    );
-    writeOptions = copyOption(
-      writeOptions,
-      options,
-      CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.IGNOREEXISTING,
-    );
-    writeOptions = copyOption(
-      writeOptions,
-      options,
-      CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ALLOWPRESSUREDEFER,
-    );
-    writeOptions = copyOption(
-      writeOptions,
-      options,
-      CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.PRESSURERETRYAFTERMS,
-    );
-    writeOptions = copyOption(
-      writeOptions,
-      options,
-      CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.RESOURCEKEYS,
-    );
-    writeOptions = copyOption(
-      writeOptions,
-      options,
-      CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.COALESCINGKEY,
-    );
-    writeOptions = copyOption(
-      writeOptions,
-      options,
-      CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ALLOWCOALESCING,
-    );
-    writeOptions = copyOption(
-      writeOptions,
-      options,
-      CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.MERGEPOLICY,
-    );
-    writeOptions = copyOption(
-      writeOptions,
-      options,
-      CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.PHASESCOPE,
-    );
-    writeOptions = copyOption(
-      writeOptions,
-      options,
-      CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.RECOVERYCANDIDATESELECTIONKEY,
-    );
-    writeOptions = copyOption(
-      writeOptions,
-      options,
-      CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.REPLACEPENDINGKEY,
-    );
-    writeOptions = applyMutationWorkloadProfileDefaults(writeOptions, options);
-    if (typeof deliverySource === TYPEOF.STRING &&
-      deliverySource.length > CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ZERO) {
-      writeOptions[CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.DELIVERYSOURCE] =
-        deliverySource;
-    }
-    return writeOptions;
+    return buildGatewayWriteOptions(this, options, context);
   }
 
   /**
