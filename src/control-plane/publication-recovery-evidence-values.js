@@ -352,6 +352,31 @@ function resolveAuthoritativePublicationMembershipNodeIds({
   ]);
 }
 
+function resolvePublicationRecoveryPublishedActiveNodeIds({
+  priorityRecoveryObservation = null,
+  publicationConvergence = null,
+  activeGateProgressRecords = PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
+} = {}) {
+  const ownerPublishedActiveNodeIds = normalizeDistinctStringArray([
+    ...normalizeDistinctStringArray(
+      priorityRecoveryObservation?.publishedActiveNodeIds,
+    ),
+    ...normalizeDistinctStringArray(
+      publicationConvergence?.publishedActiveNodeIds,
+    ),
+  ]);
+  if (ownerPublishedActiveNodeIds.length > NUM.ZERO) {
+    return ownerPublishedActiveNodeIds;
+  }
+  return normalizeActiveGateProgressNodeIds(
+    activeGateProgressRecords,
+    [
+      PUBLICATION_RECOVERY_ACTIVE_GATE_PROGRESS_FIELD
+        .SELECTED_PUBLISHED_ACTIVE_NODE_IDS,
+    ],
+  );
+}
+
 function resolveRelevantPublicationMembershipNodeIds(
   nodeIds = PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
   authoritativePublicationMembershipNodeIds =
@@ -386,6 +411,7 @@ export {
   resolveRawPublicationConvergenceGate,
   resolvePriorityRecoveryClosureWitness,
   resolveAuthoritativePublicationMembershipNodeIds,
+  resolvePublicationRecoveryPublishedActiveNodeIds,
   resolveRelevantPublicationMembershipNodeIds,
   PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
   PUBLICATION_RECOVERY_ACK_NODE_LIST_INPUT_STATE,

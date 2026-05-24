@@ -16,6 +16,7 @@ export {
   resolveRawPublicationConvergenceGate,
   resolvePriorityRecoveryClosureWitness,
   resolveAuthoritativePublicationMembershipNodeIds,
+  resolvePublicationRecoveryPublishedActiveNodeIds,
   resolveRelevantPublicationMembershipNodeIds,
   PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
   PUBLICATION_RECOVERY_ACK_NODE_LIST_INPUT_STATE,
