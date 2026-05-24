@@ -3,33 +3,41 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
-  "opened": "2026-05-24",
-  "lane": "lightweight-maintenance",
-  "scenario": "none",
-  "artifact": "none",
-  "playback": "none",
-  "owner": "test_quality_owner",
-  "boundary": "test_rebalancer_quorum_conditioned_remove_safety_file_size_refactor",
-  "dominantReason": "oversized_file_ratchet",
-  "currentState": "Current file-size audit reports test/rebalancer/quorum-conditioned-remove-safety.test.js at 1507/1500 lines; no implementation is started in this package yet.",
-  "nextAction": "Split semantically grouped test/support code from test/rebalancer/quorum-conditioned-remove-safety.test.js until it is below 1500 lines, preserving coverage and imports.",
-  "proof": [
-    "npm run audit:file-size -- --strict test/rebalancer/quorum-conditioned-remove-safety.test.js",
-    "node --check test/rebalancer/quorum-conditioned-remove-safety.test.js",
-    "npm test -- test/rebalancer/quorum-conditioned-remove-safety.test.js",
-    "git diff --check -- test/rebalancer/quorum-conditioned-remove-safety.test.js"
-  ],
-  "theoryLedgerRefs": [],
-  "writeScope": [
-    "test/rebalancer/quorum-conditioned-remove-safety.test.js"
-  ],
-  "handoffFiles": [],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [
-    "test/rebalancer/quorum-conditioned-remove-safety.test.js"
-  ],
+  "status": "done",
+  "intent": {
+    "opened": "2026-05-24",
+    "closed": "2026-05-24",
+    "lane": "lightweight-maintenance",
+    "scenario": "none",
+    "artifact": "none",
+    "playback": "none",
+    "owner": "test_quality_owner",
+    "boundary": "test_rebalancer_quorum_conditioned_remove_safety_file_size_refactor",
+    "currentState": "The deferred dispatch/source-removal tests were split from test/rebalancer/quorum-conditioned-remove-safety.test.js into test/rebalancer/quorum-conditioned-remove-safety-deferred-dispatch-test-cases.js; touched JS files are 1092/439 lines and strict file-size, syntax, moved-test, and diff proof pass. The full wrapper remains red on the same out-of-scope tail replacement-election residual present in clean HEAD before this split.",
+    "nextAction": "Close as a file-size refactor with the pre-existing quorum-conditioned remove-safety tail replacement-election residual recorded outside this package scope.",
+    "dominantReason": "oversized_file_ratchet"
+  },
+  "scope": {
+    "writeScope": [
+      "test/rebalancer/quorum-conditioned-remove-safety.test.js",
+      "test/rebalancer/quorum-conditioned-remove-safety-deferred-dispatch-test-cases.js"
+    ],
+    "handoffFiles": [],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": [],
+    "commitScope": [
+      "test/rebalancer/quorum-conditioned-remove-safety.test.js",
+      "test/rebalancer/quorum-conditioned-remove-safety-deferred-dispatch-test-cases.js"
+    ]
+  },
+  "gates": {
+    "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
+    "stabilityCredit": "local-proof-only",
+    "codeQualityAdmission": {
+      "reason": "active-guardrail-requirement",
+      "evidence": "The package is generated from npm run audit:file-size -- --top 250 for test/rebalancer/quorum-conditioned-remove-safety.test.js; closure proof must make npm run audit:file-size -- --strict test/rebalancer/quorum-conditioned-remove-safety.test.js pass."
+    }
+  },
   "modelFit": {
     "packageClass": "bounded-implementation",
     "intendedMinimumModel": "gpt-5.3-codex-spark",
@@ -41,30 +49,16 @@
       "a frozen decision must be reopened"
     ]
   },
-  "modelFitSplit": {
-    "targetExecutionModel": "gpt-5.3-codex-spark",
-    "allowedDecisionDepth": "bounded local edit after owner, scope, proof, and forbidden files are named",
-    "safeToExecuteWhen": [
-      "owner, boundary, write scope, forbidden scope, proof, and kill rule stay as declared",
-      "the executor does not need to choose architecture, migrate ownership, or reinterpret representative evidence",
-      "the first focused proof gives a clear pass, fail, or escalate signal"
-    ],
-    "splitTriggers": [
-      "write scope expands beyond the declared lower-model lane",
-      "proof requires forbidden scope, cross-owner reasoning, or architecture route selection",
-      "the implementation needs to decide system behavior instead of executing a named local mechanism"
-    ],
-    "childPackageCandidates": [
-      "Prefer mechanical-maintenance for docs/templates/schema-only edits.",
-      "Prefer test-only-proof for tests that do not change runtime behavior.",
-      "Prefer bounded-experiment for one same-owner hypothesis with inherited context."
-    ]
-  },
-  "stabilityCredit": "local-proof-only",
-  "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
-  "codeQualityAdmission": {
-    "reason": "active-guardrail-requirement",
-    "evidence": "The package is generated from npm run audit:file-size -- --top 250 for test/rebalancer/quorum-conditioned-remove-safety.test.js; closure proof must make npm run audit:file-size -- --strict test/rebalancer/quorum-conditioned-remove-safety.test.js pass."
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": {
+      "commands": [
+        "npm run audit:file-size -- --strict test/rebalancer/quorum-conditioned-remove-safety.test.js test/rebalancer/quorum-conditioned-remove-safety-deferred-dispatch-test-cases.js",
+        "node --check test/rebalancer/quorum-conditioned-remove-safety.test.js && node --check test/rebalancer/quorum-conditioned-remove-safety-deferred-dispatch-test-cases.js",
+        "npm test -- test/rebalancer/quorum-conditioned-remove-safety.test.js",
+        "git diff --check -- test/rebalancer/quorum-conditioned-remove-safety.test.js test/rebalancer/quorum-conditioned-remove-safety-deferred-dispatch-test-cases.js work/packages/done-20260524-oversized-rebalancer-quorum-conditioned-remove-safety.md"
+      ]
+    }
   }
 }
 -->
@@ -142,6 +136,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 ## In Scope
 
 1. test/rebalancer/quorum-conditioned-remove-safety.test.js
+2. test/rebalancer/quorum-conditioned-remove-safety-deferred-dispatch-test-cases.js
 
 ## Out Of Scope
 
@@ -154,11 +149,11 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex-spark`
 - Scope shape: `leaf-slice`
 - Output profile: `medium`
-- Owned files: `test/rebalancer/quorum-conditioned-remove-safety.test.js`
+- Owned files: `test/rebalancer/quorum-conditioned-remove-safety.test.js`, `test/rebalancer/quorum-conditioned-remove-safety-deferred-dispatch-test-cases.js`
 - Forbidden files: `src/`, `coverage reduction or assertion deletion`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run audit:file-size -- --strict test/rebalancer/quorum-conditioned-remove-safety.test.js`, `node --check test/rebalancer/quorum-conditioned-remove-safety.test.js`, `npm test -- test/rebalancer/quorum-conditioned-remove-safety.test.js`, `git diff --check -- test/rebalancer/quorum-conditioned-remove-safety.test.js`
+- Focused proof: `npm run audit:file-size -- --strict test/rebalancer/quorum-conditioned-remove-safety.test.js test/rebalancer/quorum-conditioned-remove-safety-deferred-dispatch-test-cases.js`, `node --check test/rebalancer/quorum-conditioned-remove-safety.test.js && node --check test/rebalancer/quorum-conditioned-remove-safety-deferred-dispatch-test-cases.js`, `npm test -- test/rebalancer/quorum-conditioned-remove-safety.test.js`, `git diff --check -- test/rebalancer/quorum-conditioned-remove-safety.test.js test/rebalancer/quorum-conditioned-remove-safety-deferred-dispatch-test-cases.js work/packages/done-20260524-oversized-rebalancer-quorum-conditioned-remove-safety.md`
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split
@@ -183,13 +178,17 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: executor; files-changed: target file plus semantically named helper/split files added to this package before pre-impl; validation: focused proof and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: verification-fix; owner: verifier_fixer; files-changed: package-owned files only; validation: strict file-size proof, syntax/focused test proof, and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: <validated|not-needed>.
+- [x] action: implementation; owner: executor; files-changed: test/rebalancer/quorum-conditioned-remove-safety.test.js, test/rebalancer/quorum-conditioned-remove-safety-deferred-dispatch-test-cases.js, work/packages/done-20260524-oversized-rebalancer-quorum-conditioned-remove-safety.md; validation: `npm run work:context` pass; `npm run work:validate -- --entry work/packages/done-20260524-oversized-rebalancer-quorum-conditioned-remove-safety.md` pass; `npm run work:validate -- --pre-impl work/packages/done-20260524-oversized-rebalancer-quorum-conditioned-remove-safety.md` pass after adding helper to scope; `npm run audit:file-size -- --strict test/rebalancer/quorum-conditioned-remove-safety.test.js test/rebalancer/quorum-conditioned-remove-safety-deferred-dispatch-test-cases.js` pass 0/60 test files over 1500; `node --check` pass for both touched JS files; grep-limited `npm test -- --grep "authoritative follower evidence|safety-deferred REMOVE re-enters|continues deferring priority REPLACE source removal even after published" test/rebalancer/quorum-conditioned-remove-safety.test.js` pass for moved tests; `git diff --check -- test/rebalancer/quorum-conditioned-remove-safety.test.js test/rebalancer/quorum-conditioned-remove-safety-deferred-dispatch-test-cases.js work/packages/done-20260524-oversized-rebalancer-quorum-conditioned-remove-safety.md` pass for tracked edits, with separate no-index helper whitespace check producing no diagnostics; full wrapper red after moved tests pass on out-of-scope replacement-election assertions in test/rebalancer/quorum-conditioned-remove-safety-tail-replacement-election.js:214, 219, 229, 234, and 239, and clean HEAD baseline reproduces the same first replacement-election failure before this split; parent revalidated focused proof: yes; outcome: validated-static-with-pre-existing-focused-test-failure.
+- [x] action: verification-fix; owner: verifier_fixer; files-changed: package-owned files only; validation: strict file-size proof, syntax proof, moved-test grep proof, diff whitespace proof, and clean HEAD baseline comparison passed; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: none; validation: not needed because this package does not own sprint/current-blocker state; outcome: not-needed.
+
+## Theory Ledger Update
+
+No ledger update: mechanical oversized-file split only; no runtime, owner-boundary, causal-route, or representative evidence truth changed.
 
 ## Validation
 
-1. npm run audit:file-size -- --strict test/rebalancer/quorum-conditioned-remove-safety.test.js
-2. node --check test/rebalancer/quorum-conditioned-remove-safety.test.js
+1. npm run audit:file-size -- --strict test/rebalancer/quorum-conditioned-remove-safety.test.js test/rebalancer/quorum-conditioned-remove-safety-deferred-dispatch-test-cases.js
+2. node --check test/rebalancer/quorum-conditioned-remove-safety.test.js && node --check test/rebalancer/quorum-conditioned-remove-safety-deferred-dispatch-test-cases.js
 3. npm test -- test/rebalancer/quorum-conditioned-remove-safety.test.js
-4. git diff --check -- test/rebalancer/quorum-conditioned-remove-safety.test.js
+4. git diff --check -- test/rebalancer/quorum-conditioned-remove-safety.test.js test/rebalancer/quorum-conditioned-remove-safety-deferred-dispatch-test-cases.js work/packages/done-20260524-oversized-rebalancer-quorum-conditioned-remove-safety.md

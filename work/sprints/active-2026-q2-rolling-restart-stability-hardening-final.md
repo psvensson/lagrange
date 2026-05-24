@@ -323,8 +323,8 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
      - [Split oversized test/support file test/query/query-executor.test-part-3.js](../packages/done-20260524-oversized-query-query-foxtrot.md)
      - [Split oversized test/support file test/distributed/harness/failure-bundle-segment-6.js](../packages/done-20260524-oversized-distributed-harness-failure-charlie.md)
      - [Split oversized test/support file test/distributed/harness/report-writer.js](../packages/done-20260524-oversized-distributed-harness-report-writer.md)
-     - [Split oversized test/support file test/distributed/harness/failure-bundle-segment-2.js](../packages/todo-20260524-oversized-distributed-harness-failure-delta.md)
-     - [Split oversized test/support file test/rebalancer/quorum-conditioned-remove-safety.test.js](../packages/todo-20260524-oversized-rebalancer-quorum-conditioned-remove-safety.md)
+     - [Split oversized test/support file test/distributed/harness/failure-bundle-segment-2.js](../packages/done-20260524-oversized-distributed-harness-failure-delta.md)
+     - [Split oversized test/support file test/rebalancer/quorum-conditioned-remove-safety.test.js](../packages/done-20260524-oversized-rebalancer-quorum-conditioned-remove-safety.md)
 
 11. [Split replica-dispatch-node-state-update test-part-2 below file-size limit](../packages/done-20260524-replica-dispatch-node-state-update-test-part-2-suites.md)
    - Lane: `lightweight-maintenance`
