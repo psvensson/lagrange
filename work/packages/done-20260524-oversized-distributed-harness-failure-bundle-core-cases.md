@@ -3,33 +3,41 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
-  "opened": "2026-05-24",
-  "lane": "lightweight-maintenance",
-  "scenario": "none",
-  "artifact": "none",
-  "playback": "none",
-  "owner": "test_quality_owner",
-  "boundary": "test_distributed_harness_failure_bundle_core_cases_file_size_refactor",
-  "dominantReason": "oversized_file_ratchet",
-  "currentState": "Current file-size audit reports test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js at 1588/1500 lines; no implementation is started in this package yet.",
-  "nextAction": "Split semantically grouped test/support code from test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js until it is below 1500 lines, preserving coverage and imports.",
-  "proof": [
-    "npm run audit:file-size -- --strict test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js",
-    "node --check test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js",
-    "npm test -- test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js",
-    "git diff --check -- test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js"
-  ],
-  "theoryLedgerRefs": [],
-  "writeScope": [
-    "test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js"
-  ],
-  "handoffFiles": [],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [
-    "test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js"
-  ],
+  "status": "done",
+  "intent": {
+    "opened": "2026-05-24",
+    "closed": "2026-05-24",
+    "lane": "lightweight-maintenance",
+    "scenario": "none",
+    "artifact": "none",
+    "playback": "none",
+    "owner": "test_quality_owner",
+    "boundary": "test_distributed_harness_failure_bundle_core_cases_file_size_refactor",
+    "currentState": "Implementation split priority-recovery carrier cases from test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js; touched JS files are 918/697 lines and below the strict test threshold. The broader failure-bundle suite still reports 86/99 passing, matching clean HEAD before this split.",
+    "nextAction": "Close as a file-size refactor with the pre-existing failure-bundle core residual recorded outside this package scope.",
+    "dominantReason": "oversized_file_ratchet"
+  },
+  "scope": {
+    "writeScope": [
+      "test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js",
+      "test/distributed/harness/__tests__/failure-bundle-core-16-priority-recovery-carrier-test-cases.js"
+    ],
+    "handoffFiles": [],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": [],
+    "commitScope": [
+      "test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js",
+      "test/distributed/harness/__tests__/failure-bundle-core-16-priority-recovery-carrier-test-cases.js"
+    ]
+  },
+  "gates": {
+    "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
+    "stabilityCredit": "local-proof-only",
+    "codeQualityAdmission": {
+      "reason": "active-guardrail-requirement",
+      "evidence": "The package is generated from npm run audit:file-size -- --top 250 for test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js; closure proof must make npm run audit:file-size -- --strict test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js pass."
+    }
+  },
   "modelFit": {
     "packageClass": "bounded-implementation",
     "intendedMinimumModel": "gpt-5.3-codex-spark",
@@ -41,30 +49,17 @@
       "a frozen decision must be reopened"
     ]
   },
-  "modelFitSplit": {
-    "targetExecutionModel": "gpt-5.3-codex-spark",
-    "allowedDecisionDepth": "bounded local edit after owner, scope, proof, and forbidden files are named",
-    "safeToExecuteWhen": [
-      "owner, boundary, write scope, forbidden scope, proof, and kill rule stay as declared",
-      "the executor does not need to choose architecture, migrate ownership, or reinterpret representative evidence",
-      "the first focused proof gives a clear pass, fail, or escalate signal"
-    ],
-    "splitTriggers": [
-      "write scope expands beyond the declared lower-model lane",
-      "proof requires forbidden scope, cross-owner reasoning, or architecture route selection",
-      "the implementation needs to decide system behavior instead of executing a named local mechanism"
-    ],
-    "childPackageCandidates": [
-      "Prefer mechanical-maintenance for docs/templates/schema-only edits.",
-      "Prefer test-only-proof for tests that do not change runtime behavior.",
-      "Prefer bounded-experiment for one same-owner hypothesis with inherited context."
-    ]
-  },
-  "stabilityCredit": "local-proof-only",
-  "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
-  "codeQualityAdmission": {
-    "reason": "active-guardrail-requirement",
-    "evidence": "The package is generated from npm run audit:file-size -- --top 250 for test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js; closure proof must make npm run audit:file-size -- --strict test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js pass."
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": {
+      "commands": [
+        "npm run audit:file-size -- --strict test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js test/distributed/harness/__tests__/failure-bundle-core-16-priority-recovery-carrier-test-cases.js",
+        "node --check test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js",
+        "node --check test/distributed/harness/__tests__/failure-bundle-core-16-priority-recovery-carrier-test-cases.js",
+        "npm test -- test/distributed/harness/__tests__/failure-bundle.test.js",
+        "git diff --check -- test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js test/distributed/harness/__tests__/failure-bundle-core-16-priority-recovery-carrier-test-cases.js work/packages/done-20260524-oversized-distributed-harness-failure-bundle-core-cases.md"
+      ]
+    }
   }
 }
 -->
@@ -142,6 +137,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 ## In Scope
 
 1. test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js
+2. test/distributed/harness/__tests__/failure-bundle-core-16-priority-recovery-carrier-test-cases.js
 
 ## Out Of Scope
 
@@ -154,11 +150,11 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex-spark`
 - Scope shape: `leaf-slice`
 - Output profile: `medium`
-- Owned files: `test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js`
+- Owned files: `test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js`, `test/distributed/harness/__tests__/failure-bundle-core-16-priority-recovery-carrier-test-cases.js`
 - Forbidden files: `src/`, `coverage reduction or assertion deletion`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run audit:file-size -- --strict test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js`, `node --check test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js`, `npm test -- test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js`, `git diff --check -- test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js`
+- Focused proof: `npm run audit:file-size -- --strict test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js test/distributed/harness/__tests__/failure-bundle-core-16-priority-recovery-carrier-test-cases.js`, `node --check test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js`, `node --check test/distributed/harness/__tests__/failure-bundle-core-16-priority-recovery-carrier-test-cases.js`, `npm test -- test/distributed/harness/__tests__/failure-bundle.test.js`, `git diff --check -- test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js test/distributed/harness/__tests__/failure-bundle-core-16-priority-recovery-carrier-test-cases.js work/packages/done-20260524-oversized-distributed-harness-failure-bundle-core-cases.md`
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split
@@ -183,13 +179,18 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: executor; files-changed: target file plus semantically named helper/split files added to this package before pre-impl; validation: focused proof and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: verification-fix; owner: verifier_fixer; files-changed: package-owned files only; validation: strict file-size proof, syntax/focused test proof, and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: <validated|not-needed>.
+- [x] action: implementation; owner: codex; files-changed: `test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js`, `test/distributed/harness/__tests__/failure-bundle-core-16-priority-recovery-carrier-test-cases.js`, `work/packages/done-20260524-oversized-distributed-harness-failure-bundle-core-cases.md`; validation: pre-implementation validation passed before edits; strict file-size proof passed at 0/60 test files over 1500 lines; syntax proof passed for both touched JS files; diff whitespace proof passed; parent focused test rerun reproduces the same 86/99 failure count present in clean HEAD; parent revalidated focused proof: yes; no ledger update; outcome: validated-static-with-pre-existing-focused-test-failure.
+- [x] action: verification-fix; owner: codex; files-changed: package-owned files only; validation: extracted carrier test bodies match the original HEAD block except wrapper whitespace; strict file-size proof, syntax proof for both touched JS files, and diff whitespace proof passed; clean HEAD baseline copy also fails the broader failure-bundle suite with 86/99 passing and the same 13 out-of-scope core residuals; parent revalidated focused proof: yes; no ledger update; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: none; validation: current-blocker repair not needed for package-targeted oversized split; outcome: not-needed.
+
+## Theory Ledger Update
+
+No ledger update: mechanical oversized-file split only; no runtime, owner-boundary, causal-route, or representative evidence truth changed.
 
 ## Validation
 
-1. npm run audit:file-size -- --strict test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js
+1. npm run audit:file-size -- --strict test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js test/distributed/harness/__tests__/failure-bundle-core-16-priority-recovery-carrier-test-cases.js
 2. node --check test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js
-3. npm test -- test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js
-4. git diff --check -- test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js
+3. node --check test/distributed/harness/__tests__/failure-bundle-core-16-priority-recovery-carrier-test-cases.js
+4. npm test -- test/distributed/harness/__tests__/failure-bundle.test.js
+5. git diff --check -- test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js test/distributed/harness/__tests__/failure-bundle-core-16-priority-recovery-carrier-test-cases.js work/packages/done-20260524-oversized-distributed-harness-failure-bundle-core-cases.md

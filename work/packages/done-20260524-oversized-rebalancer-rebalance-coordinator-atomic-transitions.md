@@ -3,33 +3,41 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
-  "opened": "2026-05-24",
-  "lane": "lightweight-maintenance",
-  "scenario": "none",
-  "artifact": "none",
-  "playback": "none",
-  "owner": "test_quality_owner",
-  "boundary": "test_rebalancer_rebalance_coordinator_atomic_transitions_file_size_refactor",
-  "dominantReason": "oversized_file_ratchet",
-  "currentState": "Current file-size audit reports test/rebalancer/rebalance-coordinator-atomic-transitions.test.js at 1610/1500 lines; no implementation is started in this package yet.",
-  "nextAction": "Split semantically grouped test/support code from test/rebalancer/rebalance-coordinator-atomic-transitions.test.js until it is below 1500 lines, preserving coverage and imports.",
-  "proof": [
-    "npm run audit:file-size -- --strict test/rebalancer/rebalance-coordinator-atomic-transitions.test.js",
-    "node --check test/rebalancer/rebalance-coordinator-atomic-transitions.test.js",
-    "npm test -- test/rebalancer/rebalance-coordinator-atomic-transitions.test.js",
-    "git diff --check -- test/rebalancer/rebalance-coordinator-atomic-transitions.test.js"
-  ],
-  "theoryLedgerRefs": [],
-  "writeScope": [
-    "test/rebalancer/rebalance-coordinator-atomic-transitions.test.js"
-  ],
-  "handoffFiles": [],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [
-    "test/rebalancer/rebalance-coordinator-atomic-transitions.test.js"
-  ],
+  "status": "done",
+  "intent": {
+    "opened": "2026-05-24",
+    "closed": "2026-05-24",
+    "lane": "lightweight-maintenance",
+    "scenario": "none",
+    "artifact": "none",
+    "playback": "none",
+    "owner": "test_quality_owner",
+    "boundary": "test_rebalancer_rebalance_coordinator_atomic_transitions_file_size_refactor",
+    "currentState": "Split complete: test/rebalancer/rebalance-coordinator-atomic-transitions.test.js is 1151 lines and test/rebalancer/rebalance-coordinator-atomic-transition-retry-test-cases.js is 485 lines. Static proof passes; focused npm test reports 147/148 passing from the same out-of-scope REBALANCER_SKIP_REASON binding failure present in clean HEAD.",
+    "nextAction": "Close as a file-size refactor with the pre-existing operation-workflow owner ReferenceError recorded outside this package scope.",
+    "dominantReason": "oversized_file_ratchet"
+  },
+  "scope": {
+    "writeScope": [
+      "test/rebalancer/rebalance-coordinator-atomic-transitions.test.js",
+      "test/rebalancer/rebalance-coordinator-atomic-transition-retry-test-cases.js"
+    ],
+    "handoffFiles": [],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": [],
+    "commitScope": [
+      "test/rebalancer/rebalance-coordinator-atomic-transitions.test.js",
+      "test/rebalancer/rebalance-coordinator-atomic-transition-retry-test-cases.js"
+    ]
+  },
+  "gates": {
+    "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
+    "stabilityCredit": "local-proof-only",
+    "codeQualityAdmission": {
+      "reason": "active-guardrail-requirement",
+      "evidence": "The package is generated from npm run audit:file-size -- --top 250 for test/rebalancer/rebalance-coordinator-atomic-transitions.test.js; closure proof must make npm run audit:file-size -- --strict test/rebalancer/rebalance-coordinator-atomic-transitions.test.js pass."
+    }
+  },
   "modelFit": {
     "packageClass": "bounded-implementation",
     "intendedMinimumModel": "gpt-5.3-codex-spark",
@@ -41,30 +49,17 @@
       "a frozen decision must be reopened"
     ]
   },
-  "modelFitSplit": {
-    "targetExecutionModel": "gpt-5.3-codex-spark",
-    "allowedDecisionDepth": "bounded local edit after owner, scope, proof, and forbidden files are named",
-    "safeToExecuteWhen": [
-      "owner, boundary, write scope, forbidden scope, proof, and kill rule stay as declared",
-      "the executor does not need to choose architecture, migrate ownership, or reinterpret representative evidence",
-      "the first focused proof gives a clear pass, fail, or escalate signal"
-    ],
-    "splitTriggers": [
-      "write scope expands beyond the declared lower-model lane",
-      "proof requires forbidden scope, cross-owner reasoning, or architecture route selection",
-      "the implementation needs to decide system behavior instead of executing a named local mechanism"
-    ],
-    "childPackageCandidates": [
-      "Prefer mechanical-maintenance for docs/templates/schema-only edits.",
-      "Prefer test-only-proof for tests that do not change runtime behavior.",
-      "Prefer bounded-experiment for one same-owner hypothesis with inherited context."
-    ]
-  },
-  "stabilityCredit": "local-proof-only",
-  "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
-  "codeQualityAdmission": {
-    "reason": "active-guardrail-requirement",
-    "evidence": "The package is generated from npm run audit:file-size -- --top 250 for test/rebalancer/rebalance-coordinator-atomic-transitions.test.js; closure proof must make npm run audit:file-size -- --strict test/rebalancer/rebalance-coordinator-atomic-transitions.test.js pass."
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": {
+      "commands": [
+        "npm run audit:file-size -- --strict test/rebalancer/rebalance-coordinator-atomic-transitions.test.js test/rebalancer/rebalance-coordinator-atomic-transition-retry-test-cases.js",
+        "bash -c 'node --check test/rebalancer/rebalance-coordinator-atomic-transitions.test.js && node --check test/rebalancer/rebalance-coordinator-atomic-transition-retry-test-cases.js'",
+        "npm test -- test/rebalancer/rebalance-coordinator-atomic-transitions.test.js",
+        "npm run work:validate -- --closure work/packages/done-20260524-oversized-rebalancer-rebalance-coordinator-atomic-transitions.md",
+        "git diff --check -- test/rebalancer/rebalance-coordinator-atomic-transitions.test.js test/rebalancer/rebalance-coordinator-atomic-transition-retry-test-cases.js work/packages/done-20260524-oversized-rebalancer-rebalance-coordinator-atomic-transitions.md"
+      ]
+    }
   }
 }
 -->
@@ -142,11 +137,14 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 ## In Scope
 
 1. test/rebalancer/rebalance-coordinator-atomic-transitions.test.js
+2. test/rebalancer/rebalance-coordinator-atomic-transition-retry-test-cases.js
 
 ## Out Of Scope
 
 1. src/
 2. coverage reduction or assertion deletion
+3. test/rebalancer/rebalance-coordinator-atomic-transitions-tail-test-cases.js
+4. unrelated pending targets
 
 ## Model Fit
 
@@ -154,11 +152,11 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex-spark`
 - Scope shape: `leaf-slice`
 - Output profile: `medium`
-- Owned files: `test/rebalancer/rebalance-coordinator-atomic-transitions.test.js`
-- Forbidden files: `src/`, `coverage reduction or assertion deletion`
+- Owned files: `test/rebalancer/rebalance-coordinator-atomic-transitions.test.js`, `test/rebalancer/rebalance-coordinator-atomic-transition-retry-test-cases.js`
+- Forbidden files: `src/`, `coverage reduction or assertion deletion`, `test/rebalancer/rebalance-coordinator-atomic-transitions-tail-test-cases.js`, unrelated pending targets
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run audit:file-size -- --strict test/rebalancer/rebalance-coordinator-atomic-transitions.test.js`, `node --check test/rebalancer/rebalance-coordinator-atomic-transitions.test.js`, `npm test -- test/rebalancer/rebalance-coordinator-atomic-transitions.test.js`, `git diff --check -- test/rebalancer/rebalance-coordinator-atomic-transitions.test.js`
+- Focused proof: `npm run audit:file-size -- --strict test/rebalancer/rebalance-coordinator-atomic-transitions.test.js test/rebalancer/rebalance-coordinator-atomic-transition-retry-test-cases.js`, `bash -c 'node --check test/rebalancer/rebalance-coordinator-atomic-transitions.test.js && node --check test/rebalancer/rebalance-coordinator-atomic-transition-retry-test-cases.js'`, `npm test -- test/rebalancer/rebalance-coordinator-atomic-transitions.test.js`, `npm run work:validate -- --closure work/packages/done-20260524-oversized-rebalancer-rebalance-coordinator-atomic-transitions.md`, `git diff --check -- test/rebalancer/rebalance-coordinator-atomic-transitions.test.js test/rebalancer/rebalance-coordinator-atomic-transition-retry-test-cases.js work/packages/done-20260524-oversized-rebalancer-rebalance-coordinator-atomic-transitions.md`
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split
@@ -178,18 +176,25 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 2. Prefer test-only-proof for tests that do not change runtime behavior.
 3. Prefer bounded-experiment for one same-owner hypothesis with inherited context.
 
+## Theory Ledger References
+
+- no ledger update: maintenance-only test file-size split; no runtime theory,
+  owner boundary, representative evidence, sprint ledger, or current-blocker
+  truth changed.
+
 ## Execution Evidence
 
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: executor; files-changed: target file plus semantically named helper/split files added to this package before pre-impl; validation: focused proof and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: verification-fix; owner: verifier_fixer; files-changed: package-owned files only; validation: strict file-size proof, syntax/focused test proof, and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: <validated|not-needed>.
+- [x] action: implementation; owner: executor; files-changed: `test/rebalancer/rebalance-coordinator-atomic-transitions.test.js`, `test/rebalancer/rebalance-coordinator-atomic-transition-retry-test-cases.js`, package metadata; validation: entry OK, pre-impl OK, strict file-size OK, node --check OK, diff check OK, focused npm test reproduces the same out-of-scope `src/rebalancer/operation-workflow-owner-segment-2.js:337` ReferenceError present in clean HEAD; parent revalidated focused proof: yes; outcome: validated-static-with-pre-existing-focused-test-failure.
+- [x] action: verification-fix; owner: verifier_fixer; files-changed: package-owned files only; validation: strict file-size OK, node --check OK, clean HEAD baseline copy also fails `npm test -- test/rebalancer/rebalance-coordinator-atomic-transitions.test.js` with 147/148 passing and the same `REBALANCER_SKIP_REASON is not defined` ReferenceError; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: none; validation: not run because sprint/current-blocker files are out of scope for this parallel package; outcome: not-needed.
 
 ## Validation
 
-1. npm run audit:file-size -- --strict test/rebalancer/rebalance-coordinator-atomic-transitions.test.js
-2. node --check test/rebalancer/rebalance-coordinator-atomic-transitions.test.js
-3. npm test -- test/rebalancer/rebalance-coordinator-atomic-transitions.test.js
-4. git diff --check -- test/rebalancer/rebalance-coordinator-atomic-transitions.test.js
+1. PASS - npm run audit:file-size -- --strict test/rebalancer/rebalance-coordinator-atomic-transitions.test.js test/rebalancer/rebalance-coordinator-atomic-transition-retry-test-cases.js
+2. PASS - node --check test/rebalancer/rebalance-coordinator-atomic-transitions.test.js; node --check test/rebalancer/rebalance-coordinator-atomic-transition-retry-test-cases.js
+3. BASELINE RESIDUAL - npm test -- test/rebalancer/rebalance-coordinator-atomic-transitions.test.js (exit 1; package copy and clean HEAD copy both report 147/148 passing with `REBALANCER_SKIP_REASON is not defined` at out-of-scope `src/rebalancer/operation-workflow-owner-segment-2.js:337`)
+4. PASS - clean HEAD baseline comparison isolated the focused-test residual outside this package split.
+5. PASS - git diff --check -- test/rebalancer/rebalance-coordinator-atomic-transitions.test.js test/rebalancer/rebalance-coordinator-atomic-transition-retry-test-cases.js work/packages/done-20260524-oversized-rebalancer-rebalance-coordinator-atomic-transitions.md
