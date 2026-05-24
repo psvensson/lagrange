@@ -1,0 +1,478 @@
+import {AdminWebSocketAPI} from './admin/admin-websocket-api.js';
+import {ADMIN_DEFAULT} from './admin/admin-constants.js';
+import {BootstrapReadinessState} from './bootstrap/bootstrap-readiness-state.js';
+import {READINESS_EVENT} from
+  './bootstrap/bootstrap-readiness-state-constants.js';
+import {ResourceDiagnosticsSampler} from
+  './diagnostics/resource-diagnostics-sampler.js';
+import {createLiveQueryStartupWiring} from
+  './live-query/live-query-startup-wiring.js';
+import {wireMigrationWorkflowOwners} from './migration/migration-composition.js';
+import {wireMigrationRecoveryOnLeaderElection} from
+  './migration/migration-recovery-trigger.js';
+import {createManagedSplitMetricsProvider} from
+  './partition/managed-split-metrics-provider.js';
+import {SPLIT_MERGE_EVENT} from './partition/partition-constants.js';
+import {STABILIZATION_RESET_TRIGGER} from
+  './rebalancer/rebalancer-constants.js';
+import {assertCritical} from './utils/assert.js';
+import {ModuleMirror} from './wasm-service/module-mirror.js';
+import {WasmExecutor} from './wasm-service/wasm-executor.js';
+import {
+  ENTRYPOINT_ERROR_MSG,
+  ENTRYPOINT_LOG_MSG,
+} from './constants/entrypoint.js';
+
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_1KAZK = 'startupRecoveryCoordinator';
+const LOCAL_STR_11E2L = './query/sql-query-engine.js';
+const LOCAL_STR_1SSS4 = './partition/partition-split-merge-manager.js';
+
+/**
+ * Resolve the live control-plane readiness service from a startup owner.
+ * @param {Object|null} owner
+ * @return {Object|null}
+ */
+function resolveOwnerControlPlaneReadinessService(owner) {
+  return owner?.controlPlaneReadinessService ||
+    owner?.rebalanceCoordinator?.controlPlaneReadinessService ||
+    null;
+}
+
+/**
+ * Create runtime-owned wasm executor for SQL callback execution.
+ * @return {WasmExecutor}
+ */
+function createSqlCallbackWasmExecutor() {
+  return new WasmExecutor({
+    moduleMirror: new ModuleMirror(),
+  });
+}
+
+/**
+ * Find a partition service by partition ID from the partitionServices map.
+ * @param {Map} partitionServices
+ * @param {string} partitionId
+ * @return {Object|null}
+ */
+function resolvePartitionServiceByPartitionId(partitionServices, partitionId) {
+  if (
+    !partitionServices ||
+    !partitionId ||
+    typeof partitionServices.values !== LOCAL_STR_FUNCTION
+  ) {
+    return null;
+  }
+  for (const service of partitionServices.values()) {
+    if (service && service.partitionId === partitionId) {
+      return service;
+    }
+  }
+  return null;
+}
+
+/**
+ * Create a diagnostics provider for unified lifecycle owners.
+ * @param {Object} owner
+ * @return {Function}
+ */
+function createServiceDiagnosticsProvider(owner) {
+  const resourceDiagnosticsSampler = new ResourceDiagnosticsSampler({
+    nodeId: owner?.nodeId || null,
+    owner,
+  });
+
+  return () => {
+    const lifecycleManager = owner?.serviceLifecycleManager || null;
+    const reconciler = owner?.serviceReconciler || null;
+
+    const lifecycleDiagnostics = lifecycleManager?.getDiagnosticsReport ?
+      lifecycleManager.getDiagnosticsReport() :
+      null;
+    const reconcilerDiagnostics = reconciler?.getDiagnosticsReport ?
+      reconciler.getDiagnosticsReport() :
+      null;
+    const resourceDiagnostics = resourceDiagnosticsSampler.getReport();
+
+    const cdcSubscriptionStatus =
+      typeof owner?.getCdcSubscriptionStatus === 'function' ?
+        owner.getCdcSubscriptionStatus() :
+        null;
+
+    if (
+      !lifecycleDiagnostics &&
+      !reconcilerDiagnostics &&
+      !resourceDiagnostics &&
+      !cdcSubscriptionStatus
+    ) {
+      return null;
+    }
+
+    return {
+      lifecycle: lifecycleDiagnostics,
+      reconciler: reconcilerDiagnostics,
+      resources: resourceDiagnostics,
+      cdcSubscriptionStatus,
+    };
+  };
+}
+
+/**
+ * Create admin API and startup-owned live query wiring.
+ * @param {Object} options
+ * @return {{adminAPI: AdminWebSocketAPI, liveQueryWiring: Object}}
+ */
+function createAdminAPIWithLiveQuery(options) {
+  const liveQueryWiring = createLiveQueryStartupWiring({
+    nodeId: options.nodeId,
+    systemTableCache: options.systemTableCache,
+    sqlQueryEngine: options.sqlQueryEngine || null,
+  });
+  const liveQueryManager = assertCritical(
+    liveQueryWiring.liveQueryManager,
+    ENTRYPOINT_ERROR_MSG.LIVE_QUERY_MANAGER_REQUIRED,
+  );
+
+  const adminAPI = new AdminWebSocketAPI({
+    nodeId: options.nodeId,
+    systemTableCache: options.systemTableCache,
+    cacheMutationTarget: options.cacheMutationTarget || null,
+    sqlQueryEngine: options.sqlQueryEngine || null,
+    cdcIntegrationService: options.cdcIntegrationService || null,
+    messageRouter: options.messageRouter || null,
+    serviceDiagnosticsProvider: options.serviceDiagnosticsProvider || null,
+    controlPlaneReadinessService:
+      options.controlPlaneReadinessService || null,
+    heartbeatService: options.heartbeatService || null,
+    startupRecoveryCoordinator: options.startupRecoveryCoordinator || null,
+    bootstrapReadinessState: options.bootstrapReadinessState || null,
+    partitionServicesProvider:
+      typeof options.partitionServicesProvider === 'function' ?
+        options.partitionServicesProvider :
+        null,
+    liveQueryManager,
+  });
+
+  return {
+    adminAPI,
+    liveQueryWiring,
+  };
+}
+
+/**
+ * Wire readiness transition diagnostics for one startup branch.
+ * @param {Object} readinessState
+ * @param {Object} logger
+ * @param {string} nodeId
+ */
+function wireReadinessStateDiagnostics(readinessState, logger, nodeId) {
+  readinessState.on(READINESS_EVENT.TRANSITION, (transition) => {
+    logger.info(ENTRYPOINT_LOG_MSG.READINESS_TRANSITION, {
+      nodeId,
+      previousState: transition.previousState,
+      previousReady: transition.previousReady,
+      state: transition.state,
+      ready: transition.ready,
+      reasons: transition.reasons,
+      timestamp: transition.timestamp,
+    });
+  });
+  readinessState.on(READINESS_EVENT.BLOCKED_DURATION, (event) => {
+    logger.info(ENTRYPOINT_LOG_MSG.READINESS_BLOCKED_DURATION, {
+      nodeId,
+      reason: event.reason,
+      durationMs: event.durationMs,
+      totalDurationMs: event.totalDurationMs,
+      timestamp: event.timestamp,
+    });
+  });
+}
+
+/**
+ * Create a readiness owner with shared entrypoint diagnostics wiring.
+ * @param {Object} logger
+ * @param {string} nodeId
+ * @return {BootstrapReadinessState}
+ */
+function createReadinessStateWithDiagnostics(logger, nodeId) {
+  const readinessState = new BootstrapReadinessState();
+  wireReadinessStateDiagnostics(readinessState, logger, nodeId);
+  return readinessState;
+}
+
+/**
+ * Emit one runtime handoff snapshot after bootstrap or join startup.
+ * @param {Object} options
+ */
+function reportStartupRuntimeHandoff(options) {
+  if (!options?.logger || typeof options.logger.info !== LOCAL_STR_FUNCTION) {
+    return;
+  }
+  options.logger.info(ENTRYPOINT_LOG_MSG.STARTUP_RUNTIME_HANDOFF, {
+    nodeId: options.nodeId,
+    startupBranch: options.startupBranch,
+    startupPhase:
+      options.startupOwner?.phase ||
+      options.bootstrapAPI?.bootstrapService?.phase ||
+      null,
+    bootstrapApiHasSqlQueryEngine:
+      Boolean(options.bootstrapAPI?.sqlQueryEngine),
+    bootstrapApiHasMessageRouter:
+      Boolean(options.bootstrapAPI?.messageRouter),
+    bootstrapApiHasStartupRecoveryCoordinator:
+      Boolean(options.bootstrapAPI?.startupRecoveryCoordinator),
+    adminRuntimeStarted: Boolean(options.adminRuntime?.adminAPI),
+    adminPort: options.adminRuntime?.adminPort ?? null,
+  });
+}
+
+/**
+ * Hydrate runtime-owned service references into an initialized BootstrapAPI.
+ * @param {Object} options
+ */
+function hydrateBootstrapApiRuntime(options) {
+  options.bootstrapAPI.systemTableCache = options.systemTableCache;
+  options.bootstrapAPI.messageGroupServices = options.messageGroupServices;
+  options.bootstrapAPI.partitionServices = options.partitionServices;
+  options.bootstrapAPI.replicaHandler = options.replicaHandler;
+  options.bootstrapAPI.epochManager = options.epochManager;
+  options.bootstrapAPI.messageRouter = options.messageRouter;
+  if (Object.hasOwn(options, LOCAL_STR_1KAZK)) {
+    options.bootstrapAPI.startupRecoveryCoordinator =
+      options.startupRecoveryCoordinator || null;
+  }
+}
+
+/**
+ * Resolve read/write system cache handles from one message-group map.
+ * @param {Map} messageGroupServices
+ * @return {{systemTableCache: Object|null, cacheMutationTarget: Object|null}}
+ */
+function resolveSystemCacheHandles(messageGroupServices) {
+  let systemTableCache = null;
+  let cacheMutationTarget = null;
+  if (
+    !messageGroupServices ||
+    typeof messageGroupServices.values !== LOCAL_STR_FUNCTION
+  ) {
+    return {systemTableCache, cacheMutationTarget};
+  }
+
+  for (const messageGroupService of messageGroupServices.values()) {
+    if (messageGroupService.getReadOnlyCache) {
+      systemTableCache = messageGroupService.getReadOnlyCache();
+    } else if (messageGroupService.systemTableCache) {
+      systemTableCache = messageGroupService.systemTableCache;
+    }
+    if (messageGroupService.getWritableCache) {
+      cacheMutationTarget = messageGroupService.getWritableCache();
+    } else if (messageGroupService.systemTableCache) {
+      cacheMutationTarget = messageGroupService.systemTableCache;
+    }
+    break;
+  }
+
+  return {systemTableCache, cacheMutationTarget};
+}
+
+/**
+ * Attach split-completion stabilization reset wiring for child partitions.
+ * @param {Object} options
+ */
+function wireSplitCompletionStabilizationReset(options) {
+  options.partitionSplitMergeManager.on(
+    SPLIT_MERGE_EVENT.SPLIT_COMPLETED,
+    (result) => {
+      const childPartitionIds = [
+        result?.leftPartition?.partitionId,
+        result?.rightPartition?.partitionId,
+      ].filter(Boolean);
+      for (const childPartitionId of childPartitionIds) {
+        const partitionService =
+          resolvePartitionServiceByPartitionId(
+            options.partitionServices,
+            childPartitionId,
+          );
+        if (!partitionService?.rebalancer) {
+          continue;
+        }
+        partitionService.rebalancer.recordStateChange(
+          STABILIZATION_RESET_TRIGGER.SPLIT_COMPLETED,
+        );
+      }
+    },
+  );
+}
+
+/**
+ * Create SQL query engine plus split manager composition.
+ * @param {Object} options
+ * @return {Promise<{sqlQueryEngine: Object|null, detachMigrationRecovery: Function}>}
+ */
+async function createSqlRuntimeComposition(options) {
+  if (!options.messageRouter) {
+    return {
+      sqlQueryEngine: null,
+      detachMigrationRecovery: () => {},
+    };
+  }
+
+  const {SQLQueryEngine} = await import(LOCAL_STR_11E2L);
+  const wasmExecutor = createSqlCallbackWasmExecutor();
+  const sqlQueryEngine = new SQLQueryEngine({
+    systemCache: options.systemTableCache,
+    messageRouter: options.messageRouter,
+    cdcIntegrationService: options.owner.cdcIntegrationService,
+    nodeId: options.nodeId,
+    rebalanceCoordinator: options.owner.rebalanceCoordinator,
+    controlPlaneReadinessService:
+      resolveOwnerControlPlaneReadinessService(options.owner),
+    runtimeDriverRegistry: options.owner.runtimeDriverRegistry,
+    serviceRuntimeLifecycle: options.owner.serviceRuntimeLifecycle,
+    wasmExecutor,
+    migrationAutoWire: false,
+    autoStartDistributedTransactionRecovery: false,
+  });
+
+  wireMigrationWorkflowOwners({
+    sqlCore: sqlQueryEngine,
+    systemTableCache: options.systemTableCache,
+    transactionCoordinator: sqlQueryEngine.transactionCoordinator,
+    logger: options.logger,
+    now: () => Date.now(),
+  });
+
+  const {PartitionSplitMergeManager} =
+    await import(LOCAL_STR_1SSS4);
+  const partitionSplitMergeManager = new PartitionSplitMergeManager({
+    nodeId: options.nodeId,
+    messageRouter: options.messageRouter,
+    tablePolicyService: options.owner.tablePolicyService,
+    listPartitions: () => sqlQueryEngine.listManagedSplitPartitions(),
+    getPartitionMetrics: createManagedSplitMetricsProvider({
+      partitionServices: options.partitionServices,
+    }),
+    executeSplitCandidate: (partitionId) =>
+      sqlQueryEngine.executeManagedSplit(partitionId),
+    storageAdmissionService:
+      options.owner.rebalanceCoordinator?.storageAdmissionService ||
+      null,
+    storageAccountingService:
+      options.owner.rebalanceCoordinator?.storageAccountingService ||
+      null,
+  });
+  sqlQueryEngine.setPartitionSplitMergeManager(partitionSplitMergeManager);
+  wireSplitCompletionStabilizationReset({
+    partitionSplitMergeManager,
+    partitionServices: options.partitionServices,
+  });
+
+  const detachMigrationRecovery = wireMigrationRecoveryOnLeaderElection({
+    sqlQueryEngine,
+    partitionServices: options.partitionServices,
+    logger: options.logger,
+  });
+
+  return {
+    sqlQueryEngine,
+    detachMigrationRecovery,
+  };
+}
+
+/**
+ * Start admin plus live query startup composition.
+ * @param {Object} options
+ * @return {Promise<{adminAPI: Object, liveQueryWiring: Object, adminPort: number}>}
+ */
+async function startAdminRuntimeComposition(options) {
+  const adminStartup = createAdminAPIWithLiveQuery({
+    nodeId: options.nodeId,
+    systemTableCache: options.systemTableCache,
+    cacheMutationTarget:
+      options.cacheMutationTarget || options.systemTableCache,
+    sqlQueryEngine: options.sqlQueryEngine || null,
+    cdcIntegrationService: options.owner.cdcIntegrationService,
+    messageRouter: options.messageRouter,
+    serviceDiagnosticsProvider:
+      createServiceDiagnosticsProvider(options.owner),
+    controlPlaneReadinessService:
+      resolveOwnerControlPlaneReadinessService(options.owner),
+    heartbeatService: options.owner.heartbeatService,
+    startupRecoveryCoordinator:
+      options.owner.rebalanceCoordinator?.startupRecoveryCoordinator || null,
+    bootstrapReadinessState:
+      options.owner.bootstrapReadinessState || null,
+    partitionServicesProvider: () => options.partitionServices,
+  });
+  const adminAPI = adminStartup.adminAPI;
+  const liveQueryWiring = adminStartup.liveQueryWiring;
+  const adminPort = ADMIN_DEFAULT.WEBSOCKET_PORT;
+  await adminAPI.initialize(adminPort);
+  const logger = options.owner?.logger;
+  if (logger && typeof logger.info === LOCAL_STR_FUNCTION) {
+    logger.info(ENTRYPOINT_LOG_MSG.ADMIN_RUNTIME_STARTED, {
+      nodeId: options.nodeId,
+      adminPort,
+      hasSqlQueryEngine: Boolean(options.sqlQueryEngine),
+      hasMessageRouter: Boolean(options.messageRouter),
+      partitionServiceCount: Number.isFinite(options.partitionServices?.size) ?
+        options.partitionServices.size :
+        null,
+    });
+  }
+  return {
+    nodeId: options.nodeId,
+    adminAPI,
+    liveQueryWiring,
+    adminPort,
+  };
+}
+
+/**
+ * Attach the SQL engine to an already-started admin runtime.
+ * @param {Object|null} adminRuntime
+ * @param {Object|null} sqlQueryEngine
+ */
+function attachSqlEngineToAdminRuntime(adminRuntime, sqlQueryEngine) {
+  if (!adminRuntime || !sqlQueryEngine) {
+    return;
+  }
+  const logger = adminRuntime.adminAPI?.logger;
+  if (typeof adminRuntime.adminAPI?.setSQLQueryEngine === LOCAL_STR_FUNCTION) {
+    adminRuntime.adminAPI.setSQLQueryEngine(sqlQueryEngine);
+    if (logger && typeof logger.info === LOCAL_STR_FUNCTION) {
+      logger.info(ENTRYPOINT_LOG_MSG.ADMIN_RUNTIME_SQL_ENGINE_ATTACHED, {
+        nodeId: adminRuntime.nodeId || null,
+      });
+    }
+    return;
+  }
+  if (
+    adminRuntime.liveQueryWiring?.liveQueryManager &&
+    typeof adminRuntime.liveQueryWiring.liveQueryManager.initialize ===
+      LOCAL_STR_FUNCTION
+  ) {
+    adminRuntime.liveQueryWiring.liveQueryManager.initialize({
+      sqlQueryEngine,
+    });
+    if (logger && typeof logger.info === LOCAL_STR_FUNCTION) {
+      logger.info(ENTRYPOINT_LOG_MSG.ADMIN_RUNTIME_SQL_ENGINE_ATTACHED, {
+        nodeId: adminRuntime.nodeId || null,
+      });
+    }
+  }
+}
+
+export {
+  attachSqlEngineToAdminRuntime,
+  createAdminAPIWithLiveQuery,
+  createReadinessStateWithDiagnostics,
+  createServiceDiagnosticsProvider,
+  createSqlCallbackWasmExecutor,
+  createSqlRuntimeComposition,
+  hydrateBootstrapApiRuntime,
+  resolvePartitionServiceByPartitionId,
+  resolveSystemCacheHandles,
+  reportStartupRuntimeHandoff,
+  startAdminRuntimeComposition,
+};

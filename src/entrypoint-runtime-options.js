@@ -1,0 +1,143 @@
+import {CONFIG_KEY} from './config/config-constants.js';
+import {resolveControlPlaneRolloutControls} from
+  './runtime/control-plane-rollout-controls.js';
+import {TRANSPORT_CONFIG_KEY} from './constants/transport.js';
+import {resolveAdvertisedWebSocketAddress} from
+  './transport/node-address-resolution.js';
+import {
+  ENTRYPOINT_DEFAULT,
+  ENTRYPOINT_ENV,
+  ENTRYPOINT_FLAG,
+  ENTRYPOINT_TEXT,
+} from './constants/entrypoint.js';
+
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_OPTIONS = 'Options:';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_ONE = 1;
+
+/**
+ * Check for version flag.
+ * @param {string} version
+ * @return {boolean} True if version was printed.
+ */
+function checkVersionFlag(version) {
+  const args = process.argv.slice(2);
+  if (
+    args.includes(ENTRYPOINT_FLAG.VERSION_LONG) ||
+    args.includes(ENTRYPOINT_FLAG.VERSION_SHORT)
+  ) {
+    console.log(ENTRYPOINT_TEXT.versionLine(version));
+    return true;
+  }
+  if (
+    args.includes(ENTRYPOINT_FLAG.HELP_LONG) ||
+    args.includes(ENTRYPOINT_FLAG.HELP_SHORT)
+  ) {
+    console.log(ENTRYPOINT_TEXT.headerLine(version));
+    console.log(LOCAL_STR_EMPTY);
+    console.log(ENTRYPOINT_TEXT.USAGE_LINE);
+    console.log(LOCAL_STR_EMPTY);
+    console.log(LOCAL_STR_OPTIONS);
+    for (const line of ENTRYPOINT_TEXT.OPTIONS_LINES) {
+      console.log(line);
+    }
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Parse command-line arguments.
+ * @return {Object} Parsed arguments.
+ */
+function parseCommandLineArgs() {
+  const args = process.argv.slice(2);
+  const result = {};
+
+  for (let i = LOCAL_NUM_ZERO; i < args.length; i++) {
+    if (args[i] === ENTRYPOINT_FLAG.DATA_DIR && i + LOCAL_NUM_ONE < args.length) {
+      result.dataDir = args[i + LOCAL_NUM_ONE];
+      i++;
+    } else if (args[i] === ENTRYPOINT_FLAG.SEED && i + LOCAL_NUM_ONE < args.length) {
+      result.seedNodeAddress = args[i + LOCAL_NUM_ONE];
+      i++;
+    } else if (args[i] === ENTRYPOINT_FLAG.CONFIG && i + LOCAL_NUM_ONE < args.length) {
+      result.configPath = args[i + LOCAL_NUM_ONE];
+      i++;
+    } else if (args[i] === ENTRYPOINT_FLAG.DRY_RUN) {
+      result.dryRun = true;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Parse a positive millisecond value from environment input.
+ * @param {string|number|undefined} value
+ * @return {number|null}
+ */
+function parsePositiveTimeoutMs(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < LOCAL_NUM_ONE) {
+    return null;
+  }
+  return Math.floor(parsed);
+}
+
+/**
+ * Resolve rollout controls from environment overrides.
+ * @param {Object} env
+ * @return {Object}
+ */
+function resolveRolloutControlsFromEnvironment(env) {
+  return resolveControlPlaneRolloutControls({
+    lifecycleProbes:
+      env[ENTRYPOINT_ENV.CONTROL_PLANE_LIFECYCLE_PROBES_REQUIRED],
+    workClassScheduler:
+      env[ENTRYPOINT_ENV.CONTROL_PLANE_WORK_CLASS_SCHEDULER_REQUIRED],
+    durableJoinSessions:
+      env[ENTRYPOINT_ENV.CONTROL_PLANE_DURABLE_JOIN_SESSIONS_REQUIRED],
+  });
+}
+
+/**
+ * Resolve runtime-facing node addresses from config.
+ * @param {Object} config
+ * @return {Object}
+ */
+function resolveRuntimeAddresses(config) {
+  const restApiPort =
+    config.get(CONFIG_KEY.NODE_REST_API_PORT) ||
+    ENTRYPOINT_DEFAULT.REST_API_PORT;
+  const wsPort =
+    config.get(CONFIG_KEY.NODE_WS_PORT) ||
+    (restApiPort + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET);
+  const nodeHttpAddress =
+    config.get(CONFIG_KEY.NODE_ADDRESS) ||
+    `${ENTRYPOINT_DEFAULT.LOCALHOST}:${restApiPort}`;
+  const advertisedNodeWsAddress =
+    resolveAdvertisedWebSocketAddress({
+      advertisedAddress: config.get(
+        CONFIG_KEY.NODE_ADVERTISED_WS_ADDRESS,
+      ),
+      nodeAddress: nodeHttpAddress,
+      wsPort,
+      wsHost: config.get(TRANSPORT_CONFIG_KEY.WS_HOST),
+    });
+  return {
+    restApiPort,
+    wsPort,
+    nodeHttpAddress,
+    advertisedNodeWsAddress,
+  };
+}
+
+export {
+  checkVersionFlag,
+  parseCommandLineArgs,
+  parsePositiveTimeoutMs,
+  resolveRuntimeAddresses,
+  resolveRolloutControlsFromEnvironment,
+};

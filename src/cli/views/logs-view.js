@@ -1,153 +1,91 @@
 /**
- * LogsView - Displays system logs with filtering and highlighting
+ * LogsView - Displays system logs with filtering and highlighting.
  *
  * Streams logs via LIVE SELECT from the owning partition (logs is a
  * non-propagated table, so it is never in the SystemTableCache).
  * When filters change, the view re-subscribes with an updated
  * server-side WHERE clause.
  *
- * Columns: timestamp, level, node_id, service_id, message
+ * Columns: timestamp, level, node_id, service_id, message.
  * Supports multi-criteria filtering, level-based highlighting, and sorting.
  *
  * Requirements: 29.1, 29.2, 29.3, 29.4, 29.5, 29.6, 29.7, 29.8,
  *               29.9, 29.11, 29.12
  */
 
-import {BaseView, ROW_STATUS} from '../core/base-view.js';
+import {BaseView} from '../core/base-view.js';
+import {
+  applyLogFilters,
+  applyLogSort,
+  compareNullishSortValues as compareNullishLogSortValues,
+  compareResolvedSortValues as compareResolvedLogSortValues,
+  compareRowsForCurrentSort as compareLogRowsForCurrentSort,
+  compareTimestampTieBreakers as compareLogTimestampTieBreakers,
+  escapeLogRegex,
+  exportLogsAsCSV,
+  exportLogsAsJSON,
+  exportLogsAsText,
+  exportLogsFromView,
+  formatLogRow,
+  formatLogTimestamp,
+  getLogColumns,
+  getLogLevelColor,
+  getLogRowStatus,
+  getLogsExportMetadata,
+  getLogsStatusBarInfo,
+  getLogsTimeRange,
+  getSelectedLogDetails,
+  resolveLogSortValue,
+  truncateLogMessage,
+} from './logs-view-data-helpers.js';
+import {
+  LOG_LEVEL_ERROR,
+  LOGS_ACTION_SHOW_DETAIL,
+  LOGS_COLUMN_TIMESTAMP,
+  LOGS_EMPTY_STRING,
+  LOGS_EVENT_LIVEQUERY_EVENT,
+  LOGS_EVENT_LIVEQUERY_INITIALIZED,
+  LOGS_EVENT_TYPE_DELETE,
+  LOGS_EVENT_TYPE_INSERT,
+  LOGS_EVENT_TYPE_SNAPSHOT,
+  LOGS_EVENT_TYPE_UPDATE,
+  LOGS_EVENT_VIEW_REFRESH,
+  LOGS_HIGHLIGHT_MAX_CHANGED_ROWS,
+  LOGS_KEY_ENTER,
+  LOGS_KEY_RETURN,
+  LOGS_LIVE_QUERY_UNAVAILABLE_ERROR,
+  LOGS_QUERY_ERROR_ID,
+  LOGS_SORT_DESC,
+  LOGS_SYSTEM_NODE_ID,
+  LOGS_SYSTEM_SERVICE_ID,
+  LOGS_VIEW_NAME,
+} from './logs-view-constants.js';
+import {
+  buildLiveLogsQuery as buildLiveLogsSql,
+  buildLiveLogsWhereConditions as buildLiveLogsSqlWhereConditions,
+  buildLogsQuery as buildLogsSql,
+  getLogTimestampMs as resolveLogTimestampMs,
+  normalizeLogTimestamp,
+  parseLogTimestamp,
+  quoteSqlLiteral as quoteSqlValueLiteral,
+  resolveLiveWindowStartTime as resolveLiveWindowStartTimeValue,
+} from './logs-view-query-helpers.js';
 
-const LOCAL_STR_ERROR = 'ERROR';
-const LOCAL_STR_WARN = 'WARN';
-const LOCAL_STR_INFO = 'INFO';
-const LOCAL_STR_DEBUG = 'DEBUG';
-const LOCAL_STR_TRACE = 'TRACE';
-const LOCAL_STR_RED = 'red';
-const LOCAL_STR_YELLOW = 'yellow';
-const LOCAL_STR_WHITE = 'white';
-const LOCAL_STR_GRAY = 'gray';
-const LOCAL_STR_LOGS = 'logs';
-const LOCAL_STR_TIMESTAMP = 'timestamp';
-const LOCAL_STR_DESC = 'desc';
-const LOCAL_STR_1RDRD = 'livequery:initialized';
-const LOCAL_STR_VIEW_REFRESH = 'view:refresh';
-const LOCAL_STR_LIVEQUERY_EVENT = 'livequery:event';
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_STR_NULL = 'NULL';
-const LOCAL_STR_NUMBER = 'number';
-const LOCAL_STR_BOOLEAN = 'boolean';
-const LOCAL_STR_1 = '1';
-const LOCAL_STR_0 = '0';
-const LOCAL_STR_Y2288 = '\'\'';
-const LOCAL_STR_AND = ' AND ';
-const LOCAL_STR_EMPTY = '';
-const LOCAL_STR_TIMESTAMP_2 = 'Timestamp';
-const LOCAL_NUM_24 = 24;
-const LOCAL_STR_LEVEL = 'level';
-const LOCAL_STR_LEVEL_2 = 'Level';
-const LOCAL_NUM_EIGHT = 8;
-const LOCAL_STR_NODE_ID = 'node_id';
-const LOCAL_STR_NODE_ID_2 = 'Node ID';
-const LOCAL_NUM_15 = 15;
-const LOCAL_STR_SERVICE_ID = 'service_id';
-const LOCAL_STR_SERVICE_ID_2 = 'Service ID';
-const LOCAL_NUM_20 = 20;
-const LOCAL_STR_MESSAGE = 'message';
-const LOCAL_STR_MESSAGE_2 = 'Message';
-const LOCAL_NUM_60 = 60;
-const LOCAL_STR_N_A = 'N/A';
-const LOCAL_STR_T = 'T';
-const LOCAL_STR_SPACE = ' ';
-const LOCAL_NUM_23 = 23;
-const LOCAL_NUM_80 = 80;
-const LOCAL_NUM_THREE = 3;
-const LOCAL_STR_2ZI04 = '...';
-const LOCAL_STR_STRING = 'string';
-const LOCAL_STR_1D7VE = '\\$&';
-const LOCAL_NUM_ONE = 1;
-const LOCAL_STR_ASC = 'asc';
-const LOCAL_STR_SHOWDETAIL = 'showDetail';
-const LOCAL_STR_ENTER = 'enter';
-const LOCAL_STR_RETURN = 'return';
-const LOCAL_STR_OBJECT = 'object';
-const LOCAL_STR_METADATA = 'Metadata';
-const LOCAL_STR_UNKNOWN = 'Unknown';
-const LOCAL_STR_TIME_RANGE_ACTIVE = 'Time range active';
-const LOCAL_STR_JSON = 'json';
-const LOCAL_STR_CSV = 'csv';
-const LOCAL_STR_TEXT = 'text';
-const LOCAL_NUM_TWO = 2;
-const LOCAL_STR_192RZ = 'timestamp,level,node_id,service_id,message';
-const LOCAL_STR_COMMA = ',';
-const LOCAL_STR_NEWLINE = '\n';
-const LOCAL_STR_NO_LOGS_TO_EXPORT = 'No logs to export';
+export {LOG_LEVELS, LOG_LEVEL_COLORS} from './logs-view-constants.js';
 
 /**
- * Log levels in order of severity
- */
-export const LOG_LEVELS = [LOCAL_STR_ERROR, LOCAL_STR_WARN, LOCAL_STR_INFO, LOCAL_STR_DEBUG, LOCAL_STR_TRACE];
-
-/**
- * Color mappings for log levels
- * Requirements: 29.8
- */
-export const LOG_LEVEL_COLORS = {
-  ERROR: LOCAL_STR_RED,
-  WARN: LOCAL_STR_YELLOW,
-  INFO: LOCAL_STR_WHITE,
-  DEBUG: LOCAL_STR_GRAY,
-  TRACE: LOCAL_STR_GRAY,
-};
-
-const LOGS_QUERY_LIMIT = 200;
-const LOGS_TABLE = 'logs';
-const LOGS_QUERY_ORDER_BY = 'timestamp DESC, created_at DESC, log_id DESC';
-const LOGS_QUERY_SELECT_ALL = 'SELECT *';
-const LOGS_QUERY_LIVE_PREFIX = 'LIVE ';
-const LOGS_QUERY_WHERE = ' WHERE ';
-const LOGS_QUERY_AND = ' AND ';
-const LOGS_QUERY_EQUAL = ' = ';
-const LOGS_QUERY_GTE = ' >= ';
-const LOGS_QUERY_LTE = ' <= ';
-const LOGS_QUERY_LIKE = ' LIKE ';
-const LOGS_QUERY_LIMIT_CLAUSE = ` LIMIT ${LOGS_QUERY_LIMIT}`;
-const LOGS_QUERY_ORDER_BY_CLAUSE = ` ORDER BY ${LOGS_QUERY_ORDER_BY}`;
-const LOGS_QUERY_ERROR_ID = 'logs_error';
-const LOGS_HIGHLIGHT_MAX_CHANGED_ROWS = 24;
-const LOGS_SYSTEM_NODE_ID = 'system';
-const LOGS_SYSTEM_SERVICE_ID = 'admin-cli';
-const LOGS_QUERY_ERROR_PREFIX = 'Live query error: ';
-const LOGS_LIVE_QUERY_UNAVAILABLE_ERROR =
-  `${LOGS_QUERY_ERROR_PREFIX}Live query manager not available`;
-const LOGS_TIMESTAMP_UNAVAILABLE = 'N/A';
-const LOGS_TIMESTAMP_INTEGER_REGEX = /^-?\d+$/;
-const LOGS_TIMESTAMP_EPOCH_SECONDS_MAX_ABS = 10000000000;
-const LOGS_TIMESTAMP_MILLISECONDS_PER_SECOND = 1000;
-const LOGS_SORT_FALLBACK_ID_FIELD = 'log_id';
-const LOGS_SINCE_RESET_VALUE = 'now';
-const LOGS_SINCE_INVALID_VALUE_PREFIX = 'Invalid since value: ';
-const LOGS_SINCE_RELATIVE_REGEX = /^-(\d+)(ms|s|m|h|d)$/i;
-const LOGS_RELATIVE_UNIT_MILLISECONDS = {
-  ms: 1,
-  s: 1000,
-  m: 60 * 1000,
-  h: 60 * 60 * 1000,
-  d: 24 * 60 * 60 * 1000,
-};
-const LOGS_EVENT_TYPE_SNAPSHOT = 'SNAPSHOT';
-const LOGS_EVENT_TYPE_INSERT = 'INSERT';
-const LOGS_EVENT_TYPE_UPDATE = 'UPDATE';
-const LOGS_EVENT_TYPE_DELETE = 'DELETE';
-
-/**
- * LogsView displays system logs with filtering and highlighting
+ * LogsView displays system logs with filtering and highlighting.
  */
 export class LogsView extends BaseView {
   /**
-   * Creates a new LogsView
-   * @param {Object} options - View options
-   * @param {import('../core/remote-cache.js').RemoteCache} [options.cache] - Remote cache
-   * @param {import('../core/event-bus.js').EventBus} [options.eventBus] - Event bus
+   * Creates a new LogsView.
+   * @param {Object} options - View options.
+   * @param {import('../core/remote-cache.js').RemoteCache} [options.cache]
+   *   Remote cache.
+   * @param {import('../core/event-bus.js').EventBus} [options.eventBus]
+   *   Event bus.
    * @param {import('../core/connection-manager.js').ConnectionManager}
-   *   [options.connectionManager] - Connection manager for SQL queries
+   *   [options.connectionManager] - Connection manager for SQL queries.
    * @param {boolean} [options.liveQueryEnabled=false] - Enable live query
    *   subscription for logs view.
    */
@@ -157,9 +95,8 @@ export class LogsView extends BaseView {
     this.connectionManager = options.connectionManager || null;
     this.liveQueryManager = options.liveQueryManager || null;
     this.liveQueryEnabled = options.liveQueryEnabled === true;
-    this.viewName = LOCAL_STR_LOGS;
+    this.viewName = LOGS_VIEW_NAME;
 
-    // Multi-criteria filter state
     this.levelFilter = null;
     this.nodeFilter = null;
     this.serviceFilter = null;
@@ -167,22 +104,17 @@ export class LogsView extends BaseView {
     this.endTimeFilter = null;
     this.messageFilter = null;
 
-    // Default sort by timestamp descending (most recent first)
-    this.sortColumn = LOCAL_STR_TIMESTAMP;
-    this.sortDirection = LOCAL_STR_DESC;
+    this.sortColumn = LOGS_COLUMN_TIMESTAMP;
+    this.sortDirection = LOGS_SORT_DESC;
 
-    // Streaming state (kept for API compat; actual streaming
-    // is driven by live query events)
     this.streamingEnabled = true;
     this.changedLogIdQueue = [];
 
-    // Live query subscription tracking
     this.activeSubscriptionId = null;
     this.activeLiveQuerySql = null;
     this.viewEnteredAt = null;
     this.internalSetDataInProgress = false;
 
-    // Wire up live query event listeners
     this.setupLiveQueryListeners();
   }
 
@@ -221,7 +153,7 @@ export class LogsView extends BaseView {
       return;
     }
 
-    this.eventBus.on(LOCAL_STR_1RDRD, (event) => {
+    this.eventBus.on(LOGS_EVENT_LIVEQUERY_INITIALIZED, (event) => {
       if (!this.activeSubscriptionId) {
         return;
       }
@@ -230,190 +162,103 @@ export class LogsView extends BaseView {
       }
       const rows = Array.isArray(event.data) ? event.data : [];
       this.applySnapshotRows(rows);
-      this.eventBus.emit(LOCAL_STR_VIEW_REFRESH, {view: this});
+      this.eventBus.emit(LOGS_EVENT_VIEW_REFRESH, {view: this});
     });
 
-    this.eventBus.on(LOCAL_STR_LIVEQUERY_EVENT, (event) => {
+    this.eventBus.on(LOGS_EVENT_LIVEQUERY_EVENT, (event) => {
       if (!this.activeSubscriptionId) {
         return;
       }
       if (event.subscriptionId !== this.activeSubscriptionId) {
         return;
       }
-      const eventType = (event.eventType || '').toUpperCase();
+      const eventType = (event.eventType || LOGS_EMPTY_STRING).toUpperCase();
       if (eventType === LOGS_EVENT_TYPE_SNAPSHOT && Array.isArray(event.data)) {
         this.applySnapshotRows(event.data);
-        this.eventBus.emit(LOCAL_STR_VIEW_REFRESH, {view: this});
+        this.eventBus.emit(LOGS_EVENT_VIEW_REFRESH, {view: this});
         return;
       }
 
       if ((eventType === LOGS_EVENT_TYPE_INSERT ||
         eventType === LOGS_EVENT_TYPE_UPDATE) &&
         event.data) {
-        const selectedLogId = this.getSelectedItem()?.log_id || null;
-        const incomingLog = {...event.data};
-        const incomingLogId = this.getItemKey(incomingLog);
-
-        let replaced = false;
-        if (incomingLogId) {
-          const existingIndex = this.data.findIndex((log) =>
-            this.getItemKey(log) === incomingLogId,
-          );
-          if (existingIndex >= LOCAL_NUM_ZERO) {
-            this.data[existingIndex] = incomingLog;
-            replaced = true;
-          }
-        }
-        if (!replaced) {
-          this.data.push(incomingLog);
-        }
-
-        this.updateFilteredData();
-        this.restoreSelectionByLogId(selectedLogId);
-        if (incomingLogId) {
-          this.markLogAsChanged(incomingLogId);
-        }
-        this.eventBus.emit(LOCAL_STR_VIEW_REFRESH, {view: this});
+        this.applyLiveQueryUpsert(event.data);
+        this.eventBus.emit(LOGS_EVENT_VIEW_REFRESH, {view: this});
         return;
       }
 
       if (eventType === LOGS_EVENT_TYPE_DELETE) {
-        const deletedLog = event.data || event.oldData || null;
-        const deletedLogId = this.getItemKey(deletedLog || {});
-        if (!deletedLogId) {
-          return;
-        }
-        const selectedLogId = this.getSelectedItem()?.log_id || null;
-        const previousLength = this.data.length;
-        this.data = this.data.filter((log) => this.getItemKey(log) !== deletedLogId);
-        if (this.data.length !== previousLength) {
-          this.updateFilteredData();
-          this.restoreSelectionByLogId(selectedLogId);
-          this.eventBus.emit(LOCAL_STR_VIEW_REFRESH, {view: this});
-        }
+        this.applyLiveQueryDelete(event);
       }
     });
   }
 
   /**
-   * Build a LIVE SELECT SQL string for the logs table using
-   * current filters. Used when a liveQueryManager is available.
-   * @return {string} LIVE SELECT SQL string.
+   * Apply one live query insert/update payload.
+   * @param {Object} data - Log row payload.
+   * @private
    */
+  applyLiveQueryUpsert(data) {
+    const selectedLogId = this.getSelectedItem()?.log_id || null;
+    const incomingLog = {...data};
+    const incomingLogId = this.getItemKey(incomingLog);
+
+    let replaced = false;
+    if (incomingLogId) {
+      const existingIndex = this.data.findIndex((log) =>
+        this.getItemKey(log) === incomingLogId,
+      );
+      if (existingIndex >= 0) {
+        this.data[existingIndex] = incomingLog;
+        replaced = true;
+      }
+    }
+    if (!replaced) {
+      this.data.push(incomingLog);
+    }
+
+    this.updateFilteredData();
+    this.restoreSelectionByLogId(selectedLogId);
+    if (incomingLogId) {
+      this.markLogAsChanged(incomingLogId);
+    }
+  }
+
+  /**
+   * Apply one live query delete payload.
+   * @param {Object} event - Live query event.
+   * @private
+   */
+  applyLiveQueryDelete(event) {
+    const deletedLog = event.data || event.oldData || null;
+    const deletedLogId = this.getItemKey(deletedLog || {});
+    if (!deletedLogId) {
+      return;
+    }
+    const selectedLogId = this.getSelectedItem()?.log_id || null;
+    const previousLength = this.data.length;
+    this.data = this.data.filter((log) => this.getItemKey(log) !== deletedLogId);
+    if (this.data.length !== previousLength) {
+      this.updateFilteredData();
+      this.restoreSelectionByLogId(selectedLogId);
+      this.eventBus.emit(LOGS_EVENT_VIEW_REFRESH, {view: this});
+    }
+  }
+
   buildLiveLogsQuery() {
-    const conditions = this.buildLiveLogsWhereConditions();
-    let sql = `${LOGS_QUERY_LIVE_PREFIX}${LOGS_QUERY_SELECT_ALL} FROM ${LOGS_TABLE}`;
-    if (conditions.length > LOCAL_NUM_ZERO) {
-      sql += `${LOGS_QUERY_WHERE}${conditions.join(LOGS_QUERY_AND)}`;
-    }
-    sql += LOGS_QUERY_ORDER_BY_CLAUSE;
-    sql += LOGS_QUERY_LIMIT_CLAUSE;
-    return sql;
+    return buildLiveLogsSql(this);
   }
 
-  /**
-   * Build SQL WHERE conditions for live query using SQL literals.
-   * @return {Array<string>} SQL condition strings.
-   * @private
-   */
   buildLiveLogsWhereConditions() {
-    const conditions = [];
-
-    if (this.levelFilter) {
-      conditions.push(
-        `level${LOGS_QUERY_EQUAL}${this.quoteSqlLiteral(this.levelFilter.toUpperCase())}`,
-      );
-    }
-    if (this.nodeFilter) {
-      conditions.push(
-        `node_id${LOGS_QUERY_EQUAL}${this.quoteSqlLiteral(this.nodeFilter)}`,
-      );
-    }
-    if (this.serviceFilter) {
-      conditions.push(
-        `service_id${LOGS_QUERY_EQUAL}${this.quoteSqlLiteral(this.serviceFilter)}`,
-      );
-    }
-    if (this.startTimeFilter !== null) {
-      conditions.push(
-        `timestamp${LOGS_QUERY_GTE}${this.quoteSqlLiteral(this.startTimeFilter)}`,
-      );
-    }
-    if (this.endTimeFilter !== null) {
-      conditions.push(
-        `timestamp${LOGS_QUERY_LTE}${this.quoteSqlLiteral(this.endTimeFilter)}`,
-      );
-    }
-    if (this.messageFilter) {
-      conditions.push(
-        `message${LOGS_QUERY_LIKE}${this.quoteSqlLiteral(`%${this.messageFilter}%`)}`,
-      );
-    }
-
-    return conditions;
+    return buildLiveLogsSqlWhereConditions(this);
   }
 
-  /**
-   * Convert a JS value to a SQL literal.
-   * @param {string|number|boolean|null} value - Value to quote.
-   * @return {string} SQL literal string.
-   * @private
-   */
   quoteSqlLiteral(value) {
-    if (value === null || value === undefined) {
-      return LOCAL_STR_NULL;
-    }
-    if (typeof value === LOCAL_STR_NUMBER) {
-      return String(Math.trunc(value));
-    }
-    if (typeof value === LOCAL_STR_BOOLEAN) {
-      return value ? LOCAL_STR_1 : LOCAL_STR_0;
-    }
-    return `'${String(value).replace(/'/g, LOCAL_STR_Y2288)}'`;
+    return quoteSqlValueLiteral(value);
   }
 
-  /**
-   * Build a SQL query for the logs table using current filters.
-   * Filters are applied server-side so only matching rows are
-   * transferred.
-   * @return {{sql: string, params: Array}} SQL and positional params.
-   */
   buildLogsQuery() {
-    const conditions = [];
-    const params = [];
-
-    if (this.levelFilter) {
-      params.push(this.levelFilter.toUpperCase());
-      conditions.push(`level = ?${params.length}`);
-    }
-    if (this.nodeFilter) {
-      params.push(this.nodeFilter);
-      conditions.push(`node_id = ?${params.length}`);
-    }
-    if (this.serviceFilter) {
-      params.push(this.serviceFilter);
-      conditions.push(`service_id = ?${params.length}`);
-    }
-    if (this.startTimeFilter !== null) {
-      params.push(this.startTimeFilter);
-      conditions.push(`timestamp >= ?${params.length}`);
-    }
-    if (this.endTimeFilter !== null) {
-      params.push(this.endTimeFilter);
-      conditions.push(`timestamp <= ?${params.length}`);
-    }
-    if (this.messageFilter) {
-      params.push(`%${this.messageFilter}%`);
-      conditions.push(`message LIKE ?${params.length}`);
-    }
-
-    let sql = `SELECT * FROM ${LOGS_TABLE}`;
-    if (conditions.length > LOCAL_NUM_ZERO) {
-      sql += ` WHERE ${conditions.join(LOCAL_STR_AND)}`;
-    }
-    sql += ` ORDER BY ${LOGS_QUERY_ORDER_BY} LIMIT ${LOGS_QUERY_LIMIT}`;
-
-    return {sql, params};
+    return buildLogsSql(this);
   }
 
   /**
@@ -435,7 +280,7 @@ export class LogsView extends BaseView {
     this.restoreSelectionByLogId(selectedLogId);
     this.clearChangedLogHighlights();
 
-    if (previousLogIds.size === LOCAL_NUM_ZERO) {
+    if (previousLogIds.size === 0) {
       return;
     }
 
@@ -458,7 +303,7 @@ export class LogsView extends BaseView {
       return;
     }
     const index = this.filteredData.findIndex((log) => this.getItemKey(log) === logId);
-    if (index >= LOCAL_NUM_ZERO) {
+    if (index >= 0) {
       this.selectedIndex = index;
     }
   }
@@ -497,7 +342,6 @@ export class LogsView extends BaseView {
 
   /**
    * Ensure an active LIVE SELECT subscription for current log filters.
-   * The logs view uses live query streaming as its source of truth.
    */
   fetchLogs() {
     if (this.liveQueryEnabled !== true) {
@@ -535,13 +379,13 @@ export class LogsView extends BaseView {
     this.replaceData([{
       log_id: LOGS_QUERY_ERROR_ID,
       timestamp: Date.now(),
-      level: LOCAL_STR_ERROR,
+      level: LOG_LEVEL_ERROR,
       node_id: LOGS_SYSTEM_NODE_ID,
       service_id: LOGS_SYSTEM_SERVICE_ID,
       message,
     }]);
     if (this.eventBus) {
-      this.eventBus.emit(LOCAL_STR_VIEW_REFRESH, {view: this});
+      this.eventBus.emit(LOGS_EVENT_VIEW_REFRESH, {view: this});
     }
   }
 
@@ -572,9 +416,8 @@ export class LogsView extends BaseView {
   }
 
   /**
-   * Enable or disable real-time log streaming
-   * Requirements: 29.9
-   * @param {boolean} enabled - Whether streaming is enabled
+   * Enable or disable real-time log streaming.
+   * @param {boolean} enabled - Whether streaming is enabled.
    */
   setStreamingEnabled(enabled) {
     this.streamingEnabled = enabled;
@@ -595,8 +438,6 @@ export class LogsView extends BaseView {
 
   /**
    * Set logs live window start time and refresh live subscription.
-   * Supports epoch values, ISO strings, `now`, and relative strings
-   * like `-30s`, `-5m`, `-2h`, `-1d`.
    * @param {string|number|null|undefined} value - Start time value.
    * @return {number} Resolved epoch milliseconds start time.
    */
@@ -608,48 +449,8 @@ export class LogsView extends BaseView {
     return resolvedStartTime;
   }
 
-  /**
-   * Resolve live window start time from user-supplied value.
-   * @param {string|number|null|undefined} value - User input.
-   * @return {number} Epoch milliseconds.
-   * @throws {Error} When value is invalid.
-   * @private
-   */
   resolveLiveWindowStartTime(value) {
-    const now = Date.now();
-    if (value === null || value === undefined) {
-      return now;
-    }
-
-    if (typeof value === LOCAL_STR_NUMBER) {
-      const normalized = this.normalizeNumericTimestamp(value);
-      if (normalized === null) {
-        throw new Error(`${LOGS_SINCE_INVALID_VALUE_PREFIX}${String(value)}`);
-      }
-      return normalized;
-    }
-
-    const trimmedValue = String(value).trim();
-    if (trimmedValue === LOCAL_STR_EMPTY || trimmedValue.toLowerCase() === LOGS_SINCE_RESET_VALUE) {
-      return now;
-    }
-
-    const relativeMatch = trimmedValue.match(LOGS_SINCE_RELATIVE_REGEX);
-    if (relativeMatch) {
-      const amount = Number(relativeMatch[1]);
-      const unit = relativeMatch[2].toLowerCase();
-      const unitMs = LOGS_RELATIVE_UNIT_MILLISECONDS[unit];
-      if (Number.isFinite(amount) && amount >= LOCAL_NUM_ZERO && Number.isFinite(unitMs)) {
-        return now - (amount * unitMs);
-      }
-    }
-
-    const parsedTimestamp = this.parseTimestamp(trimmedValue);
-    if (parsedTimestamp !== null) {
-      return parsedTimestamp;
-    }
-
-    throw new Error(`${LOGS_SINCE_INVALID_VALUE_PREFIX}${trimmedValue}`);
+    return resolveLiveWindowStartTimeValue(this, value);
   }
 
   /**
@@ -664,176 +465,64 @@ export class LogsView extends BaseView {
     this.activeLiveQuerySql = null;
   }
 
-  /**
-   * Check if streaming is enabled
-   * @return {boolean}
-   */
   isStreamingEnabled() {
     return this.streamingEnabled;
   }
 
-  /**
-   * Get column definitions for the logs view
-   * Requirements: 29.1
-   * @return {Array<{key: string, label: string, width?: number}>}
-   */
   getColumns() {
-    return [
-      {key: LOCAL_STR_TIMESTAMP, label: LOCAL_STR_TIMESTAMP_2, width: LOCAL_NUM_24},
-      {key: LOCAL_STR_LEVEL, label: LOCAL_STR_LEVEL_2, width: LOCAL_NUM_EIGHT},
-      {key: LOCAL_STR_NODE_ID, label: LOCAL_STR_NODE_ID_2, width: LOCAL_NUM_15},
-      {key: LOCAL_STR_SERVICE_ID, label: LOCAL_STR_SERVICE_ID_2, width: LOCAL_NUM_20},
-      {key: LOCAL_STR_MESSAGE, label: LOCAL_STR_MESSAGE_2, width: LOCAL_NUM_60},
-    ];
+    return getLogColumns();
   }
 
-  /**
-   * Format a log record into a row array
-   * Requirements: 29.1
-   * @param {Object} log - Log record
-   * @return {Array<string>} Row values
-   */
   formatRow(log) {
-    return [
-      this.formatTimestamp(this.getLogTimestampMs(log)),
-      log.level || LOCAL_STR_INFO,
-      log.node_id || LOCAL_STR_N_A,
-      log.service_id || LOCAL_STR_N_A,
-      this.truncateMessage(log.message),
-    ];
+    return formatLogRow(this, log);
   }
 
-  /**
-   * Format timestamp for display
-   * @param {number|string|null|undefined} timestamp - Timestamp value
-   * @return {string} Formatted timestamp
-   */
   formatTimestamp(timestamp) {
-    const normalizedTimestamp = this.parseTimestamp(timestamp);
-    if (normalizedTimestamp === null) {
-      return LOGS_TIMESTAMP_UNAVAILABLE;
-    }
-
-    const date = new Date(normalizedTimestamp);
-    if (isNaN(date.getTime())) {
-      return LOGS_TIMESTAMP_UNAVAILABLE;
-    }
-    return date.toISOString().replace(LOCAL_STR_T, LOCAL_STR_SPACE).substring(LOCAL_NUM_ZERO, LOCAL_NUM_23);
+    return formatLogTimestamp(this, timestamp);
   }
 
-  /**
-   * Truncate message for display in table
-   * @param {string|null|undefined} message - Log message
-   * @param {number} maxLength - Maximum length
-   * @return {string} Truncated message
-   */
-  truncateMessage(message, maxLength = LOCAL_NUM_80) {
-    if (!message) {
-      return LOCAL_STR_EMPTY;
-    }
-    // Replace newlines with spaces for table display
-    const singleLine = String(message).replace(/[\r\n]+/g, ' ');
-    if (singleLine.length <= maxLength) {
-      return singleLine;
-    }
-    return singleLine.substring(LOCAL_NUM_ZERO, maxLength - LOCAL_NUM_THREE) + LOCAL_STR_2ZI04;
+  truncateMessage(message, maxLength) {
+    return truncateLogMessage(message, maxLength);
   }
 
-  /**
-   * Get the row status for styling based on log level
-   * Requirements: 29.8
-   * @param {Object} log - Log record
-   * @return {string} Row status (normal, warning, error)
-   */
   getRowStatus(log) {
-    const level = (log.level || 'INFO').toUpperCase();
-
-    if (level === LOCAL_STR_ERROR) {
-      return ROW_STATUS.ERROR;
-    }
-
-    if (level === LOCAL_STR_WARN) {
-      return ROW_STATUS.WARNING;
-    }
-
-    return ROW_STATUS.NORMAL;
+    return getLogRowStatus(log);
   }
 
-  /**
-   * Get the color for a log level
-   * Requirements: 29.8
-   * @param {string} level - Log level
-   * @return {string} Color name
-   */
   getLevelColor(level) {
-    const normalizedLevel = (level || 'INFO').toUpperCase();
-    return LOG_LEVEL_COLORS[normalizedLevel] || LOG_LEVEL_COLORS.INFO;
+    return getLogLevelColor(level);
   }
 
-  /**
-   * Get the unique key for a log entry
-   * @param {Object} log - Log record
-   * @return {string} Unique key (log_id)
-   */
   getItemKey(log) {
-    return log.log_id || LOCAL_STR_EMPTY;
+    return log.log_id || LOGS_EMPTY_STRING;
   }
 
-  /**
-   * Set level filter
-   * Requirements: 29.2
-   * @param {string|null} level - Log level to filter by
-   */
   setLevelFilter(level) {
     this.levelFilter = level;
     this.fetchLogs();
   }
 
-  /**
-   * Set node filter
-   * Requirements: 29.3
-   * @param {string|null} nodeId - Node ID to filter by
-   */
   setNodeFilter(nodeId) {
     this.nodeFilter = nodeId;
     this.fetchLogs();
   }
 
-  /**
-   * Set service filter
-   * Requirements: 29.4
-   * @param {string|null} serviceId - Service ID to filter by
-   */
   setServiceFilter(serviceId) {
     this.serviceFilter = serviceId;
     this.fetchLogs();
   }
 
-  /**
-   * Set time range filter
-   * Requirements: 29.5
-   * @param {number|null} startTime - Start timestamp
-   * @param {number|null} endTime - End timestamp
-   */
   setTimeRangeFilter(startTime, endTime) {
     this.startTimeFilter = startTime;
     this.endTimeFilter = endTime;
     this.fetchLogs();
   }
 
-  /**
-   * Set message content filter
-   * Requirements: 29.6
-   * @param {string|null} pattern - Message pattern to filter by
-   */
   setMessageFilter(pattern) {
     this.messageFilter = pattern;
     this.fetchLogs();
   }
 
-  /**
-   * Clear all filters
-   */
   clearAllFilters() {
     this.levelFilter = null;
     this.nodeFilter = null;
@@ -841,231 +530,57 @@ export class LogsView extends BaseView {
     this.startTimeFilter = null;
     this.endTimeFilter = null;
     this.messageFilter = null;
-    this.filter = LOCAL_STR_EMPTY;
+    this.filter = LOGS_EMPTY_STRING;
     this.fetchLogs();
   }
 
-  /**
-   * Apply all filters to data.
-   * When connected, server-side SQL handles the primary filters.
-   * Client-side filtering is used as fallback (no connection) and
-   * for the general text filter from the base class.
-   * Requirements: 29.2, 29.3, 29.4, 29.5, 29.6
-   * @param {Array} data - Data to filter
-   * @return {Array} Filtered data
-   */
   applyFilter(data) {
-    let result = data;
-
-    // Apply structured filters client-side (fallback when offline
-    // or for data already loaded via setData in tests).
-    if (this.levelFilter) {
-      result = result.filter((log) =>
-        (log.level || LOCAL_STR_INFO).toUpperCase() ===
-          this.levelFilter.toUpperCase(),
-      );
-    }
-    if (this.nodeFilter) {
-      result = result.filter((log) =>
-        log.node_id === this.nodeFilter,
-      );
-    }
-    if (this.serviceFilter) {
-      result = result.filter((log) =>
-        log.service_id === this.serviceFilter,
-      );
-    }
-    if (this.startTimeFilter !== null) {
-      result = result.filter((log) => {
-        const ts = this.getLogTimestampMs(log);
-        return ts !== null && ts >= this.startTimeFilter;
-      });
-    }
-    if (this.endTimeFilter !== null) {
-      result = result.filter((log) => {
-        const ts = this.getLogTimestampMs(log);
-        return ts !== null && ts <= this.endTimeFilter;
-      });
-    }
-    if (this.messageFilter) {
-      const pattern = new RegExp(
-        this.escapeRegex(this.messageFilter), 'i',
-      );
-      result = result.filter((log) =>
-        pattern.test(log.message || LOCAL_STR_EMPTY),
-      );
-    }
-
-    // Apply general text filter from base class
-    if (this.filter && this.filter.trim() !== LOCAL_STR_EMPTY) {
-      const lowerFilter = this.filter.toLowerCase();
-      result = result.filter((item) => {
-        const values = Object.values(item);
-        return values.some((value) => {
-          if (value === null || value === undefined) return false;
-          return String(value).toLowerCase().includes(lowerFilter);
-        });
-      });
-    }
-
-    return result;
+    return applyLogFilters(this, data);
   }
 
-  /**
-   * Parse timestamp to numeric value
-   * @param {number|string|null|undefined} timestamp - Timestamp value
-   * @return {number|null} Numeric timestamp or null
-   */
   parseTimestamp(timestamp) {
-    if (timestamp === null || timestamp === undefined) {
-      return null;
-    }
-
-    if (typeof timestamp === LOCAL_STR_NUMBER) {
-      return this.normalizeNumericTimestamp(timestamp);
-    }
-    if (typeof timestamp === LOCAL_STR_STRING) {
-      const trimmedTimestamp = timestamp.trim();
-      if (trimmedTimestamp === LOCAL_STR_EMPTY) {
-        return null;
-      }
-      if (LOGS_TIMESTAMP_INTEGER_REGEX.test(trimmedTimestamp)) {
-        return this.normalizeNumericTimestamp(Number(trimmedTimestamp));
-      }
-      const parsed = Date.parse(trimmedTimestamp);
-      return isNaN(parsed) ? null : parsed;
-    }
-    if (timestamp instanceof Date) {
-      const parsed = timestamp.getTime();
-      return isNaN(parsed) ? null : parsed;
-    }
-    return null;
+    return parseLogTimestamp(this, timestamp);
   }
 
-  /**
-   * Normalize a numeric timestamp to epoch milliseconds.
-   * @param {number} timestamp - Numeric timestamp in seconds or milliseconds.
-   * @return {number|null} Epoch milliseconds or null when invalid.
-   * @private
-   */
   normalizeNumericTimestamp(timestamp) {
-    if (!Number.isFinite(timestamp)) {
-      return null;
-    }
-    if (Math.abs(timestamp) <= LOGS_TIMESTAMP_EPOCH_SECONDS_MAX_ABS) {
-      return Math.trunc(timestamp * LOGS_TIMESTAMP_MILLISECONDS_PER_SECOND);
-    }
-    return Math.trunc(timestamp);
+    return normalizeLogTimestamp(timestamp);
   }
 
-  /**
-   * Resolve the best available log timestamp in epoch milliseconds.
-   * Uses `timestamp` first, then `created_at` as fallback.
-   * @param {Object} log - Log record.
-   * @return {number|null} Epoch milliseconds timestamp.
-   * @private
-   */
   getLogTimestampMs(log) {
-    const logTimestamp = this.parseTimestamp(log?.timestamp);
-    if (logTimestamp !== null) {
-      return logTimestamp;
-    }
-    return this.parseTimestamp(log?.created_at);
+    return resolveLogTimestampMs(this, log);
   }
 
-  /**
-   * Escape special regex characters
-   * @param {string} str - String to escape
-   * @return {string} Escaped string
-   */
   escapeRegex(str) {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, LOCAL_STR_1D7VE);
+    return escapeLogRegex(str);
   }
 
   resolveSortValue(log) {
-    return this.sortColumn === LOCAL_STR_TIMESTAMP ?
-      this.getLogTimestampMs(log) :
-      log?.[this.sortColumn];
+    return resolveLogSortValue(this, log);
   }
 
   compareNullishSortValues(aVal, bVal) {
-    const aMissing = aVal === null || aVal === undefined;
-    const bMissing = bVal === null || bVal === undefined;
-    if (aMissing && bMissing) {
-      return LOCAL_NUM_ZERO;
-    }
-    if (aMissing) {
-      return LOCAL_NUM_ONE;
-    }
-    if (bMissing) {
-      return -LOCAL_NUM_ONE;
-    }
-    return null;
+    return compareNullishLogSortValues(aVal, bVal);
   }
 
   compareResolvedSortValues(aVal, bVal) {
-    if (typeof aVal === LOCAL_STR_NUMBER && typeof bVal === LOCAL_STR_NUMBER) {
-      return aVal - bVal;
-    }
-    return String(aVal).localeCompare(String(bVal));
+    return compareResolvedLogSortValues(aVal, bVal);
   }
 
   compareTimestampTieBreakers(a, b) {
-    const aCreatedAt = this.parseTimestamp(a?.created_at);
-    const bCreatedAt = this.parseTimestamp(b?.created_at);
-    if (aCreatedAt !== null && bCreatedAt !== null) {
-      const timestampCompare = aCreatedAt - bCreatedAt;
-      if (timestampCompare !== LOCAL_NUM_ZERO) {
-        return timestampCompare;
-      }
-    } else if (aCreatedAt !== null) {
-      return LOCAL_NUM_ONE;
-    } else if (bCreatedAt !== null) {
-      return -LOCAL_NUM_ONE;
-    }
-
-    const aId = String(a?.[LOGS_SORT_FALLBACK_ID_FIELD] || '');
-    const bId = String(b?.[LOGS_SORT_FALLBACK_ID_FIELD] || '');
-    return aId.localeCompare(bId);
+    return compareLogTimestampTieBreakers(this, a, b);
   }
 
   compareRowsForCurrentSort(a, b) {
-    const aVal = this.resolveSortValue(a);
-    const bVal = this.resolveSortValue(b);
-    const nullishComparison = this.compareNullishSortValues(aVal, bVal);
-    if (nullishComparison !== null) {
-      return nullishComparison;
-    }
-
-    const valueComparison = this.compareResolvedSortValues(aVal, bVal);
-    if (valueComparison !== LOCAL_NUM_ZERO || this.sortColumn !== LOCAL_STR_TIMESTAMP) {
-      return valueComparison;
-    }
-
-    return this.compareTimestampTieBreakers(a, b);
+    return compareLogRowsForCurrentSort(this, a, b);
   }
 
-  /**
-   * Apply sort to data
-   * Requirements: 29.12
-   * @param {Array} data - Data to sort
-   * @return {Array} Sorted data
-   */
   applySort(data) {
-    if (!this.sortColumn) {
-      return data;
-    }
-
-    return [...data].sort((a, b) => {
-      const comparison = this.compareRowsForCurrentSort(a, b);
-      return this.sortDirection === LOCAL_STR_ASC ? comparison : -comparison;
-    });
+    return applyLogSort(this, data);
   }
 
   /**
-   * Handle drill-down action (Enter key on selected log)
-   * Requirements: 29.7
-   * @return {Object|null} Navigation action or null
+   * Handle drill-down action (Enter key on selected log).
+   * @return {Object|null} Navigation action or null.
    */
   handleDrillDown() {
     const selectedLog = this.getSelectedItem();
@@ -1074,270 +589,65 @@ export class LogsView extends BaseView {
     }
 
     return {
-      action: LOCAL_STR_SHOWDETAIL,
-      view: LOCAL_STR_LOGS,
+      action: LOGS_ACTION_SHOW_DETAIL,
+      view: LOGS_VIEW_NAME,
       context: {logId: selectedLog.log_id},
       detail: this.getSelectedDetails(),
     };
   }
 
   /**
-   * Handle key input for the logs view
-   * @param {Object} key - Key event
-   * @return {boolean|Object} True if handled, navigation object, or false
+   * Handle key input for the logs view.
+   * @param {Object} key - Key event.
+   * @return {boolean|Object} True if handled, navigation object, or false.
    */
   handleKey(key) {
-    if (key.name === LOCAL_STR_ENTER || key.name === LOCAL_STR_RETURN) {
+    if (key.name === LOGS_KEY_ENTER || key.name === LOGS_KEY_RETURN) {
       return this.handleDrillDown();
     }
     return super.handleKey(key);
   }
 
-  /**
-   * Get detail information for the selected log
-   * Requirements: 29.7
-   * @return {Object|null} Detail information or null
-   */
   getSelectedDetails() {
-    const log = this.getSelectedItem();
-    if (!log) {
-      return null;
-    }
-
-    const sections = [
-      {
-        title: 'Log Entry',
-        fields: [
-          {label: 'Log ID', value: log.log_id || 'N/A'},
-          {label: 'Timestamp', value: this.formatTimestamp(this.getLogTimestampMs(log))},
-          {label: 'Level', value: log.level || 'INFO'},
-          {label: 'Node ID', value: log.node_id || 'N/A'},
-          {label: 'Service ID', value: log.service_id || 'N/A'},
-        ],
-      },
-      {
-        title: 'Message',
-        fields: [
-          {label: 'Content', value: log.message || ''},
-        ],
-      },
-    ];
-
-    // Add metadata section if available
-    if (log.metadata && typeof log.metadata === LOCAL_STR_OBJECT) {
-      const metadataFields = Object.entries(log.metadata).map(
-        ([k, v]) => ({
-          label: k,
-          value: typeof v === 'object' ? JSON.stringify(v) : String(v),
-        }),
-      );
-
-      if (metadataFields.length > LOCAL_NUM_ZERO) {
-        sections.push({
-          title: LOCAL_STR_METADATA,
-          fields: metadataFields,
-        });
-      }
-    }
-
-    return {
-      title: `Log: ${log.log_id || LOCAL_STR_UNKNOWN}`,
-      sections,
-    };
+    return getSelectedLogDetails(this);
   }
 
-  /**
-   * Get time range of current data
-   * Requirements: 29.11
-   * @return {Object} Time range with start and end
-   */
   getTimeRange() {
-    if (this.filteredData.length === LOCAL_NUM_ZERO) {
-      return {start: null, end: null};
-    }
-
-    let minTime = Infinity;
-    let maxTime = -Infinity;
-
-    for (const log of this.filteredData) {
-      const ts = this.getLogTimestampMs(log);
-      if (ts !== null) {
-        if (ts < minTime) minTime = ts;
-        if (ts > maxTime) maxTime = ts;
-      }
-    }
-
-    return {
-      start: minTime === Infinity ? null : minTime,
-      end: maxTime === -Infinity ? null : maxTime,
-    };
+    return getLogsTimeRange(this);
   }
 
-  /**
-   * Get status bar information
-   * Requirements: 29.11
-   * @return {Object} Status bar data
-   */
   getStatusBarInfo() {
-    const timeRange = this.getTimeRange();
-    const activeFilters = [];
-
-    if (this.levelFilter) {
-      activeFilters.push(`Level: ${this.levelFilter}`);
-    }
-    if (this.nodeFilter) {
-      activeFilters.push(`Node: ${this.nodeFilter}`);
-    }
-    if (this.serviceFilter) {
-      activeFilters.push(`Service: ${this.serviceFilter}`);
-    }
-    if (this.messageFilter) {
-      activeFilters.push(`Message: "${this.messageFilter}"`);
-    }
-    if (this.startTimeFilter || this.endTimeFilter) {
-      activeFilters.push(LOCAL_STR_TIME_RANGE_ACTIVE);
-    }
-
-    return {
-      logCount: this.filteredData.length,
-      totalCount: this.data.length,
-      timeRange,
-      activeFilters,
-    };
+    return getLogsStatusBarInfo(this);
   }
 
   /**
-   * Render the view with log-specific styling
-   * @param {Object} state - Navigation state
-   * @return {Object} Render data with headers and rows
+   * Render the view with log-specific styling.
+   * @param {Object} state - Navigation state.
+   * @return {Object} Render data with headers and rows.
    */
   render(state = {}) {
     const baseRender = super.render(state);
-
-    // Add status bar info
     baseRender.statusBar = this.getStatusBarInfo();
-
     return baseRender;
   }
 
-  /**
-   * Export filtered logs to a formatted string
-   * Requirements: 29.10
-   * @param {string} format - Export format ('json', 'csv', 'text')
-   * @return {string} Exported logs as string
-   */
-  exportLogs(format = LOCAL_STR_JSON) {
-    const logs = this.filteredData;
-
-    switch (format.toLowerCase()) {
-    case LOCAL_STR_JSON:
-      return this.exportAsJSON(logs);
-    case LOCAL_STR_CSV:
-      return this.exportAsCSV(logs);
-    case LOCAL_STR_TEXT:
-      return this.exportAsText(logs);
-    default:
-      return this.exportAsJSON(logs);
-    }
+  exportLogs(format) {
+    return exportLogsFromView(this, format);
   }
 
-  /**
-   * Export logs as JSON
-   * @param {Array} logs - Logs to export
-   * @return {string} JSON string
-   */
   exportAsJSON(logs) {
-    return JSON.stringify(logs, null, LOCAL_NUM_TWO);
+    return exportLogsAsJSON(logs);
   }
 
-  /**
-   * Export logs as CSV
-   * @param {Array} logs - Logs to export
-   * @return {string} CSV string
-   */
   exportAsCSV(logs) {
-    if (logs.length === LOCAL_NUM_ZERO) {
-      return LOCAL_STR_192RZ;
-    }
-
-    const headers = [
-      'timestamp', 'level', 'node_id', 'service_id', 'message',
-    ];
-    const rows = [headers.join(',')];
-
-    for (const log of logs) {
-      const row = headers.map((h) => {
-        let value = log[h];
-        if (value === null || value === undefined) {
-          return '';
-        }
-        value = String(value);
-        if (
-          value.includes(',') ||
-          value.includes('\n') ||
-          value.includes('"')
-        ) {
-          value = '"' + value.replace(/"/g, '""') + '"';
-        }
-        return value;
-      });
-      rows.push(row.join(LOCAL_STR_COMMA));
-    }
-
-    return rows.join(LOCAL_STR_NEWLINE);
+    return exportLogsAsCSV(logs);
   }
 
-  /**
-   * Export logs as plain text
-   * @param {Array} logs - Logs to export
-   * @return {string} Text string
-   */
   exportAsText(logs) {
-    if (logs.length === LOCAL_NUM_ZERO) {
-      return LOCAL_STR_NO_LOGS_TO_EXPORT;
-    }
-
-    const lines = [];
-    for (const log of logs) {
-      const timestamp = this.formatTimestamp(this.getLogTimestampMs(log));
-      const level = (log.level || 'INFO').padEnd(5);
-      const nodeId = log.node_id || 'N/A';
-      const serviceId = log.service_id || 'N/A';
-      const message = log.message || '';
-
-      lines.push(
-        `[${timestamp}] ${level} [${nodeId}]` +
-        ` [${serviceId}] ${message}`,
-      );
-    }
-
-    return lines.join(LOCAL_STR_NEWLINE);
+    return exportLogsAsText(this, logs);
   }
 
-  /**
-   * Get export metadata
-   * @return {Object} Export metadata
-   */
   getExportMetadata() {
-    const timeRange = this.getTimeRange();
-    return {
-      exportedAt: new Date().toISOString(),
-      totalLogs: this.data.length,
-      filteredLogs: this.filteredData.length,
-      filters: {
-        level: this.levelFilter,
-        nodeId: this.nodeFilter,
-        serviceId: this.serviceFilter,
-        startTime: this.startTimeFilter,
-        endTime: this.endTimeFilter,
-        messagePattern: this.messageFilter,
-      },
-      timeRange: {
-        start: timeRange.start ?
-          new Date(timeRange.start).toISOString() : null,
-        end: timeRange.end ?
-          new Date(timeRange.end).toISOString() : null,
-      },
-    };
+    return getLogsExportMetadata(this);
   }
 }
