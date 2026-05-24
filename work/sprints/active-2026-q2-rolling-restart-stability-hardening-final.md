@@ -293,7 +293,7 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
      - [Split oversized test/support file test/distributed/harness/cluster-segment-2.js](../packages/done-20260524-oversized-distributed-harness-charlie.md)
      - [Split oversized test/support file test/query/query-executor.test-part-6.js](../packages/done-20260524-oversized-query-query-echo.md)
      - [Split oversized test/support file test/distributed/harness/__tests__/assert-consistency.test.js](../packages/done-20260524-oversized-distributed-harness-assert-consistency.md)
-     - [Split oversized test/support file test/distributed/harness/failure-bundle-segment-3.js](../packages/todo-20260524-oversized-distributed-harness-failure-bravo.md)
+     - [Split oversized test/support file test/distributed/harness/failure-bundle-segment-3.js](../packages/done-20260524-oversized-distributed-harness-failure-bravo.md)
      - [Split oversized test/support file test/distributed/harness/__tests__/assertions.test.js](../packages/done-20260524-oversized-distributed-harness-delta.md)
      - [Split oversized test/support file test/rebalancer/replica-operation-repository.test.js](../packages/done-20260524-oversized-rebalancer-replica-operation-alpha.md)
      - [Split oversized test/support file test/rebalancer/rebalance-coordinator-operation-ownership-tail-test-cases.js](../packages/done-20260524-oversized-rebalancer-rebalance-coordinator-operation-ownership-tail-cases.md)
