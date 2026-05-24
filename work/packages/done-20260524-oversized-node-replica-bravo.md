@@ -3,33 +3,45 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
-  "opened": "2026-05-24",
-  "lane": "lightweight-maintenance",
-  "scenario": "none",
-  "artifact": "none",
-  "playback": "none",
-  "owner": "test_quality_owner",
-  "boundary": "test_node_replica_handler_file_size_refactor",
-  "dominantReason": "oversized_file_ratchet",
-  "currentState": "Current file-size audit reports test/node/replica-handler.test.js at 1881/1500 lines; no implementation is started in this package yet.",
-  "nextAction": "Split semantically grouped test/support code from test/node/replica-handler.test.js until it is below 1500 lines, preserving coverage and imports.",
-  "proof": [
-    "npm run audit:file-size -- --strict test/node/replica-handler.test.js",
-    "node --check test/node/replica-handler.test.js",
-    "npm test -- test/node/replica-handler.test.js",
-    "git diff --check -- test/node/replica-handler.test.js"
-  ],
-  "theoryLedgerRefs": [],
-  "writeScope": [
-    "test/node/replica-handler.test.js"
-  ],
-  "handoffFiles": [],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [
-    "test/node/replica-handler.test.js"
-  ],
+  "status": "done",
+  "intent": {
+    "opened": "2026-05-24",
+    "closed": "2026-05-24",
+    "lane": "lightweight-maintenance",
+    "scenario": "none",
+    "artifact": "none",
+    "playback": "none",
+    "owner": "test_quality_owner",
+    "boundary": "test_node_replica_handler_file_size_refactor",
+    "currentState": "Split complete: test/node/replica-handler.test.js is 1186 lines, with admission and topology create-replica groups extracted to semantic helper test-case modules at 256 and 504 lines.",
+    "nextAction": "Leave the package unclosed for package ceremony; do not rename, stage, commit, push, or edit sprint/current-blocker files in this pass.",
+    "dominantReason": "oversized_file_ratchet"
+  },
+  "scope": {
+    "writeScope": [
+      "test/node/replica-handler.test.js",
+      "test/node/replica-handler-create-admission-test-cases.js",
+      "test/node/replica-handler-create-topology-test-cases.js",
+      "work/packages/done-20260524-oversized-node-replica-bravo.md"
+    ],
+    "handoffFiles": [],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": [],
+    "commitScope": [
+      "test/node/replica-handler.test.js",
+      "test/node/replica-handler-create-admission-test-cases.js",
+      "test/node/replica-handler-create-topology-test-cases.js",
+      "work/packages/done-20260524-oversized-node-replica-bravo.md"
+    ]
+  },
+  "gates": {
+    "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
+    "stabilityCredit": "local-proof-only",
+    "codeQualityAdmission": {
+      "reason": "active-guardrail-requirement",
+      "evidence": "The package is generated from npm run audit:file-size -- --top 250 for test/node/replica-handler.test.js; closure proof made npm run audit:file-size -- --strict pass for test/node/replica-handler.test.js and the created admission/topology helper modules."
+    }
+  },
   "modelFit": {
     "packageClass": "bounded-implementation",
     "intendedMinimumModel": "gpt-5.3-codex-spark",
@@ -41,30 +53,16 @@
       "a frozen decision must be reopened"
     ]
   },
-  "modelFitSplit": {
-    "targetExecutionModel": "gpt-5.3-codex-spark",
-    "allowedDecisionDepth": "bounded local edit after owner, scope, proof, and forbidden files are named",
-    "safeToExecuteWhen": [
-      "owner, boundary, write scope, forbidden scope, proof, and kill rule stay as declared",
-      "the executor does not need to choose architecture, migrate ownership, or reinterpret representative evidence",
-      "the first focused proof gives a clear pass, fail, or escalate signal"
-    ],
-    "splitTriggers": [
-      "write scope expands beyond the declared lower-model lane",
-      "proof requires forbidden scope, cross-owner reasoning, or architecture route selection",
-      "the implementation needs to decide system behavior instead of executing a named local mechanism"
-    ],
-    "childPackageCandidates": [
-      "Prefer mechanical-maintenance for docs/templates/schema-only edits.",
-      "Prefer test-only-proof for tests that do not change runtime behavior.",
-      "Prefer bounded-experiment for one same-owner hypothesis with inherited context."
-    ]
-  },
-  "stabilityCredit": "local-proof-only",
-  "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
-  "codeQualityAdmission": {
-    "reason": "active-guardrail-requirement",
-    "evidence": "The package is generated from npm run audit:file-size -- --top 250 for test/node/replica-handler.test.js; closure proof must make npm run audit:file-size -- --strict test/node/replica-handler.test.js pass."
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": {
+      "commands": [
+        "npm run audit:file-size -- --strict test/node/replica-handler.test.js test/node/replica-handler-create-admission-test-cases.js test/node/replica-handler-create-topology-test-cases.js",
+        "node --check test/node/replica-handler.test.js",
+        "npm test -- test/node/replica-handler.test.js",
+        "git diff --check -- test/node/replica-handler.test.js work/packages/done-20260524-oversized-node-replica-bravo.md"
+      ]
+    }
   }
 }
 -->
@@ -142,6 +140,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 ## In Scope
 
 1. test/node/replica-handler.test.js
+2. test/node/replica-handler-create-admission-test-cases.js
+3. test/node/replica-handler-create-topology-test-cases.js
+4. work/packages/done-20260524-oversized-node-replica-bravo.md
 
 ## Out Of Scope
 
@@ -154,11 +155,11 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex-spark`
 - Scope shape: `leaf-slice`
 - Output profile: `medium`
-- Owned files: `test/node/replica-handler.test.js`
+- Owned files: `test/node/replica-handler.test.js`, `test/node/replica-handler-create-admission-test-cases.js`, `test/node/replica-handler-create-topology-test-cases.js`, `work/packages/done-20260524-oversized-node-replica-bravo.md`
 - Forbidden files: `src/`, `coverage reduction or assertion deletion`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run audit:file-size -- --strict test/node/replica-handler.test.js`, `node --check test/node/replica-handler.test.js`, `npm test -- test/node/replica-handler.test.js`, `git diff --check -- test/node/replica-handler.test.js`
+- Focused proof: `npm run audit:file-size -- --strict test/node/replica-handler.test.js test/node/replica-handler-create-admission-test-cases.js test/node/replica-handler-create-topology-test-cases.js`, `node --check` on all touched JS, `npm test -- test/node/replica-handler.test.js`, `git diff --check` for tracked changes plus `--no-index` checks for untracked helpers
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split
@@ -183,13 +184,19 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: executor; files-changed: target file plus semantically named helper/split files added to this package before pre-impl; validation: focused proof and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: verification-fix; owner: verifier_fixer; files-changed: package-owned files only; validation: strict file-size proof, syntax/focused test proof, and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: <validated|not-needed>.
+- [x] action: implementation; owner: executor; files-changed: `test/node/replica-handler.test.js`, `test/node/replica-handler-create-admission-test-cases.js`, `test/node/replica-handler-create-topology-test-cases.js`; validation: strict file-size audit passed at 0/144 source and 0/60 test over ratchet, syntax checks passed, focused wrapper test passed 208/208; parent revalidated focused proof: yes; no ledger update; outcome: validated.
+- [x] action: verification-fix; owner: verifier_fixer; files-changed: package-owned files only; validation: strict file-size proof, syntax/focused test proof, tracked diff check, untracked helper `--no-index` checks; parent revalidated focused proof: yes; no ledger update; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: none; validation: repair not needed because sprint/current-blocker files were intentionally untouched; no ledger update; outcome: not-needed.
+
+- no ledger update: local file-size maintenance refactor only; no theory ledger, causal ledger, sprint ledger, or current-blocker update required.
 
 ## Validation
 
-1. npm run audit:file-size -- --strict test/node/replica-handler.test.js
+1. npm run audit:file-size -- --strict test/node/replica-handler.test.js test/node/replica-handler-create-admission-test-cases.js test/node/replica-handler-create-topology-test-cases.js
 2. node --check test/node/replica-handler.test.js
-3. npm test -- test/node/replica-handler.test.js
-4. git diff --check -- test/node/replica-handler.test.js
+3. node --check test/node/replica-handler-create-admission-test-cases.js
+4. node --check test/node/replica-handler-create-topology-test-cases.js
+5. npm test -- test/node/replica-handler.test.js
+6. git diff --check -- test/node/replica-handler.test.js work/packages/done-20260524-oversized-node-replica-bravo.md
+7. git diff --check --no-index -- /dev/null test/node/replica-handler-create-admission-test-cases.js
+8. git diff --check --no-index -- /dev/null test/node/replica-handler-create-topology-test-cases.js

@@ -299,7 +299,7 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
      - [Split oversized test/support file test/rebalancer/rebalance-coordinator-operation-ownership-tail-test-cases.js](../packages/done-20260524-oversized-rebalancer-rebalance-coordinator-operation-ownership-tail-cases.md)
      - [Split oversized test/support file test/bootstrap/bootstrap-api.test-part-3.js](../packages/done-20260524-oversized-bootstrap-bootstrap-bravo.md)
      - [Split oversized test/support file test/distributed/harness/cluster-segment-7-class-5.js](../packages/done-20260524-oversized-distributed-harness-echo.md)
-     - [Split oversized test/support file test/node/replica-handler.test.js](../packages/todo-20260524-oversized-node-replica-bravo.md)
+     - [Split oversized test/support file test/node/replica-handler.test.js](../packages/done-20260524-oversized-node-replica-bravo.md)
      - [Split oversized test/support file test/query/sql-query-engine.test.js](../packages/todo-20260524-oversized-query-sql-query-golf.md)
      - [Split oversized test/support file test/rebalancer/rebalance-coordinator-operation-ownership.test.js](../packages/todo-20260524-oversized-rebalancer-rebalance-coordinator-operation-ownership.md)
      - [Split oversized test/support file test/control-plane/membership-publication-coordinator-tail-test-cases.js](../packages/todo-20260524-oversized-control-plane-membership-publication-coordinator-tail-cases.md)
