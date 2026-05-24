@@ -308,7 +308,7 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
      - [Split oversized test/support file test/admin/admin-control-snapshot-deferred-refresh-membership-observation-test-cases.js](../packages/todo-20260524-oversized-admin-admin-control-snapshot-deferred-refresh-membership.md)
      - [Split oversized test/support file test/admin/admin-websocket-api.test-part-2.js](../packages/todo-20260524-oversized-admin-admin-websocket-bravo.md)
      - [Split oversized test/support file test/rebalancer/rebalance-coordinator-timeout-cache-visibility.test.js](../packages/todo-20260524-oversized-rebalancer-rebalance-coordinator-timeout-cache-visibility.md)
-     - [Split oversized test/support file test/rebalancer/replace-replica-workflow-tail-more-test-cases.js](../packages/todo-20260524-oversized-rebalancer-replace-replica-workflow-tail-more-cases.md)
+     - [Split oversized test/support file test/rebalancer/replace-replica-workflow-tail-more-test-cases.js](../packages/done-20260524-oversized-rebalancer-replace-replica-workflow-tail-more-cases.md)
      - [Split oversized test/support file test/control-plane/replica-dispatch-node-state-update.test-part-3.js](../packages/todo-20260524-oversized-control-plane-replica-dispatch-node-state-bravo.md)
      - [Split oversized test/support file test/control-plane/active-node-projection.test.js](../packages/todo-20260524-oversized-control-plane-active-node-alpha.md)
      - [Split oversized test/support file test/distributed/harness/__tests__/cluster.test-part-2.js](../packages/todo-20260524-oversized-distributed-harness-golf.md)
