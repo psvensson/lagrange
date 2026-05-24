@@ -3,32 +3,41 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
-  "opened": "2026-05-24",
-  "lane": "lightweight-maintenance",
-  "scenario": "none",
-  "artifact": "none",
-  "playback": "none",
-  "owner": "node_file_size_owner",
-  "boundary": "source_node_replica_handler_runtime_methods_file_size_refactor",
-  "dominantReason": "oversized_file_ratchet",
-  "currentState": "Current file-size audit reports src/node/replica-handler-runtime-methods.js at 1175/800 lines; no implementation is started in this package yet.",
-  "nextAction": "Extract semantically named helper modules from src/node/replica-handler-runtime-methods.js until it is below 800 lines, preserving behavior and the public entrypoint.",
-  "proof": [
-    "npm run audit:file-size -- --strict src/node/replica-handler-runtime-methods.js",
-    "node --check src/node/replica-handler-runtime-methods.js",
-    "git diff --check -- src/node/replica-handler-runtime-methods.js"
-  ],
-  "theoryLedgerRefs": [],
-  "writeScope": [
-    "src/node/replica-handler-runtime-methods.js"
-  ],
-  "handoffFiles": [],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [
-    "src/node/replica-handler-runtime-methods.js"
-  ],
+  "status": "done",
+  "intent": {
+    "opened": "2026-05-24",
+    "closed": "2026-05-24",
+    "lane": "lightweight-maintenance",
+    "scenario": "none",
+    "artifact": "none",
+    "playback": "none",
+    "owner": "node_file_size_owner",
+    "boundary": "source_node_replica_handler_runtime_methods_file_size_refactor",
+    "currentState": "Implemented metadata/context hydration split: src/node/replica-handler-runtime-methods.js is 584 lines and src/node/replica-handler-runtime-metadata-methods.js is 630 lines; focused proof is green and the package is ready for parent closure.",
+    "nextAction": "Parent session may run closure validation and close this package without additional implementation.",
+    "dominantReason": "oversized_file_ratchet"
+  },
+  "scope": {
+    "writeScope": [
+      "src/node/replica-handler-runtime-methods.js",
+      "src/node/replica-handler-runtime-metadata-methods.js"
+    ],
+    "handoffFiles": [],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": [],
+    "commitScope": [
+      "src/node/replica-handler-runtime-methods.js",
+      "src/node/replica-handler-runtime-metadata-methods.js"
+    ]
+  },
+  "gates": {
+    "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
+    "stabilityCredit": "local-proof-only",
+    "codeQualityAdmission": {
+      "reason": "active-guardrail-requirement",
+      "evidence": "The package is generated from npm run audit:file-size -- --top 250 for src/node/replica-handler-runtime-methods.js; closure proof must make npm run audit:file-size -- --strict src/node/replica-handler-runtime-methods.js pass."
+    }
+  },
   "modelFit": {
     "packageClass": "bounded-implementation",
     "intendedMinimumModel": "gpt-5.3-codex-spark",
@@ -40,30 +49,17 @@
       "a frozen decision must be reopened"
     ]
   },
-  "modelFitSplit": {
-    "targetExecutionModel": "gpt-5.3-codex-spark",
-    "allowedDecisionDepth": "bounded local edit after owner, scope, proof, and forbidden files are named",
-    "safeToExecuteWhen": [
-      "owner, boundary, write scope, forbidden scope, proof, and kill rule stay as declared",
-      "the executor does not need to choose architecture, migrate ownership, or reinterpret representative evidence",
-      "the first focused proof gives a clear pass, fail, or escalate signal"
-    ],
-    "splitTriggers": [
-      "write scope expands beyond the declared lower-model lane",
-      "proof requires forbidden scope, cross-owner reasoning, or architecture route selection",
-      "the implementation needs to decide system behavior instead of executing a named local mechanism"
-    ],
-    "childPackageCandidates": [
-      "Prefer mechanical-maintenance for docs/templates/schema-only edits.",
-      "Prefer test-only-proof for tests that do not change runtime behavior.",
-      "Prefer bounded-experiment for one same-owner hypothesis with inherited context."
-    ]
-  },
-  "stabilityCredit": "local-proof-only",
-  "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
-  "codeQualityAdmission": {
-    "reason": "active-guardrail-requirement",
-    "evidence": "The package is generated from npm run audit:file-size -- --top 250 for src/node/replica-handler-runtime-methods.js; closure proof must make npm run audit:file-size -- --strict src/node/replica-handler-runtime-methods.js pass."
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": {
+      "commands": [
+        "npm run audit:file-size -- --strict src/node/replica-handler-runtime-methods.js src/node/replica-handler-runtime-metadata-methods.js",
+        "node --check src/node/replica-handler-runtime-methods.js",
+        "node --check src/node/replica-handler-runtime-metadata-methods.js",
+        "node --test test/node/replica-handler.test.js test/node/replica-handler-cache-state.test.js test/node/replica-handler-idempotency.property.test.js test/node/replica-handler-owner-path-bypass.test.js",
+        "git diff --check -- src/node/replica-handler-runtime-methods.js src/node/replica-handler-runtime-metadata-methods.js work/packages/done-20260524-oversized-node-replica-handler-runtime-methods.md"
+      ]
+    }
   }
 }
 -->
@@ -141,6 +137,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 ## In Scope
 
 1. src/node/replica-handler-runtime-methods.js
+2. src/node/replica-handler-runtime-metadata-methods.js
 
 ## Out Of Scope
 
@@ -153,11 +150,11 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex-spark`
 - Scope shape: `leaf-slice`
 - Output profile: `medium`
-- Owned files: `src/node/replica-handler-runtime-methods.js`
+- Owned files: `src/node/replica-handler-runtime-methods.js`, `src/node/replica-handler-runtime-metadata-methods.js`
 - Forbidden files: `test/`, `runtime ownership or public contract changes`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run audit:file-size -- --strict src/node/replica-handler-runtime-methods.js`, `node --check src/node/replica-handler-runtime-methods.js`, `git diff --check -- src/node/replica-handler-runtime-methods.js`
+- Focused proof: `npm run audit:file-size -- --strict src/node/replica-handler-runtime-methods.js src/node/replica-handler-runtime-metadata-methods.js`, `node --check src/node/replica-handler-runtime-methods.js`, `node --check src/node/replica-handler-runtime-metadata-methods.js`, focused node replica-handler tests, and scoped `git diff --check`
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split
@@ -182,12 +179,14 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: executor; files-changed: target file plus semantically named helper/split files added to this package before pre-impl; validation: focused proof and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: verification-fix; owner: verifier_fixer; files-changed: package-owned files only; validation: strict file-size proof, syntax/focused test proof, and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: <validated|not-needed>.
+- [x] action: implementation; owner: executor; files-changed: `src/node/replica-handler-runtime-methods.js` (584 lines) and `src/node/replica-handler-runtime-metadata-methods.js` (630 lines); validation: `npm run work:validate -- --pre-impl work/packages/done-20260524-oversized-node-replica-handler-runtime-methods.md` passed, metadata/context hydration methods were extracted to the semantic helper, `node --check` passed for both files, import smoke for runtime/helper/public `ReplicaHandler` passed, strict file-size audit passed with source oversized-file ratchet 0/144 and test oversized-file ratchet 0/60; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: verification-fix; owner: verifier_fixer; files-changed: package-owned files only; validation: first focused replica-handler test run exposed missing `SYSTEM_TABLE_NAME` in the remaining local-runtime half, fixed in `src/node/replica-handler-runtime-methods.js`, then reran focused tests individually (`test/node/replica-handler.test.js` 208 pass, `test/node/replica-handler-cache-state.test.js` 16 pass, `test/node/replica-handler-idempotency.property.test.js` 30 pass, `test/node/replica-handler-owner-path-bypass.test.js` 19 pass) and as the package command `node --test test/node/replica-handler.test.js test/node/replica-handler-cache-state.test.js test/node/replica-handler-idempotency.property.test.js test/node/replica-handler-owner-path-bypass.test.js` (273 pass), plus scoped `git diff --check` passed; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: none; validation: not run because this worker did not edit tracker/current-blocker files and package closure is parent-owned; no ledger update; outcome: not-needed.
 
 ## Validation
 
-1. npm run audit:file-size -- --strict src/node/replica-handler-runtime-methods.js
+1. npm run audit:file-size -- --strict src/node/replica-handler-runtime-methods.js src/node/replica-handler-runtime-metadata-methods.js
 2. node --check src/node/replica-handler-runtime-methods.js
-3. git diff --check -- src/node/replica-handler-runtime-methods.js
+3. node --check src/node/replica-handler-runtime-metadata-methods.js
+4. node --test test/node/replica-handler.test.js test/node/replica-handler-cache-state.test.js test/node/replica-handler-idempotency.property.test.js test/node/replica-handler-owner-path-bypass.test.js
+5. git diff --check -- src/node/replica-handler-runtime-methods.js src/node/replica-handler-runtime-metadata-methods.js work/packages/done-20260524-oversized-node-replica-handler-runtime-methods.md

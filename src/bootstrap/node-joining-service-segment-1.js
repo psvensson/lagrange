@@ -1,4 +1,10 @@
 import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
+import {
+  createNodeJoiningRuntimeDependencyOwner,
+  defineNodeJoiningRuntimeDependencyProperties,
+  installNodeJoiningServiceSegment1DelegateMethods,
+  installNodeJoiningStatePublicationOwner,
+} from './node-joining-service-segment-1-delegates.js';
 
 const {
   BOOTSTRAP_SUBSYSTEM,
@@ -14,7 +20,6 @@ const {
   JOINING_ERROR_MSG,
   JOINING_LOG_MSG,
   JOINING_UNIFIED_RECONCILE,
-  JOIN_DELEGATE_BUNDLE,
   JOIN_REJOIN_PROMOTION_RESTORE_STATE,
   JoinCleanupHandler,
   JoinCoordinator,
@@ -31,14 +36,12 @@ const {
   NodeLifecycleStateMachine,
   NodeService,
   NodeState,
-  NodeStatePublicationOwner,
   QuerySystemStatePhase,
   STARTUP_JOIN_MODE,
   STORAGE_DEFAULT,
   StartupRuntimeHandoffOwner,
   StartupRuntimeSurfaceOwner,
   StartupServiceLifecycleOwner,
-  TABLES,
   TYPEOF,
   TablePolicyService,
   WaitForLeadershipPhase,
@@ -185,90 +188,11 @@ class NodeJoiningServiceSegment1 extends EventEmitter {
     const runtimeWiring = createRuntimeStartupWiring({
       ociFeatureGateEnabled: Boolean(options.ociFeatureGateEnabled),
     });
-    const self = this;
-    this.runtimeDependencyOwner = {
-      runtimeDriverRegistry: runtimeWiring.runtimeDriverRegistry,
-      serviceRuntimeLifecycle: runtimeWiring.serviceRuntimeLifecycle,
-      get logger() {
-        return self.logger;
-      },
-      get transport() {
-        return self.transport;
-      },
-      get messageRouter() {
-        return self.messageRouter;
-      },
-      get rpcClient() {
-        return self.rpcClient;
-      },
-      get cdcIntegrationService() {
-        return self.cdcIntegrationService;
-      },
-      get systemTableCache() {
-        return self.peekSystemTableCache();
-      },
-      get replicaHandler() {
-        return self.replicaHandler;
-      },
-      get replicaStateMachine() {
-        return self.replicaStateMachine;
-      },
-      get heartbeatService() {
-        return self.heartbeatService;
-      },
-      get leaseService() {
-        return self.leaseService;
-      },
-      get endpointService() {
-        return self.endpointService;
-      },
-      get dispatchService() {
-        return self.dispatchService;
-      },
-      get tablePolicyService() {
-        return self.tablePolicyService;
-      },
-      getSqlQueryEngine() {
-        return (
-          self.sqlQueryEngine ||
-          self.cdcIntegrationService?.sqlQueryEngine ||
-          null
-        );
-      },
-      get latencyTopology() {
-        return self.latencyTopology;
-      },
-      get runtimeServiceHandler() {
-        return self.runtimeServiceHandler;
-      },
-      get rebalanceCoordinator() {
-        return self.rebalanceCoordinator;
-      },
-      get controlPlaneReadinessService() {
-        return self.rebalanceCoordinator?.controlPlaneReadinessService || null;
-      },
-      get bootstrapReadinessState() {
-        return self.joinReadinessState;
-      },
-      get serviceLifecycleManager() {
-        return self.serviceLifecycleManager;
-      },
-      get serviceReconciler() {
-        return self.serviceReconciler;
-      },
-    };
-    Object.defineProperties(this, {
-      runtimeDriverRegistry: {
-        configurable: true,
-        enumerable: true,
-        get: () => this.runtimeDependencyOwner.runtimeDriverRegistry,
-      },
-      serviceRuntimeLifecycle: {
-        configurable: true,
-        enumerable: true,
-        get: () => this.runtimeDependencyOwner.serviceRuntimeLifecycle,
-      },
+    this.runtimeDependencyOwner = createNodeJoiningRuntimeDependencyOwner({
+      service: this,
+      runtimeWiring,
     });
+    defineNodeJoiningRuntimeDependencyProperties(this);
     this.runtimeDrivers = runtimeWiring.drivers; // RPC client for control plane dispatch
     this.rpcClient = null; // CDC integration service for system table writes
     this.cdcIntegrationService = null; // Storage budget owner for node registration
@@ -296,121 +220,7 @@ class NodeJoiningServiceSegment1 extends EventEmitter {
           getSqlQueryEngine: () =>
             this.cdcIntegrationService?.sqlQueryEngine || null,
         });
-    this.nodeStatePublicationOwner = new NodeStatePublicationOwner({
-      nodeId: this.nodeId,
-      nodeAddress: this.nodeAddress,
-      config: this.config,
-      delegates: {
-        getNow: () => this.now(),
-        getSleep: () => this.sleep,
-        getLogger: () => this.logger,
-        getNodeCapabilities: () => this.getNodeCapabilities(),
-        getMessageRouter: () => this.messageRouter,
-        getControlPlaneKernelIngress: () => this.controlPlaneKernelIngress,
-        resolveLegacyTargetCandidates: (publicationOptions = {}) =>
-          typeof this.resolveControlPlaneTargetAddressCandidates ===
-          TYPEOF.FUNCTION ?
-            this.resolveControlPlaneTargetAddressCandidates(
-              publicationOptions,
-            ) :
-            [],
-        resolveNodeStateUpdateTimeoutMs: (publicationOptions = {}) =>
-          this.resolveControlPlaneNodeStateUpdateTimeoutMs(publicationOptions),
-        shouldReconnectClusterMesh: () =>
-          this.joinReadinessEvaluator?.shouldReconnectClusterMesh() === true,
-        connectToClusterNodes: () => this.connectToClusterNodes(),
-      },
-    });
-    Object.defineProperties(this, {
-      controlPlaneTargetAddress: {
-        configurable: true,
-        enumerable: true,
-        get: () => this.nodeStatePublicationOwner.controlPlaneTargetAddress,
-        set: (value) => {
-          this.nodeStatePublicationOwner.controlPlaneTargetAddress = value;
-        },
-      },
-      pendingClusterMeshReconciliation: {
-        configurable: true,
-        enumerable: true,
-        get: () =>
-          this.nodeStatePublicationOwner.pendingClusterMeshReconciliation,
-        set: (value) => {
-          this.nodeStatePublicationOwner.pendingClusterMeshReconciliation =
-            value;
-        },
-      },
-      nodeStateUpdateDeferredPublication: {
-        configurable: true,
-        enumerable: true,
-        get: () =>
-          this.nodeStatePublicationOwner.nodeStateUpdateDeferredPublication,
-        set: (value) => {
-          this.nodeStatePublicationOwner.nodeStateUpdateDeferredPublication =
-            value;
-        },
-      },
-    });
-    this.sendControlPlaneNodeStateUpdate = (publicationOptions = {}) =>
-      this.nodeStatePublicationOwner.sendControlPlaneNodeStateUpdate(
-        publicationOptions,
-      );
-    this.shouldRetryControlPlaneNodeStateUpdate = (
-      error,
-      publicationMode = null,
-    ) =>
-      this.nodeStatePublicationOwner.shouldRetryControlPlaneNodeStateUpdate(
-        error,
-        publicationMode,
-      );
-    this.resolveNodeStateUpdateTargetCandidates = (publicationOptions = {}) =>
-      this.nodeStatePublicationOwner.resolveNodeStateUpdateTargetCandidates(
-        publicationOptions,
-      );
-    this.resolveNodeStateUpdatePublicationRetryClass = (error) =>
-      this.nodeStatePublicationOwner.resolveNodeStateUpdatePublicationRetryClass(
-        error,
-      );
-    this.shouldDeferNodeStateUpdatePublication = (
-      error,
-      publicationProfile = null,
-    ) =>
-      this.nodeStatePublicationOwner.shouldDeferNodeStateUpdatePublication(
-        error,
-        publicationProfile,
-      );
-    this.resolveNodeStateUpdatePublicationRetryAfterMs = (error) =>
-      this.nodeStatePublicationOwner.resolveNodeStateUpdatePublicationRetryAfterMs(
-        error,
-      );
-    this.clearDeferredNodeStateUpdatePublication = () =>
-      this.nodeStatePublicationOwner.clearDeferredNodeStateUpdatePublication();
-    this.buildDeferredNodeStateUpdatePublicationOutcome = (
-      deferredPublication,
-      nowMs,
-    ) =>
-      this.nodeStatePublicationOwner.buildDeferredNodeStateUpdatePublicationOutcome(
-        deferredPublication,
-        nowMs,
-      );
-    this.resolveDeferredNodeStateUpdatePublicationOutcome = (
-      message,
-      publicationMode,
-      publicationProfile,
-    ) =>
-      this.nodeStatePublicationOwner.resolveDeferredNodeStateUpdatePublicationOutcome(
-        message,
-        publicationMode,
-        publicationProfile,
-      );
-    this.deferNodeStateUpdatePublication = (publicationOptions = {}) =>
-      this.nodeStatePublicationOwner.deferNodeStateUpdatePublication(
-        publicationOptions,
-      );
-    this.triggerBackgroundClusterMeshReconciliation = (state) =>
-      this.nodeStatePublicationOwner.triggerBackgroundClusterMeshReconciliation(
-        state,
-      ); // Node lifecycle state machine for explicit state transitions
+    installNodeJoiningStatePublicationOwner(this); // Node lifecycle state machine for explicit state transitions
     // Requirements: 2.1, 2.2, 2.3, 2.4
     this.lifecycleStateMachine = new NodeLifecycleStateMachine({
       nodeId: this.nodeId,
@@ -883,284 +693,8 @@ class NodeJoiningServiceSegment1 extends EventEmitter {
       },
     });
   }
-  /**
-   * Build concern-scoped delegate bundles for join bootstrap (D2.2).
-   *
-   * Splits the monolithic join delegate surface into four bundles:
-   * - phaseExecution: core accessors, service collections, lifecycle
-   *   owners, and phase helper callbacks needed during phase execution
-   * - readiness: lifecycle state machine and readiness state accessors
-   * - cleanup: resource teardown helpers and state mutators for cleanup
-   * - runtimeWiring: post-phase wiring accessors for runtime owners
-   *
-   * @return {Object} Keyed by JOIN_DELEGATE_BUNDLE concern names.
-   */
-  _buildJoinDelegateBundles() {
-    return {
-      [JOIN_DELEGATE_BUNDLE.PHASE_EXECUTION]:
-        this._buildJoinPhaseExecutionDelegates(),
-      [JOIN_DELEGATE_BUNDLE.READINESS]: this._buildJoinReadinessDelegates(),
-      [JOIN_DELEGATE_BUNDLE.CLEANUP]: this._buildJoinCleanupDelegates(),
-      [JOIN_DELEGATE_BUNDLE.RUNTIME_WIRING]:
-        this._buildJoinRuntimeWiringDelegates(),
-    };
-  }
-  /**
-   * Compose join delegates from bundles for a specific consumer.
-   *
-   * @param {Object} bundles - Output of _buildJoinDelegateBundles().
-   * @param {Object} [options={}] - Composition options.
-   * @param {boolean} [options.cleanupOnly=false] - When true, returns
-   *   only cleanup + readiness delegates (for JoinCleanupHandler).
-   * @return {Object} Merged delegate map.
-   */
-  _composeJoinDelegates(bundles, options = {}) {
-    if (options.cleanupOnly) {
-      return {
-        ...bundles[JOIN_DELEGATE_BUNDLE.CLEANUP],
-        ...bundles[JOIN_DELEGATE_BUNDLE.READINESS],
-      };
-    }
-    return {
-      ...bundles[JOIN_DELEGATE_BUNDLE.PHASE_EXECUTION],
-      ...bundles[JOIN_DELEGATE_BUNDLE.READINESS],
-      ...bundles[JOIN_DELEGATE_BUNDLE.CLEANUP],
-      ...bundles[JOIN_DELEGATE_BUNDLE.RUNTIME_WIRING],
-    };
-  }
-  /**
-   * Phase execution delegates for join bootstrap.
-   * Core accessors, service collections, lifecycle owners, and
-   * phase helper callbacks needed during phase execution.
-   * @return {Object} Phase execution delegate map.
-   * @private
-   */
-  _buildJoinPhaseExecutionDelegates() {
-    const self = this;
-    return {
-      // -- Core accessors --
-      getNodeId: () => self.nodeId,
-      getNodeAddress: () => self.nodeAddress,
-      getAdvertisedNodeWsAddress: () => self.advertisedNodeWsAddress,
-      getWsPort: () => self.wsPort ?? self.config.wsPort,
-      getConfig: () => self.config,
-      getLogger: () => self.logger,
-      getNow: () => self.now,
-      getSleep: () => self.sleep,
-      getRandom: () => self.random,
-      getPhase: () => self.phase,
-      getStartTime: () => self.startTime,
-      getHttpPostImpl: () => self.httpPostImpl, // -- Service collections --
-      getMessageRouter: () => self.messageRouter,
-      getTransport: () => self.transport,
-      getMessageGroupServices: () => self.messageGroupServices,
-      getPartitionServices: () => self.partitionServices,
-      getJoinMessageGroupReplicas: () => self.joinMessageGroupReplicas, // -- Bootstrap response --
-      getBootstrapResponse: () => self.bootstrapResponse,
-      setBootstrapResponse: (v) => {
-        self.bootstrapResponse = v;
-      },
-      getSeedNodeAddress: () => self.seedNodeAddress,
-      getSeedNodeId: () => self.seedNodeId,
-      setSeedNodeId: (v) => {
-        self.seedNodeId = v;
-      },
-      getSeedNodeWsAddress: () => self.seedNodeWsAddress,
-      setSeedNodeWsAddress: (v) => {
-        self.seedNodeWsAddress = v;
-      }, // -- State mutators --
-      setMessageRouter: (v) => {
-        self.messageRouter = v;
-      },
-      setTransport: (v) => {
-        self.transport = v;
-      },
-      pushJoinMessageGroupReplica: (replica) => {
-        self.joinMessageGroupReplicas.push(replica);
-      },
-      removeJoinMessageGroupReplica: (replica) => {
-        self.joinMessageGroupReplicas = self.joinMessageGroupReplicas.filter(
-          (s) => s !== replica,
-        );
-      },
-      resetJoinMessageGroupReplicas: () => {
-        self.joinMessageGroupReplicas = [];
-      }, // -- Phase helper callbacks (D2.3: direct owner invocation) --
-      resolveJoinReplicaOptions: (id, type) =>
-        self.resolveJoinReplicaOptions(id, type),
-      assertReplicaStartupOwnership: (id) =>
-        self.assertReplicaStartupOwnership(id),
-      queueJoinServiceReplica: (desc, opts) =>
-        self.queueJoinServiceReplica(desc, opts),
-      createJoinServiceDescriptor: (type, id) =>
-        self.createJoinServiceDescriptor(type, id),
-      triggerJoinReconciler: (reason) => self.triggerJoinReconciler(reason),
-      resolveJoinRetryPolicy: () => self.resolveJoinRetryPolicy(),
-      classifySeedContactFailure: (err, msg) =>
-        self.classifySeedContactFailure(err, msg),
-      computeSeedContactRetryDelayMs: (opts) =>
-        self.computeSeedContactRetryDelayMs(opts),
-      upsertSystemTableRow: (table, data) =>
-        self.upsertSystemTableRow(table, data),
-      registerMessageGroupService: (gId, rId, svc, opts) =>
-        self.registerMessageGroupService(gId, rId, svc, opts),
-      getIdentifyPayload: () => self.getIdentifyBootstrapPayload(),
-      getNodeCapabilities: () => self.getNodeCapabilities(),
-      getLeaderMessageGroupService: () => self.getLeaderMessageGroupService(),
-      initializeJoiningLifecycleOwners: () =>
-        self.initializeJoiningLifecycleOwners(),
-      ensureBootstrapSnapshotHydrated: async () => {
-        if (self.systemCacheHydrated) {
-          return;
-        }
-        await self.hydrateSystemCacheFromBootstrap();
-        self.systemCacheHydrated = true;
-      },
-      sendControlPlaneNodeStateUpdate: (opts) =>
-        self.sendControlPlaneNodeStateUpdate(opts),
-      shouldRetryControlPlaneNodeStateUpdate: (error) =>
-        self.shouldRetryControlPlaneNodeStateUpdate(error),
-      resolveMeshConnectivityNodeRows: () =>
-        self.joinReadinessEvaluator.resolveMeshConnectivityNodeRows(),
-      buildClusterMeshSignature: (rows) =>
-        self.joinReadinessEvaluator.buildClusterMeshSignature(rows),
-      setLastClusterMeshSignature: (sig) => {
-        self.joinReadinessEvaluator.lastClusterMeshSignature = sig;
-      },
-      hasMessageGroupLeaderInCache: (cache) =>
-        self.hasMessageGroupLeaderInCache(cache),
-      getMessageGroupServicesSize: () => self.messageGroupServices.size,
-      emit: (event, data) => self.emit(event, data),
-    };
-  }
-  /**
-   * Read the current runtime cache reference without forcing bootstrap peers
-   * to branch on one specific startup handoff timing.
-   * @return {Object|null}
-   */
-  peekSystemTableCache() {
-    for (const messageGroupService of this.messageGroupServices.values()) {
-      if (typeof messageGroupService?.getReadOnlyCache === TYPEOF.FUNCTION) {
-        const readOnlyCache = messageGroupService.getReadOnlyCache();
-        if (readOnlyCache) {
-          return readOnlyCache;
-        }
-      }
-      if (messageGroupService?.systemTableCache) {
-        return messageGroupService.systemTableCache;
-      }
-    }
-    const nodeService = NodeService.getInstance();
-    return (
-      nodeService?._readOnlyCache || nodeService?._systemTableCache || null
-    );
-  }
-  /**
-   * Readiness delegates for join bootstrap.
-   * Lifecycle state machine and readiness state accessors.
-   * @return {Object} Readiness delegate map.
-   * @private
-   */
-  _buildJoinReadinessDelegates() {
-    const self = this;
-    return {
-      getLifecycleStateMachine: () => self.lifecycleStateMachine,
-      getBootstrapReadinessState: () => self.bootstrapReadinessState,
-    };
-  }
-  /**
-   * Cleanup delegates for join bootstrap.
-   * Resource teardown helpers and state mutators for cleanup.
-   * @return {Object} Cleanup delegate map.
-   * @private
-   */
-  _buildJoinCleanupDelegates() {
-    const self = this;
-    return {
-      // -- Core accessors needed for cleanup diagnostics --
-      getNodeId: () => self.nodeId,
-      getLogger: () => self.logger,
-      getNow: () => self.now,
-      getPhase: () => self.phase,
-      getStartTime: () => self.startTime, // -- Service collections --
-      getMessageGroupServices: () => self.messageGroupServices,
-      getPartitionServices: () => self.partitionServices,
-      getMessageRouter: () => self.messageRouter,
-      getTransport: () => self.transport,
-      getBootstrapResponse: () => self.bootstrapResponse, // -- State mutators --
-      setPhase: (p) => {
-        self.phase = p;
-      },
-      setLastError: (e) => {
-        self.lastError = e;
-      },
-      getLastError: () => self.lastError,
-      setTransport: (v) => {
-        self.transport = v;
-      },
-      setMessageRouter: (v) => {
-        self.messageRouter = v;
-      }, // -- Membership state --
-      getRegisteredJoinNodeId: () => {
-        const systemTableCache =
-          NodeService.getInstance().getSystemTableCache();
-        const nodeRow = systemTableCache?.get?.(TABLES.NODES, self.nodeId);
-        return nodeRow ? self.nodeId : null;
-      },
-      getJoinLifecycleIntentType: () =>
-        resolveMembershipJoinIntentType(self.startupMode), // -- Resource teardown helpers --
-      getCdcIntegrationService: () => self.cdcIntegrationService,
-      setCdcIntegrationService: (v) => {
-        self.cdcIntegrationService = v;
-      },
-      getRebalanceCoordinator: () => self.rebalanceCoordinator,
-      setRebalanceCoordinator: (v) => {
-        self.rebalanceCoordinator = v;
-      },
-      getLatencyTopology: () => self.latencyTopology,
-      setLatencyTopology: (v) => {
-        self.latencyTopology = v;
-      },
-      getReplicaStateMachine: () => self.replicaStateMachine,
-      setReplicaStateMachine: (v) => {
-        self.replicaStateMachine = v;
-      },
-      getRpcClient: () => self.rpcClient,
-      setRpcClient: (v) => {
-        self.rpcClient = v;
-      },
-      getHeartbeatService: () => self.heartbeatService,
-      setHeartbeatService: (v) => {
-        self.heartbeatService = v;
-      },
-      getLeaseService: () => self.leaseService,
-      setLeaseService: (v) => {
-        self.leaseService = v;
-      },
-      getEndpointService: () => self.endpointService,
-      setEndpointService: (v) => {
-        self.endpointService = v;
-      },
-      getDispatchService: () => self.dispatchService,
-      setDispatchService: (v) => {
-        self.dispatchService = v;
-      },
-      getReplicaHandler: () => self.replicaHandler,
-      setReplicaHandler: (v) => {
-        self.replicaHandler = v;
-      },
-      sendControlPlaneNodeStateUpdate: (options) =>
-        self.sendControlPlaneNodeStateUpdate(options),
-      stopJoiningLifecycleOwners: () => self.stopJoiningLifecycleOwners(),
-      emit: (event, data) => self.emit(event, data),
-    };
-  }
-  /**
-   * Runtime wiring delegates for join bootstrap.
-   * Post-phase wiring accessors for runtime owners.
-   * @return {Object} Runtime wiring delegate map.
-   * @private
-   */
 }
+
+installNodeJoiningServiceSegment1DelegateMethods(NodeJoiningServiceSegment1);
 
 export {NodeJoiningServiceSegment1};

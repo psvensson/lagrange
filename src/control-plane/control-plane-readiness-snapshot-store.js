@@ -1,0 +1,560 @@
+import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-service-shared.js';
+
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_REFRESH = '::refresh=';
+const LOCAL_STR_STALE = '::stale=';
+const LOCAL_STR_PLANNING = '::planning=';
+
+const {
+  COLUMN,
+  CONTROL_PLANE_READINESS_DIMENSION,
+  NUM,
+  PROJECTION_READINESS_CONTRACT_STATE,
+  TABLES,
+  TYPEOF,
+  compareNodeHeartbeatWatermarks,
+  normalizeIsoTimestamp,
+} = CONTROL_PLANE_READINESS_SERVICE_SHARED;
+
+const controlPlaneReadinessSnapshotStoreMethods = {
+  /**
+   * Reuse one previously-computed readiness snapshot when it is fresher than
+   * the currently visible cache row. This bridges short read-cache lag after a
+   * canonical owner-path refresh without reopening the sync call path to I/O.
+   * @param {string} nodeId
+   * @param {Object|null} nodeRow
+   * @param {Object|null} publication
+   * @param {Object|null} membershipPublication
+   * @return {Object|null}
+   * @private
+   */
+  getFresherStoredReadinessSnapshot(
+    nodeId,
+    nodeRow,
+    publication,
+    membershipPublication,
+  ) {
+    const storedSnapshot =
+      this.lastReadinessSnapshotByNodeId.get(nodeId) || null;
+    const capturedAtMs =
+      this.lastReadinessSnapshotAtMsByNodeId.get(nodeId) || null;
+    if (
+      !storedSnapshot ||
+      !this.isStoredReadinessSnapshotFresh(storedSnapshot, capturedAtMs)
+    ) {
+      return null;
+    }
+
+    const storedWatermark =
+      this.buildStoredReadinessSnapshotWatermark(storedSnapshot);
+    if (!storedWatermark) {
+      return null;
+    }
+
+    if (
+      nodeRow &&
+      compareNodeHeartbeatWatermarks(nodeRow, storedWatermark) <= NUM.ZERO
+    ) {
+      return null;
+    }
+
+    return Object.freeze({
+      ...storedSnapshot,
+      publication:
+        publication && typeof publication === TYPEOF.OBJECT ?
+          Object.freeze({...publication}) :
+          null,
+      membershipPublication:
+        membershipPublication && typeof membershipPublication === TYPEOF.OBJECT ?
+          Object.freeze({...membershipPublication}) :
+          null,
+      recentTransitions: this.getReadinessTransitionHistory(nodeId),
+    });
+  },
+
+  /**
+   * Return true when one stored readiness snapshot is still safe to reuse for
+   * hot-path sync consumers.
+   * @param {Object|null} snapshot
+   * @param {number|null} capturedAtMs
+   * @return {boolean}
+   * @private
+   */
+  isStoredReadinessSnapshotFresh(snapshot, capturedAtMs) {
+    if (!snapshot || !Number.isFinite(capturedAtMs)) {
+      return false;
+    }
+
+    const now = this.now();
+    if (now - capturedAtMs > this.clusterMemberStaleHeartbeatMaxAgeMs) {
+      return false;
+    }
+
+    const readyLeaseExpiresAt = Number(
+      snapshot?.nodeEvidence?.readyLeaseExpiresAt,
+    );
+    if (Number.isFinite(readyLeaseExpiresAt) && readyLeaseExpiresAt <= now) {
+      return false;
+    }
+
+    return true;
+  },
+
+  /**
+   * Build a comparable node watermark from one stored readiness snapshot.
+   * @param {Object|null} snapshot
+   * @return {Object|null}
+   * @private
+   */
+  buildStoredReadinessSnapshotWatermark(snapshot) {
+    const nodeEvidence = snapshot?.nodeEvidence;
+    if (!nodeEvidence || typeof nodeEvidence !== TYPEOF.OBJECT) {
+      return null;
+    }
+
+    const watermark = {};
+    const lastHeartbeat = Number(nodeEvidence.lastHeartbeat);
+    if (Number.isFinite(lastHeartbeat)) {
+      watermark.lastHeartbeat = lastHeartbeat;
+    }
+    const readyLeaseExpiresAt = Number(nodeEvidence.readyLeaseExpiresAt);
+    if (Number.isFinite(readyLeaseExpiresAt)) {
+      watermark.readyLeaseExpiresAt = readyLeaseExpiresAt;
+    }
+    if (
+      typeof nodeEvidence.rowConnectionState === TYPEOF.STRING &&
+      nodeEvidence.rowConnectionState.length > NUM.ZERO
+    ) {
+      watermark.connectionState = nodeEvidence.rowConnectionState;
+    }
+
+    return Object.keys(watermark).length > NUM.ZERO ?
+      Object.freeze(watermark) :
+      null;
+  },
+
+  /**
+   * Return one recent readiness snapshot when available.
+   * @param {string} nodeId
+   * @param {number} maxCachedAgeMs
+   * @return {Object|null}
+   * @private
+   */
+  getCachedReadinessSnapshot(nodeId, maxCachedAgeMs, options = {}) {
+    if (!nodeId || maxCachedAgeMs <= NUM.ZERO) {
+      return null;
+    }
+    const snapshot = this.lastReadinessSnapshotByNodeId.get(nodeId) || null;
+    const capturedAtMs =
+      this.lastReadinessSnapshotAtMsByNodeId.get(nodeId) || null;
+    if (!snapshot || !Number.isFinite(capturedAtMs)) {
+      return null;
+    }
+    if (this.now() - capturedAtMs > maxCachedAgeMs) {
+      return null;
+    }
+    if (
+      this.isReadinessSnapshotInvalidated(nodeId, capturedAtMs) &&
+      options.allowStaleOnCacheChange !== true
+    ) {
+      return null;
+    }
+    return snapshot;
+  },
+
+  /**
+   * Return true when callers should bypass cached readiness and refresh
+   * synchronously before making a gating decision.
+   * @param {Object|null} snapshot
+   * @param {Object} [options]
+   * @return {boolean}
+   * @private
+   */
+  shouldBypassCachedSnapshot(snapshot, options = {}) {
+    if (options.requireFreshOnIneligible !== true) {
+      return false;
+    }
+    const decisionDimension = this.resolveReadinessDecisionDimension(options);
+    const dimensions = snapshot?.dimensions;
+    if (!dimensions || typeof dimensions !== TYPEOF.OBJECT) {
+      return true;
+    }
+    return dimensions[decisionDimension] !== true;
+  },
+
+  /**
+   * Return true when callers should reuse a recent cached ineligible snapshot
+   * immediately and refresh the canonical readiness owner in the background.
+   * @param {Object|null} snapshot
+   * @param {Object} [options]
+   * @return {boolean}
+   * @private
+   */
+  shouldPreferBackgroundRefreshOnIneligible(snapshot, options = {}) {
+    if (
+      options.allowAuthoritativeRefresh !== true ||
+      options.preferBackgroundRefreshOnIneligible !== true
+    ) {
+      return false;
+    }
+    const dimensions = snapshot?.dimensions;
+    if (!dimensions || typeof dimensions !== TYPEOF.OBJECT) {
+      return false;
+    }
+    const decisionDimension = this.resolveReadinessDecisionDimension(options);
+    return dimensions[decisionDimension] !== true;
+  },
+
+  /**
+   * Resolve the caller's gating dimension with a stable serve default.
+   * @param {Object} [options]
+   * @return {string}
+   * @private
+   */
+  resolveReadinessDecisionDimension(options = {}) {
+    return typeof options.decisionDimension === TYPEOF.STRING &&
+      options.decisionDimension.length > NUM.ZERO ?
+      options.decisionDimension :
+      CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE;
+  },
+
+  /**
+   * Persist one recent readiness snapshot for hot-path reuse.
+   * @param {string} nodeId
+   * @param {Object|null} snapshot
+   * @private
+   */
+  storeReadinessSnapshot(nodeId, snapshot) {
+    if (!nodeId || !snapshot) {
+      return;
+    }
+    const capturedAtMs = this.now();
+    this.lastReadinessSnapshotByNodeId.set(nodeId, snapshot);
+    this.lastReadinessSnapshotAtMsByNodeId.set(nodeId, capturedAtMs);
+    this.lastReadinessSnapshotInvalidatedAtMsByNodeId.delete(nodeId);
+    this.recordRecoveryEpochObservation(nodeId, snapshot, capturedAtMs);
+  },
+
+  /**
+   * Track restart/recovery epochs as bounded per-node timelines keyed by the
+   * canonical readiness owner, so harness diagnostics can inspect progress
+   * directly instead of inferring it from raw logs.
+   * @param {string} nodeId
+   * @param {Object|null} snapshot
+   * @param {number} observedAtMs
+   * @return {void}
+   * @private
+   */
+  recordRecoveryEpochObservation(nodeId, snapshot, observedAtMs) {
+    const summary = this.buildRecoveryEpochSummary(
+      nodeId,
+      snapshot,
+      observedAtMs,
+    );
+    const recoveryActive = summary.recoveryActive === true;
+    const currentEpoch = this.currentRecoveryEpochByNodeId.get(nodeId) || null;
+    if (!currentEpoch && !recoveryActive) {
+      return;
+    }
+
+    if (!currentEpoch && recoveryActive) {
+      const history = this.recoveryEpochHistoryByNodeId.get(nodeId) || [];
+      const epoch = {
+        epochId: `${nodeId}:${history.length + this.currentRecoveryEpochByNodeId.size + 1}`,
+        nodeId,
+        startedAt: summary.observedAt,
+        startedAtMs: observedAtMs,
+        open: true,
+        events: [summary],
+      };
+      this.currentRecoveryEpochByNodeId.set(nodeId, epoch);
+      return;
+    }
+
+    if (!currentEpoch) {
+      return;
+    }
+
+    const lastEvent =
+      currentEpoch.events[currentEpoch.events.length - 1] || null;
+    if (!lastEvent || JSON.stringify(lastEvent) !== JSON.stringify(summary)) {
+      currentEpoch.events.push(summary);
+      if (currentEpoch.events.length > this.recoveryEpochEventLimit) {
+        currentEpoch.events.splice(
+          LOCAL_NUM_ZERO,
+          currentEpoch.events.length - this.recoveryEpochEventLimit,
+        );
+      }
+    }
+
+    if (!recoveryActive) {
+      currentEpoch.open = false;
+      currentEpoch.endedAt = summary.observedAt;
+      currentEpoch.endedAtMs = observedAtMs;
+      this.currentRecoveryEpochByNodeId.delete(nodeId);
+      const history = this.recoveryEpochHistoryByNodeId.get(nodeId) || [];
+      history.push(
+        Object.freeze({
+          ...currentEpoch,
+          events: Object.freeze(
+            currentEpoch.events.map((event) => Object.freeze({...event})),
+          ),
+        }),
+      );
+      while (history.length > this.recoveryEpochHistoryLimit) {
+        history.shift();
+      }
+      this.recoveryEpochHistoryByNodeId.set(nodeId, history);
+    }
+  },
+
+  /**
+   * @param {string} nodeId
+   * @param {Object|null} snapshot
+   * @param {number} observedAtMs
+   * @return {Object}
+   * @private
+   */
+  buildRecoveryEpochSummary(nodeId, snapshot, observedAtMs) {
+    const dimensions =
+      snapshot?.dimensions && typeof snapshot.dimensions === TYPEOF.OBJECT ?
+        snapshot.dimensions :
+        {};
+    const reasonCodes = Array.isArray(snapshot?.reasons) ?
+      [
+        ...new Set(
+          snapshot.reasons
+            .map((reason) => String(reason?.code || ''))
+            .filter(Boolean),
+        ),
+      ] :
+      [];
+    const projectionReadinessContract =
+      snapshot?.projectionReadinessContract &&
+      typeof snapshot.projectionReadinessContract === TYPEOF.OBJECT ?
+        snapshot.projectionReadinessContract :
+        null;
+    return Object.freeze({
+      nodeId,
+      observedAt: snapshot?.observedAt || normalizeIsoTimestamp(observedAtMs),
+      observedAtMs,
+      lifecycleState: snapshot?.lifecycleState || null,
+      processAlive:
+        dimensions[CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE] === true,
+      clusterMemberHealthy:
+        dimensions[CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY] ===
+        true,
+      controlPlaneWritable:
+        dimensions[CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE] ===
+        true,
+      controlPlanePublished:
+        dimensions[
+          CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED
+        ] === true,
+      controlPlaneRecoveryEligible:
+        dimensions[
+          CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE
+        ] === true,
+      repairEligible:
+        dimensions[CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE] === true,
+      serveEligible:
+        dimensions[CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE] === true,
+      projectionReadinessContract,
+      projectionReadinessState:
+        projectionReadinessContract?.state ||
+        PROJECTION_READINESS_CONTRACT_STATE.BLOCKED,
+      priorityControlPlaneRecoveryActive:
+        projectionReadinessContract?.priorityRecovery?.active === true,
+      priorityControlPlaneRecoveryReasonCodes:
+        Array.isArray(
+          projectionReadinessContract?.priorityRecovery?.reasonCodes,
+        ) ?
+          Object.freeze([
+            ...projectionReadinessContract.priorityRecovery.reasonCodes,
+          ]) :
+          Object.freeze([]),
+      reasonCodes: Object.freeze(reasonCodes),
+      recoveryActive:
+        projectionReadinessContract?.recoveryOpen !== false,
+    });
+  },
+
+  /**
+   * @return {Object}
+   */
+  getRecoveryEpochHistoryByNodeId() {
+    const entries = {};
+    for (const [
+      nodeId,
+      history,
+    ] of this.recoveryEpochHistoryByNodeId.entries()) {
+      entries[nodeId] = Array.isArray(history) ?
+        history.map((epoch) =>
+          Object.freeze({
+            ...epoch,
+            events: Object.freeze(
+              (Array.isArray(epoch.events) ? epoch.events : []).map((event) =>
+                Object.freeze({...event}),
+              ),
+            ),
+          }),
+        ) :
+        [];
+    }
+    for (const [nodeId, epoch] of this.currentRecoveryEpochByNodeId.entries()) {
+      entries[nodeId] = Object.freeze([
+        ...(Array.isArray(entries[nodeId]) ? entries[nodeId] : []),
+        Object.freeze({
+          ...epoch,
+          events: Object.freeze(
+            (Array.isArray(epoch.events) ? epoch.events : []).map((event) =>
+              Object.freeze({...event}),
+            ),
+          ),
+        }),
+      ]);
+    }
+    return Object.freeze(entries);
+  },
+
+  /**
+   * Build one stable single-flight key for readiness evaluations.
+   * @param {string} nodeId
+   * @param {Object} [options]
+   * @return {string}
+   * @private
+   */
+  buildReadinessEvaluationKey(nodeId, options = {}) {
+    return (
+      String(nodeId || LOCAL_STR_EMPTY) +
+      LOCAL_STR_REFRESH +
+      String(options.allowAuthoritativeRefresh === true) +
+      LOCAL_STR_STALE +
+      String(options.allowStaleOnCacheChange === true) +
+      LOCAL_STR_PLANNING +
+      this.resolveMembershipPublicationPlanningSource(options)
+    );
+  },
+
+  /**
+   * Subscribe to node/service cache changes so hot-path readiness reuse does
+   * not outlive fresh cluster evidence.
+   * @private
+   */
+  subscribeToCacheChanges() {
+    if (
+      !this.systemTableCache ||
+      typeof this.systemTableCache.onCacheChange !== TYPEOF.FUNCTION
+    ) {
+      return;
+    }
+    this.cacheChangeListener = (tableName, _operation, record) => {
+      this.handleCacheChange(tableName, record);
+    };
+    this.systemTableCache.onCacheChange(this.cacheChangeListener);
+  },
+
+  /**
+   * Invalidate cached readiness snapshots affected by one cache change.
+   * @param {string} tableName
+   * @param {Object|null} record
+   * @private
+   */
+  handleCacheChange(tableName, record) {
+    if (tableName !== TABLES.NODES && tableName !== TABLES.SERVICES) {
+      return;
+    }
+    const nodeId = String(record?.[COLUMN.NODE_ID] ?? record?.node_id ?? '');
+    if (!nodeId) {
+      return;
+    }
+    this.lastReadinessSnapshotInvalidatedAtMsByNodeId.set(nodeId, this.now());
+  },
+
+  /**
+   * Determine whether one cached readiness snapshot was invalidated by a
+   * subsequent node/service cache mutation.
+   * @param {string} nodeId
+   * @param {number|null} [capturedAtMs]
+   * @return {boolean}
+   * @private
+   */
+  isReadinessSnapshotInvalidated(nodeId, capturedAtMs = null) {
+    if (!nodeId) {
+      return false;
+    }
+    const invalidatedAtMs = Number(
+      this.lastReadinessSnapshotInvalidatedAtMsByNodeId.get(nodeId),
+    );
+    if (!Number.isFinite(invalidatedAtMs) || invalidatedAtMs <= NUM.ZERO) {
+      return false;
+    }
+    const snapshotAtMs = Number.isFinite(capturedAtMs) ?
+      capturedAtMs :
+      Number(this.lastReadinessSnapshotAtMsByNodeId.get(nodeId));
+    if (!Number.isFinite(snapshotAtMs) || snapshotAtMs <= NUM.ZERO) {
+      return true;
+    }
+    return invalidatedAtMs >= snapshotAtMs;
+  },
+
+  /**
+   * Start one deduped asynchronous readiness refresh when a hot-path caller is
+   * allowed to reuse a recently invalidated snapshot.
+   * @param {string} nodeId
+   * @param {Object} [options]
+   * @private
+   */
+  maybeStartBackgroundReadinessRefresh(nodeId, options = {}) {
+    if (!nodeId) {
+      return;
+    }
+    const evaluationKey = this.buildReadinessEvaluationKey(nodeId, options);
+    this.readinessEvaluationLane
+      .run({ownerKey: evaluationKey}, async () =>
+        this.evaluateNodeReadiness(nodeId, options),
+      )
+      .catch((_error) => null);
+  },
+
+  /**
+   * Start one background owner-path refresh for sync callers when the visible
+   * snapshot is ineligible for the requested decision and connected evidence
+   * suggests the cache may be stale.
+   * @param {Object} context
+   * @param {Object} [options]
+   * @private
+   */
+  maybeStartBackgroundSyncReadinessRefresh(context = {}, options = {}) {
+    if (options.allowAuthoritativeRefresh !== true) {
+      return;
+    }
+    if (!this.shouldBypassCachedSnapshot(context.snapshot, options)) {
+      return;
+    }
+    this.authoritativeNodeEvidenceReconciler
+      .maybeRepairNodeEvidence(context, options)
+      .catch((_error) => null);
+  },
+};
+
+function installControlPlaneReadinessSnapshotStoreMethods(prototype) {
+  Object.defineProperties(
+    prototype,
+    Object.fromEntries(
+      Object.entries(controlPlaneReadinessSnapshotStoreMethods).map(
+        ([name, value]) => [
+          name,
+          {
+            configurable: true,
+            value,
+            writable: true,
+          },
+        ],
+      ),
+    ),
+  );
+}
+
+export {installControlPlaneReadinessSnapshotStoreMethods};
