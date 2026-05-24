@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "active",
+  "status": "done",
   "intent": {
     "opened": "2026-05-24",
     "lane": "lightweight-maintenance",
@@ -12,8 +12,8 @@
     "playback": "none",
     "owner": "test_quality_owner",
     "boundary": "replica_dispatch_node_state_update_suites",
-    "currentState": "New package scaffolded from the shared work-package schema.",
-    "nextAction": "Split semantically grouped replica-dispatch-node-state-update test-part-2 suites until test/control-plane/replica-dispatch-node-state-update.test-part-2.js is below the configured test file-size limit without reducing coverage.",
+    "currentState": "Split test-part-2 (2518 lines) into test-part-2 (1365 lines) and new test-part-6 (1402 lines); npm run audit:file-size reports 0/60 over 1500, and npx tap across the two files passes 62/62.",
+    "nextAction": "Close package after closure validation and commit the split.",
     "dominantReason": "oversized_file_ratchet"
   },
   "scope": {
@@ -31,7 +31,8 @@
       "src/rebalancer/operation-workflow-replacement-leader-resolution.js",
       "src/rebalancer/operation-workflow-replacement-leader-state.js",
       "test/control-plane/membership-publication-coordinator-main-stage-2b.js",
-      "test/control-plane/membership-publication-coordinator-main-stage-2c.js"
+      "test/control-plane/membership-publication-coordinator-main-stage-2c.js",
+      "test/control-plane/replica-dispatch-node-state-update.test-part-6.js"
     ],
     "handoffFiles": [],
     "generatedFiles": [],
@@ -51,7 +52,8 @@
       "src/rebalancer/operation-workflow-replacement-leader-state.js",
       "test/control-plane/membership-publication-coordinator-main-stage-2b.js",
       "test/control-plane/membership-publication-coordinator-main-stage-2c.js",
-      "work/packages/active-20260524-replica-dispatch-node-state-update-test-part-2-suites.md"
+      "work/packages/active-20260524-replica-dispatch-node-state-update-test-part-2-suites.md",
+      "test/control-plane/replica-dispatch-node-state-update.test-part-6.js"
     ]
   },
   "gates": {
@@ -70,9 +72,7 @@
     "ambiguityScore": 1
   },
   "execution": {
-    "theoryLedgerRefs": [
-      "none"
-    ],
+    "theoryLedgerRefs": [],
     "proof": {
       "commands": [
         "npm run audit:file-size -- test/control-plane/replica-dispatch-node-state-update.test-part-2.js"
@@ -195,9 +195,11 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: <owner>; files-changed: <paths or none>; validation: <focused proof and parent revalidated focused proof: yes>; outcome: <validated|blocked>.
-- [ ] action: verification-fix; owner: <owner>; files-changed: <paths or none>; validation: <verification proof and parent revalidated focused proof: yes>; outcome: <validated|blocked>.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: <validated|not-needed>.
+- [x] action: implementation; owner: test_quality_owner; files-changed: test/control-plane/replica-dispatch-node-state-update.test-part-2.js, test/control-plane/replica-dispatch-node-state-update.test-part-6.js; validation: `npm run audit:file-size -- test/control-plane/replica-dispatch-node-state-update.test-part-2.js test/control-plane/replica-dispatch-node-state-update.test-part-6.js` reports 0/60 over 1500 lines; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: verification-fix; owner: test_quality_owner; files-changed: none; validation: `npx tap test/control-plane/replica-dispatch-node-state-update.test-part-2.js test/control-plane/replica-dispatch-node-state-update.test-part-6.js --disable-coverage` reports 62/62 passing; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: validated.
+
+theory ledger: no ledger update
 
 ## Validation
 

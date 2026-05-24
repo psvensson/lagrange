@@ -25,20 +25,20 @@ Make the system stable under rolling-restart: change the core logic of the syste
 ```text
 Representative artifact: none
 Visible first frontier: unknown
-Active package: work/packages/done-20260524-membership-publication-coordinator-test-suites.md
+Active package: work/packages/done-20260524-replica-dispatch-node-state-update-test-part-2-suites.md
 Active package owner: test_quality_owner
-Active package boundary: membership_publication_coordinator_suites
+Active package boundary: replica_dispatch_node_state_update_suites
 Selected cause: oversized_file_ratchet
-Required action: Close the package after verification: run closure validation and update the current-blocker.
+Required action: Close package after closure validation and commit the split.
 Representative status: unknown
 Causal outcome: unknown
 Architecture gate: not-required / unknown
 Expected delta: unknown
-Current state: test/control-plane/membership-publication-coordinator-main-stage-2.js split into stage-2, stage-2b, and stage-2c; main now 1229 lines and audit reports 0/60 over 1500 lines.
-Allowed edits: test/control-plane/membership-publication-coordinator-main-stage-2.js, src/rebalancer/operation-workflow-owner-segment-6.js, test/bootstrap/node-joining-service.test.js, test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js, src/rebalancer/operation-workflow-observed-state.js, src/rebalancer/operation-workflow-priority-recovery-errors.js, src/rebalancer/operation-workflow-remove-safety-evaluator.js, src/rebalancer/operation-workflow-remove-safety-membership.js, src/rebalancer/operation-workflow-replace-replay.js, src/rebalancer/operation-workflow-replacement-leader-resolution.js, src/rebalancer/operation-workflow-replacement-leader-state.js, test/bootstrap/node-joining-service.test-part-7.js, test/bootstrap/node-joining-service.test-part-8.js, test/control-plane/membership-publication-coordinator.test.js, test/control-plane/membership-publication-coordinator-main-stage-2b.js, test/control-plane/membership-publication-coordinator-main-stage-2c.js
+Current state: Split test-part-2 (2518 lines) into test-part-2 (1365 lines) and new test-part-6 (1402 lines); npm run audit:file-size reports 0/60 over 1500, and npx tap across the two files passes 62/62.
+Allowed edits: test/control-plane/replica-dispatch-node-state-update.test-part-2.js, src/rebalancer/operation-workflow-owner-segment-6.js, test/control-plane/membership-publication-coordinator-main-stage-2.js, test/control-plane/membership-publication-coordinator.test.js, test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js, src/rebalancer/operation-workflow-observed-state.js, src/rebalancer/operation-workflow-priority-recovery-errors.js, src/rebalancer/operation-workflow-remove-safety-evaluator.js, src/rebalancer/operation-workflow-remove-safety-membership.js, src/rebalancer/operation-workflow-replace-replay.js, src/rebalancer/operation-workflow-replacement-leader-resolution.js, src/rebalancer/operation-workflow-replacement-leader-state.js, test/control-plane/membership-publication-coordinator-main-stage-2b.js, test/control-plane/membership-publication-coordinator-main-stage-2c.js, test/control-plane/replica-dispatch-node-state-update.test-part-6.js
 Candidate runtime files: unknown
 Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
-Required latest proof: npm run audit:file-size -- test/control-plane/membership-publication-coordinator-main-stage-2.js
+Required latest proof: npm run audit:file-size -- test/control-plane/replica-dispatch-node-state-update.test-part-2.js
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -103,7 +103,7 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Purpose: Keep the sprint's front of queue pointed at the current largest source/test and owner-boundary oversized files until the audit reaches zero oversized files.
    - First-run reason: the current audit reports 154 source oversized files and 60 test oversized files, so this first tranche cannot complete the full backlog by itself.
 
-11. [Split replica-dispatch-node-state-update test-part-2 below file-size limit](../packages/active-20260524-replica-dispatch-node-state-update-test-part-2-suites.md)
+11. [Split replica-dispatch-node-state-update test-part-2 below file-size limit](../packages/done-20260524-replica-dispatch-node-state-update-test-part-2-suites.md)
    - Lane: `lightweight-maintenance`
    - Purpose: Split semantically grouped replica-dispatch-node-state-update test-part-2 suites until `test/control-plane/replica-dispatch-node-state-update.test-part-2.js` is below the configured test file-size limit.
    - First-run reason: next largest oversized test file in the current audit (2519 lines).
