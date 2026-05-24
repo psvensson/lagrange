@@ -1,12 +1,8 @@
 import {test} from '../../src/test-helpers/tap.js';
 import assert from 'node:assert/strict';
-import {ConfigurationManager} from '../../src/config/configuration-manager.js';
-import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   CDC_OPERATION,
   COLUMN,
-  SERVICE_TYPE,
-  SERVICE_STATUS,
   TABLES,
 } from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
@@ -27,6 +23,16 @@ import {
 import {
   CDCGroupPropagationService,
 } from '../../src/topology/cdc-group-propagation-service.js';
+import {
+  createGroupRow,
+  createMessageGroupServiceRow,
+  createMessageRouter,
+  createSourceMessageGroupService,
+  createTopologyCache,
+  setupConfig,
+  teardownConfig,
+  waitForCondition,
+} from './cdc-group-propagation-service-harness.js';
 
 const GROUPED_VISIBILITY_NODE_ID = 'node-z';
 const GROUPED_VISIBILITY_UPDATED_AT = 2000;
@@ -35,119 +41,6 @@ const GROUPED_VISIBILITY_NODE_ROW = Object.freeze({
   [COLUMN.UPDATED_AT]: GROUPED_VISIBILITY_UPDATED_AT,
 });
 
-function setupConfig(propagationMode) {
-  ConfigurationManager.resetInstance();
-  LoggingService.resetInstance();
-  const config = ConfigurationManager.getInstance();
-  config.initialize({
-    node: {id: 'node-a'},
-    logging: {level: 'error'},
-    latency: {
-      groupThresholdMs: 100,
-      recalcIntervalMs: 1000,
-      recalcJitterRatio: 0.1,
-      pingTimeoutMs: 50,
-      pingRetryCount: 2,
-      smoothingAlpha: 0.5,
-      propagationMode,
-    },
-  });
-  const logging = LoggingService.getInstance();
-  logging.initialize({level: 'error'});
-}
-
-function teardownConfig() {
-  ConfigurationManager.resetInstance();
-  LoggingService.resetInstance();
-}
-
-function createTopologyCache({nodes = [], groups = [], services = []} = {}) {
-  const nodeRows = new Map(
-    nodes.map((row) => [row[COLUMN.NODE_ID], {...row}]),
-  );
-  const groupRows = groups.map((row) => ({...row}));
-  const serviceRows = services.map((row) => ({...row}));
-
-  return {
-    get(tableName, key) {
-      if (tableName === TABLES.NODES) {
-        return nodeRows.get(key) || null;
-      }
-      return null;
-    },
-    getAll(tableName) {
-      if (tableName === TABLES.LATENCY_GROUPS) {
-        return groupRows.map((row) => ({...row}));
-      }
-      return [];
-    },
-    filter(tableName, predicate) {
-      if (tableName !== TABLES.SERVICES) {
-        return [];
-      }
-      return serviceRows.filter((row) => predicate(row));
-    },
-  };
-}
-
-function createSourceMessageGroupService() {
-  const calls = [];
-  return {
-    calls,
-    async applyCDCEvent(tableName, operation, data) {
-      calls.push({tableName, operation, data});
-    },
-  };
-}
-
-function createMessageRouter(results = []) {
-  const calls = [];
-  return {
-    calls,
-    async deliver(address, payload, options) {
-      calls.push({address, payload, options});
-      const index = calls.length - 1;
-      return results[Math.min(index, results.length - 1)];
-    },
-  };
-}
-
-async function waitForCondition(predicate, timeoutMs = 1000, intervalMs = 10) {
-  const startedAtMs = Date.now();
-  while (Date.now() - startedAtMs < timeoutMs) {
-    if (predicate()) {
-      return true;
-    }
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
-  }
-  return predicate();
-}
-
-function createGroupRow(groupId, coordinatorNodeId) {
-  return {
-    [COLUMN.GROUP_ID]: groupId,
-    [COLUMN.COORDINATOR_NODE_ID]: coordinatorNodeId,
-    [COLUMN.STATE]: 'active',
-  };
-}
-
-function createMessageGroupServiceRow(
-  serviceId,
-  nodeId,
-  address,
-  raftRole,
-  groupId = null,
-) {
-  return {
-    [COLUMN.SERVICE_ID]: serviceId,
-    [COLUMN.GROUP_ID]: groupId,
-    [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
-    [COLUMN.NODE_ID]: nodeId,
-    [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-    [COLUMN.ADDRESS]: address,
-    [COLUMN.RAFT_ROLE]: raftRole,
-  };
-}
 test('CDCGroupPropagationService uses safe mode when configured', async (t) => {
   setupConfig(LATENCY_PROPAGATION_MODE.SAFE);
   const cache = createTopologyCache({
