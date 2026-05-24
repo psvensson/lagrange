@@ -276,7 +276,7 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
      - [Split oversized test/support file test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js](../packages/done-20260524-oversized-admin-admin-control-snapshot-repair-handoff-outcome-cases.md)
      - [Split oversized test/support file test/rebalancer/unified-rebalancer-part-5-2-stage-2.js](../packages/done-20260524-oversized-rebalancer-unified-charlie.md)
      - [Split oversized test/support file test/distributed/harness/publication-evidence-contract.js](../packages/done-20260524-oversized-distributed-harness-publication-evidence-contract.md)
-     - [Split oversized test/support file test/distributed/harness/assertions-segment-3.js](../packages/todo-20260524-oversized-distributed-harness-assertions.md)
+     - [Split oversized test/support file test/distributed/harness/assertions-segment-3.js](../packages/done-20260524-oversized-distributed-harness-assertions.md)
      - [Split oversized test/support file test/distributed/harness/__tests__/failure-bundle-playback-test-cases.js](../packages/done-20260524-oversized-distributed-harness-failure-bundle-playback-cases.md)
      - [Split oversized test/support file test/control-plane/publication-recovery-evidence.test.js](../packages/done-20260524-oversized-control-plane-publication-recovery-evidence.md)
      - [Split oversized test/support file test/bootstrap/move-replica-assignment-token.test.js](../packages/done-20260524-oversized-bootstrap-move-replica-assignment-token.md)
