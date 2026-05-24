@@ -3,32 +3,59 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
-  "opened": "2026-05-24",
-  "lane": "lightweight-maintenance",
-  "scenario": "none",
-  "artifact": "none",
-  "playback": "none",
-  "owner": "test_quality_owner",
-  "boundary": "node_joining_service_suites",
-  "dominantReason": "oversized_file_ratchet",
-  "currentState": "New package scaffolded from the shared work-package schema.",
-  "nextAction": "Split semantically grouped node joining service test suites until test/bootstrap/node-joining-service.test.js is below the configured test file-size limit without reducing coverage.",
-  "proof": [
-    "npm run audit:file-size -- test/bootstrap/node-joining-service.test.js"
-  ],
-  "theoryLedgerRefs": [],
-  "stabilityCredit": "local-proof-only",
-  "whyHighestLeverageNow": "This package is front-loaded in the active sprint to reduce LLM and human confusion from oversized files before more rolling-restart runtime work resumes; it preserves behavior while forcing semantic helper names and file-size proof.",
-  "writeScope": [
-    "test/bootstrap/node-joining-service.test.js"
-  ],
-  "handoffFiles": [],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [
-    "test/bootstrap/node-joining-service.test.js"
-  ],
+  "status": "active",
+  "intent": {
+    "opened": "2026-05-24",
+    "lane": "lightweight-maintenance",
+    "scenario": "none",
+    "artifact": "none",
+    "playback": "none",
+    "owner": "test_quality_owner",
+    "boundary": "node_joining_service_suites",
+    "currentState": "New package scaffolded from the shared work-package schema.",
+    "nextAction": "Split semantically grouped node joining service test suites until test/bootstrap/node-joining-service.test.js is below the configured test file-size limit without reducing coverage.",
+    "dominantReason": "oversized_file_ratchet"
+  },
+  "scope": {
+    "writeScope": [
+      "test/bootstrap/node-joining-service.test.js",
+      "src/rebalancer/operation-workflow-owner-segment-6.js",
+      "test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js",
+      "test/rebalancer/quorum-conditioned-remove-safety-tail-test-cases.js",
+      "src/rebalancer/operation-workflow-observed-state.js",
+      "src/rebalancer/operation-workflow-priority-recovery-errors.js",
+      "src/rebalancer/operation-workflow-remove-safety-evaluator.js",
+      "src/rebalancer/operation-workflow-remove-safety-membership.js",
+      "src/rebalancer/operation-workflow-replace-replay.js",
+      "src/rebalancer/operation-workflow-replacement-leader-resolution.js",
+      "src/rebalancer/operation-workflow-replacement-leader-state.js",
+      "test/rebalancer/quorum-conditioned-remove-safety-tail-election-retargeting.js",
+      "test/rebalancer/quorum-conditioned-remove-safety-tail-replacement-election.js"
+    ],
+    "handoffFiles": [],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": [],
+    "commitScope": [
+      "test/bootstrap/node-joining-service.test.js",
+      "src/rebalancer/operation-workflow-owner-segment-6.js",
+      "test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js",
+      "test/rebalancer/quorum-conditioned-remove-safety-tail-test-cases.js",
+      "src/rebalancer/operation-workflow-observed-state.js",
+      "src/rebalancer/operation-workflow-priority-recovery-errors.js",
+      "src/rebalancer/operation-workflow-remove-safety-evaluator.js",
+      "src/rebalancer/operation-workflow-remove-safety-membership.js",
+      "src/rebalancer/operation-workflow-replace-replay.js",
+      "src/rebalancer/operation-workflow-replacement-leader-resolution.js",
+      "src/rebalancer/operation-workflow-replacement-leader-state.js",
+      "test/rebalancer/quorum-conditioned-remove-safety-tail-election-retargeting.js",
+      "test/rebalancer/quorum-conditioned-remove-safety-tail-replacement-election.js",
+      "work/packages/active-20260524-node-joining-service-test-suites.md"
+    ]
+  },
+  "gates": {
+    "whyHighestLeverageNow": "This package is front-loaded in the active sprint to reduce LLM and human confusion from oversized files before more rolling-restart runtime work resumes; it preserves behavior while forcing semantic helper names and file-size proof.",
+    "stabilityCredit": "local-proof-only"
+  },
   "modelFit": {
     "packageClass": "bounded-implementation",
     "intendedMinimumModel": "gpt-5.3-codex-spark",
@@ -40,24 +67,13 @@
       "a frozen decision must be reopened"
     ]
   },
-  "modelFitSplit": {
-    "targetExecutionModel": "gpt-5.3-codex-spark",
-    "allowedDecisionDepth": "bounded local edit after owner, scope, proof, and forbidden files are named",
-    "safeToExecuteWhen": [
-      "owner, boundary, write scope, forbidden scope, proof, and kill rule stay as declared",
-      "the executor does not need to choose architecture, migrate ownership, or reinterpret representative evidence",
-      "the first focused proof gives a clear pass, fail, or escalate signal"
-    ],
-    "splitTriggers": [
-      "write scope expands beyond the declared lower-model lane",
-      "proof requires forbidden scope, cross-owner reasoning, or architecture route selection",
-      "the implementation needs to decide system behavior instead of executing a named local mechanism"
-    ],
-    "childPackageCandidates": [
-      "Prefer mechanical-maintenance for docs/templates/schema-only edits.",
-      "Prefer test-only-proof for tests that do not change runtime behavior.",
-      "Prefer bounded-experiment for one same-owner hypothesis with inherited context."
-    ]
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": {
+      "commands": [
+        "npm run audit:file-size -- test/bootstrap/node-joining-service.test.js"
+      ]
+    }
   }
 }
 -->

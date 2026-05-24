@@ -25,20 +25,20 @@ Make the system stable under rolling-restart: change the core logic of the syste
 ```text
 Representative artifact: none
 Visible first frontier: unknown
-Active package: none
-Active package owner: cdc_integration_service_owner
-Active package boundary: semantic_service_modules
+Active package: work/packages/active-20260524-node-joining-service-test-suites.md
+Active package owner: test_quality_owner
+Active package boundary: node_joining_service_suites
 Selected cause: oversized_file_ratchet
-Required action: Extract semantically named CDC integration service modules until src/cdc/cdc-integration-service-segment-3.js is below the configured source file-size limit without changing behavior.
+Required action: Split semantically grouped node joining service test suites until test/bootstrap/node-joining-service.test.js is below the configured test file-size limit without reducing coverage.
 Representative status: unknown
 Causal outcome: unknown
 Architecture gate: not-required / unknown
 Expected delta: unknown
-Current state: Completed semantic module extraction. All CDC Integration Service Segment-3 functionality resides under the configured 800-line source file-size limit, and all test coverage has passed with zero regressions.
-Allowed edits: src/cdc/cdc-integration-service-segment-3.js, src/control-plane/publication-active-gate-handoff-contract.js, src/control-plane/publication-active-gate-handoff-contract-constants.js, src/control-plane/publication-active-gate-handoff-contract-decision.js, src/control-plane/publication-active-gate-handoff-contract-evidence.js, src/control-plane/publication-active-gate-handoff-contract-fence.js, src/control-plane/publication-active-gate-handoff-contract-helpers.js, src/control-plane/publication-active-gate-handoff-contract-selection.js, src/control-plane/publication-active-gate-handoff-contract-workflow.js, src/cdc/cdc-integration-service-cache-divergence.js, src/cdc/cdc-integration-service-coalesced-mutation.js, src/cdc/cdc-integration-service-fallback-diagnostics.js, src/cdc/cdc-integration-service-insert-normalization.js, src/cdc/cdc-integration-service-mutations.js, src/cdc/cdc-integration-service-node-join.js
+Current state: New package scaffolded from the shared work-package schema.
+Allowed edits: test/bootstrap/node-joining-service.test.js, src/rebalancer/operation-workflow-owner-segment-6.js, test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js, test/rebalancer/quorum-conditioned-remove-safety-tail-test-cases.js, src/rebalancer/operation-workflow-observed-state.js, src/rebalancer/operation-workflow-priority-recovery-errors.js, src/rebalancer/operation-workflow-remove-safety-evaluator.js, src/rebalancer/operation-workflow-remove-safety-membership.js, src/rebalancer/operation-workflow-replace-replay.js, src/rebalancer/operation-workflow-replacement-leader-resolution.js, src/rebalancer/operation-workflow-replacement-leader-state.js, test/rebalancer/quorum-conditioned-remove-safety-tail-election-retargeting.js, test/rebalancer/quorum-conditioned-remove-safety-tail-replacement-election.js
 Candidate runtime files: unknown
 Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
-Required latest proof: npm run audit:owner-boundary-segments -- src/cdc/cdc-integration-service-segment-3.js
+Required latest proof: npm run audit:file-size -- test/bootstrap/node-joining-service.test.js
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -78,17 +78,17 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Purpose: Extract semantically named CDC integration service modules until `src/cdc/cdc-integration-service-segment-3.js` is below the source file-size limit.
    - First-run reason: next top owner-boundary segment candidate from `npm run work:oversized-next -- --markdown`.
 
-6. [Bring operation workflow owner below file-size limit](../packages/todo-20260524-operation-workflow-owner-semantic-modules.md)
+6. [Bring operation workflow owner below file-size limit](../packages/done-20260524-operation-workflow-owner-semantic-modules.md)
    - Lane: `lightweight-maintenance`
    - Purpose: Extract semantically named operation workflow owner modules until `src/rebalancer/operation-workflow-owner-segment-6.js` is below the source file-size limit.
    - First-run reason: next top owner-boundary segment candidate from `npm run work:oversized-next -- --markdown`.
 
-7. [Split quorum conditioned remove safety tail tests below file-size limit](../packages/todo-20260524-quorum-conditioned-remove-safety-test-suites.md)
+7. [Split quorum conditioned remove safety tail tests below file-size limit](../packages/done-20260524-quorum-conditioned-remove-safety-test-suites.md)
    - Lane: `lightweight-maintenance`
    - Purpose: Split semantically grouped quorum conditioned remove-safety test suites until `test/rebalancer/quorum-conditioned-remove-safety-tail-test-cases.js` is below the test file-size limit.
    - First-run reason: largest oversized test file reported by `npm run audit:file-size`.
 
-8. [Split node joining service tests below file-size limit](../packages/todo-20260524-node-joining-service-test-suites.md)
+8. [Split node joining service tests below file-size limit](../packages/active-20260524-node-joining-service-test-suites.md)
    - Lane: `lightweight-maintenance`
    - Purpose: Split semantically grouped node joining service test suites until `test/bootstrap/node-joining-service.test.js` is below the test file-size limit.
    - First-run reason: next largest oversized test file in the current audit.

@@ -3,32 +3,57 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
-  "opened": "2026-05-24",
-  "lane": "lightweight-maintenance",
-  "scenario": "none",
-  "artifact": "none",
-  "playback": "none",
-  "owner": "test_quality_owner",
-  "boundary": "quorum_conditioned_remove_safety_suites",
-  "dominantReason": "oversized_file_ratchet",
-  "currentState": "New package scaffolded from the shared work-package schema.",
-  "nextAction": "Split semantically grouped quorum conditioned remove-safety tail test suites until test/rebalancer/quorum-conditioned-remove-safety-tail-test-cases.js is below the configured test file-size limit without reducing coverage.",
-  "proof": [
-    "npm run audit:file-size -- test/rebalancer/quorum-conditioned-remove-safety-tail-test-cases.js"
-  ],
-  "theoryLedgerRefs": [],
-  "stabilityCredit": "local-proof-only",
-  "whyHighestLeverageNow": "This package is front-loaded in the active sprint to reduce LLM and human confusion from oversized files before more rolling-restart runtime work resumes; it preserves behavior while forcing semantic helper names and file-size proof.",
-  "writeScope": [
-    "test/rebalancer/quorum-conditioned-remove-safety-tail-test-cases.js"
-  ],
-  "handoffFiles": [],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [
-    "test/rebalancer/quorum-conditioned-remove-safety-tail-test-cases.js"
-  ],
+  "status": "done",
+  "intent": {
+    "opened": "2026-05-24",
+    "lane": "lightweight-maintenance",
+    "scenario": "none",
+    "artifact": "none",
+    "playback": "none",
+    "owner": "test_quality_owner",
+    "boundary": "quorum_conditioned_remove_safety_suites",
+    "currentState": "Tail test suites split into replacement-election and election-retargeting chain helpers; main file now 1202 lines and `npm run audit:file-size` reports 0/60 over 1500 lines.",
+    "nextAction": "Close the package after verification: run closure validation and update the current-blocker.",
+    "dominantReason": "oversized_file_ratchet"
+  },
+  "scope": {
+    "writeScope": [
+      "test/rebalancer/quorum-conditioned-remove-safety-tail-test-cases.js",
+      "src/rebalancer/operation-workflow-owner-segment-6.js",
+      "test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js",
+      "src/rebalancer/operation-workflow-observed-state.js",
+      "src/rebalancer/operation-workflow-priority-recovery-errors.js",
+      "src/rebalancer/operation-workflow-remove-safety-evaluator.js",
+      "src/rebalancer/operation-workflow-remove-safety-membership.js",
+      "src/rebalancer/operation-workflow-replace-replay.js",
+      "src/rebalancer/operation-workflow-replacement-leader-resolution.js",
+      "src/rebalancer/operation-workflow-replacement-leader-state.js",
+      "test/rebalancer/quorum-conditioned-remove-safety-tail-election-retargeting.js",
+      "test/rebalancer/quorum-conditioned-remove-safety-tail-replacement-election.js"
+    ],
+    "handoffFiles": [],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": [],
+    "commitScope": [
+      "test/rebalancer/quorum-conditioned-remove-safety-tail-test-cases.js",
+      "src/rebalancer/operation-workflow-owner-segment-6.js",
+      "test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js",
+      "src/rebalancer/operation-workflow-observed-state.js",
+      "src/rebalancer/operation-workflow-priority-recovery-errors.js",
+      "src/rebalancer/operation-workflow-remove-safety-evaluator.js",
+      "src/rebalancer/operation-workflow-remove-safety-membership.js",
+      "src/rebalancer/operation-workflow-replace-replay.js",
+      "src/rebalancer/operation-workflow-replacement-leader-resolution.js",
+      "src/rebalancer/operation-workflow-replacement-leader-state.js",
+      "test/rebalancer/quorum-conditioned-remove-safety-tail-election-retargeting.js",
+      "test/rebalancer/quorum-conditioned-remove-safety-tail-replacement-election.js",
+      "work/packages/active-20260524-quorum-conditioned-remove-safety-test-suites.md"
+    ]
+  },
+  "gates": {
+    "whyHighestLeverageNow": "This package is front-loaded in the active sprint to reduce LLM and human confusion from oversized files before more rolling-restart runtime work resumes; it preserves behavior while forcing semantic helper names and file-size proof.",
+    "stabilityCredit": "local-proof-only"
+  },
   "modelFit": {
     "packageClass": "bounded-implementation",
     "intendedMinimumModel": "gpt-5.3-codex-spark",
@@ -40,24 +65,13 @@
       "a frozen decision must be reopened"
     ]
   },
-  "modelFitSplit": {
-    "targetExecutionModel": "gpt-5.3-codex-spark",
-    "allowedDecisionDepth": "bounded local edit after owner, scope, proof, and forbidden files are named",
-    "safeToExecuteWhen": [
-      "owner, boundary, write scope, forbidden scope, proof, and kill rule stay as declared",
-      "the executor does not need to choose architecture, migrate ownership, or reinterpret representative evidence",
-      "the first focused proof gives a clear pass, fail, or escalate signal"
-    ],
-    "splitTriggers": [
-      "write scope expands beyond the declared lower-model lane",
-      "proof requires forbidden scope, cross-owner reasoning, or architecture route selection",
-      "the implementation needs to decide system behavior instead of executing a named local mechanism"
-    ],
-    "childPackageCandidates": [
-      "Prefer mechanical-maintenance for docs/templates/schema-only edits.",
-      "Prefer test-only-proof for tests that do not change runtime behavior.",
-      "Prefer bounded-experiment for one same-owner hypothesis with inherited context."
-    ]
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": {
+      "commands": [
+        "npm run audit:file-size -- test/rebalancer/quorum-conditioned-remove-safety-tail-test-cases.js"
+      ]
+    }
   }
 }
 -->
@@ -175,9 +189,13 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: <owner>; files-changed: <paths or none>; validation: <focused proof and parent revalidated focused proof: yes>; outcome: <validated|blocked>.
-- [ ] action: verification-fix; owner: <owner>; files-changed: <paths or none>; validation: <verification proof and parent revalidated focused proof: yes>; outcome: <validated|blocked>.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: <validated|not-needed>.
+- [x] action: implementation; owner: test_quality_owner; files-changed: test/rebalancer/quorum-conditioned-remove-safety-tail-test-cases.js; validation: `npm run audit:file-size -- test/rebalancer/quorum-conditioned-remove-safety-tail-test-cases.js` reports 0/60 over 1500 lines and parent revalidated focused proof: yes; outcome: validated.
+- [x] action: verification-fix; owner: test_quality_owner; files-changed: none; validation: independent re-read confirmed the 10 extracted tests (5 in replacement-election.js, 5 in election-retargeting.js) match the originals byte-for-byte at the function/test level; `npm run audit:file-size -- test/rebalancer/quorum-conditioned-remove-safety-tail-test-cases.js` reruns clean and parent revalidated focused proof: yes; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: validated.
+
+## Theory Ledger
+
+- No ledger update: this package is a behavior-preserving refactor that splits an oversized test file; no representative or causal theory was added or revised.
 
 ## Validation
 
