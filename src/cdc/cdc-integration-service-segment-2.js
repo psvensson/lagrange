@@ -4,16 +4,15 @@ import {
   resolveControlPlaneSystemTableDeliverySource,
 } from '../control-plane/control-plane-system-table-gateway-shared.js';
 import {
-  resolveInsertMutationColumnNames,
-  resolveReplicaOperationMutationCoalescingKey,
-} from './cdc-replica-operation-mutation-coalescing-key.js';
+  resolveRoutedSystemTableMutationCoalescingKey,
+  resolveRoutedSystemWriteRecoveryCandidateSelectionKey,
+} from './cdc-routed-system-write-selection.js';
 import {
   buildControlPlaneWorkloadProfile,
 } from '../control-plane/control-plane-workload-profile.js';
 import {CDCIntegrationServiceSegment1} from './cdc-integration-service-segment-1.js';
 
 const {
-  AUTHORITATIVE_ROW_VERSION_FIELD_CANDIDATES,
   AUTHORITATIVE_FALLBACK_OUTCOME,
   AUTHORITATIVE_FALLBACK_PHASE,
   CDC_DEFAULTS,
@@ -24,7 +23,6 @@ const {
   CDC_RETRY,
   CDC_SESSION,
   CDC_SQL,
-  CDC_SYSTEM_WRITE_RECOVERY_CANDIDATE_SELECTION_KIND,
   CONTROL_PLANE_MUTATION_READINESS_ERROR,
   CONTROL_PLANE_READINESS_DIMENSION,
   ERRORS,
@@ -60,49 +58,15 @@ const {
   normalizeAuthoritativeFallbackPhase,
   normalizeDeliveryPriority,
   normalizeSystemTableVisibilityResult,
-  normalizeSystemWriteRecoveryCandidateSelectionKeyValue,
   resolveAuthoritativeFallbackOutcome,
   resolveSystemTableMutationDeliveryPriority,
   shouldEmitTableWriteMetric,
-  stableSerializeMutationKey,
   uuidv4,
 } = CDC_INTEGRATION_SERVICE_SHARED;
 
 const CDC_CONTROL_PLANE_WRITE_RESOURCE_KEY = 'control-plane:write';
 const CDC_CONTROL_PLANE_TABLE_RESOURCE_KEY_PREFIX = 'control-plane:table:';
 const CDC_UNKNOWN_TABLE_RESOURCE_KEY = 'unknown';
-const CDC_VOLATILE_SELECTION_PARAM_VALUE = '<volatile-row-version>';
-
-function resolveRoutedSystemTableMutationCoalescingKey(
-  tableName,
-  sql,
-  params,
-  options,
-) {
-  if (
-    typeof options?.coalescingKey === TYPEOF.STRING &&
-    options.coalescingKey.length > NUM.ZERO
-  ) {
-    return options.coalescingKey;
-  }
-  return resolveReplicaOperationMutationCoalescingKey(tableName, sql, params);
-}
-
-function normalizeSystemWriteSelectionParams(sql, params = []) {
-  if (!Array.isArray(params) || params.length === NUM.ZERO) {
-    return [];
-  }
-  const columnNames = resolveInsertMutationColumnNames(sql);
-  if (columnNames.length !== params.length) {
-    return params;
-  }
-  const volatileColumns = new Set(AUTHORITATIVE_ROW_VERSION_FIELD_CANDIDATES);
-  return params.map((param, index) => {
-    return volatileColumns.has(columnNames[index]) ?
-      CDC_VOLATILE_SELECTION_PARAM_VALUE :
-      param;
-  });
-}
 
 class CDCIntegrationServiceSegment2 extends CDCIntegrationServiceSegment1 {
   async tryExecuteLocalSystemTableWrite(sql, params = []) {
@@ -409,48 +373,12 @@ class CDCIntegrationServiceSegment2 extends CDCIntegrationServiceSegment1 {
     params = [],
     options = {},
   ) {
-    const explicitSelectionKey =
-      normalizeSystemWriteRecoveryCandidateSelectionKeyValue(
-        options?.recoveryCandidateSelectionKey,
-      );
-    if (explicitSelectionKey !== null) {
-      return explicitSelectionKey;
-    }
-    const explicitCoalescingKey =
-      normalizeSystemWriteRecoveryCandidateSelectionKeyValue(
-        options?.coalescingKey,
-      );
-    if (explicitCoalescingKey !== null) {
-      return stableSerializeMutationKey({
-        kind: CDC_SYSTEM_WRITE_RECOVERY_CANDIDATE_SELECTION_KIND,
-        tableName,
-        coalescingKey: explicitCoalescingKey,
-        routingReadinessDimension:
-          options?.routingReadinessDimension ||
-          CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-      });
-    }
-    const explicitSessionId =
-      normalizeSystemWriteRecoveryCandidateSelectionKeyValue(
-        options?.sessionId,
-      );
-    if (explicitSessionId !== null) {
-      return explicitSessionId;
-    }
-    return stableSerializeMutationKey({
-      kind: CDC_SYSTEM_WRITE_RECOVERY_CANDIDATE_SELECTION_KIND,
+    return resolveRoutedSystemWriteRecoveryCandidateSelectionKey(
       tableName,
       sql,
-      params: normalizeSystemWriteSelectionParams(sql, params),
-      workClass: options?.workClass || null,
-      deliveryPriority: normalizeDeliveryPriority(
-        options?.deliveryPriority,
-        resolveSystemTableMutationDeliveryPriority({tableName}),
-      ),
-      routingReadinessDimension:
-        options?.routingReadinessDimension ||
-        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-    });
+      params,
+      options,
+    );
   }
 
   /**

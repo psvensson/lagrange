@@ -834,13 +834,7 @@ class OperationWorkflowOwner extends OperationWorkflowOwnerSegment7 {
     operation,
     options = OPERATION_WORKFLOW_OWNER_ADAPTER_DEFAULT_CONTEXT,
   ) {
-    return this.runOperationWorkflowOwnerAdapter(
-      operation,
-      {
-        ...options,
-        mode: OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_MODE.OWNER_RECONCILE,
-      },
-    );
+    return super.reconcileOperationProgress(operation, options);
   }
 
   buildPriorityRecoveryDecisionSnapshotForOperations(

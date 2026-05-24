@@ -102,6 +102,15 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Lane: `lightweight-maintenance`
    - Purpose: Keep the sprint's front of queue pointed at the current largest source/test and owner-boundary oversized files until the audit reaches zero oversized files.
    - First-run reason: the current audit reports 154 source oversized files and 60 test oversized files, so this first tranche cannot complete the full backlog by itself.
+   - Inserted parallel-safe packages from the latest owner-boundary audit:
+     - [Extract priority recovery coordination helper from unified rebalancer](../packages/done-20260524-unified-rebalancer-priority-recovery-coordination.md)
+     - [Extract dispatch wake preemption helper from operation workflow owner](../packages/done-20260524-operation-workflow-dispatch-wake-preemption.md)
+     - [Extract routed system write selection helper from CDC integration service](../packages/done-20260524-cdc-routed-system-write-selection.md)
+     - [Extract transition retry grace helper from operation workflow owner](../packages/done-20260524-operation-workflow-transition-retry-grace.md)
+     - [Extract dispatch replay readiness helper from replica dispatch service](../packages/done-20260524-replica-dispatch-replay-readiness.md)
+     - [Extract local serve readiness helper from unified rebalancer](../packages/done-20260524-unified-rebalancer-local-serve-readiness.md)
+     - [Extract coordinator handoff retry helper from operation workflow owner](../packages/done-20260524-operation-workflow-coordinator-handoff-retry.md)
+     - [Extract concurrent add budget helper from rebalance coordinator](../packages/done-20260524-rebalance-coordinator-concurrent-add-budget.md)
 
 11. [Split replica-dispatch-node-state-update test-part-2 below file-size limit](../packages/done-20260524-replica-dispatch-node-state-update-test-part-2-suites.md)
    - Lane: `lightweight-maintenance`

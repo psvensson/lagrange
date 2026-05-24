@@ -1,11 +1,7 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {OperationWorkflowOwnerSegment3} from './operation-workflow-owner-segment-3.js';
-import {
-  DISPATCH_WAKE_PENDING_TARGET_PROGRESS_STATE,
-  isDispatchWakeProgressPreemptStateAllowed,
-  resolveDispatchWakePendingTargetProgressState,
-  resolveDispatchWakeProgressPreemptState,
-} from './operation-workflow-dispatch-wake-progress-decision.js';
+import * as DISPATCH_WAKE_PREEMPTION
+  from './operation-workflow-dispatch-wake-preemption.js';
 
 const {
   DISPATCH_RETRY_DELAY_MS,
@@ -38,23 +34,6 @@ const {
   isDeliveredTransportDeliveryOutcome,
   isPriorityControlPlanePartition,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
-
-const DISPATCH_WAKE_PROGRESS_PREEMPT_STATUSES = Object.freeze(
-  new Set([
-    ReplicaStatus.CREATING,
-    ReplicaStatus.SYNCING,
-    ReplicaStatus.ACTIVE,
-    ReplicaStatus.FAILED,
-  ]),
-);
-
-const DISPATCH_WAKE_PROGRESS_PREEMPT_WORKFLOW_STEPS = Object.freeze(
-  new Set([
-    WORKFLOW_STEP.PENDING,
-    WORKFLOW_STEP.SENDING,
-    WORKFLOW_STEP.CREATING,
-  ]),
-);
 
 const CREATE_IN_PROGRESS_OBSERVED_RECONCILE_STATUSES = Object.freeze(
   new Set([
@@ -384,12 +363,8 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
    * @private
    */
   isOperationRowDispatchWakeInput(operationInput) {
-    return (
-      operationInput &&
-      typeof operationInput === OPERATION_WORKFLOW_OWNER_LITERAL.OBJECT &&
-      typeof operationInput.operation_id ===
-        OPERATION_WORKFLOW_OWNER_LITERAL.STRING &&
-      operationInput.operation_id.length > NUM.ZERO
+    return DISPATCH_WAKE_PREEMPTION.isOperationRowDispatchWakeInput(
+      operationInput,
     );
   }
 
@@ -399,9 +374,8 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
    * @private
    */
   isExplicitDispatchWakeProgressInput(options) {
-    return (
-      options?.cause ===
-      OPERATION_WORKFLOW_OWNER_LITERAL.REPLICA_OPERATION_DISPATCH
+    return DISPATCH_WAKE_PREEMPTION.isExplicitDispatchWakeProgressInput(
+      options,
     );
   }
 
@@ -411,17 +385,10 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
    * @private
    */
   getDispatchWakeObservedTargetStatus(operation) {
-    if (
-      typeof this.getObservedOperationRowTargetProgressStatus !==
-        TYPEOF.FUNCTION
-    ) {
-      return OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING;
-    }
-    const observedTargetStatus =
-      this.getObservedOperationRowTargetProgressStatus(operation);
-    return typeof observedTargetStatus === TYPEOF.STRING ?
-      observedTargetStatus :
-      OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING;
+    return DISPATCH_WAKE_PREEMPTION.getDispatchWakeObservedTargetStatus(
+      this,
+      operation,
+    );
   }
 
   /**
@@ -438,34 +405,13 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
     createRearmDispatchPhase,
     options = {},
   ) {
-    const observedTargetStatus =
-      this.getDispatchWakeObservedTargetStatus(operation);
-    const dispatchWakeInput =
-      this.isOperationRowDispatchWakeInput(operationInput) ||
-      this.isExplicitDispatchWakeProgressInput(options);
-    return Object.freeze({
-      operationAvailable: Boolean(operation),
-      progressWakeWorkflowStep:
-        createRearmDispatchPhase === true ||
-        DISPATCH_WAKE_PROGRESS_PREEMPT_WORKFLOW_STEPS.has(
-          operation?.workflowStep,
-        ),
-      dispatchWakeInput,
-      progressReconcilerAvailable:
-        typeof this.reconcileOperationProgress === TYPEOF.FUNCTION,
-      observedPreemptStatus:
-        DISPATCH_WAKE_PROGRESS_PREEMPT_STATUSES.has(observedTargetStatus),
-      boundedPendingWakeReconcile:
-        dispatchWakeInput === true &&
-        operation?.workflowStep === WORKFLOW_STEP.PENDING &&
-        (
-          this.isCriticalSystemPartition(operation?.partitionId) ||
-          isPriorityControlPlanePartition({
-            partitionId: operation?.partitionId,
-          })
-        ),
-      observedTargetStatus,
-    });
+    return DISPATCH_WAKE_PREEMPTION.buildDispatchWakeProgressPreemptEvidence(
+      this,
+      operationInput,
+      operation,
+      createRearmDispatchPhase,
+      options,
+    );
   }
 
   /**
@@ -474,7 +420,9 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
    * @private
    */
   resolveDispatchWakeProgressPreemptState(evidence) {
-    return resolveDispatchWakeProgressPreemptState(evidence);
+    return DISPATCH_WAKE_PREEMPTION.resolveDispatchWakeProgressPreemptState(
+      evidence,
+    );
   }
 
   /**
@@ -491,14 +439,14 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
     createRearmDispatchPhase,
     options = {},
   ) {
-    const evidence = this.buildDispatchWakeProgressPreemptEvidence(
-      operationInput,
-      operation,
-      createRearmDispatchPhase,
-      options,
-    );
-    const state = this.resolveDispatchWakeProgressPreemptState(evidence);
-    return isDispatchWakeProgressPreemptStateAllowed(state);
+    return DISPATCH_WAKE_PREEMPTION
+      .shouldPreemptCreateRearmWithObservedProgress(
+        this,
+        operationInput,
+        operation,
+        createRearmDispatchPhase,
+        options,
+      );
   }
 
   /**
@@ -512,22 +460,10 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
    * @private
    */
   async reconcileDispatchWakeOperationProgress(operation) {
-    if (
-      await this.reconcileDispatchWakePendingTargetProgress(operation)
-    ) {
-      return true;
-    }
-    if (typeof this.reconcileOperationLifecycle === TYPEOF.FUNCTION) {
-      return this.reconcileOperationLifecycle(operation, {
-        cause: OPERATION_WORKFLOW_OWNER_LITERAL.OBSERVED_PROGRESS,
-      });
-    }
-    if (typeof this.reconcileOperationProgress !== TYPEOF.FUNCTION) {
-      return false;
-    }
-    return this.reconcileOperationProgress(operation, {
-      cause: OPERATION_WORKFLOW_OWNER_LITERAL.OBSERVED_PROGRESS,
-    });
+    return DISPATCH_WAKE_PREEMPTION.reconcileDispatchWakeOperationProgress(
+      this,
+      operation,
+    );
   }
 
   /**
@@ -542,41 +478,8 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
    * @private
    */
   async reconcileDispatchWakePendingTargetProgress(operation) {
-    const statusReconcilerAvailable =
-      typeof this.getReconciledReplicaStatus === TYPEOF.FUNCTION;
-    const actualTargetStatus = statusReconcilerAvailable === true ?
-      await this.getReconciledReplicaStatus(
-        operation?.replicaId,
-        operation?.partitionId,
-        operation?.targetNodeId,
-      ) :
-      OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING;
-    const reconciledTargetStatus =
-      typeof this.resolveReconciledReplicaStatus === TYPEOF.FUNCTION ?
-        this.resolveReconciledReplicaStatus(operation, actualTargetStatus) :
-        actualTargetStatus;
-    const state = resolveDispatchWakePendingTargetProgressState(
-      Object.freeze({
-        operationAvailable: Boolean(operation),
-        pendingWorkflowStep: operation?.workflowStep === WORKFLOW_STEP.PENDING,
-        statusReconcilerAvailable,
-        reconciledTargetStatus,
-      }),
-    );
-
-    if (state === DISPATCH_WAKE_PENDING_TARGET_PROGRESS_STATE.TARGET_PENDING) {
-      await this.updateStep(operation, WORKFLOW_STEP.CREATING);
-      return true;
-    }
-    if (state === DISPATCH_WAKE_PENDING_TARGET_PROGRESS_STATE.TARGET_SYNCING) {
-      await this.updateStep(operation, WORKFLOW_STEP.SYNCING);
-      return true;
-    }
-    if (state === DISPATCH_WAKE_PENDING_TARGET_PROGRESS_STATE.TARGET_ACTIVE) {
-      await this.updateStep(operation, WORKFLOW_STEP.ACTIVE);
-      return true;
-    }
-    return false;
+    return DISPATCH_WAKE_PREEMPTION
+      .reconcileDispatchWakePendingTargetProgress(this, operation);
   }
 
   /**

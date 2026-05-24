@@ -1,4 +1,19 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
+import {
+  getConcurrentAddBudgetLimit,
+  getLatestMembershipPublicationRow,
+  getPriorityConcurrentAddBudgetLimit,
+  getPriorityRecoveryAdmissionPlan,
+  getReservedPriorityRecoveryAddSlots,
+  isEmergencyPriorityControlPlanePartition,
+  isEmergencyPriorityControlPlaneRecoveryActive,
+  isGlobalPriorityControlPlaneRecoveryActive,
+  resolveConcurrentBudgetReadMode,
+  resolveConcurrentCreateBudgetScope,
+  runConcurrentCreateBudgetGate,
+  shouldBypassConcurrentBudgetEmptyBackoff,
+  shouldUsePriorityConcurrentAddLane,
+} from './rebalance-coordinator-concurrent-add-budget.js';
 import {RebalanceCoordinatorSegment2} from './rebalance-coordinator-segment-2.js';
 
 const LOCAL_NUM_ZERO = 0;
@@ -9,15 +24,12 @@ const LOCAL_NUM_ONE = 1;
 const LOCAL_STR_CRITICAL_PARTITION = 'Critical partition ';
 const LOCAL_STR_IN_FLIGHT = 'in flight';
 const LOCAL_STR_OBJECT = 'object';
-const LOCAL_STR_ADD = 'add';
 
 const {
-  CONCURRENT_CREATE_BUDGET_SCOPE,
   ControlPlaneReadinessService,
   NUM,
   OPERATION_METADATA_KEY,
   OperationType,
-  REBALANCER_CONCURRENT_BUDGET_READ_MODE,
   REBALANCER_SKIP_REASON,
   REBALANCE_COORDINATOR_EVENT,
   REBALANCE_COORDINATOR_LOG_MSG,
@@ -28,10 +40,8 @@ const {
   buildPriorityRecoveryOperationAssessment,
   buildReplicatedServiceBootstrapTopology,
   createOperationRecord,
-  isPriorityRecoveryEmergencyPartition,
   isPriorityControlPlanePartitionTable,
   resolvePriorityRecoveryActiveNodeCohort,
-  resolveTrackedPriorityRecoveryAdmissionPlan,
   shouldPriorityRecoveryOperationBlockPlanning,
   uuidv4,
 } = REBALANCE_COORDINATOR_SHARED;
@@ -1105,19 +1115,11 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
     budgetContext = {},
     executionFactory,
   ) {
-    const scope = this.resolveConcurrentCreateBudgetScope(
+    return runConcurrentCreateBudgetGate(
+      this,
       normalizedMoveType,
       budgetContext,
-    );
-    return this.operationWorkflowRunExclusive(
-      this.getCreateBudgetSingleFlightKey(scope),
-      async () => {
-        await this.ensureConcurrentOperationBudgetAllowed(
-          normalizedMoveType,
-          budgetContext,
-        );
-        return executionFactory();
-      },
+      executionFactory,
     );
   }
 
@@ -1131,27 +1133,11 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
    * @private
    */
   resolveConcurrentCreateBudgetScope(normalizedMoveType, budgetContext = {}) {
-    if (normalizedMoveType === OperationType.REMOVE) {
-      return CONCURRENT_CREATE_BUDGET_SCOPE.REMOVE;
-    }
-    if (
-      !this.shouldUsePriorityConcurrentAddLane(
-        normalizedMoveType,
-        budgetContext,
-      )
-    ) {
-      return CONCURRENT_CREATE_BUDGET_SCOPE.ADD;
-    }
-    const priorityRecoveryAdmissionPlan =
-      this.getPriorityRecoveryAdmissionPlan();
-    if (
-      priorityRecoveryAdmissionPlan.usesEmergencyPriorityOverflow(
-        budgetContext?.partitionId,
-      ) === true
-    ) {
-      return CONCURRENT_CREATE_BUDGET_SCOPE.EMERGENCY_PRIORITY_ADD;
-    }
-    return CONCURRENT_CREATE_BUDGET_SCOPE.PRIORITY_ADD;
+    return resolveConcurrentCreateBudgetScope(
+      this,
+      normalizedMoveType,
+      budgetContext,
+    );
   }
 
   /**
@@ -1165,18 +1151,11 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
    * @private
    */
   shouldBypassConcurrentBudgetEmptyBackoff(normalizedMoveType, options = {}) {
-    if (
-      normalizedMoveType !== OperationType.ADD &&
-      normalizedMoveType !== OperationType.REPLACE &&
-      normalizedMoveType !== OperationType.REMOVE
-    ) {
-      return false;
-    }
-    const partitionId = String(options.partitionId || '').trim();
-    if (partitionId.length === NUM.ZERO) {
-      return false;
-    }
-    return this.isCriticalSystemPartition(partitionId);
+    return shouldBypassConcurrentBudgetEmptyBackoff(
+      this,
+      normalizedMoveType,
+      options,
+    );
   }
 
   /**
@@ -1189,26 +1168,7 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
    * @private
    */
   resolveConcurrentBudgetReadMode(normalizedMoveType, options = {}) {
-    if (
-      options.concurrentBudgetReadMode ===
-      REBALANCER_CONCURRENT_BUDGET_READ_MODE.OWNER_RPC_RECHECK_ON_SATURATION
-    ) {
-      return REBALANCER_CONCURRENT_BUDGET_READ_MODE.OWNER_RPC_RECHECK_ON_SATURATION;
-    }
-    if (
-      normalizedMoveType !== OperationType.ADD &&
-      normalizedMoveType !== OperationType.REPLACE &&
-      normalizedMoveType !== OperationType.REMOVE
-    ) {
-      return REBALANCER_CONCURRENT_BUDGET_READ_MODE.CACHE_ONLY;
-    }
-    const partitionId = String(options.partitionId || '').trim();
-    if (partitionId.length === NUM.ZERO) {
-      return REBALANCER_CONCURRENT_BUDGET_READ_MODE.CACHE_ONLY;
-    }
-    return this.isPriorityControlPlanePartition(partitionId) ?
-      REBALANCER_CONCURRENT_BUDGET_READ_MODE.OWNER_RPC_RECHECK_ON_SATURATION :
-      REBALANCER_CONCURRENT_BUDGET_READ_MODE.CACHE_ONLY;
+    return resolveConcurrentBudgetReadMode(this, normalizedMoveType, options);
   }
 
   /**
@@ -1221,17 +1181,11 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
    * @private
    */
   shouldUsePriorityConcurrentAddLane(normalizedMoveType, options = {}) {
-    if (
-      normalizedMoveType !== OperationType.ADD &&
-      normalizedMoveType !== OperationType.REPLACE
-    ) {
-      return false;
-    }
-    const partitionId = String(options.partitionId || '').trim();
-    if (partitionId.length === NUM.ZERO) {
-      return false;
-    }
-    return this.isPriorityControlPlanePartition(partitionId);
+    return shouldUsePriorityConcurrentAddLane(
+      this,
+      normalizedMoveType,
+      options,
+    );
   }
 
   /**
@@ -1245,7 +1199,7 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
    * @private
    */
   isEmergencyPriorityControlPlanePartition(partitionId) {
-    return isPriorityRecoveryEmergencyPartition(partitionId);
+    return isEmergencyPriorityControlPlanePartition(partitionId);
   }
 
   /**
@@ -1254,23 +1208,7 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
    * @private
    */
   getLatestMembershipPublicationRow() {
-    const publicationService =
-      this.controlPlaneReadinessService?.membershipPublicationService;
-    let publicationRow = null;
-    if (
-      publicationService &&
-      typeof publicationService.getLatestClusterPublicationSync === LOCAL_STR_FUNCTION
-    ) {
-      publicationRow = publicationService.getLatestClusterPublicationSync();
-    } else if (
-      publicationService &&
-      typeof publicationService.getLatestPublicationRowSync === LOCAL_STR_FUNCTION
-    ) {
-      publicationRow = publicationService.getLatestPublicationRowSync();
-    }
-    return publicationRow && typeof publicationRow === LOCAL_STR_OBJECT ?
-      publicationRow :
-      null;
+    return getLatestMembershipPublicationRow(this);
   }
 
   /**
@@ -1282,21 +1220,11 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
    * @private
    */
   getPriorityRecoveryAdmissionPlan() {
-    return resolveTrackedPriorityRecoveryAdmissionPlan({
-      tracker: this.priorityRecoveryAdmissionTracker,
-      publicationRow: this.getLatestMembershipPublicationRow(),
-      nowMs: this.nowFn(),
-      staleGraceMs: this.priorityRecoveryActivityStaleGraceMs,
-      maxConcurrentAdds: this.config.maxConcurrentAdds,
-      isPriorityPartition: (partitionId) =>
-        this.isPriorityControlPlanePartition(partitionId),
-      isEmergencyPriorityPartition: (partitionId) =>
-        this.isEmergencyPriorityControlPlanePartition(partitionId),
-    });
+    return getPriorityRecoveryAdmissionPlan(this);
   }
 
   isGlobalPriorityControlPlaneRecoveryActive() {
-    return this.getPriorityRecoveryAdmissionPlan().recoveryActive === true;
+    return isGlobalPriorityControlPlaneRecoveryActive(this);
   }
 
   /**
@@ -1312,9 +1240,7 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
    * @private
    */
   isEmergencyPriorityControlPlaneRecoveryActive() {
-    return (
-      this.getPriorityRecoveryAdmissionPlan().emergencyRecoveryActive === true
-    );
+    return isEmergencyPriorityControlPlaneRecoveryActive(this);
   }
 
   /**
@@ -1325,10 +1251,7 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
    * @private
    */
   getReservedPriorityRecoveryAddSlots(options = {}) {
-    return this.getPriorityRecoveryAdmissionPlan().getReservedNonPrioritySlots(
-      options.partitionId,
-      LOCAL_STR_ADD,
-    );
+    return getReservedPriorityRecoveryAddSlots(this, options);
   }
 
   /**
@@ -1339,11 +1262,7 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
    * @private
    */
   getConcurrentAddBudgetLimit(options = {}) {
-    return Math.max(
-      NUM.ZERO,
-      this.config.maxConcurrentAdds -
-        this.getReservedPriorityRecoveryAddSlots(options),
-    );
+    return getConcurrentAddBudgetLimit(this, options);
   }
 
   /**
@@ -1358,9 +1277,7 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
    * @private
    */
   getPriorityConcurrentAddBudgetLimit(options = {}) {
-    return this.getPriorityRecoveryAdmissionPlan().getPriorityAddBudgetLimit(
-      options.partitionId,
-    );
+    return getPriorityConcurrentAddBudgetLimit(this, options);
   }
 
   /**
