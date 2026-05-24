@@ -8,14 +8,14 @@ Theory under test: New package scaffolded from the shared work-package schema.
 
 Causal question: oversized_file_ratchet
 
-Implementation slice: Split semantically grouped node joining service test suites until test/bootstrap/node-joining-service.test.js is below the configured test file-size limit without reducing coverage.
+Implementation slice: Split semantically grouped membership publication coordinator test suites until test/control-plane/membership-publication-coordinator-main-stage-2.js is below the configured test file-size limit without reducing coverage.
 
 Implementation files:
 
-1. `test/bootstrap/node-joining-service.test.js`
+1. `test/control-plane/membership-publication-coordinator-main-stage-2.js`
 2. `src/rebalancer/operation-workflow-owner-segment-6.js`
-3. `test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js`
-4. `test/rebalancer/quorum-conditioned-remove-safety-tail-test-cases.js`
+3. `test/bootstrap/node-joining-service.test.js`
+4. `test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js`
 5. `src/rebalancer/operation-workflow-observed-state.js`
 6. `src/rebalancer/operation-workflow-priority-recovery-errors.js`
 7. `src/rebalancer/operation-workflow-remove-safety-evaluator.js`
@@ -23,18 +23,18 @@ Implementation files:
 9. `src/rebalancer/operation-workflow-replace-replay.js`
 10. `src/rebalancer/operation-workflow-replacement-leader-resolution.js`
 11. `src/rebalancer/operation-workflow-replacement-leader-state.js`
-12. `test/rebalancer/quorum-conditioned-remove-safety-tail-election-retargeting.js`
-13. `test/rebalancer/quorum-conditioned-remove-safety-tail-replacement-election.js`
+12. `test/bootstrap/node-joining-service.test-part-7.js`
+13. `test/bootstrap/node-joining-service.test-part-8.js`
 
 Expected implementation delta: unknown
 
-Falsifying probe: npm run audit:file-size -- test/bootstrap/node-joining-service.test.js
+Falsifying probe: npm run audit:file-size -- test/control-plane/membership-publication-coordinator-main-stage-2.js
 
 Stop rule: No architecture decision gate is required for this package.
 
 Sprint: `work/sprints/active-2026-q2-rolling-restart-stability-hardening-final.md`
 
-Package: `work/packages/active-20260524-node-joining-service-test-suites.md`
+Package: `work/packages/active-20260524-membership-publication-coordinator-test-suites.md`
 
 Workflow lane: `lightweight-maintenance`
 
@@ -48,7 +48,7 @@ Playback: `none`
 
 Owner: `test_quality_owner`
 
-Boundary: `node_joining_service_suites`
+Boundary: `membership_publication_coordinator_suites`
 
 Dominant reason: `oversized_file_ratchet`
 
@@ -56,11 +56,11 @@ Current state: New package scaffolded from the shared work-package schema.
 
 ## Next Action
 
-Split semantically grouped node joining service test suites until test/bootstrap/node-joining-service.test.js is below the configured test file-size limit without reducing coverage.
+Split semantically grouped membership publication coordinator test suites until test/control-plane/membership-publication-coordinator-main-stage-2.js is below the configured test file-size limit without reducing coverage.
 
 ## Proof Ladder
 
-1. `npm run audit:file-size -- test/bootstrap/node-joining-service.test.js`
+1. `npm run audit:file-size -- test/control-plane/membership-publication-coordinator-main-stage-2.js`
 
 ## Model Fit
 
@@ -245,10 +245,10 @@ Gate next action: No architecture decision gate is required for this package.
 
 Write scope:
 
-1. `test/bootstrap/node-joining-service.test.js`
+1. `test/control-plane/membership-publication-coordinator-main-stage-2.js`
 2. `src/rebalancer/operation-workflow-owner-segment-6.js`
-3. `test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js`
-4. `test/rebalancer/quorum-conditioned-remove-safety-tail-test-cases.js`
+3. `test/bootstrap/node-joining-service.test.js`
+4. `test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js`
 5. `src/rebalancer/operation-workflow-observed-state.js`
 6. `src/rebalancer/operation-workflow-priority-recovery-errors.js`
 7. `src/rebalancer/operation-workflow-remove-safety-evaluator.js`
@@ -256,8 +256,8 @@ Write scope:
 9. `src/rebalancer/operation-workflow-replace-replay.js`
 10. `src/rebalancer/operation-workflow-replacement-leader-resolution.js`
 11. `src/rebalancer/operation-workflow-replacement-leader-state.js`
-12. `test/rebalancer/quorum-conditioned-remove-safety-tail-election-retargeting.js`
-13. `test/rebalancer/quorum-conditioned-remove-safety-tail-replacement-election.js`
+12. `test/bootstrap/node-joining-service.test-part-7.js`
+13. `test/bootstrap/node-joining-service.test-part-8.js`
 
 Handoff files:
 
@@ -273,10 +273,10 @@ Candidate runtime files:
 
 Commit scope:
 
-1. `test/bootstrap/node-joining-service.test.js`
+1. `test/control-plane/membership-publication-coordinator-main-stage-2.js`
 2. `src/rebalancer/operation-workflow-owner-segment-6.js`
-3. `test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js`
-4. `test/rebalancer/quorum-conditioned-remove-safety-tail-test-cases.js`
+3. `test/bootstrap/node-joining-service.test.js`
+4. `test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js`
 5. `src/rebalancer/operation-workflow-observed-state.js`
 6. `src/rebalancer/operation-workflow-priority-recovery-errors.js`
 7. `src/rebalancer/operation-workflow-remove-safety-evaluator.js`
@@ -284,9 +284,9 @@ Commit scope:
 9. `src/rebalancer/operation-workflow-replace-replay.js`
 10. `src/rebalancer/operation-workflow-replacement-leader-resolution.js`
 11. `src/rebalancer/operation-workflow-replacement-leader-state.js`
-12. `test/rebalancer/quorum-conditioned-remove-safety-tail-election-retargeting.js`
-13. `test/rebalancer/quorum-conditioned-remove-safety-tail-replacement-election.js`
-14. `work/packages/active-20260524-node-joining-service-test-suites.md`
+12. `test/bootstrap/node-joining-service.test-part-7.js`
+13. `test/bootstrap/node-joining-service.test-part-8.js`
+14. `work/packages/active-20260524-membership-publication-coordinator-test-suites.md`
 
 Legacy touched files:
 

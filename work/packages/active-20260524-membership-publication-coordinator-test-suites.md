@@ -1,4 +1,4 @@
-# Split node joining service tests below file-size limit
+# Split membership publication coordinator tests below file-size limit
 
 <!-- work-package
 {
@@ -11,17 +11,17 @@
     "artifact": "none",
     "playback": "none",
     "owner": "test_quality_owner",
-    "boundary": "node_joining_service_suites",
+    "boundary": "membership_publication_coordinator_suites",
     "currentState": "New package scaffolded from the shared work-package schema.",
-    "nextAction": "Split semantically grouped node joining service test suites until test/bootstrap/node-joining-service.test.js is below the configured test file-size limit without reducing coverage.",
+    "nextAction": "Split semantically grouped membership publication coordinator test suites until test/control-plane/membership-publication-coordinator-main-stage-2.js is below the configured test file-size limit without reducing coverage.",
     "dominantReason": "oversized_file_ratchet"
   },
   "scope": {
     "writeScope": [
-      "test/bootstrap/node-joining-service.test.js",
+      "test/control-plane/membership-publication-coordinator-main-stage-2.js",
       "src/rebalancer/operation-workflow-owner-segment-6.js",
+      "test/bootstrap/node-joining-service.test.js",
       "test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js",
-      "test/rebalancer/quorum-conditioned-remove-safety-tail-test-cases.js",
       "src/rebalancer/operation-workflow-observed-state.js",
       "src/rebalancer/operation-workflow-priority-recovery-errors.js",
       "src/rebalancer/operation-workflow-remove-safety-evaluator.js",
@@ -29,17 +29,17 @@
       "src/rebalancer/operation-workflow-replace-replay.js",
       "src/rebalancer/operation-workflow-replacement-leader-resolution.js",
       "src/rebalancer/operation-workflow-replacement-leader-state.js",
-      "test/rebalancer/quorum-conditioned-remove-safety-tail-election-retargeting.js",
-      "test/rebalancer/quorum-conditioned-remove-safety-tail-replacement-election.js"
+      "test/bootstrap/node-joining-service.test-part-7.js",
+      "test/bootstrap/node-joining-service.test-part-8.js"
     ],
     "handoffFiles": [],
     "generatedFiles": [],
     "candidateRuntimeFiles": [],
     "commitScope": [
-      "test/bootstrap/node-joining-service.test.js",
+      "test/control-plane/membership-publication-coordinator-main-stage-2.js",
       "src/rebalancer/operation-workflow-owner-segment-6.js",
+      "test/bootstrap/node-joining-service.test.js",
       "test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js",
-      "test/rebalancer/quorum-conditioned-remove-safety-tail-test-cases.js",
       "src/rebalancer/operation-workflow-observed-state.js",
       "src/rebalancer/operation-workflow-priority-recovery-errors.js",
       "src/rebalancer/operation-workflow-remove-safety-evaluator.js",
@@ -47,9 +47,9 @@
       "src/rebalancer/operation-workflow-replace-replay.js",
       "src/rebalancer/operation-workflow-replacement-leader-resolution.js",
       "src/rebalancer/operation-workflow-replacement-leader-state.js",
-      "test/rebalancer/quorum-conditioned-remove-safety-tail-election-retargeting.js",
-      "test/rebalancer/quorum-conditioned-remove-safety-tail-replacement-election.js",
-      "work/packages/active-20260524-node-joining-service-test-suites.md"
+      "test/bootstrap/node-joining-service.test-part-7.js",
+      "test/bootstrap/node-joining-service.test-part-8.js",
+      "work/packages/active-20260524-membership-publication-coordinator-test-suites.md"
     ]
   },
   "gates": {
@@ -71,7 +71,7 @@
     "theoryLedgerRefs": [],
     "proof": {
       "commands": [
-        "npm run audit:file-size -- test/bootstrap/node-joining-service.test.js"
+        "npm run audit:file-size -- test/control-plane/membership-publication-coordinator-main-stage-2.js"
       ]
     }
   }
@@ -80,11 +80,11 @@
 
 ## Why
 
-`test/bootstrap/node-joining-service.test.js` is one of the largest oversized test files in the current audit. This package owns splitting it into semantically grouped suites below the configured test threshold without reducing coverage.
+`test/control-plane/membership-publication-coordinator-main-stage-2.js` is one of the largest oversized test files in the current audit. This package owns splitting it into semantically grouped suites below the configured test threshold without reducing coverage.
 
 ## Scope Basis
 
-Approved maintenance/refactor scope from the active sprint's front-loaded oversized-file tranche. `npm run audit:file-size` reports this file at 3504/1500 lines.
+Approved maintenance/refactor scope from the active sprint's front-loaded oversized-file tranche. `npm run audit:file-size` reports this file at 3443/1500 lines.
 
 ## Workflow Lane
 
@@ -112,7 +112,7 @@ Approved maintenance/refactor scope from the active sprint's front-loaded oversi
 
 - Source artifact: `none`
 - Route owner: `test_quality_owner`
-- Route boundary: `node_joining_service_suites`
+- Route boundary: `membership_publication_coordinator_suites`
 - Route dominant reason: `oversized_file_ratchet`
 - Route causal outcome: `pending-before-rerun`
 - Stop mode: `pending-before-rerun`
@@ -150,7 +150,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. test/bootstrap/node-joining-service.test.js
+1. test/control-plane/membership-publication-coordinator-main-stage-2.js
 
 ## Out Of Scope
 
@@ -162,11 +162,11 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex-spark`
 - Scope shape: `leaf-slice`
 - Output profile: `medium`
-- Owned files: `test/bootstrap/node-joining-service.test.js`
+- Owned files: `test/control-plane/membership-publication-coordinator-main-stage-2.js`
 - Forbidden files: `src/`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run audit:file-size -- test/bootstrap/node-joining-service.test.js`
+- Focused proof: `npm run audit:file-size -- test/control-plane/membership-publication-coordinator-main-stage-2.js`
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split
@@ -197,4 +197,4 @@ Agent identity is optional provenance. Use the compact five-field shape for new 
 
 ## Validation
 
-1. npm run audit:file-size -- test/bootstrap/node-joining-service.test.js
+1. npm run audit:file-size -- test/control-plane/membership-publication-coordinator-main-stage-2.js

@@ -1,34 +1,65 @@
-# Split membership publication coordinator tests below file-size limit
+# Split node joining service tests below file-size limit
 
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
-  "opened": "2026-05-24",
-  "lane": "lightweight-maintenance",
-  "scenario": "none",
-  "artifact": "none",
-  "playback": "none",
-  "owner": "test_quality_owner",
-  "boundary": "membership_publication_coordinator_suites",
-  "dominantReason": "oversized_file_ratchet",
-  "currentState": "New package scaffolded from the shared work-package schema.",
-  "nextAction": "Split semantically grouped membership publication coordinator test suites until test/control-plane/membership-publication-coordinator-main-stage-2.js is below the configured test file-size limit without reducing coverage.",
-  "proof": [
-    "npm run audit:file-size -- test/control-plane/membership-publication-coordinator-main-stage-2.js"
-  ],
-  "theoryLedgerRefs": [],
-  "stabilityCredit": "local-proof-only",
-  "whyHighestLeverageNow": "This package is front-loaded in the active sprint to reduce LLM and human confusion from oversized files before more rolling-restart runtime work resumes; it preserves behavior while forcing semantic helper names and file-size proof.",
-  "writeScope": [
-    "test/control-plane/membership-publication-coordinator-main-stage-2.js"
-  ],
-  "handoffFiles": [],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [
-    "test/control-plane/membership-publication-coordinator-main-stage-2.js"
-  ],
+  "status": "done",
+  "intent": {
+    "opened": "2026-05-24",
+    "lane": "lightweight-maintenance",
+    "scenario": "none",
+    "artifact": "none",
+    "playback": "none",
+    "owner": "test_quality_owner",
+    "boundary": "node_joining_service_suites",
+    "currentState": "test/bootstrap/node-joining-service.test.js split into existing parts-2..6 plus new parts-7 and parts-8; main now 1428 lines and audit reports 0/60 over 1500 lines.",
+    "nextAction": "Close the package after verification: run closure validation and update the current-blocker.",
+    "dominantReason": "oversized_file_ratchet"
+  },
+  "scope": {
+    "writeScope": [
+      "test/bootstrap/node-joining-service.test.js",
+      "src/rebalancer/operation-workflow-owner-segment-6.js",
+      "test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js",
+      "test/rebalancer/quorum-conditioned-remove-safety-tail-test-cases.js",
+      "src/rebalancer/operation-workflow-observed-state.js",
+      "src/rebalancer/operation-workflow-priority-recovery-errors.js",
+      "src/rebalancer/operation-workflow-remove-safety-evaluator.js",
+      "src/rebalancer/operation-workflow-remove-safety-membership.js",
+      "src/rebalancer/operation-workflow-replace-replay.js",
+      "src/rebalancer/operation-workflow-replacement-leader-resolution.js",
+      "src/rebalancer/operation-workflow-replacement-leader-state.js",
+      "test/rebalancer/quorum-conditioned-remove-safety-tail-election-retargeting.js",
+      "test/rebalancer/quorum-conditioned-remove-safety-tail-replacement-election.js",
+      "test/bootstrap/node-joining-service.test-part-7.js",
+      "test/bootstrap/node-joining-service.test-part-8.js"
+    ],
+    "handoffFiles": [],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": [],
+    "commitScope": [
+      "test/bootstrap/node-joining-service.test.js",
+      "src/rebalancer/operation-workflow-owner-segment-6.js",
+      "test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js",
+      "test/rebalancer/quorum-conditioned-remove-safety-tail-test-cases.js",
+      "src/rebalancer/operation-workflow-observed-state.js",
+      "src/rebalancer/operation-workflow-priority-recovery-errors.js",
+      "src/rebalancer/operation-workflow-remove-safety-evaluator.js",
+      "src/rebalancer/operation-workflow-remove-safety-membership.js",
+      "src/rebalancer/operation-workflow-replace-replay.js",
+      "src/rebalancer/operation-workflow-replacement-leader-resolution.js",
+      "src/rebalancer/operation-workflow-replacement-leader-state.js",
+      "test/rebalancer/quorum-conditioned-remove-safety-tail-election-retargeting.js",
+      "test/rebalancer/quorum-conditioned-remove-safety-tail-replacement-election.js",
+      "work/packages/active-20260524-node-joining-service-test-suites.md",
+      "test/bootstrap/node-joining-service.test-part-7.js",
+      "test/bootstrap/node-joining-service.test-part-8.js"
+    ]
+  },
+  "gates": {
+    "whyHighestLeverageNow": "This package is front-loaded in the active sprint to reduce LLM and human confusion from oversized files before more rolling-restart runtime work resumes; it preserves behavior while forcing semantic helper names and file-size proof.",
+    "stabilityCredit": "local-proof-only"
+  },
   "modelFit": {
     "packageClass": "bounded-implementation",
     "intendedMinimumModel": "gpt-5.3-codex-spark",
@@ -40,35 +71,24 @@
       "a frozen decision must be reopened"
     ]
   },
-  "modelFitSplit": {
-    "targetExecutionModel": "gpt-5.3-codex-spark",
-    "allowedDecisionDepth": "bounded local edit after owner, scope, proof, and forbidden files are named",
-    "safeToExecuteWhen": [
-      "owner, boundary, write scope, forbidden scope, proof, and kill rule stay as declared",
-      "the executor does not need to choose architecture, migrate ownership, or reinterpret representative evidence",
-      "the first focused proof gives a clear pass, fail, or escalate signal"
-    ],
-    "splitTriggers": [
-      "write scope expands beyond the declared lower-model lane",
-      "proof requires forbidden scope, cross-owner reasoning, or architecture route selection",
-      "the implementation needs to decide system behavior instead of executing a named local mechanism"
-    ],
-    "childPackageCandidates": [
-      "Prefer mechanical-maintenance for docs/templates/schema-only edits.",
-      "Prefer test-only-proof for tests that do not change runtime behavior.",
-      "Prefer bounded-experiment for one same-owner hypothesis with inherited context."
-    ]
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": {
+      "commands": [
+        "npm run audit:file-size -- test/bootstrap/node-joining-service.test.js"
+      ]
+    }
   }
 }
 -->
 
 ## Why
 
-`test/control-plane/membership-publication-coordinator-main-stage-2.js` is one of the largest oversized test files in the current audit. This package owns splitting it into semantically grouped suites below the configured test threshold without reducing coverage.
+`test/bootstrap/node-joining-service.test.js` is one of the largest oversized test files in the current audit. This package owns splitting it into semantically grouped suites below the configured test threshold without reducing coverage.
 
 ## Scope Basis
 
-Approved maintenance/refactor scope from the active sprint's front-loaded oversized-file tranche. `npm run audit:file-size` reports this file at 3443/1500 lines.
+Approved maintenance/refactor scope from the active sprint's front-loaded oversized-file tranche. `npm run audit:file-size` reports this file at 3504/1500 lines.
 
 ## Workflow Lane
 
@@ -96,7 +116,7 @@ Approved maintenance/refactor scope from the active sprint's front-loaded oversi
 
 - Source artifact: `none`
 - Route owner: `test_quality_owner`
-- Route boundary: `membership_publication_coordinator_suites`
+- Route boundary: `node_joining_service_suites`
 - Route dominant reason: `oversized_file_ratchet`
 - Route causal outcome: `pending-before-rerun`
 - Stop mode: `pending-before-rerun`
@@ -134,7 +154,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. test/control-plane/membership-publication-coordinator-main-stage-2.js
+1. test/bootstrap/node-joining-service.test.js
 
 ## Out Of Scope
 
@@ -146,11 +166,11 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex-spark`
 - Scope shape: `leaf-slice`
 - Output profile: `medium`
-- Owned files: `test/control-plane/membership-publication-coordinator-main-stage-2.js`
+- Owned files: `test/bootstrap/node-joining-service.test.js`
 - Forbidden files: `src/`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run audit:file-size -- test/control-plane/membership-publication-coordinator-main-stage-2.js`
+- Focused proof: `npm run audit:file-size -- test/bootstrap/node-joining-service.test.js`
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split
@@ -175,10 +195,14 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: <owner>; files-changed: <paths or none>; validation: <focused proof and parent revalidated focused proof: yes>; outcome: <validated|blocked>.
-- [ ] action: verification-fix; owner: <owner>; files-changed: <paths or none>; validation: <verification proof and parent revalidated focused proof: yes>; outcome: <validated|blocked>.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: <validated|not-needed>.
+- [x] action: implementation; owner: test_quality_owner; files-changed: test/bootstrap/node-joining-service.test.js, test/bootstrap/node-joining-service.test-part-7.js, test/bootstrap/node-joining-service.test-part-8.js; validation: `npm run audit:file-size -- test/bootstrap/node-joining-service.test.js` reports 0/60 over 1500 lines and `npx tap test/bootstrap/node-joining-service.test.js test/bootstrap/node-joining-service.test-part-7.js test/bootstrap/node-joining-service.test-part-8.js --disable-coverage` reports 201/201 pass and parent revalidated focused proof: yes; outcome: validated.
+- [x] action: verification-fix; owner: test_quality_owner; files-changed: none; validation: independent re-read confirmed each test block was moved as a contiguous unit; tap rerun across the three files reports 201/201 pass and parent revalidated focused proof: yes; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: validated.
+
+## Theory Ledger
+
+- No ledger update: this package is a behavior-preserving refactor that splits an oversized test file; no representative or causal theory was added or revised.
 
 ## Validation
 
-1. npm run audit:file-size -- test/control-plane/membership-publication-coordinator-main-stage-2.js
+1. npm run audit:file-size -- test/bootstrap/node-joining-service.test.js

@@ -25,20 +25,20 @@ Make the system stable under rolling-restart: change the core logic of the syste
 ```text
 Representative artifact: none
 Visible first frontier: unknown
-Active package: work/packages/active-20260524-node-joining-service-test-suites.md
+Active package: work/packages/active-20260524-membership-publication-coordinator-test-suites.md
 Active package owner: test_quality_owner
-Active package boundary: node_joining_service_suites
+Active package boundary: membership_publication_coordinator_suites
 Selected cause: oversized_file_ratchet
-Required action: Split semantically grouped node joining service test suites until test/bootstrap/node-joining-service.test.js is below the configured test file-size limit without reducing coverage.
+Required action: Split semantically grouped membership publication coordinator test suites until test/control-plane/membership-publication-coordinator-main-stage-2.js is below the configured test file-size limit without reducing coverage.
 Representative status: unknown
 Causal outcome: unknown
 Architecture gate: not-required / unknown
 Expected delta: unknown
 Current state: New package scaffolded from the shared work-package schema.
-Allowed edits: test/bootstrap/node-joining-service.test.js, src/rebalancer/operation-workflow-owner-segment-6.js, test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js, test/rebalancer/quorum-conditioned-remove-safety-tail-test-cases.js, src/rebalancer/operation-workflow-observed-state.js, src/rebalancer/operation-workflow-priority-recovery-errors.js, src/rebalancer/operation-workflow-remove-safety-evaluator.js, src/rebalancer/operation-workflow-remove-safety-membership.js, src/rebalancer/operation-workflow-replace-replay.js, src/rebalancer/operation-workflow-replacement-leader-resolution.js, src/rebalancer/operation-workflow-replacement-leader-state.js, test/rebalancer/quorum-conditioned-remove-safety-tail-election-retargeting.js, test/rebalancer/quorum-conditioned-remove-safety-tail-replacement-election.js
+Allowed edits: test/control-plane/membership-publication-coordinator-main-stage-2.js, src/rebalancer/operation-workflow-owner-segment-6.js, test/bootstrap/node-joining-service.test.js, test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js, src/rebalancer/operation-workflow-observed-state.js, src/rebalancer/operation-workflow-priority-recovery-errors.js, src/rebalancer/operation-workflow-remove-safety-evaluator.js, src/rebalancer/operation-workflow-remove-safety-membership.js, src/rebalancer/operation-workflow-replace-replay.js, src/rebalancer/operation-workflow-replacement-leader-resolution.js, src/rebalancer/operation-workflow-replacement-leader-state.js, test/bootstrap/node-joining-service.test-part-7.js, test/bootstrap/node-joining-service.test-part-8.js
 Candidate runtime files: unknown
 Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
-Required latest proof: npm run audit:file-size -- test/bootstrap/node-joining-service.test.js
+Required latest proof: npm run audit:file-size -- test/control-plane/membership-publication-coordinator-main-stage-2.js
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -88,12 +88,12 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Purpose: Split semantically grouped quorum conditioned remove-safety test suites until `test/rebalancer/quorum-conditioned-remove-safety-tail-test-cases.js` is below the test file-size limit.
    - First-run reason: largest oversized test file reported by `npm run audit:file-size`.
 
-8. [Split node joining service tests below file-size limit](../packages/active-20260524-node-joining-service-test-suites.md)
+8. [Split node joining service tests below file-size limit](../packages/done-20260524-node-joining-service-test-suites.md)
    - Lane: `lightweight-maintenance`
    - Purpose: Split semantically grouped node joining service test suites until `test/bootstrap/node-joining-service.test.js` is below the test file-size limit.
    - First-run reason: next largest oversized test file in the current audit.
 
-9. [Split membership publication coordinator tests below file-size limit](../packages/todo-20260524-membership-publication-coordinator-test-suites.md)
+9. [Split membership publication coordinator tests below file-size limit](../packages/active-20260524-membership-publication-coordinator-test-suites.md)
    - Lane: `lightweight-maintenance`
    - Purpose: Split semantically grouped membership publication coordinator test suites until `test/control-plane/membership-publication-coordinator-main-stage-2.js` is below the test file-size limit.
    - First-run reason: next largest oversized test file in the current audit.
