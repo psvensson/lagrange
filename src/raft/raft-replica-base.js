@@ -13,8 +13,7 @@ import {AddressManager} from '../address/address-manager.js';
 import {emitInvariant} from '../invariants/invariant-emitter.js';
 import {INVARIANT_ID} from '../invariants/invariant-catalog.js';
 import {isRaftPacket} from './raft-packet-utils.js';
-import {NUM, STRING, TABLES} from '../constants/index.js';
-import {ensureLiferaftProviderForRuntime} from './raft-provider-control.js';
+import {NUM, STRING} from '../constants/index.js';
 import {assertRaftProviderContract} from './raft-provider-contract.js';
 import {LiferaftProvider} from './liferaft-provider.js';
 import {resolveRaftTransportDeliveryOptions} from './constants.js';
@@ -26,15 +25,16 @@ import {
 import {LeaderActivationGate} from './leader-activation-gate.js';
 import {LeaderActivationScheduler} from './leader-activation-scheduler.js';
 import {
-  RAFT_REPLICA_BASE_ADDRESS,
+  buildPeerAddressForReplica,
+  createRaftInstanceForReplica,
+} from './raft-replica-base-runtime-helpers.js';
+import {
   RAFT_REPLICA_BASE_DEFAULT,
   RAFT_REPLICA_BASE_ERROR_MSG,
   RAFT_REPLICA_BASE_EVENT,
   RAFT_REPLICA_BASE_LIFERAFT_EVENT,
-  RAFT_REPLICA_BASE_LIFERAFT_TIMER,
   RAFT_REPLICA_BASE_LOG_MSG,
   RAFT_REPLICA_BASE_ROLE,
-  RAFT_REPLICA_BASE_VALUE,
 } from './raft-replica-base-constants.js';
 
 const LOCAL_STR_GIR4Q = 'RaftReplicaBase requires replicaId';
@@ -184,64 +184,7 @@ class RaftReplicaBase extends EventEmitter {
    * @return {string} Unified address for the peer.
    */
   buildPeerAddress(peerId) {
-    // If peerId is already in unified format, validate and return as-is
-    if (peerId.includes(RAFT_REPLICA_BASE_ADDRESS.SEPARATOR)) {
-      const validation = this.addressManager.validate(peerId);
-      if (validation.valid) {
-        return peerId;
-      }
-      this.logger.error(RAFT_REPLICA_BASE_LOG_MSG.PEER_ADDRESS_NOT_UNIFIED, {
-        peerId,
-        replicaId: this.replicaId,
-        error: validation.error,
-      });
-      throw new Error(RAFT_REPLICA_BASE_ERROR_MSG.peerAddressNotUnified(peerId));
-    }
-
-    // Check peerAddresses array (provided during cross-node joining)
-    if (this.peerAddresses && this.peerAddresses.length > NUM.ZERO) {
-      for (const addr of this.peerAddresses) {
-        const validation = this.addressManager.validate(addr);
-        if (!validation.valid) {
-          this.logger.error(RAFT_REPLICA_BASE_LOG_MSG.PEER_ADDRESS_NOT_UNIFIED, {
-            peerId: addr,
-            replicaId: this.replicaId,
-            error: validation.error,
-          });
-          throw new Error(RAFT_REPLICA_BASE_ERROR_MSG.peerAddressNotUnified(addr));
-        }
-        const parsed = this.addressManager.parse(addr);
-        if (parsed.serviceId === peerId) {
-          this.logger.debug(RAFT_REPLICA_BASE_LOG_MSG.PEER_ADDRESS_FROM_LIST, {
-            peerId,
-            address: addr,
-            replicaId: this.replicaId,
-          });
-          return addr;
-        }
-      }
-    }
-
-    // Try to look up nodeId from system table cache
-    if (this.systemTableCache) {
-      const service = this.systemTableCache.get(TABLES.SERVICES, peerId);
-      if (service && service.node_id) {
-        const address = this.addressManager.format(
-          service.node_id,
-          this.entityType,
-          peerId,
-        );
-        this.logger.debug(RAFT_REPLICA_BASE_LOG_MSG.PEER_ADDRESS_FROM_CACHE, {
-          peerId,
-          nodeId: service.node_id,
-          address,
-          replicaId: this.replicaId,
-        });
-        return address;
-      }
-    }
-
-    throw new Error(RAFT_REPLICA_BASE_ERROR_MSG.peerAddressUnresolved(peerId));
+    return buildPeerAddressForReplica(this, peerId);
   }
 
   /**
@@ -252,71 +195,7 @@ class RaftReplicaBase extends EventEmitter {
    * @protected
    */
   createRaftInstance(logAdapter) {
-    ensureLiferaftProviderForRuntime();
-
-    const config = ConfigurationManager.getInstance();
-    const heartbeatMs = config.get(CONFIG_KEY.RAFT_HEARTBEAT_INTERVAL_MS) ||
-      RAFT_REPLICA_BASE_DEFAULT.HEARTBEAT_DEFAULT_MS;
-    const baseElectionMinMs = config.get(CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MIN_MS) ||
-      RAFT_REPLICA_BASE_DEFAULT.ELECTION_MIN_DEFAULT_MS;
-    const baseElectionMaxMs = config.get(CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MAX_MS) ||
-      RAFT_REPLICA_BASE_DEFAULT.ELECTION_MAX_DEFAULT_MS;
-
-    // Add replica-index-based jitter to election timeouts
-    let replicaIndex = this.replicaIds.indexOf(this.replicaId);
-    if (replicaIndex < NUM.ZERO) {
-      const hashCode = this.replicaId.split(STRING.EMPTY).reduce(
-        (acc, char) => acc + char.charCodeAt(NUM.ZERO), NUM.ZERO,
-      );
-      replicaIndex = this.replicaIds.length +
-        (hashCode % RAFT_REPLICA_BASE_VALUE.HASH_MODULO);
-    }
-    const jitterMs = replicaIndex * RAFT_REPLICA_BASE_DEFAULT.ELECTION_JITTER_PER_REPLICA_MS;
-    const electionMinMs = baseElectionMinMs + jitterMs;
-    const electionMaxMs = baseElectionMaxMs + jitterMs;
-
-    const RaftNode = this.raftProvider.createNodeClass({
-      deferElection: this.deferElection,
-      logger: this.logger,
-      replicaId: this.replicaId,
-      resolvePeerAddress: (peerId) => this.buildPeerAddress(peerId),
-      deliverPacket: (peerAddress, packet) =>
-        this.transport.deliver(
-          peerAddress,
-          packet,
-          resolveRaftTransportDeliveryOptions({
-            ...packet,
-            targetAddress: peerAddress,
-          }),
-        ),
-    });
-
-    const raftOptions = {
-      [RAFT_REPLICA_BASE_LIFERAFT_TIMER.HEARTBEAT]: heartbeatMs,
-      [RAFT_REPLICA_BASE_LIFERAFT_TIMER.ELECTION_MIN]: electionMinMs,
-      [RAFT_REPLICA_BASE_LIFERAFT_TIMER.ELECTION_MAX]: electionMaxMs,
-    };
-
-    if (logAdapter) {
-      raftOptions[RAFT_REPLICA_BASE_LIFERAFT_TIMER.LOG] = function() {
-        return logAdapter;
-      };
-    }
-
-    this.raft = new RaftNode(this.unifiedAddress, raftOptions);
-
-    // Clear timers if deferring election
-    if (this.deferElection && this.raft) {
-      this.raftProvider.clearTimers(
-        this.raft,
-        RAFT_REPLICA_BASE_LIFERAFT_TIMER.HEARTBEAT_ELECTION,
-      );
-      this.logger.debug(RAFT_REPLICA_BASE_LOG_MSG.CLEARED_LIFERAFT_TIMERS, {
-        replicaId: this.replicaId,
-      });
-    }
-
-    return this.raft;
+    return createRaftInstanceForReplica(this, logAdapter);
   }
 
   /**

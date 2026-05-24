@@ -1,34 +1,43 @@
-# Refactor oversized source file src/topology/latency-group-manager.js
+# Refactor oversized source file src/raft/raft-replica-base.js
 
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
-  "opened": "2026-05-24",
-  "lane": "lightweight-maintenance",
-  "scenario": "none",
-  "artifact": "none",
-  "playback": "none",
-  "owner": "topology_file_size_owner",
-  "boundary": "source_topology_latency_group_manager_file_size_refactor",
-  "dominantReason": "oversized_file_ratchet",
-  "currentState": "Current file-size audit reports src/topology/latency-group-manager.js at 948/800 lines; no implementation is started in this package yet.",
-  "nextAction": "Extract semantically named helper modules from src/topology/latency-group-manager.js until it is below 800 lines, preserving behavior and the public entrypoint.",
-  "proof": [
-    "npm run audit:file-size -- --strict src/topology/latency-group-manager.js",
-    "node --check src/topology/latency-group-manager.js",
-    "git diff --check -- src/topology/latency-group-manager.js"
-  ],
-  "theoryLedgerRefs": [],
-  "writeScope": [
-    "src/topology/latency-group-manager.js"
-  ],
-  "handoffFiles": [],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [
-    "src/topology/latency-group-manager.js"
-  ],
+  "status": "done",
+  "intent": {
+    "opened": "2026-05-24",
+    "closed": "2026-05-24",
+    "lane": "lightweight-maintenance",
+    "scenario": "none",
+    "artifact": "none",
+    "playback": "none",
+    "owner": "raft_file_size_owner",
+    "boundary": "source_raft_raft_replica_base_file_size_refactor",
+    "currentState": "Implementation extracted peer-address and liferaft construction helpers; src/raft/raft-replica-base.js is now 784/800 lines and parent revalidated focused proof: yes.",
+    "nextAction": "Close this package atomically with the validated wave.",
+    "dominantReason": "oversized_file_ratchet"
+  },
+  "scope": {
+    "writeScope": [
+      "src/raft/raft-replica-base.js",
+      "src/raft/raft-replica-base-runtime-helpers.js"
+    ],
+    "handoffFiles": [],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": [],
+    "commitScope": [
+      "src/raft/raft-replica-base.js",
+      "src/raft/raft-replica-base-runtime-helpers.js"
+    ]
+  },
+  "gates": {
+    "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
+    "stabilityCredit": "local-proof-only",
+    "codeQualityAdmission": {
+      "reason": "active-guardrail-requirement",
+      "evidence": "The package is generated from npm run audit:file-size -- --top 250 for src/raft/raft-replica-base.js; closure proof must make npm run audit:file-size -- --strict src/raft/raft-replica-base.js pass."
+    }
+  },
   "modelFit": {
     "packageClass": "bounded-implementation",
     "intendedMinimumModel": "gpt-5.3-codex-spark",
@@ -40,41 +49,29 @@
       "a frozen decision must be reopened"
     ]
   },
-  "modelFitSplit": {
-    "targetExecutionModel": "gpt-5.3-codex-spark",
-    "allowedDecisionDepth": "bounded local edit after owner, scope, proof, and forbidden files are named",
-    "safeToExecuteWhen": [
-      "owner, boundary, write scope, forbidden scope, proof, and kill rule stay as declared",
-      "the executor does not need to choose architecture, migrate ownership, or reinterpret representative evidence",
-      "the first focused proof gives a clear pass, fail, or escalate signal"
-    ],
-    "splitTriggers": [
-      "write scope expands beyond the declared lower-model lane",
-      "proof requires forbidden scope, cross-owner reasoning, or architecture route selection",
-      "the implementation needs to decide system behavior instead of executing a named local mechanism"
-    ],
-    "childPackageCandidates": [
-      "Prefer mechanical-maintenance for docs/templates/schema-only edits.",
-      "Prefer test-only-proof for tests that do not change runtime behavior.",
-      "Prefer bounded-experiment for one same-owner hypothesis with inherited context."
-    ]
-  },
-  "stabilityCredit": "local-proof-only",
-  "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
-  "codeQualityAdmission": {
-    "reason": "active-guardrail-requirement",
-    "evidence": "The package is generated from npm run audit:file-size -- --top 250 for src/topology/latency-group-manager.js; closure proof must make npm run audit:file-size -- --strict src/topology/latency-group-manager.js pass."
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": {
+      "commands": [
+        "npm run audit:file-size -- --strict src/raft/raft-replica-base.js src/raft/raft-replica-base-runtime-helpers.js",
+        "node --check src/raft/raft-replica-base.js",
+        "node --check src/raft/raft-replica-base-runtime-helpers.js",
+        "node --input-type=module -e \"const mod = await import('./src/raft/raft-replica-base.js'); if (typeof mod.RaftReplicaBase !== 'function' || !mod.RaftRole?.FOLLOWER) throw new Error('raft base import smoke failed'); console.log('raft base import smoke ok');\"",
+        "node --test test/raft/raft-replica-base.test.js",
+        "git diff --check -- src/raft/raft-replica-base.js src/raft/raft-replica-base-runtime-helpers.js work/packages/done-20260524-oversized-raft-raft-replica-base.md"
+      ]
+    }
   }
 }
 -->
 
 ## Why
 
-src/topology/latency-group-manager.js is a remaining oversized source file at 948/800 lines. This package owns one disjoint target in the zero-oversized backlog so parallel executors can refactor it without crossing package scopes.
+src/raft/raft-replica-base.js is a remaining oversized source file at 906/800 lines. This package owns one disjoint target in the zero-oversized backlog so parallel executors can refactor it without crossing package scopes.
 
 ## Scope Basis
 
-Approved maintenance/refactor scope from the active rolling-restart stability sprint. The May 24 full file-size audit reports src/topology/latency-group-manager.js at 948/800 lines; closure must bring this file below the configured threshold without changing behavior or reducing coverage.
+Approved maintenance/refactor scope from the active rolling-restart stability sprint. The May 24 full file-size audit reports src/raft/raft-replica-base.js at 906/800 lines; closure must bring this file below the configured threshold without changing behavior or reducing coverage.
 
 ## Workflow Lane
 
@@ -101,8 +98,8 @@ Approved maintenance/refactor scope from the active rolling-restart stability sp
 ## Rerun Decision Gate
 
 - Source artifact: `none`
-- Route owner: `topology_file_size_owner`
-- Route boundary: `source_topology_latency_group_manager_file_size_refactor`
+- Route owner: `raft_file_size_owner`
+- Route boundary: `source_raft_raft_replica_base_file_size_refactor`
 - Route dominant reason: `oversized_file_ratchet`
 - Route causal outcome: `pending-before-rerun`
 - Stop mode: `pending-before-rerun`
@@ -140,7 +137,8 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. src/topology/latency-group-manager.js
+1. src/raft/raft-replica-base.js
+2. src/raft/raft-replica-base-runtime-helpers.js
 
 ## Out Of Scope
 
@@ -153,11 +151,11 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex-spark`
 - Scope shape: `leaf-slice`
 - Output profile: `medium`
-- Owned files: `src/topology/latency-group-manager.js`
+- Owned files: `src/raft/raft-replica-base.js`, `src/raft/raft-replica-base-runtime-helpers.js`
 - Forbidden files: `test/`, `runtime ownership or public contract changes`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run audit:file-size -- --strict src/topology/latency-group-manager.js`, `node --check src/topology/latency-group-manager.js`, `git diff --check -- src/topology/latency-group-manager.js`
+- Focused proof: `npm run audit:file-size -- --strict src/raft/raft-replica-base.js src/raft/raft-replica-base-runtime-helpers.js`, `node --check` on touched JS files, import smoke, `node --test test/raft/raft-replica-base.test.js`, `git diff --check --` package-owned files
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split
@@ -182,12 +180,16 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: executor; files-changed: target file plus semantically named helper/split files added to this package before pre-impl; validation: focused proof and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: verification-fix; owner: verifier_fixer; files-changed: package-owned files only; validation: strict file-size proof, syntax/focused test proof, and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: <validated|not-needed>.
+- [x] action: scope-update; owner: executor; files-changed: work/packages/done-20260524-oversized-raft-raft-replica-base.md; validation: `npm run work:validate -- --pre-impl work/packages/done-20260524-oversized-raft-raft-replica-base.md` passed before edits and after helper scope update; outcome: validated.
+- [x] action: implementation; owner: executor; files-changed: src/raft/raft-replica-base.js, src/raft/raft-replica-base-runtime-helpers.js, work/packages/done-20260524-oversized-raft-raft-replica-base.md; validation: strict file-size audit passed for all touched files, node --check passed for both touched JS files, import smoke passed, node --test test/raft/raft-replica-base.test.js passed 56/56, scoped diff check passed; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: verification-fix; owner: verifier_fixer; files-changed: package metadata only; validation: parent revalidated focused proof: yes; strict file-size/import smoke and focused raft base suite passed; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: none; validation: no ledger update needed before wave closure; outcome: not-needed.
 
 ## Validation
 
-1. npm run audit:file-size -- --strict src/topology/latency-group-manager.js
-2. node --check src/topology/latency-group-manager.js
-3. git diff --check -- src/topology/latency-group-manager.js
+1. npm run audit:file-size -- --strict src/raft/raft-replica-base.js src/raft/raft-replica-base-runtime-helpers.js
+2. node --check src/raft/raft-replica-base.js
+3. node --check src/raft/raft-replica-base-runtime-helpers.js
+4. node --input-type=module -e "const mod = await import('./src/raft/raft-replica-base.js'); if (typeof mod.RaftReplicaBase !== 'function' || !mod.RaftRole?.FOLLOWER) throw new Error('raft base import smoke failed'); console.log('raft base import smoke ok');"
+5. node --test test/raft/raft-replica-base.test.js
+6. git diff --check -- src/raft/raft-replica-base.js src/raft/raft-replica-base-runtime-helpers.js work/packages/done-20260524-oversized-raft-raft-replica-base.md

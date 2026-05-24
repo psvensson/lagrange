@@ -15,12 +15,8 @@ import {isRetryableControlPlaneError} from
 import {getControlPlaneRetryAfterMs} from
   '../../control-plane/control-plane-error-classification.js';
 import {
-  CACHE_DEFAULT,
   CACHE_HYDRATION_TABLES,
 } from '../../cache/cache-constants.js';
-import {
-  getSystemCachePrimaryKeyFieldOrFallback,
-} from '../../cache/system-cache-key-descriptor.js';
 import {
   CDC_PIPELINE_READINESS_TIMEOUT_MS,
 } from '../../constants/cdc-lifecycle-constants.js';
@@ -31,7 +27,6 @@ import {
   JOINING_UNIFIED_RECONCILE,
 } from '../node-joining-constants.js';
 import {
-  COLUMN,
   CDC_OPERATION,
   NUM,
   TABLES,
@@ -39,44 +34,29 @@ import {
 } from '../../constants/index.js';
 import {canonicalizeSystemTableRow} from '../../control-plane/system-row-normalizers.js';
 import {
-  resolveControlPlaneSnapshotRevisionMetadata,
-} from '../../control-plane/control-plane-snapshot-revision.js';
-
-const LOG_CACHE_POPULATED =
-  'System cache populated from bootstrap response';
-const LOG_BOOTSTRAP_MISSING_SNAPSHOTS =
-  'Bootstrap response missing systemTableSnapshots';
-const LOG_CACHE_HYDRATED =
-  'System cache hydrated from bootstrap response';
-const LOG_TOPOLOGY_EPOCH_APPLIED =
-  'Applied bootstrap topology epoch to local cache watermark';
-const LOG_SNAPSHOT_MISSING =
-  'Snapshot missing or invalid for table';
-const LOG_HYDRATED_TABLE =
-  'Hydrated table from snapshot';
-const LOG_SKIPPING_STALE_SNAPSHOT =
-  'Skipping stale snapshot row during cache hydration';
-const LOG_BLOCKING_BACKFILL_START =
-  'Starting blocking join backfill for discovery-critical propagated tables';
-const LOG_BLOCKING_BACKFILL_COMPLETE =
-  'Completed blocking join backfill for discovery-critical propagated tables';
-const LOG_BLOCKING_BACKFILL_FAILED =
-  'Blocking join backfill failed for discovery-critical propagated tables';
-const LOG_BLOCKING_BACKFILL_SKIPPED =
-  'Skipping blocking join backfill because bootstrap snapshot already covers ' +
-  'discovery-critical propagated tables';
-const LOG_OPPORTUNISTIC_BACKFILL_SKIPPED =
-  'Skipping opportunistic join backfill because bootstrap snapshot already ' +
-  'covers opportunistic propagated tables';
-const LOG_OPPORTUNISTIC_BACKFILL_COMPLETE =
-  'Completed opportunistic join backfill for non-critical propagated tables';
-const LOG_OPPORTUNISTIC_BACKFILL_FAILED =
-  'Opportunistic join backfill failed for non-critical propagated tables';
-const LOG_NODE_REGISTRATION_RETRY =
-  'Retrying join node registration after retryable admission failure';
-const JOIN_NODE_REGISTRATION_MAX_ATTEMPTS = NUM.TWO;
-const JOIN_NODE_REGISTRATION_RETRY_DELAY_MS = NUM.TWO * NUM.HUNDRED;
-const JOIN_NODE_REGISTRATION_MAX_DELAY_MS = NUM.THOUSAND;
+  applyBootstrapTopologyEpoch as applyBootstrapTopologyEpochToCache,
+  getSnapshotHydrationOperation as resolveSnapshotHydrationOperation,
+  recordBootstrapTopologySnapshotMetadata as recordBootstrapTopologyMetadata,
+  resolveSnapshotBackfillPlan as resolveBootstrapSnapshotBackfillPlan,
+} from './query-system-state-phase-snapshot-helpers.js';
+import {
+  JOIN_NODE_REGISTRATION_MAX_ATTEMPTS,
+  JOIN_NODE_REGISTRATION_MAX_DELAY_MS,
+  JOIN_NODE_REGISTRATION_RETRY_DELAY_MS,
+  LOG_BLOCKING_BACKFILL_COMPLETE,
+  LOG_BLOCKING_BACKFILL_FAILED,
+  LOG_BLOCKING_BACKFILL_SKIPPED,
+  LOG_BLOCKING_BACKFILL_START,
+  LOG_BOOTSTRAP_MISSING_SNAPSHOTS,
+  LOG_CACHE_HYDRATED,
+  LOG_CACHE_POPULATED,
+  LOG_HYDRATED_TABLE,
+  LOG_NODE_REGISTRATION_RETRY,
+  LOG_OPPORTUNISTIC_BACKFILL_COMPLETE,
+  LOG_OPPORTUNISTIC_BACKFILL_FAILED,
+  LOG_OPPORTUNISTIC_BACKFILL_SKIPPED,
+  LOG_SNAPSHOT_MISSING,
+} from './query-system-state-phase-constants.js';
 
 /**
  * Handles the query-system-state phase of the join process.
@@ -362,31 +342,10 @@ class QuerySystemStatePhase {
       typeof this.delegates.getBootstrapResponse === TYPEOF.FUNCTION ?
         this.delegates.getBootstrapResponse() :
         null;
-    const snapshots = bootstrapResponse?.systemTableSnapshots;
-    const hydrationTables = Array.isArray(
-      bootstrapResponse?.topologySnapshotMeta?.hydrationTables,
-    ) ?
-      new Set(
-        bootstrapResponse.topologySnapshotMeta.hydrationTables.filter(
-          (value) => typeof value === TYPEOF.STRING && value.length > NUM.ZERO,
-        ),
-      ) :
-      null;
-    const missingTables = [];
-
-    for (const tableName of tableNames) {
-      const hasSnapshotRows = Array.isArray(snapshots?.[tableName]);
-      const declaredHydrated =
-        !hydrationTables || hydrationTables.has(tableName);
-      if (!hasSnapshotRows || !declaredHydrated) {
-        missingTables.push(tableName);
-      }
-    }
-
-    return {
-      tables: missingTables,
-      missingTables,
-    };
+    return resolveBootstrapSnapshotBackfillPlan({
+      bootstrapResponse,
+      tableNames,
+    });
   }
 
   /**
@@ -562,21 +521,11 @@ class QuerySystemStatePhase {
    * @private
    */
   applyBootstrapTopologyEpoch(systemTableCache, bootstrapResponse) {
-    if (!systemTableCache ||
-        typeof systemTableCache.updateFromEpoch !== TYPEOF.FUNCTION) {
-      return;
-    }
-
-    const currentEpoch = bootstrapResponse?.currentEpoch;
-    if (!currentEpoch || typeof currentEpoch !== TYPEOF.OBJECT) {
-      return;
-    }
-
-    const logger = this.delegates.getLogger();
-    systemTableCache.updateFromEpoch(currentEpoch);
-    logger.info(LOG_TOPOLOGY_EPOCH_APPLIED, {
+    applyBootstrapTopologyEpochToCache({
+      systemTableCache,
+      bootstrapResponse,
+      logger: this.delegates.getLogger(),
       nodeId: this.nodeId,
-      topologyEpoch: currentEpoch.epoch,
     });
   }
 
@@ -587,45 +536,10 @@ class QuerySystemStatePhase {
    * @private
    */
   recordBootstrapTopologySnapshotMetadata(bootstrapResponse) {
-    const nowMs =
-      typeof this.delegates.getNow === TYPEOF.FUNCTION ?
-        this.delegates.getNow() :
-        Date.now();
-    const topologySnapshotMeta =
-      bootstrapResponse?.topologySnapshotMeta &&
-      typeof bootstrapResponse.topologySnapshotMeta === TYPEOF.OBJECT ?
-        bootstrapResponse.topologySnapshotMeta :
-        null;
-    const revisionMetadata = resolveControlPlaneSnapshotRevisionMetadata(
-      {
-        topologySnapshotEpoch:
-          topologySnapshotMeta?.topologyEpoch ??
-          bootstrapResponse?.currentEpoch?.epoch ??
-          null,
-        capturedAt: nowMs,
-      },
-    );
-    if (typeof this.delegates.setBootstrapTopologySnapshotMeta ===
-        TYPEOF.FUNCTION) {
-      this.delegates.setBootstrapTopologySnapshotMeta(
-        topologySnapshotMeta ?
-          {
-            ...topologySnapshotMeta,
-            snapshotRevision: revisionMetadata.revision,
-            snapshotRevisionSource: revisionMetadata.revisionSource,
-            snapshotResumeToken: revisionMetadata.resumeToken,
-            snapshotObservedAt: revisionMetadata.observedAt,
-            snapshotObservedAtMs: revisionMetadata.observedAtMs,
-          } :
-          null,
-      );
-    }
-    if (typeof this.delegates.setBootstrapTopologySnapshotHydratedAtMs ===
-        TYPEOF.FUNCTION) {
-      this.delegates.setBootstrapTopologySnapshotHydratedAtMs(
-        nowMs,
-      );
-    }
+    recordBootstrapTopologyMetadata({
+      bootstrapResponse,
+      delegates: this.delegates,
+    });
   }
 
   /**
@@ -643,57 +557,13 @@ class QuerySystemStatePhase {
     tableName,
     record,
   ) {
-    const logger = this.delegates.getLogger();
-    const pkField = getSystemCachePrimaryKeyFieldOrFallback(
+    return resolveSnapshotHydrationOperation({
+      systemTableCache,
       tableName,
-      CACHE_DEFAULT.PRIMARY_KEY_FALLBACK,
-    );
-    const key =
-      record?.[pkField] ??
-      record?.[CACHE_DEFAULT.PRIMARY_KEY_FALLBACK];
-
-    // Let cache validation handle malformed rows with no key.
-    if (typeof key === TYPEOF.UNDEFINED || key === null) {
-      return CDC_OPERATION.INSERT;
-    }
-
-    if (!systemTableCache.has(tableName, key)) {
-      return CDC_OPERATION.INSERT;
-    }
-
-    const existing = systemTableCache.get(tableName, key);
-    const existingUpdatedAt =
-      Number(existing?.[COLUMN.UPDATED_AT]);
-    const incomingUpdatedAt =
-      Number(record?.[COLUMN.UPDATED_AT]);
-    const hasExistingUpdatedAt =
-      Number.isFinite(existingUpdatedAt) &&
-      existingUpdatedAt > NUM.ZERO;
-    const hasIncomingUpdatedAt =
-      Number.isFinite(incomingUpdatedAt) &&
-      incomingUpdatedAt > NUM.ZERO;
-
-    if (
-      hasExistingUpdatedAt &&
-      (!hasIncomingUpdatedAt ||
-        existingUpdatedAt >= incomingUpdatedAt)
-    ) {
-      logger.debug(
-        LOG_SKIPPING_STALE_SNAPSHOT,
-        {
-          nodeId: this.nodeId,
-          tableName,
-          key,
-          existingUpdatedAt,
-          incomingUpdatedAt: hasIncomingUpdatedAt ?
-            incomingUpdatedAt :
-            null,
-        },
-      );
-      return null;
-    }
-
-    return CDC_OPERATION.UPSERT;
+      record,
+      logger: this.delegates.getLogger(),
+      nodeId: this.nodeId,
+    });
   }
 
   /**

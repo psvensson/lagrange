@@ -16,11 +16,8 @@ import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
 import {
   LATENCY_ASSIGNMENT_STATE,
   LATENCY_GROUP_STATE,
-  LATENCY_TOPOLOGY_CONFIG_KEY,
-  LATENCY_TOPOLOGY_DEFAULT,
 } from './latency-topology-constants.js';
 import {
-  LATENCY_GROUP_MANAGER_DEFAULT,
   LATENCY_GROUP_MANAGER_ERROR_MSG,
   LATENCY_GROUP_MANAGER_EVENT,
   LATENCY_GROUP_MANAGER_LOG_MSG,
@@ -29,6 +26,21 @@ import {
   LATENCY_GROUP_MANAGER_SUBSYSTEM,
   LATENCY_GROUP_MANAGER_TRIGGER,
 } from './latency-group-manager-constants.js';
+import {
+  buildLatencyGroupMap,
+  buildNodeRowsAfterAssignment,
+  buildNormalizedGroupRow,
+  collectAffectedGroupIds,
+  getActiveLatencyGroups,
+  getMeasurementForGroup,
+  selectNearestEligibleGroup,
+  shouldPersistLifecycleState,
+} from './latency-group-manager-assignment-helpers.js';
+import {
+  buildLatencyGroupId,
+  computeNextLatencyGroupCycleDelayMs,
+  resolveLatencyGroupManagerConfig,
+} from './latency-group-manager-runtime-helpers.js';
 
 const LOCAL_STR_CRITICAL = 'critical';
 
@@ -318,7 +330,12 @@ class LatencyGroupManager extends EventEmitter {
    */
   buildCreatedGroupRow() {
     const now = this.now();
-    const groupId = this.buildGroupId(now);
+    const groupId = buildLatencyGroupId({
+      timestamp: now,
+      nodeId: this.nodeId,
+      nowFn: this.nowFn,
+      systemTableCache: this.systemTableCache,
+    });
     return {
       [COLUMN.GROUP_ID]: groupId,
       [COLUMN.REPRESENTATIVE_NODE_ID]: this.nodeId,
@@ -381,10 +398,13 @@ class LatencyGroupManager extends EventEmitter {
    */
   async computeAssignmentDecision(localNodeRow, groupRows) {
     const currentGroupId = localNodeRow[COLUMN.LATENCY_GROUP_ID] || null;
-    const activeGroups = this.getActiveGroups(groupRows);
+    const activeGroups = getActiveLatencyGroups(groupRows);
     const measurements = await this.measureGroups(activeGroups);
-    const nearestEligible = this.selectNearestEligibleGroup(measurements);
-    const currentGroupMeasurement = this.getMeasurementForGroup(
+    const nearestEligible = selectNearestEligibleGroup(
+      measurements,
+      this.groupThresholdMs,
+    );
+    const currentGroupMeasurement = getMeasurementForGroup(
       measurements,
       currentGroupId,
     );
@@ -466,7 +486,7 @@ class LatencyGroupManager extends EventEmitter {
       timestamp: now,
     });
 
-    const affectedGroupIds = this.collectAffectedGroupIds(
+    const affectedGroupIds = collectAffectedGroupIds(
       previousGroupId,
       targetGroupId,
     );
@@ -519,14 +539,15 @@ class LatencyGroupManager extends EventEmitter {
    * @private
    */
   async reconcileAffectedGroups(options) {
-    const groupById = this.buildGroupMap(options.allGroupRows);
+    const groupById = buildLatencyGroupMap(options.allGroupRows);
     if (options.createdGroupRow) {
       groupById.set(options.createdGroupRow[COLUMN.GROUP_ID], options.createdGroupRow);
     }
-    const nodeRowsAfterAssignment = this.buildNodeRowsAfterAssignment(
-      options.allNodeRows,
-      options.targetGroupId,
-    );
+    const nodeRowsAfterAssignment = buildNodeRowsAfterAssignment({
+      allNodeRows: options.allNodeRows,
+      nodeId: this.nodeId,
+      targetGroupId: options.targetGroupId,
+    });
 
     for (const groupId of options.affectedGroupIds) {
       const groupRow = groupById.get(groupId) || null;
@@ -540,14 +561,14 @@ class LatencyGroupManager extends EventEmitter {
       const desiredState = memberRows.length > NUM.ZERO ?
         LATENCY_GROUP_STATE.ACTIVE :
         LATENCY_GROUP_STATE.DRAINING;
-      const normalizedGroupRow = this.buildNormalizedGroupRow({
+      const normalizedGroupRow = buildNormalizedGroupRow({
         groupId,
         groupRow,
         desiredState,
         timestamp: options.timestamp,
       });
 
-      if (this.shouldPersistLifecycleState(groupRow, normalizedGroupRow)) {
+      if (shouldPersistLifecycleState(groupRow, normalizedGroupRow)) {
         await this.getControlPlaneSystemTableGateway().submitMutation({
           operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
           tableName: TABLES.LATENCY_GROUPS,
@@ -563,95 +584,6 @@ class LatencyGroupManager extends EventEmitter {
         memberRows,
       });
     }
-  }
-
-  /**
-   * Build a normalized group row for lifecycle + leadership reconciliation.
-   * @param {Object} options
-   * @return {Object}
-   * @private
-   */
-  buildNormalizedGroupRow(options) {
-    const groupRow = options.groupRow;
-    return {
-      [COLUMN.GROUP_ID]: options.groupId,
-      [COLUMN.REPRESENTATIVE_NODE_ID]:
-        groupRow?.[COLUMN.REPRESENTATIVE_NODE_ID] || null,
-      [COLUMN.COORDINATOR_NODE_ID]:
-        groupRow?.[COLUMN.COORDINATOR_NODE_ID] || null,
-      [COLUMN.STATE]: options.desiredState,
-      [COLUMN.CREATED_AT]: groupRow?.[COLUMN.CREATED_AT] || options.timestamp,
-      [COLUMN.UPDATED_AT]: options.timestamp,
-    };
-  }
-
-  /**
-   * Determine whether lifecycle row persistence is needed.
-   * @param {Object|null} currentGroupRow
-   * @param {Object} nextGroupRow
-   * @return {boolean}
-   * @private
-   */
-  shouldPersistLifecycleState(currentGroupRow, nextGroupRow) {
-    if (!currentGroupRow) {
-      return true;
-    }
-    return currentGroupRow[COLUMN.STATE] !== nextGroupRow[COLUMN.STATE];
-  }
-
-  /**
-   * Build a group-id keyed map from cached rows.
-   * @param {Object[]} allGroupRows
-   * @return {Map<string, Object>}
-   * @private
-   */
-  buildGroupMap(allGroupRows) {
-    const map = new Map();
-    for (const groupRow of allGroupRows) {
-      const groupId = groupRow?.[COLUMN.GROUP_ID];
-      if (!groupId) {
-        continue;
-      }
-      map.set(groupId, groupRow);
-    }
-    return map;
-  }
-
-  /**
-   * Build nodes view with local node assignment updated to the target group.
-   * @param {Object[]} allNodeRows
-   * @param {string|null} targetGroupId
-   * @return {Object[]}
-   * @private
-   */
-  buildNodeRowsAfterAssignment(allNodeRows, targetGroupId) {
-    return allNodeRows.map((nodeRow) => {
-      if (nodeRow?.[COLUMN.NODE_ID] !== this.nodeId) {
-        return nodeRow;
-      }
-      return {
-        ...nodeRow,
-        [COLUMN.LATENCY_GROUP_ID]: targetGroupId,
-      };
-    });
-  }
-
-  /**
-   * Collect unique non-null affected group IDs.
-   * @param {string|null} previousGroupId
-   * @param {string|null} targetGroupId
-   * @return {string[]}
-   * @private
-   */
-  collectAffectedGroupIds(previousGroupId, targetGroupId) {
-    const groupIds = new Set();
-    if (previousGroupId) {
-      groupIds.add(previousGroupId);
-    }
-    if (targetGroupId) {
-      groupIds.add(targetGroupId);
-    }
-    return [...groupIds];
   }
 
   /**
@@ -698,52 +630,16 @@ class LatencyGroupManager extends EventEmitter {
   }
 
   /**
-   * Select nearest eligible group under configured threshold.
-   * @param {Object[]} measurements
-   * @return {Object|null}
-   * @private
-   */
-  selectNearestEligibleGroup(measurements) {
-    const eligible = measurements.filter((measurement) => {
-      return measurement.rttMs <= this.groupThresholdMs;
-    });
-    return eligible[NUM.ZERO] || null;
-  }
-
-  /**
-   * Find measurement entry for a group.
-   * @param {Object[]} measurements
-   * @param {string|null} groupId
-   * @return {Object|null}
-   * @private
-   */
-  getMeasurementForGroup(measurements, groupId) {
-    if (!groupId) {
-      return null;
-    }
-    return measurements.find((measurement) => measurement.groupId === groupId) || null;
-  }
-
-  /**
-   * Keep only groups currently considered active.
-   * @param {Object[]} groupRows
-   * @return {Object[]}
-   * @private
-   */
-  getActiveGroups(groupRows) {
-    return groupRows.filter((groupRow) => {
-      const state = groupRow?.[COLUMN.STATE];
-      return !state || state === LATENCY_GROUP_STATE.ACTIVE;
-    });
-  }
-
-  /**
    * Schedule next periodic reassignment cycle.
    * @private
    */
   scheduleNextCycle() {
     this.clearScheduledCycle();
-    const delayMs = this.computeNextDelayMs();
+    const delayMs = computeNextLatencyGroupCycleDelayMs({
+      recalcIntervalMs: this.recalcIntervalMs,
+      recalcJitterRatio: this.recalcJitterRatio,
+      randomFn: this.randomFn,
+    });
     this.recalcTimer = this.setTimeoutFn(() => {
       void this.executeScheduledCycle(LATENCY_GROUP_MANAGER_TRIGGER.PERIODIC);
     }, delayMs);
@@ -764,139 +660,13 @@ class LatencyGroupManager extends EventEmitter {
   }
 
   /**
-   * Compute next periodic cycle delay with bounded jitter.
-   * @return {number}
-   * @private
-   */
-  computeNextDelayMs() {
-    const jitterRange = this.recalcIntervalMs * this.recalcJitterRatio;
-    if (jitterRange <= NUM.ZERO) {
-      return this.recalcIntervalMs;
-    }
-
-    const rawRandom = this.randomFn();
-    const randomValue = Number.isFinite(rawRandom) ?
-      rawRandom :
-      LATENCY_GROUP_MANAGER_DEFAULT.RANDOM_CENTER;
-    const centeredRandom =
-      (randomValue - LATENCY_GROUP_MANAGER_DEFAULT.RANDOM_CENTER) * NUM.TWO;
-    const jitterOffset = Math.round(centeredRandom * jitterRange);
-    return Math.max(
-      LATENCY_GROUP_MANAGER_DEFAULT.MIN_DELAY_MS,
-      this.recalcIntervalMs + jitterOffset,
-    );
-  }
-
-  /**
-   * Build deterministic group ID when no eligible group exists.
-   * @param {number} timestamp
-   * @return {string}
-   * @private
-   */
-  buildGroupId(timestamp) {
-    const baseTimestamp = Number.isFinite(timestamp) ?
-      Math.floor(timestamp) :
-      this.now();
-    let attempt = NUM.ZERO;
-
-    while (true) {
-      const retrySuffix = attempt === NUM.ZERO ?
-        '' :
-        `${LATENCY_GROUP_MANAGER_DEFAULT.GROUP_ID_SEPARATOR}` +
-          `${LATENCY_GROUP_MANAGER_DEFAULT.GROUP_ID_RETRY_MARKER}` +
-          `${LATENCY_GROUP_MANAGER_DEFAULT.GROUP_ID_SEPARATOR}` +
-          `${attempt}`;
-      const groupId = `${LATENCY_GROUP_MANAGER_DEFAULT.GROUP_ID_PREFIX}` +
-        `${this.nodeId}` +
-        `${LATENCY_GROUP_MANAGER_DEFAULT.GROUP_ID_SEPARATOR}` +
-        `${baseTimestamp}${retrySuffix}`;
-      if (!this.hasGroup(groupId)) {
-        return groupId;
-      }
-      attempt += NUM.ONE;
-    }
-  }
-
-  /**
-   * Check whether a group already exists in cache.
-   * @param {string} groupId
-   * @return {boolean}
-   * @private
-   */
-  hasGroup(groupId) {
-    const hasFn = this.systemTableCache?.has;
-    if (typeof hasFn !== TYPEOF.FUNCTION) {
-      return false;
-    }
-    const hasResult = hasFn.call(
-      this.systemTableCache,
-      TABLES.LATENCY_GROUPS,
-      groupId,
-    );
-
-    // Some runtime cache implementations (for example proxy-backed caches)
-    // expose async `has()` methods that return a Promise. `buildGroupId()` is
-    // synchronous and cannot await here, so treat async responses as
-    // non-colliding to avoid blocking in a synchronous retry loop.
-    if (hasResult && typeof hasResult.then === TYPEOF.FUNCTION) {
-      return false;
-    }
-
-    return Boolean(hasResult);
-  }
-
-  /**
    * Refresh runtime config values from ConfigurationManager.
    */
   refreshConfig() {
-    this.groupThresholdMs = this.resolveNumericConfig(
-      LATENCY_TOPOLOGY_CONFIG_KEY.GROUP_THRESHOLD_MS,
-      LATENCY_TOPOLOGY_DEFAULT.GROUP_THRESHOLD_MS,
-      LATENCY_GROUP_MANAGER_DEFAULT.MIN_GROUP_THRESHOLD_MS,
-    );
-    this.recalcIntervalMs = this.resolveNumericConfig(
-      LATENCY_TOPOLOGY_CONFIG_KEY.RECALC_INTERVAL_MS,
-      LATENCY_TOPOLOGY_DEFAULT.RECALC_INTERVAL_MS,
-      LATENCY_GROUP_MANAGER_DEFAULT.MIN_RECALC_INTERVAL_MS,
-    );
-    this.recalcJitterRatio = this.resolveRatioConfig(
-      LATENCY_TOPOLOGY_CONFIG_KEY.RECALC_JITTER_RATIO,
-      LATENCY_TOPOLOGY_DEFAULT.RECALC_JITTER_RATIO,
-    );
-  }
-
-  /**
-   * Resolve numeric config with fallback and lower bound.
-   * @param {string} key
-   * @param {number} fallback
-   * @param {number} minValue
-   * @return {number}
-   * @private
-   */
-  resolveNumericConfig(key, fallback, minValue) {
-    const value = this.config.get(key);
-    if (typeof value !== TYPEOF.NUMBER || !Number.isFinite(value)) {
-      return fallback;
-    }
-    return Math.max(minValue, value);
-  }
-
-  /**
-   * Resolve ratio config with fallback and hard bounds.
-   * @param {string} key
-   * @param {number} fallback
-   * @return {number}
-   * @private
-   */
-  resolveRatioConfig(key, fallback) {
-    const value = this.config.get(key);
-    if (typeof value !== TYPEOF.NUMBER || !Number.isFinite(value)) {
-      return fallback;
-    }
-    return Math.min(
-      LATENCY_GROUP_MANAGER_DEFAULT.MAX_RECALC_JITTER_RATIO,
-      Math.max(LATENCY_GROUP_MANAGER_DEFAULT.MIN_RECALC_JITTER_RATIO, value),
-    );
+    const runtimeConfig = resolveLatencyGroupManagerConfig(this.config);
+    this.groupThresholdMs = runtimeConfig.groupThresholdMs;
+    this.recalcIntervalMs = runtimeConfig.recalcIntervalMs;
+    this.recalcJitterRatio = runtimeConfig.recalcJitterRatio;
   }
 
   /**
