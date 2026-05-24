@@ -34,6 +34,9 @@ import {
   MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG,
   MESSAGE_GROUP_SERVICE_HANDLER_SUBSYSTEM,
 } from './message-group-service-handler-constants.js';
+import {
+  buildMessageGroupReplicaOptions,
+} from './message-group-replica-options.js';
 
 function isFunction(value) {
   return typeof value === TYPEOF.FUNCTION;
@@ -626,104 +629,13 @@ class MessageGroupServiceHandler extends EventEmitter {
   }
 
   buildReplicaOptions(groupId, replicaId, request = {}) {
-    const requestedReplicaIds = Array.isArray(
-      request?.[ReplicaOperationField.REPLICA_IDS],
-    ) ? request[ReplicaOperationField.REPLICA_IDS].filter((value) =>
-        typeof value === 'string' && value.length > 0,
-      ) : [];
-    const requestedPeerAddresses = Array.isArray(
-      request?.[ReplicaOperationField.PEER_ADDRESSES],
-    ) ? request[ReplicaOperationField.PEER_ADDRESSES].filter((value) =>
-        typeof value === 'string' && value.length > 0,
-      ) : [];
-
-    const addressManager = AddressManager.getInstance();
-    const services = this.systemTableCache?.filter?.(
-      SYSTEM_TABLE_NAME.SERVICES,
-      (row) =>
-        row?.service_type === SERVICE_TYPE.MESSAGE_GROUP &&
-        row?.group_id === groupId,
-    ) || [];
-    const topologyMustBeComplete =
-      requestedReplicaIds.length > 0 ||
-      requestedPeerAddresses.length > 0 ||
-      services.length > 0;
-
-    const replicaIds = [];
-    const peerAddresses = [];
-    const seenReplicaIds = new Set();
-
-    for (const service of services) {
-      const serviceReplicaId = service.service_id || service.replica_id;
-      if (!serviceReplicaId) {
-        continue;
-      }
-      if (!seenReplicaIds.has(serviceReplicaId)) {
-        seenReplicaIds.add(serviceReplicaId);
-        replicaIds.push(serviceReplicaId);
-      }
-      const peerAddress = service.address ||
-        (service.node_id ?
-          addressManager.format(
-            service.node_id,
-            ENTITY_TYPE.MESSAGE_GROUP,
-            serviceReplicaId,
-          ) :
-          null);
-      if (peerAddress && !peerAddresses.includes(peerAddress)) {
-        peerAddresses.push(peerAddress);
-      }
-    }
-
-    for (const requestedReplicaId of requestedReplicaIds) {
-      if (!seenReplicaIds.has(requestedReplicaId)) {
-        seenReplicaIds.add(requestedReplicaId);
-        replicaIds.push(requestedReplicaId);
-      }
-    }
-
-    if (!seenReplicaIds.has(replicaId)) {
-      seenReplicaIds.add(replicaId);
-      replicaIds.push(replicaId);
-    }
-
-    const selfAddress = addressManager.format(
-      this.nodeId,
-      ENTITY_TYPE.MESSAGE_GROUP,
-      replicaId,
-    );
-    if (!peerAddresses.includes(selfAddress)) {
-      peerAddresses.push(selfAddress);
-    }
-
-    for (const requestedPeerAddress of requestedPeerAddresses) {
-      if (!peerAddresses.includes(requestedPeerAddress)) {
-        peerAddresses.push(requestedPeerAddress);
-      }
-    }
-
-    const hasPeerReplica = replicaIds.some((value) => value !== replicaId);
-    const hasPeerAddress = peerAddresses.some((value) => value !== selfAddress);
-    if (topologyMustBeComplete &&
-        (!hasPeerReplica ||
-          !hasPeerAddress ||
-          peerAddresses.length < replicaIds.length)) {
-      throw new Error(
-        MESSAGE_GROUP_SERVICE_HANDLER_ERROR_MSG.CREATE_TOPOLOGY_REQUIRED(
-          groupId,
-          replicaId,
-        ),
-      );
-    }
-
-    return {
+    return buildMessageGroupReplicaOptions({
       groupId,
       replicaId,
-      replicaIds,
-      peerAddresses,
-      deferElection: false,
-      createDelayMs: NUM.ZERO,
-    };
+      request,
+      nodeId: this.nodeId,
+      systemTableCache: this.systemTableCache,
+    });
   }
 
   resolveActiveReplicaService(replicaId) {

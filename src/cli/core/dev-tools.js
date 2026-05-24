@@ -1,3 +1,5 @@
+import {formatDevToolsTextContent} from './dev-tools-text-renderer.js';
+
 const LOCAL_STR_PRODUCTION = 'production';
 const LOCAL_STR_STATE = 'state';
 const LOCAL_NUM_100 = 100;
@@ -53,19 +55,6 @@ const LOCAL_STR_ESCAPE = 'escape';
 const LOCAL_STR_Q = 'q';
 const LOCAL_STR_S = 's';
 const LOCAL_STR_C = 'c';
-const LOCAL_STR_O7OJW = '╔════════════════════════════════════════════════════════════╗';
-const LOCAL_STR_DEV_TOOLS = '║                        DEV TOOLS                           ║';
-const LOCAL_STR_146V0 = '╚════════════════════════════════════════════════════════════╝';
-const LOCAL_STR_1G31G = '─';
-const LOCAL_NUM_60 = 60;
-const LOCAL_STR_CURRENT_STATE = 'Current State:';
-const LOCAL_NUM_20 = 20;
-const LOCAL_STR_4N5M0 = 'Initialization Order:';
-const LOCAL_STR_NM5X6 = 'Performance Metrics:';
-const LOCAL_STR_RENDER_TIMES = 'Render Times:';
-const LOCAL_STR_EVENT_LATENCY = 'Event Latency:';
-const LOCAL_STR_NO_CONTENT = 'No content';
-const LOCAL_STR_NLF4D = 'Keys: 1-5:Tabs | s:Snapshot | c:Clear | q/Esc:Close';
 const LOCAL_STR_DEVTOOLS_DESTROYED = 'devtools:destroyed';
 
 /**
@@ -754,98 +743,12 @@ export class DevTools {
    * @returns {string} Formatted text content
    */
   formatTextContent() {
-    const lines = [];
-    const content = this.getTabContent();
-
-    // Header
-    lines.push(LOCAL_STR_O7OJW);
-    lines.push(LOCAL_STR_DEV_TOOLS);
-    lines.push(LOCAL_STR_146V0);
-    lines.push(LOCAL_STR_EMPTY);
-
-    // Tab bar
-    const tabs = this.getTabs();
-    const tabLine = tabs.map((t) =>
-      t.id === this.currentTab ? `[${t.label}]` : ` ${t.label} `,
-    ).join(' ');
-    lines.push(tabLine);
-    lines.push(LOCAL_STR_1G31G.repeat(LOCAL_NUM_60));
-    lines.push(LOCAL_STR_EMPTY);
-
-    // Content based on tab
-    switch (content.type) {
-    case LOCAL_STR_STATE:
-      lines.push(LOCAL_STR_CURRENT_STATE);
-      lines.push(LOCAL_STR_EMPTY);
-      if (content.stateTree) {
-        lines.push(content.stateTree);
-      } else if (content.error) {
-        lines.push(`Error: ${content.error}`);
-      }
-      lines.push(LOCAL_STR_EMPTY);
-      lines.push(`Snapshots: ${content.snapshots?.length || LOCAL_NUM_ZERO}`);
-      break;
-
-    case LOCAL_STR_EVENTS:
-      lines.push(`Recent Events (${content.totalCount} total):`);
-      lines.push(LOCAL_STR_EMPTY);
-      for (const event of content.events.slice(LOCAL_NUM_ZERO, LOCAL_NUM_20)) {
-        lines.push(`${event.time} ${event.type || event.event}`);
-        if (event.dataPreview) {
-          lines.push(`  ${event.dataPreview}`);
-        }
-      }
-      break;
-
-    case LOCAL_STR_COMPONENTS:
-      lines.push(`Components (${content.componentCount}):`);
-      lines.push(LOCAL_STR_EMPTY);
-      lines.push(LOCAL_STR_4N5M0);
-      for (const name of content.initOrder || []) {
-        const info = content.dependencyGraph?.[name];
-        const deps = info?.dependencies?.length ?
-          ` → [${info.dependencies.join(', ')}]` : '';
-        lines.push(`  ${name}${deps}`);
-      }
-      break;
-
-    case LOCAL_STR_CDC:
-      lines.push(`CDC Events (${content.filteredCount}/${content.totalCount}):`);
-      if (content.filter) {
-        lines.push(`Filter: "${content.filter}"`);
-      }
-      lines.push(LOCAL_STR_EMPTY);
-      for (const event of content.events.slice(LOCAL_NUM_ZERO, LOCAL_NUM_20)) {
-        const time = this.formatTimestamp(event.timestamp);
-        lines.push(`${time} ${event.operation} ${event.table}:${event.key}`);
-      }
-      break;
-
-    case LOCAL_STR_PERFORMANCE:
-      lines.push(LOCAL_STR_NM5X6);
-      lines.push(LOCAL_STR_EMPTY);
-      lines.push(LOCAL_STR_RENDER_TIMES);
-      lines.push(`  Samples: ${content.render.samples}`);
-      lines.push(`  Average: ${content.render.avg}ms`);
-      lines.push(`  Min: ${content.render.min}ms`);
-      lines.push(`  Max: ${content.render.max}ms`);
-      lines.push(LOCAL_STR_EMPTY);
-      lines.push(LOCAL_STR_EVENT_LATENCY);
-      lines.push(`  Samples: ${content.eventLatency.samples}`);
-      lines.push(`  Average: ${content.eventLatency.avg}ms`);
-      lines.push(`  Min: ${content.eventLatency.min}ms`);
-      lines.push(`  Max: ${content.eventLatency.max}ms`);
-      break;
-
-    default:
-      lines.push(content.content || LOCAL_STR_NO_CONTENT);
-    }
-
-    lines.push(LOCAL_STR_EMPTY);
-    lines.push(LOCAL_STR_1G31G.repeat(LOCAL_NUM_60));
-    lines.push(LOCAL_STR_NLF4D);
-
-    return lines.join(LOCAL_STR_NEWLINE);
+    return formatDevToolsTextContent({
+      content: this.getTabContent(),
+      tabs: this.getTabs(),
+      currentTab: this.currentTab,
+      formatTimestamp: (timestamp) => this.formatTimestamp(timestamp),
+    });
   }
 
   /**

@@ -1,34 +1,43 @@
-# Refactor oversized source file src/control-plane/recovery-protocol-snapshot.js
+# Refactor oversized source file src/bootstrap/phases/contact-seed-phase.js
 
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
-  "opened": "2026-05-24",
-  "lane": "lightweight-maintenance",
-  "scenario": "none",
-  "artifact": "none",
-  "playback": "none",
-  "owner": "control_plane_file_size_owner",
-  "boundary": "source_control_plane_recovery_protocol_snapshot_file_size_refactor",
-  "dominantReason": "oversized_file_ratchet",
-  "currentState": "Current file-size audit reports src/control-plane/recovery-protocol-snapshot.js at 858/800 lines; no implementation is started in this package yet.",
-  "nextAction": "Extract semantically named helper modules from src/control-plane/recovery-protocol-snapshot.js until it is below 800 lines, preserving behavior and the public entrypoint.",
-  "proof": [
-    "npm run audit:file-size -- --strict src/control-plane/recovery-protocol-snapshot.js",
-    "node --check src/control-plane/recovery-protocol-snapshot.js",
-    "git diff --check -- src/control-plane/recovery-protocol-snapshot.js"
-  ],
-  "theoryLedgerRefs": [],
-  "writeScope": [
-    "src/control-plane/recovery-protocol-snapshot.js"
-  ],
-  "handoffFiles": [],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [
-    "src/control-plane/recovery-protocol-snapshot.js"
-  ],
+  "status": "done",
+  "intent": {
+    "opened": "2026-05-24",
+    "closed": "2026-05-24",
+    "lane": "lightweight-maintenance",
+    "scenario": "none",
+    "artifact": "none",
+    "playback": "none",
+    "owner": "bootstrap_file_size_owner",
+    "boundary": "source_bootstrap_phases_contact_seed_phase_file_size_refactor",
+    "currentState": "src/bootstrap/phases/contact-seed-phase.js now delegates pure retry/error signal helpers to src/bootstrap/phases/contact-seed-failure-signals.js; touched source files are 614 and 309 lines after local proof.",
+    "nextAction": "Verifier-fixer review can re-run the focused proof before any package closure; no public entrypoint or behavior change is intended.",
+    "dominantReason": "oversized_file_ratchet"
+  },
+  "scope": {
+    "writeScope": [
+      "src/bootstrap/phases/contact-seed-phase.js",
+      "src/bootstrap/phases/contact-seed-failure-signals.js"
+    ],
+    "handoffFiles": [],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": [],
+    "commitScope": [
+      "src/bootstrap/phases/contact-seed-phase.js",
+      "src/bootstrap/phases/contact-seed-failure-signals.js"
+    ]
+  },
+  "gates": {
+    "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
+    "stabilityCredit": "local-proof-only",
+    "codeQualityAdmission": {
+      "reason": "active-guardrail-requirement",
+      "evidence": "The package is generated from npm run audit:file-size -- --top 250 for src/bootstrap/phases/contact-seed-phase.js; closure proof must make npm run audit:file-size -- --strict src/bootstrap/phases/contact-seed-phase.js pass."
+    }
+  },
   "modelFit": {
     "packageClass": "bounded-implementation",
     "intendedMinimumModel": "gpt-5.3-codex-spark",
@@ -40,46 +49,35 @@
       "a frozen decision must be reopened"
     ]
   },
-  "modelFitSplit": {
-    "targetExecutionModel": "gpt-5.3-codex-spark",
-    "allowedDecisionDepth": "bounded local edit after owner, scope, proof, and forbidden files are named",
-    "safeToExecuteWhen": [
-      "owner, boundary, write scope, forbidden scope, proof, and kill rule stay as declared",
-      "the executor does not need to choose architecture, migrate ownership, or reinterpret representative evidence",
-      "the first focused proof gives a clear pass, fail, or escalate signal"
-    ],
-    "splitTriggers": [
-      "write scope expands beyond the declared lower-model lane",
-      "proof requires forbidden scope, cross-owner reasoning, or architecture route selection",
-      "the implementation needs to decide system behavior instead of executing a named local mechanism"
-    ],
-    "childPackageCandidates": [
-      "Prefer mechanical-maintenance for docs/templates/schema-only edits.",
-      "Prefer test-only-proof for tests that do not change runtime behavior.",
-      "Prefer bounded-experiment for one same-owner hypothesis with inherited context."
-    ]
-  },
-  "stabilityCredit": "local-proof-only",
-  "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
-  "codeQualityAdmission": {
-    "reason": "active-guardrail-requirement",
-    "evidence": "The package is generated from npm run audit:file-size -- --top 250 for src/control-plane/recovery-protocol-snapshot.js; closure proof must make npm run audit:file-size -- --strict src/control-plane/recovery-protocol-snapshot.js pass."
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": {
+      "commands": [
+        "npm run audit:file-size -- --strict src/bootstrap/phases/contact-seed-phase.js src/bootstrap/phases/contact-seed-failure-signals.js",
+        "node --check src/bootstrap/phases/contact-seed-phase.js",
+        "node --check src/bootstrap/phases/contact-seed-failure-signals.js",
+        "node --test test/bootstrap/node-joining-service.test-part-8.js",
+        "git diff --check -- src/bootstrap/phases/contact-seed-phase.js src/bootstrap/phases/contact-seed-failure-signals.js",
+        "git diff --check --no-index /dev/null src/bootstrap/phases/contact-seed-failure-signals.js"
+      ]
+    }
   }
 }
 -->
 
 ## Why
 
-src/control-plane/recovery-protocol-snapshot.js is a remaining oversized source file at 858/800 lines. This package owns one disjoint target in the zero-oversized backlog so parallel executors can refactor it without crossing package scopes.
+src/bootstrap/phases/contact-seed-phase.js is a remaining oversized source file at 878/800 lines. This package owns one disjoint target in the zero-oversized backlog so parallel executors can refactor it without crossing package scopes.
 
 ## Scope Basis
 
-Approved maintenance/refactor scope from the active rolling-restart stability sprint. The May 24 full file-size audit reports src/control-plane/recovery-protocol-snapshot.js at 858/800 lines; closure must bring this file below the configured threshold without changing behavior or reducing coverage.
+Approved maintenance/refactor scope from the active rolling-restart stability sprint. The May 24 full file-size audit reports src/bootstrap/phases/contact-seed-phase.js at 878/800 lines; closure must bring this file below the configured threshold without changing behavior or reducing coverage.
 
 ## Workflow Lane
 
 - Selected lane: `lightweight-maintenance`
-- Why this lane is sufficient: bounded workflow/tooling scope unless changed.
+- Why this lane is sufficient: bounded source file-size refactor with no public
+  contract or behavior change intended.
 - Escalation trigger to a heavier lane: runtime ownership, shared contract, or representative scenario evidence changes.
 
 ## Core Logic Brief
@@ -101,8 +99,8 @@ Approved maintenance/refactor scope from the active rolling-restart stability sp
 ## Rerun Decision Gate
 
 - Source artifact: `none`
-- Route owner: `control_plane_file_size_owner`
-- Route boundary: `source_control_plane_recovery_protocol_snapshot_file_size_refactor`
+- Route owner: `bootstrap_file_size_owner`
+- Route boundary: `source_bootstrap_phases_contact_seed_phase_file_size_refactor`
 - Route dominant reason: `oversized_file_ratchet`
 - Route causal outcome: `pending-before-rerun`
 - Stop mode: `pending-before-rerun`
@@ -140,7 +138,8 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. src/control-plane/recovery-protocol-snapshot.js
+1. src/bootstrap/phases/contact-seed-phase.js
+2. src/bootstrap/phases/contact-seed-failure-signals.js
 
 ## Out Of Scope
 
@@ -153,11 +152,11 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex-spark`
 - Scope shape: `leaf-slice`
 - Output profile: `medium`
-- Owned files: `src/control-plane/recovery-protocol-snapshot.js`
+- Owned files: `src/bootstrap/phases/contact-seed-phase.js`, `src/bootstrap/phases/contact-seed-failure-signals.js`
 - Forbidden files: `test/`, `runtime ownership or public contract changes`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run audit:file-size -- --strict src/control-plane/recovery-protocol-snapshot.js`, `node --check src/control-plane/recovery-protocol-snapshot.js`, `git diff --check -- src/control-plane/recovery-protocol-snapshot.js`
+- Focused proof: `npm run audit:file-size -- --strict src/bootstrap/phases/contact-seed-phase.js src/bootstrap/phases/contact-seed-failure-signals.js`, `node --check src/bootstrap/phases/contact-seed-phase.js`, `node --check src/bootstrap/phases/contact-seed-failure-signals.js`, `node --test test/bootstrap/node-joining-service.test-part-8.js`, `git diff --check -- src/bootstrap/phases/contact-seed-phase.js src/bootstrap/phases/contact-seed-failure-signals.js`, `git diff --check --no-index /dev/null src/bootstrap/phases/contact-seed-failure-signals.js`
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split
@@ -182,12 +181,15 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: executor; files-changed: target file plus semantically named helper/split files added to this package before pre-impl; validation: focused proof and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: verification-fix; owner: verifier_fixer; files-changed: package-owned files only; validation: strict file-size proof, syntax/focused test proof, and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: <validated|not-needed>.
+- [x] action: implementation; owner: executor; files-changed: src/bootstrap/phases/contact-seed-phase.js, src/bootstrap/phases/contact-seed-failure-signals.js, work/packages/done-20260524-oversized-bootstrap-phases-contact-seed-phase.md; validation: strict file-size audit, node --check on touched JS, focused import/prototype smoke, focused bootstrap contact-seed test, tracked whitespace diff check, and no-index whitespace check for untracked helper passed; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: verification-fix; owner: verifier_fixer; files-changed: package-owned files only; validation: parent revalidated strict file-size proof, syntax proof, focused bootstrap contact-seed test 62/62, import smoke, and whitespace proof passed; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: none; validation: no ledger update needed before package closure; outcome: not-needed.
 
 ## Validation
 
-1. npm run audit:file-size -- --strict src/control-plane/recovery-protocol-snapshot.js
-2. node --check src/control-plane/recovery-protocol-snapshot.js
-3. git diff --check -- src/control-plane/recovery-protocol-snapshot.js
+1. npm run audit:file-size -- --strict src/bootstrap/phases/contact-seed-phase.js src/bootstrap/phases/contact-seed-failure-signals.js
+2. node --check src/bootstrap/phases/contact-seed-phase.js
+3. node --check src/bootstrap/phases/contact-seed-failure-signals.js
+4. node --test test/bootstrap/node-joining-service.test-part-8.js
+5. git diff --check -- src/bootstrap/phases/contact-seed-phase.js src/bootstrap/phases/contact-seed-failure-signals.js
+6. git diff --check --no-index /dev/null src/bootstrap/phases/contact-seed-failure-signals.js
