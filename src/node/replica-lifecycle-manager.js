@@ -17,7 +17,7 @@ import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
-import {SERVICE_TYPE, TYPEOF} from '../constants/index.js';
+import {TYPEOF} from '../constants/index.js';
 import {STORAGE_DEFAULT} from '../storage/storage-constants.js';
 import {assertCritical} from '../utils/assert.js';
 import {
@@ -40,11 +40,10 @@ import {
   REPLICA_LIFECYCLE_VALID_TRANSITIONS,
 } from './replica-lifecycle-constants.js';
 import {ReplicaHandler} from './replica-handler.js';
+import {
+  runReplicaLifecycleRecovery,
+} from './replica-lifecycle-recovery.js';
 
-const LOCAL_NUM_ZERO = 0;
-const LOCAL_STR_1EYB6 = 'Skipped stale replica recovery failure update';
-const LOCAL_STR_13LAG = 'Skipped stale replica recovery stop update';
-const LOCAL_STR_CRITICAL = 'critical';
 const LOCAL_STR_A2VUY = 'Failed to shut down delegated replica handler';
 
 /**
@@ -67,32 +66,6 @@ const MessageType = REPLICA_LIFECYCLE_MESSAGE_TYPE;
  * ACK status values.
  */
 const AckStatus = REPLICA_LIFECYCLE_ACK_STATUS;
-
-function guardedMutationApplied(result) {
-  if (result?.success === false) {
-    return false;
-  }
-  const affectedRows = Number(result?.partitionResult?.affectedRows);
-  return !Number.isFinite(affectedRows) ||
-    affectedRows > REPLICA_LIFECYCLE_NUM.ZERO;
-}
-
-function buildObservedReplicaWhereClause(service) {
-  const whereClause = {
-    service_id: service.service_id,
-  };
-  if (typeof service?.node_id === TYPEOF.STRING && service.node_id.length > LOCAL_NUM_ZERO) {
-    whereClause.node_id = service.node_id;
-  }
-  if (typeof service?.status === TYPEOF.STRING && service.status.length > LOCAL_NUM_ZERO) {
-    whereClause.status = service.status;
-  }
-  if (Number.isFinite(service?.updated_at)) {
-    whereClause.updated_at = service.updated_at;
-  }
-  return whereClause;
-}
-
 
 /**
  * ReplicaLifecycleManager handles CREATE_REPLICA and REMOVE_REPLICA messages.
@@ -590,134 +563,7 @@ class ReplicaLifecycleManager extends EventEmitter {
    * @return {Promise<void>}
    */
   async handleNodeRecovery() {
-    this.logger.info(REPLICA_LIFECYCLE_LOG_MSG.RECOVERY_START, {
-      nodeId: this.nodeId,
-    });
-
-    assertCritical(
-      this.systemTableCache,
-      REPLICA_LIFECYCLE_ERROR_MSG.MISSING_SYSTEM_TABLE_CACHE,
-    );
-
-    // Query services table for replicas on this node in transitional states
-    const services = this.systemTableCache.filter(
-      SYSTEM_TABLE_NAME.SERVICES,
-      (service) =>
-        service.node_id === this.nodeId &&
-        service.service_type === SERVICE_TYPE.PARTITION &&
-        [
-          ReplicaStatus.STARTING,
-          ReplicaStatus.SYNCING,
-          ReplicaStatus.STOPPING,
-        ].includes(service.status),
-    );
-
-    this.logger.info(REPLICA_LIFECYCLE_LOG_MSG.RECOVERY_FOUND, {
-      count: services.length,
-      nodeId: this.nodeId,
-    });
-
-    for (const service of services) {
-      const {service_id: serviceId, partition_id: partitionId, status} = service;
-
-      this.logger.info(REPLICA_LIFECYCLE_LOG_MSG.RECOVERY_PROCESSING, {
-        replicaId: serviceId,
-        partitionId,
-        status,
-        nodeId: this.nodeId,
-      });
-
-      try {
-        if (status === ReplicaStatus.STARTING || status === ReplicaStatus.SYNCING) {
-          // Mark 'starting'/'syncing' replicas as 'failed'
-          const failResult = await this.getControlPlaneSystemTableGateway()
-            .submitMutation({
-              operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
-              tableName: SYSTEM_TABLE_NAME.SERVICES,
-              whereClause: buildObservedReplicaWhereClause(service),
-              data: {
-                status: ReplicaStatus.FAILED,
-                error_message:
-                  REPLICA_LIFECYCLE_ERROR_MSG.RECOVERY_CLEANUP_ERROR,
-              },
-            }, {
-              workClass: PRESSURE_WORK_CLASS.CRITICAL,
-              deliveryPriority: 'critical',
-            });
-          if (!guardedMutationApplied(failResult)) {
-            this.logger.debug(LOCAL_STR_1EYB6, {
-              replicaId: serviceId,
-              partitionId,
-              status,
-              nodeId: this.nodeId,
-            });
-            continue;
-          }
-
-          // Clean up local resources
-          await this.cleanupReplicaResources(partitionId, serviceId);
-
-          this.logger.info(REPLICA_LIFECYCLE_LOG_MSG.RECOVERY_MARKED_FAILED, {
-            replicaId: serviceId,
-            previousStatus: status,
-            nodeId: this.nodeId,
-          });
-        } else if (status === ReplicaStatus.STOPPING) {
-          // Complete removal for 'stopping' replicas
-          const stopResult = await this.getControlPlaneSystemTableGateway()
-            .submitMutation({
-              operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
-              tableName: SYSTEM_TABLE_NAME.SERVICES,
-              whereClause: buildObservedReplicaWhereClause(service),
-              data: {status: ReplicaStatus.STOPPED},
-            }, {
-              workClass: PRESSURE_WORK_CLASS.CRITICAL,
-              deliveryPriority: 'critical',
-            });
-          if (!guardedMutationApplied(stopResult)) {
-            this.logger.debug(LOCAL_STR_13LAG, {
-              replicaId: serviceId,
-              partitionId,
-              nodeId: this.nodeId,
-            });
-            continue;
-          }
-
-          await this.getControlPlaneSystemTableGateway().submitMutation({
-            operation: CONTROL_PLANE_MUTATION_OPERATION.DELETE,
-            tableName: SYSTEM_TABLE_NAME.SERVICES,
-            whereClause: {
-              service_id: serviceId,
-              status: ReplicaStatus.STOPPED,
-            },
-          }, {
-            workClass: PRESSURE_WORK_CLASS.CRITICAL,
-            deliveryPriority: LOCAL_STR_CRITICAL,
-          });
-
-          // Clean up local resources
-          await this.cleanupReplicaResources(partitionId, serviceId);
-
-          this.logger.info(REPLICA_LIFECYCLE_LOG_MSG.RECOVERY_COMPLETED_REMOVAL, {
-            replicaId: serviceId,
-            nodeId: this.nodeId,
-          });
-        }
-      } catch (error) {
-        this.logger.error(REPLICA_LIFECYCLE_LOG_MSG.RECOVERY_FAILED, {
-          replicaId: serviceId,
-          status,
-          error: error.message,
-          nodeId: this.nodeId,
-        });
-        throw error;
-      }
-    }
-
-    this.emit(REPLICA_LIFECYCLE_EVENT.RECOVERY_COMPLETE, {
-      nodeId: this.nodeId,
-      orphanedCount: services.length,
-    });
+    await runReplicaLifecycleRecovery(this);
   }
 
   /**

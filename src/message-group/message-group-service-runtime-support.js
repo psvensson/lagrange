@@ -82,6 +82,18 @@ const MESSAGE_GROUP_SERVICE_LITERAL = Object.freeze({
   SHUTDOWN: 'shutdown',
 });
 
+const ROLE_PERSIST_ERROR_MSG = 'Failed to persist raft role update';
+const LEADER_NODE_PERSIST_ERROR_MSG =
+  'Failed to persist message group leader update';
+const FLUSH_SKIP_NOT_OWNER = 'not-owner';
+const FLUSH_SKIP_READY = 'ready';
+const FLUSH_SKIP_DISABLED = 'disabled';
+const FORWARD_TOPOLOGY_REPAIR_DEFAULT = Object.freeze({
+  COOLDOWN_MS: 1000,
+  FAILURE_COOLDOWN_MS: 5000,
+  NO_CHANGE_COOLDOWN_MS: 2000,
+  QUERY_TIMEOUT_MS: 1500,
+});
 const CDC_FORWARD_MAX_RELAY_DEPTH = NUM.TWO;
 const CDC_FORWARD_ERROR_DETAIL_MAX_LENGTH = NUM.TWO_HUNDRED_FIFTY_SIX;
 const CDC_FORWARD_ERROR_TRUNCATION_SUFFIX = '...[truncated]';
@@ -131,6 +143,24 @@ function buildDeferredCdcForwardError(message, retryAfterMs = NUM.ZERO) {
   error.deferRetry = true;
   error.retryAfterMs = Math.max(NUM.ONE, Math.floor(retryAfterMs || NUM.ZERO));
   return error;
+}
+
+/**
+ * Check if transport is WebSocket-based (MessageRouter).
+ * Detection is done via duck typing:
+ * - MessageRouter has: deliver(), initialize(), setServiceNodeResolver()
+ * @param {Object} transport - Transport to validate.
+ * @return {boolean} True if transport is WebSocket-based.
+ */
+function isWebSocketBasedMessageRouterTransport(transport) {
+  if (!transport) {
+    return false;
+  }
+  const hasDeliver = typeof transport.deliver === TYPEOF.FUNCTION;
+  const hasInitialize = typeof transport.initialize === TYPEOF.FUNCTION;
+  const isMessageRouter =
+    typeof transport.setServiceNodeResolver === TYPEOF.FUNCTION;
+  return hasDeliver && hasInitialize && isMessageRouter;
 }
 
 function wrapCdcProposeError(message, error) {
@@ -251,12 +281,19 @@ export {
   CDC_BATCH_COMMAND_TYPE,
   CDC_FORWARD_MAX_RELAY_DEPTH,
   DIRECT_ONLY_MESSAGE_TYPES,
+  FLUSH_SKIP_DISABLED,
+  FLUSH_SKIP_NOT_OWNER,
+  FLUSH_SKIP_READY,
+  FORWARD_TOPOLOGY_REPAIR_DEFAULT,
+  LEADER_NODE_PERSIST_ERROR_MSG,
   MESSAGE_DELIVERY_MODE,
   MESSAGE_GROUP_SERVICE_LITERAL,
+  ROLE_PERSIST_ERROR_MSG,
   boundCdcForwardErrorDetail,
   buildDeferredCdcForwardError,
   buildDeferredDeliveryError,
   buildLatencyCdcPropagationResult,
+  isWebSocketBasedMessageRouterTransport,
   normalizeMessageDeliveryMode,
   resolveTransportDeliveryOptions,
   shouldDeferImmediateDeliveryRetry,

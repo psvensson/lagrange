@@ -25,7 +25,6 @@ import {
   FAILURE_DETECTOR_ERROR_MSG,
   FAILURE_DETECTOR_EVENT,
   FAILURE_DETECTOR_LOG_MSG,
-  FAILURE_DETECTOR_REPLICA_TYPE,
   FAILURE_DETECTOR_SQL,
   FAILURE_DETECTOR_SUBSYSTEM,
   NODE_STATUS,
@@ -36,8 +35,15 @@ import {
   buildFailureRepairIntentRecord,
   createInMemoryFailureRepairIntentRecorder,
 } from './failure-repair-intent-contract.js';
-
-const LOCAL_NUM_ZERO = 0;
+import {
+  buildObservedNodeWhereClause,
+  guardedUpdateApplied,
+} from './failure-detector-control-plane-guards.js';
+import {
+  markFailureDetectorMessageGroupReplicaAsFailed,
+  markFailureDetectorPartitionReplicaAsFailed,
+  markFailureDetectorReplicasAsFailed,
+} from './failure-detector-replica-failures.js';
 
 /**
  * FailureDetector monitors node health via heartbeat timeouts.
@@ -48,49 +54,6 @@ const LOCAL_NUM_ZERO = 0;
  * - Layer 2 (Node-Level): Confirmation of node failures (15 seconds)
  */
 const NodeStatus = NODE_STATUS;
-
-function buildObservedNodeWhereClause(node) {
-  const whereClause = {
-    node_id: node.node_id,
-  };
-  if (typeof node?.status === TYPEOF.STRING && node.status.length > LOCAL_NUM_ZERO) {
-    whereClause.status = node.status;
-  }
-  if (Number.isFinite(node?.last_heartbeat)) {
-    whereClause.last_heartbeat = node.last_heartbeat;
-  }
-  if (Number.isFinite(node?.failed_at)) {
-    whereClause.failed_at = node.failed_at;
-  }
-  if (Number.isFinite(node?.recovered_at)) {
-    whereClause.recovered_at = node.recovered_at;
-  }
-  return whereClause;
-}
-
-function buildObservedReplicaWhereClause(replica) {
-  const whereClause = {
-    service_id: replica.service_id,
-  };
-  if (typeof replica?.node_id === TYPEOF.STRING && replica.node_id.length > LOCAL_NUM_ZERO) {
-    whereClause.node_id = replica.node_id;
-  }
-  if (typeof replica?.status === TYPEOF.STRING && replica.status.length > LOCAL_NUM_ZERO) {
-    whereClause.status = replica.status;
-  }
-  if (Number.isFinite(replica?.updated_at)) {
-    whereClause.updated_at = replica.updated_at;
-  }
-  return whereClause;
-}
-
-function guardedUpdateApplied(result) {
-  if (result?.success === false) {
-    return false;
-  }
-  const affectedRows = Number(result?.partitionResult?.affectedRows);
-  return !Number.isFinite(affectedRows) || affectedRows > NUM.ZERO;
-}
 
 class FailureDetector extends EventEmitter {
   /**
@@ -494,24 +457,7 @@ class FailureDetector extends EventEmitter {
    * @private
    */
   async markReplicasAsFailed(nodeId, now) {
-    // Mark partition replicas as failed
-    const partitionReplicas = await this.getPartitionReplicasOnNode(nodeId);
-    for (const replica of partitionReplicas) {
-      await this.markReplicaAsFailed(replica, nodeId, now);
-    }
-
-    // Mark message group replicas as failed
-    const messageGroupReplicas =
-      await this.getMessageGroupReplicasOnNode(nodeId);
-    for (const replica of messageGroupReplicas) {
-      await this.markMessageGroupReplicaAsFailed(replica, nodeId, now);
-    }
-
-    this.logger.info(FAILURE_DETECTOR_LOG_MSG.MARKED_REPLICAS_FAILED, {
-      nodeId,
-      partitionReplicas: partitionReplicas.length,
-      messageGroupReplicas: messageGroupReplicas.length,
-    });
+    return markFailureDetectorReplicasAsFailed(this, nodeId, now);
   }
 
   /**
@@ -523,62 +469,12 @@ class FailureDetector extends EventEmitter {
    * @private
    */
   async markReplicaAsFailed(replica, nodeId, now) {
-    try {
-      const result = await this.getControlPlaneSystemTableGateway().submitMutation({
-        operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
-        tableName: SYSTEM_TABLE_NAME.SERVICES,
-        whereClause: buildObservedReplicaWhereClause(replica),
-        data: {
-          status: ReplicaStatus.FAILED,
-          updated_at: now,
-        },
-      }, {
-        workClass: PRESSURE_WORK_CLASS.CRITICAL,
-        deliveryPriority: 'critical',
-      });
-      if (!guardedUpdateApplied(result)) {
-        this.logger.debug(
-          FAILURE_DETECTOR_LOG_MSG.STALE_PARTITION_REPLICA_FAILURE_UPDATE,
-          {
-            serviceId: replica.service_id,
-            nodeId,
-          },
-        );
-        return;
-      }
-
-      this.logger.warn(FAILURE_DETECTOR_LOG_MSG.MARK_PARTITION_REPLICA_FAILED, {
-        serviceId: replica.service_id,
-        partitionId: replica.partition_id,
-        nodeId,
-      });
-
-      await this.recordDurableRepairIntent({
-        transitionType:
-          FAILURE_REPAIR_INTENT_TRANSITION_TYPE.PARTITION_REPLICA_FAILURE,
-        nodeId,
-        serviceId: replica.service_id,
-        partitionId: replica.partition_id,
-        replicaType: FAILURE_DETECTOR_REPLICA_TYPE.PARTITION,
-        observedAt: now,
-      });
-
-      this.emit(FAILURE_DETECTOR_EVENT.REPLICA_FAILED, {
-        type: FAILURE_DETECTOR_REPLICA_TYPE.PARTITION,
-        serviceId: replica.service_id,
-        partitionId: replica.partition_id,
-        nodeId,
-      });
-    } catch (error) {
-      this.logger.error(
-        FAILURE_DETECTOR_LOG_MSG.MARK_PARTITION_REPLICA_FAILED_FAILED,
-        {
-          serviceId: replica.service_id,
-          error: error.message,
-        },
-      );
-      throw error;
-    }
+    return markFailureDetectorPartitionReplicaAsFailed(
+      this,
+      replica,
+      nodeId,
+      now,
+    );
   }
 
   /**
@@ -590,65 +486,12 @@ class FailureDetector extends EventEmitter {
    * @private
    */
   async markMessageGroupReplicaAsFailed(replica, nodeId, now) {
-    try {
-      const result = await this.getControlPlaneSystemTableGateway().submitMutation({
-        operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
-        tableName: SYSTEM_TABLE_NAME.SERVICES,
-        whereClause: buildObservedReplicaWhereClause(replica),
-        data: {
-          status: ReplicaStatus.FAILED,
-          updated_at: now,
-        },
-      }, {
-        workClass: PRESSURE_WORK_CLASS.CRITICAL,
-        deliveryPriority: 'critical',
-      });
-      if (!guardedUpdateApplied(result)) {
-        this.logger.debug(
-          FAILURE_DETECTOR_LOG_MSG.STALE_MESSAGE_GROUP_REPLICA_FAILURE_UPDATE,
-          {
-            serviceId: replica.service_id,
-            nodeId,
-          },
-        );
-        return;
-      }
-
-      this.logger.warn(
-        FAILURE_DETECTOR_LOG_MSG.MARK_MESSAGE_GROUP_REPLICA_FAILED,
-        {
-          serviceId: replica.service_id,
-          groupId: replica.group_id,
-          nodeId,
-        },
-      );
-
-      await this.recordDurableRepairIntent({
-        transitionType:
-          FAILURE_REPAIR_INTENT_TRANSITION_TYPE.MESSAGE_GROUP_REPLICA_FAILURE,
-        nodeId,
-        serviceId: replica.service_id,
-        groupId: replica.group_id,
-        replicaType: FAILURE_DETECTOR_REPLICA_TYPE.MESSAGE_GROUP,
-        observedAt: now,
-      });
-
-      this.emit(FAILURE_DETECTOR_EVENT.REPLICA_FAILED, {
-        type: FAILURE_DETECTOR_REPLICA_TYPE.MESSAGE_GROUP,
-        serviceId: replica.service_id,
-        groupId: replica.group_id,
-        nodeId,
-      });
-    } catch (error) {
-      this.logger.error(
-        FAILURE_DETECTOR_LOG_MSG.MARK_MESSAGE_GROUP_REPLICA_FAILED_FAILED,
-        {
-          serviceId: replica.service_id,
-          error: error.message,
-        },
-      );
-      throw error;
-    }
+    return markFailureDetectorMessageGroupReplicaAsFailed(
+      this,
+      replica,
+      nodeId,
+      now,
+    );
   }
 
   /**

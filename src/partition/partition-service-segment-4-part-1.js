@@ -1,8 +1,12 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {PartitionServiceSegment3} from './partition-service-segment-3.js';
 import {
-  assertSplitRoutingDescriptorEpoch as assertPartitionSplitRoutingDescriptorEpoch,
-} from './partition-split-routing.js';
+  assertSplitRoutingDescriptorEpochForService,
+  isSameSplitReplicationMetadata,
+  normalizeSplitTransitionMetadataForService,
+  reconstructSplitExecutionStateForService,
+  resolveSplitDescriptorEpochEvidenceForService,
+} from './partition-service-split-replication-state.js';
 
 const {
   CONTROL_PLANE_MUTATION_OPERATION,
@@ -114,50 +118,7 @@ class PartitionServiceSegment4Part1 extends PartitionServiceSegment3 {
    * @private
    */
   normalizeSplitTransitionMetadata(rawMetadata) {
-    if (!rawMetadata) {
-      return null;
-    }
-    let metadata = rawMetadata;
-    if (typeof rawMetadata === TYPEOF.STRING) {
-      try {
-        metadata = JSON.parse(rawMetadata);
-      } catch {
-        return null;
-      }
-    }
-    if (!metadata || typeof metadata !== PARTITION_SERVICE_LITERAL.OBJECT) {
-      return null;
-    }
-    const targetPartitionIds =
-      metadata[PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_IDS];
-    const targetPartitionVersion = Number(
-      metadata[PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_VERSION],
-    );
-    const primaryKeyColumn =
-      metadata[PARTITION_TRANSITION_METADATA_FIELD.PRIMARY_KEY_COLUMN];
-    const sourcePartitionId =
-      metadata[PARTITION_TRANSITION_METADATA_FIELD.SOURCE_PARTITION_ID];
-    if (
-      !primaryKeyColumn ||
-      !sourcePartitionId ||
-      sourcePartitionId !== this.partitionId ||
-      !Array.isArray(targetPartitionIds) ||
-      targetPartitionIds.length !== NUM.TWO ||
-      !targetPartitionIds[NUM.ZERO] ||
-      !targetPartitionIds[NUM.ONE] ||
-      !Number.isInteger(targetPartitionVersion)
-    ) {
-      return null;
-    }
-    return {
-      primaryKeyColumn,
-      sourcePartitionId,
-      splitKey: metadata[PARTITION_TRANSITION_METADATA_FIELD.SPLIT_KEY],
-      targetPartitionIds: [...targetPartitionIds],
-      targetPartitionVersion,
-      workflowId:
-        metadata[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ID] || null,
-    };
+    return normalizeSplitTransitionMetadataForService(this, rawMetadata);
   }
   /**
    * Build descriptor-epoch evidence for split mirror routing when the
@@ -167,28 +128,7 @@ class PartitionServiceSegment4Part1 extends PartitionServiceSegment3 {
    * @private
    */
   resolveSplitDescriptorEpochEvidence(metadata) {
-    if (!this.systemTableCache || typeof this.systemTableCache.get !==
-        PARTITION_SERVICE_TYPE.FUNCTION) {
-      return null;
-    }
-    const tableDescriptor =
-      this.systemTableCache.get(TABLES.TABLES, this.tableId) ||
-      this.systemTableCache.get(TABLES.TABLES, this.tableName) ||
-      null;
-    if (!tableDescriptor) {
-      return null;
-    }
-    const targetPartitionIds = Array.isArray(metadata?.targetPartitionIds) ?
-      metadata.targetPartitionIds :
-      [];
-    const targetPartitionDescriptors = targetPartitionIds.map((partitionId) =>
-      this.systemTableCache.get(TABLES.PARTITIONS, partitionId) || null,
-    );
-    return {
-      tableDescriptor,
-      targetPartitionDescriptors,
-      requireTargetDescriptors: targetPartitionIds.length > NUM.ZERO,
-    };
+    return resolveSplitDescriptorEpochEvidenceForService(this, metadata);
   }
   /**
    * Assert split routing still matches the descriptor epoch visible in
@@ -198,10 +138,7 @@ class PartitionServiceSegment4Part1 extends PartitionServiceSegment3 {
    * @private
    */
   assertSplitRoutingDescriptorEpoch(metadata) {
-    return assertPartitionSplitRoutingDescriptorEpoch(metadata, {
-      descriptorEpochEvidence:
-        this.resolveSplitDescriptorEpochEvidence(metadata),
-    });
+    return assertSplitRoutingDescriptorEpochForService(this, metadata);
   }
   /**
    * Determine whether two split-replication descriptors refer to the same split.
@@ -211,21 +148,7 @@ class PartitionServiceSegment4Part1 extends PartitionServiceSegment3 {
    * @private
    */
   isSameSplitReplication(left, right) {
-    if (!left || !right) {
-      return false;
-    }
-    return (
-      left.primaryKeyColumn === right.primaryKeyColumn &&
-      left.sourcePartitionId === right.sourcePartitionId &&
-      left.splitKey === right.splitKey &&
-      left.targetPartitionVersion === right.targetPartitionVersion &&
-      Array.isArray(left.targetPartitionIds) &&
-      Array.isArray(right.targetPartitionIds) &&
-      left.targetPartitionIds.length === right.targetPartitionIds.length &&
-      left.targetPartitionIds.every(
-        (partitionId, index) => partitionId === right.targetPartitionIds[index],
-      )
-    );
+    return isSameSplitReplicationMetadata(left, right);
   }
   /**
    * Reconstruct the transient split execution handle from durable
@@ -246,37 +169,7 @@ class PartitionServiceSegment4Part1 extends PartitionServiceSegment3 {
    *   or null if the durable state is not an active split.
    */
   reconstructSplitExecutionState(durableState) {
-    if (!durableState || !durableState.phase || !durableState.metadata) {
-      return null;
-    }
-    const phase = durableState.phase;
-    const activeSplitPhases = /* @__PURE__ */ new Set([
-      PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING,
-      PARTITION_TRANSITION_STATE.SPLIT_CATCHUP,
-      PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
-    ]);
-    if (!activeSplitPhases.has(phase)) {
-      return null;
-    }
-    const metadata = this.normalizeSplitTransitionMetadata(
-      durableState.metadata,
-    );
-    if (!metadata) {
-      return null;
-    }
-    this.splitReplication = {
-      metadata,
-      phase,
-      pendingEntries: [],
-      flushInFlight: false,
-      startedAt: Date.now(),
-      lastError: null,
-    };
-    this.logger.info(
-      PARTITION_SERVICE_LOG_MSG.SPLIT_REPLICATION_RECONSTRUCTED,
-      {partitionId: this.partitionId, phase, workflowId: metadata.workflowId},
-    );
-    return this.splitReplication;
+    return reconstructSplitExecutionStateForService(this, durableState);
   }
   /**
    * Run snapshot backfill and queued-delta catch-up for the active split.

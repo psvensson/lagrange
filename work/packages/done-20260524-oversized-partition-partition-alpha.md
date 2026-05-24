@@ -3,32 +3,43 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
-  "opened": "2026-05-24",
-  "lane": "lightweight-maintenance",
-  "scenario": "none",
-  "artifact": "none",
-  "playback": "none",
-  "owner": "partition_file_size_owner",
-  "boundary": "source_partition_partition_service_file_size_refactor_alpha",
-  "dominantReason": "oversized_file_ratchet",
-  "currentState": "Current file-size audit reports src/partition/partition-service-segment-4-part-1.js at 886/800 lines; no implementation is started in this package yet.",
-  "nextAction": "Extract semantically named helper modules from src/partition/partition-service-segment-4-part-1.js until it is below 800 lines, preserving behavior and the public entrypoint.",
-  "proof": [
-    "npm run audit:file-size -- --strict src/partition/partition-service-segment-4-part-1.js",
-    "node --check src/partition/partition-service-segment-4-part-1.js",
-    "git diff --check -- src/partition/partition-service-segment-4-part-1.js"
-  ],
-  "theoryLedgerRefs": [],
-  "writeScope": [
-    "src/partition/partition-service-segment-4-part-1.js"
-  ],
-  "handoffFiles": [],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [
-    "src/partition/partition-service-segment-4-part-1.js"
-  ],
+  "status": "done",
+  "intent": {
+    "opened": "2026-05-24",
+    "closed": "2026-05-24",
+    "lane": "lightweight-maintenance",
+    "scenario": "none",
+    "artifact": "none",
+    "playback": "none",
+    "owner": "partition_file_size_owner",
+    "boundary": "source_partition_partition_service_file_size_refactor_alpha",
+    "currentState": "Current file-size audit reports src/partition/partition-service-segment-4-part-1.js at 886/800 lines; implementation extracts split-replication state helpers to src/partition/partition-service-split-replication-state.js while preserving PartitionServiceSegment4Part1 prototype entrypoints.",
+    "nextAction": "Handoff validated oversized-file refactor without closing, staging, committing, pushing, package rename, or sprint edits.",
+    "dominantReason": "oversized_file_ratchet"
+  },
+  "scope": {
+    "writeScope": [
+      "src/partition/partition-service-segment-4-part-1.js",
+      "src/partition/partition-service-split-replication-state.js",
+      "work/packages/done-20260524-oversized-partition-partition-alpha.md"
+    ],
+    "handoffFiles": [],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": [],
+    "commitScope": [
+      "src/partition/partition-service-segment-4-part-1.js",
+      "src/partition/partition-service-split-replication-state.js",
+      "work/packages/done-20260524-oversized-partition-partition-alpha.md"
+    ]
+  },
+  "gates": {
+    "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
+    "stabilityCredit": "local-proof-only",
+    "codeQualityAdmission": {
+      "reason": "active-guardrail-requirement",
+      "evidence": "The package is generated from npm run audit:file-size -- --top 250 for src/partition/partition-service-segment-4-part-1.js; closure proof must make npm run audit:file-size -- --strict src/partition/partition-service-segment-4-part-1.js pass."
+    }
+  },
   "modelFit": {
     "packageClass": "bounded-implementation",
     "intendedMinimumModel": "gpt-5.3-codex-spark",
@@ -40,30 +51,17 @@
       "a frozen decision must be reopened"
     ]
   },
-  "modelFitSplit": {
-    "targetExecutionModel": "gpt-5.3-codex-spark",
-    "allowedDecisionDepth": "bounded local edit after owner, scope, proof, and forbidden files are named",
-    "safeToExecuteWhen": [
-      "owner, boundary, write scope, forbidden scope, proof, and kill rule stay as declared",
-      "the executor does not need to choose architecture, migrate ownership, or reinterpret representative evidence",
-      "the first focused proof gives a clear pass, fail, or escalate signal"
-    ],
-    "splitTriggers": [
-      "write scope expands beyond the declared lower-model lane",
-      "proof requires forbidden scope, cross-owner reasoning, or architecture route selection",
-      "the implementation needs to decide system behavior instead of executing a named local mechanism"
-    ],
-    "childPackageCandidates": [
-      "Prefer mechanical-maintenance for docs/templates/schema-only edits.",
-      "Prefer test-only-proof for tests that do not change runtime behavior.",
-      "Prefer bounded-experiment for one same-owner hypothesis with inherited context."
-    ]
-  },
-  "stabilityCredit": "local-proof-only",
-  "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
-  "codeQualityAdmission": {
-    "reason": "active-guardrail-requirement",
-    "evidence": "The package is generated from npm run audit:file-size -- --top 250 for src/partition/partition-service-segment-4-part-1.js; closure proof must make npm run audit:file-size -- --strict src/partition/partition-service-segment-4-part-1.js pass."
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": {
+      "commands": [
+        "npm run audit:file-size -- --strict src/partition/partition-service-segment-4-part-1.js src/partition/partition-service-split-replication-state.js",
+        "node --check src/partition/partition-service-segment-4-part-1.js",
+        "node --check src/partition/partition-service-split-replication-state.js",
+        "node --input-type=module -e \"const {PartitionServiceSegment4Part1}=await import('./src/partition/partition-service-segment-4-part-1.js'); const names=['normalizeSplitTransitionMetadata','resolveSplitDescriptorEpochEvidence','assertSplitRoutingDescriptorEpoch','isSameSplitReplication','reconstructSplitExecutionState']; for (const name of names) { if (typeof PartitionServiceSegment4Part1.prototype[name] !== 'function') throw new Error(name); }\"",
+        "git diff --check -- src/partition/partition-service-segment-4-part-1.js src/partition/partition-service-split-replication-state.js work/packages/done-20260524-oversized-partition-partition-alpha.md"
+      ]
+    }
   }
 }
 -->
@@ -141,6 +139,8 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 ## In Scope
 
 1. src/partition/partition-service-segment-4-part-1.js
+2. src/partition/partition-service-split-replication-state.js
+3. work/packages/done-20260524-oversized-partition-partition-alpha.md
 
 ## Out Of Scope
 
@@ -153,11 +153,11 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex-spark`
 - Scope shape: `leaf-slice`
 - Output profile: `medium`
-- Owned files: `src/partition/partition-service-segment-4-part-1.js`
+- Owned files: `src/partition/partition-service-segment-4-part-1.js`, `src/partition/partition-service-split-replication-state.js`, `work/packages/done-20260524-oversized-partition-partition-alpha.md`
 - Forbidden files: `test/`, `runtime ownership or public contract changes`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run audit:file-size -- --strict src/partition/partition-service-segment-4-part-1.js`, `node --check src/partition/partition-service-segment-4-part-1.js`, `git diff --check -- src/partition/partition-service-segment-4-part-1.js`
+- Focused proof: `npm run audit:file-size -- --strict src/partition/partition-service-segment-4-part-1.js src/partition/partition-service-split-replication-state.js`, `node --check src/partition/partition-service-segment-4-part-1.js`, `node --check src/partition/partition-service-split-replication-state.js`, focused import/prototype smoke, whitespace diff checks
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split
@@ -182,12 +182,15 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: executor; files-changed: target file plus semantically named helper/split files added to this package before pre-impl; validation: focused proof and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: verification-fix; owner: verifier_fixer; files-changed: package-owned files only; validation: strict file-size proof, syntax/focused test proof, and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: <validated|not-needed>.
+- [x] action: implementation; owner: executor; files-changed: src/partition/partition-service-segment-4-part-1.js (778 lines), src/partition/partition-service-split-replication-state.js (160 lines), work/packages/done-20260524-oversized-partition-partition-alpha.md; validation: `npm run audit:file-size -- --strict src/partition/partition-service-segment-4-part-1.js src/partition/partition-service-split-replication-state.js` -> 0/144 source over 800 and 0/60 test over 1500; `node --check src/partition/partition-service-segment-4-part-1.js` -> pass; `node --check src/partition/partition-service-split-replication-state.js` -> pass; focused import/prototype smoke for normalize/descriptor/same-split/reconstruct methods -> pass; `git diff --check -- ...` -> pass; `git diff --check --no-index -- /dev/null src/partition/partition-service-split-replication-state.js` -> exit 1 with no whitespace diagnostics, expected for no-index content difference; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: verification-fix; owner: verifier_fixer; files-changed: package-owned files only; validation: parent revalidated strict file-size proof, node --check proof, focused import/prototype smoke for split-replication entrypoints, tracked whitespace check, and helper no-index whitespace check passed; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: none; validation: no ledger update needed before package closure; outcome: not-needed.
 
 ## Validation
 
-1. npm run audit:file-size -- --strict src/partition/partition-service-segment-4-part-1.js
+1. npm run audit:file-size -- --strict src/partition/partition-service-segment-4-part-1.js src/partition/partition-service-split-replication-state.js
 2. node --check src/partition/partition-service-segment-4-part-1.js
-3. git diff --check -- src/partition/partition-service-segment-4-part-1.js
+3. node --check src/partition/partition-service-split-replication-state.js
+4. node --input-type=module -e "const {PartitionServiceSegment4Part1}=await import('./src/partition/partition-service-segment-4-part-1.js'); const names=['normalizeSplitTransitionMetadata','resolveSplitDescriptorEpochEvidence','assertSplitRoutingDescriptorEpoch','isSameSplitReplication','reconstructSplitExecutionState']; for (const name of names) { if (typeof PartitionServiceSegment4Part1.prototype[name] !== 'function') throw new Error(name); }"
+5. git diff --check -- src/partition/partition-service-segment-4-part-1.js src/partition/partition-service-split-replication-state.js work/packages/done-20260524-oversized-partition-partition-alpha.md
+6. No-index whitespace check for untracked helper: `git diff --check --no-index -- /dev/null src/partition/partition-service-split-replication-state.js` -> exit 1 with no output; no whitespace diagnostics.

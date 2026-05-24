@@ -3,32 +3,42 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
-  "opened": "2026-05-24",
-  "lane": "lightweight-maintenance",
-  "scenario": "none",
-  "artifact": "none",
-  "playback": "none",
-  "owner": "node_file_size_owner",
-  "boundary": "source_node_replica_lifecycle_manager_file_size_refactor",
-  "dominantReason": "oversized_file_ratchet",
-  "currentState": "Current file-size audit reports src/node/replica-lifecycle-manager.js at 903/800 lines; no implementation is started in this package yet.",
-  "nextAction": "Extract semantically named helper modules from src/node/replica-lifecycle-manager.js until it is below 800 lines, preserving behavior and the public entrypoint.",
-  "proof": [
-    "npm run audit:file-size -- --strict src/node/replica-lifecycle-manager.js",
-    "node --check src/node/replica-lifecycle-manager.js",
-    "git diff --check -- src/node/replica-lifecycle-manager.js"
-  ],
-  "theoryLedgerRefs": [],
-  "writeScope": [
-    "src/node/replica-lifecycle-manager.js"
-  ],
-  "handoffFiles": [],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [
-    "src/node/replica-lifecycle-manager.js"
-  ],
+  "status": "done",
+  "intent": {
+    "opened": "2026-05-24",
+    "closed": "2026-05-24",
+    "lane": "lightweight-maintenance",
+    "scenario": "none",
+    "artifact": "none",
+    "playback": "none",
+    "owner": "node_file_size_owner",
+    "boundary": "source_node_replica_lifecycle_manager_file_size_refactor",
+    "currentState": "Recovery-specific lifecycle logic has been extracted from src/node/replica-lifecycle-manager.js into src/node/replica-lifecycle-recovery.js; focused proof is green with line counts at 748 and 206.",
+    "nextAction": "Await independent verifier/closure pass; do not rename, stage, commit, push, or edit sprint files from this package execution.",
+    "dominantReason": "oversized_file_ratchet"
+  },
+  "scope": {
+    "writeScope": [
+      "src/node/replica-lifecycle-manager.js",
+      "src/node/replica-lifecycle-recovery.js",
+      "work/packages/done-20260524-oversized-node-replica-lifecycle-manager.md"
+    ],
+    "handoffFiles": [],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": [],
+    "commitScope": [
+      "src/node/replica-lifecycle-manager.js",
+      "src/node/replica-lifecycle-recovery.js"
+    ]
+  },
+  "gates": {
+    "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
+    "stabilityCredit": "local-proof-only",
+    "codeQualityAdmission": {
+      "reason": "active-guardrail-requirement",
+      "evidence": "The package is generated from npm run audit:file-size -- --top 250 for src/node/replica-lifecycle-manager.js; closure proof must make npm run audit:file-size -- --strict src/node/replica-lifecycle-manager.js src/node/replica-lifecycle-recovery.js pass."
+    }
+  },
   "modelFit": {
     "packageClass": "bounded-implementation",
     "intendedMinimumModel": "gpt-5.3-codex-spark",
@@ -40,30 +50,17 @@
       "a frozen decision must be reopened"
     ]
   },
-  "modelFitSplit": {
-    "targetExecutionModel": "gpt-5.3-codex-spark",
-    "allowedDecisionDepth": "bounded local edit after owner, scope, proof, and forbidden files are named",
-    "safeToExecuteWhen": [
-      "owner, boundary, write scope, forbidden scope, proof, and kill rule stay as declared",
-      "the executor does not need to choose architecture, migrate ownership, or reinterpret representative evidence",
-      "the first focused proof gives a clear pass, fail, or escalate signal"
-    ],
-    "splitTriggers": [
-      "write scope expands beyond the declared lower-model lane",
-      "proof requires forbidden scope, cross-owner reasoning, or architecture route selection",
-      "the implementation needs to decide system behavior instead of executing a named local mechanism"
-    ],
-    "childPackageCandidates": [
-      "Prefer mechanical-maintenance for docs/templates/schema-only edits.",
-      "Prefer test-only-proof for tests that do not change runtime behavior.",
-      "Prefer bounded-experiment for one same-owner hypothesis with inherited context."
-    ]
-  },
-  "stabilityCredit": "local-proof-only",
-  "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
-  "codeQualityAdmission": {
-    "reason": "active-guardrail-requirement",
-    "evidence": "The package is generated from npm run audit:file-size -- --top 250 for src/node/replica-lifecycle-manager.js; closure proof must make npm run audit:file-size -- --strict src/node/replica-lifecycle-manager.js pass."
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": {
+      "commands": [
+        "npm run audit:file-size -- --strict src/node/replica-lifecycle-manager.js src/node/replica-lifecycle-recovery.js",
+        "node --check src/node/replica-lifecycle-manager.js",
+        "node --check src/node/replica-lifecycle-recovery.js",
+        "node --test test/node/node-recovery-orphan-cleanup.property.test.js",
+        "git diff --check -- src/node/replica-lifecycle-manager.js work/packages/done-20260524-oversized-node-replica-lifecycle-manager.md"
+      ]
+    }
   }
 }
 -->
@@ -141,6 +138,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 ## In Scope
 
 1. src/node/replica-lifecycle-manager.js
+2. src/node/replica-lifecycle-recovery.js
 
 ## Out Of Scope
 
@@ -153,11 +151,11 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex-spark`
 - Scope shape: `leaf-slice`
 - Output profile: `medium`
-- Owned files: `src/node/replica-lifecycle-manager.js`
+- Owned files: `src/node/replica-lifecycle-manager.js`, `src/node/replica-lifecycle-recovery.js`
 - Forbidden files: `test/`, `runtime ownership or public contract changes`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run audit:file-size -- --strict src/node/replica-lifecycle-manager.js`, `node --check src/node/replica-lifecycle-manager.js`, `git diff --check -- src/node/replica-lifecycle-manager.js`
+- Focused proof: `npm run audit:file-size -- --strict src/node/replica-lifecycle-manager.js src/node/replica-lifecycle-recovery.js`, `node --check src/node/replica-lifecycle-manager.js`, `node --check src/node/replica-lifecycle-recovery.js`, `node --test test/node/node-recovery-orphan-cleanup.property.test.js`, `git diff --check -- src/node/replica-lifecycle-manager.js work/packages/done-20260524-oversized-node-replica-lifecycle-manager.md`
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split
@@ -182,12 +180,14 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: executor; files-changed: target file plus semantically named helper/split files added to this package before pre-impl; validation: focused proof and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: verification-fix; owner: verifier_fixer; files-changed: package-owned files only; validation: strict file-size proof, syntax/focused test proof, and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: <validated|not-needed>.
+- [x] action: implementation; owner: executor; files-changed: src/node/replica-lifecycle-manager.js, src/node/replica-lifecycle-recovery.js, work/packages/done-20260524-oversized-node-replica-lifecycle-manager.md; validation: pre-impl OK before edits and after helper scope update; strict file-size OK 0/144 source and 0/60 test over limit; node --check OK for both touched JS files; focused node recovery test pass 7/7; tracked whitespace diff OK; untracked helper no-index whitespace check produced no whitespace output and expected diff exit 1; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: verification-fix; owner: verifier_fixer; files-changed: package-owned files only; validation: parent revalidated strict file-size proof, node --check proof, focused node recovery orphan cleanup test 7/7, tracked whitespace check, and helper no-index whitespace check passed; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: none; validation: no ledger update needed before package closure; outcome: not-needed.
 
 ## Validation
 
-1. npm run audit:file-size -- --strict src/node/replica-lifecycle-manager.js
+1. npm run audit:file-size -- --strict src/node/replica-lifecycle-manager.js src/node/replica-lifecycle-recovery.js
 2. node --check src/node/replica-lifecycle-manager.js
-3. git diff --check -- src/node/replica-lifecycle-manager.js
+3. node --check src/node/replica-lifecycle-recovery.js
+4. node --test test/node/node-recovery-orphan-cleanup.property.test.js
+5. git diff --check -- src/node/replica-lifecycle-manager.js work/packages/done-20260524-oversized-node-replica-lifecycle-manager.md

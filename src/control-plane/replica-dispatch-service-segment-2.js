@@ -1,5 +1,13 @@
 import {REPLICA_DISPATCH_SERVICE_SHARED} from './replica-dispatch-service-shared.js';
 import {
+  buildDispatchReadinessGateError,
+  buildReplicaOperationVisibilityLagError,
+  buildRetryableSkippedDispatchError,
+  hasAuthoritativeReplicaOperationRowChanged,
+  resolveNodeStateUpdateBudgetFields,
+  shouldRetrySkippedDispatchResult,
+} from './replica-dispatch-service-dispatch-error-helpers.js';
+import {
   ReplicaDispatchReplayReadiness,
 } from './replica-dispatch-replay-readiness.js';
 
@@ -11,7 +19,6 @@ const {
   DISPATCH_READINESS_ERROR_CODE,
   DISPATCH_READINESS_ERROR_REASON,
   NUM,
-  OPERATION_WORKFLOW_OWNER_REASON,
   RECONCILE_REASON,
   REPLICA_DISPATCH_SERVICE_LITERAL,
   ReplicaOperationField,
@@ -29,46 +36,9 @@ const READY_NODE_DISPATCH_RETRY_CONTEXT_FIELD = Object.freeze({
   FORCE_READY_WATERMARK: 'forceReadyWatermark',
 });
 
-const RETRYABLE_DISPATCH_SKIPPED_REASONS = Object.freeze(
-  new Set([
-    OPERATION_WORKFLOW_OWNER_REASON.SHUTDOWN_IN_PROGRESS,
-  ]),
-);
-
 class ReplicaDispatchServiceSegment2 extends ReplicaDispatchReplayReadiness {
   resolveNodeStateUpdateBudgetFields(nodeRow) {
-    if (!nodeRow || typeof nodeRow !== TYPEOF.OBJECT) {
-      return {};
-    }
-
-    const budgetFields = {};
-    const storageBudgetBytes = Number(nodeRow?.[COLUMN.STORAGE_BUDGET_BYTES]);
-    if (Number.isFinite(storageBudgetBytes) && storageBudgetBytes > NUM.ZERO) {
-      budgetFields[COLUMN.STORAGE_BUDGET_BYTES] =
-        Math.floor(storageBudgetBytes);
-    }
-
-    const storageBudgetSource = nodeRow?.[COLUMN.STORAGE_BUDGET_SOURCE];
-    if (
-      typeof storageBudgetSource === TYPEOF.STRING &&
-      storageBudgetSource.length > NUM.ZERO
-    ) {
-      budgetFields[COLUMN.STORAGE_BUDGET_SOURCE] = storageBudgetSource;
-    }
-
-    const storageBudgetUpdatedAt = Number(
-      nodeRow?.[COLUMN.STORAGE_BUDGET_UPDATED_AT],
-    );
-    if (
-      Number.isFinite(storageBudgetUpdatedAt) &&
-      storageBudgetUpdatedAt > NUM.ZERO
-    ) {
-      budgetFields[COLUMN.STORAGE_BUDGET_UPDATED_AT] = Math.floor(
-        storageBudgetUpdatedAt,
-      );
-    }
-
-    return budgetFields;
+    return resolveNodeStateUpdateBudgetFields(nodeRow);
   }
 
   /**
@@ -316,10 +286,7 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchReplayReadiness {
    * @private
    */
   shouldRetrySkippedDispatchResult(dispatchResult) {
-    return (
-      dispatchResult?.skipped === true &&
-      RETRYABLE_DISPATCH_SKIPPED_REASONS.has(dispatchResult.reason)
-    );
+    return shouldRetrySkippedDispatchResult(dispatchResult);
   }
 
   /**
@@ -328,17 +295,10 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchReplayReadiness {
    * @private
    */
   buildRetryableSkippedDispatchError(dispatchResult) {
-    const error = new Error(
-      getControlPlaneErrorMessage(dispatchResult) ||
-        dispatchResult?.reason ||
-        REPLICA_DISPATCH_SERVICE_LITERAL.DISPATCH_UNSUCCESSFUL,
+    return buildRetryableSkippedDispatchError(
+      dispatchResult,
+      this.operationDispatchRetryAfterMs,
     );
-    error.reason =
-      dispatchResult?.reason ||
-      REPLICA_DISPATCH_SERVICE_LITERAL.DISPATCH_UNSUCCESSFUL;
-    error.deferRetry = true;
-    error.retryAfterMs = this.operationDispatchRetryAfterMs;
-    return error;
   }
 
   /**
@@ -415,24 +375,9 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchReplayReadiness {
    * @private
    */
   hasAuthoritativeReplicaOperationRowChanged(row, authoritativeRow) {
-    if (!row?.operation_id || !authoritativeRow?.operation_id) {
-      return false;
-    }
-    if (
-      row.workflow_step !== authoritativeRow.workflow_step ||
-      row.status !== authoritativeRow.status ||
-      row.replica_id !== authoritativeRow.replica_id ||
-      row.source_node_id !== authoritativeRow.source_node_id ||
-      row.target_node_id !== authoritativeRow.target_node_id
-    ) {
-      return true;
-    }
-    const staleUpdatedAt = Number(row.updated_at);
-    const authoritativeUpdatedAt = Number(authoritativeRow.updated_at);
-    return (
-      Number.isFinite(authoritativeUpdatedAt) &&
-      (!Number.isFinite(staleUpdatedAt) ||
-        authoritativeUpdatedAt > staleUpdatedAt)
+    return hasAuthoritativeReplicaOperationRowChanged(
+      row,
+      authoritativeRow,
     );
   }
 
@@ -444,29 +389,11 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchReplayReadiness {
    * @private
    */
   buildReplicaOperationVisibilityLagError(operationId, deferredOutcome = null) {
-    const error = new Error(
-      `${REPLICA_DISPATCH_SERVICE_LITERAL.CACHE_UPDATE_NOT_OBSERVED_FOR_REPLICA_OPERATION} ${operationId}`,
+    return buildReplicaOperationVisibilityLagError(
+      operationId,
+      deferredOutcome,
+      this.operationDispatchRetryAfterMs,
     );
-    error.code =
-      REPLICA_DISPATCH_SERVICE_LITERAL.REPLICA_OPERATION_VISIBILITY_LAG;
-    error.operationId = operationId;
-    error.deferRetry = true;
-    error.retryAfterMs = Number.isFinite(deferredOutcome?.retryAfterMs) ?
-      deferredOutcome.retryAfterMs :
-      this.operationDispatchRetryAfterMs;
-    if (
-      typeof deferredOutcome?.reasonCode === TYPEOF.STRING &&
-      deferredOutcome.reasonCode.length > NUM.ZERO
-    ) {
-      error.reasonCode = deferredOutcome.reasonCode;
-    }
-    if (
-      typeof deferredOutcome?.completionState === TYPEOF.STRING &&
-      deferredOutcome.completionState.length > NUM.ZERO
-    ) {
-      error.completionState = deferredOutcome.completionState;
-    }
-    return error;
   }
 
   /**
@@ -486,18 +413,14 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchReplayReadiness {
     retryAfterMs,
     cause = null,
   ) {
-    const error = new Error(message);
-    error.code = code;
-    error.targetNodeId = targetNodeId || null;
-    error.deferRetry = true;
-    error.retryAfterMs =
-      Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO ?
-        retryAfterMs :
-        this.operationDispatchRetryAfterMs;
-    if (cause) {
-      error.cause = cause;
-    }
-    return error;
+    return buildDispatchReadinessGateError(
+      targetNodeId,
+      message,
+      code,
+      retryAfterMs,
+      this.operationDispatchRetryAfterMs,
+      cause,
+    );
   }
 
   /**
@@ -864,19 +787,6 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchReplayReadiness {
     );
   }
 
-  /**
-   * Enqueue a locally owned replica operation row for dispatch reconciliation.
-   * Cache and CDC visibility can arrive on different nodes or at different
-   * times, so both paths must converge on the same local-owner gate. SENDING
-   * rows remain replayable because retryable dispatch failures deliberately
-   * park persisted workflow state in SENDING until the owner re-arms it.
-   * @param {Object} row - Replica operation row.
-   * @param {Object} reasons - Reconcile reason overrides.
-   * @param {string} reasons.pendingReason - Reason for pending rows.
-   * @param {string} reasons.replaceActiveReason - Reason for active REPLACE rows.
-   * @return {boolean} True when a reconcile item was enqueued.
-   * @private
-   */
 }
 
 export {ReplicaDispatchServiceSegment2};
