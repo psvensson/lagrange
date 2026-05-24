@@ -38,6 +38,10 @@ import {
   formatStateMachinePressurePreflightSummary,
   runStateMachinePressurePreflight,
 } from './harness/state-machine-pressure-preflight.js';
+import {
+  createDistributedRunPhaseEventHelpers,
+} from './run-phase-event-helpers.js';
+import {createDistributedRunArgHelpers} from './run-args-helpers.js';
 import {createDistributedRunRuntimeBundle} from './run-runtime-helpers.js';
 import {
   CLI,
@@ -226,6 +230,22 @@ const SUMMARY_FIXED_DECIMALS_RATE = 1;
 const SUMMARY_FIXED_DECIMALS_RATIO = 2;
 const SUMMARY_FIXED_DECIMALS_OPS = 1;
 
+const {
+  createScenarioPhaseEventSink,
+  formatScenarioPhaseEventLine,
+  installScenarioPhaseEventSink,
+  resolveClusterSize,
+} = createDistributedRunPhaseEventHelpers({
+  SCENARIO_PHASE_LOG_PREFIX,
+  SCENARIO_PHASE_EVENT_TYPE_START,
+  SCENARIO_PHASE_EVENT_TYPE_END,
+  SCENARIO_PHASE_EVENT_TYPE_PROGRESS,
+  SCENARIO_PHASE_EVENT_TYPE_LAST_MEANINGFUL_CHANGE,
+  SCENARIO_PHASE_EVENT_TYPE_NO_PROGRESS_WARNING,
+  SCENARIO_PHASE_EVENT_TYPE_FAILED_NO_PROGRESS,
+});
+const {parseArgs} = createDistributedRunArgHelpers({CLI});
+
 const DISTRIBUTED_RUN_RUNTIME_BUNDLE = createDistributedRunRuntimeBundle({
   LIVE_LOG_PREFIX,
   LIVE_LOG_NODE_EXCLUDED,
@@ -387,176 +407,6 @@ const {
   buildHistoricalBaselineIndex,
   formatRunSummary,
 } = DISTRIBUTED_RUN_RUNTIME_BUNDLE;
-
-function formatScenarioPhaseEventValue(value) {
-  if (Array.isArray(value)) {
-    return JSON.stringify(value);
-  }
-  if (value && typeof value === 'object') {
-    return JSON.stringify(value);
-  }
-  return String(value);
-}
-
-function formatScenarioPhaseEventDetails(details) {
-  if (!details || typeof details !== 'object' || Array.isArray(details)) {
-    return '';
-  }
-  return Object.entries(details)
-    .filter(([, value]) => value !== undefined)
-    .map(([key, value]) => `${key}=${formatScenarioPhaseEventValue(value)}`)
-    .join(' ');
-}
-
-function formatScenarioPhaseEventLine(scenarioName, event) {
-  if (!event || typeof event !== 'object') {
-    return '';
-  }
-  const scenario = String(scenarioName || 'scenario');
-  const phase = String(event.phase || 'unknown');
-  const type = String(event.type || '');
-  const message = typeof event.message === 'string' ? event.message : '';
-  const detailSuffix = formatScenarioPhaseEventDetails(event.details);
-
-  switch (type) {
-  case SCENARIO_PHASE_EVENT_TYPE_START:
-    return `${SCENARIO_PHASE_LOG_PREFIX}${scenario} ${phase} start`;
-  case SCENARIO_PHASE_EVENT_TYPE_END:
-    return `${SCENARIO_PHASE_LOG_PREFIX}${scenario} ${phase} end: ` +
-      `status=${String(event.status || 'unknown')} ` +
-      `durationMs=${Number(event.durationMs || 0)}`;
-  case SCENARIO_PHASE_EVENT_TYPE_PROGRESS:
-    return `${SCENARIO_PHASE_LOG_PREFIX}${scenario} ${phase} progress: ` +
-      `${message}` +
-      (detailSuffix ? ` ${detailSuffix}` : '');
-  case SCENARIO_PHASE_EVENT_TYPE_LAST_MEANINGFUL_CHANGE:
-    return `${SCENARIO_PHASE_LOG_PREFIX}${scenario} ${phase} change: ` +
-      `${message}` +
-      (detailSuffix ? ` ${detailSuffix}` : '');
-  case SCENARIO_PHASE_EVENT_TYPE_NO_PROGRESS_WARNING:
-    return `${SCENARIO_PHASE_LOG_PREFIX}${scenario} ${phase} warning: ` +
-      `${message}` +
-      (detailSuffix ? ` ${detailSuffix}` : '');
-  case SCENARIO_PHASE_EVENT_TYPE_FAILED_NO_PROGRESS:
-    return `${SCENARIO_PHASE_LOG_PREFIX}${scenario} ${phase} stalled: ` +
-      `${message}` +
-      (detailSuffix ? ` ${detailSuffix}` : '');
-  default:
-    return '';
-  }
-}
-
-function composeScenarioPhaseEventSinks(existingSink, nextSink) {
-  if (typeof existingSink !== 'function') {
-    return typeof nextSink === 'function' ? nextSink : null;
-  }
-  if (typeof nextSink !== 'function') {
-    return existingSink;
-  }
-  return (event) => {
-    try {
-      existingSink(event);
-    } catch (_error) {
-      // Progress sinks must not affect scenario execution.
-    }
-    nextSink(event);
-  };
-}
-
-function createScenarioPhaseEventSink(verbose, scenarioName) {
-  if (!verbose) {
-    return null;
-  }
-  return (event) => {
-    const line = formatScenarioPhaseEventLine(scenarioName, event);
-    if (!line) {
-      return;
-    }
-    process.stdout.write(line + '\n');
-  };
-}
-
-function installScenarioPhaseEventSink(cluster, scenarioName, sink) {
-  if (!cluster || typeof sink !== 'function') {
-    return;
-  }
-  const scenarioOverrides =
-    cluster._scenarioOverrides && typeof cluster._scenarioOverrides === 'object' ?
-      cluster._scenarioOverrides :
-      {};
-  const benchmarkOverrides =
-    scenarioOverrides.postgresBaselineComparison &&
-      typeof scenarioOverrides.postgresBaselineComparison === 'object' ?
-      scenarioOverrides.postgresBaselineComparison :
-      {};
-
-  cluster._scenarioOverrides = {
-    ...scenarioOverrides,
-    postgresBaselineComparison: {
-      ...benchmarkOverrides,
-      phaseEventSink: composeScenarioPhaseEventSinks(
-        benchmarkOverrides.phaseEventSink,
-        sink,
-      ),
-    },
-  };
-}
-
-function resolveClusterSize(config) {
-  return Number.isInteger(config?.size) && config.size > 0 ?
-    config.size :
-    null;
-}
-
-/**
- * Parse CLI arguments from argv.
- * @param {Array<string>} argv - process.argv.slice(2)
- * @returns {{config: string, scenario: string|null,
- *   output: string, verbose: boolean, fastLocal: boolean|null,
- *   deterministicDebug: boolean|null}}
- */
-function parseArgs(argv) {
-  let config = CLI.DEFAULT_CONFIG;
-  let scenario = null;
-  let output = CLI.DEFAULT_OUTPUT;
-  let verbose = false;
-  let fastLocal = null;
-  let deterministicDebug = null;
-  let contract = null;
-
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i];
-    if (arg === CLI.ARG_CONFIG && i + 1 < argv.length) {
-      config = argv[++i];
-    } else if (arg === CLI.ARG_SCENARIO && i + 1 < argv.length) {
-      scenario = argv[++i];
-    } else if (arg === CLI.ARG_OUTPUT && i + 1 < argv.length) {
-      output = argv[++i];
-    } else if (arg === CLI.ARG_VERBOSE) {
-      verbose = true;
-    } else if (arg === CLI.ARG_FAST_LOCAL) {
-      fastLocal = true;
-    } else if (arg === CLI.ARG_NO_FAST_LOCAL) {
-      fastLocal = false;
-    } else if (arg === CLI.ARG_DETERMINISTIC_DEBUG) {
-      deterministicDebug = true;
-    } else if (arg === CLI.ARG_NO_DETERMINISTIC_DEBUG) {
-      deterministicDebug = false;
-    } else if (arg === '--contract' && i + 1 < argv.length) {
-      contract = argv[++i];
-    }
-  }
-
-  return {
-    config,
-    scenario,
-    output,
-    verbose,
-    fastLocal,
-    deterministicDebug,
-    contract,
-  };
-}
 
 function buildFastLocalSourceBind(cwd = process.cwd()) {
   const hostSourcePath = resolve(cwd, FAST_LOCAL_SOURCE_RELATIVE_PATH);

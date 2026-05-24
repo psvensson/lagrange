@@ -1,34 +1,45 @@
-# Split oversized test/support file test/control-plane/replica-dispatch-node-state-update.test-part-3.js
+# Split oversized test/support file test/distributed/run.js
 
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
-  "opened": "2026-05-24",
-  "lane": "lightweight-maintenance",
-  "scenario": "none",
-  "artifact": "none",
-  "playback": "none",
-  "owner": "test_quality_owner",
-  "boundary": "test_control_plane_replica_dispatch_node_state_update_file_size_refactor_bravo",
-  "dominantReason": "oversized_file_ratchet",
-  "currentState": "Current file-size audit reports test/control-plane/replica-dispatch-node-state-update.test-part-3.js at 1666/1500 lines; no implementation is started in this package yet.",
-  "nextAction": "Split semantically grouped test/support code from test/control-plane/replica-dispatch-node-state-update.test-part-3.js until it is below 1500 lines, preserving coverage and imports.",
-  "proof": [
-    "npm run audit:file-size -- --strict test/control-plane/replica-dispatch-node-state-update.test-part-3.js",
-    "node --check test/control-plane/replica-dispatch-node-state-update.test-part-3.js",
-    "git diff --check -- test/control-plane/replica-dispatch-node-state-update.test-part-3.js"
-  ],
-  "theoryLedgerRefs": [],
-  "writeScope": [
-    "test/control-plane/replica-dispatch-node-state-update.test-part-3.js"
-  ],
-  "handoffFiles": [],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [
-    "test/control-plane/replica-dispatch-node-state-update.test-part-3.js"
-  ],
+  "status": "done",
+  "intent": {
+    "opened": "2026-05-24",
+    "closed": "2026-05-24",
+    "lane": "lightweight-maintenance",
+    "scenario": "none",
+    "artifact": "none",
+    "playback": "none",
+    "owner": "test_quality_owner",
+    "boundary": "test_distributed_run_file_size_refactor",
+    "currentState": "CLI argument parsing and scenario phase-event helpers have been split into adjacent helper modules; strict file-size audit reports all touched JS files below the ratchet.",
+    "nextAction": "Close package after focused proof and closure validation.",
+    "dominantReason": "oversized_file_ratchet"
+  },
+  "scope": {
+    "writeScope": [
+      "test/distributed/run.js",
+      "test/distributed/run-phase-event-helpers.js",
+      "test/distributed/run-args-helpers.js"
+    ],
+    "handoffFiles": [],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": [],
+    "commitScope": [
+      "test/distributed/run.js",
+      "test/distributed/run-phase-event-helpers.js",
+      "test/distributed/run-args-helpers.js"
+    ]
+  },
+  "gates": {
+    "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
+    "stabilityCredit": "local-proof-only",
+    "codeQualityAdmission": {
+      "reason": "active-guardrail-requirement",
+      "evidence": "The package is generated from npm run audit:file-size -- --top 250 for test/distributed/run.js; closure proof must make npm run audit:file-size -- --strict test/distributed/run.js pass."
+    }
+  },
   "modelFit": {
     "packageClass": "bounded-implementation",
     "intendedMinimumModel": "gpt-5.3-codex-spark",
@@ -40,41 +51,29 @@
       "a frozen decision must be reopened"
     ]
   },
-  "modelFitSplit": {
-    "targetExecutionModel": "gpt-5.3-codex-spark",
-    "allowedDecisionDepth": "bounded local edit after owner, scope, proof, and forbidden files are named",
-    "safeToExecuteWhen": [
-      "owner, boundary, write scope, forbidden scope, proof, and kill rule stay as declared",
-      "the executor does not need to choose architecture, migrate ownership, or reinterpret representative evidence",
-      "the first focused proof gives a clear pass, fail, or escalate signal"
-    ],
-    "splitTriggers": [
-      "write scope expands beyond the declared lower-model lane",
-      "proof requires forbidden scope, cross-owner reasoning, or architecture route selection",
-      "the implementation needs to decide system behavior instead of executing a named local mechanism"
-    ],
-    "childPackageCandidates": [
-      "Prefer mechanical-maintenance for docs/templates/schema-only edits.",
-      "Prefer test-only-proof for tests that do not change runtime behavior.",
-      "Prefer bounded-experiment for one same-owner hypothesis with inherited context."
-    ]
-  },
-  "stabilityCredit": "local-proof-only",
-  "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
-  "codeQualityAdmission": {
-    "reason": "active-guardrail-requirement",
-    "evidence": "The package is generated from npm run audit:file-size -- --top 250 for test/control-plane/replica-dispatch-node-state-update.test-part-3.js; closure proof must make npm run audit:file-size -- --strict test/control-plane/replica-dispatch-node-state-update.test-part-3.js pass."
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": {
+      "commands": [
+        "npm run audit:file-size -- --strict test/distributed/run.js test/distributed/run-phase-event-helpers.js test/distributed/run-args-helpers.js",
+        "node --check test/distributed/run.js",
+        "node --check test/distributed/run-phase-event-helpers.js",
+        "node --check test/distributed/run-args-helpers.js",
+        "node --test --test-name-pattern \"parseArgs|formatScenarioPhaseEventLine\" test/distributed/harness/__tests__/run.test.js",
+        "git diff --check -- test/distributed/run.js test/distributed/run-phase-event-helpers.js test/distributed/run-args-helpers.js"
+      ]
+    }
   }
 }
 -->
 
 ## Why
 
-test/control-plane/replica-dispatch-node-state-update.test-part-3.js is a remaining oversized test/support file at 1666/1500 lines. This package owns one disjoint target in the zero-oversized backlog so parallel executors can refactor it without crossing package scopes.
+test/distributed/run.js is a remaining oversized test/support file at 1611/1500 lines. This package owns one disjoint target in the zero-oversized backlog so parallel executors can refactor it without crossing package scopes.
 
 ## Scope Basis
 
-Approved maintenance/refactor scope from the active rolling-restart stability sprint. The May 24 full file-size audit reports test/control-plane/replica-dispatch-node-state-update.test-part-3.js at 1666/1500 lines; closure must bring this file below the configured threshold without changing behavior or reducing coverage.
+Approved maintenance/refactor scope from the active rolling-restart stability sprint. The May 24 full file-size audit reports test/distributed/run.js at 1611/1500 lines; closure must bring this file below the configured threshold without changing behavior or reducing coverage.
 
 ## Workflow Lane
 
@@ -102,7 +101,7 @@ Approved maintenance/refactor scope from the active rolling-restart stability sp
 
 - Source artifact: `none`
 - Route owner: `test_quality_owner`
-- Route boundary: `test_control_plane_replica_dispatch_node_state_update_file_size_refactor_bravo`
+- Route boundary: `test_distributed_run_file_size_refactor`
 - Route dominant reason: `oversized_file_ratchet`
 - Route causal outcome: `pending-before-rerun`
 - Stop mode: `pending-before-rerun`
@@ -140,7 +139,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. test/control-plane/replica-dispatch-node-state-update.test-part-3.js
+1. test/distributed/run.js
+2. test/distributed/run-phase-event-helpers.js
+3. test/distributed/run-args-helpers.js
 
 ## Out Of Scope
 
@@ -153,11 +154,11 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex-spark`
 - Scope shape: `leaf-slice`
 - Output profile: `medium`
-- Owned files: `test/control-plane/replica-dispatch-node-state-update.test-part-3.js`
+- Owned files: `test/distributed/run.js`, `test/distributed/run-phase-event-helpers.js`, `test/distributed/run-args-helpers.js`
 - Forbidden files: `src/`, `coverage reduction or assertion deletion`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run audit:file-size -- --strict test/control-plane/replica-dispatch-node-state-update.test-part-3.js`, `node --check test/control-plane/replica-dispatch-node-state-update.test-part-3.js`, `git diff --check -- test/control-plane/replica-dispatch-node-state-update.test-part-3.js`
+- Focused proof: `npm run audit:file-size -- --strict test/distributed/run.js test/distributed/run-phase-event-helpers.js test/distributed/run-args-helpers.js`, `node --check test/distributed/run.js`, `node --check test/distributed/run-phase-event-helpers.js`, `node --check test/distributed/run-args-helpers.js`, `node --test --test-name-pattern "parseArgs|formatScenarioPhaseEventLine" test/distributed/harness/__tests__/run.test.js`, `git diff --check -- test/distributed/run.js test/distributed/run-phase-event-helpers.js test/distributed/run-args-helpers.js`
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split
@@ -182,12 +183,19 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: executor; files-changed: target file plus semantically named helper/split files added to this package before pre-impl; validation: focused proof and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: verification-fix; owner: verifier_fixer; files-changed: package-owned files only; validation: strict file-size proof, syntax/focused test proof, and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: <validated|not-needed>.
+- [x] action: implementation; owner: executor; files-changed: test/distributed/run.js, test/distributed/run-phase-event-helpers.js, test/distributed/run-args-helpers.js; validation: strict file-size proof, syntax proof, targeted run helper unit proof, and parent revalidated focused proof: yes; no ledger update; outcome: validated.
+- [x] action: verification-fix; owner: verifier_fixer; files-changed: package-owned files only; validation: strict file-size proof, syntax/focused test proof, and parent revalidated focused proof: yes; no ledger update; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: none; validation: not run because current-blocker files are outside this package scope and were not edited; no ledger update; outcome: not-needed.
+
+## Theory Ledger Update
+
+No ledger update: this package is a behavior-preserving test runner file-size split with no runtime, representative evidence, or causal theory change.
 
 ## Validation
 
-1. npm run audit:file-size -- --strict test/control-plane/replica-dispatch-node-state-update.test-part-3.js
-2. node --check test/control-plane/replica-dispatch-node-state-update.test-part-3.js
-3. git diff --check -- test/control-plane/replica-dispatch-node-state-update.test-part-3.js
+1. npm run audit:file-size -- --strict test/distributed/run.js test/distributed/run-phase-event-helpers.js test/distributed/run-args-helpers.js
+2. node --check test/distributed/run.js
+3. node --check test/distributed/run-phase-event-helpers.js
+4. node --check test/distributed/run-args-helpers.js
+5. node --test --test-name-pattern "parseArgs|formatScenarioPhaseEventLine" test/distributed/harness/__tests__/run.test.js
+6. git diff --check -- test/distributed/run.js test/distributed/run-phase-event-helpers.js test/distributed/run-args-helpers.js
