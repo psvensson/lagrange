@@ -1,8 +1,10 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {PartitionServiceSegment1} from './partition-service-segment-1.js';
+import {
+  createPartitionServiceTransactionSessionMethods,
+} from './partition-service-transaction-session-methods.js';
 
 const {
-  DEFAULT_TRANSACTION_SESSION_ID,
   ERRORS,
   NUM,
   PARTITION_SERVICE_COLUMN,
@@ -21,7 +23,6 @@ const {
   QUERY_PAYLOAD_FIELD_MIGRATION_OPERATION,
   RaftRole,
   SYSTEM_TABLE_NAME,
-  TYPEOF,
   isRaftPacket,
   resolveRaftTransportDeliveryOptions,
 } = PARTITION_SERVICE_SHARED;
@@ -671,144 +672,9 @@ class PartitionServiceSegment2Part1 extends PartitionServiceSegment1 {
       command,
     });
   }
-  /**
-   * Resolve the canonical transaction session ID.
-   * @param {string|null} sessionId - Requested session ID.
-   * @return {string} Canonical session ID.
-   * @private
-   */
-  normalizeTransactionSessionId(sessionId) {
-    return typeof sessionId === TYPEOF.STRING && sessionId.length > NUM.ZERO ?
-      sessionId :
-      DEFAULT_TRANSACTION_SESSION_ID;
-  }
-  /**
-   * Resolve one active session ID for transaction operations.
-   * @param {string|null} sessionId - Requested session ID.
-   * @return {string|null} Active session ID or null.
-   * @private
-   */
-  resolveActiveTransactionSessionId(sessionId) {
-    if (typeof sessionId === TYPEOF.STRING && sessionId.length > NUM.ZERO) {
-      return sessionId;
-    }
-    if (this.activeTransactions.has(DEFAULT_TRANSACTION_SESSION_ID)) {
-      return DEFAULT_TRANSACTION_SESSION_ID;
-    }
-    if (this.activeTransactions.size === NUM.ONE) {
-      return this.activeTransactions.keys().next().value || null;
-    }
-    return null;
-  }
-  /**
-   * Synchronize legacy transaction aliases for compatibility.
-   * @private
-   */
-  syncLegacyTransactionAliases() {
-    const defaultState = this.activeTransactions.get(
-      DEFAULT_TRANSACTION_SESSION_ID,
-    );
-    const fallbackState =
-      this.activeTransactions.size === NUM.ONE ?
-        this.activeTransactions.values().next().value :
-        null;
-    const defaultPreparedState = this.preparedTransactions.get(
-      DEFAULT_TRANSACTION_SESSION_ID,
-    );
-    const fallbackPreparedState =
-      this.preparedTransactions.size === NUM.ONE ?
-        this.preparedTransactions.values().next().value :
-        null;
-    const activeState =
-      defaultState ||
-      fallbackState ||
-      defaultPreparedState ||
-      fallbackPreparedState ||
-      null;
-    this.activeTransaction = activeState;
-    this.transactionOperations = activeState?.operations || [];
-  }
-  /**
-   * Resolve one transaction state by session.
-   * @param {string|null} sessionId - Requested session ID.
-   * @return {{sessionId: string, state: Object}|null} Resolved state.
-   * @private
-   */
-  resolveActiveTransactionState(sessionId = null) {
-    const resolvedSessionId = this.resolveActiveTransactionSessionId(sessionId);
-    if (!resolvedSessionId) {
-      return null;
-    }
-    const state = this.activeTransactions.get(resolvedSessionId) || null;
-    if (!state) {
-      return null;
-    }
-    return {sessionId: resolvedSessionId, state};
-  }
-  /**
-   * Resolve one prepared session ID for transaction operations.
-   * @param {string|null} sessionId - Requested session ID.
-   * @return {string|null} Prepared session ID or null.
-   * @private
-   */
-  resolvePreparedTransactionSessionId(sessionId) {
-    if (typeof sessionId === TYPEOF.STRING && sessionId.length > NUM.ZERO) {
-      return sessionId;
-    }
-    if (this.preparedTransactions.has(DEFAULT_TRANSACTION_SESSION_ID)) {
-      return DEFAULT_TRANSACTION_SESSION_ID;
-    }
-    if (this.preparedTransactions.size === NUM.ONE) {
-      return this.preparedTransactions.keys().next().value || null;
-    }
-    return null;
-  }
-  /**
-   * Resolve one prepared transaction state by session.
-   * @param {string|null} sessionId - Requested session ID.
-   * @return {{sessionId: string, state: Object}|null} Resolved state.
-   * @private
-   */
-  resolvePreparedTransactionState(sessionId = null) {
-    const resolvedSessionId =
-      this.resolvePreparedTransactionSessionId(sessionId);
-    if (!resolvedSessionId) {
-      return null;
-    }
-    const state = this.preparedTransactions.get(resolvedSessionId) || null;
-    if (!state) {
-      return null;
-    }
-    return {sessionId: resolvedSessionId, state};
-  }
-  /**
-   * Resolve one open transaction state by session across active and prepared
-   * phases.
-   * @param {string|null} sessionId - Requested session ID.
-   * @return {{sessionId: string, state: Object}|null} Resolved state.
-   * @private
-   */
-  resolveOpenTransactionState(sessionId = null) {
-    return (
-      this.resolveActiveTransactionState(sessionId) ||
-      this.resolvePreparedTransactionState(sessionId)
-    );
-  }
-  /**
-   * Build one prepare-lost response payload.
-   * @param {string} operation - Transaction operation.
-   * @param {string|null} sessionId - Session ID.
-   * @return {Object} Prepare-lost response payload.
-   * @private
-   */
-  buildPrepareLostResponse(operation, sessionId = null) {
-    return {
-      success: false,
-      operation,
-      partitionId: this.partitionId,
-      sessionId: this.normalizeTransactionSessionId(sessionId),
-      error: PARTITION_SERVICE_ERROR_MSG.PREPARE_LOST,
-    };
-  }
 }
+Object.assign(
+  PartitionServiceSegment2Part1.prototype,
+  createPartitionServiceTransactionSessionMethods(),
+);
 export {PartitionServiceSegment2Part1};

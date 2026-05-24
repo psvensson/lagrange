@@ -114,60 +114,27 @@ import {
   NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE,
   resolveNodeWebSocketAddress,
 } from '../transport/node-address-resolution.js';
+import {
+  AUTHORITATIVE_FALLBACK_OUTCOME,
+  AUTHORITATIVE_FALLBACK_PHASE,
+  AUTHORITATIVE_FALLBACK_RECENT_LIMIT,
+  AUTHORITATIVE_FALLBACK_REPAIR_BUDGET_MS,
+  AUTHORITATIVE_FALLBACK_RETRY_DELAY_MS,
+  AUTHORITATIVE_FALLBACK_WINDOW_MS,
+  AUTHORITATIVE_READ_SOURCE,
+  CDC_INTEGRATION_SERVICE_ERROR,
+  CDC_INTEGRATION_SERVICE_LITERAL,
+  CDC_OWNER_HANDOFF_CLOSED_FRAGMENT,
+  CDC_OWNER_HANDOFF_CONNECTION_TO_NODE_FRAGMENT,
+  CDC_OWNER_HANDOFF_ROUTING_ERROR_FRAGMENTS,
+  CDC_SYSTEM_WRITE_RECOVERY_CANDIDATE_SELECTION_KIND,
+  LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
+  QUERY_TRANSPORT_NOT_READY_ERROR_CODE,
+  TABLE_WRITE_FAILURE_LOG_SUPPRESSED_TABLES,
+  TABLE_WRITE_METRIC_SUPPRESSED_TABLES,
+} from './cdc-integration-service-shared-constants.js';
 
-/**
- * Valid system table names for CDC operations.
- */
-const CDC_INTEGRATION_SERVICE_LITERAL = Object.freeze({
-  VISIBILITYSTATE: 'visibilityState',
-  READY: 'ready',
-  DEFERRED: 'deferred',
-  LEADER: 'leader',
-  LOCAL_PARTITION_QUERY_UNAVAILABLE: 'local_partition_query_unavailable',
-  FAILED_TO_READ_AUTHORITATIVE_SYSTEM_TABLE_ROWS_FROM_LOCAL:
-    'Failed to read authoritative system table rows from local ',
-  PARTITION_REPLICA: 'partition replica',
-  QUERY_DATA_PLANE_TRANSPORT_NOT_READY: 'query_data_plane_transport_not_ready',
-  AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE: 'authoritative_row_source_unavailable',
-  AUTHORITATIVE_QUERY_FAILED: 'authoritative_query_failed',
-  SELECT: 'SELECT',
-  EMPTY: '',
-  EMPTY_2: ', ',
-  EXECUTING_SQL_DIRECTLY_ON_LOCAL_PARTITION_BOOTSTRAP_MODE:
-    'Executing SQL directly on local partition (bootstrap mode)',
-  CDC_WRITE_ROUTER_IS_NOT_CONFIGURED: 'CDC write router is not configured',
-  NO_CONNECTION_TO_NODE: 'No connection to node',
-  FAILED_TO_FORWARD_WRITE_TO_LEADER: 'Failed to forward write to leader',
-  MESSAGE_TIMEOUT: 'Message timeout',
-  VALUE_60: 60,
-  VALUE_1000: 1000,
-  DIAGNOSED_CACHE_VISIBILITY_GAP_FROM_AUTHORITATIVE_SYSTEM_TABLE_READ:
-    'Diagnosed cache visibility gap from authoritative system table read',
-  UNKNOWN: 'unknown',
-  EMPTY_3: '[]',
-  EMPTY_4: '\'',
-  EMPTY_5: '"',
-  NULL: 'null',
-  DEFAULT_VALUE_STATE_NULL: 'null',
-  DEFAULT_VALUE_STATE_UNDEFINED: 'undefined',
-  DEFAULT_VALUE_STATE_VALUE: 'value',
-  TABLE_NAME_EXTRACTION_STATE_FOUND: 'found',
-  TABLE_NAME_EXTRACTION_STATE_INVALID_INPUT: 'invalid_input',
-  TABLE_NAME_EXTRACTION_STATE_NOT_FOUND: 'not_found',
-});
 const VALID_SYSTEM_TABLES = Object.values(SYSTEM_TABLE_NAME);
-const CDC_OWNER_HANDOFF_ROUTING_ERROR_FRAGMENTS = Object.freeze([
-  ERRORS.NO_HANDLER_FOR_ADDRESS,
-  ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE,
-  QUERY_ERROR_MSG.NO_ACTIVE_SERVICE_FOR_PARTITION,
-  QUERY_ERROR_MSG.QUERY_ROUTING_FAILED,
-  'No connection to node',
-  'Failed to forward write to leader',
-  'Message timeout',
-]);
-const CDC_OWNER_HANDOFF_CONNECTION_TO_NODE_FRAGMENT = 'Connection to node';
-const CDC_OWNER_HANDOFF_CLOSED_FRAGMENT = 'closed';
-const CDC_SYSTEM_WRITE_RECOVERY_CANDIDATE_SELECTION_KIND = 'cdc_system_write';
 
 /**
  * CDC operation types.
@@ -202,42 +169,6 @@ function materializeNormalizedDefaultValue(result) {
  * @param {string|null} tableName
  * @return {boolean}
  */
-const TABLE_WRITE_METRIC_SUPPRESSED_TABLES = new Set([
-  SYSTEM_TABLE_NAME.LOGS,
-  SYSTEM_TABLE_NAME.NODES,
-  SYSTEM_TABLE_NAME.NODE_ENDPOINTS,
-]);
-const TABLE_WRITE_FAILURE_LOG_SUPPRESSED_TABLES = new Set([
-  SYSTEM_TABLE_NAME.LOGS,
-]);
-const AUTHORITATIVE_FALLBACK_PHASE = Object.freeze({
-  BOOTSTRAP: 'bootstrap',
-  RECOVERY: 'recovery',
-  STEADY_STATE: 'steady_state',
-});
-const AUTHORITATIVE_FALLBACK_OUTCOME = Object.freeze({
-  RECOVERED: 'recovered',
-  DIAGNOSED: 'diagnosed',
-  FAILED: 'failed',
-});
-const AUTHORITATIVE_FALLBACK_WINDOW_MS = TIME_MS.MINUTE;
-const AUTHORITATIVE_FALLBACK_RECENT_LIMIT = NUM.TEN;
-const AUTHORITATIVE_FALLBACK_REPAIR_BUDGET_MS = 250;
-const AUTHORITATIVE_FALLBACK_RETRY_DELAY_MS = 25;
-const LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY = Object.freeze({
-  ANY_REPLICA: 'any_replica',
-  LOCAL_LEADER: 'local_leader',
-});
-const CDC_INTEGRATION_SERVICE_ERROR = Object.freeze({
-  MISSING_CANONICAL_NODE_ENDPOINTS_WEBSOCKET_ADDRESS:
-    'Missing canonical node_endpoints websocket address',
-});
-const QUERY_TRANSPORT_NOT_READY_ERROR_CODE = 'ROUTER_QUERY_TRANSPORT_NOT_READY';
-const AUTHORITATIVE_READ_SOURCE = Object.freeze({
-  LOCAL_PARTITION_REPLICA: 'local_partition_replica',
-  QUERY_TRANSPORT_PREFLIGHT: 'query_transport_preflight',
-  OWNER_RPC_LANE: 'owner_rpc_lane',
-});
 const SYSTEM_TABLE_VISIBILITY_STATE =
   CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE;
 function normalizeSystemTableVisibilityState(value, fallback = null) {

@@ -15,15 +15,14 @@ import {
 } from './query-constants.js';
 import {DISTRIBUTED_PREDICATE_SHAPE as PREDICATE_SHAPE} from
   './distributed/distributed-query-plan-constants.js';
+import {
+  KEY_CONDITION_TYPE,
+  createInitialKeyConditions,
+  resolvePredicateShape,
+} from './partition-resolver-key-conditions.js';
 
 const LOCAL_NUM_ONE = 1;
 const LOCAL_NUM_ZERO = 0;
-
-const KEY_CONDITION_TYPE = Object.freeze({
-  EQUALS: 'equals',
-  RANGE: 'range',
-  IN: 'in',
-});
 
 const UNARY_OPERATOR = Object.freeze({
   PLUS: '+',
@@ -304,17 +303,7 @@ class PartitionResolver {
       return null;
     }
 
-    const conditions = {
-      type: null,
-      values: [],
-      low: null,
-      high: null,
-      lowInclusive: true,
-      highInclusive: false,
-      fromBetween: false,
-      predicateShape: PREDICATE_SHAPE.SCATTER,
-    };
-
+    const conditions = createInitialKeyConditions();
     const found = this.findKeyConditions(
       whereClause,
       primaryKey,
@@ -322,31 +311,9 @@ class PartitionResolver {
       resolutionContext,
     );
     if (found) {
-      conditions.predicateShape = this.resolvePredicateShape(conditions);
+      conditions.predicateShape = resolvePredicateShape(conditions);
     }
     return found ? conditions : null;
-  }
-
-  /**
-   * Resolve predicate shape for diagnostics and explainability.
-   * @param {Object} conditions - Key condition metadata.
-   * @return {string} Predicate shape enum.
-   * @private
-   */
-  resolvePredicateShape(conditions) {
-    if (conditions.type === KEY_CONDITION_TYPE.EQUALS) {
-      return PREDICATE_SHAPE.EQ;
-    }
-    if (conditions.type === KEY_CONDITION_TYPE.IN) {
-      return PREDICATE_SHAPE.IN;
-    }
-    if (conditions.type === KEY_CONDITION_TYPE.RANGE && conditions.fromBetween) {
-      return PREDICATE_SHAPE.BETWEEN;
-    }
-    if (conditions.type === KEY_CONDITION_TYPE.RANGE) {
-      return PREDICATE_SHAPE.RANGE;
-    }
-    return PREDICATE_SHAPE.SCATTER;
   }
 
   /**

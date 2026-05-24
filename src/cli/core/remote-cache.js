@@ -1,14 +1,28 @@
+import {
+  collectEndpointNodeIds,
+  countHealthyEndpoints,
+  createRuntimeServiceRow,
+  formatEndpointAddress,
+  getEndpointsByServiceId,
+  getLogicalServiceRows,
+  getRuntimeServiceRows,
+  getServiceRows,
+  resolveEndpointId,
+  resolveLogicalServiceStatus,
+  resolveNodeAddress,
+  resolveNodeId,
+  resolveReplicaCount,
+  resolveRuntimeStatus,
+  resolveServiceId,
+  resolveServiceType,
+} from './remote-cache-service-rows.js';
+
 const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_INSERT = 'INSERT';
 const LOCAL_STR_UPDATE = 'UPDATE';
 const LOCAL_STR_PARTITIONS = 'partitions';
 const LOCAL_STR_DELETE = 'DELETE';
-const LOCAL_STR_RUNTIME_SERVICE = 'runtime_service';
-const LOCAL_STR_128KJ = ', ';
-const LOCAL_STR_NONE = 'none';
 const LOCAL_STR_EMPTY = '';
-const LOCAL_STR_UNKNOWN = 'unknown';
-const LOCAL_NUM_ONE = 1;
 const LOCAL_NUM_5000 = 5000;
 
 /**
@@ -38,18 +52,6 @@ const PRIMARY_KEYS = {
   contexts: 'context_id',
   replica_operations: 'operation_id',
 };
-
-const LOGICAL_SERVICE_STATUS = Object.freeze({
-  HEALTHY: 'healthy',
-  PARTIAL: 'partial',
-  DEGRADED: 'degraded',
-  UNKNOWN: 'unknown',
-});
-
-const HEALTHY_RUNTIME_STATUS = new Set([
-  'healthy',
-  'active',
-]);
 
 /**
  * RemoteCache class maintains a local copy of system tables synchronized via CDC
@@ -222,47 +224,7 @@ export class RemoteCache {
    * @return {Array} Array of replica records
    */
   getServices(filter = {}) {
-    let services = Array.from(this.tables.services.values());
-    services = services.concat(this.getRuntimeServices());
-    if (filter.nodeId) {
-      services = services.filter((service) => {
-        return this.resolveNodeId(service) === filter.nodeId;
-      });
-    }
-    if (filter.type) {
-      services = services.filter((service) => {
-        return this.resolveServiceType(service) === filter.type;
-      });
-    }
-    if (filter.partitionId) {
-      services = services.filter((service) => {
-        return service.partition_id === filter.partitionId;
-      });
-    }
-    if (filter.groupId) {
-      services = services.filter((service) => {
-        return service.group_id === filter.groupId;
-      });
-    }
-    if (filter.serviceId) {
-      services = services.filter((service) => {
-        return this.resolveServiceId(service) === filter.serviceId ||
-          service.logical_service_id === filter.serviceId;
-      });
-    }
-
-    // Enrich services with node_address from nodes table
-    return services.map((service) => {
-      if (service.node_address) {
-        return service;
-      }
-      const node = this.tables.nodes.get(this.resolveNodeId(service));
-      const nodeAddress = this.resolveNodeAddress(node);
-      if (nodeAddress) {
-        return {...service, node_address: nodeAddress};
-      }
-      return service;
-    });
+    return getServiceRows(this.tables, filter);
   }
 
   /**
@@ -271,51 +233,7 @@ export class RemoteCache {
    * @return {Array<Object>}
    */
   getLogicalServices(filter = {}) {
-    const logicalServices = [];
-    const definitions = Array.from(this.tables.service_definitions.values());
-    const endpointsByServiceId = this.getEndpointsByServiceId();
-
-    for (const definition of definitions) {
-      const serviceId = this.resolveServiceId(definition);
-      if (!serviceId) {
-        continue;
-      }
-
-      const endpoints = endpointsByServiceId.get(serviceId) || [];
-      const nodes = this.collectEndpointNodeIds(endpoints);
-      if (filter.nodeId && !nodes.includes(filter.nodeId)) {
-        continue;
-      }
-      if (filter.serviceId && serviceId !== filter.serviceId) {
-        continue;
-      }
-
-      const desiredReplicaCount = this.resolveReplicaCount(definition);
-      const observedReplicaCount = endpoints.length;
-      const healthyReplicaCount = this.countHealthyEndpoints(endpoints);
-
-      logicalServices.push({
-        ...definition,
-        service_id: serviceId,
-        service_name: definition.service_name || definition.serviceName || serviceId,
-        service_type: definition.service_type || definition.serviceType || LOCAL_STR_RUNTIME_SERVICE,
-        runtime_kind: definition.runtime_kind || definition.runtimeKind || null,
-        runtime_ref: definition.runtime_ref || definition.runtimeRef || null,
-        replica_count: desiredReplicaCount,
-        replica_count_observed: observedReplicaCount,
-        healthy_replica_count: healthyReplicaCount,
-        node_count: nodes.length,
-        nodes,
-        nodes_summary: nodes.length > LOCAL_NUM_ZERO ? nodes.join(LOCAL_STR_128KJ) : LOCAL_STR_NONE,
-        status: this.resolveLogicalServiceStatus(
-          desiredReplicaCount,
-          observedReplicaCount,
-          healthyReplicaCount,
-        ),
-      });
-    }
-
-    return logicalServices;
+    return getLogicalServiceRows(this.tables, filter);
   }
 
   /**
@@ -323,23 +241,7 @@ export class RemoteCache {
    * @return {Array<Object>} Runtime-backed service rows.
    */
   getRuntimeServices() {
-    const runtimeServices = [];
-    const definitions = Array.from(this.tables.service_definitions.values());
-    const endpointsByServiceId = this.getEndpointsByServiceId();
-
-    for (const definition of definitions) {
-      const serviceId = this.resolveServiceId(definition);
-      if (!serviceId) {
-        continue;
-      }
-
-      const endpoints = endpointsByServiceId.get(serviceId) || [];
-      for (const endpoint of endpoints) {
-        runtimeServices.push(this.createRuntimeServiceRow(definition, endpoint));
-      }
-    }
-
-    return runtimeServices;
+    return getRuntimeServiceRows(this.tables);
   }
 
   /**
@@ -349,24 +251,7 @@ export class RemoteCache {
    * @return {Object}
    */
   createRuntimeServiceRow(definition, endpoint) {
-    const serviceId = this.resolveServiceId(definition);
-    const endpointId = this.resolveEndpointId(endpoint);
-    const endpointAddress = this.formatEndpointAddress(endpoint);
-    const status = this.resolveRuntimeStatus(definition, endpoint);
-    const nodeId = this.resolveNodeId(endpoint);
-
-    return {
-      ...definition,
-      service_id: serviceId,
-      logical_service_id: serviceId,
-      service_type: LOCAL_STR_RUNTIME_SERVICE,
-      status,
-      node_id: nodeId,
-      endpoint_id: endpointId,
-      replica_id: endpointId,
-      address: endpointAddress,
-      row_key: `runtime:${serviceId}:${endpointId}`,
-    };
+    return createRuntimeServiceRow(definition, endpoint);
   }
 
   /**
@@ -375,15 +260,7 @@ export class RemoteCache {
    * @return {string|null}
    */
   formatEndpointAddress(endpoint) {
-    const address = this.resolveNodeAddress(endpoint);
-    if (!address) {
-      return null;
-    }
-    const port = endpoint.port ?? endpoint.ws_port ?? endpoint.wsPort;
-    if (port === undefined || port === null) {
-      return address;
-    }
-    return `${address}:${port}`;
+    return formatEndpointAddress(endpoint);
   }
 
   /**
@@ -392,10 +269,7 @@ export class RemoteCache {
    * @return {string}
    */
   resolveServiceId(row) {
-    if (!row) {
-      return LOCAL_STR_EMPTY;
-    }
-    return row.service_id || row.serviceId || row.id || LOCAL_STR_EMPTY;
+    return resolveServiceId(row);
   }
 
   /**
@@ -404,10 +278,7 @@ export class RemoteCache {
    * @return {string|null}
    */
   resolveNodeId(row) {
-    if (!row) {
-      return null;
-    }
-    return row.node_id || row.nodeId || null;
+    return resolveNodeId(row);
   }
 
   /**
@@ -416,10 +287,7 @@ export class RemoteCache {
    * @return {string|null}
    */
   resolveServiceType(row) {
-    if (!row) {
-      return null;
-    }
-    return row.service_type || row.serviceType || row.type || null;
+    return resolveServiceType(row);
   }
 
   /**
@@ -428,10 +296,7 @@ export class RemoteCache {
    * @return {string|null}
    */
   resolveEndpointId(endpoint) {
-    if (!endpoint) {
-      return null;
-    }
-    return endpoint.endpoint_id || endpoint.endpointId || endpoint.id || null;
+    return resolveEndpointId(endpoint);
   }
 
   /**
@@ -440,10 +305,7 @@ export class RemoteCache {
    * @return {string|null}
    */
   resolveNodeAddress(row) {
-    if (!row) {
-      return null;
-    }
-    return row.node_address || row.nodeAddress || row.address || row.host || null;
+    return resolveNodeAddress(row);
   }
 
   /**
@@ -453,12 +315,7 @@ export class RemoteCache {
    * @return {string}
    */
   resolveRuntimeStatus(definition, endpoint) {
-    return endpoint?.health_status ||
-      endpoint?.healthStatus ||
-      endpoint?.status ||
-      definition?.status ||
-      definition?.state ||
-      LOCAL_STR_UNKNOWN;
+    return resolveRuntimeStatus(definition, endpoint);
   }
 
   /**
@@ -466,18 +323,7 @@ export class RemoteCache {
    * @return {Map<string, Array<Object>>}
    */
   getEndpointsByServiceId() {
-    const endpointsByServiceId = new Map();
-    for (const endpoint of this.tables.service_endpoints.values()) {
-      const serviceId = this.resolveServiceId(endpoint);
-      if (!serviceId) {
-        continue;
-      }
-      if (!endpointsByServiceId.has(serviceId)) {
-        endpointsByServiceId.set(serviceId, []);
-      }
-      endpointsByServiceId.get(serviceId).push(endpoint);
-    }
-    return endpointsByServiceId;
+    return getEndpointsByServiceId(this.tables);
   }
 
   /**
@@ -486,12 +332,7 @@ export class RemoteCache {
    * @return {number}
    */
   resolveReplicaCount(definition) {
-    const raw = definition?.replica_count ?? definition?.replicaCount ?? 0;
-    const parsed = Number(raw);
-    if (!Number.isFinite(parsed) || parsed < LOCAL_NUM_ZERO) {
-      return LOCAL_NUM_ZERO;
-    }
-    return Math.floor(parsed);
+    return resolveReplicaCount(definition);
   }
 
   /**
@@ -500,14 +341,7 @@ export class RemoteCache {
    * @return {Array<string>}
    */
   collectEndpointNodeIds(endpoints) {
-    const uniqueNodeIds = new Set();
-    for (const endpoint of endpoints) {
-      const nodeId = this.resolveNodeId(endpoint);
-      if (nodeId) {
-        uniqueNodeIds.add(nodeId);
-      }
-    }
-    return Array.from(uniqueNodeIds.values()).sort();
+    return collectEndpointNodeIds(endpoints);
   }
 
   /**
@@ -516,12 +350,7 @@ export class RemoteCache {
    * @return {number}
    */
   countHealthyEndpoints(endpoints) {
-    return endpoints.reduce((count, endpoint) => {
-      const status = this.resolveRuntimeStatus(null, endpoint);
-      return HEALTHY_RUNTIME_STATUS.has(String(status).toLowerCase()) ?
-        count + LOCAL_NUM_ONE :
-        count;
-    }, LOCAL_NUM_ZERO);
+    return countHealthyEndpoints(endpoints);
   }
 
   /**
@@ -536,18 +365,11 @@ export class RemoteCache {
     observedReplicaCount,
     healthyReplicaCount,
   ) {
-    if (desiredReplicaCount <= LOCAL_NUM_ZERO) {
-      return observedReplicaCount === LOCAL_NUM_ZERO ?
-        LOGICAL_SERVICE_STATUS.UNKNOWN :
-        LOGICAL_SERVICE_STATUS.HEALTHY;
-    }
-    if (healthyReplicaCount >= desiredReplicaCount) {
-      return LOGICAL_SERVICE_STATUS.HEALTHY;
-    }
-    if (healthyReplicaCount === LOCAL_NUM_ZERO) {
-      return LOGICAL_SERVICE_STATUS.DEGRADED;
-    }
-    return LOGICAL_SERVICE_STATUS.PARTIAL;
+    return resolveLogicalServiceStatus(
+      desiredReplicaCount,
+      observedReplicaCount,
+      healthyReplicaCount,
+    );
   }
 
   /**

@@ -3,32 +3,41 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
-  "opened": "2026-05-24",
-  "lane": "lightweight-maintenance",
-  "scenario": "none",
-  "artifact": "none",
-  "playback": "none",
-  "owner": "rebalancer_file_size_owner",
-  "boundary": "source_rebalancer_topology_owner_constants_file_size_refactor",
-  "dominantReason": "oversized_file_ratchet",
-  "currentState": "Current file-size audit reports src/rebalancer/topology-owner-constants.js at 809/800 lines; no implementation is started in this package yet.",
-  "nextAction": "Extract semantically named helper modules from src/rebalancer/topology-owner-constants.js until it is below 800 lines, preserving behavior and the public entrypoint.",
-  "proof": [
-    "npm run audit:file-size -- --strict src/rebalancer/topology-owner-constants.js",
-    "node --check src/rebalancer/topology-owner-constants.js",
-    "git diff --check -- src/rebalancer/topology-owner-constants.js"
-  ],
-  "theoryLedgerRefs": [],
-  "writeScope": [
-    "src/rebalancer/topology-owner-constants.js"
-  ],
-  "handoffFiles": [],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [
-    "src/rebalancer/topology-owner-constants.js"
-  ],
+  "status": "done",
+  "intent": {
+    "opened": "2026-05-24",
+    "closed": "2026-05-24",
+    "lane": "lightweight-maintenance",
+    "scenario": "none",
+    "artifact": "none",
+    "playback": "none",
+    "owner": "rebalancer_file_size_owner",
+    "boundary": "source_rebalancer_topology_owner_constants_file_size_refactor",
+    "currentState": "Refactor complete: src/rebalancer/topology-owner-constants.js is now 604/800 lines and src/rebalancer/topology-owner-placement-constants.js is 233/800 lines; parent revalidated strict file-size, syntax, public export smoke, and diff-check proof.",
+    "nextAction": "Close package after closure validation and sprint link update.",
+    "dominantReason": "oversized_file_ratchet"
+  },
+  "scope": {
+    "writeScope": [
+      "src/rebalancer/topology-owner-constants.js",
+      "src/rebalancer/topology-owner-placement-constants.js"
+    ],
+    "handoffFiles": [],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": [],
+    "commitScope": [
+      "src/rebalancer/topology-owner-constants.js",
+      "src/rebalancer/topology-owner-placement-constants.js"
+    ]
+  },
+  "gates": {
+    "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
+    "stabilityCredit": "local-proof-only",
+    "codeQualityAdmission": {
+      "reason": "active-guardrail-requirement",
+      "evidence": "Closure proof made strict file-size pass for src/rebalancer/topology-owner-constants.js, src/rebalancer/topology-owner-placement-constants.js and parent revalidated syntax/focused proof before package closure."
+    }
+  },
   "modelFit": {
     "packageClass": "bounded-implementation",
     "intendedMinimumModel": "gpt-5.3-codex-spark",
@@ -40,30 +49,17 @@
       "a frozen decision must be reopened"
     ]
   },
-  "modelFitSplit": {
-    "targetExecutionModel": "gpt-5.3-codex-spark",
-    "allowedDecisionDepth": "bounded local edit after owner, scope, proof, and forbidden files are named",
-    "safeToExecuteWhen": [
-      "owner, boundary, write scope, forbidden scope, proof, and kill rule stay as declared",
-      "the executor does not need to choose architecture, migrate ownership, or reinterpret representative evidence",
-      "the first focused proof gives a clear pass, fail, or escalate signal"
-    ],
-    "splitTriggers": [
-      "write scope expands beyond the declared lower-model lane",
-      "proof requires forbidden scope, cross-owner reasoning, or architecture route selection",
-      "the implementation needs to decide system behavior instead of executing a named local mechanism"
-    ],
-    "childPackageCandidates": [
-      "Prefer mechanical-maintenance for docs/templates/schema-only edits.",
-      "Prefer test-only-proof for tests that do not change runtime behavior.",
-      "Prefer bounded-experiment for one same-owner hypothesis with inherited context."
-    ]
-  },
-  "stabilityCredit": "local-proof-only",
-  "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
-  "codeQualityAdmission": {
-    "reason": "active-guardrail-requirement",
-    "evidence": "The package is generated from npm run audit:file-size -- --top 250 for src/rebalancer/topology-owner-constants.js; closure proof must make npm run audit:file-size -- --strict src/rebalancer/topology-owner-constants.js pass."
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": {
+      "commands": [
+        "npm run audit:file-size -- --strict src/rebalancer/topology-owner-constants.js src/rebalancer/topology-owner-placement-constants.js",
+        "node --check src/rebalancer/topology-owner-constants.js",
+        "node --check src/rebalancer/topology-owner-placement-constants.js",
+        "node --input-type=module -e \"import {buildPlacementOwnerTargetOutcome, buildOperationOwnerRetryOutcome} from './src/rebalancer/topology-owner-constants.js'; console.log(typeof buildPlacementOwnerTargetOutcome, typeof buildOperationOwnerRetryOutcome)\"",
+        "git diff --check -- work/packages/done-20260524-oversized-rebalancer-topology-owner-constants.md src/rebalancer/topology-owner-constants.js src/rebalancer/topology-owner-placement-constants.js"
+      ]
+    }
   }
 }
 -->
@@ -141,6 +137,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 ## In Scope
 
 1. src/rebalancer/topology-owner-constants.js
+2. src/rebalancer/topology-owner-placement-constants.js
 
 ## Out Of Scope
 
@@ -153,11 +150,11 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex-spark`
 - Scope shape: `leaf-slice`
 - Output profile: `medium`
-- Owned files: `src/rebalancer/topology-owner-constants.js`
+- Owned files: `src/rebalancer/topology-owner-constants.js`, `src/rebalancer/topology-owner-placement-constants.js`
 - Forbidden files: `test/`, `runtime ownership or public contract changes`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run audit:file-size -- --strict src/rebalancer/topology-owner-constants.js`, `node --check src/rebalancer/topology-owner-constants.js`, `git diff --check -- src/rebalancer/topology-owner-constants.js`
+- Focused proof: `npm run audit:file-size -- --strict src/rebalancer/topology-owner-constants.js src/rebalancer/topology-owner-placement-constants.js`, `node --check src/rebalancer/topology-owner-constants.js`, `node --check src/rebalancer/topology-owner-placement-constants.js`, `node --input-type=module -e "import {buildPlacementOwnerTargetOutcome, buildOperationOwnerRetryOutcome} from './src/rebalancer/topology-owner-constants.js'; console.log(typeof buildPlacementOwnerTargetOutcome, typeof buildOperationOwnerRetryOutcome)"`, `git diff --check -- work/packages/done-20260524-oversized-rebalancer-topology-owner-constants.md src/rebalancer/topology-owner-constants.js src/rebalancer/topology-owner-placement-constants.js`
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split
@@ -182,12 +179,14 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: executor; files-changed: target file plus semantically named helper/split files added to this package before pre-impl; validation: focused proof and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: verification-fix; owner: verifier_fixer; files-changed: package-owned files only; validation: strict file-size proof, syntax/focused test proof, and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: <validated|not-needed>.
+- [x] action: implementation; owner: executor; files-changed: target file plus semantically named helper/split files added to this package before pre-impl; validation: focused proof and parent revalidated focused proof: yes; outcome: validated.
+- [x] action: verification-fix; owner: verifier_fixer; files-changed: package-owned files only; validation: strict file-size proof, syntax/focused test proof, and parent revalidated focused proof: yes; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: none; validation: no ledger update needed before package closure; outcome: not-needed.
 
 ## Validation
 
-1. npm run audit:file-size -- --strict src/rebalancer/topology-owner-constants.js
+1. npm run audit:file-size -- --strict src/rebalancer/topology-owner-constants.js src/rebalancer/topology-owner-placement-constants.js
 2. node --check src/rebalancer/topology-owner-constants.js
-3. git diff --check -- src/rebalancer/topology-owner-constants.js
+3. node --check src/rebalancer/topology-owner-placement-constants.js
+4. node --input-type=module -e "import {buildPlacementOwnerTargetOutcome, buildOperationOwnerRetryOutcome} from './src/rebalancer/topology-owner-constants.js'; console.log(typeof buildPlacementOwnerTargetOutcome, typeof buildOperationOwnerRetryOutcome)"
+5. git diff --check -- work/packages/done-20260524-oversized-rebalancer-topology-owner-constants.md src/rebalancer/topology-owner-constants.js src/rebalancer/topology-owner-placement-constants.js
