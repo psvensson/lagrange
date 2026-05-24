@@ -287,7 +287,7 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
      - [Split oversized test/support file test/distributed/harness/__tests__/cluster.test-part-4.js](../packages/done-20260524-oversized-distributed-harness-bravo.md)
      - [Split oversized test/support file test/control-plane/replica-dispatch-node-state-update.test-part-4.js](../packages/done-20260524-oversized-control-plane-replica-dispatch-node-state-update.md)
      - [Split oversized test/support file test/bootstrap/bootstrap-api.test.js](../packages/done-20260524-oversized-bootstrap-bootstrap-alpha.md)
-     - [Split oversized test/support file test/distributed/harness/failure-bundle-segment-1.js](../packages/todo-20260524-oversized-distributed-harness-failure-alpha.md)
+     - [Split oversized test/support file test/distributed/harness/failure-bundle-segment-1.js](../packages/done-20260524-oversized-distributed-harness-failure-alpha.md)
      - [Split oversized test/support file test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js](../packages/done-20260524-oversized-rebalancer-coordinator-created-operation-progress-remote-handoff.md)
      - [Split oversized test/support file test/control-plane/membership-publication-coordinator-tail-more-test-cases.js](../packages/done-20260524-oversized-control-plane-membership-publication-coordinator-tail-more-cases.md)
      - [Split oversized test/support file test/distributed/harness/cluster-segment-2.js](../packages/todo-20260524-oversized-distributed-harness-charlie.md)
