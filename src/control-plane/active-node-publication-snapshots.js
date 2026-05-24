@@ -1,0 +1,670 @@
+import {
+  NUM,
+  TYPEOF,
+} from '../constants/index.js';
+import {
+  CONTROL_PLANE_PUBLICATION_STATUS,
+} from './control-plane-publication-merge.js';
+import {
+  NODE_PARTICIPATION_ADMISSION_STATE,
+  isNodeRuntimeParticipationBlocked,
+  normalizeNodeParticipationAdmissionState,
+} from './membership-lifecycle-constants.js';
+import {
+  PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE,
+} from './publication-recovery-gate.js';
+import {
+  normalizeControlPlanePublicationRow,
+} from './system-row-normalizers.js';
+import {
+  normalizeNodeIdList,
+  normalizeNonNegativeInteger,
+  normalizeOptionalString,
+  normalizePendingAckEvidenceState,
+  normalizeStringList,
+} from './active-node-projection-normalizers.js';
+
+const LOCAL_STR_UPDATEDAT = 'updatedAt';
+const LOCAL_STR_UPDATED_AT = 'updated_at';
+const LOCAL_NUM_ZERO = 0;
+
+const MEMBERSHIP_PUBLICATION_KIND = 'cluster_membership';
+const ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE = Object.freeze({
+  PUBLISHED_MEMBERSHIP: 'published_membership',
+  LOCALLY_ELIGIBLE_PROJECTION: 'locally_eligible_projection',
+  PROJECTED_SERVING: 'projected_serving_projection',
+  RECOVERY_ELIGIBLE_PROJECTION: 'recovery_eligible_projection',
+  NONE: 'none',
+});
+
+function resolveParticipationByNodeId(publicationConvergence = null) {
+  if (!publicationConvergence || typeof publicationConvergence !== TYPEOF.OBJECT) {
+    return {};
+  }
+  if (publicationConvergence.participationByNodeId &&
+      typeof publicationConvergence.participationByNodeId === TYPEOF.OBJECT) {
+    return publicationConvergence.participationByNodeId;
+  }
+  if (publicationConvergence.membershipLifecycleSummary?.participationByNodeId &&
+      typeof publicationConvergence.membershipLifecycleSummary.participationByNodeId ===
+        TYPEOF.OBJECT) {
+    return publicationConvergence.membershipLifecycleSummary.participationByNodeId;
+  }
+  return {};
+}
+
+function resolveAdmissionBlockedNodeIds(publicationConvergence = null) {
+  const participationByNodeId = resolveParticipationByNodeId(publicationConvergence);
+  const blockedNodeIds = Object.values(participationByNodeId)
+    .filter((participation) =>
+      isNodeRuntimeParticipationBlocked({participation}),
+    )
+    .map((participation) => participation?.nodeId);
+  const targetNodeId = normalizeOptionalString(
+    publicationConvergence?.targetNodeId ??
+      publicationConvergence?.publisherNodeId,
+  );
+  if (
+    targetNodeId &&
+    normalizeNodeParticipationAdmissionState(
+      publicationConvergence?.admissionState,
+    ) === NODE_PARTICIPATION_ADMISSION_STATE.BLOCKED
+  ) {
+    blockedNodeIds.push(targetNodeId);
+  }
+  return normalizeNodeIdList(blockedNodeIds);
+}
+
+function excludeAdmissionBlockedNodeIds(nodeIds = [], blockedNodeIds = new Set()) {
+  return normalizeNodeIdList(
+    normalizeNodeIdList(nodeIds).filter((nodeId) => !blockedNodeIds.has(nodeId)),
+  );
+}
+
+function readPublicationOrderingValue(row, keys = []) {
+  for (const key of keys) {
+    const value = Number(row?.[key]);
+    if (Number.isFinite(value)) {
+      return value;
+    }
+  }
+  return NUM.ZERO;
+}
+
+function isMembershipPublicationRow(row) {
+  const publicationKind = String(row?.publicationKind || '').toLowerCase();
+  return publicationKind.length === NUM.ZERO ||
+    publicationKind === MEMBERSHIP_PUBLICATION_KIND;
+}
+
+function resolveLatestPublicationRow(options = {}) {
+  const publicationRows = (Array.isArray(options.publicationRows) ?
+    options.publicationRows :
+    [])
+    .filter((row) => row && typeof row === TYPEOF.OBJECT)
+    .map((row) => normalizeControlPlanePublicationRow(row))
+    .filter((row) => isMembershipPublicationRow(row));
+  const explicitPublicationRow =
+    options.latestPublicationRow &&
+      typeof options.latestPublicationRow === TYPEOF.OBJECT ?
+      normalizeControlPlanePublicationRow(options.latestPublicationRow) :
+      null;
+  if (explicitPublicationRow &&
+    isMembershipPublicationRow(explicitPublicationRow) && (
+    explicitPublicationRow.publicationId ||
+    explicitPublicationRow.publicationEpoch > NUM.ZERO ||
+    explicitPublicationRow.status
+  )) {
+    publicationRows.push(explicitPublicationRow);
+  }
+  if (publicationRows.length === NUM.ZERO) {
+    return null;
+  }
+
+  publicationRows.sort((left, right) => {
+    const publicationEpochDelta =
+      readPublicationOrderingValue(right, ['publicationEpoch', 'publication_epoch']) -
+      readPublicationOrderingValue(left, ['publicationEpoch', 'publication_epoch']);
+    if (publicationEpochDelta !== NUM.ZERO) {
+      return publicationEpochDelta;
+    }
+    const publishedAtDelta =
+      readPublicationOrderingValue(right, ['publishedAt', 'published_at']) -
+      readPublicationOrderingValue(left, ['publishedAt', 'published_at']);
+    if (publishedAtDelta !== NUM.ZERO) {
+      return publishedAtDelta;
+    }
+    return readPublicationOrderingValue(right, [LOCAL_STR_UPDATEDAT, LOCAL_STR_UPDATED_AT]) -
+      readPublicationOrderingValue(left, [LOCAL_STR_UPDATEDAT, LOCAL_STR_UPDATED_AT]);
+  });
+
+  return publicationRows[LOCAL_NUM_ZERO] || null;
+}
+
+function resolveLatestPublishedPublicationRow(options = {}) {
+  const publicationRows = (Array.isArray(options.publicationRows) ?
+    options.publicationRows :
+    [])
+    .filter((row) => row && typeof row === TYPEOF.OBJECT)
+    .map((row) => normalizeControlPlanePublicationRow(row))
+    .filter((row) => isMembershipPublicationRow(row));
+  const explicitPublishedPublicationRow =
+    options.latestPublishedPublicationRow &&
+      typeof options.latestPublishedPublicationRow === TYPEOF.OBJECT ?
+      normalizeControlPlanePublicationRow(
+        options.latestPublishedPublicationRow,
+      ) :
+      null;
+  const explicitPublicationRow =
+    options.latestPublicationRow &&
+      typeof options.latestPublicationRow === TYPEOF.OBJECT ?
+      normalizeControlPlanePublicationRow(options.latestPublicationRow) :
+      null;
+  if (explicitPublishedPublicationRow &&
+    isMembershipPublicationRow(explicitPublishedPublicationRow) && (
+    explicitPublishedPublicationRow.publicationId ||
+    explicitPublishedPublicationRow.publicationEpoch > NUM.ZERO ||
+    explicitPublishedPublicationRow.status
+  ) &&
+    explicitPublishedPublicationRow.status ===
+      CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED) {
+    publicationRows.push(explicitPublishedPublicationRow);
+  }
+  if (explicitPublicationRow &&
+    isMembershipPublicationRow(explicitPublicationRow) && (
+    explicitPublicationRow.publicationId ||
+    explicitPublicationRow.publicationEpoch > NUM.ZERO ||
+    explicitPublicationRow.status
+  )) {
+    publicationRows.push(explicitPublicationRow);
+  }
+
+  return resolveLatestPublicationRow({
+    publicationRows: publicationRows.filter((row) =>
+      row?.status === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+    ),
+  });
+}
+
+function resolvePublishedActiveNodeIds(options = {}) {
+  const latestPublicationRow = resolveLatestPublicationRow(options);
+  const publishedPublicationRow =
+    latestPublicationRow?.status === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED ?
+      latestPublicationRow :
+      resolveLatestPublishedPublicationRow(options);
+  const durablePublishedMembershipCandidate = publishedPublicationRow ||
+    buildMembershipPublicationActiveSnapshot(latestPublicationRow);
+  if (!durablePublishedMembershipCandidate) {
+    return options.requirePublishedMembership === true ?
+      Object.freeze([]) :
+      null;
+  }
+  const publishedActiveNodeIds = Array.isArray(
+    durablePublishedMembershipCandidate.publishedActiveNodeIds,
+  ) ?
+    durablePublishedMembershipCandidate.publishedActiveNodeIds :
+    [];
+  if (publishedActiveNodeIds.length === NUM.ZERO) {
+    return durablePublishedMembershipCandidate
+      .publishedActiveNodeIdsPresent === true ?
+      Object.freeze([]) :
+      (options.requirePublishedMembership === true ?
+        Object.freeze([]) :
+        null);
+  }
+  return Object.freeze([...new Set(
+    publishedActiveNodeIds.filter((nodeId) =>
+      typeof nodeId === TYPEOF.STRING &&
+      nodeId.length > NUM.ZERO,
+    ),
+  )].sort());
+}
+
+function resolvePriorityRecoveryActiveNodeCohort(publicationConvergence = null) {
+  const normalizedPublicationConvergence =
+    publicationConvergence &&
+      typeof publicationConvergence === TYPEOF.OBJECT ?
+      publicationConvergence :
+      {};
+  const membershipLifecycleSummary =
+    normalizedPublicationConvergence.membershipLifecycleSummary &&
+      typeof normalizedPublicationConvergence.membershipLifecycleSummary ===
+        TYPEOF.OBJECT ?
+      normalizedPublicationConvergence.membershipLifecycleSummary :
+      null;
+  const projectionDiagnostics =
+    normalizedPublicationConvergence.projectionDiagnostics &&
+      typeof normalizedPublicationConvergence.projectionDiagnostics ===
+        TYPEOF.OBJECT ?
+      normalizedPublicationConvergence.projectionDiagnostics :
+      membershipLifecycleSummary?.projectionDiagnostics &&
+        typeof membershipLifecycleSummary.projectionDiagnostics ===
+          TYPEOF.OBJECT ?
+        membershipLifecycleSummary.projectionDiagnostics :
+        null;
+  const admissionBlockedNodeIdSet = new Set(
+    resolveAdmissionBlockedNodeIds(normalizedPublicationConvergence),
+  );
+  const publishedActiveNodeIds = normalizeNodeIdList(
+    Array.isArray(normalizedPublicationConvergence?.publishedActiveNodeIds) ?
+      normalizedPublicationConvergence.publishedActiveNodeIds :
+      membershipLifecycleSummary?.publishedActiveNodeIds,
+  );
+  const projectedServingNodeIds = normalizeNodeIdList([
+    ...(Array.isArray(normalizedPublicationConvergence?.projectedServingNodeIds) ?
+      normalizedPublicationConvergence.projectedServingNodeIds :
+      []),
+    ...(Array.isArray(membershipLifecycleSummary?.projectedServingNodeIds) ?
+      membershipLifecycleSummary.projectedServingNodeIds :
+      []),
+  ]);
+  const locallyEligibleNodeIds = normalizeNodeIdList([
+    ...(Array.isArray(normalizedPublicationConvergence?.locallyEligibleNodeIds) ?
+      normalizedPublicationConvergence.locallyEligibleNodeIds :
+      []),
+    ...(Array.isArray(membershipLifecycleSummary?.locallyEligibleNodeIds) ?
+      membershipLifecycleSummary.locallyEligibleNodeIds :
+      []),
+  ]);
+  const recoveryEligibleIncludedNodeIds = normalizeNodeIdList(
+    projectionDiagnostics?.recoveryEligibleIncludedNodeIds,
+  );
+  const livenessFallbackIncludedNodeIds = normalizeNodeIdList(
+    projectionDiagnostics?.livenessFallbackIncludedNodeIds,
+  );
+  const explicitRecoveryActiveNodeIds = normalizeNodeIdList([
+    ...(Array.isArray(normalizedPublicationConvergence?.recoveryActiveNodeIds) ?
+      normalizedPublicationConvergence.recoveryActiveNodeIds :
+      []),
+    ...(Array.isArray(membershipLifecycleSummary?.recoveryActiveNodeIds) ?
+      membershipLifecycleSummary.recoveryActiveNodeIds :
+      []),
+  ]);
+  const missingPublishedRecoveryActiveNodeIds = normalizeNodeIdList([
+    ...(Array.isArray(
+      normalizedPublicationConvergence?.missingPublishedRecoveryActiveNodeIds,
+    ) ?
+      normalizedPublicationConvergence.missingPublishedRecoveryActiveNodeIds :
+      []),
+    ...(Array.isArray(
+      membershipLifecycleSummary?.missingPublishedRecoveryActiveNodeIds,
+    ) ?
+      membershipLifecycleSummary.missingPublishedRecoveryActiveNodeIds :
+      []),
+  ]);
+  const admittedPublishedActiveNodeIds = excludeAdmissionBlockedNodeIds(
+    publishedActiveNodeIds,
+    admissionBlockedNodeIdSet,
+  );
+  const admittedProjectedServingNodeIds = excludeAdmissionBlockedNodeIds(
+    projectedServingNodeIds,
+    admissionBlockedNodeIdSet,
+  );
+  const admittedLocallyEligibleNodeIds = excludeAdmissionBlockedNodeIds(
+    locallyEligibleNodeIds,
+    admissionBlockedNodeIdSet,
+  );
+  const admittedRecoveryEligibleIncludedNodeIds = excludeAdmissionBlockedNodeIds(
+    recoveryEligibleIncludedNodeIds,
+    admissionBlockedNodeIdSet,
+  );
+  const admittedLivenessFallbackIncludedNodeIds = excludeAdmissionBlockedNodeIds(
+    livenessFallbackIncludedNodeIds,
+    admissionBlockedNodeIdSet,
+  );
+  const admittedExplicitRecoveryActiveNodeIds = excludeAdmissionBlockedNodeIds(
+    explicitRecoveryActiveNodeIds,
+    admissionBlockedNodeIdSet,
+  );
+  const admittedMissingPublishedRecoveryActiveNodeIds =
+    excludeAdmissionBlockedNodeIds(
+      missingPublishedRecoveryActiveNodeIds,
+      admissionBlockedNodeIdSet,
+    );
+  const explicitRecoveryActiveNodeSource =
+    typeof normalizedPublicationConvergence?.recoveryActiveNodeSource ===
+      TYPEOF.STRING &&
+      normalizedPublicationConvergence.recoveryActiveNodeSource.trim()
+        .length > NUM.ZERO ?
+      normalizedPublicationConvergence.recoveryActiveNodeSource.trim() :
+      (typeof membershipLifecycleSummary?.recoveryActiveNodeSource ===
+        TYPEOF.STRING &&
+        membershipLifecycleSummary.recoveryActiveNodeSource.trim().length >
+          NUM.ZERO ?
+        membershipLifecycleSummary.recoveryActiveNodeSource.trim() :
+        null);
+
+  const publishedActiveNodeIdSet = new Set(admittedPublishedActiveNodeIds);
+  const projectionNodeIds = normalizeNodeIdList([
+    ...admittedLocallyEligibleNodeIds,
+    ...admittedProjectedServingNodeIds,
+    ...admittedRecoveryEligibleIncludedNodeIds,
+  ]);
+  const projectionAddsNodes = projectionNodeIds.some((nodeId) =>
+    !publishedActiveNodeIdSet.has(nodeId),
+  );
+  const shouldUseProjectionCohort =
+    projectionNodeIds.length > NUM.ZERO && (
+      admittedPublishedActiveNodeIds.length === NUM.ZERO ||
+      projectionAddsNodes ||
+      admittedRecoveryEligibleIncludedNodeIds.length > NUM.ZERO ||
+      admittedLivenessFallbackIncludedNodeIds.length > NUM.ZERO
+    );
+  const buildProjectionCohortNodeIds = (candidateNodeIds) =>
+    normalizeNodeIdList([
+      ...admittedPublishedActiveNodeIds,
+      ...candidateNodeIds,
+    ]);
+
+  let activeNodeIds = [];
+  let source = ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE.NONE;
+  if (shouldUseProjectionCohort && admittedLocallyEligibleNodeIds.length > NUM.ZERO) {
+    activeNodeIds = buildProjectionCohortNodeIds(admittedLocallyEligibleNodeIds);
+    source = ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE.LOCALLY_ELIGIBLE_PROJECTION;
+  } else if (
+    shouldUseProjectionCohort && admittedProjectedServingNodeIds.length > NUM.ZERO
+  ) {
+    activeNodeIds = buildProjectionCohortNodeIds(admittedProjectedServingNodeIds);
+    source = ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE.PROJECTED_SERVING;
+  } else if (
+    shouldUseProjectionCohort &&
+    admittedRecoveryEligibleIncludedNodeIds.length > NUM.ZERO
+  ) {
+    activeNodeIds = buildProjectionCohortNodeIds(
+      admittedRecoveryEligibleIncludedNodeIds,
+    );
+    source =
+      ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE.RECOVERY_ELIGIBLE_PROJECTION;
+  } else if (admittedPublishedActiveNodeIds.length > NUM.ZERO) {
+    activeNodeIds = admittedPublishedActiveNodeIds;
+    source = ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE.PUBLISHED_MEMBERSHIP;
+  } else if (admittedLocallyEligibleNodeIds.length > NUM.ZERO) {
+    activeNodeIds = admittedLocallyEligibleNodeIds;
+    source = ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE.LOCALLY_ELIGIBLE_PROJECTION;
+  } else if (admittedProjectedServingNodeIds.length > NUM.ZERO) {
+    activeNodeIds = admittedProjectedServingNodeIds;
+    source = ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE.PROJECTED_SERVING;
+  } else if (admittedRecoveryEligibleIncludedNodeIds.length > NUM.ZERO) {
+    activeNodeIds = admittedRecoveryEligibleIncludedNodeIds;
+    source =
+      ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE.RECOVERY_ELIGIBLE_PROJECTION;
+  }
+
+  if (admittedExplicitRecoveryActiveNodeIds.length > NUM.ZERO) {
+    activeNodeIds = normalizeNodeIdList([
+      ...activeNodeIds,
+      ...admittedExplicitRecoveryActiveNodeIds,
+    ]);
+    if (source === ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE.NONE) {
+      source = explicitRecoveryActiveNodeSource ||
+        ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE.LOCALLY_ELIGIBLE_PROJECTION;
+    }
+  }
+  if (admittedMissingPublishedRecoveryActiveNodeIds.length > NUM.ZERO) {
+    activeNodeIds = normalizeNodeIdList([
+      ...activeNodeIds,
+      ...admittedPublishedActiveNodeIds,
+      ...admittedMissingPublishedRecoveryActiveNodeIds,
+    ]);
+    if (source === ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE.NONE) {
+      source =
+        ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE.RECOVERY_ELIGIBLE_PROJECTION;
+    }
+  }
+
+  return Object.freeze({
+    activeNodeIds: Object.freeze([...activeNodeIds]),
+    source,
+    publishedActiveNodeIds: Object.freeze([...admittedPublishedActiveNodeIds]),
+    projectedServingNodeIds: Object.freeze([...admittedProjectedServingNodeIds]),
+    locallyEligibleNodeIds: Object.freeze([...admittedLocallyEligibleNodeIds]),
+    recoveryEligibleIncludedNodeIds: Object.freeze([
+      ...admittedRecoveryEligibleIncludedNodeIds,
+    ]),
+    missingPublishedActiveNodeIds: Object.freeze(activeNodeIds.filter((nodeId) =>
+      !admittedPublishedActiveNodeIds.includes(nodeId),
+    )),
+  });
+}
+
+function buildActiveMembershipSnapshot(publicationConvergence = null) {
+  const normalizedPublicationConvergence =
+    publicationConvergence &&
+      typeof publicationConvergence === TYPEOF.OBJECT ?
+      publicationConvergence :
+      {};
+  const membershipLifecycleSummary =
+    normalizedPublicationConvergence.membershipLifecycleSummary &&
+      typeof normalizedPublicationConvergence.membershipLifecycleSummary ===
+        TYPEOF.OBJECT ?
+      normalizedPublicationConvergence.membershipLifecycleSummary :
+      null;
+  const projectionDiagnostics =
+    normalizedPublicationConvergence.projectionDiagnostics &&
+      typeof normalizedPublicationConvergence.projectionDiagnostics ===
+        TYPEOF.OBJECT ?
+      normalizedPublicationConvergence.projectionDiagnostics :
+      membershipLifecycleSummary?.projectionDiagnostics &&
+        typeof membershipLifecycleSummary.projectionDiagnostics ===
+          TYPEOF.OBJECT ?
+        membershipLifecycleSummary.projectionDiagnostics :
+        null;
+  const activeNodeCohort =
+    resolvePriorityRecoveryActiveNodeCohort(normalizedPublicationConvergence);
+
+  return Object.freeze({
+    publishedActiveNodeIds: Object.freeze([
+      ...activeNodeCohort.publishedActiveNodeIds,
+    ]),
+    projectedServingNodeIds: Object.freeze([
+      ...activeNodeCohort.projectedServingNodeIds,
+    ]),
+    locallyEligibleNodeIds: Object.freeze([
+      ...activeNodeCohort.locallyEligibleNodeIds,
+    ]),
+    projectionDiagnostics:
+      projectionDiagnostics && typeof projectionDiagnostics === TYPEOF.OBJECT ?
+        Object.freeze({...projectionDiagnostics}) :
+        null,
+    recoveryEligibleIncludedNodeIds: Object.freeze([
+      ...activeNodeCohort.recoveryEligibleIncludedNodeIds,
+    ]),
+    concreteEligibleNodeIds: Object.freeze([
+      ...activeNodeCohort.activeNodeIds,
+    ]),
+    recoveryActiveNodeIds: Object.freeze([
+      ...activeNodeCohort.activeNodeIds,
+    ]),
+    recoveryActiveNodeSource: activeNodeCohort.source,
+    missingPublishedRecoveryActiveNodeIds: Object.freeze([
+      ...activeNodeCohort.missingPublishedActiveNodeIds,
+    ]),
+    missingPublishedEligibleNodeIds: Object.freeze([
+      ...activeNodeCohort.missingPublishedActiveNodeIds,
+    ]),
+  });
+}
+
+function buildMembershipPublicationActiveSnapshot(
+  membershipPublication = null,
+) {
+  if (!membershipPublication || typeof membershipPublication !== TYPEOF.OBJECT) {
+    return null;
+  }
+
+  const normalizedPublication =
+    normalizeControlPlanePublicationRow(membershipPublication);
+  const membershipLifecycleSummary =
+    normalizedPublication.membershipLifecycleSummary &&
+      typeof normalizedPublication.membershipLifecycleSummary ===
+        TYPEOF.OBJECT ?
+      Object.freeze({...normalizedPublication.membershipLifecycleSummary}) :
+      null;
+  const projectionDiagnostics =
+    membershipLifecycleSummary?.projectionDiagnostics &&
+      typeof membershipLifecycleSummary.projectionDiagnostics ===
+        TYPEOF.OBJECT ?
+      Object.freeze({...membershipLifecycleSummary.projectionDiagnostics}) :
+      null;
+  const publicationStatus =
+    typeof membershipPublication.status === TYPEOF.STRING ?
+      membershipPublication.status :
+      normalizedPublication.status || null;
+  const publishedActiveNodeIdsPresent =
+    membershipPublication.publishedActiveNodeIdsPresent === true ||
+    Array.isArray(membershipPublication.publishedActiveNodeIds) ||
+    Array.isArray(membershipPublication.published_active_node_ids);
+  const pendingAckEvidenceState =
+    normalizePendingAckEvidenceState(
+      membershipPublication.pendingAckEvidenceState ??
+        membershipPublication.pending_ack_evidence_state,
+    ) ??
+    (Array.isArray(
+      membershipPublication.requiredAckNodeIds ??
+        membershipPublication.required_ack_node_ids,
+    ) ?
+      PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
+        .REQUIRED_ACK_NODE_LIST :
+      PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY);
+  const priorityRecoveryPublicationContext =
+    buildActiveMembershipSnapshot({
+      publishedActiveNodeIds: normalizedPublication.publishedActiveNodeIds,
+      membershipLifecycleSummary,
+      projectionDiagnostics,
+      targetNodeId:
+        membershipPublication.targetNodeId ??
+        membershipPublication.target_node_id ??
+        membershipPublication.publisherNodeId ??
+        membershipPublication.publisher_node_id,
+      admissionState:
+        membershipPublication.admissionState ??
+        membershipPublication.admission_state,
+      admissionReasonCodes:
+        membershipPublication.admissionReasonCodes ??
+        membershipPublication.admission_reason_codes,
+      clusterIncarnationFence:
+        membershipPublication.clusterIncarnationFence ??
+        membershipPublication.cluster_incarnation_fence,
+      recoveryActiveNodeIds:
+        membershipPublication.recoveryActiveNodeIds ??
+        membershipPublication.recovery_active_node_ids,
+      recoveryActiveNodeSource:
+        membershipPublication.recoveryActiveNodeSource ??
+        membershipPublication.recovery_active_node_source,
+    });
+
+  return Object.freeze({
+    publicationEpoch:
+      Number.isFinite(normalizedPublication.publicationEpoch) ?
+        normalizedPublication.publicationEpoch :
+        null,
+    status: publicationStatus,
+    publicationStatus: publicationStatus,
+    sourceTopologyEpoch:
+      Number.isFinite(normalizedPublication.sourceTopologyEpoch) ?
+        normalizedPublication.sourceTopologyEpoch :
+        null,
+    sourceSnapshotVersion:
+      Number.isFinite(normalizedPublication.sourceSnapshotVersion) ?
+        normalizedPublication.sourceSnapshotVersion :
+        null,
+    targetNodeId: normalizeOptionalString(
+      membershipPublication.targetNodeId ??
+        membershipPublication.target_node_id ??
+        membershipPublication.publisherNodeId ??
+        membershipPublication.publisher_node_id,
+    ),
+    ...(normalizeOptionalString(
+      membershipPublication.admissionState ??
+        membershipPublication.admission_state,
+    ) ?
+      {
+        admissionState: normalizeOptionalString(
+          membershipPublication.admissionState ??
+            membershipPublication.admission_state,
+        ),
+      } :
+      {}),
+    ...(Array.isArray(
+      membershipPublication.admissionReasonCodes ??
+        membershipPublication.admission_reason_codes,
+    ) ?
+      {
+        admissionReasonCodes: Object.freeze(normalizeStringList(
+          membershipPublication.admissionReasonCodes ??
+            membershipPublication.admission_reason_codes,
+        )),
+      } :
+      {}),
+    ...((membershipPublication.clusterIncarnationFence ??
+      membershipPublication.cluster_incarnation_fence) &&
+      typeof (
+        membershipPublication.clusterIncarnationFence ??
+          membershipPublication.cluster_incarnation_fence
+      ) === TYPEOF.OBJECT ?
+      {
+        clusterIncarnationFence: Object.freeze({
+          ...(membershipPublication.clusterIncarnationFence ??
+            membershipPublication.cluster_incarnation_fence),
+        }),
+      } :
+      {}),
+    publishedActiveNodeIdsPresent,
+    publishedActiveNodeIds: Object.freeze([
+      ...normalizedPublication.publishedActiveNodeIds,
+    ]),
+    requiredAckNodeIds: Object.freeze([
+      ...normalizedPublication.requiredAckNodeIds,
+    ]),
+    acknowledgedNodeIds: Object.freeze([
+      ...normalizedPublication.acknowledgedNodeIds,
+    ]),
+    pendingAckCount: normalizeNonNegativeInteger(
+      membershipPublication.pendingAckCount ??
+        membershipPublication.pending_ack_count,
+    ),
+    pendingAckEvidenceState,
+    priorityPartitionSummary:
+      normalizedPublication.priorityPartitionSummary &&
+        typeof normalizedPublication.priorityPartitionSummary ===
+          TYPEOF.OBJECT ?
+        Object.freeze({...normalizedPublication.priorityPartitionSummary}) :
+        null,
+    membershipLifecycleSummary,
+    projectionDiagnostics,
+    projectedServingNodeIds: Object.freeze([
+      ...priorityRecoveryPublicationContext.projectedServingNodeIds,
+    ]),
+    locallyEligibleNodeIds: Object.freeze([
+      ...priorityRecoveryPublicationContext.locallyEligibleNodeIds,
+    ]),
+    recoveryEligibleIncludedNodeIds: Object.freeze([
+      ...priorityRecoveryPublicationContext.recoveryEligibleIncludedNodeIds,
+    ]),
+    concreteEligibleNodeIds: Object.freeze([
+      ...priorityRecoveryPublicationContext.concreteEligibleNodeIds,
+    ]),
+    recoveryActiveNodeIds: Object.freeze([
+      ...priorityRecoveryPublicationContext.recoveryActiveNodeIds,
+    ]),
+    recoveryActiveNodeSource:
+      priorityRecoveryPublicationContext.recoveryActiveNodeSource,
+    missingPublishedRecoveryActiveNodeIds: Object.freeze([
+      ...priorityRecoveryPublicationContext
+        .missingPublishedRecoveryActiveNodeIds,
+    ]),
+    missingPublishedEligibleNodeIds: Object.freeze([
+      ...priorityRecoveryPublicationContext.missingPublishedEligibleNodeIds,
+    ]),
+  });
+}
+
+export {
+  ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE,
+  buildActiveMembershipSnapshot,
+  buildMembershipPublicationActiveSnapshot,
+  resolveLatestPublicationRow,
+  resolveLatestPublishedPublicationRow,
+  resolvePriorityRecoveryActiveNodeCohort,
+  resolvePublishedActiveNodeIds,
+};

@@ -3,32 +3,39 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
-  "opened": "2026-05-24",
-  "lane": "lightweight-maintenance",
-  "scenario": "none",
-  "artifact": "none",
-  "playback": "none",
-  "owner": "message_group_file_size_owner",
-  "boundary": "source_message_group_message_group_forwarding_owner_file_size_refactor",
-  "dominantReason": "oversized_file_ratchet",
-  "currentState": "Current file-size audit reports src/message-group/message-group-forwarding-owner.js at 1339/800 lines; no implementation is started in this package yet.",
-  "nextAction": "Extract semantically named helper modules from src/message-group/message-group-forwarding-owner.js until it is below 800 lines, preserving behavior and the public entrypoint.",
-  "proof": [
-    "npm run audit:file-size -- --strict src/message-group/message-group-forwarding-owner.js",
-    "node --check src/message-group/message-group-forwarding-owner.js",
-    "git diff --check -- src/message-group/message-group-forwarding-owner.js"
-  ],
-  "theoryLedgerRefs": [],
-  "writeScope": [
-    "src/message-group/message-group-forwarding-owner.js"
-  ],
-  "handoffFiles": [],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [
-    "src/message-group/message-group-forwarding-owner.js"
-  ],
+  "status": "done",
+  "intent": {
+    "opened": "2026-05-24",
+    "closed": "2026-05-24",
+    "lane": "lightweight-maintenance",
+    "scenario": "none",
+    "artifact": "none",
+    "playback": "none",
+    "owner": "message_group_file_size_owner",
+    "boundary": "source_message_group_message_group_forwarding_owner_file_size_refactor",
+    "currentState": "Current file-size audit reports src/message-group/message-group-forwarding-owner.js at 1339/800 lines; no implementation is started in this package yet.",
+    "nextAction": "Extract semantically named helper modules from src/message-group/message-group-forwarding-owner.js until it is below 800 lines, preserving behavior and the public entrypoint.",
+    "dominantReason": "oversized_file_ratchet"
+  },
+  "scope": {
+    "writeScope": [
+      "src/message-group/message-group-forwarding-owner.js"
+    ],
+    "handoffFiles": [],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": [],
+    "commitScope": [
+      "src/message-group/message-group-forwarding-owner.js"
+    ]
+  },
+  "gates": {
+    "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
+    "stabilityCredit": "local-proof-only",
+    "codeQualityAdmission": {
+      "reason": "active-guardrail-requirement",
+      "evidence": "The package is generated from npm run audit:file-size -- --top 250 for src/message-group/message-group-forwarding-owner.js; closure proof must make npm run audit:file-size -- --strict src/message-group/message-group-forwarding-owner.js pass."
+    }
+  },
   "modelFit": {
     "packageClass": "bounded-implementation",
     "intendedMinimumModel": "gpt-5.3-codex-spark",
@@ -40,30 +47,15 @@
       "a frozen decision must be reopened"
     ]
   },
-  "modelFitSplit": {
-    "targetExecutionModel": "gpt-5.3-codex-spark",
-    "allowedDecisionDepth": "bounded local edit after owner, scope, proof, and forbidden files are named",
-    "safeToExecuteWhen": [
-      "owner, boundary, write scope, forbidden scope, proof, and kill rule stay as declared",
-      "the executor does not need to choose architecture, migrate ownership, or reinterpret representative evidence",
-      "the first focused proof gives a clear pass, fail, or escalate signal"
-    ],
-    "splitTriggers": [
-      "write scope expands beyond the declared lower-model lane",
-      "proof requires forbidden scope, cross-owner reasoning, or architecture route selection",
-      "the implementation needs to decide system behavior instead of executing a named local mechanism"
-    ],
-    "childPackageCandidates": [
-      "Prefer mechanical-maintenance for docs/templates/schema-only edits.",
-      "Prefer test-only-proof for tests that do not change runtime behavior.",
-      "Prefer bounded-experiment for one same-owner hypothesis with inherited context."
-    ]
-  },
-  "stabilityCredit": "local-proof-only",
-  "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
-  "codeQualityAdmission": {
-    "reason": "active-guardrail-requirement",
-    "evidence": "The package is generated from npm run audit:file-size -- --top 250 for src/message-group/message-group-forwarding-owner.js; closure proof must make npm run audit:file-size -- --strict src/message-group/message-group-forwarding-owner.js pass."
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": {
+      "commands": [
+        "npm run audit:file-size -- --strict src/message-group/message-group-forwarding-owner.js",
+        "node --check src/message-group/message-group-forwarding-owner.js",
+        "git diff --check -- src/message-group/message-group-forwarding-owner.js"
+      ]
+    }
   }
 }
 -->
@@ -182,9 +174,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: executor; files-changed: target file plus semantically named helper/split files added to this package before pre-impl; validation: focused proof and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: verification-fix; owner: verifier_fixer; files-changed: package-owned files only; validation: strict file-size proof, syntax/focused test proof, and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: <validated|not-needed>.
+- [x] action: implementation; owner: executor; files-changed: src/message-group/message-group-forwarding-owner.js, src/message-group/message-group-forwarding-owner-constants.js, src/message-group/message-group-forwarding-owner-routing-methods.js; validation: pre-impl validation OK; strict file-size audit OK for target/helpers; node --check OK for changed JS; import smoke OK; scoped git diff --check OK; focused node --test message-group parts blocked before package code by unrelated src/control-plane/active-node-projection.js duplicate buildActiveMembershipSnapshot; parent revalidated focused proof: yes; no ledger update; outcome: validated.
+- [x] action: verification-fix; owner: verifier_fixer; files-changed: work/packages/done-20260524-oversized-message-group-message-group-forwarding-owner.md; validation: `npm run audit:file-size -- --strict src/message-group/message-group-forwarding-owner.js src/message-group/message-group-forwarding-owner-constants.js src/message-group/message-group-forwarding-owner-routing-methods.js`; `node --check src/message-group/message-group-forwarding-owner.js`; `node --check src/message-group/message-group-forwarding-owner-constants.js`; `node --check src/message-group/message-group-forwarding-owner-routing-methods.js`; `node --input-type=module -e "const [{MessageGroupForwardingOwner}, constants, routing] = await Promise.all([import('./src/message-group/message-group-forwarding-owner.js'), import('./src/message-group/message-group-forwarding-owner-constants.js'), import('./src/message-group/message-group-forwarding-owner-routing-methods.js')]); const owner = new MessageGroupForwardingOwner({service: {}}); if (typeof MessageGroupForwardingOwner !== 'function' || typeof owner.resolveCDCForwardSelection !== 'function' || typeof owner.buildCDCForwardTargets !== 'function' || typeof constants.resolveCDCForwardDeliveryProfile !== 'function' || typeof routing.defineMessageGroupForwardingOwnerRoutingMethods !== 'function') { throw new Error('message-group forwarding import smoke failed'); } console.log('message-group forwarding import smoke OK');"`; `node --test --test-concurrency=1 test/message-group/message-group-service.test.js test/message-group/message-group-service.test-part-2.js test/message-group/message-group-service.test-part-3.js test/message-group/message-group-service.test-part-4.js test/message-group/message-group-service.test-part-5.js test/message-group/message-group-service.test-part-6.js`; `git diff --check -- src/message-group/message-group-forwarding-owner.js src/message-group/message-group-forwarding-owner-constants.js src/message-group/message-group-forwarding-owner-routing-methods.js work/packages/done-20260524-oversized-message-group-message-group-forwarding-owner.md`; parent revalidated focused proof: yes; no ledger update; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: none; validation: not-needed; outcome: not-needed.
 
 ## Validation
 

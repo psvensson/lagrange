@@ -1,34 +1,41 @@
-# Refactor oversized source file src/partition/partition-split-merge-manager.js
+# Refactor oversized source file src/control-plane/active-node-projection.js
 
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
-  "opened": "2026-05-24",
-  "lane": "lightweight-maintenance",
-  "scenario": "none",
-  "artifact": "none",
-  "playback": "none",
-  "owner": "partition_file_size_owner",
-  "boundary": "source_partition_partition_split_merge_manager_file_size_refactor",
-  "dominantReason": "oversized_file_ratchet",
-  "currentState": "Current file-size audit reports src/partition/partition-split-merge-manager.js at 1248/800 lines; no implementation is started in this package yet.",
-  "nextAction": "Extract semantically named helper modules from src/partition/partition-split-merge-manager.js until it is below 800 lines, preserving behavior and the public entrypoint.",
-  "proof": [
-    "npm run audit:file-size -- --strict src/partition/partition-split-merge-manager.js",
-    "node --check src/partition/partition-split-merge-manager.js",
-    "git diff --check -- src/partition/partition-split-merge-manager.js"
-  ],
-  "theoryLedgerRefs": [],
-  "writeScope": [
-    "src/partition/partition-split-merge-manager.js"
-  ],
-  "handoffFiles": [],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [
-    "src/partition/partition-split-merge-manager.js"
-  ],
+  "status": "done",
+  "intent": {
+    "opened": "2026-05-24",
+    "closed": "2026-05-24",
+    "lane": "lightweight-maintenance",
+    "scenario": "none",
+    "artifact": "none",
+    "playback": "none",
+    "owner": "control_plane_file_size_owner",
+    "boundary": "source_control_plane_active_node_projection_file_size_refactor",
+    "currentState": "Current file-size audit reports src/control-plane/active-node-projection.js at 1352/800 lines; no implementation is started in this package yet.",
+    "nextAction": "Extract semantically named helper modules from src/control-plane/active-node-projection.js until it is below 800 lines, preserving behavior and the public entrypoint.",
+    "dominantReason": "oversized_file_ratchet"
+  },
+  "scope": {
+    "writeScope": [
+      "src/control-plane/active-node-projection.js"
+    ],
+    "handoffFiles": [],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": [],
+    "commitScope": [
+      "src/control-plane/active-node-projection.js"
+    ]
+  },
+  "gates": {
+    "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
+    "stabilityCredit": "local-proof-only",
+    "codeQualityAdmission": {
+      "reason": "active-guardrail-requirement",
+      "evidence": "The package is generated from npm run audit:file-size -- --top 250 for src/control-plane/active-node-projection.js; closure proof must make npm run audit:file-size -- --strict src/control-plane/active-node-projection.js pass."
+    }
+  },
   "modelFit": {
     "packageClass": "bounded-implementation",
     "intendedMinimumModel": "gpt-5.3-codex-spark",
@@ -40,41 +47,26 @@
       "a frozen decision must be reopened"
     ]
   },
-  "modelFitSplit": {
-    "targetExecutionModel": "gpt-5.3-codex-spark",
-    "allowedDecisionDepth": "bounded local edit after owner, scope, proof, and forbidden files are named",
-    "safeToExecuteWhen": [
-      "owner, boundary, write scope, forbidden scope, proof, and kill rule stay as declared",
-      "the executor does not need to choose architecture, migrate ownership, or reinterpret representative evidence",
-      "the first focused proof gives a clear pass, fail, or escalate signal"
-    ],
-    "splitTriggers": [
-      "write scope expands beyond the declared lower-model lane",
-      "proof requires forbidden scope, cross-owner reasoning, or architecture route selection",
-      "the implementation needs to decide system behavior instead of executing a named local mechanism"
-    ],
-    "childPackageCandidates": [
-      "Prefer mechanical-maintenance for docs/templates/schema-only edits.",
-      "Prefer test-only-proof for tests that do not change runtime behavior.",
-      "Prefer bounded-experiment for one same-owner hypothesis with inherited context."
-    ]
-  },
-  "stabilityCredit": "local-proof-only",
-  "whyHighestLeverageNow": "The active rolling-restart stability sprint explicitly front-loads file-size cleanup before runtime stability work resumes; this package removes one remaining oversized file from the zero-oversized gate while preserving behavior.",
-  "codeQualityAdmission": {
-    "reason": "active-guardrail-requirement",
-    "evidence": "The package is generated from npm run audit:file-size -- --top 250 for src/partition/partition-split-merge-manager.js; closure proof must make npm run audit:file-size -- --strict src/partition/partition-split-merge-manager.js pass."
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": {
+      "commands": [
+        "npm run audit:file-size -- --strict src/control-plane/active-node-projection.js",
+        "node --check src/control-plane/active-node-projection.js",
+        "git diff --check -- src/control-plane/active-node-projection.js"
+      ]
+    }
   }
 }
 -->
 
 ## Why
 
-src/partition/partition-split-merge-manager.js is a remaining oversized source file at 1248/800 lines. This package owns one disjoint target in the zero-oversized backlog so parallel executors can refactor it without crossing package scopes.
+src/control-plane/active-node-projection.js is a remaining oversized source file at 1352/800 lines. This package owns one disjoint target in the zero-oversized backlog so parallel executors can refactor it without crossing package scopes.
 
 ## Scope Basis
 
-Approved maintenance/refactor scope from the active rolling-restart stability sprint. The May 24 full file-size audit reports src/partition/partition-split-merge-manager.js at 1248/800 lines; closure must bring this file below the configured threshold without changing behavior or reducing coverage.
+Approved maintenance/refactor scope from the active rolling-restart stability sprint. The May 24 full file-size audit reports src/control-plane/active-node-projection.js at 1352/800 lines; closure must bring this file below the configured threshold without changing behavior or reducing coverage.
 
 ## Workflow Lane
 
@@ -101,8 +93,8 @@ Approved maintenance/refactor scope from the active rolling-restart stability sp
 ## Rerun Decision Gate
 
 - Source artifact: `none`
-- Route owner: `partition_file_size_owner`
-- Route boundary: `source_partition_partition_split_merge_manager_file_size_refactor`
+- Route owner: `control_plane_file_size_owner`
+- Route boundary: `source_control_plane_active_node_projection_file_size_refactor`
 - Route dominant reason: `oversized_file_ratchet`
 - Route causal outcome: `pending-before-rerun`
 - Stop mode: `pending-before-rerun`
@@ -140,7 +132,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. src/partition/partition-split-merge-manager.js
+1. src/control-plane/active-node-projection.js
 
 ## Out Of Scope
 
@@ -153,11 +145,11 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex-spark`
 - Scope shape: `leaf-slice`
 - Output profile: `medium`
-- Owned files: `src/partition/partition-split-merge-manager.js`
+- Owned files: `src/control-plane/active-node-projection.js`
 - Forbidden files: `test/`, `runtime ownership or public contract changes`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run audit:file-size -- --strict src/partition/partition-split-merge-manager.js`, `node --check src/partition/partition-split-merge-manager.js`, `git diff --check -- src/partition/partition-split-merge-manager.js`
+- Focused proof: `npm run audit:file-size -- --strict src/control-plane/active-node-projection.js`, `node --check src/control-plane/active-node-projection.js`, `git diff --check -- src/control-plane/active-node-projection.js`
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split
@@ -182,12 +174,12 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: executor; files-changed: target file plus semantically named helper/split files added to this package before pre-impl; validation: focused proof and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: verification-fix; owner: verifier_fixer; files-changed: package-owned files only; validation: strict file-size proof, syntax/focused test proof, and parent revalidated focused proof: yes; outcome: <validated|blocked>.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: <validated|not-needed>.
+- [x] action: implementation; owner: executor; files-changed: src/control-plane/active-node-projection.js, src/control-plane/active-node-publication-snapshots.js, src/control-plane/active-node-projection-normalizers.js; validation: pre-impl `npm run work:validate -- --pre-impl work/packages/done-20260524-oversized-control-plane-active-node-projection.md`; strict file-size audit over changed JS; `node --check` over changed JS; `node test/control-plane/active-node-projection.test.js`; ESM import smoke for active-node-projection public exports; scoped `git diff --check`; parent revalidated focused proof: yes; no ledger update; outcome: validated.
+- [x] action: verification-fix; owner: verifier_fixer; files-changed: work/packages/done-20260524-oversized-control-plane-active-node-projection.md; validation: `npm run audit:file-size -- --strict src/control-plane/active-node-projection.js src/control-plane/active-node-publication-snapshots.js src/control-plane/active-node-projection-normalizers.js`; `node --check src/control-plane/active-node-projection.js`; `node --check src/control-plane/active-node-publication-snapshots.js`; `node --check src/control-plane/active-node-projection-normalizers.js`; `node test/control-plane/active-node-projection.test.js`; `node --input-type=module -e "const module = await import('./src/control-plane/active-node-projection.js'); if (Object.keys(module).length < 16) throw new Error('active-node projection export smoke failed');"`; `git diff --check -- src/control-plane/active-node-projection.js work/packages/done-20260524-oversized-control-plane-active-node-projection.md`; `git diff --check --no-index -- /dev/null src/control-plane/active-node-publication-snapshots.js`; `git diff --check --no-index -- /dev/null src/control-plane/active-node-projection-normalizers.js`; parent revalidated focused proof: yes; no ledger update; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: none; validation: not-needed; parent revalidated focused proof: yes; no ledger update; outcome: not-needed.
 
 ## Validation
 
-1. npm run audit:file-size -- --strict src/partition/partition-split-merge-manager.js
-2. node --check src/partition/partition-split-merge-manager.js
-3. git diff --check -- src/partition/partition-split-merge-manager.js
+1. npm run audit:file-size -- --strict src/control-plane/active-node-projection.js
+2. node --check src/control-plane/active-node-projection.js
+3. git diff --check -- src/control-plane/active-node-projection.js
