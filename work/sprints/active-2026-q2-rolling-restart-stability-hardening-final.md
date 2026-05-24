@@ -315,7 +315,7 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
      - [Split oversized test/support file test/migration/migration-coordinator-core.test.js](../packages/todo-20260524-oversized-migration-migration-coordinator-core.md)
      - [Split oversized test/support file test/distributed/run.js](../packages/todo-20260524-oversized-distributed-run.md)
      - [Split oversized test/support file test/rebalancer/rebalance-coordinator-atomic-transitions.test.js](../packages/todo-20260524-oversized-rebalancer-rebalance-coordinator-atomic-transitions.md)
-     - [Split oversized test/support file test/bootstrap/connect-websocket-phase.test.js](../packages/todo-20260524-oversized-bootstrap-connect-websocket-phase.md)
+     - [Split oversized test/support file test/bootstrap/connect-websocket-phase.test.js](../packages/done-20260524-oversized-bootstrap-connect-websocket-phase.md)
      - [Split oversized test/support file test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js](../packages/todo-20260524-oversized-distributed-harness-failure-bundle-core-cases.md)
      - [Split oversized test/support file test/distributed/harness/__tests__/cluster-active-gate-startup-acknowledgement-test-cases.js](../packages/todo-20260524-oversized-distributed-harness-cluster-active-gate-startup-acknowledgement.md)
      - [Split oversized test/support file test/admin/admin-control-snapshot-tail-test-cases.js](../packages/todo-20260524-oversized-admin-admin-control-snapshot-tail-cases.md)
