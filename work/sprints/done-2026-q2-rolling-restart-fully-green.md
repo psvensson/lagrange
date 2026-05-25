@@ -1,6 +1,6 @@
 # Rolling Restart Fully Green Sprint
 
-Status: active. Opened on May 25, 2026.
+Status: done. Opened on May 25, 2026.
 
 ## Goal
 
@@ -38,20 +38,20 @@ admission relaxation, or unresolved topology/frontier blockers.
 ```text
 Representative artifact: test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json
 Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out
-Active package: work/packages/active-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md
+Active package: work/packages/done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage-retry.md
 Active package owner: startup_active_gate_owner
 Active package boundary: snapshot_coverage
 Selected cause: active_gate_timed_out
 Required action: Triage active_gate_snapshot_coverage with combined scenario evidence before runtime edits.
-Representative status: migrated
+Representative status: unknown
 Causal outcome: continue_local_fix
-Architecture gate: watching / unknown
+Architecture gate: selected / continue-local-proof
 Expected delta: Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.
 Current state: Scaffolded from representative evidence for active_gate_snapshot_coverage.
-Allowed edits: unknown
+Allowed edits: src/admin/admin-control-snapshot-class-part-6.js, scripts/work-package-new.js
 Candidate runtime files: unknown
 Forbidden edits: Startup readiness remains downstream until active-gate snapshot coverage is resolved.
-Required latest proof: falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json, regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json --markdown, supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json --markdown
+Required latest proof: falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json, regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json --markdown, supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json --markdown, supporting: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json --explain active_gate_snapshot_coverage, supporting: npx tap test/admin/admin-control-snapshot.test.js --contract-transition --fixture-focused --consumer-affected
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -67,7 +67,7 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
 2. [Active Gate Snapshot Coverage Blocker](../packages/done-20260525-rolling-restart-active-gate-snapshot-coverage-blocker.md)
    - Lane: `causal-escalation`
    - Purpose: triage active-gate snapshot coverage with combined scenario evidence.
-3. [Active Gate Snapshot Coverage Fix](../packages/active-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md)
+3. [Active Gate Snapshot Coverage Fix](../packages/done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md)
    - Lane: `runtime-owner-boundary`
    - Purpose: resolve active-gate snapshot coverage timeout.
 

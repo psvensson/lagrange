@@ -29,6 +29,7 @@ import {
   resolveOwnerRecoveryWaitHandoffReasonCode,
 } from './admin-control-membership-publication-handoff-outcomes.js';
 import {AdminControlSnapshotPart5} from './admin-control-snapshot-class-part-5.js';
+import {isRecoverableControlSnapshotPublicationReadError} from './admin-control-snapshot-repair-diagnostics.js';
 // ── file-local constants ────────────────────────────────────────────────────
 const ADMIN_CONTROL_SNAPSHOT_LITERAL = Object.freeze({
   VALUE: '',
@@ -354,16 +355,16 @@ async function maybeReconcileAuthoritativeMembershipPublication(
       ) === true
     ) {
       if (!membershipPublicationService) {
+        const recoveryWaitReason =
+          MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_REASON_OWNER_RECOVERY_WAIT_SERVICE_UNAVAILABLE;
         return buildMembershipPublicationHandoffOutcome(
           MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_STATE.WRITE_DEFERRED,
           {
             target: membershipPublicationTarget,
-            reasonCode:
-              MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_REASON_OWNER_RECOVERY_WAIT_SERVICE_UNAVAILABLE,
+            reasonCode: recoveryWaitReason,
             controlPlaneConvergence:
               buildMembershipPublicationHandoffControlPlaneConvergence({
-                reasonCode:
-                  MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_REASON_OWNER_RECOVERY_WAIT_SERVICE_UNAVAILABLE,
+                reasonCode: recoveryWaitReason,
               }),
           },
         );
@@ -417,11 +418,11 @@ async function maybeReconcileAuthoritativeMembershipPublication(
       buildDeferredMembershipPublicationReconcileOptions(options);
     const enqueueOutcome =
       reconcileOptions !== MEMBERSHIP_PUBLICATION_RECONCILE_OPTIONS ?
-      enqueueMembershipPublicationReconcileFallback(
-        membershipPublicationService,
-        reconcileOptions,
-      ) :
-      buildMembershipPublicationHandoffEnqueueOutcome();
+        enqueueMembershipPublicationReconcileFallback(
+          membershipPublicationService,
+          reconcileOptions,
+        ) :
+        buildMembershipPublicationHandoffEnqueueOutcome();
     return buildMembershipPublicationHandoffOutcome(
       MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_STATE.WRITE_DEFERRED,
       {
@@ -667,12 +668,32 @@ class AdminControlSnapshotPart6 extends AdminControlSnapshotPart5 {
       typeof membershipPublicationService.getLatestClusterPublication ===
         TYPEOF.FUNCTION
     ) {
-      const publicationRow =
-        await membershipPublicationService.getLatestClusterPublication(
-          buildMembershipPublicationReadOptions({preferAuthoritativeRead}),
-        );
-      if (publicationRow) {
-        return publicationRow;
+      try {
+        const publicationRow =
+          await membershipPublicationService.getLatestClusterPublication(
+            buildMembershipPublicationReadOptions({preferAuthoritativeRead}),
+          );
+        if (publicationRow) {
+          return publicationRow;
+        }
+      } catch (error) {
+        const errorMsg = String(error?.message || error || '').toLowerCase();
+        const isTimeoutError = errorMsg.includes('timeout') || errorMsg.includes('timed out');
+        const isConnectionError =
+          errorMsg.includes('ehostunreach') ||
+          errorMsg.includes('econnrefused') ||
+          errorMsg.includes('econnreset') ||
+          errorMsg.includes('socket hang up') ||
+          errorMsg.includes('network error') ||
+          errorMsg.includes('aborted') ||
+          errorMsg.includes('closed');
+        if (
+          !isRecoverableControlSnapshotPublicationReadError(error) &&
+          !isTimeoutError &&
+          !isConnectionError
+        ) {
+          throw error;
+        }
       }
     }
     return resolveLatestMembershipPublicationRow(
@@ -739,14 +760,34 @@ class AdminControlSnapshotPart6 extends AdminControlSnapshotPart5 {
       typeof membershipPublicationService.getLatestPublishedClusterPublication ===
         TYPEOF.FUNCTION
     ) {
-      const publicationRow =
-        await membershipPublicationService.getLatestPublishedClusterPublication(
-          buildMembershipPublicationReadOptions({
-            preferAuthoritativeRead: options.preferAuthoritativeRead === true,
-          }),
-        );
-      if (publicationRow && typeof publicationRow === TYPEOF.OBJECT) {
-        return publicationRow;
+      try {
+        const publicationRow =
+          await membershipPublicationService.getLatestPublishedClusterPublication(
+            buildMembershipPublicationReadOptions({
+              preferAuthoritativeRead: options.preferAuthoritativeRead === true,
+            }),
+          );
+        if (publicationRow && typeof publicationRow === TYPEOF.OBJECT) {
+          return publicationRow;
+        }
+      } catch (error) {
+        const errorMsg = String(error?.message || error || '').toLowerCase();
+        const isTimeoutError = errorMsg.includes('timeout') || errorMsg.includes('timed out');
+        const isConnectionError =
+          errorMsg.includes('ehostunreach') ||
+          errorMsg.includes('econnrefused') ||
+          errorMsg.includes('econnreset') ||
+          errorMsg.includes('socket hang up') ||
+          errorMsg.includes('network error') ||
+          errorMsg.includes('aborted') ||
+          errorMsg.includes('closed');
+        if (
+          !isRecoverableControlSnapshotPublicationReadError(error) &&
+          !isTimeoutError &&
+          !isConnectionError
+        ) {
+          throw error;
+        }
       }
     }
     return resolveLatestMembershipPublicationRow(

@@ -1326,6 +1326,11 @@ async function buildPackageContent(flags = {}) {
       'New package scaffolded from the shared work-package schema.',
     nextAction: normalizeText(flags[FLAG_NEXT_ACTION]),
     proof: metadataProof,
+    representativeRerunCadence: flags['representative-rerun-cadence'] || (
+      [LANE_RUNTIME_OWNER_BOUNDARY, LANE_SCENARIO_RELEASE_GATE].includes(lane) ?
+        'scheduled-rerun-command' :
+        undefined
+    ),
     [THEORY_LEDGER_REFS_FIELD]: [],
     [SCOPE_FIELD_WRITE_SCOPE]: writeScope,
     [SCOPE_FIELD_HANDOFF_FILES]: handoffFiles,
@@ -1405,11 +1410,19 @@ async function buildPackageContent(flags = {}) {
   if (predecessor) {
     metadata.predecessor = predecessor;
     try {
-      // Find the predecessor file and parse its metadata to inherit theoryLedgerRefs
+      // Find the predecessor file and parse its metadata to inherit theoryLedgerRefs and causal blocks
       const predContent = await fs.readFile(predecessor, 'utf8');
       const predMetadata = parsePackageMetadata(predContent, predecessor);
-      if (predMetadata && Array.isArray(predMetadata[THEORY_LEDGER_REFS_FIELD])) {
-        metadata[THEORY_LEDGER_REFS_FIELD] = predMetadata[THEORY_LEDGER_REFS_FIELD];
+      if (predMetadata) {
+        if (Array.isArray(predMetadata[THEORY_LEDGER_REFS_FIELD])) {
+          metadata[THEORY_LEDGER_REFS_FIELD] = predMetadata[THEORY_LEDGER_REFS_FIELD];
+        }
+        if (predMetadata.causalGovernance) {
+          metadata.causalGovernance = predMetadata.causalGovernance;
+        }
+        if (predMetadata.scenarioCausalClosure) {
+          metadata.scenarioCausalClosure = predMetadata.scenarioCausalClosure;
+        }
       }
     } catch (e) {
       // ignore if predecessor file does not exist or fails to parse

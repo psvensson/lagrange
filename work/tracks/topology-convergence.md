@@ -159,7 +159,7 @@ publication-evidence replay code rather than by the runtime owner alone.
 | `work/sprints/done-2026-q2-topology-operation-workflow-residual-closure.md` | `stabilization` / `scenario-release-gate` | done | Cleared operation-workflow priority-recovery residual witnesses and routed fresh rolling-restart evidence to active-gate snapshot coverage. |
 | `work/sprints/done-2026-q2-tell-tale-scenario-reliability.md` | `stabilization` / `scenario-release-gate` | done | Starts from the active-gate snapshot coverage architecture gap, then queues runtime successor, final adjudication repair, rolling-restart green gate, and tell-tale suite promotion. |
 | `work/sprints/done-2026-q2-rolling-restart-resume-activation.md` | `experiment` / `source-of-truth-repair` | done | Active-gate discriminator records owner-boundary migration and queues workflow-progress causal proof. |
-| `work/sprints/active-2026-q2-rolling-restart-fully-green.md` | `stabilization` / `scenario-release-gate` | active | Success criterion is representative-green rolling-restart; reduced or migrated evidence opens successors but does not close the sprint. |
+| `work/sprints/done-2026-q2-rolling-restart-fully-green.md` | `stabilization` / `scenario-release-gate` | done | Success criterion is representative-green rolling-restart; reduced or migrated evidence opens successors but does not close the sprint. |
 
 
 ## Owner Boundaries
