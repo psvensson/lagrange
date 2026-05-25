@@ -8,7 +8,7 @@ parent_index: ../workflow-guidelines/INDEX.md
 last_reviewed: 2026-05-23
 ---
 
-> **Canonical source.** Core Logic Brief Gate, Decision Experiment Gate, Sprint Architecture Decision Gate, Classification fast-path, Causal closure ledger. Index: [`INDEX.md`](INDEX.md).
+> **Canonical source.** Discovery Gate, Core Logic Brief Gate, Decision Experiment Gate, Sprint Architecture Decision Gate, Classification fast-path, Causal closure ledger. Index: [`INDEX.md`](INDEX.md).
 
 # Workflow — Decision & Closure Gates
 
@@ -119,6 +119,43 @@ Required:
 9. Sprint Architecture Decision Gate when the sprint may continue local proof,
    migrate owner boundary, classify `architecture-gap`, or route broad
    architecture work.
+
+## Discovery Gate
+
+The Discovery Gate is a package-local pre-implementation framing step for
+material owner, boundary, route, or proof ambiguity. It gives an LLM a bounded
+place to compare lateral explanations without creating a parallel workflow
+truth source.
+
+Use it when `modelFit.ambiguityScore >= 2`, competing owners or hypotheses
+remain plausible, the package repeats a same-frontier or same-action pattern,
+or write scope cannot be chosen until one discriminator is named. Skip it when
+owner, boundary, route, forbidden scope, and proof are already explicit.
+
+Required fields:
+
+1. `Symptom / decision question`
+2. `Current evidence`
+3. `Candidate owners / boundaries`
+4. `Competing hypotheses`
+5. `Cheapest discriminator`
+6. `Do not edit yet`
+7. `Selected route`
+8. `Promotion rule`
+
+The gate has only four valid promotions:
+
+1. Continue the current package after selected route, write scope, forbidden
+   scope, and proof are explicit.
+2. Open or use an `experiment`/probe package when the discriminator must run
+   before implementation.
+3. Update current-blocker or successor truth only when selected owner,
+   boundary, required action, stop condition, or successor changes.
+4. Add or supersede a theory-ledger entry only for durable route knowledge that
+   future packages should reuse.
+
+Transient discovery that only clarified the current package stays inside the
+package and does not update current-blocker or `work/theory-ledger.md`.
 
 ## Sprint Strategy Brief
 

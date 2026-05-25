@@ -58,6 +58,19 @@ Describe the runtime owner-boundary problem.
 - Primary boundary:
 - Escalate to scenario lane if:
 
+## Discovery Gate
+
+- Status: required when owner, boundary, route, or proof ambiguity is material;
+  otherwise `not-needed`.
+- Symptom / decision question:
+- Current evidence:
+- Candidate owners / boundaries:
+- Competing hypotheses:
+- Cheapest discriminator:
+- Do not edit yet:
+- Selected route:
+- Promotion rule:
+
 ## Core Logic Brief
 
 - Canonical outcome:

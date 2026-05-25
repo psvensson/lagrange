@@ -253,6 +253,67 @@ the package explicitly records a heavier audit or architecture reason:
    pre-registered observable prediction, and one stop rule; it should not carry
    `## Execution Evidence`.
 
+## Discovery Gate
+
+Use a `## Discovery Gate` as package-local thinking space when an LLM needs to
+compare plausible owners, boundaries, or routes before implementation scope is
+safe. It is not a new lane, a status system, a current-blocker replacement, or
+a theory-ledger entry.
+
+Use the gate when any of these are true:
+
+1. `modelFit.ambiguityScore >= 2`
+2. multiple owners, boundaries, or hypotheses could explain the same symptom
+3. the package repeats a same-frontier or same-action pattern
+4. write scope, forbidden scope, or focused proof cannot be chosen without one
+   discriminator
+
+Skip the gate when owner, boundary, route, forbidden scope, and proof are
+already explicit, especially for read-doc, doc-only, or straightforward
+maintenance packages.
+
+Required package fields:
+
+```md
+## Discovery Gate
+
+- Symptom / decision question:
+- Current evidence:
+- Candidate owners / boundaries:
+- Competing hypotheses:
+- Cheapest discriminator:
+- Do not edit yet:
+- Selected route:
+- Promotion rule:
+```
+
+Promotion rules are strict:
+
+1. If the discriminator is only needed to choose the package route, open or use
+   an `experiment`/probe package before implementation.
+2. If the selected route changes active owner, boundary, required action, stop
+   condition, or successor, update current-blocker/successor truth through the
+   normal workflow tools.
+3. If the conclusion is durable route knowledge future agents should reuse,
+   add or supersede a `work/theory-ledger.md` entry at closure, rerun routing,
+   or an architecture gate. Do not write ledger entries for transient local
+   reasoning.
+4. If the gate only clarifies the current package and does not change durable
+   route truth, keep it in the package and leave current-blocker and the theory
+   ledger unchanged.
+
+Relationship to existing structures:
+
+1. The Core Logic Brief records the selected domain decision after the route is
+   chosen; the Discovery Gate records why that route was selected or why a
+   probe is required first.
+2. The Decision Experiment Gate applies to runtime, scenario, and causal lanes
+   after a route is selected. It tests the chosen implementation hypothesis;
+   the Discovery Gate prevents choosing that hypothesis by momentum alone.
+3. Execution Evidence records implementation and verification-fix proof. Optional
+   explorer, skeptic, or integrator notes are provenance only and do not replace
+   required closure roles.
+
 ## Core Logic Brief
 
 Runtime owner-boundary, scenario/release-gate, and causal-escalation packages

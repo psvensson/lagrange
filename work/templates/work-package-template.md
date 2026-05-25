@@ -56,6 +56,19 @@ In scope:
 Out of scope:
 1. Item
 
+## Discovery Gate
+
+- Status: `not-needed` when owner, boundary, route, forbidden scope, and proof
+  are already explicit.
+- Symptom / decision question:
+- Current evidence:
+- Candidate owners / boundaries:
+- Competing hypotheses:
+- Cheapest discriminator:
+- Do not edit yet:
+- Selected route:
+- Promotion rule:
+
 ## Core Logic Brief
 
 - Status: `not-needed` or brief description.

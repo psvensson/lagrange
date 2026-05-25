@@ -35,11 +35,17 @@ Default closure sequence:
 3. The parent session reruns the focused package proof locally before package
    closure.
 
-Review, owner-path mapping, metadata repair, and artifact extraction are
-optional planning or support roles. Use them when scenario, release-gate,
-causal-escalation, or package metadata complexity makes them useful. These
-optional roles do not replace the `implementation` and `verification-fix`
-closure roles.
+Review, owner-path mapping, metadata repair, artifact extraction, and Discovery
+Gate explorer/skeptic/integrator work are optional planning or support roles.
+Use them when scenario, release-gate, causal-escalation, or package metadata
+complexity makes them useful. These optional roles do not replace the
+`implementation` and `verification-fix` closure roles.
+
+Discovery roles are provenance for bounded lateral analysis. They may help
+compare candidate owners, hypotheses, or discriminators, but their output must
+resolve to the package Discovery Gate, an experiment/probe package,
+current-blocker or successor truth, or a theory-ledger entry. They are not a
+third required closure role.
 
 Optional review checks:
 

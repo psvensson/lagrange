@@ -48,6 +48,47 @@ To guarantee stability, implementation changes must compile and pass structured 
 
 ---
 
+## Discovery Gate
+<a name="discovery-gate"></a>
+
+The Discovery Gate is a package-local pre-implementation framing step. It is
+not a lane, status, closure artifact, current-blocker replacement, or theory
+ledger entry.
+
+Use it when owner, boundary, route, or proof ambiguity is material, including
+`modelFit.ambiguityScore >= 2`, competing owners or hypotheses, repeated
+same-frontier or same-action packages, or a package whose write scope cannot
+be selected until one discriminator is named. Skip it for read-doc, doc-only,
+or lightweight maintenance when owner, boundary, route, and proof are already
+explicit.
+
+When used, record these fields in the package before implementation:
+
+1. `Symptom / decision question`
+2. `Current evidence`
+3. `Candidate owners / boundaries`
+4. `Competing hypotheses`
+5. `Cheapest discriminator`
+6. `Do not edit yet`
+7. `Selected route`
+8. `Promotion rule`
+
+Allowed outcomes:
+
+1. Continue the current package only after selected route, write scope,
+   forbidden scope, and proof are explicit.
+2. Open or use an `experiment`/probe package when the cheapest discriminator
+   must run before implementation.
+3. Update current-blocker or successor truth only when the selected route
+   changes active owner, boundary, required action, stop condition, or
+   successor.
+4. Update `work/theory-ledger.md` only when the conclusion is durable route
+   knowledge that future package selection should reuse.
+5. Leave no current-blocker or theory-ledger update for transient local
+   reasoning that only served the current package.
+
+---
+
 ## Coding Constraints
 <a name="coding-constraints"></a>
 

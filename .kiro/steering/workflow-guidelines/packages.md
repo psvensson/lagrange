@@ -70,6 +70,12 @@ For scenario and causal-escalation packages, closure order is:
 `current-blocker` pointing to a non-existent package are closure defects, not
 handoff states.
 
+Discovery Gate notes are package-local until explicitly promoted. Do not create
+new headings, sidecar files, ledger rows, or current-blocker edits from
+discovery thinking unless the selected route changes owner, boundary, required
+action, stop condition, successor, or durable theory. Transient lateral
+analysis stays in the active package and is closed with that package.
+
 ## Affected-Area Deep Dive
 
 Every work package ends with an affected-area review before `done-...`.

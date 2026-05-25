@@ -99,12 +99,12 @@
     }
   ],
   "stats": {
-    "candidateCount": 319,
-    "dedupedRuleCount": 312,
-    "exportedRuleCount": 312,
+    "candidateCount": 325,
+    "dedupedRuleCount": 318,
+    "exportedRuleCount": 318,
     "aliasRuleCount": 11,
-    "masterRuleCount": 301,
-    "estimatedAllRulesTokens": 12218
+    "masterRuleCount": 307,
+    "estimatedAllRulesTokens": 12436
   },
   "rules": [
     {
@@ -1555,7 +1555,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 175,
+          "line": 212,
           "section": "Workflow — Decision & Closure Gates > Classification-Only Fast Path"
         }
       ]
@@ -1630,7 +1630,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 204,
+          "line": 210,
           "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
@@ -1647,7 +1647,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 314,
+          "line": 351,
           "section": "Workflow — Decision & Closure Gates > Sprint Architecture Decision Gate"
         }
       ]
@@ -1662,7 +1662,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 390,
+          "line": 427,
           "section": "Workflow — Decision & Closure Gates > Scenario Failure Migration"
         }
       ]
@@ -1679,7 +1679,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 432,
+          "line": 469,
           "section": "Workflow — Decision & Closure Gates > Frontier Oscillation Escalation"
         }
       ]
@@ -2406,7 +2406,7 @@
           "section": "Testing — Harness & Execution > Test Duration Hard Limit"
         }
       ],
-      "canonical_of": "GOV-0025"
+      "canonical_of": "GOV-0026"
     },
     {
       "id": "TEST-0043",
@@ -2485,7 +2485,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 203,
+          "line": 240,
           "section": "Workflow — Decision & Closure Gates > Classification Efficiency Contract"
         }
       ]
@@ -2547,15 +2547,15 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [
-        "governance"
+        "ownership"
       ],
-      "rule": "Do not start a second active package on the same architectural boundary while the first has unresolved in-scope residuals.",
+      "rule": "Do not create new headings, sidecar files, ledger rows, or current-blocker edits from discovery thinking unless the selected route changes owner, boundary, required action, stop condition, successor, or durable theory.",
       "score": 211,
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 115,
-          "section": "Workflow — Packages & Closure > Residual Closure Inventory"
+          "line": 73,
+          "section": "Workflow — Packages & Closure > Package Status And Closure"
         }
       ]
     },
@@ -2566,18 +2566,35 @@
       "tags": [
         "governance"
       ],
-      "rule": "Roadmap status must not outrun representative evidence.",
+      "rule": "Do not start a second active package on the same architectural boundary while the first has unresolved in-scope residuals.",
       "score": 211,
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 148,
-          "section": "Workflow — Packages & Closure > Roadmap And Work-Tracker Truth"
+          "line": 121,
+          "section": "Workflow — Packages & Closure > Residual Closure Inventory"
         }
       ]
     },
     {
       "id": "GOV-0021",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [
+        "governance"
+      ],
+      "rule": "Roadmap status must not outrun representative evidence.",
+      "score": 211,
+      "sources": [
+        {
+          "file": "workflow-guidelines/packages.md",
+          "line": 154,
+          "section": "Workflow — Packages & Closure > Roadmap And Work-Tracker Truth"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0022",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2592,7 +2609,7 @@
       ]
     },
     {
-      "id": "GOV-0022",
+      "id": "GOV-0023",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2601,13 +2618,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 164,
+          "line": 170,
           "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
         }
       ]
     },
     {
-      "id": "GOV-0023",
+      "id": "GOV-0024",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2618,13 +2635,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 190,
+          "line": 196,
           "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
     },
     {
-      "id": "GOV-0024",
+      "id": "GOV-0025",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2633,13 +2650,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 237,
+          "line": 243,
           "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
     },
     {
-      "id": "GOV-0025",
+      "id": "GOV-0026",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2657,7 +2674,7 @@
       ]
     },
     {
-      "id": "GOV-0026",
+      "id": "GOV-0027",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2741,7 +2758,7 @@
       ]
     },
     {
-      "id": "GOV-0027",
+      "id": "GOV-0028",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2758,7 +2775,7 @@
       ]
     },
     {
-      "id": "GOV-0028",
+      "id": "GOV-0029",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -2773,7 +2790,7 @@
       ]
     },
     {
-      "id": "GOV-0029",
+      "id": "GOV-0030",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2790,7 +2807,7 @@
       ]
     },
     {
-      "id": "GOV-0030",
+      "id": "GOV-0031",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2808,7 +2825,7 @@
       ]
     },
     {
-      "id": "GOV-0031",
+      "id": "GOV-0032",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2825,7 +2842,7 @@
       ]
     },
     {
-      "id": "GOV-0032",
+      "id": "GOV-0033",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2842,7 +2859,7 @@
       ]
     },
     {
-      "id": "GOV-0033",
+      "id": "GOV-0034",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3220,7 +3237,7 @@
       ]
     },
     {
-      "id": "GOV-0034",
+      "id": "GOV-0035",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3237,7 +3254,7 @@
       ]
     },
     {
-      "id": "GOV-0035",
+      "id": "GOV-0036",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3254,7 +3271,39 @@
       ]
     },
     {
-      "id": "GOV-0036",
+      "id": "GOV-0037",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [],
+      "rule": "Open or use an experiment/probe package when the discriminator must run before implementation.",
+      "score": 203,
+      "sources": [
+        {
+          "file": "workflow-guidelines/closure.md",
+          "line": 150,
+          "section": "Workflow — Decision & Closure Gates > Discovery Gate"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0038",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "Update current-blocker or successor truth only when selected owner, boundary, required action, stop condition, or successor changes.",
+      "score": 203,
+      "sources": [
+        {
+          "file": "workflow-guidelines/closure.md",
+          "line": 152,
+          "section": "Workflow — Decision & Closure Gates > Discovery Gate"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0039",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3269,7 +3318,7 @@
       ]
     },
     {
-      "id": "GOV-0037",
+      "id": "GOV-0040",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3286,7 +3335,7 @@
       ]
     },
     {
-      "id": "GOV-0038",
+      "id": "GOV-0041",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3335,7 +3384,7 @@
       ]
     },
     {
-      "id": "GOV-0039",
+      "id": "GOV-0042",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3352,7 +3401,7 @@
       ]
     },
     {
-      "id": "GOV-0040",
+      "id": "GOV-0043",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3363,13 +3412,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 250,
+          "line": 287,
           "section": "Workflow — Decision & Closure Gates > Sprint Architecture Decision Gate"
         }
       ]
     },
     {
-      "id": "GOV-0041",
+      "id": "GOV-0044",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3380,13 +3429,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 273,
+          "line": 310,
           "section": "Workflow — Decision & Closure Gates > Sprint Architecture Decision Gate"
         }
       ]
     },
     {
-      "id": "GOV-0042",
+      "id": "GOV-0045",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3395,13 +3444,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 305,
+          "line": 342,
           "section": "Workflow — Decision & Closure Gates > Sprint Architecture Decision Gate"
         }
       ]
     },
     {
-      "id": "GOV-0043",
+      "id": "GOV-0046",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3412,7 +3461,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 387,
+          "line": 424,
           "section": "Workflow — Decision & Closure Gates > Scenario Failure Migration"
         }
       ]
@@ -3569,7 +3618,7 @@
       ]
     },
     {
-      "id": "GOV-0044",
+      "id": "GOV-0047",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3584,7 +3633,7 @@
       ]
     },
     {
-      "id": "GOV-0045",
+      "id": "GOV-0048",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3602,7 +3651,7 @@
       ]
     },
     {
-      "id": "GOV-0046",
+      "id": "GOV-0049",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3620,7 +3669,7 @@
       ]
     },
     {
-      "id": "GOV-0047",
+      "id": "GOV-0050",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3857,7 +3906,7 @@
       ]
     },
     {
-      "id": "GOV-0048",
+      "id": "GOV-0051",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3873,13 +3922,13 @@
         },
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 210,
+          "line": 247,
           "section": "Workflow — Decision & Closure Gates > Decision Experiment Gate"
         }
       ]
     },
     {
-      "id": "GOV-0049",
+      "id": "GOV-0052",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3896,7 +3945,7 @@
       ]
     },
     {
-      "id": "GOV-0050",
+      "id": "GOV-0053",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3911,7 +3960,7 @@
       ]
     },
     {
-      "id": "GOV-0051",
+      "id": "GOV-0054",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3928,7 +3977,7 @@
       ]
     },
     {
-      "id": "GOV-0052",
+      "id": "GOV-0055",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3943,7 +3992,7 @@
       ]
     },
     {
-      "id": "GOV-0053",
+      "id": "GOV-0056",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3958,7 +4007,7 @@
       ]
     },
     {
-      "id": "GOV-0054",
+      "id": "GOV-0057",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3973,7 +4022,7 @@
       ]
     },
     {
-      "id": "GOV-0055",
+      "id": "GOV-0058",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3990,7 +4039,22 @@
       ]
     },
     {
-      "id": "GOV-0056",
+      "id": "GOV-0059",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [],
+      "rule": "They are not a third required closure role.",
+      "score": 193,
+      "sources": [
+        {
+          "file": "workflow-guidelines/subagents.md",
+          "line": 44,
+          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0060",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3999,13 +4063,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 61,
+          "line": 67,
           "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
         }
       ]
     },
     {
-      "id": "GOV-0057",
+      "id": "GOV-0061",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4014,13 +4078,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 75,
+          "line": 81,
           "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
         }
       ]
     },
     {
-      "id": "GOV-0058",
+      "id": "GOV-0062",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4029,13 +4093,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 175,
+          "line": 181,
           "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
     },
     {
-      "id": "GOV-0059",
+      "id": "GOV-0063",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4046,13 +4110,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 234,
+          "line": 240,
           "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
     },
     {
-      "id": "GOV-0060",
+      "id": "GOV-0064",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4061,13 +4125,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 237,
+          "line": 243,
           "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
     },
     {
-      "id": "GOV-0061",
+      "id": "GOV-0065",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4082,7 +4146,7 @@
       ]
     },
     {
-      "id": "GOV-0062",
+      "id": "GOV-0066",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4114,7 +4178,7 @@
       ]
     },
     {
-      "id": "GOV-0063",
+      "id": "GOV-0067",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4125,13 +4189,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 342,
+          "line": 379,
           "section": "Workflow — Decision & Closure Gates > Scenario Causal Closure Ledger"
         }
       ]
     },
     {
-      "id": "GOV-0064",
+      "id": "GOV-0068",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4142,7 +4206,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 393,
+          "line": 430,
           "section": "Workflow — Decision & Closure Gates > Scenario Failure Migration"
         }
       ]
@@ -4237,7 +4301,7 @@
       ]
     },
     {
-      "id": "GOV-0065",
+      "id": "GOV-0069",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -4250,13 +4314,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 61,
+          "line": 67,
           "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
         }
       ]
     },
     {
-      "id": "GOV-0066",
+      "id": "GOV-0070",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4265,7 +4329,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 84,
+          "line": 90,
           "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
         }
       ]
@@ -4404,7 +4468,7 @@
       ]
     },
     {
-      "id": "GOV-0067",
+      "id": "GOV-0071",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4492,7 +4556,7 @@
       ]
     },
     {
-      "id": "GOV-0068",
+      "id": "GOV-0072",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4507,7 +4571,7 @@
       ]
     },
     {
-      "id": "GOV-0069",
+      "id": "GOV-0073",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4516,13 +4580,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 124,
+          "line": 130,
           "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
         }
       ]
     },
     {
-      "id": "GOV-0070",
+      "id": "GOV-0074",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4531,13 +4595,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 285,
+          "line": 322,
           "section": "Workflow — Decision & Closure Gates > Sprint Architecture Decision Gate"
         }
       ]
     },
     {
-      "id": "GOV-0071",
+      "id": "GOV-0075",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4549,13 +4613,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 289,
+          "line": 326,
           "section": "Workflow — Decision & Closure Gates > Sprint Architecture Decision Gate"
         }
       ]
     },
     {
-      "id": "GOV-0072",
+      "id": "GOV-0076",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4566,7 +4630,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 383,
+          "line": 420,
           "section": "Workflow — Decision & Closure Gates > Scenario Failure Migration"
         }
       ]
@@ -4704,7 +4768,7 @@
       ]
     },
     {
-      "id": "GOV-0073",
+      "id": "GOV-0077",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4715,6 +4779,21 @@
           "file": "workflow-guidelines/closure.md",
           "line": 33,
           "section": "Workflow — Decision & Closure Gates > Core Logic Brief Gate"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0078",
+      "domain": "governance",
+      "strength": "should",
+      "tags": [],
+      "rule": "Add or supersede a theory-ledger entry only for durable route knowledge that future packages should reuse.",
+      "score": 171,
+      "sources": [
+        {
+          "file": "workflow-guidelines/closure.md",
+          "line": 154,
+          "section": "Workflow — Decision & Closure Gates > Discovery Gate"
         }
       ]
     },
@@ -4794,7 +4873,24 @@
       ]
     },
     {
-      "id": "GOV-0074",
+      "id": "GOV-0079",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "They may help compare candidate owners, hypotheses, or discriminators, but their output must resolve to the package Discovery Gate, an experiment/probe package, current-blocker or successor truth, or a theory-ledger entry.",
+      "score": 169,
+      "sources": [
+        {
+          "file": "workflow-guidelines/subagents.md",
+          "line": 44,
+          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0080",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4805,13 +4901,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 95,
+          "line": 101,
           "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
         }
       ]
     },
     {
-      "id": "GOV-0075",
+      "id": "GOV-0081",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4822,7 +4918,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 450,
+          "line": 487,
           "section": "Workflow — Decision & Closure Gates > Frontier Oscillation Escalation"
         }
       ]
@@ -4875,7 +4971,7 @@
       ]
     },
     {
-      "id": "GOV-0076",
+      "id": "GOV-0082",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4892,7 +4988,7 @@
       ]
     },
     {
-      "id": "GOV-0077",
+      "id": "GOV-0083",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4909,7 +5005,7 @@
       ]
     },
     {
-      "id": "GOV-0078",
+      "id": "GOV-0084",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4958,7 +5054,7 @@
       ]
     },
     {
-      "id": "GOV-0079",
+      "id": "GOV-0085",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4975,7 +5071,7 @@
       ]
     },
     {
-      "id": "GOV-0080",
+      "id": "GOV-0086",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4986,13 +5082,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 144,
+          "line": 150,
           "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
         }
       ]
     },
     {
-      "id": "GOV-0081",
+      "id": "GOV-0087",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5001,7 +5097,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 207,
+          "line": 213,
           "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
@@ -5022,7 +5118,7 @@
       ]
     },
     {
-      "id": "GOV-0082",
+      "id": "GOV-0088",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5054,7 +5150,7 @@
       ]
     },
     {
-      "id": "GOV-0083",
+      "id": "GOV-0089",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5071,7 +5167,7 @@
       ]
     },
     {
-      "id": "GOV-0084",
+      "id": "GOV-0090",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5086,24 +5182,7 @@
       ]
     },
     {
-      "id": "GOV-0085",
-      "domain": "governance",
-      "strength": "may",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "Use this gate when a scenario-driven or causal-escalation sprint may decide between continued local proof, owner-boundary migration, autonomous architecture experiment, or human-only escalation.",
-      "score": 145,
-      "sources": [
-        {
-          "file": "workflow-guidelines/closure.md",
-          "line": 240,
-          "section": "Workflow — Decision & Closure Gates > Sprint Architecture Decision Gate"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0086",
+      "id": "GOV-0091",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5114,13 +5193,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 111,
+          "line": 117,
           "section": "Workflow — Packages & Closure > Residual Closure Inventory"
         }
       ]
     },
     {
-      "id": "GOV-0087",
+      "id": "GOV-0092",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5135,7 +5214,7 @@
       ]
     },
     {
-      "id": "GOV-0088",
+      "id": "GOV-0093",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5152,7 +5231,7 @@
       ]
     },
     {
-      "id": "GOV-0089",
+      "id": "GOV-0094",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5161,13 +5240,30 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 75,
+          "line": 81,
           "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
         }
       ]
     },
     {
-      "id": "GOV-0090",
+      "id": "GOV-0095",
+      "domain": "governance",
+      "strength": "may",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "Use this gate when a scenario-driven or causal-escalation sprint may decide between continued local proof, owner-boundary migration, autonomous architecture experiment, or human-only escalation.",
+      "score": 144,
+      "sources": [
+        {
+          "file": "workflow-guidelines/closure.md",
+          "line": 277,
+          "section": "Workflow — Decision & Closure Gates > Sprint Architecture Decision Gate"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0096",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5179,13 +5275,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 435,
+          "line": 472,
           "section": "Workflow — Decision & Closure Gates > Frontier Oscillation Escalation"
         }
       ]
     },
     {
-      "id": "GOV-0091",
+      "id": "GOV-0097",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5194,7 +5290,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 450,
+          "line": 487,
           "section": "Workflow — Decision & Closure Gates > Frontier Oscillation Escalation"
         }
       ]
@@ -5215,7 +5311,7 @@
       ]
     },
     {
-      "id": "GOV-0092",
+      "id": "GOV-0098",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5232,7 +5328,7 @@
       ]
     },
     {
-      "id": "GOV-0093",
+      "id": "GOV-0099",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5249,7 +5345,7 @@
       ]
     },
     {
-      "id": "GOV-0094",
+      "id": "GOV-0100",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5262,13 +5358,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 132,
+          "line": 138,
           "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
         }
       ]
     },
     {
-      "id": "GOV-0095",
+      "id": "GOV-0101",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5279,13 +5375,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 139,
+          "line": 145,
           "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
         }
       ]
     },
     {
-      "id": "GOV-0096",
+      "id": "GOV-0102",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5296,11 +5392,11 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 342,
+          "line": 379,
           "section": "Workflow — Decision & Closure Gates > Scenario Causal Closure Ledger"
         }
       ]
     }
   ],
-  "generatedAt": "2026-05-25T05:54:12.619Z"
+  "generatedAt": "2026-05-25T07:31:28.260Z"
 }

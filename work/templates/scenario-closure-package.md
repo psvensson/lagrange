@@ -97,6 +97,19 @@ frontier.
 - Current boundary:
 - Current dominant reason:
 
+## Discovery Gate
+
+- Status: required when owner, boundary, route, or proof ambiguity is material;
+  otherwise `not-needed`.
+- Symptom / decision question:
+- Current evidence:
+- Candidate owners / boundaries:
+- Competing hypotheses:
+- Cheapest discriminator:
+- Do not edit yet:
+- Selected route:
+- Promotion rule:
+
 ## Core Logic Brief
 
 - Canonical outcome:
