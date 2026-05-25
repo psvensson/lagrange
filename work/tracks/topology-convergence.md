@@ -61,7 +61,7 @@ Latest current handoff state:
 - route-selection package:
   `work/packages/done-20260525-topology-load-stabilization-route-selection.md`
 - active sprint:
-  `work/sprints/active-2026-q2-tell-tale-scenario-reliability.md`
+  `work/sprints/done-2026-q2-tell-tale-scenario-reliability.md`
 - active package:
   `work/packages/done-20260525-tell-tale-active-gate-snapshot-coverage-runtime-successor.md`
 - rolling-restart artifact:
@@ -110,7 +110,7 @@ or produces a narrower owner-boundary blocker selected by canonical evidence.
 - Current route-selection package:
   `work/packages/done-20260525-topology-load-stabilization-route-selection.md`
 - Active reliability sprint:
-  `work/sprints/active-2026-q2-tell-tale-scenario-reliability.md`
+  `work/sprints/done-2026-q2-tell-tale-scenario-reliability.md`
 - Active reliability package:
   `work/packages/done-20260525-tell-tale-active-gate-snapshot-coverage-runtime-successor.md`
 - Selected immediate successor route:
@@ -158,7 +158,7 @@ publication-evidence replay code rather than by the runtime owner alone.
 | `work/sprints/superseded-2026-q2-workflow-steering-core-logic-hardening.md` | `stabilization` / `ceremony-hardening` | superseded | Superseded on May 23, 2026. |
 | `work/sprints/done-2026-q2-rolling-restart-stability-hardening-final.md` | `stabilization` / `rolling-restart` | done | Focused push to make the system stable under 5-node rolling restarts. |
 | `work/sprints/done-2026-q2-topology-operation-workflow-residual-closure.md` | `stabilization` / `scenario-release-gate` | done | Cleared operation-workflow priority-recovery residual witnesses and routed fresh rolling-restart evidence to active-gate snapshot coverage. |
-| `work/sprints/active-2026-q2-tell-tale-scenario-reliability.md` | `stabilization` / `scenario-release-gate` | active | Starts from the active-gate snapshot coverage architecture gap, then queues runtime successor, final adjudication repair, rolling-restart green gate, and tell-tale suite promotion. |
+| `work/sprints/done-2026-q2-tell-tale-scenario-reliability.md` | `stabilization` / `scenario-release-gate` | done | Starts from the active-gate snapshot coverage architecture gap, then queues runtime successor, final adjudication repair, rolling-restart green gate, and tell-tale suite promotion. |
 
 
 ## Owner Boundaries

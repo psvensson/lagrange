@@ -1,6 +1,6 @@
 # Tell-Tale Scenario Reliability Sprint
 
-Status: active. Created on May 25, 2026.
+Status: done. Created on May 25, 2026.
 
 ## Goal
 
