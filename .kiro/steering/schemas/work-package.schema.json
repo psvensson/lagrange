@@ -76,6 +76,10 @@
           "type": "string",
           "pattern": "^20\\d{2}-\\d{2}-\\d{2}$"
         },
+        "closed": {
+          "type": "string",
+          "pattern": "^20\\d{2}-\\d{2}-\\d{2}$"
+        },
         "lane": {
           "type": "string",
           "enum": [

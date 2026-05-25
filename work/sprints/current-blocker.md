@@ -20,7 +20,7 @@ Falsifying probe: unknown
 
 Stop rule: unknown
 
-Sprint: `work/sprints/active-2026-q2-workflow-leverage-rebalance.md`
+Sprint: `none`
 
 Package: `none`
 

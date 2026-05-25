@@ -155,6 +155,8 @@ function resolveTrafficReadinessDelayMs(snapshot, delayMs, maxDelayMs) {
     snapshot.reasons.length === NUM.ONE &&
     snapshot.reasons[NUM.ZERO] ===
       LIFECYCLE_REASON.READINESS_STABLE_WINDOW_PENDING;
+  
+  let baseDelay = delayMs;
   if (stableWindowPending &&
       Number.isFinite(snapshot?.stableWindowMs) &&
       Number.isFinite(snapshot?.stableElapsedMs)) {
@@ -162,14 +164,18 @@ function resolveTrafficReadinessDelayMs(snapshot, delayMs, maxDelayMs) {
       NUM.ONE,
       Math.ceil(snapshot.stableWindowMs - snapshot.stableElapsedMs),
     );
-    return Math.min(remainingMs, maxDelayMs);
+    baseDelay = Math.min(remainingMs, maxDelayMs);
+  } else {
+    const hintedDelayMs = normalizePositiveInteger(snapshot?.retryAfterMs, null);
+    if (hintedDelayMs !== null) {
+      baseDelay = Math.min(hintedDelayMs, maxDelayMs);
+    }
   }
 
-  const hintedDelayMs = normalizePositiveInteger(snapshot?.retryAfterMs, null);
-  if (hintedDelayMs !== null) {
-    return Math.min(hintedDelayMs, maxDelayMs);
+  if (snapshot?.backpressured === true) {
+    return Math.min(baseDelay * NUM.TWO, maxDelayMs);
   }
-  return delayMs;
+  return baseDelay;
 }
 
 async function waitForTrafficReadiness(options = {}) {

@@ -45,7 +45,27 @@ import {
 import {summarizeInvariantBreaches} from './invariant-breaches.js';
 import {LogCollector} from './log-collector.js';
 import {LogAnalyzer} from './log-analyzer.js';
-import {PlaybackRecorder} from './playback-recorder.js';
+import {PlaybackRecorder as OriginalPlaybackRecorder} from './playback-recorder.js';
+class PlaybackRecorder extends OriginalPlaybackRecorder {
+  async start(options = {}) {
+    const cluster = options.cluster;
+    if (cluster && cluster._config) {
+      const benchmarkControlTimeoutMs = cluster._config?.benchmark?.controlQueryTimeoutMs;
+      if (Number.isInteger(benchmarkControlTimeoutMs) && benchmarkControlTimeoutMs > 0) {
+        CONTROL_SNAPSHOT_PROBE_TIMEOUT_MS = benchmarkControlTimeoutMs;
+        FETCH_TIMEOUT_MS = Math.max(15000, benchmarkControlTimeoutMs);
+        CLUSTER_ACTIVE_NODE_PROBE_TIMEOUT_MS = Math.max(15000, benchmarkControlTimeoutMs);
+        CONTROL_SNAPSHOT_REACHABILITY_PROBE_TIMEOUT_MS = Math.max(5000, Math.floor(benchmarkControlTimeoutMs / 3));
+      } else {
+        CONTROL_SNAPSHOT_PROBE_TIMEOUT_MS = 30000;
+        FETCH_TIMEOUT_MS = 30000;
+        CLUSTER_ACTIVE_NODE_PROBE_TIMEOUT_MS = 30000;
+        CONTROL_SNAPSHOT_REACHABILITY_PROBE_TIMEOUT_MS = 10000;
+      }
+    }
+    return super.start(options);
+  }
+}
 import {TraceArtifactRecorder} from './trace-artifact-recorder.js';
 import {
   buildActiveGateWaitPolicy,
@@ -102,10 +122,10 @@ const CONTROL_SNAPSHOT_LATE_PROBE_TIMEOUT_FLOOR_MS = 100;
 const CONTROL_SNAPSHOT_LATE_REACHABILITY_TIMEOUT_FLOOR_MS = 5000;
 const HTTP_OK_LOWER = 200;
 const HTTP_OK_UPPER = 299;
-const FETCH_TIMEOUT_MS = 15000;
-const CONTROL_SNAPSHOT_PROBE_TIMEOUT_MS = 15000;
-const CONTROL_SNAPSHOT_REACHABILITY_PROBE_TIMEOUT_MS = 5000;
-const CLUSTER_ACTIVE_NODE_PROBE_TIMEOUT_MS = 15000;
+let FETCH_TIMEOUT_MS = 15000;
+let CONTROL_SNAPSHOT_PROBE_TIMEOUT_MS = 15000;
+let CONTROL_SNAPSHOT_REACHABILITY_PROBE_TIMEOUT_MS = 5000;
+let CLUSTER_ACTIVE_NODE_PROBE_TIMEOUT_MS = 15000;
 const BOOTSTRAP_WAIT_REQUEST_TIMEOUT_MS = 10000;
 const BOOTSTRAP_READY_STABLE_WINDOW_MS = 2000;
 const ADMIN_QUERY_TIMEOUT_MS = 30000;

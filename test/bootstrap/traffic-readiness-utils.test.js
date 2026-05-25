@@ -224,3 +224,57 @@ test('traffic-readiness-utils - metadata publication stays blocked for hard runt
       'metadata publication must stay blocked when priority recovery pending is mixed with hard runtime blockers',
     );
   });
+
+test('traffic-readiness-utils - scales delays dynamically under backpressure', async (t) => {
+  const readinessStateNormal = createReadinessState({
+    ready: false,
+    phase: LIFECYCLE_PHASE.INIT,
+    reasons: [LIFECYCLE_REASON.RUNTIME_WIRING_INCOMPLETE],
+    retryAfterMs: 100,
+    backpressured: false,
+  });
+
+  const readinessStateBackpressured = createReadinessState({
+    ready: false,
+    phase: LIFECYCLE_PHASE.INIT,
+    reasons: [LIFECYCLE_REASON.RUNTIME_WIRING_INCOMPLETE],
+    retryAfterMs: 100,
+    backpressured: true,
+  });
+
+  let sleepNormalDelay = 0;
+  try {
+    await waitForMetadataPublicationReadiness({
+      readinessState: readinessStateNormal,
+      maxAttempts: 2,
+      initialDelayMs: 50,
+      maxDelayMs: 1000,
+      backoffMultiplier: 2,
+      sleep: async (delayMs) => {
+        sleepNormalDelay = delayMs;
+      },
+    });
+  } catch (err) {
+    // Expected to throw not-ready error
+  }
+
+  let sleepBackpressuredDelay = 0;
+  try {
+    await waitForMetadataPublicationReadiness({
+      readinessState: readinessStateBackpressured,
+      maxAttempts: 2,
+      initialDelayMs: 50,
+      maxDelayMs: 1000,
+      backoffMultiplier: 2,
+      sleep: async (delayMs) => {
+        sleepBackpressuredDelay = delayMs;
+      },
+    });
+  } catch (err) {
+    // Expected to throw not-ready error
+  }
+
+  t.equal(sleepNormalDelay, 100, 'should sleep for retryAfterMs (100) under normal pressure');
+  t.equal(sleepBackpressuredDelay, 200, 'should double sleep for retryAfterMs (200) under backpressure');
+});
+
