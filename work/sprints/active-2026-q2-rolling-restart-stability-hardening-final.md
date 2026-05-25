@@ -25,20 +25,20 @@ Make the system stable under rolling-restart: change the core logic of the syste
 ```text
 Representative artifact: none
 Visible first frontier: unknown
-Active package: work/packages/done-20260525-sprint-queue-maintenance-procedure.md
+Active package: work/packages/done-20260525-steering-pack-canonical-of-aliases.md
 Active package owner: workflow_tooling_owner
 Active package boundary: llm_steering_doc_truth
 Selected cause: steering_doc_truth_repair
-Required action: Add a Sprint Queue Maintenance section to work/RULES.md describing how to insert, renumber, and cross-link queue items when closing a package or activating new work, and link it from boot.md so LLMs follow the same procedure used by recent oversized-file closures.
+Required action: Extend the steering pack generator with a ruleAliases config so cross-domain duplicate rules collapse to a single master id; add canonical_of/aliases fields to rules.json and suppress alias rules from per-domain pack emission.
 Representative status: unknown
 Causal outcome: unknown
 Architecture gate: not-required / unknown
 Expected delta: unknown
 Current state: New package scaffolded from the shared work-package schema.
-Allowed edits: work/RULES.md, .kiro/steering/llm/boot.md
+Allowed edits: scripts/generate-steering-llm-pack.js, test/scripts/generate-steering-llm-pack.test.js, .kiro/steering/llm-pack.config.json, .kiro/steering/llm/rules.json, .kiro/steering/llm/manifest.json, .kiro/steering/llm/architecture.md, .kiro/steering/llm/testing.md, .kiro/steering/llm/style.md, .kiro/steering/llm/governance.md, .kiro/steering/llm/core.md, .kiro/steering/llm/README.md
 Candidate runtime files: unknown
 Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
-Required latest proof: grep -n 'Sprint Queue Maintenance' work/RULES.md .kiro/steering/llm/boot.md
+Required latest proof: node --test test/scripts/generate-steering-llm-pack.test.js
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -341,7 +341,12 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Purpose: Add a `Sprint Queue Maintenance` section to `work/RULES.md` describing how to insert, renumber, and cross-link sprint queue items when closing a package or inserting new work, and link it from `boot.md` so LLM agents follow the same procedure observed in recent oversized-file closures.
    - First-run reason: sprint queue mutation was undocumented; the procedure was reconstructed by reading prior commits rather than steering, which is the LLM-ambiguity class this sprint already promised to eliminate.
 
-14. [Rolling Restart Active Gate Snapshot Coverage Repair](../packages/done-20260523-rolling-restart-active-gate-snapshot-coverage-repair.md)
+14. [Collapse cross-domain rule duplicates via canonical_of](../packages/done-20260525-steering-pack-canonical-of-aliases.md)
+   - Lane: `lightweight-maintenance`
+   - Purpose: Add a `ruleAliases` mechanism to the steering pack generator so cross-pack duplicate rules collapse to a single master id; rules.json gains `canonical_of` / `aliases` fields and per-domain markdown packs suppress alias rules. Six duplicate groups (no-ordinal-filenames, null-state-encoding, file-size thresholds, cache-observes-owners-decide, no-skipped-tests, do-not-weaken-guardrails) collapse to one master each.
+   - First-run reason: identical rules were emitted under up to four IDs across architecture/style/testing/governance packs, forcing LLM agents to cite different IDs for the same rule depending on which pack happened to be loaded.
+
+15. [Rolling Restart Active Gate Snapshot Coverage Repair](../packages/done-20260523-rolling-restart-active-gate-snapshot-coverage-repair.md)
    - Lane: `runtime-owner-boundary`
    - Purpose: Align active-gate cohort fallbacks and repair snapshot recovery projection logic.
 

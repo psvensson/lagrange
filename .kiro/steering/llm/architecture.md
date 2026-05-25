@@ -13,7 +13,7 @@ regenerate_with: npm run steering:llm:pack
 Load for bootstrap/join/rebalance/control-plane/runtime ownership and lifecycle work.
 
 Generated rules: 40
-Estimated tokens: 1392
+Estimated tokens: 1413
 Domains: architecture
 
 ## Rules
@@ -30,11 +30,11 @@ Domains: architecture
 8. [ARCH-0019] Control-plane pressure must not cause query/data-plane correctness failures.
 9. [ARCH-0020] Do not add alternate fast paths such as direct local handler calls, ad-hoc sockets, admin API forwarding, or service-to-service in-process bypasses.
 10. [ARCH-0022] Diagnostics, admin, harness, and reporting surfaces that consume a boundary must reuse the same grammar or declare a bounded view role, and must not invent a new dominant reason by reassembling lower-layer fragments.
-11. [ARCH-0023] Non-forced readers do not repair authoritative state on the hot path.
-12. [ARCH-0029] Do not pre-slice candidates to the requested replica count before admission.
-13. [ARCH-0037] Architectural exceptions must be explicit, owned, time-bounded, and recorded in an active spec or architecture note with a removal checkpoint.
-14. [ARCH-0039] During splits, moves, and leader elections, queries may be slower but must not fail because topology is transient.
-15. [ARCH-0040] All non-trivial implementation work MUST follow the repository work-tracking workflow.
+11. [ARCH-0029] Do not pre-slice candidates to the requested replica count before admission.
+12. [ARCH-0037] Architectural exceptions must be explicit, owned, time-bounded, and recorded in an active spec or architecture note with a removal checkpoint.
+13. [ARCH-0039] During splits, moves, and leader elections, queries may be slower but must not fail because topology is transient.
+14. [ARCH-0040] All non-trivial implementation work MUST follow the repository work-tracking workflow.
+15. [ARCH-0042] Any runtime function or semantic concern MUST have one active path after input normalization.
 
 ### Ownership & Authority Policies
 
@@ -43,12 +43,12 @@ Domains: architecture
 18. [ARCH-0005] Callers submit intent to owners. They do not reproduce owner logic locally.
 19. [ARCH-0012] Events may enqueue owner-key work; they must not execute long-running progression inline.
 20. [ARCH-0015] Missing owner dependencies fail loudly with typed errors. They do not synthesize "allow by default" or equivalent fallback decisions.
-21. [ARCH-0025] Temporary delegators may forward to the owner, but must not add a second decision path.
-22. [ARCH-0027] Participant executors emit outcomes and do not persist owner-managed phase transitions directly.
-23. [ARCH-0030] Read/review/doc-only: answer questions or edit explanatory docs. No work package is required unless implementation truth, roadmap status, or architecture ownership changes.
-24. [ARCH-0032] Subscribers, bridges, queues, retry loops, cache hydration paths, and repair scheduling created by a phase must transfer to an explicit runtime owner before the phase completes.
-25. [ARCH-0033] Package validation must prove the owner path and affected tail consumers.
-26. [ARCH-0038] Bootstrap, join, and recovery phases must not remain the steady-state owner after the phase completes.
+21. [ARCH-0027] Participant executors emit outcomes and do not persist owner-managed phase transitions directly.
+22. [ARCH-0030] Read/review/doc-only: answer questions or edit explanatory docs. No work package is required unless implementation truth, roadmap status, or architecture ownership changes.
+23. [ARCH-0032] Subscribers, bridges, queues, retry loops, cache hydration paths, and repair scheduling created by a phase must transfer to an explicit runtime owner before the phase completes.
+24. [ARCH-0033] Package validation must prove the owner path and affected tail consumers.
+25. [ARCH-0038] Bootstrap, join, and recovery phases must not remain the steady-state owner after the phase completes.
+26. [ARCH-0041] Every state transition, lifecycle decision, data transformation, cache view, diagnostic grammar, and runtime resource MUST have one semantic owner.
 
 ### Lifecycle & State Machine Rules
 

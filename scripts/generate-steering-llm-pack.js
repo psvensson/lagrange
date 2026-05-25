@@ -754,6 +754,52 @@ function assignRuleIds(rules = [], domainPrefixes = {}) {
   return {allRules, byDomain};
 }
 
+function ruleSourceKey(sourceRef = {}) {
+  const file = sourceRef.file || LOCAL_STR_EMPTY;
+  const line = sourceRef.line;
+  return `${file}:${line}`;
+}
+
+function locateRuleBySourceRef(rules = [], target = {}) {
+  const targetKey = ruleSourceKey(target);
+  for (const rule of rules) {
+    for (const source of rule.sources || []) {
+      if (ruleSourceKey(source) === targetKey) {
+        return rule;
+      }
+    }
+  }
+  return null;
+}
+
+function applyRuleAliases(allRules = [], ruleAliases = []) {
+  const aliasStats = {pairs: 0, missing: []};
+  for (const entry of ruleAliases) {
+    const canonicalRule = locateRuleBySourceRef(allRules, entry.canonical || {});
+    if (!canonicalRule) {
+      aliasStats.missing.push({role: 'canonical', ref: entry.canonical || null});
+      continue;
+    }
+    for (const aliasRef of entry.aliases || []) {
+      const aliasRule = locateRuleBySourceRef(allRules, aliasRef);
+      if (!aliasRule) {
+        aliasStats.missing.push({role: 'alias', ref: aliasRef});
+        continue;
+      }
+      if (aliasRule.id === canonicalRule.id) {
+        continue;
+      }
+      aliasRule.canonical_of = canonicalRule.id;
+      canonicalRule.aliases = canonicalRule.aliases || [];
+      if (!canonicalRule.aliases.includes(aliasRule.id)) {
+        canonicalRule.aliases.push(aliasRule.id);
+      }
+      aliasStats.pairs += LOCAL_NUM_ONE;
+    }
+  }
+  return aliasStats;
+}
+
 function selectOutputRules(allRules = [], output = {}) {
   const domains = new Set(output.domains || []);
   const maxRules = Number.isFinite(output.maxRules) ? output.maxRules : 80;
@@ -764,6 +810,9 @@ function selectOutputRules(allRules = [], output = {}) {
 
   for (const rule of allRules) {
     if (!domains.has(rule.domain)) {
+      continue;
+    }
+    if (rule.canonical_of) {
       continue;
     }
 
@@ -981,6 +1030,7 @@ function renderReadme(manifestEntries = []) {
     '- `core.md` and `boot.md` are manually curated so the always-load contract stays memorable.',
     '- Domain Markdown packs are generated and compact for prompt loading.',
     '- Pack sizes (rule counts, token estimates) are recorded in `manifest.json` at generation time; do not maintain a separate static table.',
+    '- Cross-pack duplicates are collapsed via `ruleAliases` in [`../llm-pack.config.json`](../llm-pack.config.json): each alias rule carries `canonical_of: <master-id>` in `rules.json` and is suppressed from per-domain pack emission, so the same rule never appears under multiple IDs in the markdown packs. Master rules keep an `aliases: [...]` array listing the suppressed IDs for traceability.',
     '',
   ];
 
@@ -1076,6 +1126,14 @@ async function main() {
 
   const deduped = dedupeCandidates(candidates).sort(compareRules);
   const {allRules} = assignRuleIds(deduped, config.domainPrefixes || {});
+  const aliasStats = applyRuleAliases(allRules, config.ruleAliases || []);
+  for (const missing of aliasStats.missing) {
+    const ref = missing.ref || {};
+    console.warn(
+      `steering:llm:pack: ruleAliases ${missing.role} reference not found: ` +
+      `${ref.file || '<no file>'}:${ref.line ?? '<no line>'}`,
+    );
+  }
 
   await fs.mkdir(llmDir, {recursive: true});
 
@@ -1119,19 +1177,30 @@ async function main() {
       candidateCount: candidates.length,
       dedupedRuleCount: deduped.length,
       exportedRuleCount: allRules.length,
+      aliasRuleCount: allRules.filter((rule) => rule.canonical_of).length,
+      masterRuleCount: allRules.filter((rule) => !rule.canonical_of).length,
       estimatedAllRulesTokens: estimateTokens(
         allRules.map((rule) => `${rule.id} ${rule.text}`).join('\n'),
       ),
     },
-    rules: allRules.map((rule) => ({
-      id: rule.id,
-      domain: rule.domain,
-      strength: rule.strength,
-      tags: rule.tags,
-      rule: rule.text,
-      score: rule.score,
-      sources: rule.sources,
-    })),
+    rules: allRules.map((rule) => {
+      const entry = {
+        id: rule.id,
+        domain: rule.domain,
+        strength: rule.strength,
+        tags: rule.tags,
+        rule: rule.text,
+        score: rule.score,
+        sources: rule.sources,
+      };
+      if (rule.canonical_of) {
+        entry.canonical_of = rule.canonical_of;
+      }
+      if (rule.aliases && rule.aliases.length > LOCAL_NUM_ZERO) {
+        entry.aliases = [...rule.aliases];
+      }
+      return entry;
+    }),
   };
   rulesJson.generatedAt = stableGeneratedAt(
     await readOptionalJson(rulesJsonPath),
@@ -1186,10 +1255,13 @@ if (isDirectRun()) {
 
 export {
   appendChildBulletsForParentRule,
+  applyRuleAliases,
   buildManifest,
   collectBulletListText,
   countMarkdownRules,
+  locateRuleBySourceRef,
   parseMarkdownCandidates,
   renderPackMarkdown,
+  selectOutputRules,
   validateCompleteRules,
 };

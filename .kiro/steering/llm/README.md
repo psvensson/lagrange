@@ -37,3 +37,4 @@ If a generated pack disagrees with its canonical source under `.kiro/steering/`,
 - `core.md` and `boot.md` are manually curated so the always-load contract stays memorable.
 - Domain Markdown packs are generated and compact for prompt loading.
 - Pack sizes (rule counts, token estimates) are recorded in `manifest.json` at generation time; do not maintain a separate static table.
+- Cross-pack duplicates are collapsed via `ruleAliases` in [`../llm-pack.config.json`](../llm-pack.config.json): each alias rule carries `canonical_of: <master-id>` in `rules.json` and is suppressed from per-domain pack emission, so the same rule never appears under multiple IDs in the markdown packs. Master rules keep an `aliases: [...]` array listing the suppressed IDs for traceability.

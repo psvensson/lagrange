@@ -1,9 +1,12 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  applyRuleAliases,
   buildManifest,
   countMarkdownRules,
+  locateRuleBySourceRef,
   parseMarkdownCandidates,
   renderPackMarkdown,
+  selectOutputRules,
   validateCompleteRules,
 } from '../../scripts/generate-steering-llm-pack.js';
 
@@ -257,5 +260,102 @@ test('steering pack manifest supports manual core packs', (t) => {
   t.equal(manifest[0].mode, 'manual');
   t.equal(manifest[0].ruleCount, 2);
   t.ok(manifest[0].estimatedTokens > 0);
+  t.end();
+});
+
+test('applyRuleAliases marks aliases with canonical_of and master with aliases list', (t) => {
+  const allRules = [
+    {
+      id: 'ARCH-0001',
+      domain: 'architecture',
+      text: 'master rule text',
+      sources: [{file: 'system-guidelines.md', line: 100, section: 'A'}],
+    },
+    {
+      id: 'STYLE-0001',
+      domain: 'style',
+      text: 'paraphrased master rule',
+      sources: [{file: 'code-style.md', line: 50, section: 'B'}],
+    },
+    {
+      id: 'TEST-0001',
+      domain: 'testing',
+      text: 'unrelated rule',
+      sources: [{file: 'testing-guidelines/fixtures.md', line: 33, section: 'C'}],
+    },
+  ];
+  const stats = applyRuleAliases(allRules, [
+    {
+      canonical: {file: 'system-guidelines.md', line: 100},
+      aliases: [{file: 'code-style.md', line: 50}],
+    },
+  ]);
+
+  t.equal(stats.pairs, 1);
+  t.equal(stats.missing.length, 0);
+  t.equal(allRules[1].canonical_of, 'ARCH-0001');
+  t.same(allRules[0].aliases, ['STYLE-0001']);
+  t.notOk(allRules[2].canonical_of, 'unrelated rule is not aliased');
+  t.end();
+});
+
+test('applyRuleAliases records missing references without crashing', (t) => {
+  const allRules = [
+    {
+      id: 'ARCH-0001',
+      domain: 'architecture',
+      text: 'master',
+      sources: [{file: 'system-guidelines.md', line: 100}],
+    },
+  ];
+  const stats = applyRuleAliases(allRules, [
+    {
+      canonical: {file: 'system-guidelines.md', line: 100},
+      aliases: [{file: 'missing.md', line: 1}],
+    },
+    {
+      canonical: {file: 'nope.md', line: 1},
+      aliases: [{file: 'system-guidelines.md', line: 100}],
+    },
+  ]);
+
+  t.equal(stats.pairs, 0);
+  t.equal(stats.missing.length, 2);
+  t.equal(stats.missing[0].role, 'alias');
+  t.equal(stats.missing[1].role, 'canonical');
+  t.end();
+});
+
+test('selectOutputRules suppresses canonical_of alias rules from per-domain packs', (t) => {
+  const allRules = [
+    {id: 'STYLE-0001', domain: 'style', text: 'master', tags: []},
+    {
+      id: 'STYLE-0002',
+      domain: 'style',
+      text: 'alias',
+      canonical_of: 'STYLE-0001',
+      tags: [],
+    },
+    {id: 'STYLE-0003', domain: 'style', text: 'other', tags: []},
+  ];
+  const selected = selectOutputRules(allRules, {
+    name: 'style',
+    domains: ['style'],
+    maxRules: 10,
+  });
+
+  t.equal(selected.length, 2);
+  t.equal(selected.map((rule) => rule.id).join(','), 'STYLE-0001,STYLE-0003');
+  t.end();
+});
+
+test('locateRuleBySourceRef finds rule by file+line', (t) => {
+  const rules = [
+    {id: 'A', sources: [{file: 'x.md', line: 1}, {file: 'y.md', line: 2}]},
+    {id: 'B', sources: [{file: 'z.md', line: 9}]},
+  ];
+  t.equal(locateRuleBySourceRef(rules, {file: 'y.md', line: 2}).id, 'A');
+  t.equal(locateRuleBySourceRef(rules, {file: 'z.md', line: 9}).id, 'B');
+  t.equal(locateRuleBySourceRef(rules, {file: 'missing.md', line: 1}), null);
   t.end();
 });

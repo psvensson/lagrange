@@ -160,5 +160,54 @@
       ],
       "maxRules": 30
     }
+  ],
+  "ruleAliases": [
+    {
+      "note": "no ordinal/segment/grab-bag source filenames",
+      "canonical": {"file": "system-guidelines.md", "line": 168},
+      "aliases": [
+        {"file": "code-style.md", "line": 66},
+        {"file": "code-style.md", "line": 62}
+      ]
+    },
+    {
+      "note": "null/undefined must not encode runtime/domain state",
+      "canonical": {"file": "system-guidelines.md", "line": 162},
+      "aliases": [
+        {"file": "code-style.md", "line": 79}
+      ]
+    },
+    {
+      "note": "source/test file-size thresholds owned by check-file-size-thresholds.js",
+      "canonical": {"file": "code-style.md", "line": 58},
+      "aliases": [
+        {"file": "testing-guidelines/proof-ladders.md", "line": 102},
+        {"file": "testing-guidelines/proof-ladders.md", "line": 103}
+      ]
+    },
+    {
+      "note": "cache observes, owners decide (single-path/owner-authority)",
+      "canonical": {"file": "system-guidelines.md", "line": 110},
+      "aliases": [
+        {"file": "system-guidelines.md", "line": 216},
+        {"file": "runtime-contracts.md", "line": 39}
+      ]
+    },
+    {
+      "note": "no skipped tests",
+      "canonical": {"file": "testing-guidelines/fixtures.md", "line": 33},
+      "aliases": [
+        {"file": "testing-guidelines/fixtures.md", "line": 35},
+        {"file": "testing-guidelines/fixtures.md", "line": 36},
+        {"file": "testing-guidelines/fixtures.md", "line": 37}
+      ]
+    },
+    {
+      "note": "do not weaken guardrails to mask failure",
+      "canonical": {"file": "workflow-guidelines/validators.md", "line": 35},
+      "aliases": [
+        {"file": "testing-guidelines/harness.md", "line": 58}
+      ]
+    }
   ]
 }

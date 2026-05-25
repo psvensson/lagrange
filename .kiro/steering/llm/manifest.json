@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-25T05:21:15.059Z",
+  "generatedAt": "2026-05-25T05:42:05.023Z",
   "packs": [
     {
       "name": "core",
@@ -20,7 +20,7 @@
       "title": "Architecture Steering Pack",
       "description": "Load for bootstrap/join/rebalance/control-plane/runtime ownership and lifecycle work.",
       "ruleCount": 40,
-      "estimatedTokens": 1314,
+      "estimatedTokens": 1335,
       "domains": [
         "architecture"
       ],
@@ -31,7 +31,7 @@
       "title": "Testing Steering Pack",
       "description": "Load for test-first workflow, reliability harness work, and regression policy.",
       "ruleCount": 35,
-      "estimatedTokens": 1146,
+      "estimatedTokens": 1269,
       "domains": [
         "testing"
       ],
@@ -41,8 +41,8 @@
       "name": "style",
       "title": "Style Steering Pack",
       "description": "Load for coding-style and lint policy enforcement.",
-      "ruleCount": 11,
-      "estimatedTokens": 351,
+      "ruleCount": 8,
+      "estimatedTokens": 237,
       "domains": [
         "style"
       ],

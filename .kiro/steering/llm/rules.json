@@ -102,6 +102,8 @@
     "candidateCount": 318,
     "dedupedRuleCount": 311,
     "exportedRuleCount": 311,
+    "aliasRuleCount": 11,
+    "masterRuleCount": 300,
     "estimatedAllRulesTokens": 11920
   },
   "rules": [
@@ -184,6 +186,10 @@
           "line": 110,
           "section": "System Guidelines — Mandatory Implementation Contract > 2. One Semantic Owner Per Concern"
         }
+      ],
+      "aliases": [
+        "ARCH-0023",
+        "ARCH-0025"
       ]
     },
     {
@@ -216,6 +222,9 @@
           "line": 162,
           "section": "System Guidelines — Mandatory Implementation Contract > 4. Scalars, State, And Naming Have Owners"
         }
+      ],
+      "aliases": [
+        "STYLE-0002"
       ]
     },
     {
@@ -246,6 +255,10 @@
           "line": 168,
           "section": "System Guidelines — Mandatory Implementation Contract > 4. Scalars, State, And Naming Have Owners"
         }
+      ],
+      "aliases": [
+        "STYLE-0001",
+        "STYLE-0008"
       ]
     },
     {
@@ -479,7 +492,8 @@
           "line": 216,
           "section": "System Guidelines — Mandatory Implementation Contract > 6. Tables, Cache, And Metadata Follow One Authority Chain"
         }
-      ]
+      ],
+      "canonical_of": "ARCH-0005"
     },
     {
       "id": "ARCH-0024",
@@ -513,7 +527,8 @@
           "line": 39,
           "section": "Runtime Contracts Detail > Owner And Path Detail"
         }
-      ]
+      ],
+      "canonical_of": "ARCH-0005"
     },
     {
       "id": "ARCH-0026",
@@ -734,7 +749,8 @@
           "line": 66,
           "section": "Code Style Guidelines > Source File Size And Naming"
         }
-      ]
+      ],
+      "canonical_of": "ARCH-0009"
     },
     {
       "id": "STYLE-0002",
@@ -751,7 +767,8 @@
           "line": 79,
           "section": "Code Style Guidelines > Constants And Naming"
         }
-      ]
+      ],
+      "canonical_of": "ARCH-0007"
     },
     {
       "id": "STYLE-0003",
@@ -829,7 +846,8 @@
           "line": 35,
           "section": "Testing — Fixtures & Mutation Requirements > No Skipped Tests Policy"
         }
-      ]
+      ],
+      "canonical_of": "TEST-0026"
     },
     {
       "id": "TEST-0003",
@@ -846,7 +864,8 @@
           "line": 36,
           "section": "Testing — Fixtures & Mutation Requirements > No Skipped Tests Policy"
         }
-      ]
+      ],
+      "canonical_of": "TEST-0026"
     },
     {
       "id": "TEST-0004",
@@ -863,7 +882,8 @@
           "line": 37,
           "section": "Testing — Fixtures & Mutation Requirements > No Skipped Tests Policy"
         }
-      ]
+      ],
+      "canonical_of": "TEST-0026"
     },
     {
       "id": "TEST-0005",
@@ -982,7 +1002,8 @@
           "line": 58,
           "section": "Testing — Harness & Execution > Test Duration Hard Limit"
         }
-      ]
+      ],
+      "canonical_of": "GOV-0025"
     },
     {
       "id": "TEST-0012",
@@ -1696,6 +1717,11 @@
           "line": 33,
           "section": "Testing — Fixtures & Mutation Requirements > No Skipped Tests Policy"
         }
+      ],
+      "aliases": [
+        "TEST-0002",
+        "TEST-0003",
+        "TEST-0004"
       ]
     },
     {
@@ -1714,6 +1740,10 @@
           "line": 58,
           "section": "Code Style Guidelines > Source File Size And Naming"
         }
+      ],
+      "aliases": [
+        "TEST-0032",
+        "TEST-0033"
       ]
     },
     {
@@ -1729,7 +1759,8 @@
           "line": 62,
           "section": "Code Style Guidelines > Source File Size And Naming"
         }
-      ]
+      ],
+      "canonical_of": "ARCH-0009"
     },
     {
       "id": "STYLE-0009",
@@ -1844,7 +1875,8 @@
           "line": 102,
           "section": "Testing — Proof Ladders & Static Guardrails > File-Size Ratchet Policy"
         }
-      ]
+      ],
+      "canonical_of": "STYLE-0007"
     },
     {
       "id": "TEST-0033",
@@ -1861,7 +1893,8 @@
           "line": 103,
           "section": "Testing — Proof Ladders & Static Guardrails > File-Size Ratchet Policy"
         }
-      ]
+      ],
+      "canonical_of": "STYLE-0007"
     },
     {
       "id": "TEST-0034",
@@ -2600,6 +2633,9 @@
           "line": 35,
           "section": "Workflow — Validators & Drift > Static Drift Ledger"
         }
+      ],
+      "aliases": [
+        "TEST-0011"
       ]
     },
     {
@@ -5248,5 +5284,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-05-25T05:21:15.058Z"
+  "generatedAt": "2026-05-25T05:42:05.022Z"
 }
