@@ -1,6 +1,6 @@
 # Rolling Restart Resume Activation Sprint
 
-Status: active. Opened on May 25, 2026.
+Status: done. Opened on May 25, 2026.
 
 ## Goal
 

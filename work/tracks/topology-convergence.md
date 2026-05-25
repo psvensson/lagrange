@@ -61,7 +61,7 @@ Latest current handoff state:
 - route-selection package:
   `work/packages/done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md`
 - active sprint:
-  `work/sprints/active-2026-q2-rolling-restart-resume-activation.md`
+  `work/sprints/done-2026-q2-rolling-restart-resume-activation.md`
 - active package:
   `work/packages/done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md`
 - rolling-restart artifact:
@@ -110,7 +110,7 @@ or produces a narrower owner-boundary blocker selected by canonical evidence.
 - Current route-selection package:
   `work/packages/done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md`
 - Active reliability sprint:
-  `work/sprints/active-2026-q2-rolling-restart-resume-activation.md`
+  `work/sprints/done-2026-q2-rolling-restart-resume-activation.md`
 - Active reliability package:
   `work/packages/done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md`
 - Selected immediate successor route:
@@ -158,7 +158,7 @@ publication-evidence replay code rather than by the runtime owner alone.
 | `work/sprints/done-2026-q2-rolling-restart-stability-hardening-final.md` | `stabilization` / `rolling-restart` | done | Focused push to make the system stable under 5-node rolling restarts. |
 | `work/sprints/done-2026-q2-topology-operation-workflow-residual-closure.md` | `stabilization` / `scenario-release-gate` | done | Cleared operation-workflow priority-recovery residual witnesses and routed fresh rolling-restart evidence to active-gate snapshot coverage. |
 | `work/sprints/done-2026-q2-tell-tale-scenario-reliability.md` | `stabilization` / `scenario-release-gate` | done | Starts from the active-gate snapshot coverage architecture gap, then queues runtime successor, final adjudication repair, rolling-restart green gate, and tell-tale suite promotion. |
-| `work/sprints/active-2026-q2-rolling-restart-resume-activation.md` | `experiment` / `source-of-truth-repair` | active | Active-gate discriminator records owner-boundary migration and queues workflow-progress causal proof. |
+| `work/sprints/done-2026-q2-rolling-restart-resume-activation.md` | `experiment` / `source-of-truth-repair` | done | Active-gate discriminator records owner-boundary migration and queues workflow-progress causal proof. |
 
 
 ## Owner Boundaries
