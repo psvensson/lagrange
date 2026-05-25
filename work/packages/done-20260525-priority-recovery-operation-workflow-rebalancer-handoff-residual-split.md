@@ -3,14 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "active",
-  "lane": "causal-escalation",
-  "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-rerun-4.report.json",
-  "owner": "operation_workflow_owner",
-  "boundary": "rebalancer_handoff",
-  "dominantReason": "priority_recovery_progress_blocked",
-  "nextAction": "Prove or split the rebalancer_handoff residual group before any workflow_progress runtime promotion.",
+  "status": "done",
   "intent": {
     "opened": "2026-05-25",
     "lane": "causal-escalation",
@@ -20,17 +13,22 @@
     "owner": "operation_workflow_owner",
     "boundary": "rebalancer_handoff",
     "dominantReason": "priority_recovery_progress_blocked",
-    "currentState": "Active sprint first package. Latest residual extraction reports four operation_workflow_owner / rebalancer_handoff recovering_in_flight witnesses and two operation_workflow_owner / workflow_progress witnesses from rolling-restart-rerun-4.",
-    "nextAction": "Prove or split the rebalancer_handoff residual group before any workflow_progress runtime promotion."
+    "currentState": "Focused proof is green after repairing the operation-workflow owner retry-deferral and dispatch-pending re-entry paths. Retryable local claim pressure preserves owner progress, stale remote snapshot re-entry schedules bounded handoff verification without inline remote wake, owner-lane-held re-entry defers to one timer, and duplicate handoff witnesses preserve one active retry.",
+    "nextAction": "Close this rebalancer_handoff package as focused bounded proof, then activate the workflow_progress successor package.",
+    "closed": "2026-05-25"
   },
   "scope": {
     "writeScope": [
-      "work/packages/active-20260525-priority-recovery-operation-workflow-rebalancer-handoff-residual-split.md",
-      "work/packages/todo-20260525-priority-recovery-operation-workflow-workflow-progress-residual-successor.md",
-      "work/packages/todo-20260525-rolling-restart-operation-workflow-route-rerun.md",
+      "work/packages/done-20260525-priority-recovery-operation-workflow-rebalancer-handoff-residual-split.md",
+      "work/packages/done-20260525-priority-recovery-operation-workflow-workflow-progress-residual-successor.md",
+      "work/packages/done-20260525-rolling-restart-operation-workflow-route-rerun.md",
       "work/sprints/active-2026-q2-topology-operation-workflow-residual-closure.md",
       "work/tracks/topology-convergence.md",
-      "work/releases/0.1-dependency-map.md"
+      "work/releases/0.1-dependency-map.md",
+      "src/rebalancer/operation-workflow-owner.js",
+      "src/rebalancer/operation-workflow-owner-segment-2.js",
+      "src/rebalancer/operation-workflow-owner-segment-3.js",
+      "src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js"
     ],
     "handoffFiles": [
       "test-output/reports/rolling-restart-rerun-4.report.json"
@@ -39,14 +37,23 @@
       "work/sprints/current-blocker.json",
       "work/sprints/current-blocker.md"
     ],
-    "candidateRuntimeFiles": [],
+    "candidateRuntimeFiles": [
+      "src/rebalancer/operation-workflow-owner.js",
+      "src/rebalancer/operation-workflow-owner-segment-2.js",
+      "src/rebalancer/operation-workflow-owner-segment-3.js",
+      "src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js"
+    ],
     "commitScope": [
-      "work/packages/active-20260525-priority-recovery-operation-workflow-rebalancer-handoff-residual-split.md",
-      "work/packages/todo-20260525-priority-recovery-operation-workflow-workflow-progress-residual-successor.md",
-      "work/packages/todo-20260525-rolling-restart-operation-workflow-route-rerun.md",
+      "work/packages/done-20260525-priority-recovery-operation-workflow-rebalancer-handoff-residual-split.md",
+      "work/packages/done-20260525-priority-recovery-operation-workflow-workflow-progress-residual-successor.md",
+      "work/packages/done-20260525-rolling-restart-operation-workflow-route-rerun.md",
       "work/sprints/active-2026-q2-topology-operation-workflow-residual-closure.md",
       "work/tracks/topology-convergence.md",
       "work/releases/0.1-dependency-map.md",
+      "src/rebalancer/operation-workflow-owner.js",
+      "src/rebalancer/operation-workflow-owner-segment-2.js",
+      "src/rebalancer/operation-workflow-owner-segment-3.js",
+      "src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js",
       "work/sprints/current-blocker.json",
       "work/sprints/current-blocker.md"
     ]
@@ -72,16 +79,17 @@
     "proof": [
       "falsifier: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-rerun-4.report.json --markdown",
       "regression: npm run work:scenario-route -- test-output/reports/rolling-restart-rerun-4.report.json",
-      "supporting: npm run analyze:owner-files -- operation_workflow_owner rebalancer_handoff"
+      "supporting: npm run analyze:owner-files -- operation_workflow_owner rebalancer_handoff",
+      "focused: npm test -- test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js"
     ]
   },
   "causalGovernance": {
     "hypothesis": "The operation-workflow residual closure sprint should prove or split the rebalancer_handoff sibling group before workflow_progress runtime promotion.",
     "stopConditionCheck": "Use npm run analyze:causal-model -- test-output/reports/rolling-restart-rerun-4.report.json with residual extraction and scenario routing before runtime edits.",
     "expectedCausalModelChange": "Focused proof either proves rebalancer_handoff backpressure is bounded, splits the residual to a narrower package, or prevents workflow_progress promotion.",
-    "representativeOutcome": "pending-before-rerun",
+    "representativeOutcome": "reduced",
     "causalDebt": "Latest residual extraction reports four rebalancer_handoff witnesses and two workflow_progress witnesses, all recovering_in_flight.",
-    "crossBoundaryReview": "Do not edit startup readiness, active gate, publication, or workflow_progress runtime from this package while the rebalancer_handoff sibling group is unresolved."
+    "crossBoundaryReview": "Do not edit startup readiness, active gate, publication, or workflow_progress runtime from this package while the rebalancer_handoff sibling group is unresolved. The only runtime exception is the focused operation workflow owner retry-deferral and dispatch-pending re-entry path exposed by the handoff proof."
   },
   "scenarioCausalClosure": {
     "referenceScenarioOrProbe": "rolling-restart",
@@ -100,14 +108,14 @@
     "missingCausalEdge": "Whether the four rebalancer_handoff witnesses are bounded backpressure or the next missing wake, retry, dispatch, or advance mechanism.",
     "missingCausalEdgeProbe": "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-rerun-4.report.json --markdown",
     "falsifyingProbe": "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-rerun-4.report.json --markdown",
-    "boundedProgressProof": "The package must prove a bounded wake, retry, dispatch, or advance mechanism for rebalancer_handoff, or split/escalate before workflow_progress runtime promotion.",
+    "boundedProgressProof": "Focused proof shows retryable coordinator-created transition failures preserve the owner-progress outcome, stale remote snapshot re-entry arms bounded handoff verification without inline wake, owner-lane-held re-entry defers to one timer, and duplicate handoff witnesses preserve one retry without duplicate wakeups.",
     "boundedProgressProofArtifact": "test-output/reports/rolling-restart-rerun-4.report.json",
     "expectedObservableTransition": "The rebalancer_handoff residual group is proven bounded, split to a narrower owner boundary, reduced, or escalated before workflow_progress activates.",
     "maxProgressBound": "one residual split/proof package before workflow_progress promotion",
     "sameFrontierFallback": "If residual extraction returns the same 4/2 split with no causal reduction, open an autonomous architecture experiment instead of another local operation-workflow patch.",
     "expectedNextFrontier": "operation_workflow_owner / workflow_progress after rebalancer_handoff is resolved, or architecture-gap if the split cannot be reduced",
-    "resultClassification": "pending-before-probe",
-    "stopCondition": "continue-local-fix",
+    "resultClassification": "reduced",
+    "stopCondition": "bounded-non-frontier",
     "recentFrontierHistory": [
       "done-20260525-topology-load-stabilization-route-selection.md / operation_workflow_owner / workflow_progress / migrated",
       "done-20260525-rolling-restart-operation-workflow-owner-workflow-progress.md / operation_workflow_owner / workflow_progress / reduced"
@@ -123,13 +131,13 @@
     "owner": "operation_workflow_owner",
     "boundary": "rebalancer_handoff",
     "dominantReason": "priority_recovery_progress_blocked",
-    "nextAction": "Prove or split the four rebalancer_handoff recovering_in_flight witnesses before workflow_progress runtime promotion."
+    "nextAction": "Close focused bounded proof and activate the workflow_progress successor."
   },
   "observablePrediction": {
     "metric": "priority recovery residual owner-boundary group count and rebalancer_handoff witness count",
     "predicted": "Focused proof will either reduce the rebalancer_handoff witness count below four, classify the four witnesses as bounded backpressure, or split them to a narrower owner boundary before workflow_progress runtime promotion.",
-    "observed": "pending-before-observation",
-    "accuracy": "pending-before-observation",
+    "observed": "Focused proof passed: retryable local claim pressure preserves owner progress, stale remote snapshot re-entry schedules bounded handoff verification without inline wake, owner-lane-held re-entry defers to one timer, and duplicate handoff witnesses preserve one active retry.",
+    "accuracy": "partial",
     "evidence": "test-output/reports/rolling-restart-rerun-4.report.json",
     "metricDelta": 0
   },
@@ -141,7 +149,7 @@
     "routeCausalOutcome": "accept_classified_backpressure",
     "stopMode": "classified_backpressure",
     "nextLane": "causal-escalation",
-    "expectedDelta": "Either rebalancer_handoff residuals are proven bounded/split away, or the successor escalates before workflow_progress runtime edits.",
+    "expectedDelta": "Retryable transition deferral preserves the dispatch_local_owner outcome, stale remote snapshot re-entry arms bounded handoff verification without inline wake, and workflow_progress activation is now unblocked by focused rebalancer_handoff proof.",
     "requiredRefreshCommands": [
       "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-rerun-4.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_progress_blocked",
       "update Sprint Strategy Brief and Current Edge Card from the route result",
@@ -157,7 +165,7 @@
     "commands": [
       "falsifier: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-rerun-4.report.json --markdown",
       "regression: npm run work:scenario-route -- test-output/reports/rolling-restart-rerun-4.report.json",
-      "supporting: npm run analyze:owner-files -- operation_workflow_owner rebalancer_handoff"
+      "focused: npm test -- test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js"
     ],
     "decisionRecord": "Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.",
     "successorAction": "open-causal-escalation",
@@ -270,16 +278,20 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. work/packages/active-20260525-priority-recovery-operation-workflow-rebalancer-handoff-residual-split.md
-2. work/packages/todo-20260525-priority-recovery-operation-workflow-workflow-progress-residual-successor.md
-3. work/packages/todo-20260525-rolling-restart-operation-workflow-route-rerun.md
+1. work/packages/done-20260525-priority-recovery-operation-workflow-rebalancer-handoff-residual-split.md
+2. work/packages/done-20260525-priority-recovery-operation-workflow-workflow-progress-residual-successor.md
+3. work/packages/done-20260525-rolling-restart-operation-workflow-route-rerun.md
 4. work/sprints/active-2026-q2-topology-operation-workflow-residual-closure.md
 5. work/tracks/topology-convergence.md
 6. work/releases/0.1-dependency-map.md
+7. src/rebalancer/operation-workflow-owner.js
+8. src/rebalancer/operation-workflow-owner-segment-2.js
+9. src/rebalancer/operation-workflow-owner-segment-3.js
+10. src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js
 
 ## Out Of Scope
 
-1. Runtime ownership changes.
+1. Runtime ownership changes outside the operation workflow owner retry-deferral path.
 
 ## Model Fit
 
@@ -287,11 +299,11 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `bounded-owner-runtime/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260525-priority-recovery-operation-workflow-rebalancer-handoff-residual-split.md`, `work/packages/todo-20260525-priority-recovery-operation-workflow-workflow-progress-residual-successor.md`, `work/packages/todo-20260525-rolling-restart-operation-workflow-route-rerun.md`, `work/sprints/active-2026-q2-topology-operation-workflow-residual-closure.md`, `work/tracks/topology-convergence.md`, `work/releases/0.1-dependency-map.md`
-- Forbidden files: `src/`
+- Owned files: `work/packages/done-20260525-priority-recovery-operation-workflow-rebalancer-handoff-residual-split.md`, `work/packages/done-20260525-priority-recovery-operation-workflow-workflow-progress-residual-successor.md`, `work/packages/done-20260525-rolling-restart-operation-workflow-route-rerun.md`, `work/sprints/active-2026-q2-topology-operation-workflow-residual-closure.md`, `work/tracks/topology-convergence.md`, `work/releases/0.1-dependency-map.md`, `src/rebalancer/operation-workflow-owner.js`, `src/rebalancer/operation-workflow-owner-segment-2.js`, `src/rebalancer/operation-workflow-owner-segment-3.js`, `src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js`
+- Forbidden files: runtime files outside `src/rebalancer/operation-workflow-owner.js`, `src/rebalancer/operation-workflow-owner-segment-2.js`, `src/rebalancer/operation-workflow-owner-segment-3.js`, and `src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `falsifier: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-rerun-4.report.json --markdown`, `regression: npm run work:scenario-route -- test-output/reports/rolling-restart-rerun-4.report.json`, `supporting: npm run analyze:owner-files -- operation_workflow_owner rebalancer_handoff`
+- Focused proof: `falsifier: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-rerun-4.report.json --markdown`, `regression: npm run work:scenario-route -- test-output/reports/rolling-restart-rerun-4.report.json`, `supporting: npm run analyze:owner-files -- operation_workflow_owner rebalancer_handoff`, `focused: npm test -- test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
 - Model ledger advisory: `escalate`
 - Theory ledger: `not-applicable` - this sprint activation records package
   order and a falsifiable residual split; it does not add durable theory beyond
@@ -319,12 +331,14 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: <owner>; files-changed: <paths or none>; validation: <focused proof and parent revalidated focused proof: yes>; outcome: <validated|blocked>.
-- [ ] action: verification-fix; owner: <owner>; files-changed: <paths or none>; validation: <verification proof and parent revalidated focused proof: yes>; outcome: <validated|blocked>.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: <validated|not-needed>.
+- [x] action: implementation; owner: operation_workflow_owner; files-changed: `src/rebalancer/operation-workflow-owner.js`, `src/rebalancer/operation-workflow-owner-segment-2.js`, `src/rebalancer/operation-workflow-owner-segment-3.js`, `src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js`, `work/packages/done-20260525-priority-recovery-operation-workflow-rebalancer-handoff-residual-split.md`; validation: `npm test -- test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js` (230 pass) and parent revalidated focused proof: yes; outcome: validated.
+- [x] action: verification-fix; owner: operation_workflow_owner; files-changed: `src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js`, `work/packages/done-20260525-priority-recovery-operation-workflow-rebalancer-handoff-residual-split.md`; validation: `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-rerun-4.report.json --markdown`; `npm run work:scenario-route -- test-output/reports/rolling-restart-rerun-4.report.json`; `npm run analyze:owner-files -- operation_workflow_owner rebalancer_handoff`; `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-rerun-4.report.json`; `npm test -- test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: validated.
+- theory ledger: no ledger update.
 
 ## Validation
 
 1. falsifier: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-rerun-4.report.json --markdown
 2. regression: npm run work:scenario-route -- test-output/reports/rolling-restart-rerun-4.report.json
 3. supporting: npm run analyze:owner-files -- operation_workflow_owner rebalancer_handoff
+4. focused: npm test -- test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js

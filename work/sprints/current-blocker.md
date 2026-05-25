@@ -4,66 +4,61 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: The operation-workflow residual closure sprint should prove or split the rebalancer_handoff sibling group before workflow_progress runtime promotion.
+Theory under test: The active-gate snapshot coverage failure is caused by one of three mechanisms: owner-reconcile wake debt, selected-source timeout debt, or snapshot repair/projection contract debt.
 
-Causal question: Whether the four rebalancer_handoff witnesses are bounded backpressure or the next missing wake, retry, dispatch, or advance mechanism.
+Causal question: Select whether the missing edge is owner-reconcile wake, selected-source timeout refresh, snapshot repair execution, or coverage projection contract.
 
-Implementation slice: Prove or split the rebalancer_handoff residual group before any workflow_progress runtime promotion.
+Implementation slice: Close as architecture-gap stop; do not open another startup_active_gate_owner / snapshot_coverage runtime patch from this artifact.
 
 Implementation files:
 
-1. `work/packages/active-20260525-priority-recovery-operation-workflow-rebalancer-handoff-residual-split.md`
-2. `work/packages/todo-20260525-priority-recovery-operation-workflow-workflow-progress-residual-successor.md`
-3. `work/packages/todo-20260525-rolling-restart-operation-workflow-route-rerun.md`
-4. `work/sprints/active-2026-q2-topology-operation-workflow-residual-closure.md`
-5. `work/tracks/topology-convergence.md`
-6. `work/releases/0.1-dependency-map.md`
+1. `work/packages/active-20260525-rolling-restart-active-gate-snapshot-coverage-architecture-experiment.md`
 
-Expected implementation delta: Focused proof either proves rebalancer_handoff backpressure is bounded, splits the residual to a narrower package, or prevents workflow_progress promotion.
+Expected implementation delta: Observed: the experiment selected architecture-gap because canonical proof only reproduced the prior active-gate selected-source / owner-recovery shape and did not name a new unique runtime successor.
 
-Falsifying probe: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-rerun-4.report.json --markdown
+Falsifying probe: npm run work:evidence-summary -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json
 
-Stop rule: If residual extraction returns the same 4/2 split with no causal reduction, open an autonomous architecture experiment instead of another local operation-workflow patch.
+Stop rule: If canonical extractors cannot distinguish the route, close as architecture-gap instead of opening another startup_active_gate_owner / snapshot_coverage runtime patch.
 
 Sprint: `work/sprints/active-2026-q2-topology-operation-workflow-residual-closure.md`
 
-Package: `work/packages/active-20260525-priority-recovery-operation-workflow-rebalancer-handoff-residual-split.md`
+Package: `work/packages/active-20260525-rolling-restart-active-gate-snapshot-coverage-architecture-experiment.md`
 
-Workflow lane: `causal-escalation`
+Workflow lane: `experiment`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-rerun-4.report.json`
+Artifact: `test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json`
 
 Playback: `none`
 
 ## Boundary
 
-Owner: `operation_workflow_owner`
+Owner: `startup_active_gate_owner`
 
-Boundary: `rebalancer_handoff`
+Boundary: `snapshot_coverage`
 
-Dominant reason: `priority_recovery_progress_blocked`
+Dominant reason: `active_gate_timed_out`
 
-Current state: Active sprint first package. Latest residual extraction reports four operation_workflow_owner / rebalancer_handoff recovering_in_flight witnesses and two operation_workflow_owner / workflow_progress witnesses from rolling-restart-rerun-4.
+Current state: Architecture experiment proof confirmed the fresh artifact is still the repeated active_gate_snapshot_coverage family: snapshotCoverageNodeCount=1/5 with owner_reconcile_pending, selected_snapshot_source_timeout, snapshot_repair_deferred, wait_owner_recovery, and selected owner queue pending writes, but no new unique runtime contract beyond prior active-gate reducers.
 
 ## Next Action
 
-Prove or split the rebalancer_handoff residual group before any workflow_progress runtime promotion.
+Close as architecture-gap stop; do not open another startup_active_gate_owner / snapshot_coverage runtime patch from this artifact.
 
 ## Proof Ladder
 
-1. `falsifier: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-rerun-4.report.json --markdown`
-2. `regression: npm run work:scenario-route -- test-output/reports/rolling-restart-rerun-4.report.json`
-3. `supporting: npm run analyze:owner-files -- operation_workflow_owner rebalancer_handoff`
+1. `falsifier: representative routing evidence npm run work:scenario-route -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json`
+2. `regression: focused contract fixture npm run work:evidence-summary -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json`
+3. `supporting: causal route proof npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json`
 
 ## Model Fit
 
-Package class: `runtime-owner-boundary`
+Package class: `architecture-experiment`
 
 Intended minimum model: `gpt-5.3-codex`
 
-Scope shape: `bounded-owner-runtime/current-frontier`
+Scope shape: `cross-owner-discriminator/current-frontier`
 
 Output profile: `medium`
 
@@ -74,135 +69,136 @@ Escalation triggers:
 
 ## Theory Ledger References
 
-1. None recorded
+1. `theory-20260522-snapshot-watch-handoff-contract`
+2. `theory-20260513-rolling-restart-preflight-green-gate-confirmation`
+3. `theory-20260523-rolling-restart-recovery-reconcile-recursion-fix`
 
 ## Representative Residual
 
-Status: `active-split-proof`
+Status: `architecture-gap`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-rerun-4.report.json`
+Artifact: `test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json`
 
-Frontier: `priority_recovery_partition_progress`
+Frontier: `active_gate_snapshot_coverage`
 
-Owner: `operation_workflow_owner`
+Owner: `startup_active_gate_owner`
 
-Boundary: `rebalancer_handoff`
+Boundary: `snapshot_coverage`
 
-Dominant reason: `priority_recovery_progress_blocked`
+Dominant reason: `active_gate_timed_out`
 
-Next action: `Prove or split the four rebalancer_handoff recovering_in_flight witnesses before workflow_progress runtime promotion.`
+Next action: `Close as architecture-gap; no runtime successor is selected from this artifact.`
 
 ## Causal Governance
 
-Causal hypothesis: `The operation-workflow residual closure sprint should prove or split the rebalancer_handoff sibling group before workflow_progress runtime promotion.`
+Causal hypothesis: `The active-gate snapshot coverage failure is caused by one of three mechanisms: owner-reconcile wake debt, selected-source timeout debt, or snapshot repair/projection contract debt.`
 
-Stop-condition check: `Use npm run analyze:causal-model -- test-output/reports/rolling-restart-rerun-4.report.json with residual extraction and scenario routing before runtime edits.`
+Stop-condition check: `Run scenario routing, evidence summary, and `npm run analyze:causal-model -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json` before runtime edits.`
 
-Expected causal-model change: `Focused proof either proves rebalancer_handoff backpressure is bounded, splits the residual to a narrower package, or prevents workflow_progress promotion.`
+Expected causal-model change: `Observed: the experiment selected architecture-gap because canonical proof only reproduced the prior active-gate selected-source / owner-recovery shape and did not name a new unique runtime successor.`
 
-Representative outcome: `pending-before-rerun`
+Representative outcome: `architecture-gap`
 
-Causal debt: `Latest residual extraction reports four rebalancer_handoff witnesses and two workflow_progress witnesses, all recovering_in_flight.`
+Causal debt: `Fresh evidence shows snapshotCoverageNodeCount 1/5, active_gate_timed_out, owner_reconcile_pending, snapshot_coverage_incomplete, selected_snapshot_source_timeout, snapshot_repair_deferred, selectedSnapshotObservationNextAction=retry, wait_owner_recovery, selectedControlPlaneOwnerQueuePendingWrites=1, and membershipPublicationHandoffOutcome=write_deferred/enqueued=false. Earlier active-gate packages already reduced the selected-source timeout, wait_owner_recovery queue, and repair-deferred contracts to this 1/5 shape.`
 
-Cross-boundary review: `Do not edit startup readiness, active gate, publication, or workflow_progress runtime from this package while the rebalancer_handoff sibling group is unresolved.`
+Cross-boundary review: `Keep operation workflow, startup readiness, timeout budgets, and src/ runtime edits frozen; this package selects no local runtime successor from the unchanged architecture shape.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `rolling-restart`
+Reference scenario/probe: `rolling-restart active gate snapshot coverage architecture discriminator`
 
 Phase chain:
 
-1. `rolling-restart routes to priority_recovery_partition_progress`
-2. `residual extraction splits operation workflow witnesses across rebalancer_handoff and workflow_progress`
-3. `rebalancer_handoff residual proof must run before workflow_progress runtime promotion`
-4. `fresh representative route after operation workflow decides whether startup readiness can activate`
+1. `operation-workflow residual witnesses cleared to zero`
+2. `fresh rolling-restart route selected active_gate_snapshot_coverage`
+3. `active-gate snapshot coverage remains 1/5 with owner reconcile, selected-source timeout, and repair-deferred signals`
 
-Current first frontier: `priority_recovery_partition_progress / operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait with sibling operation_workflow_owner / rebalancer_handoff residual split`
+Current first frontier: `active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out`
 
 Known downstream blockers:
 
-1. `operation_workflow_owner / rebalancer_handoff has four recovering_in_flight witnesses`
-2. `operation_workflow_owner / workflow_progress has two recovering_in_flight witnesses`
-3. `startup_readiness_owner / startup_support_evidence remains deferred until fresh route evidence promotes it`
+1. `startup_readiness_owner / startup_support_evidence remains downstream of active-gate coverage`
+2. `fresh report exited failed because final adjudication raised runFinalAdjudication is not defined`
 
-Missing causal edge: `Whether the four rebalancer_handoff witnesses are bounded backpressure or the next missing wake, retry, dispatch, or advance mechanism.`
+Missing causal edge: `Select whether the missing edge is owner-reconcile wake, selected-source timeout refresh, snapshot repair execution, or coverage projection contract.`
 
-Missing causal edge probe: `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-rerun-4.report.json --markdown`
+Missing causal edge probe: `npm run work:evidence-summary -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json`
 
-Bounded progress proof: `The package must prove a bounded wake, retry, dispatch, or advance mechanism for rebalancer_handoff, or split/escalate before workflow_progress runtime promotion.`
+Bounded progress proof: `The experiment must name one successor owner contract with focused proof for a wake, timeout, reconcile, timer, snapshot repair advance, or bounded projection mechanism, or close as architecture-gap before runtime promotion.`
 
-Bounded progress proof artifact: `test-output/reports/rolling-restart-rerun-4.report.json`
+Bounded progress proof artifact: `test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json`
 
-Expected observable transition: `The rebalancer_handoff residual group is proven bounded, split to a narrower owner boundary, reduced, or escalated before workflow_progress activates.`
+Expected observable transition: `Observed architecture-gap: proof exposed the same combined active-gate selected-source, wait_owner_recovery, and repair-deferred contract shape without a new unique successor.`
 
-Max progress bound: `one residual split/proof package before workflow_progress promotion`
+Max progress bound: `architecture experiment only; no runtime edits in this package`
 
-Same-frontier fallback: `If residual extraction returns the same 4/2 split with no causal reduction, open an autonomous architecture experiment instead of another local operation-workflow patch.`
+Same-frontier fallback: `If canonical extractors cannot distinguish the route, close as architecture-gap instead of opening another startup_active_gate_owner / snapshot_coverage runtime patch.`
 
-Expected next frontier: `operation_workflow_owner / workflow_progress after rebalancer_handoff is resolved, or architecture-gap if the split cannot be reduced`
+Expected next frontier: `architecture-gap stop`
 
-Result classification: `pending-before-probe`
+Result classification: `architecture-gap`
 
-Stop condition: `continue-local-fix`
+Stop condition: `architecture-gap-stop`
 
 Recent frontier history:
 
-1. `done-20260525-topology-load-stabilization-route-selection.md / operation_workflow_owner / workflow_progress / migrated`
-2. `done-20260525-rolling-restart-operation-workflow-owner-workflow-progress.md / operation_workflow_owner / workflow_progress / reduced`
+1. `done-20260523-rolling-restart-wait-owner-recovery-reconcile-drain-runtime.md / startup_active_gate_owner / snapshot_coverage / reduced`
+2. `done-20260525-rolling-restart-operation-workflow-route-rerun.md / diagnostics_owner / representative_route_after_operation_workflow / migrated`
+3. `done-20260525-rolling-restart-startup-active-gate-snapshot-coverage-fresh-route.md / startup_active_gate_owner / snapshot_coverage / architecture-gap`
 
-Oscillation check: `The sprint orders the sibling residual groups explicitly to avoid bouncing between rebalancer_handoff and workflow_progress.`
+Oscillation check: `The predecessor selected this experiment because fresh evidence returned to active_gate_snapshot_coverage after operation-workflow residuals cleared.`
 
-Handoff invariant: `workflow_progress runtime promotion requires rebalancer_handoff residual proof or split first.`
+Handoff invariant: `Startup readiness remains downstream until active-gate snapshot coverage is repaired, reduced, migrated, or closed as architecture-gap.`
 
 ## Observable Prediction
 
-Metric: `priority recovery residual owner-boundary group count and rebalancer_handoff witness count`
+Metric: `active_gate_snapshot_coverage reason set, snapshotCoverageNodeCount 1/5, selected snapshot source timeout state, owner_reconcile_pending, and selected successor owner contract`
 
-Predicted: `Focused proof will either reduce the rebalancer_handoff witness count below four, classify the four witnesses as bounded backpressure, or split them to a narrower owner boundary before workflow_progress runtime promotion.`
+Predicted: `active_gate_snapshot_coverage reason set, snapshotCoverageNodeCount 1/5, selected snapshot source timeout state, owner_reconcile_pending, and selected successor owner contract`
 
-Observed: `pending-before-observation`
+Observed: `Canonical proof exposed selectedSnapshotObservationNextAction=retry, wait_owner_recovery, selectedControlPlaneOwnerQueuePendingWrites=1, and repair_deferred, but those mechanisms match prior reduced active-gate packages rather than a new unique successor contract.`
 
-Accuracy: `pending-before-observation`
+Accuracy: `partial`
 
-Evidence: `test-output/reports/rolling-restart-rerun-4.report.json`
+Evidence: `npm run work:scenario-route; npm run work:evidence-summary; npm --silent run analyze:causal-model; npm run analyze:topology-convergence -- --explain active_gate_snapshot_coverage`
 
-Metric delta: `0`
+Metric delta: `unknown`
 
 ## Experiment Outcome
 
-Distinguished hypothesis: `unknown`
+Distinguished hypothesis: `evidence-incomplete`
 
-Decision: `unknown`
+Decision: `evidence-incomplete`
 
-Next owner: `unknown`
+Next owner: `startup_active_gate_owner`
 
-Next boundary: `unknown`
+Next boundary: `snapshot_coverage`
 
-Evidence: `unknown`
+Evidence: `The topology explanation names selectedSnapshotObservationNextAction=retry, publicationActiveGateHandoffNextAction=wait_owner_recovery, selectedControlPlaneOwnerQueuePendingWrites=1, and membershipPublicationHandoffOutcome=write_deferred/enqueued=false, but prior reduced packages already covered selected-source timeout, wait_owner_recovery queue/defer, and repair-deferred projection. This artifact does not distinguish a new runtime successor.`
 
 ## Rerun Decision
 
-Source artifact: `test-output/reports/rolling-restart-rerun-4.report.json`
+Source artifact: `test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json`
 
-Route owner: `operation_workflow_owner`
+Route owner: `startup_active_gate_owner`
 
-Route boundary: `rebalancer_handoff`
+Route boundary: `snapshot_coverage`
 
-Route dominant reason: `priority_recovery_progress_blocked`
+Route dominant reason: `active_gate_timed_out`
 
-Route causal outcome: `accept_classified_backpressure`
+Route causal outcome: `widen_architecture_work`
 
-Stop mode: `classified_backpressure`
+Stop mode: `architecture-gap-stop`
 
-Next lane: `causal-escalation`
+Next lane: `experiment`
 
-Expected delta: `Either rebalancer_handoff residuals are proven bounded/split away, or the successor escalates before workflow_progress runtime edits.`
+Expected delta: `Select one concrete active-gate snapshot coverage contract or close as architecture-gap before runtime promotion.`
 
 Required refresh commands:
 
-1. `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-rerun-4.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_progress_blocked`
+1. `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out`
 2. `update Sprint Strategy Brief and Current Edge Card from the route result`
 3. `npm run work:repair`
 4. `npm run work:validate -- --pre-impl`
@@ -219,53 +215,47 @@ Proof command budget: `two-or-three-canonical-commands`
 
 Commands:
 
-1. `falsifier: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-rerun-4.report.json --markdown`
-2. `regression: npm run work:scenario-route -- test-output/reports/rolling-restart-rerun-4.report.json`
-3. `supporting: npm run analyze:owner-files -- operation_workflow_owner rebalancer_handoff`
+1. `npm run work:scenario-route -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json`
+2. `npm run work:evidence-summary -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json`
+3. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json`
 
 Decision record: `Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.`
 
-Successor action: `open-causal-escalation`
+Successor action: `record-in-predecessor-or-sprint`
 
-Runtime promotion rule: `When canonical owner and boundary are stable, prefer a runtime-owner-boundary successor and keep runtime files in candidateRuntimeFiles until that package activates them. If the representative route is same-frontier with no reduction or an architecture gap, open an autonomous architecture experiment before more local runtime work.`
+Runtime promotion rule: `Do not promote another startup_active_gate_owner / snapshot_coverage runtime patch from this artifact; a future package needs fresh evidence or a higher-level architecture contract.`
 
 ## Architecture Decision Gate
 
-Status: `watching`
+Status: `selected`
 
-Trigger: `frontier-oscillation`
+Trigger: `architecture-gap`
 
 Trigger evidence:
 
-1. `adjacent owner-boundary fixes did not close the representative gate`
-2. `work/packages/done-20260523-rolling-restart-wait-owner-recovery-reconcile-drain-runtime.md / startup_active_gate_owner / snapshot_coverage / reduced`
-3. `work/packages/done-20260523-rolling-restart-startup-active-gate-owner-snapshot-coverage.md / startup_active_gate_owner / snapshot_coverage / migrated`
+1. `Predecessor classified active_gate_snapshot_coverage as architecture-gap after fresh route evidence.`
+2. `Snapshot coverage remains 1/5 with owner_reconcile_pending, selected_snapshot_source_timeout, and snapshot_repair_deferred.`
+3. `Runtime files are forbidden until this experiment selects a concrete contract.`
 
 Choices:
 
-1. `continue-local-proof` route=`continue-local-proof` - Continue with a bounded local proof if the missing edge stays inside this owner boundary.
-2. `migrate-owner-boundary` route=`owner-boundary-migration` - Migrate the active package to the owner boundary named by the first frontier evidence.
-3. `open-architecture-package` route=`architecture-package` - Open a bounded autonomous architecture experiment for the missing owner contract.
-4. `human-escalation` route=`human-escalation` - Escalate to a human only when evidence is contradictory, policy-blocked, credential-blocked, or unavailable.
+1. `continue-local-proof` route=`continue-local-proof` - Continue local proof only if the experiment names one concrete wake, timeout, reconcile, timer, repair, or projection mechanism.
+2. `owner-boundary-migration` route=`owner-boundary-migration` - Migrate if canonical proof names a different first owner boundary.
+3. `open-architecture-package` route=`architecture-package` - Run this bounded architecture experiment before runtime implementation resumes.
 
-Selected choice: `unknown`
+Selected choice: `open-architecture-package`
 
-Gate next action: Watch for repeated frontier oscillation; open an autonomous architecture experiment if another local proof returns here unchanged.
+Gate next action: Close as architecture-gap stop; require fresh evidence or a higher-level architecture contract before runtime implementation resumes.
 
 ## Scope
 
 Write scope:
 
-1. `work/packages/active-20260525-priority-recovery-operation-workflow-rebalancer-handoff-residual-split.md`
-2. `work/packages/todo-20260525-priority-recovery-operation-workflow-workflow-progress-residual-successor.md`
-3. `work/packages/todo-20260525-rolling-restart-operation-workflow-route-rerun.md`
-4. `work/sprints/active-2026-q2-topology-operation-workflow-residual-closure.md`
-5. `work/tracks/topology-convergence.md`
-6. `work/releases/0.1-dependency-map.md`
+1. `work/packages/active-20260525-rolling-restart-active-gate-snapshot-coverage-architecture-experiment.md`
 
 Handoff files:
 
-1. `test-output/reports/rolling-restart-rerun-4.report.json`
+1. `test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json`
 
 Generated files:
 
@@ -278,14 +268,10 @@ Candidate runtime files:
 
 Commit scope:
 
-1. `work/packages/active-20260525-priority-recovery-operation-workflow-rebalancer-handoff-residual-split.md`
-2. `work/packages/todo-20260525-priority-recovery-operation-workflow-workflow-progress-residual-successor.md`
-3. `work/packages/todo-20260525-rolling-restart-operation-workflow-route-rerun.md`
-4. `work/sprints/active-2026-q2-topology-operation-workflow-residual-closure.md`
-5. `work/tracks/topology-convergence.md`
-6. `work/releases/0.1-dependency-map.md`
-7. `work/sprints/current-blocker.json`
-8. `work/sprints/current-blocker.md`
+1. `work/packages/active-20260525-rolling-restart-active-gate-snapshot-coverage-architecture-experiment.md`
+2. `work/sprints/active-2026-q2-topology-operation-workflow-residual-closure.md`
+3. `work/sprints/current-blocker.json`
+4. `work/sprints/current-blocker.md`
 
 Legacy touched files:
 

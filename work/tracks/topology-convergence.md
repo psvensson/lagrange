@@ -63,7 +63,7 @@ Latest current handoff state:
 - active sprint:
   `work/sprints/active-2026-q2-topology-operation-workflow-residual-closure.md`
 - active package:
-  `work/packages/active-20260525-priority-recovery-operation-workflow-rebalancer-handoff-residual-split.md`
+  `work/packages/done-20260525-priority-recovery-operation-workflow-rebalancer-handoff-residual-split.md`
 - rolling-restart artifact:
   `test-output/reports/rolling-restart-rerun-4.report.json`
 - first frontier: `priority_recovery_partition_progress`
@@ -113,7 +113,7 @@ or produces a narrower owner-boundary blocker selected by canonical evidence.
 - Active residual sprint:
   `work/sprints/active-2026-q2-topology-operation-workflow-residual-closure.md`
 - Active residual package:
-  `work/packages/active-20260525-priority-recovery-operation-workflow-rebalancer-handoff-residual-split.md`
+  `work/packages/done-20260525-priority-recovery-operation-workflow-rebalancer-handoff-residual-split.md`
 - Selected immediate successor route:
   `operation_workflow_owner / workflow_progress` from
   `test-output/reports/rolling-restart-rerun-4.report.json`.
@@ -225,7 +225,7 @@ canonical owner-boundary evidence.
 ## Next Package
 
 Active continuation:
-`work/packages/active-20260525-priority-recovery-operation-workflow-rebalancer-handoff-residual-split.md`.
+`work/packages/done-20260525-priority-recovery-operation-workflow-rebalancer-handoff-residual-split.md`.
 It proves or splits the four
 `operation_workflow_owner / rebalancer_handoff` witnesses before the queued
 `operation_workflow_owner / workflow_progress` successor can activate. Do not

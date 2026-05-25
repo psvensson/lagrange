@@ -166,6 +166,7 @@ const PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_ACTION =
   Object.freeze({
     ARM_OWNER: 'arm_owner',
     RECONCILE_STALE_PROGRESS: 'reconcile_stale_progress',
+    SCHEDULE_REMOTE_HANDOFF_RETRY: 'schedule_remote_handoff_retry',
     WAKE_REMOTE_OWNER: 'wake_remote_owner',
   });
 
@@ -196,6 +197,15 @@ const PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_HANDLER =
         .RECONCILE_STALE_PROGRESS,
       (owner, operation) =>
         owner.operationWorkflowOwnerPorts.reconcileStaleProgress(operation),
+    ],
+    [
+      PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_ACTION
+        .SCHEDULE_REMOTE_HANDOFF_RETRY,
+      (owner, operation) =>
+        owner.scheduleCoordinatorCreatedRemoteHandoffFollowUp(
+          operation,
+          TRANSITION_RETRY_DELAY_MS,
+        ),
     ],
     [
       PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_ACTION.WAKE_REMOTE_OWNER,
@@ -592,6 +602,30 @@ function schedulePriorityRecoveryDispatchPendingReentry(
   if (!operation || !operation.operationId) {
     return false;
   }
+  const immediateAction =
+    owner.resolvePriorityRecoveryDispatchPendingReentryAction(
+      snapshot,
+      operation,
+      options,
+    );
+  if (
+    immediateAction ===
+    PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_ACTION.SKIP
+  ) {
+    return false;
+  }
+  if (
+    immediateAction ===
+    PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_ACTION
+      .RETRY_AFTER_OWNER_LANE
+  ) {
+    return owner.applyPriorityRecoveryDispatchPendingReentryAction(
+      operation,
+      immediateAction,
+      snapshot,
+      options,
+    );
+  }
   const operationId = operation.operationId;
   owner._reentryLocks = owner._reentryLocks || new Set();
   if (owner._reentryLocks.has(operationId)) {
@@ -608,14 +642,9 @@ function schedulePriorityRecoveryDispatchPendingReentry(
 
   setImmediate(() => {
     try {
-      const action = owner.resolvePriorityRecoveryDispatchPendingReentryAction(
-        snapshot,
-        operation,
-        options,
-      );
       owner.applyPriorityRecoveryDispatchPendingReentryAction(
         operation,
-        action,
+        immediateAction,
         snapshot,
         options,
       );
@@ -638,6 +667,10 @@ function resolvePriorityRecoveryDispatchPendingOwnerEffectAction(
   options,
 ) {
   if (options.executeOwnerObservationEffect === false) {
+    if (owner.repository.isOperationLocallyOwned(operation) !== true) {
+      return PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_ACTION
+        .SCHEDULE_REMOTE_HANDOFF_RETRY;
+    }
     return PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_ACTION.ARM_OWNER;
   }
   const operationOwnerObservation =

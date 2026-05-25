@@ -147,28 +147,10 @@ class OperationWorkflowOwnerSegment3
           )) {
             throw error;
           }
-          this.operationWorkflowCoordinator.removeWorkflow(
-            operation.operationId,
-          );
-          if (
-            !this.deferTransitionRetry(operation.operationId, error, {
-              boundary: OPERATION_WORKFLOW_OWNER_LITERAL.DISPATCH,
-              partitionId: operation.partitionId,
-              workflowStep: previousStep,
-              updatedAt: operation.updatedAt,
-              createdAt: operation.createdAt,
-              operationSnapshot: options.preserveTransitionRetrySnapshot ===
-                true ?
-                operation :
-                null,
-              ingress:
-                OPERATION_WORKFLOW_OWNER_LITERAL
-                  .PRIORITY_CLAIM_DEFERRED_LOCAL,
-            })
-          ) {
-            throw error;
-          }
-          return null;
+          projectedOperation[PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD] =
+            previousStep;
+          commitProjectedState(operation);
+          return operation;
         }
 
         if (!transitionCommitted) {

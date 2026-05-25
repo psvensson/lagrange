@@ -43,7 +43,7 @@ representative route before startup-readiness work is promoted.
   sibling group; treating stale load evidence as enough to start startup
   readiness work.
 - Next best package:
-  `work/packages/active-20260525-priority-recovery-operation-workflow-rebalancer-handoff-residual-split.md`.
+  `work/packages/done-20260525-priority-recovery-operation-workflow-rebalancer-handoff-residual-split.md`.
 - Stop or escalate rule: if rebalancer-handoff and workflow-progress both
   return the same frontier with no residual-count, frontier, or owner-boundary
   movement, stop for an autonomous architecture experiment before another local
@@ -52,28 +52,28 @@ representative route before startup-readiness work is promoted.
 ## Current Edge Card
 
 ```text
-Representative artifact: test-output/reports/rolling-restart-rerun-4.report.json
-Visible first frontier: priority_recovery_partition_progress / operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait with sibling operation_workflow_owner / rebalancer_handoff residual split
-Active package: work/packages/active-20260525-priority-recovery-operation-workflow-rebalancer-handoff-residual-split.md
-Active package owner: operation_workflow_owner
-Active package boundary: rebalancer_handoff
-Selected cause: priority_recovery_progress_blocked
-Required action: Prove or split the rebalancer_handoff residual group before any workflow_progress runtime promotion.
-Representative status: active-split-proof
-Causal outcome: accept_classified_backpressure
-Architecture gate: watching / unknown
-Expected delta: Either rebalancer_handoff residuals are proven bounded/split away, or the successor escalates before workflow_progress runtime edits.
-Current state: Active sprint first package. Latest residual extraction reports four operation_workflow_owner / rebalancer_handoff recovering_in_flight witnesses and two operation_workflow_owner / workflow_progress witnesses from rolling-restart-rerun-4.
-Allowed edits: work/packages/active-20260525-priority-recovery-operation-workflow-rebalancer-handoff-residual-split.md, work/packages/todo-20260525-priority-recovery-operation-workflow-workflow-progress-residual-successor.md, work/packages/todo-20260525-rolling-restart-operation-workflow-route-rerun.md, work/sprints/active-2026-q2-topology-operation-workflow-residual-closure.md, work/tracks/topology-convergence.md, work/releases/0.1-dependency-map.md
+Representative artifact: test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json
+Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out
+Active package: work/packages/active-20260525-rolling-restart-active-gate-snapshot-coverage-architecture-experiment.md
+Active package owner: startup_active_gate_owner
+Active package boundary: snapshot_coverage
+Selected cause: active_gate_timed_out
+Required action: Close as architecture-gap stop; do not open another startup_active_gate_owner / snapshot_coverage runtime patch from this artifact.
+Representative status: architecture-gap
+Causal outcome: widen_architecture_work
+Architecture gate: selected / open-architecture-package
+Expected delta: Select one concrete active-gate snapshot coverage contract or close as architecture-gap before runtime promotion.
+Current state: Architecture experiment proof confirmed the fresh artifact is still the repeated active_gate_snapshot_coverage family: snapshotCoverageNodeCount=1/5 with owner_reconcile_pending, selected_snapshot_source_timeout, snapshot_repair_deferred, wait_owner_recovery, and selected owner queue pending writes, but no new unique runtime contract beyond prior active-gate reducers.
+Allowed edits: work/packages/active-20260525-rolling-restart-active-gate-snapshot-coverage-architecture-experiment.md
 Candidate runtime files: unknown
-Forbidden edits: workflow_progress runtime promotion requires rebalancer_handoff residual proof or split first.
-Required latest proof: falsifier: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-rerun-4.report.json --markdown, regression: npm run work:scenario-route -- test-output/reports/rolling-restart-rerun-4.report.json, supporting: npm run analyze:owner-files -- operation_workflow_owner rebalancer_handoff
+Forbidden edits: Startup readiness remains downstream until active-gate snapshot coverage is repaired, reduced, migrated, or closed as architecture-gap.
+Required latest proof: falsifier: representative routing evidence npm run work:scenario-route -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json, regression: focused contract fixture npm run work:evidence-summary -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json, supporting: causal route proof npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
 ## Package Queue
 
-1. [Priority Recovery Rebalancer Handoff Residual Split](../packages/active-20260525-priority-recovery-operation-workflow-rebalancer-handoff-residual-split.md)
+1. [Priority Recovery Rebalancer Handoff Residual Split](../packages/done-20260525-priority-recovery-operation-workflow-rebalancer-handoff-residual-split.md)
    - Lane: `causal-escalation`
    - Purpose: prove or split the four `operation_workflow_owner / rebalancer_handoff`
      residual witnesses before workflow-progress runtime promotion.
@@ -81,7 +81,7 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
      across two operation-workflow boundaries, with the larger group under
      `rebalancer_handoff`.
 
-2. [Priority Recovery Workflow Progress Residual Successor](../packages/todo-20260525-priority-recovery-operation-workflow-workflow-progress-residual-successor.md)
+2. [Priority Recovery Workflow Progress Residual Successor](../packages/done-20260525-priority-recovery-operation-workflow-workflow-progress-residual-successor.md)
    - Lane: `scenario-release-gate`
    - Purpose: consume the selected `operation_workflow_owner / workflow_progress`
      route after the rebalancer-handoff sibling group is proven bounded, split
@@ -90,7 +90,7 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
      `operation_workflow_owner / workflow_progress` with
      `priority_recovery_event_driven_wait`.
 
-3. [Rolling Restart Operation Workflow Route Rerun](../packages/todo-20260525-rolling-restart-operation-workflow-route-rerun.md)
+3. [Rolling Restart Operation Workflow Route Rerun](../packages/done-20260525-rolling-restart-operation-workflow-route-rerun.md)
    - Lane: `scenario-release-gate`
    - Purpose: run or route fresh representative evidence after the
      operation-workflow residual packages close.

@@ -3,14 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
-  "lane": "scenario-release-gate",
-  "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-rerun-4.report.json",
-  "owner": "operation_workflow_owner",
-  "boundary": "workflow_progress",
-  "dominantReason": "priority_recovery_event_driven_wait",
-  "nextAction": "Activate only after rebalancer_handoff is proven bounded, split away, or escalated; then prove or implement the workflow_progress residual successor.",
+  "status": "done",
   "intent": {
     "opened": "2026-05-25",
     "lane": "scenario-release-gate",
@@ -20,12 +13,13 @@
     "owner": "operation_workflow_owner",
     "boundary": "workflow_progress",
     "dominantReason": "priority_recovery_event_driven_wait",
-    "currentState": "Queued after the rebalancer_handoff residual split. Latest route selects operation_workflow_owner / workflow_progress with two workflow_progress residual witnesses and four sibling rebalancer_handoff witnesses.",
-    "nextAction": "Activate only after rebalancer_handoff is proven bounded, split away, or escalated; then prove or implement the workflow_progress residual successor."
+    "currentState": "Classification proof kept operation_workflow_owner / workflow_progress selected with priority_recovery_event_driven_wait, residual extraction stayed split at six witnesses across two owner-boundary groups, and causal-model classified the stale artifact as accept_classified_backpressure with zero failed invariants.",
+    "nextAction": "Close this workflow_progress package as classification-only and activate the rolling-restart route rerun package for fresh representative evidence.",
+    "closed": "2026-05-25"
   },
   "scope": {
     "writeScope": [
-      "work/packages/todo-20260525-priority-recovery-operation-workflow-workflow-progress-residual-successor.md",
+      "work/packages/done-20260525-priority-recovery-operation-workflow-workflow-progress-residual-successor.md",
       "work/sprints/active-2026-q2-topology-operation-workflow-residual-closure.md"
     ],
     "handoffFiles": [
@@ -34,7 +28,7 @@
     "generatedFiles": [],
     "candidateRuntimeFiles": [],
     "commitScope": [
-      "work/packages/todo-20260525-priority-recovery-operation-workflow-workflow-progress-residual-successor.md",
+      "work/packages/done-20260525-priority-recovery-operation-workflow-workflow-progress-residual-successor.md",
       "work/sprints/active-2026-q2-topology-operation-workflow-residual-closure.md"
     ]
   },
@@ -56,44 +50,69 @@
   },
   "execution": {
     "theoryLedgerRefs": [],
+    "theoryLedger": "no-ledger-update",
     "proof": [
-      "falsifier: npm run work:scenario-route -- test-output/reports/rolling-restart-rerun-4.report.json",
-      "regression: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-rerun-4.report.json --markdown",
-      "supporting: npm run analyze:owner-files -- operation_workflow_owner workflow_progress"
-    ]
+      "falsifier: transition route npm run work:scenario-route -- test-output/reports/rolling-restart-rerun-4.report.json",
+      "regression: state residuals npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-rerun-4.report.json --markdown",
+      "supporting: owner contract npm run analyze:owner-files -- operation_workflow_owner workflow_progress"
+    ],
+    "implementation": {
+      "parentRevalidatedFocusedProof": true,
+      "filesChanged": [
+        "work/packages/done-20260525-priority-recovery-operation-workflow-workflow-progress-residual-successor.md"
+      ]
+    },
+    "verificationFix": {
+      "parentRevalidatedFocusedProof": true
+    }
   },
-  "modelFitSplit": {
-    "targetExecutionModel": "gpt-5.3-codex",
-    "allowedDecisionDepth": "planning and route selection; split executable children before implementation",
-    "safeToExecuteWhen": [
-      "owner, boundary, write scope, forbidden scope, proof, and kill rule stay as declared",
-      "the executor does not need to choose architecture, migrate ownership, or reinterpret representative evidence",
-      "the first focused proof gives a clear pass, fail, or escalate signal"
-    ],
-    "splitTriggers": [
-      "write scope expands beyond the declared lower-model lane",
-      "proof requires forbidden scope, cross-owner reasoning, or architecture route selection",
-      "the implementation needs to decide system behavior instead of executing a named local mechanism"
-    ],
-    "childPackageCandidates": [
-      "Use this package for route selection, owner/boundary decisions, and stop rules.",
-      "Create Spark-safe mechanical or test-only children once execution is unambiguous.",
-      "Create a gpt-5.4 single-file-runtime child only after the runtime owner file is selected."
-    ]
+  "causalGovernance": {
+    "hypothesis": "After the rebalancer_handoff sibling group was proven bounded, operation_workflow_owner / workflow_progress owns the remaining priority_recovery_event_driven_wait route selection.",
+    "stopConditionCheck": "Use npm run analyze:causal-model -- test-output/reports/rolling-restart-rerun-4.report.json with scenario routing and residual extraction before promoting runtime edits.",
+    "expectedCausalModelChange": "The stale artifact is classified as bounded backpressure, so no local workflow_progress runtime child is promoted from this package; the next move is fresh representative route evidence.",
+    "representativeOutcome": "classification-only",
+    "causalDebt": "Latest route still selects operation_workflow_owner / workflow_progress with priority_recovery_event_driven_wait, and residual extraction still reports two workflow_progress witnesses plus four rebalancer_handoff witnesses on the stale artifact.",
+    "crossBoundaryReview": "Do not edit startup readiness, active gate, publication, or runtime source in this package. Runtime promotion remains blocked until fresh representative evidence selects a concrete owner boundary."
   },
-  "classificationEfficiency": {
-    "defaultMode": "inline-gate-default",
-    "separatePackageReason": "successor-selection",
-    "artifactBudget": "one-artifact",
-    "proofCommandBudget": "two-or-three-canonical-commands",
-    "commands": [
-      "falsifier: npm run work:scenario-route -- test-output/reports/rolling-restart-rerun-4.report.json",
-      "regression: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-rerun-4.report.json --markdown",
-      "supporting: npm run analyze:owner-files -- operation_workflow_owner workflow_progress"
+  "scenarioCausalClosure": {
+    "referenceScenarioOrProbe": "rolling-restart",
+    "phaseChain": [
+      "rolling-restart routes to priority_recovery_partition_progress",
+      "rebalancer_handoff sibling proof is reduced and no longer blocks workflow_progress activation",
+      "workflow_progress residual classification accepts bounded backpressure on the stale artifact and avoids runtime promotion",
+      "fresh representative route after operation workflow decides whether startup readiness can activate"
     ],
-    "decisionRecord": "Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.",
-    "successorAction": "open-causal-escalation",
-    "runtimePromotionRule": "When canonical owner and boundary are stable, prefer a runtime-owner-boundary successor and keep runtime files in candidateRuntimeFiles until that package activates them. If the representative route is same-frontier with no reduction or an architecture gap, open an autonomous architecture experiment before more local runtime work."
+    "currentFirstFrontier": "priority_recovery_partition_progress / operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait",
+    "knownDownstreamBlockers": [
+      "operation_workflow_owner / workflow_progress has two recovering_in_flight witnesses",
+      "startup_readiness_owner / startup_support_evidence remains deferred until fresh route evidence promotes it"
+    ],
+    "missingCausalEdge": "Whether priority_recovery_event_driven_wait is bounded workflow-progress backpressure, a concrete missing wake, retry, dispatch, timer, or advance mechanism, an owner-boundary migration, or an architecture gap.",
+    "missingCausalEdgeProbe": "npm run work:scenario-route -- test-output/reports/rolling-restart-rerun-4.report.json",
+    "falsifyingProbe": "npm run work:scenario-route -- test-output/reports/rolling-restart-rerun-4.report.json",
+    "boundedProgressProof": "Route classification, residual extraction, and causal-model proof show the stale workflow_progress evidence remains classified backpressure rather than a concrete wake, retry, dispatch, timer, or advance runtime mechanism.",
+    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-rerun-4.report.json",
+    "expectedObservableTransition": "No workflow_progress runtime child is promoted from stale evidence; the sprint advances to fresh rolling-restart route evidence.",
+    "maxProgressBound": "one workflow_progress classification package before runtime child selection or architecture stop",
+    "sameFrontierFallback": "If the route and residual shape stay unchanged with no concrete mechanism or migration, open an autonomous architecture experiment instead of another local operation-workflow patch.",
+    "expectedNextFrontier": "diagnostics_owner / representative_route_after_operation_workflow for fresh route evidence",
+    "resultClassification": "classification-only",
+    "stopCondition": "classification-only-stop",
+    "recentFrontierHistory": [
+      "done-20260525-topology-load-stabilization-route-selection.md / operation_workflow_owner / workflow_progress / migrated",
+      "done-20260525-rolling-restart-operation-workflow-owner-workflow-progress.md / operation_workflow_owner / workflow_progress / reduced",
+      "done-20260525-priority-recovery-operation-workflow-rebalancer-handoff-residual-split.md / operation_workflow_owner / rebalancer_handoff / reduced"
+    ],
+    "oscillationCheck": "This package is a classification gate after sibling residual proof; unchanged workflow_progress evidence did not produce another symptom-shaped local patch.",
+    "handoffInvariant": "workflow_progress runtime promotion requires a selected runtime child or migration proof; startup readiness remains downstream."
+  },
+  "observablePrediction": {
+    "metric": "workflow_progress residual witness count and selected route owner-boundary",
+    "predicted": "The classification will keep operation_workflow_owner / workflow_progress as selected route with two residual witnesses, then either open a focused runtime child, migrate ownership, or stop for architecture before runtime edits.",
+    "observed": "Scenario route stayed operation_workflow_owner / workflow_progress with two workflow_progress residual witnesses and causal-model outcome accept_classified_backpressure; no runtime child, migration, or architecture stop was selected from the stale artifact.",
+    "accuracy": "partial",
+    "evidence": "test-output/reports/rolling-restart-rerun-4.report.json",
+    "metricDelta": 0
   },
   "rerunDecision": {
     "sourceArtifact": "test-output/reports/rolling-restart-rerun-4.report.json",
@@ -103,13 +122,27 @@
     "routeCausalOutcome": "accept_classified_backpressure",
     "stopMode": "classified_backpressure",
     "nextLane": "scenario-release-gate",
-    "expectedDelta": "workflow_progress residuals reduce, migrate, or produce a focused runtime-owner boundary.",
+    "expectedDelta": "Fresh representative route should be run or routed before any further runtime promotion.",
     "requiredRefreshCommands": [
       "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-rerun-4.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait",
       "update Sprint Strategy Brief and Current Edge Card from the route result",
       "npm run work:repair",
       "npm run work:validate -- --pre-impl"
     ]
+  },
+  "classificationEfficiency": {
+    "defaultMode": "inline-gate-default",
+    "separatePackageReason": "successor-selection",
+    "artifactBudget": "one-artifact",
+    "proofCommandBudget": "two-or-three-canonical-commands",
+    "commands": [
+      "falsifier: transition route npm run work:scenario-route -- test-output/reports/rolling-restart-rerun-4.report.json",
+      "regression: state residuals npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-rerun-4.report.json --markdown",
+      "supporting: owner contract npm run analyze:owner-files -- operation_workflow_owner workflow_progress"
+    ],
+    "decisionRecord": "Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.",
+    "successorAction": "rerun-representative-evidence",
+    "runtimePromotionRule": "Do not promote workflow_progress runtime work from this stale artifact. Fresh representative evidence must select the next owner boundary before runtime edits resume."
   }
 }
 -->
@@ -121,6 +154,11 @@ State the focused concern and why this package owns it.
 ## Scope Basis
 
 Approved maintenance scope or roadmap row.
+
+Theory ledger: `not-applicable` - this package is a classification and
+successor-selection gate after the sibling residual proof, not a repeat of the
+prior workflow_progress runtime route; no ledger update is needed for this
+classification-only stop.
 
 ## Workflow Lane
 
@@ -213,7 +251,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. work/packages/todo-20260525-priority-recovery-operation-workflow-workflow-progress-residual-successor.md
+1. work/packages/done-20260525-priority-recovery-operation-workflow-workflow-progress-residual-successor.md
 2. work/sprints/active-2026-q2-topology-operation-workflow-residual-closure.md
 
 ## Out Of Scope
@@ -226,7 +264,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `bounded-owner-runtime/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/todo-20260525-priority-recovery-operation-workflow-workflow-progress-residual-successor.md`, `work/sprints/active-2026-q2-topology-operation-workflow-residual-closure.md`
+- Owned files: `work/packages/done-20260525-priority-recovery-operation-workflow-workflow-progress-residual-successor.md`, `work/sprints/active-2026-q2-topology-operation-workflow-residual-closure.md`
 - Forbidden files: `src/`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -255,9 +293,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: <owner>; files-changed: <paths or none>; validation: <focused proof and parent revalidated focused proof: yes>; outcome: <validated|blocked>.
-- [ ] action: verification-fix; owner: <owner>; files-changed: <paths or none>; validation: <verification proof and parent revalidated focused proof: yes>; outcome: <validated|blocked>.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: <validated|not-needed>.
+- [x] action: implementation; owner: operation_workflow_owner; files-changed: work/packages/done-20260525-priority-recovery-operation-workflow-workflow-progress-residual-successor.md; validation: `npm run work:scenario-route -- test-output/reports/rolling-restart-rerun-4.report.json`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-rerun-4.report.json --markdown`, `npm run analyze:owner-files -- operation_workflow_owner workflow_progress`, and `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-rerun-4.report.json`; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: verification-fix; owner: operation_workflow_owner; files-changed: none; validation: causal model reports `accept_classified_backpressure` with failedInvariantCount 0; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: not-needed.
 
 ## Validation
 

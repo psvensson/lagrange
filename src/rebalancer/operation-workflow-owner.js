@@ -28,6 +28,10 @@ import {
   createOperationWorkflowOwnerPorts,
 } from './operation-workflow-owner-ports.js';
 import {
+  OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES,
+  OPERATION_WORKFLOW_OUTCOME_VALUES,
+} from './operation-workflow-owner-constants.js';
+import {
   applyOperationWorkflowOwnerTargetProgressReentryAction,
   isOperationWorkflowOwnerDispatchPendingTargetProgressReady,
   resolveOperationWorkflowOwnerTargetProgressReentryAction,
@@ -74,6 +78,16 @@ const OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_ALLOWED_STATES =
     OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_STATE
       .REBALANCER_HANDOFF_RETRY_ACTIVE,
   ]));
+
+function shouldReturnDeferredDispatchOwnerProgressResult(result) {
+  return (
+    result?.applied !== true &&
+    result?.outcome?.outcome ===
+      OPERATION_WORKFLOW_OUTCOME_VALUES.DISPATCH_LOCAL_OWNER &&
+    result?.command?.effectCommand ===
+      OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES.DISPATCH_LOCAL_OWNER_COMMAND
+  );
+}
 
 const OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_ACTUATION_STATES =
   Object.freeze(new Set([
@@ -566,7 +580,13 @@ class OperationWorkflowOwner extends OperationWorkflowOwnerSegment7 {
           },
         ),
       );
-      return result?.applied === true;
+      if (result?.applied === true) {
+        return true;
+      }
+      if (shouldReturnDeferredDispatchOwnerProgressResult(result)) {
+        return result;
+      }
+      return false;
     } catch (error) {
       if (
         this.deferCoordinatorCreatedRemoteHandoffRetry(operationInput, error)
