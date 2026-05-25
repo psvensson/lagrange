@@ -58,21 +58,27 @@ loop.
 
 Latest current handoff state:
 
-- artifact:
-  `test-output/reports/rolling-restart-after-workflow-progress-pending-coordination-gate-20260516.report.json`
-- first frontier: `active_gate_snapshot_coverage`
-- owner boundary: `startup_active_gate_owner / snapshot_coverage`
-- dominant reason: `active_gate_timed_out`
-- publication ACK convergence is not selected and reports `pendingAckCount=0`
-- priority recovery is satisfied and residual extraction reports zero
-  witnesses
-- active-gate snapshot coverage is blocked with snapshot coverage `0/5`,
-  expected nodes `5`, and selected admin snapshot timeout evidence
-- forced repair snapshot capture also times out while readiness support is
-  deferred as inherited active-gate no progress
-- the active package is
-  `work/packages/done-20260516-startup-active-gate-admin-snapshot-timeout-after-priority-recovery.md`
-  and focuses `startup_active_gate_owner / snapshot_coverage`
+- route-selection package:
+  `work/packages/done-20260525-topology-load-stabilization-route-selection.md`
+- rolling-restart artifact:
+  `test-output/reports/rolling-restart-rerun-4.report.json`
+- first frontier: `priority_recovery_partition_progress`
+- owner boundary: `operation_workflow_owner / workflow_progress`
+- dominant reason: `priority_recovery_event_driven_wait`
+- causal outcome: `accept_classified_backpressure`
+- priority recovery residuals split across six witnesses:
+  four under `operation_workflow_owner / rebalancer_handoff` and two under
+  `operation_workflow_owner / workflow_progress`
+- heavy-load artifact:
+  `test-output/reports/topology-load-baseline.report.json`
+- heavy-load route: no topology frontier; causal taxonomy migrates the deferred
+  load-readiness concern to
+  `startup_readiness_owner / startup_support_evidence` with selected snapshot
+  timeout evidence
+- prior load-readiness support artifact:
+  `test-output/reports/rolling-restart-load-readiness-force-repair-20260522T183247Z.report.json`
+  still shows `startup_active_gate_owner / snapshot_coverage` as the producer
+  prerequisite for readiness support
 
 ## Target Invariant
 
@@ -98,27 +104,25 @@ or produces a narrower owner-boundary blocker selected by canonical evidence.
 
 ## Current Evidence
 
-- Active theory sprint:
-  `work/sprints/done-2026-q2-topology-convergence-theory-ladder.md`
-- Active theory package:
-  `work/packages/done-20260521-topology-publication-reconcile-system-theory.md`
-- First theory:
-  fresh `rolling-restart` evidence distinguished H3: topology convergence
-  remains red at publication acknowledgement convergence.
-- Closed baseline:
-  `work/packages/done-20260521-rolling-restart-theory-baseline-probe.md`
-- Seed artifact:
-  `test-output/reports/rolling-restart-theory-baseline-20260521T035711Z.report.json`
-- Next holistic theory:
-  `work/packages/done-20260521-topology-publication-reconcile-system-theory.md`
-  should prove whether the accepted owner-reconcile handoff has visible bounded
-  wake/retry/reconcile/drain progress across publication owner, operation
-  workflow, active-gate snapshot coverage, startup readiness, and diagnostics.
-- Previous checkpoint:
-  `work/packages/done-20260520-operation-progress-resource-and-deterministic-gates.md`
-- Extractor plan:
-  run the representative gate once, then route the artifact with
-  `work:evidence-summary` and `work:scenario-route` before any runtime package.
+- Current route-selection package:
+  `work/packages/done-20260525-topology-load-stabilization-route-selection.md`
+- Selected immediate successor route:
+  `operation_workflow_owner / workflow_progress` from
+  `test-output/reports/rolling-restart-rerun-4.report.json`.
+- Required successor discriminator:
+  `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-rerun-4.report.json --markdown`.
+- Residual split:
+  six witnesses, with four `rebalancer_handoff` witnesses and two
+  `workflow_progress` witnesses, all in `recovering_in_flight` state.
+- Deferred load route:
+  `startup_readiness_owner / startup_support_evidence` from
+  `test-output/reports/topology-load-baseline.report.json`, held until
+  operation-workflow backpressure clears or a fresh rerun promotes startup
+  readiness to first frontier.
+- Historical support:
+  `test-output/reports/rolling-restart-load-readiness-force-repair-20260522T183247Z.report.json`
+  preserves the active-gate snapshot coverage prerequisite for startup
+  readiness support.
 
 ## Codebase Analysis Notes
 
@@ -157,8 +161,8 @@ publication-evidence replay code rather than by the runtime owner alone.
 - `topology_publication_owner / publication_projection_cohort`
 - `startup_readiness_owner / startup_support_evidence`
 - `diagnostics_owner / causal_analysis_framework`
-- `operation_workflow_owner / workflow_progress` as subordinate evidence only
-  when canonical extractors keep it off the first frontier.
+- `operation_workflow_owner / workflow_progress`
+- `operation_workflow_owner / rebalancer_handoff`
 
 ## Likely Files
 
@@ -211,8 +215,10 @@ canonical owner-boundary evidence.
 
 ## Next Package
 
-Active continuation:
-`work/packages/done-20260521-rolling-restart-theory-baseline-probe.md`.
-It created the fresh rolling-restart baseline artifact and recorded
-`work/packages/done-20260521-topology-publication-reconcile-system-theory.md`
-as the next holistic theory decision before any runtime package is promoted.
+Open an `operation_workflow_owner / workflow_progress` successor package first.
+It must prove or split the priority-recovery residual groups from
+`test-output/reports/rolling-restart-rerun-4.report.json`, especially the four
+`operation_workflow_owner / rebalancer_handoff` witnesses, before any runtime
+promotion. Do not promote `startup_readiness_owner / startup_support_evidence`
+until operation-workflow backpressure clears or fresh canonical route evidence
+makes startup readiness the first frontier.
