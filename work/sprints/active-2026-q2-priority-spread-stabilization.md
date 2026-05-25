@@ -18,34 +18,34 @@ Resolve the control-plane priority spread timeout during heavy-load rolling rest
 - Expected green path: triage the priority spread timeout, identify the missing ACK or loop constraint, implement the local stabilization repair under `topology_publication_owner / publication_convergence`, and verify it.
 - Wrong direction signals: widening the rebalance/admission timeouts or bypassing control-plane publication validation.
 - Next best package:
-  `work/packages/active-20260525-priority-spread-triage.md`.
+  `work/packages/done-20260525-priority-spread-triage.md`.
 - Stop or escalate rule: if a fresh rerun is red and same-frontier without concrete reduction, open/select an autonomous architecture experiment; human escalation only for contradictory or blocked evidence.
 
 ## Current Edge Card
 
 ```text
 Representative artifact: test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json
-Visible first frontier: publicationConvergence / topology_publication_owner / publication_convergence / priority_control_plane_spread_pending
-Active package: work/packages/active-20260525-priority-spread-triage.md
-Active package owner: topology_publication_owner
-Active package boundary: publication_convergence
-Selected cause: priority_control_plane_spread_pending
-Required action: Triage control-plane priority spread timeout with combined scenario evidence before runtime edits.
-Representative status: pending-before-probe
+Visible first frontier: activeGateSnapshotCoverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out
+Active package: work/packages/active-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md
+Active package owner: startup_active_gate_owner
+Active package boundary: snapshot_coverage
+Selected cause: active_gate_timed_out
+Required action: Triage active_gate_snapshot_coverage with combined scenario evidence before runtime edits.
+Representative status: unknown
 Causal outcome: continue_local_fix
-Architecture gate: selected / continue-local-proof
+Architecture gate: watching / unknown
 Expected delta: Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.
-Current state: Scaffolded from representative evidence for publicationConvergence.
-Allowed edits: work/packages/active-20260525-priority-spread-triage.md, src/bootstrap/node-joining-ready-signal-readiness.js, src/bootstrap/traffic-readiness-utils.js, test/bootstrap/traffic-readiness-utils.test.js, test/distributed/harness/cluster-segment-1.js
+Current state: Scaffolded from representative evidence for active_gate_snapshot_coverage.
+Allowed edits: unknown
 Candidate runtime files: unknown
 Forbidden edits: Startup readiness remains downstream.
-Required latest proof: falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json, regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --markdown, supporting: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --explain priority_control_plane_spread_pending
+Required latest proof: falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json, regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --markdown, supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --markdown
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
 ## Package Queue
 
-1. [Priority Spread Triage](../packages/active-20260525-priority-spread-triage.md)
+1. [Priority Spread Triage](../packages/done-20260525-priority-spread-triage.md)
    - Lane: `causal-escalation`
    - Purpose: triage control-plane priority spread timeout with combined scenario evidence.
    - First-run reason: active-gate snapshot coverage was resolved, and this is the first package to investigate the new priority spread bottleneck.
@@ -53,7 +53,7 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
 ## Proof Ladder
 
 1. `npm run work:context`
-2. `npm run work:validate -- --pre-impl work/packages/active-20260525-priority-spread-triage.md`
+2. `npm run work:validate -- --pre-impl work/packages/done-20260525-priority-spread-triage.md`
 3. `npm run work:evidence-summary -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json`
 4. `npm run work:scenario-triage -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --markdown`
 5. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --explain priority_control_plane_spread_pending`

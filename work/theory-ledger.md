@@ -150,14 +150,14 @@ Each entry must include these labels:
 
 ## theory-20260525-priority-spread-triage-stub
 
-- Status: active
+- Status: supported
 - Scenario/gate: rolling-restart / publication_convergence
 - Owner/boundary: topology_publication_owner / publication_convergence
 - Hypothesis: Triaging the priority spread timeout will expose whether the bottleneck is an ACK gap, rebalancer starvation, or subscriber initialization delay.
 - Probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --explain priority_control_plane_spread_pending`
-- Artifact/result: `work/packages/active-20260525-priority-spread-triage.md` - active triage package initiated.
+- Artifact/result: `work/packages/done-20260525-priority-spread-triage.md` - triage completed; fresh representative rerun showed that the frontier migrated back to the startup active gate owner due to incomplete snapshot coverage.
 - Representative movement: none
-- Linked packages: `work/packages/active-20260525-priority-spread-triage.md`
+- Linked packages: `work/packages/done-20260525-priority-spread-triage.md`
 - Supersedes: none
 - Superseded by: none
-- Next implication: Complete triage to identify the correct local stabilization repair.
+- Next implication: Stabilize startup active gate snapshot coverage under the active successor package.

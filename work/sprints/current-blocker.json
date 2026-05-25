@@ -2,49 +2,35 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-priority-spread-stabilization.md",
-  "package": "work/packages/active-20260525-priority-spread-triage.md",
+  "package": "work/packages/active-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md",
   "status": "active",
-  "lane": "causal-escalation",
+  "lane": "runtime-owner-boundary",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json",
   "playback": "none",
-  "owner": "topology_publication_owner",
-  "boundary": "publication_convergence",
-  "dominantReason": "priority_control_plane_spread_pending",
-  "currentState": "Scaffolded from representative evidence for publicationConvergence.",
-  "nextAction": "Triage control-plane priority spread timeout with combined scenario evidence before runtime edits.",
+  "owner": "startup_active_gate_owner",
+  "boundary": "snapshot_coverage",
+  "dominantReason": "active_gate_timed_out",
+  "currentState": "Scaffolded from representative evidence for active_gate_snapshot_coverage.",
+  "nextAction": "Triage active_gate_snapshot_coverage with combined scenario evidence before runtime edits.",
   "proof": [
     "falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json",
     "regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --markdown",
-    "supporting: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --explain priority_control_plane_spread_pending"
+    "supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --markdown"
   ],
-  "writeScope": [
-    "work/packages/active-20260525-priority-spread-triage.md",
-    "src/bootstrap/node-joining-ready-signal-readiness.js",
-    "src/bootstrap/traffic-readiness-utils.js",
-    "test/bootstrap/traffic-readiness-utils.test.js",
-    "test/distributed/harness/cluster-segment-1.js"
-  ],
+  "writeScope": [],
   "handoffFiles": [
     "test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json"
   ],
   "generatedFiles": [],
   "candidateRuntimeFiles": [],
-  "commitScope": [
-    "work/packages/active-20260525-priority-spread-triage.md",
-    "src/bootstrap/node-joining-ready-signal-readiness.js",
-    "src/bootstrap/traffic-readiness-utils.js",
-    "test/bootstrap/traffic-readiness-utils.test.js",
-    "test/distributed/harness/cluster-segment-1.js"
-  ],
+  "commitScope": [],
   "touchedFiles": [],
-  "theoryLedgerRefs": [
-    "theory-20260525-priority-spread-triage-stub"
-  ],
+  "theoryLedgerRefs": [],
   "modelFit": {
-    "packageClass": "experiment",
-    "intendedMinimumModel": "gpt-5.3-codex-spark",
-    "scopeShape": "leaf-slice",
+    "packageClass": "runtime-owner-boundary",
+    "intendedMinimumModel": "gpt-5.3-codex",
+    "scopeShape": "bounded-owner-runtime/current-frontier",
     "outputProfile": "medium",
     "ambiguityScore": 1,
     "escalationTriggers": [
@@ -52,71 +38,57 @@
       "a frozen decision must be reopened"
     ]
   },
-  "representativeResidual": {
-    "status": "pending-before-probe",
-    "scenario": "rolling-restart",
-    "artifact": "test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json",
-    "frontier": "publicationConvergence",
-    "owner": "topology_publication_owner",
-    "boundary": "publication_convergence",
-    "dominantReason": "priority_control_plane_spread_pending",
-    "nextAction": "Triage control-plane priority spread timeout with combined scenario evidence before runtime edits."
-  },
+  "representativeResidual": {},
   "causalGovernance": {
-    "hypothesis": "Triaging the priority spread timeout will expose whether the bottleneck is an ACK gap, rebalancer starvation, or subscriber initialization delay.",
-    "stopConditionCheck": "Use npm run analyze:causal-model -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --explain priority_control_plane_spread_pending",
-    "expectedCausalModelChange": "This package determines priority spread bottleneck.",
+    "hypothesis": "Startup active gate snapshot coverage timeout under rolling restart is blocked by the incomplete snapshot coverage.",
+    "stopConditionCheck": "Use npm run analyze:causal-model -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --explain active_gate_timed_out",
+    "expectedCausalModelChange": "This package stabilizes active-gate snapshot coverage.",
     "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "The fresh rerun has publicationConvergence=priority_control_plane_spread_pending.",
-    "crossBoundaryReview": "All runtime files outside topology_publication_owner boundary stay frozen."
+    "causalDebt": "The fresh rerun has activeGateSnapshotCoverage=active_gate_timed_out.",
+    "crossBoundaryReview": "All runtime files outside startup_active_gate_owner boundary stay frozen."
   },
   "scenarioCausalClosure": {
     "referenceScenarioOrProbe": "rolling-restart",
     "phaseChain": [
       "fresh representative rerun completed",
-      "routed to topology_publication_owner publication_convergence priority_control_plane_spread_pending",
-      "triage priority spread timeout with combined scenario evidence"
+      "routed to startup_active_gate_owner snapshot_coverage active_gate_timed_out",
+      "triage snapshot coverage timeout with combined scenario evidence"
     ],
-    "currentFirstFrontier": "publicationConvergence / topology_publication_owner / publication_convergence / priority_control_plane_spread_pending",
+    "currentFirstFrontier": "activeGateSnapshotCoverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out",
     "knownDownstreamBlockers": [
-      "rebalancer_handoff / publication_convergence remains downstream of priority spread"
+      "topology_publication_owner / publication_convergence remains downstream of active gate"
     ],
-    "missingCausalEdge": "Whether priority spread needs an ACK gap recovery or loops stabilization.",
-    "missingCausalEdgeProbe": "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --explain priority_control_plane_spread_pending",
+    "missingCausalEdge": "Whether active gate needs a snapshot watch retry doubling or a local timeout doubling revert.",
+    "missingCausalEdgeProbe": "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --explain active_gate_timed_out",
     "falsifyingProbe": "npm run work:scenario-route -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json",
-    "boundedProgressProof": "The priority spread triage maps the reconcile timer progress or names the successor contract.",
+    "boundedProgressProof": "The active gate triage maps the reconcile timer progress or names the successor contract.",
     "boundedProgressProofArtifact": "test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json",
-    "expectedObservableTransition": "priority spread reduces, migrates, or selects an architecture stop.",
+    "expectedObservableTransition": "active gate snapshot coverage reduces, migrates, or selects an architecture stop.",
     "maxProgressBound": "one triage package",
     "sameFrontierFallback": "If canonical extractors cannot distinguish the route, close as architecture-gap.",
-    "expectedNextFrontier": "architecture-gap-stop or selected priority-spread runtime contract",
+    "expectedNextFrontier": "architecture-gap-stop or selected active-gate snapshot coverage runtime contract",
     "resultClassification": "pending-before-probe",
     "stopCondition": "continue-local-fix",
     "recentFrontierHistory": [
-      "done-20260525-rolling-restart-fully-green-gate.md / release_gate_owner / rolling_restart_fully_green_gate / migrated"
+      "done-20260525-rolling-restart-fully-green-gate.md / release_gate_owner / rolling_restart_fully_green_gate / migrated",
+      "done-20260525-priority-spread-triage.md / topology_publication_owner / publication_convergence / priority_control_plane_spread_pending"
     ],
     "oscillationCheck": "This package is activated because of validator same-frontier/frontier-oscillation rules.",
     "handoffInvariant": "Startup readiness remains downstream."
   },
-  "observablePrediction": {
-    "metric": "priority spread reaches convergence or resolves successfully",
-    "predicted": "priority spread reaches convergence or resolves successfully",
-    "observed": "unknown",
-    "accuracy": "pending-before-observation",
-    "evidence": "unknown"
-  },
+  "observablePrediction": {},
   "experimentOutcome": {},
   "rerunDecision": {
     "sourceArtifact": "test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json",
-    "routeOwner": "topology_publication_owner",
-    "routeBoundary": "publication_convergence",
-    "routeDominantReason": "priority_control_plane_spread_pending",
+    "routeOwner": "startup_active_gate_owner",
+    "routeBoundary": "snapshot_coverage",
+    "routeDominantReason": "active_gate_timed_out",
     "routeCausalOutcome": "continue_local_fix",
     "stopMode": "classified_local_blocker",
     "nextLane": "runtime-owner-boundary",
     "expectedDelta": "Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.",
     "requiredRefreshCommands": [
-      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --owner topology_publication_owner --boundary publication_convergence --dominant-reason priority_control_plane_spread_pending",
+      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out",
       "update Sprint Strategy Brief and Current Edge Card from the route result",
       "npm run work:repair",
       "npm run work:validate -- --pre-impl"
@@ -129,17 +101,21 @@
     "proofCommandBudget": "two-or-three-canonical-commands",
     "commands": [
       "npm run work:evidence-summary -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json",
-      "npm run work:scenario-triage -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --markdown"
+      "npm run work:scenario-triage -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --markdown",
+      "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --markdown"
     ],
     "decisionRecord": "Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.",
     "successorAction": "open-runtime-owner-boundary",
     "runtimePromotionRule": "When canonical owner and boundary are stable, prefer a runtime-owner-boundary successor and keep runtime files in candidateRuntimeFiles until that package activates them. If the representative route is same-frontier with no reduction or an architecture gap, open an autonomous architecture experiment before more local runtime work."
   },
   "architectureDecisionGate": {
-    "status": "selected",
+    "status": "watching",
     "trigger": "frontier-oscillation",
     "triggerEvidence": [
-      "frontier returned to a recently closed related boundary"
+      "frontier returned to a recently closed related boundary",
+      "work/packages/done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md / startup_active_gate_owner / snapshot_coverage / reduced",
+      "work/packages/done-20260525-rolling-restart-workflow-progress-dispatch-chain.md / operation_workflow_owner / workflow_progress / migrated",
+      "work/packages/done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage-retry.md / startup_active_gate_owner / snapshot_coverage / reduced"
     ],
     "choices": [
       {
@@ -147,12 +123,48 @@
         "summary": "Continue with a bounded local proof if the missing edge stays inside this owner boundary.",
         "route": "continue-local-proof",
         "proof": [
-          "npm run work:evidence-summary -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json"
+          "falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json",
+          "regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --markdown",
+          "supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --markdown",
+          "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --explain active_gate_timed_out"
+        ]
+      },
+      {
+        "id": "migrate-owner-boundary",
+        "summary": "Migrate the active package to the owner boundary named by the first frontier evidence.",
+        "route": "owner-boundary-migration",
+        "proof": [
+          "falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json",
+          "regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --markdown",
+          "supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --markdown",
+          "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --explain active_gate_timed_out"
+        ]
+      },
+      {
+        "id": "open-architecture-package",
+        "summary": "Open a bounded autonomous architecture experiment for the missing owner contract.",
+        "route": "architecture-package",
+        "proof": [
+          "falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json",
+          "regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --markdown",
+          "supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --markdown",
+          "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --explain active_gate_timed_out"
+        ]
+      },
+      {
+        "id": "human-escalation",
+        "summary": "Escalate to a human only when evidence is contradictory, policy-blocked, credential-blocked, or unavailable.",
+        "route": "human-escalation",
+        "proof": [
+          "falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json",
+          "regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --markdown",
+          "supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --markdown",
+          "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --explain active_gate_timed_out"
         ]
       }
     ],
-    "selectedChoice": "continue-local-proof",
-    "nextAction": "Triage control-plane priority spread timeout with combined scenario evidence before runtime edits."
+    "selectedChoice": null,
+    "nextAction": "Watch for repeated frontier oscillation; open an autonomous architecture experiment if another local proof returns here unchanged."
   },
   "predecessor": null
 }
