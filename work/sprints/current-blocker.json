@@ -1,37 +1,207 @@
 {
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
-  "sprint": "none",
-  "package": "none",
-  "status": "none",
-  "lane": "none",
-  "scenario": "none",
-  "artifact": "none",
+  "sprint": "work/sprints/active-2026-q2-topology-operation-workflow-residual-closure.md",
+  "package": "work/packages/active-20260525-priority-recovery-operation-workflow-rebalancer-handoff-residual-split.md",
+  "status": "active",
+  "lane": "causal-escalation",
+  "scenario": "rolling-restart",
+  "artifact": "test-output/reports/rolling-restart-rerun-4.report.json",
   "playback": "none",
-  "owner": "none",
-  "boundary": "none",
-  "dominantReason": "none",
-  "currentState": "No active work package. Start a new package when implementation resumes.",
-  "nextAction": "Create or activate one focused package for the next executable concern.",
-  "proof": [],
-  "writeScope": [],
-  "handoffFiles": [],
+  "owner": "operation_workflow_owner",
+  "boundary": "rebalancer_handoff",
+  "dominantReason": "priority_recovery_progress_blocked",
+  "currentState": "Active sprint first package. Latest residual extraction reports four operation_workflow_owner / rebalancer_handoff recovering_in_flight witnesses and two operation_workflow_owner / workflow_progress witnesses from rolling-restart-rerun-4.",
+  "nextAction": "Prove or split the rebalancer_handoff residual group before any workflow_progress runtime promotion.",
+  "proof": [
+    "falsifier: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-rerun-4.report.json --markdown",
+    "regression: npm run work:scenario-route -- test-output/reports/rolling-restart-rerun-4.report.json",
+    "supporting: npm run analyze:owner-files -- operation_workflow_owner rebalancer_handoff"
+  ],
+  "writeScope": [
+    "work/packages/active-20260525-priority-recovery-operation-workflow-rebalancer-handoff-residual-split.md",
+    "work/packages/todo-20260525-priority-recovery-operation-workflow-workflow-progress-residual-successor.md",
+    "work/packages/todo-20260525-rolling-restart-operation-workflow-route-rerun.md",
+    "work/sprints/active-2026-q2-topology-operation-workflow-residual-closure.md",
+    "work/tracks/topology-convergence.md",
+    "work/releases/0.1-dependency-map.md"
+  ],
+  "handoffFiles": [
+    "test-output/reports/rolling-restart-rerun-4.report.json"
+  ],
   "generatedFiles": [
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
   ],
   "candidateRuntimeFiles": [],
-  "commitScope": [],
+  "commitScope": [
+    "work/packages/active-20260525-priority-recovery-operation-workflow-rebalancer-handoff-residual-split.md",
+    "work/packages/todo-20260525-priority-recovery-operation-workflow-workflow-progress-residual-successor.md",
+    "work/packages/todo-20260525-rolling-restart-operation-workflow-route-rerun.md",
+    "work/sprints/active-2026-q2-topology-operation-workflow-residual-closure.md",
+    "work/tracks/topology-convergence.md",
+    "work/releases/0.1-dependency-map.md",
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md"
+  ],
   "touchedFiles": [],
-  "modelFit": {},
-  "representativeResidual": {},
-  "causalGovernance": {},
-  "scenarioCausalClosure": {},
-  "observablePrediction": {},
+  "theoryLedgerRefs": [],
+  "modelFit": {
+    "packageClass": "runtime-owner-boundary",
+    "intendedMinimumModel": "gpt-5.3-codex",
+    "scopeShape": "bounded-owner-runtime/current-frontier",
+    "outputProfile": "medium",
+    "ambiguityScore": 2,
+    "escalationTriggers": [
+      "owned files expand beyond this package",
+      "a frozen decision must be reopened"
+    ]
+  },
+  "representativeResidual": {
+    "status": "active-split-proof",
+    "scenario": "rolling-restart",
+    "artifact": "test-output/reports/rolling-restart-rerun-4.report.json",
+    "frontier": "priority_recovery_partition_progress",
+    "owner": "operation_workflow_owner",
+    "boundary": "rebalancer_handoff",
+    "dominantReason": "priority_recovery_progress_blocked",
+    "nextAction": "Prove or split the four rebalancer_handoff recovering_in_flight witnesses before workflow_progress runtime promotion."
+  },
+  "causalGovernance": {
+    "hypothesis": "The operation-workflow residual closure sprint should prove or split the rebalancer_handoff sibling group before workflow_progress runtime promotion.",
+    "stopConditionCheck": "Use npm run analyze:causal-model -- test-output/reports/rolling-restart-rerun-4.report.json with residual extraction and scenario routing before runtime edits.",
+    "expectedCausalModelChange": "Focused proof either proves rebalancer_handoff backpressure is bounded, splits the residual to a narrower package, or prevents workflow_progress promotion.",
+    "representativeOutcome": "pending-before-rerun",
+    "causalDebt": "Latest residual extraction reports four rebalancer_handoff witnesses and two workflow_progress witnesses, all recovering_in_flight.",
+    "crossBoundaryReview": "Do not edit startup readiness, active gate, publication, or workflow_progress runtime from this package while the rebalancer_handoff sibling group is unresolved."
+  },
+  "scenarioCausalClosure": {
+    "referenceScenarioOrProbe": "rolling-restart",
+    "phaseChain": [
+      "rolling-restart routes to priority_recovery_partition_progress",
+      "residual extraction splits operation workflow witnesses across rebalancer_handoff and workflow_progress",
+      "rebalancer_handoff residual proof must run before workflow_progress runtime promotion",
+      "fresh representative route after operation workflow decides whether startup readiness can activate"
+    ],
+    "currentFirstFrontier": "priority_recovery_partition_progress / operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait with sibling operation_workflow_owner / rebalancer_handoff residual split",
+    "knownDownstreamBlockers": [
+      "operation_workflow_owner / rebalancer_handoff has four recovering_in_flight witnesses",
+      "operation_workflow_owner / workflow_progress has two recovering_in_flight witnesses",
+      "startup_readiness_owner / startup_support_evidence remains deferred until fresh route evidence promotes it"
+    ],
+    "missingCausalEdge": "Whether the four rebalancer_handoff witnesses are bounded backpressure or the next missing wake, retry, dispatch, or advance mechanism.",
+    "missingCausalEdgeProbe": "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-rerun-4.report.json --markdown",
+    "falsifyingProbe": "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-rerun-4.report.json --markdown",
+    "boundedProgressProof": "The package must prove a bounded wake, retry, dispatch, or advance mechanism for rebalancer_handoff, or split/escalate before workflow_progress runtime promotion.",
+    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-rerun-4.report.json",
+    "expectedObservableTransition": "The rebalancer_handoff residual group is proven bounded, split to a narrower owner boundary, reduced, or escalated before workflow_progress activates.",
+    "maxProgressBound": "one residual split/proof package before workflow_progress promotion",
+    "sameFrontierFallback": "If residual extraction returns the same 4/2 split with no causal reduction, open an autonomous architecture experiment instead of another local operation-workflow patch.",
+    "expectedNextFrontier": "operation_workflow_owner / workflow_progress after rebalancer_handoff is resolved, or architecture-gap if the split cannot be reduced",
+    "resultClassification": "pending-before-probe",
+    "stopCondition": "continue-local-fix",
+    "recentFrontierHistory": [
+      "done-20260525-topology-load-stabilization-route-selection.md / operation_workflow_owner / workflow_progress / migrated",
+      "done-20260525-rolling-restart-operation-workflow-owner-workflow-progress.md / operation_workflow_owner / workflow_progress / reduced"
+    ],
+    "oscillationCheck": "The sprint orders the sibling residual groups explicitly to avoid bouncing between rebalancer_handoff and workflow_progress.",
+    "handoffInvariant": "workflow_progress runtime promotion requires rebalancer_handoff residual proof or split first."
+  },
+  "observablePrediction": {
+    "metric": "priority recovery residual owner-boundary group count and rebalancer_handoff witness count",
+    "predicted": "Focused proof will either reduce the rebalancer_handoff witness count below four, classify the four witnesses as bounded backpressure, or split them to a narrower owner boundary before workflow_progress runtime promotion.",
+    "observed": "pending-before-observation",
+    "accuracy": "pending-before-observation",
+    "evidence": "test-output/reports/rolling-restart-rerun-4.report.json",
+    "metricDelta": 0
+  },
   "experimentOutcome": {},
-  "rerunDecision": {},
-  "classificationEfficiency": {},
-  "architectureDecisionGate": {},
-  "predecessor": null,
-  "theoryLedgerRefs": []
+  "rerunDecision": {
+    "sourceArtifact": "test-output/reports/rolling-restart-rerun-4.report.json",
+    "routeOwner": "operation_workflow_owner",
+    "routeBoundary": "rebalancer_handoff",
+    "routeDominantReason": "priority_recovery_progress_blocked",
+    "routeCausalOutcome": "accept_classified_backpressure",
+    "stopMode": "classified_backpressure",
+    "nextLane": "causal-escalation",
+    "expectedDelta": "Either rebalancer_handoff residuals are proven bounded/split away, or the successor escalates before workflow_progress runtime edits.",
+    "requiredRefreshCommands": [
+      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-rerun-4.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_progress_blocked",
+      "update Sprint Strategy Brief and Current Edge Card from the route result",
+      "npm run work:repair",
+      "npm run work:validate -- --pre-impl"
+    ]
+  },
+  "classificationEfficiency": {
+    "defaultMode": "inline-gate-default",
+    "separatePackageReason": "successor-selection",
+    "artifactBudget": "one-artifact",
+    "proofCommandBudget": "two-or-three-canonical-commands",
+    "commands": [
+      "falsifier: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-rerun-4.report.json --markdown",
+      "regression: npm run work:scenario-route -- test-output/reports/rolling-restart-rerun-4.report.json",
+      "supporting: npm run analyze:owner-files -- operation_workflow_owner rebalancer_handoff"
+    ],
+    "decisionRecord": "Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.",
+    "successorAction": "open-causal-escalation",
+    "runtimePromotionRule": "When canonical owner and boundary are stable, prefer a runtime-owner-boundary successor and keep runtime files in candidateRuntimeFiles until that package activates them. If the representative route is same-frontier with no reduction or an architecture gap, open an autonomous architecture experiment before more local runtime work."
+  },
+  "architectureDecisionGate": {
+    "status": "watching",
+    "trigger": "frontier-oscillation",
+    "triggerEvidence": [
+      "adjacent owner-boundary fixes did not close the representative gate",
+      "work/packages/done-20260523-rolling-restart-wait-owner-recovery-reconcile-drain-runtime.md / startup_active_gate_owner / snapshot_coverage / reduced",
+      "work/packages/done-20260523-rolling-restart-startup-active-gate-owner-snapshot-coverage.md / startup_active_gate_owner / snapshot_coverage / migrated"
+    ],
+    "choices": [
+      {
+        "id": "continue-local-proof",
+        "summary": "Continue with a bounded local proof if the missing edge stays inside this owner boundary.",
+        "route": "continue-local-proof",
+        "proof": [
+          "falsifier: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-rerun-4.report.json --markdown",
+          "regression: npm run work:scenario-route -- test-output/reports/rolling-restart-rerun-4.report.json",
+          "supporting: npm run analyze:owner-files -- operation_workflow_owner rebalancer_handoff",
+          "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-rerun-4.report.json --markdown"
+        ]
+      },
+      {
+        "id": "migrate-owner-boundary",
+        "summary": "Migrate the active package to the owner boundary named by the first frontier evidence.",
+        "route": "owner-boundary-migration",
+        "proof": [
+          "falsifier: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-rerun-4.report.json --markdown",
+          "regression: npm run work:scenario-route -- test-output/reports/rolling-restart-rerun-4.report.json",
+          "supporting: npm run analyze:owner-files -- operation_workflow_owner rebalancer_handoff",
+          "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-rerun-4.report.json --markdown"
+        ]
+      },
+      {
+        "id": "open-architecture-package",
+        "summary": "Open a bounded autonomous architecture experiment for the missing owner contract.",
+        "route": "architecture-package",
+        "proof": [
+          "falsifier: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-rerun-4.report.json --markdown",
+          "regression: npm run work:scenario-route -- test-output/reports/rolling-restart-rerun-4.report.json",
+          "supporting: npm run analyze:owner-files -- operation_workflow_owner rebalancer_handoff",
+          "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-rerun-4.report.json --markdown"
+        ]
+      },
+      {
+        "id": "human-escalation",
+        "summary": "Escalate to a human only when evidence is contradictory, policy-blocked, credential-blocked, or unavailable.",
+        "route": "human-escalation",
+        "proof": [
+          "falsifier: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-rerun-4.report.json --markdown",
+          "regression: npm run work:scenario-route -- test-output/reports/rolling-restart-rerun-4.report.json",
+          "supporting: npm run analyze:owner-files -- operation_workflow_owner rebalancer_handoff",
+          "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-rerun-4.report.json --markdown"
+        ]
+      }
+    ],
+    "selectedChoice": null,
+    "nextAction": "Watch for repeated frontier oscillation; open an autonomous architecture experiment if another local proof returns here unchanged."
+  },
+  "predecessor": null
 }

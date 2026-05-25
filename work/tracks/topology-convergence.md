@@ -60,6 +60,10 @@ Latest current handoff state:
 
 - route-selection package:
   `work/packages/done-20260525-topology-load-stabilization-route-selection.md`
+- active sprint:
+  `work/sprints/active-2026-q2-topology-operation-workflow-residual-closure.md`
+- active package:
+  `work/packages/active-20260525-priority-recovery-operation-workflow-rebalancer-handoff-residual-split.md`
 - rolling-restart artifact:
   `test-output/reports/rolling-restart-rerun-4.report.json`
 - first frontier: `priority_recovery_partition_progress`
@@ -106,6 +110,10 @@ or produces a narrower owner-boundary blocker selected by canonical evidence.
 
 - Current route-selection package:
   `work/packages/done-20260525-topology-load-stabilization-route-selection.md`
+- Active residual sprint:
+  `work/sprints/active-2026-q2-topology-operation-workflow-residual-closure.md`
+- Active residual package:
+  `work/packages/active-20260525-priority-recovery-operation-workflow-rebalancer-handoff-residual-split.md`
 - Selected immediate successor route:
   `operation_workflow_owner / workflow_progress` from
   `test-output/reports/rolling-restart-rerun-4.report.json`.
@@ -149,6 +157,7 @@ publication-evidence replay code rather than by the runtime owner alone.
 | `work/sprints/superseded-2026-q2-topology-publication-reconcile-system-theory.md` | `experiment` / `theory-ladder` | superseded | Superseded on May 23, 2026. |
 | `work/sprints/superseded-2026-q2-workflow-steering-core-logic-hardening.md` | `stabilization` / `ceremony-hardening` | superseded | Superseded on May 23, 2026. |
 | `work/sprints/done-2026-q2-rolling-restart-stability-hardening-final.md` | `stabilization` / `rolling-restart` | done | Focused push to make the system stable under 5-node rolling restarts. |
+| `work/sprints/active-2026-q2-topology-operation-workflow-residual-closure.md` | `stabilization` / `scenario-release-gate` | active | Orders the `rebalancer_handoff` residual split, `workflow_progress` successor, and representative rerun before startup readiness can be promoted. |
 
 
 ## Owner Boundaries
@@ -215,10 +224,11 @@ canonical owner-boundary evidence.
 
 ## Next Package
 
-Open an `operation_workflow_owner / workflow_progress` successor package first.
-It must prove or split the priority-recovery residual groups from
-`test-output/reports/rolling-restart-rerun-4.report.json`, especially the four
-`operation_workflow_owner / rebalancer_handoff` witnesses, before any runtime
-promotion. Do not promote `startup_readiness_owner / startup_support_evidence`
-until operation-workflow backpressure clears or fresh canonical route evidence
-makes startup readiness the first frontier.
+Active continuation:
+`work/packages/active-20260525-priority-recovery-operation-workflow-rebalancer-handoff-residual-split.md`.
+It proves or splits the four
+`operation_workflow_owner / rebalancer_handoff` witnesses before the queued
+`operation_workflow_owner / workflow_progress` successor can activate. Do not
+promote `startup_readiness_owner / startup_support_evidence` until
+operation-workflow backpressure clears or fresh canonical route evidence makes
+startup readiness the first frontier.
