@@ -106,3 +106,15 @@ Package closure is atomic — the following steps move as a unit. Do not stop pa
 7. `git add` only the files in `commitScope` plus tracker-generated handoff files, then commit and push. The commit MUST NOT include "unrelated dirty entries" reported by `work:context`.
 
 Step 2 is run again only if needed after the rename; after step 4 a fresh `work:repair` will warn "No active package was found" until the next `todo-` is activated — that warning is expected and does not block the commit.
+
+---
+
+## Sprint Queue Maintenance
+<a name="sprint-queue-maintenance"></a>
+
+Sprint queues live in `work/sprints/active-*.md` under the `## Package Queue` heading as a numbered markdown list. Each item has three lines: a markdown link to the package file (`active-<slug>.md` while open, `done-<slug>.md` once closed), a `Lane:` line, a `Purpose:` line, and a `First-run reason:` line.
+
+1. **Insert** a new item by editing the sprint file directly at the chosen position with the same four-line shape; renumber the items below it by hand. `npm run work:repair` does not renumber.
+2. **Cross-link** the new item by pointing its markdown link at `../packages/active-<new-slug>.md`. The link target is rewritten to `done-<new-slug>.md` only during the Closure Recipe (step 6, `sed -i 's|active-<slug>|done-<slug>|g' <sprint-file>`).
+3. **Supersede or remove** an item by replacing its link target with the appropriate `superseded-<slug>.md` package and updating its purpose; never delete a numbered entry, because downstream sprint references and closure receipts cite the queue position.
+4. The active sprint file is part of every closing package's commit scope whenever the queue or its references change.

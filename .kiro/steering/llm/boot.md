@@ -49,6 +49,7 @@ These are LLM-specific operational steps. Process semantics for each lane live i
 
 * `npm run work:package:new` requires the `--write` flag to actually create a file on disk; without it the template is printed to stdout only.
 * Every lane that closes a package MUST finish with the [Closure Recipe](../../../work/RULES.md#closure-recipe) (work:repair → work:validate --closure → rename active→done → focused commit + push). The lane-specific steps below do not repeat those tail steps.
+* Sprint queue mutations (inserting a new package, renumbering, or superseding an entry) follow [Sprint Queue Maintenance](../../../work/RULES.md#sprint-queue-maintenance); the active sprint file then joins that package's commit scope.
 
 ### `read-doc`
 

@@ -25,20 +25,20 @@ Make the system stable under rolling-restart: change the core logic of the syste
 ```text
 Representative artifact: none
 Visible first frontier: unknown
-Active package: work/packages/done-20260525-steering-docs-contradictions-fix.md
+Active package: work/packages/done-20260525-sprint-queue-maintenance-procedure.md
 Active package owner: workflow_tooling_owner
 Active package boundary: llm_steering_doc_truth
 Selected cause: steering_doc_truth_repair
-Required action: Close package after closure validation and commit.
+Required action: Add a Sprint Queue Maintenance section to work/RULES.md describing how to insert, renumber, and cross-link queue items when closing a package or activating new work, and link it from boot.md so LLMs follow the same procedure used by recent oversized-file closures.
 Representative status: unknown
 Causal outcome: unknown
 Architecture gate: not-required / unknown
 Expected delta: unknown
-Current state: Steering-doc contradictions fixed: file-size numbers updated to point at scripts/check-file-size-thresholds.js (src 800 / test 1500); scaffolder default theoryLedgerRefs is now [] not ["none"]; new Closure Evidence Grammar + Closure Recipe sections added to work/RULES.md and referenced from core.md/boot.md; compiled steering packs regenerated.
-Allowed edits: work/RULES.md, .kiro/steering/llm/core.md, .kiro/steering/llm/boot.md, .kiro/steering/code-style.md, .kiro/steering/testing-guidelines/proof-ladders.md, .kiro/steering/workflow-guidelines/subagents.md, scripts/work-package-new.js, .kiro/steering/llm/testing.md, .kiro/steering/llm/architecture.md, .kiro/steering/llm/style.md, .kiro/steering/llm/governance.md, .kiro/steering/llm/rules.json, .kiro/steering/llm/manifest.json
+Current state: New package scaffolded from the shared work-package schema.
+Allowed edits: work/RULES.md, .kiro/steering/llm/boot.md
 Candidate runtime files: unknown
 Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
-Required latest proof: grep -nE '1200 lines' work/RULES.md .kiro/steering/llm/core.md .kiro/steering/llm/testing.md .kiro/steering/code-style.md .kiro/steering/testing-guidelines/proof-ladders.md .kiro/steering/workflow-guidelines/subagents.md || echo no-stale-1200-references, node -e 'const s=require("fs").readFileSync("scripts/work-package-new.js","utf8"); if(s.includes("[THEORY_LEDGER_REFS_FIELD]: [\u0027none\u0027]")){process.exit(1)} else {console.log("theoryLedgerRefs default is empty array")}', npm run steering:llm:pack
+Required latest proof: grep -n 'Sprint Queue Maintenance' work/RULES.md .kiro/steering/llm/boot.md
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -336,7 +336,12 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Purpose: Align steering docs with the enforced reality of the file-size script (src 800 / test 1500), default `theoryLedgerRefs` to `[]` so new packages are not born invalid, document the closure validator's required `parent revalidated focused proof: yes` grammar, and add an atomic Closure Recipe to `core.md` and `boot.md`.
    - First-run reason: each of these four ambiguities cost real workflow time during the May 24 oversized-file tranche, and the contradictions are still active in the steering surface.
 
-13. [Rolling Restart Active Gate Snapshot Coverage Repair](../packages/done-20260523-rolling-restart-active-gate-snapshot-coverage-repair.md)
+13. [Document Sprint Queue Maintenance procedure](../packages/done-20260525-sprint-queue-maintenance-procedure.md)
+   - Lane: `lightweight-maintenance`
+   - Purpose: Add a `Sprint Queue Maintenance` section to `work/RULES.md` describing how to insert, renumber, and cross-link sprint queue items when closing a package or inserting new work, and link it from `boot.md` so LLM agents follow the same procedure observed in recent oversized-file closures.
+   - First-run reason: sprint queue mutation was undocumented; the procedure was reconstructed by reading prior commits rather than steering, which is the LLM-ambiguity class this sprint already promised to eliminate.
+
+14. [Rolling Restart Active Gate Snapshot Coverage Repair](../packages/done-20260523-rolling-restart-active-gate-snapshot-coverage-repair.md)
    - Lane: `runtime-owner-boundary`
    - Purpose: Align active-gate cohort fallbacks and repair snapshot recovery projection logic.
 
