@@ -1,37 +1,136 @@
 {
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-rolling-restart-resume-activation.md",
-  "package": "none",
-  "status": "none",
-  "lane": "none",
-  "scenario": "none",
-  "artifact": "none",
+  "sprint": "work/sprints/active-2026-q2-rolling-restart-fully-green.md",
+  "package": "work/packages/active-20260525-rolling-restart-fully-green-gate.md",
+  "status": "active",
+  "lane": "scenario-release-gate",
+  "scenario": "rolling-restart",
+  "artifact": "test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json",
   "playback": "none",
-  "owner": "none",
-  "boundary": "none",
-  "dominantReason": "none",
-  "currentState": "No active work package. Start a new package when implementation resumes.",
-  "nextAction": "Create or activate one focused package for the next executable concern.",
-  "proof": [],
-  "writeScope": [],
+  "owner": "release_gate_owner",
+  "boundary": "rolling_restart_fully_green_gate",
+  "dominantReason": "representative_green_required",
+  "currentState": "No active sprint existed after rolling-restart resume activation closed. This release-gate package starts the sprint whose success criterion is that rolling-restart is fully green.",
+  "nextAction": "Run the rolling-restart representative gate and close this package only as representative-green; if the rerun is red, route the first frontier and open exactly one bounded successor while keeping the sprint active.",
+  "proof": [
+    "falsifier: contract transition fixture release_gate_owner rolling_restart_fully_green_gate representative_green_required node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json --verbose",
+    "regression: npm run work:scenario-route -- test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json --owner release_gate_owner --boundary rolling_restart_fully_green_gate --dominant-reason representative_green_required",
+    "supporting: npm run work:evidence-summary -- test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json",
+    "supporting: npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json"
+  ],
+  "writeScope": [
+    "work/packages/active-20260525-rolling-restart-fully-green-gate.md",
+    "work/sprints/active-2026-q2-rolling-restart-fully-green.md"
+  ],
   "handoffFiles": [],
   "generatedFiles": [
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
   ],
   "candidateRuntimeFiles": [],
-  "commitScope": [],
+  "commitScope": [
+    "work/packages/active-20260525-rolling-restart-fully-green-gate.md",
+    "work/sprints/active-2026-q2-rolling-restart-fully-green.md",
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md",
+    "work/tracks/topology-convergence.md",
+    "work/releases/0.1-dependency-map.md"
+  ],
   "touchedFiles": [],
-  "modelFit": {},
-  "representativeResidual": {},
-  "causalGovernance": {},
-  "scenarioCausalClosure": {},
-  "observablePrediction": {},
+  "theoryLedgerRefs": [
+    "theory-20260513-rolling-restart-preflight-green-gate-confirmation",
+    "theory-20260523-rolling-restart-recovery-reconcile-recursion-fix"
+  ],
+  "modelFit": {
+    "packageClass": "scenario-release-gate",
+    "intendedMinimumModel": "gpt-5.3-codex",
+    "scopeShape": "release-gate/current-frontier",
+    "outputProfile": "medium",
+    "escalationTriggers": [
+      "rolling-restart rerun is red and route requires runtime owner package",
+      "representative evidence is contradictory or unavailable"
+    ],
+    "ambiguityScore": 2
+  },
+  "representativeResidual": {
+    "status": "pending-before-probe",
+    "scenario": "rolling-restart",
+    "artifact": "test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json",
+    "frontier": "rolling_restart_fully_green_gate",
+    "owner": "release_gate_owner",
+    "boundary": "rolling_restart_fully_green_gate",
+    "dominantReason": "representative_green_required",
+    "nextAction": "Run the rolling-restart representative gate and close this package only as representative-green; if red, route the first frontier and open exactly one bounded successor while keeping the sprint active."
+  },
+  "causalGovernance": {
+    "hypothesis": "The sprint success criterion is full rolling-restart green; local reductions and owner-boundary migrations are insufficient for sprint closure.",
+    "stopConditionCheck": "Run the representative scenario, route the artifact, evidence summary, and `npm run analyze:causal-model` before closure.",
+    "expectedCausalModelChange": "The result is representative-green, or fresh evidence selects exactly one current first frontier successor while the sprint stays active.",
+    "representativeOutcome": "pending-before-rerun",
+    "causalDebt": "The prior resume-activation sprint closed on migration/reduction evidence, not a fully green rolling-restart release gate.",
+    "crossBoundaryReview": "This package performs no runtime edits; a red route must open a bounded owner/boundary successor instead of closing the sprint."
+  },
+  "scenarioCausalClosure": {
+    "referenceScenarioOrProbe": "rolling-restart fully green gate",
+    "phaseChain": [
+      "run fresh rolling-restart representative",
+      "route the artifact",
+      "prove representative-green or select one first frontier successor"
+    ],
+    "currentFirstFrontier": "release_gate_owner/rolling_restart_fully_green_gate",
+    "knownDownstreamBlockers": [
+      "unknown until fresh rerun routes the first frontier"
+    ],
+    "missingCausalEdge": "Representative-green proof is missing after the resume-activation sprint closed.",
+    "missingCausalEdgeProbe": "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json --verbose",
+    "falsifyingProbe": "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json --verbose",
+    "boundedProgressProof": "The representative rerun must pass clean or use the bounded dispatch/advance route mechanism to select exactly one successor while the sprint remains active.",
+    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json",
+    "expectedObservableTransition": "rolling-restart representative-green with active=5/5, snapshotCoverage=5/5, missingPublished=0, zero priority recovery residuals, and clean convergence",
+    "maxProgressBound": "one representative rerun and canonical routing decision",
+    "sameFrontierFallback": "A red rerun opens or selects one bounded successor; the sprint does not close.",
+    "expectedNextFrontier": "green or one routed owner/boundary successor",
+    "resultClassification": "pending-before-probe",
+    "stopCondition": "continue-local-fix",
+    "recentFrontierHistory": [
+      "done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md / operation_workflow_owner / workflow_progress / migrated"
+    ],
+    "oscillationCheck": "This sprint raises the closure bar to representative-green so migrated or reduced evidence is not treated as sprint completion.",
+    "handoffInvariant": "The sprint cannot be marked done until rolling-restart is fully green."
+  },
+  "observablePrediction": {
+    "metric": "rolling-restart exit status, representative route outcome, active=5/5, snapshotCoverage=5/5, missingPublished=0, priorityRecoveryWitnesses=0",
+    "predicted": "fresh rerun either passes clean or routes to one first frontier successor without closing the sprint",
+    "observed": "pending-before-observation",
+    "accuracy": "pending-before-observation",
+    "evidence": "test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json"
+  },
   "experimentOutcome": {},
-  "rerunDecision": {},
+  "rerunDecision": {
+    "sourceArtifact": "test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json",
+    "routeOwner": "release_gate_owner",
+    "routeBoundary": "rolling_restart_fully_green_gate",
+    "routeDominantReason": "representative_green_required",
+    "routeCausalOutcome": "pending-before-rerun",
+    "stopMode": "pending-before-rerun",
+    "nextLane": "scenario-release-gate",
+    "expectedDelta": "Representative-green or one routed owner/boundary successor while the sprint remains active.",
+    "requiredRefreshCommands": [
+      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json --owner release_gate_owner --boundary rolling_restart_fully_green_gate --dominant-reason representative_green_required",
+      "update Sprint Strategy Brief and Current Edge Card from the route result",
+      "npm run work:repair",
+      "npm run work:validate -- --pre-impl work/packages/active-20260525-rolling-restart-fully-green-gate.md"
+    ]
+  },
   "classificationEfficiency": {},
-  "architectureDecisionGate": {},
-  "predecessor": null,
-  "theoryLedgerRefs": []
+  "architectureDecisionGate": {
+    "status": "not-required",
+    "trigger": "none",
+    "triggerEvidence": [],
+    "choices": [],
+    "selectedChoice": null,
+    "nextAction": "No architecture decision gate is required for this package."
+  },
+  "predecessor": null
 }

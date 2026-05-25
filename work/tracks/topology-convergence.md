@@ -159,6 +159,7 @@ publication-evidence replay code rather than by the runtime owner alone.
 | `work/sprints/done-2026-q2-topology-operation-workflow-residual-closure.md` | `stabilization` / `scenario-release-gate` | done | Cleared operation-workflow priority-recovery residual witnesses and routed fresh rolling-restart evidence to active-gate snapshot coverage. |
 | `work/sprints/done-2026-q2-tell-tale-scenario-reliability.md` | `stabilization` / `scenario-release-gate` | done | Starts from the active-gate snapshot coverage architecture gap, then queues runtime successor, final adjudication repair, rolling-restart green gate, and tell-tale suite promotion. |
 | `work/sprints/done-2026-q2-rolling-restart-resume-activation.md` | `experiment` / `source-of-truth-repair` | done | Active-gate discriminator records owner-boundary migration and queues workflow-progress causal proof. |
+| `work/sprints/active-2026-q2-rolling-restart-fully-green.md` | `stabilization` / `scenario-release-gate` | active | Success criterion is representative-green rolling-restart; reduced or migrated evidence opens successors but does not close the sprint. |
 
 
 ## Owner Boundaries
@@ -226,8 +227,6 @@ canonical owner-boundary evidence.
 ## Next Package
 
 Active continuation:
-`work/packages/done-20260525-tell-tale-active-gate-snapshot-coverage-runtime-successor.md`.
-It selects the active-gate snapshot coverage contract before runtime promotion.
-Do not open another `startup_active_gate_owner / snapshot_coverage` runtime
-patch from the unchanged artifact until the contract package names one concrete
-wake, timeout, repair, or projection edge.
+`work/packages/active-20260525-rolling-restart-fully-green-gate.md`.
+It owns the representative green gate. The sprint cannot close on reduced or
+migrated evidence; red evidence must route to exactly one bounded successor.
