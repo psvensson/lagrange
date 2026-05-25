@@ -12,7 +12,7 @@ Implementation slice: Run the rolling-restart representative gate and close this
 
 Implementation files:
 
-1. `work/packages/active-20260525-rolling-restart-fully-green-gate.md`
+1. `work/packages/done-20260525-rolling-restart-fully-green-gate.md`
 2. `work/sprints/active-2026-q2-rolling-restart-fully-green.md`
 
 Expected implementation delta: The result is representative-green, or fresh evidence selects exactly one current first frontier successor while the sprint stays active.
@@ -23,7 +23,7 @@ Stop rule: A red rerun opens or selects one bounded successor; the sprint does n
 
 Sprint: `work/sprints/active-2026-q2-rolling-restart-fully-green.md`
 
-Package: `work/packages/active-20260525-rolling-restart-fully-green-gate.md`
+Package: `work/packages/done-20260525-rolling-restart-fully-green-gate.md`
 
 Workflow lane: `scenario-release-gate`
 
@@ -199,7 +199,7 @@ Required refresh commands:
 1. `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json --owner release_gate_owner --boundary rolling_restart_fully_green_gate --dominant-reason representative_green_required`
 2. `update Sprint Strategy Brief and Current Edge Card from the route result`
 3. `npm run work:repair`
-4. `npm run work:validate -- --pre-impl work/packages/active-20260525-rolling-restart-fully-green-gate.md`
+4. `npm run work:validate -- --pre-impl work/packages/done-20260525-rolling-restart-fully-green-gate.md`
 
 ## Classification Efficiency
 
@@ -243,7 +243,7 @@ Gate next action: No architecture decision gate is required for this package.
 
 Write scope:
 
-1. `work/packages/active-20260525-rolling-restart-fully-green-gate.md`
+1. `work/packages/done-20260525-rolling-restart-fully-green-gate.md`
 2. `work/sprints/active-2026-q2-rolling-restart-fully-green.md`
 
 Handoff files:
@@ -261,7 +261,7 @@ Candidate runtime files:
 
 Commit scope:
 
-1. `work/packages/active-20260525-rolling-restart-fully-green-gate.md`
+1. `work/packages/done-20260525-rolling-restart-fully-green-gate.md`
 2. `work/sprints/active-2026-q2-rolling-restart-fully-green.md`
 3. `work/sprints/current-blocker.json`
 4. `work/sprints/current-blocker.md`

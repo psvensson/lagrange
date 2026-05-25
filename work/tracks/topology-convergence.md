@@ -227,6 +227,6 @@ canonical owner-boundary evidence.
 ## Next Package
 
 Active continuation:
-`work/packages/active-20260525-rolling-restart-fully-green-gate.md`.
+`work/packages/done-20260525-rolling-restart-fully-green-gate.md`.
 It owns the representative green gate. The sprint cannot close on reduced or
 migrated evidence; red evidence must route to exactly one bounded successor.

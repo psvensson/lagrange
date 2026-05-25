@@ -28,7 +28,7 @@ admission relaxation, or unresolved topology/frontier blockers.
   evidence, widening timeouts, relaxing admission, or patching startup readiness
   before the routed owner/boundary is selected.
 - Next best package:
-  `work/packages/active-20260525-rolling-restart-fully-green-gate.md`.
+  `work/packages/done-20260525-rolling-restart-fully-green-gate.md`.
 - Stop or escalate rule: if a fresh rerun is red and same-frontier without
   concrete reduction, open/select an autonomous architecture experiment; human
   escalation only for contradictory or blocked evidence.
@@ -37,27 +37,27 @@ admission relaxation, or unresolved topology/frontier blockers.
 
 ```text
 Representative artifact: test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json
-Visible first frontier: release_gate_owner/rolling_restart_fully_green_gate
-Active package: work/packages/active-20260525-rolling-restart-fully-green-gate.md
-Active package owner: release_gate_owner
-Active package boundary: rolling_restart_fully_green_gate
-Selected cause: representative_green_required
-Required action: Run the rolling-restart representative gate and close this package only as representative-green; if the rerun is red, route the first frontier and open exactly one bounded successor while keeping the sprint active.
-Representative status: pending-before-probe
-Causal outcome: pending-before-rerun
-Architecture gate: not-required / unknown
-Expected delta: Representative-green or one routed owner/boundary successor while the sprint remains active.
-Current state: No active sprint existed after rolling-restart resume activation closed. This release-gate package starts the sprint whose success criterion is that rolling-restart is fully green.
-Allowed edits: work/packages/active-20260525-rolling-restart-fully-green-gate.md, work/sprints/active-2026-q2-rolling-restart-fully-green.md
+Visible first frontier: unknown
+Active package: work/packages/active-20260525-rolling-restart-active-gate-snapshot-coverage-blocker.md
+Active package owner: startup_active_gate_owner
+Active package boundary: snapshot_coverage
+Selected cause: active_gate_timed_out
+Required action: Fix the active-gate snapshot coverage timeout
+Representative status: unknown
+Causal outcome: continue_local_fix
+Architecture gate: watching / unknown
+Expected delta: Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.
+Current state: Scaffolded from representative evidence for active_gate_snapshot_coverage.
+Allowed edits: unknown
 Candidate runtime files: unknown
-Forbidden edits: The sprint cannot be marked done until rolling-restart is fully green.
-Required latest proof: falsifier: contract transition fixture release_gate_owner rolling_restart_fully_green_gate representative_green_required node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json --verbose, regression: npm run work:scenario-route -- test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json --owner release_gate_owner --boundary rolling_restart_fully_green_gate --dominant-reason representative_green_required, supporting: npm run work:evidence-summary -- test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json, supporting: npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json
+Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
+Required latest proof: falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json, regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json --markdown, supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json --markdown
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
 ## Package Queue
 
-1. [Rolling Restart Fully Green Gate](../packages/active-20260525-rolling-restart-fully-green-gate.md)
+1. [Rolling Restart Fully Green Gate](../packages/done-20260525-rolling-restart-fully-green-gate.md)
    - Lane: `scenario-release-gate`
    - Purpose: run fresh `rolling-restart` and prove representative-green or
      route the first blocker into exactly one successor package.
@@ -68,11 +68,11 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
 ## Proof Ladder
 
 1. `npm run work:context`
-2. `npm run work:validate -- --pre-impl work/packages/active-20260525-rolling-restart-fully-green-gate.md`
+2. `npm run work:validate -- --pre-impl work/packages/done-20260525-rolling-restart-fully-green-gate.md`
 3. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json --verbose`
 4. `npm run work:scenario-route -- test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json --owner release_gate_owner --boundary rolling_restart_fully_green_gate --dominant-reason representative_green_required`
 5. `npm run work:evidence-summary -- test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json`
-6. `npm run work:validate -- --closure work/packages/active-20260525-rolling-restart-fully-green-gate.md`
+6. `npm run work:validate -- --closure work/packages/done-20260525-rolling-restart-fully-green-gate.md`
 
 ## Closure Rules
 

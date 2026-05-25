@@ -85,6 +85,42 @@
     "successorAction": "open-runtime-owner-boundary",
     "runtimePromotionRule": "When canonical owner and boundary are stable, prefer a runtime-owner-boundary successor and keep runtime files in candidateRuntimeFiles until that package activates them. If the representative route is same-frontier with no reduction or an architecture gap, open an autonomous architecture experiment before more local runtime work."
   },
+  "causalGovernance": {
+    "hypothesis": "Fixing active-gate snapshot coverage under Lagrange load stabilization stabilizes Lagrange startup nodes.",
+    "stopConditionCheck": "Use npm run analyze:causal-model -- test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json plus topology explain.",
+    "expectedCausalModelChange": "This package determines active-gate snapshot coverage, cache watermark retry timer, or snapshot state.",
+    "representativeOutcome": "continue-local-fix",
+    "causalDebt": "The fresh rerun has activeGateState=timed_out, snapshotCoverageNodeCount=3/5, and reasons cache_stale_watermark, stale_replica_operations_in_flight.",
+    "crossBoundaryReview": "All runtime files outside startup_active_gate_owner boundary stay frozen."
+  },
+  "scenarioCausalClosure": {
+    "referenceScenarioOrProbe": "rolling-restart",
+    "phaseChain": [
+      "fresh representative rerun completed",
+      "routed to startup_active_gate_owner snapshot_coverage active_gate_timed_out",
+      "triage active-gate snapshot coverage with combined scenario evidence"
+    ],
+    "currentFirstFrontier": "active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out",
+    "knownDownstreamBlockers": [
+      "startup_readiness_owner / startup_support_evidence remains downstream of active-gate coverage"
+    ],
+    "missingCausalEdge": "Whether active-gate snapshot coverage needs a cache watermark bypass or stale replica operations purge.",
+    "missingCausalEdgeProbe": "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json --explain active_gate_snapshot_coverage",
+    "falsifyingProbe": "npm run work:scenario-route -- test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json",
+    "boundedProgressProof": "The startup active-gate snapshot coverage reconciles the cache watermark retry timer or names the successor contract.",
+    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json",
+    "expectedObservableTransition": "active_gate_snapshot_coverage reduces, migrates, or selects an architecture stop.",
+    "maxProgressBound": "one runtime owner package",
+    "sameFrontierFallback": "If canonical extractors cannot distinguish the route, close as architecture-gap.",
+    "expectedNextFrontier": "architecture-gap-stop or selected active-gate runtime contract",
+    "resultClassification": "pending-before-probe",
+    "stopCondition": "continue-local-fix",
+    "recentFrontierHistory": [
+      "done-20260525-rolling-restart-fully-green-gate.md / release_gate_owner / rolling_restart_fully_green_gate / migrated"
+    ],
+    "oscillationCheck": "This package is activated because of validator same-frontier/frontier-oscillation rules.",
+    "handoffInvariant": "Startup readiness remains downstream until active-gate snapshot coverage is resolved."
+  },
   "rerunDecision": {
     "sourceArtifact": "test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json",
     "routeOwner": "startup_active_gate_owner",
