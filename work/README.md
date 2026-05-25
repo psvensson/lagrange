@@ -90,7 +90,8 @@ Use the tracker utility for current sprint/package mechanics:
    escalation does not silently mean inheriting a larger parent model.
 9. `npm run work:package:doctor -- work/packages/active-...md` prints a compact
    package summary plus the same validation findings used by the tracker. It is
-   a local diagnostic aid only; it does not replace real subagent sequencing.
+   a local diagnostic aid only; it does not replace checked Execution Evidence
+   role proof.
    Add `-- --suggest` or `-- --fix-dry-run` when validation failed and the LLM
    needs concrete schema or ledger guidance before editing the package.
 10. `npm run work:package:schema` prints the shared status, lane,
@@ -126,9 +127,10 @@ Use the tracker utility for current sprint/package mechanics:
     package scaffolding commands for deliberate residual splits.
 18. `npm run work:subagent-prompt -- --role implementation|verification-fix
     --package work/packages/active-...md` generates bounded role prompts and
-    the `## Execution Evidence` line shape to record after a real subagent
-    returns. Legacy `review` and `fix` prompts remain available for historical
-    inspection only. The prompt includes the package spawn/execution
+    the `## Execution Evidence` line shape to record after role execution.
+    A real sub-agent may perform the role, but real-agent identity is optional
+    provenance. Legacy `review` and `fix` prompts remain available for
+    historical inspection only. The prompt includes the package spawn/execution
     model and tells the parent to set it explicitly instead of relying on
     inherited high-model defaults. It records `## Execution Evidence`; agent
     identity is optional provenance.
@@ -189,7 +191,7 @@ focused implementation, not refining administration. Use these defaults unless
 the package explicitly records a heavier audit or architecture reason:
 
 1. `npm run work:advance -- --check` is the fast path before more package
-   editing. It prints doctor findings, the next subagent role, and entry plus
+   editing. It prints doctor findings, the next delegated role, and entry plus
    pre-implementation validation in one pass.
 2. Representative reruns are the progress currency for release-gate sprints.
    Classification is an inline gate by default. Create a separate
@@ -207,12 +209,13 @@ the package explicitly records a heavier audit or architecture reason:
    Once a gate has a selected route, future packages execute that route or
    rerun evidence; they do not open another architecture gate unless fresh
    canonical evidence contradicts the selection.
-6. Use the executor plus verifier-fixer model for real package work. One
+6. Use the executor plus verifier-fixer role model for real package work. One
    executor owns inspect, edit, focused proof, and changed-file reporting. One
    separate verifier-fixer then verifies the last package work, may fix any
    in-scope problem directly, reruns focused proof, and reports changed files.
-   Closure proof is the package's `## Execution Evidence`. Agent identity is
-   optional provenance and must never be invented.
+   Closure proof is the package's `## Execution Evidence`. A real sub-agent may
+   perform either role, but agent identity is optional provenance and must
+   never be invented.
 7. Use the `mechanical-maintenance` lane for docs, templates, schema text,
    package metadata, generated handoff text, and similarly mechanical edits
    that do not change runtime or test behavior. These packages should be
@@ -299,7 +302,7 @@ an `experiment`/probe with H1 vs H2 vs H3 observable discrimination and an
 Classification-only fast-path, pure classification, read/review/doc-only, and
 lightweight maintenance packages do not require the gate unless implementation
 scope is promoted. The package scaffolder emits the gate for strict runtime and
-scenario lanes, validators enforce it before implementation, and subagent
+scenario lanes, validators enforce it before implementation, and delegated role
 prompts include it so review, fix, and implementation agents test the same
 decision experiment.
 
@@ -319,7 +322,7 @@ canonical extractor:
    extractor for the failure class.
 3. Owner discovery:
    `npm run analyze:owner-files -- <owner> [boundary]`.
-4. Subagent sequencing:
+4. Delegated role prompts:
    `npm run work:subagent-prompt -- --role <role> --package <package>`.
 5. Large-file reduction:
    `npm run work:oversized-next -- --markdown`.
@@ -359,17 +362,21 @@ selection, focused validation, package closure, or commit discipline.
 Choose the lightest workflow lane that still proves the owner boundary was not
 weakened. Record the lane in package metadata as `lane`.
 
-Subagents are not required for `read-review-doc-only`,
-`lightweight-maintenance`, `mechanical-maintenance`, `test-only-proof`,
-`diagnostic-classification`, `bounded-experiment`, or `single-file-runtime`
-packages unless the package explicitly declares that they are needed or a human
-asks for them. These lanes should prefer direct implementation and focused
-proof.
+Real sub-agents are not required by default. Closure is role-based: record an
+`implementation` role, then a `verification-fix` role when the package changes
+code, tests, scripts, runtime contracts, tracker truth, or generated handoff
+state. `read-review-doc-only`, `lightweight-maintenance`,
+`mechanical-maintenance`, `test-only-proof`, `diagnostic-classification`,
+`bounded-experiment`, and `single-file-runtime` packages may execute those
+roles in the parent session unless the package or human explicitly requests
+delegation. These lanes should prefer direct implementation and focused proof.
 
 For `runtime-owner-boundary`, `scenario-release-gate`, and
 `causal-escalation` packages, use the lightest valid path that preserves the
-owner boundary. Direct implementation is allowed before `--pre-impl` when the
-route, scope, proof, and stop rule are explicit. Closure remains strict.
+owner boundary. Package metadata, route selection, scope declaration, proof
+planning, and stop-rule setup may happen before `--pre-impl`; implementation
+code changes must wait until `npm run work:validate -- --pre-impl <package>`
+passes. Closure remains strict.
 
 The preferred package proof section is `## Execution Evidence`:
 
@@ -380,8 +387,11 @@ The preferred package proof section is `## Execution Evidence`:
 scripts, runtime contracts, package/tracker truth, or generated handoff state.
 Pure Q&A and tiny docs-only changes may skip packages and verifier-fixer
 entirely. Agent identity may be appended as `agent: Agent <name> (<agent-id>);`
-when a real subagent was used and recovery would benefit from that provenance.
-It is not required for implementation truth and must not be invented.
+when a real sub-agent was used and recovery would benefit from that provenance.
+It is not required for implementation truth and must not be invented. When
+delegation is unavailable or intentionally waived, record `human-waived`,
+`tool-unavailable`, or `blocked-by-environment-policy` with a `reason: ...`
+instead of a fake agent identity.
 
 Worker-reported validation is handoff evidence only. The parent session must
 rerun focused proof locally before committing runtime edits or marking package
@@ -394,9 +404,11 @@ those sections is reopened or closed again, migrate the current proof to
 `## Execution Evidence`.
 
 `npm run work:validate -- --entry` validates package shape and contracts.
-`--pre-impl` no longer blocks on process ledgers when implementation scope is
-bounded. `--closure` is strict: implementation evidence must be checked,
-terminal, focused-proof-backed, and parent-revalidated before package closure.
+`--pre-impl` is required before implementation code changes. When
+implementation scope is bounded, `--pre-impl` does not block solely on legacy
+process-ledger sections. `--closure` is strict: implementation evidence must be
+checked, terminal, focused-proof-backed, and parent-revalidated before package
+closure.
 
 Legacy active metadata packages without `lane` remain strict. Historical
 `done-...` packages without `## Execution Evidence` remain valid. Legacy
@@ -559,7 +571,7 @@ Every active package should start with a machine-readable metadata comment:
 The header exists to make handoff and automation reliable. The prose package
 must keep these scope fields distinct:
 
-1. `writeScope`: files the package or implementation subagent may edit.
+1. `writeScope`: files the package or implementation role may edit.
 2. `handoffFiles`: files or artifacts to read for context only.
 3. `generatedFiles`: outputs produced by tracker, steering-pack, or other
    deterministic generators.
@@ -818,10 +830,10 @@ Before creating or assigning executable packages, do a model-fit split:
    architecture route decisions on `runtime-owner-boundary`,
    `scenario-release-gate`, or `causal-escalation` packages.
 
-When spawning subagents, use the package's `Target executor` or intended
-minimum model explicitly. Do not let the parent session's stronger model become
-the default for mechanical, test-only, bounded experiment, or single-file
-runtime packages.
+When optionally spawning real sub-agents, use the package's `Target executor` or
+intended minimum model explicitly. Do not let the parent session's stronger
+model become the default for mechanical, test-only, bounded experiment, or
+single-file runtime packages.
 
 Package closure also requires one final deep dive across the affected area:
 
@@ -930,7 +942,7 @@ belong in `candidateRuntimeFiles` until fresh evidence promotes implementation.
 
 Fast-path proof should be two or three canonical commands: representative
 evidence, one focused extractor or probe, and validation or causal-model proof.
-Subagent sequencing and static runtime guardrails are optional until
+Execution Evidence role proof and static runtime guardrails are optional until
 implementation write scope is promoted.
 
 Do not create a new classification-only package from the same unchanged

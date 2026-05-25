@@ -3,32 +3,50 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
-  "opened": "2026-05-24",
-  "lane": "lightweight-maintenance",
-  "scenario": "none",
-  "artifact": "none",
-  "playback": "none",
-  "owner": "operation_workflow_owner",
-  "boundary": "semantic_operation_modules",
-  "dominantReason": "oversized_file_ratchet",
-  "currentState": "New package scaffolded from the shared work-package schema.",
-  "nextAction": "Extract semantically named operation workflow owner modules until src/rebalancer/operation-workflow-owner-segment-6.js is below the configured source file-size limit without changing behavior.",
-  "proof": [
-    "npm run audit:owner-boundary-segments -- src/rebalancer/operation-workflow-owner-segment-6.js"
-  ],
-  "theoryLedgerRefs": [],
-  "stabilityCredit": "local-proof-only",
-  "whyHighestLeverageNow": "This package is front-loaded in the active sprint to reduce LLM and human confusion from oversized files before more rolling-restart runtime work resumes; it preserves behavior while forcing semantic helper names and file-size proof.",
-  "writeScope": [
-    "src/rebalancer/operation-workflow-owner-segment-6.js"
-  ],
-  "handoffFiles": [],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [
-    "src/rebalancer/operation-workflow-owner-segment-6.js"
-  ],
+  "status": "done",
+  "intent": {
+    "opened": "2026-05-24",
+    "closed": "2026-05-24",
+    "lane": "lightweight-maintenance",
+    "scenario": "none",
+    "artifact": "none",
+    "playback": "none",
+    "owner": "operation_workflow_owner",
+    "boundary": "semantic_operation_modules",
+    "currentState": "Completed semantic module extraction. All Operation Workflow Owner Segment-6 functionality resides under the configured 800-line source file-size limit, and all test coverage has passed with zero regressions.",
+    "nextAction": "Close the package, run closure validation, then commit only the package-scoped files.",
+    "dominantReason": "oversized_file_ratchet"
+  },
+  "scope": {
+    "writeScope": [
+      "src/rebalancer/operation-workflow-owner-segment-6.js",
+      "src/rebalancer/operation-workflow-observed-state.js",
+      "src/rebalancer/operation-workflow-priority-recovery-errors.js",
+      "src/rebalancer/operation-workflow-remove-safety-evaluator.js",
+      "src/rebalancer/operation-workflow-remove-safety-membership.js",
+      "src/rebalancer/operation-workflow-replace-replay.js",
+      "src/rebalancer/operation-workflow-replacement-leader-resolution.js",
+      "src/rebalancer/operation-workflow-replacement-leader-state.js"
+    ],
+    "handoffFiles": [],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": [],
+    "commitScope": [
+      "src/rebalancer/operation-workflow-owner-segment-6.js",
+      "work/packages/done-20260524-operation-workflow-owner-semantic-modules.md",
+      "src/rebalancer/operation-workflow-observed-state.js",
+      "src/rebalancer/operation-workflow-priority-recovery-errors.js",
+      "src/rebalancer/operation-workflow-remove-safety-evaluator.js",
+      "src/rebalancer/operation-workflow-remove-safety-membership.js",
+      "src/rebalancer/operation-workflow-replace-replay.js",
+      "src/rebalancer/operation-workflow-replacement-leader-resolution.js",
+      "src/rebalancer/operation-workflow-replacement-leader-state.js"
+    ]
+  },
+  "gates": {
+    "whyHighestLeverageNow": "This package is front-loaded in the active sprint to reduce LLM and human confusion from oversized files before more rolling-restart runtime work resumes; it preserves behavior while forcing semantic helper names and file-size proof.",
+    "stabilityCredit": "local-proof-only"
+  },
   "modelFit": {
     "packageClass": "bounded-implementation",
     "intendedMinimumModel": "gpt-5.3-codex-spark",
@@ -40,24 +58,13 @@
       "a frozen decision must be reopened"
     ]
   },
-  "modelFitSplit": {
-    "targetExecutionModel": "gpt-5.3-codex-spark",
-    "allowedDecisionDepth": "bounded local edit after owner, scope, proof, and forbidden files are named",
-    "safeToExecuteWhen": [
-      "owner, boundary, write scope, forbidden scope, proof, and kill rule stay as declared",
-      "the executor does not need to choose architecture, migrate ownership, or reinterpret representative evidence",
-      "the first focused proof gives a clear pass, fail, or escalate signal"
-    ],
-    "splitTriggers": [
-      "write scope expands beyond the declared lower-model lane",
-      "proof requires forbidden scope, cross-owner reasoning, or architecture route selection",
-      "the implementation needs to decide system behavior instead of executing a named local mechanism"
-    ],
-    "childPackageCandidates": [
-      "Prefer mechanical-maintenance for docs/templates/schema-only edits.",
-      "Prefer test-only-proof for tests that do not change runtime behavior.",
-      "Prefer bounded-experiment for one same-owner hypothesis with inherited context."
-    ]
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": {
+      "commands": [
+        "npm run audit:owner-boundary-segments -- src/rebalancer/operation-workflow-owner-segment-6.js"
+      ]
+    }
   }
 }
 -->
@@ -175,10 +182,12 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: <owner>; files-changed: <paths or none>; validation: <focused proof and parent revalidated focused proof: yes>; outcome: <validated|blocked>.
-- [ ] action: verification-fix; owner: <owner>; files-changed: <paths or none>; validation: <verification proof and parent revalidated focused proof: yes>; outcome: <validated|blocked>.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: <validated|not-needed>.
+- [x] action: implementation; owner: operation_workflow_owner; files-changed: src/rebalancer/operation-workflow-owner-segment-6.js, src/rebalancer/operation-workflow-observed-state.js, src/rebalancer/operation-workflow-priority-recovery-errors.js, src/rebalancer/operation-workflow-remove-safety-evaluator.js, src/rebalancer/operation-workflow-remove-safety-membership.js, src/rebalancer/operation-workflow-replace-replay.js, src/rebalancer/operation-workflow-replacement-leader-resolution.js, src/rebalancer/operation-workflow-replacement-leader-state.js; validation: `npm test -- test/rebalancer/operation-workflow-owner-adapter.test.js`, parent revalidated focused proof: yes; outcome: validated.
+- [x] action: verification-fix; owner: operation_workflow_owner; files-changed: none; validation: `npm test -- test/rebalancer/operation-workflow-owner-adapter.test.js`, parent revalidated focused proof: yes; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: validated.
 
 ## Validation
 
 1. npm run audit:owner-boundary-segments -- src/rebalancer/operation-workflow-owner-segment-6.js
+
+no ledger update

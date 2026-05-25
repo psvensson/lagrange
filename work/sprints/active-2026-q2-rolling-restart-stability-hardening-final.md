@@ -25,20 +25,20 @@ Make the system stable under rolling-restart: change the core logic of the syste
 ```text
 Representative artifact: none
 Visible first frontier: unknown
-Active package: work/packages/done-20260524-replica-dispatch-node-state-update-test-part-2-suites.md
-Active package owner: test_quality_owner
-Active package boundary: replica_dispatch_node_state_update_suites
-Selected cause: oversized_file_ratchet
-Required action: Close package after closure validation and commit the split.
+Active package: work/packages/done-20260524-pre-impl-rule-alignment.md
+Active package owner: workflow-steering
+Active package boundary: validator-phase-policy
+Selected cause: pre-impl-policy-ambiguity
+Required action: Align workflow docs to work/RULES.md pre-implementation validation policy
 Representative status: unknown
 Causal outcome: unknown
 Architecture gate: not-required / unknown
 Expected delta: unknown
-Current state: Split test-part-2 (2518 lines) into test-part-2 (1365 lines) and new test-part-6 (1402 lines); npm run audit:file-size reports 0/60 over 1500, and npx tap across the two files passes 62/62.
-Allowed edits: test/control-plane/replica-dispatch-node-state-update.test-part-2.js, src/rebalancer/operation-workflow-owner-segment-6.js, test/control-plane/membership-publication-coordinator-main-stage-2.js, test/control-plane/membership-publication-coordinator.test.js, test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js, src/rebalancer/operation-workflow-observed-state.js, src/rebalancer/operation-workflow-priority-recovery-errors.js, src/rebalancer/operation-workflow-remove-safety-evaluator.js, src/rebalancer/operation-workflow-remove-safety-membership.js, src/rebalancer/operation-workflow-replace-replay.js, src/rebalancer/operation-workflow-replacement-leader-resolution.js, src/rebalancer/operation-workflow-replacement-leader-state.js, test/control-plane/membership-publication-coordinator-main-stage-2b.js, test/control-plane/membership-publication-coordinator-main-stage-2c.js, test/control-plane/replica-dispatch-node-state-update.test-part-6.js
+Current state: work/README.md contains wording that allows direct runtime/scenario implementation before --pre-impl, while work/RULES.md requires --pre-impl before implementation code changes.
+Allowed edits: work/README.md, work/packages/done-20260524-pre-impl-rule-alignment.md
 Candidate runtime files: unknown
 Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
-Required latest proof: npm run audit:file-size -- test/control-plane/replica-dispatch-node-state-update.test-part-2.js
+Required latest proof: npm run work:validate -- --entry work/packages/done-20260524-pre-impl-rule-alignment.md, npm run work:validate -- --pre-impl work/packages/done-20260524-pre-impl-rule-alignment.md, npm run work:validate -- --closure work/packages/done-20260524-pre-impl-rule-alignment.md, git diff --check -- work/README.md work/packages/done-20260524-pre-impl-rule-alignment.md
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 

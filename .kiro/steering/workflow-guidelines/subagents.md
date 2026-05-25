@@ -8,24 +8,39 @@ parent_index: ../workflow-guidelines/INDEX.md
 last_reviewed: 2026-05-23
 ---
 
-> **Canonical source.** Sub-agent sequencing, LLM tool-first triage, current edge card and trap list. Index: [`INDEX.md`](INDEX.md).
+> **Canonical source.** Execution-role evidence, optional sub-agent provenance, LLM tool-first triage, current edge card and trap list. Index: [`INDEX.md`](INDEX.md).
 
-# Workflow — Sub-Agents & Triage
+# Workflow — Execution Roles & Triage
 
-## Sub-Agent Sequencing
+## Execution Roles And Optional Sub-Agents
 
-Real sub-agents are used sequentially for sprint or work-package implementation
-unless the user explicitly disables them.
+Package closure is role-based. The required closure roles are
+`implementation` and, when the package changes code, tests, scripts, runtime
+contracts, tracker truth, or generated handoff state, `verification-fix`.
 
-Default sequence:
+A real sub-agent may perform either role, but real sub-agent identity is
+optional provenance. The parent session may perform a role directly when that
+is the lightest valid path. If delegation is unavailable or intentionally
+waived, record one of `human-waived`, `tool-unavailable`, or
+`blocked-by-environment-policy` with `reason: ...` instead of inventing a
+real agent id.
 
-1. Review sub-agent reviews the most recently executed package on the same
-   sprint or owner boundary.
-2. If review finds actionable problems, a separate fix sub-agent fixes those
-   findings before new implementation starts.
-3. A separate implementation sub-agent handles the current package.
+Default closure sequence:
 
-Review checks:
+1. `implementation` role inspects, edits, runs focused proof, and records
+   files changed.
+2. `verification-fix` role independently verifies the last package work, fixes
+   in-scope defects when needed, reruns focused proof, and records files
+   changed.
+3. The parent session reruns the focused package proof locally before package
+   closure.
+
+Review, owner-path mapping, metadata repair, and artifact extraction are
+optional planning or support roles. Use them when scenario, release-gate,
+causal-escalation, or package metadata complexity makes them useful. They do
+not replace the `implementation` and `verification-fix` closure roles.
+
+Optional review checks:
 
 - last package closed its stated blocker
 - stale status
@@ -34,7 +49,7 @@ Review checks:
 - guardrail drift
 - sprint snapshot mismatch with current evidence
 
-Review command budget:
+Optional review command budget:
 
 1. package doctor for the active package
 2. package doctor for the direct predecessor when present
@@ -42,53 +57,44 @@ Review command budget:
 4. pre-implementation validation after metadata-only repairs or before final
    clean handoff
 
-Review agents do not run focused runtime tests, `npm run test:static`, broad
-extractor stacks, raw report JSON, raw logs, or older handoff-file archaeology
-unless the capped commands contradict package routing, scope, stale blocker
-state, or metadata shape. The review may cite runtime/static proof as required
-later; implementation and parent revalidation run it.
+Optional review roles do not run focused runtime tests, `npm run test:static`,
+broad extractor stacks, raw report JSON, raw logs, or older handoff-file
+archaeology unless the capped commands contradict package routing, scope,
+stale blocker state, or metadata shape. Review may cite runtime/static proof as
+required later; implementation, verification-fix, and parent revalidation run
+it.
 
-Parallel sub-agents are allowed only for independent sidecar questions with
-disjoint owner or file scope. Parent-session notes, local/manual labels, and
-arbitrary text without a real agent id do not satisfy review, fix, or
-implementation roles at closure. Generic labels such as
-`Agent Codex Implementation`, `Agent Codex Review`, and `Agent Codex Fix` are
-also invalid closure identities. Before closure, an implementation environment
-may record `human-waived`, `tool-unavailable`, or
-`blocked-by-environment-policy` with a `reason: ...` note so unavailable
-delegation is explicit instead of disguised as agent proof.
+Parallel real sub-agents are allowed only for independent sidecar questions
+with disjoint owner or file scope. Parent-session notes, local/manual labels,
+generic labels such as `Agent Codex Implementation`, and arbitrary text without
+a real agent id are provenance notes only. They are not proof of a delegated
+real-agent attempt. Closure proof comes from checked `## Execution Evidence`
+role entries.
 
-When sub-agent sequencing is required, the package's Subagent Progress Ledger
-is the in-flight communication channel. Each real sub-agent appends one checked
-update after every completed subtask with real agent identity, the completed
-subtask, `evidence: ...`, and either `next: ...` or `blocker: ...`. The
-progress ledger explains what happened inside each role; the Subagent
-Sequencing Ledger remains the role-completion proof.
+When a real sub-agent is used, the package may keep Subagent Progress or
+Attempt Ledger notes as provenance. Each checked attempt update names the real
+agent when known, role, `status: ...`, `last checkpoint: ...`, `parent action:
+...`, `evidence: ...`, and either `next: ...` or `blocker: ...`. Valid
+statuses are `started`, `running`, `interrupted`, `partial-unvalidated`,
+`validated`, and `superseded`. `interrupted` and `partial-unvalidated`
+attempts must be followed by a checked superseded/discarded/revalidated line
+before closure.
 
-The Subagent Attempt Ledger records every real attempt, including stopped or
-failed attempts. Each checked attempt update names the real agent, role,
-`status: ...`, `last checkpoint: ...`, `parent action: ...`, `evidence: ...`,
-and either `next: ...` or `blocker: ...`. Valid statuses are `started`,
-`running`, `interrupted`, `partial-unvalidated`, `validated`, and
-`superseded`. `interrupted` and `partial-unvalidated` attempts must be
-followed by a checked superseded/discarded/revalidated line before closure.
-
-Implementation completion is valid only after the parent session reruns the
-focused package proof locally and records `parent revalidated focused proof:
-yes` in the Sequencing Ledger. Worker-reported validation is handoff evidence,
-not promotion authority. If a worker goes silent after a checkpoint or stops
-with edited files and no validation, record the attempt as
-`partial-unvalidated` or `interrupted`, discard or supersede that patch, and do
-not commit subagent runtime edits until local proof passes.
+Worker-reported validation is handoff evidence, not promotion authority. If a
+worker goes silent after a checkpoint or stops with edited files and no
+validation, record the attempt as `partial-unvalidated` or `interrupted`,
+discard or supersede that patch, and do not commit delegated runtime edits
+until local proof passes.
 
 The main agent remains responsible for integrating findings, deciding whether
 the owner boundary changed, and keeping package status filename-first.
 
 ## LLM Tool-First Triage
 
-This is a repo-wide package and sub-agent entry contract, not a sprint-local
-note. LLM-driven work across all packages and sub-agent tasks must use canonical
-workflow and artifact tools before raw JSON or log slicing: `work:llm-start`,
+This is a repo-wide package and optional sub-agent entry contract, not a
+sprint-local note. LLM-driven work across all packages and delegated tasks must
+use canonical workflow and artifact tools before raw JSON or log slicing:
+`work:llm-start`,
 `work:evidence-summary`,
 `work:package:doctor -- --suggest`, `work:package:schema`,
 `work:package:new`, `analyze:owner-files`, focused scenario extractors such as
@@ -99,7 +105,8 @@ Required workflow:
 
 1. Use `npm run work:package:doctor -- --suggest <package>` or
    `npm run work:package:doctor -- --fix-dry-run <package>` before hand-editing
-   package schema, causal ledger, Model Fit, sub-agent ledger, or commit-ledger
+   package schema, causal ledger, Model Fit, execution evidence, optional
+   sub-agent provenance, or commit-ledger
    fields.
 2. Use `npm run work:package:schema` before choosing status, lane,
    causal-outcome, scenario-classification, stop-condition, or bounded-progress
@@ -114,10 +121,11 @@ Required workflow:
    `npm run analyze:priority-recovery-residuals -- <artifact>` before ad hoc
    residual extraction.
 7. Use `npm run work:subagent-prompt -- --role <role> --package <package>` to
-   prepare bounded sub-agent tasks; the generated text assists the real
-   sub-agent sequence but does not replace real returned agent ids. The prompt
-   must carry the package Model Fit output profile so sub-agents know expected
-   response verbosity separately from model or reasoning effort.
+   prepare bounded delegated role tasks. The generated text assists optional
+   real sub-agents but does not replace checked `## Execution Evidence` role
+   entries. The prompt must carry the package Model Fit output profile so
+   delegated agents know expected response verbosity separately from model or
+   reasoning effort.
 8. Use `npm run work:oversized-next -- --markdown` before inventing file-size
    cleanup packages from raw line counts.
 9. Before closure, confirm every new or edited source-code file in package
@@ -228,4 +236,3 @@ Representative artifacts must use real unique timestamps or otherwise unique
 run identifiers. Do not name new representative rerun outputs with placeholder
 timestamps such as `T000000Z`; placeholder names make lineage ambiguous and can
 hide accidental overwrite.
-

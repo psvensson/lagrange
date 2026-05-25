@@ -69,30 +69,33 @@ Prefer:
 - one canonical blocker derived from the latest artifact
 - one semantic owner and owner boundary
 - one smallest focused proof surface before broad reruns
-- one integrated handoff from sub-agent findings back into the package
+- one integrated handoff from execution-role evidence and any optional
+  delegated findings back into the package
 
-Do not let old migration history, stale residual packages, or several
-sub-agents create competing active interpretations of the same blocker.
+Do not let old migration history, stale residual packages, or several optional
+delegated findings create competing active interpretations of the same blocker.
 
 If a fresh artifact changes only counts, nodes, epochs, or timing while the
 same owner boundary still dominates, continue the current package. If the
 semantic owner, owner boundary, or next required action changes, split or
 activate one new representative package and make the old boundary historical.
 
-Real sub-agents should accelerate this sequence, not replace it. Use them
-first to review the most recently executed package on the same sprint or owner
-boundary. If that review finds closure, evidence, residual, guardrail, or
-snapshot problems, use the next real sub-agent to fix those problems before new
-implementation begins. Then use a separate implementation sub-agent for the
-current package. Parent-session notes, local/manual labels, and arbitrary text
-without a real agent id do not satisfy these roles unless the user explicitly
-disables sub-agents for that task.
+Optional real sub-agents should accelerate this sequence, not replace it.
+Closure still depends on checked `implementation` and `verification-fix` roles.
+Use an optional review role for the most recently executed package on the same
+sprint or owner boundary. If that review finds closure, evidence, residual,
+guardrail, or snapshot problems, fix those problems before new implementation
+begins. Parent-session notes, local/manual labels, arbitrary text, and real
+agent ids are provenance only. When delegation is unavailable or intentionally
+not used, record `human-waived`, `tool-unavailable`, or
+`blocked-by-environment-policy` with a reason instead of inventing an agent id.
 
 The normal sequence is:
 
-1. review the last package
+1. review the last package when needed
 2. fix review findings if any
 3. extract current artifact truth
 4. map the owner path or focused proof surface
-5. implement the current package with bounded file ownership
-6. commit and push the focused package slice with Commit And Push Ledger proof
+5. run the `implementation` role with bounded file ownership
+6. run the `verification-fix` role and focused proof
+7. commit and push the focused package slice with Commit And Push Ledger proof

@@ -99,10 +99,10 @@
     }
   ],
   "stats": {
-    "candidateCount": 315,
-    "dedupedRuleCount": 306,
-    "exportedRuleCount": 306,
-    "estimatedAllRulesTokens": 11652
+    "candidateCount": 318,
+    "dedupedRuleCount": 310,
+    "exportedRuleCount": 310,
+    "estimatedAllRulesTokens": 11816
   },
   "rules": [
     {
@@ -1074,8 +1074,8 @@
       "sources": [
         {
           "file": "testing-guidelines/release-gate.md",
-          "line": 210,
-          "section": "Testing — Release-Gate & Distributed Validation > Agent And Sub-Agent Validation Handoff Policy"
+          "line": 211,
+          "section": "Testing — Release-Gate & Distributed Validation > Agent And Execution-Role Validation Handoff Policy"
         }
       ]
     },
@@ -1086,13 +1086,13 @@
       "tags": [
         "governance"
       ],
-      "rule": "If several sub-agents are used, give each one a disjoint question or file scope. Do not ask several workers to independently fix the same blocker.",
+      "rule": "If several real sub-agents are used, give each one a disjoint question or file scope. Do not ask several workers to independently fix the same blocker.",
       "score": 236,
       "sources": [
         {
           "file": "testing-guidelines/release-gate.md",
-          "line": 214,
-          "section": "Testing — Release-Gate & Distributed Validation > Agent And Sub-Agent Validation Handoff Policy"
+          "line": 215,
+          "section": "Testing — Release-Gate & Distributed Validation > Agent And Execution-Role Validation Handoff Policy"
         }
       ]
     },
@@ -1407,26 +1407,6 @@
       ]
     },
     {
-      "id": "GOV-0003",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "Parent-session notes, local/manual session labels, and arbitrary text without a real agent id do not satisfy review, fix, or implementation roles unless the user explicitly disables sub-agents for that task.",
-      "score": 226,
-      "sources": [
-        {
-          "file": "roadmap.md",
-          "line": 204,
-          "section": "Roadmap Steering Pointer > Sprint Continuation And Package Split Policy"
-        },
-        {
-          "file": "workflow-guidelines/subagents.md",
-          "line": 51,
-          "section": "Workflow — Sub-Agents & Triage > Sub-Agent Sequencing"
-        }
-      ]
-    },
-    {
       "id": "STYLE-0006",
       "domain": "style",
       "strength": "must_not",
@@ -1544,7 +1524,7 @@
       ]
     },
     {
-      "id": "GOV-0004",
+      "id": "GOV-0003",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -1561,7 +1541,7 @@
       ]
     },
     {
-      "id": "GOV-0005",
+      "id": "GOV-0004",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -1572,13 +1552,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 171,
+          "line": 175,
           "section": "Workflow — Decision & Closure Gates > Classification-Only Fast Path"
         }
       ]
     },
     {
-      "id": "GOV-0006",
+      "id": "GOV-0005",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -1593,7 +1573,7 @@
       ]
     },
     {
-      "id": "GOV-0007",
+      "id": "GOV-0006",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -1608,7 +1588,7 @@
       ]
     },
     {
-      "id": "GOV-0008",
+      "id": "GOV-0007",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -1623,7 +1603,7 @@
       ]
     },
     {
-      "id": "GOV-0009",
+      "id": "GOV-0008",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -1638,7 +1618,7 @@
       ]
     },
     {
-      "id": "GOV-0010",
+      "id": "GOV-0009",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -1647,13 +1627,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 194,
-          "section": "Workflow — Sub-Agents & Triage > LLM Current Edge Card And Trap List"
+          "line": 202,
+          "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
     },
     {
-      "id": "GOV-0011",
+      "id": "GOV-0010",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -1664,13 +1644,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 308,
+          "line": 314,
           "section": "Workflow — Decision & Closure Gates > Sprint Architecture Decision Gate"
         }
       ]
     },
     {
-      "id": "GOV-0012",
+      "id": "GOV-0011",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -1679,13 +1659,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 384,
+          "line": 390,
           "section": "Workflow — Decision & Closure Gates > Scenario Failure Migration"
         }
       ]
     },
     {
-      "id": "GOV-0013",
+      "id": "GOV-0012",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -1696,7 +1676,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 426,
+          "line": 432,
           "section": "Workflow — Decision & Closure Gates > Frontier Oscillation Escalation"
         }
       ]
@@ -1979,7 +1959,7 @@
         {
           "file": "testing-guidelines/release-gate.md",
           "line": 195,
-          "section": "Testing — Release-Gate & Distributed Validation > Agent And Sub-Agent Validation Handoff Policy"
+          "section": "Testing — Release-Gate & Distributed Validation > Agent And Execution-Role Validation Handoff Policy"
         }
       ]
     },
@@ -1995,8 +1975,8 @@
       "sources": [
         {
           "file": "testing-guidelines/release-gate.md",
-          "line": 216,
-          "section": "Testing — Release-Gate & Distributed Validation > Agent And Sub-Agent Validation Handoff Policy"
+          "line": 217,
+          "section": "Testing — Release-Gate & Distributed Validation > Agent And Execution-Role Validation Handoff Policy"
         }
       ]
     },
@@ -2122,33 +2102,18 @@
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
-      "rule": "Do not let old migration history, stale residual packages, or several sub-agents create competing active interpretations of the same blocker.",
+      "rule": "Do not let old migration history, stale residual packages, or several optional delegated findings create competing active interpretations of the same blocker.",
       "score": 216,
       "sources": [
         {
           "file": "doctrine/owner-boundaries.md",
-          "line": 74,
+          "line": 75,
           "section": "Doctrine — Owner Boundaries > 17. Sprint Execution Has One Current Boundary"
         }
       ]
     },
     {
       "id": "ARCH-0061",
-      "domain": "architecture",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "Parent-session notes, local/manual labels, and arbitrary text without a real agent id do not satisfy these roles unless the user explicitly disables sub-agents for that task.",
-      "score": 216,
-      "sources": [
-        {
-          "file": "doctrine/owner-boundaries.md",
-          "line": 82,
-          "section": "Doctrine — Owner Boundaries > 17. Sprint Execution Has One Current Boundary"
-        }
-      ]
-    },
-    {
-      "id": "ARCH-0062",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -2165,7 +2130,7 @@
       ]
     },
     {
-      "id": "ARCH-0063",
+      "id": "ARCH-0062",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -2182,7 +2147,7 @@
       ]
     },
     {
-      "id": "ARCH-0064",
+      "id": "ARCH-0063",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -2199,7 +2164,7 @@
       ]
     },
     {
-      "id": "ARCH-0065",
+      "id": "ARCH-0064",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2214,7 +2179,7 @@
       ]
     },
     {
-      "id": "ARCH-0066",
+      "id": "ARCH-0065",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2229,7 +2194,7 @@
       ]
     },
     {
-      "id": "ARCH-0067",
+      "id": "ARCH-0066",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2244,7 +2209,7 @@
       ]
     },
     {
-      "id": "ARCH-0068",
+      "id": "ARCH-0067",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -2262,7 +2227,7 @@
       ]
     },
     {
-      "id": "ARCH-0069",
+      "id": "ARCH-0068",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2277,7 +2242,7 @@
       ]
     },
     {
-      "id": "ARCH-0070",
+      "id": "ARCH-0069",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2292,7 +2257,7 @@
       ]
     },
     {
-      "id": "ARCH-0071",
+      "id": "ARCH-0070",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2307,7 +2272,7 @@
       ]
     },
     {
-      "id": "GOV-0014",
+      "id": "GOV-0013",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2322,7 +2287,7 @@
       ]
     },
     {
-      "id": "GOV-0015",
+      "id": "GOV-0014",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2337,7 +2302,7 @@
       ]
     },
     {
-      "id": "ARCH-0072",
+      "id": "ARCH-0071",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -2360,7 +2325,7 @@
       ]
     },
     {
-      "id": "ARCH-0073",
+      "id": "ARCH-0072",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -2377,7 +2342,7 @@
       ]
     },
     {
-      "id": "ARCH-0074",
+      "id": "ARCH-0073",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -2427,7 +2392,7 @@
       ]
     },
     {
-      "id": "ARCH-0075",
+      "id": "ARCH-0074",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -2442,7 +2407,7 @@
       ]
     },
     {
-      "id": "GOV-0016",
+      "id": "GOV-0015",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2451,13 +2416,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 198,
+          "line": 203,
           "section": "Workflow — Decision & Closure Gates > Classification Efficiency Contract"
         }
       ]
     },
     {
-      "id": "GOV-0017",
+      "id": "GOV-0016",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2474,7 +2439,7 @@
       ]
     },
     {
-      "id": "GOV-0018",
+      "id": "GOV-0017",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2494,7 +2459,7 @@
       ]
     },
     {
-      "id": "GOV-0019",
+      "id": "GOV-0018",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2509,7 +2474,7 @@
       ]
     },
     {
-      "id": "GOV-0020",
+      "id": "GOV-0019",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2526,7 +2491,7 @@
       ]
     },
     {
-      "id": "GOV-0021",
+      "id": "GOV-0020",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2543,6 +2508,21 @@
       ]
     },
     {
+      "id": "GOV-0021",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "They do not replace the implementation and verification-fix closure roles.",
+      "score": 211,
+      "sources": [
+        {
+          "file": "workflow-guidelines/subagents.md",
+          "line": 38,
+          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
+        }
+      ]
+    },
+    {
       "id": "GOV-0022",
       "domain": "governance",
       "strength": "must_not",
@@ -2552,8 +2532,8 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 154,
-          "section": "Workflow — Sub-Agents & Triage > LLM Tool-First Triage"
+          "line": 162,
+          "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
         }
       ]
     },
@@ -2569,8 +2549,8 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 180,
-          "section": "Workflow — Sub-Agents & Triage > LLM Current Edge Card And Trap List"
+          "line": 188,
+          "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
     },
@@ -2584,8 +2564,8 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 227,
-          "section": "Workflow — Sub-Agents & Triage > LLM Current Edge Card And Trap List"
+          "line": 235,
+          "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
     },
@@ -2624,7 +2604,7 @@
       ]
     },
     {
-      "id": "ARCH-0076",
+      "id": "ARCH-0075",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -2639,7 +2619,7 @@
       ]
     },
     {
-      "id": "ARCH-0077",
+      "id": "ARCH-0076",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -2657,7 +2637,7 @@
       ]
     },
     {
-      "id": "ARCH-0078",
+      "id": "ARCH-0077",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -2674,7 +2654,7 @@
       ]
     },
     {
-      "id": "ARCH-0079",
+      "id": "ARCH-0078",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -2796,12 +2776,12 @@
       "tags": [
         "ownership"
       ],
-      "rule": "The main package owner must reconcile sub-agent results into one package status update rather than creating parallel status narratives.",
+      "rule": "The main package owner must reconcile optional delegated findings into one package status update rather than creating parallel status narratives.",
       "score": 208,
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 202,
+          "line": 203,
           "section": "Roadmap Steering Pointer > Sprint Continuation And Package Split Policy"
         }
       ]
@@ -3090,13 +3070,13 @@
       "tags": [
         "ownership"
       ],
-      "rule": "When an agent or sub-agent is used to continue a sprint, validation ownership must follow the same evidence ladder as package work.",
+      "rule": "When an agent continues a sprint or an optional sub-agent is delegated, validation ownership must follow the same evidence ladder as package work.",
       "score": 208,
       "sources": [
         {
           "file": "testing-guidelines/release-gate.md",
           "line": 190,
-          "section": "Testing — Release-Gate & Distributed Validation > Agent And Sub-Agent Validation Handoff Policy"
+          "section": "Testing — Release-Gate & Distributed Validation > Agent And Execution-Role Validation Handoff Policy"
         }
       ]
     },
@@ -3153,7 +3133,7 @@
       ]
     },
     {
-      "id": "ARCH-0080",
+      "id": "ARCH-0079",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -3196,30 +3176,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 84,
+          "line": 88,
           "section": "Workflow — Decision & Closure Gates > Core Logic Brief Gate > Scenario/Release-Gate Lane"
         }
       ]
     },
     {
       "id": "GOV-0036",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "Canonical extractors agree on the first frontier, owner boundary, cause, and next required action, or the sprint records the exact extractor conflict.",
-      "score": 203,
-      "sources": [
-        {
-          "file": "workflow-guidelines/closure.md",
-          "line": 245,
-          "section": "Workflow — Decision & Closure Gates > Sprint Architecture Decision Gate"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0037",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3234,7 +3197,7 @@
       ]
     },
     {
-      "id": "GOV-0038",
+      "id": "GOV-0037",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3251,7 +3214,7 @@
       ]
     },
     {
-      "id": "GOV-0039",
+      "id": "GOV-0038",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3268,7 +3231,7 @@
       ]
     },
     {
-      "id": "ARCH-0081",
+      "id": "ARCH-0080",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -3285,7 +3248,7 @@
       ]
     },
     {
-      "id": "ARCH-0082",
+      "id": "ARCH-0081",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -3300,7 +3263,41 @@
       ]
     },
     {
+      "id": "GOV-0039",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "Execute owner-boundary work through required implementation and verification-fix roles. Optional delegated review, artifact extraction, owner-path mapping, and focused proof design can accelerate those roles but do not replace them.",
+      "score": 202,
+      "sources": [
+        {
+          "file": "roadmap.md",
+          "line": 188,
+          "section": "Roadmap Steering Pointer > Sprint Continuation And Package Split Policy"
+        }
+      ]
+    },
+    {
       "id": "GOV-0040",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "Canonical extractors agree on the first frontier, owner boundary, cause, and next required action, or the sprint records the exact extractor conflict.",
+      "score": 202,
+      "sources": [
+        {
+          "file": "workflow-guidelines/closure.md",
+          "line": 250,
+          "section": "Workflow — Decision & Closure Gates > Sprint Architecture Decision Gate"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0041",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3311,28 +3308,28 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 268,
-          "section": "Workflow — Decision & Closure Gates > Sprint Architecture Decision Gate"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0041",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [],
-      "rule": "The gate cannot replace canonical extractor evidence, package closure, required sub-agent sequencing, validation, or focused commit and push proof.",
-      "score": 202,
-      "sources": [
-        {
-          "file": "workflow-guidelines/closure.md",
-          "line": 300,
+          "line": 273,
           "section": "Workflow — Decision & Closure Gates > Sprint Architecture Decision Gate"
         }
       ]
     },
     {
       "id": "GOV-0042",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [],
+      "rule": "The gate cannot replace canonical extractor evidence, package closure, required Execution Evidence roles, validation, or focused commit and push proof.",
+      "score": 202,
+      "sources": [
+        {
+          "file": "workflow-guidelines/closure.md",
+          "line": 305,
+          "section": "Workflow — Decision & Closure Gates > Sprint Architecture Decision Gate"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0043",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3343,13 +3340,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 381,
+          "line": 387,
           "section": "Workflow — Decision & Closure Gates > Scenario Failure Migration"
         }
       ]
     },
     {
-      "id": "ARCH-0083",
+      "id": "ARCH-0082",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -3364,7 +3361,7 @@
       ]
     },
     {
-      "id": "ARCH-0084",
+      "id": "ARCH-0083",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3381,7 +3378,7 @@
       ]
     },
     {
-      "id": "ARCH-0085",
+      "id": "ARCH-0084",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3398,7 +3395,7 @@
       ]
     },
     {
-      "id": "ARCH-0086",
+      "id": "ARCH-0085",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -3413,7 +3410,7 @@
       ]
     },
     {
-      "id": "ARCH-0087",
+      "id": "ARCH-0086",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3424,13 +3421,13 @@
       "sources": [
         {
           "file": "doctrine/owner-boundaries.md",
-          "line": 77,
+          "line": 78,
           "section": "Doctrine — Owner Boundaries > 17. Sprint Execution Has One Current Boundary"
         }
       ]
     },
     {
-      "id": "ARCH-0088",
+      "id": "ARCH-0087",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3453,7 +3450,7 @@
       ]
     },
     {
-      "id": "ARCH-0089",
+      "id": "ARCH-0088",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3470,7 +3467,7 @@
       ]
     },
     {
-      "id": "ARCH-0090",
+      "id": "ARCH-0089",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -3485,7 +3482,7 @@
       ]
     },
     {
-      "id": "ARCH-0091",
+      "id": "ARCH-0090",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -3500,7 +3497,7 @@
       ]
     },
     {
-      "id": "GOV-0043",
+      "id": "GOV-0044",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3515,7 +3512,7 @@
       ]
     },
     {
-      "id": "GOV-0044",
+      "id": "GOV-0045",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3533,7 +3530,7 @@
       ]
     },
     {
-      "id": "GOV-0045",
+      "id": "GOV-0046",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3551,7 +3548,7 @@
       ]
     },
     {
-      "id": "GOV-0046",
+      "id": "GOV-0047",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3568,7 +3565,7 @@
       ]
     },
     {
-      "id": "ARCH-0092",
+      "id": "ARCH-0091",
       "domain": "architecture",
       "strength": "should",
       "tags": [
@@ -3782,13 +3779,13 @@
       "sources": [
         {
           "file": "testing-guidelines/release-gate.md",
-          "line": 200,
-          "section": "Testing — Release-Gate & Distributed Validation > Agent And Sub-Agent Validation Handoff Policy"
+          "line": 202,
+          "section": "Testing — Release-Gate & Distributed Validation > Agent And Execution-Role Validation Handoff Policy"
         }
       ]
     },
     {
-      "id": "GOV-0047",
+      "id": "GOV-0048",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3804,13 +3801,13 @@
         },
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 205,
+          "line": 210,
           "section": "Workflow — Decision & Closure Gates > Decision Experiment Gate"
         }
       ]
     },
     {
-      "id": "GOV-0048",
+      "id": "GOV-0049",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3827,7 +3824,7 @@
       ]
     },
     {
-      "id": "GOV-0049",
+      "id": "GOV-0050",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3836,13 +3833,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 66,
+          "line": 68,
           "section": "Workflow — Decision & Closure Gates > Core Logic Brief Gate > Runtime Owner-Boundary Lane"
         }
       ]
     },
     {
-      "id": "GOV-0050",
+      "id": "GOV-0051",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3853,13 +3850,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 71,
+          "line": 73,
           "section": "Workflow — Decision & Closure Gates > Core Logic Brief Gate > Scenario/Release-Gate Lane"
         }
       ]
     },
     {
-      "id": "GOV-0051",
+      "id": "GOV-0052",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3868,13 +3865,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 101,
+          "line": 105,
           "section": "Workflow — Decision & Closure Gates > Core Logic Brief Gate > Causal Escalation Lane"
         }
       ]
     },
     {
-      "id": "GOV-0052",
+      "id": "GOV-0053",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3889,7 +3886,7 @@
       ]
     },
     {
-      "id": "GOV-0053",
+      "id": "GOV-0054",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3904,32 +3901,19 @@
       ]
     },
     {
-      "id": "GOV-0054",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [],
-      "rule": "The review may cite runtime/static proof as required later; implementation and parent revalidation run it.",
-      "score": 193,
-      "sources": [
-        {
-          "file": "workflow-guidelines/subagents.md",
-          "line": 45,
-          "section": "Workflow — Sub-Agents & Triage > Sub-Agent Sequencing"
-        }
-      ]
-    },
-    {
       "id": "GOV-0055",
       "domain": "governance",
       "strength": "must",
-      "tags": [],
-      "rule": "When sub-agent sequencing is required, the package's Subagent Progress Ledger is the in-flight communication channel.",
+      "tags": [
+        "testing"
+      ],
+      "rule": "The required closure roles are implementation and, when the package changes code, tests, scripts, runtime contracts, tracker truth, or generated handoff state, verification-fix.",
       "score": 193,
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 61,
-          "section": "Workflow — Sub-Agents & Triage > Sub-Agent Sequencing"
+          "line": 17,
+          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
         }
       ]
     },
@@ -3938,13 +3922,13 @@
       "domain": "governance",
       "strength": "must",
       "tags": [],
-      "rule": "interrupted and partial-unvalidated attempts must be followed by a checked superseded/discarded/revalidated line before closure.",
+      "rule": "Review may cite runtime/static proof as required later; implementation, verification-fix, and parent revalidation run it.",
       "score": 193,
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 68,
-          "section": "Workflow — Sub-Agents & Triage > Sub-Agent Sequencing"
+          "line": 60,
+          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
         }
       ]
     },
@@ -3953,18 +3937,33 @@
       "domain": "governance",
       "strength": "must",
       "tags": [],
-      "rule": "Scenario-driven packages and active sprint snapshots must include a compact Current Edge Card that an LLM can keep in working memory without rereading the full package history.",
+      "rule": "interrupted and partial-unvalidated attempts must be followed by a checked superseded/discarded/revalidated line before closure.",
       "score": 193,
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 165,
-          "section": "Workflow — Sub-Agents & Triage > LLM Current Edge Card And Trap List"
+          "line": 74,
+          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
         }
       ]
     },
     {
       "id": "GOV-0058",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [],
+      "rule": "Scenario-driven packages and active sprint snapshots must include a compact Current Edge Card that an LLM can keep in working memory without rereading the full package history.",
+      "score": 193,
+      "sources": [
+        {
+          "file": "workflow-guidelines/subagents.md",
+          "line": 173,
+          "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0059",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3975,13 +3974,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 224,
-          "section": "Workflow — Sub-Agents & Triage > LLM Current Edge Card And Trap List"
+          "line": 232,
+          "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
     },
     {
-      "id": "GOV-0059",
+      "id": "GOV-0060",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3990,13 +3989,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 227,
-          "section": "Workflow — Sub-Agents & Triage > LLM Current Edge Card And Trap List"
+          "line": 235,
+          "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
     },
     {
-      "id": "GOV-0060",
+      "id": "GOV-0061",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4011,7 +4010,7 @@
       ]
     },
     {
-      "id": "GOV-0061",
+      "id": "GOV-0062",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4043,7 +4042,7 @@
       ]
     },
     {
-      "id": "GOV-0062",
+      "id": "GOV-0063",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4054,13 +4053,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 336,
+          "line": 342,
           "section": "Workflow — Decision & Closure Gates > Scenario Causal Closure Ledger"
         }
       ]
     },
     {
-      "id": "GOV-0063",
+      "id": "GOV-0064",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4071,13 +4070,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 387,
+          "line": 393,
           "section": "Workflow — Decision & Closure Gates > Scenario Failure Migration"
         }
       ]
     },
     {
-      "id": "ARCH-0093",
+      "id": "ARCH-0092",
       "domain": "architecture",
       "strength": "may",
       "tags": [
@@ -4099,7 +4098,7 @@
       ]
     },
     {
-      "id": "ARCH-0094",
+      "id": "ARCH-0093",
       "domain": "architecture",
       "strength": "may",
       "tags": [
@@ -4116,7 +4115,7 @@
       ]
     },
     {
-      "id": "ARCH-0095",
+      "id": "ARCH-0094",
       "domain": "architecture",
       "strength": "may",
       "tags": [
@@ -4134,7 +4133,7 @@
       ]
     },
     {
-      "id": "ARCH-0096",
+      "id": "ARCH-0095",
       "domain": "architecture",
       "strength": "may",
       "tags": [
@@ -4151,7 +4150,7 @@
       ]
     },
     {
-      "id": "ARCH-0097",
+      "id": "ARCH-0096",
       "domain": "architecture",
       "strength": "may",
       "tags": [],
@@ -4166,7 +4165,7 @@
       ]
     },
     {
-      "id": "GOV-0064",
+      "id": "GOV-0065",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -4174,28 +4173,28 @@
         "testing",
         "governance"
       ],
-      "rule": "Review agents do not run focused runtime tests, npm run test:static, broad extractor stacks, raw report JSON, raw logs, or older handoff-file archaeology unless the capped commands contradict package routing, scope, stale blocker state, or metadata shape.",
+      "rule": "Optional review roles do not run focused runtime tests, npm run test:static, broad extractor stacks, raw report JSON, raw logs, or older handoff-file archaeology unless the capped commands contradict package routing, scope, stale blocker state, or metadata shape.",
       "score": 187,
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 45,
-          "section": "Workflow — Sub-Agents & Triage > Sub-Agent Sequencing"
+          "line": 60,
+          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
         }
       ]
     },
     {
-      "id": "GOV-0065",
+      "id": "GOV-0066",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "If a worker goes silent after a checkpoint or stops with edited files and no validation, record the attempt as partial-unvalidated or interrupted, discard or supersede that patch, and do not commit subagent runtime edits until local proof passes.",
+      "rule": "If a worker goes silent after a checkpoint or stops with edited files and no validation, record the attempt as partial-unvalidated or interrupted, discard or supersede that patch, and do not commit delegated runtime edits until local proof passes.",
       "score": 187,
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 76,
-          "section": "Workflow — Sub-Agents & Triage > Sub-Agent Sequencing"
+          "line": 83,
+          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
         }
       ]
     },
@@ -4310,13 +4309,13 @@
       "sources": [
         {
           "file": "testing-guidelines/release-gate.md",
-          "line": 212,
-          "section": "Testing — Release-Gate & Distributed Validation > Agent And Sub-Agent Validation Handoff Policy"
+          "line": 213,
+          "section": "Testing — Release-Gate & Distributed Validation > Agent And Execution-Role Validation Handoff Policy"
         }
       ]
     },
     {
-      "id": "ARCH-0098",
+      "id": "ARCH-0097",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -4333,7 +4332,7 @@
       ]
     },
     {
-      "id": "GOV-0066",
+      "id": "GOV-0067",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4402,7 +4401,7 @@
       ]
     },
     {
-      "id": "ARCH-0099",
+      "id": "ARCH-0098",
       "domain": "architecture",
       "strength": "may",
       "tags": [
@@ -4421,7 +4420,7 @@
       ]
     },
     {
-      "id": "GOV-0067",
+      "id": "GOV-0068",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4430,23 +4429,8 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 93,
+          "line": 97,
           "section": "Workflow — Decision & Closure Gates > Core Logic Brief Gate > Scenario/Release-Gate Lane"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0068",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [],
-      "rule": "Use npm run work:subagent-prompt -- --role <role> --package <package> to prepare bounded sub-agent tasks; the generated text assists the real sub-agent sequence but does not replace real returned agent ids. The prompt must carry the package Model Fit output profile so sub-agents know expected response verbosity separately from model or reasoning effort.",
-      "score": 179,
-      "sources": [
-        {
-          "file": "workflow-guidelines/subagents.md",
-          "line": 116,
-          "section": "Workflow — Sub-Agents & Triage > LLM Tool-First Triage"
         }
       ]
     },
@@ -4455,13 +4439,13 @@
       "domain": "governance",
       "strength": "must",
       "tags": [],
-      "rule": "status: required means the tracker has enough evidence to stop and request concrete choices. status: presented means choices are visible but no route has been selected. Both states fail pre-implementation validation for active runtime/scenario work.",
-      "score": 178,
+      "rule": "Use npm run work:subagent-prompt -- --role <role> --package <package> to prepare bounded delegated role tasks. The generated text assists optional real sub-agents but does not replace checked ## Execution Evidence role entries. The prompt must carry the package Model Fit output profile so delegated agents know expected response verbosity separately from model or reasoning effort.",
+      "score": 179,
       "sources": [
         {
-          "file": "workflow-guidelines/closure.md",
-          "line": 280,
-          "section": "Workflow — Decision & Closure Gates > Sprint Architecture Decision Gate"
+          "file": "workflow-guidelines/subagents.md",
+          "line": 123,
+          "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
         }
       ]
     },
@@ -4469,22 +4453,37 @@
       "id": "GOV-0070",
       "domain": "governance",
       "strength": "must",
-      "tags": [
-        "ownership",
-        "governance"
-      ],
-      "rule": "status: selected names the selected choice and opens the bounded route for the next package or new sprint. For architecture gaps and unchanged same-frontier/no-reduction evidence, the default selected route is architecture-package, implemented as an autonomous architecture experiment. The selected route still must carry normal owner, boundary, scope, proof, sub-agent, validation, commit, and push evidence.",
+      "tags": [],
+      "rule": "status: required means the tracker has enough evidence to stop and request concrete choices. status: presented means choices are visible but no route has been selected. Both states fail pre-implementation validation for active runtime/scenario work.",
       "score": 178,
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 284,
+          "line": 285,
           "section": "Workflow — Decision & Closure Gates > Sprint Architecture Decision Gate"
         }
       ]
     },
     {
       "id": "GOV-0071",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [
+        "ownership",
+        "governance"
+      ],
+      "rule": "status: selected names the selected choice and opens the bounded route for the next package or new sprint. For architecture gaps and unchanged same-frontier/no-reduction evidence, the default selected route is architecture-package, implemented as an autonomous architecture experiment. The selected route still must carry normal owner, boundary, scope, execution-role, validation, commit, and push evidence.",
+      "score": 178,
+      "sources": [
+        {
+          "file": "workflow-guidelines/closure.md",
+          "line": 289,
+          "section": "Workflow — Decision & Closure Gates > Sprint Architecture Decision Gate"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0072",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4495,7 +4494,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 377,
+          "line": 383,
           "section": "Workflow — Decision & Closure Gates > Scenario Failure Migration"
         }
       ]
@@ -4518,7 +4517,7 @@
       ]
     },
     {
-      "id": "ARCH-0100",
+      "id": "ARCH-0099",
       "domain": "architecture",
       "strength": "should",
       "tags": [
@@ -4535,7 +4534,7 @@
       ]
     },
     {
-      "id": "ARCH-0101",
+      "id": "ARCH-0100",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -4550,7 +4549,7 @@
       ]
     },
     {
-      "id": "ARCH-0102",
+      "id": "ARCH-0101",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -4633,7 +4632,7 @@
       ]
     },
     {
-      "id": "GOV-0072",
+      "id": "GOV-0073",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4712,30 +4711,13 @@
       "domain": "testing",
       "strength": "may",
       "tags": [],
-      "rule": "A separate implementation sub-agent may start the current work package only after the previous-package review is clean or the review findings have been fixed.",
+      "rule": "The current package's implementation role may start only after the previous-package review is clean, not needed, or fixed.",
       "score": 170,
       "sources": [
         {
           "file": "testing-guidelines/release-gate.md",
-          "line": 207,
-          "section": "Testing — Release-Gate & Distributed Validation > Agent And Sub-Agent Validation Handoff Policy"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0073",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "LLM-driven work across all packages and sub-agent tasks must use canonical workflow and artifact tools before raw JSON or log slicing: work:llm-start, work:evidence-summary, work:package:doctor -- --suggest, work:package:schema, work:package:new, analyze:owner-files, focused scenario extractors such as analyze:priority-recovery-residuals, work:subagent-prompt, and work:oversized-next.",
-      "score": 169,
-      "sources": [
-        {
-          "file": "workflow-guidelines/subagents.md",
-          "line": 89,
-          "section": "Workflow — Sub-Agents & Triage > LLM Tool-First Triage"
+          "line": 209,
+          "section": "Testing — Release-Gate & Distributed Validation > Agent And Execution-Role Validation Handoff Policy"
         }
       ]
     },
@@ -4746,18 +4728,35 @@
       "tags": [
         "ownership"
       ],
+      "rule": "LLM-driven work across all packages and delegated tasks must use canonical workflow and artifact tools before raw JSON or log slicing: work:llm-start, work:evidence-summary, work:package:doctor -- --suggest, work:package:schema, work:package:new, analyze:owner-files, focused scenario extractors such as analyze:priority-recovery-residuals, work:subagent-prompt, and work:oversized-next.",
+      "score": 169,
+      "sources": [
+        {
+          "file": "workflow-guidelines/subagents.md",
+          "line": 94,
+          "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0075",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [
+        "ownership"
+      ],
       "rule": "If the same two boundaries alternate again without representative green or monotonic reduction, the next validation surface must be a replayable handoff fixture or missing-edge probe that includes both owners before more runtime edits start.",
       "score": 168,
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 444,
+          "line": 450,
           "section": "Workflow — Decision & Closure Gates > Frontier Oscillation Escalation"
         }
       ]
     },
     {
-      "id": "ARCH-0103",
+      "id": "ARCH-0102",
       "domain": "architecture",
       "strength": "should",
       "tags": [
@@ -4774,7 +4773,7 @@
       ]
     },
     {
-      "id": "ARCH-0104",
+      "id": "ARCH-0103",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -4789,22 +4788,22 @@
       ]
     },
     {
-      "id": "ARCH-0105",
+      "id": "ARCH-0104",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
-      "rule": "Real sub-agents should accelerate this sequence, not replace it.",
+      "rule": "Optional real sub-agents should accelerate this sequence, not replace it.",
       "score": 166,
       "sources": [
         {
           "file": "doctrine/owner-boundaries.md",
-          "line": 82,
+          "line": 83,
           "section": "Doctrine — Owner Boundaries > 17. Sprint Execution Has One Current Boundary"
         }
       ]
     },
     {
-      "id": "GOV-0075",
+      "id": "GOV-0076",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4821,7 +4820,7 @@
       ]
     },
     {
-      "id": "GOV-0076",
+      "id": "GOV-0077",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4838,7 +4837,7 @@
       ]
     },
     {
-      "id": "GOV-0077",
+      "id": "GOV-0078",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4887,7 +4886,7 @@
       ]
     },
     {
-      "id": "GOV-0078",
+      "id": "GOV-0079",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4898,13 +4897,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 115,
+          "line": 119,
           "section": "Workflow — Decision & Closure Gates > Core Logic Brief Gate > Causal Escalation Lane"
         }
       ]
     },
     {
-      "id": "GOV-0079",
+      "id": "GOV-0080",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4915,13 +4914,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 134,
-          "section": "Workflow — Sub-Agents & Triage > LLM Tool-First Triage"
+          "line": 142,
+          "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
         }
       ]
     },
     {
-      "id": "GOV-0080",
+      "id": "GOV-0081",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4930,13 +4929,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 197,
-          "section": "Workflow — Sub-Agents & Triage > LLM Current Edge Card And Trap List"
+          "line": 205,
+          "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
     },
     {
-      "id": "ARCH-0106",
+      "id": "ARCH-0105",
       "domain": "architecture",
       "strength": "may",
       "tags": [],
@@ -4951,7 +4950,7 @@
       ]
     },
     {
-      "id": "GOV-0081",
+      "id": "GOV-0082",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4966,7 +4965,24 @@
       ]
     },
     {
-      "id": "GOV-0082",
+      "id": "TEST-0098",
+      "domain": "testing",
+      "strength": "may",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "Before implementing a new or continued package, review the most recently executed package on the same sprint or owner boundary when that context can affect the new package. A real sub-agent may perform the review, but identity is optional provenance.",
+      "score": 146,
+      "sources": [
+        {
+          "file": "testing-guidelines/release-gate.md",
+          "line": 198,
+          "section": "Testing — Release-Gate & Distributed Validation > Agent And Execution-Role Validation Handoff Policy"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0083",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4983,7 +4999,7 @@
       ]
     },
     {
-      "id": "GOV-0083",
+      "id": "GOV-0084",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4998,7 +5014,7 @@
       ]
     },
     {
-      "id": "GOV-0084",
+      "id": "GOV-0085",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5009,13 +5025,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 235,
+          "line": 240,
           "section": "Workflow — Decision & Closure Gates > Sprint Architecture Decision Gate"
         }
       ]
     },
     {
-      "id": "GOV-0085",
+      "id": "GOV-0086",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5032,22 +5048,54 @@
       ]
     },
     {
-      "id": "GOV-0086",
+      "id": "GOV-0087",
       "domain": "governance",
       "strength": "may",
       "tags": [],
-      "rule": "Before closure, an implementation environment may record human-waived, tool-unavailable, or blocked-by-environment-policy with a reason: ... note so unavailable delegation is explicit instead of disguised as agent proof.",
+      "rule": "A real sub-agent may perform either role, but real sub-agent identity is optional provenance.",
       "score": 145,
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 51,
-          "section": "Workflow — Sub-Agents & Triage > Sub-Agent Sequencing"
+          "line": 21,
+          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
         }
       ]
     },
     {
-      "id": "GOV-0087",
+      "id": "GOV-0088",
+      "domain": "governance",
+      "strength": "may",
+      "tags": [
+        "testing"
+      ],
+      "rule": "The parent session may perform a role directly when that is the lightest valid path.",
+      "score": 145,
+      "sources": [
+        {
+          "file": "workflow-guidelines/subagents.md",
+          "line": 21,
+          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0089",
+      "domain": "governance",
+      "strength": "may",
+      "tags": [],
+      "rule": "When a real sub-agent is used, the package may keep Subagent Progress or Attempt Ledger notes as provenance.",
+      "score": 145,
+      "sources": [
+        {
+          "file": "workflow-guidelines/subagents.md",
+          "line": 74,
+          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0090",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5059,13 +5107,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 429,
+          "line": 435,
           "section": "Workflow — Decision & Closure Gates > Frontier Oscillation Escalation"
         }
       ]
     },
     {
-      "id": "GOV-0088",
+      "id": "GOV-0091",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5074,13 +5122,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 444,
+          "line": 450,
           "section": "Workflow — Decision & Closure Gates > Frontier Oscillation Escalation"
         }
       ]
     },
     {
-      "id": "ARCH-0107",
+      "id": "ARCH-0106",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -5095,7 +5143,7 @@
       ]
     },
     {
-      "id": "GOV-0089",
+      "id": "GOV-0092",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5112,7 +5160,24 @@
       ]
     },
     {
-      "id": "GOV-0090",
+      "id": "GOV-0093",
+      "domain": "governance",
+      "strength": "may",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "When starting or continuing a work package, review the most recently executed package on the same sprint or owner boundary when that context can affect the new package. A real sub-agent may perform the review, but identity is optional provenance.",
+      "score": 136,
+      "sources": [
+        {
+          "file": "roadmap.md",
+          "line": 192,
+          "section": "Roadmap Steering Pointer > Sprint Continuation And Package Split Policy"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0094",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5124,13 +5189,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 123,
-          "section": "Workflow — Sub-Agents & Triage > LLM Tool-First Triage"
+          "line": 131,
+          "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
         }
       ]
     },
     {
-      "id": "GOV-0091",
+      "id": "GOV-0095",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5141,13 +5206,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 129,
-          "section": "Workflow — Sub-Agents & Triage > LLM Tool-First Triage"
+          "line": 137,
+          "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
         }
       ]
     },
     {
-      "id": "GOV-0092",
+      "id": "GOV-0096",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5158,11 +5223,11 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 336,
+          "line": 342,
           "section": "Workflow — Decision & Closure Gates > Scenario Causal Closure Ledger"
         }
       ]
     }
   ],
-  "generatedAt": "2026-05-23T20:21:29.939Z"
+  "generatedAt": "2026-05-24T18:25:07.603Z"
 }

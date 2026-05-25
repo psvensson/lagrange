@@ -143,7 +143,7 @@ Required workflow:
    primary debugging surface.
 6. When the harness provides a report, playback bundle, failure bundle, or
    triage summary, derive a compact evidence block from those artifacts before
-   assigning sub-agent work or changing runtime code.
+   assigning optional delegated work or changing runtime code.
 7. The evidence block must name the canonical blocker, owner boundary, source
    artifact paths, prior blocker status, subordinate evidence, and next focused
    proof surface.
@@ -185,34 +185,35 @@ Required workflow:
 This layer exists to shrink the gap between “too small to be truthful” and
 “too expensive to iterate on”.
 
-## Agent And Sub-Agent Validation Handoff Policy
+## Agent And Execution-Role Validation Handoff Policy
 
-When an agent or sub-agent is used to continue a sprint, validation ownership
-must follow the same evidence ladder as package work.
+When an agent continues a sprint or an optional sub-agent is delegated,
+validation ownership must follow the same evidence ladder as package work.
 
 Required workflow:
 
 1. The first delegated or local analysis step must extract the canonical
    evidence from the latest artifact and compare it with the sprint current
    blocker snapshot.
-2. Before implementing a new or continued package, delegate a review of the
-   most recently executed package on the same sprint or owner boundary.
+2. Before implementing a new or continued package, review the most recently
+   executed package on the same sprint or owner boundary when that context can
+   affect the new package. A real sub-agent may perform the review, but identity
+   is optional provenance.
 3. The review must check package closure evidence, residual inventory,
    guardrail ledger, blocker migration notes, sprint snapshot consistency, and
    whether the last package's stated next action still matches current
    artifact evidence.
-4. If that review finds actionable defects, delegate a bounded fix for those
+4. If that review finds actionable defects, run a bounded fix role for those
    defects and validate that fix before starting the new package
    implementation.
-5. A separate implementation sub-agent may start the current work package only
-   after the previous-package review is clean or the review findings have been
-   fixed.
+5. The current package's `implementation` role may start only after the
+   previous-package review is clean, not needed, or fixed.
 6. A second analysis step may map the owner path, focused fixture, or affected
    presentation surface, but must not broaden beyond the current snapshot.
 7. Implementation work should start only after the current owner boundary and
    smallest proof surface are named.
-8. If several sub-agents are used, give each one a disjoint question or file
-   scope. Do not ask several workers to independently fix the same blocker.
+8. If several real sub-agents are used, give each one a disjoint question or
+   file scope. Do not ask several workers to independently fix the same blocker.
 9. The final validation note must state whether the representative scenario
    passed, stayed on the same owner boundary, or migrated to a new named
    owner boundary.
@@ -221,4 +222,3 @@ Required workflow:
 11. If the blocker migrated, update the sprint current blocker snapshot and
    activate exactly one new representative package before further runtime
    edits.
-

@@ -54,7 +54,7 @@ Use the repository documents according to this ownership split:
 | Implementation doctrine | `.kiro/steering/doctrine.md` | Short repo-wide architectural intent |
 | Stable implementation contract | `.kiro/steering/system-guidelines.md` | Compact repo-wide hard stops |
 | Runtime contract detail | `.kiro/steering/runtime-contracts.md` | Control-plane, cache, metadata, pressure, and transport rules |
-| Workflow contract detail | `.kiro/steering/workflow-guidelines.md` | Package, sprint, sub-agent, guardrail, and causal-closure workflow |
+| Workflow contract detail | `.kiro/steering/workflow-guidelines.md` | Package, sprint, execution-role, guardrail, and causal-closure workflow |
 | Stable testing policy | `.kiro/steering/testing-guidelines.md` | Durable repo-wide testing rules |
 | Style and lint | `.kiro/steering/code-style.md` | Formatting, lint, and local coding style |
 | Architecture entrypoint | `architecture.md` | Current subsystem owner maps and data flow index |
@@ -95,11 +95,11 @@ Use `work/sprints/` only to group multiple active packages. Sprint files do not
 replace work packages.
 
 Scenario-driven sprint files must keep a compact current blocker snapshot near
-the top of the document. The snapshot is the handoff point for agents and
-sub-agents when starting or continuing the sprint. The snapshot must identify
-the latest artifact, representative gate, current representative package, owner
-boundary, canonical blocker, prior blocker status, subordinate evidence, and
-next focused proof surface.
+the top of the document. The snapshot is the handoff point for agents and any
+optional delegated sub-agents when starting or continuing the sprint. The
+snapshot must identify the latest artifact, representative gate, current
+representative package, owner boundary, canonical blocker, prior blocker status,
+subordinate evidence, and next focused proof surface.
 
 At most one package in a sprint may own the current representative re-entry
 gate. Residual packages that are not currently being executed must be renamed
@@ -185,25 +185,28 @@ Required workflow:
    node ids, counters, or presentation-only shape.
 4. Split or activate a new package only when the normalized evidence identifies
    a new owner boundary or materially different next action.
-5. Use real sub-agents in sequence across owner-boundary work: artifact evidence
-   extraction, owner-path mapping, focused proof design, then bounded
-   implementation.
-6. When starting or continuing a work package, first assign a sub-agent to
-   review the most recently executed package on the same sprint or owner
-   boundary.
+5. Execute owner-boundary work through required `implementation` and
+   `verification-fix` roles. Optional delegated review, artifact extraction,
+   owner-path mapping, and focused proof design can accelerate those roles but
+   do not replace them.
+6. When starting or continuing a work package, review the most recently executed
+   package on the same sprint or owner boundary when that context can affect the
+   new package. A real sub-agent may perform the review, but identity is
+   optional provenance.
 7. If that review finds stale status, incomplete closure, missing residual
-   split, guardrail drift, evidence mismatch, or package-snapshot
-   inconsistency, assign the next sub-agent to fix those findings before
-   implementation of the new package starts.
-8. Assign the implementation sub-agent for the current package only after the
-   previous-package review is clean or the review findings have been fixed.
-9. Parallel sub-agents are allowed only for independent sidecar questions with
-   disjoint owner or file scope.
-10. The main package owner must reconcile sub-agent results into one package
-   status update rather than creating parallel status narratives.
-11. Parent-session notes, local/manual session labels, and arbitrary text
-    without a real agent id do not satisfy review, fix, or implementation
-    roles unless the user explicitly disables sub-agents for that task.
+   split, guardrail drift, evidence mismatch, or package-snapshot inconsistency,
+   fix those findings before implementation of the new package starts.
+8. Start the current package's `implementation` role only after the
+   previous-package review is clean, not needed, or fixed.
+9. Parallel real sub-agents are allowed only for independent sidecar questions
+   with disjoint owner or file scope.
+10. The main package owner must reconcile optional delegated findings into one
+   package status update rather than creating parallel status narratives.
+11. Parent-session notes, local/manual session labels, arbitrary text, and real
+    agent ids are provenance only. Closure proof comes from checked
+    `## Execution Evidence` roles; use `human-waived`, `tool-unavailable`, or
+    `blocked-by-environment-policy` with a reason when delegation is not used or
+    unavailable.
 
 ## Audit Procedure
 

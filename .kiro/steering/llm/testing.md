@@ -13,7 +13,7 @@ regenerate_with: npm run steering:llm:pack
 Load for test-first workflow, reliability harness work, and regression policy.
 
 Generated rules: 35
-Estimated tokens: 1161
+Estimated tokens: 1163
 Domains: testing
 
 ## Rules
@@ -66,4 +66,4 @@ Domains: testing
 
 ### Governance & Scope Controls
 
-35. [TEST-0018] If several sub-agents are used, give each one a disjoint question or file scope. Do not ask several workers to independently fix the same blocker.
+35. [TEST-0018] If several real sub-agents are used, give each one a disjoint question or file scope. Do not ask several workers to independently fix the same blocker.

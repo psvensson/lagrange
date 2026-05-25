@@ -4,27 +4,28 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: No active work package. Start a new package when implementation resumes.
+Theory under test: work/README.md contains wording that allows direct runtime/scenario implementation before --pre-impl, while work/RULES.md requires --pre-impl before implementation code changes.
 
-Causal question: none
+Causal question: pre-impl-policy-ambiguity
 
-Implementation slice: Create or activate one focused package for the next executable concern.
+Implementation slice: Align workflow docs to work/RULES.md pre-implementation validation policy
 
 Implementation files:
 
-1. None recorded
+1. `work/README.md`
+2. `work/packages/done-20260524-pre-impl-rule-alignment.md`
 
 Expected implementation delta: unknown
 
-Falsifying probe: unknown
+Falsifying probe: npm run work:validate -- --entry work/packages/done-20260524-pre-impl-rule-alignment.md
 
-Stop rule: unknown
+Stop rule: No architecture decision gate is required for this package.
 
 Sprint: `work/sprints/active-2026-q2-rolling-restart-stability-hardening-final.md`
 
-Package: `none`
+Package: `work/packages/done-20260524-pre-impl-rule-alignment.md`
 
-Workflow lane: `none`
+Workflow lane: `lightweight-maintenance`
 
 Scenario: `none`
 
@@ -34,35 +35,39 @@ Playback: `none`
 
 ## Boundary
 
-Owner: `none`
+Owner: `workflow-steering`
 
-Boundary: `none`
+Boundary: `validator-phase-policy`
 
-Dominant reason: `none`
+Dominant reason: `pre-impl-policy-ambiguity`
 
-Current state: No active work package. Start a new package when implementation resumes.
+Current state: work/README.md contains wording that allows direct runtime/scenario implementation before --pre-impl, while work/RULES.md requires --pre-impl before implementation code changes.
 
 ## Next Action
 
-Create or activate one focused package for the next executable concern.
+Align workflow docs to work/RULES.md pre-implementation validation policy
 
 ## Proof Ladder
 
-1. None recorded
+1. `npm run work:validate -- --entry work/packages/done-20260524-pre-impl-rule-alignment.md`
+2. `npm run work:validate -- --pre-impl work/packages/done-20260524-pre-impl-rule-alignment.md`
+3. `npm run work:validate -- --closure work/packages/done-20260524-pre-impl-rule-alignment.md`
+4. `git diff --check -- work/README.md work/packages/done-20260524-pre-impl-rule-alignment.md`
 
 ## Model Fit
 
-Package class: `unknown`
+Package class: `bounded-implementation`
 
-Intended minimum model: `unknown`
+Intended minimum model: `gpt-5.3-codex-spark`
 
-Scope shape: `unknown`
+Scope shape: `leaf-slice`
 
-Output profile: `unknown`
+Output profile: `medium`
 
 Escalation triggers:
 
-1. None recorded
+1. `owned files expand beyond this package`
+2. `a frozen decision must be reopened`
 
 ## Theory Ledger References
 
@@ -212,9 +217,9 @@ Runtime promotion rule: `unknown`
 
 ## Architecture Decision Gate
 
-Status: `unknown`
+Status: `not-required`
 
-Trigger: `unknown`
+Trigger: `none`
 
 Trigger evidence:
 
@@ -226,13 +231,14 @@ Choices:
 
 Selected choice: `unknown`
 
-Gate next action: unknown
+Gate next action: No architecture decision gate is required for this package.
 
 ## Scope
 
 Write scope:
 
-1. None recorded
+1. `work/README.md`
+2. `work/packages/done-20260524-pre-impl-rule-alignment.md`
 
 Handoff files:
 
@@ -240,8 +246,7 @@ Handoff files:
 
 Generated files:
 
-1. `work/sprints/current-blocker.json`
-2. `work/sprints/current-blocker.md`
+1. None recorded
 
 Candidate runtime files:
 
@@ -249,7 +254,8 @@ Candidate runtime files:
 
 Commit scope:
 
-1. None recorded
+1. `work/README.md`
+2. `work/packages/done-20260524-pre-impl-rule-alignment.md`
 
 Legacy touched files:
 

@@ -60,8 +60,10 @@ Required:
 6. Affected consumer proof for diagnostics, admin, harness, reporting, or
    status surfaces that consume the changed contract.
 7. Affected-area deep dive before closure.
-8. Sequential sub-agent review/fix/implementation proof unless the user
-   explicitly disables sub-agents.
+8. Checked `## Execution Evidence` with `implementation` and
+   `verification-fix` roles. Real sub-agent identity is optional provenance; if
+   delegation is unavailable or intentionally not used, record the unavailable
+   state and reason instead of inventing a real agent id.
 
 Representative scenario proof is required when a scenario artifact drove the
 work; otherwise focused proof may be sufficient.
@@ -77,7 +79,9 @@ Required:
 2. Core Logic Brief tying the selected edge to one canonical owner outcome,
    evidence inputs, state model or invariant, proof mapping, and wrong-slice
    trigger.
-3. Sub-agent sequencing ledger before implementation.
+3. Execution Evidence role plan before implementation, including
+   `implementation` and `verification-fix` roles plus any optional delegated
+   review or provenance notes.
 4. Causal governance fields and scenario causal closure ledger.
 5. A compact Current Edge Card near the top of the package that names the
    selected edge, allowed edits, forbidden edits, first proof, and stop modes.
@@ -163,11 +167,11 @@ Fast-path rules:
    `candidateRuntimeFiles` only.
 3. Use two or three canonical proof commands: representative evidence, one
    focused extractor/probe, and validation or causal-model proof.
-4. Subagent sequencing and static runtime guardrails are optional while no
-   implementation write scope exists.
+4. Execution Evidence role proof and static runtime guardrails are optional
+   while no implementation write scope exists.
 5. Promotion to runtime, test, script, or report edits exits the fast path and
-   requires normal lane proof, including subagent sequencing when the lane
-   requires it.
+   requires normal lane proof, including `implementation` and
+   `verification-fix` role evidence when the lane requires it.
 6. Do not create another classification-only package from the same unchanged
    artifact unless owner/boundary, package class, or stop condition changes.
    Close, rerun fresh evidence, or escalate.
@@ -191,9 +195,10 @@ the default mode, separate-package reason, one-artifact budget,
 two-or-three-command proof budget, capped commands, decision record, successor
 action, and runtime promotion rule.
 
-Subagent sequencing and static runtime guardrails are optional while the pure
-classifier has no runtime, test, script, or report write scope. Promotion to
-implementation scope exits the fast path and restores normal lane proof.
+Execution Evidence role proof and static runtime guardrails are optional while
+the pure classifier has no runtime, test, script, or report write scope.
+Promotion to implementation scope exits the fast path and restores normal lane
+proof.
 
 When canonical owner and boundary are stable and the route is a local runtime
 fix, the successor action is `open-runtime-owner-boundary` and
@@ -285,8 +290,8 @@ Tracker contract:
   the next package or new sprint. For architecture gaps and unchanged
   same-frontier/no-reduction evidence, the default selected route is
   `architecture-package`, implemented as an autonomous architecture experiment.
-  The selected route still must carry normal owner, boundary, scope, proof,
-  sub-agent, validation, commit, and push evidence.
+  The selected route still must carry normal owner, boundary, scope,
+  execution-role, validation, commit, and push evidence.
 - The tracker infers and surfaces an autonomous architecture package route from
   `architecture-gap` scenario closure. Frontier oscillation is rendered as
   `watching`; it becomes an autonomous architecture experiment when the next
@@ -298,7 +303,8 @@ Limits:
 
 1. The gate cannot authorize edits outside the active package scope.
 2. The gate cannot replace canonical extractor evidence, package closure,
-   required sub-agent sequencing, validation, or focused commit and push proof.
+   required Execution Evidence roles, validation, or focused commit and push
+   proof.
 3. A representative green artifact is not success when it contradicts the
    selected owner contract; classify it as `architecture-gap`, `migrated`, or
    `contradictory` instead.
@@ -397,7 +403,7 @@ the fixture confirms the same selected edge, continue in the same package:
 
 1. classify edge
 2. add or identify replay fixture/probe
-3. run implementation subagent
+3. run the implementation role
 4. implement exact promoted files
 5. run focused proof and representative rerun
 
@@ -479,4 +485,3 @@ material covering:
 
 Runtime packages that follow cite the causal model, schema, decision table,
 fixture, extractor, or artifact they rely on.
-

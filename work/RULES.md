@@ -7,20 +7,22 @@ Canonical single source of truth for repository process lanes, validator phases,
 ## Lane Definitions
 <a name="lane-definitions"></a>
 
-All implementation work must select and declare the lightest valid lane that satisfies the following criteria:
+All implementation work must select and declare the lightest valid lane. The
+canonical lane groups are the same groups printed by
+`npm run work:package:schema`; older package files may still use the accepted
+aliases below. Requirements are determined by the canonical lane group.
 
-*   **Read/Review/Doc-Only**:
-    *   **Scope**: Answers or edits to explanatory documentation.
-    *   **Package Requirement**: No package required unless implementation truth, roadmap status, or architecture ownership changes.
-*   **Lightweight Maintenance**:
-    *   **Scope**: Low-risk mechanical, tooling, or documentation updates.
-    *   **Package Requirement**: One focused package and focused proof. Subagents are optional unless runtime ownership or shared contracts can change.
-*   **Runtime Owner-Boundary**:
-    *   **Scope**: Changes impacting runtime boundaries, control plane logic, state transitions, or shared contracts.
-    *   **Package Requirement**: Full package lane required by the validator, including focused proof and static guardrails.
-*   **Scenario / Release-Gate**:
-    *   **Scope**: High-order release gates, distributed cluster test scenarios, or priority recovery actions.
-    *   **Package Requirement**: Full package lane with causal ledger, focused owner proof, representative rerun evidence when the scenario drove the work, and validation by a separate verifier-fixer.
+| Canonical lane | Accepted aliases | Use when | Package requirement |
+| --- | --- | --- | --- |
+| `read-doc` | `read-review-doc-only` | Answering questions, reviewing, or editing explanatory docs without changing implementation truth. | No package unless implementation truth, roadmap status, architecture ownership, package truth, or validation obligations change. |
+| `maintenance` | `mechanical-maintenance`, `lightweight-maintenance` | Low-risk mechanical, tooling, template, generated steering, package metadata, or durable documentation cleanup. | Use one focused package and focused proof when tracker truth, package templates, workflow behavior, generated steering, or durable process docs change. Subagents are optional unless runtime ownership or shared contracts can change. |
+| `proof` | `test-only-proof`, `diagnostic-classification` | Tests, validation evidence, diagnostic classification, or proof-surface changes that do not alter runtime behavior. | Use the active package validation surface, or create one focused proof package when no active package owns the proof. Closure requires the focused proof and any required representative or diagnostic evidence. |
+| `experiment` | `bounded-experiment`, `fast-spike` | A bounded hypothesis, probe, or spike decides the next owner, boundary, action, or route. | Use a focused experiment/probe package with a pre-registered question, observable prediction or discriminator, proof command, and stop rule. Runtime changes are allowed only when the package explicitly owns the bounded experiment scope. |
+| `runtime` | `single-file-runtime`, `runtime-owner-boundary` | Runtime behavior, owner contracts, control-plane logic, state transitions, shared metadata, diagnostics grammar, or affected consumers can change. | Full package lane required by the validator, including owner contract, Core Logic Brief, focused proof, affected-consumer proof when applicable, static guardrails, and closure validation. |
+| `scenario` | `scenario-release-gate`, `causal-escalation` | Distributed, integration, load, release-gate, repeated same-frontier, causal-closure, or priority recovery work. | Full package lane with causal ledger, focused owner proof or missing-edge probe, representative rerun evidence when the scenario drove the work, and validation by a separate verifier-fixer. |
+
+When the lane is not obvious, use
+`npm run work:lane-picker -- --docs-only|--maintenance|--tests-only|--experiment|--runtime|--scenario`.
 
 ---
 
