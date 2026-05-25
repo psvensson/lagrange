@@ -25,20 +25,20 @@ Make the system stable under rolling-restart: change the core logic of the syste
 ```text
 Representative artifact: none
 Visible first frontier: unknown
-Active package: work/packages/done-20260524-pre-impl-rule-alignment.md
-Active package owner: workflow-steering
-Active package boundary: validator-phase-policy
-Selected cause: pre-impl-policy-ambiguity
-Required action: Align workflow docs to work/RULES.md pre-implementation validation policy
+Active package: work/packages/done-20260525-steering-docs-contradictions-fix.md
+Active package owner: workflow_tooling_owner
+Active package boundary: llm_steering_doc_truth
+Selected cause: steering_doc_truth_repair
+Required action: Close package after closure validation and commit.
 Representative status: unknown
 Causal outcome: unknown
 Architecture gate: not-required / unknown
 Expected delta: unknown
-Current state: work/README.md contains wording that allows direct runtime/scenario implementation before --pre-impl, while work/RULES.md requires --pre-impl before implementation code changes.
-Allowed edits: work/README.md, work/packages/done-20260524-pre-impl-rule-alignment.md
+Current state: Steering-doc contradictions fixed: file-size numbers updated to point at scripts/check-file-size-thresholds.js (src 800 / test 1500); scaffolder default theoryLedgerRefs is now [] not ["none"]; new Closure Evidence Grammar + Closure Recipe sections added to work/RULES.md and referenced from core.md/boot.md; compiled steering packs regenerated.
+Allowed edits: work/RULES.md, .kiro/steering/llm/core.md, .kiro/steering/llm/boot.md, .kiro/steering/code-style.md, .kiro/steering/testing-guidelines/proof-ladders.md, .kiro/steering/workflow-guidelines/subagents.md, scripts/work-package-new.js, .kiro/steering/llm/testing.md, .kiro/steering/llm/architecture.md, .kiro/steering/llm/style.md, .kiro/steering/llm/governance.md, .kiro/steering/llm/rules.json, .kiro/steering/llm/manifest.json
 Candidate runtime files: unknown
 Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
-Required latest proof: npm run work:validate -- --entry work/packages/done-20260524-pre-impl-rule-alignment.md, npm run work:validate -- --pre-impl work/packages/done-20260524-pre-impl-rule-alignment.md, npm run work:validate -- --closure work/packages/done-20260524-pre-impl-rule-alignment.md, git diff --check -- work/README.md work/packages/done-20260524-pre-impl-rule-alignment.md
+Required latest proof: grep -nE '1200 lines' work/RULES.md .kiro/steering/llm/core.md .kiro/steering/llm/testing.md .kiro/steering/code-style.md .kiro/steering/testing-guidelines/proof-ladders.md .kiro/steering/workflow-guidelines/subagents.md || echo no-stale-1200-references, node -e 'const s=require("fs").readFileSync("scripts/work-package-new.js","utf8"); if(s.includes("[THEORY_LEDGER_REFS_FIELD]: [\u0027none\u0027]")){process.exit(1)} else {console.log("theoryLedgerRefs default is empty array")}', npm run steering:llm:pack
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -331,7 +331,12 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Purpose: Split semantically grouped replica-dispatch-node-state-update test-part-2 suites until `test/control-plane/replica-dispatch-node-state-update.test-part-2.js` is below the configured test file-size limit.
    - First-run reason: next largest oversized test file in the current audit (2519 lines).
 
-12. [Rolling Restart Active Gate Snapshot Coverage Repair](../packages/done-20260523-rolling-restart-active-gate-snapshot-coverage-repair.md)
+12. [Fix four hard steering-doc contradictions](../packages/done-20260525-steering-docs-contradictions-fix.md)
+   - Lane: `lightweight-maintenance`
+   - Purpose: Align steering docs with the enforced reality of the file-size script (src 800 / test 1500), default `theoryLedgerRefs` to `[]` so new packages are not born invalid, document the closure validator's required `parent revalidated focused proof: yes` grammar, and add an atomic Closure Recipe to `core.md` and `boot.md`.
+   - First-run reason: each of these four ambiguities cost real workflow time during the May 24 oversized-file tranche, and the contradictions are still active in the steering surface.
+
+13. [Rolling Restart Active Gate Snapshot Coverage Repair](../packages/done-20260523-rolling-restart-active-gate-snapshot-coverage-repair.md)
    - Lane: `runtime-owner-boundary`
    - Purpose: Align active-gate cohort fallbacks and repair snapshot recovery projection logic.
 

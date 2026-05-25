@@ -1179,7 +1179,7 @@ async function buildPackageContent(flags = {}) {
       'New package scaffolded from the shared work-package schema.',
     nextAction: normalizeText(flags[FLAG_NEXT_ACTION]),
     proof,
-    [THEORY_LEDGER_REFS_FIELD]: ['none'],
+    [THEORY_LEDGER_REFS_FIELD]: [],
     [SCOPE_FIELD_WRITE_SCOPE]: writeScope,
     [SCOPE_FIELD_HANDOFF_FILES]: handoffFiles,
     [SCOPE_FIELD_GENERATED_FILES]: generatedFiles,

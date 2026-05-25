@@ -129,7 +129,8 @@ Required workflow:
 8. Use `npm run work:oversized-next -- --markdown` before inventing file-size
    cleanup packages from raw line counts.
 9. Before closure, confirm every new or edited source-code file in package
-   scope is at or below `1200` lines. If a touched source-code file exceeds the
+   scope is within its scope threshold (see `scripts/check-file-size-thresholds.js`;
+   currently src ≤ 800, test ≤ 1500 lines). If a touched source-code file exceeds the
    cap, refactor or extract a semantically named owner/helper/contract boundary
    in the current package before closing. `work:oversized-next` may choose the
    extraction order, but it is not a waiver for newly created or edited

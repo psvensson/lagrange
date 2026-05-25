@@ -58,7 +58,7 @@ All runtime code must strictly adhere to the following rules:
 *   **Single Normalization Path**: Do not implement semantic decision boundaries as piles of independent `if` statements. Collect evidence, normalize one snapshot, use one explicit state model or decision table, and emit one canonical outcome with reasons.
 *   **Cache Observes, Owners Decide**: Callers submit intent to owners and consume owner outcomes; they do not reproduce owner logic locally. Cache visibility, elapsed time, and incidental rows do not prove owner-managed phase completion.
 *   **No Weakening of Guardrails**: Do not weaken scripts, allowlists, scan scope, or lint rules to make a package pass.
-*   **File Size Limit**: New or newly edited source-code files must finish at or below `1200` lines. If a touched source-code file exceeds the cap, refactor or extract a semantically named owner/helper/contract boundary before closure.
+*   **File Size Limit**: The authoritative thresholds are owned by `scripts/check-file-size-thresholds.js`, not by this doc. As of writing the script enforces **source ≤ 800 lines** and **test ≤ 1500 lines** (run `npm run audit:file-size` to read the current values). If a touched file exceeds the cap for its scope, refactor or extract a semantically named owner/helper/contract boundary before closure. If this paragraph ever disagrees with the script, the script wins.
 
 ---
 
@@ -75,3 +75,34 @@ All runtime code must strictly adhere to the following rules:
 
 *   The worktree may already be dirty. Do not revert or overwrite changes you did not make.
 *   Keep edits inside the package write scope, ignore unrelated dirty files, and stop for human direction if package-owned and unrelated changes cannot be separated safely.
+*   **Unrelated dirty entries** (as reported by `npm run work:context`) MUST NOT be staged in package closure commits. A *focused commit* contains only files listed in the closing package's `commitScope` plus tracker-generated handoff files (`work/sprints/current-blocker.{json,md}` and the active sprint file).
+
+---
+
+## Closure Evidence Grammar
+<a name="closure-evidence-grammar"></a>
+
+The closure validator (`npm run work:validate -- --closure`) accepts an Execution Evidence section only when it contains the following literal phrases and check states. These are enforced by `scripts/work-tracker.js`; this section is the human-readable contract.
+
+1. Each non-`not-needed` evidence line MUST be marked `[x]` (checked).
+2. The `implementation` and `verification-fix` lines MUST contain the exact phrase `parent revalidated focused proof: yes`. Without that literal phrase the validator rejects closure even if every other field is filled in.
+3. The `repair` line MUST cite `npm run work:repair` as its validation command.
+4. The package MUST contain either a `theory ledger: no ledger update` line OR a real `theoryLedgerRefs` entry of the form `theory-YYYYMMDD-short-slug` that is also present in `work/theory-ledger.md`. The package metadata field `theoryLedgerRefs` MUST default to `[]` (empty array); the value `["none"]` is invalid.
+5. Closure commands MUST be replayable: do not paraphrase the validation command; copy it verbatim from the focused proof ladder.
+
+---
+
+## Closure Recipe
+<a name="closure-recipe"></a>
+
+Package closure is atomic — the following steps move as a unit. Do not stop part-way.
+
+1. Fill `## Execution Evidence` per the grammar above (check the `[x]` boxes, include `parent revalidated focused proof: yes`, add the `theory ledger: no ledger update` line if no ledger ref applies).
+2. `npm run work:repair` — refresh `current-blocker.{json,md}` and the active sprint file references.
+3. `npm run work:validate -- --closure` — must report `Work tracker validation OK`.
+4. `mv work/packages/active-<slug>.md work/packages/done-<slug>.md`.
+5. `sed -i 's/"status": "active"/"status": "done"/' work/packages/done-<slug>.md`.
+6. Update sprint references with `sed -i 's|active-<slug>|done-<slug>|g' <active-sprint-file>`.
+7. `git add` only the files in `commitScope` plus tracker-generated handoff files, then commit and push. The commit MUST NOT include "unrelated dirty entries" reported by `work:context`.
+
+Step 2 is run again only if needed after the rename; after step 4 a fresh `work:repair` will warn "No active package was found" until the next `todo-` is activated — that warning is expected and does not block the commit.

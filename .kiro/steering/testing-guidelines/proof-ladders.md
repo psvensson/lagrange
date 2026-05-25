@@ -99,11 +99,11 @@ Required workflow:
 
 1. Run `npm run audit:file-size` for broad runtime, control-plane, transport,
    harness, and test-infrastructure packages.
-2. New or newly edited source-code files must finish at or below `1200` lines.
+2. New or newly edited source-code files must finish within the per-scope thresholds owned by `scripts/check-file-size-thresholds.js` (currently src ≤ 800, test ≤ 1500 lines).
 3. If a package touches an inherited oversized source-code file, it must
-   extract or refactor the touched file until it is at or below `1200` lines
+   extract or refactor the touched file until it is within its scope threshold
    before closure.
-4. New source-code files over `1200` lines fail closure; a follow-on extraction
+4. New source-code files over their scope threshold fail closure; a follow-on extraction
    package is not sufficient for newly created oversize.
 5. Use `npm run audit:file-size:strict` only for packages that explicitly own
    repo-wide inherited file-size cleanup, because the repository still has

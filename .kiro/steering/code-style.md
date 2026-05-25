@@ -55,8 +55,8 @@ When writing or modifying code:
 
 ## Source File Size And Naming
 
-- New or newly edited source-code files must finish at or below `1200` lines.
-- If an edit would leave a touched source-code file over `1200` lines, extract
+- New or newly edited source-code files must finish within the per-scope thresholds owned by `scripts/check-file-size-thresholds.js` (currently src ≤ 800, test ≤ 1500 lines; run `npm run audit:file-size` to confirm).
+- If an edit would leave a touched source-code file over its scope threshold, extract
   a smaller semantic owner, helper, contract, state model, or consumer boundary
   before closure.
 - New source-code files must be named for the semantic responsibility they own,
@@ -97,7 +97,7 @@ When writing or modifying code:
 - Ensure all new code follows the linting rules above
 - Break long lines appropriately to stay under 100 characters
 - Use consistent formatting with existing codebase patterns
-- Confirm every new or edited source-code file is at or below `1200` lines, or
+- Confirm every new or edited source-code file is within its scope threshold (see `scripts/check-file-size-thresholds.js`), or
   refactor the touched file before closure.
 
 ## Related Checks

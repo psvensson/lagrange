@@ -58,7 +58,7 @@ Full canon: [`work/RULES.md`](../../../work/RULES.md). Anchors below are inline 
    * *No state-nulls* — Explicit variants must encode domain/runtime state; never raw null/undefined.
    * *Single path* — Use decision tables or state models instead of nested independent `if` statements.
    * *Owner decides* — Cache observes; owners decide. Avoid helper-local verdicts.
-   * *1200-line cap* — Touch/create files strictly ≤ 1200 lines. Refactor first if exceeded.
+   * *File-size cap* — Touched/created files must stay within the scope thresholds enforced by `scripts/check-file-size-thresholds.js` (currently src ≤ 800, test ≤ 1500). Refactor first if exceeded. See [`work/RULES.md#coding-constraints`](../../../work/RULES.md#coding-constraints).
 5. **Owner boundaries** — Identify semantic owner boundaries, reduce duplicate paths, do not locally patch symptoms.
 6. **Sub-agents** — Assign sub-agents to maximize useful work per assignment (e.g. executor and verifier-fixer). Record roles in `## Execution Evidence`.
-7. **Atomicity** — Package closure is atomic: renaming, status, blocker, validation, commit/push move together.
+7. **Atomicity** — Package closure is atomic: renaming, status, blocker, validation, commit/push move together. Follow the literal recipe in [`work/RULES.md#closure-recipe`](../../../work/RULES.md#closure-recipe) and the evidence grammar in [`work/RULES.md#closure-evidence-grammar`](../../../work/RULES.md#closure-evidence-grammar) — in particular, every `implementation` and `verification-fix` evidence line MUST include the literal phrase `parent revalidated focused proof: yes`.

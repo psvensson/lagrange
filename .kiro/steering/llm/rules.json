@@ -100,9 +100,9 @@
   ],
   "stats": {
     "candidateCount": 318,
-    "dedupedRuleCount": 310,
-    "exportedRuleCount": 310,
-    "estimatedAllRulesTokens": 11818
+    "dedupedRuleCount": 311,
+    "exportedRuleCount": 311,
+    "estimatedAllRulesTokens": 11920
   },
   "rules": [
     {
@@ -1627,7 +1627,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 202,
+          "line": 203,
           "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
@@ -1702,6 +1702,24 @@
       "id": "STYLE-0007",
       "domain": "style",
       "strength": "must",
+      "tags": [
+        "testing",
+        "governance"
+      ],
+      "rule": "New or newly edited source-code files must finish within the per-scope thresholds owned by scripts/check-file-size-thresholds.js (currently src ≤ 800, test ≤ 1500 lines; run npm run audit:file-size to confirm).",
+      "score": 218,
+      "sources": [
+        {
+          "file": "code-style.md",
+          "line": 58,
+          "section": "Code Style Guidelines > Source File Size And Naming"
+        }
+      ]
+    },
+    {
+      "id": "STYLE-0008",
+      "domain": "style",
+      "strength": "must",
       "tags": [],
       "rule": "New source-code files must be named for the semantic responsibility they own, not for their position in a split.",
       "score": 218,
@@ -1714,7 +1732,7 @@
       ]
     },
     {
-      "id": "STYLE-0008",
+      "id": "STYLE-0009",
       "domain": "style",
       "strength": "must",
       "tags": [
@@ -1814,19 +1832,17 @@
       "id": "TEST-0032",
       "domain": "testing",
       "strength": "must",
-      "tags": [],
-      "rule": "New or newly edited source-code files must finish at or below 1200 lines.",
+      "tags": [
+        "testing",
+        "governance"
+      ],
+      "rule": "New or newly edited source-code files must finish within the per-scope thresholds owned by scripts/check-file-size-thresholds.js (currently src ≤ 800, test ≤ 1500 lines).",
       "score": 218,
       "sources": [
         {
           "file": "testing-guidelines/proof-ladders.md",
           "line": 102,
           "section": "Testing — Proof Ladders & Static Guardrails > File-Size Ratchet Policy"
-        },
-        {
-          "file": "code-style.md",
-          "line": 58,
-          "section": "Code Style Guidelines > Source File Size And Naming"
         }
       ]
     },
@@ -1834,8 +1850,10 @@
       "id": "TEST-0033",
       "domain": "testing",
       "strength": "must",
-      "tags": [],
-      "rule": "If a package touches an inherited oversized source-code file, it must extract or refactor the touched file until it is at or below 1200 lines before closure.",
+      "tags": [
+        "governance"
+      ],
+      "rule": "If a package touches an inherited oversized source-code file, it must extract or refactor the touched file until it is within its scope threshold before closure.",
       "score": 218,
       "sources": [
         {
@@ -2532,7 +2550,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 162,
+          "line": 163,
           "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
         }
       ]
@@ -2549,7 +2567,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 188,
+          "line": 189,
           "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
@@ -2564,7 +2582,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 235,
+          "line": 236,
           "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
@@ -2787,7 +2805,7 @@
       ]
     },
     {
-      "id": "STYLE-0009",
+      "id": "STYLE-0010",
       "domain": "style",
       "strength": "must",
       "tags": [
@@ -3957,7 +3975,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 173,
+          "line": 174,
           "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
@@ -3974,7 +3992,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 232,
+          "line": 233,
           "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
@@ -3989,7 +4007,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 235,
+          "line": 236,
           "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
@@ -4199,7 +4217,7 @@
       ]
     },
     {
-      "id": "STYLE-0010",
+      "id": "STYLE-0011",
       "domain": "style",
       "strength": "should",
       "tags": [
@@ -4914,7 +4932,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 142,
+          "line": 143,
           "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
         }
       ]
@@ -4929,7 +4947,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 205,
+          "line": 206,
           "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
@@ -5182,9 +5200,10 @@
       "strength": "may",
       "tags": [
         "ownership",
+        "testing",
         "governance"
       ],
-      "rule": "Before closure, confirm every new or edited source-code file in package scope is at or below 1200 lines. If a touched source-code file exceeds the cap, refactor or extract a semantically named owner/helper/contract boundary in the current package before closing. work:oversized-next may choose the extraction order, but it is not a waiver for newly created or edited oversize.",
+      "rule": "Before closure, confirm every new or edited source-code file in package scope is within its scope threshold (see scripts/check-file-size-thresholds.js; currently src ≤ 800, test ≤ 1500 lines). If a touched source-code file exceeds the cap, refactor or extract a semantically named owner/helper/contract boundary in the current package before closing. work:oversized-next may choose the extraction order, but it is not a waiver for newly created or edited oversize.",
       "score": 131,
       "sources": [
         {
@@ -5206,7 +5225,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 137,
+          "line": 138,
           "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
         }
       ]
@@ -5229,5 +5248,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-05-25T04:58:06.134Z"
+  "generatedAt": "2026-05-25T05:21:15.058Z"
 }

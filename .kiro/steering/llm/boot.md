@@ -45,7 +45,10 @@ Use `npm run work:lane-picker -- --docs-only|--maintenance|--tests-only|--experi
 
 ## Per-Lane First Commands
 
-These are LLM-specific operational steps. Process semantics for each lane live in [`work/RULES.md#lane-definitions`](../../../work/RULES.md#lane-definitions).
+These are LLM-specific operational steps. Process semantics for each lane live in [`work/RULES.md#lane-definitions`](../../../work/RULES.md#lane-definitions). Two cross-cutting notes apply to every lane below:
+
+* `npm run work:package:new` requires the `--write` flag to actually create a file on disk; without it the template is printed to stdout only.
+* Every lane that closes a package MUST finish with the [Closure Recipe](../../../work/RULES.md#closure-recipe) (work:repair → work:validate --closure → rename active→done → focused commit + push). The lane-specific steps below do not repeat those tail steps.
 
 ### `read-doc`
 

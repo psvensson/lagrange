@@ -2,47 +2,28 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-rolling-restart-stability-hardening-final.md",
-  "package": "work/packages/active-20260524-pre-impl-rule-alignment.md",
-  "status": "active",
-  "lane": "lightweight-maintenance",
+  "package": "none",
+  "status": "none",
+  "lane": "none",
   "scenario": "none",
   "artifact": "none",
   "playback": "none",
-  "owner": "workflow-steering",
-  "boundary": "validator-phase-policy",
-  "dominantReason": "pre-impl-policy-ambiguity",
-  "currentState": "work/README.md contains wording that allows direct runtime/scenario implementation before --pre-impl, while work/RULES.md requires --pre-impl before implementation code changes.",
-  "nextAction": "Align workflow docs to work/RULES.md pre-implementation validation policy",
-  "proof": [
-    "npm run work:validate -- --entry work/packages/active-20260524-pre-impl-rule-alignment.md",
-    "npm run work:validate -- --pre-impl work/packages/active-20260524-pre-impl-rule-alignment.md",
-    "npm run work:validate -- --closure work/packages/active-20260524-pre-impl-rule-alignment.md",
-    "git diff --check -- work/README.md work/packages/active-20260524-pre-impl-rule-alignment.md"
-  ],
-  "writeScope": [
-    "work/README.md",
-    "work/packages/active-20260524-pre-impl-rule-alignment.md"
-  ],
+  "owner": "none",
+  "boundary": "none",
+  "dominantReason": "none",
+  "currentState": "No active work package. Start a new package when implementation resumes.",
+  "nextAction": "Create or activate one focused package for the next executable concern.",
+  "proof": [],
+  "writeScope": [],
   "handoffFiles": [],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [
-    "work/README.md",
-    "work/packages/active-20260524-pre-impl-rule-alignment.md"
+  "generatedFiles": [
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md"
   ],
+  "candidateRuntimeFiles": [],
+  "commitScope": [],
   "touchedFiles": [],
-  "theoryLedgerRefs": [],
-  "modelFit": {
-    "packageClass": "bounded-implementation",
-    "intendedMinimumModel": "gpt-5.3-codex-spark",
-    "scopeShape": "leaf-slice",
-    "outputProfile": "medium",
-    "ambiguityScore": 1,
-    "escalationTriggers": [
-      "owned files expand beyond this package",
-      "a frozen decision must be reopened"
-    ]
-  },
+  "modelFit": {},
   "representativeResidual": {},
   "causalGovernance": {},
   "scenarioCausalClosure": {},
@@ -50,13 +31,7 @@
   "experimentOutcome": {},
   "rerunDecision": {},
   "classificationEfficiency": {},
-  "architectureDecisionGate": {
-    "status": "not-required",
-    "trigger": "none",
-    "triggerEvidence": [],
-    "choices": [],
-    "selectedChoice": null,
-    "nextAction": "No architecture decision gate is required for this package."
-  },
-  "predecessor": null
+  "architectureDecisionGate": {},
+  "predecessor": null,
+  "theoryLedgerRefs": []
 }
