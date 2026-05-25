@@ -4,27 +4,33 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: The active-gate snapshot coverage failure is caused by one of three mechanisms: owner-reconcile wake debt, selected-source timeout debt, or snapshot repair/projection contract debt.
+Theory under test: The runFinalAdjudication not defined error is a test harness binding defect and does not affect the correctness of runtime topology convergence. Repairing it allows scenario runs to output complete verdict reports.
 
-Causal question: Select whether the missing edge is owner-reconcile wake, selected-source timeout refresh, snapshot repair execution, or coverage projection contract.
+Causal question: Correct runFinalAdjudication binding in consistency-evaluator.
 
-Implementation slice: Close as architecture-gap stop; do not open another startup_active_gate_owner / snapshot_coverage runtime patch from this artifact.
+Implementation slice: Repair the harness final-adjudication binding/import path without changing runtime topology behavior, then prove the final adjudication tests and a fresh scenario report can complete adjudication.
 
 Implementation files:
 
-1. `work/packages/active-20260525-rolling-restart-active-gate-snapshot-coverage-architecture-experiment.md`
+1. `test/distributed/harness/cluster-segment-7.js`
+2. `src/logging/logs-table-service-constants.js`
+3. `test/logging/logs-table-service.test.js`
+4. `test/distributed/harness/assertions-segment-2.js`
+5. `test/distributed/harness/cluster-segment-7.js`
+6. `test/distributed/harness/cluster-segment-7-alpha-load-readiness.js`
+7. `test/distributed/harness/__tests__/consistency-evaluator.test.js`
 
-Expected implementation delta: Observed: the experiment selected architecture-gap because canonical proof only reproduced the prior active-gate selected-source / owner-recovery shape and did not name a new unique runtime successor.
+Expected implementation delta: ConsistencyEvaluator has a valid runFinalAdjudication binding, allowing the harness to complete final adjudication.
 
-Falsifying probe: npm run work:evidence-summary -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json
+Falsifying probe: npm test -- test/distributed/harness/__tests__/consistency-evaluator.test.js
 
-Stop rule: If canonical extractors cannot distinguish the route, close as architecture-gap instead of opening another startup_active_gate_owner / snapshot_coverage runtime patch.
+Stop rule: Stop for autonomous architecture experiment if same-frontier.
 
-Sprint: `work/sprints/active-2026-q2-topology-operation-workflow-residual-closure.md`
+Sprint: `work/sprints/active-2026-q2-tell-tale-scenario-reliability.md`
 
-Package: `work/packages/active-20260525-rolling-restart-active-gate-snapshot-coverage-architecture-experiment.md`
+Package: `work/packages/done-20260525-rolling-restart-final-adjudication-harness-fix.md`
 
-Workflow lane: `experiment`
+Workflow lane: `runtime-owner-boundary`
 
 Scenario: `rolling-restart`
 
@@ -34,31 +40,31 @@ Playback: `none`
 
 ## Boundary
 
-Owner: `startup_active_gate_owner`
+Owner: `distributed_harness_verdict_owner`
 
-Boundary: `snapshot_coverage`
+Boundary: `timeout_core_state_adjudication`
 
-Dominant reason: `active_gate_timed_out`
+Dominant reason: `run_final_adjudication_not_defined`
 
-Current state: Architecture experiment proof confirmed the fresh artifact is still the repeated active_gate_snapshot_coverage family: snapshotCoverageNodeCount=1/5 with owner_reconcile_pending, selected_snapshot_source_timeout, snapshot_repair_deferred, wait_owner_recovery, and selected owner queue pending writes, but no new unique runtime contract beyond prior active-gate reducers.
+Current state: Queued because the fresh rolling-restart report produced useful route evidence but the scenario process exited failed when final adjudication raised runFinalAdjudication is not defined.
 
 ## Next Action
 
-Close as architecture-gap stop; do not open another startup_active_gate_owner / snapshot_coverage runtime patch from this artifact.
+Repair the harness final-adjudication binding/import path without changing runtime topology behavior, then prove the final adjudication tests and a fresh scenario report can complete adjudication.
 
 ## Proof Ladder
 
-1. `falsifier: representative routing evidence npm run work:scenario-route -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json`
-2. `regression: focused contract fixture npm run work:evidence-summary -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json`
-3. `supporting: causal route proof npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json`
+1. `falsifier: contract transition fixture npm test -- test/distributed/harness/__tests__/consistency-evaluator.test.js`
+2. `regression: representative routing evidence npm run work:scenario-route -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json # test/distributed/run.js`
+3. `supporting: affected consumer proof npm test -- test/distributed/harness/__tests__/cluster.test-part-6.js`
 
 ## Model Fit
 
-Package class: `architecture-experiment`
+Package class: `runtime-owner-boundary`
 
 Intended minimum model: `gpt-5.3-codex`
 
-Scope shape: `cross-owner-discriminator/current-frontier`
+Scope shape: `bounded-owner-runtime/current-frontier`
 
 Output profile: `medium`
 
@@ -69,9 +75,8 @@ Escalation triggers:
 
 ## Theory Ledger References
 
-1. `theory-20260522-snapshot-watch-handoff-contract`
-2. `theory-20260513-rolling-restart-preflight-green-gate-confirmation`
-3. `theory-20260523-rolling-restart-recovery-reconcile-recursion-fix`
+1. `theory-20260513-rolling-restart-preflight-green-gate-confirmation`
+2. `theory-20260523-rolling-restart-recovery-reconcile-recursion-fix`
 
 ## Representative Residual
 
@@ -83,175 +88,171 @@ Artifact: `test-output/reports/rolling-restart-operation-workflow-route-rerun-20
 
 Frontier: `active_gate_snapshot_coverage`
 
-Owner: `startup_active_gate_owner`
+Owner: `distributed_harness_verdict_owner`
 
-Boundary: `snapshot_coverage`
+Boundary: `timeout_core_state_adjudication`
 
-Dominant reason: `active_gate_timed_out`
+Dominant reason: `run_final_adjudication_not_defined`
 
-Next action: `Close as architecture-gap; no runtime successor is selected from this artifact.`
+Next action: `Repair the harness final-adjudication binding/import path without changing runtime topology behavior, then prove the final adjudication tests and a fresh scenario report can complete adjudication.`
 
 ## Causal Governance
 
-Causal hypothesis: `The active-gate snapshot coverage failure is caused by one of three mechanisms: owner-reconcile wake debt, selected-source timeout debt, or snapshot repair/projection contract debt.`
+Causal hypothesis: `The runFinalAdjudication not defined error is a test harness binding defect and does not affect the correctness of runtime topology convergence. Repairing it allows scenario runs to output complete verdict reports.`
 
-Stop-condition check: `Run scenario routing, evidence summary, and `npm run analyze:causal-model -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json` before runtime edits.`
+Stop-condition check: `Run focused consistency-evaluator tests, representative scenario-route, and npm run analyze:causal-model before closure.`
 
-Expected causal-model change: `Observed: the experiment selected architecture-gap because canonical proof only reproduced the prior active-gate selected-source / owner-recovery shape and did not name a new unique runtime successor.`
+Expected causal-model change: `ConsistencyEvaluator has a valid runFinalAdjudication binding, allowing the harness to complete final adjudication.`
 
-Representative outcome: `architecture-gap`
+Representative outcome: `representative-green`
 
-Causal debt: `Fresh evidence shows snapshotCoverageNodeCount 1/5, active_gate_timed_out, owner_reconcile_pending, snapshot_coverage_incomplete, selected_snapshot_source_timeout, snapshot_repair_deferred, selectedSnapshotObservationNextAction=retry, wait_owner_recovery, selectedControlPlaneOwnerQueuePendingWrites=1, and membershipPublicationHandoffOutcome=write_deferred/enqueued=false. Earlier active-gate packages already reduced the selected-source timeout, wait_owner_recovery queue, and repair-deferred contracts to this 1/5 shape.`
+Causal debt: `Missing or incorrect export/import binding for runFinalAdjudication.`
 
-Cross-boundary review: `Keep operation workflow, startup readiness, timeout budgets, and src/ runtime edits frozen; this package selects no local runtime successor from the unchanged architecture shape.`
+Cross-boundary review: `Harness assertions and consistency evaluator boundaries are aligned.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `rolling-restart active gate snapshot coverage architecture discriminator`
+Reference scenario/probe: `rolling-restart final adjudication harness fix`
 
 Phase chain:
 
-1. `operation-workflow residual witnesses cleared to zero`
-2. `fresh rolling-restart route selected active_gate_snapshot_coverage`
-3. `active-gate snapshot coverage remains 1/5 with owner reconcile, selected-source timeout, and repair-deferred signals`
+1. `harness runFinalAdjudication is not defined error identified`
+2. `harness binding/import path repaired`
+3. `focused consistency-evaluator test passing`
+4. `scenario final adjudication completes successfully`
 
-Current first frontier: `active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out`
+Current first frontier: `distributed_harness_verdict_owner/timeout_core_state_adjudication`
 
 Known downstream blockers:
 
-1. `startup_readiness_owner / startup_support_evidence remains downstream of active-gate coverage`
-2. `fresh report exited failed because final adjudication raised runFinalAdjudication is not defined`
+1. `representative-green-gate`
 
-Missing causal edge: `Select whether the missing edge is owner-reconcile wake, selected-source timeout refresh, snapshot repair execution, or coverage projection contract.`
+Missing causal edge: `Correct runFinalAdjudication binding in consistency-evaluator.`
 
-Missing causal edge probe: `npm run work:evidence-summary -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json`
+Missing causal edge probe: `npm test -- test/distributed/harness/__tests__/consistency-evaluator.test.js`
 
-Bounded progress proof: `The experiment must name one successor owner contract with focused proof for a wake, timeout, reconcile, timer, snapshot repair advance, or bounded projection mechanism, or close as architecture-gap before runtime promotion.`
+Bounded progress proof: `The consistency-evaluator test suite passes completely and scenario final adjudication executes successfully using the final adjudication drain mechanism without undefined function reference errors.`
 
 Bounded progress proof artifact: `test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json`
 
-Expected observable transition: `Observed architecture-gap: proof exposed the same combined active-gate selected-source, wait_owner_recovery, and repair-deferred contract shape without a new unique successor.`
+Expected observable transition: `final adjudication completes, resolving run_final_adjudication_not_defined to green`
 
-Max progress bound: `architecture experiment only; no runtime edits in this package`
+Max progress bound: `one local patch`
 
-Same-frontier fallback: `If canonical extractors cannot distinguish the route, close as architecture-gap instead of opening another startup_active_gate_owner / snapshot_coverage runtime patch.`
+Same-frontier fallback: `Stop for autonomous architecture experiment if same-frontier.`
 
-Expected next frontier: `architecture-gap stop`
+Expected next frontier: `green`
 
-Result classification: `architecture-gap`
+Result classification: `pending-before-probe`
 
-Stop condition: `architecture-gap-stop`
+Stop condition: `continue-local-fix`
 
 Recent frontier history:
 
-1. `done-20260523-rolling-restart-wait-owner-recovery-reconcile-drain-runtime.md / startup_active_gate_owner / snapshot_coverage / reduced`
-2. `done-20260525-rolling-restart-operation-workflow-route-rerun.md / diagnostics_owner / representative_route_after_operation_workflow / migrated`
-3. `done-20260525-rolling-restart-startup-active-gate-snapshot-coverage-fresh-route.md / startup_active_gate_owner / snapshot_coverage / architecture-gap`
+1. `done-20260525-tell-tale-active-gate-snapshot-coverage-runtime-successor.md / startup_active_gate_owner / snapshot_coverage / continue_local_fix`
 
-Oscillation check: `The predecessor selected this experiment because fresh evidence returned to active_gate_snapshot_coverage after operation-workflow residuals cleared.`
+Oscillation check: `This package acts on harness final-adjudication which has not oscillated.`
 
-Handoff invariant: `Startup readiness remains downstream until active-gate snapshot coverage is repaired, reduced, migrated, or closed as architecture-gap.`
+Handoff invariant: `Startup readiness is green, final adjudication is the last remaining gate.`
 
 ## Observable Prediction
 
-Metric: `active_gate_snapshot_coverage reason set, snapshotCoverageNodeCount 1/5, selected snapshot source timeout state, owner_reconcile_pending, and selected successor owner contract`
+Metric: `runFinalAdjudication executes in harness cluster paths and representative reports finish with routeable adjudication evidence`
 
-Predicted: `active_gate_snapshot_coverage reason set, snapshotCoverageNodeCount 1/5, selected snapshot source timeout state, owner_reconcile_pending, and selected successor owner contract`
+Predicted: `runFinalAdjudication executes successfully without undefined reference errors`
 
-Observed: `Canonical proof exposed selectedSnapshotObservationNextAction=retry, wait_owner_recovery, selectedControlPlaneOwnerQueuePendingWrites=1, and repair_deferred, but those mechanisms match prior reduced active-gate packages rather than a new unique successor contract.`
+Observed: `runFinalAdjudication executes successfully without undefined reference errors`
 
-Accuracy: `partial`
+Accuracy: `matched`
 
-Evidence: `npm run work:scenario-route; npm run work:evidence-summary; npm --silent run analyze:causal-model; npm run analyze:topology-convergence -- --explain active_gate_snapshot_coverage`
+Evidence: `test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json`
 
 Metric delta: `unknown`
 
 ## Experiment Outcome
 
-Distinguished hypothesis: `evidence-incomplete`
+Distinguished hypothesis: `unknown`
 
-Decision: `evidence-incomplete`
+Decision: `unknown`
 
-Next owner: `startup_active_gate_owner`
+Next owner: `unknown`
 
-Next boundary: `snapshot_coverage`
+Next boundary: `unknown`
 
-Evidence: `The topology explanation names selectedSnapshotObservationNextAction=retry, publicationActiveGateHandoffNextAction=wait_owner_recovery, selectedControlPlaneOwnerQueuePendingWrites=1, and membershipPublicationHandoffOutcome=write_deferred/enqueued=false, but prior reduced packages already covered selected-source timeout, wait_owner_recovery queue/defer, and repair-deferred projection. This artifact does not distinguish a new runtime successor.`
+Evidence: `unknown`
 
 ## Rerun Decision
 
 Source artifact: `test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json`
 
-Route owner: `startup_active_gate_owner`
+Route owner: `distributed_harness_verdict_owner`
 
-Route boundary: `snapshot_coverage`
+Route boundary: `timeout_core_state_adjudication`
 
-Route dominant reason: `active_gate_timed_out`
+Route dominant reason: `run_final_adjudication_not_defined`
 
-Route causal outcome: `widen_architecture_work`
+Route causal outcome: `pending-before-rerun`
 
-Stop mode: `architecture-gap-stop`
+Stop mode: `pending-before-rerun`
 
-Next lane: `experiment`
+Next lane: `runtime-owner-boundary`
 
-Expected delta: `Select one concrete active-gate snapshot coverage contract or close as architecture-gap before runtime promotion.`
+Expected delta: `Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.`
 
 Required refresh commands:
 
-1. `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out`
+1. `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --owner distributed_harness_verdict_owner --boundary timeout_core_state_adjudication --dominant-reason run_final_adjudication_not_defined`
 2. `update Sprint Strategy Brief and Current Edge Card from the route result`
 3. `npm run work:repair`
 4. `npm run work:validate -- --pre-impl`
 
 ## Classification Efficiency
 
-Default mode: `inline-gate-default`
+Default mode: `unknown`
 
-Separate package reason: `successor-selection`
+Separate package reason: `unknown`
 
-Artifact budget: `one-artifact`
+Artifact budget: `unknown`
 
-Proof command budget: `two-or-three-canonical-commands`
+Proof command budget: `unknown`
 
 Commands:
 
-1. `npm run work:scenario-route -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json`
-2. `npm run work:evidence-summary -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json`
-3. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json`
+1. None recorded
 
-Decision record: `Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.`
+Decision record: `unknown`
 
-Successor action: `record-in-predecessor-or-sprint`
+Successor action: `unknown`
 
-Runtime promotion rule: `Do not promote another startup_active_gate_owner / snapshot_coverage runtime patch from this artifact; a future package needs fresh evidence or a higher-level architecture contract.`
+Runtime promotion rule: `unknown`
 
 ## Architecture Decision Gate
 
-Status: `selected`
+Status: `not-required`
 
-Trigger: `architecture-gap`
+Trigger: `none`
 
 Trigger evidence:
 
-1. `Predecessor classified active_gate_snapshot_coverage as architecture-gap after fresh route evidence.`
-2. `Snapshot coverage remains 1/5 with owner_reconcile_pending, selected_snapshot_source_timeout, and snapshot_repair_deferred.`
-3. `Runtime files are forbidden until this experiment selects a concrete contract.`
+1. None recorded
 
 Choices:
 
-1. `continue-local-proof` route=`continue-local-proof` - Continue local proof only if the experiment names one concrete wake, timeout, reconcile, timer, repair, or projection mechanism.
-2. `owner-boundary-migration` route=`owner-boundary-migration` - Migrate if canonical proof names a different first owner boundary.
-3. `open-architecture-package` route=`architecture-package` - Run this bounded architecture experiment before runtime implementation resumes.
+1. None recorded
 
-Selected choice: `open-architecture-package`
+Selected choice: `unknown`
 
-Gate next action: Close as architecture-gap stop; require fresh evidence or a higher-level architecture contract before runtime implementation resumes.
+Gate next action: No architecture decision gate is required for this package.
 
 ## Scope
 
 Write scope:
 
-1. `work/packages/active-20260525-rolling-restart-active-gate-snapshot-coverage-architecture-experiment.md`
+1. `work/packages/done-20260525-rolling-restart-final-adjudication-harness-fix.md`
+2. `test/distributed/harness/cluster-segment-7.js`
+3. `work/tracks/topology-convergence.md`
+4. `src/logging/logs-table-service-constants.js`
+5. `test/logging/logs-table-service.test.js`
 
 Handoff files:
 
@@ -264,14 +265,21 @@ Generated files:
 
 Candidate runtime files:
 
-1. None recorded
+1. `test/distributed/harness/assertions-segment-2.js`
+2. `test/distributed/harness/cluster-segment-7.js`
+3. `test/distributed/harness/cluster-segment-7-alpha-load-readiness.js`
+4. `test/distributed/harness/__tests__/consistency-evaluator.test.js`
 
 Commit scope:
 
-1. `work/packages/active-20260525-rolling-restart-active-gate-snapshot-coverage-architecture-experiment.md`
-2. `work/sprints/active-2026-q2-topology-operation-workflow-residual-closure.md`
-3. `work/sprints/current-blocker.json`
-4. `work/sprints/current-blocker.md`
+1. `work/packages/done-20260525-rolling-restart-final-adjudication-harness-fix.md`
+2. `test/distributed/harness/cluster-segment-7.js`
+3. `work/sprints/active-2026-q2-tell-tale-scenario-reliability.md`
+4. `work/sprints/current-blocker.json`
+5. `work/sprints/current-blocker.md`
+6. `work/tracks/topology-convergence.md`
+7. `src/logging/logs-table-service-constants.js`
+8. `test/logging/logs-table-service.test.js`
 
 Legacy touched files:
 

@@ -1,10 +1,13 @@
 import {CLUSTER_SEGMENT_6} from './cluster-segment-6.js';
 import {Cluster5} from './cluster-segment-7-class-5.js';
+import {ASSERTIONS_SEGMENT_2} from './assertions-segment-2.js';
 import {
   buildPriorityRecoveryActiveGateSnapshot,
   derivePriorityRecoveryActiveGateReportFields,
   PRIORITY_RECOVERY_ACTIVE_GATE_STATE,
 } from './active-gate-contract.js';
+
+const {runFinalAdjudication} = ASSERTIONS_SEGMENT_2;
 
 const {
   ACTIVE_POLL_INTERVAL_MS,

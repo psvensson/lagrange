@@ -1438,6 +1438,43 @@ test('LogsTableService drops logging-pipeline metrics to prevent recursion',
     LogsTableService.resetInstance();
   });
 
+test('LogsTableService drops logging-pipeline pressure metrics to prevent recursion',
+  async (t) => {
+    LogsTableService.resetInstance();
+    const writtenRows = [];
+    const service = LogsTableService.getInstance();
+    service.initialize({
+      logsOwner: createLogsOwner(async (row) => {
+        writtenRows.push(row);
+        return {success: true};
+      }),
+    });
+
+    await service.writeLogEntry({
+      logId: 'log-pressure-loop-1',
+      timestamp: Date.now(),
+      level: 'INFO',
+      nodeId: 'test-node',
+      message: 'metrics.pressure.policy',
+      createdAt: Date.now(),
+    });
+    await service.flush();
+
+    t.equal(
+      service.getStats().selfLoopPreventedWrites,
+      1,
+      'should count dropped recursive pressure metrics',
+    );
+    t.equal(
+      writtenRows.length,
+      0,
+      'should not persist recursive pressure metrics',
+    );
+
+    await service.shutdown();
+    LogsTableService.resetInstance();
+  });
+
 test('LogsTableService resetInstance avoids async shutdown side effects', async (t) => {
   LogsTableService.resetInstance();
 

@@ -61,18 +61,17 @@ Latest current handoff state:
 - route-selection package:
   `work/packages/done-20260525-topology-load-stabilization-route-selection.md`
 - active sprint:
-  `work/sprints/active-2026-q2-topology-operation-workflow-residual-closure.md`
+  `work/sprints/active-2026-q2-tell-tale-scenario-reliability.md`
 - active package:
-  `work/packages/done-20260525-priority-recovery-operation-workflow-rebalancer-handoff-residual-split.md`
+  `work/packages/done-20260525-tell-tale-active-gate-snapshot-coverage-runtime-successor.md`
 - rolling-restart artifact:
-  `test-output/reports/rolling-restart-rerun-4.report.json`
-- first frontier: `priority_recovery_partition_progress`
-- owner boundary: `operation_workflow_owner / workflow_progress`
-- dominant reason: `priority_recovery_event_driven_wait`
-- causal outcome: `accept_classified_backpressure`
-- priority recovery residuals split across six witnesses:
-  four under `operation_workflow_owner / rebalancer_handoff` and two under
-  `operation_workflow_owner / workflow_progress`
+  `test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json`
+- first frontier: `active_gate_snapshot_coverage`
+- owner boundary: `startup_active_gate_owner / snapshot_coverage`
+- dominant reason: `active_gate_timed_out`
+- causal outcome: `widen_architecture_work`
+- priority recovery residuals: zero witnesses after operation-workflow residual
+  closure
 - heavy-load artifact:
   `test-output/reports/topology-load-baseline.report.json`
 - heavy-load route: no topology frontier; causal taxonomy migrates the deferred
@@ -110,18 +109,19 @@ or produces a narrower owner-boundary blocker selected by canonical evidence.
 
 - Current route-selection package:
   `work/packages/done-20260525-topology-load-stabilization-route-selection.md`
-- Active residual sprint:
-  `work/sprints/active-2026-q2-topology-operation-workflow-residual-closure.md`
-- Active residual package:
-  `work/packages/done-20260525-priority-recovery-operation-workflow-rebalancer-handoff-residual-split.md`
+- Active reliability sprint:
+  `work/sprints/active-2026-q2-tell-tale-scenario-reliability.md`
+- Active reliability package:
+  `work/packages/done-20260525-tell-tale-active-gate-snapshot-coverage-runtime-successor.md`
 - Selected immediate successor route:
-  `operation_workflow_owner / workflow_progress` from
-  `test-output/reports/rolling-restart-rerun-4.report.json`.
+  `startup_active_gate_owner / snapshot_coverage` from
+  `test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json`.
 - Required successor discriminator:
-  `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-rerun-4.report.json --markdown`.
+  `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --explain active_gate_snapshot_coverage`.
 - Residual split:
-  six witnesses, with four `rebalancer_handoff` witnesses and two
-  `workflow_progress` witnesses, all in `recovering_in_flight` state.
+  priority-recovery operation-workflow witnesses are zero; active-gate snapshot
+  coverage remains 1/5 with owner reconcile, selected-source timeout, and
+  repair-deferred evidence.
 - Deferred load route:
   `startup_readiness_owner / startup_support_evidence` from
   `test-output/reports/topology-load-baseline.report.json`, held until
@@ -157,7 +157,8 @@ publication-evidence replay code rather than by the runtime owner alone.
 | `work/sprints/superseded-2026-q2-topology-publication-reconcile-system-theory.md` | `experiment` / `theory-ladder` | superseded | Superseded on May 23, 2026. |
 | `work/sprints/superseded-2026-q2-workflow-steering-core-logic-hardening.md` | `stabilization` / `ceremony-hardening` | superseded | Superseded on May 23, 2026. |
 | `work/sprints/done-2026-q2-rolling-restart-stability-hardening-final.md` | `stabilization` / `rolling-restart` | done | Focused push to make the system stable under 5-node rolling restarts. |
-| `work/sprints/active-2026-q2-topology-operation-workflow-residual-closure.md` | `stabilization` / `scenario-release-gate` | active | Orders the `rebalancer_handoff` residual split, `workflow_progress` successor, and representative rerun before startup readiness can be promoted. |
+| `work/sprints/done-2026-q2-topology-operation-workflow-residual-closure.md` | `stabilization` / `scenario-release-gate` | done | Cleared operation-workflow priority-recovery residual witnesses and routed fresh rolling-restart evidence to active-gate snapshot coverage. |
+| `work/sprints/active-2026-q2-tell-tale-scenario-reliability.md` | `stabilization` / `scenario-release-gate` | active | Starts from the active-gate snapshot coverage architecture gap, then queues runtime successor, final adjudication repair, rolling-restart green gate, and tell-tale suite promotion. |
 
 
 ## Owner Boundaries
@@ -225,10 +226,8 @@ canonical owner-boundary evidence.
 ## Next Package
 
 Active continuation:
-`work/packages/done-20260525-priority-recovery-operation-workflow-rebalancer-handoff-residual-split.md`.
-It proves or splits the four
-`operation_workflow_owner / rebalancer_handoff` witnesses before the queued
-`operation_workflow_owner / workflow_progress` successor can activate. Do not
-promote `startup_readiness_owner / startup_support_evidence` until
-operation-workflow backpressure clears or fresh canonical route evidence makes
-startup readiness the first frontier.
+`work/packages/done-20260525-tell-tale-active-gate-snapshot-coverage-runtime-successor.md`.
+It selects the active-gate snapshot coverage contract before runtime promotion.
+Do not open another `startup_active_gate_owner / snapshot_coverage` runtime
+patch from the unchanged artifact until the contract package names one concrete
+wake, timeout, repair, or projection edge.
