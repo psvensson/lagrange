@@ -13,20 +13,13 @@ last_reviewed: 2026-05-23
 
 ## Authority Order
 
-When sources appear to disagree, follow this order:
+When sources appear to disagree at execution time, follow this three-level order. Lower-numbered authorities always win.
 
-1. User and developer instructions define the requested task and safety limits.
-2. `npm run work:context` defines the current active blocker, primary steering pack, owner boundary, and dirty-scope warning.
-3. [`work/RULES.md`](../../../work/RULES.md) is the canon for lanes, validation phases, proof, scope, and worktree safety.
-4. Source steering files under `.kiro/steering/` provide detailed domain policy
-   and win over generated compact packs on conflict. This is authority order,
-   not default load order. Source steering can add detail; it does not weaken
-   `work/RULES.md`.
-5. `.kiro/steering/llm/*.md` files are compact prompt packs and the default LLM
-   load surface defined by `AGENTS.md`. Use them to keep rules active in
-   memory. Consult source steering or `rules.json` when conflict resolution,
-   detailed policy, rule IDs, or source citations are needed.
-6. Generated domain packs are not sequential checklists. Apply only the rules relevant to the selected lane and touched boundary.
+1. **User and developer instructions, and safety limits.** This includes the requested task, the prohibited-actions list, and any explicit user override.
+2. **`work/RULES.md` together with `npm run work:context`.** `work/RULES.md` is the canon for lanes, validation phases, proof, scope, and worktree safety. `work:context` names the active blocker, owner boundary, primary domain pack, and active constraints for the current task. These two together define what the current task is and what the rules of engagement are.
+3. **Domain packs under `.kiro/steering/llm/*.md`.** Apply only the rules whose tags match the selected lane and whose scope intersects the touched owner boundary. Each rule carries a `(see file:line)` citation; follow that citation when more detail is needed.
+
+The source-vs-pack distinction is a generator concern, not an execution-time concern. If a pack rule looks wrong, the answer is to fix the source and regenerate (`npm run steering:llm:pack`), not to selectively prefer the source at runtime. Packs are the canonical execution-time surface.
 
 ## Lane Vocabulary
 
@@ -95,4 +88,4 @@ These are LLM-specific operational steps. Process semantics for each lane live i
 
 ## Conflict Rule
 
-If two steering files appear to disagree, do not average them. Follow the Authority Order above. Record the conflict in the package if it changes scope, lane, proof, or stop conditions.
+If two steering files appear to disagree at execution time, do not average them. Follow the three-level Authority Order above: user instructions outrank `work/RULES.md` + `work:context`, which outrank domain packs. Record the conflict in the package if it changes scope, lane, proof, or stop conditions. If a domain pack rule itself looks wrong, the fix is to edit its source and regenerate the pack (`npm run steering:llm:pack`) — not to silently follow a different rule.

@@ -25,17 +25,17 @@ Make the system stable under rolling-restart: change the core logic of the syste
 ```text
 Representative artifact: none
 Visible first frontier: unknown
-Active package: work/packages/done-20260525-steering-pack-no-aphorisms.md
+Active package: work/packages/done-20260525-boot-authority-order-collapse.md
 Active package owner: workflow_tooling_owner
 Active package boundary: llm_steering_doc_truth
 Selected cause: steering_doc_truth_repair
-Required action: Add an aphorism heuristic to the steering pack generator so admonition-marker and dangling-pronoun rules are rejected at generation time; rewrite the four cited source admonitions so the corpus regenerates cleanly; emit per-rule source citation links in the generated packs.
+Required action: Collapse boot.md Authority Order from six levels to three runtime levels (user instructions; work/RULES.md and work:context; domain packs). Remove the source-vs-pack distinction from the runtime authority order; it is a generator concern, not an execution-time concern. Update README pack-truth note accordingly.
 Representative status: unknown
 Causal outcome: unknown
 Architecture gate: not-required / unknown
 Expected delta: unknown
 Current state: New package scaffolded from the shared work-package schema.
-Allowed edits: scripts/generate-steering-llm-pack.js, .kiro/steering/testing-guidelines/harness.md, .kiro/steering/testing-guidelines/regression-policy.md, .kiro/steering/workflow-guidelines/subagents.md, .kiro/steering/llm/rules.json, .kiro/steering/llm/manifest.json, .kiro/steering/llm/architecture.md, .kiro/steering/llm/testing.md, .kiro/steering/llm/style.md, .kiro/steering/llm/governance.md, test/scripts/generate-steering-llm-pack.test.js
+Allowed edits: .kiro/steering/llm/boot.md, scripts/generate-steering-llm-pack.js, .kiro/steering/llm/README.md
 Candidate runtime files: unknown
 Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
 Required latest proof: node --test test/scripts/generate-steering-llm-pack.test.js
@@ -351,7 +351,12 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Purpose: Add an aphorism heuristic to the steering pack generator that rejects admonition-marker prefixes (e.g. `STOP -`, `DO NOT IGNORE -`) and dangling-pronoun openings followed by action verbs (e.g. `They do not replace…`), and append a per-rule `(see file:line)` citation to every emitted rule in the per-domain markdown packs. Rewrites the cited STOP/ANALYZE/FIX and DO NOT IGNORE/DEFER/INVESTIGATE/FIX/VERIFY admonition lists in harness.md and regression-policy.md, and resolves the orphan pronoun in subagents.md.
    - First-run reason: cited examples (TEST-0011, TEST-0019, ARCH-0029, GOV-0021) showed that the generator was emitting rules an LLM could not act on without guessing — either bare imperatives with no trigger or pronouns with no antecedent — and rules carried no link back to their source for verification.
 
-16. [Rolling Restart Active Gate Snapshot Coverage Repair](../packages/done-20260523-rolling-restart-active-gate-snapshot-coverage-repair.md)
+16. [Collapse boot.md authority order to three runtime levels](../packages/done-20260525-boot-authority-order-collapse.md)
+   - Lane: `lightweight-maintenance`
+   - Purpose: Rewrite `.kiro/steering/llm/boot.md` Authority Order from six levels to three runtime levels (user instructions and safety limits; `work/RULES.md` + `npm run work:context`; domain packs scoped by lane and touched boundary). Remove the runtime "source vs pack" distinction; pack staleness is repaired by regenerating, not by selectively preferring source steering at execution time. Update the Conflict Rule section and the generated README pack-truth note to match.
+   - First-run reason: the previous six-level order combined runtime authority with load-surface ordering and generator staleness in one numbered list, so an LLM could not tell whether to follow a compact pack rule when its source happened not to be loaded. Items #4 ("source wins") and #5 ("packs are default load surface") directly contradicted each other at execution time.
+
+17. [Rolling Restart Active Gate Snapshot Coverage Repair](../packages/done-20260523-rolling-restart-active-gate-snapshot-coverage-repair.md)
    - Lane: `runtime-owner-boundary`
    - Purpose: Align active-gate cohort fallbacks and repair snapshot recovery projection logic.
 
