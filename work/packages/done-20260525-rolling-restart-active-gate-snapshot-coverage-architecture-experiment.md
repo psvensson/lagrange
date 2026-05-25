@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-25",
   "lane": "experiment",
   "scenario": "rolling-restart",
@@ -25,7 +25,7 @@
     "theory-20260523-rolling-restart-recovery-reconcile-recursion-fix"
   ],
   "writeScope": [
-    "work/packages/active-20260525-rolling-restart-active-gate-snapshot-coverage-architecture-experiment.md"
+    "work/packages/done-20260525-rolling-restart-active-gate-snapshot-coverage-architecture-experiment.md"
   ],
   "handoffFiles": [
     "test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json"
@@ -36,7 +36,7 @@
   ],
   "candidateRuntimeFiles": [],
   "commitScope": [
-    "work/packages/active-20260525-rolling-restart-active-gate-snapshot-coverage-architecture-experiment.md",
+    "work/packages/done-20260525-rolling-restart-active-gate-snapshot-coverage-architecture-experiment.md",
     "work/sprints/active-2026-q2-topology-operation-workflow-residual-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
@@ -220,7 +220,10 @@
       "npm run work:repair",
       "npm run work:validate -- --pre-impl"
     ]
-  }
+  },
+  "closed": "2026-05-25",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260525-tell-tale-active-gate-snapshot-coverage-contract.md"
 }
 -->
 
@@ -322,7 +325,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. work/packages/active-20260525-rolling-restart-active-gate-snapshot-coverage-architecture-experiment.md
+1. work/packages/done-20260525-rolling-restart-active-gate-snapshot-coverage-architecture-experiment.md
 
 ## Out Of Scope
 
@@ -334,7 +337,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `cross-owner-discriminator/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260525-rolling-restart-active-gate-snapshot-coverage-architecture-experiment.md`
+- Owned files: `work/packages/done-20260525-rolling-restart-active-gate-snapshot-coverage-architecture-experiment.md`
 - Forbidden files: `src/`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -362,7 +365,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [x] action: implementation; owner: startup_active_gate_owner; files-changed: work/packages/active-20260525-rolling-restart-active-gate-snapshot-coverage-architecture-experiment.md; validation: `npm run work:scenario-route -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json`; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: implementation; owner: startup_active_gate_owner; files-changed: work/packages/done-20260525-rolling-restart-active-gate-snapshot-coverage-architecture-experiment.md; validation: `npm run work:scenario-route -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json`, `npm run work:evidence-summary -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json`; parent revalidated focused proof: yes; outcome: validated.
 - [x] action: verification-fix; owner: startup_active_gate_owner; files-changed: none; validation: `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --explain active_gate_snapshot_coverage`; parent revalidated focused proof: yes; outcome: validated.
 - [x] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: validated.
 
@@ -372,3 +375,9 @@ Agent identity is optional provenance. Use the compact five-field shape for new 
 2. npm run work:evidence-summary -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json
 3. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json
 4. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --explain active_gate_snapshot_coverage
+
+## Commit And Push Ledger
+
+1. Focused package commit: b48701b3a40b21c376758d471d3199a42858bede
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

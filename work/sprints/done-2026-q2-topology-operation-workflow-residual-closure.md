@@ -1,6 +1,11 @@
 # Topology Operation Workflow Residual Closure Sprint
 
-Status: active. Created on May 25, 2026.
+Status: done on May 25, 2026. Created on May 25, 2026.
+
+Closed by the tell-tale scenario reliability successor sprint after
+operation-workflow priority-recovery residual witnesses dropped to zero and the
+fresh representative route migrated to
+`startup_active_gate_owner / snapshot_coverage / active_gate_timed_out`.
 
 ## Goal
 
@@ -54,7 +59,7 @@ representative route before startup-readiness work is promoted.
 ```text
 Representative artifact: test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json
 Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out
-Active package: work/packages/active-20260525-rolling-restart-active-gate-snapshot-coverage-architecture-experiment.md
+Active package: work/packages/done-20260525-rolling-restart-active-gate-snapshot-coverage-architecture-experiment.md
 Active package owner: startup_active_gate_owner
 Active package boundary: snapshot_coverage
 Selected cause: active_gate_timed_out
@@ -64,7 +69,7 @@ Causal outcome: widen_architecture_work
 Architecture gate: selected / open-architecture-package
 Expected delta: Select one concrete active-gate snapshot coverage contract or close as architecture-gap before runtime promotion.
 Current state: Architecture experiment proof confirmed the fresh artifact is still the repeated active_gate_snapshot_coverage family: snapshotCoverageNodeCount=1/5 with owner_reconcile_pending, selected_snapshot_source_timeout, snapshot_repair_deferred, wait_owner_recovery, and selected owner queue pending writes, but no new unique runtime contract beyond prior active-gate reducers.
-Allowed edits: work/packages/active-20260525-rolling-restart-active-gate-snapshot-coverage-architecture-experiment.md
+Allowed edits: work/packages/done-20260525-rolling-restart-active-gate-snapshot-coverage-architecture-experiment.md
 Candidate runtime files: unknown
 Forbidden edits: Startup readiness remains downstream until active-gate snapshot coverage is repaired, reduced, migrated, or closed as architecture-gap.
 Required latest proof: falsifier: representative routing evidence npm run work:scenario-route -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json, regression: focused contract fixture npm run work:evidence-summary -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json, supporting: causal route proof npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json

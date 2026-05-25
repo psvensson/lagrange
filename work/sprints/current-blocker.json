@@ -2,51 +2,39 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-tell-tale-scenario-reliability.md",
-  "package": "work/packages/active-20260525-rolling-restart-final-adjudication-harness-fix.md",
+  "package": "work/packages/active-20260525-tell-tale-scenario-suite-promotion-gate.md",
   "status": "active",
-  "lane": "runtime-owner-boundary",
-  "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json",
+  "lane": "scenario-release-gate",
+  "scenario": "tell-tale-suite",
+  "artifact": "test-output/reports/rolling-restart-tell-tale-green-gate.report.json",
   "playback": "none",
-  "owner": "distributed_harness_verdict_owner",
-  "boundary": "timeout_core_state_adjudication",
-  "dominantReason": "run_final_adjudication_not_defined",
-  "currentState": "Queued because the fresh rolling-restart report produced useful route evidence but the scenario process exited failed when final adjudication raised runFinalAdjudication is not defined.",
-  "nextAction": "Repair the harness final-adjudication binding/import path without changing runtime topology behavior, then prove the final adjudication tests and a fresh scenario report can complete adjudication.",
+  "owner": "release_gate_owner",
+  "boundary": "tell_tale_suite_repeatability",
+  "dominantReason": "tell_tale_suite_repeatability_required",
+  "currentState": "Active because the broader tell-tale suite cannot be promoted while the latest rolling-restart representative artifact still routes to startup_active_gate_owner / snapshot_coverage / active_gate_timed_out.",
+  "nextAction": "Do not run the broader tell-tale suite yet; preserve the failed rolling-restart route evidence and keep one bounded active-gate snapshot coverage successor before suite promotion.",
   "proof": [
-    "falsifier: contract transition fixture npm test -- test/distributed/harness/__tests__/consistency-evaluator.test.js",
-    "regression: representative routing evidence npm run work:scenario-route -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json # test/distributed/run.js",
-    "supporting: affected consumer proof npm test -- test/distributed/harness/__tests__/cluster.test-part-6.js"
+    "falsifier: contract transition fixture npm run work:scenario-route -- test-output/reports/rolling-restart-tell-tale-green-gate.report.json",
+    "regression: affected consumer proof npm run work:evidence-summary -- test-output/reports/rolling-restart-tell-tale-green-gate.report.json",
+    "supporting: npm run summarize:harness -- --report-dir test-output/reports"
   ],
   "writeScope": [
-    "work/packages/active-20260525-rolling-restart-final-adjudication-harness-fix.md",
-    "test/distributed/harness/cluster-segment-7.js",
-    "work/tracks/topology-convergence.md",
-    "src/logging/logs-table-service-constants.js",
-    "test/logging/logs-table-service.test.js"
+    "work/packages/active-20260525-tell-tale-scenario-suite-promotion-gate.md"
   ],
   "handoffFiles": [
-    "test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json"
+    "test-output/reports/rolling-restart-tell-tale-green-gate.report.json"
   ],
   "generatedFiles": [
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
   ],
-  "candidateRuntimeFiles": [
-    "test/distributed/harness/assertions-segment-2.js",
-    "test/distributed/harness/cluster-segment-7.js",
-    "test/distributed/harness/cluster-segment-7-alpha-load-readiness.js",
-    "test/distributed/harness/__tests__/consistency-evaluator.test.js"
-  ],
+  "candidateRuntimeFiles": [],
   "commitScope": [
-    "work/packages/active-20260525-rolling-restart-final-adjudication-harness-fix.md",
-    "test/distributed/harness/cluster-segment-7.js",
+    "work/packages/active-20260525-tell-tale-scenario-suite-promotion-gate.md",
     "work/sprints/active-2026-q2-tell-tale-scenario-reliability.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",
-    "work/tracks/topology-convergence.md",
-    "src/logging/logs-table-service-constants.js",
-    "test/logging/logs-table-service.test.js"
+    "work/tracks/topology-convergence.md"
   ],
   "touchedFiles": [],
   "theoryLedgerRefs": [
@@ -54,7 +42,7 @@
     "theory-20260523-rolling-restart-recovery-reconcile-recursion-fix"
   ],
   "modelFit": {
-    "packageClass": "runtime-owner-boundary",
+    "packageClass": "scenario-release-gate",
     "intendedMinimumModel": "gpt-5.3-codex",
     "scopeShape": "bounded-owner-runtime/current-frontier",
     "outputProfile": "medium",
@@ -65,71 +53,70 @@
     "ambiguityScore": 1
   },
   "representativeResidual": {
-    "status": "architecture-gap",
-    "scenario": "rolling-restart",
-    "artifact": "test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json",
+    "status": "same-frontier",
+    "scenario": "tell-tale-suite",
+    "artifact": "test-output/reports/rolling-restart-tell-tale-green-gate.report.json",
     "frontier": "active_gate_snapshot_coverage",
-    "owner": "distributed_harness_verdict_owner",
-    "boundary": "timeout_core_state_adjudication",
-    "dominantReason": "run_final_adjudication_not_defined",
-    "nextAction": "Repair the harness final-adjudication binding/import path without changing runtime topology behavior, then prove the final adjudication tests and a fresh scenario report can complete adjudication."
+    "owner": "startup_active_gate_owner",
+    "boundary": "snapshot_coverage",
+    "dominantReason": "active_gate_timed_out",
+    "nextAction": "Keep one bounded active-gate snapshot coverage successor before suite promotion."
   },
   "causalGovernance": {
-    "hypothesis": "The runFinalAdjudication not defined error is a test harness binding defect and does not affect the correctness of runtime topology convergence. Repairing it allows scenario runs to output complete verdict reports.",
-    "stopConditionCheck": "Run focused consistency-evaluator tests, representative scenario-route, and npm run analyze:causal-model before closure.",
-    "expectedCausalModelChange": "ConsistencyEvaluator has a valid runFinalAdjudication binding, allowing the harness to complete final adjudication.",
-    "representativeOutcome": "representative-green",
-    "causalDebt": "Missing or incorrect export/import binding for runFinalAdjudication.",
-    "crossBoundaryReview": "Harness assertions and consistency evaluator boundaries are aligned."
+    "hypothesis": "The active sprint goal cannot promote the tell-tale suite until the representative rolling-restart gate stops routing to active-gate snapshot coverage.",
+    "stopConditionCheck": "Use work:scenario-route, work:evidence-summary, npm run analyze:causal-model, and summarize:harness on the latest rolling-restart representative artifact before running broader tell-tale scenarios.",
+    "expectedCausalModelChange": "The current package should block suite promotion and preserve the active-gate snapshot coverage successor as the first frontier.",
+    "representativeOutcome": "same-frontier",
+    "causalDebt": "rolling-restart remains blocked at startup_active_gate_owner / snapshot_coverage / active_gate_timed_out.",
+    "crossBoundaryReview": "Suite promotion stays under release_gate_owner; runtime changes remain in the active-gate successor boundary."
   },
   "scenarioCausalClosure": {
-    "referenceScenarioOrProbe": "rolling-restart final adjudication harness fix",
+    "referenceScenarioOrProbe": "tell-tale-suite-promotion-gate",
     "phaseChain": [
-      "harness runFinalAdjudication is not defined error identified",
-      "harness binding/import path repaired",
-      "focused consistency-evaluator test passing",
-      "scenario final adjudication completes successfully"
+      "rolling-restart representative gate rerun completed",
+      "route evidence selected startup_active_gate_owner / snapshot_coverage",
+      "tell-tale suite promotion remains blocked until rolling-restart is green"
     ],
-    "currentFirstFrontier": "distributed_harness_verdict_owner/timeout_core_state_adjudication",
+    "currentFirstFrontier": "release_gate_owner/tell_tale_suite_repeatability blocked by startup_active_gate_owner/snapshot_coverage",
     "knownDownstreamBlockers": [
-      "representative-green-gate"
+      "tell-tale-suite-repeatability"
     ],
-    "missingCausalEdge": "Correct runFinalAdjudication binding in consistency-evaluator.",
-    "missingCausalEdgeProbe": "npm test -- test/distributed/harness/__tests__/consistency-evaluator.test.js",
-    "falsifyingProbe": "npm test -- test/distributed/harness/__tests__/consistency-evaluator.test.js",
-    "boundedProgressProof": "The consistency-evaluator test suite passes completely and scenario final adjudication executes successfully using the final adjudication drain mechanism without undefined function reference errors.",
-    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json",
-    "expectedObservableTransition": "final adjudication completes, resolving run_final_adjudication_not_defined to green",
-    "maxProgressBound": "one local patch",
-    "sameFrontierFallback": "Stop for autonomous architecture experiment if same-frontier.",
-    "expectedNextFrontier": "green",
-    "resultClassification": "pending-before-probe",
-    "stopCondition": "continue-local-fix",
+    "missingCausalEdge": "Rolling-restart representative-green evidence is missing.",
+    "missingCausalEdgeProbe": "npm run work:scenario-route -- test-output/reports/rolling-restart-tell-tale-green-gate.report.json",
+    "falsifyingProbe": "npm run work:scenario-route -- test-output/reports/rolling-restart-tell-tale-green-gate.report.json",
+    "boundedProgressProof": "The package records that suite promotion is blocked by same-frontier rolling-restart evidence and preserves the active-gate reconcile/repair/timer successor before running unrelated scenarios.",
+    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-tell-tale-green-gate.report.json",
+    "expectedObservableTransition": "suite promotion remains blocked until active_gate_snapshot_coverage clears or migrates",
+    "maxProgressBound": "one classification gate",
+    "sameFrontierFallback": "Keep the active-gate successor as the first frontier.",
+    "expectedNextFrontier": "active_gate_snapshot_coverage",
+    "resultClassification": "same-frontier",
+    "stopCondition": "architecture-gap-stop",
     "recentFrontierHistory": [
-      "done-20260525-tell-tale-active-gate-snapshot-coverage-runtime-successor.md / startup_active_gate_owner / snapshot_coverage / continue_local_fix"
+      "done-20260525-rolling-restart-representative-green-gate.md / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out"
     ],
-    "oscillationCheck": "This package acts on harness final-adjudication which has not oscillated.",
-    "handoffInvariant": "Startup readiness is green, final adjudication is the last remaining gate."
+    "oscillationCheck": "The suite gate does not open another runtime patch; it preserves the selected active-gate successor.",
+    "handoffInvariant": "Broader tell-tale scenarios are downstream of rolling-restart representative-green."
   },
   "observablePrediction": {
-    "metric": "runFinalAdjudication executes in harness cluster paths and representative reports finish with routeable adjudication evidence",
-    "predicted": "runFinalAdjudication executes successfully without undefined reference errors",
-    "observed": "runFinalAdjudication executes successfully without undefined reference errors",
+    "metric": "tell-tale suite promotion eligibility",
+    "predicted": "blocked while rolling-restart routes to active_gate_snapshot_coverage",
+    "observed": "rolling-restart routes to active_gate_snapshot_coverage",
     "accuracy": "matched",
-    "evidence": "test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json"
+    "evidence": "test-output/reports/rolling-restart-tell-tale-green-gate.report.json"
   },
   "experimentOutcome": {},
   "rerunDecision": {
-    "sourceArtifact": "test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json",
-    "routeOwner": "distributed_harness_verdict_owner",
-    "routeBoundary": "timeout_core_state_adjudication",
-    "routeDominantReason": "run_final_adjudication_not_defined",
-    "routeCausalOutcome": "pending-before-rerun",
-    "stopMode": "pending-before-rerun",
-    "nextLane": "runtime-owner-boundary",
-    "expectedDelta": "Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.",
+    "sourceArtifact": "test-output/reports/rolling-restart-tell-tale-green-gate.report.json",
+    "routeOwner": "startup_active_gate_owner",
+    "routeBoundary": "snapshot_coverage",
+    "routeDominantReason": "active_gate_timed_out",
+    "routeCausalOutcome": "continue_local_fix",
+    "stopMode": "architecture-gap-stop",
+    "nextLane": "experiment",
+    "expectedDelta": "Block broader tell-tale suite promotion until rolling-restart active-gate snapshot coverage clears, reduces, or migrates.",
     "requiredRefreshCommands": [
-      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --owner distributed_harness_verdict_owner --boundary timeout_core_state_adjudication --dominant-reason run_final_adjudication_not_defined",
+      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-tell-tale-green-gate.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out",
       "update Sprint Strategy Brief and Current Edge Card from the route result",
       "npm run work:repair",
       "npm run work:validate -- --pre-impl"
@@ -137,12 +124,27 @@
   },
   "classificationEfficiency": {},
   "architectureDecisionGate": {
-    "status": "not-required",
-    "trigger": "none",
-    "triggerEvidence": [],
-    "choices": [],
-    "selectedChoice": null,
-    "nextAction": "No architecture decision gate is required for this package."
+    "status": "selected",
+    "trigger": "frontier-oscillation",
+    "triggerEvidence": [
+      "Fresh rolling-restart representative route selected startup_active_gate_owner / snapshot_coverage / active_gate_timed_out.",
+      "The broader tell-tale suite is downstream of rolling-restart representative-green.",
+      "Same-frontier rolling-restart evidence must stop suite promotion and preserve the active-gate successor."
+    ],
+    "choices": [
+      {
+        "id": "open-architecture-package",
+        "summary": "Keep the active-gate snapshot coverage successor as the first frontier before suite promotion.",
+        "route": "architecture-package",
+        "proof": [
+          "npm run work:scenario-route -- test-output/reports/rolling-restart-tell-tale-green-gate.report.json",
+          "npm run work:evidence-summary -- test-output/reports/rolling-restart-tell-tale-green-gate.report.json",
+          "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-tell-tale-green-gate.report.json"
+        ]
+      }
+    ],
+    "selectedChoice": "open-architecture-package",
+    "nextAction": "Keep the selected active-gate snapshot coverage architecture/runtime successor before broader tell-tale suite promotion."
   },
   "predecessor": null
 }

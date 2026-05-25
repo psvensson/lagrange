@@ -57,22 +57,22 @@ and the same proof ladder is promoted to the tell-tale scenario set.
 ## Current Edge Card
 
 ```text
-Representative artifact: test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json
-Visible first frontier: distributed_harness_verdict_owner/timeout_core_state_adjudication
-Active package: work/packages/done-20260525-rolling-restart-final-adjudication-harness-fix.md
-Active package owner: distributed_harness_verdict_owner
-Active package boundary: timeout_core_state_adjudication
-Selected cause: run_final_adjudication_not_defined
-Required action: Repair the harness final-adjudication binding/import path without changing runtime topology behavior, then prove the final adjudication tests and a fresh scenario report can complete adjudication.
-Representative status: architecture-gap
-Causal outcome: pending-before-rerun
-Architecture gate: not-required / unknown
-Expected delta: Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.
-Current state: Queued because the fresh rolling-restart report produced useful route evidence but the scenario process exited failed when final adjudication raised runFinalAdjudication is not defined.
-Allowed edits: work/packages/done-20260525-rolling-restart-final-adjudication-harness-fix.md, test/distributed/harness/cluster-segment-7.js, work/tracks/topology-convergence.md, src/logging/logs-table-service-constants.js, test/logging/logs-table-service.test.js
-Candidate runtime files: test/distributed/harness/assertions-segment-2.js, test/distributed/harness/cluster-segment-7.js, test/distributed/harness/cluster-segment-7-alpha-load-readiness.js, test/distributed/harness/__tests__/consistency-evaluator.test.js
-Forbidden edits: Startup readiness is green, final adjudication is the last remaining gate.
-Required latest proof: falsifier: contract transition fixture npm test -- test/distributed/harness/__tests__/consistency-evaluator.test.js, regression: representative routing evidence npm run work:scenario-route -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json # test/distributed/run.js, supporting: affected consumer proof npm test -- test/distributed/harness/__tests__/cluster.test-part-6.js
+Representative artifact: test-output/reports/rolling-restart-tell-tale-green-gate.report.json
+Visible first frontier: release_gate_owner/tell_tale_suite_repeatability blocked by startup_active_gate_owner/snapshot_coverage
+Active package: work/packages/active-20260525-tell-tale-scenario-suite-promotion-gate.md
+Active package owner: release_gate_owner
+Active package boundary: tell_tale_suite_repeatability
+Selected cause: tell_tale_suite_repeatability_required
+Required action: Do not run the broader tell-tale suite yet; preserve the failed rolling-restart route evidence and keep one bounded active-gate snapshot coverage successor before suite promotion.
+Representative status: same-frontier
+Causal outcome: continue_local_fix
+Architecture gate: selected / open-architecture-package
+Expected delta: Block broader tell-tale suite promotion until rolling-restart active-gate snapshot coverage clears, reduces, or migrates.
+Current state: Active because the broader tell-tale suite cannot be promoted while the latest rolling-restart representative artifact still routes to startup_active_gate_owner / snapshot_coverage / active_gate_timed_out.
+Allowed edits: work/packages/active-20260525-tell-tale-scenario-suite-promotion-gate.md
+Candidate runtime files: unknown
+Forbidden edits: Broader tell-tale scenarios are downstream of rolling-restart representative-green.
+Required latest proof: falsifier: contract transition fixture npm run work:scenario-route -- test-output/reports/rolling-restart-tell-tale-green-gate.report.json, regression: affected consumer proof npm run work:evidence-summary -- test-output/reports/rolling-restart-tell-tale-green-gate.report.json, supporting: npm run summarize:harness -- --report-dir test-output/reports
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -100,7 +100,7 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - First-run reason: the latest rolling-restart report routed useful
      evidence but the scenario process exited through final adjudication.
 
-4. [Rolling Restart Representative Green Gate](../packages/todo-20260525-rolling-restart-representative-green-gate.md)
+4. [Rolling Restart Representative Green Gate](../packages/done-20260525-rolling-restart-representative-green-gate.md)
    - Lane: `scenario-release-gate`
    - Purpose: run fresh rolling-restart evidence and close as
      representative-green, reduced, migrated, or same-frontier with one
@@ -108,7 +108,17 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - First-run reason: tell-tale stabilization must be proven by fresh
      representative evidence after the current first frontier is handled.
 
-5. [Tell-Tale Scenario Suite Promotion Gate](../packages/todo-20260525-tell-tale-scenario-suite-promotion-gate.md)
+5. [Rolling Restart Active Gate Snapshot Coverage Architecture Experiment V2](../packages/done-20260525-rolling-restart-active-gate-snapshot-coverage-architecture-experiment-v2.md)
+   - Lane: `experiment`
+   - Purpose: triage active-gate snapshot coverage with combined scenario evidence before runtime edits.
+   - First-run reason: fresh representative rerun routed to startup_active_gate_owner/snapshot_coverage with active_gate_timed_out.
+
+6. [Rolling Restart Cache Watermark Write Queue Drain Successor](../packages/done-20260525-rolling-restart-cache-watermark-write-queue-drain-successor.md)
+   - Lane: `causal-escalation`
+   - Purpose: implement write-queue drain and cache refresh mechanics to resolve the stale cache watermark under concurrent load.
+   - First-run reason: architecture experiment v2 distinguished cache watermark write-queue latency as the primary blocker.
+
+7. [Tell-Tale Scenario Suite Promotion Gate](../packages/active-20260525-tell-tale-scenario-suite-promotion-gate.md)
    - Lane: `scenario-release-gate`
    - Purpose: promote the rolling-restart proof ladder to the tell-tale
      scenarios and require repeatable route evidence.

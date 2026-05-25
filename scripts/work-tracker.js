@@ -8750,6 +8750,7 @@ async function writeValidatedMovedPackage(
     enforceClosureSubagentLedger:
       targetStatus === STATUS_DONE || targetStatus === STATUS_SUPERSEDED,
     packageHistoryEntries: await collectPackageHistoryEntries(),
+    theoryLedgerContext: await readTheoryLedgerContext(),
   });
   if (validation.errors.length > NUM_ZERO) {
     await fs.rm(targetPath, {force: true});

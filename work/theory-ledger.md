@@ -129,7 +129,7 @@ Each entry must include these labels:
 - Probe: npm run work:advance -- --check
 - Artifact/result: test-output/reports/rolling-restart-preflight-green-gate-confirmation.report.json
 - Representative movement: representative-green
-- Linked packages: work/packages/done-20260523-rolling-restart-recovery-reconcile-recursion-fix.md, work/packages/done-20260523-priority-recovery-operation-workflow-owner-workflow-progress.md, work/packages/done-20260523-rolling-restart-priority-recovery-event-wait-architecture-experiment.md
+- Linked packages: work/packages/done-20260523-rolling-restart-recovery-reconcile-recursion-fix.md, work/packages/done-20260523-priority-recovery-operation-workflow-owner-workflow-progress.md, work/packages/done-20260523-rolling-restart-priority-recovery-event-wait-architecture-experiment.md, work/packages/done-20260525-rolling-restart-cache-watermark-write-queue-drain-successor.md
 - Supersedes: none
 - Superseded by: none
 - Next implication: Successfully stabilized the rolling-restart scenario.

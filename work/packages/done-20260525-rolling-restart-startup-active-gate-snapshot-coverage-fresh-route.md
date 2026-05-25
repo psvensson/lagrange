@@ -183,7 +183,7 @@
   },
   "closed": "2026-05-25",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260525-rolling-restart-active-gate-snapshot-coverage-architecture-experiment.md"
+  "successor": "work/packages/done-20260525-rolling-restart-active-gate-snapshot-coverage-architecture-experiment.md"
 }
 -->
 
