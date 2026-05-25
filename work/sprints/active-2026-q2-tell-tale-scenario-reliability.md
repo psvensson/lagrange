@@ -59,7 +59,7 @@ and the same proof ladder is promoted to the tell-tale scenario set.
 ```text
 Representative artifact: none
 Visible first frontier: unknown
-Active package: work/packages/active-20260525-workflow-streamlining-follow-through.md
+Active package: work/packages/done-20260525-workflow-streamlining-follow-through.md
 Active package owner: workflow_tooling_owner
 Active package boundary: workflow_acceleration
 Selected cause: ceremony_reduction
@@ -69,10 +69,10 @@ Causal outcome: unknown
 Architecture gate: not-required / unknown
 Expected delta: unknown
 Current state: Workflow streamlining primitives exist but sprint advancement, audit summaries, and LLM-facing docs still leave manual ceremony.
-Allowed edits: scripts/work-audit-ceremony.js, scripts/work-sprint-advance.js, scripts/work-context.js, scripts/list-commands.js, package.json, work/RULES.md, work/README.md, .kiro/steering/llm/core.md, .kiro/steering/llm/boot.md, test/scripts/work-audit-ceremony.test.js, test/scripts/work-sprint-advance.test.js, test/scripts/work-context.test.js, test/scripts/list-commands.test.js, work/packages/active-20260525-workflow-streamlining-follow-through.md
+Allowed edits: scripts/work-audit-ceremony.js, scripts/work-sprint-advance.js, scripts/work-context.js, scripts/list-commands.js, package.json, work/RULES.md, work/README.md, .kiro/steering/llm/core.md, .kiro/steering/llm/boot.md, test/scripts/work-audit-ceremony.test.js, test/scripts/work-sprint-advance.test.js, test/scripts/work-context.test.js, test/scripts/list-commands.test.js, work/packages/done-20260525-workflow-streamlining-follow-through.md
 Candidate runtime files: unknown
 Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
-Required latest proof: regression: node --test test/scripts/work-audit-ceremony.test.js test/scripts/work-sprint-advance.test.js test/scripts/work-context.test.js test/scripts/list-commands.test.js, supporting: npm run work:audit:ceremony -- --summary --limit 5, supporting: npm run work:sprint:advance -- --dry-run --force, supporting: git diff --check -- scripts/work-audit-ceremony.js scripts/work-sprint-advance.js scripts/work-context.js scripts/list-commands.js package.json work/RULES.md work/README.md .kiro/steering/llm/core.md .kiro/steering/llm/boot.md test/scripts/work-audit-ceremony.test.js test/scripts/work-sprint-advance.test.js test/scripts/work-context.test.js test/scripts/list-commands.test.js work/packages/active-20260525-workflow-streamlining-follow-through.md
+Required latest proof: regression: node --test test/scripts/work-audit-ceremony.test.js test/scripts/work-sprint-advance.test.js test/scripts/work-context.test.js test/scripts/list-commands.test.js, supporting: npm run work:audit:ceremony -- --summary --limit 5, supporting: npm run work:sprint:advance -- --dry-run --force, supporting: git diff --check -- scripts/work-audit-ceremony.js scripts/work-sprint-advance.js scripts/work-context.js scripts/list-commands.js package.json work/RULES.md work/README.md .kiro/steering/llm/core.md .kiro/steering/llm/boot.md test/scripts/work-audit-ceremony.test.js test/scripts/work-sprint-advance.test.js test/scripts/work-context.test.js test/scripts/list-commands.test.js work/packages/done-20260525-workflow-streamlining-follow-through.md
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 

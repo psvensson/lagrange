@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "active",
+  "status": "done",
   "intent": {
     "opened": "2026-05-25",
     "lane": "lightweight-maintenance",
@@ -14,7 +14,8 @@
     "boundary": "workflow_acceleration",
     "dominantReason": "ceremony_reduction",
     "currentState": "Workflow streamlining primitives exist but sprint advancement, audit summaries, and LLM-facing docs still leave manual ceremony.",
-    "nextAction": "Add sprint advancement tooling, actionable audit summaries, bootstrap context hints, and streamlined workflow docs."
+    "nextAction": "Add sprint advancement tooling, actionable audit summaries, bootstrap context hints, and streamlined workflow docs.",
+    "closed": "2026-05-25"
   },
   "scope": {
     "writeScope": [
@@ -31,7 +32,7 @@
       "test/scripts/work-sprint-advance.test.js",
       "test/scripts/work-context.test.js",
       "test/scripts/list-commands.test.js",
-      "work/packages/active-20260525-workflow-streamlining-follow-through.md"
+      "work/packages/done-20260525-workflow-streamlining-follow-through.md"
     ],
     "handoffFiles": [],
     "generatedFiles": [],
@@ -75,7 +76,7 @@
         "regression: node --test test/scripts/work-audit-ceremony.test.js test/scripts/work-sprint-advance.test.js test/scripts/work-context.test.js test/scripts/list-commands.test.js",
         "supporting: npm run work:audit:ceremony -- --summary --limit 5",
         "supporting: npm run work:sprint:advance -- --dry-run --force",
-        "supporting: git diff --check -- scripts/work-audit-ceremony.js scripts/work-sprint-advance.js scripts/work-context.js scripts/list-commands.js package.json work/RULES.md work/README.md .kiro/steering/llm/core.md .kiro/steering/llm/boot.md test/scripts/work-audit-ceremony.test.js test/scripts/work-sprint-advance.test.js test/scripts/work-context.test.js test/scripts/list-commands.test.js work/packages/active-20260525-workflow-streamlining-follow-through.md"
+        "supporting: git diff --check -- scripts/work-audit-ceremony.js scripts/work-sprint-advance.js scripts/work-context.js scripts/list-commands.js package.json work/RULES.md work/README.md .kiro/steering/llm/core.md .kiro/steering/llm/boot.md test/scripts/work-audit-ceremony.test.js test/scripts/work-sprint-advance.test.js test/scripts/work-context.test.js test/scripts/list-commands.test.js work/packages/done-20260525-workflow-streamlining-follow-through.md"
       ]
     },
     "implementation": {
@@ -94,7 +95,7 @@
         "test/scripts/work-sprint-advance.test.js",
         "test/scripts/work-context.test.js",
         "test/scripts/list-commands.test.js",
-        "work/packages/active-20260525-workflow-streamlining-follow-through.md"
+        "work/packages/done-20260525-workflow-streamlining-follow-through.md"
       ]
     },
     "verificationFix": {
@@ -193,7 +194,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 11. test/scripts/work-sprint-advance.test.js
 12. test/scripts/work-context.test.js
 13. test/scripts/list-commands.test.js
-14. work/packages/active-20260525-workflow-streamlining-follow-through.md
+14. work/packages/done-20260525-workflow-streamlining-follow-through.md
 
 ## Out Of Scope
 
@@ -206,11 +207,11 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex-spark`
 - Scope shape: `leaf-slice`
 - Output profile: `medium`
-- Owned files: `scripts/work-audit-ceremony.js`, `scripts/work-sprint-advance.js`, `scripts/work-context.js`, `scripts/list-commands.js`, `package.json`, `work/RULES.md`, `work/README.md`, `.kiro/steering/llm/core.md`, `.kiro/steering/llm/boot.md`, `test/scripts/work-audit-ceremony.test.js`, `test/scripts/work-sprint-advance.test.js`, `test/scripts/work-context.test.js`, `test/scripts/list-commands.test.js`, `work/packages/active-20260525-workflow-streamlining-follow-through.md`
+- Owned files: `scripts/work-audit-ceremony.js`, `scripts/work-sprint-advance.js`, `scripts/work-context.js`, `scripts/list-commands.js`, `package.json`, `work/RULES.md`, `work/README.md`, `.kiro/steering/llm/core.md`, `.kiro/steering/llm/boot.md`, `test/scripts/work-audit-ceremony.test.js`, `test/scripts/work-sprint-advance.test.js`, `test/scripts/work-context.test.js`, `test/scripts/list-commands.test.js`, `work/packages/done-20260525-workflow-streamlining-follow-through.md`
 - Forbidden files: `src/`, `test-output/`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `regression: node --test test/scripts/work-audit-ceremony.test.js test/scripts/work-sprint-advance.test.js test/scripts/work-context.test.js test/scripts/list-commands.test.js`, `supporting: npm run work:audit:ceremony -- --summary --limit 5`, `supporting: npm run work:sprint:advance -- --dry-run --force`, `supporting: git diff --check -- scripts/work-audit-ceremony.js scripts/work-sprint-advance.js scripts/work-context.js scripts/list-commands.js package.json work/RULES.md work/README.md .kiro/steering/llm/core.md .kiro/steering/llm/boot.md test/scripts/work-audit-ceremony.test.js test/scripts/work-sprint-advance.test.js test/scripts/work-context.test.js test/scripts/list-commands.test.js work/packages/active-20260525-workflow-streamlining-follow-through.md`
+- Focused proof: `regression: node --test test/scripts/work-audit-ceremony.test.js test/scripts/work-sprint-advance.test.js test/scripts/work-context.test.js test/scripts/list-commands.test.js`, `supporting: npm run work:audit:ceremony -- --summary --limit 5`, `supporting: npm run work:sprint:advance -- --dry-run --force`, `supporting: git diff --check -- scripts/work-audit-ceremony.js scripts/work-sprint-advance.js scripts/work-context.js scripts/list-commands.js package.json work/RULES.md work/README.md .kiro/steering/llm/core.md .kiro/steering/llm/boot.md test/scripts/work-audit-ceremony.test.js test/scripts/work-sprint-advance.test.js test/scripts/work-context.test.js test/scripts/list-commands.test.js work/packages/done-20260525-workflow-streamlining-follow-through.md`
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split
@@ -235,13 +236,13 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: <owner>; files-changed: <paths or none>; validation: <focused proof and parent revalidated focused proof: yes>; outcome: <validated|blocked>.
-- [ ] action: verification-fix; owner: <owner>; files-changed: <paths or none>; validation: <verification proof and parent revalidated focused proof: yes>; outcome: <validated|blocked>.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: <validated|not-needed>.
+- [x] action: implementation; owner: workflow_tooling_owner; files-changed: scripts/work-audit-ceremony.js, scripts/work-sprint-advance.js, scripts/work-context.js, scripts/list-commands.js, package.json, work/RULES.md, work/README.md, .kiro/steering/llm/core.md, .kiro/steering/llm/boot.md, test/scripts/work-audit-ceremony.test.js, test/scripts/work-sprint-advance.test.js, test/scripts/work-context.test.js, test/scripts/list-commands.test.js, work/packages/done-20260525-workflow-streamlining-follow-through.md; validation: focused proof passed and parent revalidated focused proof: yes; outcome: validated.
+- [x] action: verification-fix; owner: workflow_tooling_owner; files-changed: none; validation: closure validation passed and parent revalidated focused proof: yes; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:current-blocker`; outcome: validated.
 
 ## Validation
 
 1. regression: node --test test/scripts/work-audit-ceremony.test.js test/scripts/work-sprint-advance.test.js test/scripts/work-context.test.js test/scripts/list-commands.test.js
 2. supporting: npm run work:audit:ceremony -- --summary --limit 5
 3. supporting: npm run work:sprint:advance -- --dry-run --force
-4. supporting: git diff --check -- scripts/work-audit-ceremony.js scripts/work-sprint-advance.js scripts/work-context.js scripts/list-commands.js package.json work/RULES.md work/README.md .kiro/steering/llm/core.md .kiro/steering/llm/boot.md test/scripts/work-audit-ceremony.test.js test/scripts/work-sprint-advance.test.js test/scripts/work-context.test.js test/scripts/list-commands.test.js work/packages/active-20260525-workflow-streamlining-follow-through.md
+4. supporting: git diff --check -- scripts/work-audit-ceremony.js scripts/work-sprint-advance.js scripts/work-context.js scripts/list-commands.js package.json work/RULES.md work/README.md .kiro/steering/llm/core.md .kiro/steering/llm/boot.md test/scripts/work-audit-ceremony.test.js test/scripts/work-sprint-advance.test.js test/scripts/work-context.test.js test/scripts/list-commands.test.js work/packages/done-20260525-workflow-streamlining-follow-through.md
