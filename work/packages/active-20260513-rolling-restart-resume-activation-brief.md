@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "todo",
+  "status": "active",
   "opened": "2026-05-13",
   "lane": "read-review-doc-only",
   "scenario": "none",
@@ -15,13 +15,18 @@
   "currentState": "The future-governance sprint now needs a concrete rolling-restart resume activation brief so the paused runtime sprint restarts from the repeated priority-recovery operation-progress edge instead of another local witness.",
   "nextAction": "Before rolling-restart runtime work resumes, reconcile this brief with the latest active artifact and activate a runtime-owner or scenario-release-gate package that cites the blocker-path ledger row, operation-progress contract seed, focused fixture proof, and green path sequence.",
   "proof": [
-    "npm run work:package:doctor -- --suggest work/packages/todo-20260513-rolling-restart-resume-activation-brief.md",
-    "npm run work:validate -- --entry work/packages/todo-20260513-rolling-restart-resume-activation-brief.md",
-    "git diff --check -- work/packages/todo-20260513-rolling-restart-resume-activation-brief.md work/sprints/todo-2026-q2-future-sprint-release-gate-systemic-governance.md"
+    "npm run work:package:doctor -- --suggest work/packages/active-20260513-rolling-restart-resume-activation-brief.md",
+    "npm run work:validate -- --entry work/packages/active-20260513-rolling-restart-resume-activation-brief.md",
+    "git diff --check -- work/packages/active-20260513-rolling-restart-resume-activation-brief.md work/packages/todo-20260513-rolling-restart-resume-activation-brief.md work/packages/done-20260513-future-sprint-release-gate-systemic-governance.md work/packages/todo-20260513-release-gate-runtime-architecture-backlog.md work/sprints/done-2026-q2-future-sprint-release-gate-systemic-governance.md work/sprints/current-blocker.json work/sprints/current-blocker.md"
   ],
   "writeScope": [
+    "work/packages/active-20260513-rolling-restart-resume-activation-brief.md",
     "work/packages/todo-20260513-rolling-restart-resume-activation-brief.md",
-    "work/sprints/todo-2026-q2-future-sprint-release-gate-systemic-governance.md"
+    "work/packages/done-20260513-future-sprint-release-gate-systemic-governance.md",
+    "work/packages/todo-20260513-release-gate-runtime-architecture-backlog.md",
+    "work/sprints/done-2026-q2-future-sprint-release-gate-systemic-governance.md",
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md"
   ],
   "handoffFiles": [
     "work/packages/done-20260513-rolling-restart-green-gate-workflow-progress-recovery.md",
@@ -34,16 +39,26 @@
     "test-output/reports/rolling-restart-green-only-baseline-20260513.report.json",
     "test-output/reports/rolling-restart-green-gate-after-direct-wakeup-transport-contract.report.json"
   ],
-  "generatedFiles": [],
+  "generatedFiles": [
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md"
+  ],
   "candidateRuntimeFiles": [],
   "commitScope": [
+    "work/packages/active-20260513-rolling-restart-resume-activation-brief.md",
     "work/packages/todo-20260513-rolling-restart-resume-activation-brief.md",
-    "work/sprints/todo-2026-q2-future-sprint-release-gate-systemic-governance.md"
+    "work/packages/done-20260513-future-sprint-release-gate-systemic-governance.md",
+    "work/packages/todo-20260513-release-gate-runtime-architecture-backlog.md",
+    "work/sprints/done-2026-q2-future-sprint-release-gate-systemic-governance.md",
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md"
   ],
   "modelFit": {
     "packageClass": "workflow-tooling-governance",
     "intendedMinimumModel": "gpt-5.3-codex",
     "scopeShape": "resume-activation-brief/rolling-restart",
+    "outputProfile": "medium",
+    "ambiguityScore": 2,
     "escalationTriggers": [
       "active artifact first frontier changed since this brief was written",
       "runtime implementation scope is selected",
@@ -263,9 +278,14 @@ differs materially from this brief, refresh the brief before activation.
 - Package class: `workflow-tooling-governance`
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `resume-activation-brief/rolling-restart`
+- Output profile: `medium`
 - Owned files:
-  `work/packages/todo-20260513-rolling-restart-resume-activation-brief.md` and
-  `work/sprints/todo-2026-q2-future-sprint-release-gate-systemic-governance.md`
+  `work/packages/active-20260513-rolling-restart-resume-activation-brief.md`,
+  `work/packages/todo-20260513-rolling-restart-resume-activation-brief.md`,
+  `work/packages/done-20260513-future-sprint-release-gate-systemic-governance.md`,
+  `work/packages/todo-20260513-release-gate-runtime-architecture-backlog.md`,
+  `work/sprints/done-2026-q2-future-sprint-release-gate-systemic-governance.md`,
+  `work/sprints/current-blocker.json`, and `work/sprints/current-blocker.md`
 - Forbidden files: `src/`, `test/rebalancer/`, `test/control-plane/`,
   representative report artifacts, active rolling-restart package/sprint files
 - Frozen decisions: this package does not implement runtime behavior or mutate
@@ -273,15 +293,15 @@ differs materially from this brief, refresh the brief before activation.
 - Escalation triggers: runtime package activation, stale active proof, or a need
   to read raw JSON because canonical extractors are insufficient.
 - Focused proof:
-  `npm run work:package:doctor -- --suggest work/packages/todo-20260513-rolling-restart-resume-activation-brief.md`,
-  `npm run work:validate -- --entry work/packages/todo-20260513-rolling-restart-resume-activation-brief.md`,
-  `git diff --check -- work/packages/todo-20260513-rolling-restart-resume-activation-brief.md work/sprints/todo-2026-q2-future-sprint-release-gate-systemic-governance.md`
+  `npm run work:package:doctor -- --suggest work/packages/active-20260513-rolling-restart-resume-activation-brief.md`,
+  `npm run work:validate -- --entry work/packages/active-20260513-rolling-restart-resume-activation-brief.md`,
+  `git diff --check -- work/packages/active-20260513-rolling-restart-resume-activation-brief.md work/packages/todo-20260513-rolling-restart-resume-activation-brief.md work/packages/done-20260513-future-sprint-release-gate-systemic-governance.md work/packages/todo-20260513-release-gate-runtime-architecture-backlog.md work/sprints/done-2026-q2-future-sprint-release-gate-systemic-governance.md work/sprints/current-blocker.json work/sprints/current-blocker.md`
 
 ## Validation
 
-1. `npm run work:package:doctor -- --suggest work/packages/todo-20260513-rolling-restart-resume-activation-brief.md`
-2. `npm run work:validate -- --entry work/packages/todo-20260513-rolling-restart-resume-activation-brief.md`
-3. `git diff --check -- work/packages/todo-20260513-rolling-restart-resume-activation-brief.md work/sprints/todo-2026-q2-future-sprint-release-gate-systemic-governance.md`
+1. `npm run work:package:doctor -- --suggest work/packages/active-20260513-rolling-restart-resume-activation-brief.md`
+2. `npm run work:validate -- --entry work/packages/active-20260513-rolling-restart-resume-activation-brief.md`
+3. `git diff --check -- work/packages/active-20260513-rolling-restart-resume-activation-brief.md work/packages/todo-20260513-rolling-restart-resume-activation-brief.md work/packages/done-20260513-future-sprint-release-gate-systemic-governance.md work/packages/todo-20260513-release-gate-runtime-architecture-backlog.md work/sprints/done-2026-q2-future-sprint-release-gate-systemic-governance.md work/sprints/current-blocker.json work/sprints/current-blocker.md`
 
 ## Activation Checklist
 

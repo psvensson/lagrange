@@ -4,27 +4,28 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: No active work package. Start a new package when implementation resumes.
+Theory under test: The future-governance sprint now needs a concrete rolling-restart resume activation brief so the paused runtime sprint restarts from the repeated priority-recovery operation-progress edge instead of another local witness.
 
-Causal question: none
+Causal question: paused_release_gate_needs_concrete_resume_path
 
-Implementation slice: Create or activate one focused package for the next executable concern.
+Implementation slice: Before rolling-restart runtime work resumes, reconcile this brief with the latest active artifact and activate a runtime-owner or scenario-release-gate package that cites the blocker-path ledger row, operation-progress contract seed, focused fixture proof, and green path sequence.
 
 Implementation files:
 
-1. None recorded
+1. `work/packages/active-20260513-rolling-restart-resume-activation-brief.md`
+2. `work/sprints/todo-2026-q2-future-sprint-release-gate-systemic-governance.md`
 
 Expected implementation delta: unknown
 
-Falsifying probe: unknown
+Falsifying probe: npm run work:package:doctor -- --suggest work/packages/active-20260513-rolling-restart-resume-activation-brief.md
 
-Stop rule: unknown
+Stop rule: No architecture decision gate is required for this package.
 
 Sprint: `none`
 
-Package: `none`
+Package: `work/packages/active-20260513-rolling-restart-resume-activation-brief.md`
 
-Workflow lane: `none`
+Workflow lane: `read-review-doc-only`
 
 Scenario: `none`
 
@@ -34,35 +35,39 @@ Playback: `none`
 
 ## Boundary
 
-Owner: `none`
+Owner: `workflow_tooling_owner`
 
-Boundary: `none`
+Boundary: `rolling_restart_resume_activation_brief`
 
-Dominant reason: `none`
+Dominant reason: `paused_release_gate_needs_concrete_resume_path`
 
-Current state: No active work package. Start a new package when implementation resumes.
+Current state: The future-governance sprint now needs a concrete rolling-restart resume activation brief so the paused runtime sprint restarts from the repeated priority-recovery operation-progress edge instead of another local witness.
 
 ## Next Action
 
-Create or activate one focused package for the next executable concern.
+Before rolling-restart runtime work resumes, reconcile this brief with the latest active artifact and activate a runtime-owner or scenario-release-gate package that cites the blocker-path ledger row, operation-progress contract seed, focused fixture proof, and green path sequence.
 
 ## Proof Ladder
 
-1. None recorded
+1. `npm run work:package:doctor -- --suggest work/packages/active-20260513-rolling-restart-resume-activation-brief.md`
+2. `npm run work:validate -- --entry work/packages/active-20260513-rolling-restart-resume-activation-brief.md`
+3. `git diff --check -- work/packages/active-20260513-rolling-restart-resume-activation-brief.md work/sprints/todo-2026-q2-future-sprint-release-gate-systemic-governance.md`
 
 ## Model Fit
 
-Package class: `unknown`
+Package class: `workflow-tooling-governance`
 
-Intended minimum model: `unknown`
+Intended minimum model: `gpt-5.3-codex`
 
-Scope shape: `unknown`
+Scope shape: `resume-activation-brief/rolling-restart`
 
-Output profile: `unknown`
+Output profile: `medium`
 
 Escalation triggers:
 
-1. None recorded
+1. `active artifact first frontier changed since this brief was written`
+2. `runtime implementation scope is selected`
+3. `the brief needs to reinterpret raw report JSON instead of using canonical extractors`
 
 ## Theory Ledger References
 
@@ -212,9 +217,9 @@ Runtime promotion rule: `unknown`
 
 ## Architecture Decision Gate
 
-Status: `unknown`
+Status: `not-required`
 
-Trigger: `unknown`
+Trigger: `none`
 
 Trigger evidence:
 
@@ -226,22 +231,30 @@ Choices:
 
 Selected choice: `unknown`
 
-Gate next action: unknown
+Gate next action: No architecture decision gate is required for this package.
 
 ## Scope
 
 Write scope:
 
-1. None recorded
+1. `work/packages/active-20260513-rolling-restart-resume-activation-brief.md`
+2. `work/sprints/todo-2026-q2-future-sprint-release-gate-systemic-governance.md`
 
 Handoff files:
 
-1. None recorded
+1. `work/packages/done-20260513-rolling-restart-green-gate-workflow-progress-recovery.md`
+2. `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
+3. `work/packages/todo-20260513-release-gate-blocker-path-ledger-template.md`
+4. `work/packages/todo-20260513-release-gate-architecture-contract-template.md`
+5. `work/packages/todo-20260513-release-gate-fixture-first-policy.md`
+6. `work/packages/todo-20260513-release-gate-bounded-progress-governance.md`
+7. `work/packages/todo-20260513-release-gate-runtime-architecture-backlog.md`
+8. `test-output/reports/rolling-restart-green-only-baseline-20260513.report.json`
+9. `test-output/reports/rolling-restart-green-gate-after-direct-wakeup-transport-contract.report.json`
 
 Generated files:
 
-1. `work/sprints/current-blocker.json`
-2. `work/sprints/current-blocker.md`
+1. None recorded
 
 Candidate runtime files:
 
@@ -249,7 +262,8 @@ Candidate runtime files:
 
 Commit scope:
 
-1. None recorded
+1. `work/packages/active-20260513-rolling-restart-resume-activation-brief.md`
+2. `work/sprints/todo-2026-q2-future-sprint-release-gate-systemic-governance.md`
 
 Legacy touched files:
 
