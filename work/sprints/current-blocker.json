@@ -1,72 +1,163 @@
 {
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
-  "sprint": "none",
-  "package": "work/packages/active-20260513-rolling-restart-resume-activation-brief.md",
+  "sprint": "work/sprints/active-2026-q2-rolling-restart-resume-activation.md",
+  "package": "work/packages/active-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md",
   "status": "active",
-  "lane": "read-review-doc-only",
-  "scenario": "none",
-  "artifact": "none",
+  "lane": "experiment",
+  "scenario": "rolling-restart",
+  "artifact": "test-output/reports/rolling-restart-tell-tale-green-gate.report.json",
   "playback": "none",
-  "owner": "workflow_tooling_owner",
-  "boundary": "rolling_restart_resume_activation_brief",
-  "dominantReason": "paused_release_gate_needs_concrete_resume_path",
-  "currentState": "The future-governance sprint now needs a concrete rolling-restart resume activation brief so the paused runtime sprint restarts from the repeated priority-recovery operation-progress edge instead of another local witness.",
-  "nextAction": "Before rolling-restart runtime work resumes, reconcile this brief with the latest active artifact and activate a runtime-owner or scenario-release-gate package that cites the blocker-path ledger row, operation-progress contract seed, focused fixture proof, and green path sequence.",
+  "owner": "startup_active_gate_owner",
+  "boundary": "snapshot_coverage",
+  "dominantReason": "active_gate_timed_out",
+  "currentState": "Latest rolling-restart evidence after the resume brief routes to active_gate_snapshot_coverage with startup_active_gate_owner / snapshot_coverage / active_gate_timed_out. Priority-recovery witnesses are zero; the selected snapshot source is transport-closed with owner_reconcile_pending and snapshot_repair_deferred.",
+  "nextAction": "Run an autonomous architecture experiment to distinguish selected transport closure, owner recovery wake, repair execution, or projection refresh before another runtime patch.",
   "proof": [
-    "npm run work:package:doctor -- --suggest work/packages/active-20260513-rolling-restart-resume-activation-brief.md",
-    "npm run work:validate -- --entry work/packages/active-20260513-rolling-restart-resume-activation-brief.md",
-    "git diff --check -- work/packages/active-20260513-rolling-restart-resume-activation-brief.md work/sprints/todo-2026-q2-future-sprint-release-gate-systemic-governance.md"
+    "falsifier: representative routing evidence npm run work:scenario-route -- test-output/reports/rolling-restart-tell-tale-green-gate.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage",
+    "regression: topology explanation npm run analyze:topology-convergence -- test-output/reports/rolling-restart-tell-tale-green-gate.report.json --explain active_gate_snapshot_coverage",
+    "supporting: causal route proof npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-tell-tale-green-gate.report.json"
   ],
   "writeScope": [
-    "work/packages/active-20260513-rolling-restart-resume-activation-brief.md",
-    "work/sprints/todo-2026-q2-future-sprint-release-gate-systemic-governance.md"
+    "work/packages/active-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md"
   ],
   "handoffFiles": [
-    "work/packages/done-20260513-rolling-restart-green-gate-workflow-progress-recovery.md",
-    "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
-    "work/packages/todo-20260513-release-gate-blocker-path-ledger-template.md",
-    "work/packages/todo-20260513-release-gate-architecture-contract-template.md",
-    "work/packages/todo-20260513-release-gate-fixture-first-policy.md",
-    "work/packages/todo-20260513-release-gate-bounded-progress-governance.md",
-    "work/packages/todo-20260513-release-gate-runtime-architecture-backlog.md",
-    "test-output/reports/rolling-restart-green-only-baseline-20260513.report.json",
-    "test-output/reports/rolling-restart-green-gate-after-direct-wakeup-transport-contract.report.json"
+    "work/packages/done-20260513-rolling-restart-resume-activation-brief.md",
+    "test-output/reports/rolling-restart-tell-tale-green-gate.report.json"
   ],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
+  "generatedFiles": [
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md"
+  ],
+  "candidateRuntimeFiles": [
+    "src/admin/admin-control-snapshot-publication-handoff.js",
+    "src/control-plane/publication-active-gate-handoff-contract-decision.js",
+    "src/control-plane/publication-active-gate-handoff-contract-fence.js",
+    "src/control-plane/publication-active-gate-handoff-contract.js",
+    "test/admin/admin-control-snapshot-deferred-refresh-membership-observation-test-cases.js",
+    "test/distributed/harness/cluster-segment-7-class-4-publication-coverage.js"
+  ],
   "commitScope": [
-    "work/packages/active-20260513-rolling-restart-resume-activation-brief.md",
-    "work/sprints/todo-2026-q2-future-sprint-release-gate-systemic-governance.md"
+    "work/packages/active-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md",
+    "work/sprints/active-2026-q2-rolling-restart-resume-activation.md",
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md"
   ],
   "touchedFiles": [],
-  "theoryLedgerRefs": [],
+  "theoryLedgerRefs": [
+    "theory-20260522-snapshot-watch-handoff-contract",
+    "theory-20260523-rolling-restart-recovery-reconcile-recursion-fix"
+  ],
   "modelFit": {
-    "packageClass": "workflow-tooling-governance",
+    "packageClass": "architecture-experiment",
     "intendedMinimumModel": "gpt-5.3-codex",
-    "scopeShape": "resume-activation-brief/rolling-restart",
+    "scopeShape": "cross-owner-discriminator/current-frontier",
     "outputProfile": "medium",
-    "ambiguityScore": 2,
     "escalationTriggers": [
-      "active artifact first frontier changed since this brief was written",
-      "runtime implementation scope is selected",
-      "the brief needs to reinterpret raw report JSON instead of using canonical extractors"
-    ]
+      "owned files expand beyond this package",
+      "a frozen decision must be reopened"
+    ],
+    "ambiguityScore": 3
   },
   "representativeResidual": {},
-  "causalGovernance": {},
-  "scenarioCausalClosure": {},
-  "observablePrediction": {},
+  "causalGovernance": {
+    "hypothesis": "The current active-gate snapshot coverage blocker is selected transport closure or repair-deferred owner recovery, not priority-recovery operation progress.",
+    "stopConditionCheck": "Use scenario-route, active_gate_snapshot_coverage topology explanation, and `npm run analyze:causal-model` proof before any runtime files move into write scope.",
+    "expectedCausalModelChange": "The experiment names exactly one selected snapshot refresh, owner recovery wake, repair execution, projection refresh, or architecture stop.",
+    "representativeOutcome": "architecture-gap",
+    "causalDebt": "Fresh route reports active_gate_snapshot_coverage blocked with snapshotCoverageNodeCount 1/5, active_gate_timed_out, selected_transport_closed, owner_reconcile_pending, and snapshot_repair_deferred.",
+    "crossBoundaryReview": "Startup readiness remains downstream; runtime files stay candidate-only during this experiment."
+  },
+  "scenarioCausalClosure": {
+    "referenceScenarioOrProbe": "rolling-restart active-gate snapshot coverage architecture discriminator",
+    "phaseChain": [
+      "latest rolling-restart route completed",
+      "priority-recovery witnesses are zero",
+      "active_gate_snapshot_coverage remains first frontier",
+      "architecture discriminator selects or rejects a runtime successor"
+    ],
+    "currentFirstFrontier": "active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out",
+    "knownDownstreamBlockers": [
+      "startup_readiness_owner / startup_support_evidence remains downstream of active-gate coverage"
+    ],
+    "missingCausalEdge": "Whether selected_transport_closed needs selected snapshot refresh, owner recovery wake, repair execution, or projection refresh.",
+    "missingCausalEdgeProbe": "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-tell-tale-green-gate.report.json --explain active_gate_snapshot_coverage",
+    "falsifyingProbe": "npm run work:scenario-route -- test-output/reports/rolling-restart-tell-tale-green-gate.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage",
+    "boundedProgressProof": "The architecture experiment names one bounded owner transition such as wake, retry, repair execution, or projection refresh, or stops before runtime edits.",
+    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-tell-tale-green-gate.report.json",
+    "expectedObservableTransition": "selected successor contract, owner-boundary migration, or architecture-stop decision",
+    "maxProgressBound": "one architecture discriminator",
+    "sameFrontierFallback": "Do not open another runtime patch; keep architecture experiment active until it selects one concrete transition.",
+    "expectedNextFrontier": "selected active-gate runtime contract or architecture-gap stop",
+    "resultClassification": "pending-before-probe",
+    "stopCondition": "architecture-gap-stop",
+    "recentFrontierHistory": [
+      "done-20260525-rolling-restart-cache-watermark-write-queue-drain-successor.md / startup_active_gate_owner / snapshot_coverage / reduced",
+      "done-20260525-tell-tale-scenario-suite-promotion-gate.md / release_gate_owner / tell_tale_suite_repeatability / same-frontier"
+    ],
+    "oscillationCheck": "Frontier returned to startup_active_gate_owner / snapshot_coverage after a related runtime successor, so this package is an architecture discriminator.",
+    "handoffInvariant": "Startup readiness stays downstream until active-gate snapshot coverage clears, reduces, migrates, or selects a runtime contract."
+  },
+  "observablePrediction": {
+    "metric": "selected successor mechanism plus active_gate_snapshot_coverage reason set and snapshotCoverageNodeCount",
+    "predicted": "one active-gate transition is selected before runtime promotion",
+    "observed": "pending-before-observation",
+    "accuracy": "pending-before-observation",
+    "evidence": "test-output/reports/rolling-restart-tell-tale-green-gate.report.json"
+  },
   "experimentOutcome": {},
-  "rerunDecision": {},
-  "classificationEfficiency": {},
+  "rerunDecision": {
+    "sourceArtifact": "test-output/reports/rolling-restart-tell-tale-green-gate.report.json",
+    "routeOwner": "startup_active_gate_owner",
+    "routeBoundary": "snapshot_coverage",
+    "routeDominantReason": "active_gate_timed_out",
+    "routeCausalOutcome": "continue_local_fix",
+    "stopMode": "classified_local_blocker",
+    "nextLane": "runtime-owner-boundary",
+    "expectedDelta": "Select the owner transition that moves selected_transport_closed plus repair_deferred evidence toward snapshotCoverageNodeCount=5/5, or stop before runtime edits.",
+    "requiredRefreshCommands": [
+      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-tell-tale-green-gate.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out",
+      "update Sprint Strategy Brief and Current Edge Card from the route result",
+      "npm run work:repair",
+      "npm run work:validate -- --pre-impl"
+    ]
+  },
+  "classificationEfficiency": {
+    "defaultMode": "inline-gate-default",
+    "separatePackageReason": "successor-selection",
+    "artifactBudget": "one-artifact",
+    "proofCommandBudget": "two-or-three-canonical-commands",
+    "commands": [
+      "npm run work:scenario-route -- test-output/reports/rolling-restart-tell-tale-green-gate.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage",
+      "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-tell-tale-green-gate.report.json --explain active_gate_snapshot_coverage",
+      "npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown"
+    ],
+    "decisionRecord": "Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.",
+    "successorAction": "open-runtime-owner-boundary",
+    "runtimePromotionRule": "When canonical owner and boundary are stable, prefer a runtime-owner-boundary successor and keep runtime files in candidateRuntimeFiles until that package activates them. If the representative route is same-frontier with no reduction or an architecture gap, open an autonomous architecture experiment before more local runtime work."
+  },
   "architectureDecisionGate": {
-    "status": "not-required",
-    "trigger": "none",
-    "triggerEvidence": [],
-    "choices": [],
-    "selectedChoice": null,
-    "nextAction": "No architecture decision gate is required for this package."
+    "status": "selected",
+    "trigger": "frontier-oscillation",
+    "triggerEvidence": [
+      "Latest route has zero priority-recovery witnesses and active_gate_snapshot_coverage as first frontier.",
+      "A related active-gate runtime successor already closed with reduced evidence.",
+      "The current route still has selected_transport_closed, owner_reconcile_pending, and snapshot_repair_deferred."
+    ],
+    "choices": [
+      {
+        "id": "open-architecture-package",
+        "summary": "Select one active-gate transition before runtime implementation resumes.",
+        "route": "architecture-package",
+        "proof": [
+          "npm run work:scenario-route -- test-output/reports/rolling-restart-tell-tale-green-gate.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage",
+          "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-tell-tale-green-gate.report.json --explain active_gate_snapshot_coverage",
+          "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-tell-tale-green-gate.report.json"
+        ]
+      }
+    ],
+    "selectedChoice": "open-architecture-package",
+    "nextAction": "Run this architecture discriminator before any further startup_active_gate_owner / snapshot_coverage runtime patch."
   },
   "predecessor": null
 }

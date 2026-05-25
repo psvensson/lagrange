@@ -17,14 +17,14 @@
   "proof": [
     "npm run work:package:doctor -- --suggest work/packages/done-20260513-future-sprint-release-gate-systemic-governance.md",
     "npm run work:validate -- --entry work/packages/done-20260513-future-sprint-release-gate-systemic-governance.md",
-    "npm run work:validate -- --entry work/packages/todo-20260513-release-gate-blocker-path-ledger-template.md work/packages/active-20260513-rolling-restart-resume-activation-brief.md work/packages/todo-20260513-release-gate-architecture-contract-template.md work/packages/todo-20260513-release-gate-fixture-first-policy.md work/packages/todo-20260513-release-gate-bounded-progress-governance.md work/packages/todo-20260513-release-gate-runtime-architecture-backlog.md",
-    "git diff --check -- work/sprints/todo-2026-q2-future-sprint-release-gate-systemic-governance.md work/packages/done-20260513-future-sprint-release-gate-systemic-governance.md work/packages/todo-20260513-release-gate-blocker-path-ledger-template.md work/packages/active-20260513-rolling-restart-resume-activation-brief.md work/packages/todo-20260513-release-gate-architecture-contract-template.md work/packages/todo-20260513-release-gate-fixture-first-policy.md work/packages/todo-20260513-release-gate-bounded-progress-governance.md work/packages/todo-20260513-release-gate-runtime-architecture-backlog.md work/README.md work/templates/work-package-template.md"
+    "npm run work:validate -- --entry work/packages/todo-20260513-release-gate-blocker-path-ledger-template.md work/packages/done-20260513-rolling-restart-resume-activation-brief.md work/packages/todo-20260513-release-gate-architecture-contract-template.md work/packages/todo-20260513-release-gate-fixture-first-policy.md work/packages/todo-20260513-release-gate-bounded-progress-governance.md work/packages/todo-20260513-release-gate-runtime-architecture-backlog.md",
+    "git diff --check -- work/sprints/todo-2026-q2-future-sprint-release-gate-systemic-governance.md work/packages/done-20260513-future-sprint-release-gate-systemic-governance.md work/packages/todo-20260513-release-gate-blocker-path-ledger-template.md work/packages/done-20260513-rolling-restart-resume-activation-brief.md work/packages/todo-20260513-release-gate-architecture-contract-template.md work/packages/todo-20260513-release-gate-fixture-first-policy.md work/packages/todo-20260513-release-gate-bounded-progress-governance.md work/packages/todo-20260513-release-gate-runtime-architecture-backlog.md work/README.md work/templates/work-package-template.md"
   ],
   "writeScope": [
     "work/sprints/todo-2026-q2-future-sprint-release-gate-systemic-governance.md",
     "work/packages/done-20260513-future-sprint-release-gate-systemic-governance.md",
     "work/packages/todo-20260513-release-gate-blocker-path-ledger-template.md",
-    "work/packages/active-20260513-rolling-restart-resume-activation-brief.md",
+    "work/packages/done-20260513-rolling-restart-resume-activation-brief.md",
     "work/packages/todo-20260513-release-gate-architecture-contract-template.md",
     "work/packages/todo-20260513-release-gate-fixture-first-policy.md",
     "work/packages/todo-20260513-release-gate-bounded-progress-governance.md",
@@ -42,7 +42,7 @@
     "work/sprints/todo-2026-q2-future-sprint-release-gate-systemic-governance.md",
     "work/packages/done-20260513-future-sprint-release-gate-systemic-governance.md",
     "work/packages/todo-20260513-release-gate-blocker-path-ledger-template.md",
-    "work/packages/active-20260513-rolling-restart-resume-activation-brief.md",
+    "work/packages/done-20260513-rolling-restart-resume-activation-brief.md",
     "work/packages/todo-20260513-release-gate-architecture-contract-template.md",
     "work/packages/todo-20260513-release-gate-fixture-first-policy.md",
     "work/packages/todo-20260513-release-gate-bounded-progress-governance.md",
@@ -200,7 +200,7 @@ active rolling-restart runtime package. Its package queue covers:
 
 1. systemic governance and active-sprint isolation
 2. [blocker-path ledger template](todo-20260513-release-gate-blocker-path-ledger-template.md)
-3. [rolling-restart resume activation brief](active-20260513-rolling-restart-resume-activation-brief.md)
+3. [rolling-restart resume activation brief](done-20260513-rolling-restart-resume-activation-brief.md)
 4. [architecture contract template](todo-20260513-release-gate-architecture-contract-template.md)
 5. [fixture-first release-gate policy](todo-20260513-release-gate-fixture-first-policy.md)
 6. [bounded-progress governance](todo-20260513-release-gate-bounded-progress-governance.md)
@@ -227,22 +227,22 @@ active rolling-restart runtime package. Its package queue covers:
 - Package class: `workflow-tooling-governance`
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `repo-wide-governance/higher-order-release-gate-contract`
-- Owned files: `work/sprints/todo-2026-q2-future-sprint-release-gate-systemic-governance.md`, `work/packages/done-20260513-future-sprint-release-gate-systemic-governance.md`, `work/packages/todo-20260513-release-gate-blocker-path-ledger-template.md`, `work/packages/active-20260513-rolling-restart-resume-activation-brief.md`, `work/packages/todo-20260513-release-gate-architecture-contract-template.md`, `work/packages/todo-20260513-release-gate-fixture-first-policy.md`, `work/packages/todo-20260513-release-gate-bounded-progress-governance.md`, `work/packages/todo-20260513-release-gate-runtime-architecture-backlog.md`, `work/README.md`, `work/templates/work-package-template.md`
+- Owned files: `work/sprints/todo-2026-q2-future-sprint-release-gate-systemic-governance.md`, `work/packages/done-20260513-future-sprint-release-gate-systemic-governance.md`, `work/packages/todo-20260513-release-gate-blocker-path-ledger-template.md`, `work/packages/done-20260513-rolling-restart-resume-activation-brief.md`, `work/packages/todo-20260513-release-gate-architecture-contract-template.md`, `work/packages/todo-20260513-release-gate-fixture-first-policy.md`, `work/packages/todo-20260513-release-gate-bounded-progress-governance.md`, `work/packages/todo-20260513-release-gate-runtime-architecture-backlog.md`, `work/README.md`, `work/templates/work-package-template.md`
 - Forbidden files: `src/`, `test/rebalancer/`, `test/control-plane/`, `work/packages/done-20260513-rolling-restart-green-gate-workflow-progress-recovery.md`, `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
 - Frozen decisions: package scope and lane stay bounded; this package must not
   fix the active rolling-restart blocker.
 - Escalation triggers: runtime ownership changes, representative scenario
   evidence changes, the governance queue needs tracker validation code, or the
   human asks to activate a runtime architecture contract.
-- Focused proof: `npm run work:package:doctor -- --suggest work/packages/done-20260513-future-sprint-release-gate-systemic-governance.md`, `npm run work:validate -- --entry work/packages/done-20260513-future-sprint-release-gate-systemic-governance.md`, `npm run work:validate -- --entry work/packages/todo-20260513-release-gate-blocker-path-ledger-template.md work/packages/active-20260513-rolling-restart-resume-activation-brief.md work/packages/todo-20260513-release-gate-architecture-contract-template.md work/packages/todo-20260513-release-gate-fixture-first-policy.md work/packages/todo-20260513-release-gate-bounded-progress-governance.md work/packages/todo-20260513-release-gate-runtime-architecture-backlog.md`, `git diff --check -- work/sprints/todo-2026-q2-future-sprint-release-gate-systemic-governance.md work/packages/done-20260513-future-sprint-release-gate-systemic-governance.md work/packages/todo-20260513-release-gate-blocker-path-ledger-template.md work/packages/active-20260513-rolling-restart-resume-activation-brief.md work/packages/todo-20260513-release-gate-architecture-contract-template.md work/packages/todo-20260513-release-gate-fixture-first-policy.md work/packages/todo-20260513-release-gate-bounded-progress-governance.md work/packages/todo-20260513-release-gate-runtime-architecture-backlog.md work/README.md work/templates/work-package-template.md`
+- Focused proof: `npm run work:package:doctor -- --suggest work/packages/done-20260513-future-sprint-release-gate-systemic-governance.md`, `npm run work:validate -- --entry work/packages/done-20260513-future-sprint-release-gate-systemic-governance.md`, `npm run work:validate -- --entry work/packages/todo-20260513-release-gate-blocker-path-ledger-template.md work/packages/done-20260513-rolling-restart-resume-activation-brief.md work/packages/todo-20260513-release-gate-architecture-contract-template.md work/packages/todo-20260513-release-gate-fixture-first-policy.md work/packages/todo-20260513-release-gate-bounded-progress-governance.md work/packages/todo-20260513-release-gate-runtime-architecture-backlog.md`, `git diff --check -- work/sprints/todo-2026-q2-future-sprint-release-gate-systemic-governance.md work/packages/done-20260513-future-sprint-release-gate-systemic-governance.md work/packages/todo-20260513-release-gate-blocker-path-ledger-template.md work/packages/done-20260513-rolling-restart-resume-activation-brief.md work/packages/todo-20260513-release-gate-architecture-contract-template.md work/packages/todo-20260513-release-gate-fixture-first-policy.md work/packages/todo-20260513-release-gate-bounded-progress-governance.md work/packages/todo-20260513-release-gate-runtime-architecture-backlog.md work/README.md work/templates/work-package-template.md`
 - Model ledger advisory: `escalate`
 
 ## Validation
 
 1. npm run work:package:doctor -- --suggest work/packages/done-20260513-future-sprint-release-gate-systemic-governance.md
 2. npm run work:validate -- --entry work/packages/done-20260513-future-sprint-release-gate-systemic-governance.md
-3. npm run work:validate -- --entry work/packages/todo-20260513-release-gate-blocker-path-ledger-template.md work/packages/active-20260513-rolling-restart-resume-activation-brief.md work/packages/todo-20260513-release-gate-architecture-contract-template.md work/packages/todo-20260513-release-gate-fixture-first-policy.md work/packages/todo-20260513-release-gate-bounded-progress-governance.md work/packages/todo-20260513-release-gate-runtime-architecture-backlog.md
-4. git diff --check -- work/sprints/todo-2026-q2-future-sprint-release-gate-systemic-governance.md work/packages/done-20260513-future-sprint-release-gate-systemic-governance.md work/packages/todo-20260513-release-gate-blocker-path-ledger-template.md work/packages/active-20260513-rolling-restart-resume-activation-brief.md work/packages/todo-20260513-release-gate-architecture-contract-template.md work/packages/todo-20260513-release-gate-fixture-first-policy.md work/packages/todo-20260513-release-gate-bounded-progress-governance.md work/packages/todo-20260513-release-gate-runtime-architecture-backlog.md work/README.md work/templates/work-package-template.md
+3. npm run work:validate -- --entry work/packages/todo-20260513-release-gate-blocker-path-ledger-template.md work/packages/done-20260513-rolling-restart-resume-activation-brief.md work/packages/todo-20260513-release-gate-architecture-contract-template.md work/packages/todo-20260513-release-gate-fixture-first-policy.md work/packages/todo-20260513-release-gate-bounded-progress-governance.md work/packages/todo-20260513-release-gate-runtime-architecture-backlog.md
+4. git diff --check -- work/sprints/todo-2026-q2-future-sprint-release-gate-systemic-governance.md work/packages/done-20260513-future-sprint-release-gate-systemic-governance.md work/packages/todo-20260513-release-gate-blocker-path-ledger-template.md work/packages/done-20260513-rolling-restart-resume-activation-brief.md work/packages/todo-20260513-release-gate-architecture-contract-template.md work/packages/todo-20260513-release-gate-fixture-first-policy.md work/packages/todo-20260513-release-gate-bounded-progress-governance.md work/packages/todo-20260513-release-gate-runtime-architecture-backlog.md work/README.md work/templates/work-package-template.md
 
 ## Activation Outcome
 

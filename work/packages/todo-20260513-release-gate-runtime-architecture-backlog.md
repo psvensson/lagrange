@@ -121,7 +121,7 @@ Operation Progress Kernel` if the latest active artifact still fronts
 
 Activation prerequisites:
 
-1. `work/packages/active-20260513-rolling-restart-resume-activation-brief.md`
+1. `work/packages/done-20260513-rolling-restart-resume-activation-brief.md`
    reconciles with the latest active artifact.
 2. The blocker-path ledger row names the repeated priority-recovery
    operation-progress causal edge.
