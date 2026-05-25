@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "active",
+  "status": "done",
   "intent": {
     "opened": "2026-05-25",
     "lane": "lightweight-maintenance",
@@ -14,7 +14,8 @@
     "boundary": "package-kinds-and-closure-grammar",
     "currentState": "Sibling leaves (e.g. 10+ `*-modularization-*` packages) close atomically but the set has no retrospective. Theory-ledger updates are ~1% of closed packages because every leaf is judged mechanical in isolation.",
     "nextAction": "Introduce an `epic` package kind that owns a set of sibling leaves under one causal question and one discriminator. Leaves cite the parent and skip theory-ledger ceremony; the epic-close step requires a retrospective answering 'what surprised us since lane-pick?'.",
-    "dominantReason": "anti-fragmentation-structural-change"
+    "dominantReason": "anti-fragmentation-structural-change",
+    "closed": "2026-05-25"
   },
   "scope": {
     "writeScope": [
@@ -102,4 +103,19 @@
 
 ## Execution Evidence
 
-- [ ] action: implementation; owner: workflow-steering; files-changed: <paths>; validation: <command/result>; outcome: <validated|blocked>.
+- [x] action: implementation; owner: workflow-steering; files-changed: scripts/work-tracker.js, test/scripts/work-tracker-package-doctor-ledger.test.js, .kiro/steering/schemas/work-package.schema.json, work/templates/epic-package.md, work/packages/active-20260525-epic-package-construct.md; validation: npx tap test/scripts/work-tracker-package-doctor-ledger.test.js, npm run work:package:doctor -- work/packages/active-20260525-epic-package-construct.md, npm run work:validate -- --pre-impl work/packages/active-20260525-epic-package-construct.md; outcome: validated.
+- [x] action: verification-fix; owner: workflow-steering; files-changed: none; validation: verified that all 21 doctor-ledger tests passed successfully; outcome: validated.
+- [x] action: repair; owner: workflow-steering; files-changed: none; validation: not-needed; outcome: validated.
+
+## Model Fit
+
+- Package class: `bounded-implementation`
+- Intended minimum model: `gpt-5.3-codex-spark`
+- Scope shape: `leaf-slice`
+- Output profile: `medium`
+- Owned files: `work/RULES.md`, `work/templates/epic-package.md`, `work/templates/work-package-template.md`, `scripts/work-tracker.js`, `work/packages/active-20260525-epic-package-construct.md`
+- Forbidden files: `src/`
+- Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
+- Escalation triggers: owned files expand beyond this package, a frozen decision must be reopened.
+- Focused proof: `npm run work:validate -- --pre-impl work/packages/active-20260525-epic-package-construct.md`
+

@@ -4,25 +4,49 @@
 {
   "schema": "work-package-v2",
   "status": "todo",
-  "opened": "YYYY-MM-DD",
-  "lane": "lightweight-maintenance",
-  "scenario": "none",
-  "artifact": "none",
-  "playback": "none",
-  "owner": "workflow_or_tooling_owner",
-  "boundary": "focused_maintenance_boundary",
-  "dominantReason": "maintenance_cleanup",
-  "currentState": "one-line current state",
-  "nextAction": "focused edit and validation",
-  "stabilityCredit": "local-proof-only",
-  "whyHighestLeverageNow": "why this maintenance slice is highest leverage now",
-  "proof": ["focused script or test", "git diff --check -- <files>"],
-  "theoryLedgerRefs": [],
-  "writeScope": ["path/to/file"],
-  "handoffFiles": [],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": ["path/to/file", "work/packages/done-YYYYMMDD-slug.md"]
+  "intent": {
+    "opened": "YYYY-MM-DD",
+    "lane": "lightweight-maintenance",
+    "scenario": "none",
+    "artifact": "none",
+    "playback": "none",
+    "owner": "workflow_or_tooling_owner",
+    "boundary": "focused_maintenance_boundary",
+    "dominantReason": "maintenance_cleanup",
+    "currentState": "one-line current state",
+    "nextAction": "focused edit and validation"
+  },
+  "scope": {
+    "writeScope": [
+      "path/to/file"
+    ],
+    "handoffFiles": [],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": [],
+    "commitScope": [
+      "path/to/file",
+      "work/packages/done-YYYYMMDD-slug.md"
+    ]
+  },
+  "gates": {
+    "stabilityCredit": "local-proof-only",
+    "whyHighestLeverageNow": "why this maintenance slice is highest leverage now"
+  },
+  "modelFit": {
+    "packageClass": "bounded-implementation",
+    "intendedMinimumModel": "gpt-5.3-codex-spark",
+    "scopeShape": "leaf-slice",
+    "escalationTriggers": [
+      "owned files expand beyond this package"
+    ]
+  },
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": [
+      "regression: focused script or test",
+      "supporting: git diff --check -- <files>"
+    ]
+  }
 }
 -->
 

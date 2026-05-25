@@ -2,46 +2,56 @@
 
 <!-- work-package
 {
-  "schema": "work-package-v1",
+  "schema": "work-package-v2",
   "status": "active",
-  "opened": "YYYY-MM-DD",
-  "lane": "runtime-owner-boundary",
-  "scenario": "scenario-or-none",
-  "artifact": "path/to/artifact-or-none",
-  "playback": "path/to/playback-or-none",
-  "owner": "canonical_runtime_owner",
-  "boundary": "owner_boundary",
-  "dominantReason": "current_owner_reason",
-  "currentState": "one-line current state",
-  "nextAction": "focused owner-boundary action",
-  "theoryLedgerRefs": [
-    "theory-YYYYMMDD-short-slug"
-  ],
-  "proof": [
-    "focused owner-path test",
-    "affected consumer proof",
-    "static guardrails"
-  ],
-  "writeScope": [
-    "src/example.js",
-    "test/example.test.js"
-  ],
-  "handoffFiles": [],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [
-    "src/example.js",
-    "test/example.test.js",
-    "work/packages/active-YYYYMMDD-package.md"
-  ],
+  "intent": {
+    "opened": "YYYY-MM-DD",
+    "lane": "runtime-owner-boundary",
+    "scenario": "scenario-or-none",
+    "artifact": "path/to/artifact-or-none",
+    "playback": "path/to/playback-or-none",
+    "owner": "canonical_runtime_owner",
+    "boundary": "owner_boundary",
+    "dominantReason": "current_owner_reason",
+    "currentState": "one-line current state",
+    "nextAction": "focused owner-boundary action"
+  },
+  "scope": {
+    "writeScope": [
+      "src/example.js",
+      "test/example.test.js"
+    ],
+    "handoffFiles": [],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": [],
+    "commitScope": [
+      "src/example.js",
+      "test/example.test.js",
+      "work/packages/active-YYYYMMDD-package.md"
+    ]
+  },
+  "gates": {
+    "stabilityCredit": "local-proof-only",
+    "whyHighestLeverageNow": "why"
+  },
   "modelFit": {
     "packageClass": "runtime-owner-boundary",
-    "intendedMinimumModel": "gpt-5.3-codex",
+    "intendedMinimumModel": "gpt-5.3-codex-spark",
     "scopeShape": "owner-boundary-contraction",
     "escalationTriggers": [
       "owner boundary changes",
       "proof requires unrelated runtime files",
       "representative scenario migrates to a new owner"
+    ]
+  },
+  "execution": {
+    "theoryLedgerRefs": [
+      "theory-YYYYMMDD-short-slug"
+    ],
+    "proof": [
+      "falsifier: focused owner-path test",
+      "regression: affected consumer proof",
+      "supporting: static guardrails"
     ]
   }
 }

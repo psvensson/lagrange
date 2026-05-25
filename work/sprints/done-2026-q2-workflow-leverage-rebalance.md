@@ -55,21 +55,21 @@ steering surface depth, manual closure steps.
 ```text
 Representative artifact: none
 Visible first frontier: unknown
-Active package: work/packages/active-20260525-epic-package-construct.md
-Active package owner: workflow-steering
-Active package boundary: package-kinds-and-closure-grammar
-Selected cause: anti-fragmentation-structural-change
-Required action: Introduce an `epic` package kind that owns a set of sibling leaves under one causal question and one discriminator. Leaves cite the parent and skip theory-ledger ceremony; the epic-close step requires a retrospective answering 'what surprised us since lane-pick?'.
+Active package: none
+Active package owner: unknown
+Active package boundary: unknown
+Selected cause: unknown
+Required action: none
 Representative status: unknown
 Causal outcome: unknown
 Architecture gate: not-required / unknown
 Expected delta: unknown
-Current state: Sibling leaves (e.g. 10+ `*-modularization-*` packages) close atomically but the set has no retrospective. Theory-ledger updates are ~1% of closed packages because every leaf is judged mechanical in isolation.
-Allowed edits: work/RULES.md, work/templates/epic-package.md, work/templates/work-package-template.md, scripts/work-tracker.js, work/packages/active-20260525-epic-package-construct.md
-Candidate runtime files: unknown
-Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
-Required latest proof: node scripts/work-tracker.js --kind epic --dry-run work/packages/todo-20260525-epic-package-construct.md, npm run work:validate -- --pre-impl work/packages/todo-20260525-epic-package-construct.md, git diff --check -- work/RULES.md work/templates scripts/work-tracker.js
-Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
+Current state: All packages are completed successfully.
+Allowed edits: none
+Candidate runtime files: none
+Forbidden edits: none
+Required latest proof: none
+Allowed stop modes: none
 ```
 
 ## Scope
@@ -103,7 +103,7 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
      named discovery lane, epic packages have nowhere to record route
      selection at the parent level.
 
-3. [Epic Package Construct](../packages/active-20260525-epic-package-construct.md)
+3. [Epic Package Construct](../packages/done-20260525-epic-package-construct.md)
    - Lane: `lightweight-maintenance`
    - Purpose: introduce an `epic` (or `frontier`) package kind that owns a
      set of sibling leaves with one shared causal question, one shared
@@ -114,7 +114,7 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
      micro-fragmentation; gates item 8's audits because audits are only
      useful once the construct exists.
 
-4. [Discriminator-Based Proof Ladder](../packages/todo-20260525-discriminator-based-proof-ladder.md)
+4. [Discriminator-Based Proof Ladder](../packages/done-20260525-discriminator-based-proof-ladder.md)
    - Lane: `lightweight-maintenance`
    - Purpose: replace "3–5 executable commands" with role-tagged proof:
      one falsifying command, one regression command, optional supporting.
@@ -123,7 +123,7 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
      items 2 and 3 introduce; prevents proof ladders from being padded with
      `--check` repeats.
 
-5. [Structured Validator Front-Matter](../packages/todo-20260525-structured-validator-front-matter.md)
+5. [Structured Validator Front-Matter](../packages/done-20260525-structured-validator-front-matter.md)
    - Lane: `lightweight-maintenance`
    - Purpose: replace literal-phrase gates (`parent revalidated focused
      proof: yes`, `theory ledger: no ledger update`, etc.) with a parsed
@@ -132,7 +132,7 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - First-run reason: ceremony reduction; eliminates a class of "validator
      rejected my close because I reworded a sentence" failures.
 
-6. [Steering Stack Collapse Decision](../packages/todo-20260525-steering-stack-collapse-decision.md)
+6. [Steering Stack Collapse Decision](../packages/done-20260525-steering-stack-collapse-decision.md)
    - Lane: `lightweight-maintenance`
    - Purpose: decide and document whether packs or source steering is the
      canonical LLM-facing surface (one source of truth), and add a CI check
@@ -140,7 +140,7 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - First-run reason: closes the drift loop the active sprint goal "reliable
      LLM handoff" depends on; cheap once items 2–5 stabilize.
 
-7. [Closure Automation work:close](../packages/todo-20260525-closure-automation-work-close.md)
+7. [Closure Automation work:close](../packages/done-20260525-closure-automation-work-close.md)
    - Lane: `lightweight-maintenance`
    - Purpose: a `npm run work:close` script that performs Closure Recipe
      steps 4–7 atomically (rename, status flip, sprint-link rewrite,
@@ -150,7 +150,7 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
      dependent on item 5 so the script reads structured front-matter not
      literal phrases.
 
-8. [Workflow Audit Reports](../packages/todo-20260525-workflow-audit-reports.md)
+8. [Workflow Audit Reports](../packages/done-20260525-workflow-audit-reports.md)
    - Lane: `lightweight-maintenance`
    - Purpose: three audit commands suitable for monthly review —
      (a) packages with no theory-ledger ref and no runtime files changed,

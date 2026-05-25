@@ -43,7 +43,7 @@ Validators execute in distinct phases to ensure the integrity of the codebase an
 
 To guarantee stability, implementation changes must compile and pass structured verification:
 
-*   **Focused Verification**: Every package must specify a proof ladder of 3-5 executable commands (e.g., `npm run work:advance -- --check`).
+*   **Focused Verification**: Every package must specify a proof ladder containing role-tagged commands: exactly one `falsifier` command (whose failure proves the implementation theory wrong), exactly one `regression` command (which fails if existing behavior is broken), and optional `supporting` commands. Maintenance lanes may use a `regression`-only ladder. Command count is not enforced.
 *   **Evidence Collection**: Sprints owning active classification or diagnostics packages must record representative residuals and link to specific run output artifacts.
 *   **Local vs. Representative Proof**: A package remains in diagnostic state until it is backed by a fresh representative rerun or canonical route-after-rerun result.
 
@@ -137,17 +137,14 @@ The closure validator (`npm run work:validate -- --closure`) accepts an Executio
 ## Closure Recipe
 <a name="closure-recipe"></a>
 
-Package closure is atomic — the following steps move as a unit. Do not stop part-way.
+Package closure is atomic — the following steps move as a unit.
 
-1. Fill `## Execution Evidence` per the grammar above (check the `[x]` boxes, include `parent revalidated focused proof: yes`, add the `theory ledger: no ledger update` line if no ledger ref applies).
+1. Fill `## Execution Evidence` or front-matter execution metadata block per the rules above.
 2. `npm run work:repair` — refresh `current-blocker.{json,md}` and the active sprint file references.
-3. `npm run work:validate -- --closure` — must report `Work tracker validation OK`.
-4. `mv work/packages/active-<slug>.md work/packages/done-<slug>.md`.
-5. `sed -i 's/"status": "active"/"status": "done"/' work/packages/done-<slug>.md`.
-6. Update sprint references with `sed -i 's|active-<slug>|done-<slug>|g' <active-sprint-file>`.
-7. `git add` only the files in `commitScope` plus tracker-generated handoff files, then commit and push. The commit MUST NOT include "unrelated dirty entries" reported by `work:context`.
-
-Step 2 is run again only if needed after the rename; after step 4 a fresh `work:repair` will warn "No active package was found" until the next `todo-` is activated — that warning is expected and does not block the commit.
+3. Run the automated close command:
+   `npm run work:close work/packages/active-<slug>.md`
+   This command automatically runs closure validation, renames the file to `done-`, flips the status, updates active sprint file references, renumbers the package queue, and stages exactly the `commitScope` files and tracker-generated handoff files.
+4. Commit and push the staged changes. The commit MUST NOT include "unrelated dirty entries" reported by `work:context`.
 
 ---
 
@@ -156,7 +153,8 @@ Step 2 is run again only if needed after the rename; after step 4 a fresh `work:
 
 Sprint queues live in `work/sprints/active-*.md` under the `## Package Queue` heading as a numbered markdown list. Each item has three lines: a markdown link to the package file (`active-<slug>.md` while open, `done-<slug>.md` once closed), a `Lane:` line, a `Purpose:` line, and a `First-run reason:` line.
 
-1. **Insert** a new item by editing the sprint file directly at the chosen position with the same four-line shape; renumber the items below it by hand. `npm run work:repair` does not renumber.
-2. **Cross-link** the new item by pointing its markdown link at `../packages/active-<new-slug>.md`. The link target is rewritten to `done-<new-slug>.md` only during the Closure Recipe (step 6, `sed -i 's|active-<slug>|done-<slug>|g' <sprint-file>`).
-3. **Supersede or remove** an item by replacing its link target with the appropriate `superseded-<slug>.md` package and updating its purpose; never delete a numbered entry, because downstream sprint references and closure receipts cite the queue position.
-4. The active sprint file is part of every closing package's commit scope whenever the queue or its references change.
+1. **Insert** a new item by editing the sprint file directly at the chosen position with the same four-line shape.
+2. **Cross-link** the new item by pointing its markdown link at `../packages/active-<new-slug>.md`.
+3. **Supersede or remove** an item by replacing its link target with the appropriate `superseded-<slug>.md` package and updating its purpose.
+4. The queue numbering is automatically managed and renumbered sequentially by `npm run work:close`.
+5. The active sprint file is part of every closing package's commit scope whenever the queue or its references change.

@@ -736,4 +736,392 @@ describe('work tracker package doctor', () => {
       fsSync.unlinkSync(doneRuntimePath);
     } catch (e) {}
   });
+
+  describe('Epic package kinds and leaf bypass validations', () => {
+    const epicMeta = {
+      schema: 'work-package-v2',
+      status: 'active',
+      intent: {
+        opened: '2026-05-25',
+        lane: 'lightweight-maintenance',
+        scenario: 'none',
+        artifact: 'none',
+        playback: 'none',
+        owner: 'workflow-steering',
+        boundary: 'epic-validation',
+        currentState: 'active',
+        nextAction: 'test'
+      },
+      scope: {
+        writeScope: ['work/packages/active-epic-test.md'],
+        handoffFiles: [],
+        generatedFiles: [],
+        candidateRuntimeFiles: [],
+        commitScope: ['work/packages/active-epic-test.md']
+      },
+      gates: {
+        stabilityCredit: 'local-proof-only',
+        whyHighestLeverageNow: 'workflow-leverage-rebalance sprint goal leverage'
+      },
+      modelFit: {
+        packageClass: 'bounded-implementation',
+        intendedMinimumModel: 'gpt-5.3-codex-spark',
+        scopeShape: 'leaf-slice',
+        outputProfile: 'medium'
+      }
+    };
+
+    it('flags missing required sections for epic packages', () => {
+      const invalidEpicContent = `# Test Epic\n\n<!-- work-package\n${JSON.stringify(epicMeta, null, 2)}\n-->\n\n## Scope\nOnly invalid sections here.`;
+      const report = buildPackageDoctorLines(
+        'work/packages/active-epic-test.md',
+        invalidEpicContent,
+        { phase: 'pre-impl', kind: 'epic' }
+      );
+      const errorsStr = report.errors.join('\n');
+      assert.match(errorsStr, /epic package must declare a ## Causal Question section/u);
+      assert.match(errorsStr, /epic package must declare a ## Expected Leaf Set section/u);
+      assert.match(errorsStr, /epic package must declare a ## Shared Discriminator section/u);
+      assert.match(errorsStr, /epic package must declare a ## Stop Rule section/u);
+    });
+
+    it('passes active epic validation when required sections are present', () => {
+      const validEpicContent = `# Test Epic\n\n<!-- work-package\n${JSON.stringify(epicMeta, null, 2)}\n-->\n\n## Causal Question\nQ\n\n## Expected Leaf Set\nL\n\n## Shared Discriminator\nD\n\n## Stop Rule\nS`;
+      const report = buildPackageDoctorLines(
+        'work/packages/active-epic-test.md',
+        validEpicContent,
+        { phase: 'pre-impl', kind: 'epic' }
+      );
+      assert.deepEqual(report.errors, []);
+    });
+
+    it('enforces retrospective fields at epic package closure', () => {
+      const doneMeta = { ...epicMeta, status: 'done' };
+      const validEpicWithoutRetro = `# Test Epic\n\n<!-- work-package\n${JSON.stringify(doneMeta, null, 2)}\n-->\n\n## Causal Question\nQ\n\n## Expected Leaf Set\nL\n\n## Shared Discriminator\nD\n\n## Stop Rule\nS`;
+      const report = buildPackageDoctorLines(
+        'work/packages/done-epic-test.md',
+        validEpicWithoutRetro,
+        { phase: 'closure', kind: 'epic' }
+      );
+      assert.match(report.errors.join('\n'), /epic package closure requires a ## Retrospective section/u);
+
+      const invalidRetroContent = validEpicWithoutRetro + '\n\n## Retrospective\nWrong content.';
+      const report2 = buildPackageDoctorLines(
+        'work/packages/done-epic-test.md',
+        invalidRetroContent,
+        { phase: 'closure', kind: 'epic' }
+      );
+      const errors2 = report2.errors.join('\n');
+      assert.match(errors2, /retrospective must answer 'What did we learn/u);
+      assert.match(errors2, /retrospective must answer 'Did the discriminator hold/u);
+      assert.match(errors2, /retrospective must answer 'Theory-ledger update/u);
+
+      const validRetroContent = validEpicWithoutRetro + '\n\n## Retrospective\nWhat did we learn that we could not predict at lane-pick time? We learned a lot. Did the discriminator hold for every leaf? Yes it held. Theory-ledger update: yes.';
+      const report3 = buildPackageDoctorLines(
+        'work/packages/done-epic-test.md',
+        validRetroContent,
+        { phase: 'closure', kind: 'epic' }
+      );
+      assert.deepEqual(report3.errors, []);
+    });
+
+    it('leaf package with epicRef bypasses theory ledger ceremony', () => {
+      const leafMeta = {
+        schema: 'work-package-v2',
+        status: 'active',
+        intent: {
+          opened: '2026-05-20',
+          lane: 'mechanical-maintenance',
+          scenario: 'none',
+          artifact: 'none',
+          playback: 'none',
+          owner: 'workflow-steering',
+          boundary: 'leaf-test',
+          currentState: 'active',
+          nextAction: 'test',
+          epicRef: 'active-epic-test.md'
+        },
+        scope: {
+          writeScope: ['work/packages/active-leaf-test.md'],
+          handoffFiles: [],
+          generatedFiles: [],
+          candidateRuntimeFiles: [],
+          commitScope: ['work/packages/active-leaf-test.md']
+        },
+        gates: {
+          stabilityCredit: 'local-proof-only',
+          whyHighestLeverageNow: 'workflow-leverage-rebalance sprint goal leverage'
+        },
+        modelFit: {
+          packageClass: 'workflow-tooling',
+          intendedMinimumModel: 'gpt-5.3-codex-medium',
+          scopeShape: 'leaf-slice',
+          outputProfile: 'medium',
+          ambiguityScore: 1
+        }
+      };
+
+      const leafContent = [
+        '# Leaf Package',
+        '',
+        '<!-- work-package',
+        JSON.stringify(leafMeta, null, 2),
+        '-->',
+        '',
+        '## Model Fit',
+        '',
+        '- Package class: `workflow-tooling`',
+        '- Intended minimum model: `gpt-5.3-codex-medium`',
+        '- Scope shape: `leaf-slice`',
+        '- Output profile: `medium`',
+        '- Owned files: `work/packages/active-leaf-test.md`',
+        '- Forbidden files: `src/`',
+        '- Frozen decisions: none.',
+        '- Escalation triggers: none.',
+        '- Focused proof: none.',
+        '',
+      ].join('\n');
+
+      const report = buildPackageDoctorLines(
+        'work/packages/active-leaf-test.md',
+        leafContent,
+        { phase: 'pre-impl' }
+      );
+      // A high-risk workflow-tooling package with epicRef bypasses the theory ledger references requirement!
+      assert.deepEqual(report.errors, []);
+    });
+
+    describe('Discriminator-based proof ladder tests', () => {
+      it('valid role-tagged proof array in lightweight-maintenance lane passes validation', () => {
+        const metadata = {
+          schema: 'work-package-v2',
+          status: 'active',
+          intent: {
+            opened: '2026-05-25',
+            lane: 'lightweight-maintenance',
+            scenario: 'none',
+            artifact: 'none',
+            playback: 'none',
+            owner: 'workflow-steering',
+            boundary: 'test',
+            currentState: 'active',
+            nextAction: 'test'
+          },
+          scope: {
+            writeScope: ['work/packages/active-test.md'],
+            handoffFiles: [],
+            generatedFiles: [],
+            candidateRuntimeFiles: [],
+            commitScope: ['work/packages/active-test.md']
+          },
+          gates: {
+            stabilityCredit: 'local-proof-only',
+            whyHighestLeverageNow: 'sprint goal leverage proof'
+          },
+          modelFit: {
+            packageClass: 'bounded-implementation',
+            intendedMinimumModel: 'gpt-5.3-codex-spark',
+            scopeShape: 'leaf-slice',
+            outputProfile: 'medium',
+            ambiguityScore: 1,
+            escalationTriggers: ['escalate']
+          },
+          execution: {
+            proof: [
+              "regression: npm run regression-test"
+            ]
+          }
+        };
+
+        const content = [
+          '# Test Package',
+          '<!-- work-package',
+          JSON.stringify(metadata, null, 2),
+          '-->',
+          '## Model Fit',
+          '- Package class: `bounded-implementation`',
+          '- Intended minimum model: `gpt-5.3-codex-spark`',
+          '- Scope shape: `leaf-slice`',
+          '- Output profile: `medium`',
+          '- Owned files: `work/packages/active-test.md`',
+          '- Forbidden files: `src/`',
+          '- Frozen decisions: contract remains bounded.',
+          '- Escalation triggers: escalate.',
+          '- Focused proof: `npm run regression-test`',
+          ''
+        ].join('\n');
+
+        const report = buildPackageDoctorLines('work/packages/active-test.md', content, { phase: 'pre-impl' });
+        assert.deepEqual(report.errors, []);
+      });
+
+      it('missing regression role in lightweight-maintenance fails validation', () => {
+        const metadata = {
+          schema: 'work-package-v2',
+          status: 'active',
+          intent: {
+            opened: '2026-05-25',
+            lane: 'lightweight-maintenance',
+            scenario: 'none',
+            artifact: 'none',
+            playback: 'none',
+            owner: 'workflow-steering',
+            boundary: 'test',
+            currentState: 'active',
+            nextAction: 'test'
+          },
+          scope: {
+            writeScope: ['work/packages/active-test.md'],
+            handoffFiles: [],
+            generatedFiles: [],
+            candidateRuntimeFiles: [],
+            commitScope: ['work/packages/active-test.md']
+          },
+          gates: {
+            stabilityCredit: 'local-proof-only',
+            whyHighestLeverageNow: 'sprint goal leverage proof'
+          },
+          modelFit: {
+            packageClass: 'bounded-implementation',
+            intendedMinimumModel: 'gpt-5.3-codex-spark',
+            scopeShape: 'leaf-slice',
+            outputProfile: 'medium',
+            ambiguityScore: 1,
+            escalationTriggers: ['escalate']
+          },
+          execution: {
+            proof: [
+              "supporting: npm run lint"
+            ]
+          }
+        };
+
+        const content = [
+          '# Test Package',
+          '<!-- work-package',
+          JSON.stringify(metadata, null, 2),
+          '-->',
+          '## Model Fit',
+          '- Package class: `bounded-implementation`',
+          '- Intended minimum model: `gpt-5.3-codex-spark`',
+          '- Scope shape: `leaf-slice`',
+          '- Output profile: `medium`',
+          '- Owned files: `work/packages/active-test.md`',
+          '- Forbidden files: `src/`',
+          '- Frozen decisions: contract remains bounded.',
+          '- Escalation triggers: escalate.',
+          '- Focused proof: `npm run lint`',
+          ''
+        ].join('\n');
+
+        const report = buildPackageDoctorLines('work/packages/active-test.md', content, { phase: 'pre-impl' });
+        assert.match(report.errors.join('\n'), /must contain at least a 'regression' command/u);
+      });
+    });
+
+    describe('Structured validator front-matter tests', () => {
+      const getBaseMetadata = () => ({
+        schema: 'work-package-v2',
+        status: 'done',
+        intent: {
+          opened: '2026-05-25',
+          lane: 'lightweight-maintenance',
+          scenario: 'none',
+          artifact: 'none',
+          playback: 'none',
+          owner: 'workflow-steering',
+          boundary: 'test',
+          currentState: 'active',
+          nextAction: 'test'
+        },
+        scope: {
+          writeScope: ['work/packages/done-test.md'],
+          handoffFiles: [],
+          generatedFiles: [],
+          candidateRuntimeFiles: [],
+          commitScope: ['work/packages/done-test.md']
+        },
+        gates: {
+          stabilityCredit: 'local-proof-only',
+          whyHighestLeverageNow: 'sprint goal leverage proof'
+        },
+        modelFit: {
+          packageClass: 'bounded-implementation',
+          intendedMinimumModel: 'gpt-5.3-codex-spark',
+          scopeShape: 'leaf-slice',
+          outputProfile: 'medium',
+          ambiguityScore: 1,
+          escalationTriggers: ['escalate']
+        },
+        execution: {
+          proof: [
+            "regression: npm run regression-test"
+          ]
+        }
+      });
+
+      const buildContent = (metadata) => [
+        '# Test Package',
+        '<!-- work-package',
+        JSON.stringify(metadata, null, 2),
+        '-->',
+        '## Model Fit',
+        '- Package class: `bounded-implementation`',
+        '- Intended minimum model: `gpt-5.3-codex-spark`',
+        '- Scope shape: `leaf-slice`',
+        '- Output profile: `medium`',
+        '- Owned files: `work/packages/done-test.md`',
+        '- Forbidden files: `src/`',
+        '- Frozen decisions: contract remains bounded.',
+        '- Escalation triggers: escalate.',
+        '- Focused proof: `npm run regression-test`',
+        ''
+      ].join('\n');
+
+      it('valid structured execution front-matter at closure passes', () => {
+        const metadata = getBaseMetadata();
+        metadata.execution.implementation = {
+          parentRevalidatedFocusedProof: true,
+          filesChanged: ['work/packages/done-test.md']
+        };
+        metadata.execution.verificationFix = {
+          parentRevalidatedFocusedProof: true
+        };
+        metadata.execution.theoryLedger = 'no-ledger-update';
+
+        const content = buildContent(metadata);
+        const report = buildPackageDoctorLines('work/packages/done-test.md', content, { phase: 'closure' });
+        assert.deepEqual(report.errors, []);
+      });
+
+      it('structured execution missing implementation at closure fails', () => {
+        const metadata = getBaseMetadata();
+        metadata.execution.verificationFix = {
+          parentRevalidatedFocusedProof: true
+        };
+        metadata.execution.theoryLedger = 'no-ledger-update';
+
+        const content = buildContent(metadata);
+        const report = buildPackageDoctorLines('work/packages/done-test.md', content, { phase: 'closure' });
+        assert.match(report.errors.join('\n'), /execution.implementation front-matter object is required before closure/u);
+      });
+
+      it('structured execution with parentRevalidatedFocusedProof false fails', () => {
+        const metadata = getBaseMetadata();
+        metadata.execution.implementation = {
+          parentRevalidatedFocusedProof: false,
+          filesChanged: ['work/packages/done-test.md']
+        };
+        metadata.execution.verificationFix = {
+          parentRevalidatedFocusedProof: true
+        };
+        metadata.execution.theoryLedger = 'no-ledger-update';
+
+        const content = buildContent(metadata);
+        const report = buildPackageDoctorLines('work/packages/done-test.md', content, { phase: 'closure' });
+        assert.match(report.errors.join('\n'), /execution.implementation.parentRevalidatedFocusedProof must be true before closure/u);
+      });
+    });
+  });
 });
+

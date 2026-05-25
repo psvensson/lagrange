@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
+  "status": "done",
   "intent": {
     "opened": "2026-05-25",
     "lane": "lightweight-maintenance",
@@ -26,7 +26,11 @@
       "work/templates/scenario-closure-package.md",
       "work/templates/doc-only-package.md",
       "work/templates/probe-package.md",
-      "work/packages/todo-20260525-structured-validator-front-matter.md"
+      "work/packages/done-20260525-structured-validator-front-matter.md",
+      ".kiro/steering/schemas/work-package.schema.json",
+      "scripts/work-package-schema.js",
+      "test/scripts/work-tracker-package-doctor-ledger.test.js",
+      "work/templates/epic-package.md"
     ],
     "handoffFiles": [],
     "generatedFiles": [
@@ -47,7 +51,11 @@
       ".kiro/steering/llm/governance.md",
       ".kiro/steering/llm/rules.json",
       ".kiro/steering/llm/manifest.json",
-      "work/packages/done-20260525-structured-validator-front-matter.md"
+      "work/packages/done-20260525-structured-validator-front-matter.md",
+      ".kiro/steering/schemas/work-package.schema.json",
+      "scripts/work-package-schema.js",
+      "test/scripts/work-tracker-package-doctor-ledger.test.js",
+      "work/templates/epic-package.md"
     ]
   },
   "gates": {
@@ -67,13 +75,32 @@
   },
   "execution": {
     "theoryLedgerRefs": [],
-    "proof": {
-      "commands": [
-        "node scripts/work-tracker.js --validate-execution work/packages/todo-20260525-structured-validator-front-matter.md",
-        "npm run work:validate -- --closure (dry-run against a fixture package)",
-        "git diff --check -- work/RULES.md scripts/work-tracker.js work/templates"
+    "proof": [
+      "regression: node scripts/work-tracker.js --validate-execution work/packages/done-20260525-structured-validator-front-matter.md",
+      "supporting: git diff --check -- work/RULES.md scripts/work-tracker.js work/templates"
+    ],
+    "implementation": {
+      "parentRevalidatedFocusedProof": true,
+      "filesChanged": [
+        "work/RULES.md",
+        "scripts/work-tracker.js",
+        "work/templates/work-package-template.md",
+        "work/templates/lightweight-maintenance-package.md",
+        "work/templates/runtime-owner-package.md",
+        "work/templates/scenario-closure-package.md",
+        "work/templates/doc-only-package.md",
+        "work/templates/probe-package.md",
+        ".kiro/steering/schemas/work-package.schema.json",
+        "test/scripts/work-tracker-package-doctor-ledger.test.js"
       ]
-    }
+    },
+    "verificationFix": {
+      "parentRevalidatedFocusedProof": true
+    },
+    "repair": {
+      "validationCommand": "npm run work:repair"
+    },
+    "theoryLedger": "no-ledger-update"
   }
 }
 -->
@@ -107,7 +134,7 @@ adopted the structured block.
 
 ## Validation
 
-1. `node scripts/work-tracker.js --validate-execution work/packages/todo-20260525-structured-validator-front-matter.md`
+1. `node scripts/work-tracker.js --validate-execution work/packages/active-20260525-structured-validator-front-matter.md`
 2. `npm run work:validate -- --closure` against a fixture package using the
    structured block; expect `Work tracker validation OK`.
 3. `git diff --check -- work/RULES.md scripts/work-tracker.js work/templates`
@@ -115,3 +142,15 @@ adopted the structured block.
 ## Execution Evidence
 
 - [ ] action: implementation; owner: workflow-steering; files-changed: <paths>; validation: <command/result>; outcome: <validated|blocked>.
+
+## Model Fit
+
+- Package class: `bounded-implementation`
+- Intended minimum model: `gpt-5.3-codex-spark`
+- Scope shape: `leaf-slice`
+- Output profile: `medium`
+- Owned files: `work/RULES.md`, `scripts/work-tracker.js`, `work/templates/work-package-template.md`, `work/templates/lightweight-maintenance-package.md`, `work/templates/runtime-owner-package.md`, `work/templates/scenario-closure-package.md`, `work/templates/doc-only-package.md`, `work/templates/probe-package.md`, `work/packages/active-20260525-structured-validator-front-matter.md`
+- Forbidden files: `src/`
+- Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
+- Escalation triggers: owned files expand beyond this package, a frozen decision must be reopened.
+- Focused proof: `node scripts/work-tracker.js --validate-execution work/packages/active-20260525-structured-validator-front-matter.md`

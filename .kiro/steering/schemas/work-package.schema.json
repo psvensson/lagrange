@@ -3,6 +3,46 @@
   "title": "Work Package Metadata Schema",
   "description": "Validation schema for work package metadata in work-package-v2 format.",
   "type": "object",
+  "definitions": {
+    "proofItem": {
+      "oneOf": [
+        { "type": "string" },
+        {
+          "type": "object",
+          "properties": {
+            "falsifier": { "type": "string" }
+          },
+          "additionalProperties": false,
+          "required": ["falsifier"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "regression": { "type": "string" }
+          },
+          "additionalProperties": false,
+          "required": ["regression"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "supporting": { "type": "string" }
+          },
+          "additionalProperties": false,
+          "required": ["supporting"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "role": { "type": "string", "enum": ["falsifier", "regression", "supporting"] },
+            "command": { "type": "string" }
+          },
+          "required": ["role", "command"],
+          "additionalProperties": false
+        }
+      ]
+    }
+  },
   "required": [
     "schema",
     "status",
@@ -79,6 +119,9 @@
           "type": "string"
         },
         "discoveryRef": {
+          "type": "string"
+        },
+        "epicRef": {
           "type": "string"
         }
       },
@@ -202,14 +245,57 @@
           "items": { "type": "string" }
         },
         "proof": {
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/proofItem"
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "commands": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/proofItem"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "implementation": {
           "type": "object",
           "properties": {
-            "commands": {
+            "parentRevalidatedFocusedProof": { "type": "boolean" },
+            "filesChanged": {
               "type": "array",
               "items": { "type": "string" }
             }
           },
+          "required": ["parentRevalidatedFocusedProof"],
           "additionalProperties": false
+        },
+        "verificationFix": {
+          "type": "object",
+          "properties": {
+            "parentRevalidatedFocusedProof": { "type": "boolean" }
+          },
+          "required": ["parentRevalidatedFocusedProof"],
+          "additionalProperties": false
+        },
+        "repair": {
+          "type": "object",
+          "properties": {
+            "validationCommand": { "type": "string" }
+          },
+          "required": ["validationCommand"],
+          "additionalProperties": false
+        },
+        "theoryLedger": {
+          "type": "string"
         }
       },
       "additionalProperties": false

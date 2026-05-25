@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
+  "status": "done",
   "intent": {
     "opened": "2026-05-25",
     "lane": "lightweight-maintenance",
@@ -22,7 +22,7 @@
       "scripts/work-tracker.js",
       "package.json",
       "work/RULES.md",
-      "work/packages/todo-20260525-closure-automation-work-close.md"
+      "work/packages/done-20260525-closure-automation-work-close.md"
     ],
     "handoffFiles": [],
     "generatedFiles": [
@@ -61,11 +61,26 @@
     "theoryLedgerRefs": [],
     "proof": {
       "commands": [
-        "node scripts/work-close.js --dry-run work/packages/active-<fixture>.md",
-        "npm run work:validate -- --pre-impl work/packages/todo-20260525-closure-automation-work-close.md",
+        "node scripts/work-close.js --dry-run work/packages/done-20260525-closure-automation-work-close.md",
+        "npm run work:validate -- --pre-impl work/packages/done-20260525-closure-automation-work-close.md",
         "git diff --check -- scripts/work-close.js scripts/work-tracker.js package.json work/RULES.md"
       ]
-    }
+    },
+    "implementation": {
+      "parentRevalidatedFocusedProof": true,
+      "filesChanged": [
+        "scripts/work-close.js",
+        "work/RULES.md",
+        "package.json"
+      ]
+    },
+    "verificationFix": {
+      "parentRevalidatedFocusedProof": true
+    },
+    "repair": {
+      "validationCommand": "npm run work:repair"
+    },
+    "theoryLedger": "no-ledger-update"
   }
 }
 -->

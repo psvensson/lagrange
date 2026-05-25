@@ -2,47 +2,53 @@
 
 <!-- work-package
 {
-  "schema": "work-package-v1",
+  "schema": "work-package-v2",
   "status": "active",
-  "opened": "YYYY-MM-DD",
-  "lane": "scenario-release-gate",
-  "scenario": "scenario-name",
-  "artifact": "path/to/latest.report.json",
-  "playback": "path/to/playback",
-  "owner": "current_semantic_owner",
-  "boundary": "current_owner_boundary",
-  "dominantReason": "current_dominant_reason",
-  "currentState": "one-line current state",
-  "nextAction": "focused missing-edge probe",
-  "proof": [
-    "missing-edge probe",
-    "focused owner tests",
-    "affected presentation tests",
-    "representative scenario rerun"
-  ],
-  "writeScope": [
-    "src/example.js",
-    "test/example.test.js"
-  ],
-  "handoffFiles": [
-    "path/to/latest.report.json",
-    "path/to/playback"
-  ],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [
-    "src/example.js",
-    "test/example.test.js",
-    "work/packages/active-YYYYMMDD-package.md"
-  ],
+  "intent": {
+    "opened": "YYYY-MM-DD",
+    "lane": "scenario-release-gate",
+    "scenario": "scenario-name",
+    "artifact": "path/to/latest.report.json",
+    "playback": "path/to/playback",
+    "owner": "current_semantic_owner",
+    "boundary": "current_owner_boundary",
+    "dominantReason": "current_dominant_reason",
+    "currentState": "one-line current state",
+    "nextAction": "focused missing-edge probe"
+  },
+  "scope": {
+    "writeScope": [
+      "src/example.js",
+      "test/example.test.js"
+    ],
+    "handoffFiles": [
+      "path/to/latest.report.json",
+      "path/to/playback"
+    ],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": []
+  },
+  "gates": {
+    "stabilityCredit": "local-proof-only",
+    "whyHighestLeverageNow": "why"
+  },
   "modelFit": {
     "packageClass": "representative-frontier-closure",
-    "intendedMinimumModel": "gpt-5.3-codex",
+    "intendedMinimumModel": "gpt-5.3-codex-spark",
     "scopeShape": "owner-boundary-contraction/current-frontier",
     "escalationTriggers": [
       "causal model contradicts package hypothesis",
       "new owner boundary becomes dominant",
       "implementation requires unrelated owners"
+    ]
+  },
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": [
+      "falsifier: missing-edge probe",
+      "regression: focused owner tests",
+      "supporting: affected presentation tests",
+      "supporting: representative scenario rerun"
     ]
   },
   "causalGovernance": {

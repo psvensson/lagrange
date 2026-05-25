@@ -46,6 +46,7 @@ import {
   LANE_EXPERIMENT,
   LANE_DISCOVERY,
   LANE_MECHANICAL_MAINTENANCE,
+  LANE_LIGHTWEIGHT_MAINTENANCE,
   LANE_READ_REVIEW_DOC_ONLY,
   LANE_RUNTIME_OWNER_BOUNDARY,
   LANE_SCENARIO_RELEASE_GATE,
@@ -114,6 +115,18 @@ import {
   validateTheoryLedgerContent,
   THEORY_LEDGER_FIELDS,
 } from './work-theory-ledger.js';
+
+let globalKindOption = null;
+let globalDryRunOption = false;
+
+for (let i = 0; i < process.argv.length; i++) {
+  if (process.argv[i] === '--kind') {
+    globalKindOption = process.argv[i + 1];
+  }
+  if (process.argv[i] === '--dry-run') {
+    globalDryRunOption = true;
+  }
+}
 
 const [
   CORE_LOGIC_BRIEF_CANONICAL_OUTCOME_FIELD,
@@ -1355,6 +1368,45 @@ function hasExecutionEvidenceChangedFilesField(content) {
 }
 
 export function validateExecutionEvidenceLedger(content, filePath, options = {}) {
+  const metadata = options.metadata;
+  const execution = metadata && metadata.execution;
+
+  if (execution && (execution.implementation || execution.verificationFix || execution.theoryLedger || execution.repair)) {
+    const errors = [];
+    if (options[LEDGER_VALIDATION_REQUIRES_LEDGER] && options[LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION] !== true) {
+      if (!execution.implementation) {
+        errors.push(
+          `${filePath}: execution.implementation front-matter object is required before closure.`,
+        );
+      } else {
+        if (execution.implementation.parentRevalidatedFocusedProof !== true) {
+          errors.push(
+            `${filePath}: execution.implementation.parentRevalidatedFocusedProof must be true before closure.`,
+          );
+        }
+        if (!Array.isArray(execution.implementation.filesChanged)) {
+          errors.push(
+            `${filePath}: execution.implementation.filesChanged must be an array of files.`,
+          );
+        }
+      }
+    }
+    if (options[LEDGER_VALIDATION_REQUIRES_VERIFICATION_FIX] === true) {
+      if (!execution.verificationFix) {
+        errors.push(
+          `${filePath}: execution.verificationFix front-matter object is required before closure.`,
+        );
+      } else {
+        if (execution.verificationFix.parentRevalidatedFocusedProof !== true) {
+          errors.push(
+            `${filePath}: execution.verificationFix.parentRevalidatedFocusedProof must be true before closure.`,
+          );
+        }
+      }
+    }
+    return errors;
+  }
+
   const ledger = extractExecutionEvidenceLedger(content);
   if (!ledger) {
     return options[LEDGER_VALIDATION_REQUIRES_LEDGER] ?
@@ -5039,7 +5091,7 @@ function replacePackageMetadata(content, metadata) {
     };
 
     const v2Keys = {
-      intent: ['opened', 'closed', 'lane', 'scenario', 'artifact', 'playback', 'owner', 'boundary', 'currentState', 'nextAction', 'dominantReason', 'discoveryRef'],
+      intent: ['opened', 'closed', 'lane', 'scenario', 'artifact', 'playback', 'owner', 'boundary', 'currentState', 'nextAction', 'dominantReason', 'discoveryRef', 'epicRef'],
       scope: ['writeScope', 'handoffFiles', 'generatedFiles', 'candidateRuntimeFiles', 'commitScope'],
       gates: ['whyHighestLeverageNow', 'stabilityCredit', 'representativeRerunCadence', 'codeQualityAdmission', 'companionGatesFile'],
       modelFit: ['packageClass', 'intendedMinimumModel', 'scopeShape', 'outputProfile', 'escalationTriggers'],
@@ -5348,11 +5400,67 @@ function validateActiveScenarioMetadataShape(filePath, metadata) {
   return errors;
 }
 
+function validateProofRoles(filePath, metadata = {}) {
+  if (isEpicPackage(filePath)) {
+    return [];
+  }
+  const isNewPackage = metadata.opened && metadata.opened >= '2026-05-22';
+  if (!isNewPackage) {
+    return [];
+  }
+
+  const errors = [];
+  const rawProof = metadata[METADATA_FIELD_PROOF] || [];
+  if (!Array.isArray(rawProof) || rawProof.length === 0) {
+    errors.push(`${filePath}: proof ladder is required and must not be empty.`);
+    return errors;
+  }
+
+  const parsedCommands = rawProof.map(parseProofCommand).filter(Boolean);
+  const roles = parsedCommands.map((c) => c.role);
+
+  const hasFalsifier = roles.includes('falsifier');
+  const hasRegression = roles.includes('regression');
+
+  const lane = normalizeLedgerText(metadata.lane);
+  const isReadDocOrMaintenance = [
+    LANE_READ_REVIEW_DOC_ONLY,
+    LANE_MECHANICAL_MAINTENANCE,
+    LANE_LIGHTWEIGHT_MAINTENANCE,
+    LANE_DISCOVERY,
+    'discovery',
+    'read-doc',
+    'maintenance'
+  ].includes(lane);
+
+  if (isReadDocOrMaintenance) {
+    if (!hasRegression) {
+      errors.push(
+        `${filePath}: proof ladder in maintenance/read-doc/discovery lane must contain at least a 'regression' command.`
+      );
+    }
+  } else {
+    if (!hasFalsifier) {
+      errors.push(
+        `${filePath}: proof ladder is missing a required 'falsifier' command.`
+      );
+    }
+    if (!hasRegression) {
+      errors.push(
+        `${filePath}: proof ladder is missing a required 'regression' command.`
+      );
+    }
+  }
+
+  return errors;
+}
+
 export function validatePackageMetadataShape(filePath, fileStatus, metadata) {
   const errors = [];
   if (!metadata) {
     return errors;
   }
+  errors.push(...validateProofRoles(filePath, metadata));
   if (metadata.schema !== 'work-package-v1' && metadata.schema !== 'work-package-v2') {
     errors.push(
       `${filePath}: metadata schema must be work-package-v1 or work-package-v2.`,
@@ -5892,6 +6000,23 @@ function validateDiscoveryRef(metadata, filePath) {
   return errors;
 }
 
+function isEpicPackage(filePath, content, options = {}) {
+  if (options.kind === 'epic') {
+    return true;
+  }
+  if (globalKindOption === 'epic') {
+    return true;
+  }
+  const normalizedPath = String(filePath || '').toLowerCase();
+  if (normalizedPath.includes('epic') && !normalizedPath.includes('epic-package-construct')) {
+    return true;
+  }
+  if (content && content.includes('## Causal Question') && content.includes('## Shared Discriminator')) {
+    return true;
+  }
+  return false;
+}
+
 function runPackageValidationsSync(filePath, content, fileStatus, metadata, options = {}) {
   const phase = options.phase || VALIDATION_PHASE_PRE_IMPL;
   const relativePath = normalizeRelativePath(filePath);
@@ -5915,6 +6040,41 @@ function runPackageValidationsSync(filePath, content, fileStatus, metadata, opti
   errors.push(
     ...validatePackageMetadataShape(relativePath, fileStatus, metadata),
   );
+
+  const isEpic = isEpicPackage(filePath, content, options);
+  if (isEpic) {
+    const requiredSections = [
+      { heading: '## Causal Question', err: 'must declare a ## Causal Question section.' },
+      { heading: '## Expected Leaf Set', err: 'must declare a ## Expected Leaf Set section.' },
+      { heading: '## Shared Discriminator', err: 'must declare a ## Shared Discriminator section.' },
+      { heading: '## Stop Rule', err: 'must declare a ## Stop Rule section.' }
+    ];
+    for (const sec of requiredSections) {
+      if (extractMarkdownLevelTwoSection(content, sec.heading) === null) {
+        errors.push(`${relativePath}: epic package ${sec.err}`);
+      }
+    }
+
+    if (fileStatus === STATUS_DONE || phase === VALIDATION_PHASE_CLOSURE) {
+      const retroSection = extractMarkdownLevelTwoSection(content, '## Retrospective');
+      if (retroSection === null) {
+        errors.push(`${relativePath}: epic package closure requires a ## Retrospective section.`);
+      } else {
+        const retroContent = String(retroSection).toLowerCase();
+        if (!retroContent.includes('learn')) {
+          errors.push(`${relativePath}: epic package retrospective must answer 'What did we learn that we could not have predicted at lane-pick time?'.`);
+        }
+        if (!retroContent.includes('discriminator')) {
+          errors.push(`${relativePath}: epic package retrospective must answer 'Did the discriminator hold for every leaf, or did any leaf reveal a different cut?'.`);
+        }
+        if (!retroContent.includes('theory-ledger') && !retroContent.includes('ledger')) {
+          errors.push(`${relativePath}: epic package retrospective must answer 'Theory-ledger update yes/no (with rationale if no)'.`);
+        }
+      }
+    }
+    return errors;
+  }
+
   if (phase !== VALIDATION_PHASE_ENTRY && fileStatus === STATUS_ACTIVE) {
     errors.push(...validateDiscoveryRef(metadata, relativePath));
   }
@@ -5942,7 +6102,8 @@ function runPackageValidationsSync(filePath, content, fileStatus, metadata, opti
   );
   if (!subagentValidation.skipSubagentLedger) {
     const hasExecutionEvidence =
-      extractExecutionEvidenceLedger(content) !== null;
+      (extractExecutionEvidenceLedger(content) !== null) ||
+      (metadata && metadata.execution && (metadata.execution.implementation || metadata.execution.verificationFix));
     if (hasExecutionEvidence) {
       errors.push(...validateExecutionEvidenceLedger(content, relativePath, {
         [LEDGER_VALIDATION_REQUIRES_LEDGER]:
@@ -5953,6 +6114,7 @@ function runPackageValidationsSync(filePath, content, fileStatus, metadata, opti
           fileStatus === STATUS_TODO,
         [LEDGER_VALIDATION_REQUIRES_VERIFICATION_FIX]:
           subagentValidation.requiresVerificationFix,
+        metadata,
       }));
     } else if (subagentValidation.requiresVerificationFix) {
       errors.push(
@@ -6670,6 +6832,10 @@ async function validateCommand(args) {
     console.error(errors.join(NEWLINE));
     process.exit(EXIT_FAILURE);
   }
+  if (globalDryRunOption) {
+    console.log(`Dry-run validation successful for epic package.`);
+    process.exit(EXIT_SUCCESS);
+  }
   console.log(
     `Work tracker validation OK for ${targets.length} file(s) ` +
       `at ${phase} phase.`,
@@ -6720,6 +6886,10 @@ function validateTheoryLedgerGates(
 ) {
   const errors = [];
   if (!metadata) {
+    return errors;
+  }
+  const epicRef = metadata?.intent?.epicRef || metadata?.epicRef;
+  if (epicRef) {
     return errors;
   }
   const normalizeText = (value) => String(value || '').trim();
@@ -6787,7 +6957,8 @@ function validateTheoryLedgerGates(
   // Gate 3: Closure write-back gate
   if (phase === VALIDATION_PHASE_CLOSURE) {
     const noUpdateRegex = /\b(?:no ledger update|ledger update not needed|ledger: not-needed|theory-ledger: not-needed)\b/iu;
-    if (!noUpdateRegex.test(content)) {
+    const structuredNoUpdate = metadata && metadata.execution && (metadata.execution.theoryLedger === 'no-ledger-update' || metadata.execution.theoryLedger === 'no ledger update');
+    if (!noUpdateRegex.test(content) && !structuredNoUpdate) {
       const baseNameWithoutStatus = path.basename(filePath).replace(/^(active|done|todo|superseded)-/, '');
 
       let hasLink = false;
@@ -6908,8 +7079,53 @@ function metadataWritePaths(metadata = {}) {
   ];
 }
 
+function parseProofCommand(item) {
+  if (typeof item === 'string') {
+    const trimmed = item.trim();
+    const match = trimmed.match(/^(falsifier|regression|supporting)\s*:\s*(.+)$/i);
+    if (match) {
+      return {
+        role: match[1].toLowerCase(),
+        command: match[2].trim()
+      };
+    }
+    return {
+      role: null,
+      command: trimmed
+    };
+  } else if (item && typeof item === 'object') {
+    if (typeof item.role === 'string' && typeof item.command === 'string') {
+      const role = item.role.trim().toLowerCase();
+      if (['falsifier', 'regression', 'supporting'].includes(role)) {
+        return {
+          role,
+          command: item.command.trim()
+        };
+      }
+    }
+    for (const role of ['falsifier', 'regression', 'supporting']) {
+      if (typeof item[role] === 'string') {
+        return {
+          role,
+          command: item[role].trim()
+        };
+      }
+    }
+  }
+  return null;
+}
+
 function metadataProofCommands(metadata = {}) {
-  return normalizeMetadataStringList(metadata[METADATA_FIELD_PROOF]);
+  const rawProof = metadata[METADATA_FIELD_PROOF] || [];
+  if (Array.isArray(rawProof)) {
+    return rawProof
+      .map((item) => {
+        const parsed = parseProofCommand(item);
+        return parsed ? parsed.command : '';
+      })
+      .filter((command) => command.length > 0);
+  }
+  return normalizeMetadataStringList(rawProof);
 }
 
 function hasImplementationWriteScope(metadata = {}) {
@@ -8690,7 +8906,27 @@ async function movePackageCommand(args, fallbackTargetStatus, requiresSuccessor)
 }
 
 async function main() {
-  const [, , command, ...args] = process.argv;
+  const rawArgs = process.argv.slice(2);
+  let command = null;
+  const args = [];
+  for (let i = 0; i < rawArgs.length; i++) {
+    if (rawArgs[i] === '--kind') {
+      i++;
+    } else if (rawArgs[i] === '--dry-run') {
+      // skip
+    } else {
+      if (!command && !rawArgs[i].startsWith('-') && !rawArgs[i].includes('work/packages/')) {
+        command = rawArgs[i];
+      } else {
+        args.push(rawArgs[i]);
+      }
+    }
+  }
+
+  if ((globalKindOption || globalDryRunOption) && !command) {
+    command = CLI_COMMAND_VALIDATE;
+  }
+
   try {
     if (command === CLI_COMMAND_VALIDATE) {
       await validateCommand(args);

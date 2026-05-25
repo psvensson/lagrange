@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
+  "status": "done",
   "intent": {
     "opened": "2026-05-25",
     "lane": "lightweight-maintenance",
@@ -23,7 +23,7 @@
       ".kiro/steering/llm/boot.md",
       "scripts/generate-steering-llm-pack.js",
       "package.json",
-      "work/packages/todo-20260525-steering-stack-collapse-decision.md"
+      "work/packages/done-20260525-steering-stack-collapse-decision.md"
     ],
     "handoffFiles": [],
     "generatedFiles": [
@@ -56,14 +56,31 @@
     ]
   },
   "execution": {
-    "theoryLedgerRefs": [],
+    "theoryLedgerRefs": [
+      "theory-20260525-steering-stack-collapse-decision"
+    ],
     "proof": {
       "commands": [
         "npm run steering:llm:pack && git diff --quiet -- .kiro/steering/llm",
-        "npm run work:validate -- --pre-impl work/packages/todo-20260525-steering-stack-collapse-decision.md",
+        "npm run work:validate -- --pre-impl work/packages/done-20260525-steering-stack-collapse-decision.md",
         "git diff --check -- AGENTS.md .kiro/steering scripts/generate-steering-llm-pack.js"
       ]
-    }
+    },
+    "implementation": {
+      "parentRevalidatedFocusedProof": true,
+      "filesChanged": [
+        "AGENTS.md",
+        "package.json",
+        "work/theory-ledger.md"
+      ]
+    },
+    "verificationFix": {
+      "parentRevalidatedFocusedProof": true
+    },
+    "repair": {
+      "validationCommand": "npm run work:repair"
+    },
+    "theoryLedger": "theory-20260525-steering-stack-collapse-decision"
   }
 }
 -->

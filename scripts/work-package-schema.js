@@ -98,7 +98,11 @@ function normalizeMetadata(metadata, filePath) {
       }
       if (metadata.execution.proof) {
         if (shim.proof === undefined) {
-          shim.proof = metadata.execution.proof.commands || [];
+          if (Array.isArray(metadata.execution.proof)) {
+            shim.proof = metadata.execution.proof;
+          } else {
+            shim.proof = metadata.execution.proof.commands || [];
+          }
         }
       }
     }

@@ -6,39 +6,50 @@ this full template.
 
 <!-- work-package
 {
-  "schema": "work-package-v1",
+  "schema": "work-package-v2",
   "status": "active",
-  "opened": "YYYY-MM-DD",
-  "lane": "mechanical-maintenance",
-  "scenario": "none",
-  "artifact": "none",
-  "playback": "none",
-  "owner": "owner",
-  "boundary": "boundary",
-  "dominantReason": "reason",
-  "currentState": "state",
-  "nextAction": "action",
-  "stabilityCredit": "local-proof-only",
-  "whyHighestLeverageNow": "why",
-  "proof": [
-    "proof command"
-  ],
-  "writeScope": [
-    "path/to/file"
-  ],
-  "handoffFiles": [],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [
-    "path/to/file",
-    "work/packages/active-package.md"
-  ],
+  "intent": {
+    "opened": "YYYY-MM-DD",
+    "lane": "mechanical-maintenance",
+    "scenario": "none",
+    "artifact": "none",
+    "playback": "none",
+    "owner": "owner",
+    "boundary": "boundary",
+    "dominantReason": "reason",
+    "currentState": "state",
+    "nextAction": "action"
+  },
+  "scope": {
+    "writeScope": [
+      "path/to/file"
+    ],
+    "handoffFiles": [],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": [],
+    "commitScope": [
+      "path/to/file",
+      "work/packages/active-package.md"
+    ]
+  },
+  "gates": {
+    "stabilityCredit": "local-proof-only",
+    "whyHighestLeverageNow": "why"
+  },
   "modelFit": {
     "packageClass": "bounded-implementation",
     "intendedMinimumModel": "gpt-5.3-codex-spark",
     "scopeShape": "leaf-slice",
     "escalationTriggers": [
       "owned files expand beyond this package"
+    ]
+  },
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": [
+      "falsifier: falsifier command",
+      "regression: regression command",
+      "supporting: supporting command"
     ]
   }
 }

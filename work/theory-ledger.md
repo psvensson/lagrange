@@ -134,4 +134,18 @@ Each entry must include these labels:
 - Superseded by: none
 - Next implication: Successfully stabilized the rolling-restart scenario.
 
+## theory-20260525-steering-stack-collapse-decision
+
+- Status: supported
+- Scenario/gate: none / workflow_tooling
+- Owner/boundary: workflow_steering_owner / steering_stack_collapse_decision
+- Hypothesis: compiling source steering files into specialized, single-file LLM steering packs (architecture, testing, style, governance) eliminates drift while keeping LLM context window load sizes minimal and highly readable.
+- Probe: `npm run steering:check`
+- Artifact/result: `package.json` and `AGENTS.md` - established LLM steering pack compiler, simplified load sequence, and added CI command `npm run steering:check` to prevent drift.
+- Representative movement: none
+- Linked packages: `work/packages/done-20260525-steering-stack-collapse-decision.md`
+- Supersedes: none
+- Superseded by: none
+- Next implication: CI workflow checks steering packs for synchronization; no human or LLM drift is possible anymore.
+
 

@@ -4,27 +4,27 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: Sibling leaves (e.g. 10+ `*-modularization-*` packages) close atomically but the set has no retrospective. Theory-ledger updates are ~1% of closed packages because every leaf is judged mechanical in isolation.
+Theory under test: No active work package. Start a new package when implementation resumes.
 
-Causal question: anti-fragmentation-structural-change
+Causal question: none
 
-Implementation slice: Introduce an `epic` package kind that owns a set of sibling leaves under one causal question and one discriminator. Leaves cite the parent and skip theory-ledger ceremony; the epic-close step requires a retrospective answering 'what surprised us since lane-pick?'.
+Implementation slice: Create or activate one focused package for the next executable concern.
 
 Implementation files:
 
-1. `scripts/work-tracker.js`
+1. None recorded
 
 Expected implementation delta: unknown
 
-Falsifying probe: node scripts/work-tracker.js --kind epic --dry-run work/packages/todo-20260525-epic-package-construct.md
+Falsifying probe: unknown
 
-Stop rule: No architecture decision gate is required for this package.
+Stop rule: unknown
 
 Sprint: `work/sprints/active-2026-q2-workflow-leverage-rebalance.md`
 
-Package: `work/packages/active-20260525-epic-package-construct.md`
+Package: `none`
 
-Workflow lane: `lightweight-maintenance`
+Workflow lane: `none`
 
 Scenario: `none`
 
@@ -34,38 +34,35 @@ Playback: `none`
 
 ## Boundary
 
-Owner: `workflow-steering`
+Owner: `none`
 
-Boundary: `package-kinds-and-closure-grammar`
+Boundary: `none`
 
-Dominant reason: `anti-fragmentation-structural-change`
+Dominant reason: `none`
 
-Current state: Sibling leaves (e.g. 10+ `*-modularization-*` packages) close atomically but the set has no retrospective. Theory-ledger updates are ~1% of closed packages because every leaf is judged mechanical in isolation.
+Current state: No active work package. Start a new package when implementation resumes.
 
 ## Next Action
 
-Introduce an `epic` package kind that owns a set of sibling leaves under one causal question and one discriminator. Leaves cite the parent and skip theory-ledger ceremony; the epic-close step requires a retrospective answering 'what surprised us since lane-pick?'.
+Create or activate one focused package for the next executable concern.
 
 ## Proof Ladder
 
-1. `node scripts/work-tracker.js --kind epic --dry-run work/packages/todo-20260525-epic-package-construct.md`
-2. `npm run work:validate -- --pre-impl work/packages/todo-20260525-epic-package-construct.md`
-3. `git diff --check -- work/RULES.md work/templates scripts/work-tracker.js`
+1. None recorded
 
 ## Model Fit
 
-Package class: `bounded-implementation`
+Package class: `unknown`
 
-Intended minimum model: `gpt-5.3-codex-spark`
+Intended minimum model: `unknown`
 
-Scope shape: `leaf-slice`
+Scope shape: `unknown`
 
-Output profile: `medium`
+Output profile: `unknown`
 
 Escalation triggers:
 
-1. `owned files expand beyond this package`
-2. `a frozen decision must be reopened`
+1. None recorded
 
 ## Theory Ledger References
 
@@ -215,9 +212,9 @@ Runtime promotion rule: `unknown`
 
 ## Architecture Decision Gate
 
-Status: `not-required`
+Status: `unknown`
 
-Trigger: `none`
+Trigger: `unknown`
 
 Trigger evidence:
 
@@ -229,17 +226,13 @@ Choices:
 
 Selected choice: `unknown`
 
-Gate next action: No architecture decision gate is required for this package.
+Gate next action: unknown
 
 ## Scope
 
 Write scope:
 
-1. `work/RULES.md`
-2. `work/templates/epic-package.md`
-3. `work/templates/work-package-template.md`
-4. `scripts/work-tracker.js`
-5. `work/packages/active-20260525-epic-package-construct.md`
+1. None recorded
 
 Handoff files:
 
@@ -247,9 +240,8 @@ Handoff files:
 
 Generated files:
 
-1. `.kiro/steering/llm/governance.md`
-2. `.kiro/steering/llm/rules.json`
-3. `.kiro/steering/llm/manifest.json`
+1. `work/sprints/current-blocker.json`
+2. `work/sprints/current-blocker.md`
 
 Candidate runtime files:
 
@@ -257,15 +249,7 @@ Candidate runtime files:
 
 Commit scope:
 
-1. `work/RULES.md`
-2. `work/templates/epic-package.md`
-3. `work/templates/work-package-template.md`
-4. `scripts/work-tracker.js`
-5. `.kiro/steering/llm/governance.md`
-6. `.kiro/steering/llm/rules.json`
-7. `.kiro/steering/llm/manifest.json`
-8. `work/packages/done-20260525-epic-package-construct.md`
-9. `work/packages/active-20260525-epic-package-construct.md`
+1. None recorded
 
 Legacy touched files:
 

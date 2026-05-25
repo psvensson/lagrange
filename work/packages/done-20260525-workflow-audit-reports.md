@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
+  "status": "done",
   "intent": {
     "opened": "2026-05-25",
     "lane": "lightweight-maintenance",
@@ -23,7 +23,7 @@
       "scripts/work-audit-validator-coverage.js",
       "package.json",
       "work/RULES.md",
-      "work/packages/todo-20260525-workflow-audit-reports.md"
+      "work/packages/done-20260525-workflow-audit-reports.md"
     ],
     "handoffFiles": [],
     "generatedFiles": [
@@ -68,7 +68,24 @@
         "node scripts/work-audit-validator-coverage.js",
         "git diff --check -- scripts/work-audit-*.js package.json work/RULES.md"
       ]
-    }
+    },
+    "implementation": {
+      "parentRevalidatedFocusedProof": true,
+      "filesChanged": [
+        "scripts/work-audit-ceremony.js",
+        "scripts/work-audit-siblings.js",
+        "scripts/work-audit-validator-coverage.js",
+        "package.json",
+        "work/RULES.md"
+      ]
+    },
+    "verificationFix": {
+      "parentRevalidatedFocusedProof": true
+    },
+    "repair": {
+      "validationCommand": "npm run work:repair"
+    },
+    "theoryLedger": "no-ledger-update"
   }
 }
 -->
