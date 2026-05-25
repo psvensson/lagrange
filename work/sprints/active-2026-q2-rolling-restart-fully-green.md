@@ -38,11 +38,11 @@ admission relaxation, or unresolved topology/frontier blockers.
 ```text
 Representative artifact: test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json
 Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out
-Active package: work/packages/active-20260525-rolling-restart-active-gate-snapshot-coverage-blocker.md
+Active package: work/packages/active-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md
 Active package owner: startup_active_gate_owner
 Active package boundary: snapshot_coverage
 Selected cause: active_gate_timed_out
-Required action: Fix the active-gate snapshot coverage timeout
+Required action: Triage active_gate_snapshot_coverage with combined scenario evidence before runtime edits.
 Representative status: migrated
 Causal outcome: continue_local_fix
 Architecture gate: watching / unknown
@@ -64,6 +64,13 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - First-run reason: the resume-activation sprint closed on migrated/reduced
      evidence, but the user requested a sprint whose success criterion is full
      representative green.
+2. [Active Gate Snapshot Coverage Blocker](../packages/done-20260525-rolling-restart-active-gate-snapshot-coverage-blocker.md)
+   - Lane: `causal-escalation`
+   - Purpose: triage active-gate snapshot coverage with combined scenario evidence.
+3. [Active Gate Snapshot Coverage Fix](../packages/active-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md)
+   - Lane: `runtime-owner-boundary`
+   - Purpose: resolve active-gate snapshot coverage timeout.
+
 
 ## Proof Ladder
 

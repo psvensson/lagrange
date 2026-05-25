@@ -8,7 +8,7 @@ Theory under test: Fixing active-gate snapshot coverage under Lagrange load stab
 
 Causal question: Whether active-gate snapshot coverage needs a cache watermark bypass or stale replica operations purge.
 
-Implementation slice: Fix the active-gate snapshot coverage timeout
+Implementation slice: Triage active_gate_snapshot_coverage with combined scenario evidence before runtime edits.
 
 Implementation files:
 
@@ -22,7 +22,7 @@ Stop rule: If canonical extractors cannot distinguish the route, close as archit
 
 Sprint: `work/sprints/active-2026-q2-rolling-restart-fully-green.md`
 
-Package: `work/packages/active-20260525-rolling-restart-active-gate-snapshot-coverage-blocker.md`
+Package: `work/packages/active-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md`
 
 Workflow lane: `causal-escalation`
 
@@ -44,7 +44,7 @@ Current state: Scaffolded from representative evidence for active_gate_snapshot_
 
 ## Next Action
 
-Fix the active-gate snapshot coverage timeout
+Triage active_gate_snapshot_coverage with combined scenario evidence before runtime edits.
 
 ## Proof Ladder
 
@@ -264,7 +264,7 @@ Candidate runtime files:
 
 Commit scope:
 
-1. `work/packages/active-20260525-rolling-restart-active-gate-snapshot-coverage-blocker.md`
+1. `work/packages/active-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md`
 
 Legacy touched files:
 

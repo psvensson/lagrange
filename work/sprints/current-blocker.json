@@ -2,7 +2,7 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-rolling-restart-fully-green.md",
-  "package": "work/packages/active-20260525-rolling-restart-active-gate-snapshot-coverage-blocker.md",
+  "package": "work/packages/active-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md",
   "status": "active",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
@@ -12,7 +12,7 @@
   "boundary": "snapshot_coverage",
   "dominantReason": "active_gate_timed_out",
   "currentState": "Scaffolded from representative evidence for active_gate_snapshot_coverage.",
-  "nextAction": "Fix the active-gate snapshot coverage timeout",
+  "nextAction": "Triage active_gate_snapshot_coverage with combined scenario evidence before runtime edits.",
   "proof": [
     "falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json",
     "regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json --markdown",
@@ -25,7 +25,7 @@
   "generatedFiles": [],
   "candidateRuntimeFiles": [],
   "commitScope": [
-    "work/packages/active-20260525-rolling-restart-active-gate-snapshot-coverage-blocker.md"
+    "work/packages/active-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md"
   ],
   "touchedFiles": [],
   "theoryLedgerRefs": [

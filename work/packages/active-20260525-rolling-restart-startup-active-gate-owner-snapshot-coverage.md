@@ -1,4 +1,4 @@
-# Active Gate Snapshot Coverage Blocker
+# Artifact Triage - startup_active_gate_owner - snapshot_coverage
 
 <!-- work-package
 {
@@ -14,7 +14,7 @@
     "boundary": "snapshot_coverage",
     "dominantReason": "active_gate_timed_out",
     "currentState": "Scaffolded from representative evidence for active_gate_snapshot_coverage.",
-    "nextAction": "Fix the active-gate snapshot coverage timeout"
+    "nextAction": "Triage active_gate_snapshot_coverage with combined scenario evidence before runtime edits."
   },
   "scope": {
     "writeScope": [],
@@ -24,7 +24,7 @@
     "generatedFiles": [],
     "candidateRuntimeFiles": [],
     "commitScope": [
-      "work/packages/active-20260525-rolling-restart-active-gate-snapshot-coverage-blocker.md"
+      "work/packages/active-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md"
     ]
   },
   "gates": {
@@ -163,7 +163,7 @@
 
 ## Why
 
-This package owns the active-gate snapshot coverage blocker. Acknowledging related theories: not-applicable.
+State the focused concern and why this package owns it.
 
 ## Scope Basis
 
@@ -171,7 +171,7 @@ Approved maintenance scope or roadmap row.
 
 ## Workflow Lane
 
-- Selected lane: `runtime-owner-boundary`
+- Selected lane: `causal-escalation`
 - Why this lane is sufficient: owner, boundary, core logic brief, and proof ladder are bounded to this package.
 - Escalation trigger to a heavier lane: runtime ownership, shared contract, or representative scenario evidence changes.
 
@@ -188,7 +188,7 @@ Approved maintenance scope or roadmap row.
 
 | Signal | Normalized value | Owner interpretation | Emitted outcome | Expected delta | Disproof probe |
 | --- | --- | --- | --- | --- | --- |
-| route owner/boundary | startup_active_gate_owner / snapshot_coverage / active_gate_timed_out | startup_active_gate_owner owns this decision before downstream consumers reinterpret it | Fix the active-gate snapshot coverage timeout | Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion. | npm run work:evidence-summary -- test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json |
+| route owner/boundary | startup_active_gate_owner / snapshot_coverage / active_gate_timed_out | startup_active_gate_owner owns this decision before downstream consumers reinterpret it | Triage active_gate_snapshot_coverage with combined scenario evidence before runtime edits. | Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion. | npm run work:evidence-summary -- test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json |
 | scope boundary | lane and package scope only | proof that needs forbidden scope means this package is the wrong slice | stop, split, or migrate owner boundary | no widened runtime scope inside this package | npm run work:advance -- --check |
 
 - Anti-symptom rationale: This package changes or classifies startup_active_gate_owner / snapshot_coverage directly; it does not patch downstream symptoms or widen forbidden scope.
