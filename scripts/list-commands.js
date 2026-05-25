@@ -13,6 +13,10 @@ const COMMAND_GROUPS = Object.freeze([
         description: 'Print current blocker, first-read files, proof ladder, and dirty worktree.',
       }),
       Object.freeze({
+        command: 'npm run work:context -- --bootstrap',
+        description: 'Print the minimal LLM boot commands, first files, guardrails, and closure path for the current package.',
+      }),
+      Object.freeze({
         command: 'npm run work:advance',
         description: 'Refresh orientation around the active package, doctor findings, validation, and next subagent role.',
       }),
@@ -35,6 +39,10 @@ const COMMAND_GROUPS = Object.freeze([
       Object.freeze({
         command: 'npm run work:sprint:remaining',
         description: 'Print active and todo packages left in the current sprint.',
+      }),
+      Object.freeze({
+        command: 'npm run work:sprint:advance -- --dry-run|--write',
+        description: 'Close a package-complete active sprint by renaming it to done and updating track/release references.',
       }),
       Object.freeze({
         command: 'npm run work:sprint:push -- <git-push-args>',
@@ -79,6 +87,23 @@ const COMMAND_GROUPS = Object.freeze([
       Object.freeze({
         command: 'npm run steering:llm:pack',
         description: 'Regenerate compact steering packs for prompt loading.',
+      }),
+    ]),
+  }),
+  Object.freeze({
+    title: 'Workflow Audit',
+    commands: Object.freeze([
+      Object.freeze({
+        command: 'npm run work:audit:ceremony -- --summary --limit 10',
+        description: 'Summarize pure-ceremony package clusters by lane and owner.',
+      }),
+      Object.freeze({
+        command: 'npm run work:audit:siblings',
+        description: 'Find high-overlap sibling packages that may belong under an epic/frontier parent.',
+      }),
+      Object.freeze({
+        command: 'npm run work:audit:validators',
+        description: 'Report validator gates and whether they have produced useful rejections.',
       }),
     ]),
   }),

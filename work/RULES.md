@@ -124,13 +124,30 @@ All runtime code must strictly adhere to the following rules:
 ## Closure Evidence Grammar
 <a name="closure-evidence-grammar"></a>
 
-The closure validator (`npm run work:validate -- --closure`) accepts an Execution Evidence section only when it contains the following literal phrases and check states. These are enforced by `scripts/work-tracker.js`; this section is the human-readable contract.
+The closure validator (`npm run work:validate -- --closure`) accepts either
+structured execution metadata or checked `## Execution Evidence`. Prefer
+structured metadata for new packages so validation does not depend on prose
+wording.
 
-1. Each non-`not-needed` evidence line MUST be marked `[x]` (checked).
-2. The `implementation` and `verification-fix` lines MUST contain the exact phrase `parent revalidated focused proof: yes`. Without that literal phrase the validator rejects closure even if every other field is filled in.
-3. The `repair` line MUST cite `npm run work:repair` as its validation command.
-4. The package MUST contain either a `theory ledger: no ledger update` line OR a real `theoryLedgerRefs` entry of the form `theory-YYYYMMDD-short-slug` that is also present in `work/theory-ledger.md`. The package metadata field `theoryLedgerRefs` MUST default to `[]` (empty array); the value `["none"]` is invalid.
-5. Closure commands MUST be replayable: do not paraphrase the validation command; copy it verbatim from the focused proof ladder.
+1. Structured packages record
+   `execution.implementation.parentRevalidatedFocusedProof: true`,
+   `execution.implementation.filesChanged: [...]`,
+   `execution.verificationFix.parentRevalidatedFocusedProof: true` when
+   verifier-fixer proof is required, `execution.repair.validationCommand:
+   "npm run work:repair"`, and `execution.theoryLedger: "no-ledger-update"` or
+   real `theoryLedgerRefs`.
+2. Prose `## Execution Evidence` remains accepted for existing packages. Each
+   non-`not-needed` evidence line MUST be marked `[x]` (checked), terminal, and
+   replayable.
+3. In prose evidence, `implementation` and `verification-fix` lines still need
+   the parent revalidation assertion accepted by the validator (for example
+   `parent revalidated focused proof: yes`).
+4. The package MUST contain either structured no-ledger metadata, a prose
+   no-ledger evidence line, or a real `theoryLedgerRefs` entry of the form
+   `theory-YYYYMMDD-short-slug` that is also present in
+   `work/theory-ledger.md`. The metadata value `["none"]` is invalid.
+5. Closure commands MUST be replayable: do not paraphrase the validation
+   command; copy it verbatim from the focused proof ladder.
 
 ---
 
@@ -158,3 +175,7 @@ Sprint queues live in `work/sprints/active-*.md` under the `## Package Queue` he
 3. **Supersede or remove** an item by replacing its link target with the appropriate `superseded-<slug>.md` package and updating its purpose.
 4. The queue numbering is automatically managed and renumbered sequentially by `npm run work:close`.
 5. The active sprint file is part of every closing package's commit scope whenever the queue or its references change.
+6. When `npm run work:sprint:remaining` reports zero active/todo packages, run
+   `npm run work:sprint:advance -- --dry-run` and then
+   `npm run work:sprint:advance -- --write` to rename the sprint to `done-*`
+   and update track/release references atomically.

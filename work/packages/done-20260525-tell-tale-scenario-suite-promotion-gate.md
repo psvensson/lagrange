@@ -178,7 +178,7 @@
   },
   "closed": "2026-05-25",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260525-rolling-restart-operation-workflow-owner-workflow-progress.md"
+  "successor": "work/packages/done-20260525-rolling-restart-operation-workflow-owner-workflow-progress.md"
 }
 -->
 

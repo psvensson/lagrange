@@ -112,6 +112,7 @@
     "work:oversized-refactor": "node scripts/work-oversized-refactor.js",
     "work:tracks": "node scripts/work-track-summary.js",
     "work:sprint:remaining": "node scripts/work-sprint-remaining.js",
+    "work:sprint:advance": "node scripts/work-sprint-advance.js",
     "work:sprint:push": "node scripts/work-sprint-push.js",
     "work:package:evidence-block": "node scripts/analyze-topology-convergence.js --package-evidence-block",
     "work:package:doctor": "node scripts/work-tracker.js doctor",

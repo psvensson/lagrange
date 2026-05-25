@@ -4,61 +4,69 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: The priority-recovery event-driven wait residuals represent a distinct classification or stop condition before broader runtime promotion.
+Theory under test: Workflow streamlining primitives exist but sprint advancement, audit summaries, and LLM-facing docs still leave manual ceremony.
 
-Causal question: Classification of fresh representative evidence is pending.
+Causal question: ceremony_reduction
 
-Implementation slice: Triage priority_recovery_partition_progress with combined scenario evidence before runtime edits.
+Implementation slice: Add sprint advancement tooling, actionable audit summaries, bootstrap context hints, and streamlined workflow docs.
 
 Implementation files:
 
-1. `work/packages/active-20260525-rolling-restart-operation-workflow-owner-workflow-progress.md`
+1. `scripts/work-audit-ceremony.js`
+2. `scripts/work-sprint-advance.js`
+3. `scripts/work-context.js`
+4. `scripts/list-commands.js`
+5. `test/scripts/work-audit-ceremony.test.js`
+6. `test/scripts/work-sprint-advance.test.js`
+7. `test/scripts/work-context.test.js`
+8. `test/scripts/list-commands.test.js`
 
-Expected implementation delta: The package should classify whether fresh evidence is green, reduced, migrated, same-frontier, architecture-gap, or contradictory.
+Expected implementation delta: unknown
 
-Falsifying probe: npm run work:scenario-triage -- test-output/reports/rolling-restart-tell-tale-suite.report.json
+Falsifying probe: regression: node --test test/scripts/work-audit-ceremony.test.js test/scripts/work-sprint-advance.test.js test/scripts/work-context.test.js test/scripts/list-commands.test.js
 
-Stop rule: Keep the workflow-progress successor as the active first frontier.
+Stop rule: No architecture decision gate is required for this package.
 
 Sprint: `work/sprints/active-2026-q2-tell-tale-scenario-reliability.md`
 
-Package: `work/packages/active-20260525-rolling-restart-operation-workflow-owner-workflow-progress.md`
+Package: `work/packages/active-20260525-workflow-streamlining-follow-through.md`
 
-Workflow lane: `diagnostic-classification`
+Workflow lane: `lightweight-maintenance`
 
-Scenario: `rolling-restart`
+Scenario: `none`
 
-Artifact: `test-output/reports/rolling-restart-tell-tale-suite.report.json`
+Artifact: `none`
 
 Playback: `none`
 
 ## Boundary
 
-Owner: `operation_workflow_owner`
+Owner: `workflow_tooling_owner`
 
-Boundary: `workflow_progress`
+Boundary: `workflow_acceleration`
 
-Dominant reason: `priority_recovery_event_driven_wait`
+Dominant reason: `ceremony_reduction`
 
-Current state: Scaffolded from representative evidence for priority_recovery_partition_progress.
+Current state: Workflow streamlining primitives exist but sprint advancement, audit summaries, and LLM-facing docs still leave manual ceremony.
 
 ## Next Action
 
-Triage priority_recovery_partition_progress with combined scenario evidence before runtime edits.
+Add sprint advancement tooling, actionable audit summaries, bootstrap context hints, and streamlined workflow docs.
 
 ## Proof Ladder
 
-1. `falsifier: representative scenario triage npm run work:scenario-triage -- test-output/reports/rolling-restart-tell-tale-suite.report.json --markdown`
-2. `regression: representative evidence summary npm run work:evidence-summary -- test-output/reports/rolling-restart-tell-tale-suite.report.json`
-3. `supporting: analyze priority recovery residuals npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-tell-tale-suite.report.json --markdown`
+1. `regression: node --test test/scripts/work-audit-ceremony.test.js test/scripts/work-sprint-advance.test.js test/scripts/work-context.test.js test/scripts/list-commands.test.js`
+2. `supporting: npm run work:audit:ceremony -- --summary --limit 5`
+3. `supporting: npm run work:sprint:advance -- --dry-run --force`
+4. `supporting: git diff --check -- scripts/work-audit-ceremony.js scripts/work-sprint-advance.js scripts/work-context.js scripts/list-commands.js package.json work/RULES.md work/README.md .kiro/steering/llm/core.md .kiro/steering/llm/boot.md test/scripts/work-audit-ceremony.test.js test/scripts/work-sprint-advance.test.js test/scripts/work-context.test.js test/scripts/list-commands.test.js work/packages/active-20260525-workflow-streamlining-follow-through.md`
 
 ## Model Fit
 
-Package class: `diagnostic-classification`
+Package class: `bounded-implementation`
 
-Intended minimum model: `gpt-5.3-codex`
+Intended minimum model: `gpt-5.3-codex-spark`
 
-Scope shape: `diagnostic-owner-evidence/current-artifact`
+Scope shape: `leaf-slice`
 
 Output profile: `medium`
 
@@ -73,79 +81,77 @@ Escalation triggers:
 
 ## Representative Residual
 
-Status: `same-frontier`
+Status: `unknown`
 
-Scenario: `rolling-restart`
+Scenario: `unknown`
 
-Artifact: `test-output/reports/rolling-restart-tell-tale-suite.report.json`
+Artifact: `unknown`
 
-Frontier: `workflow_progress`
+Frontier: `unknown`
 
-Owner: `operation_workflow_owner`
+Owner: `unknown`
 
-Boundary: `workflow_progress`
+Boundary: `unknown`
 
-Dominant reason: `priority_recovery_event_driven_wait`
+Dominant reason: `unknown`
 
-Next action: `Triage priority_recovery_partition_progress with combined scenario evidence before runtime edits.`
+Next action: `unknown`
 
 ## Causal Governance
 
-Causal hypothesis: `The priority-recovery event-driven wait residuals represent a distinct classification or stop condition before broader runtime promotion.`
+Causal hypothesis: `unknown`
 
-Stop-condition check: `Use npm run analyze:causal-model, work:scenario-triage, work:evidence-summary, and analyze:priority-recovery-residuals on the latest representative artifact.`
+Stop-condition check: `unknown`
 
-Expected causal-model change: `The package should classify whether fresh evidence is green, reduced, migrated, same-frontier, architecture-gap, or contradictory.`
+Expected causal-model change: `unknown`
 
-Representative outcome: `pending-before-rerun`
+Representative outcome: `unknown`
 
-Causal debt: `priority-recovery event-driven wait needs material classification before promotion.`
+Causal debt: `unknown`
 
-Cross-boundary review: `Triage stays under operation_workflow_owner / workflow_progress.`
+Cross-boundary review: `unknown`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `rolling-restart-priority-recovery-triage`
+Reference scenario/probe: `unknown`
 
 Phase chain:
 
-1. `rolling-restart representative gate rerun completed`
-2. `route evidence selected operation_workflow_owner / workflow_progress`
-3. `triage residuals to classify the frontier outcome`
+1. None recorded
 
-Current first frontier: `operation_workflow_owner/workflow_progress`
+Current first frontier: `unknown`
 
 Known downstream blockers:
 
-1. `tell-tale-suite-repeatability`
+1. None recorded
 
-Missing causal edge: `Classification of fresh representative evidence is pending.`
+Missing causal edge: `unknown`
 
-Missing causal edge probe: `npm run work:scenario-triage -- test-output/reports/rolling-restart-tell-tale-suite.report.json`
+Missing causal edge probe: `unknown`
 
-Bounded progress proof: `The package records that priority-recovery residuals must be classified before runtime promotion to reconcile and advance workflow progress.`
+Bounded progress proof: `unknown`
 
-Bounded progress proof artifact: `test-output/reports/rolling-restart-tell-tale-suite.report.json`
+Bounded progress proof artifact: `unknown`
 
-Expected observable transition: `residuals classified to determine next successor`
+Expected observable transition: `unknown`
 
-Max progress bound: `one classification gate`
+Max progress bound: `unknown`
 
-Same-frontier fallback: `Keep the workflow-progress successor as the active first frontier.`
+Same-frontier fallback: `unknown`
 
-Expected next frontier: `workflow_progress`
+Expected next frontier: `unknown`
 
-Result classification: `pending-before-probe`
+Result classification: `unknown`
 
-Stop condition: `continue-local-fix`
+Stop condition: `unknown`
 
 Recent frontier history:
 
-1. `done-20260525-tell-tale-scenario-suite-promotion-gate.md / release_gate_owner / tell_tale_suite_repeatability / tell_tale_suite_repeatability_required`
+1. None recorded
 
-Oscillation check: `The package does not patch runtime; it triages priority-recovery evidence to select the next owner/boundary.`
+Oscillation check: `unknown`
 
-Handoff invariant: `Workflow progress triage is downstream of scenario-release-gate routing.`
+Handoff invariant: `unknown`
 
 ## Observable Prediction
 
@@ -175,80 +181,86 @@ Evidence: `unknown`
 
 ## Rerun Decision
 
-Source artifact: `test-output/reports/rolling-restart-tell-tale-suite.report.json`
+Source artifact: `unknown`
 
-Route owner: `operation_workflow_owner`
+Route owner: `unknown`
 
-Route boundary: `workflow_progress`
+Route boundary: `unknown`
 
-Route dominant reason: `priority_recovery_event_driven_wait`
+Route dominant reason: `unknown`
 
-Route causal outcome: `accept_classified_backpressure`
+Route causal outcome: `unknown`
 
-Stop mode: `classified_backpressure`
+Stop mode: `unknown`
 
-Next lane: `diagnostic-classification`
+Next lane: `unknown`
 
-Expected delta: `Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.`
+Expected delta: `unknown`
 
 Required refresh commands:
 
-1. `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-tell-tale-suite.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait`
-2. `update Sprint Strategy Brief and Current Edge Card from the route result`
-3. `npm run work:repair`
-4. `npm run work:validate -- --pre-impl`
+1. None recorded
 
 ## Classification Efficiency
 
-Default mode: `separate-package-approved`
+Default mode: `unknown`
 
-Separate package reason: `successor-selection`
+Separate package reason: `unknown`
 
-Artifact budget: `one-artifact`
+Artifact budget: `unknown`
 
-Proof command budget: `two-or-three-canonical-commands`
+Proof command budget: `unknown`
 
 Commands:
 
-1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-tell-tale-suite.report.json`
-2. `npm run work:scenario-triage -- test-output/reports/rolling-restart-tell-tale-suite.report.json --markdown`
-3. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-tell-tale-suite.report.json --markdown`
+1. None recorded
 
-Decision record: `Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.`
+Decision record: `unknown`
 
-Successor action: `rerun-representative-evidence`
+Successor action: `unknown`
 
-Runtime promotion rule: `When canonical owner and boundary are stable, prefer a runtime-owner-boundary successor and keep runtime files in candidateRuntimeFiles until that package activates them. If the representative route is same-frontier with no reduction or an architecture gap, open an autonomous architecture experiment before more local runtime work.`
+Runtime promotion rule: `unknown`
 
 ## Architecture Decision Gate
 
-Status: `selected`
+Status: `not-required`
 
-Trigger: `frontier-oscillation`
+Trigger: `none`
 
 Trigger evidence:
 
-1. `Fresh rolling-restart representative route selected operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait.`
-2. `Frontier oscillation detected (repeated adjacent-boundary oscillation within the same boundary family).`
-3. `Same-frontier rolling-restart evidence must stop local patching and triage residuals.`
+1. None recorded
 
 Choices:
 
-1. `open-architecture-package` route=`architecture-package` - Keep the workflow-progress successor as the active first frontier.
+1. None recorded
 
-Selected choice: `open-architecture-package`
+Selected choice: `unknown`
 
-Gate next action: Keep the selected workflow-progress classification/triage successor before further runtime edits.
+Gate next action: No architecture decision gate is required for this package.
 
 ## Scope
 
 Write scope:
 
-1. `work/packages/active-20260525-rolling-restart-operation-workflow-owner-workflow-progress.md`
+1. `scripts/work-audit-ceremony.js`
+2. `scripts/work-sprint-advance.js`
+3. `scripts/work-context.js`
+4. `scripts/list-commands.js`
+5. `package.json`
+6. `work/RULES.md`
+7. `work/README.md`
+8. `.kiro/steering/llm/core.md`
+9. `.kiro/steering/llm/boot.md`
+10. `test/scripts/work-audit-ceremony.test.js`
+11. `test/scripts/work-sprint-advance.test.js`
+12. `test/scripts/work-context.test.js`
+13. `test/scripts/list-commands.test.js`
+14. `work/packages/active-20260525-workflow-streamlining-follow-through.md`
 
 Handoff files:
 
-1. `test-output/reports/rolling-restart-tell-tale-suite.report.json`
+1. None recorded
 
 Generated files:
 
@@ -260,10 +272,20 @@ Candidate runtime files:
 
 Commit scope:
 
-1. `work/packages/active-20260525-rolling-restart-operation-workflow-owner-workflow-progress.md`
-2. `work/sprints/active-2026-q2-tell-tale-scenario-reliability.md`
-3. `work/sprints/current-blocker.json`
-4. `work/sprints/current-blocker.md`
+1. `scripts/work-audit-ceremony.js`
+2. `scripts/work-sprint-advance.js`
+3. `scripts/work-context.js`
+4. `scripts/list-commands.js`
+5. `package.json`
+6. `work/RULES.md`
+7. `work/README.md`
+8. `.kiro/steering/llm/core.md`
+9. `.kiro/steering/llm/boot.md`
+10. `test/scripts/work-audit-ceremony.test.js`
+11. `test/scripts/work-sprint-advance.test.js`
+12. `test/scripts/work-context.test.js`
+13. `test/scripts/list-commands.test.js`
+14. `work/packages/done-20260525-workflow-streamlining-follow-through.md`
 
 Legacy touched files:
 

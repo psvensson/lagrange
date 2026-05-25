@@ -2,149 +2,85 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-tell-tale-scenario-reliability.md",
-  "package": "work/packages/active-20260525-rolling-restart-operation-workflow-owner-workflow-progress.md",
+  "package": "work/packages/active-20260525-workflow-streamlining-follow-through.md",
   "status": "active",
-  "lane": "diagnostic-classification",
-  "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-tell-tale-suite.report.json",
+  "lane": "lightweight-maintenance",
+  "scenario": "none",
+  "artifact": "none",
   "playback": "none",
-  "owner": "operation_workflow_owner",
-  "boundary": "workflow_progress",
-  "dominantReason": "priority_recovery_event_driven_wait",
-  "currentState": "Scaffolded from representative evidence for priority_recovery_partition_progress.",
-  "nextAction": "Triage priority_recovery_partition_progress with combined scenario evidence before runtime edits.",
+  "owner": "workflow_tooling_owner",
+  "boundary": "workflow_acceleration",
+  "dominantReason": "ceremony_reduction",
+  "currentState": "Workflow streamlining primitives exist but sprint advancement, audit summaries, and LLM-facing docs still leave manual ceremony.",
+  "nextAction": "Add sprint advancement tooling, actionable audit summaries, bootstrap context hints, and streamlined workflow docs.",
   "proof": [
-    "falsifier: representative scenario triage npm run work:scenario-triage -- test-output/reports/rolling-restart-tell-tale-suite.report.json --markdown",
-    "regression: representative evidence summary npm run work:evidence-summary -- test-output/reports/rolling-restart-tell-tale-suite.report.json",
-    "supporting: analyze priority recovery residuals npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-tell-tale-suite.report.json --markdown"
+    "regression: node --test test/scripts/work-audit-ceremony.test.js test/scripts/work-sprint-advance.test.js test/scripts/work-context.test.js test/scripts/list-commands.test.js",
+    "supporting: npm run work:audit:ceremony -- --summary --limit 5",
+    "supporting: npm run work:sprint:advance -- --dry-run --force",
+    "supporting: git diff --check -- scripts/work-audit-ceremony.js scripts/work-sprint-advance.js scripts/work-context.js scripts/list-commands.js package.json work/RULES.md work/README.md .kiro/steering/llm/core.md .kiro/steering/llm/boot.md test/scripts/work-audit-ceremony.test.js test/scripts/work-sprint-advance.test.js test/scripts/work-context.test.js test/scripts/list-commands.test.js work/packages/active-20260525-workflow-streamlining-follow-through.md"
   ],
   "writeScope": [
-    "work/packages/active-20260525-rolling-restart-operation-workflow-owner-workflow-progress.md"
+    "scripts/work-audit-ceremony.js",
+    "scripts/work-sprint-advance.js",
+    "scripts/work-context.js",
+    "scripts/list-commands.js",
+    "package.json",
+    "work/RULES.md",
+    "work/README.md",
+    ".kiro/steering/llm/core.md",
+    ".kiro/steering/llm/boot.md",
+    "test/scripts/work-audit-ceremony.test.js",
+    "test/scripts/work-sprint-advance.test.js",
+    "test/scripts/work-context.test.js",
+    "test/scripts/list-commands.test.js",
+    "work/packages/active-20260525-workflow-streamlining-follow-through.md"
   ],
-  "handoffFiles": [
-    "test-output/reports/rolling-restart-tell-tale-suite.report.json"
-  ],
+  "handoffFiles": [],
   "generatedFiles": [],
   "candidateRuntimeFiles": [],
   "commitScope": [
-    "work/packages/active-20260525-rolling-restart-operation-workflow-owner-workflow-progress.md",
-    "work/sprints/active-2026-q2-tell-tale-scenario-reliability.md",
-    "work/sprints/current-blocker.json",
-    "work/sprints/current-blocker.md"
+    "scripts/work-audit-ceremony.js",
+    "scripts/work-sprint-advance.js",
+    "scripts/work-context.js",
+    "scripts/list-commands.js",
+    "package.json",
+    "work/RULES.md",
+    "work/README.md",
+    ".kiro/steering/llm/core.md",
+    ".kiro/steering/llm/boot.md",
+    "test/scripts/work-audit-ceremony.test.js",
+    "test/scripts/work-sprint-advance.test.js",
+    "test/scripts/work-context.test.js",
+    "test/scripts/list-commands.test.js",
+    "work/packages/done-20260525-workflow-streamlining-follow-through.md"
   ],
   "touchedFiles": [],
   "theoryLedgerRefs": [],
   "modelFit": {
-    "packageClass": "diagnostic-classification",
-    "intendedMinimumModel": "gpt-5.3-codex",
-    "scopeShape": "diagnostic-owner-evidence/current-artifact",
+    "packageClass": "bounded-implementation",
+    "intendedMinimumModel": "gpt-5.3-codex-spark",
+    "scopeShape": "leaf-slice",
     "outputProfile": "medium",
+    "ambiguityScore": 1,
     "escalationTriggers": [
       "owned files expand beyond this package",
       "a frozen decision must be reopened"
-    ],
-    "ambiguityScore": 1
-  },
-  "representativeResidual": {
-    "status": "same-frontier",
-    "scenario": "rolling-restart",
-    "artifact": "test-output/reports/rolling-restart-tell-tale-suite.report.json",
-    "frontier": "workflow_progress",
-    "owner": "operation_workflow_owner",
-    "boundary": "workflow_progress",
-    "dominantReason": "priority_recovery_event_driven_wait",
-    "nextAction": "Triage priority_recovery_partition_progress with combined scenario evidence before runtime edits."
-  },
-  "causalGovernance": {
-    "hypothesis": "The priority-recovery event-driven wait residuals represent a distinct classification or stop condition before broader runtime promotion.",
-    "stopConditionCheck": "Use npm run analyze:causal-model, work:scenario-triage, work:evidence-summary, and analyze:priority-recovery-residuals on the latest representative artifact.",
-    "expectedCausalModelChange": "The package should classify whether fresh evidence is green, reduced, migrated, same-frontier, architecture-gap, or contradictory.",
-    "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "priority-recovery event-driven wait needs material classification before promotion.",
-    "crossBoundaryReview": "Triage stays under operation_workflow_owner / workflow_progress."
-  },
-  "scenarioCausalClosure": {
-    "referenceScenarioOrProbe": "rolling-restart-priority-recovery-triage",
-    "phaseChain": [
-      "rolling-restart representative gate rerun completed",
-      "route evidence selected operation_workflow_owner / workflow_progress",
-      "triage residuals to classify the frontier outcome"
-    ],
-    "currentFirstFrontier": "operation_workflow_owner/workflow_progress",
-    "knownDownstreamBlockers": [
-      "tell-tale-suite-repeatability"
-    ],
-    "missingCausalEdge": "Classification of fresh representative evidence is pending.",
-    "missingCausalEdgeProbe": "npm run work:scenario-triage -- test-output/reports/rolling-restart-tell-tale-suite.report.json",
-    "falsifyingProbe": "npm run work:scenario-triage -- test-output/reports/rolling-restart-tell-tale-suite.report.json",
-    "boundedProgressProof": "The package records that priority-recovery residuals must be classified before runtime promotion to reconcile and advance workflow progress.",
-    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-tell-tale-suite.report.json",
-    "expectedObservableTransition": "residuals classified to determine next successor",
-    "maxProgressBound": "one classification gate",
-    "sameFrontierFallback": "Keep the workflow-progress successor as the active first frontier.",
-    "expectedNextFrontier": "workflow_progress",
-    "resultClassification": "pending-before-probe",
-    "stopCondition": "continue-local-fix",
-    "recentFrontierHistory": [
-      "done-20260525-tell-tale-scenario-suite-promotion-gate.md / release_gate_owner / tell_tale_suite_repeatability / tell_tale_suite_repeatability_required"
-    ],
-    "oscillationCheck": "The package does not patch runtime; it triages priority-recovery evidence to select the next owner/boundary.",
-    "handoffInvariant": "Workflow progress triage is downstream of scenario-release-gate routing."
-  },
-  "observablePrediction": {},
-  "experimentOutcome": {},
-  "rerunDecision": {
-    "sourceArtifact": "test-output/reports/rolling-restart-tell-tale-suite.report.json",
-    "routeOwner": "operation_workflow_owner",
-    "routeBoundary": "workflow_progress",
-    "routeDominantReason": "priority_recovery_event_driven_wait",
-    "routeCausalOutcome": "accept_classified_backpressure",
-    "stopMode": "classified_backpressure",
-    "nextLane": "diagnostic-classification",
-    "expectedDelta": "Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.",
-    "requiredRefreshCommands": [
-      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-tell-tale-suite.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait",
-      "update Sprint Strategy Brief and Current Edge Card from the route result",
-      "npm run work:repair",
-      "npm run work:validate -- --pre-impl"
     ]
   },
-  "classificationEfficiency": {
-    "defaultMode": "separate-package-approved",
-    "separatePackageReason": "successor-selection",
-    "artifactBudget": "one-artifact",
-    "proofCommandBudget": "two-or-three-canonical-commands",
-    "commands": [
-      "npm run work:evidence-summary -- test-output/reports/rolling-restart-tell-tale-suite.report.json",
-      "npm run work:scenario-triage -- test-output/reports/rolling-restart-tell-tale-suite.report.json --markdown",
-      "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-tell-tale-suite.report.json --markdown"
-    ],
-    "decisionRecord": "Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.",
-    "successorAction": "rerun-representative-evidence",
-    "runtimePromotionRule": "When canonical owner and boundary are stable, prefer a runtime-owner-boundary successor and keep runtime files in candidateRuntimeFiles until that package activates them. If the representative route is same-frontier with no reduction or an architecture gap, open an autonomous architecture experiment before more local runtime work."
-  },
+  "representativeResidual": {},
+  "causalGovernance": {},
+  "scenarioCausalClosure": {},
+  "observablePrediction": {},
+  "experimentOutcome": {},
+  "rerunDecision": {},
+  "classificationEfficiency": {},
   "architectureDecisionGate": {
-    "status": "selected",
-    "trigger": "frontier-oscillation",
-    "triggerEvidence": [
-      "Fresh rolling-restart representative route selected operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait.",
-      "Frontier oscillation detected (repeated adjacent-boundary oscillation within the same boundary family).",
-      "Same-frontier rolling-restart evidence must stop local patching and triage residuals."
-    ],
-    "choices": [
-      {
-        "id": "open-architecture-package",
-        "summary": "Keep the workflow-progress successor as the active first frontier.",
-        "route": "architecture-package",
-        "proof": [
-          "npm run work:scenario-triage -- test-output/reports/rolling-restart-tell-tale-suite.report.json --markdown",
-          "npm run work:evidence-summary -- test-output/reports/rolling-restart-tell-tale-suite.report.json",
-          "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-tell-tale-suite.report.json"
-        ]
-      }
-    ],
-    "selectedChoice": "open-architecture-package",
-    "nextAction": "Keep the selected workflow-progress classification/triage successor before further runtime edits."
+    "status": "not-required",
+    "trigger": "none",
+    "triggerEvidence": [],
+    "choices": [],
+    "selectedChoice": null,
+    "nextAction": "No architecture decision gate is required for this package."
   },
   "predecessor": null
 }

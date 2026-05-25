@@ -13,6 +13,7 @@ const FOCUSED_VALIDATION_GROUP_TITLE = 'Focused Validation';
 const REPORT_TRIAGE_GROUP_TITLE = 'Report And Triage';
 const WORK_HELP_COMMAND = 'npm run work:help';
 const WORK_CONTEXT_COMMAND = 'npm run work:context';
+const WORK_CONTEXT_BOOTSTRAP_COMMAND = 'npm run work:context -- --bootstrap';
 const WORK_ADVANCE_COMMAND = 'npm run work:advance';
 const WORK_LLM_START_COMMAND = 'npm run work:llm-start';
 const WORK_LANE_PICKER_COMMAND =
@@ -20,6 +21,8 @@ const WORK_LANE_PICKER_COMMAND =
 const WORK_DIRTY_SCOPE_COMMAND = 'npm run work:dirty-scope';
 const WORK_TRACKS_COMMAND = 'npm run work:tracks';
 const WORK_SPRINT_REMAINING_COMMAND = 'npm run work:sprint:remaining';
+const WORK_SPRINT_ADVANCE_COMMAND =
+  'npm run work:sprint:advance -- --dry-run|--write';
 const WORK_SPRINT_PUSH_COMMAND = 'npm run work:sprint:push -- <git-push-args>';
 const MODEL_LEDGER_SUMMARY_COMMAND = 'npm run work:model-ledger -- summary';
 const THEORY_LEDGER_COMMAND = 'npm run work:theory-ledger -- validate|list|new';
@@ -82,6 +85,8 @@ const WORK_TRACKS_DESCRIPTION =
   'Print current tracks with status, active sprints, upcoming sprints, and track relation.';
 const WORK_SPRINT_REMAINING_DESCRIPTION =
   'Print active and todo packages left in the current sprint.';
+const WORK_SPRINT_ADVANCE_DESCRIPTION =
+  'Close a package-complete active sprint by renaming it to done and updating track/release references.';
 const WORK_SPRINT_PUSH_DESCRIPTION =
   'Push with git, then print packages left in the current sprint after a successful push.';
 const OWNER_BOUNDARY_SEGMENTS_DESCRIPTION =
@@ -130,6 +135,8 @@ const COMMAND_GROUPS_EXPORTED_MESSAGE =
   'command groups should be exported for tests';
 const WORK_CONTEXT_ORIENTATION_MESSAGE =
   'work context should remain the first orientation entrypoint';
+const WORK_CONTEXT_BOOTSTRAP_ORIENTATION_MESSAGE =
+  'bootstrap context should be discoverable from orientation';
 const WORK_HELP_ORIENTATION_MESSAGE =
   'work help should be discoverable from orientation';
 const MODEL_LEDGER_ORIENTATION_MESSAGE =
@@ -146,6 +153,8 @@ const WORK_TRACKS_ORIENTATION_MESSAGE =
   'track status summary should be discoverable from orientation';
 const WORK_SPRINT_REMAINING_ORIENTATION_MESSAGE =
   'sprint remaining package summary should be discoverable from orientation';
+const WORK_SPRINT_ADVANCE_ORIENTATION_MESSAGE =
+  'sprint advance transaction should be discoverable from orientation';
 const WORK_SPRINT_PUSH_ORIENTATION_MESSAGE =
   'sprint push wrapper should be discoverable from orientation';
 const GUIDELINE_LITERALS_GROUP_MESSAGE =
@@ -191,6 +200,8 @@ const ANALYZE_OWNER_GLOSSARY_SCRIPT_COMMAND =
   'node scripts/analyze-topology-convergence.js --glossary';
 const WORK_DIRTY_SCOPE_SCRIPT = 'work:dirty-scope';
 const WORK_DIRTY_SCOPE_SCRIPT_COMMAND = 'node scripts/work-context.js --dirty-scope';
+const WORK_CONTEXT_SCRIPT = 'work:context';
+const WORK_CONTEXT_SCRIPT_COMMAND = 'node scripts/work-context.js';
 const WORK_HELP_SCRIPT = 'work:help';
 const WORK_HELP_SCRIPT_COMMAND = 'node scripts/list-commands.js';
 const WORK_TRACKS_SCRIPT = 'work:tracks';
@@ -198,6 +209,9 @@ const WORK_TRACKS_SCRIPT_COMMAND = 'node scripts/work-track-summary.js';
 const WORK_SPRINT_REMAINING_SCRIPT = 'work:sprint:remaining';
 const WORK_SPRINT_REMAINING_SCRIPT_COMMAND =
   'node scripts/work-sprint-remaining.js';
+const WORK_SPRINT_ADVANCE_SCRIPT = 'work:sprint:advance';
+const WORK_SPRINT_ADVANCE_SCRIPT_COMMAND =
+  'node scripts/work-sprint-advance.js';
 const WORK_SPRINT_PUSH_SCRIPT = 'work:sprint:push';
 const WORK_SPRINT_PUSH_SCRIPT_COMMAND = 'node scripts/work-sprint-push.js';
 const WORK_LLM_START_SCRIPT = 'work:llm-start';
@@ -260,12 +274,14 @@ test(ORIENTATION_GUARDRAILS_TEST_NAME, (t) => {
 
   t.match(rendered, WORK_HELP_COMMAND);
   t.match(rendered, WORK_CONTEXT_COMMAND);
+  t.match(rendered, WORK_CONTEXT_BOOTSTRAP_COMMAND);
   t.match(rendered, WORK_ADVANCE_COMMAND);
   t.match(rendered, WORK_LLM_START_COMMAND);
   t.match(rendered, WORK_LANE_PICKER_COMMAND);
   t.match(rendered, WORK_DIRTY_SCOPE_COMMAND);
   t.match(rendered, WORK_TRACKS_COMMAND);
   t.match(rendered, WORK_SPRINT_REMAINING_COMMAND);
+  t.match(rendered, WORK_SPRINT_ADVANCE_COMMAND);
   t.match(rendered, WORK_SPRINT_PUSH_COMMAND);
   t.match(rendered, MODEL_LEDGER_SUMMARY_COMMAND);
   t.match(rendered, THEORY_LEDGER_COMMAND);
@@ -296,6 +312,11 @@ test(ORIENTATION_GUARDRAILS_TEST_NAME, (t) => {
     findCommandEntry(WORK_CONTEXT_COMMAND).group.title,
     ORIENTATION_GROUP_TITLE,
     WORK_CONTEXT_ORIENTATION_MESSAGE,
+  );
+  t.equal(
+    findCommandEntry(WORK_CONTEXT_BOOTSTRAP_COMMAND).group.title,
+    ORIENTATION_GROUP_TITLE,
+    WORK_CONTEXT_BOOTSTRAP_ORIENTATION_MESSAGE,
   );
   t.equal(
     findCommandEntry(WORK_ADVANCE_COMMAND).group.title,
@@ -336,6 +357,11 @@ test(ORIENTATION_GUARDRAILS_TEST_NAME, (t) => {
     findCommandEntry(WORK_SPRINT_REMAINING_COMMAND).group.title,
     ORIENTATION_GROUP_TITLE,
     WORK_SPRINT_REMAINING_ORIENTATION_MESSAGE,
+  );
+  t.equal(
+    findCommandEntry(WORK_SPRINT_ADVANCE_COMMAND).group.title,
+    ORIENTATION_GROUP_TITLE,
+    WORK_SPRINT_ADVANCE_ORIENTATION_MESSAGE,
   );
   t.equal(
     findCommandEntry(WORK_SPRINT_PUSH_COMMAND).group.title,
@@ -386,6 +412,11 @@ test(ORIENTATION_GUARDRAILS_TEST_NAME, (t) => {
     rendered,
     `${WORK_SPRINT_REMAINING_COMMAND}\`${COMMAND_ENTRY_SEPARATOR}` +
       WORK_SPRINT_REMAINING_DESCRIPTION,
+  );
+  t.match(
+    rendered,
+    `${WORK_SPRINT_ADVANCE_COMMAND}\`${COMMAND_ENTRY_SEPARATOR}` +
+      WORK_SPRINT_ADVANCE_DESCRIPTION,
   );
   t.match(
     rendered,
@@ -575,12 +606,20 @@ test(RUNTIME_GRAMMAR_TEST_NAME,
       WORK_DIRTY_SCOPE_SCRIPT_COMMAND,
     );
     t.equal(
+      scripts[WORK_CONTEXT_SCRIPT],
+      WORK_CONTEXT_SCRIPT_COMMAND,
+    );
+    t.equal(
       scripts[WORK_TRACKS_SCRIPT],
       WORK_TRACKS_SCRIPT_COMMAND,
     );
     t.equal(
       scripts[WORK_SPRINT_REMAINING_SCRIPT],
       WORK_SPRINT_REMAINING_SCRIPT_COMMAND,
+    );
+    t.equal(
+      scripts[WORK_SPRINT_ADVANCE_SCRIPT],
+      WORK_SPRINT_ADVANCE_SCRIPT_COMMAND,
     );
     t.equal(
       scripts[WORK_SPRINT_PUSH_SCRIPT],

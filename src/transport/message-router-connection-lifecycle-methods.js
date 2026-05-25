@@ -290,9 +290,14 @@ class MessageRouterConnectionLifecycleMethods {
           connectionInfo.ws = null;
           reject(error);
         };
+        const attempts = connectionInfo.reconnectAttempts || TRANSPORT_NUM.ZERO;
+        const currentConnectTimeoutMs = Math.min(
+          30000,
+          this.connectTimeoutMs + attempts * 5000
+        );
         let connectTimeout = setTimeout(() => {
           const error = new Error(
-            `WebSocket connection timeout after ${this.connectTimeoutMs}ms`,
+            `WebSocket connection timeout after ${currentConnectTimeoutMs}ms`,
           );
           error.code = WEBSOCKET_CONNECT_TIMEOUT_ERROR_CODE;
           rejectPendingConnection(error);
@@ -301,7 +306,7 @@ class MessageRouterConnectionLifecycleMethods {
           } catch (_error) {
             void _error;
           }
-        }, this.connectTimeoutMs);
+        }, currentConnectTimeoutMs);
         if (
           typeof connectTimeout?.unref ===
           MESSAGE_ROUTER_LITERAL.STRING_FUNCTION

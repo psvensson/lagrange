@@ -2,36 +2,86 @@
 
 <!-- work-package
 {
-  "schema": "work-package-v2",
+  "schema": "work-package-v1",
   "status": "done",
-  "intent": {
-    "opened": "2026-05-25",
-    "lane": "diagnostic-classification",
+  "opened": "2026-05-25",
+  "lane": "diagnostic-classification",
+  "scenario": "rolling-restart",
+  "artifact": "test-output/reports/rolling-restart-tell-tale-suite.report.json",
+  "playback": "none",
+  "owner": "operation_workflow_owner",
+  "boundary": "workflow_progress",
+  "dominantReason": "priority_recovery_event_driven_wait",
+  "currentState": "Scaffolded from representative evidence for priority_recovery_partition_progress.",
+  "nextAction": "Triage priority_recovery_partition_progress with combined scenario evidence before runtime edits.",
+  "proof": [
+    "falsifier: representative scenario triage npm run work:scenario-triage -- test-output/reports/rolling-restart-tell-tale-suite.report.json --markdown",
+    "regression: representative evidence summary npm run work:evidence-summary -- test-output/reports/rolling-restart-tell-tale-suite.report.json",
+    "supporting: analyze priority recovery residuals npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-tell-tale-suite.report.json --markdown"
+  ],
+  "stabilityCredit": "local-proof-only",
+  "whyHighestLeverageNow": "Classify priority-recovery residuals to advance the tell-tale scenario reliability goal and determine the next successor for the tell-tale scenario suite promotion gate.",
+  "representativeResidual": {
+    "status": "same-frontier",
     "scenario": "rolling-restart",
-    "artifact": "test-output/reports/rolling-restart-rerun-4.report.json",
-    "playback": "none",
+    "artifact": "test-output/reports/rolling-restart-tell-tale-suite.report.json",
+    "frontier": "workflow_progress",
     "owner": "operation_workflow_owner",
     "boundary": "workflow_progress",
-    "currentState": "Scaffolded from representative evidence for priority_recovery_partition_progress.",
-    "nextAction": "Triage priority_recovery_partition_progress with combined scenario evidence before runtime edits.",
-    "dominantReason": "priority_recovery_event_driven_wait"
+    "dominantReason": "priority_recovery_event_driven_wait",
+    "nextAction": "Triage priority_recovery_partition_progress with combined scenario evidence before runtime edits."
   },
-  "scope": {
-    "writeScope": [],
-    "handoffFiles": [
-      "test-output/reports/rolling-restart-rerun-4.report.json"
+  "causalGovernance": {
+    "hypothesis": "The priority-recovery event-driven wait residuals represent a distinct classification or stop condition before broader runtime promotion.",
+    "stopConditionCheck": "Use npm run analyze:causal-model, work:scenario-triage, work:evidence-summary, and analyze:priority-recovery-residuals on the latest representative artifact.",
+    "expectedCausalModelChange": "The package should classify whether fresh evidence is green, reduced, migrated, same-frontier, architecture-gap, or contradictory.",
+    "representativeOutcome": "same-frontier",
+    "causalDebt": "priority-recovery event-driven wait needs material classification before promotion.",
+    "crossBoundaryReview": "Triage stays under operation_workflow_owner / workflow_progress."
+  },
+  "scenarioCausalClosure": {
+    "referenceScenarioOrProbe": "rolling-restart-priority-recovery-triage",
+    "phaseChain": [
+      "rolling-restart representative gate rerun completed",
+      "route evidence selected operation_workflow_owner / workflow_progress",
+      "triage residuals to classify the frontier outcome"
     ],
-    "generatedFiles": [],
-    "candidateRuntimeFiles": [],
-    "commitScope": [
-      "work/packages/done-20260525-rolling-restart-operation-workflow-owner-workflow-progress.md"
-    ]
+    "currentFirstFrontier": "operation_workflow_owner/workflow_progress",
+    "knownDownstreamBlockers": [
+      "tell-tale-suite-repeatability"
+    ],
+    "missingCausalEdge": "Classification of fresh representative evidence is pending.",
+    "missingCausalEdgeProbe": "npm run work:scenario-triage -- test-output/reports/rolling-restart-tell-tale-suite.report.json",
+    "falsifyingProbe": "npm run work:scenario-triage -- test-output/reports/rolling-restart-tell-tale-suite.report.json",
+    "boundedProgressProof": "The package records that priority-recovery residuals must be classified before runtime promotion to reconcile and advance workflow progress.",
+    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-tell-tale-suite.report.json",
+    "expectedObservableTransition": "residuals classified to determine next successor",
+    "maxProgressBound": "one classification gate",
+    "sameFrontierFallback": "Keep the workflow-progress successor as the active first frontier.",
+    "expectedNextFrontier": "workflow_progress",
+    "resultClassification": "same-frontier",
+    "stopCondition": "classification-only-stop",
+    "recentFrontierHistory": [
+      "done-20260525-tell-tale-scenario-suite-promotion-gate.md / release_gate_owner / tell_tale_suite_repeatability / tell_tale_suite_repeatability_required"
+    ],
+    "oscillationCheck": "The package does not patch runtime; it triages priority-recovery evidence to select the next owner/boundary.",
+    "handoffInvariant": "Workflow progress triage is downstream of scenario-release-gate routing."
   },
-  "gates": {
-    "whyHighestLeverageNow": "This package triages the new frontier priority_recovery_partition_progress to advance the rolling-restart stabilization goal.",
-    "stabilityCredit": "local-proof-only",
-    "representativeRerunCadence": "scheduled-rerun-command"
-  },
+  "theoryLedgerRefs": [],
+  "writeScope": [
+    "work/packages/done-20260525-rolling-restart-operation-workflow-owner-workflow-progress.md"
+  ],
+  "handoffFiles": [
+    "test-output/reports/rolling-restart-tell-tale-suite.report.json"
+  ],
+  "generatedFiles": [],
+  "candidateRuntimeFiles": [],
+  "commitScope": [
+    "work/packages/done-20260525-rolling-restart-operation-workflow-owner-workflow-progress.md",
+    "work/sprints/active-2026-q2-tell-tale-scenario-reliability.md",
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md"
+  ],
   "modelFit": {
     "packageClass": "diagnostic-classification",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -43,51 +93,47 @@
     ],
     "ambiguityScore": 1
   },
-  "execution": {
-    "theoryLedgerRefs": [],
-    "proof": {
-      "commands": [
-        "npm run work:evidence-summary -- test-output/reports/rolling-restart-rerun-4.report.json",
-        "npm run work:scenario-triage -- test-output/reports/rolling-restart-rerun-4.report.json --markdown",
-        "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-rerun-4.report.json --markdown"
-      ]
-    }
+  "modelFitSplit": {
+    "targetExecutionModel": "gpt-5.3-codex",
+    "allowedDecisionDepth": "bounded local edit after owner, scope, proof, and forbidden files are named",
+    "safeToExecuteWhen": [
+      "owner, boundary, write scope, forbidden scope, proof, and kill rule stay as declared",
+      "the executor does not need to choose architecture, migrate ownership, or reinterpret representative evidence",
+      "the first focused proof gives a clear pass, fail, or escalate signal"
+    ],
+    "splitTriggers": [
+      "write scope expands beyond the declared lower-model lane",
+      "proof requires forbidden scope, cross-owner reasoning, or architecture route selection",
+      "the implementation needs to decide system behavior instead of executing a named local mechanism"
+    ],
+    "childPackageCandidates": [
+      "Prefer mechanical-maintenance for docs/templates/schema-only edits.",
+      "Prefer test-only-proof for tests that do not change runtime behavior.",
+      "Prefer bounded-experiment for one same-owner hypothesis with inherited context."
+    ]
   },
-  "causalGovernance": {
-    "hypothesis": "Accepting classified backpressure at priority_recovery_partition_progress prevents system destabilization.",
-    "stopConditionCheck": "Focused triage, rerun-representative-evidence validation, and npm run analyze:causal-model before closure.",
-    "expectedCausalModelChange": "Priority recovery workflow progress advances successfully.",
-    "representativeOutcome": "reduced",
-    "causalDebt": "Priority recovery event-driven wait at workflow progress due to partition progress coordination under rolling restart.",
-    "crossBoundaryReview": "Only workflow progress and backpressure controls are in scope."
-  },
-  "scenarioCausalClosure": {
-    "referenceScenarioOrProbe": "rolling-restart",
-    "phaseChain": [
-      "priority recovery partition progress is detected",
-      "backpressure is classified",
-      "workflow progress converges"
+  "architectureDecisionGate": {
+    "status": "selected",
+    "trigger": "frontier-oscillation",
+    "selectedChoice": "open-architecture-package",
+    "nextAction": "Keep the selected workflow-progress classification/triage successor before further runtime edits.",
+    "triggerEvidence": [
+      "Fresh rolling-restart representative route selected operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait.",
+      "Frontier oscillation detected (repeated adjacent-boundary oscillation within the same boundary family).",
+      "Same-frontier rolling-restart evidence must stop local patching and triage residuals."
     ],
-    "currentFirstFrontier": "operation_workflow_owner/workflow_progress",
-    "knownDownstreamBlockers": [
-      "workflow progress remains incomplete"
-    ],
-    "missingCausalEdge": "Backpressure controls for partition progress under rolling restart need triage alignment.",
-    "missingCausalEdgeProbe": "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-rerun-4.report.json --markdown",
-    "falsifyingProbe": "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-rerun-4.report.json --markdown",
-    "boundedProgressProof": "Scenario triage and residuals summary prove workflow progress convergence via concrete dispatch advance and drain mechanism.",
-    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-rerun-4.report.json",
-    "expectedObservableTransition": "Workflow progress advances in representative rerun.",
-    "maxProgressBound": "one local patch",
-    "sameFrontierFallback": "Stop for autonomous architecture experiment if same-frontier.",
-    "expectedNextFrontier": "green",
-    "resultClassification": "pending-before-probe",
-    "stopCondition": "continue-local-fix",
-    "recentFrontierHistory": [
-      "done-20260525-rolling-restart-active-gate-snapshot-coverage-repair.md / startup_active_gate_owner / snapshot_coverage / reduced"
-    ],
-    "oscillationCheck": "Triage resolves potential oscillations.",
-    "handoffInvariant": "workflow progress is bounded."
+    "choices": [
+      {
+        "id": "open-architecture-package",
+        "summary": "Keep the workflow-progress successor as the active first frontier.",
+        "route": "architecture-package",
+        "proof": [
+          "npm run work:scenario-triage -- test-output/reports/rolling-restart-tell-tale-suite.report.json --markdown",
+          "npm run work:evidence-summary -- test-output/reports/rolling-restart-tell-tale-suite.report.json",
+          "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-tell-tale-suite.report.json"
+        ]
+      }
+    ]
   },
   "classificationEfficiency": {
     "defaultMode": "separate-package-approved",
@@ -95,16 +141,16 @@
     "artifactBudget": "one-artifact",
     "proofCommandBudget": "two-or-three-canonical-commands",
     "commands": [
-      "npm run work:evidence-summary -- test-output/reports/rolling-restart-rerun-4.report.json",
-      "npm run work:scenario-triage -- test-output/reports/rolling-restart-rerun-4.report.json --markdown",
-      "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-rerun-4.report.json --markdown"
+      "npm run work:evidence-summary -- test-output/reports/rolling-restart-tell-tale-suite.report.json",
+      "npm run work:scenario-triage -- test-output/reports/rolling-restart-tell-tale-suite.report.json --markdown",
+      "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-tell-tale-suite.report.json --markdown"
     ],
-    "decisionRecord": "Classified backpressure at priority_recovery_partition_progress prevents system destabilization.",
+    "decisionRecord": "Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.",
     "successorAction": "rerun-representative-evidence",
-    "runtimePromotionRule": "When canonical owner and boundary are stable, prefer a runtime-owner-boundary successor."
+    "runtimePromotionRule": "When canonical owner and boundary are stable, prefer a runtime-owner-boundary successor and keep runtime files in candidateRuntimeFiles until that package activates them. If the representative route is same-frontier with no reduction or an architecture gap, open an autonomous architecture experiment before more local runtime work."
   },
   "rerunDecision": {
-    "sourceArtifact": "test-output/reports/rolling-restart-rerun-4.report.json",
+    "sourceArtifact": "test-output/reports/rolling-restart-tell-tale-suite.report.json",
     "routeOwner": "operation_workflow_owner",
     "routeBoundary": "workflow_progress",
     "routeDominantReason": "priority_recovery_event_driven_wait",
@@ -113,12 +159,15 @@
     "nextLane": "diagnostic-classification",
     "expectedDelta": "Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.",
     "requiredRefreshCommands": [
-      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-rerun-4.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait",
+      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-tell-tale-suite.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait",
       "update Sprint Strategy Brief and Current Edge Card from the route result",
       "npm run work:repair",
       "npm run work:validate -- --pre-impl"
     ]
-  }
+  },
+  "closed": "2026-05-25",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/done-20260525-priority-recovery-operation-workflow-owner-workflow-progress.md"
 }
 -->
 
@@ -146,7 +195,7 @@ Approved maintenance scope or roadmap row.
 
 ## Expected Representative Delta
 
-- Baseline artifact: `test-output/reports/rolling-restart-rerun-4.report.json`
+- Baseline artifact: `test-output/reports/rolling-restart-tell-tale-suite.report.json`
 - Expected delta: Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.
 - Local proof class: focused owner or diagnostic proof only; it is not representative-green proof.
 - Representative proof class: fresh representative rerun or canonical route-after-rerun result.
@@ -154,7 +203,7 @@ Approved maintenance scope or roadmap row.
 
 ## Rerun Decision Gate
 
-- Source artifact: `test-output/reports/rolling-restart-rerun-4.report.json`
+- Source artifact: `test-output/reports/rolling-restart-tell-tale-suite.report.json`
 - Route owner: `operation_workflow_owner`
 - Route boundary: `workflow_progress`
 - Route dominant reason: `priority_recovery_event_driven_wait`
@@ -206,13 +255,12 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `diagnostic-owner-evidence/current-artifact`
 - Output profile: `medium`
-- Owned files: `work/packages/done-20260525-rolling-restart-operation-workflow-owner-workflow-progress.md`
+- Owned files: `work/packages/<this-package>.md`
 - Forbidden files: `src/`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run work:evidence-summary -- test-output/reports/rolling-restart-rerun-4.report.json`, `npm run work:scenario-triage -- test-output/reports/rolling-restart-rerun-4.report.json --markdown`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-rerun-4.report.json --markdown`
-- Model ledger advisory: escalate
-- Theory-ledger: not-needed
+- Focused proof: `npm run work:evidence-summary -- test-output/reports/rolling-restart-tell-tale-suite.report.json`, `npm run work:scenario-triage -- test-output/reports/rolling-restart-tell-tale-suite.report.json --markdown`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-tell-tale-suite.report.json --markdown`
+- Model ledger advisory: `escalate`
 
 ## Model-Fit Split
 
@@ -236,13 +284,15 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [x] action: implementation; owner: Antigravity; files-changed: none; validation: parent revalidated focused proof: yes; outcome: validated.
-- [x] action: verification-fix; owner: Antigravity; files-changed: none; validation: parent revalidated focused proof: yes; outcome: validated.
-- [x] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: validated.
+- [x] action: implementation; owner: operation_workflow_owner; files-changed: none; validation: npm run work:scenario-triage -- test-output/reports/rolling-restart-tell-tale-suite.report.json --markdown; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: verification-fix; owner: operation_workflow_owner; files-changed: none; validation: npm run work:evidence-summary -- test-output/reports/rolling-restart-tell-tale-suite.report.json; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: npm run work:repair; outcome: validated.
 
 ## Validation
 
-1. npm run work:evidence-summary -- test-output/reports/rolling-restart-rerun-4.report.json
-2. npm run work:scenario-triage -- test-output/reports/rolling-restart-rerun-4.report.json --markdown
-3. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-rerun-4.report.json --markdown
+1. npm run work:evidence-summary -- test-output/reports/rolling-restart-tell-tale-suite.report.json
+2. npm run work:scenario-triage -- test-output/reports/rolling-restart-tell-tale-suite.report.json --markdown
+3. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-tell-tale-suite.report.json --markdown
+
+<!-- Theory ledger update: no ledger update -->
 

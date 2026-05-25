@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  buildBootstrapLines,
   buildContextLines,
   buildCommitScope,
   buildCurrentBlockerFromPackage,
@@ -621,6 +622,24 @@ test('work context advertises triage commands before raw artifact reads',
       COMPACT_GOVERNANCE_PACK_PATH +
         ' (present) - read only if needed: work package, sprint, or tracker files are in scope',
     ));
+  });
+
+test('work context bootstrap view collapses first commands and closure path',
+  (t) => {
+    const lines = buildBootstrapLines(
+      TEST_BLOCKER,
+      TEST_LIGHTWEIGHT_CODE_SCOPE_PACKAGE_CONTENT,
+    );
+    const rendered = lines.join('\n');
+
+    t.equal(lines[0], '# Work Bootstrap');
+    t.match(rendered, 'npm run work:advance -- --check');
+    t.match(rendered, `npm run work:close ${TEST_PACKAGE_PATH}`);
+    t.match(rendered, 'npm run work:sprint:advance -- --dry-run');
+    t.match(rendered, '.kiro/steering/llm/boot.md');
+    t.match(rendered, 'Owner / boundary: Bootstrap owner / Startup join');
+    t.match(rendered, 'Write scope: ' + TEST_BOOTSTRAP_SOURCE_PATH);
+    t.end();
   });
 
 test('work context surfaces advisory theory ledger refs', async (t) => {

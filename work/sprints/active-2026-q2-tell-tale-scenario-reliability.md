@@ -57,22 +57,22 @@ and the same proof ladder is promoted to the tell-tale scenario set.
 ## Current Edge Card
 
 ```text
-Representative artifact: test-output/reports/rolling-restart-tell-tale-suite.report.json
-Visible first frontier: operation_workflow_owner/workflow_progress
-Active package: work/packages/active-20260525-rolling-restart-operation-workflow-owner-workflow-progress.md
-Active package owner: operation_workflow_owner
-Active package boundary: workflow_progress
-Selected cause: priority_recovery_event_driven_wait
-Required action: Triage priority_recovery_partition_progress with combined scenario evidence before runtime edits.
-Representative status: same-frontier
-Causal outcome: accept_classified_backpressure
-Architecture gate: selected / open-architecture-package
-Expected delta: Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.
-Current state: Scaffolded from representative evidence for priority_recovery_partition_progress.
-Allowed edits: work/packages/active-20260525-rolling-restart-operation-workflow-owner-workflow-progress.md
+Representative artifact: none
+Visible first frontier: unknown
+Active package: work/packages/active-20260525-workflow-streamlining-follow-through.md
+Active package owner: workflow_tooling_owner
+Active package boundary: workflow_acceleration
+Selected cause: ceremony_reduction
+Required action: Add sprint advancement tooling, actionable audit summaries, bootstrap context hints, and streamlined workflow docs.
+Representative status: unknown
+Causal outcome: unknown
+Architecture gate: not-required / unknown
+Expected delta: unknown
+Current state: Workflow streamlining primitives exist but sprint advancement, audit summaries, and LLM-facing docs still leave manual ceremony.
+Allowed edits: scripts/work-audit-ceremony.js, scripts/work-sprint-advance.js, scripts/work-context.js, scripts/list-commands.js, package.json, work/RULES.md, work/README.md, .kiro/steering/llm/core.md, .kiro/steering/llm/boot.md, test/scripts/work-audit-ceremony.test.js, test/scripts/work-sprint-advance.test.js, test/scripts/work-context.test.js, test/scripts/list-commands.test.js, work/packages/active-20260525-workflow-streamlining-follow-through.md
 Candidate runtime files: unknown
-Forbidden edits: Workflow progress triage is downstream of scenario-release-gate routing.
-Required latest proof: falsifier: representative scenario triage npm run work:scenario-triage -- test-output/reports/rolling-restart-tell-tale-suite.report.json --markdown, regression: representative evidence summary npm run work:evidence-summary -- test-output/reports/rolling-restart-tell-tale-suite.report.json, supporting: analyze priority recovery residuals npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-tell-tale-suite.report.json --markdown
+Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
+Required latest proof: regression: node --test test/scripts/work-audit-ceremony.test.js test/scripts/work-sprint-advance.test.js test/scripts/work-context.test.js test/scripts/list-commands.test.js, supporting: npm run work:audit:ceremony -- --summary --limit 5, supporting: npm run work:sprint:advance -- --dry-run --force, supporting: git diff --check -- scripts/work-audit-ceremony.js scripts/work-sprint-advance.js scripts/work-context.js scripts/list-commands.js package.json work/RULES.md work/README.md .kiro/steering/llm/core.md .kiro/steering/llm/boot.md test/scripts/work-audit-ceremony.test.js test/scripts/work-sprint-advance.test.js test/scripts/work-context.test.js test/scripts/list-commands.test.js work/packages/active-20260525-workflow-streamlining-follow-through.md
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 

@@ -41,7 +41,11 @@ Use one simple path for executable work:
 2. Triage it.
 3. Either sharpen `roadmap.md` first or create a direct work package.
 4. Work the package until done.
-5. Rename the file to mark completion.
+5. Run `npm run work:close <package>` to validate, rename, refresh handoff,
+   and stage the focused package slice.
+6. When `npm run work:sprint:remaining` reports zero packages left, run
+   `npm run work:sprint:advance -- --dry-run` and then `--write` to close the
+   sprint.
 
 For release-scale stabilization, keep the layers distinct:
 
@@ -64,7 +68,8 @@ Use the tracker utility for current sprint/package mechanics:
    handoff files from the active package metadata.
 2. `npm run work:context` prints a compact human and LLM handoff with the
    current blocker, first-read files, proof ladder, useful commands, and dirty
-   worktree summary.
+   worktree summary. Add `-- --bootstrap` for the minimal LLM boot commands,
+   first files, guardrails, and closure path.
 3. `npm run work:llm-start` prints a fuller LLM startup bundle: work context,
    package doctor suggestions, dirty scope, model-ledger summary, and
    representative evidence summary for the active artifact.
@@ -78,54 +83,57 @@ Use the tracker utility for current sprint/package mechanics:
    `work/sprints/current-blocker.json` when present.
 6. `npm run work:sprint:remaining` prints active and todo packages left in the
    current active sprint.
-7. `npm run work:sprint:push -- <git-push-args>` runs `git push` with the
+7. `npm run work:sprint:advance -- --dry-run` checks whether the current active
+   sprint has no active/todo packages left. Re-run with `-- --write` to rename
+   the sprint to `done-*` and update track/release references.
+8. `npm run work:sprint:push -- <git-push-args>` runs `git push` with the
    provided arguments and then runs `npm run work:sprint:remaining` after a
    successful push. Use this wrapper for sprint package pushes so the remaining
    sprint work is visible immediately after the push.
-8. `npm run work:model-ledger -- summary` prints recent model, reasoning
+9. `npm run work:model-ledger -- summary` prints recent model, reasoning
    effort, output profile, task class, package class, intended minimum model,
    scope shape, escalation, bailout, outcome, validation, correction-loop, and
    review-finding signals with an advisory recommendation to escalate,
    de-escalate, or hold effort plus a bounded recommended executor so
    escalation does not silently mean inheriting a larger parent model.
-9. `npm run work:package:doctor -- work/packages/active-...md` prints a compact
+10. `npm run work:package:doctor -- work/packages/active-...md` prints a compact
    package summary plus the same validation findings used by the tracker. It is
    a local diagnostic aid only; it does not replace checked Execution Evidence
    role proof.
    Add `-- --suggest` or `-- --fix-dry-run` when validation failed and the LLM
    needs concrete schema or ledger guidance before editing the package.
-10. `npm run work:package:schema` prints the shared status, lane,
+11. `npm run work:package:schema` prints the shared status, lane,
    causal-outcome, scenario-classification, stop-condition, and bounded-progress
    enums used by templates and validation.
-11. `npm run work:package:new -- --lane <lane> --title <title> --slug <slug>
+12. `npm run work:package:new -- --lane <lane> --title <title> --slug <slug>
    --owner <owner> --boundary <boundary> --dominant-reason <reason>
    --next-action <action>` scaffolds a schema-valid work package. The
    scaffolder pre-fills Model Fit and Core Logic Brief defaults from the lane
    and model-ledger summary unless explicit Model Fit flags are provided.
-12. `npm run work:package:route-after-rerun -- --artifact <artifact>
+13. `npm run work:package:route-after-rerun -- --artifact <artifact>
    --successor <active-successor>` combines the post-rerun route handoff with
    the package migration transaction when the successor already exists and is
    ready to become the active blocker. It also prints the required refresh
    sequence: update Sprint Strategy Brief, update Current Edge Card, run
    `npm run work:repair`, and run pre-implementation validation.
-13. `npm run work:repair` regenerates generated current-blocker files and the
+14. `npm run work:repair` regenerates generated current-blocker files and the
    active sprint Current Edge Card, then checks freshness. Use this instead of
    hand-editing generated tracker state.
-14. `npm run work:evidence-summary -- <artifact>` prints a compact deterministic
+15. `npm run work:evidence-summary -- <artifact>` prints a compact deterministic
    topology plus causal-model summary for LLM handoff before reading raw logs or
    large harness segment files.
-15. `npm run work:scenario-route -- <artifact> [--owner <owner>]
+16. `npm run work:scenario-route -- <artifact> [--owner <owner>]
    [--boundary <boundary>] [--explain <edge>]` combines representative
    evidence, causal routing, priority residuals, owner-file discovery, and a
    capped proof ladder into one handoff. Prefer this over listing multiple
    extractor commands in diagnostic classification packages.
-16. `npm run analyze:owner-files -- <owner> [boundary]` prints a ranked
+17. `npm run analyze:owner-files -- <owner> [boundary]` prints a ranked
     owner-to-files index so agents can inspect likely owner files before broad
     text search.
-17. `npm run analyze:priority-recovery-residuals -- <artifact>` extracts
+18. `npm run analyze:priority-recovery-residuals -- <artifact>` extracts
     priority-recovery partition witnesses by owner and boundary and prints
     package scaffolding commands for deliberate residual splits.
-18. `npm run work:subagent-prompt -- --role implementation|verification-fix
+19. `npm run work:subagent-prompt -- --role implementation|verification-fix
     --package work/packages/active-...md` generates bounded role prompts and
     the `## Execution Evidence` line shape to record after role execution.
     A real sub-agent may perform the role, but real-agent identity is optional
@@ -134,10 +142,10 @@ Use the tracker utility for current sprint/package mechanics:
     model and tells the parent to set it explicitly instead of relying on
     inherited high-model defaults. It records `## Execution Evidence`; agent
     identity is optional provenance.
-19. `npm run work:oversized-next -- --markdown` turns oversized
+20. `npm run work:oversized-next -- --markdown` turns oversized
     owner-boundary segment files into package-ready extraction candidates so
     file-size debt stays actionable rather than a broad background concern.
-20. `npm run work:validate -- --entry|--probe|--pre-impl|--closure` checks active and
+21. `npm run work:validate -- --entry|--probe|--pre-impl|--closure` checks active and
    metadata-bearing packages for filename/header drift, stale open checklist
    items, and lane-required execution proof at the requested phase. The default
    phase is `--pre-impl`; `--probe` validates experiment-lane hypothesis,
@@ -145,22 +153,26 @@ Use the tracker utility for current sprint/package mechanics:
    Packages with `modelFit.packageClass=compact-probe` also stay at or below
    30 markdown lines and omit the closure evidence ladder. `--closure` is strict
    for implementation evidence.
-21. `npm run work:package:close -- --write work/packages/active-...md` renames a
-    package to `done-...` only after open checklist items are closed.
-22. `npm run work:package:migrate -- --write work/packages/active-...md`
+22. `npm run work:close work/packages/active-...md` is the package closure
+    transaction. It validates closure, renames the package to `done-*`, updates
+    sprint references, refreshes tracker handoff, and stages exactly the
+    package commit scope plus generated handoff files.
+    `npm run work:package:close -- --write ...` is a lower-level legacy move
+    helper and should not be the default LLM closure path.
+23. `npm run work:package:migrate -- --write work/packages/active-...md`
     `work/packages/active-successor.md` performs the same closure gate while
     recording a successor handoff.
-23. `npm run work:package:move -- --write work/packages/todo-...md --to active`
+24. `npm run work:package:move -- --write work/packages/todo-...md --to active`
     performs non-terminal state moves.
-24. `npm run work:package:evidence-block -- <artifact>` generates a Markdown
+25. `npm run work:package:evidence-block -- <artifact>` generates a Markdown
     owner/evidence block from topology-convergence analyzer output for package
     migration or contraction notes.
-25. After each completed package slice, create one focused git commit containing
+26. After each completed package slice, create one focused git commit containing
     only that slice's package-owned changes and push the current branch before
     starting the next slice. Use `npm run work:sprint:push -- <git-push-args>`
     for sprint pushes so the remaining package list is printed after a
     successful push.
-26. If the slice cannot be pushed because the remote or credentials are
+27. If the slice cannot be pushed because the remote or credentials are
    unavailable, record the unpushed commit SHA and reason in the package or
    sprint handoff. If package-owned and unrelated dirty changes cannot be
    separated safely, stop for human direction instead of committing a mixed
@@ -193,65 +205,78 @@ the package explicitly records a heavier audit or architecture reason:
 1. `npm run work:advance -- --check` is the fast path before more package
    editing. It prints doctor findings, the next delegated role, and entry plus
    pre-implementation validation in one pass.
-2. Representative reruns are the progress currency for release-gate sprints.
+2. Use packages only for durable truth changes. Read-only answers, reviews,
+   recommendations, and tiny docs-only observations stay in `read-doc` unless
+   they change implementation truth, roadmap status, architecture ownership,
+   package truth, or validation obligations.
+3. Representative reruns are the progress currency for release-gate sprints.
    Classification is an inline gate by default. Create a separate
    classification package only when the rerun changes owner, boundary, required
    action, stop condition, tracker truth, or successor selection.
-3. Durable proof ladders default to 3-5 commands. Use
+4. Durable proof ladders default to 3-5 commands. Use
    `npm run work:scenario-route -- <artifact>` to replace separate evidence,
    causal, residual, owner-file, and explain commands when the package is
    classifying or routing diagnostic evidence.
-4. Admin-only packages, meaning packages whose write/commit scope is limited to
+5. Admin-only packages, meaning packages whose write/commit scope is limited to
    `work/` tracking files and ledgers, must end the next pass by doing one of
    four things: run representative evidence, close as classification-only, open
    a concrete runtime/tooling bug package, or present a human gate.
-5. Architecture gates are for repeated oscillation or missing owner contracts.
+6. Repeated sibling leaves with the same owner, boundary, write-scope prefix,
+   and causal question should share an epic/frontier package. The parent owns
+   the discriminator and retrospective; leaves stay mechanical and skip theory
+   ledger ceremony unless they discover new durable route knowledge.
+7. Architecture gates are for repeated oscillation or missing owner contracts.
    Once a gate has a selected route, future packages execute that route or
    rerun evidence; they do not open another architecture gate unless fresh
    canonical evidence contradicts the selection.
-6. Use the executor plus verifier-fixer role model for real package work. One
+8. Use the executor plus verifier-fixer role model for real package work. One
    executor owns inspect, edit, focused proof, and changed-file reporting. One
    separate verifier-fixer then verifies the last package work, may fix any
    in-scope problem directly, reruns focused proof, and reports changed files.
    Closure proof is the package's `## Execution Evidence`. A real sub-agent may
    perform either role, but agent identity is optional provenance and must
    never be invented.
-7. Use the `mechanical-maintenance` lane for docs, templates, schema text,
+9. Use the `mechanical-maintenance` lane for docs, templates, schema text,
    package metadata, generated handoff text, and similarly mechanical edits
    that do not change runtime or test behavior. These packages should be
    Spark-safe by default.
-8. Use the `test-only-proof` lane when the package only adds or tightens tests,
+10. Use the `test-only-proof` lane when the package only adds or tightens tests,
    fixtures, or package proof around already-selected behavior. Runtime files
    stay out of `writeScope` and `commitScope`; open a separate implementation
    package for the fix.
-9. Use the `diagnostic-classification` lane when the package is driven by a
+11. Use the `diagnostic-classification` lane when the package is driven by a
    representative artifact but edits only diagnostics, diagnostic tests, and
    work-tracker files. This lane keeps causal ledgers and representative
    evidence; use executor proof and add verifier-fixer closure proof when the
    package changes tests, scripts, tracker truth, runtime contracts, or
    scenario behavior.
-10. Use the `experiment` lane for probe packages whose success criterion is
+12. Use the `experiment` lane for probe packages whose success criterion is
    information. An experiment closes green when it distinguishes competing
    hypotheses with a pre-registered observable prediction, even when no runtime
    line changes.
-11. Use the `bounded-experiment` lane for same-owner or tightly scoped
+13. Use the `bounded-experiment` lane for same-owner or tightly scoped
    hypothesis-driven slices that inherit current owner/boundary context and
    merge only after focused proof plus canonical evidence movement. The
    executor owns the implementation pass; a separate verifier-fixer is required
    before closure when runtime behavior, tests, scripts, or tracker truth
    changed.
-12. Use the `single-file-runtime` lane for a preselected one-file runtime slice
+14. Use the `single-file-runtime` lane for a preselected one-file runtime slice
    intended for `gpt-5.4`. It still needs a Core Logic Brief, focused proof,
    and explicit forbidden scope, and it must split as soon as a second runtime
    file, shared contract, or owner migration is needed.
-13. Once canonical owner and boundary are stable and the route is local runtime
+15. Once canonical owner and boundary are stable and the route is local runtime
    work, prefer a `runtime-owner-boundary` successor over another
    classification package.
-14. For read/probe work, start from `work/templates/probe-package.md` and
+16. For read/probe work, start from `work/templates/probe-package.md` and
    validate with `npm run work:validate -- --probe <package>`. A probe package
    should name one falsifiable question, one hypothesis discriminator, one
    pre-registered observable prediction, and one stop rule; it should not carry
    `## Execution Evidence`.
+17. Before adding more workflow policy, run the feedback loop:
+   `npm run work:audit:ceremony -- --summary --limit 10`,
+   `npm run work:audit:siblings`, and `npm run work:audit:validators`. Use the
+   largest owner/lane or sibling clusters to decide whether an epic/frontier
+   parent, validator simplification, or no new package is the right response.
 
 ## Discovery Gate
 
@@ -439,7 +464,18 @@ planning, and stop-rule setup may happen before `--pre-impl`; implementation
 code changes must wait until `npm run work:validate -- --pre-impl <package>`
 passes. Closure remains strict.
 
-The preferred package proof section is `## Execution Evidence`:
+The preferred package proof for new packages is structured execution metadata:
+
+1. `execution.implementation.parentRevalidatedFocusedProof: true`
+2. `execution.implementation.filesChanged: [...]`
+3. `execution.verificationFix.parentRevalidatedFocusedProof: true` when
+   verifier-fixer proof is required.
+4. `execution.repair.validationCommand: "npm run work:repair"` when tracker
+   handoff was refreshed.
+5. `execution.theoryLedger: "no-ledger-update"` or real
+   `execution.theoryLedgerRefs`.
+
+Legacy and reopened packages may still use `## Execution Evidence`:
 
 1. Implementation: `- [x] implementation: status: validated; evidence: <focused proof commands and results>; parent revalidated focused proof: yes; next: verification.`
 2. Verification-fix: `- [x] verification-fix: status: validated; evidence: <verification/fix commands and results>; changed files: <paths or none>; parent revalidated focused proof: yes; next: closure or successor action.`

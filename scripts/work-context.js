@@ -40,6 +40,7 @@ const MAX_ACTIVE_STEERING_RULES = 10;
 const MIN_ACTIVE_STEERING_RULES = 5;
 const PROCESS_ARG_SCRIPT_INDEX = 1;
 const CLI_FLAG_DIRTY_SCOPE = '--dirty-scope';
+const CLI_FLAG_BOOTSTRAP = '--bootstrap';
 const CLI_FLAG_PACKAGE = '--package';
 const CURRENT_BLOCKER_JSON_PATH = path.join(
   'work',
@@ -50,6 +51,7 @@ const AGENTS_PATH = 'AGENTS.md';
 const LLM_STEERING_DIRECTORY = path.join('.kiro', 'steering', 'llm');
 const LLM_STEERING_README_PATH = path.join(LLM_STEERING_DIRECTORY, 'README.md');
 const LLM_STEERING_CORE_PATH = path.join(LLM_STEERING_DIRECTORY, 'core.md');
+const LLM_STEERING_BOOT_PATH = path.join(LLM_STEERING_DIRECTORY, 'boot.md');
 const LLM_STEERING_ARCHITECTURE_PATH = path.join(
   LLM_STEERING_DIRECTORY,
   'architecture.md',
@@ -80,8 +82,14 @@ const GIT_COMMAND = 'git';
 const GIT_STATUS_ARGS = Object.freeze(['status', '--short']);
 const NPM_RUN_WORK_CURRENT_BLOCKER_COMMAND = 'npm run work:current-blocker';
 const NPM_RUN_WORK_ADVANCE_COMMAND = 'npm run work:advance';
+const NPM_RUN_WORK_ADVANCE_CHECK_COMMAND = 'npm run work:advance -- --check';
 const NPM_RUN_WORK_LLM_START_COMMAND = 'npm run work:llm-start';
 const NPM_RUN_WORK_VALIDATE_COMMAND = 'npm run work:validate';
+const NPM_RUN_WORK_CLOSE_COMMAND = 'npm run work:close';
+const NPM_RUN_WORK_SPRINT_ADVANCE_DRY_RUN_COMMAND =
+  'npm run work:sprint:advance -- --dry-run';
+const NPM_RUN_WORK_SPRINT_ADVANCE_WRITE_COMMAND =
+  'npm run work:sprint:advance -- --write';
 const NPM_RUN_WORK_PACKAGE_DOCTOR_COMMAND = 'npm run work:package:doctor --';
 const NPM_RUN_WORK_PACKAGE_DOCTOR_SUGGEST_COMMAND =
   'npm run work:package:doctor -- --suggest';
@@ -152,6 +160,7 @@ const LOWER_MODEL_EXECUTION_LANES = Object.freeze([
 const DEFAULT_UNKNOWN = 'unknown';
 const OUTPUT_TITLE = '# Work Context';
 const DIRTY_SCOPE_OUTPUT_TITLE = '# Worktree Package Scope';
+const BOOTSTRAP_OUTPUT_TITLE = '# Work Bootstrap';
 const SECTION_THEORY_IMPLEMENTATION = 'Theory And Implementation Focus';
 const SECTION_ACTIVE_CONSTRAINTS = 'Active Constraints';
 const SECTION_CURRENT_BLOCKER = 'Current Blocker';
@@ -2421,6 +2430,51 @@ async function buildDirtyScopeLines(currentBlocker, gitStatusOverride = null) {
   return lines;
 }
 
+function buildBootstrapLines(currentBlocker, packageContent = EMPTY_STRING) {
+  const lines = [BOOTSTRAP_OUTPUT_TITLE];
+  const hasPackage = currentBlocker.package && currentBlocker.package !== 'none';
+  const packagePath = hasPackage ? currentBlocker.package : '<new-package>';
+  const firstReadPaths = new Set([
+    AGENTS_PATH,
+    LLM_STEERING_CORE_PATH,
+    LLM_STEERING_BOOT_PATH,
+    ...buildFirstReadPaths(currentBlocker),
+  ]);
+
+  appendSection(lines, 'Minimal Command Loop');
+  if (hasPackage) {
+    appendList(lines, [
+      NPM_RUN_WORK_ADVANCE_CHECK_COMMAND,
+      `${NPM_RUN_WORK_VALIDATE_COMMAND} -- --pre-impl ${packagePath}`,
+      `${NPM_RUN_WORK_CLOSE_COMMAND} ${packagePath}`,
+      NPM_RUN_WORK_SPRINT_ADVANCE_DRY_RUN_COMMAND,
+      NPM_RUN_WORK_SPRINT_ADVANCE_WRITE_COMMAND,
+    ]);
+  } else {
+    appendList(lines, [
+      NPM_RUN_WORK_CURRENT_BLOCKER_COMMAND,
+      'npm run work:package:new -- --write --lane <lane> --title <title> --slug <slug> --owner <owner> --boundary <boundary> --dominant-reason <reason> --next-action <action>',
+      NPM_RUN_WORK_ADVANCE_CHECK_COMMAND,
+    ]);
+  }
+
+  appendSection(lines, 'Files To Load');
+  appendList(lines, [...firstReadPaths]);
+
+  appendSection(lines, 'Current Guardrails');
+  appendKeyValue(lines, FIELD_LABELS.PACKAGE, currentBlocker.package);
+  appendKeyValue(lines, 'Lane', currentBlocker.lane);
+  appendKeyValue(lines, 'Owner / boundary', `${currentBlocker.owner} / ${currentBlocker.boundary}`);
+  appendKeyValue(lines, 'Write scope', buildWriteScope(currentBlocker).join(', '));
+  appendKeyValue(lines, 'Forbidden files', buildForbiddenScope(packageContent).join(', '));
+  appendKeyValue(lines, 'Closure path', hasPackage ?
+    `${NPM_RUN_WORK_CLOSE_COMMAND} ${packagePath}` :
+    'create or activate one package first');
+  appendKeyValue(lines, 'Sprint finish check', NPM_RUN_WORK_SPRINT_ADVANCE_DRY_RUN_COMMAND);
+
+  return lines;
+}
+
 async function main() {
   let currentBlocker;
   let packageContent = EMPTY_STRING;
@@ -2460,6 +2514,16 @@ async function main() {
     return EXIT_SUCCESS;
   }
 
+  if (process.argv.includes(CLI_FLAG_BOOTSTRAP)) {
+    if (!packageContent) {
+      const packageRead = await readOptionalTextFile(currentBlocker.package);
+      packageContent = packageRead.content;
+    }
+    const lines = buildBootstrapLines(currentBlocker, packageContent);
+    console.log(lines.join(NEWLINE));
+    return EXIT_SUCCESS;
+  }
+
   if (!packageContent) {
     const packageRead = await readOptionalTextFile(currentBlocker.package);
     packageContent = packageRead.content;
@@ -2479,6 +2543,7 @@ if (isDirectRun()) {
 }
 
 export {
+  buildBootstrapLines,
   buildContextLines,
   buildCommitScope,
   buildCurrentBlockerFromActivePackage,

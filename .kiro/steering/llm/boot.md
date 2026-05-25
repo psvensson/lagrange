@@ -41,7 +41,7 @@ Use `npm run work:lane-picker -- --docs-only|--maintenance|--tests-only|--experi
 These are LLM-specific operational steps. Process semantics for each lane live in [`work/RULES.md#lane-definitions`](../../../work/RULES.md#lane-definitions). Two cross-cutting notes apply to every lane below:
 
 * `npm run work:package:new` requires the `--write` flag to actually create a file on disk; without it the template is printed to stdout only.
-* Every lane that closes a package finishes with the same four-step **Closure Tail** documented at the end of this section. The lane blocks below name those four steps explicitly so an LLM reading a single lane sees the full closure ceremony without scrolling.
+* Every lane that closes a package finishes with the same automated **Closure Tail** documented at the end of this section. The lane blocks below point to that tail so an LLM reading a single lane sees the closure path without manual rename steps.
 * Sprint queue mutations (inserting a new package, renumbering, or superseding an entry) follow [Sprint Queue Maintenance](../../../work/RULES.md#sprint-queue-maintenance); the active sprint file then joins that package's commit scope.
 
 ### `read-doc`
@@ -94,10 +94,10 @@ These are LLM-specific operational steps. Process semantics for each lane live i
 
 Every lane that closes a package ends with these four steps in order. They are the LLM-facing surface of the canonical [Closure Recipe](../../../work/RULES.md#closure-recipe); follow that recipe for the exact command shapes and evidence grammar.
 
-1. `npm run work:validate -- --closure <package>` — final validator pass against the filled evidence section.
-2. Rename `work/packages/active-<slug>.md` → `work/packages/done-<slug>.md` and set the JSON header `status` to `done` (e.g. `sed -i 's/"status": "active"/"status": "done"/'`). Update the active sprint file's reference with the same active→done rename.
-3. `npm run work:repair` — refresh `current-blocker.{json,md}` and sprint refs. Expect the "no active package was found" warning once the rename is complete; this is the signal that closure is clean.
-4. Focused commit (only `commitScope` files plus tracker-generated handoff files; never unrelated dirty entries) and `git push`. See [focused commit](../../../work/RULES.md#worktree-safety) and the [Closure Recipe](../../../work/RULES.md#closure-recipe).
+1. Fill structured `execution.*` metadata or checked `## Execution Evidence` with replayable proof.
+2. `npm run work:repair` — refresh generated current-blocker and sprint handoff files before closure.
+3. `npm run work:close <package>` — runs closure validation, renames `active-*` to `done-*`, flips status, rewrites sprint refs, renumbers the sprint queue, and stages only commit-scope plus tracker-generated handoff files.
+4. Focused commit and push. If `npm run work:sprint:remaining` reports zero packages left after the push, use `npm run work:sprint:advance -- --dry-run` and then `--write` to close the sprint in a separate focused transaction.
 
 ## Conflict Rule and Escape Hatch
 
