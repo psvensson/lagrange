@@ -12,9 +12,7 @@ regenerate_with: npm run steering:llm:pack
 
 Load for coding-style and lint policy enforcement.
 
-Generated rules: 8
-Estimated tokens: 330
-Domains: style
+Rule count, token estimate, and domain coverage live in `manifest.json` (regenerated on each `npm run steering:llm:pack`). Do not maintain those numbers inline.
 
 ## Rules
 

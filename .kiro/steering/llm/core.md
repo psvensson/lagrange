@@ -32,10 +32,17 @@ Use this list at cold start before any non-trivial work. Anchors point into [`wo
 
 ## Template Picker
 
-* Docs only: `work/templates/doc-only-package.md`.
-* One file, no runtime contract: `work/templates/single-file-maintenance-package.md`.
-* Small tooling / template / test maintenance: `work/templates/lightweight-maintenance-package.md`.
-* Runtime owner boundary, scenario gate, or architecture work: use the full package tools and templates.
+Templates map 1-to-1 to canonical lanes from [`work/RULES.md#lane-definitions`](../../../work/RULES.md#lane-definitions). Pick the row whose lane matches `work:context` (or `work:lane-picker`) and use the named template with `npm run work:package:new --write --lane <lane>`.
+
+| Canonical lane | Template | Use when |
+| --- | --- | --- |
+| `read-doc` | [`work/templates/doc-only-package.md`](../../../work/templates/doc-only-package.md) | Docs-only edit; no implementation truth, roadmap status, or architecture ownership changes. |
+| `maintenance` | [`work/templates/lightweight-maintenance-package.md`](../../../work/templates/lightweight-maintenance-package.md) | Bounded tooling, templates, generated steering, package metadata, or test-only maintenance. |
+| `maintenance` (single-file) | [`work/templates/single-file-maintenance-package.md`](../../../work/templates/single-file-maintenance-package.md) | One file, no runtime contract change (use this narrower variant when scope fits). |
+| `proof` | [`work/templates/lightweight-maintenance-package.md`](../../../work/templates/lightweight-maintenance-package.md) (with `--lane test-only-proof`) | Tests, validation evidence, or diagnostic classification change without runtime behavior change. |
+| `experiment` | [`work/templates/lightweight-maintenance-package.md`](../../../work/templates/lightweight-maintenance-package.md) (with `--lane bounded-experiment`) | One bounded hypothesis or probe inside an inherited owner boundary. |
+| `runtime` | Full package tooling — use `npm run work:package:new --write --lane runtime-owner-boundary` and follow the [Closure Recipe](../../../work/RULES.md#closure-recipe). | Runtime behavior, owner contracts, shared metadata, diagnostics grammar, or affected consumers can change. |
+| `scenario` | Full package tooling — use `npm run work:package:new --write --lane scenario-release-gate` and add the Sprint Strategy Brief and causal ledger. | Distributed, integration, load, release-gate, repeated same-frontier, or causal-closure work. |
 
 ## Process Weight (Summary)
 

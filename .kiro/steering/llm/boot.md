@@ -41,7 +41,7 @@ Use `npm run work:lane-picker -- --docs-only|--maintenance|--tests-only|--experi
 These are LLM-specific operational steps. Process semantics for each lane live in [`work/RULES.md#lane-definitions`](../../../work/RULES.md#lane-definitions). Two cross-cutting notes apply to every lane below:
 
 * `npm run work:package:new` requires the `--write` flag to actually create a file on disk; without it the template is printed to stdout only.
-* Every lane that closes a package MUST finish with the [Closure Recipe](../../../work/RULES.md#closure-recipe) (work:repair → work:validate --closure → rename active→done → focused commit + push). The lane-specific steps below do not repeat those tail steps.
+* Every lane that closes a package finishes with the same four-step **Closure Tail** documented at the end of this section. The lane blocks below name those four steps explicitly so an LLM reading a single lane sees the full closure ceremony without scrolling.
 * Sprint queue mutations (inserting a new package, renumbering, or superseding an entry) follow [Sprint Queue Maintenance](../../../work/RULES.md#sprint-queue-maintenance); the active sprint file then joins that package's commit scope.
 
 ### `read-doc`
@@ -50,22 +50,24 @@ These are LLM-specific operational steps. Process semantics for each lane live i
 2. Read `core.md` and the smallest relevant domain pack.
 3. No package required unless implementation truth, roadmap status, or architecture ownership changes.
 4. For edits, run `git diff --check -- <files>`.
+5. **If a package was created**, finish with the closure tail (see below).
 
 ### `maintenance`
 
 1. `npm run work:context`
-2. `npm run work:package:new -- --lane lightweight-maintenance ...` when the change alters workflow, package truth, generated steering, or durable docs.
+2. `npm run work:package:new -- --write --lane lightweight-maintenance ...` when the change alters workflow, package truth, generated steering, or durable docs.
 3. `npm run work:validate -- --entry <package>`
 4. `npm run work:validate -- --pre-impl <package>`
 5. Run the focused generator, script, or doc proof.
 6. Run `git diff --check -- <files>`.
+7. Finish with the closure tail (see below).
 
 ### `proof`
 
 1. `npm run work:context`
-2. Use the active package validation surface or create a `test-only-proof` package if no active package owns the proof.
+2. Use the active package validation surface or create a `test-only-proof` package with `--write` if no active package owns the proof.
 3. Run the focused test/probe before broad suites.
-4. Run `npm run work:validate -- --closure <package>` before closing.
+4. Finish with the closure tail (see below).
 
 ### `runtime`
 
@@ -75,6 +77,7 @@ These are LLM-specific operational steps. Process semantics for each lane live i
 4. Ensure the package has a Core Logic Brief, exact write scope, proof ladder, static guardrail plan, and affected-consumer proof.
 5. Run `npm run work:validate -- --pre-impl <package>` before runtime edits.
 6. Use implementation plus verifier-fixer evidence before closure.
+7. Finish with the closure tail (see below).
 
 ### `scenario`
 
@@ -85,6 +88,16 @@ These are LLM-specific operational steps. Process semantics for each lane live i
 5. Keep the Current Edge Card, causal closure fields, selected owner boundary, and stop mode in view.
 6. Prove the missing edge or fixture before broad representative reruns.
 7. Use separate verifier-fixer evidence before closure.
+8. Finish with the closure tail (see below).
+
+### Closure Tail (every lane)
+
+Every lane that closes a package ends with these four steps in order. They are the LLM-facing surface of the canonical [Closure Recipe](../../../work/RULES.md#closure-recipe); follow that recipe for the exact command shapes and evidence grammar.
+
+1. `npm run work:validate -- --closure <package>` — final validator pass against the filled evidence section.
+2. Rename `work/packages/active-<slug>.md` → `work/packages/done-<slug>.md` and set the JSON header `status` to `done` (e.g. `sed -i 's/"status": "active"/"status": "done"/'`). Update the active sprint file's reference with the same active→done rename.
+3. `npm run work:repair` — refresh `current-blocker.{json,md}` and sprint refs. Expect the "no active package was found" warning once the rename is complete; this is the signal that closure is clean.
+4. Focused commit (only `commitScope` files plus tracker-generated handoff files; never unrelated dirty entries) and `git push`. See [focused commit](../../../work/RULES.md#worktree-safety) and the [Closure Recipe](../../../work/RULES.md#closure-recipe).
 
 ## Conflict Rule
 

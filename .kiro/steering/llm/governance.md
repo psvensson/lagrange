@@ -12,9 +12,7 @@ regenerate_with: npm run steering:llm:pack
 
 Load for roadmap and edition-scope checks.
 
-Generated rules: 30
-Estimated tokens: 1282
-Domains: governance
+Rule count, token estimate, and domain coverage live in `manifest.json` (regenerated on each `npm run steering:llm:pack`). Do not maintain those numbers inline.
 
 ## Rules
 

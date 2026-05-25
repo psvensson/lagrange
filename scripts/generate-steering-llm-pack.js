@@ -984,10 +984,6 @@ function renderPackMarkdown(output = {}, rules = []) {
     rulesBody.push('');
   }
 
-  const domainSummary = [...new Set(rules.map((rule) => rule.domain))]
-    .sort()
-    .join(', ');
-
   const sourceForScope = output.name || 'pack';
   const body = [
     '---',
@@ -1004,9 +1000,7 @@ function renderPackMarkdown(output = {}, rules = []) {
     '',
     output.description || '',
     '',
-    `Generated rules: ${rules.length}`,
-    `Estimated tokens: ${estimateTokens(rulesBody.join('\n'))}`,
-    `Domains: ${domainSummary || 'none'}`,
+    `Rule count, token estimate, and domain coverage live in \`manifest.json\` (regenerated on each \`npm run steering:llm:pack\`). Do not maintain those numbers inline.`,
     '',
     '## Rules',
     '',

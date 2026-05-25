@@ -12,9 +12,7 @@ regenerate_with: npm run steering:llm:pack
 
 Load for test-first workflow, reliability harness work, and regression policy.
 
-Generated rules: 35
-Estimated tokens: 1748
-Domains: testing
+Rule count, token estimate, and domain coverage live in `manifest.json` (regenerated on each `npm run steering:llm:pack`). Do not maintain those numbers inline.
 
 ## Rules
 

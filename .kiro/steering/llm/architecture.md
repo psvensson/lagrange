@@ -12,9 +12,7 @@ regenerate_with: npm run steering:llm:pack
 
 Load for bootstrap/join/rebalance/control-plane/runtime ownership and lifecycle work.
 
-Generated rules: 40
-Estimated tokens: 1742
-Domains: architecture
+Rule count, token estimate, and domain coverage live in `manifest.json` (regenerated on each `npm run steering:llm:pack`). Do not maintain those numbers inline.
 
 ## Rules
 
