@@ -2,12 +2,16 @@ import {test} from '../../src/test-helpers/tap.js';
 import {
   applyRuleAliases,
   buildManifest,
+  classifyAphoristicText,
   countMarkdownRules,
+  formatRuleCitation,
+  isAphoristicText,
   locateRuleBySourceRef,
   parseMarkdownCandidates,
   renderPackMarkdown,
   selectOutputRules,
   validateCompleteRules,
+  validateRulesHaveTriggerAndCitation,
 } from '../../scripts/generate-steering-llm-pack.js';
 
 const TEST_SOURCE_FILE = 'system guidelines.md';
@@ -117,6 +121,7 @@ const TEST_COMPLETE_RULE = Object.freeze({
   id: 'ARCH-0002',
   text: 'Do not create a second owner.',
   domain: TEST_DOMAIN,
+  sources: [{file: TEST_SOURCE_FILE, line: 1}],
 });
 
 function parseTestCandidates(markdown) {
@@ -357,5 +362,108 @@ test('locateRuleBySourceRef finds rule by file+line', (t) => {
   t.equal(locateRuleBySourceRef(rules, {file: 'y.md', line: 2}).id, 'A');
   t.equal(locateRuleBySourceRef(rules, {file: 'z.md', line: 9}).id, 'B');
   t.equal(locateRuleBySourceRef(rules, {file: 'missing.md', line: 1}), null);
+  t.end();
+});
+
+test('classifyAphoristicText flags admonition-marker prefixes', (t) => {
+  t.equal(classifyAphoristicText('STOP - Do not accept the test as passing'), 'admonition_marker');
+  t.equal(classifyAphoristicText('DO NOT IGNORE - Failing tests indicate broken functionality'), 'admonition_marker');
+  t.equal(classifyAphoristicText('DO NOT DEFER - Resolve the failure before closing'), 'admonition_marker');
+  t.equal(classifyAphoristicText('WARNING: this path is deprecated'), 'admonition_marker');
+  t.end();
+});
+
+test('classifyAphoristicText flags dangling-pronoun openings followed by action verbs', (t) => {
+  t.equal(classifyAphoristicText('They do not replace the implementation role.'), 'dangling_pronoun');
+  t.equal(classifyAphoristicText('It must run before closure.'), 'dangling_pronoun');
+  t.equal(classifyAphoristicText('These apply to all owners.'), 'dangling_pronoun');
+  t.end();
+});
+
+test('classifyAphoristicText accepts self-contained normative rules', (t) => {
+  t.equal(classifyAphoristicText('It is FORBIDDEN to add NODE_ENV checks in src/.'), null);
+  t.equal(classifyAphoristicText('When a unit test exceeds 2 seconds, treat it as a hard error.'), null);
+  t.equal(classifyAphoristicText('Do not pre-slice candidates to the requested replica count before admission.'), null);
+  t.equal(classifyAphoristicText('Optional review roles do not replace the closure roles.'), null);
+  t.notOk(isAphoristicText('Cache observes; owners decide.'));
+  t.end();
+});
+
+test('validateRulesHaveTriggerAndCitation rejects aphoristic rules with file:line context', (t) => {
+  const rules = [{
+    id: 'TEST-0019',
+    text: 'DO NOT IGNORE - Failing tests indicate broken functionality',
+    sources: [{file: 'testing-guidelines/regression-policy.md', line: 341}],
+  }];
+  t.throws(
+    () => validateRulesHaveTriggerAndCitation(rules, 'testing'),
+    /TEST-0019.*regression-policy\.md:341.*aphoristic.*admonition_marker/s,
+  );
+  t.end();
+});
+
+test('validateRulesHaveTriggerAndCitation rejects rules without any citation', (t) => {
+  const rules = [{
+    id: 'ARCH-9999',
+    text: 'Owners must reconcile snapshots before publishing.',
+    sources: [],
+  }];
+  t.throws(
+    () => validateRulesHaveTriggerAndCitation(rules, 'architecture'),
+    /ARCH-9999.*no source citation/s,
+  );
+  t.end();
+});
+
+test('validateRulesHaveTriggerAndCitation passes for well-formed rules', (t) => {
+  const rules = [{
+    id: 'OK-0001',
+    text: 'When a package closes, the focused commit must include only commitScope files.',
+    sources: [{file: 'work/RULES.md', line: 42}],
+  }];
+  t.doesNotThrow(() => validateRulesHaveTriggerAndCitation(rules, 'core'));
+  t.end();
+});
+
+test('formatRuleCitation returns file:line link for the primary source', (t) => {
+  t.equal(formatRuleCitation({sources: [{file: 'a.md', line: 7}]}), 'a.md:7');
+  t.equal(formatRuleCitation({sources: [{file: 'a.md'}]}), 'a.md');
+  t.equal(formatRuleCitation({sources: []}), '');
+  t.equal(formatRuleCitation({}), '');
+  t.end();
+});
+
+test('renderPackMarkdown emits per-rule source citations inline', (t) => {
+  const output = {name: 'governance', filename: 'governance.md', domains: ['governance']};
+  const rules = [{
+    id: 'GOV-9000',
+    domain: 'governance',
+    text: 'Optional review roles do not replace the closure roles.',
+    tags: ['governance'],
+    sources: [{file: 'workflow-guidelines/subagents.md', line: 38}],
+    score: 1,
+    strength: 'must',
+  }];
+  const md = renderPackMarkdown(output, rules);
+  t.ok(md.includes('[GOV-9000]'));
+  t.ok(md.includes('_(see workflow-guidelines/subagents.md:38)_'));
+  t.end();
+});
+
+test('renderPackMarkdown throws when any rule is aphoristic', (t) => {
+  const output = {name: 'testing', filename: 'testing.md', domains: ['testing']};
+  const rules = [{
+    id: 'TEST-9000',
+    domain: 'testing',
+    text: 'STOP - Do not accept the test as passing',
+    tags: ['testing'],
+    sources: [{file: 'testing-guidelines/harness.md', line: 58}],
+    score: 1,
+    strength: 'must',
+  }];
+  t.throws(
+    () => renderPackMarkdown(output, rules),
+    /TEST-9000.*aphoristic.*admonition_marker/s,
+  );
   t.end();
 });

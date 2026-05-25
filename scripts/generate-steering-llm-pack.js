@@ -175,6 +175,47 @@ function isIncompleteRuleText(text = LOCAL_STR_EMPTY) {
   return TRAILING_COLON_PATTERN.test(normalizeWhitespace(text));
 }
 
+const APHORISM_ADMONITION_PATTERN =
+  /^(?:STOP|DO\s+NOT\s+IGNORE|DO\s+NOT\s+DEFER|ANALYZE|ANALYSE|INVESTIGATE|VERIFY|FIX|WARNING|CAUTION|NOTE)\b\s*[-—:]/u;
+const APHORISM_ALLCAPS_LABEL_PATTERN = /^[A-Z][A-Z\s]{1,30}[A-Z]\s*[-—:]\s/u;
+const APHORISM_DANGLING_PRONOUN_PATTERN =
+  /^(?:They|It|This|That|These|Those)\s+(?:do|does|did|must|should|shall|will|can|cannot|may|might|need|needs|require|requires|replace|replaces|prevent|prevents|apply|applies|run|runs|use|uses|fail|fails|own|owns|hold|holds|enforce|enforces)\b/u;
+
+function classifyAphoristicText(text = LOCAL_STR_EMPTY) {
+  const normalized = normalizeWhitespace(text);
+  if (!normalized) {
+    return null;
+  }
+  if (APHORISM_ADMONITION_PATTERN.test(normalized)) {
+    return 'admonition_marker';
+  }
+  if (APHORISM_ALLCAPS_LABEL_PATTERN.test(normalized)) {
+    return 'allcaps_label';
+  }
+  if (APHORISM_DANGLING_PRONOUN_PATTERN.test(normalized)) {
+    return 'dangling_pronoun';
+  }
+  return null;
+}
+
+function isAphoristicText(text = LOCAL_STR_EMPTY) {
+  return classifyAphoristicText(text) !== null;
+}
+
+function formatRuleCitation(rule = {}) {
+  const sources = Array.isArray(rule.sources) ? rule.sources : [];
+  if (sources.length === 0) {
+    return LOCAL_STR_EMPTY;
+  }
+  const primary = sources[0] || {};
+  const file = primary.file ? String(primary.file) : LOCAL_STR_EMPTY;
+  const line = primary.line ? String(primary.line) : LOCAL_STR_EMPTY;
+  if (!file) {
+    return LOCAL_STR_EMPTY;
+  }
+  return line ? `${file}:${line}` : file;
+}
+
 function stripInlineMarkdown(value) {
   return normalizeWhitespace(
     String(value || LOCAL_STR_EMPTY)
@@ -848,6 +889,38 @@ function validateCompleteRules(rules = [], outputName = LOCAL_STR_UNKNOWN_OUTPUT
   }
 }
 
+function validateRulesHaveTriggerAndCitation(
+  rules = [],
+  outputName = LOCAL_STR_UNKNOWN_OUTPUT,
+) {
+  const failures = [];
+  for (const rule of rules) {
+    const ruleId = rule.id || LOCAL_STR_UNKNOWN_RULE;
+    const aphorismKind = classifyAphoristicText(rule.text);
+    if (aphorismKind) {
+      const where = formatRuleCitation(rule) || 'unknown source';
+      failures.push(
+        `${ruleId} (${where}) is aphoristic (${aphorismKind}): "${rule.text}". ` +
+          `Rephrase the source paragraph so the rule names its trigger condition ` +
+          `or subject (avoid bare admonition markers and dangling pronouns).`,
+      );
+      continue;
+    }
+    if (!formatRuleCitation(rule)) {
+      failures.push(
+        `${ruleId} has no source citation. Every emitted rule must record ` +
+          `at least one {file, line} entry in rules.json sources.`,
+      );
+    }
+  }
+  if (failures.length > 0) {
+    throw new Error(
+      `Aphoristic or uncitable rules in ${outputName}:\n  - ` +
+        failures.join('\n  - '),
+    );
+  }
+}
+
 function countMarkdownRules(content = LOCAL_STR_EMPTY) {
   return String(content || LOCAL_STR_EMPTY)
     .split(/\r?\n/u)
@@ -857,6 +930,7 @@ function countMarkdownRules(content = LOCAL_STR_EMPTY) {
 
 function renderPackMarkdown(output = {}, rules = []) {
   validateCompleteRules(rules, output.name);
+  validateRulesHaveTriggerAndCitation(rules, output.name);
 
   // Group rules by primary tag (or first tag in list), falling back to 'general'
   const groups = new Map();
@@ -902,7 +976,9 @@ function renderPackMarkdown(output = {}, rules = []) {
     const title = tagTitles[tag] || 'General Rules';
     rulesBody.push(`### ${title}`, '');
     for (const rule of groupRules) {
-      rulesBody.push(`${absoluteIndex}. [${rule.id}] ${rule.text}`);
+      const citation = formatRuleCitation(rule);
+      const suffix = citation ? ` _(see ${citation})_` : '';
+      rulesBody.push(`${absoluteIndex}. [${rule.id}] ${rule.text}${suffix}`);
       absoluteIndex++;
     }
     rulesBody.push('');
@@ -1257,11 +1333,15 @@ export {
   appendChildBulletsForParentRule,
   applyRuleAliases,
   buildManifest,
+  classifyAphoristicText,
   collectBulletListText,
   countMarkdownRules,
+  formatRuleCitation,
+  isAphoristicText,
   locateRuleBySourceRef,
   parseMarkdownCandidates,
   renderPackMarkdown,
   selectOutputRules,
   validateCompleteRules,
+  validateRulesHaveTriggerAndCitation,
 };

@@ -25,17 +25,17 @@ Make the system stable under rolling-restart: change the core logic of the syste
 ```text
 Representative artifact: none
 Visible first frontier: unknown
-Active package: work/packages/done-20260525-steering-pack-canonical-of-aliases.md
+Active package: work/packages/done-20260525-steering-pack-no-aphorisms.md
 Active package owner: workflow_tooling_owner
 Active package boundary: llm_steering_doc_truth
 Selected cause: steering_doc_truth_repair
-Required action: Extend the steering pack generator with a ruleAliases config so cross-domain duplicate rules collapse to a single master id; add canonical_of/aliases fields to rules.json and suppress alias rules from per-domain pack emission.
+Required action: Add an aphorism heuristic to the steering pack generator so admonition-marker and dangling-pronoun rules are rejected at generation time; rewrite the four cited source admonitions so the corpus regenerates cleanly; emit per-rule source citation links in the generated packs.
 Representative status: unknown
 Causal outcome: unknown
 Architecture gate: not-required / unknown
 Expected delta: unknown
 Current state: New package scaffolded from the shared work-package schema.
-Allowed edits: scripts/generate-steering-llm-pack.js, test/scripts/generate-steering-llm-pack.test.js, .kiro/steering/llm-pack.config.json, .kiro/steering/llm/rules.json, .kiro/steering/llm/manifest.json, .kiro/steering/llm/architecture.md, .kiro/steering/llm/testing.md, .kiro/steering/llm/style.md, .kiro/steering/llm/governance.md, .kiro/steering/llm/core.md, .kiro/steering/llm/README.md
+Allowed edits: scripts/generate-steering-llm-pack.js, .kiro/steering/testing-guidelines/harness.md, .kiro/steering/testing-guidelines/regression-policy.md, .kiro/steering/workflow-guidelines/subagents.md, .kiro/steering/llm/rules.json, .kiro/steering/llm/manifest.json, .kiro/steering/llm/architecture.md, .kiro/steering/llm/testing.md, .kiro/steering/llm/style.md, .kiro/steering/llm/governance.md, test/scripts/generate-steering-llm-pack.test.js
 Candidate runtime files: unknown
 Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
 Required latest proof: node --test test/scripts/generate-steering-llm-pack.test.js
@@ -346,7 +346,12 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Purpose: Add a `ruleAliases` mechanism to the steering pack generator so cross-pack duplicate rules collapse to a single master id; rules.json gains `canonical_of` / `aliases` fields and per-domain markdown packs suppress alias rules. Six duplicate groups (no-ordinal-filenames, null-state-encoding, file-size thresholds, cache-observes-owners-decide, no-skipped-tests, do-not-weaken-guardrails) collapse to one master each.
    - First-run reason: identical rules were emitted under up to four IDs across architecture/style/testing/governance packs, forcing LLM agents to cite different IDs for the same rule depending on which pack happened to be loaded.
 
-15. [Rolling Restart Active Gate Snapshot Coverage Repair](../packages/done-20260523-rolling-restart-active-gate-snapshot-coverage-repair.md)
+15. [Reject aphoristic rules and emit citation links in generated packs](../packages/done-20260525-steering-pack-no-aphorisms.md)
+   - Lane: `lightweight-maintenance`
+   - Purpose: Add an aphorism heuristic to the steering pack generator that rejects admonition-marker prefixes (e.g. `STOP -`, `DO NOT IGNORE -`) and dangling-pronoun openings followed by action verbs (e.g. `They do not replace…`), and append a per-rule `(see file:line)` citation to every emitted rule in the per-domain markdown packs. Rewrites the cited STOP/ANALYZE/FIX and DO NOT IGNORE/DEFER/INVESTIGATE/FIX/VERIFY admonition lists in harness.md and regression-policy.md, and resolves the orphan pronoun in subagents.md.
+   - First-run reason: cited examples (TEST-0011, TEST-0019, ARCH-0029, GOV-0021) showed that the generator was emitting rules an LLM could not act on without guessing — either bare imperatives with no trigger or pronouns with no antecedent — and rules carried no link back to their source for verification.
+
+16. [Rolling Restart Active Gate Snapshot Coverage Repair](../packages/done-20260523-rolling-restart-active-gate-snapshot-coverage-repair.md)
    - Lane: `runtime-owner-boundary`
    - Purpose: Align active-gate cohort fallbacks and repair snapshot recovery projection logic.
 

@@ -13,30 +13,30 @@ regenerate_with: npm run steering:llm:pack
 Load for coding-style and lint policy enforcement.
 
 Generated rules: 8
-Estimated tokens: 280
+Estimated tokens: 330
 Domains: style
 
 ## Rules
 
 ### General Guidelines
 
-1. [STYLE-0003] Do not introduce synonyms for an existing concept.
-2. [STYLE-0004] Do not expose semantic policy through combinable booleans when one named mode constant set should exist.
-3. [STYLE-0005] Do not leak raw storage or transport field shapes into runtime model names or contracts.
+1. [STYLE-0003] Do not introduce synonyms for an existing concept. _(see code-style.md:84)_
+2. [STYLE-0004] Do not expose semantic policy through combinable booleans when one named mode constant set should exist. _(see code-style.md:85)_
+3. [STYLE-0005] Do not leak raw storage or transport field shapes into runtime model names or contracts. _(see code-style.md:92)_
 
 ### Ownership & Authority Policies
 
-4. [STYLE-0009] Shared domain literals belong in their canonical owner module and must be imported from there.
+4. [STYLE-0009] Shared domain literals belong in their canonical owner module and must be imported from there. _(see code-style.md:74)_
 
 ### Readiness & Health Contracts
 
-5. [STYLE-0011] When a boundary already owns a named mode vocabulary, call sites and tests should use that vocabulary directly instead of restating legacy boolean preferences.
+5. [STYLE-0011] When a boundary already owns a named mode vocabulary, call sites and tests should use that vocabulary directly instead of restating legacy boolean preferences. _(see code-style.md:87)_
 
 ### Testing & Harness Guidelines
 
-6. [STYLE-0007] New or newly edited source-code files must finish within the per-scope thresholds owned by scripts/check-file-size-thresholds.js (currently src ≤ 800, test ≤ 1500 lines; run npm run audit:file-size to confirm).
+6. [STYLE-0007] New or newly edited source-code files must finish within the per-scope thresholds owned by scripts/check-file-size-thresholds.js (currently src ≤ 800, test ≤ 1500 lines; run npm run audit:file-size to confirm). _(see code-style.md:58)_
 
 ### Code Style & Formatting Guidelines
 
-7. [STYLE-0006] NEVER introduce eslint override comments.
-8. [STYLE-0010] All code must be written with ESLint rules in mind from the start.
+7. [STYLE-0006] NEVER introduce eslint override comments. _(see code-style.md:44)_
+8. [STYLE-0010] All code must be written with ESLint rules in mind from the start. _(see code-style.md:41)_

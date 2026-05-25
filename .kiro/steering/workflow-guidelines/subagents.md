@@ -37,8 +37,9 @@ Default closure sequence:
 
 Review, owner-path mapping, metadata repair, and artifact extraction are
 optional planning or support roles. Use them when scenario, release-gate,
-causal-escalation, or package metadata complexity makes them useful. They do
-not replace the `implementation` and `verification-fix` closure roles.
+causal-escalation, or package metadata complexity makes them useful. These
+optional roles do not replace the `implementation` and `verification-fix`
+closure roles.
 
 Optional review checks:
 

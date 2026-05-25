@@ -336,20 +336,13 @@ and any CDC-propagated mutation.
 Failures discovered in the touched area, or discovered by the test runs chosen
 for the current change, must be resolved before the task closes.
 
-When you discover failing or timing-out tests:
+When you discover failing or timing-out tests you must address each failure with this remediation sequence rather than ignoring or deferring it:
 
-1. **DO NOT IGNORE** - Failing tests indicate broken functionality
-2. **DO NOT DEFER** - Resolve the failure before closing the current task when
-   it is in the touched area or surfaced by the runs you chose to perform
-3. **INVESTIGATE** - Determine the root cause:
-   - Is the test incorrect?
-   - Is the implementation broken?
-   - Is there a race condition or timing issue?
-4. **FIX** - Resolve the issue:
-   - Update the test if it's testing the wrong behavior
-   - Fix the implementation if it's broken
-   - Fix timing issues or clean up resources properly
-5. **VERIFY** - Re-run the test to confirm it passes
+1. **Do not ignore a failing test.** A failing test indicates broken functionality and must be treated as a stop-the-line signal for the touched area.
+2. **Do not defer the failure.** When the failure is in the touched area, or was surfaced by the runs you chose to perform, you must resolve it before closing the current task.
+3. **Investigate the root cause.** Determine whether the test itself is incorrect, the implementation is broken, or a race condition or timing issue is at fault.
+4. **Apply the fix.** Update the test if it is checking the wrong behavior, fix the implementation if it is broken, or fix timing issues and clean up resources properly.
+5. **Verify by re-running.** Re-run the test to confirm it passes before closing the task.
 
 **Rationale:** Broken tests erode confidence in the suite. Work must not close
 while the touched area remains red.

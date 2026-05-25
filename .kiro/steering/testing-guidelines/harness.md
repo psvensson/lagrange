@@ -53,19 +53,10 @@ tail of unrelated suite failures.
 
 **Any unit test taking longer than 2 seconds is a HARD ERROR that requires immediate analysis. Integration tests can take up to 30 seconds**
 
-This is a powerful multi-core machine running in-memory tests. There is no valid reason for tests to take more than a couple of seconds. If a test exceeds this limit:
+This is a powerful multi-core machine running in-memory tests. There is no valid reason for tests to take more than a couple of seconds. When a test exceeds this limit you must not accept the test as passing; instead, follow this remediation procedure in order:
 
-1. **STOP** - Do not accept the test as passing
-2. **ANALYZE** - Identify the root cause:
-   - Unnecessary `setTimeout()` or real-time delays in tests
-   - Uncleaned timers (`setTimeout`, `setInterval`) keeping the process alive
-   - Speculative execution or background intervals not disabled in tests
-   - Actual performance bugs in the implementation
-3. **FIX** - Resolve the issue before proceeding:
-   - Mock time-based behavior instead of waiting for real time
-   - Ensure all timers are cleared in `finally` blocks
-   - Disable background features (speculative execution, intervals) in unit tests
-   - Use `Promise.resolve()` or immediate callbacks instead of delays
+1. **Identify the root cause.** Look for unnecessary `setTimeout()` or real-time delays in tests, uncleaned timers (`setTimeout`, `setInterval`) keeping the process alive, speculative execution or background intervals not disabled in tests, or actual performance bugs in the implementation.
+2. **Resolve the issue before proceeding.** Mock time-based behavior instead of waiting for real time, ensure all timers are cleared in `finally` blocks, disable background features (speculative execution, intervals) in unit tests, and use `Promise.resolve()` or immediate callbacks instead of delays.
 
 **Common violations:**
 ```javascript
