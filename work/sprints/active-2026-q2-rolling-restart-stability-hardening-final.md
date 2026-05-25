@@ -25,20 +25,20 @@ Make the system stable under rolling-restart: change the core logic of the syste
 ```text
 Representative artifact: none
 Visible first frontier: unknown
-Active package: work/packages/done-20260525-steering-docs-final-cleanups.md
+Active package: work/packages/done-20260525-execute-llm-steering-ambiguity-reduction.md
 Active package owner: workflow_tooling_owner
 Active package boundary: llm_steering_doc_truth
 Selected cause: steering_doc_truth_repair
-Required action: Append the closure tail (work:validate --closure, rename + sed status, work:repair, focused commit + push) to every lane block in boot.md so an LLM reading a single lane sees the full closure ceremony; merge the redundant AGENTS.md paragraph at L31-34 into the following sentence; map each Template Picker entry in core.md 1-to-1 to its canonical lane; and remove the silently-drifting rule-count, token, and domain header lines from generated per-domain packs (manifest.json already tracks these). README pack-truth note already updated in the previous package.
+Required action: Define validation schemas and front-load Must-Nots
 Representative status: unknown
 Causal outcome: unknown
 Architecture gate: not-required / unknown
 Expected delta: unknown
 Current state: New package scaffolded from the shared work-package schema.
-Allowed edits: .kiro/steering/llm/boot.md, AGENTS.md, .kiro/steering/llm/core.md, scripts/generate-steering-llm-pack.js, .kiro/steering/llm/architecture.md, .kiro/steering/llm/testing.md, .kiro/steering/llm/style.md, .kiro/steering/llm/governance.md, .kiro/steering/llm/manifest.json, .kiro/steering/llm/rules.json
+Allowed edits: unknown
 Candidate runtime files: unknown
 Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
-Required latest proof: node --test test/scripts/generate-steering-llm-pack.test.js
+Required latest proof: unknown
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -364,6 +364,11 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
 18. [Rolling Restart Active Gate Snapshot Coverage Repair](../packages/done-20260523-rolling-restart-active-gate-snapshot-coverage-repair.md)
    - Lane: `runtime-owner-boundary`
    - Purpose: Align active-gate cohort fallbacks and repair snapshot recovery projection logic.
+
+19. [Execute LLM steering ambiguity reduction](../packages/done-20260525-execute-llm-steering-ambiguity-reduction.md)
+   - Lane: `lightweight-maintenance`
+   - Purpose: Implement approved optimizations from the steering analysis, including defining JSON schemas, front-loading core Must-Nots, mapping rules to CLI commands, and adding escape override hatches.
+   - First-run reason: The user automatically approved the steering analysis artifact and requested execution.
 
 ## Proof Ladder
 

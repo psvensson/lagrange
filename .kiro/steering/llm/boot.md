@@ -99,6 +99,11 @@ Every lane that closes a package ends with these four steps in order. They are t
 3. `npm run work:repair` — refresh `current-blocker.{json,md}` and sprint refs. Expect the "no active package was found" warning once the rename is complete; this is the signal that closure is clean.
 4. Focused commit (only `commitScope` files plus tracker-generated handoff files; never unrelated dirty entries) and `git push`. See [focused commit](../../../work/RULES.md#worktree-safety) and the [Closure Recipe](../../../work/RULES.md#closure-recipe).
 
-## Conflict Rule
+## Conflict Rule and Escape Hatch
 
-If two steering files appear to disagree at execution time, do not average them. Follow the three-level Authority Order above: user instructions outrank `work/RULES.md` + `work:context`, which outrank domain packs. Record the conflict in the package if it changes scope, lane, proof, or stop conditions. If a domain pack rule itself looks wrong, the fix is to edit its source and regenerate the pack (`npm run steering:llm:pack`) — not to silently follow a different rule.
+If two steering files or instructions appear to disagree at execution time, do not average them or compromise. Follow the three-level Authority Order above: **User Instructions and Safety Limits (Level 1)** always outrank **`work/RULES.md` + `work:context` (Level 2)**, which outrank **Domain Packs (Level 3)**.
+
+When a Level 1 user instruction explicitly overrides or contradicts a Level 2 or Level 3 constraint:
+1. **Document the Contradiction:** You MUST record the exact contradiction and override in the active package under a dedicated `## Override Log` section.
+2. **Escalate/Confirm Safety Limits:** If the override weakens core safety bounds (e.g. bypassing validators, deleting/disabling guardrails, or modifying frozen decisions), you MUST explicitly ask the user for confirmation in the chat before executing the action.
+3. **Domain Pack Fix:** If a domain pack rule itself is outdated or incorrect, the canonical path is to edit its source file under `.kiro/steering/` and run `npm run steering:llm:pack` to regenerate the pack. Do not silently bypass or drift from rules.

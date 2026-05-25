@@ -1,0 +1,195 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Work Package Metadata Schema",
+  "description": "Validation schema for work package metadata in work-package-v2 format.",
+  "type": "object",
+  "required": [
+    "schema",
+    "status",
+    "intent",
+    "scope",
+    "gates",
+    "modelFit"
+  ],
+  "properties": {
+    "schema": {
+      "type": "string",
+      "enum": ["work-package-v2"]
+    },
+    "status": {
+      "type": "string",
+      "enum": ["active", "done", "todo", "superseded", "failed"]
+    },
+    "intent": {
+      "type": "object",
+      "required": [
+        "opened",
+        "lane",
+        "scenario",
+        "owner",
+        "boundary",
+        "currentState",
+        "nextAction"
+      ],
+      "properties": {
+        "opened": {
+          "type": "string",
+          "pattern": "^20\\d{2}-\\d{2}-\\d{2}$"
+        },
+        "lane": {
+          "type": "string",
+          "enum": [
+            "read-review-doc-only",
+            "mechanical-maintenance",
+            "lightweight-maintenance",
+            "test-only-proof",
+            "diagnostic-classification",
+            "experiment",
+            "bounded-experiment",
+            "single-file-runtime",
+            "runtime-owner-boundary",
+            "scenario-release-gate",
+            "causal-escalation",
+            "fast-spike"
+          ]
+        },
+        "scenario": {
+          "type": "string"
+        },
+        "artifact": {
+          "type": "string"
+        },
+        "playback": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "boundary": {
+          "type": "string"
+        },
+        "currentState": {
+          "type": "string"
+        },
+        "nextAction": {
+          "type": "string"
+        },
+        "dominantReason": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "scope": {
+      "type": "object",
+      "required": [
+        "writeScope",
+        "handoffFiles",
+        "generatedFiles",
+        "candidateRuntimeFiles",
+        "commitScope"
+      ],
+      "properties": {
+        "writeScope": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "handoffFiles": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "generatedFiles": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "candidateRuntimeFiles": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "commitScope": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "gates": {
+      "type": "object",
+      "required": [
+        "whyHighestLeverageNow",
+        "stabilityCredit"
+      ],
+      "properties": {
+        "whyHighestLeverageNow": {
+          "type": "string"
+        },
+        "stabilityCredit": {
+          "type": "string",
+          "enum": [
+            "representative-green",
+            "representative-migrated",
+            "representative-reduced",
+            "local-proof-only",
+            "instrumentation-only"
+          ]
+        },
+        "companionGatesFile": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "modelFit": {
+      "type": "object",
+      "required": [
+        "packageClass",
+        "intendedMinimumModel",
+        "scopeShape",
+        "outputProfile"
+      ],
+      "properties": {
+        "packageClass": {
+          "type": "string"
+        },
+        "intendedMinimumModel": {
+          "type": "string"
+        },
+        "scopeShape": {
+          "type": "string"
+        },
+        "outputProfile": {
+          "type": "string",
+          "enum": ["small", "medium", "high", "extra-high"]
+        },
+        "escalationTriggers": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "ambiguityScore": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false
+    },
+    "execution": {
+      "type": "object",
+      "properties": {
+        "theoryLedgerRefs": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "proof": {
+          "type": "object",
+          "properties": {
+            "commands": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

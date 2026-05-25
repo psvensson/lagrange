@@ -19,16 +19,33 @@ Preserve the highest-level owner boundary, choose the lightest process that prov
 
 Use this list at cold start before any non-trivial work. Anchors point into [`work/RULES.md`](../../../work/RULES.md).
 
-1. Do not skip `npm run work:context` for non-trivial implementation work. (§validator-phases)
-2. Do not edit without a bounded package when implementation truth, roadmap status, or architecture ownership changes. (§lane-definitions)
-3. Do not choose a heavy lane when read-doc or maintenance proof is enough. (§lane-definitions)
-4. Do not use raw JSON, raw logs, broad search, or ad-hoc `jq` before canonical workflow tools. (§proof-requirements)
-5. Do not write runtime/domain scalars inline; use named constants or ingress normalization. (§coding-constraints)
-6. Do not encode runtime state with `null` or `undefined`; use explicit variants. (§coding-constraints)
-7. Do not implement semantic decisions as independent branch piles; collect evidence and emit one canonical outcome. (§coding-constraints)
-8. Do not let callers reproduce owner logic locally; owners decide and caches observe. (§coding-constraints)
-9. Do not weaken guardrails, scripts, allowlists, or scan scope to make proof pass. (§proof-requirements)
-10. Do not close a package without closure validation, focused commit, push, and ledger proof. (§proof-requirements)
+1. **Do not modify forbidden files** outside your package's declared `writeScope` (e.g. `src/` inside maintenance lanes). (§worktree-safety)
+2. **Do not bypass frozen decisions** or reopen established architecture routes without explicit Level 1 user override/confirmation. (§sprint-strategy)
+3. **Do not exceed file-size caps** when modifying or creating files (src ≤ 800 lines, test ≤ 1500 lines); refactor first. (§coding-constraints)
+4. **Do not skip `npm run work:context`** for non-trivial implementation work. (§validator-phases)
+5. **Do not edit without a bounded package** when implementation truth, roadmap status, or architecture ownership changes. (§lane-definitions)
+6. **Do not choose a heavy lane** when read-doc or maintenance proof is enough. (§lane-definitions)
+7. **Do not use raw JSON, raw logs, broad search, or ad-hoc `jq`** before canonical workflow tools. (§proof-requirements)
+8. **Do not write runtime/domain scalars inline**; use named constants or ingress normalization. (§coding-constraints)
+9. **Do not encode runtime state with `null` or `undefined`**; use explicit variants. (§coding-constraints)
+10. **Do not implement semantic decisions as independent branch piles**; collect evidence and emit one canonical outcome. (§coding-constraints)
+11. **Do not let callers reproduce owner logic locally**; owners decide and caches observe. (§coding-constraints)
+12. **Do not weaken guardrails, scripts, allowlists, or scan scope** to make proof pass. (§proof-requirements)
+13. **Do not close a package** without closure validation, focused commit, push, and ledger proof. (§proof-requirements)
+
+## Canonical Guardrail Command Map
+
+Map abstract steering rules directly to the automated validation tools that enforce them:
+
+| Abstract Rule / Constraint | Canonical CLI Guardrail Command | Enforced By File/Script |
+| --- | --- | --- |
+| Touched/created file-size limits | `npm run audit:file-size` or `npm run work:oversized-next -- --markdown` | `scripts/check-file-size-thresholds.js` |
+| Runtime syntax and grammar | `npm run check-runtime-grammar` | `scripts/check-runtime-grammar.js` |
+| Package structure, metadata JSON Schema | `npm run work:validate -- --entry` | `scripts/work-tracker.js` + `work-package.schema.json` |
+| Pre-implementation validator checks | `npm run work:validate -- --pre-impl` | `scripts/work-tracker.js` |
+| Ledger continuity, blocker sync, auto-healing | `npm run work:repair` | `scripts/work-tracker.js` |
+| Local proof and doctor diagnostics | `npm run work:advance -- --check` | `scripts/work-advance.js` |
+| Final package closure validation | `npm run work:validate -- --closure` | `scripts/work-tracker.js` |
 
 ## Template Picker
 

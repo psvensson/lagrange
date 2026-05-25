@@ -6,6 +6,7 @@ import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
 import {execSync} from 'node:child_process';
+import Ajv from 'ajv';
 import {
   CAUSAL_GOVERNANCE_PENDING_OUTCOME,
   CAUSAL_GOVERNANCE_VALID_OUTCOMES,
@@ -4955,6 +4956,26 @@ export function isGeneratedCurrentBlockerPath(filePath) {
     normalizedPath === CURRENT_BLOCKER_JSON_PATH;
 }
 
+let ajvValidator = null;
+
+function getAjvValidator() {
+  if (ajvValidator) {
+    return ajvValidator;
+  }
+  const ajv = new Ajv({ allErrors: true });
+  const schemaPath = path.join(process.cwd(), '.kiro', 'steering', 'schemas', 'work-package.schema.json');
+  try {
+    if (fsSync.existsSync(schemaPath)) {
+      const schemaContent = fsSync.readFileSync(schemaPath, 'utf8');
+      const schema = JSON.parse(schemaContent);
+      ajvValidator = ajv.compile(schema);
+    }
+  } catch (err) {
+    console.error(`Failed to load or compile work-package JSON Schema: ${err.message}`);
+  }
+  return ajvValidator;
+}
+
 export function parsePackageMetadata(content, filePath) {
   const openIndex = content.indexOf(PACKAGE_METADATA_OPEN);
   if (openIndex < NUM_ZERO) {
@@ -4970,6 +4991,21 @@ export function parsePackageMetadata(content, filePath) {
   const jsonText = content.slice(jsonStart, closeIndex).trim();
   try {
     const rawMetadata = JSON.parse(jsonText);
+    if (rawMetadata.schema === 'work-package-v2') {
+      const validate = getAjvValidator();
+      if (validate) {
+        const valid = validate(rawMetadata);
+        if (!valid) {
+          const schemaErrors = validate.errors.map((err) => {
+            const errorPath = err.instancePath || 'root';
+            return `${errorPath}: ${err.message}${err.params ? ' ' + JSON.stringify(err.params) : ''}`;
+          }).join(', ');
+          throw new Error(
+            `work-package metadata failed JSON Schema validation: ${schemaErrors}`,
+          );
+        }
+      }
+    }
     return normalizeMetadata(rawMetadata, filePath);
   } catch (error) {
     throw new Error(
@@ -5769,6 +5805,9 @@ function runPackageValidationsSync(filePath, content, fileStatus, metadata, opti
   if (fileStatus === STATUS_ACTIVE && !metadata) {
     errors.push(`${relativePath}: active package metadata is required.`);
   }
+  if (!metadata) {
+    return errors;
+  }
   errors.push(
     ...validatePackageMetadataShape(relativePath, fileStatus, metadata),
   );
@@ -5954,10 +5993,11 @@ async function validatePackageFile(filePath, options = {}) {
   const relativePath = normalizeRelativePath(filePath);
   const fileStatus = getPackageStatusFromPath(filePath);
   let metadata = null;
+  let parseError = null;
   try {
     metadata = parsePackageMetadata(content, relativePath);
   } catch (err) {
-    // Ignore error here, it is caught in validations
+    parseError = err.message;
   }
 
   const errors = runPackageValidationsSync(filePath, content, fileStatus, metadata, {
@@ -5966,6 +6006,10 @@ async function validatePackageFile(filePath, options = {}) {
     enforceClosureSubagentLedger: options.enforceClosureSubagentLedger,
     packageHistoryEntries: options.packageHistoryEntries,
   });
+
+  if (parseError) {
+    errors.push(parseError);
+  }
 
   if (fileStatus === STATUS_ACTIVE && metadata && metadata.predecessor) {
     const isCurrentFocused = [
