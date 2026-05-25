@@ -2,49 +2,42 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-tell-tale-scenario-reliability.md",
-  "package": "work/packages/active-20260525-tell-tale-scenario-suite-promotion-gate.md",
+  "package": "work/packages/active-20260525-rolling-restart-operation-workflow-owner-workflow-progress.md",
   "status": "active",
-  "lane": "scenario-release-gate",
-  "scenario": "tell-tale-suite",
-  "artifact": "test-output/reports/rolling-restart-tell-tale-green-gate.report.json",
+  "lane": "diagnostic-classification",
+  "scenario": "rolling-restart",
+  "artifact": "test-output/reports/rolling-restart-tell-tale-suite.report.json",
   "playback": "none",
-  "owner": "release_gate_owner",
-  "boundary": "tell_tale_suite_repeatability",
-  "dominantReason": "tell_tale_suite_repeatability_required",
-  "currentState": "Active because the broader tell-tale suite cannot be promoted while the latest rolling-restart representative artifact still routes to startup_active_gate_owner / snapshot_coverage / active_gate_timed_out.",
-  "nextAction": "Do not run the broader tell-tale suite yet; preserve the failed rolling-restart route evidence and keep one bounded active-gate snapshot coverage successor before suite promotion.",
+  "owner": "operation_workflow_owner",
+  "boundary": "workflow_progress",
+  "dominantReason": "priority_recovery_event_driven_wait",
+  "currentState": "Scaffolded from representative evidence for priority_recovery_partition_progress.",
+  "nextAction": "Triage priority_recovery_partition_progress with combined scenario evidence before runtime edits.",
   "proof": [
-    "falsifier: contract transition fixture npm run work:scenario-route -- test-output/reports/rolling-restart-tell-tale-green-gate.report.json",
-    "regression: affected consumer proof npm run work:evidence-summary -- test-output/reports/rolling-restart-tell-tale-green-gate.report.json",
-    "supporting: npm run summarize:harness -- --report-dir test-output/reports"
+    "falsifier: representative scenario triage npm run work:scenario-triage -- test-output/reports/rolling-restart-tell-tale-suite.report.json --markdown",
+    "regression: representative evidence summary npm run work:evidence-summary -- test-output/reports/rolling-restart-tell-tale-suite.report.json",
+    "supporting: analyze priority recovery residuals npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-tell-tale-suite.report.json --markdown"
   ],
   "writeScope": [
-    "work/packages/active-20260525-tell-tale-scenario-suite-promotion-gate.md"
+    "work/packages/active-20260525-rolling-restart-operation-workflow-owner-workflow-progress.md"
   ],
   "handoffFiles": [
-    "test-output/reports/rolling-restart-tell-tale-green-gate.report.json"
+    "test-output/reports/rolling-restart-tell-tale-suite.report.json"
   ],
-  "generatedFiles": [
+  "generatedFiles": [],
+  "candidateRuntimeFiles": [],
+  "commitScope": [
+    "work/packages/active-20260525-rolling-restart-operation-workflow-owner-workflow-progress.md",
+    "work/sprints/active-2026-q2-tell-tale-scenario-reliability.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
   ],
-  "candidateRuntimeFiles": [],
-  "commitScope": [
-    "work/packages/active-20260525-tell-tale-scenario-suite-promotion-gate.md",
-    "work/sprints/active-2026-q2-tell-tale-scenario-reliability.md",
-    "work/sprints/current-blocker.json",
-    "work/sprints/current-blocker.md",
-    "work/tracks/topology-convergence.md"
-  ],
   "touchedFiles": [],
-  "theoryLedgerRefs": [
-    "theory-20260513-rolling-restart-preflight-green-gate-confirmation",
-    "theory-20260523-rolling-restart-recovery-reconcile-recursion-fix"
-  ],
+  "theoryLedgerRefs": [],
   "modelFit": {
-    "packageClass": "scenario-release-gate",
+    "packageClass": "diagnostic-classification",
     "intendedMinimumModel": "gpt-5.3-codex",
-    "scopeShape": "bounded-owner-runtime/current-frontier",
+    "scopeShape": "diagnostic-owner-evidence/current-artifact",
     "outputProfile": "medium",
     "escalationTriggers": [
       "owned files expand beyond this package",
@@ -54,97 +47,104 @@
   },
   "representativeResidual": {
     "status": "same-frontier",
-    "scenario": "tell-tale-suite",
-    "artifact": "test-output/reports/rolling-restart-tell-tale-green-gate.report.json",
-    "frontier": "active_gate_snapshot_coverage",
-    "owner": "startup_active_gate_owner",
-    "boundary": "snapshot_coverage",
-    "dominantReason": "active_gate_timed_out",
-    "nextAction": "Keep one bounded active-gate snapshot coverage successor before suite promotion."
+    "scenario": "rolling-restart",
+    "artifact": "test-output/reports/rolling-restart-tell-tale-suite.report.json",
+    "frontier": "workflow_progress",
+    "owner": "operation_workflow_owner",
+    "boundary": "workflow_progress",
+    "dominantReason": "priority_recovery_event_driven_wait",
+    "nextAction": "Triage priority_recovery_partition_progress with combined scenario evidence before runtime edits."
   },
   "causalGovernance": {
-    "hypothesis": "The active sprint goal cannot promote the tell-tale suite until the representative rolling-restart gate stops routing to active-gate snapshot coverage.",
-    "stopConditionCheck": "Use work:scenario-route, work:evidence-summary, npm run analyze:causal-model, and summarize:harness on the latest rolling-restart representative artifact before running broader tell-tale scenarios.",
-    "expectedCausalModelChange": "The current package should block suite promotion and preserve the active-gate snapshot coverage successor as the first frontier.",
-    "representativeOutcome": "same-frontier",
-    "causalDebt": "rolling-restart remains blocked at startup_active_gate_owner / snapshot_coverage / active_gate_timed_out.",
-    "crossBoundaryReview": "Suite promotion stays under release_gate_owner; runtime changes remain in the active-gate successor boundary."
+    "hypothesis": "The priority-recovery event-driven wait residuals represent a distinct classification or stop condition before broader runtime promotion.",
+    "stopConditionCheck": "Use npm run analyze:causal-model, work:scenario-triage, work:evidence-summary, and analyze:priority-recovery-residuals on the latest representative artifact.",
+    "expectedCausalModelChange": "The package should classify whether fresh evidence is green, reduced, migrated, same-frontier, architecture-gap, or contradictory.",
+    "representativeOutcome": "pending-before-rerun",
+    "causalDebt": "priority-recovery event-driven wait needs material classification before promotion.",
+    "crossBoundaryReview": "Triage stays under operation_workflow_owner / workflow_progress."
   },
   "scenarioCausalClosure": {
-    "referenceScenarioOrProbe": "tell-tale-suite-promotion-gate",
+    "referenceScenarioOrProbe": "rolling-restart-priority-recovery-triage",
     "phaseChain": [
       "rolling-restart representative gate rerun completed",
-      "route evidence selected startup_active_gate_owner / snapshot_coverage",
-      "tell-tale suite promotion remains blocked until rolling-restart is green"
+      "route evidence selected operation_workflow_owner / workflow_progress",
+      "triage residuals to classify the frontier outcome"
     ],
-    "currentFirstFrontier": "release_gate_owner/tell_tale_suite_repeatability blocked by startup_active_gate_owner/snapshot_coverage",
+    "currentFirstFrontier": "operation_workflow_owner/workflow_progress",
     "knownDownstreamBlockers": [
       "tell-tale-suite-repeatability"
     ],
-    "missingCausalEdge": "Rolling-restart representative-green evidence is missing.",
-    "missingCausalEdgeProbe": "npm run work:scenario-route -- test-output/reports/rolling-restart-tell-tale-green-gate.report.json",
-    "falsifyingProbe": "npm run work:scenario-route -- test-output/reports/rolling-restart-tell-tale-green-gate.report.json",
-    "boundedProgressProof": "The package records that suite promotion is blocked by same-frontier rolling-restart evidence and preserves the active-gate reconcile/repair/timer successor before running unrelated scenarios.",
-    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-tell-tale-green-gate.report.json",
-    "expectedObservableTransition": "suite promotion remains blocked until active_gate_snapshot_coverage clears or migrates",
+    "missingCausalEdge": "Classification of fresh representative evidence is pending.",
+    "missingCausalEdgeProbe": "npm run work:scenario-triage -- test-output/reports/rolling-restart-tell-tale-suite.report.json",
+    "falsifyingProbe": "npm run work:scenario-triage -- test-output/reports/rolling-restart-tell-tale-suite.report.json",
+    "boundedProgressProof": "The package records that priority-recovery residuals must be classified before runtime promotion to reconcile and advance workflow progress.",
+    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-tell-tale-suite.report.json",
+    "expectedObservableTransition": "residuals classified to determine next successor",
     "maxProgressBound": "one classification gate",
-    "sameFrontierFallback": "Keep the active-gate successor as the first frontier.",
-    "expectedNextFrontier": "active_gate_snapshot_coverage",
-    "resultClassification": "same-frontier",
-    "stopCondition": "architecture-gap-stop",
+    "sameFrontierFallback": "Keep the workflow-progress successor as the active first frontier.",
+    "expectedNextFrontier": "workflow_progress",
+    "resultClassification": "pending-before-probe",
+    "stopCondition": "continue-local-fix",
     "recentFrontierHistory": [
-      "done-20260525-rolling-restart-representative-green-gate.md / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out"
+      "done-20260525-tell-tale-scenario-suite-promotion-gate.md / release_gate_owner / tell_tale_suite_repeatability / tell_tale_suite_repeatability_required"
     ],
-    "oscillationCheck": "The suite gate does not open another runtime patch; it preserves the selected active-gate successor.",
-    "handoffInvariant": "Broader tell-tale scenarios are downstream of rolling-restart representative-green."
+    "oscillationCheck": "The package does not patch runtime; it triages priority-recovery evidence to select the next owner/boundary.",
+    "handoffInvariant": "Workflow progress triage is downstream of scenario-release-gate routing."
   },
-  "observablePrediction": {
-    "metric": "tell-tale suite promotion eligibility",
-    "predicted": "blocked while rolling-restart routes to active_gate_snapshot_coverage",
-    "observed": "rolling-restart routes to active_gate_snapshot_coverage",
-    "accuracy": "matched",
-    "evidence": "test-output/reports/rolling-restart-tell-tale-green-gate.report.json"
-  },
+  "observablePrediction": {},
   "experimentOutcome": {},
   "rerunDecision": {
-    "sourceArtifact": "test-output/reports/rolling-restart-tell-tale-green-gate.report.json",
-    "routeOwner": "startup_active_gate_owner",
-    "routeBoundary": "snapshot_coverage",
-    "routeDominantReason": "active_gate_timed_out",
-    "routeCausalOutcome": "continue_local_fix",
-    "stopMode": "architecture-gap-stop",
-    "nextLane": "experiment",
-    "expectedDelta": "Block broader tell-tale suite promotion until rolling-restart active-gate snapshot coverage clears, reduces, or migrates.",
+    "sourceArtifact": "test-output/reports/rolling-restart-tell-tale-suite.report.json",
+    "routeOwner": "operation_workflow_owner",
+    "routeBoundary": "workflow_progress",
+    "routeDominantReason": "priority_recovery_event_driven_wait",
+    "routeCausalOutcome": "accept_classified_backpressure",
+    "stopMode": "classified_backpressure",
+    "nextLane": "diagnostic-classification",
+    "expectedDelta": "Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.",
     "requiredRefreshCommands": [
-      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-tell-tale-green-gate.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out",
+      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-tell-tale-suite.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait",
       "update Sprint Strategy Brief and Current Edge Card from the route result",
       "npm run work:repair",
       "npm run work:validate -- --pre-impl"
     ]
   },
-  "classificationEfficiency": {},
+  "classificationEfficiency": {
+    "defaultMode": "separate-package-approved",
+    "separatePackageReason": "successor-selection",
+    "artifactBudget": "one-artifact",
+    "proofCommandBudget": "two-or-three-canonical-commands",
+    "commands": [
+      "npm run work:evidence-summary -- test-output/reports/rolling-restart-tell-tale-suite.report.json",
+      "npm run work:scenario-triage -- test-output/reports/rolling-restart-tell-tale-suite.report.json --markdown",
+      "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-tell-tale-suite.report.json --markdown"
+    ],
+    "decisionRecord": "Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.",
+    "successorAction": "rerun-representative-evidence",
+    "runtimePromotionRule": "When canonical owner and boundary are stable, prefer a runtime-owner-boundary successor and keep runtime files in candidateRuntimeFiles until that package activates them. If the representative route is same-frontier with no reduction or an architecture gap, open an autonomous architecture experiment before more local runtime work."
+  },
   "architectureDecisionGate": {
     "status": "selected",
     "trigger": "frontier-oscillation",
     "triggerEvidence": [
-      "Fresh rolling-restart representative route selected startup_active_gate_owner / snapshot_coverage / active_gate_timed_out.",
-      "The broader tell-tale suite is downstream of rolling-restart representative-green.",
-      "Same-frontier rolling-restart evidence must stop suite promotion and preserve the active-gate successor."
+      "Fresh rolling-restart representative route selected operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait.",
+      "Frontier oscillation detected (repeated adjacent-boundary oscillation within the same boundary family).",
+      "Same-frontier rolling-restart evidence must stop local patching and triage residuals."
     ],
     "choices": [
       {
         "id": "open-architecture-package",
-        "summary": "Keep the active-gate snapshot coverage successor as the first frontier before suite promotion.",
+        "summary": "Keep the workflow-progress successor as the active first frontier.",
         "route": "architecture-package",
         "proof": [
-          "npm run work:scenario-route -- test-output/reports/rolling-restart-tell-tale-green-gate.report.json",
-          "npm run work:evidence-summary -- test-output/reports/rolling-restart-tell-tale-green-gate.report.json",
-          "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-tell-tale-green-gate.report.json"
+          "npm run work:scenario-triage -- test-output/reports/rolling-restart-tell-tale-suite.report.json --markdown",
+          "npm run work:evidence-summary -- test-output/reports/rolling-restart-tell-tale-suite.report.json",
+          "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-tell-tale-suite.report.json"
         ]
       }
     ],
     "selectedChoice": "open-architecture-package",
-    "nextAction": "Keep the selected active-gate snapshot coverage architecture/runtime successor before broader tell-tale suite promotion."
+    "nextAction": "Keep the selected workflow-progress classification/triage successor before further runtime edits."
   },
   "predecessor": null
 }

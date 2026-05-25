@@ -57,22 +57,22 @@ and the same proof ladder is promoted to the tell-tale scenario set.
 ## Current Edge Card
 
 ```text
-Representative artifact: test-output/reports/rolling-restart-tell-tale-green-gate.report.json
-Visible first frontier: release_gate_owner/tell_tale_suite_repeatability blocked by startup_active_gate_owner/snapshot_coverage
-Active package: work/packages/active-20260525-tell-tale-scenario-suite-promotion-gate.md
-Active package owner: release_gate_owner
-Active package boundary: tell_tale_suite_repeatability
-Selected cause: tell_tale_suite_repeatability_required
-Required action: Do not run the broader tell-tale suite yet; preserve the failed rolling-restart route evidence and keep one bounded active-gate snapshot coverage successor before suite promotion.
+Representative artifact: test-output/reports/rolling-restart-tell-tale-suite.report.json
+Visible first frontier: operation_workflow_owner/workflow_progress
+Active package: work/packages/active-20260525-rolling-restart-operation-workflow-owner-workflow-progress.md
+Active package owner: operation_workflow_owner
+Active package boundary: workflow_progress
+Selected cause: priority_recovery_event_driven_wait
+Required action: Triage priority_recovery_partition_progress with combined scenario evidence before runtime edits.
 Representative status: same-frontier
-Causal outcome: continue_local_fix
+Causal outcome: accept_classified_backpressure
 Architecture gate: selected / open-architecture-package
-Expected delta: Block broader tell-tale suite promotion until rolling-restart active-gate snapshot coverage clears, reduces, or migrates.
-Current state: Active because the broader tell-tale suite cannot be promoted while the latest rolling-restart representative artifact still routes to startup_active_gate_owner / snapshot_coverage / active_gate_timed_out.
-Allowed edits: work/packages/active-20260525-tell-tale-scenario-suite-promotion-gate.md
+Expected delta: Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.
+Current state: Scaffolded from representative evidence for priority_recovery_partition_progress.
+Allowed edits: work/packages/active-20260525-rolling-restart-operation-workflow-owner-workflow-progress.md
 Candidate runtime files: unknown
-Forbidden edits: Broader tell-tale scenarios are downstream of rolling-restart representative-green.
-Required latest proof: falsifier: contract transition fixture npm run work:scenario-route -- test-output/reports/rolling-restart-tell-tale-green-gate.report.json, regression: affected consumer proof npm run work:evidence-summary -- test-output/reports/rolling-restart-tell-tale-green-gate.report.json, supporting: npm run summarize:harness -- --report-dir test-output/reports
+Forbidden edits: Workflow progress triage is downstream of scenario-release-gate routing.
+Required latest proof: falsifier: representative scenario triage npm run work:scenario-triage -- test-output/reports/rolling-restart-tell-tale-suite.report.json --markdown, regression: representative evidence summary npm run work:evidence-summary -- test-output/reports/rolling-restart-tell-tale-suite.report.json, supporting: analyze priority recovery residuals npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-tell-tale-suite.report.json --markdown
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -118,7 +118,7 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Purpose: implement write-queue drain and cache refresh mechanics to resolve the stale cache watermark under concurrent load.
    - First-run reason: architecture experiment v2 distinguished cache watermark write-queue latency as the primary blocker.
 
-7. [Tell-Tale Scenario Suite Promotion Gate](../packages/active-20260525-tell-tale-scenario-suite-promotion-gate.md)
+7. [Tell-Tale Scenario Suite Promotion Gate](../packages/done-20260525-tell-tale-scenario-suite-promotion-gate.md)
    - Lane: `scenario-release-gate`
    - Purpose: promote the rolling-restart proof ladder to the tell-tale
      scenarios and require repeatable route evidence.
