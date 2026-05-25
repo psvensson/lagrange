@@ -6,7 +6,7 @@
   "status": "active",
   "intent": {
     "opened": "2026-05-25",
-    "lane": "runtime-owner-boundary",
+    "lane": "causal-escalation",
     "scenario": "rolling-restart",
     "artifact": "test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json",
     "playback": "none",
@@ -23,7 +23,9 @@
     ],
     "generatedFiles": [],
     "candidateRuntimeFiles": [],
-    "commitScope": []
+    "commitScope": [
+      "work/packages/active-20260525-rolling-restart-active-gate-snapshot-coverage-blocker.md"
+    ]
   },
   "gates": {
     "stabilityCredit": "local-proof-only",
@@ -31,7 +33,7 @@
     "representativeRerunCadence": "scheduled-rerun-command"
   },
   "modelFit": {
-    "packageClass": "runtime-owner-boundary",
+    "packageClass": "causal-escalation",
     "intendedMinimumModel": "gpt-5.3-codex",
     "scopeShape": "bounded-owner-runtime/current-frontier",
     "outputProfile": "medium",
@@ -42,7 +44,9 @@
     ]
   },
   "execution": {
-    "theoryLedgerRefs": [],
+    "theoryLedgerRefs": [
+      "theory-20260523-rolling-restart-recovery-reconcile-recursion-fix"
+    ],
     "proof": {
       "commands": [
         "falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json",
@@ -89,7 +93,7 @@
     "hypothesis": "Fixing active-gate snapshot coverage under Lagrange load stabilization stabilizes Lagrange startup nodes.",
     "stopConditionCheck": "Use npm run analyze:causal-model -- test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json plus topology explain.",
     "expectedCausalModelChange": "This package determines active-gate snapshot coverage, cache watermark retry timer, or snapshot state.",
-    "representativeOutcome": "continue-local-fix",
+    "representativeOutcome": "pending-before-rerun",
     "causalDebt": "The fresh rerun has activeGateState=timed_out, snapshotCoverageNodeCount=3/5, and reasons cache_stale_watermark, stale_replica_operations_in_flight.",
     "crossBoundaryReview": "All runtime files outside startup_active_gate_owner boundary stay frozen."
   },
@@ -121,6 +125,23 @@
     "oscillationCheck": "This package is activated because of validator same-frontier/frontier-oscillation rules.",
     "handoffInvariant": "Startup readiness remains downstream until active-gate snapshot coverage is resolved."
   },
+  "observablePrediction": {
+    "metric": "active_gate_snapshot_coverage reason set, snapshotCoverageNodeCount",
+    "predicted": "active_gate snapshot coverage reaches 5/5 or reduces timeout duration",
+    "observed": "pending-before-observation",
+    "accuracy": "pending-before-observation",
+    "evidence": "test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json"
+  },
+  "representativeResidual": {
+    "status": "migrated",
+    "scenario": "rolling-restart",
+    "artifact": "test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json",
+    "frontier": "active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out",
+    "owner": "startup_active_gate_owner",
+    "boundary": "snapshot_coverage",
+    "dominantReason": "active_gate_timed_out",
+    "nextAction": "Fix the active-gate snapshot coverage timeout"
+  },
   "rerunDecision": {
     "sourceArtifact": "test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json",
     "routeOwner": "startup_active_gate_owner",
@@ -142,7 +163,7 @@
 
 ## Why
 
-State the focused concern and why this package owns it.
+This package owns the active-gate snapshot coverage blocker. Acknowledging related theories: not-applicable.
 
 ## Scope Basis
 

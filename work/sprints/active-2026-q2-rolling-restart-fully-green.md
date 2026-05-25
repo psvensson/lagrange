@@ -37,20 +37,20 @@ admission relaxation, or unresolved topology/frontier blockers.
 
 ```text
 Representative artifact: test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json
-Visible first frontier: unknown
+Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out
 Active package: work/packages/active-20260525-rolling-restart-active-gate-snapshot-coverage-blocker.md
 Active package owner: startup_active_gate_owner
 Active package boundary: snapshot_coverage
 Selected cause: active_gate_timed_out
 Required action: Fix the active-gate snapshot coverage timeout
-Representative status: unknown
+Representative status: migrated
 Causal outcome: continue_local_fix
 Architecture gate: watching / unknown
 Expected delta: Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.
 Current state: Scaffolded from representative evidence for active_gate_snapshot_coverage.
 Allowed edits: unknown
 Candidate runtime files: unknown
-Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
+Forbidden edits: Startup readiness remains downstream until active-gate snapshot coverage is resolved.
 Required latest proof: falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json, regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json --markdown, supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json --markdown
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
