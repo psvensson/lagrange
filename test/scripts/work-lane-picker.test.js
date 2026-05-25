@@ -8,7 +8,7 @@ import {
   runCli,
 } from '../../scripts/work-lane-picker.js';
 
-test('lane picker exposes six canonical lane buckets', (t) => {
+test('lane picker exposes seven canonical lane buckets', (t) => {
   t.same(CANONICAL_WORKFLOW_LANES, [
     'read-doc',
     'maintenance',
@@ -16,8 +16,9 @@ test('lane picker exposes six canonical lane buckets', (t) => {
     'experiment',
     'runtime',
     'scenario',
+    'discovery',
   ]);
-  t.equal(Object.keys(LEGACY_LANE_ALIASES).length >= 12, true);
+  t.equal(Object.keys(LEGACY_LANE_ALIASES).length >= 13, true);
   t.end();
 });
 
@@ -33,6 +34,7 @@ test('lane picker maps legacy package lanes to canonical buckets', (t) => {
   t.equal(canonicalLaneForPackageLane('runtime-owner-boundary'), 'runtime');
   t.equal(canonicalLaneForPackageLane('scenario-release-gate'), 'scenario');
   t.equal(canonicalLaneForPackageLane('causal-escalation'), 'scenario');
+  t.equal(canonicalLaneForPackageLane('discovery'), 'discovery');
   t.end();
 });
 
@@ -57,6 +59,7 @@ test('lane picker recommends compatible package lanes from signals', (t) => {
     recommendLane({scenario: true}).packageLane,
     'scenario-release-gate',
   );
+  t.equal(recommendLane({discovery: true}).packageLane, 'discovery');
   t.end();
 });
 

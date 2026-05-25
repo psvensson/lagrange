@@ -44,6 +44,7 @@ import {
   LANE_BOUNDED_EXPERIMENT,
   LANE_DIAGNOSTIC_CLASSIFICATION,
   LANE_EXPERIMENT,
+  LANE_DISCOVERY,
   LANE_MECHANICAL_MAINTENANCE,
   LANE_READ_REVIEW_DOC_ONLY,
   LANE_RUNTIME_OWNER_BOUNDARY,
@@ -5038,7 +5039,7 @@ function replacePackageMetadata(content, metadata) {
     };
 
     const v2Keys = {
-      intent: ['opened', 'closed', 'lane', 'scenario', 'artifact', 'playback', 'owner', 'boundary', 'currentState', 'nextAction', 'dominantReason'],
+      intent: ['opened', 'closed', 'lane', 'scenario', 'artifact', 'playback', 'owner', 'boundary', 'currentState', 'nextAction', 'dominantReason', 'discoveryRef'],
       scope: ['writeScope', 'handoffFiles', 'generatedFiles', 'candidateRuntimeFiles', 'commitScope'],
       gates: ['whyHighestLeverageNow', 'stabilityCredit', 'representativeRerunCadence', 'codeQualityAdmission', 'companionGatesFile'],
       modelFit: ['packageClass', 'intendedMinimumModel', 'scopeShape', 'outputProfile', 'escalationTriggers'],
@@ -5249,6 +5250,20 @@ function validateLowerModelLaneMetadataShape(filePath, metadata) {
       `${filePath}: ${LANE_TEST_ONLY_PROOF} packages must keep writeScope ` +
       'and commitScope in test/ or work/packages/ paths.',
     );
+  }
+  if (lane === LANE_DISCOVERY) {
+    const invalidPaths = writeScope.filter((filePathValue) => {
+      const normalizedPath = normalizeLedgerText(filePathValue);
+      return !normalizedPath.startsWith('work/packages/') &&
+        !normalizedPath.startsWith('work/sprints/') &&
+        normalizedPath !== 'work/theory-ledger.md';
+    });
+    if (invalidPaths.length > 0) {
+      errors.push(
+        `${filePath}: ${LANE_DISCOVERY} packages must restrict writeScope to ` +
+        'package files, sprints, and work/theory-ledger.md (no runtime, tests, or scripts).',
+      );
+    }
   }
   if (lane === LANE_SINGLE_FILE_RUNTIME) {
     const runtimeFiles = writeScope.filter(isSourceWritePath);
@@ -5804,6 +5819,79 @@ export function validateProbePackageContract(content, filePath, metadata) {
   return errors;
 }
 
+function validateDiscoveryRef(metadata, filePath) {
+  const errors = [];
+  if (!metadata) {
+    return errors;
+  }
+  const lane = metadataLane(metadata);
+  const isRuntime = lane === 'runtime' || lane === 'single-file-runtime' || lane === 'runtime-owner-boundary';
+
+  if (!isRuntime) {
+    return errors;
+  }
+
+  const ambiguityScore = metadata?.modelFit?.ambiguityScore;
+  if (ambiguityScore === undefined || Number(ambiguityScore) < 2) {
+    return errors;
+  }
+
+  const discoveryRef = metadata?.intent?.discoveryRef || metadata?.discoveryRef;
+  if (!discoveryRef) {
+    errors.push(
+      `${filePath}: high-ambiguity runtime package (ambiguityScore >= 2) must cite a discovery or experiment predecessor in metadata.intent.discoveryRef.`,
+    );
+    return errors;
+  }
+
+  let refPath = String(discoveryRef).trim();
+  if (!refPath.startsWith('work/packages/')) {
+    refPath = path.join('work/packages', refPath);
+  }
+  if (!refPath.endsWith('.md')) {
+    refPath = refPath + '.md';
+  }
+
+  if (!fsSync.existsSync(refPath)) {
+    errors.push(
+      `${filePath}: metadata.intent.discoveryRef "${discoveryRef}" refers to non-existent file "${refPath}".`,
+    );
+    return errors;
+  }
+
+  try {
+    const refContent = fsSync.readFileSync(refPath, 'utf8');
+    const refMetadata = parsePackageMetadata(refContent, refPath);
+    if (!refMetadata) {
+      errors.push(
+        `${filePath}: metadata.intent.discoveryRef "${discoveryRef}" could not parse metadata.`,
+      );
+      return errors;
+    }
+
+    const isClosed = refMetadata.status === 'done' || path.basename(refPath).startsWith('done-');
+    if (!isClosed) {
+      errors.push(
+        `${filePath}: metadata.intent.discoveryRef "${discoveryRef}" must refer to a CLOSED (done) package.`,
+      );
+    }
+
+    const refLane = String(refMetadata.lane || refMetadata.intent?.lane || '').trim().toLowerCase();
+    const isDiscoveryOrExperiment = refLane === 'discovery' || refLane === 'experiment' || refLane === 'bounded-experiment' || refLane === 'fast-spike';
+    if (!isDiscoveryOrExperiment) {
+      errors.push(
+        `${filePath}: metadata.intent.discoveryRef "${discoveryRef}" must refer to a discovery or experiment package (got lane "${refLane}").`,
+      );
+    }
+  } catch (err) {
+    errors.push(
+      `${filePath}: metadata.intent.discoveryRef "${discoveryRef}" error reading/parsing file: ${err.message}`,
+    );
+  }
+
+  return errors;
+}
+
 function runPackageValidationsSync(filePath, content, fileStatus, metadata, options = {}) {
   const phase = options.phase || VALIDATION_PHASE_PRE_IMPL;
   const relativePath = normalizeRelativePath(filePath);
@@ -5827,6 +5915,9 @@ function runPackageValidationsSync(filePath, content, fileStatus, metadata, opti
   errors.push(
     ...validatePackageMetadataShape(relativePath, fileStatus, metadata),
   );
+  if (phase !== VALIDATION_PHASE_ENTRY && fileStatus === STATUS_ACTIVE) {
+    errors.push(...validateDiscoveryRef(metadata, relativePath));
+  }
   errors.push(...validateTheoryLedgerReferenceContinuity(
     relativePath,
     metadata,

@@ -50,7 +50,8 @@
             "runtime-owner-boundary",
             "scenario-release-gate",
             "causal-escalation",
-            "fast-spike"
+            "fast-spike",
+            "discovery"
           ]
         },
         "scenario": {
@@ -75,6 +76,9 @@
           "type": "string"
         },
         "dominantReason": {
+          "type": "string"
+        },
+        "discoveryRef": {
           "type": "string"
         }
       },

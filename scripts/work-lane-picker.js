@@ -17,6 +17,7 @@ const FLAG_CLASSIFICATION = '--classification';
 const FLAG_EXPERIMENT = '--experiment';
 const FLAG_RUNTIME = '--runtime';
 const FLAG_SCENARIO = '--scenario';
+const FLAG_DISCOVERY = '--discovery';
 const FLAG_SRC = '--src';
 const FLAG_TEST = '--test';
 const FLAG_SCRIPT = '--script';
@@ -31,6 +32,7 @@ const CANONICAL_LANE_PROOF = 'proof';
 const CANONICAL_LANE_EXPERIMENT = 'experiment';
 const CANONICAL_LANE_RUNTIME = 'runtime';
 const CANONICAL_LANE_SCENARIO = 'scenario';
+const CANONICAL_LANE_DISCOVERY = 'discovery';
 const PACKAGE_LANE_READ_REVIEW_DOC_ONLY = 'read-review-doc-only';
 const PACKAGE_LANE_MECHANICAL_MAINTENANCE = 'mechanical-maintenance';
 const PACKAGE_LANE_LIGHTWEIGHT_MAINTENANCE = 'lightweight-maintenance';
@@ -43,6 +45,7 @@ const PACKAGE_LANE_RUNTIME_OWNER_BOUNDARY = 'runtime-owner-boundary';
 const PACKAGE_LANE_SCENARIO_RELEASE_GATE = 'scenario-release-gate';
 const PACKAGE_LANE_CAUSAL_ESCALATION = 'causal-escalation';
 const PACKAGE_LANE_FAST_SPIKE = 'fast-spike';
+const PACKAGE_LANE_DISCOVERY = 'discovery';
 const DEFAULT_REASON = 'No strong signal selected; use maintenance until runtime, scenario, experiment, or test-only proof is named.';
 const HELP_TEXT = [
   'Usage:',
@@ -56,6 +59,7 @@ const HELP_TEXT = [
   '  --experiment             probe or bounded hypothesis package',
   '  --runtime                runtime owner-boundary work',
   '  --scenario               representative scenario/release-gate work',
+  '  --discovery              lateral analysis/framing or route selection',
   '  --src --test --script --work --one-file --representative --shared-contract',
 ].join(NEWLINE);
 
@@ -66,6 +70,7 @@ const CANONICAL_WORKFLOW_LANES = Object.freeze([
   CANONICAL_LANE_EXPERIMENT,
   CANONICAL_LANE_RUNTIME,
   CANONICAL_LANE_SCENARIO,
+  CANONICAL_LANE_DISCOVERY,
 ]);
 
 const LEGACY_LANE_ALIASES = Object.freeze({
@@ -81,6 +86,7 @@ const LEGACY_LANE_ALIASES = Object.freeze({
   [PACKAGE_LANE_RUNTIME_OWNER_BOUNDARY]: CANONICAL_LANE_RUNTIME,
   [PACKAGE_LANE_SCENARIO_RELEASE_GATE]: CANONICAL_LANE_SCENARIO,
   [PACKAGE_LANE_CAUSAL_ESCALATION]: CANONICAL_LANE_SCENARIO,
+  [PACKAGE_LANE_DISCOVERY]: CANONICAL_LANE_DISCOVERY,
 });
 
 function hasFlag(args, flag) {
@@ -100,6 +106,7 @@ function buildSignalsFromArgs(args = []) {
     experiment: hasFlag(args, FLAG_EXPERIMENT),
     runtime: hasFlag(args, FLAG_RUNTIME) || hasFlag(args, FLAG_RUNTIME_CONTRACT),
     scenario: hasFlag(args, FLAG_SCENARIO) || hasFlag(args, FLAG_REPRESENTATIVE),
+    discovery: hasFlag(args, FLAG_DISCOVERY),
     src: hasFlag(args, FLAG_SRC),
     test: hasFlag(args, FLAG_TEST),
     script: hasFlag(args, FLAG_SCRIPT),
@@ -110,6 +117,13 @@ function buildSignalsFromArgs(args = []) {
 }
 
 function recommendLane(signals = {}) {
+  if (signals.discovery) {
+    return {
+      canonicalLane: CANONICAL_LANE_DISCOVERY,
+      packageLane: PACKAGE_LANE_DISCOVERY,
+      reason: 'Lateral analysis, exploratory framing, or route selection is pre-registered.',
+    };
+  }
   if (signals.scenario) {
     return {
       canonicalLane: CANONICAL_LANE_SCENARIO,

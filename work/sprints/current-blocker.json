@@ -1,29 +1,61 @@
 {
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
-  "sprint": "none",
-  "package": "none",
-  "status": "none",
-  "lane": "none",
+  "sprint": "work/sprints/active-2026-q2-workflow-leverage-rebalance.md",
+  "package": "work/packages/active-20260525-epic-package-construct.md",
+  "status": "active",
+  "lane": "lightweight-maintenance",
   "scenario": "none",
   "artifact": "none",
   "playback": "none",
-  "owner": "none",
-  "boundary": "none",
-  "dominantReason": "none",
-  "currentState": "No active work package. Start a new package when implementation resumes.",
-  "nextAction": "Create or activate one focused package for the next executable concern.",
-  "proof": [],
-  "writeScope": [],
+  "owner": "workflow-steering",
+  "boundary": "package-kinds-and-closure-grammar",
+  "dominantReason": "anti-fragmentation-structural-change",
+  "currentState": "Sibling leaves (e.g. 10+ `*-modularization-*` packages) close atomically but the set has no retrospective. Theory-ledger updates are ~1% of closed packages because every leaf is judged mechanical in isolation.",
+  "nextAction": "Introduce an `epic` package kind that owns a set of sibling leaves under one causal question and one discriminator. Leaves cite the parent and skip theory-ledger ceremony; the epic-close step requires a retrospective answering 'what surprised us since lane-pick?'.",
+  "proof": [
+    "node scripts/work-tracker.js --kind epic --dry-run work/packages/todo-20260525-epic-package-construct.md",
+    "npm run work:validate -- --pre-impl work/packages/todo-20260525-epic-package-construct.md",
+    "git diff --check -- work/RULES.md work/templates scripts/work-tracker.js"
+  ],
+  "writeScope": [
+    "work/RULES.md",
+    "work/templates/epic-package.md",
+    "work/templates/work-package-template.md",
+    "scripts/work-tracker.js",
+    "work/packages/active-20260525-epic-package-construct.md"
+  ],
   "handoffFiles": [],
   "generatedFiles": [
-    "work/sprints/current-blocker.json",
-    "work/sprints/current-blocker.md"
+    ".kiro/steering/llm/governance.md",
+    ".kiro/steering/llm/rules.json",
+    ".kiro/steering/llm/manifest.json"
   ],
   "candidateRuntimeFiles": [],
-  "commitScope": [],
+  "commitScope": [
+    "work/RULES.md",
+    "work/templates/epic-package.md",
+    "work/templates/work-package-template.md",
+    "scripts/work-tracker.js",
+    ".kiro/steering/llm/governance.md",
+    ".kiro/steering/llm/rules.json",
+    ".kiro/steering/llm/manifest.json",
+    "work/packages/done-20260525-epic-package-construct.md",
+    "work/packages/active-20260525-epic-package-construct.md"
+  ],
   "touchedFiles": [],
-  "modelFit": {},
+  "theoryLedgerRefs": [],
+  "modelFit": {
+    "packageClass": "bounded-implementation",
+    "intendedMinimumModel": "gpt-5.3-codex-spark",
+    "scopeShape": "leaf-slice",
+    "outputProfile": "medium",
+    "ambiguityScore": 1,
+    "escalationTriggers": [
+      "owned files expand beyond this package",
+      "a frozen decision must be reopened"
+    ]
+  },
   "representativeResidual": {},
   "causalGovernance": {},
   "scenarioCausalClosure": {},
@@ -31,7 +63,13 @@
   "experimentOutcome": {},
   "rerunDecision": {},
   "classificationEfficiency": {},
-  "architectureDecisionGate": {},
-  "predecessor": null,
-  "theoryLedgerRefs": []
+  "architectureDecisionGate": {
+    "status": "not-required",
+    "trigger": "none",
+    "triggerEvidence": [],
+    "choices": [],
+    "selectedChoice": null,
+    "nextAction": "No architecture decision gate is required for this package."
+  },
+  "predecessor": null
 }

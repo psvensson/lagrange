@@ -1,3 +1,4 @@
+import fsSync from 'node:fs';
 import {CAUSAL_DECISION_CONTRACT_INVALID_CONTENT, CAUSAL_DECISION_CONTRACT_OSCILLATION_METADATA, CAUSAL_DECISION_CONTRACT_VALID_CONTENT, CAUSAL_GOVERNANCE_INVALID_METADATA, CAUSAL_GOVERNANCE_MISSING_METADATA, CAUSAL_GOVERNANCE_VALID_METADATA, CLASSIFICATION_EFFICIENCY_VALID_METADATA, CLASSIFICATION_ONLY_FAST_PATH_METADATA, CLASSIFICATION_ONLY_WITH_IMPLEMENTATION_SCOPE_METADATA, CORE_LOGIC_BRIEF_GENERIC_CONTENT, CORE_LOGIC_BRIEF_INCOMPLETE_CONTENT, CORE_LOGIC_BRIEF_NOT_NEEDED_CONTENT, CORE_LOGIC_BRIEF_VALID_CONTENT, DECISION_EXPERIMENT_GATE_INVALID_CONTENT, DECISION_EXPERIMENT_GATE_VALID_CONTENT, FIX_AGENT_ID, IMPLEMENTATION_AGENT_ID, LANE_BOUNDED_EXPERIMENT, LANE_CAUSAL_ESCALATION, LANE_DIAGNOSTIC_CLASSIFICATION, LANE_EXPERIMENT, LANE_LIGHTWEIGHT_MAINTENANCE, LANE_MECHANICAL_MAINTENANCE, LANE_READ_REVIEW_DOC_ONLY, LANE_RUNTIME_OWNER_BOUNDARY, LANE_SINGLE_FILE_RUNTIME, LANE_TEST_ONLY_PROOF, MODEL_FIT_INCOMPLETE_SPARK_SAFE_CONTENT, MODEL_FIT_MISSING_CONTENT, MODEL_FIT_VALID_SPARK_SAFE_CONTENT, REPRESENTATIVE_RESIDUAL_INVALID_METADATA, REPRESENTATIVE_RESIDUAL_MISSING_METADATA, REPRESENTATIVE_RESIDUAL_VALID_METADATA, RERUN_DECISION_VALID_METADATA, REVIEW_AGENT_ID, SCENARIO_CAUSAL_CLOSURE_INVALID_METADATA, SCENARIO_CAUSAL_CLOSURE_MISSING_METADATA, SCENARIO_CAUSAL_CLOSURE_VALID_METADATA, SPRINT_STRATEGY_BRIEF_INCOMPLETE_CONTENT, SPRINT_STRATEGY_BRIEF_VALID_CONTENT, TEST_COMMIT_SHA, TEST_PUSH_TARGET, TEST_THEORY_LEDGER_REF, WORK_TRACKER_ACTIVE_DOCTOR_FILE, WORK_TRACKER_ACTIVE_STATUS, WORK_TRACKER_ATTEMPT_LEDGER_BAD_CONTENT, WORK_TRACKER_ATTEMPT_LEDGER_CLEAN_CONTENT, WORK_TRACKER_ATTEMPT_LEDGER_CODEX_NAMED_AGENT_CONTENT, WORK_TRACKER_ATTEMPT_LEDGER_GENERIC_IDENTITY_CONTENT, WORK_TRACKER_ATTEMPT_LEDGER_NOT_NEEDED_CONTENT, WORK_TRACKER_ATTEMPT_LEDGER_OPEN_PARTIAL_CONTENT, WORK_TRACKER_ATTEMPT_LEDGER_PARTIAL_CONTENT, WORK_TRACKER_ATTEMPT_LEDGER_SUPERSEDED_CONTENT, WORK_TRACKER_COMBINED_PROGRESS_ATTEMPT_LEDGER_CONTENT, WORK_TRACKER_COMBINED_PROGRESS_ATTEMPT_LEDGER_LOCAL_RUNTIME_CONTENT, WORK_TRACKER_COMMIT_LEDGER_LEGACY_VALID_CONTENT, WORK_TRACKER_COMMIT_LEDGER_PENDING_CONTENT, WORK_TRACKER_COMMIT_LEDGER_TEMPLATE_CONTENT, WORK_TRACKER_COMMIT_LEDGER_VALID_CONTENT, WORK_TRACKER_CURRENT_BLOCKER_MARKDOWN, WORK_TRACKER_DOCTOR_CONTENT, WORK_TRACKER_DONE_STATUS, WORK_TRACKER_DONE_TEST_FILE, WORK_TRACKER_EXECUTION_EVIDENCE_CLEAN_CONTENT, WORK_TRACKER_EXECUTION_EVIDENCE_FIVE_FIELD_CONTENT, WORK_TRACKER_EXECUTION_EVIDENCE_OPEN_CONTENT, WORK_TRACKER_EXECUTION_EVIDENCE_UNVALIDATED_CONTENT, WORK_TRACKER_EXECUTION_EVIDENCE_VERIFIED_CONTENT, WORK_TRACKER_EXECUTION_EVIDENCE_VERIFIED_NO_CHANGES_CONTENT, WORK_TRACKER_EXECUTION_EVIDENCE_WITH_AGENT_CONTENT, WORK_TRACKER_FUTURE_DONE_STRICT_CONTENT, WORK_TRACKER_FUTURE_DONE_TEST_FILE, WORK_TRACKER_LEDGER_AMBIGUOUS_REVIEW_NOT_NEEDED_CONTENT, WORK_TRACKER_LEDGER_BAD_NOT_NEEDED_CONTENT, WORK_TRACKER_LEDGER_CHECKED_PENDING_CONTENT, WORK_TRACKER_LEDGER_CHECKED_TEMPLATE_CONTENT, WORK_TRACKER_LEDGER_CLEAN_CONTENT, WORK_TRACKER_LEDGER_FIRST_PACKAGE_CONTENT, WORK_TRACKER_LEDGER_FIXES_REQUIRED_CONTENT, WORK_TRACKER_LEDGER_LEGACY_DONE_CONTENT, WORK_TRACKER_LEDGER_LOCAL_IMPLEMENTATION_CONTENT, WORK_TRACKER_LEDGER_LOCAL_PATH_CONTENT, WORK_TRACKER_LEDGER_LOCAL_PATH_TEST_FILE, WORK_TRACKER_LEDGER_MANUAL_FIX_NOTE_CONTENT, WORK_TRACKER_LEDGER_NO_AGENT_ID_CONTENT, WORK_TRACKER_LEDGER_NO_LEDGER_CONTENT, WORK_TRACKER_LEDGER_NUMBERED_PRE_IMPL_CONTENT, WORK_TRACKER_LEDGER_OPEN_CONTENT, WORK_TRACKER_LEDGER_PRE_IMPL_CONTENT, WORK_TRACKER_LEDGER_REVIEW_FIXED_METADATA_CONTENT, WORK_TRACKER_LEDGER_REVIEW_FIXED_RUNTIME_CONTENT, WORK_TRACKER_LEDGER_REVIEW_FIXED_WRONG_AGENT_CONTENT, WORK_TRACKER_LEDGER_TEST_FILE, WORK_TRACKER_LEDGER_UNAVAILABLE_CONTENT, WORK_TRACKER_LEDGER_UNVALIDATED_IMPLEMENTATION_CONTENT, WORK_TRACKER_PROGRESS_LEDGER_BAD_CONTENT, WORK_TRACKER_PROGRESS_LEDGER_CLEAN_CONTENT, WORK_TRACKER_PROGRESS_LEDGER_NOT_NEEDED_CONTENT, WORK_TRACKER_PROGRESS_LEDGER_OPEN_CONTENT, assert, buildCurrentBlockerPayload, buildPackageDoctorLines, describe, findActivePackageLinkInSprint, isGeneratedCurrentBlockerPath, it, metadataHasClassificationOnlyOutcome, metadataRequiresSubagentSequencing, metadataUsesClassificationOnlyFastPath, metadataUsesPureClassificationFastPath, path, renderCurrentBlockerMarkdown, renderCurrentEdgeCardSection, resolveSprintPackageReference, upsertSprintCurrentEdgeCard, validateActiveWorkReferences, validateCausalDecisionContract, validateCausalGovernanceContract, validateClassificationEfficiencyContract, validateCommitAndPushLedger, validateContractProofRequirement, validateCoreLogicBrief, validateCurrentBlockerPayloadFreshness, validateCurrentBlockerSnapshot, validateDecisionExperimentGate, validateExecutionEvidenceLedger, validateExperimentOutcomeContract, validateFrontierOscillationContract, validateModelFitContract, validateObservablePredictionContract, validatePackageMetadataShape, validateProbePackageContract, validateRepresentativeResidualContract, validateRequiredPreImplProbeContract, validateRerunDecisionContract, validateSameFrontierStopContract, validateScenarioCausalClosureContract, validateScenarioFrontierOwnerBoundaryContract, validateSprintCurrentEdgeCard, validateSprintStrategyBrief, validateSubagentAttemptLedger, validateSubagentProgressLedger, validateSubagentSequencingLedger} from './work-tracker-subagent-ledger-fixtures.js';
 
 describe('work tracker package doctor', () => {
@@ -467,5 +468,272 @@ describe('work tracker package doctor', () => {
     assert.match(rendered, /## Fix Dry Run/u);
     assert.match(rendered, /work:package:schema/u);
     assert.match(rendered, /analyze:topology-convergence/u);
+  });
+
+  it('enforces discovery lane writeScope rules', () => {
+    // Valid discovery package
+    const validContent = WORK_TRACKER_DOCTOR_CONTENT.replace(
+      '"lane": "lightweight-maintenance"',
+      '"lane": "discovery"'
+    ).replace(
+      '"writeScope": [\n    "scripts/work-tracker.js"\n  ]',
+      '"writeScope": [\n    "work/packages/active-20260525-discovery-lane-first-class.md"\n  ]'
+    );
+    const reportValid = buildPackageDoctorLines(
+      'work/packages/active-20260525-discovery-lane-first-class.md',
+      validContent
+    );
+    assert.deepEqual(reportValid.errors, []);
+
+    // Invalid discovery package touching src/
+    const invalidContent = WORK_TRACKER_DOCTOR_CONTENT.replace(
+      '"lane": "lightweight-maintenance"',
+      '"lane": "discovery"'
+    );
+    const reportInvalid = buildPackageDoctorLines(
+      'work/packages/active-20260525-discovery-lane-first-class.md',
+      invalidContent
+    );
+    assert.match(
+      reportInvalid.errors.join('\n'),
+      /discovery packages must restrict writeScope/u
+    );
+  });
+
+  it('enforces discoveryRef rule for high-ambiguity runtime packages', () => {
+    // Clean up or write fixture files synchronously in work/packages/
+    const doneDiscoveryPath = 'work/packages/done-fixture-test-discovery.md';
+    const activeDiscoveryPath = 'work/packages/active-fixture-test-discovery.md';
+    const doneRuntimePath = 'work/packages/done-fixture-test-runtime.md';
+
+    const discoveryMetadata = {
+      schema: 'work-package-v2',
+      status: 'done',
+      intent: {
+        opened: '2026-05-25',
+        lane: 'discovery',
+        scenario: 'none',
+        owner: 'workflow_tooling_owner',
+        boundary: 'package_doctor',
+        currentState: 'done',
+        nextAction: 'none'
+      },
+      scope: {
+        writeScope: ['work/packages/done-fixture-test-discovery.md'],
+        handoffFiles: [],
+        generatedFiles: [],
+        candidateRuntimeFiles: [],
+        commitScope: ['work/packages/done-fixture-test-discovery.md']
+      },
+      gates: {
+        whyHighestLeverageNow: 'essential',
+        stabilityCredit: 'local-proof-only'
+      },
+      modelFit: {
+        packageClass: 'discovery-framing',
+        intendedMinimumModel: 'gpt-5.3-codex-spark',
+        scopeShape: 'leaf-slice',
+        outputProfile: 'medium'
+      }
+    };
+
+    fsSync.writeFileSync(
+      doneDiscoveryPath,
+      `# Done Discovery\n\n<!-- work-package\n${JSON.stringify(discoveryMetadata, null, 2)}\n-->`
+    );
+
+    // High ambiguity runtime package metadata base
+    const baseRuntimeMetadata = {
+      schema: 'work-package-v2',
+      status: 'active',
+      intent: {
+        opened: '2026-05-25',
+        lane: 'runtime-owner-boundary',
+        scenario: 'none',
+        owner: 'workflow_tooling_owner',
+        boundary: 'package_doctor',
+        currentState: 'active',
+        nextAction: 'implement'
+      },
+      scope: {
+        writeScope: ['src/rebalancer/operation-workflow-owner.js'],
+        handoffFiles: [],
+        generatedFiles: [],
+        candidateRuntimeFiles: [],
+        commitScope: ['src/rebalancer/operation-workflow-owner.js']
+      },
+      gates: {
+        whyHighestLeverageNow: 'essential',
+        stabilityCredit: 'local-proof-only'
+      },
+      modelFit: {
+        packageClass: 'runtime-owner-boundary',
+        intendedMinimumModel: 'gpt-5.3-codex',
+        scopeShape: 'owner-boundary-contraction',
+        outputProfile: 'medium',
+        ambiguityScore: 2
+      }
+    };
+
+    const getPackageContent = (meta) => {
+      return [
+        '# High Ambiguity Runtime Package',
+        '',
+        '<!-- work-package',
+        JSON.stringify(meta, null, 2),
+        '-->',
+        '',
+        '## Model Fit',
+        '',
+        '- Package class: `runtime-owner-boundary`',
+        '- Intended minimum model: `gpt-5.3-codex`',
+        '- Scope shape: `owner-boundary-contraction`',
+        '- Output profile: `medium`',
+        '- Owned files: `src/rebalancer/operation-workflow-owner.js`',
+        '- Forbidden files: `test/`',
+        '- Frozen decisions: active package metadata requires the section.',
+        '- Escalation triggers: owned files expand beyond tracker scripts.',
+        '- Focused proof: `npm test`',
+        '',
+        '## Core Logic Brief',
+        '',
+        '- Canonical outcome: workflow reconciles retry.',
+        '- Inputs/signals: rebalancer state.',
+        '- State model or invariant: transition is atomic.',
+        '- Non-goals and forbidden interpretations: no timeout relaxation.',
+        '- Proof mapping: npm test proves it.',
+        '- Wrong-slice trigger: none.',
+        '',
+        '## Causal Decision Contract',
+        '',
+        '| Signal | Normalized value | Owner interpretation | Emitted outcome | Expected delta | Disproof probe |',
+        '| --- | --- | --- | --- | --- | --- |',
+        '| route owner | operation_workflow_owner | decidir | retry-scheduled | dispatch debt reduces | npm test |',
+        '',
+        '- Anti-symptom rationale: Direct fix.',
+        '- Falsifying focused probe: npm test',
+        '- Competing explanations: none.',
+        '- Systemic interaction scan: check lifecycle.',
+        '- Ping-pong stop rule: none.',
+        '- Oscillation guard: none.',
+        '',
+        '## Decision Experiment Gate',
+        '',
+        '- Decision question: retry fact moves?',
+        '- Architecture review: yes.',
+        '- Competing hypotheses: none.',
+        '- Pre-edit focused probe: npm test',
+        '- Success metrics: count reduces.',
+        '- Kill rule: stop if unchanged.',
+        '- Representative rerun: npm test',
+        '',
+        '## Subagent Sequencing Ledger',
+        '',
+        '- [x] Review subagent recorded: `not-needed` (`first-package-in-sprint`).',
+        '- [x] Fix subagent recorded or explicitly not needed: `not-needed`.',
+        '- [x] Implementation subagent recorded:',
+        `      Agent Implement (${IMPLEMENTATION_AGENT_ID}) implemented`,
+        '      `work/packages/active-high-ambiguity.md`; parent revalidated focused proof: yes.',
+        ''
+      ].join('\n');
+    };
+
+    // Scenario 1: ambiguityScore >= 2 but no discoveryRef
+    const report1 = buildPackageDoctorLines(
+      'work/packages/active-high-ambiguity.md',
+      getPackageContent(baseRuntimeMetadata),
+      { phase: 'pre-impl' }
+    );
+    assert.match(
+      report1.errors.join('\n'),
+      /high-ambiguity runtime package.*must cite a discovery or experiment predecessor/u
+    );
+
+    // Scenario 2: cites non-existent file
+    const metaWithMissingRef = {
+      ...baseRuntimeMetadata,
+      intent: {
+        ...baseRuntimeMetadata.intent,
+        discoveryRef: 'done-missing-file.md'
+      }
+    };
+    const report2 = buildPackageDoctorLines(
+      'work/packages/active-high-ambiguity.md',
+      getPackageContent(metaWithMissingRef),
+      { phase: 'pre-impl' }
+    );
+    assert.match(
+      report2.errors.join('\n'),
+      /refers to non-existent file/u
+    );
+
+    // Scenario 3: cites non-closed package (active)
+    const activeDiscoveryMetadata = { ...discoveryMetadata, status: 'active' };
+    fsSync.writeFileSync(
+      activeDiscoveryPath,
+      `# Active Discovery\n\n<!-- work-package\n${JSON.stringify(activeDiscoveryMetadata, null, 2)}\n-->`
+    );
+    const metaWithActiveRef = {
+      ...baseRuntimeMetadata,
+      intent: {
+        ...baseRuntimeMetadata.intent,
+        discoveryRef: 'active-fixture-test-discovery.md'
+      }
+    };
+    const report3 = buildPackageDoctorLines(
+      'work/packages/active-high-ambiguity.md',
+      getPackageContent(metaWithActiveRef),
+      { phase: 'pre-impl' }
+    );
+    assert.match(
+      report3.errors.join('\n'),
+      /must refer to a CLOSED \(done\) package/u
+    );
+
+    // Scenario 4: cites done package but with non-discovery/non-experiment lane (runtime)
+    const doneRuntimeMetadata = { ...discoveryMetadata, lane: 'runtime-owner-boundary' };
+    fsSync.writeFileSync(
+      doneRuntimePath,
+      `# Done Runtime\n\n<!-- work-package\n${JSON.stringify(doneRuntimeMetadata, null, 2)}\n-->`
+    );
+    const metaWithRuntimeRef = {
+      ...baseRuntimeMetadata,
+      intent: {
+        ...baseRuntimeMetadata.intent,
+        discoveryRef: 'done-fixture-test-runtime.md'
+      }
+    };
+    const report4 = buildPackageDoctorLines(
+      'work/packages/active-high-ambiguity.md',
+      getPackageContent(metaWithRuntimeRef),
+      { phase: 'pre-impl' }
+    );
+    assert.match(
+      report4.errors.join('\n'),
+      /must refer to a discovery or experiment package/u
+    );
+
+    // Scenario 5: cites valid done discovery package -> PASS
+    const metaWithValidRef = {
+      ...baseRuntimeMetadata,
+      intent: {
+        ...baseRuntimeMetadata.intent,
+        discoveryRef: 'done-fixture-test-discovery.md'
+      }
+    };
+    const report5 = buildPackageDoctorLines(
+      'work/packages/active-high-ambiguity.md',
+      getPackageContent(metaWithValidRef),
+      { phase: 'pre-impl' }
+    );
+    const discoveryRefErrors = report5.errors.filter(err => err.includes('discoveryRef'));
+    assert.deepEqual(discoveryRefErrors, []);
+
+    // Clean up synchronous fixture files
+    try {
+      fsSync.unlinkSync(doneDiscoveryPath);
+      fsSync.unlinkSync(activeDiscoveryPath);
+      fsSync.unlinkSync(doneRuntimePath);
+    } catch (e) {}
   });
 });
