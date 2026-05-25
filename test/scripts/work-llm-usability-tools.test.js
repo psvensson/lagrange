@@ -7,6 +7,7 @@ import {buildPriorityRecoveryResiduals} from '../../scripts/analyze-priority-rec
 import {buildSubagentPrompt} from '../../scripts/work-subagent-prompt.js';
 import {buildSubagentNextLines} from '../../scripts/work-subagent-next.js';
 import {buildPackageContent, runCli} from '../../scripts/work-package-new.js';
+import {parsePackageMetadata} from '../../scripts/work-tracker.js';
 import {
   buildRouteAfterRerunLines,
 } from '../../scripts/work-package-route-after-rerun.js';
@@ -38,6 +39,14 @@ const TEST_TITLE = 'LLM Usability Test Package';
 const TEST_SLUG = 'llm-usability-test';
 const FIXTURE_PATH =
   'test/scripts/__fixtures__/topology-convergence/active-gate-snapshot-partial-residual.fixture.json';
+
+function parseRawPackageMetadata(content) {
+  const match = /<!-- work-package\n([\s\S]*?)\n-->/u.exec(content);
+  if (!match) {
+    throw new Error('package metadata block was not rendered');
+  }
+  return JSON.parse(match[1]);
+}
 
 async function writeTempPackage() {
   await fs.mkdir(TEMP_PACKAGE_ROOT, {recursive: true});
@@ -167,6 +176,36 @@ test('package scaffolder pre-fills Model Fit from schema defaults', async (t) =>
   t.match(content, /work:scenario-route/u);
   t.match(content, /work:evidence-summary/u);
   t.match(content, /ad hoc `jq`/u);
+});
+
+test('package scaffolder emits nested work-package-v2 metadata', async (t) => {
+  const content = await buildPackageContent({
+    'title': TEST_TITLE,
+    'slug': TEST_SLUG,
+    'lane': 'lightweight-maintenance',
+    'owner': 'workflow_tooling_owner',
+    'boundary': 'llm_usability_handoff',
+    'dominant-reason': 'test_package',
+    'next-action': 'Create a package.',
+    'proof': ['git diff --check'],
+    'write-scope': ['scripts/work-package-new.js'],
+    'ledger': TEMP_LEDGER_PATH,
+  });
+  const rawMetadata = parseRawPackageMetadata(content);
+  const normalizedMetadata = parsePackageMetadata(
+    content,
+    'work/packages/todo-20260512-llm-usability-test.md',
+  );
+
+  t.equal(rawMetadata.schema, 'work-package-v2');
+  t.notOk(Object.hasOwn(rawMetadata, 'lane'));
+  t.notOk(Object.hasOwn(rawMetadata, 'writeScope'));
+  t.equal(rawMetadata.intent.lane, 'lightweight-maintenance');
+  t.same(rawMetadata.scope.writeScope, ['scripts/work-package-new.js']);
+  t.equal(rawMetadata.modelFit.ambiguityScore, 1);
+  t.ok(rawMetadata.modelFitSplit);
+  t.equal(normalizedMetadata.lane, 'lightweight-maintenance');
+  t.same(normalizedMetadata.writeScope, ['scripts/work-package-new.js']);
 });
 
 test('package scaffolder adds Core Logic Brief for runtime lanes', async (t) => {

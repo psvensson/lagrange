@@ -2592,6 +2592,69 @@ function validateSparkSafeModelFit(content, filePath, fields) {
 }
 
 export function validateModelFitContract(content, filePath, options = {}) {
+  const metadata = options.metadata;
+  if (metadata && metadata.modelFit) {
+    const fields = {
+      [MODEL_FIT_PACKAGE_CLASS_LABEL]: metadata.modelFit.packageClass,
+      [MODEL_FIT_INTENDED_MINIMUM_MODEL_LABEL]:
+        metadata.modelFit.intendedMinimumModel,
+      [MODEL_FIT_SCOPE_SHAPE_LABEL]: metadata.modelFit.scopeShape,
+      [MODEL_FIT_OUTPUT_PROFILE_LABEL]: metadata.modelFit.outputProfile,
+    };
+    const errors = [
+      ...validateModelFitField(
+        filePath,
+        MODEL_FIT_PACKAGE_CLASS_LABEL,
+        fields[MODEL_FIT_PACKAGE_CLASS_LABEL],
+      ),
+      ...validateModelFitField(
+        filePath,
+        MODEL_FIT_INTENDED_MINIMUM_MODEL_LABEL,
+        fields[MODEL_FIT_INTENDED_MINIMUM_MODEL_LABEL],
+      ),
+      ...validateModelFitField(
+        filePath,
+        MODEL_FIT_SCOPE_SHAPE_LABEL,
+        fields[MODEL_FIT_SCOPE_SHAPE_LABEL],
+      ),
+      ...validateModelFitField(
+        filePath,
+        MODEL_FIT_OUTPUT_PROFILE_LABEL,
+        fields[MODEL_FIT_OUTPUT_PROFILE_LABEL],
+      ),
+    ];
+    if (
+      fields[MODEL_FIT_OUTPUT_PROFILE_LABEL] &&
+      !VALID_OUTPUT_PROFILES.includes(fields[MODEL_FIT_OUTPUT_PROFILE_LABEL])
+    ) {
+      errors.push(
+        `${filePath}: metadata.modelFit.outputProfile must be one ` +
+          `of ${VALID_OUTPUT_PROFILES.join(', ')}.`,
+      );
+    }
+    if (options[LEDGER_VALIDATION_REQUIRES_LEDGER]) {
+      const ambiguityScore = metadata.modelFit.ambiguityScore;
+      if (ambiguityScore === undefined) {
+        errors.push(
+          `${filePath}: metadata.modelFit.ambiguityScore is required for active packages ` +
+            `to guard against high-entropy subagent execution loops.`
+        );
+      } else {
+        const score = Number(ambiguityScore);
+        if (!Number.isInteger(score) || score < 1 || score > 5) {
+          errors.push(
+            `${filePath}: metadata.modelFit.ambiguityScore must be an integer between 1 and 5 inclusive.`
+          );
+        } else if (score > 3 && options.phase !== VALIDATION_PHASE_ENTRY) {
+          errors.push(
+            `${filePath}: metadata.modelFit.ambiguityScore is ${score} (> 3), which requires ` +
+              `escalation to a stronger model or human split before implementation.`
+          );
+        }
+      }
+    }
+    return errors;
+  }
   const section = extractModelFitSection(content);
   if (!section) {
     return options[LEDGER_VALIDATION_REQUIRES_LEDGER] ?
@@ -2674,29 +2737,6 @@ export function validateModelFitContract(content, filePath, options = {}) {
   }
   if (isSparkSafeModelFit(fields)) {
     errors.push(...validateSparkSafeModelFit(content, filePath, fields));
-  }
-  const metadata = options.metadata;
-  const phase = options.phase;
-  if (metadata && metadata.modelFit && options[LEDGER_VALIDATION_REQUIRES_LEDGER]) {
-    const ambiguityScore = metadata.modelFit.ambiguityScore;
-    if (ambiguityScore === undefined) {
-      errors.push(
-        `${filePath}: metadata.modelFit.ambiguityScore is required for active packages ` +
-        `to guard against high-entropy subagent execution loops.`
-      );
-    } else {
-      const score = Number(ambiguityScore);
-      if (!Number.isInteger(score) || score < 1 || score > 5) {
-        errors.push(
-          `${filePath}: metadata.modelFit.ambiguityScore must be an integer between 1 and 5 inclusive.`
-        );
-      } else if (score > 3 && phase !== VALIDATION_PHASE_ENTRY) {
-        errors.push(
-          `${filePath}: metadata.modelFit.ambiguityScore is ${score} (> 3), which requires ` +
-          `escalation to a stronger model or human split before implementation.`
-        );
-      }
-    }
   }
   return errors;
 }
@@ -5091,12 +5131,23 @@ function replacePackageMetadata(content, metadata) {
     };
 
     const v2Keys = {
-      intent: ['opened', 'closed', 'lane', 'scenario', 'artifact', 'playback', 'owner', 'boundary', 'currentState', 'nextAction', 'dominantReason', 'discoveryRef', 'epicRef'],
+      intent: ['opened', 'closed', 'lane', 'scenario', 'artifact', 'playback', 'owner', 'boundary', 'currentState', 'nextAction', 'dominantReason', 'discoveryRef', 'epicRef', 'predecessor', 'successor'],
       scope: ['writeScope', 'handoffFiles', 'generatedFiles', 'candidateRuntimeFiles', 'commitScope'],
       gates: ['whyHighestLeverageNow', 'stabilityCredit', 'representativeRerunCadence', 'codeQualityAdmission', 'companionGatesFile'],
-      modelFit: ['packageClass', 'intendedMinimumModel', 'scopeShape', 'outputProfile', 'escalationTriggers'],
+      modelFit: ['packageClass', 'intendedMinimumModel', 'scopeShape', 'outputProfile', 'escalationTriggers', 'ambiguityScore'],
       execution: ['evidence', 'theoryLedgerRefs']
     };
+    const nestedV2FieldKeys = new Set([
+      'schema',
+      'status',
+      'intent',
+      'scope',
+      'gates',
+      'modelFit',
+      'execution',
+      'proof',
+      ...Object.values(v2Keys).flat(),
+    ]);
 
     for (const [section, keys] of Object.entries(v2Keys)) {
       for (const k of keys) {
@@ -5113,19 +5164,9 @@ function replacePackageMetadata(content, metadata) {
       metadataToSave.execution.proof.commands = metadata.proof;
     }
 
-    for (const key of [
-      'causalGovernance',
-      'scenarioCausalClosure',
-      'representativeResidual',
-      'observablePrediction',
-      'experimentOutcome',
-      'rerunDecision',
-      'classificationEfficiency',
-      'architectureDecisionGate',
-      'predecessor'
-    ]) {
-      if (metadata[key] !== undefined) {
-        metadataToSave[key] = metadata[key];
+    for (const [key, value] of Object.entries(metadata)) {
+      if (!nestedV2FieldKeys.has(key)) {
+        metadataToSave[key] = value;
       }
     }
   }
@@ -5464,6 +5505,15 @@ export function validatePackageMetadataShape(filePath, fileStatus, metadata) {
   if (metadata.schema !== 'work-package-v1' && metadata.schema !== 'work-package-v2') {
     errors.push(
       `${filePath}: metadata schema must be work-package-v1 or work-package-v2.`,
+    );
+  }
+  if (
+    (fileStatus === STATUS_ACTIVE || fileStatus === STATUS_TODO) &&
+    metadata.schema !== WORK_PACKAGE_METADATA_SCHEMA
+  ) {
+    errors.push(
+      `${filePath}: ${fileStatus} packages must use ${WORK_PACKAGE_METADATA_SCHEMA}; ` +
+        'work-package-v1 is accepted only for historical closed packages.',
     );
   }
   if (metadata.status !== fileStatus) {
@@ -8645,18 +8695,71 @@ async function listWorkMarkdownFiles() {
   ];
 }
 
-async function rewriteWorkReferences(oldPackagePath, newPackagePath) {
+export async function planWorkReferenceRewrites(oldPackagePath, newPackagePath) {
   const oldFileName = path.basename(oldPackagePath);
-  const newFileName = path.basename(newPackagePath);
   const files = await listWorkMarkdownFiles();
+  const oldRelativePath = normalizeRelativePath(oldPackagePath);
+  const newRelativePath = normalizeRelativePath(newPackagePath);
+  const rewriteFiles = [];
   for (const filePath of files) {
-    if (filePath === newPackagePath) {
+    const relativePath = normalizeRelativePath(filePath);
+    if (relativePath === oldRelativePath || relativePath === newRelativePath) {
       continue;
     }
     const content = await readTextFile(filePath);
     if (!content.includes(oldFileName)) {
       continue;
     }
+    rewriteFiles.push(filePath);
+  }
+  return rewriteFiles;
+}
+
+function normalizeScopePaths(paths = []) {
+  return paths.map((filePath) =>
+    normalizeRelativePath(path.resolve(process.cwd(), filePath)));
+}
+
+export async function validateReferenceRewriteScope(
+  rewriteFiles,
+  metadata,
+  packagePath,
+  targetPath,
+) {
+  const allowed = new Set([
+    normalizeRelativePath(packagePath),
+    normalizeRelativePath(targetPath),
+    CURRENT_BLOCKER_MARKDOWN_PATH,
+    ...normalizeScopePaths(metadata?.writeScope || []),
+    ...normalizeScopePaths(metadata?.generatedFiles || []),
+    ...normalizeScopePaths(metadata?.commitScope || []),
+  ]);
+  try {
+    const activeSprintFile = await findActiveSprintFile();
+    if (activeSprintFile) {
+      allowed.add(normalizeRelativePath(activeSprintFile));
+    }
+  } catch {
+    // Package moves can still be scoped safely in repos without an active sprint.
+  }
+
+  const outsideScope = rewriteFiles
+    .map((filePath) => normalizeRelativePath(filePath))
+    .filter((filePath) => !allowed.has(filePath));
+  if (outsideScope.length > NUM_ZERO) {
+    throw new Error(
+      'Package move would rewrite references outside target package scope: ' +
+        outsideScope.join(', ') +
+        '. Add these files to writeScope/commitScope or split the reference update.',
+    );
+  }
+}
+
+async function rewriteWorkReferences(oldPackagePath, newPackagePath, rewriteFiles) {
+  const oldFileName = path.basename(oldPackagePath);
+  const newFileName = path.basename(newPackagePath);
+  for (const filePath of rewriteFiles) {
+    const content = await readTextFile(filePath);
     await writeTextFile(filePath, content.split(oldFileName).join(newFileName));
   }
 }
@@ -8847,32 +8950,51 @@ async function movePackageCommand(args, fallbackTargetStatus, requiresSuccessor)
   }
   const targetPath = buildPackageTargetPath(packagePath, targetStatus);
   const metadata = parsePackageMetadata(content, normalizeRelativePath(packagePath));
+  const targetMetadata = metadata ? {
+    ...metadata,
+    status: targetStatus,
+    ...(targetStatus === STATUS_DONE || targetStatus === STATUS_SUPERSEDED ?
+      {closed: metadata.closed || new Date().toISOString().slice(
+        NUM_ZERO,
+        DATE_SLICE_END,
+      ),
+      [METADATA_COMMIT_AND_PUSH_LEDGER_REQUIRED]: true} :
+      {}),
+  } : null;
   const successorPath = successor ? normalizeRelativePath(normalizeCliPath(successor)) : null;
+  if (successorPath && targetMetadata) {
+    targetMetadata.successor = successorPath;
+  }
   const migrationSuccessor = requiresSuccessor ?
     await validateMigrationSuccessorPackage(successorPath) :
     null;
+  const referenceRewritePlan = await planWorkReferenceRewrites(
+    packagePath,
+    targetPath,
+  );
   if (!args.includes(CLI_FLAG_WRITE)) {
     console.log(
       `Dry run: ${normalizeRelativePath(packagePath)} -> ${normalizeRelativePath(targetPath)}`,
     );
+    if (referenceRewritePlan.length > NUM_ZERO) {
+      console.log('Reference rewrites:');
+      for (const filePath of referenceRewritePlan) {
+        console.log(`- ${normalizeRelativePath(filePath)}`);
+      }
+    }
     if (successorPath) {
       console.log(`Successor: ${successorPath}`);
     }
     return;
   }
+  await validateReferenceRewriteScope(
+    referenceRewritePlan,
+    targetMetadata,
+    packagePath,
+    targetPath,
+  );
   let nextContent = metadata ?
-    replacePackageMetadata(content, {
-      ...metadata,
-      status: targetStatus,
-      ...(targetStatus === STATUS_DONE || targetStatus === STATUS_SUPERSEDED ?
-        {closed: metadata.closed || new Date().toISOString().slice(
-          NUM_ZERO,
-          DATE_SLICE_END,
-        ),
-        [METADATA_COMMIT_AND_PUSH_LEDGER_REQUIRED]: true} :
-        {}),
-      ...(successorPath ? {successor: successorPath} : {}),
-    }) :
+    replacePackageMetadata(content, targetMetadata) :
     content;
   if (targetStatus === STATUS_DONE || targetStatus === STATUS_SUPERSEDED) {
     nextContent = autoPopulateCommitLedgerInMarkdown(nextContent);
@@ -8890,7 +9012,7 @@ async function movePackageCommand(args, fallbackTargetStatus, requiresSuccessor)
     }
     await fs.rename(packagePath, targetPath);
   }
-  await rewriteWorkReferences(packagePath, targetPath);
+  await rewriteWorkReferences(packagePath, targetPath, referenceRewritePlan);
   if (args.includes(CLI_FLAG_TRANSACTION)) {
     await upsertSuccessorCurrentEdgeCard(migrationSuccessor);
     const regenerated = await regenerateCurrentBlockerWhenActivePackageExists();

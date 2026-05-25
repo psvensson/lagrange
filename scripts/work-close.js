@@ -48,17 +48,25 @@ async function main() {
   const relativePackagePath = path.relative(process.cwd(), packagePath);
   console.log(`Closing package: ${relativePackagePath}`);
 
-  // 1. Run closure validation
-  console.log('Running closure validation...');
+  const content = fs.readFileSync(packagePath, 'utf8');
+  if (/(?:^|\n)(?:-|\d+\.) \[ \]/u.test(content)) {
+    console.error(
+      `${relativePackagePath} still has open checklist items. ` +
+        'Close evidence checklists before running work:close.',
+    );
+    process.exit(1);
+  }
+
+  // 1. Run active package validation before the tracker validates the done target.
+  console.log('Running active package closure preflight...');
   try {
     execSync(`node scripts/work-tracker.js validate --closure ${relativePackagePath}`, { stdio: 'inherit' });
   } catch (error) {
-    console.error('Validation failed. Closure aborted.');
+    console.error('Closure preflight failed. Closure aborted.');
     process.exit(1);
   }
 
   // 2. Read package metadata to get commitScope and other details
-  const content = fs.readFileSync(packagePath, 'utf8');
   const openMarker = '<!-- work-package';
   const closeMarker = '-->';
   const openIndex = content.indexOf(openMarker);
@@ -100,6 +108,7 @@ async function main() {
     console.error('Underlying close command failed.');
     process.exit(1);
   }
+  console.log('Done-target validation passed inside work-tracker close.');
 
   // 4. Find the active sprint file
   const sprintFiles = fs.readdirSync('work/sprints');

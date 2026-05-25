@@ -7,17 +7,17 @@
   "opened": "2026-05-25",
   "lane": "experiment",
   "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-tell-tale-green-gate.report.json",
+  "artifact": "test-output/reports/rolling-restart-continue-green-20260525T000001Z.report.json",
   "playback": "none",
   "owner": "startup_active_gate_owner",
   "boundary": "snapshot_coverage",
   "dominantReason": "active_gate_timed_out",
-  "currentState": "Latest rolling-restart evidence after the resume brief routes to active_gate_snapshot_coverage with startup_active_gate_owner / snapshot_coverage / active_gate_timed_out. Priority-recovery witnesses are zero; the selected snapshot source is transport-closed with owner_reconcile_pending and snapshot_repair_deferred.",
-  "nextAction": "Run an autonomous architecture experiment to distinguish selected transport closure, owner recovery wake, repair execution, or projection refresh before another runtime patch.",
+  "currentState": "Fresh representative rolling-restart evidence no longer selects active_gate_snapshot_coverage as the first frontier. Active-gate evidence improved to forced_repair/fresh/ready/applied/proceed with snapshotCoverageNodeCount 2/5, while the first actionable frontier migrated to priority_recovery_partition_progress under operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait.",
+  "nextAction": "Close this active-gate architecture discriminator as owner-boundary migration and continue in work/packages/active-20260525-rolling-restart-workflow-progress-dispatch-chain.md.",
   "proof": [
-    "falsifier: representative routing evidence npm run work:scenario-route -- test-output/reports/rolling-restart-tell-tale-green-gate.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage",
-    "regression: topology explanation npm run analyze:topology-convergence -- test-output/reports/rolling-restart-tell-tale-green-gate.report.json --explain active_gate_snapshot_coverage",
-    "supporting: causal route proof npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-tell-tale-green-gate.report.json"
+    "falsifier: fresh representative route npm run work:scenario-route -- test-output/reports/rolling-restart-continue-green-20260525T000001Z.report.json",
+    "regression: active-gate topology explanation npm run analyze:topology-convergence -- test-output/reports/rolling-restart-continue-green-20260525T000001Z.report.json --explain active_gate_snapshot_coverage",
+    "supporting: causal route proof npm run analyze:causal-model -- test-output/reports/rolling-restart-continue-green-20260525T000001Z.report.json"
   ],
   "theoryLedgerRefs": [
     "theory-20260522-snapshot-watch-handoff-contract",
@@ -28,7 +28,8 @@
   ],
   "handoffFiles": [
     "work/packages/done-20260513-rolling-restart-resume-activation-brief.md",
-    "test-output/reports/rolling-restart-tell-tale-green-gate.report.json"
+    "test-output/reports/rolling-restart-tell-tale-green-gate.report.json",
+    "test-output/reports/rolling-restart-continue-green-20260525T000001Z.report.json"
   ],
   "generatedFiles": [
     "work/sprints/current-blocker.json",
@@ -59,46 +60,46 @@
     ],
     "ambiguityScore": 3
   },
-  "stabilityCredit": "local-proof-only",
-  "representativeRerunCadence": "architecture-stop-reason",
-  "whyHighestLeverageNow": "Latest rolling-restart evidence has zero priority-recovery witnesses and exactly one first frontier: startup_active_gate_owner / snapshot_coverage. Frontier oscillation rules require an autonomous architecture experiment before another local runtime patch.",
+  "stabilityCredit": "representative-migrated",
+  "representativeRerunCadence": "fresh-representative-rerun",
+  "whyHighestLeverageNow": "The active-gate discriminator consumed fresh representative evidence and moved the first frontier to operation_workflow_owner / workflow_progress. Continuing in the migrated owner boundary is the highest-leverage path to green rolling-restart.",
   "causalGovernance": {
-    "hypothesis": "The current active-gate snapshot coverage blocker is selected transport closure or repair-deferred owner recovery, not priority-recovery operation progress.",
-    "stopConditionCheck": "Use scenario-route, active_gate_snapshot_coverage topology explanation, and `npm run analyze:causal-model` proof before any runtime files move into write scope.",
-    "expectedCausalModelChange": "The experiment names exactly one selected snapshot refresh, owner recovery wake, repair execution, projection refresh, or architecture stop.",
-    "representativeOutcome": "architecture-gap",
-    "causalDebt": "Fresh route reports active_gate_snapshot_coverage blocked with snapshotCoverageNodeCount 1/5, active_gate_timed_out, selected_transport_closed, owner_reconcile_pending, and snapshot_repair_deferred.",
-    "crossBoundaryReview": "Startup readiness remains downstream; runtime files stay candidate-only during this experiment."
+    "hypothesis": "The active-gate snapshot coverage blocker should either select one active-gate transition or migrate when fresh representative evidence names a different first frontier.",
+    "stopConditionCheck": "Fresh route, active_gate_snapshot_coverage topology explanation, and `npm run analyze:causal-model -- test-output/reports/rolling-restart-continue-green-20260525T000001Z.report.json` proof were run before runtime promotion.",
+    "expectedCausalModelChange": "The representative route migrates away from active_gate_snapshot_coverage to priority_recovery_partition_progress under operation_workflow_owner / workflow_progress.",
+    "representativeOutcome": "migrated",
+    "causalDebt": "Fresh route reports active_gate_snapshot_coverage as downstream/degraded with snapshotCoverageNodeCount 2/5 and no repair defer, while priority_recovery_partition_progress is first with five operation_workflow_owner / workflow_progress witnesses.",
+    "crossBoundaryReview": "Startup active-gate runtime remains frozen; the executable successor is the workflow-progress dispatch-chain package."
   },
   "scenarioCausalClosure": {
-    "referenceScenarioOrProbe": "rolling-restart active-gate snapshot coverage architecture discriminator",
+    "referenceScenarioOrProbe": "rolling-restart active-gate snapshot coverage architecture discriminator after fresh representative rerun",
     "phaseChain": [
-      "latest rolling-restart route completed",
-      "priority-recovery witnesses are zero",
-      "active_gate_snapshot_coverage remains first frontier",
-      "architecture discriminator selects or rejects a runtime successor"
+      "fresh rolling-restart route completed",
+      "active-gate snapshot coverage improved to forced_repair/fresh/ready/applied/proceed",
+      "priority_recovery_partition_progress became the first frontier",
+      "workflow-progress dispatch-chain successor was opened"
     ],
-    "currentFirstFrontier": "active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out",
+    "currentFirstFrontier": "priority_recovery_partition_progress / operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait",
     "knownDownstreamBlockers": [
       "startup_readiness_owner / startup_support_evidence remains downstream of active-gate coverage"
     ],
-    "missingCausalEdge": "Whether selected_transport_closed needs selected snapshot refresh, owner recovery wake, repair execution, or projection refresh.",
-    "missingCausalEdgeProbe": "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-tell-tale-green-gate.report.json --explain active_gate_snapshot_coverage",
-    "falsifyingProbe": "npm run work:scenario-route -- test-output/reports/rolling-restart-tell-tale-green-gate.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage",
-    "boundedProgressProof": "The architecture experiment names one bounded owner transition such as wake, retry, repair execution, or projection refresh, or stops before runtime edits.",
-    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-tell-tale-green-gate.report.json",
-    "expectedObservableTransition": "selected successor contract, owner-boundary migration, or architecture-stop decision",
+    "missingCausalEdge": "Workflow progress must advance the fresh priority-recovery dispatch chain before active-gate coverage can complete.",
+    "missingCausalEdgeProbe": "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-continue-green-20260525T000001Z.report.json --explain priority_recovery_partition_progress",
+    "falsifyingProbe": "npm run work:scenario-route -- test-output/reports/rolling-restart-continue-green-20260525T000001Z.report.json",
+    "boundedProgressProof": "Fresh route names an owner-boundary migration to operation_workflow_owner / workflow_progress for a bounded dispatch/advance successor.",
+    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-continue-green-20260525T000001Z.report.json",
+    "expectedObservableTransition": "owner-boundary migration to the workflow-progress dispatch-chain successor",
     "maxProgressBound": "one architecture discriminator",
     "sameFrontierFallback": "Do not open another runtime patch; keep architecture experiment active until it selects one concrete transition.",
-    "expectedNextFrontier": "selected active-gate runtime contract or architecture-gap stop",
-    "resultClassification": "pending-before-probe",
-    "stopCondition": "architecture-gap-stop",
+    "expectedNextFrontier": "operation_workflow_owner / workflow_progress dispatch-chain successor",
+    "resultClassification": "migrated",
+    "stopCondition": "migrate-owner-boundary",
     "recentFrontierHistory": [
       "done-20260525-rolling-restart-cache-watermark-write-queue-drain-successor.md / startup_active_gate_owner / snapshot_coverage / reduced",
       "done-20260525-tell-tale-scenario-suite-promotion-gate.md / release_gate_owner / tell_tale_suite_repeatability / same-frontier"
     ],
     "oscillationCheck": "Frontier returned to startup_active_gate_owner / snapshot_coverage after a related runtime successor, so this package is an architecture discriminator.",
-    "handoffInvariant": "Startup readiness stays downstream until active-gate snapshot coverage clears, reduces, migrates, or selects a runtime contract."
+    "handoffInvariant": "Startup readiness stays downstream; this package does not edit startup active-gate runtime after fresh evidence selected workflow progress."
   },
   "boundedExperiment": {
     "hypothesis": "H1 selected transport closure needs selected snapshot refresh; H2 owner_reconcile_pending needs an owner recovery wake; H3 snapshot_repair_deferred needs repair execution; H4 projection refresh is stale or instrumentation-only.",
@@ -113,15 +114,15 @@
   "observablePrediction": {
     "metric": "selected successor mechanism plus active_gate_snapshot_coverage reason set and snapshotCoverageNodeCount",
     "predicted": "one active-gate transition is selected before runtime promotion",
-    "observed": "pending-before-observation",
-    "accuracy": "pending-before-observation",
-    "evidence": "test-output/reports/rolling-restart-tell-tale-green-gate.report.json"
+    "observed": "fresh representative rerun improved active-gate snapshot evidence to 2/5 and migrated the first frontier to operation_workflow_owner / workflow_progress",
+    "accuracy": "partial",
+    "evidence": "test-output/reports/rolling-restart-continue-green-20260525T000001Z.report.json"
   },
   "architectureDecisionGate": {
     "status": "selected",
     "trigger": "frontier-oscillation",
-    "selectedChoice": "open-architecture-package",
-    "nextAction": "Run this architecture discriminator before any further startup_active_gate_owner / snapshot_coverage runtime patch.",
+    "selectedChoice": "owner-boundary-migration",
+    "nextAction": "Continue in work/packages/active-20260525-rolling-restart-workflow-progress-dispatch-chain.md.",
     "triggerEvidence": [
       "Latest route has zero priority-recovery witnesses and active_gate_snapshot_coverage as first frontier.",
       "A related active-gate runtime successor already closed with reduced evidence.",
@@ -377,9 +378,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: <owner>; files-changed: <paths or none>; validation: <focused proof and parent revalidated focused proof: yes>; outcome: <validated|blocked>.
-- [ ] action: verification-fix; owner: <owner>; files-changed: <paths or none>; validation: <verification proof and parent revalidated focused proof: yes>; outcome: <validated|blocked>.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: <validated|not-needed>.
+- [x] action: implementation; owner: startup_active_gate_owner; files-changed: work/packages/active-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md; validation: fresh representative route, active-gate topology explanation, and causal-model proof selected owner-boundary migration; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: verification-fix; owner: startup_active_gate_owner; files-changed: work/packages/active-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md; validation: package doctor and migration transaction before closure; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: migration transaction followed by `npm run work:repair`; outcome: pending-transaction.
 
 ## Validation
 

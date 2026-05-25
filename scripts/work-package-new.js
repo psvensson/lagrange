@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
+import {execFileSync} from 'node:child_process';
 import {buildRepresentativeEvidenceSummary} from './summarize-representative-evidence.js';
 import {buildSummary, readLedgerEntries} from './model-ledger.js';
 import {parsePackageMetadata} from './work-tracker.js';
@@ -173,9 +174,23 @@ const DEFAULT_EXPERIMENT_MERGE_REQUIREMENT =
 const DEFAULT_EXPERIMENT_KILL_RULE =
   'same frontier with no metric movement opens/selects an autonomous architecture experiment; human escalation is only for contradictory or blocked evidence';
 const DEFAULT_EXPERIMENT_VALIDATION_TIER = 'single-owner';
+const DEFAULT_AMBIGUITY_SCORE = 1;
 const OBSERVABLE_PREDICTION_ACCURACY_PENDING = 'pending-before-observation';
 const CAUSAL_OUTCOME_CONTINUE_LOCAL_FIX = 'continue_local_fix';
 const STOP_MODE_CLASSIFIED_LOCAL_BLOCKER = 'classified_local_blocker';
+const PROOF_ROLE_FALSIFIER = 'falsifier';
+const PROOF_ROLE_REGRESSION = 'regression';
+const PROOF_ROLE_SUPPORTING = 'supporting';
+const PROOF_ROLE_PREFIX_PATTERN =
+  /^(?:falsifier|regression|supporting)\s*:/iu;
+const REGRESSION_ONLY_PROOF_LANES = Object.freeze([
+  'read-review-doc-only',
+  LANE_MECHANICAL_MAINTENANCE,
+  LANE_LIGHTWEIGHT_MAINTENANCE,
+  'discovery',
+  'read-doc',
+  'maintenance',
+]);
 const [
   CORE_LOGIC_BRIEF_CANONICAL_OUTCOME_FIELD,
   CORE_LOGIC_BRIEF_INPUTS_FIELD,
@@ -1127,9 +1142,140 @@ function concreteModelFitProofCommands(values = []) {
     [DEFAULT_ACCELERATION_PROOF];
 }
 
+function rolePrefixedProofCommand(role, command) {
+  return `${role}: ${command}`;
+}
+
+function buildMetadataProofCommands(lane, proof = []) {
+  const commands = concreteModelFitProofCommands(proof);
+  if (commands.some((command) => PROOF_ROLE_PREFIX_PATTERN.test(command))) {
+    return commands;
+  }
+  if (REGRESSION_ONLY_PROOF_LANES.includes(lane)) {
+    return [
+      rolePrefixedProofCommand(PROOF_ROLE_REGRESSION, commands[NUM_ZERO]),
+      ...commands.slice(NUM_ONE).map((command) =>
+        rolePrefixedProofCommand(PROOF_ROLE_SUPPORTING, command)),
+    ];
+  }
+  return [
+    rolePrefixedProofCommand(PROOF_ROLE_FALSIFIER, commands[NUM_ZERO]),
+    rolePrefixedProofCommand(
+      PROOF_ROLE_REGRESSION,
+      commands[NUM_ONE] || commands[NUM_ZERO],
+    ),
+    ...commands.slice(NUM_TWO).map((command) =>
+      rolePrefixedProofCommand(PROOF_ROLE_SUPPORTING, command)),
+  ];
+}
+
 function buildPackagePath(status, opened, slug) {
   const packageDate = opened.replaceAll('-', EMPTY_TEXT);
   return path.join(WORK_PACKAGES_DIRECTORY, `${status}-${packageDate}-${slug}.md`);
+}
+
+function toWorkPackageV2Metadata(metadata) {
+  const nestedFieldKeys = new Set([
+    'schema',
+    'status',
+    'intent',
+    'scope',
+    'gates',
+    'execution',
+    'modelFit',
+    'opened',
+    'closed',
+    'lane',
+    'scenario',
+    'artifact',
+    'playback',
+    'owner',
+    'boundary',
+    'dominantReason',
+    'currentState',
+    'nextAction',
+    'predecessor',
+    'successor',
+    'proof',
+    'stabilityCredit',
+    'whyHighestLeverageNow',
+    'representativeRerunCadence',
+    'codeQualityAdmission',
+    THEORY_LEDGER_REFS_FIELD,
+    SCOPE_FIELD_WRITE_SCOPE,
+    SCOPE_FIELD_HANDOFF_FILES,
+    SCOPE_FIELD_GENERATED_FILES,
+    SCOPE_FIELD_CANDIDATE_RUNTIME_FILES,
+    SCOPE_FIELD_COMMIT_SCOPE,
+  ]);
+  const intent = {
+    opened: metadata.opened,
+    lane: metadata.lane,
+    scenario: metadata.scenario,
+    artifact: metadata.artifact,
+    playback: metadata.playback,
+    owner: metadata.owner,
+    boundary: metadata.boundary,
+    dominantReason: metadata.dominantReason,
+    currentState: metadata.currentState,
+    nextAction: metadata.nextAction,
+  };
+  for (const optionalIntentField of ['closed', 'predecessor', 'successor']) {
+    if (metadata[optionalIntentField]) {
+      intent[optionalIntentField] = metadata[optionalIntentField];
+    }
+  }
+
+  const execution = {
+    theoryLedgerRefs: metadata[THEORY_LEDGER_REFS_FIELD] || [],
+    proof: {
+      commands: metadata.proof || [],
+    },
+  };
+
+  const packageMetadata = {
+    schema: WORK_PACKAGE_METADATA_SCHEMA,
+    status: metadata.status,
+    intent,
+    scope: {
+      [SCOPE_FIELD_WRITE_SCOPE]: metadata[SCOPE_FIELD_WRITE_SCOPE] || [],
+      [SCOPE_FIELD_HANDOFF_FILES]: metadata[SCOPE_FIELD_HANDOFF_FILES] || [],
+      [SCOPE_FIELD_GENERATED_FILES]: metadata[SCOPE_FIELD_GENERATED_FILES] || [],
+      [SCOPE_FIELD_CANDIDATE_RUNTIME_FILES]:
+        metadata[SCOPE_FIELD_CANDIDATE_RUNTIME_FILES] || [],
+      [SCOPE_FIELD_COMMIT_SCOPE]: metadata[SCOPE_FIELD_COMMIT_SCOPE] || [],
+    },
+    gates: {
+      stabilityCredit: metadata.stabilityCredit || 'local-proof-only',
+      whyHighestLeverageNow:
+        metadata.whyHighestLeverageNow ||
+        'This package advances the active sprint goal with focused proof.',
+      ...(metadata.representativeRerunCadence ?
+        {representativeRerunCadence: metadata.representativeRerunCadence} :
+        {}),
+      ...(metadata.codeQualityAdmission ?
+        {codeQualityAdmission: metadata.codeQualityAdmission} :
+        {}),
+    },
+    modelFit: metadata.modelFit,
+    execution,
+  };
+
+  for (const [key, value] of Object.entries(metadata)) {
+    if (!nestedFieldKeys.has(key)) {
+      packageMetadata[key] = value;
+    }
+  }
+
+  return packageMetadata;
+}
+
+function validateGeneratedPackage(packagePath) {
+  execFileSync(
+    'node',
+    ['scripts/work-tracker.js', 'validate', '--entry', packagePath],
+    {stdio: 'pipe'},
+  );
 }
 
 async function buildModelLedgerSummary(flags = {}) {
@@ -1147,6 +1293,7 @@ async function buildPackageContent(flags = {}) {
   const opened = normalizeText(flags[FLAG_OPENED]) || todayIsoDate();
   const status = normalizeText(flags[FLAG_STATUS]) || DEFAULT_STATUS;
   const proof = flags[FLAG_PROOF] || [];
+  const metadataProof = buildMetadataProofCommands(lane, proof);
   const modelFitProof = concreteModelFitProofCommands(proof);
   const legacyTouchedFiles = flags[FLAG_TOUCHED_FILE] || [];
   const writeScope = [
@@ -1178,7 +1325,7 @@ async function buildPackageContent(flags = {}) {
       normalizeText(flags[FLAG_CURRENT_STATE]) ||
       'New package scaffolded from the shared work-package schema.',
     nextAction: normalizeText(flags[FLAG_NEXT_ACTION]),
-    proof,
+    proof: metadataProof,
     [THEORY_LEDGER_REFS_FIELD]: [],
     [SCOPE_FIELD_WRITE_SCOPE]: writeScope,
     [SCOPE_FIELD_HANDOFF_FILES]: handoffFiles,
@@ -1198,6 +1345,7 @@ async function buildPackageContent(flags = {}) {
       outputProfile:
         normalizeText(flags[FLAG_OUTPUT_PROFILE]) ||
         modelFitDefaults.outputProfile,
+      ambiguityScore: DEFAULT_AMBIGUITY_SCORE,
       escalationTriggers: [
         'owned files expand beyond this package',
         'a frozen decision must be reopened',
@@ -1272,7 +1420,7 @@ async function buildPackageContent(flags = {}) {
     `# ${normalizeText(flags[FLAG_TITLE])}`,
     EMPTY_TEXT,
     '<!-- work-package',
-    JSON.stringify(metadata, null, JSON_INDENT_SPACES),
+    JSON.stringify(toWorkPackageV2Metadata(metadata), null, JSON_INDENT_SPACES),
     '-->',
     EMPTY_TEXT,
     '## Why',
@@ -1445,10 +1593,12 @@ async function runCli(args = process.argv.slice(NUM_TWO)) {
         encoding: ENCODING_UTF8,
         flag: 'wx',
       });
+      validateGeneratedPackage(packagePath);
     } catch (error) {
       if (error.code === 'EEXIST') {
         throw new Error(`${packagePath} already exists.`);
       }
+      await fs.rm(packagePath, {force: true});
       throw error;
     }
     return `Created ${packagePath}.${NEWLINE}`;

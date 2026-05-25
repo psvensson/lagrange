@@ -1,4 +1,75 @@
 import {CAUSAL_DECISION_CONTRACT_INVALID_CONTENT, CAUSAL_DECISION_CONTRACT_OSCILLATION_METADATA, CAUSAL_DECISION_CONTRACT_VALID_CONTENT, CAUSAL_GOVERNANCE_INVALID_METADATA, CAUSAL_GOVERNANCE_MISSING_METADATA, CAUSAL_GOVERNANCE_VALID_METADATA, CLASSIFICATION_EFFICIENCY_VALID_METADATA, CLASSIFICATION_ONLY_FAST_PATH_METADATA, CLASSIFICATION_ONLY_WITH_IMPLEMENTATION_SCOPE_METADATA, CORE_LOGIC_BRIEF_GENERIC_CONTENT, CORE_LOGIC_BRIEF_INCOMPLETE_CONTENT, CORE_LOGIC_BRIEF_NOT_NEEDED_CONTENT, CORE_LOGIC_BRIEF_VALID_CONTENT, DECISION_EXPERIMENT_GATE_INVALID_CONTENT, DECISION_EXPERIMENT_GATE_VALID_CONTENT, FIX_AGENT_ID, IMPLEMENTATION_AGENT_ID, LANE_BOUNDED_EXPERIMENT, LANE_CAUSAL_ESCALATION, LANE_DIAGNOSTIC_CLASSIFICATION, LANE_EXPERIMENT, LANE_LIGHTWEIGHT_MAINTENANCE, LANE_MECHANICAL_MAINTENANCE, LANE_READ_REVIEW_DOC_ONLY, LANE_RUNTIME_OWNER_BOUNDARY, LANE_SINGLE_FILE_RUNTIME, LANE_TEST_ONLY_PROOF, MODEL_FIT_INCOMPLETE_SPARK_SAFE_CONTENT, MODEL_FIT_MISSING_CONTENT, MODEL_FIT_VALID_SPARK_SAFE_CONTENT, REPRESENTATIVE_RESIDUAL_INVALID_METADATA, REPRESENTATIVE_RESIDUAL_MISSING_METADATA, REPRESENTATIVE_RESIDUAL_VALID_METADATA, RERUN_DECISION_VALID_METADATA, REVIEW_AGENT_ID, SCENARIO_CAUSAL_CLOSURE_INVALID_METADATA, SCENARIO_CAUSAL_CLOSURE_MISSING_METADATA, SCENARIO_CAUSAL_CLOSURE_VALID_METADATA, SPRINT_STRATEGY_BRIEF_INCOMPLETE_CONTENT, SPRINT_STRATEGY_BRIEF_VALID_CONTENT, TEST_COMMIT_SHA, TEST_PUSH_TARGET, TEST_THEORY_LEDGER_REF, WORK_TRACKER_ACTIVE_DOCTOR_FILE, WORK_TRACKER_ACTIVE_STATUS, WORK_TRACKER_ATTEMPT_LEDGER_BAD_CONTENT, WORK_TRACKER_ATTEMPT_LEDGER_CLEAN_CONTENT, WORK_TRACKER_ATTEMPT_LEDGER_CODEX_NAMED_AGENT_CONTENT, WORK_TRACKER_ATTEMPT_LEDGER_GENERIC_IDENTITY_CONTENT, WORK_TRACKER_ATTEMPT_LEDGER_NOT_NEEDED_CONTENT, WORK_TRACKER_ATTEMPT_LEDGER_OPEN_PARTIAL_CONTENT, WORK_TRACKER_ATTEMPT_LEDGER_PARTIAL_CONTENT, WORK_TRACKER_ATTEMPT_LEDGER_SUPERSEDED_CONTENT, WORK_TRACKER_COMBINED_PROGRESS_ATTEMPT_LEDGER_CONTENT, WORK_TRACKER_COMBINED_PROGRESS_ATTEMPT_LEDGER_LOCAL_RUNTIME_CONTENT, WORK_TRACKER_COMMIT_LEDGER_LEGACY_VALID_CONTENT, WORK_TRACKER_COMMIT_LEDGER_PENDING_CONTENT, WORK_TRACKER_COMMIT_LEDGER_TEMPLATE_CONTENT, WORK_TRACKER_COMMIT_LEDGER_VALID_CONTENT, WORK_TRACKER_CURRENT_BLOCKER_MARKDOWN, WORK_TRACKER_DOCTOR_CONTENT, WORK_TRACKER_DONE_STATUS, WORK_TRACKER_DONE_TEST_FILE, WORK_TRACKER_EXECUTION_EVIDENCE_CLEAN_CONTENT, WORK_TRACKER_EXECUTION_EVIDENCE_FIVE_FIELD_CONTENT, WORK_TRACKER_EXECUTION_EVIDENCE_OPEN_CONTENT, WORK_TRACKER_EXECUTION_EVIDENCE_UNVALIDATED_CONTENT, WORK_TRACKER_EXECUTION_EVIDENCE_VERIFIED_CONTENT, WORK_TRACKER_EXECUTION_EVIDENCE_VERIFIED_NO_CHANGES_CONTENT, WORK_TRACKER_EXECUTION_EVIDENCE_WITH_AGENT_CONTENT, WORK_TRACKER_FUTURE_DONE_STRICT_CONTENT, WORK_TRACKER_FUTURE_DONE_TEST_FILE, WORK_TRACKER_LEDGER_AMBIGUOUS_REVIEW_NOT_NEEDED_CONTENT, WORK_TRACKER_LEDGER_BAD_NOT_NEEDED_CONTENT, WORK_TRACKER_LEDGER_CHECKED_PENDING_CONTENT, WORK_TRACKER_LEDGER_CHECKED_TEMPLATE_CONTENT, WORK_TRACKER_LEDGER_CLEAN_CONTENT, WORK_TRACKER_LEDGER_FIRST_PACKAGE_CONTENT, WORK_TRACKER_LEDGER_FIXES_REQUIRED_CONTENT, WORK_TRACKER_LEDGER_LEGACY_DONE_CONTENT, WORK_TRACKER_LEDGER_LOCAL_IMPLEMENTATION_CONTENT, WORK_TRACKER_LEDGER_LOCAL_PATH_CONTENT, WORK_TRACKER_LEDGER_LOCAL_PATH_TEST_FILE, WORK_TRACKER_LEDGER_MANUAL_FIX_NOTE_CONTENT, WORK_TRACKER_LEDGER_NO_AGENT_ID_CONTENT, WORK_TRACKER_LEDGER_NO_LEDGER_CONTENT, WORK_TRACKER_LEDGER_NUMBERED_PRE_IMPL_CONTENT, WORK_TRACKER_LEDGER_OPEN_CONTENT, WORK_TRACKER_LEDGER_PRE_IMPL_CONTENT, WORK_TRACKER_LEDGER_REVIEW_FIXED_METADATA_CONTENT, WORK_TRACKER_LEDGER_REVIEW_FIXED_RUNTIME_CONTENT, WORK_TRACKER_LEDGER_REVIEW_FIXED_WRONG_AGENT_CONTENT, WORK_TRACKER_LEDGER_TEST_FILE, WORK_TRACKER_LEDGER_UNAVAILABLE_CONTENT, WORK_TRACKER_LEDGER_UNVALIDATED_IMPLEMENTATION_CONTENT, WORK_TRACKER_PROGRESS_LEDGER_BAD_CONTENT, WORK_TRACKER_PROGRESS_LEDGER_CLEAN_CONTENT, WORK_TRACKER_PROGRESS_LEDGER_NOT_NEEDED_CONTENT, WORK_TRACKER_PROGRESS_LEDGER_OPEN_CONTENT, assert, buildCurrentBlockerPayload, buildPackageDoctorLines, describe, findActivePackageLinkInSprint, isGeneratedCurrentBlockerPath, it, metadataHasClassificationOnlyOutcome, metadataRequiresSubagentSequencing, metadataUsesClassificationOnlyFastPath, metadataUsesPureClassificationFastPath, path, renderCurrentBlockerMarkdown, renderCurrentEdgeCardSection, resolveSprintPackageReference, upsertSprintCurrentEdgeCard, validateActiveWorkReferences, validateCausalDecisionContract, validateCausalGovernanceContract, validateClassificationEfficiencyContract, validateCommitAndPushLedger, validateContractProofRequirement, validateCoreLogicBrief, validateCurrentBlockerPayloadFreshness, validateCurrentBlockerSnapshot, validateDecisionExperimentGate, validateExecutionEvidenceLedger, validateExperimentOutcomeContract, validateFrontierOscillationContract, validateModelFitContract, validateObservablePredictionContract, validatePackageMetadataShape, validateProbePackageContract, validateRepresentativeResidualContract, validateRequiredPreImplProbeContract, validateRerunDecisionContract, validateSameFrontierStopContract, validateScenarioCausalClosureContract, validateScenarioFrontierOwnerBoundaryContract, validateSprintCurrentEdgeCard, validateSprintStrategyBrief, validateSubagentAttemptLedger, validateSubagentProgressLedger, validateSubagentSequencingLedger} from './work-tracker-subagent-ledger-fixtures.js';
+import {validateReferenceRewriteScope} from '../../scripts/work-tracker.js';
+
+const POLICY_REGRESSION_PROOF = Object.freeze([
+  'regression: node --test test/scripts/work-tracker-policy-ledger.test.js',
+]);
+const POLICY_RUNTIME_PROOF = Object.freeze([
+  'falsifier: npm test -- test/rebalancer/operation-workflow-owner.test.js --fixture --consumer --contract-transition',
+  'regression: node --test test/scripts/work-tracker-policy-ledger.test.js',
+]);
+
+function policyProofForLane(lane) {
+  return [
+    LANE_READ_REVIEW_DOC_ONLY,
+    LANE_MECHANICAL_MAINTENANCE,
+    LANE_LIGHTWEIGHT_MAINTENANCE,
+  ].includes(lane) ?
+    [...POLICY_REGRESSION_PROOF] :
+    [...POLICY_RUNTIME_PROOF];
+}
+
+function withCurrentPolicyMetadata(metadata, fileStatus) {
+  const status = fileStatus || metadata.status;
+  const scenarioDriven = metadata.scenario && metadata.scenario !== 'none';
+  const currentMetadata = {
+    ...metadata,
+    schema: status === WORK_TRACKER_ACTIVE_STATUS || status === 'todo' ?
+      'work-package-v2' :
+      metadata.schema,
+  };
+  if (
+    metadata.opened >= '2026-05-22' &&
+    (!Array.isArray(metadata.proof) || metadata.proof.length === 0)
+  ) {
+    currentMetadata.proof = policyProofForLane(metadata.lane);
+  }
+  if (status === WORK_TRACKER_ACTIVE_STATUS) {
+    currentMetadata.currentState =
+      metadata.currentState || 'validating workflow policy metadata';
+    if (scenarioDriven) {
+      currentMetadata.artifact =
+        metadata.artifact ||
+        'test-output/reports/work-tracker-policy-ledger.report.json';
+      currentMetadata.playback = metadata.playback || 'none';
+      currentMetadata.dominantReason =
+        metadata.dominantReason || 'policy_validation';
+      currentMetadata.writeScope = metadata.writeScope || [];
+      currentMetadata.handoffFiles = metadata.handoffFiles || [];
+      currentMetadata.generatedFiles = metadata.generatedFiles || [];
+      currentMetadata.candidateRuntimeFiles =
+        metadata.candidateRuntimeFiles || [];
+      currentMetadata.commitScope = metadata.commitScope || [];
+      currentMetadata.modelFit = {
+        packageClass: 'bounded-implementation',
+        intendedMinimumModel: 'gpt-5.3-codex-spark',
+        scopeShape: 'leaf-slice',
+        outputProfile: 'medium',
+        escalationTriggers: ['scope expands beyond this policy package'],
+        ...(metadata.modelFit || {}),
+      };
+    }
+  }
+  return currentMetadata;
+}
+
+function validateCurrentPolicyMetadataShape(filePath, fileStatus, metadata) {
+  return validatePackageMetadataShape(
+    filePath,
+    fileStatus,
+    withCurrentPolicyMetadata(metadata, fileStatus),
+  );
+}
 
 describe('work tracker contract proof requirement validation', () => {
   it('allows active package in runtime-owner-boundary lane with correct contract transition naming and fixture/consumer proof', () => {
@@ -113,7 +184,79 @@ describe('work tracker contract proof requirement validation', () => {
   });
 });
 
+describe('work tracker package schema version policy', () => {
+  it('rejects legacy v1 metadata for active and todo packages', () => {
+    const metadata = {
+      schema: 'work-package-v1',
+      status: WORK_TRACKER_ACTIVE_STATUS,
+      opened: '2026-05-22',
+      lane: LANE_LIGHTWEIGHT_MAINTENANCE,
+      scenario: 'none',
+      owner: 'workflow_tooling_owner',
+      boundary: 'package_schema_policy',
+      currentState: 'checking schema version policy',
+      nextAction: 'reject legacy active metadata',
+      stabilityCredit: 'local-proof-only',
+      whyHighestLeverageNow: 'This advances the sprint goal.',
+      modelFit: {
+        packageClass: 'bounded-implementation',
+        intendedMinimumModel: 'gpt-5.3-codex-spark',
+        scopeShape: 'leaf-slice',
+        ambiguityScore: 1,
+      },
+    };
+
+    const activeErrors = validatePackageMetadataShape(
+      'work/packages/active-schema-policy.md',
+      WORK_TRACKER_ACTIVE_STATUS,
+      metadata,
+    );
+    const todoErrors = validatePackageMetadataShape(
+      'work/packages/todo-schema-policy.md',
+      'todo',
+      {...metadata, status: 'todo'},
+    );
+
+    assert.match(activeErrors.join('\n'), /active packages must use work-package-v2/u);
+    assert.match(todoErrors.join('\n'), /todo packages must use work-package-v2/u);
+  });
+
+  it('rejects package reference rewrites outside declared scope', async () => {
+    const outsideScopeFile = path.resolve(
+      'work/sprints/done-2026-q2-previous.md',
+    );
+    await assert.rejects(
+      validateReferenceRewriteScope(
+        [outsideScopeFile],
+        {
+          writeScope: [],
+          generatedFiles: [],
+          commitScope: [],
+        },
+        'work/packages/active-old.md',
+        'work/packages/done-old.md',
+      ),
+      /outside target package scope/u,
+    );
+
+    await assert.doesNotReject(
+      validateReferenceRewriteScope(
+        [outsideScopeFile],
+        {
+          writeScope: [],
+          generatedFiles: [],
+          commitScope: ['work/sprints/done-2026-q2-previous.md'],
+        },
+        'work/packages/active-old.md',
+        'work/packages/done-old.md',
+      ),
+    );
+  });
+});
+
 describe('work tracker stabilityCredit validation', () => {
+  const validatePackageMetadataShape = validateCurrentPolicyMetadataShape;
+
   it('accepts optional theoryLedgerRefs as advisory ids', () => {
     const metadata = {
       schema: 'work-package-v1',
@@ -288,6 +431,8 @@ describe('work tracker stabilityCredit validation', () => {
 });
 
 describe('work tracker whyHighestLeverageNow validation', () => {
+  const validatePackageMetadataShape = validateCurrentPolicyMetadataShape;
+
   it('accepts valid whyHighestLeverageNow values on new active packages', () => {
     const metadata = {
       schema: 'work-package-v1',

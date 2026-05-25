@@ -964,6 +964,28 @@ describe('work tracker model fit validation', () => {
     assert.deepEqual(errors, []);
   });
 
+  it('accepts complete Model Fit metadata without duplicate prose fields', () => {
+    const errors = validateModelFitContract(
+      '',
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {
+        requiresLedger: true,
+        phase: 'pre-impl',
+        metadata: {
+          modelFit: {
+            packageClass: 'bounded-implementation',
+            intendedMinimumModel: 'gpt-5.3-codex-spark',
+            scopeShape: 'leaf-slice',
+            outputProfile: 'medium',
+            ambiguityScore: 1,
+          },
+        },
+      },
+    );
+
+    assert.deepEqual(errors, []);
+  });
+
   it('rejects Spark-safe packages without Spark model, leaf scope, or bounded language',
     () => {
       const errors = validateModelFitContract(

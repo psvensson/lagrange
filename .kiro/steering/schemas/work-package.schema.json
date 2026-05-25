@@ -127,6 +127,12 @@
         },
         "epicRef": {
           "type": "string"
+        },
+        "predecessor": {
+          "type": "string"
+        },
+        "successor": {
+          "type": "string"
         }
       },
       "additionalProperties": false
@@ -236,7 +242,9 @@
           "items": { "type": "string" }
         },
         "ambiguityScore": {
-          "type": "number"
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
         }
       },
       "additionalProperties": false
