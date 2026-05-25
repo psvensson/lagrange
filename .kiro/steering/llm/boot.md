@@ -18,8 +18,14 @@ When sources appear to disagree, follow this order:
 1. User and developer instructions define the requested task and safety limits.
 2. `npm run work:context` defines the current active blocker, primary steering pack, owner boundary, and dirty-scope warning.
 3. [`work/RULES.md`](../../../work/RULES.md) is the canon for lanes, validation phases, proof, scope, and worktree safety.
-4. Source steering files under `.kiro/steering/` provide detailed domain policy. They can add detail; they do not weaken `work/RULES.md`.
-5. `.kiro/steering/llm/*.md` files are compact prompt packs. Use them to keep rules active in memory. Consult `rules.json` only when rule IDs or source citations are needed.
+4. Source steering files under `.kiro/steering/` provide detailed domain policy
+   and win over generated compact packs on conflict. This is authority order,
+   not default load order. Source steering can add detail; it does not weaken
+   `work/RULES.md`.
+5. `.kiro/steering/llm/*.md` files are compact prompt packs and the default LLM
+   load surface defined by `AGENTS.md`. Use them to keep rules active in
+   memory. Consult source steering or `rules.json` when conflict resolution,
+   detailed policy, rule IDs, or source citations are needed.
 6. Generated domain packs are not sequential checklists. Apply only the rules relevant to the selected lane and touched boundary.
 
 ## Lane Vocabulary

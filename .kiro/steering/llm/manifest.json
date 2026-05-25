@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-24T18:25:07.605Z",
+  "generatedAt": "2026-05-25T04:50:28.659Z",
   "packs": [
     {
       "name": "core",
@@ -20,7 +20,7 @@
       "title": "Architecture Steering Pack",
       "description": "Load for bootstrap/join/rebalance/control-plane/runtime ownership and lifecycle work.",
       "ruleCount": 40,
-      "estimatedTokens": 1312,
+      "estimatedTokens": 1314,
       "domains": [
         "architecture"
       ],

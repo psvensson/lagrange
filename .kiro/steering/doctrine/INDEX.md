@@ -28,7 +28,11 @@ Do not use this tree for:
 - style and lint details (see [`../code-style.md`](../code-style.md))
 - roadmap scope decisions (see [`../roadmap.md`](../roadmap.md))
 
-Read together with [`../system-guidelines.md`](../system-guidelines.md), [`../testing-guidelines.md`](../testing-guidelines.md), and the canonical [`../../architecture.md`](../../../architecture.md).
+Read together with [`../system-guidelines.md`](../system-guidelines.md),
+[`../testing-guidelines.md`](../testing-guidelines.md), and the canonical
+[`../../architecture/INDEX.md`](../../../architecture/INDEX.md). Root
+[`../../architecture.md`](../../../architecture.md) is a compatibility pointer
+for older links only.
 
 ## Doctrine Summary
 

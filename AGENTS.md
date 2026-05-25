@@ -28,6 +28,11 @@ This file is the **single entry point** for steering. It is the only document th
 5. Load the primary domain pack named by `work:context` (architecture, testing, style, or governance).
 6. Consult source steering under [`.kiro/steering/`](.kiro/steering/) only when a compact pack identifies which detailed policy matters, or when rule IDs are needed (use `rules.json`).
 
+Compact packs are the default LLM load surface. Source steering files are the
+canonical sources behind those packs for conflicts, citations, and detailed
+policy, but they are not part of the default load order unless this section or
+a compact pack explicitly names them.
+
 For the canonical rules of process, lanes, validators, proof, scope, and worktree safety, see [`work/RULES.md`](work/RULES.md). Steering files under `.kiro/steering/` add domain detail; they never weaken `work/RULES.md`.
 
 ## Workflow Tooling

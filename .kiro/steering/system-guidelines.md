@@ -1,10 +1,11 @@
 ---
 scope: architecture
 status: canonical
-always_load: true
+always_load: false
 source_of_truth: self
 compiled_pack: .kiro/steering/llm/architecture.md
-inclusion: always
+llm_load: represented_by_compact_packs
+inclusion: represented_by_llm_core_and_architecture_pack
 last_reviewed: 2026-05-23
 ---
 
@@ -14,9 +15,10 @@ last_reviewed: 2026-05-23
 
 ## Document Role
 
-This file is the short mandatory contract for generated and hand-written code in
-this repository. It is intentionally compact so an LLM can keep the whole
-contract active while editing.
+This file is the canonical source contract for generated and hand-written code
+in this repository. LLM sessions keep it active by loading the compact packs
+named in `AGENTS.md`; source steering is consulted directly for conflicts,
+citations, or detailed policy.
 
 Use this file for:
 
@@ -35,8 +37,10 @@ Use focused steering files for detail:
 - [`testing-guidelines.md`](testing-guidelines.md): validation policy
 - [`code-style.md`](code-style.md): formatting and lint policy
 - [`roadmap.md`](roadmap.md): implementation scope and edition boundaries
-- [`../../architecture.md`](../../architecture.md): current owner maps and
-  concrete architecture entrypoint
+- [`../../architecture/INDEX.md`](../../architecture/INDEX.md): canonical
+  architecture entrypoint, current owner maps, and subsystem detail index
+- [`../../architecture.md`](../../architecture.md): compatibility pointer for
+  older links only
 - [`../../work/README.md`](../../work/README.md): local work-tracker procedure
 
 These rules are non-negotiable. When this file and a detailed policy both
@@ -53,14 +57,15 @@ Use the lightest process lane that protects the owner boundary:
    package is required unless implementation truth, roadmap status, or
    architecture ownership changes.
 2. **Lightweight maintenance**: use one focused package and focused proof. Do
-   not require causal ledgers, representative reruns, or sub-agent sequencing
-   unless runtime ownership or shared contracts can change.
+   not require causal ledgers, representative reruns, or delegated role
+   provenance unless runtime ownership or shared contracts can change.
 3. **Runtime owner-boundary work**: use full package discipline with owner
    contract, static guardrails, focused owner tests, affected consumers, and
    package closure proof.
 4. **Scenario or release-gate work**: use full scenario discipline with
-   sequential sub-agents, causal closure ledger, missing-edge probe,
-   representative proof, and blocker-migration notes.
+   checked implementation and verification-fix role evidence, causal closure
+   ledger, missing-edge probe, representative proof, and blocker-migration
+   notes.
 
 When unsure, choose the heavier lane only if runtime ownership, shared
 contracts, or representative scenario evidence can change.

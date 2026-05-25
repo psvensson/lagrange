@@ -33,7 +33,7 @@ For those concerns, use:
 - [`.kiro/steering/doctrine.md`](doctrine.md)
 - [`.kiro/steering/system-guidelines.md`](system-guidelines.md)
 - [`.kiro/steering/testing-guidelines.md`](testing-guidelines.md)
-- [`../../architecture.md`](../../architecture.md)
+- [`../../architecture/INDEX.md`](../../architecture/INDEX.md)
 - [`../../roadmap.md`](../../roadmap.md)
 
 ## Linting Compliance

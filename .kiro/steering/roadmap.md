@@ -57,7 +57,8 @@ Use the repository documents according to this ownership split:
 | Workflow contract detail | `.kiro/steering/workflow-guidelines.md` | Package, sprint, execution-role, guardrail, and causal-closure workflow |
 | Stable testing policy | `.kiro/steering/testing-guidelines.md` | Durable repo-wide testing rules |
 | Style and lint | `.kiro/steering/code-style.md` | Formatting, lint, and local coding style |
-| Architecture entrypoint | `architecture.md` | Current subsystem owner maps and data flow index |
+| Architecture entrypoint | `architecture/INDEX.md` | Canonical architecture entrypoint, current subsystem owner maps, and data flow index |
+| Architecture compatibility pointer | `architecture.md` | Compatibility pointer for older links only |
 | Architecture support docs | `architecture/*.md` | Current concrete owner maps and subsystem detail |
 | Implementation-driving roadmap | `roadmap.md` | Allowed implementation scope and status |
 | Visibility roadmap | `product-roadmap.md` | Cross-edition status only |
@@ -211,16 +212,21 @@ Required workflow:
 ## Audit Procedure
 
 Use these repository-root checks to confirm the steering stack still has one
-doctrine path and one owning document per rule class:
+doctrine path and that top-level canonical source files declare their role:
 
 ```sh
 rg -n --glob '*.md' '`doctrine\\.md`' .kiro/steering
 rg -n --glob '*.md' '\\.kiro/steering/doctrine\\.md' .kiro/steering
-rg -n --glob '*.md' '^## Document Role$' .kiro/steering
+for f in .kiro/steering/*.md; do
+  rg -q '^status: canonical$' "$f" || continue
+  rg -q '^## Document Role$' "$f" || echo "$f"
+done
 ```
 
 Expected result:
 
 1. Short-name doctrine references return zero hits in steering Markdown.
 2. Canonical `.kiro/steering/doctrine.md` references remain.
-3. Every steering Markdown file carries a `Document Role` header.
+3. The `Document Role` loop prints no paths for top-level canonical source
+   files. Pointer files, split subfiles, and generated LLM packs are outside
+   this check.

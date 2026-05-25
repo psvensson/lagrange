@@ -13,7 +13,7 @@ regenerate_with: npm run steering:llm:pack
 Load for bootstrap/join/rebalance/control-plane/runtime ownership and lifecycle work.
 
 Generated rules: 40
-Estimated tokens: 1391
+Estimated tokens: 1392
 Domains: architecture
 
 ## Rules
@@ -38,7 +38,7 @@ Domains: architecture
 
 ### Ownership & Authority Policies
 
-16. [ARCH-0001] Lightweight maintenance: use one focused package and focused proof. Do not require causal ledgers, representative reruns, or sub-agent sequencing unless runtime ownership or shared contracts can change.
+16. [ARCH-0001] Lightweight maintenance: use one focused package and focused proof. Do not require causal ledgers, representative reruns, or delegated role provenance unless runtime ownership or shared contracts can change.
 17. [ARCH-0004] If the existing owner lacks one capability, extend that owner. Do not fork a feature-local implementation.
 18. [ARCH-0005] Callers submit intent to owners. They do not reproduce owner logic locally.
 19. [ARCH-0012] Events may enqueue owner-key work; they must not execute long-running progression inline.

@@ -102,7 +102,7 @@
     "candidateCount": 318,
     "dedupedRuleCount": 310,
     "exportedRuleCount": 310,
-    "estimatedAllRulesTokens": 11816
+    "estimatedAllRulesTokens": 11818
   },
   "rules": [
     {
@@ -112,12 +112,12 @@
       "tags": [
         "ownership"
       ],
-      "rule": "Lightweight maintenance: use one focused package and focused proof. Do not require causal ledgers, representative reruns, or sub-agent sequencing unless runtime ownership or shared contracts can change.",
+      "rule": "Lightweight maintenance: use one focused package and focused proof. Do not require causal ledgers, representative reruns, or delegated role provenance unless runtime ownership or shared contracts can change.",
       "score": 256,
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 55,
+          "line": 59,
           "section": "System Guidelines — Mandatory Implementation Contract > Process Weight Gate"
         }
       ]
@@ -132,7 +132,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 80,
+          "line": 85,
           "section": "System Guidelines — Mandatory Implementation Contract > 1. Work Starts From One Bounded Package"
         }
       ]
@@ -147,7 +147,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 84,
+          "line": 89,
           "section": "System Guidelines — Mandatory Implementation Contract > 1. Work Starts From One Bounded Package"
         }
       ]
@@ -164,7 +164,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 103,
+          "line": 108,
           "section": "System Guidelines — Mandatory Implementation Contract > 2. One Semantic Owner Per Concern"
         }
       ]
@@ -181,7 +181,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 105,
+          "line": 110,
           "section": "System Guidelines — Mandatory Implementation Contract > 2. One Semantic Owner Per Concern"
         }
       ]
@@ -198,7 +198,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 129,
+          "line": 134,
           "section": "System Guidelines — Mandatory Implementation Contract > 3. One Path Per Semantic Decision"
         }
       ]
@@ -213,7 +213,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 157,
+          "line": 162,
           "section": "System Guidelines — Mandatory Implementation Contract > 4. Scalars, State, And Naming Have Owners"
         }
       ]
@@ -228,7 +228,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 160,
+          "line": 165,
           "section": "System Guidelines — Mandatory Implementation Contract > 4. Scalars, State, And Naming Have Owners"
         }
       ]
@@ -243,7 +243,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 163,
+          "line": 168,
           "section": "System Guidelines — Mandatory Implementation Contract > 4. Scalars, State, And Naming Have Owners"
         }
       ]
@@ -260,7 +260,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 201,
+          "line": 206,
           "section": "System Guidelines — Mandatory Implementation Contract > 6. Tables, Cache, And Metadata Follow One Authority Chain"
         }
       ]
@@ -278,7 +278,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 208,
+          "line": 213,
           "section": "System Guidelines — Mandatory Implementation Contract > 6. Tables, Cache, And Metadata Follow One Authority Chain"
         }
       ]
@@ -295,7 +295,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 226,
+          "line": 231,
           "section": "System Guidelines — Mandatory Implementation Contract > 7. Phase Code Must Hand Off To Runtime Owners"
         },
         {
@@ -317,7 +317,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 233,
+          "line": 238,
           "section": "System Guidelines — Mandatory Implementation Contract > 7. Phase Code Must Hand Off To Runtime Owners"
         }
       ]
@@ -334,7 +334,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 251,
+          "line": 256,
           "section": "System Guidelines — Mandatory Implementation Contract > 8. Control-Plane Work Uses Shared Primitives"
         }
       ]
@@ -351,7 +351,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 256,
+          "line": 261,
           "section": "System Guidelines — Mandatory Implementation Contract > 8. Control-Plane Work Uses Shared Primitives"
         }
       ]
@@ -366,7 +366,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 269,
+          "line": 274,
           "section": "System Guidelines — Mandatory Implementation Contract > 9. Load May Slow The System, Not Break It"
         }
       ]
@@ -381,7 +381,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 270,
+          "line": 275,
           "section": "System Guidelines — Mandatory Implementation Contract > 9. Load May Slow The System, Not Break It"
         }
       ]
@@ -398,7 +398,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 274,
+          "line": 279,
           "section": "System Guidelines — Mandatory Implementation Contract > 9. Load May Slow The System, Not Break It"
         }
       ]
@@ -413,7 +413,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 275,
+          "line": 280,
           "section": "System Guidelines — Mandatory Implementation Contract > 9. Load May Slow The System, Not Break It"
         }
       ]
@@ -428,7 +428,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 291,
+          "line": 296,
           "section": "System Guidelines — Mandatory Implementation Contract > 10. Communication Has One Replicated Data Path"
         }
       ]
@@ -446,7 +446,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 316,
+          "line": 321,
           "section": "System Guidelines — Mandatory Implementation Contract > 12. User-Facing Model Stays Small"
         }
       ]
@@ -461,7 +461,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 184,
+          "line": 189,
           "section": "System Guidelines — Mandatory Implementation Contract > 5. Shared Runtime Contracts Have One Shape"
         }
       ]
@@ -476,7 +476,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 211,
+          "line": 216,
           "section": "System Guidelines — Mandatory Implementation Contract > 6. Tables, Cache, And Metadata Follow One Authority Chain"
         }
       ]
@@ -493,7 +493,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 217,
+          "line": 222,
           "section": "System Guidelines — Mandatory Implementation Contract > 7. Phase Code Must Hand Off To Runtime Owners"
         }
       ]
@@ -595,7 +595,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 52,
+          "line": 56,
           "section": "System Guidelines — Mandatory Implementation Contract > Process Weight Gate"
         }
       ]
@@ -612,7 +612,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 203,
+          "line": 208,
           "section": "System Guidelines — Mandatory Implementation Contract > 6. Tables, Cache, And Metadata Follow One Authority Chain"
         }
       ]
@@ -631,7 +631,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 223,
+          "line": 228,
           "section": "System Guidelines — Mandatory Implementation Contract > 7. Phase Code Must Hand Off To Runtime Owners"
         }
       ]
@@ -648,7 +648,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 332,
+          "line": 337,
           "section": "System Guidelines — Mandatory Implementation Contract > 13. Closure Requires Proof, Review, And Truth Repair"
         }
       ]
@@ -665,7 +665,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 333,
+          "line": 338,
           "section": "System Guidelines — Mandatory Implementation Contract > 13. Closure Requires Proof, Review, And Truth Repair"
         }
       ]
@@ -682,7 +682,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 335,
+          "line": 340,
           "section": "System Guidelines — Mandatory Implementation Contract > 13. Closure Requires Proof, Review, And Truth Repair"
         }
       ]
@@ -699,7 +699,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 338,
+          "line": 343,
           "section": "System Guidelines — Mandatory Implementation Contract > 13. Closure Requires Proof, Review, And Truth Repair"
         }
       ]
@@ -714,7 +714,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 346,
+          "line": 351,
           "section": "System Guidelines — Mandatory Implementation Contract > 13. Closure Requires Proof, Review, And Truth Repair"
         }
       ]
@@ -1203,7 +1203,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 70,
+          "line": 75,
           "section": "System Guidelines — Mandatory Implementation Contract > 1. Work Starts From One Bounded Package"
         }
       ]
@@ -1222,7 +1222,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 95,
+          "line": 100,
           "section": "System Guidelines — Mandatory Implementation Contract > 2. One Semantic Owner Per Concern"
         }
       ]
@@ -1237,7 +1237,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 123,
+          "line": 128,
           "section": "System Guidelines — Mandatory Implementation Contract > 3. One Path Per Semantic Decision"
         }
       ]
@@ -1255,7 +1255,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 211,
+          "line": 216,
           "section": "System Guidelines — Mandatory Implementation Contract > 6. Tables, Cache, And Metadata Follow One Authority Chain"
         }
       ]
@@ -1270,7 +1270,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 264,
+          "line": 269,
           "section": "System Guidelines — Mandatory Implementation Contract > 9. Load May Slow The System, Not Break It"
         }
       ]
@@ -1285,7 +1285,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 299,
+          "line": 304,
           "section": "System Guidelines — Mandatory Implementation Contract > 11. Mutations Are Idempotent"
         },
         {
@@ -1386,7 +1386,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 167,
+          "line": 168,
           "section": "Roadmap Steering Pointer > Roadmap Status Truth Policy"
         }
       ]
@@ -1401,7 +1401,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 184,
+          "line": 185,
           "section": "Roadmap Steering Pointer > Sprint Continuation And Package Split Policy"
         }
       ]
@@ -2281,7 +2281,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 94,
+          "line": 95,
           "section": "Roadmap Steering Pointer > Work Intake And Execution Flow"
         }
       ]
@@ -2296,7 +2296,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 109,
+          "line": 110,
           "section": "Roadmap Steering Pointer > Work Intake And Execution Flow"
         }
       ]
@@ -2351,7 +2351,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 340,
+          "line": 345,
           "section": "System Guidelines — Mandatory Implementation Contract > 13. Closure Requires Proof, Review, And Truth Repair"
         }
       ]
@@ -2453,7 +2453,7 @@
         },
         {
           "file": "roadmap.md",
-          "line": 86,
+          "line": 87,
           "section": "Roadmap Steering Pointer > Work Intake And Execution Flow"
         }
       ]
@@ -2680,7 +2680,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 134,
+          "line": 135,
           "section": "Roadmap Steering Pointer > Readiness To Start Work"
         }
       ]
@@ -2695,7 +2695,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 136,
+          "line": 137,
           "section": "Roadmap Steering Pointer > Readiness To Start Work"
         }
       ]
@@ -2712,7 +2712,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 140,
+          "line": 141,
           "section": "Roadmap Steering Pointer > Readiness To Start Work"
         }
       ]
@@ -2730,7 +2730,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 143,
+          "line": 144,
           "section": "Roadmap Steering Pointer > Readiness To Start Work"
         }
       ]
@@ -2747,7 +2747,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 170,
+          "line": 171,
           "section": "Roadmap Steering Pointer > Roadmap Status Truth Policy"
         }
       ]
@@ -2764,7 +2764,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 182,
+          "line": 183,
           "section": "Roadmap Steering Pointer > Sprint Continuation And Package Split Policy"
         }
       ]
@@ -2781,7 +2781,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 203,
+          "line": 204,
           "section": "Roadmap Steering Pointer > Sprint Continuation And Package Split Policy"
         }
       ]
@@ -3142,7 +3142,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 320,
+          "line": 325,
           "section": "System Guidelines — Mandatory Implementation Contract > 12. User-Facing Model Stays Small"
         }
       ]
@@ -3159,7 +3159,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 124,
+          "line": 125,
           "section": "Roadmap Steering Pointer > AGPL Preparatory Work"
         }
       ]
@@ -3274,7 +3274,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 188,
+          "line": 189,
           "section": "Roadmap Steering Pointer > Sprint Continuation And Package Split Policy"
         }
       ]
@@ -3506,7 +3506,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 97,
+          "line": 98,
           "section": "Roadmap Steering Pointer > Work Intake And Execution Flow"
         }
       ]
@@ -3524,7 +3524,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 97,
+          "line": 98,
           "section": "Roadmap Steering Pointer > Work Intake And Execution Flow"
         }
       ]
@@ -3542,7 +3542,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 104,
+          "line": 105,
           "section": "Roadmap Steering Pointer > Work Intake And Execution Flow"
         }
       ]
@@ -3559,7 +3559,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 149,
+          "line": 150,
           "section": "Roadmap Steering Pointer > Roadmap Status Truth Policy"
         }
       ]
@@ -3576,7 +3576,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 285,
+          "line": 290,
           "section": "System Guidelines — Mandatory Implementation Contract > 10. Communication Has One Replicated Data Path"
         }
       ]
@@ -4087,7 +4087,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 108,
+          "line": 113,
           "section": "System Guidelines — Mandatory Implementation Contract > 2. One Semantic Owner Per Concern"
         },
         {
@@ -4109,7 +4109,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 135,
+          "line": 140,
           "section": "System Guidelines — Mandatory Implementation Contract > 3. One Path Per Semantic Decision"
         }
       ]
@@ -4127,7 +4127,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 206,
+          "line": 211,
           "section": "System Guidelines — Mandatory Implementation Contract > 6. Tables, Cache, And Metadata Follow One Authority Chain"
         }
       ]
@@ -4144,7 +4144,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 228,
+          "line": 233,
           "section": "System Guidelines — Mandatory Implementation Contract > 7. Phase Code Must Hand Off To Runtime Owners"
         }
       ]
@@ -4159,7 +4159,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 318,
+          "line": 323,
           "section": "System Guidelines — Mandatory Implementation Contract > 12. User-Facing Model Stays Small"
         }
       ]
@@ -4343,7 +4343,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 159,
+          "line": 160,
           "section": "Roadmap Steering Pointer > Roadmap Status Truth Policy"
         }
       ]
@@ -4414,7 +4414,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 217,
+          "line": 222,
           "section": "System Guidelines — Mandatory Implementation Contract > 7. Phase Code Must Hand Off To Runtime Owners"
         }
       ]
@@ -4814,7 +4814,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 138,
+          "line": 139,
           "section": "Roadmap Steering Pointer > Readiness To Start Work"
         }
       ]
@@ -4831,7 +4831,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 154,
+          "line": 155,
           "section": "Roadmap Steering Pointer > Roadmap Status Truth Policy"
         }
       ]
@@ -4848,7 +4848,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 164,
+          "line": 165,
           "section": "Roadmap Steering Pointer > Roadmap Status Truth Policy"
         }
       ]
@@ -4959,7 +4959,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 104,
+          "line": 105,
           "section": "Roadmap Steering Pointer > Work Intake And Execution Flow"
         }
       ]
@@ -5154,7 +5154,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 124,
+          "line": 125,
           "section": "Roadmap Steering Pointer > AGPL Preparatory Work"
         }
       ]
@@ -5171,7 +5171,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 192,
+          "line": 193,
           "section": "Roadmap Steering Pointer > Sprint Continuation And Package Split Policy"
         }
       ]
@@ -5229,5 +5229,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-05-24T18:25:07.603Z"
+  "generatedAt": "2026-05-25T04:58:06.134Z"
 }
