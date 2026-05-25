@@ -250,9 +250,9 @@ const TEST_SNAPSHOT_REENTRY_TEST_NAME =
 const TEST_ASSERT_SNAPSHOT_REENTRY_ADVANCE_ACTION =
   'the snapshot should return stale SENDING timeout rows to owner advancement';
 const TEST_ASSERT_SNAPSHOT_REENTRY_WAKES_REMOTE_OWNER =
-  'snapshot re-entry should not wake the remote operation owner inline';
+  'snapshot re-entry should wake the remote operation owner and keep bounded verification';
 const TEST_ASSERT_SNAPSHOT_REENTRY_TARGET =
-  'snapshot re-entry should not use the remote replica-dispatch ingress inline';
+  'snapshot re-entry should use the canonical remote replica-dispatch ingress';
 const TEST_ASSERT_SNAPSHOT_REENTRY_NOT_TRANSITION_DEFERRED =
   'snapshot re-entry should not leave the stale SENDING row transition-deferred';
 const TEST_EXPECTED_SENDING_REENTRY_ACTUATION_STATE =

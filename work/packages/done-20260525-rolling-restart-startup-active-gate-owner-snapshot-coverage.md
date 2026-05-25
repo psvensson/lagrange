@@ -14,7 +14,7 @@
     "boundary": "snapshot_coverage",
     "dominantReason": "active_gate_timed_out",
     "currentState": "Fresh representative rolling-restart evidence no longer selects active_gate_snapshot_coverage as the first frontier. Active-gate evidence improved to forced_repair/fresh/ready/applied/proceed with snapshotCoverageNodeCount 2/5, while the first actionable frontier migrated to priority_recovery_partition_progress under operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait.",
-    "nextAction": "Close this active-gate architecture discriminator as owner-boundary migration and continue in work/packages/active-20260525-rolling-restart-workflow-progress-dispatch-chain.md.",
+    "nextAction": "Close this active-gate architecture discriminator as owner-boundary migration and continue in work/packages/done-20260525-rolling-restart-workflow-progress-dispatch-chain.md.",
     "closed": "2026-05-25"
   },
   "scope": {
@@ -33,7 +33,7 @@
       "work/packages/todo-20260513-rolling-restart-diff-aware-risk-review.md",
       "work/packages/todo-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md",
       "work/packages/todo-20260519-rolling-restart-topology-publication-owner-publication-conve.md",
-      "work/packages/active-20260525-rolling-restart-workflow-progress-dispatch-chain.md",
+      "work/packages/done-20260525-rolling-restart-workflow-progress-dispatch-chain.md",
       "work/sprints/active-2026-q2-rolling-restart-resume-activation.md",
       "work/sprints/current-blocker.json",
       "work/sprints/current-blocker.md",
@@ -77,7 +77,7 @@
       "work/packages/todo-20260513-rolling-restart-diff-aware-risk-review.md",
       "work/packages/todo-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md",
       "work/packages/todo-20260519-rolling-restart-topology-publication-owner-publication-conve.md",
-      "work/packages/active-20260525-rolling-restart-workflow-progress-dispatch-chain.md",
+      "work/packages/done-20260525-rolling-restart-workflow-progress-dispatch-chain.md",
       "work/sprints/active-2026-q2-rolling-restart-resume-activation.md",
       "work/sprints/current-blocker.json",
       "work/sprints/current-blocker.md",
@@ -123,7 +123,7 @@
       "parentRevalidatedFocusedProof": true,
       "filesChanged": [
         "work/packages/active-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md",
-        "work/packages/active-20260525-rolling-restart-workflow-progress-dispatch-chain.md",
+        "work/packages/done-20260525-rolling-restart-workflow-progress-dispatch-chain.md",
         "work/packages/done-20260513-rolling-restart-resume-activation-brief.md",
         "work/packages/done-20260525-rolling-restart-representative-green-gate.md",
         "work/sprints/active-2026-q2-rolling-restart-resume-activation.md",
@@ -197,7 +197,7 @@
     "status": "selected",
     "trigger": "frontier-oscillation",
     "selectedChoice": "owner-boundary-migration",
-    "nextAction": "Continue in work/packages/active-20260525-rolling-restart-workflow-progress-dispatch-chain.md after this discriminator closes.",
+    "nextAction": "Continue in work/packages/done-20260525-rolling-restart-workflow-progress-dispatch-chain.md after this discriminator closes.",
     "triggerEvidence": [
       "Fresh route selects priority_recovery_partition_progress as the first frontier.",
       "active_gate_snapshot_coverage is now downstream/degraded rather than the first actionable frontier.",
@@ -286,7 +286,7 @@
     "parentRevalidatedFocusedProof": true,
     "filesChanged": [
       "work/packages/active-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md",
-      "work/packages/active-20260525-rolling-restart-workflow-progress-dispatch-chain.md",
+      "work/packages/done-20260525-rolling-restart-workflow-progress-dispatch-chain.md",
       "work/packages/done-20260513-rolling-restart-resume-activation-brief.md",
       "work/packages/done-20260525-rolling-restart-representative-green-gate.md",
       "work/sprints/active-2026-q2-rolling-restart-resume-activation.md",
@@ -314,7 +314,7 @@ instead routes first to `priority_recovery_partition_progress`.
 
 This package closes the discriminator as an owner-boundary migration and leaves
 startup active-gate runtime frozen while the sprint continues in
-`work/packages/active-20260525-rolling-restart-workflow-progress-dispatch-chain.md`.
+`work/packages/done-20260525-rolling-restart-workflow-progress-dispatch-chain.md`.
 
 ## Scope Basis
 
@@ -458,7 +458,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Scope shape: `cross-owner-discriminator/current-frontier`
 - Output profile: `medium`
 - Owned files: `work/packages/active-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md`,
-  `work/packages/active-20260525-rolling-restart-workflow-progress-dispatch-chain.md`,
+  `work/packages/done-20260525-rolling-restart-workflow-progress-dispatch-chain.md`,
   package queue and tracker handoff files in the declared write scope
 - Candidate runtime files:
   `src/admin/admin-control-snapshot-publication-handoff.js`,

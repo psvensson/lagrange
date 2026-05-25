@@ -367,12 +367,12 @@ async (t) => {
     );
     t.equal(
       deliveries.length,
-      NUM.ZERO,
+      NUM.ONE,
       TEST_ASSERT_SNAPSHOT_REENTRY_WAKES_REMOTE_OWNER,
     );
     t.equal(
       deliveries[NUM.ZERO]?.target,
-      TEST_UNDEFINED_VALUE,
+      TEST_REPLICA_DISPATCH_TARGET,
       TEST_ASSERT_SNAPSHOT_REENTRY_TARGET,
     );
     t.equal(

@@ -182,13 +182,13 @@ async (t) => {
     );
     t.equal(
       deliveries.length,
-      NUM.ZERO,
-      'serial-wait PENDING rows should not wake the remote owner inline',
+      NUM.ONE,
+      'serial-wait PENDING rows should wake the remote owner and keep bounded verification',
     );
     t.equal(
       deliveries[NUM.ZERO]?.target,
-      TEST_UNDEFINED_VALUE,
-      'serial-wait re-entry should not use the remote dispatch ingress inline',
+      TEST_REPLICA_DISPATCH_TARGET,
+      'serial-wait re-entry should use the canonical remote dispatch ingress',
     );
     t.equal(
       deferredTimers.length,

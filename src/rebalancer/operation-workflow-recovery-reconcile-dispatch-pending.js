@@ -640,7 +640,7 @@ function schedulePriorityRecoveryDispatchPendingReentry(
   }
   owner._reentryLocks.add(operationId);
 
-  setImmediate(() => {
+  setTimeout(() => {
     try {
       owner.applyPriorityRecoveryDispatchPendingReentryAction(
         operation,
@@ -656,7 +656,7 @@ function schedulePriorityRecoveryDispatchPendingReentry(
     } finally {
       owner._reentryLocks.delete(operationId);
     }
-  });
+  }, NUM.ZERO);
   return true;
 }
 

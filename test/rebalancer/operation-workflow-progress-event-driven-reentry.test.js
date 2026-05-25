@@ -138,8 +138,8 @@ const TEST_ASSERT_TIMEOUT_RECONCILE_EFFECT =
   'timeout-due dispatch-pending snapshots should use the stale-progress ' +
   'reconcile command';
 const TEST_ASSERT_TIMEOUT_RECONCILE_NO_INLINE_WAKE =
-  'timeout-due dispatch-pending snapshot normalization should not wake the ' +
-  'remote owner inline';
+  'timeout-due dispatch-pending snapshot normalization should wake the ' +
+  'remote owner inline and arm bounded verification';
 const TEST_ASSERT_CACHE_REENTRY_TARGET =
   'cache-event re-entry should use the canonical dispatch ingress';
 const TEST_ASSERT_CACHE_REENTRY_TIMER =
@@ -525,12 +525,12 @@ test(TEST_REENTRY_TEST_NAME, async (t) => {
     );
     t.equal(
       deliveries.length,
-      NUM.ZERO,
+      NUM.ONE,
       TEST_ASSERT_TIMEOUT_RECONCILE_NO_INLINE_WAKE,
     );
     t.equal(
       deliveries[NUM.ZERO]?.target,
-      TEST_UNDEFINED_VALUE,
+      TEST_REPLICA_DISPATCH_TARGET,
       TEST_ASSERT_TIMEOUT_RECONCILE_NO_INLINE_WAKE,
     );
     t.equal(
@@ -562,7 +562,7 @@ test(TEST_REENTRY_TEST_NAME, async (t) => {
     });
     t.equal(
       deliveries.length,
-      NUM.ONE,
+      NUM.TWO,
       'owner-observed event-driven re-entry should enqueue a fresh owner wake',
     );
 
@@ -589,7 +589,7 @@ test(TEST_REENTRY_TEST_NAME, async (t) => {
     });
     t.equal(
       deliveries.length,
-      NUM.TWO,
+      NUM.THREE,
       'observation-missing event-driven re-entry should enqueue owner work',
     );
   } finally {
@@ -670,12 +670,12 @@ test(TEST_PENDING_REENTRY_TEST_NAME, async (t) => {
     );
     t.equal(
       deliveries.length,
-      NUM.ZERO,
+      NUM.ONE,
       TEST_ASSERT_TIMEOUT_RECONCILE_NO_INLINE_WAKE,
     );
     t.equal(
       deliveries[NUM.ZERO]?.target,
-      TEST_UNDEFINED_VALUE,
+      TEST_REPLICA_DISPATCH_TARGET,
       TEST_ASSERT_TIMEOUT_RECONCILE_NO_INLINE_WAKE,
     );
     t.equal(
@@ -782,7 +782,7 @@ test(TEST_PUBLICATION_BACKPRESSURE_REENTRY_TEST_NAME, async (t) => {
     );
     t.equal(
       deliveries.length,
-      NUM.ZERO,
+      NUM.ONE,
       TEST_ASSERT_PUBLICATION_BACKPRESSURE_RETRY,
     );
     t.equal(
@@ -795,11 +795,11 @@ test(TEST_PUBLICATION_BACKPRESSURE_REENTRY_TEST_NAME, async (t) => {
 
     t.equal(
       deliveries.length,
-      NUM.ONE,
+      NUM.TWO,
       TEST_ASSERT_PUBLICATION_BACKPRESSURE_WAKE,
     );
     t.equal(
-      deliveries[NUM.ZERO]?.target,
+      deliveries[NUM.ONE]?.target,
       TEST_CONTROL_PLANE_PUBLICATION_REPLICA_DISPATCH_TARGET,
       TEST_ASSERT_PUBLICATION_BACKPRESSURE_WAKE,
     );

@@ -380,7 +380,7 @@ function normalizePriorityRecoveryDispatchPendingOwnerSnapshot(
       [OPERATION_WORKFLOW_OWNER_PRIORITY_RECOVERY_REENTRY_OPTION
         .ALLOW_OWNER_LANE_RETRY]: true,
       [OPERATION_WORKFLOW_OWNER_PRIORITY_RECOVERY_REENTRY_OPTION
-        .EXECUTE_OWNER_OBSERVATION_EFFECT]: false,
+        .EXECUTE_OWNER_OBSERVATION_EFFECT]: true,
     },
   );
   return normalizedSnapshot;

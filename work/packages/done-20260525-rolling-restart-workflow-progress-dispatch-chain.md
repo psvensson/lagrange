@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "active",
+  "status": "done",
   "intent": {
     "opened": "2026-05-25",
     "lane": "causal-escalation",
@@ -13,16 +13,24 @@
     "owner": "operation_workflow_owner",
     "boundary": "workflow_progress",
     "dominantReason": "priority_recovery_event_driven_wait",
-    "currentState": "Scaffolded from representative evidence for priority_recovery_partition_progress.",
-    "nextAction": "Before runtime edits, prove the workflow-progress missing edge with causal-escalation proof or select an autonomous architecture experiment; activate only after pre-implementation validation is clean."
+    "currentState": "Implemented the workflow-progress dispatch-pending re-entry edge. Focused owner proof passes, priority recovery witnesses dropped from 5 to 0, and fresh rolling-restart evidence migrated the first frontier to active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage.",
+    "nextAction": "Close this package as migrated/reduced off priority_recovery_partition_progress; active-gate snapshot coverage is the fresh downstream frontier.",
+    "closed": "2026-05-25"
   },
   "scope": {
     "writeScope": [
-      "work/packages/todo-20260525-rolling-restart-workflow-progress-dispatch-chain.md",
-      "work/packages/done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md"
+      "work/packages/active-20260525-rolling-restart-workflow-progress-dispatch-chain.md",
+      "work/packages/done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md",
+      "src/rebalancer/operation-workflow-owner.js",
+      "src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js",
+      "test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
+      "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js",
+      "test/rebalancer/priority-recovery-snapshot-handoff-timeout-reentry-test-cases.js",
+      "test/rebalancer/priority-recovery-serial-wait-coordinator-handoff-test-cases.js"
     ],
     "handoffFiles": [
-      "test-output/reports/rolling-restart-continue-green-20260525T000001Z.report.json"
+      "test-output/reports/rolling-restart-continue-green-20260525T000001Z.report.json",
+      "test-output/reports/rolling-restart-workflow-progress-reentry-20260525T170257Z-rerun.report.json"
     ],
     "generatedFiles": [],
     "candidateRuntimeFiles": [
@@ -30,19 +38,29 @@
       "src/rebalancer/operation-workflow-owner-segment-7-stage-3.js",
       "src/rebalancer/operation-workflow-owner-segment-7-stage-5.js",
       "src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js",
+      "src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js",
       "test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
       "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
+      "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js",
+      "test/rebalancer/priority-recovery-snapshot-handoff-timeout-reentry-test-cases.js",
+      "test/rebalancer/priority-recovery-serial-wait-coordinator-handoff-test-cases.js",
       "src/rebalancer/operation-workflow-owner-constants.js",
       "src/control-plane/priority-recovery-snapshot-stage-10.js"
     ],
     "commitScope": [
-      "work/packages/todo-20260525-rolling-restart-workflow-progress-dispatch-chain.md",
-      "work/packages/done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md"
+      "work/packages/active-20260525-rolling-restart-workflow-progress-dispatch-chain.md",
+      "work/packages/done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md",
+      "src/rebalancer/operation-workflow-owner.js",
+      "src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js",
+      "test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
+      "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js",
+      "test/rebalancer/priority-recovery-snapshot-handoff-timeout-reentry-test-cases.js",
+      "test/rebalancer/priority-recovery-serial-wait-coordinator-handoff-test-cases.js"
     ]
   },
   "gates": {
-    "stabilityCredit": "local-proof-only",
-    "whyHighestLeverageNow": "Fresh representative evidence moved the stale active-gate package to the first actionable priority_recovery_partition_progress frontier. The residual is one operation_workflow_owner / workflow_progress group with five witnesses, two direct dispatch_pending advance_existing_operation operations, one dispatched target_creation wait, and two serial-wait dependents.",
+    "stabilityCredit": "representative-migrated",
+    "whyHighestLeverageNow": "Fresh representative evidence moved the priority_recovery_partition_progress frontier: the operation_workflow_owner / workflow_progress residual now has zero witnesses, and the first frontier migrated to active_gate_snapshot_coverage.",
     "representativeRerunCadence": "fresh-representative-rerun"
   },
   "modelFit": {
@@ -61,12 +79,32 @@
       "theory-20260523-rolling-restart-recovery-reconcile-recursion-fix",
       "theory-20260513-rolling-restart-preflight-green-gate-confirmation"
     ],
+    "theoryLedger": "no-ledger-update",
     "proof": {
       "commands": [
-        "falsifier: representative route npm run work:scenario-route -- test-output/reports/rolling-restart-continue-green-20260525T000001Z.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress",
-        "regression: priority recovery residuals npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-continue-green-20260525T000001Z.report.json --markdown",
-        "supporting: causal model npm run analyze:causal-model -- test-output/reports/rolling-restart-continue-green-20260525T000001Z.report.json"
+        "falsifier: focused owner proof node --test-name-pattern \"direct owner snapshot build enqueues dispatch-pending workflow progress re-entry\" test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
+        "regression: dispatch-pending timeout suite node test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
+        "supporting: baseline topology probe npm run analyze:topology-convergence -- test-output/reports/rolling-restart-continue-green-20260525T000001Z.report.json --explain priority_recovery_partition_progress",
+        "supporting: fresh priority topology npm run analyze:topology-convergence -- test-output/reports/rolling-restart-workflow-progress-reentry-20260525T170257Z-rerun.report.json --explain priority_recovery_partition_progress",
+        "supporting: fresh route after rerun npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-workflow-progress-reentry-20260525T170257Z-rerun.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage"
       ]
+    },
+    "implementation": {
+      "parentRevalidatedFocusedProof": true,
+      "filesChanged": [
+        "src/rebalancer/operation-workflow-owner.js",
+        "src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js",
+        "test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
+        "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js",
+        "test/rebalancer/priority-recovery-snapshot-handoff-timeout-reentry-test-cases.js",
+        "test/rebalancer/priority-recovery-serial-wait-coordinator-handoff-test-cases.js"
+      ]
+    },
+    "verificationFix": {
+      "parentRevalidatedFocusedProof": true
+    },
+    "repair": {
+      "validationCommand": "npm run work:repair"
     }
   },
   "modelFitSplit": {
@@ -108,12 +146,12 @@
     "routeOwner": "operation_workflow_owner",
     "routeBoundary": "workflow_progress",
     "routeDominantReason": "priority_recovery_event_driven_wait",
-    "routeCausalOutcome": "pending-before-rerun",
-    "stopMode": "causal-escalation",
-    "nextLane": "causal-escalation",
-    "expectedDelta": "priority recovery witness count drops below 5, owner boundary migrates, snapshot coverage increases beyond 2/5, or rolling-restart turns green",
+    "routeCausalOutcome": "continue_local_fix",
+    "stopMode": "classified_local_blocker",
+    "nextLane": "runtime-owner-boundary",
+    "expectedDelta": "Observed: priority recovery witness count dropped 5 -> 0 and the first frontier migrated to active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage.",
     "requiredRefreshCommands": [
-      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-continue-green-20260525T000001Z.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait",
+      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-workflow-progress-reentry-20260525T170257Z-rerun.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage",
       "update Sprint Strategy Brief and Current Edge Card from the route result",
       "refresh current-blocker with npm run work:repair",
       "npm run work:validate -- --pre-impl"
@@ -125,62 +163,89 @@
     "reason": "Runtime promotion depends on the fresh dispatch chain: control_plane_publications-p1 is dispatched_waiting_progress, replica_operations-p1 and sql_transaction_participants-p1 are persisted_not_dispatched, and sql_transactions-p1 plus sql_write_operations-p1 are serial-wait dependents."
   },
   "representativeResidual": {
-    "status": "pending-before-probe",
+    "status": "migrated",
     "scenario": "rolling-restart",
-    "artifact": "test-output/reports/rolling-restart-continue-green-20260525T000001Z.report.json",
-    "frontier": "priority_recovery_partition_progress",
-    "owner": "operation_workflow_owner",
-    "boundary": "workflow_progress",
-    "dominantReason": "priority_recovery_event_driven_wait",
-    "nextAction": "Implement one bounded workflow-progress advance/re-entry path, then rerun rolling-restart for reduction, migration, or green."
+    "artifact": "test-output/reports/rolling-restart-workflow-progress-reentry-20260525T170257Z-rerun.report.json",
+    "frontier": "active_gate_snapshot_coverage",
+    "owner": "startup_active_gate_owner",
+    "boundary": "snapshot_coverage",
+    "dominantReason": "active_gate_timed_out",
+    "nextAction": "Priority recovery is satisfied with zero witnesses; active-gate snapshot coverage is the next frontier."
   },
   "scenarioCausalClosure": {
     "referenceScenarioOrProbe": "rolling-restart fresh workflow progress dispatch chain",
     "phaseChain": [
       "active-gate selected snapshot evidence improved and is no longer first frontier",
       "publication is PUBLISHED with zero pending ACKs",
-      "priority recovery remains pending on operation_workflow_owner / workflow_progress",
-      "workflow progress must advance or re-enter the dispatch chain before active-gate coverage can complete"
+      "priority recovery dispatch-pending re-entry now wakes the owner and arms bounded verification",
+      "fresh representative evidence satisfies priority_recovery_partition_progress",
+      "active_gate_snapshot_coverage is the first remaining frontier"
     ],
-    "currentFirstFrontier": "priority_recovery_partition_progress / operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait",
+    "currentFirstFrontier": "active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out",
     "knownDownstreamBlockers": [
-      "startup_active_gate_owner / snapshot_coverage remains incomplete at 2/5",
-      "startup_readiness_owner / startup_support_evidence remains downstream of priority recovery and active-gate coverage"
+      "startup_readiness_owner / startup_support_evidence remains downstream of active-gate coverage"
     ],
-    "missingCausalEdge": "The owner must advance, wake, timeout, or re-enter the dispatch_pending persisted operations while preserving target_creation waits and serial-wait dependents as downstream evidence.",
-    "missingCausalEdgeProbe": "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-continue-green-20260525T000001Z.report.json --explain priority_recovery_partition_progress",
-    "falsifyingProbe": "npm run work:scenario-route -- test-output/reports/rolling-restart-continue-green-20260525T000001Z.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress",
-    "boundedProgressProof": "Focused owner tests plus fresh representative rerun must show a bounded dispatch, advance, wake, retry, timeout, or reconcile mechanism that drops priority recovery witness count below 5, migrates owner boundary, raises snapshot coverage above 2/5, or turns rolling-restart green.",
-    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-continue-green-20260525T000001Z.report.json",
-    "expectedObservableTransition": "priority recovery witness count drops below 5, owner boundary migrates, snapshot coverage increases beyond 2/5, or rolling-restart turns green",
+    "missingCausalEdge": "Resolved for this package: dispatch-pending snapshot normalization must wake the remote owner and keep bounded verification armed.",
+    "missingCausalEdgeProbe": "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-workflow-progress-reentry-20260525T170257Z-rerun.report.json --explain priority_recovery_partition_progress",
+    "falsifyingProbe": "npm run work:scenario-route -- test-output/reports/rolling-restart-workflow-progress-reentry-20260525T170257Z-rerun.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage",
+    "boundedProgressProof": "Focused owner tests and fresh representative rerun show a bounded wake/timer re-entry mechanism; priority recovery witnesses dropped to zero and the frontier migrated.",
+    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-workflow-progress-reentry-20260525T170257Z-rerun.report.json",
+    "expectedObservableTransition": "Observed priority recovery witness count 5 -> 0 and first frontier migration to startup_active_gate_owner / snapshot_coverage.",
     "maxProgressBound": "one operation_workflow_owner / workflow_progress runtime slice",
     "sameFrontierFallback": "If fresh evidence remains same-frontier with no concrete metric reduction, stop for autonomous architecture experiment instead of another local runtime patch.",
-    "expectedNextFrontier": "reduced operation_workflow_owner / workflow_progress, migrated owner boundary, startup_active_gate_owner / snapshot_coverage, or representative green",
-    "resultClassification": "pending-before-probe",
-    "stopCondition": "continue-local-fix",
+    "expectedNextFrontier": "startup_active_gate_owner / snapshot_coverage",
+    "resultClassification": "migrated",
+    "stopCondition": "migrate-owner-boundary",
     "recentFrontierHistory": [
       "done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md / startup_active_gate_owner / snapshot_coverage / migrated",
       "done-20260525-rolling-restart-cache-watermark-write-queue-drain-successor.md / startup_active_gate_owner / snapshot_coverage / reduced"
     ],
     "oscillationCheck": "Fresh evidence moved from startup_active_gate_owner / snapshot_coverage back to operation_workflow_owner / workflow_progress after active-gate evidence improved but did not complete.",
-    "handoffInvariant": "Startup active-gate and startup readiness remain downstream until workflow progress proves reduction, migration, or green."
+    "handoffInvariant": "Startup readiness remains downstream; this package does not patch active-gate symptoms after workflow progress migrated."
   },
   "causalGovernance": {
     "hypothesis": "Workflow progress must advance the fresh priority-recovery dispatch chain before active-gate coverage can complete.",
     "stopConditionCheck": "Run priority-recovery route, residual extraction, and `npm run analyze:causal-model -- test-output/reports/rolling-restart-continue-green-20260525T000001Z.report.json` before runtime promotion.",
     "expectedCausalModelChange": "The successor either proves a concrete operation_workflow_owner / workflow_progress missing edge, reduces the witness count, migrates owner boundary, or stops for architecture work.",
-    "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "Fresh evidence shows priority_recovery_partition_progress first with five operation_workflow_owner / workflow_progress witnesses after active-gate coverage improved but did not complete.",
-    "crossBoundaryReview": "Do not patch downstream startup readiness or active-gate symptoms until workflow progress moves or migrates."
+    "representativeOutcome": "migrated",
+    "causalDebt": "Closed for this package: fresh evidence shows priority_recovery_partition_progress satisfied and zero operation_workflow_owner / workflow_progress witnesses after the bounded dispatch-pending re-entry edge.",
+    "crossBoundaryReview": "Do not patch startup readiness; active-gate snapshot coverage is a separate downstream frontier."
+  },
+  "ownerBoundaryMigrationProof": {
+    "fromOwner": "operation_workflow_owner",
+    "fromBoundary": "workflow_progress",
+    "toOwner": "startup_active_gate_owner",
+    "toBoundary": "snapshot_coverage",
+    "reason": "Fresh representative evidence satisfies priority_recovery_partition_progress with zero priority recovery witnesses and selects active_gate_snapshot_coverage as the first remaining topology frontier.",
+    "evidence": "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-workflow-progress-reentry-20260525T170257Z-rerun.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage"
   },
   "observablePrediction": {
     "metric": "priority recovery witness count, owner boundary, snapshot coverage, or representative green",
     "predicted": "causal-escalation proof names one missing workflow-progress edge before runtime promotion",
-    "observed": "pending-before-observation",
-    "accuracy": "pending-before-observation",
-    "evidence": "test-output/reports/rolling-restart-continue-green-20260525T000001Z.report.json",
-    "metricDelta": 0
-  }
+    "observed": "focused owner proof passes and fresh rolling-restart rerun reduced priority recovery witnesses 5 -> 0; first frontier migrated to active_gate_snapshot_coverage",
+    "accuracy": "partial",
+    "evidence": "test-output/reports/rolling-restart-workflow-progress-reentry-20260525T170257Z-rerun.report.json",
+    "metricDelta": 5
+  },
+  "theoryLedger": "no-ledger-update",
+  "implementation": {
+    "parentRevalidatedFocusedProof": true,
+    "filesChanged": [
+      "src/rebalancer/operation-workflow-owner.js",
+      "src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js",
+      "test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
+      "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js",
+      "test/rebalancer/priority-recovery-snapshot-handoff-timeout-reentry-test-cases.js",
+      "test/rebalancer/priority-recovery-serial-wait-coordinator-handoff-test-cases.js"
+    ]
+  },
+  "verificationFix": {
+    "parentRevalidatedFocusedProof": true
+  },
+  "repair": {
+    "validationCommand": "npm run work:repair"
+  },
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -251,19 +316,20 @@ restart resume activation sprint.
 
 - Baseline artifact: `test-output/reports/rolling-restart-continue-green-20260525T000001Z.report.json`
 - Expected delta: priority recovery witness count drops below 5, owner boundary migrates, snapshot coverage increases beyond 2/5, or rolling-restart turns green
+- Observed delta: fresh rerun `test-output/reports/rolling-restart-workflow-progress-reentry-20260525T170257Z-rerun.report.json` reduced priority recovery witnesses from 5 to 0 and migrated the first frontier to `active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage`.
 - Local proof class: focused owner or diagnostic proof only; it is not representative-green proof.
 - Representative proof class: fresh representative rerun or canonical route-after-rerun result.
 - Stop if unchanged: same-frontier with no concrete metric or shape reduction opens/selects an autonomous architecture experiment instead of another local patch; human escalation is only for contradictory or blocked evidence.
 
 ## Rerun Decision Gate
 
-- Source artifact: `test-output/reports/rolling-restart-continue-green-20260525T000001Z.report.json`
-- Route owner: `operation_workflow_owner`
-- Route boundary: `workflow_progress`
-- Route dominant reason: `priority_recovery_event_driven_wait`
-- Route causal outcome: `pending-before-rerun`
-- Stop mode: `causal-escalation`
-- Next lane: `causal-escalation`
+- Source artifact: `test-output/reports/rolling-restart-workflow-progress-reentry-20260525T170257Z-rerun.report.json`
+- Route owner: `startup_active_gate_owner`
+- Route boundary: `snapshot_coverage`
+- Route dominant reason: `active_gate_timed_out`
+- Route causal outcome: `continue_local_fix`
+- Stop mode: `classified_local_blocker`
+- Next lane: `runtime-owner-boundary`
 - Required after rerun: route-after-rerun, Sprint Strategy Brief and Current Edge Card update, current-blocker refresh, and pre-implementation validation.
 
 ## Classification Efficiency
@@ -315,7 +381,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `scenario-causal-escalation`
 - Output profile: `medium`
-- Owned files: `work/packages/todo-20260525-rolling-restart-workflow-progress-dispatch-chain.md`
+- Owned files: `work/packages/active-20260525-rolling-restart-workflow-progress-dispatch-chain.md`
 - Candidate runtime files: `src/rebalancer/operation-workflow-owner.js`, `src/rebalancer/operation-workflow-owner-segment-7-stage-3.js`, `src/rebalancer/operation-workflow-owner-segment-7-stage-5.js`, `src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js`, `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`, `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`, `src/rebalancer/operation-workflow-owner-constants.js`, `src/control-plane/priority-recovery-snapshot-stage-10.js`
 - Forbidden files: runtime source and tests until activation passes
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
@@ -343,15 +409,20 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## Execution Evidence
 
-Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
-Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
-
-- [ ] action: implementation; owner: <owner>; files-changed: <paths or none>; validation: <focused proof and parent revalidated focused proof: yes>; outcome: <validated|blocked>.
-- [ ] action: verification-fix; owner: <owner>; files-changed: <paths or none>; validation: <verification proof and parent revalidated focused proof: yes>; outcome: <validated|blocked>.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: <validated|not-needed>.
+- [x] action: implementation; owner: operation_workflow_owner; files-changed: src/rebalancer/operation-workflow-owner.js, src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js, test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js, test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js, test/rebalancer/priority-recovery-snapshot-handoff-timeout-reentry-test-cases.js, test/rebalancer/priority-recovery-serial-wait-coordinator-handoff-test-cases.js; validation: `node --test-name-pattern "direct owner snapshot build enqueues dispatch-pending workflow progress re-entry" test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js` pass 72/72, `node test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js` pass 230/230, parent revalidated focused proof: yes; outcome: validated.
+- [x] action: verification-fix; owner: operation_workflow_owner; files-changed: none; validation: verifier-fixer 019e6022-9fb2-7e02-bfc1-2dd49373dd03 reran both focused tests, `npm run work:evidence-summary -- test-output/reports/rolling-restart-workflow-progress-reentry-20260525T170257Z-rerun.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-workflow-progress-reentry-20260525T170257Z-rerun.report.json --explain priority_recovery_partition_progress`, and `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-workflow-progress-reentry-20260525T170257Z-rerun.report.json --markdown`; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: representative-rerun; owner: operation_workflow_owner; files-changed: none; validation: `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-workflow-progress-reentry-20260525T170257Z-rerun.report.json --verbose` failed after migrating the frontier; `priority_recovery_partition_progress` satisfied and priority recovery witnesses are 0; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md, work/sprints/active-2026-q2-rolling-restart-resume-activation.md; validation: `npm run work:repair` pass; outcome: validated.
 
 ## Validation
 
-1. npm run work:scenario-route -- test-output/reports/rolling-restart-continue-green-20260525T000001Z.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress
-2. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-continue-green-20260525T000001Z.report.json --markdown
-3. npm run analyze:causal-model -- test-output/reports/rolling-restart-continue-green-20260525T000001Z.report.json
+1. node --test-name-pattern "direct owner snapshot build enqueues dispatch-pending workflow progress re-entry" test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js
+2. node test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js
+3. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-workflow-progress-reentry-20260525T170257Z-rerun.report.json --explain priority_recovery_partition_progress
+4. npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-workflow-progress-reentry-20260525T170257Z-rerun.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage
+
+## Commit And Push Ledger
+
+1. Focused package commit: 3048361913d1cdaf90761b1e72943f05000499c2
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
