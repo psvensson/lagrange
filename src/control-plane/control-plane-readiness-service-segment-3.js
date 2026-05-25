@@ -80,6 +80,47 @@ class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceS
     }
   }
 
+  shouldAllowTransportBackedRecoveryGrace(context = {}) {
+    const nodeId = context.nodeId;
+    const nodeEvidence =
+      context.nodeEvidence && typeof context.nodeEvidence === TYPEOF.OBJECT ?
+        context.nodeEvidence :
+        null;
+    const serviceRows = Array.isArray(context.serviceRows) ?
+      context.serviceRows :
+      [];
+
+    let isTransportActive = nodeEvidence?.transportConnected === true;
+    if (!isTransportActive && nodeId && this.messageRouter) {
+      const connection = typeof this.messageRouter.nodeConnections?.get === 'function' ?
+        this.messageRouter.nodeConnections.get(nodeId) :
+        null;
+      const isReconnecting = connection && (
+        connection.state === 'reconnecting' ||
+        (typeof this.messageRouter.hasScheduledReconnect === 'function' &&
+         this.messageRouter.hasScheduledReconnect(connection))
+      );
+      const connectedNodes = typeof this.messageRouter.getConnectedNodes === 'function' ?
+        this.messageRouter.getConnectedNodes() :
+        [];
+      const remoteWitnesses = connectedNodes.filter((id) => id !== this.nodeId);
+      const hasAlternativeWitnesses = remoteWitnesses.length > 0;
+
+      if (isReconnecting || hasAlternativeWitnesses) {
+        isTransportActive = true;
+      }
+    }
+
+    if (!isTransportActive) {
+      return false;
+    }
+
+    return (
+      this.hasRoutableService(serviceRows) &&
+      this.hasRecoveryGraceControlPlaneService(serviceRows)
+    );
+  }
+
   buildReasons(context) {
     const reasons = [];
     const dimensions = context.dimensions;

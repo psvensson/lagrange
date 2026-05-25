@@ -1,6 +1,6 @@
 # Rolling Restart Stability Hardening Final Sprint
 
-Status: active. Created on May 23, 2026.
+Status: done. Created on May 23, 2026.
 
 ## Goal
 

@@ -622,15 +622,22 @@ class NodeHandle {
     });
 
     ws.on('close', () => {
-      this._rejectPendingQueries(
-        'Admin API query connection closed before response ' +
-          'for node ' +
-          this.id +
-          ' on lane ' +
-          lane,
-        lane,
-      );
-      this._resetAdminSocket(lane);
+      const closeTimeout = setTimeout(() => {
+        if (this._adminSocketByLane.get(lane) === ws) {
+          this._rejectPendingQueries(
+            'Admin API query connection closed before response ' +
+              'for node ' +
+              this.id +
+              ' on lane ' +
+              lane,
+            lane,
+          );
+          this._resetAdminSocket(lane);
+        }
+      }, 2000);
+      if (typeof closeTimeout.unref === 'function') {
+        closeTimeout.unref();
+      }
     });
   }
 

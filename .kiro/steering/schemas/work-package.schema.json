@@ -135,6 +135,25 @@
         },
         "companionGatesFile": {
           "type": "string"
+        },
+        "representativeRerunCadence": {
+          "type": "string",
+          "enum": [
+            "fresh-representative-rerun",
+            "scheduled-rerun-command",
+            "explicit-invalid-rerun-reason",
+            "architecture-stop-reason"
+          ]
+        },
+        "codeQualityAdmission": {
+          "type": "string",
+          "enum": [
+            "removes-duplicate-decision-paths",
+            "preserves-owner-outcomes",
+            "improves-evidence-fidelity",
+            "prevents-regression",
+            "active-guardrail-requirement"
+          ]
         }
       },
       "additionalProperties": false

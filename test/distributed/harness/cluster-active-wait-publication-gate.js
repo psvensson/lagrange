@@ -675,4 +675,5 @@ export {
   resolveActiveWaitPublicationStatusRank,
   resolveStartupPublicationLagSelectedMissingCount,
   resolveSteadyPublishedSelectedMissingCount,
+  ACTIVE_WAIT_PUBLICATION_CONVERGENCE_REASONS_EMPTY,
 };

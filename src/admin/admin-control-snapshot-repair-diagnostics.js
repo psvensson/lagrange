@@ -269,8 +269,11 @@ function hasWebSocketClosedRepairCause(repair = null) {
   return normalizeControlSnapshotRepairMessageList(repair).some((message) => {
     const lowerMessage = message.toLowerCase();
     return (
-      lowerMessage.includes(CONTROL_SNAPSHOT_REPAIR_WEBSOCKET_MATCH_LOWER) &&
-      lowerMessage.includes(CONTROL_SNAPSHOT_REPAIR_CLOSED_MATCH_LOWER)
+      (lowerMessage.includes(CONTROL_SNAPSHOT_REPAIR_WEBSOCKET_MATCH_LOWER) &&
+       lowerMessage.includes(CONTROL_SNAPSHOT_REPAIR_CLOSED_MATCH_LOWER)) ||
+      lowerMessage.includes('connection closed') ||
+      lowerMessage.includes('transport closed') ||
+      lowerMessage.includes('connection closed before response')
     );
   });
 }

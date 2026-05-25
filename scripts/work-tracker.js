@@ -5059,6 +5059,22 @@ function replacePackageMetadata(content, metadata) {
       }
       metadataToSave.execution.proof.commands = metadata.proof;
     }
+
+    for (const key of [
+      'causalGovernance',
+      'scenarioCausalClosure',
+      'representativeResidual',
+      'observablePrediction',
+      'experimentOutcome',
+      'rerunDecision',
+      'classificationEfficiency',
+      'architectureDecisionGate',
+      'predecessor'
+    ]) {
+      if (metadata[key] !== undefined) {
+        metadataToSave[key] = metadata[key];
+      }
+    }
   }
 
   const nextJson = JSON.stringify(metadataToSave, null, NUM_TWO);

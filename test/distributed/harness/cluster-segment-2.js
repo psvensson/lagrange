@@ -26,6 +26,7 @@ import {
   resolveActiveWaitPublicationStatusRank,
   resolveStartupPublicationLagSelectedMissingCount,
   resolveSteadyPublishedSelectedMissingCount,
+  ACTIVE_WAIT_PUBLICATION_CONVERGENCE_REASONS_EMPTY,
 } from './cluster-active-wait-publication-gate.js';
 import {
   normalizePriorityRecoverySemanticStateId,
