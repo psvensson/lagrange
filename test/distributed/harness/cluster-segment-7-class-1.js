@@ -939,8 +939,14 @@ class Cluster1 {
 
   async waitForConvergence(options) {
     const nodes = Array.from(this._nodes.values());
+    const controlQueryTimeoutMs = this._config?.benchmark?.controlQueryTimeoutMs;
+    const snapshotTimeoutMs =
+      Number.isInteger(controlQueryTimeoutMs) && controlQueryTimeoutMs > 0 ?
+        controlQueryTimeoutMs :
+        undefined;
     return waitForConvergence(nodes, {
       ignoreStaleInFlightReplicaOperations: true,
+      ...(snapshotTimeoutMs !== undefined ? {snapshotTimeoutMs} : {}),
       ...(options || {}),
     });
   }
@@ -949,14 +955,30 @@ class Cluster1 {
     return this._waitForAllActive(options);
   }
 
-  async assertConsistency() {
+  async assertConsistency(options) {
     const nodes = Array.from(this._nodes.values());
-    return assertConsistency(nodes);
+    const controlQueryTimeoutMs = this._config?.benchmark?.controlQueryTimeoutMs;
+    const snapshotTimeoutMs =
+      Number.isInteger(controlQueryTimeoutMs) && controlQueryTimeoutMs > 0 ?
+        controlQueryTimeoutMs :
+        undefined;
+    return assertConsistency(nodes, {
+      ...(snapshotTimeoutMs !== undefined ? {snapshotTimeoutMs} : {}),
+      ...(options || {}),
+    });
   }
 
   async waitForConsistencyConvergence(options) {
     const nodes = Array.from(this._nodes.values());
-    return waitForConsistencyConvergence(nodes, options);
+    const controlQueryTimeoutMs = this._config?.benchmark?.controlQueryTimeoutMs;
+    const snapshotTimeoutMs =
+      Number.isInteger(controlQueryTimeoutMs) && controlQueryTimeoutMs > 0 ?
+        controlQueryTimeoutMs :
+        undefined;
+    return waitForConsistencyConvergence(nodes, {
+      ...(snapshotTimeoutMs !== undefined ? {snapshotTimeoutMs} : {}),
+      ...(options || {}),
+    });
   }
 
   async assertDataIntegrity(table, expectedRows) {

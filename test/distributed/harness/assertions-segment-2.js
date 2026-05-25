@@ -517,6 +517,7 @@ async function waitForConvergence(nodes, options = {}) {
     maxSustainedOverTargetMs,
     sampleIntervalMs,
     targetVoterCount,
+    snapshotTimeoutMs,
   } = opts;
   const ignoreStaleInFlightReplicaOperations =
     options?.ignoreStaleInFlightReplicaOperations === true;
@@ -564,6 +565,7 @@ async function waitForConvergence(nodes, options = {}) {
     const snapshot = await queryReachableClusterSnapshot(nodes, {
       targetVoterCount,
       forceRepair,
+      snapshotTimeoutMs,
     });
     latestRows = snapshot.servicesRows;
     latestExpectedPartitionIds = snapshot.expectedPartitionIds;
