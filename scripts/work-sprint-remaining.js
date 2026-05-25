@@ -3,6 +3,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
+import {normalizeMetadata} from './work-package-schema.js';
 
 const ENCODING_UTF8 = 'utf8';
 const EMPTY_TEXT = '';
@@ -54,7 +55,7 @@ function packageStatusFromPath(filePath) {
   return KNOWN_PACKAGE_STATUSES.includes(status) ? status : UNKNOWN_VALUE;
 }
 
-function parsePackageMetadata(content) {
+function parsePackageMetadata(content, filePath) {
   const openIndex = content.indexOf(PACKAGE_METADATA_OPEN);
   if (openIndex < 0) {
     return undefined;
@@ -65,7 +66,8 @@ function parsePackageMetadata(content) {
     return undefined;
   }
   try {
-    return JSON.parse(content.slice(jsonStart, closeIndex).trim());
+    const rawMetadata = JSON.parse(content.slice(jsonStart, closeIndex).trim());
+    return normalizeMetadata(rawMetadata, filePath);
   } catch {
     return undefined;
   }
@@ -147,7 +149,7 @@ async function findActiveSprint(root) {
 
 async function readPackage(root, packagePath, source) {
   const content = await readTextIfPresent(root, packagePath);
-  const metadata = parsePackageMetadata(content);
+  const metadata = parsePackageMetadata(content, packagePath);
   const fileStatus = packageStatusFromPath(packagePath);
   return {
     path: packagePath,

@@ -2,47 +2,61 @@
 
 <!-- work-package
 {
-  "schema": "work-package-v1",
+  "schema": "work-package-v2",
   "status": "todo",
-  "opened": "2026-05-13",
-  "lane": "lightweight-maintenance",
-  "scenario": "none",
-  "artifact": "none",
-  "playback": "none",
-  "owner": "workflow_tooling_owner",
-  "boundary": "release_gate_blocker_path_ledger",
-  "dominantReason": "local_package_fixes_without_whole_problem_lineage",
-  "currentState": "Future release-gate work needs a mandatory blocker-path ledger so packages reason from the whole causal chain instead of the newest local symptom.",
-  "nextAction": "Add the reusable ledger template and package guidance, then make future release-gate sprint activation require a populated blocker-path ledger before runtime implementation packages start.",
-  "proof": [
-    "npm run work:package:doctor -- --suggest work/packages/todo-20260513-release-gate-blocker-path-ledger-template.md",
-    "npm run work:validate -- --entry work/packages/todo-20260513-release-gate-blocker-path-ledger-template.md",
-    "git diff --check -- work/packages/todo-20260513-release-gate-blocker-path-ledger-template.md work/README.md work/templates/work-package-template.md"
-  ],
-  "writeScope": [
-    "work/packages/todo-20260513-release-gate-blocker-path-ledger-template.md",
-    "work/README.md",
-    "work/templates/work-package-template.md"
-  ],
-  "handoffFiles": [
-    "work/packages/done-20260512-scenario-causal-closure-governance.md",
-    "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md"
-  ],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [
-    "work/packages/todo-20260513-release-gate-blocker-path-ledger-template.md",
-    "work/README.md",
-    "work/templates/work-package-template.md"
-  ],
+  "intent": {
+    "opened": "2026-05-13",
+    "lane": "lightweight-maintenance",
+    "scenario": "none",
+    "artifact": "none",
+    "playback": "none",
+    "owner": "workflow_tooling_owner",
+    "boundary": "release_gate_blocker_path_ledger",
+    "dominantReason": "local_package_fixes_without_whole_problem_lineage",
+    "currentState": "Future release-gate work needs a mandatory blocker-path ledger so packages reason from the whole causal chain instead of the newest local symptom.",
+    "nextAction": "Add the reusable ledger template and package guidance, then make future release-gate sprint activation require a populated blocker-path ledger before runtime implementation packages start."
+  },
+  "scope": {
+    "writeScope": [
+      "work/packages/todo-20260513-release-gate-blocker-path-ledger-template.md",
+      "work/README.md",
+      "work/templates/work-package-template.md"
+    ],
+    "handoffFiles": [
+      "work/packages/done-20260512-scenario-causal-closure-governance.md",
+      "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md"
+    ],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": [],
+    "commitScope": [
+      "work/packages/todo-20260513-release-gate-blocker-path-ledger-template.md",
+      "work/README.md",
+      "work/templates/work-package-template.md"
+    ]
+  },
+  "gates": {
+    "stabilityCredit": "local-proof-only",
+    "whyHighestLeverageNow": "Future release-gate work needs a mandatory blocker-path ledger so packages reason from the whole causal chain instead of the newest local symptom."
+  },
   "modelFit": {
     "packageClass": "workflow-tooling-governance",
     "intendedMinimumModel": "gpt-5.3-codex",
     "scopeShape": "repo-wide-governance/blocker-path-ledger",
+    "outputProfile": "medium",
     "escalationTriggers": [
       "validation requires tracker code changes",
       "the ledger must infer runtime owner decisions instead of recording package evidence"
     ]
+  },
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": {
+      "commands": [
+        "npm run work:package:doctor -- --suggest work/packages/todo-20260513-release-gate-blocker-path-ledger-template.md",
+        "npm run work:validate -- --entry work/packages/todo-20260513-release-gate-blocker-path-ledger-template.md",
+        "git diff --check -- work/packages/todo-20260513-release-gate-blocker-path-ledger-template.md work/README.md work/templates/work-package-template.md"
+      ]
+    }
   }
 }
 -->

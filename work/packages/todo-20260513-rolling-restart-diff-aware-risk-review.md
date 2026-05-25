@@ -2,49 +2,63 @@
 
 <!-- work-package
 {
-  "schema": "work-package-v1",
+  "schema": "work-package-v2",
   "status": "todo",
-  "opened": "2026-05-13",
-  "lane": "read-review-doc-only",
-  "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-green-gate-after-dispatch-retry-recovery-readiness.report.json",
-  "playback": "none",
-  "owner": "workflow_tooling_owner",
-  "boundary": "dirty_diff_risk_review",
-  "dominantReason": "broad_dirty_runtime_diff_before_release_gate",
-  "currentState": "Executed the dirty-diff review on May 13, 2026. `npm run work:dirty-scope` reports 44 dirty entries: 23 current-blocker package-owned entries under `startup_active_gate_owner / snapshot_coverage`, no tracker-generated entries, and 21 unrelated entries. After removing sprint metadata/package-status cleanup from the unrelated bucket, 14 runtime/test files remain split-required before a representative full rolling-restart rerun can be trusted.",
-  "nextAction": "Do not run the full rolling-restart gate from this mixed diff. Continue only focused proof until the active startup package is committed and the unrelated control-plane, node, rebalancer, and failure-bundle edits are split into their own package or explicitly admitted by the human.",
-  "proof": [
-    "npm run work:dirty-scope",
-    "git status --short",
-    "git diff --stat",
-    "git diff --check",
-    "npm run work:validate -- --entry work/packages/todo-20260513-rolling-restart-diff-aware-risk-review.md"
-  ],
-  "writeScope": [
-    "work/packages/todo-20260513-rolling-restart-diff-aware-risk-review.md",
-    "work/sprints/todo-2026-q2-rolling-restart-llm-preflight-and-code-risk-closure.md"
-  ],
-  "handoffFiles": [
-    "work/packages/done-20260513-rolling-restart-green-gate-workflow-progress-recovery.md",
-    "work/sprints/current-blocker.md",
-    "work/sprints/current-blocker.json"
-  ],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [
-    "work/packages/todo-20260513-rolling-restart-diff-aware-risk-review.md",
-    "work/sprints/todo-2026-q2-rolling-restart-llm-preflight-and-code-risk-closure.md"
-  ],
+  "intent": {
+    "opened": "2026-05-13",
+    "lane": "read-review-doc-only",
+    "scenario": "rolling-restart",
+    "artifact": "test-output/reports/rolling-restart-green-gate-after-dispatch-retry-recovery-readiness.report.json",
+    "playback": "none",
+    "owner": "workflow_tooling_owner",
+    "boundary": "dirty_diff_risk_review",
+    "dominantReason": "broad_dirty_runtime_diff_before_release_gate",
+    "currentState": "Executed the dirty-diff review on May 13, 2026. `npm run work:dirty-scope` reports 44 dirty entries: 23 current-blocker package-owned entries under `startup_active_gate_owner / snapshot_coverage`, no tracker-generated entries, and 21 unrelated entries. After removing sprint metadata/package-status cleanup from the unrelated bucket, 14 runtime/test files remain split-required before a representative full rolling-restart rerun can be trusted.",
+    "nextAction": "Do not run the full rolling-restart gate from this mixed diff. Continue only focused proof until the active startup package is committed and the unrelated control-plane, node, rebalancer, and failure-bundle edits are split into their own package or explicitly admitted by the human."
+  },
+  "scope": {
+    "writeScope": [
+      "work/packages/todo-20260513-rolling-restart-diff-aware-risk-review.md",
+      "work/sprints/todo-2026-q2-rolling-restart-llm-preflight-and-code-risk-closure.md"
+    ],
+    "handoffFiles": [
+      "work/packages/done-20260513-rolling-restart-green-gate-workflow-progress-recovery.md",
+      "work/sprints/current-blocker.md",
+      "work/sprints/current-blocker.json"
+    ],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": [],
+    "commitScope": [
+      "work/packages/todo-20260513-rolling-restart-diff-aware-risk-review.md",
+      "work/sprints/todo-2026-q2-rolling-restart-llm-preflight-and-code-risk-closure.md"
+    ]
+  },
+  "gates": {
+    "stabilityCredit": "local-proof-only",
+    "whyHighestLeverageNow": "Executed the dirty-diff review on May 13, 2026. `npm run work:dirty-scope` reports 44 dirty entries: 23 current-blocker package-owned entries under `startup_active_gate_owner / snapshot_coverage`, no tracker-generated entries, and 21 unrelated entries. After removing sprint metadata/package-status cleanup from the unrelated bucket, 14 runtime/test files remain split-required before a representative full rolling-restart rerun can be trusted."
+  },
   "modelFit": {
     "packageClass": "release-gate-risk-review",
     "intendedMinimumModel": "gpt-5.3-codex",
     "scopeShape": "dirty-diff-review/no-runtime-edits",
+    "outputProfile": "medium",
     "escalationTriggers": [
       "dirty package-owned and unrelated changes cannot be separated safely",
       "the review finds a runtime regression that must be fixed before rerun",
       "the review requires editing runtime or tests"
     ]
+  },
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": {
+      "commands": [
+        "npm run work:dirty-scope",
+        "git status --short",
+        "git diff --stat",
+        "git diff --check",
+        "npm run work:validate -- --entry work/packages/todo-20260513-rolling-restart-diff-aware-risk-review.md"
+      ]
+    }
   }
 }
 -->

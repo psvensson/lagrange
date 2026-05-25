@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
+import {normalizeMetadata} from './work-package-schema.js';
 
 const ENCODING_UTF8 = 'utf8';
 const EMPTY_TEXT = '';
@@ -52,7 +53,7 @@ async function listDonePackageFiles(root = process.cwd()) {
     .sort();
 }
 
-function parsePackageMetadata(content) {
+function parsePackageMetadata(content, filePath) {
   const openIndex = content.indexOf(PACKAGE_METADATA_OPEN);
   if (openIndex < NUM_ZERO) {
     return null;
@@ -63,7 +64,8 @@ function parsePackageMetadata(content) {
     return null;
   }
   try {
-    return JSON.parse(content.slice(jsonStart, closeIndex).trim());
+    const rawMetadata = JSON.parse(content.slice(jsonStart, closeIndex).trim());
+    return normalizeMetadata(rawMetadata, filePath);
   } catch {
     return null;
   }
@@ -181,7 +183,7 @@ async function readPackageEntry(root, filePath) {
   const content = await fs.readFile(filePath, ENCODING_UTF8);
   return {
     path: normalizeRelativePath(path.relative(root, filePath)),
-    metadata: parsePackageMetadata(content),
+    metadata: parsePackageMetadata(content, filePath),
   };
 }
 

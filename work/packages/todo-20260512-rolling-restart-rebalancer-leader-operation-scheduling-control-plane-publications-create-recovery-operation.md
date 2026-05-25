@@ -2,39 +2,58 @@
 
 <!-- work-package
 {
-  "schema": "work-package-v1",
+  "schema": "work-package-v2",
   "status": "todo",
-  "opened": "2026-05-12",
-  "lane": "scenario-release-gate",
-  "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-current-release-gate-after-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled-fix.report.json",
-  "playback": "test-output/reports/.playback/rolling-restart-current-release-gate-after-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled-fix/rolling-restart/",
-  "owner": "rebalancer_leader",
-  "boundary": "operation_scheduling",
-  "dominantReason": "eligible_but_no_operation_created",
-  "currentState": "Parked split successor from the needs_operation / coordination_mismatch classification. The latest artifact has one direct operation-scheduling witness: control_plane_publications-p1 is needs_operation, eligible_but_no_operation_created, action_required, rebalancer_leader / operation_scheduling, event_driven, and next action create_recovery_operation.",
-  "nextAction": "Keep parked until the workflow-progress coordinator-excludes-node successor is fixed, reduced, or fresh evidence promotes this operation-scheduling witness as the first selected owner boundary. When activated, determine why control_plane_publications-p1 remains eligible without a created recovery operation.",
-  "proof": [
-    "npm run work:evidence-summary -- test-output/reports/rolling-restart-current-release-gate-after-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled-fix.report.json",
-    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled-fix.report.json --explain priority_recovery_partition_progress",
-    "jq residual semantic-state extraction for needs_operation and coordination_mismatch partitions",
-    "focused rebalancer_leader / operation_scheduling tests selected by implementation package",
-    "representative rolling-restart rerun or explicit migration proof"
-  ],
-  "touchedFiles": [
-    "work/packages/todo-20260512-rolling-restart-rebalancer-leader-operation-scheduling-control-plane-publications-create-recovery-operation.md"
-  ],
+  "intent": {
+    "opened": "2026-05-12",
+    "lane": "scenario-release-gate",
+    "scenario": "rolling-restart",
+    "artifact": "test-output/reports/rolling-restart-current-release-gate-after-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled-fix.report.json",
+    "playback": "test-output/reports/.playback/rolling-restart-current-release-gate-after-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled-fix/rolling-restart/",
+    "owner": "rebalancer_leader",
+    "boundary": "operation_scheduling",
+    "dominantReason": "eligible_but_no_operation_created",
+    "currentState": "Parked split successor from the needs_operation / coordination_mismatch classification. The latest artifact has one direct operation-scheduling witness: control_plane_publications-p1 is needs_operation, eligible_but_no_operation_created, action_required, rebalancer_leader / operation_scheduling, event_driven, and next action create_recovery_operation.",
+    "nextAction": "Keep parked until the workflow-progress coordinator-excludes-node successor is fixed, reduced, or fresh evidence promotes this operation-scheduling witness as the first selected owner boundary. When activated, determine why control_plane_publications-p1 remains eligible without a created recovery operation.",
+    "predecessor": "work/packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-needs-operation-coordination-mismatch-classification.md"
+  },
+  "scope": {
+    "writeScope": [],
+    "handoffFiles": [],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": [],
+    "commitScope": []
+  },
+  "gates": {
+    "stabilityCredit": "local-proof-only",
+    "whyHighestLeverageNow": "Parked split successor from the needs_operation / coordination_mismatch classification. The latest artifact has one direct operation-scheduling witness: control_plane_publications-p1 is needs_operation, eligible_but_no_operation_created, action_required, rebalancer_leader / operation_scheduling, event_driven, and next action create_recovery_operation."
+  },
   "modelFit": {
     "packageClass": "representative-frontier-closure",
     "intendedMinimumModel": "gpt-5.3-codex",
     "scopeShape": "owner-boundary-contraction/parked-split-successor",
+    "outputProfile": "medium",
     "escalationTriggers": [
       "workflow-progress direct blockers remain unresolved and still dominate the selected successor order",
       "the fix requires startup active-gate, publication convergence, harness timeout, Pro, or Enterprise behavior",
       "fresh evidence changes the witness from operation scheduling to workflow progress"
     ]
   },
-  "predecessor": "work/packages/done-20260512-rolling-restart-operation-workflow-rebalancer-handoff-needs-operation-coordination-mismatch-classification.md"
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": {
+      "commands": [
+        "npm run work:evidence-summary -- test-output/reports/rolling-restart-current-release-gate-after-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled-fix.report.json",
+        "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-operation-workflow-rebalancer-handoff-priority-recovery-retry-scheduled-fix.report.json --explain priority_recovery_partition_progress",
+        "jq residual semantic-state extraction for needs_operation and coordination_mismatch partitions",
+        "focused rebalancer_leader / operation_scheduling tests selected by implementation package",
+        "representative rolling-restart rerun or explicit migration proof"
+      ]
+    }
+  },
+  "touchedFiles": [
+    "work/packages/todo-20260512-rolling-restart-rebalancer-leader-operation-scheduling-control-plane-publications-create-recovery-operation.md"
+  ]
 }
 -->
 

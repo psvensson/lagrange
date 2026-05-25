@@ -2,47 +2,61 @@
 
 <!-- work-package
 {
-  "schema": "work-package-v1",
+  "schema": "work-package-v2",
   "status": "todo",
-  "opened": "2026-05-13",
-  "lane": "read-review-doc-only",
-  "scenario": "none",
-  "artifact": "none",
-  "playback": "none",
-  "owner": "architecture_governance_owner",
-  "boundary": "release_gate_architecture_contract_template",
-  "dominantReason": "runtime_packages_without_predeclared_owner_contract",
-  "currentState": "Future release-gate runtime packages need architecture contracts that collapse repeated owner-boundary failures before code scope is chosen.",
-  "nextAction": "Define the architecture contract shape and require it to reconcile with the latest active release-gate proof before any runtime-owner package implements the contract.",
-  "proof": [
-    "npm run work:package:doctor -- --suggest work/packages/todo-20260513-release-gate-architecture-contract-template.md",
-    "npm run work:validate -- --entry work/packages/todo-20260513-release-gate-architecture-contract-template.md",
-    "git diff --check -- work/packages/todo-20260513-release-gate-architecture-contract-template.md work/README.md work/templates/work-package-template.md"
-  ],
-  "writeScope": [
-    "work/packages/todo-20260513-release-gate-architecture-contract-template.md",
-    "work/README.md",
-    "work/templates/work-package-template.md"
-  ],
-  "handoffFiles": [
-    "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
-    "work/packages/todo-20260513-release-gate-blocker-path-ledger-template.md"
-  ],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [
-    "work/packages/todo-20260513-release-gate-architecture-contract-template.md",
-    "work/README.md",
-    "work/templates/work-package-template.md"
-  ],
+  "intent": {
+    "opened": "2026-05-13",
+    "lane": "read-review-doc-only",
+    "scenario": "none",
+    "artifact": "none",
+    "playback": "none",
+    "owner": "architecture_governance_owner",
+    "boundary": "release_gate_architecture_contract_template",
+    "dominantReason": "runtime_packages_without_predeclared_owner_contract",
+    "currentState": "Future release-gate runtime packages need architecture contracts that collapse repeated owner-boundary failures before code scope is chosen.",
+    "nextAction": "Define the architecture contract shape and require it to reconcile with the latest active release-gate proof before any runtime-owner package implements the contract."
+  },
+  "scope": {
+    "writeScope": [
+      "work/packages/todo-20260513-release-gate-architecture-contract-template.md",
+      "work/README.md",
+      "work/templates/work-package-template.md"
+    ],
+    "handoffFiles": [
+      "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
+      "work/packages/todo-20260513-release-gate-blocker-path-ledger-template.md"
+    ],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": [],
+    "commitScope": [
+      "work/packages/todo-20260513-release-gate-architecture-contract-template.md",
+      "work/README.md",
+      "work/templates/work-package-template.md"
+    ]
+  },
+  "gates": {
+    "stabilityCredit": "local-proof-only",
+    "whyHighestLeverageNow": "Future release-gate runtime packages need architecture contracts that collapse repeated owner-boundary failures before code scope is chosen."
+  },
   "modelFit": {
     "packageClass": "architecture-contract-governance",
     "intendedMinimumModel": "gpt-5.3-codex",
     "scopeShape": "release-gate-architecture-contract-template",
+    "outputProfile": "medium",
     "escalationTriggers": [
       "the contract needs runtime implementation",
       "the contract conflicts with active scenario proof"
     ]
+  },
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": {
+      "commands": [
+        "npm run work:package:doctor -- --suggest work/packages/todo-20260513-release-gate-architecture-contract-template.md",
+        "npm run work:validate -- --entry work/packages/todo-20260513-release-gate-architecture-contract-template.md",
+        "git diff --check -- work/packages/todo-20260513-release-gate-architecture-contract-template.md work/README.md work/templates/work-package-template.md"
+      ]
+    }
   }
 }
 -->

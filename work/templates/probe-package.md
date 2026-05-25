@@ -1,7 +1,73 @@
 # Probe Package Template
 
 <!-- work-package
-{"schema":"work-package-v1","status":"todo","opened":"YYYY-MM-DD","lane":"experiment","scenario":"none","artifact":"none","playback":"none","owner":"owner_name","boundary":"boundary_name","dominantReason":"reason_name","currentState":"One sentence describing the uncertainty.","nextAction":"Run the smallest probe that can distinguish the competing hypotheses.","proof":["npm test -- path/to/focused-probe.test.js"],"writeScope":["work/packages/todo-YYYYMMDD-short-probe.md"],"handoffFiles":[],"generatedFiles":[],"candidateRuntimeFiles":[],"commitScope":["work/packages/todo-YYYYMMDD-short-probe.md"],"modelFit":{"packageClass":"compact-probe","intendedMinimumModel":"gpt-5.3-codex-spark","scopeShape":"leaf-slice","outputProfile":"medium","escalationTriggers":["probe cannot distinguish H1/H2/H3"]},"boundedExperiment":{"hypothesis":"H1 says the owner edge is missing; H2 says the downstream observer is stale; H3 says the fixture is stale.","hypothesisDiscriminator":"H1 predicts observable A; H2 predicts observable B; H3 predicts observable C.","expectedMetric":"observable A vs observable B vs observable C","inheritsFrom":"none","timebox":"24h","mergeRequirement":"probe distinguishes H1/H2/H3 or closes as evidence-incomplete","killRule":"stop runtime edits if the probe cannot distinguish hypotheses"},"validationTier":"single-owner","observablePrediction":{"metric":"observable A vs observable B vs observable C","predicted":"H1 observable A","observed":"pending-before-observation","accuracy":"pending-before-observation","evidence":"pending-before-observation","metricDelta":0}}
+{
+  "schema": "work-package-v2",
+  "status": "todo",
+  "intent": {
+    "opened": "YYYY-MM-DD",
+    "lane": "experiment",
+    "scenario": "none",
+    "artifact": "none",
+    "playback": "none",
+    "owner": "owner_name",
+    "boundary": "boundary_name",
+    "dominantReason": "reason_name",
+    "currentState": "One sentence describing the uncertainty.",
+    "nextAction": "Run the smallest probe that can distinguish the competing hypotheses."
+  },
+  "scope": {
+    "writeScope": [
+      "work/packages/todo-YYYYMMDD-short-probe.md"
+    ],
+    "handoffFiles": [],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": [],
+    "commitScope": [
+      "work/packages/todo-YYYYMMDD-short-probe.md"
+    ]
+  },
+  "gates": {
+    "stabilityCredit": "local-proof-only",
+    "whyHighestLeverageNow": "The probe is the cheapest discriminator for the current owner/boundary uncertainty."
+  },
+  "modelFit": {
+    "packageClass": "compact-probe",
+    "intendedMinimumModel": "gpt-5.3-codex-spark",
+    "scopeShape": "leaf-slice",
+    "outputProfile": "medium",
+    "escalationTriggers": [
+      "probe cannot distinguish H1/H2/H3"
+    ]
+  },
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": {
+      "commands": [
+        "falsifier: npm test -- path/to/focused-probe.test.js",
+        "regression: npm run work:validate -- --probe work/packages/todo-YYYYMMDD-short-probe.md"
+      ]
+    }
+  },
+  "boundedExperiment": {
+    "hypothesis": "H1 says the owner edge is missing; H2 says the downstream observer is stale; H3 says the fixture is stale.",
+    "hypothesisDiscriminator": "H1 predicts observable A; H2 predicts observable B; H3 predicts observable C.",
+    "expectedMetric": "observable A vs observable B vs observable C",
+    "inheritsFrom": "none",
+    "timebox": "24h",
+    "mergeRequirement": "probe distinguishes H1/H2/H3 or closes as evidence-incomplete",
+    "killRule": "stop runtime edits if the probe cannot distinguish hypotheses"
+  },
+  "validationTier": "single-owner",
+  "observablePrediction": {
+    "metric": "observable A vs observable B vs observable C",
+    "predicted": "H1 observable A",
+    "observed": "pending-before-observation",
+    "accuracy": "pending-before-observation",
+    "evidence": "pending-before-observation",
+    "metricDelta": 0
+  }
+}
 -->
 
 ## Probe

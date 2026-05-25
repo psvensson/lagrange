@@ -142,7 +142,7 @@
   },
   "closed": "2026-05-25",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md"
+  "successor": "work/packages/done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md"
 }
 -->
 

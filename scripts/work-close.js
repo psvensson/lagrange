@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
+import {normalizeMetadata} from './work-package-schema.js';
 
 function renumberSprintQueue(fileContent) {
   const lines = fileContent.split('\n');
@@ -79,7 +80,7 @@ async function main() {
   const jsonText = content.slice(openIndex + openMarker.length, closeIndex).trim();
   let metadata;
   try {
-    metadata = JSON.parse(jsonText);
+    metadata = normalizeMetadata(JSON.parse(jsonText), relativePackagePath);
   } catch (error) {
     console.error('Error parsing package metadata JSON:', error.message);
     process.exit(1);
@@ -126,7 +127,7 @@ async function main() {
   fs.writeFileSync(activeSprintPath, nextSprintContent, 'utf8');
 
   // 6. Gather files to stage
-  const commitScope = metadata.scope && metadata.scope.commitScope || [];
+  const commitScope = metadata.commitScope || [];
   const filesToStage = new Set();
 
   for (const file of commitScope) {

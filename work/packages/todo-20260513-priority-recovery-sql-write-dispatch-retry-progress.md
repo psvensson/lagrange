@@ -2,87 +2,102 @@
 
 <!-- work-package
 {
-  "schema": "work-package-v1",
+  "schema": "work-package-v2",
   "status": "todo",
-  "opened": "2026-05-13",
-  "lane": "scenario-release-gate",
-  "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json",
-  "playback": "none",
-  "owner": "operation_workflow_owner",
-  "boundary": "workflow_progress",
-  "dominantReason": "priority_recovery_event_driven_wait",
-  "currentState": "The representative rerun after focused ready-node dispatch retry proof remains red on the same first frontier: priority_recovery_partition_progress under operation_workflow_owner / workflow_progress. The residual changed from one persisted_not_dispatched SQL write witness to retry_deferred / recovering_in_flight coordinator-created remote handoff ACK failures across replica_operations-p1, sql_transaction_participants-p1, sql_transactions-p1, and sql_write_operations-p1; the residual extractor also reports a rebalancer_handoff split group. Active gate remains downstream at active=2/5 and snapshotCoverage=2/5.",
-  "nextAction": "Parked because the rolling-restart sprint closed as failed on May 13, 2026. Do not continue this package unless a new strategy or successor sprint explicitly reactivates the priority-recovery remote handoff ACK/retry line.",
-  "proof": [
-    "npm run work:package:doctor -- --suggest work/packages/todo-20260513-priority-recovery-sql-write-dispatch-retry-progress.md",
-    "npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json",
-    "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json --markdown",
-    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json --explain priority_recovery_partition_progress",
-    "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json",
-    "npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json",
-    "npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown",
-    "npm run analyze:owner-files -- operation_workflow_owner rebalancer_handoff --markdown",
-    "node --test test/control-plane/replica-dispatch-node-state-update.test-part-2.js test/control-plane/replica-dispatch-node-state-update.test-part-3.js test/control-plane/replica-dispatch-node-state-update.test-part-4.js",
-    "node scripts/check-guideline-literals.js src/control-plane/replica-dispatch-service-segment-2.js src/control-plane/replica-dispatch-service-segment-3.js src/control-plane/replica-dispatch-service-segment-4.js",
-    "node scripts/check-guideline-decision-boundaries.js src/control-plane/replica-dispatch-service-segment-2.js src/control-plane/replica-dispatch-service-segment-3.js src/control-plane/replica-dispatch-service-segment-4.js",
-    "npm run audit:runtime-grammar:file -- src/control-plane/replica-dispatch-service-segment-2.js src/control-plane/replica-dispatch-service-segment-3.js src/control-plane/replica-dispatch-service-segment-4.js",
-    "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json --fast-local --verbose",
-    "npm run work:current-blocker",
-    "npm run work:validate -- --entry work/packages/todo-20260513-priority-recovery-sql-write-dispatch-retry-progress.md",
-    "npm run work:validate -- --pre-impl work/packages/todo-20260513-priority-recovery-sql-write-dispatch-retry-progress.md"
-  ],
-  "writeScope": [
-    "work/packages/todo-20260513-priority-recovery-sql-write-dispatch-retry-progress.md",
-    "work/sprints/archived/done-2026-q2-phase-0-1-rolling-restart-release-gate-closure-failed.md",
-    "work/sprints/current-blocker.json",
-    "work/sprints/current-blocker.md",
-    "work/model-ledger.jsonl",
-    "src/control-plane/replica-dispatch-service-segment-2.js",
-    "src/control-plane/replica-dispatch-service-segment-3.js",
-    "src/control-plane/replica-dispatch-service-segment-4.js",
-    "test/control-plane/replica-dispatch-node-state-update.test-part-2.js",
-    "test/control-plane/replica-dispatch-node-state-update.test-part-3.js",
-    "test/control-plane/replica-dispatch-node-state-update.test-part-4.js"
-  ],
-  "handoffFiles": [
-    "work/packages/done-20260513-rolling-restart-active-gate-snapshot-coverage-after-readiness-support-reduction.md",
-    "work/packages/done-20260513-priority-recovery-operation-workflow-owner-workflow-progress.md",
-    "test-output/reports/rolling-restart-green-gate-after-active-gate-register-service-timeout.report.json",
-    "test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json"
-  ],
-  "generatedFiles": [
-    "work/sprints/current-blocker.json",
-    "work/sprints/current-blocker.md"
-  ],
-  "candidateRuntimeFiles": [
-    "src/control-plane/replica-dispatch-service-segment-2.js",
-    "src/control-plane/replica-dispatch-service-segment-3.js",
-    "src/control-plane/replica-dispatch-service-segment-4.js"
-  ],
-  "commitScope": [
-    "work/packages/todo-20260513-priority-recovery-sql-write-dispatch-retry-progress.md",
-    "work/sprints/archived/done-2026-q2-phase-0-1-rolling-restart-release-gate-closure-failed.md",
-    "work/sprints/current-blocker.json",
-    "work/sprints/current-blocker.md",
-    "work/model-ledger.jsonl",
-    "src/control-plane/replica-dispatch-service-segment-2.js",
-    "src/control-plane/replica-dispatch-service-segment-3.js",
-    "src/control-plane/replica-dispatch-service-segment-4.js",
-    "test/control-plane/replica-dispatch-node-state-update.test-part-2.js",
-    "test/control-plane/replica-dispatch-node-state-update.test-part-3.js",
-    "test/control-plane/replica-dispatch-node-state-update.test-part-4.js"
-  ],
+  "intent": {
+    "opened": "2026-05-13",
+    "lane": "scenario-release-gate",
+    "scenario": "rolling-restart",
+    "artifact": "test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json",
+    "playback": "none",
+    "owner": "operation_workflow_owner",
+    "boundary": "workflow_progress",
+    "dominantReason": "priority_recovery_event_driven_wait",
+    "currentState": "The representative rerun after focused ready-node dispatch retry proof remains red on the same first frontier: priority_recovery_partition_progress under operation_workflow_owner / workflow_progress. The residual changed from one persisted_not_dispatched SQL write witness to retry_deferred / recovering_in_flight coordinator-created remote handoff ACK failures across replica_operations-p1, sql_transaction_participants-p1, sql_transactions-p1, and sql_write_operations-p1; the residual extractor also reports a rebalancer_handoff split group. Active gate remains downstream at active=2/5 and snapshotCoverage=2/5.",
+    "nextAction": "Parked because the rolling-restart sprint closed as failed on May 13, 2026. Do not continue this package unless a new strategy or successor sprint explicitly reactivates the priority-recovery remote handoff ACK/retry line.",
+    "predecessor": "work/packages/done-20260513-rolling-restart-active-gate-snapshot-coverage-after-readiness-support-reduction.md"
+  },
+  "scope": {
+    "writeScope": [
+      "work/packages/todo-20260513-priority-recovery-sql-write-dispatch-retry-progress.md",
+      "work/sprints/archived/done-2026-q2-phase-0-1-rolling-restart-release-gate-closure-failed.md",
+      "work/sprints/current-blocker.json",
+      "work/sprints/current-blocker.md",
+      "work/model-ledger.jsonl",
+      "src/control-plane/replica-dispatch-service-segment-2.js",
+      "src/control-plane/replica-dispatch-service-segment-3.js",
+      "src/control-plane/replica-dispatch-service-segment-4.js",
+      "test/control-plane/replica-dispatch-node-state-update.test-part-2.js",
+      "test/control-plane/replica-dispatch-node-state-update.test-part-3.js",
+      "test/control-plane/replica-dispatch-node-state-update.test-part-4.js"
+    ],
+    "handoffFiles": [
+      "work/packages/done-20260513-rolling-restart-active-gate-snapshot-coverage-after-readiness-support-reduction.md",
+      "work/packages/done-20260513-priority-recovery-operation-workflow-owner-workflow-progress.md",
+      "test-output/reports/rolling-restart-green-gate-after-active-gate-register-service-timeout.report.json",
+      "test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json"
+    ],
+    "generatedFiles": [
+      "work/sprints/current-blocker.json",
+      "work/sprints/current-blocker.md"
+    ],
+    "candidateRuntimeFiles": [
+      "src/control-plane/replica-dispatch-service-segment-2.js",
+      "src/control-plane/replica-dispatch-service-segment-3.js",
+      "src/control-plane/replica-dispatch-service-segment-4.js"
+    ],
+    "commitScope": [
+      "work/packages/todo-20260513-priority-recovery-sql-write-dispatch-retry-progress.md",
+      "work/sprints/archived/done-2026-q2-phase-0-1-rolling-restart-release-gate-closure-failed.md",
+      "work/sprints/current-blocker.json",
+      "work/sprints/current-blocker.md",
+      "work/model-ledger.jsonl",
+      "src/control-plane/replica-dispatch-service-segment-2.js",
+      "src/control-plane/replica-dispatch-service-segment-3.js",
+      "src/control-plane/replica-dispatch-service-segment-4.js",
+      "test/control-plane/replica-dispatch-node-state-update.test-part-2.js",
+      "test/control-plane/replica-dispatch-node-state-update.test-part-3.js",
+      "test/control-plane/replica-dispatch-node-state-update.test-part-4.js"
+    ]
+  },
+  "gates": {
+    "stabilityCredit": "local-proof-only",
+    "whyHighestLeverageNow": "The representative rerun after focused ready-node dispatch retry proof remains red on the same first frontier: priority_recovery_partition_progress under operation_workflow_owner / workflow_progress. The residual changed from one persisted_not_dispatched SQL write witness to retry_deferred / recovering_in_flight coordinator-created remote handoff ACK failures across replica_operations-p1, sql_transaction_participants-p1, sql_transactions-p1, and sql_write_operations-p1; the residual extractor also reports a rebalancer_handoff split group. Active gate remains downstream at active=2/5 and snapshotCoverage=2/5."
+  },
   "modelFit": {
     "packageClass": "representative-frontier-closure",
     "intendedMinimumModel": "gpt-5.3-codex",
     "scopeShape": "owner-boundary-contraction/current-frontier",
+    "outputProfile": "medium",
     "escalationTriggers": [
       "fresh canonical evidence promotes startup active gate, publication convergence, readiness support, or another owner ahead of priority recovery workflow progress",
       "the fix requires writes outside the owned control-plane dispatch retry path",
       "runtime implementation requires broader operation workflow ownership changes than dispatch retry progress",
       "scenario remains red after focused dispatch retry proof and one representative rerun"
     ]
+  },
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": {
+      "commands": [
+        "npm run work:package:doctor -- --suggest work/packages/todo-20260513-priority-recovery-sql-write-dispatch-retry-progress.md",
+        "npm run work:evidence-summary -- test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json",
+        "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json --markdown",
+        "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json --explain priority_recovery_partition_progress",
+        "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json",
+        "npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json",
+        "npm run analyze:owner-files -- operation_workflow_owner workflow_progress --markdown",
+        "npm run analyze:owner-files -- operation_workflow_owner rebalancer_handoff --markdown",
+        "node --test test/control-plane/replica-dispatch-node-state-update.test-part-2.js test/control-plane/replica-dispatch-node-state-update.test-part-3.js test/control-plane/replica-dispatch-node-state-update.test-part-4.js",
+        "node scripts/check-guideline-literals.js src/control-plane/replica-dispatch-service-segment-2.js src/control-plane/replica-dispatch-service-segment-3.js src/control-plane/replica-dispatch-service-segment-4.js",
+        "node scripts/check-guideline-decision-boundaries.js src/control-plane/replica-dispatch-service-segment-2.js src/control-plane/replica-dispatch-service-segment-3.js src/control-plane/replica-dispatch-service-segment-4.js",
+        "npm run audit:runtime-grammar:file -- src/control-plane/replica-dispatch-service-segment-2.js src/control-plane/replica-dispatch-service-segment-3.js src/control-plane/replica-dispatch-service-segment-4.js",
+        "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-green-gate-after-sql-write-dispatch-retry-progress.report.json --fast-local --verbose",
+        "npm run work:current-blocker",
+        "npm run work:validate -- --entry work/packages/todo-20260513-priority-recovery-sql-write-dispatch-retry-progress.md",
+        "npm run work:validate -- --pre-impl work/packages/todo-20260513-priority-recovery-sql-write-dispatch-retry-progress.md"
+      ]
+    }
   },
   "causalGovernance": {
     "hypothesis": "If operation_workflow_owner / workflow_progress owns the latest priority recovery residual, ready-node dispatch retry must rediscover the persisted_not_dispatched sql_write_operations-p1 operation and dispatch or advance it through one bounded owner path instead of waiting only for event-driven progress.",
@@ -117,8 +132,7 @@
     "expectedNextFrontier": "a narrower operation_workflow_owner successor for coordinator_created_remote_handoff retry/ACK progress, then active_gate_snapshot_coverage only after priority progress closes",
     "resultClassification": "same-frontier",
     "stopCondition": "continue-local-fix"
-  },
-  "predecessor": "work/packages/done-20260513-rolling-restart-active-gate-snapshot-coverage-after-readiness-support-reduction.md"
+  }
 }
 -->
 

@@ -2,30 +2,33 @@
 
 <!-- work-package
 {
-  "schema": "work-package-v1",
+  "schema": "work-package-v2",
   "status": "todo",
-  "opened": "2026-05-19",
-  "lane": "diagnostic-classification",
-  "scenario": "rolling-restart",
-  "artifact": "test-output/report.json",
-  "playback": "none",
-  "owner": "topology_publication_owner",
-  "boundary": "publication_convergence",
-  "dominantReason": "publication_pending",
-  "currentState": "Scaffolded from representative evidence for publication_ack_convergence.",
-  "nextAction": "Triage publication_ack_convergence with combined scenario evidence before runtime edits.",
-  "proof": [
-    "npm run work:evidence-summary -- test-output/report.json",
-    "npm run work:scenario-triage -- test-output/report.json --markdown",
-    "npm run analyze:priority-recovery-residuals -- test-output/report.json --markdown"
-  ],
-  "writeScope": [],
-  "handoffFiles": [
-    "test-output/report.json"
-  ],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [],
+  "intent": {
+    "opened": "2026-05-19",
+    "lane": "diagnostic-classification",
+    "scenario": "rolling-restart",
+    "artifact": "test-output/report.json",
+    "playback": "none",
+    "owner": "topology_publication_owner",
+    "boundary": "publication_convergence",
+    "dominantReason": "publication_pending",
+    "currentState": "Scaffolded from representative evidence for publication_ack_convergence.",
+    "nextAction": "Triage publication_ack_convergence with combined scenario evidence before runtime edits."
+  },
+  "scope": {
+    "writeScope": [],
+    "handoffFiles": [
+      "test-output/report.json"
+    ],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": [],
+    "commitScope": []
+  },
+  "gates": {
+    "stabilityCredit": "local-proof-only",
+    "whyHighestLeverageNow": "Scaffolded from representative evidence for publication_ack_convergence."
+  },
   "modelFit": {
     "packageClass": "diagnostic-classification",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -35,6 +38,16 @@
       "owned files expand beyond this package",
       "a frozen decision must be reopened"
     ]
+  },
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": {
+      "commands": [
+        "npm run work:evidence-summary -- test-output/report.json",
+        "npm run work:scenario-triage -- test-output/report.json --markdown",
+        "npm run analyze:priority-recovery-residuals -- test-output/report.json --markdown"
+      ]
+    }
   },
   "modelFitSplit": {
     "targetExecutionModel": "gpt-5.3-codex",

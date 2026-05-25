@@ -2,110 +2,100 @@
 
 <!-- work-package
 {
-  "schema": "work-package-v1",
+  "schema": "work-package-v2",
   "status": "todo",
-  "opened": "2026-05-15",
-  "lane": "causal-escalation",
-  "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json",
-  "playback": "none",
-  "owner": "startup_active_gate_owner",
-  "boundary": "snapshot_coverage",
-  "dominantReason": "active_gate_timed_out",
-  "currentState": "Publication catch-up is now reachable from repair-deferred active-gate snapshots with owner_reconcile_pending evidence, but fresh representative evidence remains same-frontier red: all five nodes are active by status, selected snapshot coverage is 2/5, producer publication remains PUBLISHED with pendingAck=0, publishedActive=1/5, and missingPublished=4, and activeGateOwnerCohort still reports two pending reconcile node IDs. The selected snapshot exposes repair_deferred/deferred_refresh/deferred/deferred/retry with retryAfterMs=14976 and reason codes cache_stale_watermark, discovery_node_coverage_gap, and stale_replica_operations_in_flight. Canonical priority recovery extraction now names a subordinate operation_workflow_owner / workflow_progress witness on control_plane_publications-p1 with actuationState=persisted_not_dispatched and nextRequiredAction=advance_existing_operation.",
-  "nextAction": "Do not relax active-gate admission. Use the same artifact to split or promote the subordinate operation_workflow_owner / workflow_progress residual if the active-gate publication catch-up remains same-frontier after this slice; otherwise continue the active-gate owner path only with owner-file proof.",
-  "proof": [
-    "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-supplied-stream-closure-20260515-codex.report.json",
-    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-supplied-stream-closure-20260515-codex.report.json --explain active_gate_snapshot_coverage",
-    "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-publication-supplied-stream-closure-20260515-codex.report.json",
-    "npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown",
-    "./node_modules/.bin/tap --grep \"active-gate owner cohort|owner-truth active cohort\" test/admin/admin-control-snapshot.test.js",
-    "node --test test/distributed/harness/__tests__/active-gate-closure-classification.test.js",
-    "node test/distributed/harness/__tests__/cluster.test-part-3.js",
-    "node test/distributed/harness/__tests__/cluster.test-part-4.js",
-    "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json --fast-local --verbose",
-    "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json",
-    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json --explain active_gate_snapshot_coverage",
-    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json --handoff-probe",
-    "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json",
-    "npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json",
-    "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json",
-    "./node_modules/.bin/tap --grep \"repair-deferred shared owner|forced authoritative membership observation|build snapshot forwards authoritative membership reconcile|auto-repaired snapshots use authoritative membership publication|active-gate owner cohort|owner-truth active cohort\" test/admin/admin-control-snapshot.test.js",
-    "node --test test/scripts/analyze-topology-convergence.test.js"
-  ],
-  "writeScope": [
-    "work/packages/todo-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md",
-    "work/packages/done-20260515-topology-publication-active-gate-handoff-oscillation.md",
-    "work/sprints/done-2026-q2-topology-convergence-residual-closure.md",
-    "work/tracks/topology-convergence.md",
-    "work/model-ledger.jsonl",
-    "test/distributed/harness/cluster-segment-5.js",
-    "test/distributed/harness/cluster-segment-2.js",
-    "test/distributed/harness/cluster-segment-7-class-4.js",
-    "test/distributed/harness/cluster-segment-7-class-5.js",
-    "test/distributed/harness/__tests__/cluster.test-part-3.js",
-    "test/distributed/harness/__tests__/cluster.test-part-4.js",
-    "test/distributed/harness/__tests__/cluster.test-part-5.js",
-    "test/distributed/harness/__tests__/active-gate-closure-classification.test.js",
-    "src/admin/admin-control-snapshot-class-part-2.js",
-    "src/admin/admin-control-snapshot-class-part-3.js",
-    "src/admin/admin-control-snapshot-class-part-5.js",
-    "src/admin/admin-control-snapshot-class-part-6.js",
-    "src/control-plane/control-plane-snapshot-owner.js",
-    "src/diagnostics/topology-convergence-graph.js",
-    "test/admin/admin-control-snapshot.test.js",
-    "scripts/analyze-topology-convergence.js",
-    "test/scripts/analyze-topology-convergence.test.js",
-    "test/scripts/__fixtures__/topology-convergence/publication-active-gate-reduced-handoff.fixture.json"
-  ],
-  "handoffFiles": [
-    "work/packages/done-20260515-topology-publication-active-gate-handoff-oscillation.md"
-  ],
-  "generatedFiles": [
-    "work/sprints/current-blocker.md",
-    "work/sprints/current-blocker.json"
-  ],
-  "candidateRuntimeFiles": [
-    "test/distributed/harness/cluster-segment-4.js",
-    "test/distributed/harness/cluster-segment-7.js",
-    "test/distributed/harness/cluster-segment-2.js",
-    "test/distributed/harness/cluster-segment-7-class-4.js",
-    "test/distributed/harness/cluster-segment-7-class-5.js",
-    "src/admin/admin-control-snapshot-class-part-2.js",
-    "src/admin/admin-control-snapshot-class-part-3.js",
-    "src/admin/admin-control-snapshot-class-part-5.js",
-    "src/admin/admin-control-snapshot-class-part-6.js",
-    "src/control-plane/control-plane-snapshot-owner.js",
-    "src/diagnostics/topology-convergence-graph.js",
-    "src/control-plane/authoritative-node-evidence-reconciler.js"
-  ],
-  "commitScope": [
-    "work/packages/todo-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md",
-    "work/packages/done-20260515-topology-publication-active-gate-handoff-oscillation.md",
-    "work/sprints/done-2026-q2-topology-convergence-residual-closure.md",
-    "work/tracks/topology-convergence.md",
-    "work/sprints/current-blocker.md",
-    "work/sprints/current-blocker.json",
-    "work/model-ledger.jsonl",
-    "test/distributed/harness/cluster-segment-5.js",
-    "test/distributed/harness/cluster-segment-2.js",
-    "test/distributed/harness/cluster-segment-7-class-4.js",
-    "test/distributed/harness/cluster-segment-7-class-5.js",
-    "test/distributed/harness/__tests__/cluster.test-part-3.js",
-    "test/distributed/harness/__tests__/cluster.test-part-4.js",
-    "test/distributed/harness/__tests__/cluster.test-part-5.js",
-    "test/distributed/harness/__tests__/active-gate-closure-classification.test.js",
-    "src/admin/admin-control-snapshot-class-part-2.js",
-    "src/admin/admin-control-snapshot-class-part-3.js",
-    "src/admin/admin-control-snapshot-class-part-5.js",
-    "src/admin/admin-control-snapshot-class-part-6.js",
-    "src/control-plane/control-plane-snapshot-owner.js",
-    "src/diagnostics/topology-convergence-graph.js",
-    "test/admin/admin-control-snapshot.test.js",
-    "scripts/analyze-topology-convergence.js",
-    "test/scripts/analyze-topology-convergence.test.js",
-    "test/scripts/__fixtures__/topology-convergence/publication-active-gate-reduced-handoff.fixture.json"
-  ],
+  "intent": {
+    "opened": "2026-05-15",
+    "lane": "causal-escalation",
+    "scenario": "rolling-restart",
+    "artifact": "test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json",
+    "playback": "none",
+    "owner": "startup_active_gate_owner",
+    "boundary": "snapshot_coverage",
+    "dominantReason": "active_gate_timed_out",
+    "currentState": "Publication catch-up is now reachable from repair-deferred active-gate snapshots with owner_reconcile_pending evidence, but fresh representative evidence remains same-frontier red: all five nodes are active by status, selected snapshot coverage is 2/5, producer publication remains PUBLISHED with pendingAck=0, publishedActive=1/5, and missingPublished=4, and activeGateOwnerCohort still reports two pending reconcile node IDs. The selected snapshot exposes repair_deferred/deferred_refresh/deferred/deferred/retry with retryAfterMs=14976 and reason codes cache_stale_watermark, discovery_node_coverage_gap, and stale_replica_operations_in_flight. Canonical priority recovery extraction now names a subordinate operation_workflow_owner / workflow_progress witness on control_plane_publications-p1 with actuationState=persisted_not_dispatched and nextRequiredAction=advance_existing_operation.",
+    "nextAction": "Do not relax active-gate admission. Use the same artifact to split or promote the subordinate operation_workflow_owner / workflow_progress residual if the active-gate publication catch-up remains same-frontier after this slice; otherwise continue the active-gate owner path only with owner-file proof.",
+    "predecessor": "work/packages/done-20260515-topology-publication-active-gate-handoff-oscillation.md"
+  },
+  "scope": {
+    "writeScope": [
+      "work/packages/todo-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md",
+      "work/packages/done-20260515-topology-publication-active-gate-handoff-oscillation.md",
+      "work/sprints/done-2026-q2-topology-convergence-residual-closure.md",
+      "work/tracks/topology-convergence.md",
+      "work/model-ledger.jsonl",
+      "test/distributed/harness/cluster-segment-5.js",
+      "test/distributed/harness/cluster-segment-2.js",
+      "test/distributed/harness/cluster-segment-7-class-4.js",
+      "test/distributed/harness/cluster-segment-7-class-5.js",
+      "test/distributed/harness/__tests__/cluster.test-part-3.js",
+      "test/distributed/harness/__tests__/cluster.test-part-4.js",
+      "test/distributed/harness/__tests__/cluster.test-part-5.js",
+      "test/distributed/harness/__tests__/active-gate-closure-classification.test.js",
+      "src/admin/admin-control-snapshot-class-part-2.js",
+      "src/admin/admin-control-snapshot-class-part-3.js",
+      "src/admin/admin-control-snapshot-class-part-5.js",
+      "src/admin/admin-control-snapshot-class-part-6.js",
+      "src/control-plane/control-plane-snapshot-owner.js",
+      "src/diagnostics/topology-convergence-graph.js",
+      "test/admin/admin-control-snapshot.test.js",
+      "scripts/analyze-topology-convergence.js",
+      "test/scripts/analyze-topology-convergence.test.js",
+      "test/scripts/__fixtures__/topology-convergence/publication-active-gate-reduced-handoff.fixture.json"
+    ],
+    "handoffFiles": [
+      "work/packages/done-20260515-topology-publication-active-gate-handoff-oscillation.md"
+    ],
+    "generatedFiles": [
+      "work/sprints/current-blocker.md",
+      "work/sprints/current-blocker.json"
+    ],
+    "candidateRuntimeFiles": [
+      "test/distributed/harness/cluster-segment-4.js",
+      "test/distributed/harness/cluster-segment-7.js",
+      "test/distributed/harness/cluster-segment-2.js",
+      "test/distributed/harness/cluster-segment-7-class-4.js",
+      "test/distributed/harness/cluster-segment-7-class-5.js",
+      "src/admin/admin-control-snapshot-class-part-2.js",
+      "src/admin/admin-control-snapshot-class-part-3.js",
+      "src/admin/admin-control-snapshot-class-part-5.js",
+      "src/admin/admin-control-snapshot-class-part-6.js",
+      "src/control-plane/control-plane-snapshot-owner.js",
+      "src/diagnostics/topology-convergence-graph.js",
+      "src/control-plane/authoritative-node-evidence-reconciler.js"
+    ],
+    "commitScope": [
+      "work/packages/todo-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md",
+      "work/packages/done-20260515-topology-publication-active-gate-handoff-oscillation.md",
+      "work/sprints/done-2026-q2-topology-convergence-residual-closure.md",
+      "work/tracks/topology-convergence.md",
+      "work/sprints/current-blocker.md",
+      "work/sprints/current-blocker.json",
+      "work/model-ledger.jsonl",
+      "test/distributed/harness/cluster-segment-5.js",
+      "test/distributed/harness/cluster-segment-2.js",
+      "test/distributed/harness/cluster-segment-7-class-4.js",
+      "test/distributed/harness/cluster-segment-7-class-5.js",
+      "test/distributed/harness/__tests__/cluster.test-part-3.js",
+      "test/distributed/harness/__tests__/cluster.test-part-4.js",
+      "test/distributed/harness/__tests__/cluster.test-part-5.js",
+      "test/distributed/harness/__tests__/active-gate-closure-classification.test.js",
+      "src/admin/admin-control-snapshot-class-part-2.js",
+      "src/admin/admin-control-snapshot-class-part-3.js",
+      "src/admin/admin-control-snapshot-class-part-5.js",
+      "src/admin/admin-control-snapshot-class-part-6.js",
+      "src/control-plane/control-plane-snapshot-owner.js",
+      "src/diagnostics/topology-convergence-graph.js",
+      "test/admin/admin-control-snapshot.test.js",
+      "scripts/analyze-topology-convergence.js",
+      "test/scripts/analyze-topology-convergence.test.js",
+      "test/scripts/__fixtures__/topology-convergence/publication-active-gate-reduced-handoff.fixture.json"
+    ]
+  },
+  "gates": {
+    "stabilityCredit": "local-proof-only",
+    "whyHighestLeverageNow": "Publication catch-up is now reachable from repair-deferred active-gate snapshots with owner_reconcile_pending evidence, but fresh representative evidence remains same-frontier red: all five nodes are active by status, selected snapshot coverage is 2/5, producer publication remains PUBLISHED with pendingAck=0, publishedActive=1/5, and missingPublished=4, and activeGateOwnerCohort still reports two pending reconcile node IDs. The selected snapshot exposes repair_deferred/deferred_refresh/deferred/deferred/retry with retryAfterMs=14976 and reason codes cache_stale_watermark, discovery_node_coverage_gap, and stale_replica_operations_in_flight. Canonical priority recovery extraction now names a subordinate operation_workflow_owner / workflow_progress witness on control_plane_publications-p1 with actuationState=persisted_not_dispatched and nextRequiredAction=advance_existing_operation."
+  },
   "modelFit": {
     "packageClass": "representative-frontier-closure",
     "intendedMinimumModel": "gpt-5.3-codex",
@@ -115,6 +105,30 @@
       "owned files expand beyond this package",
       "a frozen decision must be reopened"
     ]
+  },
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": {
+      "commands": [
+        "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-publication-supplied-stream-closure-20260515-codex.report.json",
+        "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-supplied-stream-closure-20260515-codex.report.json --explain active_gate_snapshot_coverage",
+        "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-publication-supplied-stream-closure-20260515-codex.report.json",
+        "npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage --markdown",
+        "./node_modules/.bin/tap --grep \"active-gate owner cohort|owner-truth active cohort\" test/admin/admin-control-snapshot.test.js",
+        "node --test test/distributed/harness/__tests__/active-gate-closure-classification.test.js",
+        "node test/distributed/harness/__tests__/cluster.test-part-3.js",
+        "node test/distributed/harness/__tests__/cluster.test-part-4.js",
+        "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json --fast-local --verbose",
+        "npm run work:evidence-summary -- test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json",
+        "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json --explain active_gate_snapshot_coverage",
+        "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json --handoff-probe",
+        "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json",
+        "npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json",
+        "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json",
+        "./node_modules/.bin/tap --grep \"repair-deferred shared owner|forced authoritative membership observation|build snapshot forwards authoritative membership reconcile|auto-repaired snapshots use authoritative membership publication|active-gate owner cohort|owner-truth active cohort\" test/admin/admin-control-snapshot.test.js",
+        "node --test test/scripts/analyze-topology-convergence.test.js"
+      ]
+    }
   },
   "representativeResidual": {
     "status": "live-red-same-frontier",
@@ -167,8 +181,7 @@
     ],
     "oscillationCheck": "The cross-boundary publication handoff package closed stale publication_pending reentry. This successor must not reopen publication unless canonical extraction promotes publication_ack_convergence as first frontier again.",
     "handoffInvariant": "The track related-work constraint now applies: active-gate admission must stay strict while the owner-reconcile catch-up edge remains pending."
-  },
-  "predecessor": "work/packages/done-20260515-topology-publication-active-gate-handoff-oscillation.md"
+  }
 }
 -->
 

@@ -13,15 +13,15 @@
   "boundary": "rolling_restart_resume_activation_brief",
   "dominantReason": "paused_release_gate_needs_concrete_resume_path",
   "currentState": "Latest rolling-restart reconciliation found this brief's original priority-recovery operation-progress path stale: the current artifact has zero priority-recovery witnesses and fronts startup_active_gate_owner / snapshot_coverage / active_gate_timed_out.",
-  "nextAction": "Migrate to work/packages/active-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md so resumed work starts from the current active-gate snapshot coverage frontier instead of the obsolete operation-progress path.",
+  "nextAction": "Migrate to work/packages/done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md so resumed work starts from the current active-gate snapshot coverage frontier instead of the obsolete operation-progress path.",
   "proof": [
     "falsifier: latest route proof npm run work:scenario-route -- test-output/reports/rolling-restart-tell-tale-green-gate.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage",
-    "regression: successor pre-implementation validation npm run work:validate -- --pre-impl work/packages/active-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md",
-    "supporting: diff hygiene git diff --check -- work/packages/done-20260513-rolling-restart-resume-activation-brief.md work/packages/active-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md work/sprints/active-2026-q2-rolling-restart-resume-activation.md work/sprints/current-blocker.json work/sprints/current-blocker.md"
+    "regression: successor pre-implementation validation npm run work:validate -- --pre-impl work/packages/done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md",
+    "supporting: diff hygiene git diff --check -- work/packages/done-20260513-rolling-restart-resume-activation-brief.md work/packages/done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md work/sprints/active-2026-q2-rolling-restart-resume-activation.md work/sprints/current-blocker.json work/sprints/current-blocker.md"
   ],
   "writeScope": [
     "work/packages/done-20260513-rolling-restart-resume-activation-brief.md",
-    "work/packages/active-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md",
+    "work/packages/done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md",
     "work/packages/done-20260513-future-sprint-release-gate-systemic-governance.md",
     "work/packages/todo-20260513-release-gate-runtime-architecture-backlog.md",
     "work/sprints/active-2026-q2-rolling-restart-resume-activation.md",
@@ -48,7 +48,7 @@
   "candidateRuntimeFiles": [],
   "commitScope": [
     "work/packages/done-20260513-rolling-restart-resume-activation-brief.md",
-    "work/packages/active-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md",
+    "work/packages/done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md",
     "work/packages/done-20260513-future-sprint-release-gate-systemic-governance.md",
     "work/packages/todo-20260513-release-gate-runtime-architecture-backlog.md",
     "work/sprints/active-2026-q2-rolling-restart-resume-activation.md",
@@ -71,7 +71,7 @@
   "theoryLedgerRefs": [],
   "closed": "2026-05-25",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md"
+  "successor": "work/packages/done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md"
 }
 -->
 
@@ -305,7 +305,7 @@ was needed.
 This materially differs from the original operation-progress activation brief.
 The `Priority Recovery Operation Progress Kernel` candidate is therefore
 deactivated for this resume. Resumed work now starts at
-`work/packages/active-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md`,
+`work/packages/done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md`,
 which cites this brief, preserves the zero-priority-recovery result, and names
 the focused active-gate route proof before runtime files move into write scope.
 
@@ -332,7 +332,7 @@ The successor is intentionally active-gate scoped:
 - Output profile: `medium`
 - Owned files:
   `work/packages/done-20260513-rolling-restart-resume-activation-brief.md`,
-  `work/packages/active-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md`,
+  `work/packages/done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md`,
   `work/packages/done-20260513-future-sprint-release-gate-systemic-governance.md`,
   `work/packages/todo-20260513-release-gate-runtime-architecture-backlog.md`,
   `work/sprints/done-2026-q2-future-sprint-release-gate-systemic-governance.md`,
@@ -346,13 +346,13 @@ The successor is intentionally active-gate scoped:
 - Focused proof:
   `npm run work:package:doctor -- --suggest work/packages/done-20260513-rolling-restart-resume-activation-brief.md`,
   `npm run work:validate -- --entry work/packages/done-20260513-rolling-restart-resume-activation-brief.md`,
-  `git diff --check -- work/packages/done-20260513-rolling-restart-resume-activation-brief.md work/packages/active-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md work/packages/done-20260513-future-sprint-release-gate-systemic-governance.md work/packages/todo-20260513-release-gate-runtime-architecture-backlog.md work/sprints/done-2026-q2-future-sprint-release-gate-systemic-governance.md work/sprints/current-blocker.json work/sprints/current-blocker.md`
+  `git diff --check -- work/packages/done-20260513-rolling-restart-resume-activation-brief.md work/packages/done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md work/packages/done-20260513-future-sprint-release-gate-systemic-governance.md work/packages/todo-20260513-release-gate-runtime-architecture-backlog.md work/sprints/done-2026-q2-future-sprint-release-gate-systemic-governance.md work/sprints/current-blocker.json work/sprints/current-blocker.md`
 
 ## Validation
 
 1. `npm run work:scenario-route -- test-output/reports/rolling-restart-tell-tale-green-gate.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage`
-2. `npm run work:validate -- --pre-impl work/packages/active-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md`
-3. `git diff --check -- work/packages/done-20260513-rolling-restart-resume-activation-brief.md work/packages/active-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md work/sprints/active-2026-q2-rolling-restart-resume-activation.md work/sprints/current-blocker.json work/sprints/current-blocker.md`
+2. `npm run work:validate -- --pre-impl work/packages/done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md`
+3. `git diff --check -- work/packages/done-20260513-rolling-restart-resume-activation-brief.md work/packages/done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md work/sprints/active-2026-q2-rolling-restart-resume-activation.md work/sprints/current-blocker.json work/sprints/current-blocker.md`
 
 ## Activation Checklist
 
@@ -367,6 +367,6 @@ The successor is intentionally active-gate scoped:
 ## Execution Evidence
 
 - [x] action: implementation falsification; owner: workflow_tooling_owner; files-changed: none; validation: `npm run work:evidence-summary -- test-output/reports/rolling-restart-tell-tale-green-gate.report.json`, `npm run work:scenario-route -- test-output/reports/rolling-restart-tell-tale-green-gate.report.json`, and `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-tell-tale-green-gate.report.json --markdown`; parent revalidated focused proof: yes; outcome: validated.
-- [x] action: implementation; owner: workflow_tooling_owner; files-changed: work/packages/done-20260513-rolling-restart-resume-activation-brief.md, work/packages/active-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md; validation: successor package prepared and validated with `npm run work:validate -- --entry` plus `npm run work:validate -- --pre-impl`; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: implementation; owner: workflow_tooling_owner; files-changed: work/packages/done-20260513-rolling-restart-resume-activation-brief.md, work/packages/done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md; validation: successor package prepared and validated with `npm run work:validate -- --entry` plus `npm run work:validate -- --pre-impl`; parent revalidated focused proof: yes; outcome: validated.
 - [x] action: verification-fix; owner: workflow_tooling_owner; files-changed: none; validation: parent revalidated focused proof: yes; outcome: validated.
 - [x] action: theory-ledger; owner: workflow_tooling_owner; files-changed: none; validation: no ledger update; outcome: validated.

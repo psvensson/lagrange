@@ -2,47 +2,61 @@
 
 <!-- work-package
 {
-  "schema": "work-package-v1",
+  "schema": "work-package-v2",
   "status": "todo",
-  "opened": "2026-05-13",
-  "lane": "lightweight-maintenance",
-  "scenario": "none",
-  "artifact": "none",
-  "playback": "none",
-  "owner": "workflow_tooling_owner",
-  "boundary": "release_gate_bounded_progress_governance",
-  "dominantReason": "retryable_and_backpressure_states_mistaken_for_closure",
-  "currentState": "Future release-gate packages need stricter bounded-progress proof before retryable, backpressure, or accepted residual evidence can be treated as non-frontier.",
-  "nextAction": "Add governance that requires a named progress mechanism, maximum bound, proof artifact, and same-frontier fallback before non-green evidence can be classified.",
-  "proof": [
-    "npm run work:package:doctor -- --suggest work/packages/todo-20260513-release-gate-bounded-progress-governance.md",
-    "npm run work:validate -- --entry work/packages/todo-20260513-release-gate-bounded-progress-governance.md",
-    "git diff --check -- work/packages/todo-20260513-release-gate-bounded-progress-governance.md work/README.md work/templates/work-package-template.md"
-  ],
-  "writeScope": [
-    "work/packages/todo-20260513-release-gate-bounded-progress-governance.md",
-    "work/README.md",
-    "work/templates/work-package-template.md"
-  ],
-  "handoffFiles": [
-    "work/packages/done-20260512-scenario-causal-closure-governance.md",
-    "work/packages/todo-20260513-release-gate-blocker-path-ledger-template.md"
-  ],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [
-    "work/packages/todo-20260513-release-gate-bounded-progress-governance.md",
-    "work/README.md",
-    "work/templates/work-package-template.md"
-  ],
+  "intent": {
+    "opened": "2026-05-13",
+    "lane": "lightweight-maintenance",
+    "scenario": "none",
+    "artifact": "none",
+    "playback": "none",
+    "owner": "workflow_tooling_owner",
+    "boundary": "release_gate_bounded_progress_governance",
+    "dominantReason": "retryable_and_backpressure_states_mistaken_for_closure",
+    "currentState": "Future release-gate packages need stricter bounded-progress proof before retryable, backpressure, or accepted residual evidence can be treated as non-frontier.",
+    "nextAction": "Add governance that requires a named progress mechanism, maximum bound, proof artifact, and same-frontier fallback before non-green evidence can be classified."
+  },
+  "scope": {
+    "writeScope": [
+      "work/packages/todo-20260513-release-gate-bounded-progress-governance.md",
+      "work/README.md",
+      "work/templates/work-package-template.md"
+    ],
+    "handoffFiles": [
+      "work/packages/done-20260512-scenario-causal-closure-governance.md",
+      "work/packages/todo-20260513-release-gate-blocker-path-ledger-template.md"
+    ],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": [],
+    "commitScope": [
+      "work/packages/todo-20260513-release-gate-bounded-progress-governance.md",
+      "work/README.md",
+      "work/templates/work-package-template.md"
+    ]
+  },
+  "gates": {
+    "stabilityCredit": "local-proof-only",
+    "whyHighestLeverageNow": "Future release-gate packages need stricter bounded-progress proof before retryable, backpressure, or accepted residual evidence can be treated as non-frontier."
+  },
   "modelFit": {
     "packageClass": "workflow-tooling-governance",
     "intendedMinimumModel": "gpt-5.3-codex",
     "scopeShape": "release-gate-bounded-progress-governance",
+    "outputProfile": "medium",
     "escalationTriggers": [
       "validation requires tracker code changes",
       "policy needs runtime state-machine changes"
     ]
+  },
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": {
+      "commands": [
+        "npm run work:package:doctor -- --suggest work/packages/todo-20260513-release-gate-bounded-progress-governance.md",
+        "npm run work:validate -- --entry work/packages/todo-20260513-release-gate-bounded-progress-governance.md",
+        "git diff --check -- work/packages/todo-20260513-release-gate-bounded-progress-governance.md work/README.md work/templates/work-package-template.md"
+      ]
+    }
   }
 }
 -->

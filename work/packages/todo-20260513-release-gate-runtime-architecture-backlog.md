@@ -2,46 +2,60 @@
 
 <!-- work-package
 {
-  "schema": "work-package-v1",
+  "schema": "work-package-v2",
   "status": "todo",
-  "opened": "2026-05-13",
-  "lane": "read-review-doc-only",
-  "scenario": "none",
-  "artifact": "none",
-  "playback": "none",
-  "owner": "architecture_governance_owner",
-  "boundary": "release_gate_runtime_architecture_backlog",
-  "dominantReason": "architecture_ideas_can_split_from_active_runtime_proof",
-  "currentState": "Future runtime architecture ideas need a reconciled backlog so implementation packages do not duplicate or conflict with the active release-gate sprint.",
-  "nextAction": "Queue runtime-owner packages only after blocker-path ledger rows and architecture contracts name the repeated causal edge and reconcile with the latest active scenario proof.",
-  "proof": [
-    "npm run work:package:doctor -- --suggest work/packages/todo-20260513-release-gate-runtime-architecture-backlog.md",
-    "npm run work:validate -- --entry work/packages/todo-20260513-release-gate-runtime-architecture-backlog.md",
-    "git diff --check -- work/packages/todo-20260513-release-gate-runtime-architecture-backlog.md work/sprints/todo-2026-q2-future-sprint-release-gate-systemic-governance.md"
-  ],
-  "writeScope": [
-    "work/packages/todo-20260513-release-gate-runtime-architecture-backlog.md",
-    "work/sprints/todo-2026-q2-future-sprint-release-gate-systemic-governance.md"
-  ],
-  "handoffFiles": [
-    "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
-    "work/packages/todo-20260513-release-gate-architecture-contract-template.md",
-    "work/packages/todo-20260513-release-gate-blocker-path-ledger-template.md"
-  ],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [
-    "work/packages/todo-20260513-release-gate-runtime-architecture-backlog.md",
-    "work/sprints/todo-2026-q2-future-sprint-release-gate-systemic-governance.md"
-  ],
+  "intent": {
+    "opened": "2026-05-13",
+    "lane": "read-review-doc-only",
+    "scenario": "none",
+    "artifact": "none",
+    "playback": "none",
+    "owner": "architecture_governance_owner",
+    "boundary": "release_gate_runtime_architecture_backlog",
+    "dominantReason": "architecture_ideas_can_split_from_active_runtime_proof",
+    "currentState": "Future runtime architecture ideas need a reconciled backlog so implementation packages do not duplicate or conflict with the active release-gate sprint.",
+    "nextAction": "Queue runtime-owner packages only after blocker-path ledger rows and architecture contracts name the repeated causal edge and reconcile with the latest active scenario proof."
+  },
+  "scope": {
+    "writeScope": [
+      "work/packages/todo-20260513-release-gate-runtime-architecture-backlog.md",
+      "work/sprints/todo-2026-q2-future-sprint-release-gate-systemic-governance.md"
+    ],
+    "handoffFiles": [
+      "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
+      "work/packages/todo-20260513-release-gate-architecture-contract-template.md",
+      "work/packages/todo-20260513-release-gate-blocker-path-ledger-template.md"
+    ],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": [],
+    "commitScope": [
+      "work/packages/todo-20260513-release-gate-runtime-architecture-backlog.md",
+      "work/sprints/todo-2026-q2-future-sprint-release-gate-systemic-governance.md"
+    ]
+  },
+  "gates": {
+    "stabilityCredit": "local-proof-only",
+    "whyHighestLeverageNow": "Future runtime architecture ideas need a reconciled backlog so implementation packages do not duplicate or conflict with the active release-gate sprint."
+  },
   "modelFit": {
     "packageClass": "architecture-backlog-governance",
     "intendedMinimumModel": "gpt-5.3-codex",
     "scopeShape": "release-gate-runtime-architecture-backlog",
+    "outputProfile": "medium",
     "escalationTriggers": [
       "a backlog item is activated for runtime implementation",
       "active scenario proof changes the contract ordering"
     ]
+  },
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": {
+      "commands": [
+        "npm run work:package:doctor -- --suggest work/packages/todo-20260513-release-gate-runtime-architecture-backlog.md",
+        "npm run work:validate -- --entry work/packages/todo-20260513-release-gate-runtime-architecture-backlog.md",
+        "git diff --check -- work/packages/todo-20260513-release-gate-runtime-architecture-backlog.md work/sprints/todo-2026-q2-future-sprint-release-gate-systemic-governance.md"
+      ]
+    }
   }
 }
 -->

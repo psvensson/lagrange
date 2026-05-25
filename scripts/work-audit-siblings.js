@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import {normalizeMetadata} from './work-package-schema.js';
 
 function parseMetadata(filePath) {
   try {
@@ -10,7 +11,7 @@ function parseMetadata(filePath) {
     const closeIndex = content.indexOf(closeMarker, openIndex);
     if (openIndex === -1 || closeIndex === -1) return null;
     const jsonText = content.slice(openIndex + openMarker.length, closeIndex).trim();
-    return JSON.parse(jsonText);
+    return normalizeMetadata(JSON.parse(jsonText), filePath);
   } catch (err) {
     return null;
   }
@@ -40,7 +41,7 @@ async function main() {
     const metadata = parseMetadata(filePath);
     if (!metadata) continue;
 
-    const writeScope = metadata.scope && metadata.scope.writeScope || [];
+    const writeScope = metadata.writeScope || [];
     if (writeScope.length === 0) continue;
 
     packages.push({

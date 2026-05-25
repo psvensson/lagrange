@@ -2,47 +2,61 @@
 
 <!-- work-package
 {
-  "schema": "work-package-v1",
+  "schema": "work-package-v2",
   "status": "todo",
-  "opened": "2026-05-13",
-  "lane": "lightweight-maintenance",
-  "scenario": "none",
-  "artifact": "none",
-  "playback": "none",
-  "owner": "workflow_tooling_owner",
-  "boundary": "release_gate_fixture_first_policy",
-  "dominantReason": "full_harness_reruns_used_as_primary_debug_surface",
-  "currentState": "Future release-gate packages need focused fixtures or analyzer proofs before full distributed runs are used for confirmation.",
-  "nextAction": "Require future scenario packages to identify the focused fixture, extractor, or missing-tooling gap that proves the architectural edge before representative reruns.",
-  "proof": [
-    "npm run work:package:doctor -- --suggest work/packages/todo-20260513-release-gate-fixture-first-policy.md",
-    "npm run work:validate -- --entry work/packages/todo-20260513-release-gate-fixture-first-policy.md",
-    "git diff --check -- work/packages/todo-20260513-release-gate-fixture-first-policy.md work/README.md work/templates/work-package-template.md"
-  ],
-  "writeScope": [
-    "work/packages/todo-20260513-release-gate-fixture-first-policy.md",
-    "work/README.md",
-    "work/templates/work-package-template.md"
-  ],
-  "handoffFiles": [
-    "work/packages/done-20260511-workflow-tooling-llm-usability.md",
-    "work/packages/todo-20260513-release-gate-blocker-path-ledger-template.md"
-  ],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [
-    "work/packages/todo-20260513-release-gate-fixture-first-policy.md",
-    "work/README.md",
-    "work/templates/work-package-template.md"
-  ],
+  "intent": {
+    "opened": "2026-05-13",
+    "lane": "lightweight-maintenance",
+    "scenario": "none",
+    "artifact": "none",
+    "playback": "none",
+    "owner": "workflow_tooling_owner",
+    "boundary": "release_gate_fixture_first_policy",
+    "dominantReason": "full_harness_reruns_used_as_primary_debug_surface",
+    "currentState": "Future release-gate packages need focused fixtures or analyzer proofs before full distributed runs are used for confirmation.",
+    "nextAction": "Require future scenario packages to identify the focused fixture, extractor, or missing-tooling gap that proves the architectural edge before representative reruns."
+  },
+  "scope": {
+    "writeScope": [
+      "work/packages/todo-20260513-release-gate-fixture-first-policy.md",
+      "work/README.md",
+      "work/templates/work-package-template.md"
+    ],
+    "handoffFiles": [
+      "work/packages/done-20260511-workflow-tooling-llm-usability.md",
+      "work/packages/todo-20260513-release-gate-blocker-path-ledger-template.md"
+    ],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": [],
+    "commitScope": [
+      "work/packages/todo-20260513-release-gate-fixture-first-policy.md",
+      "work/README.md",
+      "work/templates/work-package-template.md"
+    ]
+  },
+  "gates": {
+    "stabilityCredit": "local-proof-only",
+    "whyHighestLeverageNow": "Future release-gate packages need focused fixtures or analyzer proofs before full distributed runs are used for confirmation."
+  },
   "modelFit": {
     "packageClass": "workflow-tooling-governance",
     "intendedMinimumModel": "gpt-5.3-codex",
     "scopeShape": "release-gate-fixture-first-policy",
+    "outputProfile": "medium",
     "escalationTriggers": [
       "policy requires new analyzer implementation",
       "fixture generation mutates representative artifacts"
     ]
+  },
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": {
+      "commands": [
+        "npm run work:package:doctor -- --suggest work/packages/todo-20260513-release-gate-fixture-first-policy.md",
+        "npm run work:validate -- --entry work/packages/todo-20260513-release-gate-fixture-first-policy.md",
+        "git diff --check -- work/packages/todo-20260513-release-gate-fixture-first-policy.md work/README.md work/templates/work-package-template.md"
+      ]
+    }
   }
 }
 -->
