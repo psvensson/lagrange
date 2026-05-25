@@ -4,6 +4,7 @@
 {
   "schema": "work-package-v2",
   "status": "active",
+  "commitAndPushLedgerRequired": true,
   "intent": {
     "opened": "2026-05-25",
     "lane": "scenario-release-gate",
@@ -106,7 +107,7 @@
     "hypothesis": "The sprint success criterion is full rolling-restart green; local reductions and owner-boundary migrations are insufficient for sprint closure.",
     "stopConditionCheck": "Run the representative scenario, route the artifact, evidence summary, and `npm run analyze:causal-model` before closure.",
     "expectedCausalModelChange": "The result is representative-green, or fresh evidence selects exactly one current first frontier successor while the sprint stays active.",
-    "representativeOutcome": "pending-before-rerun",
+    "representativeOutcome": "migrated",
     "causalDebt": "The prior resume-activation sprint closed on migration/reduction evidence, not a fully green rolling-restart release gate.",
     "crossBoundaryReview": "This package performs no runtime edits; a red route must open a bounded owner/boundary successor instead of closing the sprint."
   },
@@ -130,7 +131,7 @@
     "maxProgressBound": "one representative rerun and canonical routing decision",
     "sameFrontierFallback": "A red rerun opens or selects one bounded successor; the sprint does not close.",
     "expectedNextFrontier": "green or one routed owner/boundary successor",
-    "resultClassification": "pending-before-probe",
+    "resultClassification": "migrated",
     "stopCondition": "continue-local-fix",
     "recentFrontierHistory": [
       "done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md / operation_workflow_owner / workflow_progress / migrated"
@@ -141,8 +142,8 @@
   "observablePrediction": {
     "metric": "rolling-restart exit status, representative route outcome, active=5/5, snapshotCoverage=5/5, missingPublished=0, priorityRecoveryWitnesses=0",
     "predicted": "fresh rerun either passes clean or routes to one first frontier successor without closing the sprint",
-    "observed": "pending-before-observation",
-    "accuracy": "pending-before-observation",
+    "observed": "timed out and migrated to startup_active_gate_owner / snapshot_coverage with active_gate_timed_out",
+    "accuracy": "partial",
     "evidence": "test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json"
   },
   "whyHighestLeverageNow": "The user requested a sprint whose success criterion is rolling-restart fully green; this package creates the representative gate without authorizing runtime symptom work.",
@@ -217,7 +218,7 @@ classification-only evidence cannot close the sprint.
 ## Scope Basis
 
 Approved stabilization workflow scope. This package changes only workflow
-state, sprint ownership, and representative gate evidence.
+state, sprint ownership, and representative gate evidence. No ledger update.
 
 ## Workflow Lane
 
@@ -352,12 +353,24 @@ state, sprint ownership, and representative gate evidence.
 
 ## Execution Evidence
 
-- [ ] `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json --verbose`
-- [ ] `npm run work:scenario-route -- test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json --owner release_gate_owner --boundary rolling_restart_fully_green_gate --dominant-reason representative_green_required`
-- [ ] `npm run work:evidence-summary -- test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json`
-- [ ] `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json`
+Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
+Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
+
+- [x] action: implementation; owner: release_gate_owner; files-changed: none; validation: fresh representative rerun plus canonical route and evidence summary, parent revalidated focused proof: yes; outcome: validated.
+- [x] action: verification-fix; owner: release_gate_owner; files-changed: none; validation: fresh representative rerun plus canonical route and evidence summary, parent revalidated focused proof: yes; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: validated.
 
 ## Validation
 
-- [ ] `npm run work:validate -- --pre-impl work/packages/active-20260525-rolling-restart-fully-green-gate.md`
-- [ ] `npm run work:validate -- --closure work/packages/active-20260525-rolling-restart-fully-green-gate.md`
+1. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json --verbose`
+2. `npm run work:scenario-route -- test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json --owner release_gate_owner --boundary rolling_restart_fully_green_gate --dominant-reason representative_green_required`
+3. `npm run work:evidence-summary -- test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json`
+4. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-fully-green-gate-20260525T172845Z.report.json`
+5. `npm run work:validate -- --pre-impl work/packages/active-20260525-rolling-restart-fully-green-gate.md`
+6. `npm run work:validate -- --closure work/packages/active-20260525-rolling-restart-fully-green-gate.md`
+
+## Commit And Push Ledger
+
+1. Focused package commit: 52ba252373d225c7cb91113d6fba5d527dc84aba
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
