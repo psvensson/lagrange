@@ -65,6 +65,18 @@ const COMMAND_GROUPS = Object.freeze([
         description: 'Scaffold a schema-valid package with Model Fit defaults from the model ledger.',
       }),
       Object.freeze({
+        command: 'npm run work:package:evidence -- --action <action> [--outcome <outcome>] [--files <files>] [--validation <validation>]',
+        description: 'Mutate the active package Execution Evidence checklist using intent flags instead of manual Markdown edits.',
+      }),
+      Object.freeze({
+        command: 'npm run work:package:ledger -- --no-ledger',
+        description: 'Set theory-ledger: not-needed and empty theoryLedgerRefs inside the active package via intent command.',
+      }),
+      Object.freeze({
+        command: 'npm run work:sprint:queue -- --activate <package-selector>',
+        description: 'Rename a todo package to active-*, update its status, adjust the active sprint queue reference, and refresh current-blocker.',
+      }),
+      Object.freeze({
         command: 'npm run work:package:route-after-rerun -- --artifact <artifact> --successor <active-successor>',
         description: 'Combine post-rerun routing, required sprint/current-blocker refresh steps, and the package migration transaction.',
       }),

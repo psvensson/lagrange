@@ -62,20 +62,20 @@ stale or manually drifted state.
 ```text
 Representative artifact: none
 Visible first frontier: unknown
-Active package: work/packages/done-20260526-workflow-publish-transaction-hardening.md
+Active package: work/packages/done-20260526-workflow-markdown-intent-tools.md
 Active package owner: workflow_tooling_owner
-Active package boundary: markdown_admin_publish_transaction
+Active package boundary: markdown_admin_intent_tools
 Selected cause: manual_workflow_markdown_admin_latency
-Required action: Implement a tool-owned publish transaction that closes packages, refreshes current-blocker, stages the rename/deletion set, records commit/push ledger proof, and reports the next command without manual Markdown edits.
+Required action: Add structured commands for package evidence, no-ledger decisions, sprint queue edits, and Current Edge Card updates so LLMs mutate workflow Markdown by intent.
 Representative status: unknown
 Causal outcome: unknown
 Architecture gate: not-required / unknown
 Expected delta: unknown
-Current state: Package closure and publish still require multiple workflow commands plus manual Markdown repair, and the latest close exposed stale current-blocker and commit-ledger friction.
-Allowed edits: scripts/work-close.js, scripts/work-tracker.js, scripts/work-sprint-remaining.js, scripts/list-commands.js, package.json, work/RULES.md, work/README.md, .kiro/steering/llm/core.md, .kiro/steering/llm/boot.md, test/scripts/work-close.test.js, test/scripts/work-tracker-current-blocker.test.js, work/releases/0.1-dependency-map.md, work/tracks/topology-convergence.md
+Current state: New package scaffolded from the shared work-package schema.
+Allowed edits: scripts/work-package-evidence.js, scripts/work-package-ledger.js, scripts/work-sprint-queue.js, scripts/work-tracker.js, scripts/list-commands.js, package.json, work/RULES.md, work/README.md, test/scripts/work-package-evidence.test.js, test/scripts/work-sprint-queue.test.js
 Candidate runtime files: unknown
 Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
-Required latest proof: regression: node --test test/scripts/work-close.test.js test/scripts/work-tracker-current-blocker.test.js, regression: npm run work:advance -- --check, supporting: git diff --check -- scripts/work-close.js scripts/work-tracker.js scripts/work-sprint-remaining.js scripts/list-commands.js package.json work/RULES.md work/README.md .kiro/steering/llm/core.md .kiro/steering/llm/boot.md test/scripts/work-close.test.js test/scripts/work-tracker-current-blocker.test.js work/packages/done-20260526-workflow-publish-transaction-hardening.md work/sprints/active-2026-q2-workflow-markdown-admin-tooling.md
+Required latest proof: regression: node --test test/scripts/work-package-evidence.test.js test/scripts/work-sprint-queue.test.js, supporting: npm run work:package:evidence -- --help, supporting: git diff --check -- scripts/work-package-evidence.js scripts/work-package-ledger.js scripts/work-sprint-queue.js scripts/work-tracker.js scripts/list-commands.js package.json work/RULES.md work/README.md test/scripts/work-package-evidence.test.js test/scripts/work-sprint-queue.test.js work/packages/done-20260526-workflow-markdown-intent-tools.md work/sprints/active-2026-q2-workflow-markdown-admin-tooling.md
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -99,7 +99,7 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - First-run reason: highest-leverage latency reduction and the direct fix
      for stale generated handoff after package close.
 
-2. [Workflow Markdown Intent Mutation Tools](../packages/todo-20260526-workflow-markdown-intent-tools.md)
+2. [Workflow Markdown Intent Mutation Tools](../packages/done-20260526-workflow-markdown-intent-tools.md)
    - Lane: `lightweight-maintenance`
    - Purpose: add structured package evidence, no-ledger, sprint queue, and
      Current Edge Card mutation commands so LLMs express intent instead of
