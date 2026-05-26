@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "active",
+  "status": "done",
   "intent": {
     "opened": "2026-05-26",
     "lane": "scenario-release-gate",
@@ -14,7 +14,8 @@
     "boundary": "snapshot_coverage",
     "dominantReason": "active_gate_timed_out",
     "currentState": "New package scaffolded from the shared work-package schema.",
-    "nextAction": "investigate stale replica operation cancellation upon node rejoin"
+    "nextAction": "investigate stale replica operation cancellation upon node rejoin",
+    "closed": "2026-05-26"
   },
   "scope": {
     "writeScope": [
@@ -82,7 +83,8 @@
       "Create Spark-safe mechanical or test-only children once execution is unambiguous.",
       "Create a gpt-5.4 single-file-runtime child only after the runtime owner file is selected."
     ]
-  }
+  },
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -238,9 +240,6 @@ Agent identity is optional provenance. Use the compact five-field shape for new 
 
 ## Commit And Push Ledger
 
-1. Focused package commit: e3d3a37d6ded3fa8d7d228f405caf460cd530995
+1. Focused package commit: 5992ef86c94102d1c72c3419c346c36437b76503
 2. Pushed to: origin/codex/pending-ack-eligibility-filter
 3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
-
-
-

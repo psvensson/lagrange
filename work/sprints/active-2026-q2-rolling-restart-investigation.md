@@ -17,7 +17,7 @@ Investigate the control-plane priority publication and ACK handoff dynamics duri
 - Confidence and evidence: Medium. The approved sprint options identify priority spread convergence as a highly relevant diagnostic path.
 - Expected green path: Run focused diagnostics, inspect coordinator publications and ACK handoff state machines, locate coordination mismatches, and prepare targeted local repairs.
 - Wrong direction signals: Raising timeouts or relaxing admission rules to pass tests.
-- Next best package: work/packages/active-20260526-cache-watermark-stale-operation-reconciler-hardening.md
+- Next best package: work/packages/done-20260526-cache-watermark-stale-operation-reconciler-hardening.md
 - Stop or escalate rule: Escalate if downstream/upstream protocol contradictions appear or if proof requires cross-owner changes.
 
 ## Current Edge Card
@@ -25,7 +25,7 @@ Investigate the control-plane priority publication and ACK handoff dynamics duri
 ```text
 Representative artifact: none
 Visible first frontier: unknown
-Active package: work/packages/active-20260526-cache-watermark-stale-operation-reconciler-hardening.md
+Active package: work/packages/done-20260526-cache-watermark-stale-operation-reconciler-hardening.md
 Active package owner: startup_active_gate_owner
 Active package boundary: snapshot_coverage
 Selected cause: active_gate_timed_out
@@ -60,7 +60,7 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Lane: `scenario-release-gate`
    - Purpose: Separate metadata control signals from data messages to stabilize outbound queue.
    - First-run reason: The representative `rolling-restart` scenario experiences priority recovery rebalancer handoff stalls due to backpressure in outbound queues.
-3. [Cache Watermark and Stale Operation Reconciler Hardening](../packages/active-20260526-cache-watermark-stale-operation-reconciler-hardening.md)
+3. [Cache Watermark and Stale Operation Reconciler Hardening](../packages/done-20260526-cache-watermark-stale-operation-reconciler-hardening.md)
    - Lane: `scenario-release-gate`
    - Purpose: Proactively cancel or clean up obsolete replica operations on node rejoin, preventing stale-operation reconciliation delays from stalling coordinator active-gate snapshot progress.
 

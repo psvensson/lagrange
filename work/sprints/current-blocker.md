@@ -26,7 +26,7 @@ Stop rule: No architecture decision gate is required for this package.
 
 Sprint: `work/sprints/active-2026-q2-rolling-restart-investigation.md`
 
-Package: `work/packages/active-20260526-cache-watermark-stale-operation-reconciler-hardening.md`
+Package: `work/packages/done-20260526-cache-watermark-stale-operation-reconciler-hardening.md`
 
 Workflow lane: `scenario-release-gate`
 
@@ -264,7 +264,7 @@ Commit scope:
 3. `src/rebalancer/rebalance-coordinator.js`
 4. `src/rebalancer/replica-operation-liveness.js`
 5. `test/rebalancer/replica-operation-liveness.test.js`
-6. `work/packages/active-20260526-cache-watermark-stale-operation-reconciler-hardening.md`
+6. `work/packages/done-20260526-cache-watermark-stale-operation-reconciler-hardening.md`
 
 Legacy touched files:
 
