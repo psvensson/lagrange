@@ -2,204 +2,36 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-rolling-restart-priority-recovery-resolution.md",
-  "package": "work/packages/active-20260526-rolling-restart-priority-recovery-deadlock-triage.md",
-  "status": "active",
-  "lane": "causal-escalation",
-  "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json",
+  "package": "none",
+  "status": "none",
+  "lane": "none",
+  "scenario": "none",
+  "artifact": "none",
   "playback": "none",
-  "owner": "operation_workflow_owner",
-  "boundary": "workflow_progress",
-  "dominantReason": "priority_recovery_event_driven_wait",
-  "currentState": "Scaffolded from representative evidence for priority_recovery_partition_progress.",
-  "nextAction": "Triage rebalancer target selection and blocker filters to identify why priority recovery operations are not created.",
-  "proof": [
-    "falsifier: contract transition operation_workflow_owner workflow_progress priority_recovery_event_driven_wait npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --json",
-    "regression: contract transition operation_workflow_owner workflow_progress priority_recovery_event_driven_wait npm run work:evidence-summary -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json",
-    "supporting: contract transition operation_workflow_owner workflow_progress priority_recovery_event_driven_wait npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --markdown"
-  ],
-  "writeScope": [
-    "src/control-plane/pressure-governor.js",
-    "src/rebalancer/operation-workflow-dispatch-rearm-evidence.js",
-    "src/rebalancer/operation-workflow-owner-segment-7-stage-2.js",
-    "src/rebalancer/operation-workflow-transition-retry-grace.js",
-    "test/control-plane/pressure-governor.test.js"
-  ],
+  "owner": "none",
+  "boundary": "none",
+  "dominantReason": "none",
+  "currentState": "No active work package. Start a new package when implementation resumes.",
+  "nextAction": "Create or activate one focused package for the next executable concern.",
+  "proof": [],
+  "writeScope": [],
   "handoffFiles": [],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [
-    "src/control-plane/pressure-governor.js"
+  "generatedFiles": [
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md"
   ],
-  "commitScope": [
-    "work/packages/active-20260526-rolling-restart-priority-recovery-deadlock-triage.md",
-    "src/control-plane/pressure-governor.js",
-    "work/sprints/active-2026-q2-rolling-restart-priority-recovery-resolution.md",
-    "src/rebalancer/operation-workflow-dispatch-rearm-evidence.js",
-    "src/rebalancer/operation-workflow-owner-segment-7-stage-2.js",
-    "src/rebalancer/operation-workflow-transition-retry-grace.js",
-    "test/control-plane/pressure-governor.test.js"
-  ],
+  "candidateRuntimeFiles": [],
+  "commitScope": [],
   "touchedFiles": [],
-  "theoryLedgerRefs": [
-    "theory-20260526-rolling-restart-logger-cpu-starvation",
-    "theory-20260526-rolling-restart-seed-websocket-cleanup",
-    "theory-20260526-rolling-restart-rebalancer-outbound-saturation"
-  ],
-  "modelFit": {
-    "packageClass": "causal-escalation",
-    "intendedMinimumModel": "gpt-5.3-codex",
-    "scopeShape": "bounded-owner-runtime/current-frontier",
-    "outputProfile": "medium",
-    "ambiguityScore": 1,
-    "escalationTriggers": [
-      "owned files expand beyond this package",
-      "a frozen decision must be reopened"
-    ]
-  },
-  "representativeResidual": {
-    "status": "active",
-    "scenario": "rolling-restart",
-    "artifact": "test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json",
-    "frontier": "priority_recovery_partition_progress",
-    "owner": "operation_workflow_owner",
-    "boundary": "workflow_progress",
-    "dominantReason": "priority_recovery_event_driven_wait",
-    "nextAction": "Triage rebalancer target selection and blocker filters to identify why priority recovery operations are not created."
-  },
-  "causalGovernance": {
-    "hypothesis": "The priority recovery event-driven wait is due to target readiness or budget filtering in unified rebalancer planning.",
-    "stopConditionCheck": "npm run analyze:causal-model -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json",
-    "expectedCausalModelChange": "A confirmed triage or classification makes priority recovery progress, transitioning to green, reduced, or migrated.",
-    "representativeOutcome": "representative-green",
-    "causalDebt": "No accumulated causal debt for this triage concern.",
-    "crossBoundaryReview": "Review with rebalancer owner if backpressure persists after triage."
-  },
-  "scenarioCausalClosure": {
-    "referenceScenarioOrProbe": "rolling-restart post-diagnostics artifact test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json",
-    "phaseChain": [
-      "previous diagnostics fix populated active-gate snapshot coverage evidence",
-      "fresh representative rerun migrated to operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait"
-    ],
-    "currentFirstFrontier": "priority_recovery_partition_progress / operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait",
-    "knownDownstreamBlockers": [
-      "priorityRecoveryResiduals witnessCount=5 with splitRequired=true",
-      "priority recovery reports eligible_but_no_operation_created and needs_operation/recovering_in_flight"
-    ],
-    "missingCausalEdge": "Which operation workflow or rebalancer edge owns priority_recovery_event_driven_wait after diagnostics evidence is complete.",
-    "missingCausalEdgeProbe": "npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --json",
-    "falsifyingProbe": "npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json",
-    "boundedProgressProof": "triage dispatch/delivery path to resolve event-driven wait via wake or retry",
-    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json",
-    "expectedObservableTransition": "priority recovery event-driven wait reduction, owner-boundary split, or representative green.",
-    "maxProgressBound": "one diagnostic-classification package and one representative rerun",
-    "sameFrontierFallback": "If successor rerun stays on priority_recovery_event_driven_wait, split the operation workflow/rebalancer owner boundary instead of patching startup active-gate.",
-    "expectedNextFrontier": "representative-green, reduced priority recovery residual, or split successor owner boundary",
-    "resultClassification": "pending-before-probe",
-    "stopCondition": "continue-local-fix",
-    "recentFrontierHistory": [
-      "test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json / operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait"
-    ],
-    "oscillationCheck": "This package is allowed because the prior representative rerun migrated owner boundary.",
-    "handoffInvariant": "Owners decide admin readiness, bootstrap recovery readiness, and active-gate admission; diagnostics and harness evidence may observe but must not override owner outcomes."
-  },
-  "observablePrediction": {
-    "metric": "bootstrap_joining",
-    "predicted": "restarted nodes successfully contact the seed node during bootstrap joining without CPU starvation",
-    "observed": "restarted nodes successfully contact the seed node during bootstrap joining without CPU starvation",
-    "accuracy": "matched",
-    "evidence": "test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json",
-    "metricDelta": 0
-  },
+  "modelFit": {},
+  "representativeResidual": {},
+  "causalGovernance": {},
+  "scenarioCausalClosure": {},
+  "observablePrediction": {},
   "experimentOutcome": {},
-  "rerunDecision": {
-    "sourceArtifact": "test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json",
-    "routeOwner": "operation_workflow_owner",
-    "routeBoundary": "workflow_progress",
-    "routeDominantReason": "priority_recovery_event_driven_wait",
-    "routeCausalOutcome": "continue_local_fix",
-    "stopMode": "classified_local_blocker",
-    "nextLane": "runtime-owner-boundary",
-    "expectedDelta": "Triage the priority recovery event-driven wait via logger CPU rate limiting.",
-    "requiredRefreshCommands": [
-      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait",
-      "Update Sprint Strategy Brief from the route result.",
-      "Update Current Edge Card from the route result.",
-      "npm run work:repair",
-      "npm run work:validate -- --entry",
-      "npm run work:validate -- --pre-impl"
-    ]
-  },
-  "classificationEfficiency": {
-    "defaultMode": "separate-package-approved",
-    "separatePackageReason": "successor-selection",
-    "artifactBudget": "one-artifact",
-    "proofCommandBudget": "two-or-three-canonical-commands",
-    "commands": [
-      "npm run work:evidence-summary -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json",
-      "npm run work:scenario-triage -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --markdown",
-      "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --markdown"
-    ],
-    "decisionRecord": "Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.",
-    "successorAction": "rerun-representative-evidence",
-    "runtimePromotionRule": "When canonical owner and boundary are stable, prefer a runtime-owner-boundary successor and keep runtime files in candidateRuntimeFiles until that package activates them. If the representative route is same-frontier with no reduction or an architecture gap, open an autonomous architecture experiment before more local runtime work."
-  },
-  "architectureDecisionGate": {
-    "status": "watching",
-    "trigger": "frontier-oscillation",
-    "triggerEvidence": [
-      "frontier returned to a recently closed related boundary",
-      "work/packages/done-20260526-rolling-restart-operation-workflow-three-theory-recovery.md / operation_workflow_owner / workflow_progress / reduced",
-      "work/packages/done-20260526-rolling-restart-startup-active-gate-owner-snapshot-coverage.md / startup_active_gate_owner / snapshot_coverage / migrated",
-      "work/packages/done-20260526-rolling-restart-operation-workflow-owner-workflow-progress-triage.md / operation_workflow_owner / workflow_progress / classification-only"
-    ],
-    "choices": [
-      {
-        "id": "continue-local-proof",
-        "summary": "Continue with a bounded local proof if the missing edge stays inside this owner boundary.",
-        "route": "continue-local-proof",
-        "proof": [
-          "falsifier: contract transition operation_workflow_owner workflow_progress priority_recovery_event_driven_wait npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --json",
-          "regression: contract transition operation_workflow_owner workflow_progress priority_recovery_event_driven_wait npm run work:evidence-summary -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json",
-          "supporting: contract transition operation_workflow_owner workflow_progress priority_recovery_event_driven_wait npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --markdown",
-          "npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --json"
-        ]
-      },
-      {
-        "id": "migrate-owner-boundary",
-        "summary": "Migrate the active package to the owner boundary named by the first frontier evidence.",
-        "route": "owner-boundary-migration",
-        "proof": [
-          "falsifier: contract transition operation_workflow_owner workflow_progress priority_recovery_event_driven_wait npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --json",
-          "regression: contract transition operation_workflow_owner workflow_progress priority_recovery_event_driven_wait npm run work:evidence-summary -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json",
-          "supporting: contract transition operation_workflow_owner workflow_progress priority_recovery_event_driven_wait npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --markdown",
-          "npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --json"
-        ]
-      },
-      {
-        "id": "open-architecture-package",
-        "summary": "Open a bounded autonomous architecture experiment for the missing owner contract.",
-        "route": "architecture-package",
-        "proof": [
-          "falsifier: contract transition operation_workflow_owner workflow_progress priority_recovery_event_driven_wait npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --json",
-          "regression: contract transition operation_workflow_owner workflow_progress priority_recovery_event_driven_wait npm run work:evidence-summary -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json",
-          "supporting: contract transition operation_workflow_owner workflow_progress priority_recovery_event_driven_wait npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --markdown",
-          "npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --json"
-        ]
-      },
-      {
-        "id": "human-escalation",
-        "summary": "Escalate to a human only when evidence is contradictory, policy-blocked, credential-blocked, or unavailable.",
-        "route": "human-escalation",
-        "proof": [
-          "falsifier: contract transition operation_workflow_owner workflow_progress priority_recovery_event_driven_wait npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --json",
-          "regression: contract transition operation_workflow_owner workflow_progress priority_recovery_event_driven_wait npm run work:evidence-summary -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json",
-          "supporting: contract transition operation_workflow_owner workflow_progress priority_recovery_event_driven_wait npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --markdown",
-          "npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --json"
-        ]
-      }
-    ],
-    "selectedChoice": null,
-    "nextAction": "Watch for repeated frontier oscillation; open an autonomous architecture experiment if another local proof returns here unchanged."
-  },
-  "predecessor": null
+  "rerunDecision": {},
+  "classificationEfficiency": {},
+  "architectureDecisionGate": {},
+  "predecessor": null,
+  "theoryLedgerRefs": []
 }

@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "active",
+  "status": "done",
   "intent": {
     "opened": "2026-05-26",
     "lane": "causal-escalation",
@@ -14,7 +14,8 @@
     "boundary": "workflow_progress",
     "dominantReason": "priority_recovery_event_driven_wait",
     "currentState": "Scaffolded from representative evidence for priority_recovery_partition_progress.",
-    "nextAction": "Triage rebalancer target selection and blocker filters to identify why priority recovery operations are not created."
+    "nextAction": "Triage rebalancer target selection and blocker filters to identify why priority recovery operations are not created.",
+    "closed": "2026-05-26"
   },
   "scope": {
     "writeScope": [
@@ -173,7 +174,8 @@
     ],
     "oscillationCheck": "This package is allowed because the prior representative rerun migrated owner boundary.",
     "handoffInvariant": "Owners decide admin readiness, bootstrap recovery readiness, and active-gate admission; diagnostics and harness evidence may observe but must not override owner outcomes."
-  }
+  },
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -305,7 +307,6 @@ Agent identity is optional provenance. Use the compact five-field shape for new 
 
 ## Commit And Push Ledger
 
-1. Focused package commit: 210700e92c15748770ad9efc4efe0f57e661e250
+1. Focused package commit: 71f03a21cae5877c8437bd260a6f14696ceeba90
 2. Pushed to: origin/codex/pending-ack-eligibility-filter
 3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
-

@@ -18,7 +18,7 @@ Resolve the priority recovery event-driven wait/deadlock during rolling-restart 
 - Expected green path: Open a focused package in `work/packages/` to investigate the candidate nodes and filters inside `src/rebalancer/`, fix the filtering discrepancy, rerun the rolling-restart scenario, and verify convergence.
 - Wrong direction signals: arbitrary delay insertion, ignoring the rebalancer's planning gates, or forcing node status changes without addressing the priority recovery planning loop.
 - Stop or escalate rule: If candidate filters match specification but recovery remains stranded, stop for architectural reassessment of the readiness boundary.
-- Next best package: [Priority Recovery Deadlock Triage](../packages/active-20260526-rolling-restart-priority-recovery-deadlock-triage.md)
+- Next best package: [Priority Recovery Deadlock Triage](../packages/done-20260526-rolling-restart-priority-recovery-deadlock-triage.md)
 
 ## Theory Loop Sprint
 
@@ -32,7 +32,7 @@ Resolve the priority recovery event-driven wait/deadlock during rolling-restart 
 ```text
 Representative artifact: test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json
 Visible first frontier: priority_recovery_partition_progress / operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait
-Active package: work/packages/active-20260526-rolling-restart-priority-recovery-deadlock-triage.md
+Active package: work/packages/done-20260526-rolling-restart-priority-recovery-deadlock-triage.md
 Active package owner: operation_workflow_owner
 Active package boundary: workflow_progress
 Selected cause: priority_recovery_event_driven_wait
@@ -58,7 +58,7 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
 
 ## Package Queue
 
-1. [Priority Recovery Deadlock Triage](../packages/active-20260526-rolling-restart-priority-recovery-deadlock-triage.md)
+1. [Priority Recovery Deadlock Triage](../packages/done-20260526-rolling-restart-priority-recovery-deadlock-triage.md)
    - Lane: `runtime-owner-boundary`
    - Purpose: Investigate the rebalancer target selection and blocker filters to identify why priority recovery operations are not created.
    - First-run reason: Latest representative evidence routed to `priority_recovery_event_driven_wait` with unresolved semantic states.
