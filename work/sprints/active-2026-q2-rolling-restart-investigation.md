@@ -25,20 +25,20 @@ Investigate the control-plane priority publication and ACK handoff dynamics duri
 ```text
 Representative artifact: none
 Visible first frontier: unknown
-Active package: work/packages/done-20260526-cache-watermark-stale-operation-reconciler-hardening.md
-Active package owner: startup_active_gate_owner
-Active package boundary: snapshot_coverage
-Selected cause: active_gate_timed_out
-Required action: investigate stale replica operation cancellation upon node rejoin
+Active package: work/packages/done-20260526-control-plane-priority-publication-ack-handoff-deep-dive.md
+Active package owner: control-plane-publications
+Active package boundary: publication-convergence
+Selected cause: priority-spread-pending
+Required action: Investigate priority publication spread and ACK handoff logic
 Representative status: unknown
 Causal outcome: unknown
 Architecture gate: not-required / unknown
 Expected delta: unknown
-Current state: New package scaffolded from the shared work-package schema.
-Allowed edits: src/admin/admin-authoritative-repair-policy.js, src/admin/admin-control-snapshot-class-part-3.js, src/rebalancer/rebalance-coordinator.js, src/rebalancer/replica-operation-liveness.js, test/rebalancer/replica-operation-liveness.test.js
+Current state: Scaffolded for priority publication and ACK handoff deep dive.
+Allowed edits: work/packages/done-20260526-control-plane-priority-publication-ack-handoff-deep-dive.md
 Candidate runtime files: unknown
 Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
-Required latest proof: falsifier: contract transition startup_active_gate_owner snapshot_coverage active_gate_timed_out npm run work:advance -- --check, regression: contract transition startup_active_gate_owner snapshot_coverage active_gate_timed_out npm run work:advance -- --check
+Required latest proof: regression: npm run work:advance -- --check
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 

@@ -4,27 +4,27 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: No active work package. Start a new package when implementation resumes.
+Theory under test: Scaffolded for priority publication and ACK handoff deep dive.
 
-Causal question: none
+Causal question: priority-spread-pending
 
-Implementation slice: Create or activate one focused package for the next executable concern.
+Implementation slice: Investigate priority publication spread and ACK handoff logic
 
 Implementation files:
 
-1. None recorded
+1. `work/packages/done-20260526-control-plane-priority-publication-ack-handoff-deep-dive.md`
 
 Expected implementation delta: unknown
 
-Falsifying probe: unknown
+Falsifying probe: regression: npm run work:advance -- --check
 
-Stop rule: unknown
+Stop rule: No architecture decision gate is required for this package.
 
 Sprint: `work/sprints/active-2026-q2-rolling-restart-investigation.md`
 
-Package: `none`
+Package: `work/packages/done-20260526-control-plane-priority-publication-ack-handoff-deep-dive.md`
 
-Workflow lane: `none`
+Workflow lane: `discovery`
 
 Scenario: `none`
 
@@ -34,35 +34,36 @@ Playback: `none`
 
 ## Boundary
 
-Owner: `none`
+Owner: `control-plane-publications`
 
-Boundary: `none`
+Boundary: `publication-convergence`
 
-Dominant reason: `none`
+Dominant reason: `priority-spread-pending`
 
-Current state: No active work package. Start a new package when implementation resumes.
+Current state: Scaffolded for priority publication and ACK handoff deep dive.
 
 ## Next Action
 
-Create or activate one focused package for the next executable concern.
+Investigate priority publication spread and ACK handoff logic
 
 ## Proof Ladder
 
-1. None recorded
+1. `regression: npm run work:advance -- --check`
 
 ## Model Fit
 
-Package class: `unknown`
+Package class: `discovery-framing`
 
-Intended minimum model: `unknown`
+Intended minimum model: `gpt-5.3-codex-spark`
 
-Scope shape: `unknown`
+Scope shape: `leaf-slice`
 
-Output profile: `unknown`
+Output profile: `medium`
 
 Escalation triggers:
 
-1. None recorded
+1. `owned files expand beyond this package`
+2. `a frozen decision must be reopened`
 
 ## Theory Ledger References
 
@@ -212,9 +213,9 @@ Runtime promotion rule: `unknown`
 
 ## Architecture Decision Gate
 
-Status: `unknown`
+Status: `not-required`
 
-Trigger: `unknown`
+Trigger: `none`
 
 Trigger evidence:
 
@@ -226,13 +227,13 @@ Choices:
 
 Selected choice: `unknown`
 
-Gate next action: unknown
+Gate next action: No architecture decision gate is required for this package.
 
 ## Scope
 
 Write scope:
 
-1. None recorded
+1. `work/packages/done-20260526-control-plane-priority-publication-ack-handoff-deep-dive.md`
 
 Handoff files:
 
@@ -240,8 +241,7 @@ Handoff files:
 
 Generated files:
 
-1. `work/sprints/current-blocker.json`
-2. `work/sprints/current-blocker.md`
+1. None recorded
 
 Candidate runtime files:
 
@@ -249,7 +249,10 @@ Candidate runtime files:
 
 Commit scope:
 
-1. None recorded
+1. `work/packages/done-20260526-control-plane-priority-publication-ack-handoff-deep-dive.md`
+2. `work/sprints/active-2026-q2-rolling-restart-investigation.md`
+3. `work/sprints/current-blocker.json`
+4. `work/sprints/current-blocker.md`
 
 Legacy touched files:
 
