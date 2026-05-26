@@ -13,7 +13,7 @@
     "owner": "operation_workflow_owner",
     "boundary": "workflow_progress",
     "dominantReason": "priority_recovery_event_driven_wait",
-    "currentState": "Three-theory sprint executed. H2 was confirmed as a diagnostics/report sidecar-loading bug and fixed by loading linked failure-bundle and triage sidecars before route, topology, causal, and representative summaries. Baseline H1/H3 were supported as symptoms (admin ECONNREFUSED after durable rejoin and control_snapshot_authority_unavailable), but no runtime patch was selected. The post-diagnostics rolling-restart rerun failed on a migrated frontier: operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait with active-gate evidence populated.",
+    "currentState": "Three-theory sprint executed. H2 was confirmed as a diagnostics/report sidecar-loading bug and fixed by loading linked failure-bundle and triage sidecars before route, topology, causal, and representative summaries. Baseline H1/H3 are recorded as avoided symptoms (admin ECONNREFUSED after durable rejoin and control_snapshot_authority_unavailable), because no runtime patch was selected and the fresh rerun migrated. The post-diagnostics rolling-restart rerun failed on a migrated frontier: operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait with active-gate evidence populated.",
     "nextAction": "Open or focus the successor for operation_workflow_owner / workflow_progress priority recovery event-driven wait; do not patch H1/H3 from the older evidence-missing artifact in this package."
   },
   "scope": {
@@ -23,6 +23,10 @@
       "work/sprints/current-blocker.json",
       "work/sprints/current-blocker.md",
       "work/theory-ledger.md",
+      "scripts/work-theory-ledger.js",
+      "scripts/work-tracker.js",
+      "test/scripts/work-theory-ledger.test.js",
+      "test/scripts/work-tracker-package-doctor-ledger.test.js",
       "src/admin/admin-websocket-api-segment-1.js",
       "src/admin/admin-control-snapshot-class-part-2.js",
       "src/admin/admin-service-discovery-readiness-methods.js",
@@ -73,6 +77,10 @@
       "work/sprints/current-blocker.json",
       "work/sprints/current-blocker.md",
       "work/theory-ledger.md",
+      "scripts/work-theory-ledger.js",
+      "scripts/work-tracker.js",
+      "test/scripts/work-theory-ledger.test.js",
+      "test/scripts/work-tracker-package-doctor-ledger.test.js",
       "src/admin/admin-websocket-api-segment-1.js",
       "src/admin/admin-control-snapshot-class-part-2.js",
       "src/admin/admin-service-discovery-readiness-methods.js",
@@ -131,6 +139,8 @@
         "baseline: npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-three-theory-validation-20260526T140236Z.report.json",
         "focused: node --test test/scripts/summarize-representative-evidence.test.js",
         "focused: node --test --test-name-pattern \"loads linked failure-bundle sidecars\" test/scripts/analyze-topology-convergence.test.js",
+        "supporting: node --test test/scripts/work-theory-ledger.test.js test/scripts/work-tracker-package-doctor-ledger.test.js",
+        "supporting: npm run work:theory-ledger -- validate",
         "rerun: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --verbose",
         "post-rerun: npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --json"
       ]
@@ -198,7 +208,7 @@
     "stopConditionCheck": "Run canonical route, distributed failure analysis, topology convergence explain, and `npm run analyze:causal-model -- test-output/reports/rolling-restart-three-theory-validation-20260526T140236Z.report.json` before source edits; inspect only owner-ranked files selected by those proofs.",
     "expectedCausalModelChange": "A confirmed fix should make restarted-node adminReady or controlPlaneRecoveryReady progress, populate active-gate snapshot coverage evidence, migrate the first frontier, or pass rolling-restart.",
     "representativeOutcome": "migrated",
-    "causalDebt": "Baseline sidecar evidence supported H1/H3 symptoms, but the confirmed source bug was H2: report-level analyzers did not dereference linked failure-bundle and triage sidecars. After the diagnostics fix, the fresh rerun exposed activeGate.progress and migrated to operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait.",
+    "causalDebt": "Baseline sidecar evidence showed H1/H3 symptoms, but the confirmed source bug was H2: report-level analyzers did not dereference linked failure-bundle and triage sidecars. After the diagnostics fix, the fresh rerun exposed activeGate.progress and migrated to operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait, so H1/H2/H3 are avoided as old routes until fresh evidence selects them again.",
     "crossBoundaryReview": "Admin, bootstrap recovery, and control-snapshot runtime edits are not selected from the older evidence-missing artifact. The successor edge belongs to operation workflow priority recovery event-driven wait."
   },
   "scenarioCausalClosure": {
@@ -445,6 +455,14 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 3. Unrelated roadmap, governance, or workflow cleanup.
 4. Runtime ownership changes outside the declared owner files.
 
+## Override Log
+
+- User-requested workflow tooling change: this package originally focused the
+  post-diagnostics operation-workflow successor, but the user asked to support
+  theory avoidance before future sprints repeat old non-selected theories. The
+  package scope now includes the theory-ledger validator, package-doctor guard,
+  and focused workflow tests. Runtime scope remains unchanged.
+
 ## Model Fit
 
 - Package class: `runtime-owner-boundary`
@@ -496,8 +514,10 @@ Agent identity is optional provenance. Use the compact five-field shape for new 
 5. node --test test/scripts/summarize-representative-evidence.test.js
 6. node --test --test-name-pattern "loads linked failure-bundle sidecars" test/scripts/analyze-topology-convergence.test.js
 7. node --test --test-name-pattern "loads linked failure-bundle sidecars" test/scripts/summarize-representative-evidence.test.js
-8. node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --verbose
-9. npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --json
-10. npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json
-11. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --explain active_gate_snapshot_coverage
-12. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json
+8. node --test test/scripts/work-theory-ledger.test.js test/scripts/work-tracker-package-doctor-ledger.test.js
+9. npm run work:theory-ledger -- validate
+10. node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --verbose
+11. npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --json
+12. npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json
+13. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --explain active_gate_snapshot_coverage
+14. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json

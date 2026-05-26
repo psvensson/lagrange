@@ -12,41 +12,45 @@ Implementation slice: Open or focus the successor for operation_workflow_owner /
 
 Implementation files:
 
-1. `src/admin/admin-websocket-api-segment-1.js`
-2. `src/admin/admin-control-snapshot-class-part-2.js`
-3. `src/admin/admin-service-discovery-readiness-methods.js`
-4. `src/bootstrap/bootstrap-api-server-methods.js`
-5. `src/bootstrap/bootstrap-readiness-ladder.js`
-6. `src/bootstrap/startup-recovery-coordinator.js`
-7. `src/bootstrap/owners/bootstrap-readiness-owner-class-part-1.js`
-8. `src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js`
-9. `src/control-plane/control-plane-snapshot-owner.js`
-10. `src/transport/message-router.js`
-11. `scripts/artifact-sidecar-loader.js`
-12. `scripts/analyze-causal-model.js`
-13. `scripts/analyze-topology-convergence.js`
-14. `scripts/summarize-representative-evidence.js`
-15. `scripts/work-scenario-route.js`
-16. `test/admin/admin-control-snapshot.test.js`
-17. `test/bootstrap/bootstrap-api.test.js`
-18. `test/bootstrap/bootstrap-readiness-ladder.test.js`
-19. `test/bootstrap/startup-recovery-coordinator.test.js`
-20. `test/distributed/harness/__tests__/cluster.test-part-2.js`
-21. `test/distributed/harness/__tests__/cluster.test-part-4-control-snapshot-coverage.js`
-22. `test/distributed/harness/__tests__/failure-bundle-core-07-test-cases.js`
-23. `test/scripts/analyze-topology-convergence.test.js`
-24. `test/scripts/summarize-representative-evidence.test.js`
-25. `test/transport/message-router.test.js`
-26. `src/admin/admin-websocket-api-segment-1.js`
-27. `src/admin/admin-control-snapshot-class-part-2.js`
-28. `src/admin/admin-service-discovery-readiness-methods.js`
-29. `src/bootstrap/bootstrap-api-server-methods.js`
-30. `src/bootstrap/bootstrap-readiness-ladder.js`
-31. `src/bootstrap/startup-recovery-coordinator.js`
-32. `src/bootstrap/owners/bootstrap-readiness-owner-class-part-1.js`
-33. `src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js`
-34. `src/control-plane/control-plane-snapshot-owner.js`
-35. `src/transport/message-router.js`
+1. `scripts/work-theory-ledger.js`
+2. `scripts/work-tracker.js`
+3. `test/scripts/work-theory-ledger.test.js`
+4. `test/scripts/work-tracker-package-doctor-ledger.test.js`
+5. `src/admin/admin-websocket-api-segment-1.js`
+6. `src/admin/admin-control-snapshot-class-part-2.js`
+7. `src/admin/admin-service-discovery-readiness-methods.js`
+8. `src/bootstrap/bootstrap-api-server-methods.js`
+9. `src/bootstrap/bootstrap-readiness-ladder.js`
+10. `src/bootstrap/startup-recovery-coordinator.js`
+11. `src/bootstrap/owners/bootstrap-readiness-owner-class-part-1.js`
+12. `src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js`
+13. `src/control-plane/control-plane-snapshot-owner.js`
+14. `src/transport/message-router.js`
+15. `scripts/artifact-sidecar-loader.js`
+16. `scripts/analyze-causal-model.js`
+17. `scripts/analyze-topology-convergence.js`
+18. `scripts/summarize-representative-evidence.js`
+19. `scripts/work-scenario-route.js`
+20. `test/admin/admin-control-snapshot.test.js`
+21. `test/bootstrap/bootstrap-api.test.js`
+22. `test/bootstrap/bootstrap-readiness-ladder.test.js`
+23. `test/bootstrap/startup-recovery-coordinator.test.js`
+24. `test/distributed/harness/__tests__/cluster.test-part-2.js`
+25. `test/distributed/harness/__tests__/cluster.test-part-4-control-snapshot-coverage.js`
+26. `test/distributed/harness/__tests__/failure-bundle-core-07-test-cases.js`
+27. `test/scripts/analyze-topology-convergence.test.js`
+28. `test/scripts/summarize-representative-evidence.test.js`
+29. `test/transport/message-router.test.js`
+30. `src/admin/admin-websocket-api-segment-1.js`
+31. `src/admin/admin-control-snapshot-class-part-2.js`
+32. `src/admin/admin-service-discovery-readiness-methods.js`
+33. `src/bootstrap/bootstrap-api-server-methods.js`
+34. `src/bootstrap/bootstrap-readiness-ladder.js`
+35. `src/bootstrap/startup-recovery-coordinator.js`
+36. `src/bootstrap/owners/bootstrap-readiness-owner-class-part-1.js`
+37. `src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js`
+38. `src/control-plane/control-plane-snapshot-owner.js`
+39. `src/transport/message-router.js`
 
 Expected implementation delta: A confirmed fix should make restarted-node adminReady or controlPlaneRecoveryReady progress, populate active-gate snapshot coverage evidence, migrate the first frontier, or pass rolling-restart.
 
@@ -74,7 +78,7 @@ Boundary: `workflow_progress`
 
 Dominant reason: `priority_recovery_event_driven_wait`
 
-Current state: Three-theory sprint executed. H2 was confirmed as a diagnostics/report sidecar-loading bug and fixed by loading linked failure-bundle and triage sidecars before route, topology, causal, and representative summaries. Baseline H1/H3 were supported as symptoms (admin ECONNREFUSED after durable rejoin and control_snapshot_authority_unavailable), but no runtime patch was selected. The post-diagnostics rolling-restart rerun failed on a migrated frontier: operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait with active-gate evidence populated.
+Current state: Three-theory sprint executed. H2 was confirmed as a diagnostics/report sidecar-loading bug and fixed by loading linked failure-bundle and triage sidecars before route, topology, causal, and representative summaries. Baseline H1/H3 are recorded as avoided symptoms (admin ECONNREFUSED after durable rejoin and control_snapshot_authority_unavailable), because no runtime patch was selected and the fresh rerun migrated. The post-diagnostics rolling-restart rerun failed on a migrated frontier: operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait with active-gate evidence populated.
 
 ## Next Action
 
@@ -88,8 +92,10 @@ Open or focus the successor for operation_workflow_owner / workflow_progress pri
 4. `baseline: npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-three-theory-validation-20260526T140236Z.report.json`
 5. `focused: node --test test/scripts/summarize-representative-evidence.test.js`
 6. `focused: node --test --test-name-pattern "loads linked failure-bundle sidecars" test/scripts/analyze-topology-convergence.test.js`
-7. `rerun: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --verbose`
-8. `post-rerun: npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --json`
+7. `supporting: node --test test/scripts/work-theory-ledger.test.js test/scripts/work-tracker-package-doctor-ledger.test.js`
+8. `supporting: npm run work:theory-ledger -- validate`
+9. `rerun: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --verbose`
+10. `post-rerun: npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --json`
 
 ## Model Fit
 
@@ -141,7 +147,7 @@ Expected causal-model change: `A confirmed fix should make restarted-node adminR
 
 Representative outcome: `migrated`
 
-Causal debt: `Baseline sidecar evidence supported H1/H3 symptoms, but the confirmed source bug was H2: report-level analyzers did not dereference linked failure-bundle and triage sidecars. After the diagnostics fix, the fresh rerun exposed activeGate.progress and migrated to operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait.`
+Causal debt: `Baseline sidecar evidence showed H1/H3 symptoms, but the confirmed source bug was H2: report-level analyzers did not dereference linked failure-bundle and triage sidecars. After the diagnostics fix, the fresh rerun exposed activeGate.progress and migrated to operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait, so H1/H2/H3 are avoided as old routes until fresh evidence selects them again.`
 
 Cross-boundary review: `Admin, bootstrap recovery, and control-snapshot runtime edits are not selected from the older evidence-missing artifact. The successor edge belongs to operation workflow priority recovery event-driven wait.`
 
@@ -304,31 +310,35 @@ Write scope:
 3. `work/sprints/current-blocker.json`
 4. `work/sprints/current-blocker.md`
 5. `work/theory-ledger.md`
-6. `src/admin/admin-websocket-api-segment-1.js`
-7. `src/admin/admin-control-snapshot-class-part-2.js`
-8. `src/admin/admin-service-discovery-readiness-methods.js`
-9. `src/bootstrap/bootstrap-api-server-methods.js`
-10. `src/bootstrap/bootstrap-readiness-ladder.js`
-11. `src/bootstrap/startup-recovery-coordinator.js`
-12. `src/bootstrap/owners/bootstrap-readiness-owner-class-part-1.js`
-13. `src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js`
-14. `src/control-plane/control-plane-snapshot-owner.js`
-15. `src/transport/message-router.js`
-16. `scripts/artifact-sidecar-loader.js`
-17. `scripts/analyze-causal-model.js`
-18. `scripts/analyze-topology-convergence.js`
-19. `scripts/summarize-representative-evidence.js`
-20. `scripts/work-scenario-route.js`
-21. `test/admin/admin-control-snapshot.test.js`
-22. `test/bootstrap/bootstrap-api.test.js`
-23. `test/bootstrap/bootstrap-readiness-ladder.test.js`
-24. `test/bootstrap/startup-recovery-coordinator.test.js`
-25. `test/distributed/harness/__tests__/cluster.test-part-2.js`
-26. `test/distributed/harness/__tests__/cluster.test-part-4-control-snapshot-coverage.js`
-27. `test/distributed/harness/__tests__/failure-bundle-core-07-test-cases.js`
-28. `test/scripts/analyze-topology-convergence.test.js`
-29. `test/scripts/summarize-representative-evidence.test.js`
-30. `test/transport/message-router.test.js`
+6. `scripts/work-theory-ledger.js`
+7. `scripts/work-tracker.js`
+8. `test/scripts/work-theory-ledger.test.js`
+9. `test/scripts/work-tracker-package-doctor-ledger.test.js`
+10. `src/admin/admin-websocket-api-segment-1.js`
+11. `src/admin/admin-control-snapshot-class-part-2.js`
+12. `src/admin/admin-service-discovery-readiness-methods.js`
+13. `src/bootstrap/bootstrap-api-server-methods.js`
+14. `src/bootstrap/bootstrap-readiness-ladder.js`
+15. `src/bootstrap/startup-recovery-coordinator.js`
+16. `src/bootstrap/owners/bootstrap-readiness-owner-class-part-1.js`
+17. `src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js`
+18. `src/control-plane/control-plane-snapshot-owner.js`
+19. `src/transport/message-router.js`
+20. `scripts/artifact-sidecar-loader.js`
+21. `scripts/analyze-causal-model.js`
+22. `scripts/analyze-topology-convergence.js`
+23. `scripts/summarize-representative-evidence.js`
+24. `scripts/work-scenario-route.js`
+25. `test/admin/admin-control-snapshot.test.js`
+26. `test/bootstrap/bootstrap-api.test.js`
+27. `test/bootstrap/bootstrap-readiness-ladder.test.js`
+28. `test/bootstrap/startup-recovery-coordinator.test.js`
+29. `test/distributed/harness/__tests__/cluster.test-part-2.js`
+30. `test/distributed/harness/__tests__/cluster.test-part-4-control-snapshot-coverage.js`
+31. `test/distributed/harness/__tests__/failure-bundle-core-07-test-cases.js`
+32. `test/scripts/analyze-topology-convergence.test.js`
+33. `test/scripts/summarize-representative-evidence.test.js`
+34. `test/transport/message-router.test.js`
 
 Handoff files:
 
@@ -360,31 +370,35 @@ Commit scope:
 3. `work/sprints/current-blocker.json`
 4. `work/sprints/current-blocker.md`
 5. `work/theory-ledger.md`
-6. `src/admin/admin-websocket-api-segment-1.js`
-7. `src/admin/admin-control-snapshot-class-part-2.js`
-8. `src/admin/admin-service-discovery-readiness-methods.js`
-9. `src/bootstrap/bootstrap-api-server-methods.js`
-10. `src/bootstrap/bootstrap-readiness-ladder.js`
-11. `src/bootstrap/startup-recovery-coordinator.js`
-12. `src/bootstrap/owners/bootstrap-readiness-owner-class-part-1.js`
-13. `src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js`
-14. `src/control-plane/control-plane-snapshot-owner.js`
-15. `src/transport/message-router.js`
-16. `scripts/artifact-sidecar-loader.js`
-17. `scripts/analyze-causal-model.js`
-18. `scripts/analyze-topology-convergence.js`
-19. `scripts/summarize-representative-evidence.js`
-20. `scripts/work-scenario-route.js`
-21. `test/admin/admin-control-snapshot.test.js`
-22. `test/bootstrap/bootstrap-api.test.js`
-23. `test/bootstrap/bootstrap-readiness-ladder.test.js`
-24. `test/bootstrap/startup-recovery-coordinator.test.js`
-25. `test/distributed/harness/__tests__/cluster.test-part-2.js`
-26. `test/distributed/harness/__tests__/cluster.test-part-4-control-snapshot-coverage.js`
-27. `test/distributed/harness/__tests__/failure-bundle-core-07-test-cases.js`
-28. `test/scripts/analyze-topology-convergence.test.js`
-29. `test/scripts/summarize-representative-evidence.test.js`
-30. `test/transport/message-router.test.js`
+6. `scripts/work-theory-ledger.js`
+7. `scripts/work-tracker.js`
+8. `test/scripts/work-theory-ledger.test.js`
+9. `test/scripts/work-tracker-package-doctor-ledger.test.js`
+10. `src/admin/admin-websocket-api-segment-1.js`
+11. `src/admin/admin-control-snapshot-class-part-2.js`
+12. `src/admin/admin-service-discovery-readiness-methods.js`
+13. `src/bootstrap/bootstrap-api-server-methods.js`
+14. `src/bootstrap/bootstrap-readiness-ladder.js`
+15. `src/bootstrap/startup-recovery-coordinator.js`
+16. `src/bootstrap/owners/bootstrap-readiness-owner-class-part-1.js`
+17. `src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js`
+18. `src/control-plane/control-plane-snapshot-owner.js`
+19. `src/transport/message-router.js`
+20. `scripts/artifact-sidecar-loader.js`
+21. `scripts/analyze-causal-model.js`
+22. `scripts/analyze-topology-convergence.js`
+23. `scripts/summarize-representative-evidence.js`
+24. `scripts/work-scenario-route.js`
+25. `test/admin/admin-control-snapshot.test.js`
+26. `test/bootstrap/bootstrap-api.test.js`
+27. `test/bootstrap/bootstrap-readiness-ladder.test.js`
+28. `test/bootstrap/startup-recovery-coordinator.test.js`
+29. `test/distributed/harness/__tests__/cluster.test-part-2.js`
+30. `test/distributed/harness/__tests__/cluster.test-part-4-control-snapshot-coverage.js`
+31. `test/distributed/harness/__tests__/failure-bundle-core-07-test-cases.js`
+32. `test/scripts/analyze-topology-convergence.test.js`
+33. `test/scripts/summarize-representative-evidence.test.js`
+34. `test/transport/message-router.test.js`
 
 Legacy touched files:
 

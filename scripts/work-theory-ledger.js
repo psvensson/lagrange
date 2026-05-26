@@ -77,6 +77,7 @@ const STATUS_ACTIVE = 'active';
 const STATUS_SUPPORTED = 'supported';
 const STATUS_FALSIFIED = 'falsified';
 const STATUS_SUPERSEDED = 'superseded';
+const STATUS_AVOIDED = 'avoided';
 const STATUS_STALE = 'stale';
 const STATUS_NEEDS_RERUN = 'needs-rerun';
 const STATUS_VALUES = Object.freeze([
@@ -84,6 +85,7 @@ const STATUS_VALUES = Object.freeze([
   STATUS_SUPPORTED,
   STATUS_FALSIFIED,
   STATUS_SUPERSEDED,
+  STATUS_AVOIDED,
   STATUS_STALE,
   STATUS_NEEDS_RERUN,
 ]);

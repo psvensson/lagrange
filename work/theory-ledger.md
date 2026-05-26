@@ -28,6 +28,8 @@ work.
   remains the source of truth.
 - `falsified`: linked evidence contradicts the theory.
 - `superseded`: a newer linked theory replaces this one.
+- `avoided`: linked evidence may support the symptom, but this theory is not a
+  selectable route without fresh artifact evidence and package justification.
 - `stale`: the theory may still matter, but current evidence is too old or
   incomplete for routing.
 - `needs-rerun`: the theory needs fresh proof before it should guide work.
@@ -220,7 +222,7 @@ Each entry must include these labels:
 
 ## theory-20260526-rolling-restart-restarted-node-admin-surface
 
-- Status: supported
+- Status: avoided
 - Scenario/gate: rolling-restart / restarted-node recovery-ready
 - Owner/boundary: startup_active_gate_owner / snapshot_coverage
 - Hypothesis: The restarted node is reachable through bootstrap health but its admin surface never binds or becomes queryable after restart, leaving adminReady=false and controlPlaneRecoveryReady=false.
@@ -230,11 +232,11 @@ Each entry must include these labels:
 - Linked packages: `work/packages/active-20260526-20260526-rolling-restart-three-theory-validation.md`
 - Supersedes: none
 - Superseded by: none
-- Next implication: Keep this as a supported baseline symptom only; do not patch admin startup/listen unless a fresh artifact selects the restarted-node admin surface again.
+- Next implication: Avoid selecting this baseline symptom for implementation; do not patch admin startup/listen unless a fresh artifact selects the restarted-node admin surface again.
 
 ## theory-20260526-rolling-restart-active-gate-evidence-capture-gap
 
-- Status: supported
+- Status: avoided
 - Scenario/gate: rolling-restart / active_gate_snapshot_coverage
 - Owner/boundary: startup_active_gate_owner / snapshot_coverage
 - Hypothesis: The active-gate/control-snapshot diagnostic path fails to retain selected snapshot coverage, expected node count, blockers, and probe outcome evidence, so the representative failure is classified evidence_missing instead of a concrete owner mechanism.
@@ -244,11 +246,11 @@ Each entry must include these labels:
 - Linked packages: `work/packages/active-20260526-20260526-rolling-restart-three-theory-validation.md`
 - Supersedes: none
 - Superseded by: none
-- Next implication: Continue from the post-diagnostics route `operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait`; H2 no longer blocks active-gate evidence classification for this artifact shape.
+- Next implication: Avoid repeating the diagnostics evidence-capture route for this artifact shape; continue from the post-diagnostics route `operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait`.
 
 ## theory-20260526-rolling-restart-control-snapshot-authority-recovery
 
-- Status: supported
+- Status: avoided
 - Scenario/gate: rolling-restart / restarted-node recovery-ready
 - Owner/boundary: startup_active_gate_owner / snapshot_coverage
 - Hypothesis: The restarted node cannot establish control-snapshot authority or publication recovery after restart, so bootstrap remains in INIT with control_snapshot_authority_unavailable and recovery diagnostics unavailable.
@@ -258,4 +260,4 @@ Each entry must include these labels:
 - Linked packages: `work/packages/active-20260526-20260526-rolling-restart-three-theory-validation.md`
 - Supersedes: none
 - Superseded by: none
-- Next implication: Keep this as supported baseline evidence, but do not select a control-snapshot authority runtime patch until a fresh artifact reproduces that edge; current work should follow the priority recovery successor.
+- Next implication: Avoid selecting this baseline evidence for implementation; do not choose a control-snapshot authority runtime patch until a fresh artifact reproduces that edge, and current work should follow the priority recovery successor.

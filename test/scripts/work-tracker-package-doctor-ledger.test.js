@@ -178,6 +178,35 @@ describe('work tracker package doctor', () => {
     assert.deepEqual(reportWithJustification.errors, []);
   });
 
+  it('Gate 2: treats avoided theories as non-active routes', () => {
+    const content = WORK_TRACKER_DOCTOR_CONTENT +
+      '\nCiting theory-20260522-avoided-theory.';
+    const report = buildPackageDoctorLines(
+      WORK_TRACKER_ACTIVE_DOCTOR_FILE,
+      content,
+      {
+        phase: 'pre-impl',
+        theoryLedgerContext: {
+          entries: [{
+            id: 'theory-20260522-avoided-theory',
+            line: 1,
+            fields: {
+              Status: 'avoided',
+              'Scenario/gate': 'none / workflow_tooling',
+              'Owner/boundary': 'workflow_tooling_owner / package_doctor',
+            }
+          }],
+          errors: [],
+        }
+      }
+    );
+
+    assert.match(
+      report.errors.join('\n'),
+      /non-active theory theory-20260522-avoided-theory \[avoided\]/u,
+    );
+  });
+
   it('Gate 3: requires package linked in the ledger or explicit "no ledger update" at closure', () => {
     // Set status to todo and change write scope to README.md to avoid subagent ledger closure checks
     const content = WORK_TRACKER_DOCTOR_CONTENT.replace(

@@ -21,6 +21,7 @@ const THEORY_ID = 'theory-20260522-snapshot-watch-handoff';
 const SUPERSEDED_THEORY_ID = 'theory-20260522-snapshot-watch-fixture';
 const STATUS_ACTIVE = 'active';
 const STATUS_SUPPORTED = 'supported';
+const STATUS_AVOIDED = 'avoided';
 const OWNER_BOUNDARY = 'startup_active_gate_owner / snapshot_coverage';
 const TEST_LEDGER_HEADER = [
   '# Experiment And Theory Ledger',
@@ -155,6 +156,31 @@ test('list output can filter by status and owner', (t) => {
   t.equal(activeEntries.length, 1);
   t.match(output, new RegExp(THEORY_ID, 'u'));
   t.notMatch(output, new RegExp(SUPERSEDED_THEORY_ID, 'u'));
+  t.end();
+});
+
+test('avoided ledger entries validate and remain queryable', (t) => {
+  const avoidedEntry = VALID_ENTRY
+    .replace('- Status: active', '- Status: avoided')
+    .replace(
+      '- Next implication: implement the typed handoff package.',
+      '- Next implication: avoid this route unless fresh evidence selects it.',
+    );
+  const entries = extractTheoryLedgerEntries(ledgerWithEntries(avoidedEntry));
+  const validation = validateTheoryLedgerContent(
+    ledgerWithEntries(avoidedEntry),
+    { packagesDir: 'non-existent' },
+  );
+  const avoidedEntries = filterTheoryLedgerEntries(entries, {
+    status: STATUS_AVOIDED,
+    owner: 'startup_active_gate_owner',
+  });
+  const output = renderTheoryLedgerList(avoidedEntries);
+
+  t.same(validation.errors, []);
+  t.equal(avoidedEntries.length, 1);
+  t.match(output, new RegExp(THEORY_ID, 'u'));
+  t.match(output, /avoid this route/u);
   t.end();
 });
 

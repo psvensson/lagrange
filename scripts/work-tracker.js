@@ -7133,7 +7133,13 @@ function validateTheoryLedgerGates(
   const allTheories = [...new Set([...citedTheoryIds, ...related.map(e => e.id)])];
 
   const entryById = new Map(entries.map((entry) => [entry.id, entry]));
-  const nonActiveStatuses = ['superseded', 'falsified', 'stale', 'needs-rerun'];
+  const nonActiveStatuses = [
+    'superseded',
+    'falsified',
+    'avoided',
+    'stale',
+    'needs-rerun',
+  ];
 
   for (const theoryId of allTheories) {
     const entry = entryById.get(theoryId);
@@ -7214,7 +7220,7 @@ function buildTheoryLedgerGuidance(metadata = {}, theoryLedgerContext = {}) {
   }
   return [
     'Related theory ledger candidates exist; review active, falsified, ' +
-      'superseded, stale, and needs-rerun status before choosing scope: ' +
+      'superseded, avoided, stale, and needs-rerun status before choosing scope: ' +
       relatedEntries.map(summarizeTheoryLedgerEntry).join('; '),
   ];
 }
