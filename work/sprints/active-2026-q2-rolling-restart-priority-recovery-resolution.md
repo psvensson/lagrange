@@ -32,7 +32,7 @@ Resolve the priority recovery event-driven wait/deadlock during rolling-restart 
 ```text
 Representative artifact: test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json
 Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out
-Active package: work/packages/active-20260526-local-query-routing-loopback-bypass.md
+Active package: work/packages/done-20260526-local-query-routing-loopback-bypass.md
 Active package owner: startup_active_gate_owner
 Active package boundary: snapshot_coverage
 Selected cause: active_gate_timed_out
