@@ -2,76 +2,36 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-rolling-restart-investigation.md",
-  "package": "work/packages/active-20260526-rolling-restart-three-theory-source-analysis-verification.md",
-  "status": "active",
-  "lane": "causal-escalation",
+  "package": "none",
+  "status": "none",
+  "lane": "none",
   "scenario": "none",
   "artifact": "none",
   "playback": "none",
-  "owner": "operation_workflow_owner",
-  "boundary": "workflow_progress",
-  "dominantReason": "priority_recovery_event_driven_wait",
-  "currentState": "New package scaffolded from the shared work-package schema.",
-  "nextAction": "Analyze source code under H1, H2, H3, run scenarios, find and fix bugs, rerun rolling-restart to collect fresh evidence",
-  "proof": [
-    "falsifier: npm run work:advance -- --check",
-    "regression: npm run work:advance -- --check"
-  ],
-  "writeScope": [
-    "work/releases/0.1-dependency-map.md",
-    "work/tracks/topology-convergence.md",
-    "src/rebalancer/rebalance-coordinator-priority-budget-helper.js"
-  ],
+  "owner": "none",
+  "boundary": "none",
+  "dominantReason": "none",
+  "currentState": "No active work package. Start a new package when implementation resumes.",
+  "nextAction": "Create or activate one focused package for the next executable concern.",
+  "proof": [],
+  "writeScope": [],
   "handoffFiles": [],
-  "generatedFiles": [],
+  "generatedFiles": [
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md"
+  ],
   "candidateRuntimeFiles": [],
-  "commitScope": [
-    "work/releases/0.1-dependency-map.md",
-    "work/tracks/topology-convergence.md",
-    "src/rebalancer/rebalance-coordinator-priority-budget-helper.js",
-    "work/packages/active-20260526-rolling-restart-three-theory-source-analysis-verification.md"
-  ],
+  "commitScope": [],
   "touchedFiles": [],
-  "theoryLedgerRefs": [
-    "theory-20260526-rolling-restart-snapshot-viewpoint-backpressure",
-    "theory-20260526-rolling-restart-workflow-budget-capture-mismatch",
-    "theory-20260526-rolling-restart-selected-snapshot-source-staleness",
-    "theory-20260526-rolling-restart-selected-view-best-view-evidence-gap"
-  ],
-  "modelFit": {
-    "packageClass": "runtime-owner-boundary",
-    "intendedMinimumModel": "gpt-5.3-codex",
-    "scopeShape": "bounded-owner-runtime/current-frontier",
-    "outputProfile": "medium",
-    "ambiguityScore": 1,
-    "escalationTriggers": [
-      "owned files expand beyond this package",
-      "a frozen decision must be reopened"
-    ]
-  },
-  "representativeResidual": {
-    "status": "reduced-migrated-after-h2-fix",
-    "scenario": "rolling-restart",
-    "artifact": "test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json",
-    "frontier": "priority_recovery_partition_progress",
-    "owner": "operation_workflow_owner",
-    "boundary": "workflow_progress",
-    "dominantReason": "priority_recovery_event_driven_wait",
-    "nextAction": "The H2 active-gate projection fix moved the failure off selected-timeout owner recovery. Remaining evidence has 4 priority recovery workflow-progress residuals but routes as classified backpressure; research budget/capture, selected snapshot source health, and selected-view versus best-view publication/readiness before further runtime edits."
-  },
+  "modelFit": {},
+  "representativeResidual": {},
   "causalGovernance": {},
   "scenarioCausalClosure": {},
   "observablePrediction": {},
   "experimentOutcome": {},
   "rerunDecision": {},
   "classificationEfficiency": {},
-  "architectureDecisionGate": {
-    "status": "not-required",
-    "trigger": "none",
-    "triggerEvidence": [],
-    "choices": [],
-    "selectedChoice": null,
-    "nextAction": "No architecture decision gate is required for this package."
-  },
-  "predecessor": null
+  "architectureDecisionGate": {},
+  "predecessor": null,
+  "theoryLedgerRefs": []
 }
