@@ -4,143 +4,155 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: No active work package. Start a new package when implementation resumes.
+Theory under test: Outbound message buffers saturate, delaying critical membership and recovery signals. Separating priority metadata signals stabilizes progression.
 
-Causal question: none
+Causal question: backpressure control in outbound queues
 
-Implementation slice: Create or activate one focused package for the next executable concern.
+Implementation slice: Separate metadata control signals from data messages to stabilize outbound queue
 
 Implementation files:
 
-1. None recorded
+1. `src/transport/message-router-shared-stage-2.js`
+2. `src/transport/message-router-shared-stage-3.js`
+3. `src/transport/message-router-shared-stage-4.js`
+4. `src/transport/message-router-shared-stage-2.js`
+5. `src/transport/message-router-shared-stage-3.js`
+6. `src/transport/message-router-shared-stage-4.js`
 
-Expected implementation delta: unknown
+Expected implementation delta: Outbound queues are stabilized and priority spread convergence succeeds.
 
-Falsifying probe: unknown
+Falsifying probe: npm run work:advance -- --check
 
-Stop rule: unknown
+Stop rule: re-evaluate
 
-Sprint: `none`
+Sprint: `work/sprints/active-2026-q2-rolling-restart-investigation.md`
 
-Package: `none`
+Package: `work/packages/active-20260526-outbound-message-queue-backpressure-stabilization.md`
 
-Workflow lane: `none`
+Workflow lane: `scenario-release-gate`
 
-Scenario: `none`
+Scenario: `rolling-restart`
 
-Artifact: `none`
+Artifact: `test-output/reports/rolling-restart-rerun-4.report.json`
 
 Playback: `none`
 
 ## Boundary
 
-Owner: `none`
+Owner: `transport_owner`
 
-Boundary: `none`
+Boundary: `message_routing`
 
-Dominant reason: `none`
+Dominant reason: `accept_classified_backpressure`
 
-Current state: No active work package. Start a new package when implementation resumes.
+Current state: Scaffolded for priority recovery transport_owner message_routing stabilization.
 
 ## Next Action
 
-Create or activate one focused package for the next executable concern.
+Separate metadata control signals from data messages to stabilize outbound queue
 
 ## Proof Ladder
 
-1. None recorded
+1. `falsifier: contract transition transport_owner message_routing accept_classified_backpressure npm run work:scenario-route -- test-output/reports/rolling-restart-rerun-4.report.json`
+2. `regression: contract transition transport_owner message_routing accept_classified_backpressure npm run work:evidence-summary -- test-output/reports/rolling-restart-rerun-4.report.json`
+3. `supporting: contract transition transport_owner message_routing accept_classified_backpressure npm run work:advance -- --check`
 
 ## Model Fit
 
-Package class: `unknown`
+Package class: `runtime-owner-boundary`
 
-Intended minimum model: `unknown`
+Intended minimum model: `gpt-5.3-codex`
 
-Scope shape: `unknown`
+Scope shape: `bounded-owner-runtime/current-frontier`
 
-Output profile: `unknown`
+Output profile: `medium`
 
 Escalation triggers:
 
-1. None recorded
+1. `owned files expand beyond this package`
+2. `a frozen decision must be reopened`
 
 ## Theory Ledger References
 
-1. None recorded
+1. `theory-20260513-rolling-restart-preflight-green-gate-confirmation`
 
 ## Representative Residual
 
-Status: `unknown`
+Status: `pending-before-probe`
 
-Scenario: `unknown`
+Scenario: `rolling-restart`
 
-Artifact: `unknown`
+Artifact: `test-output/reports/rolling-restart-rerun-4.report.json`
 
-Frontier: `unknown`
+Frontier: `control-plane-publications/publication-convergence`
 
-Owner: `unknown`
+Owner: `transport_owner`
 
-Boundary: `unknown`
+Boundary: `message_routing`
 
-Dominant reason: `unknown`
+Dominant reason: `accept_classified_backpressure`
 
-Next action: `unknown`
+Next action: `Separate metadata control signals from data messages to stabilize outbound queue`
 
 ## Causal Governance
 
-Causal hypothesis: `unknown`
+Causal hypothesis: `Outbound message buffers saturate, delaying critical membership and recovery signals. Separating priority metadata signals stabilizes progression.`
 
-Stop-condition check: `unknown`
+Stop-condition check: `npm run analyze:causal-model -- test-output/reports/rolling-restart-rerun-4.report.json`
 
-Expected causal-model change: `unknown`
+Expected causal-model change: `Outbound queues are stabilized and priority spread convergence succeeds.`
 
-Representative outcome: `unknown`
+Representative outcome: `reduced`
 
-Causal debt: `unknown`
+Causal debt: `The previous sprint closed on metadata signal delay timeouts; this package resolves the underlying transport queue priority backpressure.`
 
-Cross-boundary review: `unknown`
+Cross-boundary review: `Reviewed with the transport and membership owners to ensure priority signal propagation.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `unknown`
+Reference scenario/probe: `rolling-restart`
 
 Phase chain:
 
-1. None recorded
+1. `triage`
+2. `design`
+3. `implement`
+4. `validate`
 
-Current first frontier: `unknown`
+Current first frontier: `transport_owner/message_routing`
 
 Known downstream blockers:
 
-1. None recorded
+1. `priority spread latency`
+2. `outbound queue saturation`
 
-Missing causal edge: `unknown`
+Missing causal edge: `backpressure control in outbound queues`
 
-Missing causal edge probe: `unknown`
+Missing causal edge probe: `npm run work:advance -- --check`
 
-Bounded progress proof: `unknown`
+Bounded progress proof: `Separate critical metadata control signals from lower priority messages to accelerate drain, dispatch, and delivery of recovery signals.`
 
-Bounded progress proof artifact: `unknown`
+Bounded progress proof artifact: `test-output/reports/rolling-restart-rerun-4.report.json`
 
-Expected observable transition: `unknown`
+Expected observable transition: `stable queue progression`
 
-Max progress bound: `unknown`
+Max progress bound: `24h`
 
-Same-frontier fallback: `unknown`
+Same-frontier fallback: `re-evaluate`
 
-Expected next frontier: `unknown`
+Expected next frontier: `clean convergence`
 
-Result classification: `unknown`
+Result classification: `reduced`
 
-Stop condition: `unknown`
+Stop condition: `continue-local-fix`
 
 Recent frontier history:
 
 1. None recorded
 
-Oscillation check: `unknown`
+Oscillation check: `none`
 
-Handoff invariant: `unknown`
+Handoff invariant: `none`
 
 ## Observable Prediction
 
@@ -170,25 +182,28 @@ Evidence: `unknown`
 
 ## Rerun Decision
 
-Source artifact: `unknown`
+Source artifact: `test-output/reports/rolling-restart-rerun-4.report.json`
 
-Route owner: `unknown`
+Route owner: `transport_owner`
 
-Route boundary: `unknown`
+Route boundary: `message_routing`
 
-Route dominant reason: `unknown`
+Route dominant reason: `accept_classified_backpressure`
 
-Route causal outcome: `unknown`
+Route causal outcome: `reduced`
 
-Stop mode: `unknown`
+Stop mode: `classified_local_blocker`
 
-Next lane: `unknown`
+Next lane: `scenario-release-gate`
 
-Expected delta: `unknown`
+Expected delta: `Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.`
 
 Required refresh commands:
 
-1. None recorded
+1. `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-rerun-4.report.json --owner transport_owner --boundary message_routing --dominant-reason accept_classified_backpressure`
+2. `update Sprint Strategy Brief and Current Edge Card from the route result`
+3. `npm run work:repair`
+4. `npm run work:validate -- --pre-impl work/packages/active-20260526-outbound-message-queue-backpressure-stabilization.md`
 
 ## Classification Efficiency
 
@@ -212,9 +227,9 @@ Runtime promotion rule: `unknown`
 
 ## Architecture Decision Gate
 
-Status: `unknown`
+Status: `not-required`
 
-Trigger: `unknown`
+Trigger: `none`
 
 Trigger evidence:
 
@@ -226,13 +241,15 @@ Choices:
 
 Selected choice: `unknown`
 
-Gate next action: unknown
+Gate next action: Select an autonomous architecture experiment unless evidence is contradictory or blocked.
 
 ## Scope
 
 Write scope:
 
-1. None recorded
+1. `src/transport/message-router-shared-stage-2.js`
+2. `src/transport/message-router-shared-stage-3.js`
+3. `src/transport/message-router-shared-stage-4.js`
 
 Handoff files:
 
@@ -240,16 +257,23 @@ Handoff files:
 
 Generated files:
 
-1. `work/sprints/current-blocker.json`
-2. `work/sprints/current-blocker.md`
+1. None recorded
 
 Candidate runtime files:
 
-1. None recorded
+1. `src/transport/message-router-shared-stage-2.js`
+2. `src/transport/message-router-shared-stage-3.js`
+3. `src/transport/message-router-shared-stage-4.js`
 
 Commit scope:
 
-1. None recorded
+1. `work/packages/active-20260526-outbound-message-queue-backpressure-stabilization.md`
+2. `work/sprints/active-2026-q2-rolling-restart-investigation.md`
+3. `work/sprints/current-blocker.json`
+4. `work/sprints/current-blocker.md`
+5. `src/transport/message-router-shared-stage-2.js`
+6. `src/transport/message-router-shared-stage-3.js`
+7. `src/transport/message-router-shared-stage-4.js`
 
 Legacy touched files:
 

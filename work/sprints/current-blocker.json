@@ -1,37 +1,132 @@
 {
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
-  "sprint": "none",
-  "package": "none",
-  "status": "none",
-  "lane": "none",
-  "scenario": "none",
-  "artifact": "none",
+  "sprint": "work/sprints/active-2026-q2-rolling-restart-investigation.md",
+  "package": "work/packages/active-20260526-outbound-message-queue-backpressure-stabilization.md",
+  "status": "active",
+  "lane": "scenario-release-gate",
+  "scenario": "rolling-restart",
+  "artifact": "test-output/reports/rolling-restart-rerun-4.report.json",
   "playback": "none",
-  "owner": "none",
-  "boundary": "none",
-  "dominantReason": "none",
-  "currentState": "No active work package. Start a new package when implementation resumes.",
-  "nextAction": "Create or activate one focused package for the next executable concern.",
-  "proof": [],
-  "writeScope": [],
-  "handoffFiles": [],
-  "generatedFiles": [
-    "work/sprints/current-blocker.json",
-    "work/sprints/current-blocker.md"
+  "owner": "transport_owner",
+  "boundary": "message_routing",
+  "dominantReason": "accept_classified_backpressure",
+  "currentState": "Scaffolded for priority recovery transport_owner message_routing stabilization.",
+  "nextAction": "Separate metadata control signals from data messages to stabilize outbound queue",
+  "proof": [
+    "falsifier: contract transition transport_owner message_routing accept_classified_backpressure npm run work:scenario-route -- test-output/reports/rolling-restart-rerun-4.report.json",
+    "regression: contract transition transport_owner message_routing accept_classified_backpressure npm run work:evidence-summary -- test-output/reports/rolling-restart-rerun-4.report.json",
+    "supporting: contract transition transport_owner message_routing accept_classified_backpressure npm run work:advance -- --check"
   ],
-  "candidateRuntimeFiles": [],
-  "commitScope": [],
+  "writeScope": [
+    "src/transport/message-router-shared-stage-2.js",
+    "src/transport/message-router-shared-stage-3.js",
+    "src/transport/message-router-shared-stage-4.js"
+  ],
+  "handoffFiles": [],
+  "generatedFiles": [],
+  "candidateRuntimeFiles": [
+    "src/transport/message-router-shared-stage-2.js",
+    "src/transport/message-router-shared-stage-3.js",
+    "src/transport/message-router-shared-stage-4.js"
+  ],
+  "commitScope": [
+    "work/packages/active-20260526-outbound-message-queue-backpressure-stabilization.md",
+    "work/sprints/active-2026-q2-rolling-restart-investigation.md",
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md",
+    "src/transport/message-router-shared-stage-2.js",
+    "src/transport/message-router-shared-stage-3.js",
+    "src/transport/message-router-shared-stage-4.js"
+  ],
   "touchedFiles": [],
-  "modelFit": {},
-  "representativeResidual": {},
-  "causalGovernance": {},
-  "scenarioCausalClosure": {},
+  "theoryLedgerRefs": [
+    "theory-20260513-rolling-restart-preflight-green-gate-confirmation"
+  ],
+  "modelFit": {
+    "packageClass": "runtime-owner-boundary",
+    "intendedMinimumModel": "gpt-5.3-codex",
+    "scopeShape": "bounded-owner-runtime/current-frontier",
+    "outputProfile": "medium",
+    "ambiguityScore": 1,
+    "escalationTriggers": [
+      "owned files expand beyond this package",
+      "a frozen decision must be reopened"
+    ]
+  },
+  "representativeResidual": {
+    "status": "pending-before-probe",
+    "scenario": "rolling-restart",
+    "artifact": "test-output/reports/rolling-restart-rerun-4.report.json",
+    "frontier": "control-plane-publications/publication-convergence",
+    "owner": "transport_owner",
+    "boundary": "message_routing",
+    "dominantReason": "accept_classified_backpressure",
+    "nextAction": "Separate metadata control signals from data messages to stabilize outbound queue"
+  },
+  "causalGovernance": {
+    "causalHypothesis": "Stabilizing outbound message queues under backpressure prevents priority recovery stalls.",
+    "stopConditionCheck": "npm run analyze:causal-model -- test-output/reports/rolling-restart-rerun-4.report.json",
+    "expectedCausalModelChange": "Outbound queues are stabilized and priority spread convergence succeeds.",
+    "representativeOutcome": "reduced",
+    "causalDebt": "The previous sprint closed on metadata signal delay timeouts; this package resolves the underlying transport queue priority backpressure.",
+    "crossBoundaryReview": "Reviewed with the transport and membership owners to ensure priority signal propagation.",
+    "hypothesis": "Outbound message buffers saturate, delaying critical membership and recovery signals. Separating priority metadata signals stabilizes progression."
+  },
+  "scenarioCausalClosure": {
+    "referenceScenarioOrProbe": "rolling-restart",
+    "phaseChain": [
+      "triage",
+      "design",
+      "implement",
+      "validate"
+    ],
+    "currentFirstFrontier": "transport_owner/message_routing",
+    "knownDownstreamBlockers": [
+      "priority spread latency",
+      "outbound queue saturation"
+    ],
+    "missingCausalEdge": "backpressure control in outbound queues",
+    "missingCausalEdgeProbe": "npm run work:advance -- --check",
+    "falsifyingProbe": "npm test -- test/transport/message-router.test.js",
+    "boundedProgressProof": "Separate critical metadata control signals from lower priority messages to accelerate drain, dispatch, and delivery of recovery signals.",
+    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-rerun-4.report.json",
+    "expectedObservableTransition": "stable queue progression",
+    "maxProgressBound": "24h",
+    "sameFrontierFallback": "re-evaluate",
+    "expectedNextFrontier": "clean convergence",
+    "resultClassification": "reduced",
+    "stopCondition": "continue-local-fix",
+    "recentFrontierHistory": [],
+    "oscillationCheck": "none",
+    "handoffInvariant": "none"
+  },
   "observablePrediction": {},
   "experimentOutcome": {},
-  "rerunDecision": {},
+  "rerunDecision": {
+    "sourceArtifact": "test-output/reports/rolling-restart-rerun-4.report.json",
+    "routeOwner": "transport_owner",
+    "routeBoundary": "message_routing",
+    "routeDominantReason": "accept_classified_backpressure",
+    "routeCausalOutcome": "reduced",
+    "stopMode": "classified_local_blocker",
+    "nextLane": "scenario-release-gate",
+    "expectedDelta": "Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.",
+    "requiredRefreshCommands": [
+      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-rerun-4.report.json --owner transport_owner --boundary message_routing --dominant-reason accept_classified_backpressure",
+      "update Sprint Strategy Brief and Current Edge Card from the route result",
+      "npm run work:repair",
+      "npm run work:validate -- --pre-impl work/packages/active-20260526-outbound-message-queue-backpressure-stabilization.md"
+    ]
+  },
   "classificationEfficiency": {},
-  "architectureDecisionGate": {},
-  "predecessor": null,
-  "theoryLedgerRefs": []
+  "architectureDecisionGate": {
+    "status": "not-required",
+    "trigger": "none",
+    "triggerEvidence": [],
+    "choices": [],
+    "selectedChoice": "unknown",
+    "nextAction": "Select an autonomous architecture experiment unless evidence is contradictory or blocked."
+  },
+  "predecessor": null
 }
