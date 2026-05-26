@@ -40,7 +40,7 @@ Stop rule: If fresh evidence remains operation_workflow_owner / workflow_progres
 
 Sprint: `work/sprints/active-2026-q2-rolling-restart-investigation.md`
 
-Package: `work/packages/active-20260526-rolling-restart-operation-workflow-three-theory-recovery.md`
+Package: `work/packages/done-20260526-rolling-restart-operation-workflow-three-theory-recovery.md`
 
 Workflow lane: `causal-escalation`
 
@@ -282,7 +282,7 @@ Gate next action: Watch for repeated frontier oscillation; open an autonomous ar
 
 Write scope:
 
-1. `work/packages/active-20260526-rolling-restart-operation-workflow-three-theory-recovery.md`
+1. `work/packages/done-20260526-rolling-restart-operation-workflow-three-theory-recovery.md`
 2. `work/theory-ledger.md`
 3. `work/sprints/active-2026-q2-rolling-restart-investigation.md`
 4. `src/rebalancer/operation-workflow-owner.js`
@@ -296,6 +296,7 @@ Write scope:
 12. `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
 13. `test/rebalancer/priority-recovery-stale-planning-visibility.test.js`
 14. `test/control-plane/control-plane-snapshot-owner.test.js`
+15. `work/packages/done-20260526-rolling-restart-three-theory-discriminator.md`
 
 Handoff files:
 
@@ -320,7 +321,7 @@ Candidate runtime files:
 
 Commit scope:
 
-1. `work/packages/active-20260526-rolling-restart-operation-workflow-three-theory-recovery.md`
+1. `work/packages/done-20260526-rolling-restart-operation-workflow-three-theory-recovery.md`
 2. `work/theory-ledger.md`
 3. `work/sprints/active-2026-q2-rolling-restart-investigation.md`
 4. `src/rebalancer/operation-workflow-owner.js`
@@ -334,6 +335,7 @@ Commit scope:
 12. `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
 13. `test/rebalancer/priority-recovery-stale-planning-visibility.test.js`
 14. `test/control-plane/control-plane-snapshot-owner.test.js`
+15. `work/packages/done-20260526-rolling-restart-three-theory-discriminator.md`
 
 Legacy touched files:
 

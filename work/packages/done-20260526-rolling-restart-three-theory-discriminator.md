@@ -16,14 +16,14 @@
     "currentState": "Fresh rolling-restart after the load-mode selected snapshot owner-recovery projection fix has snapshotCoverageNodeCount=5/5, selectedSnapshotError=null, active_gate_snapshot_coverage satisfied, and first frontier priority_recovery_partition_progress.",
     "nextAction": "Treat this package as reduced/migrated; continue from operation_workflow_owner/workflow_progress/priority_recovery_event_driven_wait in a successor package if more runtime fixing is requested.",
     "closed": "2026-05-26",
-    "successor": "work/packages/active-20260526-rolling-restart-operation-workflow-three-theory-recovery.md"
+    "successor": "work/packages/done-20260526-rolling-restart-operation-workflow-three-theory-recovery.md"
   },
   "scope": {
     "writeScope": [
       "test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js",
       "test/distributed/harness/cluster-segment-7-class-4-publication-coverage.js",
       "test/distributed/harness/__tests__/cluster-active-gate-load-selected-timeout-owner-recovery.test.js",
-      "work/packages/active-20260526-rolling-restart-operation-workflow-three-theory-recovery.md"
+      "work/packages/done-20260526-rolling-restart-operation-workflow-three-theory-recovery.md"
     ],
     "handoffFiles": [
       "test-output/reports/rolling-restart.report.json"
@@ -40,7 +40,7 @@
       "test/distributed/harness/cluster-segment-7-class-4-publication-coverage.js",
       "test/distributed/harness/__tests__/cluster-active-gate-load-selected-timeout-owner-recovery.test.js",
       "work/packages/active-20260526-rolling-restart-three-theory-discriminator.md",
-      "work/packages/active-20260526-rolling-restart-operation-workflow-three-theory-recovery.md"
+      "work/packages/done-20260526-rolling-restart-operation-workflow-three-theory-recovery.md"
     ]
   },
   "gates": {

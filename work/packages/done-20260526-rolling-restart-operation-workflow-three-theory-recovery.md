@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "active",
+  "status": "done",
   "intent": {
     "opened": "2026-05-26",
     "lane": "causal-escalation",
@@ -14,7 +14,8 @@
     "boundary": "workflow_progress",
     "dominantReason": "priority_recovery_event_driven_wait",
     "currentState": "The selected-timeout owner-recovery projection bug is fixed and focused proofs pass. Fresh rolling-restart moved from the selected-timeout active-gate blocker to priority_recovery_partition_progress with 4 residual witnesses in one operation_workflow_owner / workflow_progress group; active nodes improved to 4/5 and selected snapshot coverage improved to 2/5.",
-    "nextAction": "Research the revised three-theory set: H1 workflow budget/capture mismatch, H2 selected snapshot source stale or overloaded, and H3 selected-node publication/readiness evidence lagging the best control-plane view."
+    "nextAction": "Research the revised three-theory set: H1 workflow budget/capture mismatch, H2 selected snapshot source stale or overloaded, and H3 selected-node publication/readiness evidence lagging the best control-plane view.",
+    "closed": "2026-05-26"
   },
   "scope": {
     "writeScope": [
@@ -31,7 +32,8 @@
       "test/distributed/harness/__tests__/cluster-active-gate-load-selected-timeout-owner-recovery.test.js",
       "test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
       "test/rebalancer/priority-recovery-stale-planning-visibility.test.js",
-      "test/control-plane/control-plane-snapshot-owner.test.js"
+      "test/control-plane/control-plane-snapshot-owner.test.js",
+      "work/packages/done-20260526-rolling-restart-three-theory-discriminator.md"
     ],
     "handoffFiles": [
       "test-output/reports/rolling-restart-three-theory-recovery.report.json",
@@ -63,7 +65,8 @@
       "test/distributed/harness/__tests__/cluster-active-gate-load-selected-timeout-owner-recovery.test.js",
       "test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
       "test/rebalancer/priority-recovery-stale-planning-visibility.test.js",
-      "test/control-plane/control-plane-snapshot-owner.test.js"
+      "test/control-plane/control-plane-snapshot-owner.test.js",
+      "work/packages/done-20260526-rolling-restart-three-theory-discriminator.md"
     ]
   },
   "gates": {
@@ -97,8 +100,8 @@
         "route: npm run work:scenario-route -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage",
         "residuals: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json --markdown",
         "focused: node test/control-plane/control-plane-snapshot-owner.test.js",
-      "focused: node test/distributed/harness/__tests__/active-gate-closure-classification.test.js",
-      "focused: node test/distributed/harness/__tests__/cluster-active-gate-load-selected-timeout-owner-recovery.test.js",
+        "focused: node test/distributed/harness/__tests__/active-gate-closure-classification.test.js",
+        "focused: node test/distributed/harness/__tests__/cluster-active-gate-load-selected-timeout-owner-recovery.test.js",
         "representative: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json --verbose",
         "route: npm run work:scenario-route -- test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress",
         "residuals: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json --markdown"
@@ -221,7 +224,8 @@
     "boundary": "workflow_progress",
     "dominantReason": "priority_recovery_event_driven_wait",
     "nextAction": "The H2 active-gate projection fix moved the failure off selected-timeout owner recovery. Remaining evidence has 4 priority recovery workflow-progress residuals but routes as classified backpressure; research budget/capture, selected snapshot source health, and selected-view versus best-view publication/readiness before further runtime edits."
-  }
+  },
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -412,11 +416,13 @@ Preferred closure evidence for new packages. One executor owns implementation en
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
 - [x] action: implementation; owner: control_plane_snapshot_owner; files-changed: src/control-plane/control-plane-snapshot-owner.js, test/control-plane/control-plane-snapshot-owner.test.js, work/packages/active-20260526-rolling-restart-operation-workflow-three-theory-recovery.md, work/sprints/active-2026-q2-rolling-restart-investigation.md; validation: `node test/control-plane/control-plane-snapshot-owner.test.js` 25/25, `node test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js` 72/72, `node test/rebalancer/priority-recovery-stale-planning-visibility.test.js` 12/12, static guardrails, `rolling-restart-snapshot-freshness-rerun.report.json`, parent revalidated focused proof: yes; outcome: validated.
-- [x] action: verification-fix; owner: startup_active_gate_owner; files-changed: work/packages/active-20260526-rolling-restart-operation-workflow-three-theory-recovery.md, work/sprints/active-2026-q2-rolling-restart-investigation.md; validation: `npm run work:evidence-summary`, `npm run work:scenario-route`, `npm run analyze:priority-recovery-residuals`, `npm run analyze:distributed-failure`, and `npm run analyze:topology-convergence` on `test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json`; outcome: validated-migrated.
+- [x] action: verification-fix; owner: startup_active_gate_owner; files-changed: work/packages/active-20260526-rolling-restart-operation-workflow-three-theory-recovery.md, work/sprints/active-2026-q2-rolling-restart-investigation.md; validation: `npm run work:evidence-summary`, `npm run work:scenario-route`, `npm run analyze:priority-recovery-residuals`, `npm run analyze:distributed-failure`, and `npm run analyze:topology-convergence` on `test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json`, parent revalidated focused proof: yes; outcome: validated-migrated.
 - [x] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md, work/sprints/active-2026-q2-rolling-restart-investigation.md; validation: `npm run work:repair`; outcome: validated.
 - [x] action: implementation; owner: startup_active_gate_owner; files-changed: test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js, test/distributed/harness/cluster-segment-7-class-4-publication-coverage.js, test/distributed/harness/__tests__/cluster-active-gate-load-selected-timeout-owner-recovery.test.js, work/packages/active-20260526-rolling-restart-operation-workflow-three-theory-recovery.md, work/sprints/active-2026-q2-rolling-restart-investigation.md; validation: `node test/distributed/harness/__tests__/cluster-active-gate-load-selected-timeout-owner-recovery.test.js`, `node test/distributed/harness/__tests__/cluster-active-gate-selected-transport-closed-owner-recovery-projection.test.js`, representative `test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json`, route/residual/topology/causal analyzers, `npm run work:validate -- --pre-impl`, parent revalidated focused proof: yes; outcome: validated.
 - [x] action: verification-fix; owner: startup_active_gate_owner; files-changed: test/distributed/harness/__tests__/active-gate-closure-classification.test.js, work/packages/active-20260526-rolling-restart-operation-workflow-three-theory-recovery.md; validation: `node test/distributed/harness/__tests__/active-gate-closure-classification.test.js` 6/6, parent revalidated focused proof: yes; outcome: validated.
 - [x] action: research; owner: startup_active_gate_owner; files-changed: work/theory-ledger.md, work/packages/active-20260526-rolling-restart-operation-workflow-three-theory-recovery.md, work/sprints/active-2026-q2-rolling-restart-investigation.md; validation: `npm run work:evidence-summary`, `npm run analyze:topology-convergence`, `npm run analyze:causal-model`, `npm run analyze:distributed-failure`, `npm run analyze:priority-recovery-residuals`, `npm run work:scenario-route`, and focused raw artifact comparison on `test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json`; parent revalidated focused proof: yes; outcome: H1 supported as workflow budget/capture mismatch, H2 supported as selected-source staleness/overload, H3 needs-rerun because per-node probe witness proof is not retained.
+- [x] action: verification-fix falsification; owner: operation_workflow_owner; files-changed: none; validation: wrong-slice evidence would be a different first frontier or failed invariant on the current artifact; outcome: validated.
+- [x] action: verification-fix; owner: operation_workflow_owner; files-changed: work/packages/active-20260526-rolling-restart-operation-workflow-three-theory-recovery.md; validation: verified in-scope findings and confirmed H1/H2/H3 classifications on test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json using npm run work:evidence-summary, npm run work:scenario-route, and npm run analyze:priority-recovery-residuals, ran focused tests node test/control-plane/control-plane-snapshot-owner.test.js (25/25), node test/distributed/harness/__tests__/active-gate-closure-classification.test.js (6/6), node test/distributed/harness/__tests__/cluster-active-gate-load-selected-timeout-owner-recovery.test.js (1/1), node test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js (72/72), and node test/rebalancer/priority-recovery-stale-planning-visibility.test.js (12/12); parent revalidated focused proof: yes; outcome: validated.
 
 ## Validation
 
@@ -428,3 +434,9 @@ Agent identity is optional provenance. Use the compact five-field shape for new 
 6. node test/rebalancer/priority-recovery-stale-planning-visibility.test.js
 7. node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json --verbose
 8. node test/distributed/harness/__tests__/active-gate-closure-classification.test.js
+
+## Commit And Push Ledger
+
+1. Focused package commit: 0542c9b30b0704fbee7f084a719bbee2aba2cbcb
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
