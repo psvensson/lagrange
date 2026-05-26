@@ -59,11 +59,11 @@ loop.
 Latest current handoff state:
 
 - route-selection package:
-  `work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md`
+  `work/packages/done-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md`
 - active sprint:
   `work/sprints/active-2026-q2-rolling-restart-investigation.md`
 - active package:
-  `work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md`
+  `work/packages/done-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md`
 - rolling-restart artifact:
   `test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json`
 - first frontier: `priority_recovery_partition_progress`
@@ -108,11 +108,11 @@ or produces a narrower owner-boundary blocker selected by canonical evidence.
 ## Current Evidence
 
 - Current route-selection package:
-  `work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md`
+  `work/packages/done-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md`
 - Active reliability sprint:
   `work/sprints/active-2026-q2-rolling-restart-investigation.md`
 - Active reliability package:
-  `work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md`
+  `work/packages/done-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md`
 - Selected immediate successor route:
   `operation_workflow_owner / workflow_progress` from
   `test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json`.
@@ -229,7 +229,7 @@ canonical owner-boundary evidence.
 ## Next Package
 
 Active continuation:
-`work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md`.
+`work/packages/done-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md`.
 It owns the current `priority_recovery_partition_progress` triage and workflow
 state repair. The sprint cannot close on stale track/release/package references;
 red or unchanged evidence must route to exactly one bounded successor or an

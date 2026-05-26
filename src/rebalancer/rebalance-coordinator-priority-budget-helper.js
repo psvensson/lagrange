@@ -8,6 +8,7 @@ import {
   REBALANCE_COORDINATOR_SEGMENT_5_LITERAL,
   REBALANCE_COORDINATOR_TYPE,
 } from './rebalance-coordinator-helper-common.js';
+import {TYPEOF} from '../constants/index.js';
 
 const {
   NUM,
@@ -322,6 +323,14 @@ function isAddBudgetOperationPastWorkflowTimeout(coordinator, operation = null) 
       '',
   ).trim();
   if (workflowStep.length === NUM.ZERO) {
+    return false;
+  }
+  const operationId = operation?.operationId || operation?.operation_id;
+  if (
+    operationId &&
+    typeof coordinator.workflowOwner?.hasActiveTransitionRetryGrace === TYPEOF.FUNCTION &&
+    coordinator.workflowOwner.hasActiveTransitionRetryGrace(operationId, coordinator.nowFn())
+  ) {
     return false;
   }
   const observedAtMs = Number(

@@ -2,74 +2,46 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-rolling-restart-investigation.md",
-  "package": "work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md",
+  "package": "work/packages/active-20260526-rolling-restart-three-theory-source-analysis-verification.md",
   "status": "active",
   "lane": "causal-escalation",
-  "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json",
+  "scenario": "none",
+  "artifact": "none",
   "playback": "none",
   "owner": "operation_workflow_owner",
   "boundary": "workflow_progress",
   "dominantReason": "priority_recovery_event_driven_wait",
-  "currentState": "Workflow state repair is in progress before representative evidence triage resumes.",
-  "nextAction": "Repair track, sprint, package-scope, and validator contradictions that make LLM routing uncertain.",
+  "currentState": "New package scaffolded from the shared work-package schema.",
+  "nextAction": "Analyze source code under H1, H2, H3, run scenarios, find and fix bugs, rerun rolling-restart to collect fresh evidence",
   "proof": [
-    "falsifier: npm run work:tracks",
-    "regression: node --test test/scripts/work-tracker-package-doctor-ledger.test.js test/scripts/work-sprint-advance.test.js",
-    "supporting: npm run work:sprint:remaining",
-    "supporting: npm run work:validate -- --pre-impl work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md"
+    "falsifier: npm run work:advance -- --check",
+    "regression: npm run work:advance -- --check"
   ],
   "writeScope": [
-    ".kiro/steering/workflow-guidelines/packages.md",
-    "scripts/work-tracker.js",
-    "test/scripts/work-tracker-package-doctor-ledger.test.js",
     "work/releases/0.1-dependency-map.md",
     "work/tracks/topology-convergence.md",
-    "work/sprints/active-2026-q2-rolling-restart-investigation.md",
-    "work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md",
-    "work/README.md",
-    "work/RULES.md",
-    ".kiro/steering/llm/governance.md",
-    ".kiro/steering/llm/manifest.json",
-    ".kiro/steering/llm/rules.json"
+    "src/rebalancer/rebalance-coordinator-priority-budget-helper.js"
   ],
-  "handoffFiles": [
-    "test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json"
-  ],
-  "generatedFiles": [
-    ".kiro/steering/llm/governance.md",
-    ".kiro/steering/llm/manifest.json",
-    ".kiro/steering/llm/rules.json",
-    "work/sprints/current-blocker.json",
-    "work/sprints/current-blocker.md"
-  ],
-  "candidateRuntimeFiles": [
-    "src/admin/admin-control-snapshot-class-part-2.js"
-  ],
+  "handoffFiles": [],
+  "generatedFiles": [],
+  "candidateRuntimeFiles": [],
   "commitScope": [
-    ".kiro/steering/workflow-guidelines/packages.md",
-    ".kiro/steering/llm/governance.md",
-    ".kiro/steering/llm/manifest.json",
-    ".kiro/steering/llm/rules.json",
-    "scripts/work-tracker.js",
-    "test/scripts/work-tracker-package-doctor-ledger.test.js",
     "work/releases/0.1-dependency-map.md",
     "work/tracks/topology-convergence.md",
-    "work/sprints/active-2026-q2-rolling-restart-investigation.md",
-    "work/sprints/current-blocker.json",
-    "work/sprints/current-blocker.md",
-    "work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md",
-    "work/README.md",
-    "work/RULES.md"
+    "src/rebalancer/rebalance-coordinator-priority-budget-helper.js",
+    "work/packages/active-20260526-rolling-restart-three-theory-source-analysis-verification.md"
   ],
   "touchedFiles": [],
   "theoryLedgerRefs": [
-    "theory-20260526-rolling-restart-selected-snapshot-source-staleness"
+    "theory-20260526-rolling-restart-snapshot-viewpoint-backpressure",
+    "theory-20260526-rolling-restart-workflow-budget-capture-mismatch",
+    "theory-20260526-rolling-restart-selected-snapshot-source-staleness",
+    "theory-20260526-rolling-restart-selected-view-best-view-evidence-gap"
   ],
   "modelFit": {
-    "packageClass": "diagnostic-classification",
+    "packageClass": "runtime-owner-boundary",
     "intendedMinimumModel": "gpt-5.3-codex",
-    "scopeShape": "diagnostic-owner-evidence/current-artifact",
+    "scopeShape": "bounded-owner-runtime/current-frontier",
     "outputProfile": "medium",
     "ambiguityScore": 1,
     "escalationTriggers": [
@@ -78,154 +50,28 @@
     ]
   },
   "representativeResidual": {
-    "status": "retryable",
+    "status": "reduced-migrated-after-h2-fix",
     "scenario": "rolling-restart",
-    "artifact": "test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json",
+    "artifact": "test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json",
     "frontier": "priority_recovery_partition_progress",
     "owner": "operation_workflow_owner",
     "boundary": "workflow_progress",
     "dominantReason": "priority_recovery_event_driven_wait",
-    "nextAction": "Repair workflow state contradictions, then resume priority_recovery_partition_progress evidence triage."
+    "nextAction": "The H2 active-gate projection fix moved the failure off selected-timeout owner recovery. Remaining evidence has 4 priority recovery workflow-progress residuals but routes as classified backpressure; research budget/capture, selected snapshot source health, and selected-view versus best-view publication/readiness before further runtime edits."
   },
-  "causalGovernance": {
-    "hypothesis": "The selected snapshot source timeout and deferred repair in startup_active_gate_owner snapshot_coverage prevents Lagrange startup nodes from converging.",
-    "stopConditionCheck": "npm run analyze:causal-model -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json",
-    "expectedCausalModelChange": "Classifies whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.",
-    "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "Priority recovery now has zero residual witnesses; the current blocker is startup active-gate snapshot coverage timing out.",
-    "crossBoundaryReview": "All runtime files outside operation_workflow_owner boundary stay frozen."
-  },
-  "scenarioCausalClosure": {
-    "referenceScenarioOrProbe": "rolling-restart",
-    "phaseChain": [
-      "fresh representative rerun completed",
-      "routed to operation_workflow_owner workflow_progress priority_recovery_event_driven_wait",
-      "triage priority_recovery_partition_progress with combined scenario evidence"
-    ],
-    "currentFirstFrontier": "priority_recovery_partition_progress / operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait",
-    "knownDownstreamBlockers": [
-      "startup_readiness_owner / startup_support_evidence remains downstream"
-    ],
-    "missingCausalEdge": "Why does selected snapshot source query timeout after 15000ms under Lagrange load.",
-    "missingCausalEdgeProbe": "npm run work:evidence-summary -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json",
-    "falsifyingProbe": "npm run analyze:causal-model -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json",
-    "boundedProgressProof": "The priority recovery partition progress classifications and bounded progress retry mechanism.",
-    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json",
-    "expectedObservableTransition": "priority_recovery_partition_progress reduces, migrates, or selects an architecture stop.",
-    "maxProgressBound": "one diagnostic package",
-    "sameFrontierFallback": "If canonical extractors cannot distinguish the route, close as architecture-gap.",
-    "expectedNextFrontier": "selected active-gate snapshot query fix",
-    "resultClassification": "pending-before-probe",
-    "stopCondition": "continue-local-fix",
-    "recentFrontierHistory": [
-      "work/packages/done-20260526-rolling-restart-operation-workflow-three-theory-recovery.md / operation_workflow_owner / workflow_progress / reduced",
-      "work/packages/done-20260526-rolling-restart-startup-active-gate-owner-snapshot-coverage.md / startup_active_gate_owner / snapshot_coverage / migrated",
-      "work/packages/done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md / startup_active_gate_owner / snapshot_coverage / reduced"
-    ],
-    "oscillationCheck": "This package is activated because of validator same-frontier/frontier-oscillation rules.",
-    "handoffInvariant": "Startup readiness remains downstream until active-gate snapshot coverage is resolved."
-  },
-  "observablePrediction": {
-    "metric": "residualWitnessCount",
-    "predicted": "0",
-    "observed": "unknown",
-    "accuracy": "pending-before-observation",
-    "evidence": "test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json",
-    "metricDelta": "0"
-  },
+  "causalGovernance": {},
+  "scenarioCausalClosure": {},
+  "observablePrediction": {},
   "experimentOutcome": {},
-  "rerunDecision": {
-    "sourceArtifact": "test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json",
-    "routeOwner": "operation_workflow_owner",
-    "routeBoundary": "workflow_progress",
-    "routeDominantReason": "priority_recovery_event_driven_wait",
-    "routeCausalOutcome": "accept_classified_backpressure",
-    "stopMode": "classified_backpressure",
-    "nextLane": "diagnostic-classification",
-    "expectedDelta": "Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.",
-    "requiredRefreshCommands": [
-      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait",
-      "update Sprint Strategy Brief and Current Edge Card from the route result",
-      "npm run work:repair",
-      "npm run work:validate -- --entry",
-      "npm run work:validate -- --pre-impl"
-    ]
-  },
-  "classificationEfficiency": {
-    "defaultMode": "separate-package-approved",
-    "separatePackageReason": "successor-selection",
-    "artifactBudget": "one-artifact",
-    "proofCommandBudget": "two-or-three-canonical-commands",
-    "commands": [
-      "npm run work:evidence-summary -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json",
-      "npm run work:scenario-triage -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json --markdown",
-      "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json --markdown"
-    ],
-    "decisionRecord": "Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.",
-    "successorAction": "rerun-representative-evidence",
-    "runtimePromotionRule": "When canonical owner and boundary are stable, prefer a runtime-owner-boundary successor and keep runtime files in candidateRuntimeFiles until that package activates them. If the representative route is same-frontier with no reduction or an architecture gap, open an autonomous architecture experiment before more local runtime work."
-  },
+  "rerunDecision": {},
+  "classificationEfficiency": {},
   "architectureDecisionGate": {
-    "status": "watching",
-    "trigger": "frontier-oscillation",
-    "triggerEvidence": [
-      "frontier returned to a recently closed related boundary",
-      "work/packages/done-20260526-rolling-restart-operation-workflow-three-theory-recovery.md / operation_workflow_owner / workflow_progress / reduced",
-      "work/packages/done-20260526-rolling-restart-startup-active-gate-owner-snapshot-coverage.md / startup_active_gate_owner / snapshot_coverage / migrated",
-      "work/packages/done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md / startup_active_gate_owner / snapshot_coverage / reduced"
-    ],
-    "choices": [
-      {
-        "id": "continue-local-proof",
-        "summary": "Continue with a bounded local proof if the missing edge stays inside this owner boundary.",
-        "route": "continue-local-proof",
-        "proof": [
-          "falsifier: npm run work:tracks",
-          "regression: node --test test/scripts/work-tracker-package-doctor-ledger.test.js test/scripts/work-sprint-advance.test.js",
-          "supporting: npm run work:sprint:remaining",
-          "supporting: npm run work:validate -- --pre-impl work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md",
-          "npm run work:evidence-summary -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json"
-        ]
-      },
-      {
-        "id": "migrate-owner-boundary",
-        "summary": "Migrate the active package to the owner boundary named by the first frontier evidence.",
-        "route": "owner-boundary-migration",
-        "proof": [
-          "falsifier: npm run work:tracks",
-          "regression: node --test test/scripts/work-tracker-package-doctor-ledger.test.js test/scripts/work-sprint-advance.test.js",
-          "supporting: npm run work:sprint:remaining",
-          "supporting: npm run work:validate -- --pre-impl work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md",
-          "npm run work:evidence-summary -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json"
-        ]
-      },
-      {
-        "id": "open-architecture-package",
-        "summary": "Open a bounded autonomous architecture experiment for the missing owner contract.",
-        "route": "architecture-package",
-        "proof": [
-          "falsifier: npm run work:tracks",
-          "regression: node --test test/scripts/work-tracker-package-doctor-ledger.test.js test/scripts/work-sprint-advance.test.js",
-          "supporting: npm run work:sprint:remaining",
-          "supporting: npm run work:validate -- --pre-impl work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md",
-          "npm run work:evidence-summary -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json"
-        ]
-      },
-      {
-        "id": "human-escalation",
-        "summary": "Escalate to a human only when evidence is contradictory, policy-blocked, credential-blocked, or unavailable.",
-        "route": "human-escalation",
-        "proof": [
-          "falsifier: npm run work:tracks",
-          "regression: node --test test/scripts/work-tracker-package-doctor-ledger.test.js test/scripts/work-sprint-advance.test.js",
-          "supporting: npm run work:sprint:remaining",
-          "supporting: npm run work:validate -- --pre-impl work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md",
-          "npm run work:evidence-summary -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json"
-        ]
-      }
-    ],
+    "status": "not-required",
+    "trigger": "none",
+    "triggerEvidence": [],
+    "choices": [],
     "selectedChoice": null,
-    "nextAction": "Watch for repeated frontier oscillation; open an autonomous architecture experiment if another local proof returns here unchanged."
+    "nextAction": "No architecture decision gate is required for this package."
   },
   "predecessor": null
 }

@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "active",
+  "status": "done",
   "intent": {
     "opened": "2026-05-26",
     "lane": "causal-escalation",
@@ -24,7 +24,7 @@
       "work/releases/0.1-dependency-map.md",
       "work/tracks/topology-convergence.md",
       "work/sprints/active-2026-q2-rolling-restart-investigation.md",
-      "work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md",
+      "work/packages/done-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md",
       "work/README.md",
       "work/RULES.md",
       ".kiro/steering/llm/governance.md",
@@ -56,7 +56,7 @@
       "work/sprints/active-2026-q2-rolling-restart-investigation.md",
       "work/sprints/current-blocker.json",
       "work/sprints/current-blocker.md",
-      "work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md",
+      "work/packages/done-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md",
       "work/README.md",
       "work/RULES.md"
     ]
@@ -85,7 +85,7 @@
         "falsifier: npm run work:tracks",
         "regression: node --test test/scripts/work-tracker-package-doctor-ledger.test.js test/scripts/work-sprint-advance.test.js",
         "supporting: npm run work:sprint:remaining",
-        "supporting: npm run work:validate -- --pre-impl work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md"
+        "supporting: npm run work:validate -- --pre-impl work/packages/done-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md"
       ]
     }
   },
@@ -102,16 +102,16 @@
   "observablePrediction": {
     "metric": "residualWitnessCount",
     "predicted": "0",
-    "observed": "unknown",
-    "accuracy": "pending-before-observation",
+    "observed": "5",
+    "accuracy": "partial",
     "evidence": "test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json",
-    "metricDelta": "0"
+    "metricDelta": "6"
   },
   "causalGovernance": {
     "hypothesis": "The selected snapshot source timeout and deferred repair in startup_active_gate_owner snapshot_coverage prevents Lagrange startup nodes from converging.",
     "stopConditionCheck": "npm run analyze:causal-model -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json",
     "expectedCausalModelChange": "Classifies whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.",
-    "representativeOutcome": "pending-before-rerun",
+    "representativeOutcome": "reduced",
     "causalDebt": "Priority recovery now has zero residual witnesses; the current blocker is startup active-gate snapshot coverage timing out.",
     "crossBoundaryReview": "All runtime files outside operation_workflow_owner boundary stay frozen."
   },
@@ -135,7 +135,7 @@
     "maxProgressBound": "one diagnostic package",
     "sameFrontierFallback": "If canonical extractors cannot distinguish the route, close as architecture-gap.",
     "expectedNextFrontier": "selected active-gate snapshot query fix",
-    "resultClassification": "pending-before-probe",
+    "resultClassification": "reduced",
     "stopCondition": "continue-local-fix",
     "recentFrontierHistory": [
       "work/packages/done-20260526-rolling-restart-operation-workflow-three-theory-recovery.md / operation_workflow_owner / workflow_progress / reduced",
@@ -291,7 +291,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Forbidden files: runtime `src/` files stay in `candidateRuntimeFiles` only during this workflow repair.
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `npm run work:tracks`, `node --test test/scripts/work-tracker-package-doctor-ledger.test.js test/scripts/work-sprint-advance.test.js`, `npm run work:sprint:remaining`, `npm run work:validate -- --pre-impl work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md`
+- Focused proof: `npm run work:tracks`, `node --test test/scripts/work-tracker-package-doctor-ledger.test.js test/scripts/work-sprint-advance.test.js`, `npm run work:sprint:remaining`, `npm run work:validate -- --pre-impl work/packages/done-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md`
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split
@@ -316,8 +316,8 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [x] action: implementation; owner: workflow_tooling_owner; files-changed: .kiro/steering/workflow-guidelines/packages.md, scripts/work-tracker.js, test/scripts/work-tracker-package-doctor-ledger.test.js, work/releases/0.1-dependency-map.md, work/tracks/topology-convergence.md, work/sprints/active-2026-q2-rolling-restart-investigation.md, work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md, work/README.md, work/RULES.md, .kiro/steering/llm/governance.md, .kiro/steering/llm/manifest.json, .kiro/steering/llm/rules.json, work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:tracks`, `node --test test/scripts/work-tracker-package-doctor-ledger.test.js test/scripts/work-sprint-advance.test.js`, `npm run work:sprint:remaining`, `npm run work:validate -- --pre-impl work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md`; parent revalidated focused proof: yes; outcome: validated.
-- [x] action: verification-fix; owner: Anscombe; files-changed: none; validation: `npm run work:context`, `npm run work:tracks`, `npm run work:sprint:remaining`, `npm run work:validate -- --pre-impl work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md`, `npm run work:validate -- --entry work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md`, `npm run work:package:doctor -- --suggest work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md`, `node --test test/scripts/work-tracker-package-doctor-ledger.test.js test/scripts/work-sprint-advance.test.js`, `git diff --check -- ...`; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: implementation; owner: workflow_tooling_owner; files-changed: .kiro/steering/workflow-guidelines/packages.md, scripts/work-tracker.js, test/scripts/work-tracker-package-doctor-ledger.test.js, work/releases/0.1-dependency-map.md, work/tracks/topology-convergence.md, work/sprints/active-2026-q2-rolling-restart-investigation.md, work/packages/done-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md, work/README.md, work/RULES.md, .kiro/steering/llm/governance.md, .kiro/steering/llm/manifest.json, .kiro/steering/llm/rules.json, work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:tracks`, `node --test test/scripts/work-tracker-package-doctor-ledger.test.js test/scripts/work-sprint-advance.test.js`, `npm run work:sprint:remaining`, `npm run work:validate -- --pre-impl work/packages/done-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md`; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: verification-fix; owner: Anscombe; files-changed: none; validation: `npm run work:context`, `npm run work:tracks`, `npm run work:sprint:remaining`, `npm run work:validate -- --pre-impl work/packages/done-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md`, `npm run work:validate -- --entry work/packages/done-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md`, `npm run work:package:doctor -- --suggest work/packages/done-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md`, `node --test test/scripts/work-tracker-package-doctor-ledger.test.js test/scripts/work-sprint-advance.test.js`, `git diff --check -- ...`; parent revalidated focused proof: yes; outcome: validated.
 - [x] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: validated.
 
 ## Validation
@@ -325,4 +325,4 @@ Agent identity is optional provenance. Use the compact five-field shape for new 
 1. npm run work:tracks
 2. node --test test/scripts/work-tracker-package-doctor-ledger.test.js test/scripts/work-sprint-advance.test.js
 3. npm run work:sprint:remaining
-4. npm run work:validate -- --pre-impl work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md
+4. npm run work:validate -- --pre-impl work/packages/done-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md
