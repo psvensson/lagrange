@@ -1,6 +1,6 @@
 # Rolling Restart Three Theory Validation Sprint
 
-Status: active. Created on May 26, 2026. Reused on May 26, 2026 for the latest restarted-node recovery-ready failure.
+Status: done. Created on May 26, 2026. Reused on May 26, 2026 for the latest restarted-node recovery-ready failure.
 
 ## Goal
 
