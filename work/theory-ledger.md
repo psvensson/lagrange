@@ -161,3 +161,59 @@ Each entry must include these labels:
 - Supersedes: none
 - Superseded by: none
 - Next implication: Stabilize startup active gate snapshot coverage under the active successor package.
+
+## theory-20260526-rolling-restart-snapshot-viewpoint-backpressure
+
+- Status: supported
+- Scenario/gate: rolling-restart / active_gate_snapshot_coverage
+- Owner/boundary: startup_active_gate_owner / snapshot_view_freshness
+- Hypothesis: After operation-workflow focused proofs pass, the remaining rolling-restart red state is most likely a three-way active-gate evidence problem: workflow budget evidence is stale or unknown, the selected snapshot source is stale or overloaded, and selected publication/readiness evidence lags the best available control-plane view.
+- Probe: `npm run work:evidence-summary -- test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json`
+- Artifact/result: test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json - priority recovery has four workflow-progress residuals classified as backpressure, workflow-step budget is unknown in causal output despite partition witness deadlines, selected snapshot node 7493b0ab has snapshot-lane timeout warnings, active nodes are 4/5, and selected published-active coverage is 2/5.
+- Representative movement: needs-rerun
+- Linked packages: `work/packages/active-20260526-rolling-restart-operation-workflow-three-theory-recovery.md`
+- Supersedes: none
+- Superseded by: none
+- Next implication: Continue from the three child theories: `theory-20260526-rolling-restart-workflow-budget-capture-mismatch`, `theory-20260526-rolling-restart-selected-snapshot-source-staleness`, and `theory-20260526-rolling-restart-selected-view-best-view-evidence-gap`; rerun rolling-restart only after a confirmed local fix or when refreshing stale classification.
+
+## theory-20260526-rolling-restart-workflow-budget-capture-mismatch
+
+- Status: supported
+- Scenario/gate: rolling-restart / priority_recovery_partition_progress
+- Owner/boundary: diagnostics_owner / workflow_budget_accounting
+- Hypothesis: The visible priority_recovery_event_driven_wait surface is partly a budget/capture mismatch: causal analysis reports workflow_step_timeout as unknown even though partition witnesses carry workflow deadlines, and the selected witness snapshot was captured before deadlines that had expired by the active-gate failure point.
+- Probe: `npm run analyze:causal-model -- test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json`
+- Artifact/result: `test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json` - causal budget accounting reports `workflow_step_timeout` as `unknown`; raw partition evidence shows `replica_operations-p1` at 18483/30000ms and `sql_transactions-p1` at 9596/30000ms when captured, but their deadlines were respectively 10281ms and 1394ms past due by the active-gate timeout.
+- Representative movement: needs-rerun
+- Linked packages: `work/packages/active-20260526-rolling-restart-operation-workflow-three-theory-recovery.md`
+- Supersedes: none
+- Superseded by: none
+- Next implication: Repair or extend diagnostic/final-capture evidence before assigning another operation workflow runtime bug; a fresh rerun is useful only after workflow budget ownership is explicit or the artifact is judged stale.
+
+## theory-20260526-rolling-restart-selected-snapshot-source-staleness
+
+- Status: supported
+- Scenario/gate: rolling-restart / active_gate_snapshot_coverage
+- Owner/boundary: startup_active_gate_owner / snapshot_source_health
+- Hypothesis: The selected snapshot source is stale, overloaded, or the wrong source for terminal classification; node 7493b0ab is both the selected snapshot source and the node with readiness/snapshot-lane timeout symptoms.
+- Probe: `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json`
+- Artifact/result: `test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json` - selected node `7493b0ab-a054-5fad-a91b-5e331db29304` timed out readiness probing, final playback warned that the snapshot lane query timed out after 15000ms, selected snapshot observation was `forced_repair/stale_usable/pending/applied/wait`, and log patterns included `failed_query_operations_table=46` and `query_timeout_5000ms=4`.
+- Representative movement: needs-rerun
+- Linked packages: `work/packages/active-20260526-rolling-restart-operation-workflow-three-theory-recovery.md`
+- Supersedes: none
+- Superseded by: none
+- Next implication: Focus the next proof on selected-source health, retry behavior, and alternative witness selection before changing operation workflow runtime code.
+
+## theory-20260526-rolling-restart-selected-view-best-view-evidence-gap
+
+- Status: needs-rerun
+- Scenario/gate: rolling-restart / active_gate_snapshot_coverage
+- Owner/boundary: startup_active_gate_owner / viewpoint_selection
+- Hypothesis: Selected-node publication/readiness evidence lags a fresher best or quorum control-plane view, but the current artifact does not preserve enough per-node probe detail to prove the better view.
+- Probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json`
+- Artifact/result: `test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json` - selected publication evidence reports 2/5 published-active and 3 missing IDs while active nodes are 4/5 and activeGateOwnerCohort missing/pending counts are zero. Per-node disagreement is concentrated on selected node 7493b0ab, but probe witness success/freshness detail is not retained, so the better-view theory remains unproven.
+- Representative movement: needs-rerun
+- Linked packages: `work/packages/active-20260526-rolling-restart-operation-workflow-three-theory-recovery.md`
+- Supersedes: none
+- Superseded by: none
+- Next implication: Preserve or extract per-node snapshot probe witness success/freshness/publication evidence on the next pass; do not treat empty disagreement sets from failed probes as proof of a healthy best view.

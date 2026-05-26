@@ -14,11 +14,12 @@
     "boundary": "workflow_progress",
     "dominantReason": "priority_recovery_event_driven_wait",
     "currentState": "The selected-timeout owner-recovery projection bug is fixed and focused proofs pass. Fresh rolling-restart moved from the selected-timeout active-gate blocker to priority_recovery_partition_progress with 4 residual witnesses in one operation_workflow_owner / workflow_progress group; active nodes improved to 4/5 and selected snapshot coverage improved to 2/5.",
-    "nextAction": "Use the fresh artifact to decide a narrow operation_workflow_owner / workflow_progress successor for the remaining 4 priority recovery residuals, or accept the classified backpressure stop if no local runtime bug is selected."
+    "nextAction": "Research the revised three-theory set: H1 workflow budget/capture mismatch, H2 selected snapshot source stale or overloaded, and H3 selected-node publication/readiness evidence lagging the best control-plane view."
   },
   "scope": {
     "writeScope": [
       "work/packages/active-20260526-rolling-restart-operation-workflow-three-theory-recovery.md",
+      "work/theory-ledger.md",
       "work/sprints/active-2026-q2-rolling-restart-investigation.md",
       "src/rebalancer/operation-workflow-owner.js",
       "src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js",
@@ -50,6 +51,7 @@
     ],
     "commitScope": [
       "work/packages/active-20260526-rolling-restart-operation-workflow-three-theory-recovery.md",
+      "work/theory-ledger.md",
       "work/sprints/active-2026-q2-rolling-restart-investigation.md",
       "src/rebalancer/operation-workflow-owner.js",
       "src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js",
@@ -81,9 +83,15 @@
     ]
   },
   "execution": {
-    "theoryLedgerRefs": [],
+    "theoryLedgerRefs": [
+      "theory-20260526-rolling-restart-snapshot-viewpoint-backpressure",
+      "theory-20260526-rolling-restart-workflow-budget-capture-mismatch",
+      "theory-20260526-rolling-restart-selected-snapshot-source-staleness",
+      "theory-20260526-rolling-restart-selected-view-best-view-evidence-gap"
+    ],
     "proof": {
       "commands": [
+        "research: npm run work:evidence-summary -- test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json",
         "falsifier: route npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-recovery.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress",
         "regression: residuals npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-three-theory-recovery.report.json --markdown",
         "route: npm run work:scenario-route -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage",
@@ -147,21 +155,21 @@
     ]
   },
   "causalGovernance": {
-    "hypothesis": "The current priority_recovery_event_driven_wait is caused by one of three bounded edges: H1 event-driven workflow progress does not re-enter dispatch for persisted dispatch_pending operations; H2 dispatched handoff progress is retrying but the progress observer/readback path never records completion or target progress; H3 the rebalancer leader sees eligible control_plane_publications recovery but does not create the next operation after terminal removed operations.",
-    "stopConditionCheck": "Run scenario route, priority residual extraction, `npm run analyze:causal-model -- test-output/reports/rolling-restart-three-theory-recovery.report.json`, and focused owner tests before runtime edits; then rerun rolling-restart after any confirmed fix.",
-    "expectedCausalModelChange": "The package either reduces priority recovery residual witness count, migrates the first frontier, reaches representative green, or stops as architecture-gap if all three focused theories are rejected.",
+    "hypothesis": "The latest priority_recovery_event_driven_wait evidence is a classified backpressure surface caused by one of three active-gate evidence edges: H1 workflow budget/capture evidence is stale or insufficient, H2 the selected snapshot source is stale or overloaded, or H3 selected-node publication/readiness evidence lags the best available control-plane view.",
+    "stopConditionCheck": "Run `npm run work:evidence-summary -- test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json`, topology convergence, `npm run analyze:causal-model -- test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json`, distributed failure, and priority residual extraction; use raw artifact inspection only after canonical extractors. Do not make runtime edits unless one revised theory selects a concrete owner bug.",
+    "expectedCausalModelChange": "Research selected H1 as a supported diagnostic/final-capture mismatch, H2 as supported selected-source staleness/overload, and H3 as an evidence gap that needs retained per-node probe success/freshness detail before runtime edits.",
     "representativeOutcome": "migrated",
-    "causalDebt": "Snapshot freshness fix moved the fresh rerun from priority_recovery_partition_progress to active_gate_snapshot_coverage. Priority recovery residuals are now witnessCount=0, ownerBoundaryGroupCount=0, splitRequired=false; rolling-restart still fails on startup_active_gate_owner / snapshot_coverage / active_gate_timed_out with selected snapshot source timeout and snapshot repair deferred.",
-    "crossBoundaryReview": "Keep startup active-gate snapshot coverage, publication ACK convergence, timeout ceilings, and harness teardown frozen. The only widened runtime scope is the shared control-plane snapshot observation owner because playback shows a forced-repair snapshot freshness contract breach."
+    "causalDebt": "Operation-workflow focused proofs now pass for dispatch re-entry, timeout re-entry, serial-wait re-entry, stale planning visibility, and bounded remote handoff. The latest artifact still has 4 workflow-progress residuals but causal analysis classifies them as backpressure; workflow-step budget is unknown in causal output even though witness deadlines exist, node 7493b0ab has readiness and snapshot-lane timeout warnings, active nodes are 4/5, selected published-active coverage is 2/5, and H3 lacks retained per-node probe success/freshness proof.",
+    "crossBoundaryReview": "Keep operation workflow runtime edits frozen unless a revised theory produces a concrete failing owner proof. The next executable slice should repair diagnostic/final-capture workflow budget evidence, selected snapshot source health/alternative selection, or per-node probe witness retention; do not raise timeouts or hide priority recovery blockers."
   },
   "scenarioCausalClosure": {
     "referenceScenarioOrProbe": "rolling-restart after load-mode selected snapshot owner-recovery projection fix",
     "phaseChain": [
       "publication_ack_convergence remains satisfied with PUBLISHED status and zero pending ACKs",
       "priority_recovery_partition_progress is still the only topology first frontier",
-      "fresh residual extraction reduced witnessCount from 11 to 6 but kept ownerBoundaryGroupCount at 3",
-      "active nodes improved to 4/5 while active_gate_snapshot_coverage regressed to 2/5",
-      "startup readiness times out downstream of priority recovery and snapshot coverage backpressure"
+      "fresh residual extraction now reports witnessCount 4 in one operation_workflow_owner / workflow_progress group",
+      "causal analysis classifies priority_recovery_event_driven_wait as backpressure with no failed invariant",
+      "active nodes improved to 4/5 while selected snapshot coverage remains 2/5 and selected publication evidence is 2/5 published-active"
     ],
     "currentFirstFrontier": "priority_recovery_partition_progress / operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait",
     "knownDownstreamBlockers": [
@@ -169,12 +177,12 @@
       "node 7493b0ab has readiness timeout and snapshot lane query timeout symptoms",
       "publication has 3 missing active nodes while priority recovery is still in needs_operation/recovering_in_flight states"
     ],
-    "missingCausalEdge": "Which concrete owner edge must move: dispatch-pending event-driven re-entry, handoff progress observation/readback, or rebalancer leader operation creation.",
-    "missingCausalEdgeProbe": "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-three-theory-recovery.report.json --markdown",
-    "falsifyingProbe": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-three-theory-recovery.report.json",
-    "boundedProgressProof": "Focused tests must reproduce and prove the selected dispatch, retry, reconcile, drain, delivery, timer, advance, or snapshot observation freshness mechanism before representative rerun; unchanged same-frontier with no residual reduction opens/selects architecture-gap instead of another local patch.",
-    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-three-theory-recovery.report.json",
-    "expectedObservableTransition": "priority recovery witness count drops below 11, ownerBoundaryGroupCount drops below 3, first frontier migrates, or rolling-restart passes.",
+    "missingCausalEdge": "Which evidence edge must move: workflow budget/capture classification, selected snapshot source freshness/health, or selected-node versus best-view publication/readiness evidence.",
+    "missingCausalEdgeProbe": "npm run work:evidence-summary -- test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json",
+    "falsifyingProbe": "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json",
+    "boundedProgressProof": "Focused proof selected H1 and H2 as supported and H3 as needs-rerun/evidence-gap. Next progress must make workflow timeout/reconcile budget ownership explicit, prove selected-source retry or alternative witness behavior, retain per-node viewpoint proof, refresh representative evidence, or open an architecture experiment instead of patching symptoms.",
+    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json",
+    "expectedObservableTransition": "selected theory, owner-boundary migration, architecture-gap classification, fresh rerun movement, or representative green.",
     "maxProgressBound": "one causal-escalation pass covering three focused theories and one representative rerun",
     "sameFrontierFallback": "If fresh evidence remains operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait with witnessCount 11 and no theory-selected metric movement, stop for an autonomous architecture experiment.",
     "expectedNextFrontier": "representative-green, reduced priority recovery residuals, migrated owner boundary, or architecture-gap",
@@ -191,18 +199,18 @@
   "observablePrediction": {
     "metric": "priority recovery witnessCount, ownerBoundaryGroupCount, first frontier, and rolling-restart pass/fail",
     "predicted": "A confirmed fix should reduce witnessCount below 11, reduce ownerBoundaryGroupCount below 3, migrate the first frontier, or pass rolling-restart.",
-    "observed": "Focused snapshot-owner proof passed after changing applied forced repairs to stay pending when the repaired view still needs repair. Focused active-gate owner-recovery projection proof then selected H2: the real report shape carried publishedActiveNodeIds on selected owner handoff while selectedPublishedActiveNodeIds was empty. Fresh rolling-restart failed after 167.8s but moved to priority_recovery_partition_progress with 4 witnesses in one operation_workflow_owner / workflow_progress group; active nodes are 4/5, snapshot coverage is 2/5, selected timeout owner-recovery is no longer the first frontier, and priority ACK invariants pass.",
+    "observed": "Focused snapshot-owner proof passed after changing applied forced repairs to stay pending when the repaired view still needs repair. Focused active-gate owner-recovery projection proof then selected H2: the real report shape carried publishedActiveNodeIds on selected owner handoff while selectedPublishedActiveNodeIds was empty. Fresh rolling-restart failed after 167.8s but moved to priority_recovery_partition_progress with 4 witnesses in one operation_workflow_owner / workflow_progress group; active nodes are 4/5, snapshot coverage is 2/5, selected timeout owner-recovery is no longer the first frontier, and priority ACK invariants pass. Follow-up research selected H1 budget/capture mismatch and H2 selected-source staleness as supported; H3 selected-view/best-view split remains needs-rerun because per-node probe witness success/freshness is not retained.",
     "accuracy": "partial",
     "evidence": "test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json"
   },
   "boundedExperiment": {
-    "hypothesis": "H1 selected snapshot source admin-health reachability masks snapshot-lane timeout; H2 owner_reconcile_pending plus write_deferred/enqueued=false loses bounded owner-recovery progress; H3 control-plane SQL/CDC pressure starves snapshot/publication repair paths.",
-    "hypothesisDiscriminator": "H1 is selected if snapshot source selection trusts admin_health without a usable snapshot/publication cohort. H2 is selected if owner handoff carries the published-active cohort and bounded recovery state, but active-gate projection ignores it when selectedPublishedActiveNodeIds is empty. H3 is selected if pressure evidence remains after H1/H2 projection consumes the bounded owner-recovery state.",
-    "expectedMetric": "H1/H2/H3 selected or rejected with focused proof, then representative rerun movement in snapshot coverage, selected timeout handling, first frontier, or pass/fail.",
+    "hypothesis": "H1 workflow budget/capture mismatch is supported: operation workflow progress is within its 30s owner budget at the captured snapshot, deadlines are past due by active-gate failure, and causal output cannot expose workflow-step budget. H2 selected snapshot source stale/overloaded is supported: selected node 7493b0ab is the selected source and has readiness/snapshot-lane timeout symptoms. H3 selected-view/best-view split is an evidence gap: selected evidence reports 2/5 published-active while active nodes are 4/5, but per-node probe witness success/freshness is not retained.",
+    "hypothesisDiscriminator": "H1 selected via causal-model unknown workflow budget plus raw witness deadline comparison. H2 selected via distributed-failure selected node timeout and stale_usable selected observation. H3 rejected as proven on the current artifact because better/quorum view proof is missing despite selected-view lag symptoms.",
+    "expectedMetric": "Next progress should make workflow budget ownership explicit, prove selected source health or alternative witness selection, retain per-node viewpoint proof, migrate owner boundary, classify architecture-gap, or refresh representative evidence.",
     "inheritsFrom": "work/packages/done-20260526-rolling-restart-three-theory-discriminator.md",
     "timebox": "24h",
-    "mergeRequirement": "scenario route, priority residual extraction, causal model, focused owner tests, rolling-restart rerun, route-after-rerun summary",
-    "killRule": "If all three theories are rejected or fresh rerun stays same-frontier with no residual reduction, stop for architecture-gap instead of opening another local runtime patch."
+    "mergeRequirement": "theory ledger ref, evidence summary, topology convergence, causal model, distributed failure, priority residual extraction, focused raw artifact comparison for H1/H2/H3 after canonical extractors",
+    "killRule": "If all three revised theories remain unselected on the current artifact, stop as classified backpressure/needs-rerun instead of opening another local runtime patch."
   },
   "representativeResidual": {
     "status": "reduced-migrated-after-h2-fix",
@@ -212,7 +220,7 @@
     "owner": "operation_workflow_owner",
     "boundary": "workflow_progress",
     "dominantReason": "priority_recovery_event_driven_wait",
-    "nextAction": "The H2 active-gate projection fix moved the failure off selected-timeout owner recovery. Remaining evidence has 4 priority recovery workflow-progress residuals and routes as classified backpressure; investigate a narrow operation-workflow successor before further runtime edits."
+    "nextAction": "The H2 active-gate projection fix moved the failure off selected-timeout owner recovery. Remaining evidence has 4 priority recovery workflow-progress residuals but routes as classified backpressure; research budget/capture, selected snapshot source health, and selected-view versus best-view publication/readiness before further runtime edits."
   }
 }
 -->
@@ -238,21 +246,21 @@ H1/H2/H3 outcome before closure.
 
 ## Core Logic Brief
 
-- Canonical outcome: operation_workflow_owner / workflow_progress must either advance the dispatch-pending priority recovery chain, migrate to the concrete owner boundary that can do so, or stop as architecture-gap with unchanged same-frontier evidence.
-- Inputs/signals: `test-output/reports/rolling-restart-three-theory-recovery.report.json`, scenario route, priority residual extraction, causal model, focused operation workflow re-entry tests, and focused priority planning visibility tests.
-- State model or invariant: each theory maps to one owner edge and one permitted action: H1 dispatch-pending event-driven re-entry advances existing operations; H2 handoff retry progress observes or waits for bounded target progress; H3 rebalancer leader creates a recovery operation when no current operation exists and the partition remains eligible.
-- Non-goals and forbidden interpretations: do not raise timeouts, patch startup readiness, relax publication ACKs, or hide priority recovery behind active-gate projection.
-- Proof mapping: focused owner tests must select or reject H1/H2/H3 before runtime changes; fresh `rolling-restart` plus route-after-rerun proves representative movement.
+- Canonical outcome: the latest artifact must either select a concrete evidence owner for the classified backpressure surface, migrate to a startup active-gate snapshot/viewpoint successor, or remain needs-rerun without runtime edits.
+- Inputs/signals: `test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json`, evidence summary, topology convergence, causal model, distributed failure, priority residual extraction, and focused raw artifact comparison after canonical extractors.
+- State model or invariant: each revised theory maps to one evidence edge and one permitted action: H1 budget/capture mismatch exposes workflow deadline ownership; H2 selected snapshot source staleness/overload moves source selection or snapshot freshness; H3 selected-view/best-view split moves publication/readiness observation.
+- Non-goals and forbidden interpretations: do not raise timeouts, patch startup readiness, relax publication ACKs, hide priority recovery behind active-gate projection, or reopen operation workflow runtime paths after focused proof passes.
+- Proof mapping: revised H1/H2/H3 must be selected or rejected from evidence before runtime changes; fresh `rolling-restart` plus route-after-rerun proves representative movement only after a confirmed fix or stale classification refresh.
 - Wrong-slice trigger: if focused proof or fresh routing selects a different owner boundary, migrate or stop; if same frontier remains unchanged with no residual reduction, open/select architecture-gap.
 
 ## Causal Decision Contract
 
 | Signal | Normalized value | Owner interpretation | Emitted outcome | Expected delta | Disproof probe |
 | --- | --- | --- | --- | --- | --- |
-| route owner/boundary | operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait | operation_workflow_owner owns the current first frontier, but residuals are split and must select one causal edge before runtime edits | Test H1/H2/H3, fix only confirmed bug, rerun rolling-restart | witnessCount `< 11`, ownerBoundaryGroupCount `< 3`, first frontier migration, or representative green | npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-recovery.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress |
-| H1 dispatch re-entry | persisted_not_dispatched + dispatch_pending + event_driven + advance_existing_operation | existing operation should re-enter operation workflow owner without relying on active-gate retry | advance existing operation or prove already covered | focused re-entry proof passes/fails and residual count moves after fix | node test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js |
-| H2 handoff progress readback | dispatched_waiting_progress + retry_scheduled + wait_for_operation_progress | retry-scheduled handoff must either observe target progress or remain bounded with visible timer | wait for bounded progress or repair progress observation/readback | rebalancer_handoff witnesses reduce or classify bounded | npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-three-theory-recovery.report.json --markdown |
-| H3 operation creation | needs_operation + eligible_but_no_operation_created + action_required | rebalancer leader must create a new recovery operation after terminal removed operations when spread remains blocked | create recovery operation or repair planning gate | control_plane_publications-p1 operation_scheduling witness disappears or migrates | node test/rebalancer/priority-recovery-stale-planning-visibility.test.js |
+| route owner/boundary | operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait | operation workflow remains the first frontier, but focused owner tests pass and causal analysis classifies backpressure | Research revised H1/H2/H3 before runtime edits | selected theory, owner migration, architecture-gap, needs-rerun, or representative green | npm run work:evidence-summary -- test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json |
+| H1 budget/capture mismatch | workflow step budget unknown in causal output while operation snapshots carry 30s deadlines | diagnostics may be classifying a bounded in-budget wait as terminal evidence | repair diagnostic deadline evidence or classify needs-rerun | workflow budget ownership becomes explicit or theory rejected | npm run analyze:causal-model -- test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json |
+| H2 selected source stale/overloaded | selected node 7493b0ab is snapshot source and has snapshot-lane timeout warnings | selected snapshot source may be stale, overloaded, or the wrong observation source | repair source selection/freshness or classify node-local pressure | selected source freshness/health explains or rejects 2/5 coverage | npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json |
+| H3 selected-view versus best-view split | selected published-active coverage is 2/5 while active nodes are 4/5 | selected-node publication/readiness evidence may lag a better or quorum control-plane view | repair viewpoint selection or classify selected-view lag | best/quorum view comparison selects or rejects selected-view staleness | npm run analyze:topology-convergence -- test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json |
 | scope boundary | lane and package scope only | proof that needs forbidden scope means this package is the wrong slice | stop, split, or migrate owner boundary | no widened runtime scope inside this package | npm run work:advance -- --check |
 
 - Anti-symptom rationale: This package changes or classifies operation_workflow_owner / workflow_progress directly; it does not patch downstream symptoms or widen forbidden scope.
@@ -264,20 +272,20 @@ H1/H2/H3 outcome before closure.
 
 ## Decision Experiment Gate
 
-- Decision question: Which of H1 dispatch re-entry, H2 handoff progress readback, or H3 operation creation is the current causal edge for priority_recovery_event_driven_wait?
+- Decision question: Which of H1 budget/capture mismatch, H2 selected snapshot source staleness/overload, or H3 selected-view versus best-view split explains the current classified backpressure surface?
 - Architecture review: Before runtime edits, confirm whether this is still a local owner-boundary route, an owner-boundary migration, an autonomous architecture experiment, or a human-only route caused by contradictory or blocked evidence.
-- Competing hypotheses: H1 event-driven workflow progress does not re-enter dispatch; H2 dispatched operations retry but progress readback never observes target progress; H3 rebalancer leader fails to create a missing control-plane publication recovery operation; H4 the route is stale diagnostics and no runtime code should change.
-- Pre-edit focused probe: `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-three-theory-recovery.report.json --markdown`
-- Success metrics: witnessCount `< 11`, ownerBoundaryGroupCount `< 3`, first frontier migration, selected architecture-gap, or representative green; at least one concrete metric, count, frontier, migration, or representative-green condition must move.
-- Representative rerun: `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-three-theory-recovery.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait`
-- Kill rule: If fresh representative evidence returns the same frontier and dominant reason with no concrete metric reduction, stop for an autonomous architecture experiment instead of opening another local patch; use human escalation only for contradictory or blocked evidence.
+- Competing hypotheses: H1 workflow budget/deadline evidence is incomplete; H2 selected snapshot source health/freshness is the blocker; H3 selected-node evidence lags a better control-plane view; H4 the route is valid classified backpressure and needs a fresh rerun before runtime code should change.
+- Pre-edit focused probe: `npm run work:evidence-summary -- test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json`
+- Success metrics: one revised theory selected/rejected, owner-boundary migration, architecture-gap classification, fresh rerun movement, or representative green; at least one concrete route, owner, evidence, or representative condition must move before runtime edits.
+- Representative rerun: `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-revised-three-theory-refresh.report.json --verbose` only after a confirmed local fix or when the current artifact is judged stale.
+- Kill rule: If all revised theories remain unselected on the current artifact, stop as classified backpressure/needs-rerun instead of opening another local runtime patch; use human escalation only for contradictory or blocked evidence.
 
 
 
 ## Expected Representative Delta
 
 - Baseline artifact: `test-output/reports/rolling-restart-three-theory-recovery.report.json`
-- Expected delta: H1/H2/H3 selected or rejected, then fresh representative evidence green, reduced, migrated, same-frontier with architecture-gap, or contradictory.
+- Expected delta: revised H1/H2/H3 selected or rejected, then focused proof, owner migration, needs-rerun, architecture-gap, or fresh representative evidence green/reduced/migrated.
 - Local proof class: focused owner or diagnostic proof only; it is not representative-green proof.
 - Representative proof class: fresh representative rerun or canonical route-after-rerun result.
 
@@ -408,6 +416,7 @@ Agent identity is optional provenance. Use the compact five-field shape for new 
 - [x] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md, work/sprints/active-2026-q2-rolling-restart-investigation.md; validation: `npm run work:repair`; outcome: validated.
 - [x] action: implementation; owner: startup_active_gate_owner; files-changed: test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js, test/distributed/harness/cluster-segment-7-class-4-publication-coverage.js, test/distributed/harness/__tests__/cluster-active-gate-load-selected-timeout-owner-recovery.test.js, work/packages/active-20260526-rolling-restart-operation-workflow-three-theory-recovery.md, work/sprints/active-2026-q2-rolling-restart-investigation.md; validation: `node test/distributed/harness/__tests__/cluster-active-gate-load-selected-timeout-owner-recovery.test.js`, `node test/distributed/harness/__tests__/cluster-active-gate-selected-transport-closed-owner-recovery-projection.test.js`, representative `test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json`, route/residual/topology/causal analyzers, `npm run work:validate -- --pre-impl`, parent revalidated focused proof: yes; outcome: validated.
 - [x] action: verification-fix; owner: startup_active_gate_owner; files-changed: test/distributed/harness/__tests__/active-gate-closure-classification.test.js, work/packages/active-20260526-rolling-restart-operation-workflow-three-theory-recovery.md; validation: `node test/distributed/harness/__tests__/active-gate-closure-classification.test.js` 6/6, parent revalidated focused proof: yes; outcome: validated.
+- [x] action: research; owner: startup_active_gate_owner; files-changed: work/theory-ledger.md, work/packages/active-20260526-rolling-restart-operation-workflow-three-theory-recovery.md, work/sprints/active-2026-q2-rolling-restart-investigation.md; validation: `npm run work:evidence-summary`, `npm run analyze:topology-convergence`, `npm run analyze:causal-model`, `npm run analyze:distributed-failure`, `npm run analyze:priority-recovery-residuals`, `npm run work:scenario-route`, and focused raw artifact comparison on `test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json`; parent revalidated focused proof: yes; outcome: H1 supported as workflow budget/capture mismatch, H2 supported as selected-source staleness/overload, H3 needs-rerun because per-node probe witness proof is not retained.
 
 ## Validation
 
