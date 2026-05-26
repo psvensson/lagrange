@@ -247,7 +247,14 @@ Agent identity is optional provenance. Use the compact five-field shape for new 
 - [x] action: verification-fix; owner: Antigravity; files-changed: none; validation: npm run audit:guideline:literals -- src/rebalancer/rebalance-coordinator-priority-budget-helper.js; outcome: validated.
 - [x] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: validated.
 
+## Commit And Push Ledger
+
+1. Focused package commit: 8e28e0bb1c29448e49315e4861ce8f1d75fb432c
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
+
 ## Validation
 
-1. `git diff --check -- <files>`
+1. npm test -- test/rebalancer/rebalance-coordinator-operation-ownership.test.js
+2. npm run audit:guideline:literals -- src/rebalancer/rebalance-coordinator-priority-budget-helper.js
 
