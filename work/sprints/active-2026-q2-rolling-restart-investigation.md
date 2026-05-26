@@ -26,7 +26,7 @@ Test the three current rolling-restart theories, fix only confirmed bugs, rerun 
 ```text
 Representative artifact: none
 Visible first frontier: priority_recovery_partition_progress
-Active package: work/packages/active-20260526-rolling-restart-three-theory-source-analysis-verification.md
+Active package: work/packages/done-20260526-rolling-restart-three-theory-source-analysis-verification.md
 Active package owner: operation_workflow_owner
 Active package boundary: workflow_progress
 Selected cause: priority_recovery_event_driven_wait
@@ -77,7 +77,7 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Lane: `causal-escalation`
    - Purpose: Repair workflow handoff state and classify the current `priority_recovery_partition_progress` edge before runtime edits.
    - First-run reason: Fresh `rolling-restart` evidence and generated current-blocker state selected `operation_workflow_owner / workflow_progress`, while track/release/package scope records still carried stale active references.
-7. [Rolling Restart Three Theory Source Analysis and Verification](../packages/active-20260526-rolling-restart-three-theory-source-analysis-verification.md)
+7. [Rolling Restart Three Theory Source Analysis and Verification](../packages/done-20260526-rolling-restart-three-theory-source-analysis-verification.md)
    - Lane: `causal-escalation`
    - Purpose: Analyze source code under H1, H2, H3, run scenarios, find and fix bugs, rerun rolling-restart to collect fresh evidence.
    - First-run reason: Test the three rolling-restart theories by analyzing source code, running experiments, and fixing bugs.

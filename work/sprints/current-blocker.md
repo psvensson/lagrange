@@ -22,7 +22,7 @@ Stop rule: No architecture decision gate is required for this package.
 
 Sprint: `work/sprints/active-2026-q2-rolling-restart-investigation.md`
 
-Package: `work/packages/active-20260526-rolling-restart-three-theory-source-analysis-verification.md`
+Package: `work/packages/done-20260526-rolling-restart-three-theory-source-analysis-verification.md`
 
 Workflow lane: `causal-escalation`
 
@@ -258,7 +258,7 @@ Commit scope:
 1. `work/releases/0.1-dependency-map.md`
 2. `work/tracks/topology-convergence.md`
 3. `src/rebalancer/rebalance-coordinator-priority-budget-helper.js`
-4. `work/packages/active-20260526-rolling-restart-three-theory-source-analysis-verification.md`
+4. `work/packages/done-20260526-rolling-restart-three-theory-source-analysis-verification.md`
 
 Legacy touched files:
 

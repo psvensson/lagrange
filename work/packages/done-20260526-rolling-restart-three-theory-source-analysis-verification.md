@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "active",
+  "status": "done",
   "intent": {
     "opened": "2026-05-26",
     "lane": "causal-escalation",
@@ -14,7 +14,8 @@
     "boundary": "workflow_progress",
     "dominantReason": "priority_recovery_event_driven_wait",
     "currentState": "New package scaffolded from the shared work-package schema.",
-    "nextAction": "Analyze source code under H1, H2, H3, run scenarios, find and fix bugs, rerun rolling-restart to collect fresh evidence"
+    "nextAction": "Analyze source code under H1, H2, H3, run scenarios, find and fix bugs, rerun rolling-restart to collect fresh evidence",
+    "closed": "2026-05-26"
   },
   "scope": {
     "writeScope": [
@@ -99,7 +100,18 @@
     "boundary": "workflow_progress",
     "dominantReason": "priority_recovery_event_driven_wait",
     "nextAction": "The H2 active-gate projection fix moved the failure off selected-timeout owner recovery. Remaining evidence has 4 priority recovery workflow-progress residuals but routes as classified backpressure; research budget/capture, selected snapshot source health, and selected-view versus best-view publication/readiness before further runtime edits."
-  }
+  },
+  "implementation": {
+    "parentRevalidatedFocusedProof": true,
+    "filesChanged": [
+      "src/rebalancer/rebalance-coordinator-priority-budget-helper.js"
+    ]
+  },
+  "verificationFix": {
+    "parentRevalidatedFocusedProof": true
+  },
+  "theoryLedger": "no ledger update",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -249,7 +261,7 @@ Agent identity is optional provenance. Use the compact five-field shape for new 
 
 ## Commit And Push Ledger
 
-1. Focused package commit: 8e28e0bb1c29448e49315e4861ce8f1d75fb432c
+1. Focused package commit: 0c07a4058002c3c5531711c53dbbb2e273ba1a03
 2. Pushed to: origin/codex/pending-ack-eligibility-filter
 3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
 
