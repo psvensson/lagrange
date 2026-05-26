@@ -431,6 +431,75 @@ function isReplicaOperationExplicitlyExcludedFromInFlight(record) {
   return !isReplaceRemoveDispatchPhase(record);
 }
 
+function resolveRecordOwnerNodeId(record) {
+  const sourceNodeId = String(record?.sourceNodeId || record?.source_node_id || '');
+  const targetNodeId = String(record?.targetNodeId || record?.target_node_id || '');
+  const type = record?.type;
+  const step = record?.workflowStep || record?.workflow_step;
+  const status = record?.status;
+  const partitionId = String(record?.partitionId || record?.partitionGroupId || record?.partition_id || '');
+
+  const semanticPhase = record?.semanticPhase ||
+    resolveReplicaOperationSemanticPhase(
+      type || null,
+      step || null,
+      status || null,
+    );
+
+  const isUnsettledReplace = type === OperationType.REPLACE &&
+    targetNodeId.length > NUM.ZERO &&
+    semanticPhase !== REPLICA_OPERATION_SEMANTIC_PHASE.SETTLED &&
+    semanticPhase !== REPLICA_OPERATION_SEMANTIC_PHASE.FAILED;
+
+  const isPriorityOrSystem = partitionId.startsWith('replica_operations-') ||
+    partitionId.startsWith('sql_transactions-') ||
+    partitionId.startsWith('sql_transaction_participants-') ||
+    partitionId.startsWith('sql_write_operations-') ||
+    partitionId.startsWith('control_plane_publications-') ||
+    partitionId.startsWith('nodes-') ||
+    partitionId.startsWith('services-');
+
+  if (isUnsettledReplace && isPriorityOrSystem) {
+    return targetNodeId;
+  }
+  if (sourceNodeId.length > NUM.ZERO) {
+    return sourceNodeId;
+  }
+  if (targetNodeId.length > NUM.ZERO) {
+    return targetNodeId;
+  }
+  return null;
+}
+
+function getOwnerNodeStartMs(ownerNodeId, options = {}) {
+  const nowMs = Number.isFinite(options.nowMs) ?
+    Math.floor(options.nowMs) :
+    Date.now();
+
+  // Try to find the start time from options.serviceRows
+  if (ownerNodeId && Array.isArray(options.serviceRows)) {
+    let maxStartMs = 0;
+    for (const service of options.serviceRows) {
+      const sNodeId = service?.nodeId || service?.node_id;
+      if (sNodeId === ownerNodeId) {
+        const startMs = normalizeEpochMillis(service?.startedAt || service?.started_at);
+        if (Number.isFinite(startMs) && startMs > maxStartMs) {
+          maxStartMs = startMs;
+        }
+      }
+    }
+    if (maxStartMs > 0) {
+      return maxStartMs;
+    }
+  }
+
+  // Fall back to local process start time
+  const uptimeSec = typeof process !== 'undefined' && typeof process.uptime === 'function' ?
+    process.uptime() :
+    NUM.ZERO;
+  return nowMs - Math.floor(uptimeSec * TIME_MS.SECOND);
+}
+
 function isReplicaOperationInFlight(record, options = {}) {
   if (!record || typeof record !== LOCAL_STR_OBJECT) {
     return false;
@@ -442,15 +511,10 @@ function isReplicaOperationInFlight(record, options = {}) {
     return false;
   }
   if (options.ignorePreRestart === true) {
-    const nowMs = Number.isFinite(options.nowMs) ?
-      Math.floor(options.nowMs) :
-      Date.now();
     const updatedAtMs = normalizeEpochMillis(record?.updatedAt);
-    const uptimeSec = typeof process !== 'undefined' && typeof process.uptime === 'function' ?
-      process.uptime() :
-      NUM.ZERO;
-    const processStartMs = nowMs - Math.floor(uptimeSec * TIME_MS.SECOND);
-    if (Number.isFinite(updatedAtMs) && updatedAtMs < processStartMs) {
+    const ownerNodeId = resolveRecordOwnerNodeId(record);
+    const ownerNodeStartMs = getOwnerNodeStartMs(ownerNodeId, options);
+    if (Number.isFinite(updatedAtMs) && updatedAtMs < ownerNodeStartMs) {
       return false;
     }
   }
@@ -480,11 +544,9 @@ function isReplicaOperationStale(record, options = {}) {
     Date.now();
   const updatedAtMs = normalizeEpochMillis(record?.updatedAt);
   if (options.ignorePreRestart === true) {
-    const uptimeSec = typeof process !== 'undefined' && typeof process.uptime === 'function' ?
-      process.uptime() :
-      NUM.ZERO;
-    const processStartMs = nowMs - Math.floor(uptimeSec * TIME_MS.SECOND);
-    if (Number.isFinite(updatedAtMs) && updatedAtMs < processStartMs) {
+    const ownerNodeId = resolveRecordOwnerNodeId(record);
+    const ownerNodeStartMs = getOwnerNodeStartMs(ownerNodeId, options);
+    if (Number.isFinite(updatedAtMs) && updatedAtMs < ownerNodeStartMs) {
       return false;
     }
   }

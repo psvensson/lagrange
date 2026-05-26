@@ -4,27 +4,31 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: No active work package. Start a new package when implementation resumes.
+Theory under test: New package scaffolded from the shared work-package schema.
 
-Causal question: none
+Causal question: active_gate_timed_out
 
-Implementation slice: Create or activate one focused package for the next executable concern.
+Implementation slice: investigate stale replica operation cancellation upon node rejoin
 
 Implementation files:
 
-1. None recorded
+1. `src/admin/admin-authoritative-repair-policy.js`
+2. `src/admin/admin-control-snapshot-class-part-3.js`
+3. `src/rebalancer/rebalance-coordinator.js`
+4. `src/rebalancer/replica-operation-liveness.js`
+5. `test/rebalancer/replica-operation-liveness.test.js`
 
 Expected implementation delta: unknown
 
-Falsifying probe: unknown
+Falsifying probe: falsifier: contract transition startup_active_gate_owner snapshot_coverage active_gate_timed_out npm run work:advance -- --check
 
-Stop rule: unknown
+Stop rule: No architecture decision gate is required for this package.
 
 Sprint: `work/sprints/active-2026-q2-rolling-restart-investigation.md`
 
-Package: `none`
+Package: `work/packages/active-20260526-cache-watermark-stale-operation-reconciler-hardening.md`
 
-Workflow lane: `none`
+Workflow lane: `scenario-release-gate`
 
 Scenario: `none`
 
@@ -34,39 +38,42 @@ Playback: `none`
 
 ## Boundary
 
-Owner: `none`
+Owner: `startup_active_gate_owner`
 
-Boundary: `none`
+Boundary: `snapshot_coverage`
 
-Dominant reason: `none`
+Dominant reason: `active_gate_timed_out`
 
-Current state: No active work package. Start a new package when implementation resumes.
+Current state: New package scaffolded from the shared work-package schema.
 
 ## Next Action
 
-Create or activate one focused package for the next executable concern.
+investigate stale replica operation cancellation upon node rejoin
 
 ## Proof Ladder
 
-1. None recorded
+1. `falsifier: contract transition startup_active_gate_owner snapshot_coverage active_gate_timed_out npm run work:advance -- --check`
+2. `regression: contract transition startup_active_gate_owner snapshot_coverage active_gate_timed_out npm run work:advance -- --check`
 
 ## Model Fit
 
-Package class: `unknown`
+Package class: `runtime-owner-boundary`
 
-Intended minimum model: `unknown`
+Intended minimum model: `gpt-5.3-codex`
 
-Scope shape: `unknown`
+Scope shape: `bounded-owner-runtime/current-frontier`
 
-Output profile: `unknown`
+Output profile: `medium`
 
 Escalation triggers:
 
-1. None recorded
+1. `owned files expand beyond this package`
+2. `a frozen decision must be reopened`
 
 ## Theory Ledger References
 
-1. None recorded
+1. `theory-20260522-snapshot-watch-fixture`
+2. `theory-20260522-snapshot-watch-handoff-contract`
 
 ## Representative Residual
 
@@ -212,9 +219,9 @@ Runtime promotion rule: `unknown`
 
 ## Architecture Decision Gate
 
-Status: `unknown`
+Status: `not-required`
 
-Trigger: `unknown`
+Trigger: `none`
 
 Trigger evidence:
 
@@ -226,13 +233,17 @@ Choices:
 
 Selected choice: `unknown`
 
-Gate next action: unknown
+Gate next action: No architecture decision gate is required for this package.
 
 ## Scope
 
 Write scope:
 
-1. None recorded
+1. `src/admin/admin-authoritative-repair-policy.js`
+2. `src/admin/admin-control-snapshot-class-part-3.js`
+3. `src/rebalancer/rebalance-coordinator.js`
+4. `src/rebalancer/replica-operation-liveness.js`
+5. `test/rebalancer/replica-operation-liveness.test.js`
 
 Handoff files:
 
@@ -240,8 +251,7 @@ Handoff files:
 
 Generated files:
 
-1. `work/sprints/current-blocker.json`
-2. `work/sprints/current-blocker.md`
+1. None recorded
 
 Candidate runtime files:
 
@@ -249,7 +259,12 @@ Candidate runtime files:
 
 Commit scope:
 
-1. None recorded
+1. `src/admin/admin-authoritative-repair-policy.js`
+2. `src/admin/admin-control-snapshot-class-part-3.js`
+3. `src/rebalancer/rebalance-coordinator.js`
+4. `src/rebalancer/replica-operation-liveness.js`
+5. `test/rebalancer/replica-operation-liveness.test.js`
+6. `work/packages/active-20260526-cache-watermark-stale-operation-reconciler-hardening.md`
 
 Legacy touched files:
 

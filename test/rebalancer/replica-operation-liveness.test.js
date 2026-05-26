@@ -526,3 +526,73 @@ test(
     );
   },
 );
+
+test(
+  'isReplicaOperationInFlight ignores pre-restart operations based on owner node service startedAt',
+  async (t) => {
+    const nowMs = 1000;
+    const record = normalizeReplicaOperationRecord({
+      operation_id: 'op-1',
+      type: 'REPLACE',
+      partition_id: 'user_data-p1',
+      source_node_id: 'node-A',
+      target_node_id: 'node-B',
+      status: 'syncing',
+      workflow_step: 'SYNCING',
+      updated_at: 400, // Pre-restart for node-A, post-restart for node-B
+    }, {
+      nowMs,
+    });
+
+    const testOptions = {
+      nowMs,
+      ignorePreRestart: true,
+      serviceRows: [
+        {
+          service_id: 's1',
+          node_id: 'node-A',
+          started_at: 500, // Node A restarted at 500
+        },
+        {
+          service_id: 's2',
+          node_id: 'node-B',
+          started_at: 300, // Node B started at 300
+        }
+      ]
+    };
+
+    // Owner is node-A (since sourceNodeId is node-A).
+    // Node-A's max started_at is 500.
+    // record.updatedAt is 400.
+    // 400 < 500, so it is pre-restart and should be ignored!
+    t.equal(
+      isReplicaOperationInFlight(record, testOptions),
+      false,
+      'operation updated before owner node restart should be ignored',
+    );
+
+    // If owner was node-B (e.g. if we set target as owner or node-B started at 300 and we check it)
+    const recordWithBOwner = normalizeReplicaOperationRecord({
+      operation_id: 'op-2',
+      type: 'REPLACE',
+      partition_id: 'user_data-p1',
+      source_node_id: 'node-B',
+      target_node_id: 'node-A',
+      status: 'syncing',
+      workflow_step: 'SYNCING',
+      updated_at: 400,
+    }, {
+      nowMs,
+    });
+
+    // Owner is node-B. Node B started at 300.
+    // record.updatedAt is 400.
+    // 400 >= 300, so it is NOT pre-restart and should NOT be ignored!
+    t.equal(
+      isReplicaOperationInFlight(recordWithBOwner, testOptions),
+      true,
+      'operation updated after owner node restart should not be ignored',
+    );
+  },
+);
+

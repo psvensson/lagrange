@@ -17,28 +17,28 @@ Investigate the control-plane priority publication and ACK handoff dynamics duri
 - Confidence and evidence: Medium. The approved sprint options identify priority spread convergence as a highly relevant diagnostic path.
 - Expected green path: Run focused diagnostics, inspect coordinator publications and ACK handoff state machines, locate coordination mismatches, and prepare targeted local repairs.
 - Wrong direction signals: Raising timeouts or relaxing admission rules to pass tests.
-- Next best package: work/packages/done-20260526-outbound-message-queue-backpressure-stabilization.md
+- Next best package: work/packages/active-20260526-cache-watermark-stale-operation-reconciler-hardening.md
 - Stop or escalate rule: Escalate if downstream/upstream protocol contradictions appear or if proof requires cross-owner changes.
 
 ## Current Edge Card
 
 ```text
-Representative artifact: test-output/reports/rolling-restart-rerun-4.report.json
-Visible first frontier: transport_owner/message_routing
-Active package: work/packages/done-20260526-outbound-message-queue-backpressure-stabilization.md
-Active package owner: transport_owner
-Active package boundary: message_routing
-Selected cause: accept_classified_backpressure
-Required action: Separate metadata control signals from data messages to stabilize outbound queue
-Representative status: pending-before-probe
-Causal outcome: reduced
+Representative artifact: none
+Visible first frontier: unknown
+Active package: work/packages/active-20260526-cache-watermark-stale-operation-reconciler-hardening.md
+Active package owner: startup_active_gate_owner
+Active package boundary: snapshot_coverage
+Selected cause: active_gate_timed_out
+Required action: investigate stale replica operation cancellation upon node rejoin
+Representative status: unknown
+Causal outcome: unknown
 Architecture gate: not-required / unknown
-Expected delta: Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.
-Current state: Scaffolded for priority recovery transport_owner message_routing stabilization.
-Allowed edits: src/transport/message-router-shared-stage-2.js, src/transport/message-router-shared-stage-3.js, src/transport/message-router-shared-stage-4.js
-Candidate runtime files: src/transport/message-router-shared-stage-2.js, src/transport/message-router-shared-stage-3.js, src/transport/message-router-shared-stage-4.js
-Forbidden edits: none
-Required latest proof: falsifier: contract transition transport_owner message_routing accept_classified_backpressure npm run work:scenario-route -- test-output/reports/rolling-restart-rerun-4.report.json, regression: contract transition transport_owner message_routing accept_classified_backpressure npm run work:evidence-summary -- test-output/reports/rolling-restart-rerun-4.report.json, supporting: contract transition transport_owner message_routing accept_classified_backpressure npm run work:advance -- --check
+Expected delta: unknown
+Current state: New package scaffolded from the shared work-package schema.
+Allowed edits: src/admin/admin-authoritative-repair-policy.js, src/admin/admin-control-snapshot-class-part-3.js, src/rebalancer/rebalance-coordinator.js, src/rebalancer/replica-operation-liveness.js, test/rebalancer/replica-operation-liveness.test.js
+Candidate runtime files: unknown
+Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
+Required latest proof: falsifier: contract transition startup_active_gate_owner snapshot_coverage active_gate_timed_out npm run work:advance -- --check, regression: contract transition startup_active_gate_owner snapshot_coverage active_gate_timed_out npm run work:advance -- --check
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -60,6 +60,9 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Lane: `scenario-release-gate`
    - Purpose: Separate metadata control signals from data messages to stabilize outbound queue.
    - First-run reason: The representative `rolling-restart` scenario experiences priority recovery rebalancer handoff stalls due to backpressure in outbound queues.
+3. [Cache Watermark and Stale Operation Reconciler Hardening](../packages/active-20260526-cache-watermark-stale-operation-reconciler-hardening.md)
+   - Lane: `scenario-release-gate`
+   - Purpose: Proactively cancel or clean up obsolete replica operations on node rejoin, preventing stale-operation reconciliation delays from stalling coordinator active-gate snapshot progress.
 
 ## Proof Ladder
 
