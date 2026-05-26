@@ -123,6 +123,7 @@
     "work:sprint:queue": "node scripts/work-sprint-queue.js",
     "work:summary": "node scripts/work-summary.js",
     "work:track-summary": "node scripts/work-track-summary.js",
+    "work:admin": "node scripts/work-admin.js",
     "work:package:route-after-rerun": "node scripts/work-package-route-after-rerun.js",
     "work:package:schema": "node scripts/work-package-schema.js",
     "work:theory-ledger": "node scripts/work-theory-ledger.js",

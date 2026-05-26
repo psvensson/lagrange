@@ -105,6 +105,18 @@ const COMMAND_GROUPS = Object.freeze([
         description: 'Print completeness percentage and task status summaries for all tracks and releases.',
       }),
       Object.freeze({
+        command: 'npm run work:admin -- --route --package <path> --successor <successor>',
+        description: 'Safely execute successor package routing via admin transaction.',
+      }),
+      Object.freeze({
+        command: 'npm run work:admin -- --attach-track --package <path> --track <track>',
+        description: 'Safely attach a track/release reference to a package file via admin transaction.',
+      }),
+      Object.freeze({
+        command: 'npm run work:admin -- --advance-sprint',
+        description: 'Safely advance the current active sprint to done/closed state.',
+      }),
+      Object.freeze({
         command: 'npm run steering:llm:pack',
         description: 'Regenerate compact steering packs for prompt loading.',
       }),
