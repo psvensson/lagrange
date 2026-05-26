@@ -1,44 +1,44 @@
-# Rolling Restart Priority Publication and ACK Handoff Investigation Sprint
+# Rolling Restart Three Theory Recovery Sprint
 
 Status: active. Created on May 26, 2026.
 
 ## Goal
 
-Investigate the control-plane priority publication and ACK handoff dynamics during a rolling restart under load. Find why the coordinator fails to complete rebalancer handoffs, stalling priority spread, without altering any timeout limits.
+Test the three current rolling-restart theories, fix only confirmed bugs, rerun the representative `rolling-restart` scenario, and route the fresh artifact.
 
 ## Sprint Strategy Brief
 
-- Goal state: Understand the coordinator's publication coordinate state and ACK handoff logic, identify the root causes of priority spread convergence stalls under load, and design targeted, non-timeout-based fixes.
-- Current causal thesis: Priority control-plane spread delays during rolling restarts are caused by inefficiencies or logic gaps in the priority publication and ACK handoff mechanisms under load.
+- Goal state: Representative `rolling-restart` is green, or the fresh artifact shows a reduced/migrated first frontier with concrete metrics.
+- Current causal thesis: The snapshot-freshness breach was real and the fix moved representative evidence. Priority recovery now has zero residual witnesses; the current blocker is startup active-gate snapshot coverage timing out on selected snapshot source timeout and deferred repair.
 - Competing hypotheses:
-  - H1: Priority publications are delayed due to packet/message queue backpressure or coordinator connection cycling.
-  - H2: Stale local cache views or rebalancer state mismatches block publication progression.
-  - H3: Transport-level connection handoffs fail to propagate or wait for critical ACKs cleanly.
-- Confidence and evidence: Medium. The approved sprint options identify priority spread convergence as a highly relevant diagnostic path.
-- Expected green path: Run focused diagnostics, inspect coordinator publications and ACK handoff state machines, locate coordination mismatches, and prepare targeted local repairs.
-- Wrong direction signals: Raising timeouts or relaxing admission rules to pass tests.
-- Next best package: work/packages/done-20260526-cache-watermark-stale-operation-reconciler-hardening.md
-- Stop or escalate rule: Escalate if downstream/upstream protocol contradictions appear or if proof requires cross-owner changes.
+  - H1: A selected snapshot source can be `admin_health` reachable while snapshot-lane queries time out, leaving partial coverage stuck.
+  - H2: `owner_reconcile_pending` plus `write_deferred/enqueued=false` loses bounded owner-recovery progress.
+  - H3: A forced control-plane repair can return a fresh/proceed snapshot observation even when the repaired snapshot still has stale replica operations in flight.
+- Confidence and evidence: High for representative migration. Baseline `test-output/reports/rolling-restart-three-theory-recovery.report.json` had priority residual witness count `11`; `test-output/reports/rolling-restart-operation-workflow-three-theory-recovery-rerun.report.json` reduced it to `6`; fresh `test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json` has priority residual witness count `0` and routes to active_gate_snapshot_coverage.
+- Expected green path: Move to a startup_active_gate_owner / snapshot_coverage successor and fix selected snapshot source timeout / repair-deferred coverage without reopening priority recovery.
+- Wrong direction signals: Raising timeouts, continuing to patch snapshot coverage after coverage is `5/5`, or passing load readiness without resolving priority recovery event-driven progress.
+- Next best package: work/packages/done-20260526-rolling-restart-three-theory-discriminator.md
+- Stop or escalate rule: This package reached `reduced/migrated`; if continuing, open the suggested diagnostic successor from the fresh artifact rather than widening the current write scope.
 
 ## Current Edge Card
 
 ```text
-Representative artifact: none
-Visible first frontier: unknown
-Active package: work/packages/done-20260526-control-plane-priority-publication-ack-handoff-deep-dive.md
-Active package owner: control-plane-publications
-Active package boundary: publication-convergence
-Selected cause: priority-spread-pending
-Required action: Investigate priority publication spread and ACK handoff logic
-Representative status: unknown
-Causal outcome: unknown
-Architecture gate: not-required / unknown
-Expected delta: unknown
-Current state: Scaffolded for priority publication and ACK handoff deep dive.
-Allowed edits: work/packages/done-20260526-control-plane-priority-publication-ack-handoff-deep-dive.md
-Candidate runtime files: unknown
-Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
-Required latest proof: regression: npm run work:advance -- --check
+Representative artifact: test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json
+Visible first frontier: priority_recovery_partition_progress / operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait
+Active package: work/packages/active-20260526-rolling-restart-operation-workflow-three-theory-recovery.md
+Active package owner: operation_workflow_owner
+Active package boundary: workflow_progress
+Selected cause: priority_recovery_event_driven_wait
+Required action: Use the fresh artifact to decide a narrow operation_workflow_owner / workflow_progress successor for the remaining 4 priority recovery residuals, or accept the classified backpressure stop if no local runtime bug is selected.
+Representative status: reduced-migrated-after-h2-fix
+Causal outcome: continue_local_fix
+Architecture gate: watching / unknown
+Expected delta: Priority recovery is cleared; next work should move snapshotCoverage above 1/5, clear selected_snapshot_source_timeout, or migrate the active-gate snapshot coverage frontier.
+Current state: The selected-timeout owner-recovery projection bug is fixed and focused proofs pass. Fresh rolling-restart moved from the selected-timeout active-gate blocker to priority_recovery_partition_progress with 4 residual witnesses in one operation_workflow_owner / workflow_progress group; active nodes improved to 4/5 and selected snapshot coverage improved to 2/5.
+Allowed edits: work/packages/active-20260526-rolling-restart-operation-workflow-three-theory-recovery.md, work/sprints/active-2026-q2-rolling-restart-investigation.md, src/rebalancer/operation-workflow-owner.js, src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js, src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js, src/control-plane/control-plane-snapshot-owner.js, test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js, test/distributed/harness/cluster-segment-7-class-4-publication-coverage.js, test/distributed/harness/__tests__/active-gate-closure-classification.test.js, test/distributed/harness/__tests__/cluster-active-gate-load-selected-timeout-owner-recovery.test.js, test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js, test/rebalancer/priority-recovery-stale-planning-visibility.test.js, test/control-plane/control-plane-snapshot-owner.test.js
+Candidate runtime files: src/rebalancer/operation-workflow-owner.js, src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js, src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js, src/rebalancer/unified-rebalancer-priority-recovery-follow-up-decisions.js, src/rebalancer/unified-rebalancer-segment-5.js, src/control-plane/control-plane-snapshot-owner.js, test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js, test/distributed/harness/cluster-segment-7-class-4-publication-coverage.js
+Forbidden edits: Owner outcomes decide runtime progress; diagnostics and active-gate readiness observe priority recovery but must not hide or decide the operation workflow contract.
+Required latest proof: falsifier: route npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-recovery.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress, regression: residuals npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-three-theory-recovery.report.json --markdown, route: npm run work:scenario-route -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage, residuals: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json --markdown, focused: node test/control-plane/control-plane-snapshot-owner.test.js, focused: node test/distributed/harness/__tests__/active-gate-closure-classification.test.js, focused: node test/distributed/harness/__tests__/cluster-active-gate-load-selected-timeout-owner-recovery.test.js, representative: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json --verbose, route: npm run work:scenario-route -- test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress, residuals: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json --markdown
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -52,17 +52,26 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
 
 ## Package Queue
 
-1. [Control-Plane Priority Publication & ACK Handoff Triage](../packages/done-20260526-control-plane-priority-publication-ack-handoff-triage.md)
+1. [Rolling Restart Three Theory Discriminator](../packages/done-20260526-rolling-restart-three-theory-discriminator.md)
+   - Lane: `experiment`
+   - Purpose: Test the selected snapshot timeout, deferred owner-recovery enqueue, and unreachable-node pressure theories, then promote only the confirmed fix.
+   - First-run reason: Latest `rolling-restart` routes to `startup_active_gate_owner / snapshot_coverage` with priority recovery residuals cleared.
+2. [Distributed Harness Scenario Teardown Cleanup](../packages/done-20260526-distributed-harness-scenario-teardown-cleanup.md)
+   - Lane: `lightweight-maintenance`
+   - Purpose: Ensure teardown continues to stop node containers even when playback shutdown or diagnostics fail.
+   - First-run reason: Residual harness processes and containers were suspected after scenario end.
+3. [Control-Plane Priority Publication & ACK Handoff Triage](../packages/done-20260526-control-plane-priority-publication-ack-handoff-triage.md)
    - Lane: `diagnostic-classification`
    - Purpose: Explore publication coordinate state and ACK handoff logic.
-   - First-run reason: The representative `rolling-restart` scenario experiences priority spread delays.
-2. [Outbound Message Queue Backpressure Stabilization](../packages/done-20260526-outbound-message-queue-backpressure-stabilization.md)
+   - First-run reason: Earlier `rolling-restart` evidence showed priority spread delays.
+4. [Outbound Message Queue Backpressure Stabilization](../packages/done-20260526-outbound-message-queue-backpressure-stabilization.md)
    - Lane: `scenario-release-gate`
    - Purpose: Separate metadata control signals from data messages to stabilize outbound queue.
-   - First-run reason: The representative `rolling-restart` scenario experiences priority recovery rebalancer handoff stalls due to backpressure in outbound queues.
-3. [Cache Watermark and Stale Operation Reconciler Hardening](../packages/done-20260526-cache-watermark-stale-operation-reconciler-hardening.md)
+   - First-run reason: Earlier evidence showed priority recovery rebalancer handoff stalls due to outbound queue backpressure.
+5. [Cache Watermark and Stale Operation Reconciler Hardening](../packages/done-20260526-cache-watermark-stale-operation-reconciler-hardening.md)
    - Lane: `scenario-release-gate`
-   - Purpose: Proactively cancel or clean up obsolete replica operations on node rejoin, preventing stale-operation reconciliation delays from stalling coordinator active-gate snapshot progress.
+   - Purpose: Proactively cancel or clean up obsolete replica operations on node rejoin.
+   - First-run reason: Earlier evidence showed stale-operation reconciliation delaying coordinator active-gate snapshot progress.
 
 ## Proof Ladder
 

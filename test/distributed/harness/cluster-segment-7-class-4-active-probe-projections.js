@@ -33,6 +33,8 @@ const {
 const TYPEOF_OBJECT = 'object';
 const TYPEOF_STRING = 'string';
 const EMPTY_STRING = '';
+const PUBLISHED_ACTIVE_NODE_IDS_FIELD = 'publishedActiveNodeIds';
+const PUBLISHED_ACTIVE_NODE_IDS_SNAKE_FIELD = 'published_active_node_ids';
 const LOAD_PUBLICATION_GATE_WITNESS_READY = 'ready';
 const LOAD_PUBLICATION_GATE_WITNESS_CANONICAL_SNAPSHOT =
   'canonical_snapshot';
@@ -87,6 +89,27 @@ const LOAD_PUBLICATION_GATE_PROJECTION_DECISION_TABLE = Object.freeze([
         ACTIVE_PROBE_ACTIVITY_SOURCE_TRAFFIC_READINESS &&
       evidence.nodeCanonicalActive === true &&
       evidence.nodePublicationDisagreementCount === ZERO,
+  }),
+  Object.freeze({
+    outcome: LOAD_PUBLICATION_GATE_PROJECTION_OUTCOME_APPLY,
+    matches: (evidence) =>
+      evidence.readinessMode === CLUSTER_READINESS_MODE_LOAD &&
+      evidence.publicationGateReady === true &&
+      evidence.snapshotCoverageComplete !== true &&
+      evidence.selectedSnapshotAdminReady === true &&
+      evidence.selectedSnapshotTimeoutOwnerRecoveryProjectionReady === true &&
+      evidence.diagnosticActive !== true &&
+      evidence.diagnosticActivitySource ===
+        ACTIVE_PROBE_ACTIVITY_SOURCE_TRAFFIC_READINESS &&
+      evidence.nodeCanonicalActive === true &&
+      evidence.nodePublicationDisagreementCount === ZERO &&
+      (
+        evidence.timeoutShaped === true ||
+        (
+          evidence.diagnosticErrorPresent !== true &&
+          evidence.projectableReasonSetComplete === true
+        )
+      ),
   }),
 ]);
 const STARTUP_SNAPSHOT_PROJECTION_OUTCOME_KEEP = Object.freeze({
@@ -199,6 +222,40 @@ function hasSnapshotPublicationDiagnostics(snapshotCoverage) {
   );
 }
 
+function normalizeObjectRecord(value) {
+  return value &&
+    typeof value === TYPEOF_OBJECT &&
+    Array.isArray(value) !== true ?
+    value :
+    null;
+}
+
+function normalizeOwnerRecoveryPublishedActiveNodeIds(snapshotCoverage) {
+  const publicationConvergence = normalizeObjectRecord(
+    snapshotCoverage?.selectedPublicationConvergence,
+  );
+  const publicationActiveGateHandoff = normalizeObjectRecord(
+    snapshotCoverage?.selectedPublicationActiveGateHandoff,
+  );
+  const activeGateOwnerCohort = normalizeObjectRecord(
+    snapshotCoverage?.selectedActiveGateOwnerCohort,
+  );
+  return normalizeDistinctStringArray([
+    ...normalizeDistinctStringArray(
+      publicationConvergence?.[PUBLISHED_ACTIVE_NODE_IDS_FIELD] ??
+        publicationConvergence?.[PUBLISHED_ACTIVE_NODE_IDS_SNAKE_FIELD],
+    ),
+    ...normalizeDistinctStringArray(
+      publicationActiveGateHandoff?.[PUBLISHED_ACTIVE_NODE_IDS_FIELD] ??
+        publicationActiveGateHandoff?.[PUBLISHED_ACTIVE_NODE_IDS_SNAKE_FIELD],
+    ),
+    ...normalizeDistinctStringArray(
+      activeGateOwnerCohort?.[PUBLISHED_ACTIVE_NODE_IDS_FIELD] ??
+        activeGateOwnerCohort?.[PUBLISHED_ACTIVE_NODE_IDS_SNAKE_FIELD],
+    ),
+  ]);
+}
+
 function normalizeLoadPublicationGateWitness(snapshotCoverage, gateReady) {
   const selectedSnapshotAdminReady =
     snapshotCoverage?.selectedAdminReady === true ||
@@ -250,6 +307,19 @@ function buildLoadPublicationGateProjectionContext(
     snapshotCoverage,
     publicationGateReady,
   );
+  const selectedTimeoutOwnerRecoveryEvidence =
+    normalizeSelectedSnapshotTimeoutOwnerRecoveryEvidence(snapshotCoverage);
+  const selectedTimeoutOwnerRecoveryOutcome =
+    decideSelectedSnapshotTimeoutOwnerRecoveryProjection(
+      selectedTimeoutOwnerRecoveryEvidence,
+    );
+  const selectedPublishedActiveNodeIds = normalizeDistinctStringArray(
+    snapshotCoverage?.selectedPublishedActiveNodeIds,
+  );
+  const ownerRecoveryPublishedActiveNodeIds =
+    selectedTimeoutOwnerRecoveryOutcome.project === true ?
+      normalizeOwnerRecoveryPublishedActiveNodeIds(snapshotCoverage) :
+      [];
   return Object.freeze({
     readinessMode,
     publicationGateReady,
@@ -260,9 +330,12 @@ function buildLoadPublicationGateProjectionContext(
     loadPublicationGateWitnessUsable:
       loadPublicationGateWitness.usable === true,
     loadPublicationGateDecisionSource: loadPublicationGateWitness.source,
-    publishedActiveNodeIds: normalizeDistinctStringArray(
-      snapshotCoverage?.selectedPublishedActiveNodeIds,
-    ),
+    selectedSnapshotTimeoutOwnerRecoveryProjectionReady:
+      selectedTimeoutOwnerRecoveryOutcome.project === true,
+    publishedActiveNodeIds: normalizeDistinctStringArray([
+      ...selectedPublishedActiveNodeIds,
+      ...ownerRecoveryPublishedActiveNodeIds,
+    ]),
     healthyReadinessNodeIds: normalizeDistinctStringArray(
       snapshotCoverage?.selectedHealthyReadinessNodeIds,
     ),
@@ -291,6 +364,9 @@ function normalizeLoadPublicationGateProjectionEvidence(
       projectionContext.snapshotCoverageComplete === true,
     selectedSnapshotAdminReady:
       projectionContext.selectedSnapshotAdminReady === true,
+    selectedSnapshotTimeoutOwnerRecoveryProjectionReady:
+      projectionContext.selectedSnapshotTimeoutOwnerRecoveryProjectionReady ===
+        true,
     loadPublicationGateWitnessUsable:
       projectionContext.loadPublicationGateWitnessUsable === true,
     loadPublicationGateDecisionSource:
@@ -373,6 +449,13 @@ function buildStartupSnapshotProjectionContext(
     decideSelectedSnapshotTimeoutOwnerRecoveryProjection(
       selectedTimeoutOwnerRecoveryEvidence,
     );
+  const selectedPublishedActiveNodeIds = normalizeDistinctStringArray(
+    snapshotCoverage?.selectedPublishedActiveNodeIds,
+  );
+  const ownerRecoveryPublishedActiveNodeIds =
+    selectedTimeoutOwnerRecoveryOutcome.project === true ?
+      normalizeOwnerRecoveryPublishedActiveNodeIds(snapshotCoverage) :
+      [];
   return Object.freeze({
     readinessMode,
     publicationGateReady: publicationConvergenceGate?.ready === true,
@@ -382,9 +465,10 @@ function buildStartupSnapshotProjectionContext(
       snapshotCoverage?.selectedSnapshotAdminReady === true,
     snapshotWitnessClean:
       selectedError === null && selectedReachabilityError === null,
-    publishedActiveNodeIds: normalizeDistinctStringArray(
-      snapshotCoverage?.selectedPublishedActiveNodeIds,
-    ),
+    publishedActiveNodeIds: normalizeDistinctStringArray([
+      ...selectedPublishedActiveNodeIds,
+      ...ownerRecoveryPublishedActiveNodeIds,
+    ]),
     selectedObservedNodeIds: normalizeDistinctStringArray(
       snapshotCoverage?.selectedObservedNodeIds,
     ),

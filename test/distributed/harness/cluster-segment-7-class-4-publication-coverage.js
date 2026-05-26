@@ -118,6 +118,18 @@ const PARTIAL_COVERAGE_CONVERGENCE_DECISION_TABLE = Object.freeze([
   Object.freeze({
     outcome: PARTIAL_COVERAGE_CONVERGENCE_OUTCOME_APPLY,
     matches: (evidence) =>
+      evidence.readinessMode === CLUSTER_READINESS_MODE_LOAD &&
+      evidence.activeByStatus === true &&
+      evidence.publicationGateReady === true &&
+      evidence.snapshotCoverageComplete !== true &&
+      evidence.bestCoverageNodeCount > ZERO &&
+      evidence.selectedSnapshotAdminReady === true &&
+      evidence.selectedSnapshotTimeoutOwnerRecoveryProjectionReady === true &&
+      evidence.selectedPendingRecoveryCount > ZERO,
+  }),
+  Object.freeze({
+    outcome: PARTIAL_COVERAGE_CONVERGENCE_OUTCOME_APPLY,
+    matches: (evidence) =>
       evidence.readinessMode === CLUSTER_READINESS_MODE_STARTUP &&
       evidence.activeByStatus === true &&
       evidence.publicationGateReady === true &&

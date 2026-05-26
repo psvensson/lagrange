@@ -77,6 +77,18 @@ const {
   waitForConvergence,
 } = CLUSTER_SEGMENT_7_CLASS_SHARED;
 
+const TEARDOWN_WARNING_PLAYBACK_BEGIN =
+  'Failed to begin playback shutdown';
+const TEARDOWN_WARNING_STAGE_START =
+  'Failed to record teardown start';
+const TEARDOWN_WARNING_LOAD_CANCEL =
+  'Failed to cancel active load runs';
+const TEARDOWN_WARNING_STOP_CONTAINER_PREFIX =
+  'Failed to stop container for ';
+const TEARDOWN_WARNING_RECORD_STOPPED_PREFIX =
+  'Failed to record stopped container for ';
+const TEARDOWN_WARNING_SEPARATOR = ': ';
+
 class Cluster1 {
   constructor(config, providers, hostAssignment) {
     this._config = config;
@@ -620,17 +632,35 @@ class Cluster1 {
     const errors = [];
     const reuseContainers = this._isContainerReuseEnabled();
     try {
-      if (typeof this._playbackRecorder.beginShutdown === 'function') {
-        await this._playbackRecorder.beginShutdown({
-          awaitInFlightCaptures: true,
-        });
-      } else {
-        this._playbackRecorder.suspendPolling();
-      }
-      this._recordClusterStage(CLUSTER_STAGE_TEARDOWN_STARTING, {
-        nodeCount: this._nodes.size,
-      });
-      await this._cancelActiveLoadRuns();
+      await this._runTeardownStep(
+        TEARDOWN_WARNING_PLAYBACK_BEGIN,
+        errors,
+        async () => {
+          if (typeof this._playbackRecorder.beginShutdown === 'function') {
+            await this._playbackRecorder.beginShutdown({
+              awaitInFlightCaptures: true,
+            });
+          } else {
+            this._playbackRecorder.suspendPolling();
+          }
+        },
+      );
+      await this._runTeardownStep(
+        TEARDOWN_WARNING_STAGE_START,
+        errors,
+        async () => {
+          this._recordClusterStage(CLUSTER_STAGE_TEARDOWN_STARTING, {
+            nodeCount: this._nodes.size,
+          });
+        },
+      );
+      await this._runTeardownStep(
+        TEARDOWN_WARNING_LOAD_CANCEL,
+        errors,
+        async () => {
+          await this._cancelActiveLoadRuns();
+        },
+      );
 
       // Collect final log snapshot and run analysis before teardown
       try {
@@ -664,7 +694,15 @@ class Cluster1 {
         } catch (_err) {
           // Best-effort stop
         }
-        await this._stopNodeContainerForTeardown(nodeId, node, errors);
+        try {
+          await this._stopNodeContainerForTeardown(nodeId, node, errors);
+        } catch (err) {
+          errors.push(
+            TEARDOWN_WARNING_STOP_CONTAINER_PREFIX + nodeId +
+              TEARDOWN_WARNING_SEPARATOR +
+              String(err?.message || err),
+          );
+        }
         if (!reuseContainers) {
           try {
             await node._dockerProvider.removeContainer(node.containerId);
@@ -756,6 +794,17 @@ class Cluster1 {
     }
   }
 
+  async _runTeardownStep(warning, errors, action) {
+    try {
+      await action();
+    } catch (error) {
+      errors.push(
+        warning + TEARDOWN_WARNING_SEPARATOR +
+          String(error?.message || error),
+      );
+    }
+  }
+
   async _stopNodeContainerForTeardown(nodeId, node, errors) {
     const provider = node?._dockerProvider;
     const containerId = node?.containerId;
@@ -804,14 +853,22 @@ class Cluster1 {
       return;
     }
 
-    this._recordPlaybackEvent(
-      PLAYBACK_EVENT_TYPE.NODE_STOPPED,
-      PLAYBACK_SCOPE_NODE,
-      nodeId,
-      {
-        containerId,
-      },
-    );
+    try {
+      this._recordPlaybackEvent(
+        PLAYBACK_EVENT_TYPE.NODE_STOPPED,
+        PLAYBACK_SCOPE_NODE,
+        nodeId,
+        {
+          containerId,
+        },
+      );
+    } catch (error) {
+      errors.push(
+        TEARDOWN_WARNING_RECORD_STOPPED_PREFIX + nodeId +
+          TEARDOWN_WARNING_SEPARATOR +
+          String(error?.message || error),
+      );
+    }
   }
 
   async _cancelActiveLoadRuns() {

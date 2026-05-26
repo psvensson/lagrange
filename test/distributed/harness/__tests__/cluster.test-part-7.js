@@ -540,6 +540,79 @@ test('Unit: Cluster.start quiesces reusable containers before startup sequence',
     await cluster.stop();
   });
 
+test('Unit: Cluster.stop tears down nodes after playback shutdown failure',
+  async () => {
+    const cluster = createCluster({
+      size: 1,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+    });
+
+    const stopCalls = [];
+    const removeCalls = [];
+    const mockProvider = {
+      stopContainer: async (containerId) => {
+        stopCalls.push(containerId);
+      },
+      removeContainer: async (containerId) => {
+        removeCalls.push(containerId);
+      },
+    };
+    const node = {
+      id: 'n1',
+      role: NODE_ROLES.SEED,
+      containerId: 'container-teardown-1',
+      _dockerProvider: mockProvider,
+      closeQueryConnection: () => {},
+    };
+    cluster._nodes.set(node.id, node);
+    cluster._providers = [mockProvider];
+    cluster._hostAssignment = [0];
+    cluster._logCollector.collectFinalSnapshot = async () => [];
+    cluster._logCollector.stopSubscription = async () => {};
+    cluster._playbackRecorder = {
+      beginShutdown: async () => {
+        throw new Error('simulated playback shutdown failure');
+      },
+      stop: async () => null,
+      recordEvent: () => {},
+    };
+
+    const originalStderrWrite = process.stderr.write;
+    let warningOutput = '';
+    process.stderr.write = (chunk, encoding, callback) => {
+      warningOutput += String(chunk);
+      if (typeof encoding === 'function') {
+        encoding();
+      }
+      if (typeof callback === 'function') {
+        callback();
+      }
+      return true;
+    };
+
+    try {
+      await cluster.stop();
+    } finally {
+      process.stderr.write = originalStderrWrite;
+    }
+
+    assert.deepStrictEqual(
+      stopCalls,
+      ['container-teardown-1'],
+      'node container should still stop after playback shutdown failure',
+    );
+    assert.deepStrictEqual(
+      removeCalls,
+      ['container-teardown-1'],
+      'non-reusable node container should still be removed after stop',
+    );
+    assert.ok(
+      warningOutput.includes('Failed to begin playback shutdown'),
+      'teardown should keep the playback failure as a warning',
+    );
+  });
+
 test('Unit: reusable cluster lease rejects reentry in the same process',
   async () => {
     const lockPath = resolvePath(

@@ -10,6 +10,10 @@ import {
 } from '../../src/control-plane/owner-contract-outcome.js';
 
 const TEST_TRIGGER_CODES = ['discovery_node_coverage_gap'];
+const TEST_STALE_OPERATION_TRIGGER_CODES = [
+  'cache_stale_watermark',
+  'stale_replica_operations_in_flight',
+];
 const TEST_SNAPSHOT_REASON = 'control_snapshot';
 const TEST_CAPTURED_AT = 1000;
 const TEST_CAPTURED_AT_REPAIRED = 2000;
@@ -176,14 +180,19 @@ test('ControlPlaneSnapshotOwner forced control snapshots still rebuild from auth
       capturedAt: TEST_CAPTURED_AT_REPAIRED,
     };
     const controlSnapshot = {
-      evaluateAuthoritativeControlSnapshotRepair() {
-        return {
-          shouldRepair: true,
-          triggerCodes: TEST_TRIGGER_CODES,
-        };
-      },
       canRunAuthoritativeControlSnapshotRepair() {
         return true;
+      },
+      evaluateAuthoritativeControlSnapshotRepair(snapshot) {
+        return snapshot === rebuiltSnapshot ?
+          {
+            shouldRepair: false,
+            triggerCodes: [],
+          } :
+          {
+            shouldRepair: true,
+            triggerCodes: TEST_TRIGGER_CODES,
+          };
       },
       async buildLocalControlSnapshot(options = {}) {
         t.same(
@@ -305,11 +314,16 @@ test('ControlPlaneSnapshotOwner preserves revision metadata when the control sna
         );
         return rebuiltSnapshot;
       },
-      evaluateAuthoritativeControlSnapshotRepair() {
-        return {
-          shouldRepair: true,
-          triggerCodes: TEST_TRIGGER_CODES,
-        };
+      evaluateAuthoritativeControlSnapshotRepair(snapshot) {
+        return snapshot === rebuiltSnapshot ?
+          {
+            shouldRepair: false,
+            triggerCodes: [],
+          } :
+          {
+            shouldRepair: true,
+            triggerCodes: TEST_TRIGGER_CODES,
+          };
       },
     };
     const owner = new ControlPlaneSnapshotOwner({
@@ -356,6 +370,82 @@ test('ControlPlaneSnapshotOwner preserves revision metadata when the control sna
       result.snapshotExpectedMinimumRevision,
       TEST_CAPTURED_AT,
       'root snapshot metadata should preserve the expected minimum revision',
+    );
+  });
+
+test('ControlPlaneSnapshotOwner keeps applied control repairs pending when the repaired snapshot remains stale',
+  async (t) => {
+    const rebuiltSnapshot = {
+      nodeId: 'node-1',
+      repaired: true,
+      capturedAt: TEST_CAPTURED_AT_REPAIRED,
+    };
+    const controlSnapshot = {
+      evaluateAuthoritativeControlSnapshotRepair(snapshot) {
+        return snapshot === rebuiltSnapshot ?
+          {
+            shouldRepair: true,
+            triggerCodes: TEST_STALE_OPERATION_TRIGGER_CODES,
+          } :
+          {
+            shouldRepair: true,
+            triggerCodes: TEST_TRIGGER_CODES,
+          };
+      },
+      canRunAuthoritativeControlSnapshotRepair() {
+        return true;
+      },
+      async buildLocalControlSnapshot() {
+        return rebuiltSnapshot;
+      },
+      attachAuthoritativeRepairDiagnostics(snapshot, options = {}) {
+        snapshot.authoritativeRepair = {
+          applied: options.repair?.applied === true,
+          forced: options.forceAuthoritativeRepair === true,
+        };
+        return snapshot;
+      },
+    };
+    const serviceDiscovery = {
+      async ensureAuthoritativeDiscoveryCacheRepair() {
+        return {
+          applied: true,
+        };
+      },
+    };
+    const owner = new ControlPlaneSnapshotOwner({
+      controlSnapshot,
+      serviceDiscovery,
+    });
+
+    const result = await owner.resolveControlSnapshot(
+      {
+        nodeId: 'node-1',
+      },
+      {
+        forceAuthoritativeRepair: true,
+      },
+    );
+
+    t.same(
+      result.snapshotObservation,
+      {
+        state: CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE.STALE_BUT_USABLE,
+        contractState: OWNER_CONTRACT_STATE.PENDING,
+        nextAction: OWNER_CONTRACT_NEXT_ACTION.WAIT,
+        reasonCodes: TEST_STALE_OPERATION_TRIGGER_CODES,
+        retryAfterMs: null,
+        refreshState: CONTROL_PLANE_SNAPSHOT_REFRESH_STATE.APPLIED,
+        revision: TEST_CAPTURED_AT_REPAIRED,
+        revisionSource: 'captured_at',
+        revisionState: 'stale_usable',
+        expectedMinimumRevision: null,
+        revisionGap: 0,
+        observedAt: TEST_CAPTURED_AT_REPAIRED_ISO,
+        observedAtMs: TEST_CAPTURED_AT_REPAIRED,
+        resumeToken: TEST_REPAIRED_RESUME_TOKEN,
+      },
+      'applied repair should not publish a ready observation when the repaired view is still stale',
     );
   });
 

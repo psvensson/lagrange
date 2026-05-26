@@ -180,6 +180,76 @@ function buildFailedSnapshotObservation(snapshot, reasonCodes = [], options = {}
   });
 }
 
+function evaluatePostRepairControlSnapshot(
+  controlSnapshot = null,
+  repairedSnapshot = null,
+  options = {},
+) {
+  if (
+    typeof controlSnapshot?.evaluateAuthoritativeControlSnapshotRepair !==
+      LOCAL_STR_FUNCTION
+  ) {
+    return null;
+  }
+  return controlSnapshot.evaluateAuthoritativeControlSnapshotRepair(
+    repairedSnapshot,
+    options,
+  );
+}
+
+function buildAppliedControlSnapshotRepairObservation(
+  controlSnapshot = null,
+  repairedSnapshot = null,
+  reasonCodes = [],
+  options = {},
+) {
+  const postRepairEvaluation = evaluatePostRepairControlSnapshot(
+    controlSnapshot,
+    repairedSnapshot,
+    options,
+  );
+  const postRepairReasonCodes = normalizeDistinctStringArray(
+    postRepairEvaluation?.triggerCodes,
+  );
+  const appliedRepairOptions = {
+    refreshState: CONTROL_PLANE_SNAPSHOT_REFRESH_STATE.APPLIED,
+    expectedMinimumRevision: options.expectedMinimumRevision,
+    expectedResumeToken: options.expectedResumeToken,
+  };
+  if (postRepairEvaluation?.shouldRepair === true) {
+    return buildStaleSnapshotObservation(
+      repairedSnapshot,
+      postRepairReasonCodes.length > LOCAL_NUM_ZERO ?
+        postRepairReasonCodes :
+        reasonCodes,
+      appliedRepairOptions,
+    );
+  }
+  return buildFreshSnapshotObservation(
+    repairedSnapshot,
+    reasonCodes,
+    appliedRepairOptions,
+  );
+}
+
+function buildControlSnapshotRepairOptions(options = {}, reasonCodes = []) {
+  return {
+    reason: CONTROL_PLANE_SNAPSHOT_REPAIR_REASON.CONTROL_SNAPSHOT,
+    bypassReuse: true,
+    queryTimeoutMs: options.queryTimeoutMs,
+    triggerCodes: reasonCodes,
+  };
+}
+
+async function ensureControlSnapshotDiscoveryRepair(
+  serviceDiscovery = null,
+  repairOptions = {},
+) {
+  return serviceDiscovery?.ensureAuthoritativeDiscoveryCacheRepair?.(
+    repairOptions,
+  );
+}
+
 class ControlPlaneSnapshotOwner {
   constructor(deps = {}) {
     this.controlSnapshot = deps.controlSnapshot || null;
@@ -489,20 +559,22 @@ class ControlPlaneSnapshotOwner {
         );
       return attachSnapshotObservation(
         repairedSnapshot,
-        buildFreshSnapshotObservation(repairedSnapshot, reasonCodes, {
-          refreshState: CONTROL_PLANE_SNAPSHOT_REFRESH_STATE.APPLIED,
-          expectedMinimumRevision: options.expectedMinimumRevision,
-          expectedResumeToken: options.expectedResumeToken,
-        }),
+        buildAppliedControlSnapshotRepairObservation(
+          this.controlSnapshot,
+          repairedSnapshot,
+          reasonCodes,
+          options,
+        ),
       );
     }
-    const repair =
-      await this.serviceDiscovery?.ensureAuthoritativeDiscoveryCacheRepair?.({
-        reason: CONTROL_PLANE_SNAPSHOT_REPAIR_REASON.CONTROL_SNAPSHOT,
-        bypassReuse: true,
-        queryTimeoutMs: options.queryTimeoutMs,
-        triggerCodes: reasonCodes,
-      });
+    const repairOptions = buildControlSnapshotRepairOptions(
+      options,
+      reasonCodes,
+    );
+    const repair = await ensureControlSnapshotDiscoveryRepair(
+      this.serviceDiscovery,
+      repairOptions,
+    );
     const repairedSnapshot =
       await this.controlSnapshot.buildLocalControlSnapshot({
         ...options,
@@ -519,11 +591,12 @@ class ControlPlaneSnapshotOwner {
     );
     return attachSnapshotObservation(
       repairedSnapshot,
-      buildFreshSnapshotObservation(repairedSnapshot, reasonCodes, {
-        refreshState: CONTROL_PLANE_SNAPSHOT_REFRESH_STATE.APPLIED,
-        expectedMinimumRevision: options.expectedMinimumRevision,
-        expectedResumeToken: options.expectedResumeToken,
-      }),
+      buildAppliedControlSnapshotRepairObservation(
+        this.controlSnapshot,
+        repairedSnapshot,
+        reasonCodes,
+        options,
+      ),
     );
   }
 

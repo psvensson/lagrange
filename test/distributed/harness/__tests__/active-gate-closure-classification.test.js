@@ -15,9 +15,6 @@ import {
   replayTopologyConvergenceFixture,
 } from '../../../../src/diagnostics/topology-convergence-graph.js';
 import {
-  FAILURE_CLASS,
-} from '../../../../src/diagnostics/causal-analysis-schema.js';
-import {
   PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION,
   PUBLICATION_ACTIVE_GATE_HANDOFF_REASON,
   PUBLICATION_ACTIVE_GATE_HANDOFF_STATE,
@@ -53,8 +50,10 @@ const ACTIVE_GATE_HANDOFF_OUTCOME_RETRY_AFTER_MS = 1000;
 const ACTIVE_GATE_TOPOLOGY_REPLAY_TEST_NAME =
   'topology convergence replay fixture preserves publication owner recovery wake';
 const ACTIVE_GATE_TOPOLOGY_REPLAY_SCENARIO = 'rolling-restart';
-const ACTIVE_GATE_TOPOLOGY_REPLAY_OWNER = 'topology_publication_owner';
-const ACTIVE_GATE_TOPOLOGY_REPLAY_BOUNDARY = 'publication_convergence';
+const ACTIVE_GATE_TOPOLOGY_REPLAY_OWNER = 'startup_active_gate_owner';
+const ACTIVE_GATE_TOPOLOGY_REPLAY_BOUNDARY = 'snapshot_coverage';
+const ACTIVE_GATE_TOPOLOGY_REPLAY_DOMINANT_REASON =
+  'active_gate_timed_out';
 const ACTIVE_GATE_TOPOLOGY_REPLAY_PUBLICATION_EPOCH = 1;
 const ACTIVE_GATE_TOPOLOGY_REPLAY_SNAPSHOT_COVERAGE_COUNT = 2;
 const ACTIVE_GATE_TOPOLOGY_REPLAY_MISSING_PUBLISHED_COUNT = 4;
@@ -561,7 +560,7 @@ test(ACTIVE_GATE_TOPOLOGY_REPLAY_TEST_NAME,
 
     assert.equal(
       replayFixture.expected.firstFrontierEdgeId,
-      EDGE_ID.PUBLICATION_ACK_CONVERGENCE,
+      EDGE_ID.ACTIVE_GATE_SNAPSHOT_COVERAGE,
     );
     assert.equal(
       replayFixture.expected.owner,
@@ -573,7 +572,7 @@ test(ACTIVE_GATE_TOPOLOGY_REPLAY_TEST_NAME,
     );
     assert.equal(
       replayFixture.expected.dominantReason,
-      FAILURE_CLASS.PUBLICATION_ACK_BLOCKED,
+      ACTIVE_GATE_TOPOLOGY_REPLAY_DOMINANT_REASON,
     );
     assert.equal(
       replayFixture.expected.nextAction,
@@ -581,13 +580,21 @@ test(ACTIVE_GATE_TOPOLOGY_REPLAY_TEST_NAME,
     );
     assert.equal(replayResult.matches.preserved, true);
     assert.deepEqual(replayResult.actual, replayFixture.expected);
+    const publicationWitness = replayResult.graph.ownerWitnesses.find(
+      (witness) =>
+        witness.edgeId === EDGE_ID.PUBLICATION_ACK_CONVERGENCE,
+    );
     assert.equal(
-      replayResult.graph.dominantWitness.source
+      publicationWitness.dominantReason,
+      'publication_published',
+    );
+    assert.equal(
+      publicationWitness.source
         .publicationOwnerRecoveryOutcome,
       ACTIVE_GATE_TOPOLOGY_REPLAY_RECOVERY_OUTCOME,
     );
     assert.equal(
-      replayResult.graph.dominantWitness.source.publicationOwnerStreamOutcome,
+      publicationWitness.source.publicationOwnerStreamOutcome,
       ACTIVE_GATE_TOPOLOGY_REPLAY_STREAM_OUTCOME,
     );
   });

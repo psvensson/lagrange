@@ -4,65 +4,93 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: No active work package. Start a new package when implementation resumes.
+Theory under test: The current priority_recovery_event_driven_wait is caused by one of three bounded edges: H1 event-driven workflow progress does not re-enter dispatch for persisted dispatch_pending operations; H2 dispatched handoff progress is retrying but the progress observer/readback path never records completion or target progress; H3 the rebalancer leader sees eligible control_plane_publications recovery but does not create the next operation after terminal removed operations.
 
-Causal question: none
+Causal question: Which concrete owner edge must move: dispatch-pending event-driven re-entry, handoff progress observation/readback, or rebalancer leader operation creation.
 
-Implementation slice: Create or activate one focused package for the next executable concern.
+Implementation slice: Use the fresh artifact to decide a narrow operation_workflow_owner / workflow_progress successor for the remaining 4 priority recovery residuals, or accept the classified backpressure stop if no local runtime bug is selected.
 
 Implementation files:
 
-1. None recorded
+1. `src/rebalancer/operation-workflow-owner.js`
+2. `src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js`
+3. `src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js`
+4. `src/control-plane/control-plane-snapshot-owner.js`
+5. `test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js`
+6. `test/distributed/harness/cluster-segment-7-class-4-publication-coverage.js`
+7. `test/distributed/harness/__tests__/active-gate-closure-classification.test.js`
+8. `test/distributed/harness/__tests__/cluster-active-gate-load-selected-timeout-owner-recovery.test.js`
+9. `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
+10. `test/rebalancer/priority-recovery-stale-planning-visibility.test.js`
+11. `test/control-plane/control-plane-snapshot-owner.test.js`
+12. `src/rebalancer/operation-workflow-owner.js`
+13. `src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js`
+14. `src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js`
+15. `src/rebalancer/unified-rebalancer-priority-recovery-follow-up-decisions.js`
+16. `src/rebalancer/unified-rebalancer-segment-5.js`
+17. `src/control-plane/control-plane-snapshot-owner.js`
+18. `test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js`
+19. `test/distributed/harness/cluster-segment-7-class-4-publication-coverage.js`
 
-Expected implementation delta: unknown
+Expected implementation delta: The package either reduces priority recovery residual witness count, migrates the first frontier, reaches representative green, or stops as architecture-gap if all three focused theories are rejected.
 
-Falsifying probe: unknown
+Falsifying probe: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-three-theory-recovery.report.json --markdown
 
-Stop rule: unknown
+Stop rule: If fresh evidence remains operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait with witnessCount 11 and no theory-selected metric movement, stop for an autonomous architecture experiment.
 
 Sprint: `work/sprints/active-2026-q2-rolling-restart-investigation.md`
 
-Package: `none`
+Package: `work/packages/active-20260526-rolling-restart-operation-workflow-three-theory-recovery.md`
 
-Workflow lane: `none`
+Workflow lane: `causal-escalation`
 
-Scenario: `none`
+Scenario: `rolling-restart`
 
-Artifact: `none`
+Artifact: `test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json`
 
 Playback: `none`
 
 ## Boundary
 
-Owner: `none`
+Owner: `operation_workflow_owner`
 
-Boundary: `none`
+Boundary: `workflow_progress`
 
-Dominant reason: `none`
+Dominant reason: `priority_recovery_event_driven_wait`
 
-Current state: No active work package. Start a new package when implementation resumes.
+Current state: The selected-timeout owner-recovery projection bug is fixed and focused proofs pass. Fresh rolling-restart moved from the selected-timeout active-gate blocker to priority_recovery_partition_progress with 4 residual witnesses in one operation_workflow_owner / workflow_progress group; active nodes improved to 4/5 and selected snapshot coverage improved to 2/5.
 
 ## Next Action
 
-Create or activate one focused package for the next executable concern.
+Use the fresh artifact to decide a narrow operation_workflow_owner / workflow_progress successor for the remaining 4 priority recovery residuals, or accept the classified backpressure stop if no local runtime bug is selected.
 
 ## Proof Ladder
 
-1. None recorded
+1. `falsifier: route npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-recovery.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress`
+2. `regression: residuals npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-three-theory-recovery.report.json --markdown`
+3. `route: npm run work:scenario-route -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage`
+4. `residuals: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json --markdown`
+5. `focused: node test/control-plane/control-plane-snapshot-owner.test.js`
+6. `focused: node test/distributed/harness/__tests__/active-gate-closure-classification.test.js`
+7. `focused: node test/distributed/harness/__tests__/cluster-active-gate-load-selected-timeout-owner-recovery.test.js`
+8. `representative: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json --verbose`
+9. `route: npm run work:scenario-route -- test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress`
+10. `residuals: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json --markdown`
 
 ## Model Fit
 
-Package class: `unknown`
+Package class: `architecture-gap-analysis`
 
-Intended minimum model: `unknown`
+Intended minimum model: `gpt-5.3-codex`
 
-Scope shape: `unknown`
+Scope shape: `bounded-owner-runtime/current-frontier`
 
-Output profile: `unknown`
+Output profile: `medium`
 
 Escalation triggers:
 
-1. None recorded
+1. `owned files expand beyond this package`
+2. `a frozen decision must be reopened`
 
 ## Theory Ledger References
 
@@ -70,89 +98,97 @@ Escalation triggers:
 
 ## Representative Residual
 
-Status: `unknown`
+Status: `reduced-migrated-after-h2-fix`
 
-Scenario: `unknown`
+Scenario: `rolling-restart`
 
-Artifact: `unknown`
+Artifact: `test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json`
 
-Frontier: `unknown`
+Frontier: `priority_recovery_partition_progress`
 
-Owner: `unknown`
+Owner: `operation_workflow_owner`
 
-Boundary: `unknown`
+Boundary: `workflow_progress`
 
-Dominant reason: `unknown`
+Dominant reason: `priority_recovery_event_driven_wait`
 
-Next action: `unknown`
+Next action: `The H2 active-gate projection fix moved the failure off selected-timeout owner recovery. Remaining evidence has 4 priority recovery workflow-progress residuals and routes as classified backpressure; investigate a narrow operation-workflow successor before further runtime edits.`
 
 ## Causal Governance
 
-Causal hypothesis: `unknown`
+Causal hypothesis: `The current priority_recovery_event_driven_wait is caused by one of three bounded edges: H1 event-driven workflow progress does not re-enter dispatch for persisted dispatch_pending operations; H2 dispatched handoff progress is retrying but the progress observer/readback path never records completion or target progress; H3 the rebalancer leader sees eligible control_plane_publications recovery but does not create the next operation after terminal removed operations.`
 
-Stop-condition check: `unknown`
+Stop-condition check: `Run scenario route, priority residual extraction, `npm run analyze:causal-model -- test-output/reports/rolling-restart-three-theory-recovery.report.json`, and focused owner tests before runtime edits; then rerun rolling-restart after any confirmed fix.`
 
-Expected causal-model change: `unknown`
+Expected causal-model change: `The package either reduces priority recovery residual witness count, migrates the first frontier, reaches representative green, or stops as architecture-gap if all three focused theories are rejected.`
 
-Representative outcome: `unknown`
+Representative outcome: `migrated`
 
-Causal debt: `unknown`
+Causal debt: `Snapshot freshness fix moved the fresh rerun from priority_recovery_partition_progress to active_gate_snapshot_coverage. Priority recovery residuals are now witnessCount=0, ownerBoundaryGroupCount=0, splitRequired=false; rolling-restart still fails on startup_active_gate_owner / snapshot_coverage / active_gate_timed_out with selected snapshot source timeout and snapshot repair deferred.`
 
-Cross-boundary review: `unknown`
+Cross-boundary review: `Keep startup active-gate snapshot coverage, publication ACK convergence, timeout ceilings, and harness teardown frozen. The only widened runtime scope is the shared control-plane snapshot observation owner because playback shows a forced-repair snapshot freshness contract breach.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `unknown`
+Reference scenario/probe: `rolling-restart after load-mode selected snapshot owner-recovery projection fix`
 
 Phase chain:
 
-1. None recorded
+1. `publication_ack_convergence remains satisfied with PUBLISHED status and zero pending ACKs`
+2. `priority_recovery_partition_progress is still the only topology first frontier`
+3. `fresh residual extraction reduced witnessCount from 11 to 6 but kept ownerBoundaryGroupCount at 3`
+4. `active nodes improved to 4/5 while active_gate_snapshot_coverage regressed to 2/5`
+5. `startup readiness times out downstream of priority recovery and snapshot coverage backpressure`
 
-Current first frontier: `unknown`
+Current first frontier: `priority_recovery_partition_progress / operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait`
 
 Known downstream blockers:
 
-1. None recorded
+1. `startup_active_gate_owner / snapshot_coverage remains next expected frontier after priority progress closes`
+2. `node 7493b0ab has readiness timeout and snapshot lane query timeout symptoms`
+3. `publication has 3 missing active nodes while priority recovery is still in needs_operation/recovering_in_flight states`
 
-Missing causal edge: `unknown`
+Missing causal edge: `Which concrete owner edge must move: dispatch-pending event-driven re-entry, handoff progress observation/readback, or rebalancer leader operation creation.`
 
-Missing causal edge probe: `unknown`
+Missing causal edge probe: `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-three-theory-recovery.report.json --markdown`
 
-Bounded progress proof: `unknown`
+Bounded progress proof: `Focused tests must reproduce and prove the selected dispatch, retry, reconcile, drain, delivery, timer, advance, or snapshot observation freshness mechanism before representative rerun; unchanged same-frontier with no residual reduction opens/selects architecture-gap instead of another local patch.`
 
-Bounded progress proof artifact: `unknown`
+Bounded progress proof artifact: `test-output/reports/rolling-restart-three-theory-recovery.report.json`
 
-Expected observable transition: `unknown`
+Expected observable transition: `priority recovery witness count drops below 11, ownerBoundaryGroupCount drops below 3, first frontier migrates, or rolling-restart passes.`
 
-Max progress bound: `unknown`
+Max progress bound: `one causal-escalation pass covering three focused theories and one representative rerun`
 
-Same-frontier fallback: `unknown`
+Same-frontier fallback: `If fresh evidence remains operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait with witnessCount 11 and no theory-selected metric movement, stop for an autonomous architecture experiment.`
 
-Expected next frontier: `unknown`
+Expected next frontier: `representative-green, reduced priority recovery residuals, migrated owner boundary, or architecture-gap`
 
-Result classification: `unknown`
+Result classification: `reduced`
 
-Stop condition: `unknown`
+Stop condition: `bounded-non-frontier`
 
 Recent frontier history:
 
-1. None recorded
+1. `done-20260525-rolling-restart-workflow-progress-dispatch-chain.md / operation_workflow_owner / workflow_progress / migrated`
+2. `done-20260525-priority-recovery-operation-workflow-workflow-progress-residual-successor.md / operation_workflow_owner / workflow_progress / classification-only`
+3. `done-20260526-rolling-restart-three-theory-discriminator.md / startup_active_gate_owner / snapshot_coverage / migrated`
 
-Oscillation check: `unknown`
+Oscillation check: `This package is allowed only because it tests three concrete causal edges before runtime edits and has a same-frontier architecture stop rule.`
 
-Handoff invariant: `unknown`
+Handoff invariant: `Owner outcomes decide runtime progress; diagnostics and active-gate readiness observe priority recovery but must not hide or decide the operation workflow contract.`
 
 ## Observable Prediction
 
-Metric: `unknown`
+Metric: `priority recovery witnessCount, ownerBoundaryGroupCount, first frontier, and rolling-restart pass/fail`
 
-Predicted: `unknown`
+Predicted: `A confirmed fix should reduce witnessCount below 11, reduce ownerBoundaryGroupCount below 3, migrate the first frontier, or pass rolling-restart.`
 
-Observed: `unknown`
+Observed: `Focused snapshot-owner proof passed after changing applied forced repairs to stay pending when the repaired view still needs repair. Focused active-gate owner-recovery projection proof then selected H2: the real report shape carried publishedActiveNodeIds on selected owner handoff while selectedPublishedActiveNodeIds was empty. Fresh rolling-restart failed after 167.8s but moved to priority_recovery_partition_progress with 4 witnesses in one operation_workflow_owner / workflow_progress group; active nodes are 4/5, snapshot coverage is 2/5, selected timeout owner-recovery is no longer the first frontier, and priority ACK invariants pass.`
 
-Accuracy: `unknown`
+Accuracy: `partial`
 
-Evidence: `unknown`
+Evidence: `test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json`
 
 Metric delta: `unknown`
 
@@ -170,86 +206,128 @@ Evidence: `unknown`
 
 ## Rerun Decision
 
-Source artifact: `unknown`
+Source artifact: `test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json`
 
-Route owner: `unknown`
+Route owner: `startup_active_gate_owner`
 
-Route boundary: `unknown`
+Route boundary: `snapshot_coverage`
 
-Route dominant reason: `unknown`
+Route dominant reason: `active_gate_timed_out`
 
-Route causal outcome: `unknown`
+Route causal outcome: `continue_local_fix`
 
-Stop mode: `unknown`
+Stop mode: `classified_local_blocker`
 
-Next lane: `unknown`
+Next lane: `runtime-owner-boundary`
 
-Expected delta: `unknown`
+Expected delta: `Priority recovery is cleared; next work should move snapshotCoverage above 1/5, clear selected_snapshot_source_timeout, or migrate the active-gate snapshot coverage frontier.`
 
 Required refresh commands:
 
-1. None recorded
+1. `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-three-theory-recovery.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait`
+2. `update Sprint Strategy Brief and Current Edge Card from the route result`
+3. `npm run work:repair`
+4. `npm run work:validate -- --pre-impl`
 
 ## Classification Efficiency
 
-Default mode: `unknown`
+Default mode: `inline-gate-default`
 
-Separate package reason: `unknown`
+Separate package reason: `successor-selection`
 
-Artifact budget: `unknown`
+Artifact budget: `one-artifact`
 
-Proof command budget: `unknown`
+Proof command budget: `two-or-three-canonical-commands`
 
 Commands:
 
-1. None recorded
+1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-three-theory-recovery.report.json`
+2. `npm run work:scenario-triage -- test-output/reports/rolling-restart-three-theory-recovery.report.json --markdown`
+3. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-three-theory-recovery.report.json --markdown`
 
-Decision record: `unknown`
+Decision record: `Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.`
 
-Successor action: `unknown`
+Successor action: `rerun-representative-evidence`
 
-Runtime promotion rule: `unknown`
+Runtime promotion rule: `When canonical owner and boundary are stable, prefer a runtime-owner-boundary successor and keep runtime files in candidateRuntimeFiles until that package activates them. If the representative route is same-frontier with no reduction or an architecture gap, open an autonomous architecture experiment before more local runtime work.`
 
 ## Architecture Decision Gate
 
-Status: `unknown`
+Status: `watching`
 
-Trigger: `unknown`
+Trigger: `frontier-oscillation`
 
 Trigger evidence:
 
-1. None recorded
+1. `repeated adjacent-boundary oscillation within the same boundary family`
+2. `work/packages/done-20260525-rolling-restart-workflow-progress-dispatch-chain.md / operation_workflow_owner / workflow_progress / migrated`
+3. `work/packages/done-20260525-rolling-restart-operation-workflow-route-rerun.md / diagnostics_owner / representative_route_after_operation_workflow / migrated`
 
 Choices:
 
-1. None recorded
+1. `continue-local-proof` route=`continue-local-proof` - Continue with a bounded local proof if the missing edge stays inside this owner boundary.
+2. `migrate-owner-boundary` route=`owner-boundary-migration` - Migrate the active package to the owner boundary named by the first frontier evidence.
+3. `open-architecture-package` route=`architecture-package` - Open a bounded autonomous architecture experiment for the missing owner contract.
+4. `human-escalation` route=`human-escalation` - Escalate to a human only when evidence is contradictory, policy-blocked, credential-blocked, or unavailable.
 
 Selected choice: `unknown`
 
-Gate next action: unknown
+Gate next action: Watch for repeated frontier oscillation; open an autonomous architecture experiment if another local proof returns here unchanged.
 
 ## Scope
 
 Write scope:
 
-1. None recorded
+1. `work/packages/active-20260526-rolling-restart-operation-workflow-three-theory-recovery.md`
+2. `work/sprints/active-2026-q2-rolling-restart-investigation.md`
+3. `src/rebalancer/operation-workflow-owner.js`
+4. `src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js`
+5. `src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js`
+6. `src/control-plane/control-plane-snapshot-owner.js`
+7. `test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js`
+8. `test/distributed/harness/cluster-segment-7-class-4-publication-coverage.js`
+9. `test/distributed/harness/__tests__/active-gate-closure-classification.test.js`
+10. `test/distributed/harness/__tests__/cluster-active-gate-load-selected-timeout-owner-recovery.test.js`
+11. `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
+12. `test/rebalancer/priority-recovery-stale-planning-visibility.test.js`
+13. `test/control-plane/control-plane-snapshot-owner.test.js`
 
 Handoff files:
 
-1. None recorded
+1. `test-output/reports/rolling-restart-three-theory-recovery.report.json`
+2. `test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json`
+3. `test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json`
 
 Generated files:
 
-1. `work/sprints/current-blocker.json`
-2. `work/sprints/current-blocker.md`
+1. None recorded
 
 Candidate runtime files:
 
-1. None recorded
+1. `src/rebalancer/operation-workflow-owner.js`
+2. `src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js`
+3. `src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js`
+4. `src/rebalancer/unified-rebalancer-priority-recovery-follow-up-decisions.js`
+5. `src/rebalancer/unified-rebalancer-segment-5.js`
+6. `src/control-plane/control-plane-snapshot-owner.js`
+7. `test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js`
+8. `test/distributed/harness/cluster-segment-7-class-4-publication-coverage.js`
 
 Commit scope:
 
-1. None recorded
+1. `work/packages/active-20260526-rolling-restart-operation-workflow-three-theory-recovery.md`
+2. `work/sprints/active-2026-q2-rolling-restart-investigation.md`
+3. `src/rebalancer/operation-workflow-owner.js`
+4. `src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js`
+5. `src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js`
+6. `src/control-plane/control-plane-snapshot-owner.js`
+7. `test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js`
+8. `test/distributed/harness/cluster-segment-7-class-4-publication-coverage.js`
+9. `test/distributed/harness/__tests__/active-gate-closure-classification.test.js`
+10. `test/distributed/harness/__tests__/cluster-active-gate-load-selected-timeout-owner-recovery.test.js`
+11. `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
+12. `test/rebalancer/priority-recovery-stale-planning-visibility.test.js`
+13. `test/control-plane/control-plane-snapshot-owner.test.js`
 
 Legacy touched files:
 
