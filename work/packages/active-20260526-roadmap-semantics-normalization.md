@@ -23,6 +23,7 @@
       "work/README.md",
       "work/RULES.md",
       "work/releases/0.1-stabilization.md",
+      "work/sprints/active-2026-q2-rolling-restart-investigation.md",
       "work/packages/active-20260526-roadmap-semantics-normalization.md"
     ],
     "handoffFiles": [],
@@ -40,6 +41,7 @@
       "work/README.md",
       "work/RULES.md",
       "work/releases/0.1-stabilization.md",
+      "work/sprints/active-2026-q2-rolling-restart-investigation.md",
       "work/packages/active-20260526-roadmap-semantics-normalization.md",
       ".kiro/steering/llm/governance.md",
       ".kiro/steering/llm/manifest.json",
@@ -171,7 +173,8 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 3. work/README.md
 4. work/RULES.md
 5. work/releases/0.1-stabilization.md
-6. work/packages/active-20260526-roadmap-semantics-normalization.md
+6. work/sprints/active-2026-q2-rolling-restart-investigation.md
+7. work/packages/active-20260526-roadmap-semantics-normalization.md
 
 ## Out Of Scope
 
@@ -183,7 +186,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex-spark`
 - Scope shape: `leaf-slice`
 - Output profile: `medium`
-- Owned files: `roadmap.md`, `.kiro/steering/roadmap.md`, `work/README.md`, `work/RULES.md`, `work/releases/0.1-stabilization.md`, `work/packages/active-20260526-roadmap-semantics-normalization.md`
+- Owned files: `roadmap.md`, `.kiro/steering/roadmap.md`, `work/README.md`, `work/RULES.md`, `work/releases/0.1-stabilization.md`, `work/sprints/active-2026-q2-rolling-restart-investigation.md`, `work/packages/active-20260526-roadmap-semantics-normalization.md`
 - Do-not-edit scope: `src/` outside declared writeScope
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -220,4 +223,3 @@ Agent identity is optional provenance. Use the compact five-field shape for new 
 
 1. regression: npm run steering:llm:pack
 2. regression: npm run work:advance -- --check
-
