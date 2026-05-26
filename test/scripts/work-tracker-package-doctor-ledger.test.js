@@ -348,6 +348,10 @@ describe('work tracker package doctor', () => {
       report.errors.join('\n'),
       /Subagent Sequencing Ledger is required/u,
     );
+    assert.match(
+      report.errors.join('\n'),
+      /classification-only result must not include runtime, test, script, or report paths/u,
+    );
     assert.match(rendered, /Classification-only fast path: no/u);
     assert.match(rendered, /Classification-only result has implementation write scope/u);
   });
@@ -428,7 +432,11 @@ describe('work tracker package doctor', () => {
         JSON.stringify(CAUSAL_GOVERNANCE_VALID_METADATA.causalGovernance) +
         ',\n    "scenarioCausalClosure": ' +
         JSON.stringify(
-          SCENARIO_CAUSAL_CLOSURE_VALID_METADATA.scenarioCausalClosure,
+          {
+            ...SCENARIO_CAUSAL_CLOSURE_VALID_METADATA.scenarioCausalClosure,
+            resultClassification: 'pending-before-probe',
+            stopCondition: 'continue-local-fix',
+          },
         ) +
         ',\n    "modelFit": {',
     );

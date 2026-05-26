@@ -26,8 +26,11 @@ Required patterns:
    contradict the filename.
 5. Update in-repo links when closing packages or archiving sprints.
 6. Do not archive package files into a second package-status directory.
-7. Close active sprints by renaming them to `done-...` and moving them to
-   `work/sprints/archived/`.
+7. Close active sprints with `npm run work:sprint:advance -- --write`, which
+   renames the sprint from `active-...` to `done-...` in `work/sprints/` and
+   updates track/release references. Move old sprint files under
+   `work/sprints/archived/` only as a separate explicit archival-maintenance
+   slice.
 
 Every completed work-package slice MUST end in a focused commit and push before
 the next slice starts.

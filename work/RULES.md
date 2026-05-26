@@ -169,7 +169,7 @@ Package closure is atomic — the following steps move as a unit.
 ## Sprint Queue Maintenance
 <a name="sprint-queue-maintenance"></a>
 
-Sprint queues live in `work/sprints/active-*.md` under the `## Package Queue` heading as a numbered markdown list. Each item has three lines: a markdown link to the package file (`active-<slug>.md` while open, `done-<slug>.md` once closed), a `Lane:` line, a `Purpose:` line, and a `First-run reason:` line.
+Sprint queues live in `work/sprints/active-*.md` under the `## Package Queue` heading as a numbered markdown list. Each item has four lines: a markdown link to the package file (`active-<slug>.md` while open, `done-<slug>.md` once closed), a `Lane:` line, a `Purpose:` line, and a `First-run reason:` line.
 
 1. **Insert** a new item by editing the sprint file directly at the chosen position with the same four-line shape.
 2. **Cross-link** the new item by pointing its markdown link at `../packages/active-<new-slug>.md`.
@@ -179,4 +179,4 @@ Sprint queues live in `work/sprints/active-*.md` under the `## Package Queue` he
 6. When `npm run work:sprint:remaining` reports zero active/todo packages, run
    `npm run work:sprint:advance -- --dry-run` and then
    `npm run work:sprint:advance -- --write` to rename the sprint to `done-*`
-   and update track/release references atomically.
+   in `work/sprints/` and update track/release references atomically.

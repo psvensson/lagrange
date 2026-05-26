@@ -80,7 +80,9 @@ Use the tracker utility for current sprint/package mechanics:
 5. `npm run work:tracks` prints a compact table of the current tracks, their
    current status, active sprints, upcoming sprints, and each listed sprint's
    relation to the track. It reads `work/tracks/`, the 0.1 dependency map, and
-   `work/sprints/current-blocker.json` when present.
+   `work/sprints/current-blocker.json` when present. If the active
+   current-blocker sprint is missing from the track membership or dependency
+   map, repair that attachment before trusting track-level status text.
 6. `npm run work:sprint:remaining` prints active and todo packages left in the
    current active sprint.
 7. `npm run work:sprint:advance -- --dry-run` checks whether the current active
@@ -1040,6 +1042,9 @@ classification, or representative residual status.
 Fast-path packages keep `writeScope` and `commitScope` to work-tracking,
 handoff, ledger, or documentation files. Runtime, test, script, and report paths
 belong in `candidateRuntimeFiles` until fresh evidence promotes implementation.
+Pre-implementation validation blocks an active package that records a
+`classification-only` outcome while implementation paths remain in
+`writeScope` or `commitScope`.
 
 Fast-path proof should be two or three canonical commands: representative
 evidence, one focused extractor or probe, and validation or causal-model proof.

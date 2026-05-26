@@ -8,27 +8,13 @@ Theory under test: The selected snapshot source timeout and deferred repair in s
 
 Causal question: Why does selected snapshot source query timeout after 15000ms under Lagrange load.
 
-Implementation slice: Triage priority_recovery_partition_progress with combined scenario evidence before runtime edits.
+Implementation slice: Repair track, sprint, package-scope, and validator contradictions that make LLM routing uncertain.
 
 Implementation files:
 
-1. `src/admin/admin-control-snapshot-class-part-2.js`
-2. `scripts/list-commands.js`
-3. `scripts/work-advance.js`
-4. `scripts/work-context.js`
-5. `scripts/work-package-new.js`
-6. `scripts/work-package-route-after-rerun.js`
-7. `scripts/work-package-schema.js`
-8. `scripts/work-subagent-prompt.js`
-9. `scripts/work-tracker.js`
-10. `test/scripts/list-commands.test.js`
-11. `test/scripts/work-context.test.js`
-12. `test/scripts/work-llm-usability-tools.test.js`
-13. `test/scripts/work-tracker-architecture-decision-gate.test.js`
-14. `test/scripts/work-tracker-contract-ledger.test.js`
-15. `test/scripts/work-tracker-package-doctor-ledger.test.js`
-16. `test/scripts/work-tracker-subagent-ledger-fixtures.js`
-17. `test/scripts/work-advance.test.js`
+1. `scripts/work-tracker.js`
+2. `test/scripts/work-tracker-package-doctor-ledger.test.js`
+3. `src/admin/admin-control-snapshot-class-part-2.js`
 
 Expected implementation delta: Classifies whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.
 
@@ -56,17 +42,18 @@ Boundary: `workflow_progress`
 
 Dominant reason: `priority_recovery_event_driven_wait`
 
-Current state: Scaffolded from representative evidence for priority_recovery_partition_progress.
+Current state: Workflow state repair is in progress before representative evidence triage resumes.
 
 ## Next Action
 
-Triage priority_recovery_partition_progress with combined scenario evidence before runtime edits.
+Repair track, sprint, package-scope, and validator contradictions that make LLM routing uncertain.
 
 ## Proof Ladder
 
-1. `falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json`
-2. `regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json --markdown`
-3. `supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json --markdown`
+1. `falsifier: npm run work:tracks`
+2. `regression: node --test test/scripts/work-tracker-package-doctor-ledger.test.js test/scripts/work-sprint-advance.test.js`
+3. `supporting: npm run work:sprint:remaining`
+4. `supporting: npm run work:validate -- --pre-impl work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md`
 
 ## Model Fit
 
@@ -103,7 +90,7 @@ Boundary: `workflow_progress`
 
 Dominant reason: `priority_recovery_event_driven_wait`
 
-Next action: `Triage priority_recovery_partition_progress with combined scenario evidence before runtime edits.`
+Next action: `Repair workflow state contradictions, then resume priority_recovery_partition_progress evidence triage.`
 
 ## Causal Governance
 
@@ -113,7 +100,7 @@ Stop-condition check: `npm run analyze:causal-model -- test-output/reports/rolli
 
 Expected causal-model change: `Classifies whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.`
 
-Representative outcome: `classification-only`
+Representative outcome: `pending-before-rerun`
 
 Causal debt: `Priority recovery now has zero residual witnesses; the current blocker is startup active-gate snapshot coverage timing out.`
 
@@ -151,9 +138,9 @@ Same-frontier fallback: `If canonical extractors cannot distinguish the route, c
 
 Expected next frontier: `selected active-gate snapshot query fix`
 
-Result classification: `classification-only`
+Result classification: `pending-before-probe`
 
-Stop condition: `human-escalation`
+Stop condition: `continue-local-fix`
 
 Recent frontier history:
 
@@ -267,28 +254,18 @@ Gate next action: Watch for repeated frontier oscillation; open an autonomous ar
 
 Write scope:
 
-1. `src/admin/admin-control-snapshot-class-part-2.js`
-2. `.kiro/steering/llm/boot.md`
-3. `.kiro/steering/llm/core.md`
-4. `scripts/list-commands.js`
-5. `scripts/work-advance.js`
-6. `scripts/work-context.js`
-7. `scripts/work-package-new.js`
-8. `scripts/work-package-route-after-rerun.js`
-9. `scripts/work-package-schema.js`
-10. `scripts/work-subagent-prompt.js`
-11. `scripts/work-tracker.js`
-12. `test/scripts/list-commands.test.js`
-13. `test/scripts/work-context.test.js`
-14. `test/scripts/work-llm-usability-tools.test.js`
-15. `test/scripts/work-tracker-architecture-decision-gate.test.js`
-16. `test/scripts/work-tracker-contract-ledger.test.js`
-17. `test/scripts/work-tracker-package-doctor-ledger.test.js`
-18. `test/scripts/work-tracker-subagent-ledger-fixtures.js`
-19. `work/README.md`
-20. `work/RULES.md`
-21. `work/templates/work-package-template.md`
-22. `test/scripts/work-advance.test.js`
+1. `.kiro/steering/workflow-guidelines/packages.md`
+2. `scripts/work-tracker.js`
+3. `test/scripts/work-tracker-package-doctor-ledger.test.js`
+4. `work/releases/0.1-dependency-map.md`
+5. `work/tracks/topology-convergence.md`
+6. `work/sprints/active-2026-q2-rolling-restart-investigation.md`
+7. `work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md`
+8. `work/README.md`
+9. `work/RULES.md`
+10. `.kiro/steering/llm/governance.md`
+11. `.kiro/steering/llm/manifest.json`
+12. `.kiro/steering/llm/rules.json`
 
 Handoff files:
 
@@ -296,37 +273,32 @@ Handoff files:
 
 Generated files:
 
-1. None recorded
+1. `.kiro/steering/llm/governance.md`
+2. `.kiro/steering/llm/manifest.json`
+3. `.kiro/steering/llm/rules.json`
+4. `work/sprints/current-blocker.json`
+5. `work/sprints/current-blocker.md`
 
 Candidate runtime files:
 
-1. None recorded
+1. `src/admin/admin-control-snapshot-class-part-2.js`
 
 Commit scope:
 
-1. `src/admin/admin-control-snapshot-class-part-2.js`
-2. `work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md`
-3. `.kiro/steering/llm/boot.md`
-4. `.kiro/steering/llm/core.md`
-5. `scripts/list-commands.js`
-6. `scripts/work-advance.js`
-7. `scripts/work-context.js`
-8. `scripts/work-package-new.js`
-9. `scripts/work-package-route-after-rerun.js`
-10. `scripts/work-package-schema.js`
-11. `scripts/work-subagent-prompt.js`
-12. `scripts/work-tracker.js`
-13. `test/scripts/list-commands.test.js`
-14. `test/scripts/work-context.test.js`
-15. `test/scripts/work-llm-usability-tools.test.js`
-16. `test/scripts/work-tracker-architecture-decision-gate.test.js`
-17. `test/scripts/work-tracker-contract-ledger.test.js`
-18. `test/scripts/work-tracker-package-doctor-ledger.test.js`
-19. `test/scripts/work-tracker-subagent-ledger-fixtures.js`
-20. `work/README.md`
-21. `work/RULES.md`
-22. `work/templates/work-package-template.md`
-23. `test/scripts/work-advance.test.js`
+1. `.kiro/steering/workflow-guidelines/packages.md`
+2. `.kiro/steering/llm/governance.md`
+3. `.kiro/steering/llm/manifest.json`
+4. `.kiro/steering/llm/rules.json`
+5. `scripts/work-tracker.js`
+6. `test/scripts/work-tracker-package-doctor-ledger.test.js`
+7. `work/releases/0.1-dependency-map.md`
+8. `work/tracks/topology-convergence.md`
+9. `work/sprints/active-2026-q2-rolling-restart-investigation.md`
+10. `work/sprints/current-blocker.json`
+11. `work/sprints/current-blocker.md`
+12. `work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md`
+13. `work/README.md`
+14. `work/RULES.md`
 
 Legacy touched files:
 

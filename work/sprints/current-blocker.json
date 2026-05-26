@@ -11,66 +11,56 @@
   "owner": "operation_workflow_owner",
   "boundary": "workflow_progress",
   "dominantReason": "priority_recovery_event_driven_wait",
-  "currentState": "Scaffolded from representative evidence for priority_recovery_partition_progress.",
-  "nextAction": "Triage priority_recovery_partition_progress with combined scenario evidence before runtime edits.",
+  "currentState": "Workflow state repair is in progress before representative evidence triage resumes.",
+  "nextAction": "Repair track, sprint, package-scope, and validator contradictions that make LLM routing uncertain.",
   "proof": [
-    "falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json",
-    "regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json --markdown",
-    "supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json --markdown"
+    "falsifier: npm run work:tracks",
+    "regression: node --test test/scripts/work-tracker-package-doctor-ledger.test.js test/scripts/work-sprint-advance.test.js",
+    "supporting: npm run work:sprint:remaining",
+    "supporting: npm run work:validate -- --pre-impl work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md"
   ],
   "writeScope": [
-    "src/admin/admin-control-snapshot-class-part-2.js",
-    ".kiro/steering/llm/boot.md",
-    ".kiro/steering/llm/core.md",
-    "scripts/list-commands.js",
-    "scripts/work-advance.js",
-    "scripts/work-context.js",
-    "scripts/work-package-new.js",
-    "scripts/work-package-route-after-rerun.js",
-    "scripts/work-package-schema.js",
-    "scripts/work-subagent-prompt.js",
+    ".kiro/steering/workflow-guidelines/packages.md",
     "scripts/work-tracker.js",
-    "test/scripts/list-commands.test.js",
-    "test/scripts/work-context.test.js",
-    "test/scripts/work-llm-usability-tools.test.js",
-    "test/scripts/work-tracker-architecture-decision-gate.test.js",
-    "test/scripts/work-tracker-contract-ledger.test.js",
     "test/scripts/work-tracker-package-doctor-ledger.test.js",
-    "test/scripts/work-tracker-subagent-ledger-fixtures.js",
+    "work/releases/0.1-dependency-map.md",
+    "work/tracks/topology-convergence.md",
+    "work/sprints/active-2026-q2-rolling-restart-investigation.md",
+    "work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md",
     "work/README.md",
     "work/RULES.md",
-    "work/templates/work-package-template.md",
-    "test/scripts/work-advance.test.js"
+    ".kiro/steering/llm/governance.md",
+    ".kiro/steering/llm/manifest.json",
+    ".kiro/steering/llm/rules.json"
   ],
   "handoffFiles": [
     "test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json"
   ],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
+  "generatedFiles": [
+    ".kiro/steering/llm/governance.md",
+    ".kiro/steering/llm/manifest.json",
+    ".kiro/steering/llm/rules.json",
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md"
+  ],
+  "candidateRuntimeFiles": [
+    "src/admin/admin-control-snapshot-class-part-2.js"
+  ],
   "commitScope": [
-    "src/admin/admin-control-snapshot-class-part-2.js",
-    "work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md",
-    ".kiro/steering/llm/boot.md",
-    ".kiro/steering/llm/core.md",
-    "scripts/list-commands.js",
-    "scripts/work-advance.js",
-    "scripts/work-context.js",
-    "scripts/work-package-new.js",
-    "scripts/work-package-route-after-rerun.js",
-    "scripts/work-package-schema.js",
-    "scripts/work-subagent-prompt.js",
+    ".kiro/steering/workflow-guidelines/packages.md",
+    ".kiro/steering/llm/governance.md",
+    ".kiro/steering/llm/manifest.json",
+    ".kiro/steering/llm/rules.json",
     "scripts/work-tracker.js",
-    "test/scripts/list-commands.test.js",
-    "test/scripts/work-context.test.js",
-    "test/scripts/work-llm-usability-tools.test.js",
-    "test/scripts/work-tracker-architecture-decision-gate.test.js",
-    "test/scripts/work-tracker-contract-ledger.test.js",
     "test/scripts/work-tracker-package-doctor-ledger.test.js",
-    "test/scripts/work-tracker-subagent-ledger-fixtures.js",
+    "work/releases/0.1-dependency-map.md",
+    "work/tracks/topology-convergence.md",
+    "work/sprints/active-2026-q2-rolling-restart-investigation.md",
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md",
+    "work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md",
     "work/README.md",
-    "work/RULES.md",
-    "work/templates/work-package-template.md",
-    "test/scripts/work-advance.test.js"
+    "work/RULES.md"
   ],
   "touchedFiles": [],
   "theoryLedgerRefs": [
@@ -95,13 +85,13 @@
     "owner": "operation_workflow_owner",
     "boundary": "workflow_progress",
     "dominantReason": "priority_recovery_event_driven_wait",
-    "nextAction": "Triage priority_recovery_partition_progress with combined scenario evidence before runtime edits."
+    "nextAction": "Repair workflow state contradictions, then resume priority_recovery_partition_progress evidence triage."
   },
   "causalGovernance": {
     "hypothesis": "The selected snapshot source timeout and deferred repair in startup_active_gate_owner snapshot_coverage prevents Lagrange startup nodes from converging.",
     "stopConditionCheck": "npm run analyze:causal-model -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json",
     "expectedCausalModelChange": "Classifies whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.",
-    "representativeOutcome": "classification-only",
+    "representativeOutcome": "pending-before-rerun",
     "causalDebt": "Priority recovery now has zero residual witnesses; the current blocker is startup active-gate snapshot coverage timing out.",
     "crossBoundaryReview": "All runtime files outside operation_workflow_owner boundary stay frozen."
   },
@@ -125,8 +115,8 @@
     "maxProgressBound": "one diagnostic package",
     "sameFrontierFallback": "If canonical extractors cannot distinguish the route, close as architecture-gap.",
     "expectedNextFrontier": "selected active-gate snapshot query fix",
-    "resultClassification": "classification-only",
-    "stopCondition": "human-escalation",
+    "resultClassification": "pending-before-probe",
+    "stopCondition": "continue-local-fix",
     "recentFrontierHistory": [
       "work/packages/done-20260526-rolling-restart-operation-workflow-three-theory-recovery.md / operation_workflow_owner / workflow_progress / reduced",
       "work/packages/done-20260526-rolling-restart-startup-active-gate-owner-snapshot-coverage.md / startup_active_gate_owner / snapshot_coverage / migrated",
@@ -190,9 +180,10 @@
         "summary": "Continue with a bounded local proof if the missing edge stays inside this owner boundary.",
         "route": "continue-local-proof",
         "proof": [
-          "falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json",
-          "regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json --markdown",
-          "supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json --markdown",
+          "falsifier: npm run work:tracks",
+          "regression: node --test test/scripts/work-tracker-package-doctor-ledger.test.js test/scripts/work-sprint-advance.test.js",
+          "supporting: npm run work:sprint:remaining",
+          "supporting: npm run work:validate -- --pre-impl work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md",
           "npm run work:evidence-summary -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json"
         ]
       },
@@ -201,9 +192,10 @@
         "summary": "Migrate the active package to the owner boundary named by the first frontier evidence.",
         "route": "owner-boundary-migration",
         "proof": [
-          "falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json",
-          "regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json --markdown",
-          "supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json --markdown",
+          "falsifier: npm run work:tracks",
+          "regression: node --test test/scripts/work-tracker-package-doctor-ledger.test.js test/scripts/work-sprint-advance.test.js",
+          "supporting: npm run work:sprint:remaining",
+          "supporting: npm run work:validate -- --pre-impl work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md",
           "npm run work:evidence-summary -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json"
         ]
       },
@@ -212,9 +204,10 @@
         "summary": "Open a bounded autonomous architecture experiment for the missing owner contract.",
         "route": "architecture-package",
         "proof": [
-          "falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json",
-          "regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json --markdown",
-          "supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json --markdown",
+          "falsifier: npm run work:tracks",
+          "regression: node --test test/scripts/work-tracker-package-doctor-ledger.test.js test/scripts/work-sprint-advance.test.js",
+          "supporting: npm run work:sprint:remaining",
+          "supporting: npm run work:validate -- --pre-impl work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md",
           "npm run work:evidence-summary -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json"
         ]
       },
@@ -223,9 +216,10 @@
         "summary": "Escalate to a human only when evidence is contradictory, policy-blocked, credential-blocked, or unavailable.",
         "route": "human-escalation",
         "proof": [
-          "falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json",
-          "regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json --markdown",
-          "supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json --markdown",
+          "falsifier: npm run work:tracks",
+          "regression: node --test test/scripts/work-tracker-package-doctor-ledger.test.js test/scripts/work-sprint-advance.test.js",
+          "supporting: npm run work:sprint:remaining",
+          "supporting: npm run work:validate -- --pre-impl work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md",
           "npm run work:evidence-summary -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json"
         ]
       }

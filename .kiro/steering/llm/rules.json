@@ -1615,7 +1615,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 65,
+          "line": 68,
           "section": "Workflow — Packages & Closure > Package Status And Closure"
         }
       ]
@@ -2517,7 +2517,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 46,
+          "line": 49,
           "section": "Workflow — Packages & Closure > Package Status And Closure"
         },
         {
@@ -2537,7 +2537,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 53,
+          "line": 56,
           "section": "Workflow — Packages & Closure > Package Status And Closure"
         }
       ]
@@ -2554,7 +2554,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 73,
+          "line": 76,
           "section": "Workflow — Packages & Closure > Package Status And Closure"
         }
       ]
@@ -2571,7 +2571,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 121,
+          "line": 124,
           "section": "Workflow — Packages & Closure > Residual Closure Inventory"
         }
       ]
@@ -2588,7 +2588,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 154,
+          "line": 157,
           "section": "Workflow — Packages & Closure > Roadmap And Work-Tracker Truth"
         }
       ]
@@ -3329,7 +3329,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 57,
+          "line": 60,
           "section": "Workflow — Packages & Closure > Package Status And Closure"
         }
       ]
@@ -3346,7 +3346,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 61,
+          "line": 64,
           "section": "Workflow — Packages & Closure > Package Status And Closure"
         }
       ]
@@ -4001,7 +4001,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 32,
+          "line": 35,
           "section": "Workflow — Packages & Closure > Package Status And Closure"
         }
       ]
@@ -4016,7 +4016,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 49,
+          "line": 52,
           "section": "Workflow — Packages & Closure > Package Status And Closure"
         }
       ]
@@ -5193,7 +5193,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 117,
+          "line": 120,
           "section": "Workflow — Packages & Closure > Residual Closure Inventory"
         }
       ]
@@ -5398,5 +5398,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-05-25T07:31:28.260Z"
+  "generatedAt": "2026-05-26T12:05:54.871Z"
 }

@@ -6369,6 +6369,14 @@ function runPackageValidationsSync(filePath, content, fileStatus, metadata, opti
     [LEDGER_VALIDATION_ALLOW_MISSING_HISTORICAL_COMMIT_LEDGER]:
       isHistoricalClosedCommitLedgerMetadata(fileStatus, metadata),
   }));
+  errors.push(...validateClassificationOnlyImplementationScope(
+    metadata,
+    relativePath,
+    {
+      phase,
+      status: fileStatus,
+    },
+  ));
   errors.push(...validateExecutableContracts(metadata, relativePath, { phase, status: fileStatus }));
   errors.push(...validateContractProofRequirement(metadata, relativePath, { phase, status: fileStatus }));
 
@@ -7250,6 +7258,29 @@ function metadataProofCommands(metadata = {}) {
 function hasImplementationWriteScope(metadata = {}) {
   return metadataWritePaths(metadata)
     .some((filePath) => IMPLEMENTATION_WRITE_PATH_PATTERN.test(filePath));
+}
+
+function validateClassificationOnlyImplementationScope(
+  metadata = {},
+  filePath,
+  options = {},
+) {
+  const phase = options.phase || VALIDATION_PHASE_PRE_IMPL;
+  const status = options.status || normalizeLedgerText(metadata?.status);
+  if (
+    status !== STATUS_ACTIVE ||
+    phase === VALIDATION_PHASE_ENTRY ||
+    !metadataHasClassificationOnlyOutcome(metadata) ||
+    !hasImplementationWriteScope(metadata)
+  ) {
+    return [];
+  }
+  return [
+    `${filePath}: classification-only result must not include runtime, test, ` +
+      'script, or report paths in writeScope/commitScope; move implementation ' +
+      'paths to candidateRuntimeFiles or change the package outcome before ' +
+      'pre-implementation.',
+  ];
 }
 
 function hasStaticGuardrailProof(metadata = {}) {

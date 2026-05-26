@@ -59,19 +59,19 @@ loop.
 Latest current handoff state:
 
 - route-selection package:
-  `work/packages/done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md`
+  `work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md`
 - active sprint:
-  `work/sprints/done-2026-q2-rolling-restart-resume-activation.md`
+  `work/sprints/active-2026-q2-rolling-restart-investigation.md`
 - active package:
-  `work/packages/done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md`
+  `work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md`
 - rolling-restart artifact:
-  `test-output/reports/rolling-restart-continue-green-20260525T000001Z.report.json`
+  `test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json`
 - first frontier: `priority_recovery_partition_progress`
 - owner boundary: `operation_workflow_owner / workflow_progress`
 - dominant reason: `priority_recovery_event_driven_wait`
-- causal outcome: owner-boundary migration from active-gate discriminator
-- priority recovery residuals: five workflow-progress witnesses remain before
-  the queued causal-escalation successor proves the missing edge
+- causal outcome: classified backpressure with frontier-oscillation watch
+- priority recovery residuals: current package must reconcile extractor
+  disagreement before runtime promotion
 - heavy-load artifact:
   `test-output/reports/topology-load-baseline.report.json`
 - heavy-load route: no topology frontier; causal taxonomy migrates the deferred
@@ -108,19 +108,20 @@ or produces a narrower owner-boundary blocker selected by canonical evidence.
 ## Current Evidence
 
 - Current route-selection package:
-  `work/packages/done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md`
+  `work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md`
 - Active reliability sprint:
-  `work/sprints/done-2026-q2-rolling-restart-resume-activation.md`
+  `work/sprints/active-2026-q2-rolling-restart-investigation.md`
 - Active reliability package:
-  `work/packages/done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md`
+  `work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md`
 - Selected immediate successor route:
   `operation_workflow_owner / workflow_progress` from
-  `test-output/reports/rolling-restart-continue-green-20260525T000001Z.report.json`.
+  `test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json`.
 - Required successor discriminator:
-  `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-continue-green-20260525T000001Z.report.json --explain priority_recovery_partition_progress`.
+  `npm run work:tracks`, then the package proof ladder before runtime promotion.
 - Residual split:
-  active-gate snapshot evidence improved to 2/5 and is downstream; priority
-  recovery is first with operation_workflow_owner / workflow_progress evidence.
+  active-gate snapshot evidence remains downstream; priority recovery is first
+  in the generated current-blocker with operation_workflow_owner /
+  workflow_progress evidence.
 - Deferred load route:
   `startup_readiness_owner / startup_support_evidence` from
   `test-output/reports/topology-load-baseline.report.json`, held until
@@ -160,6 +161,7 @@ publication-evidence replay code rather than by the runtime owner alone.
 | `work/sprints/done-2026-q2-tell-tale-scenario-reliability.md` | `stabilization` / `scenario-release-gate` | done | Starts from the active-gate snapshot coverage architecture gap, then queues runtime successor, final adjudication repair, rolling-restart green gate, and tell-tale suite promotion. |
 | `work/sprints/done-2026-q2-rolling-restart-resume-activation.md` | `experiment` / `source-of-truth-repair` | done | Active-gate discriminator records owner-boundary migration and queues workflow-progress causal proof. |
 | `work/sprints/done-2026-q2-rolling-restart-fully-green.md` | `stabilization` / `scenario-release-gate` | done | Success criterion is representative-green rolling-restart; reduced or migrated evidence opens successors but does not close the sprint. |
+| `work/sprints/active-2026-q2-rolling-restart-investigation.md` | `stabilization` / `scenario-release-gate` | active | Current active sprint for `operation_workflow_owner / workflow_progress` artifact triage and workflow state repair before runtime promotion. |
 
 
 ## Owner Boundaries
@@ -227,6 +229,8 @@ canonical owner-boundary evidence.
 ## Next Package
 
 Active continuation:
-`work/packages/done-20260525-rolling-restart-fully-green-gate.md`.
-It owns the representative green gate. The sprint cannot close on reduced or
-migrated evidence; red evidence must route to exactly one bounded successor.
+`work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md`.
+It owns the current `priority_recovery_partition_progress` triage and workflow
+state repair. The sprint cannot close on stale track/release/package references;
+red or unchanged evidence must route to exactly one bounded successor or an
+architecture experiment.

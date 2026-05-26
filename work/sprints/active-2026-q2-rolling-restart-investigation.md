@@ -8,17 +8,17 @@ Test the three current rolling-restart theories, fix only confirmed bugs, rerun 
 
 ## Sprint Strategy Brief
 
-- Goal state: Representative `rolling-restart` is green, or the fresh artifact shows a reduced/migrated first frontier with concrete metrics.
-- Current causal thesis: The snapshot-freshness breach was real and the fix moved representative evidence. Priority recovery now has zero residual witnesses; the current blocker is startup active-gate snapshot coverage timing out on selected snapshot source timeout and deferred repair.
+- Goal state: Representative `rolling-restart` is green, or the fresh artifact shows a reduced/migrated first frontier with concrete metrics and exactly one successor owner boundary.
+- Current causal thesis: The snapshot-freshness breach was real and the fix moved representative evidence, but the fresh artifact currently routes through `priority_recovery_partition_progress` under `operation_workflow_owner / workflow_progress` with classified backpressure. Before further runtime promotion, the sprint/track/package handoff state must agree on that active edge.
 - Competing hypotheses:
   - H1: A selected snapshot source can be `admin_health` reachable while snapshot-lane queries time out, leaving partial coverage stuck.
   - H2: `owner_reconcile_pending` plus `write_deferred/enqueued=false` loses bounded owner-recovery progress.
   - H3: A forced control-plane repair can return a fresh/proceed snapshot observation even when the repaired snapshot still has stale replica operations in flight.
-- Confidence and evidence: High for representative migration. Baseline `test-output/reports/rolling-restart-three-theory-recovery.report.json` had priority residual witness count `11`; `test-output/reports/rolling-restart-operation-workflow-three-theory-recovery-rerun.report.json` reduced it to `6`; fresh `test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json` has priority residual witness count `0` and routes to active_gate_snapshot_coverage.
-- Expected green path: Move to a startup_active_gate_owner / snapshot_coverage successor and fix selected snapshot source timeout / repair-deferred coverage without reopening priority recovery.
+- Confidence and evidence: High for representative movement, but the current routing record was ambiguous across sprint, track, and release handoffs. Baseline `test-output/reports/rolling-restart-three-theory-recovery.report.json` had priority residual witness count `11`; `test-output/reports/rolling-restart-operation-workflow-three-theory-recovery-rerun.report.json` reduced it to `6`; fresh `test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json` has priority residual witness count `0` in one extractor path while current blocker routing still selects `priority_recovery_partition_progress`.
+- Expected green path: Repair the workflow state so `work:context`, `work:tracks`, sprint queue, package scope, and dependency map agree; then use the package proof ladder to decide whether the operation-workflow edge is reduced, migrated, same-frontier, architecture-gap, or ready for a runtime successor.
 - Wrong direction signals: Raising timeouts, continuing to patch snapshot coverage after coverage is `5/5`, or passing load readiness without resolving priority recovery event-driven progress.
-- Next best package: work/packages/done-20260526-rolling-restart-three-theory-discriminator.md
-- Stop or escalate rule: This package reached `reduced/migrated`; if continuing, open the suggested diagnostic successor from the fresh artifact rather than widening the current write scope.
+- Next best package: work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md
+- Stop or escalate rule: If canonical workflow tools still disagree after this repair, fix tracker state before runtime work; if evidence remains same-frontier after focused proof, open/select the autonomous architecture experiment instead of widening runtime scope.
 
 ## Current Edge Card
 
@@ -29,16 +29,16 @@ Active package: work/packages/active-20260526-rolling-restart-operation-workflow
 Active package owner: operation_workflow_owner
 Active package boundary: workflow_progress
 Selected cause: priority_recovery_event_driven_wait
-Required action: Triage priority_recovery_partition_progress with combined scenario evidence before runtime edits.
+Required action: Repair track, sprint, package-scope, and validator contradictions that make LLM routing uncertain.
 Representative status: retryable
 Causal outcome: accept_classified_backpressure
 Architecture gate: watching / unknown
 Expected delta: Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.
-Current state: Scaffolded from representative evidence for priority_recovery_partition_progress.
-Allowed edits: src/admin/admin-control-snapshot-class-part-2.js, .kiro/steering/llm/boot.md, .kiro/steering/llm/core.md, scripts/list-commands.js, scripts/work-advance.js, scripts/work-context.js, scripts/work-package-new.js, scripts/work-package-route-after-rerun.js, scripts/work-package-schema.js, scripts/work-subagent-prompt.js, scripts/work-tracker.js, test/scripts/list-commands.test.js, test/scripts/work-context.test.js, test/scripts/work-llm-usability-tools.test.js, test/scripts/work-tracker-architecture-decision-gate.test.js, test/scripts/work-tracker-contract-ledger.test.js, test/scripts/work-tracker-package-doctor-ledger.test.js, test/scripts/work-tracker-subagent-ledger-fixtures.js, work/README.md, work/RULES.md, work/templates/work-package-template.md, test/scripts/work-advance.test.js
-Candidate runtime files: unknown
+Current state: Workflow state repair is in progress before representative evidence triage resumes.
+Allowed edits: .kiro/steering/workflow-guidelines/packages.md, scripts/work-tracker.js, test/scripts/work-tracker-package-doctor-ledger.test.js, work/releases/0.1-dependency-map.md, work/tracks/topology-convergence.md, work/sprints/active-2026-q2-rolling-restart-investigation.md, work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md, work/README.md, work/RULES.md, .kiro/steering/llm/governance.md, .kiro/steering/llm/manifest.json, .kiro/steering/llm/rules.json
+Candidate runtime files: src/admin/admin-control-snapshot-class-part-2.js
 Forbidden edits: Startup readiness remains downstream until active-gate snapshot coverage is resolved.
-Required latest proof: falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json, regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json --markdown, supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json --markdown
+Required latest proof: falsifier: npm run work:tracks, regression: node --test test/scripts/work-tracker-package-doctor-ledger.test.js test/scripts/work-sprint-advance.test.js, supporting: npm run work:sprint:remaining, supporting: npm run work:validate -- --pre-impl work/packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -72,13 +72,17 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Lane: `scenario-release-gate`
    - Purpose: Proactively cancel or clean up obsolete replica operations on node rejoin.
    - First-run reason: Earlier evidence showed stale-operation reconciliation delaying coordinator active-gate snapshot progress.
+6. [Artifact Triage - operation_workflow_owner - workflow_progress](../packages/active-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md)
+   - Lane: `causal-escalation`
+   - Purpose: Repair workflow handoff state and classify the current `priority_recovery_partition_progress` edge before runtime edits.
+   - First-run reason: Fresh `rolling-restart` evidence and generated current-blocker state selected `operation_workflow_owner / workflow_progress`, while track/release/package scope records still carried stale active references.
 
 ## Proof Ladder
 
 1. `npm run work:context`
 2. `npm run work:llm-start`
 3. `npm run work:validate -- --pre-impl <package>`
-4. Run focused cluster and rebalancer tests.
+4. Run the package proof ladder before runtime edits.
 5. `npm run work:validate -- --closure <package>` before closure.
 
 ## Closure Rules
