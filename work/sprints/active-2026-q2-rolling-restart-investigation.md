@@ -17,6 +17,9 @@ Test the three current rolling-restart theories, fix only confirmed bugs, rerun 
   - H3 (Selected-View vs Best-View Split): The coordinator's view of active publication coverage lags a fresher quorum or best viewpoint due to un-retained per-node probe details.
 - Confidence and evidence: High for representative movement. Current active gate snapshot coverage timeout has been successfully resolved, downstream operation workflow progress has been unblocked, and the frontier has shifted downstream.
 - Expected green path: Run experimental scenarios, analyze corresponding codebase modules under `src/` to confirm or falsify each theory, fix verified bugs, rerun rolling-restart to collect fresh evidence, and route the resulting metrics.
+- Temporary maintenance allowance: the active roadmap-semantics package is a
+  workflow-truth cleanup requested before runtime work resumes; keep it bounded
+  to roadmap/governance/source-of-truth docs and generated handoff files.
 - Wrong direction signals: Raising timeouts, ignoring load-induced query stress, or bypassing priority recovery convergence issues.
 - Next best package: work/packages/done-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md
 - Stop or escalate rule: If fresh evidence remains same-frontier with no reduction, transition to an autonomous architecture experiment or escalate if conflicting signals occur.
@@ -81,6 +84,10 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Lane: `causal-escalation`
    - Purpose: Analyze source code under H1, H2, H3, run scenarios, find and fix bugs, rerun rolling-restart to collect fresh evidence.
    - First-run reason: Test the three rolling-restart theories by analyzing source code, running experiments, and fixing bugs.
+8. [Roadmap Semantics Normalization](../packages/active-20260526-roadmap-semantics-normalization.md)
+   - Lane: `lightweight-maintenance`
+   - Purpose: Restore `roadmap.md` to stable feature sequence and AGPL scope semantics while moving live truth to tracker, release, and track documents.
+   - First-run reason: Human review found roadmap semantics drift that can make LLM source-of-truth selection uncertain.
 
 ## Proof Ladder
 
