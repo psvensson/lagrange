@@ -466,8 +466,9 @@ Escalate when any of these happen:
    A -> B -> A, or B -> A -> B.
 2. A package closes as `migrated` to an owner boundary that was active or done
    within the last two related packages.
-3. Two focused fixes in adjacent owner boundaries are green locally but do not
-   produce representative green or monotonic representative reduction.
+3. Escalate to causal analysis when two focused fixes in adjacent owner
+   boundaries are green locally but do not produce representative green or
+   monotonic representative reduction.
 
 The next package uses the `causal-escalation` lane and owns the handoff between
 the oscillating boundaries, not either boundary in isolation. If an active

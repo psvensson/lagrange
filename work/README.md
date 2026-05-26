@@ -218,7 +218,9 @@ supersession, and next implication. Start from
 
 The tracker should spend most of its time moving representative evidence or
 focused implementation, not refining administration. Use these defaults unless
-the package explicitly records a heavier audit or architecture reason:
+the package explicitly records a heavier audit or architecture reason. Lane
+names below are package metadata lane values accepted under the canonical lane
+groups in `work/RULES.md`:
 
 1. `npm run work:advance -- --check` is the fast path before more package
    editing. It prints doctor findings, the next delegated role, and entry plus
@@ -231,7 +233,8 @@ the package explicitly records a heavier audit or architecture reason:
    Classification is an inline gate by default. Create a separate
    classification package only when the rerun changes owner, boundary, required
    action, stop condition, tracker truth, or successor selection.
-4. Durable proof ladders default to 3-5 commands. Use
+4. Durable proof ladders default to 3-5 commands for readability; validators
+   enforce role and phase requirements, not exact command count. Use
    `npm run work:scenario-route -- <artifact>` to replace separate evidence,
    causal, residual, owner-file, and explain commands when the package is
    classifying or routing diagnostic evidence.
@@ -1247,9 +1250,12 @@ Avoid:
 Implementation speed depends on keeping owner files small enough to inspect.
 
 Use `npm run audit:file-size` to keep source-file size debt from increasing.
-New or newly edited source-code files must finish at or below `1200` lines.
-If a package touches an inherited oversized source-code file, refactor or
-extract the touched file until it is at or below `1200` lines before closure.
+New or newly edited source-code files must finish within the per-scope
+thresholds owned by `scripts/check-file-size-thresholds.js` (currently source
+files at or below `800` lines and test files at or below `1500` lines; run
+`npm run audit:file-size` to confirm). If a package touches an inherited
+oversized source-code file, refactor or extract the touched file until it is
+within its scope threshold before closure.
 
 New source-code files must be named for the semantic owner, contract, decision,
 state model, or consumer role they contain. Avoid ordinal, segment, or grab-bag

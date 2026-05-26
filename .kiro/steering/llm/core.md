@@ -49,7 +49,7 @@ Map abstract steering rules directly to the automated validation tools that enfo
 
 ## Template Picker
 
-Templates map 1-to-1 to canonical lanes from [`work/RULES.md#lane-definitions`](../../../work/RULES.md#lane-definitions). Pick the row whose lane matches `work:context` (or `work:lane-picker`) and use the named template with `npm run work:package:new --write --lane <lane>`.
+Templates map to canonical lane groups from [`work/RULES.md#lane-definitions`](../../../work/RULES.md#lane-definitions). Pick the row whose lane group matches `work:context` (or `work:lane-picker`) and use the named template with `npm run work:package:new -- --write --lane <metadata-lane>`.
 
 | Canonical lane | Template | Use when |
 | --- | --- | --- |
@@ -58,8 +58,8 @@ Templates map 1-to-1 to canonical lanes from [`work/RULES.md#lane-definitions`](
 | `maintenance` (single-file) | [`work/templates/single-file-maintenance-package.md`](../../../work/templates/single-file-maintenance-package.md) | One file, no runtime contract change (use this narrower variant when scope fits). |
 | `proof` | [`work/templates/lightweight-maintenance-package.md`](../../../work/templates/lightweight-maintenance-package.md) (with `--lane test-only-proof`) | Tests, validation evidence, or diagnostic classification change without runtime behavior change. |
 | `experiment` | [`work/templates/lightweight-maintenance-package.md`](../../../work/templates/lightweight-maintenance-package.md) (with `--lane bounded-experiment`) | One bounded hypothesis or probe inside an inherited owner boundary. |
-| `runtime` | Full package tooling — use `npm run work:package:new --write --lane runtime-owner-boundary` and follow the [Closure Recipe](../../../work/RULES.md#closure-recipe). | Runtime behavior, owner contracts, shared metadata, diagnostics grammar, or affected consumers can change. |
-| `scenario` | Full package tooling — use `npm run work:package:new --write --lane scenario-release-gate` and add the Sprint Strategy Brief and causal ledger. | Distributed, integration, load, release-gate, repeated same-frontier, or causal-closure work. |
+| `runtime` | Full package tooling — use `npm run work:package:new -- --write --lane runtime-owner-boundary` and follow the [Closure Recipe](../../../work/RULES.md#closure-recipe). | Runtime behavior, owner contracts, shared metadata, diagnostics grammar, or affected consumers can change. |
+| `scenario` | Full package tooling — use `npm run work:package:new -- --write --lane scenario-release-gate` and add the Sprint Strategy Brief and causal ledger. | Distributed, integration, load, release-gate, repeated same-frontier, or causal-closure work. |
 
 ## Process Weight (Summary)
 
@@ -76,7 +76,7 @@ Full canon: [`work/RULES.md`](../../../work/RULES.md). Anchors below are inline 
 
 1. **Workflow & context** — Start from `npm run work:context`. Keep owner, boundary, proof ladder, and out-of-scope in view. (§validator-phases)
 2. **Validator phases** — Validate at the correct phase: `--entry` for shape, `--pre-impl` before editing, `--closure` before closing/committing. (§validator-phases)
-3. **Proof integrity** — Keep proof ladders to 3–5 executable commands. Never weaken guardrails, lint rules, or allowlists to make a package pass. (§proof-requirements)
+3. **Proof integrity** — Prefer compact proof ladders of 3–5 executable commands; validators enforce role/phase requirements, not an exact command count. Never weaken guardrails, lint rules, or allowlists to make a package pass. (§proof-requirements)
 4. **Coding constraints** (§coding-constraints):
    * *No inline scalars* — Import or declare canonical constants.
    * *No state-nulls* — Explicit variants must encode domain/runtime state; never raw null/undefined.

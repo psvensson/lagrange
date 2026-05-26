@@ -8,9 +8,11 @@ Canonical single source of truth for repository process lanes, validator phases,
 <a name="lane-definitions"></a>
 
 All implementation work must select and declare the lightest valid lane. The
-canonical lane groups are the same groups printed by
-`npm run work:package:schema`; older package files may still use the accepted
-aliases below. Requirements are determined by the canonical lane group.
+canonical lane groups are the requirement buckets printed by
+`npm run work:package:schema`. Package metadata may store one of the accepted
+lane-specific values below, such as `lightweight-maintenance` or
+`runtime-owner-boundary`; requirements are determined by the canonical lane
+group those values map to.
 
 | Canonical lane | Accepted aliases | Use when | Package requirement |
 | --- | --- | --- | --- |
@@ -43,7 +45,7 @@ Validators execute in distinct phases to ensure the integrity of the codebase an
 
 To guarantee stability, implementation changes must compile and pass structured verification:
 
-*   **Focused Verification**: Every package must specify a proof ladder containing role-tagged commands: exactly one `falsifier` command (whose failure proves the implementation theory wrong), exactly one `regression` command (which fails if existing behavior is broken), and optional `supporting` commands. Maintenance lanes may use a `regression`-only ladder. Command count is not enforced.
+*   **Focused Verification**: Every package must specify a proof ladder containing role-tagged commands: exactly one `falsifier` command (whose failure proves the implementation theory wrong), exactly one `regression` command (which fails if existing behavior is broken), and optional `supporting` commands. Maintenance lanes may use a `regression`-only ladder. Prefer compact ladders of 3-5 commands for readability, but command count is not enforced.
 *   **Evidence Collection**: Sprints owning active classification or diagnostics packages must record representative residuals and link to specific run output artifacts.
 *   **Local vs. Representative Proof**: A package remains in diagnostic state until it is backed by a fresh representative rerun or canonical route-after-rerun result.
 

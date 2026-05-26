@@ -46,8 +46,9 @@ Lane selection rules:
 
 ### Read/Review/Doc-Only Lane
 
-This lane is valid when the task does not change runtime code, package status,
-roadmap truth, architecture owner maps, or validation obligations.
+Use the read/review/doc-only lane when the task does not change runtime code,
+package status, roadmap truth, architecture owner maps, or validation
+obligations.
 
 Required:
 
@@ -65,8 +66,9 @@ Not required unless the task changes implementation truth:
 
 ### Lightweight Maintenance Lane
 
-This lane is valid for small internal docs, workflow, template, and tooling
-changes that do not change runtime ownership or shared runtime contracts.
+Use the lightweight maintenance lane for small internal docs, workflow,
+template, and tooling changes that do not change runtime ownership or shared
+runtime contracts.
 
 Required:
 
@@ -126,4 +128,3 @@ Required fields:
 Diagnostics, admin, harness, and reporting surfaces reuse the grammar or
 declare a bounded view role. If readers still infer progress from existence,
 local booleans, or logs after the package lands, the package is not done.
-

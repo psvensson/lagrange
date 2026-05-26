@@ -41,8 +41,8 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 18. [GOV-0004] Non-goals and forbidden interpretations: meanings, consumers, owner boundaries, or downstream symptoms this package must not treat as authority. _(see workflow-guidelines/closure.md:29)_
 19. [GOV-0005] Do not create another classification-only package from the same unchanged artifact unless owner/boundary, package class, or stop condition changes. Close, rerun fresh evidence, or escalate. _(see workflow-guidelines/closure.md:212)_
 20. [GOV-0011] Refresh the sprint gate card whenever the representative artifact, canonical owner boundary, or required action changes. _(see workflow-guidelines/closure.md:351)_
-21. [GOV-0013] Two focused fixes in adjacent owner boundaries are green locally but do not produce representative green or monotonic representative reduction. _(see workflow-guidelines/closure.md:469)_
-22. [GOV-0017] This lane is valid for small internal docs, workflow, template, and tooling changes that do not change runtime ownership or shared runtime contracts. _(see workflow-guidelines/lifecycle.md:68)_
+21. [GOV-0013] Escalate to causal analysis when two focused fixes in adjacent owner boundaries are green locally but do not produce representative green or monotonic representative reduction. _(see workflow-guidelines/closure.md:469)_
+22. [GOV-0017] Use the lightweight maintenance lane for small internal docs, workflow, template, and tooling changes that do not change runtime ownership or shared runtime contracts. _(see workflow-guidelines/lifecycle.md:69)_
 23. [GOV-0020] Do not create new headings, sidecar files, ledger rows, or current-blocker edits from discovery thinking unless the selected route changes owner, boundary, required action, stop condition, successor, or durable theory. _(see workflow-guidelines/packages.md:76)_
 
 ### Readiness & Health Contracts
