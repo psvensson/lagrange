@@ -16,7 +16,7 @@
     "currentState": "Scaffolded from representative evidence for publicationConvergence.",
     "nextAction": "Triage control-plane priority spread timeout with combined scenario evidence before runtime edits.",
     "closed": "2026-05-25",
-    "successor": "work/packages/active-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md"
+    "successor": "work/packages/done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md"
   },
   "scope": {
     "writeScope": [

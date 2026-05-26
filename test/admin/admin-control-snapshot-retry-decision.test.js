@@ -341,3 +341,52 @@ test('admin websocket control snapshot query retries pressure observations',
       'control snapshot query should return the admitted clean result',
     );
   });
+
+test('closeStaleSnapshotLaneSockets protects active client and open sockets', (t) => {
+  const closedIds = [];
+  const disconnectedClients = [];
+
+  const api = {
+    clients: new Set([
+      {
+        id: 'client-active',
+        lane: 'snapshot',
+        socket: { readyState: 1, close() { closedIds.push('client-active'); } }
+      },
+      {
+        id: 'client-stale-open',
+        lane: 'snapshot',
+        socket: { readyState: 1, close() { closedIds.push('client-stale-open'); } }
+      },
+      {
+        id: 'client-stale-closed',
+        lane: 'snapshot',
+        socket: { readyState: 3, close() { closedIds.push('client-stale-closed'); } }
+      },
+      {
+        id: 'client-other-lane',
+        lane: 'load',
+        socket: { readyState: 3, close() { closedIds.push('client-other-lane'); } }
+      }
+    ]),
+    logger: {
+      info() {}
+    },
+    handleDisconnection(client) {
+      disconnectedClients.push(client.id);
+    }
+  };
+
+  const methods = AdminWebSocketAPI.prototype;
+  api.closeStaleSnapshotLaneSockets = methods.closeStaleSnapshotLaneSockets.bind(api);
+
+  api.closeStaleSnapshotLaneSockets(null);
+  t.equal(closedIds.length, 0, 'should not close any socket when activeClientId is null');
+
+  api.closeStaleSnapshotLaneSockets('client-active');
+  t.same(closedIds, ['client-stale-closed'], 'should only close the stale closed socket on the snapshot lane');
+  t.same(disconnectedClients, ['client-stale-closed'], 'should handle disconnection only for closed stale socket');
+
+  t.end();
+});
+

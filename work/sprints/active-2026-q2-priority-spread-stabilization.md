@@ -26,20 +26,20 @@ Resolve the control-plane priority spread timeout during heavy-load rolling rest
 ```text
 Representative artifact: test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json
 Visible first frontier: activeGateSnapshotCoverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out
-Active package: work/packages/active-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md
+Active package: work/packages/done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md
 Active package owner: startup_active_gate_owner
 Active package boundary: snapshot_coverage
 Selected cause: active_gate_timed_out
-Required action: Triage active_gate_snapshot_coverage with combined scenario evidence before runtime edits.
-Representative status: unknown
+Required action: Stabilize active-gate snapshot coverage by ensuring closeStaleSnapshotLaneSockets protects healthy, active WebSocket connections and activeClientId from premature closure during retry cycles.
+Representative status: reduced
 Causal outcome: continue_local_fix
-Architecture gate: watching / unknown
-Expected delta: Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.
-Current state: Scaffolded from representative evidence for active_gate_snapshot_coverage.
-Allowed edits: unknown
-Candidate runtime files: unknown
+Architecture gate: selected / continue-local-proof
+Expected delta: Verify that socket housekeeping logic protects healthy open connections and resolves the premature connection closure symptom.
+Current state: Control snapshot queries time out / disconnect under rolling restart due to premature WebSocket query connection teardown in closeStaleSnapshotLaneSockets during transient retryable delays.
+Allowed edits: src/admin/admin-websocket-observation-methods.js, test/admin/admin-control-snapshot-retry-decision.test.js, work/packages/done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md, scripts/list-commands.js, src/bootstrap/node-joining-ready-signal-readiness.js, src/bootstrap/traffic-readiness-utils.js, test/bootstrap/traffic-readiness-utils.test.js, test/distributed/README.local.md, test/distributed/harness/cluster-segment-1.js, scripts/stop-distributed-harness-containers.js, test/scripts/stop-distributed-harness-containers.test.js, work/packages/done-20260525-priority-spread-triage.md
+Candidate runtime files: src/admin/admin-websocket-observation-methods.js
 Forbidden edits: Startup readiness remains downstream.
-Required latest proof: falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json, regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --markdown, supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --markdown
+Required latest proof: falsifier: npm test -- test/admin/admin-control-snapshot-retry-decision.test.js # focused unit test verifying socket housekeeping logic, regression: npm run audit:runtime-grammar:file -- src/admin/admin-websocket-observation-methods.js # verify syntactical correctness of modified observation methods, supporting: npm run work:evidence-summary -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json # cite representative artifact evidence
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 

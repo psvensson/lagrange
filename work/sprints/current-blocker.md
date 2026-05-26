@@ -4,27 +4,37 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: Startup active gate snapshot coverage timeout under rolling restart is blocked by the incomplete snapshot coverage.
+Theory under test: Ensuring closeStaleSnapshotLaneSockets does not close active query connections or healthy open sockets avoids premature query termination during transient rolling-restart delays.
 
-Causal question: Whether active gate needs a snapshot watch retry doubling or a local timeout doubling revert.
+Causal question: Whether active WebSocket connection protection prevents premature watchdog query termination.
 
-Implementation slice: Triage active_gate_snapshot_coverage with combined scenario evidence before runtime edits.
+Implementation slice: Stabilize active-gate snapshot coverage by ensuring closeStaleSnapshotLaneSockets protects healthy, active WebSocket connections and activeClientId from premature closure during retry cycles.
 
 Implementation files:
 
-1. None recorded
+1. `src/admin/admin-websocket-observation-methods.js`
+2. `test/admin/admin-control-snapshot-retry-decision.test.js`
+3. `scripts/list-commands.js`
+4. `src/bootstrap/node-joining-ready-signal-readiness.js`
+5. `src/bootstrap/traffic-readiness-utils.js`
+6. `test/bootstrap/traffic-readiness-utils.test.js`
+7. `test/distributed/README.local.md`
+8. `test/distributed/harness/cluster-segment-1.js`
+9. `scripts/stop-distributed-harness-containers.js`
+10. `test/scripts/stop-distributed-harness-containers.test.js`
+11. `src/admin/admin-websocket-observation-methods.js`
 
-Expected implementation delta: This package stabilizes active-gate snapshot coverage.
+Expected implementation delta: This package stabilizes active-gate snapshot coverage by protecting active WebSocket connections.
 
-Falsifying probe: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --explain active_gate_timed_out
+Falsifying probe: npm test -- test/admin/admin-control-snapshot-retry-decision.test.js
 
 Stop rule: If canonical extractors cannot distinguish the route, close as architecture-gap.
 
 Sprint: `work/sprints/active-2026-q2-priority-spread-stabilization.md`
 
-Package: `work/packages/active-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md`
+Package: `work/packages/done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md`
 
-Workflow lane: `runtime-owner-boundary`
+Workflow lane: `causal-escalation`
 
 Scenario: `rolling-restart`
 
@@ -40,25 +50,25 @@ Boundary: `snapshot_coverage`
 
 Dominant reason: `active_gate_timed_out`
 
-Current state: Scaffolded from representative evidence for active_gate_snapshot_coverage.
+Current state: Control snapshot queries time out / disconnect under rolling restart due to premature WebSocket query connection teardown in closeStaleSnapshotLaneSockets during transient retryable delays.
 
 ## Next Action
 
-Triage active_gate_snapshot_coverage with combined scenario evidence before runtime edits.
+Stabilize active-gate snapshot coverage by ensuring closeStaleSnapshotLaneSockets protects healthy, active WebSocket connections and activeClientId from premature closure during retry cycles.
 
 ## Proof Ladder
 
-1. `falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json`
-2. `regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --markdown`
-3. `supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --markdown`
+1. `falsifier: npm test -- test/admin/admin-control-snapshot-retry-decision.test.js # focused unit test verifying socket housekeeping logic`
+2. `regression: npm run audit:runtime-grammar:file -- src/admin/admin-websocket-observation-methods.js # verify syntactical correctness of modified observation methods`
+3. `supporting: npm run work:evidence-summary -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json # cite representative artifact evidence`
 
 ## Model Fit
 
-Package class: `runtime-owner-boundary`
+Package class: `experiment`
 
-Intended minimum model: `gpt-5.3-codex`
+Intended minimum model: `gpt-5.3-codex-spark`
 
-Scope shape: `bounded-owner-runtime/current-frontier`
+Scope shape: `leaf-slice`
 
 Output profile: `medium`
 
@@ -69,37 +79,37 @@ Escalation triggers:
 
 ## Theory Ledger References
 
-1. None recorded
+1. `theory-20260525-priority-spread-triage-stub`
 
 ## Representative Residual
 
-Status: `unknown`
+Status: `reduced`
 
-Scenario: `unknown`
+Scenario: `rolling-restart`
 
-Artifact: `unknown`
+Artifact: `test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json`
 
-Frontier: `unknown`
+Frontier: `activeGateSnapshotCoverage`
 
-Owner: `unknown`
+Owner: `startup_active_gate_owner`
 
-Boundary: `unknown`
+Boundary: `snapshot_coverage`
 
-Dominant reason: `unknown`
+Dominant reason: `active_gate_timed_out`
 
-Next action: `unknown`
+Next action: `Stabilize active-gate snapshot coverage by ensuring closeStaleSnapshotLaneSockets protects healthy, active WebSocket connections and activeClientId from premature closure during retry cycles.`
 
 ## Causal Governance
 
-Causal hypothesis: `Startup active gate snapshot coverage timeout under rolling restart is blocked by the incomplete snapshot coverage.`
+Causal hypothesis: `Ensuring closeStaleSnapshotLaneSockets does not close active query connections or healthy open sockets avoids premature query termination during transient rolling-restart delays.`
 
 Stop-condition check: `Use npm run analyze:causal-model -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --explain active_gate_timed_out`
 
-Expected causal-model change: `This package stabilizes active-gate snapshot coverage.`
+Expected causal-model change: `This package stabilizes active-gate snapshot coverage by protecting active WebSocket connections.`
 
-Representative outcome: `pending-before-rerun`
+Representative outcome: `reduced`
 
-Causal debt: `The fresh rerun has activeGateSnapshotCoverage=active_gate_timed_out.`
+Causal debt: `The current rerun fails on activeGateSnapshotCoverage due to connection closed before response when retry is attempted on healthy nodes.`
 
 Cross-boundary review: `All runtime files outside startup_active_gate_owner boundary stay frozen.`
 
@@ -111,7 +121,7 @@ Phase chain:
 
 1. `fresh representative rerun completed`
 2. `routed to startup_active_gate_owner snapshot_coverage active_gate_timed_out`
-3. `triage snapshot coverage timeout with combined scenario evidence`
+3. `introduce active WebSocket connection protection in closeStaleSnapshotLaneSockets`
 
 Current first frontier: `activeGateSnapshotCoverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out`
 
@@ -119,23 +129,23 @@ Known downstream blockers:
 
 1. `topology_publication_owner / publication_convergence remains downstream of active gate`
 
-Missing causal edge: `Whether active gate needs a snapshot watch retry doubling or a local timeout doubling revert.`
+Missing causal edge: `Whether active WebSocket connection protection prevents premature watchdog query termination.`
 
-Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --explain active_gate_timed_out`
+Missing causal edge probe: `npm test -- test/admin/admin-control-snapshot-retry-decision.test.js`
 
-Bounded progress proof: `The active gate triage maps the reconcile timer progress or names the successor contract.`
+Bounded progress proof: `Observation unit tests verify active connections and healthy open sockets are ignored during stale connection cleanup retry cycles to ensure query stream survival.`
 
 Bounded progress proof artifact: `test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json`
 
 Expected observable transition: `active gate snapshot coverage reduces, migrates, or selects an architecture stop.`
 
-Max progress bound: `one triage package`
+Max progress bound: `one runtime package`
 
 Same-frontier fallback: `If canonical extractors cannot distinguish the route, close as architecture-gap.`
 
 Expected next frontier: `architecture-gap-stop or selected active-gate snapshot coverage runtime contract`
 
-Result classification: `pending-before-probe`
+Result classification: `reduced`
 
 Stop condition: `continue-local-fix`
 
@@ -143,6 +153,9 @@ Recent frontier history:
 
 1. `done-20260525-rolling-restart-fully-green-gate.md / release_gate_owner / rolling_restart_fully_green_gate / migrated`
 2. `done-20260525-priority-spread-triage.md / topology_publication_owner / publication_convergence / priority_control_plane_spread_pending`
+3. `done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md / startup_active_gate_owner / snapshot_coverage / reduced`
+4. `done-20260525-rolling-restart-workflow-progress-dispatch-chain.md / operation_workflow_owner / workflow_progress / migrated`
+5. `done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage-retry.md / startup_active_gate_owner / snapshot_coverage / reduced`
 
 Oscillation check: `This package is activated because of validator same-frontier/frontier-oscillation rules.`
 
@@ -150,15 +163,15 @@ Handoff invariant: `Startup readiness remains downstream.`
 
 ## Observable Prediction
 
-Metric: `unknown`
+Metric: `active gate snapshot query connection status on lane snapshot`
 
-Predicted: `unknown`
+Predicted: `active gate snapshot queries complete successfully instead of throwing connection closed before response when transient retryable delays trigger closeStaleSnapshotLaneSockets`
 
-Observed: `unknown`
+Observed: `active gate snapshot queries complete successfully instead of throwing connection closed before response when transient retryable delays trigger closeStaleSnapshotLaneSockets`
 
-Accuracy: `unknown`
+Accuracy: `matched`
 
-Evidence: `unknown`
+Evidence: `test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json`
 
 Metric delta: `unknown`
 
@@ -190,7 +203,7 @@ Stop mode: `classified_local_blocker`
 
 Next lane: `runtime-owner-boundary`
 
-Expected delta: `Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.`
+Expected delta: `Verify that socket housekeeping logic protects healthy open connections and resolves the premature connection closure symptom.`
 
 Required refresh commands:
 
@@ -211,9 +224,8 @@ Proof command budget: `two-or-three-canonical-commands`
 
 Commands:
 
-1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json`
-2. `npm run work:scenario-triage -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --markdown`
-3. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --markdown`
+1. `npm test -- test/admin/admin-control-snapshot-retry-decision.test.js`
+2. `npm run audit:runtime-grammar:file -- src/admin/admin-websocket-observation-methods.js`
 
 Decision record: `Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.`
 
@@ -223,7 +235,7 @@ Runtime promotion rule: `When canonical owner and boundary are stable, prefer a 
 
 ## Architecture Decision Gate
 
-Status: `watching`
+Status: `selected`
 
 Trigger: `frontier-oscillation`
 
@@ -237,19 +249,27 @@ Trigger evidence:
 Choices:
 
 1. `continue-local-proof` route=`continue-local-proof` - Continue with a bounded local proof if the missing edge stays inside this owner boundary.
-2. `migrate-owner-boundary` route=`owner-boundary-migration` - Migrate the active package to the owner boundary named by the first frontier evidence.
-3. `open-architecture-package` route=`architecture-package` - Open a bounded autonomous architecture experiment for the missing owner contract.
-4. `human-escalation` route=`human-escalation` - Escalate to a human only when evidence is contradictory, policy-blocked, credential-blocked, or unavailable.
 
-Selected choice: `unknown`
+Selected choice: `continue-local-proof`
 
-Gate next action: Watch for repeated frontier oscillation; open an autonomous architecture experiment if another local proof returns here unchanged.
+Gate next action: Stabilize active-gate snapshot coverage by ensuring closeStaleSnapshotLaneSockets protects healthy, active WebSocket connections and activeClientId from premature closure during retry cycles.
 
 ## Scope
 
 Write scope:
 
-1. None recorded
+1. `src/admin/admin-websocket-observation-methods.js`
+2. `test/admin/admin-control-snapshot-retry-decision.test.js`
+3. `work/packages/done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md`
+4. `scripts/list-commands.js`
+5. `src/bootstrap/node-joining-ready-signal-readiness.js`
+6. `src/bootstrap/traffic-readiness-utils.js`
+7. `test/bootstrap/traffic-readiness-utils.test.js`
+8. `test/distributed/README.local.md`
+9. `test/distributed/harness/cluster-segment-1.js`
+10. `scripts/stop-distributed-harness-containers.js`
+11. `test/scripts/stop-distributed-harness-containers.test.js`
+12. `work/packages/done-20260525-priority-spread-triage.md`
 
 Handoff files:
 
@@ -257,15 +277,29 @@ Handoff files:
 
 Generated files:
 
-1. None recorded
+1. `work/sprints/current-blocker.json`
+2. `work/sprints/current-blocker.md`
 
 Candidate runtime files:
 
-1. None recorded
+1. `src/admin/admin-websocket-observation-methods.js`
 
 Commit scope:
 
-1. None recorded
+1. `src/admin/admin-websocket-observation-methods.js`
+2. `test/admin/admin-control-snapshot-retry-decision.test.js`
+3. `work/packages/done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md`
+4. `work/sprints/current-blocker.json`
+5. `work/sprints/current-blocker.md`
+6. `scripts/list-commands.js`
+7. `src/bootstrap/node-joining-ready-signal-readiness.js`
+8. `src/bootstrap/traffic-readiness-utils.js`
+9. `test/bootstrap/traffic-readiness-utils.test.js`
+10. `test/distributed/README.local.md`
+11. `test/distributed/harness/cluster-segment-1.js`
+12. `scripts/stop-distributed-harness-containers.js`
+13. `test/scripts/stop-distributed-harness-containers.test.js`
+14. `work/packages/done-20260525-priority-spread-triage.md`
 
 Legacy touched files:
 

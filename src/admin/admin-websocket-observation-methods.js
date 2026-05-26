@@ -16,11 +16,17 @@ const {
 
 const ADMIN_WEBSOCKET_OBSERVATION_METHODS = {
   closeStaleSnapshotLaneSockets(activeClientId = null) {
+    if (!activeClientId) {
+      return;
+    }
     const snapshotClients = [...this.clients].filter(
       (clientInfo) => clientInfo.lane === ADMIN_STREAM_LANE_SNAPSHOT,
     );
     for (const clientInfo of snapshotClients) {
-      if (activeClientId && clientInfo.id === activeClientId) {
+      if (clientInfo.id === activeClientId) {
+        continue;
+      }
+      if (clientInfo.socket && clientInfo.socket.readyState === 1) {
         continue;
       }
       this.logger.info(CLOSE_STALE_SOCKET_BEFORE_RETRY_MSG, {
