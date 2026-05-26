@@ -271,7 +271,7 @@ Each entry must include these labels:
 - Probe: `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
 - Artifact/result: `test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json` - restarted node timeout joining seed node due to 100.3% CPU starvation on the seed node.
 - Representative movement: same-frontier
-- Linked packages: `work/packages/done-20260526-rolling-restart-priority-recovery-deadlock-triage.md`, `work/packages/done-20260526-outbound-message-queue-backpressure-stabilization.md`
+- Linked packages: `work/packages/done-20260526-rolling-restart-priority-recovery-deadlock-triage.md`, `work/packages/done-20260526-outbound-message-queue-backpressure-stabilization.md`, `work/packages/done-20260526-local-query-routing-loopback-bypass.md`
 - Supersedes: none
 - Superseded by: none
 - Next implication: Add rate-limiting inside `PressureGovernor.emitPressureMetric` to prevent logging flooding under backpressure.
@@ -285,7 +285,7 @@ Each entry must include these labels:
 - Probe: `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
 - Artifact/result: `test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
 - Representative movement: same-frontier
-- Linked packages: `work/packages/done-20260526-rolling-restart-priority-recovery-deadlock-triage.md`, `work/packages/done-20260526-outbound-message-queue-backpressure-stabilization.md`
+- Linked packages: `work/packages/done-20260526-rolling-restart-priority-recovery-deadlock-triage.md`, `work/packages/done-20260526-outbound-message-queue-backpressure-stabilization.md`, `work/packages/done-20260526-local-query-routing-loopback-bypass.md`
 - Supersedes: none
 - Superseded by: none
 - Next implication: Inspect WebSocket connection close handlers and keep-alive timeouts on the seed node.
@@ -299,7 +299,7 @@ Each entry must include these labels:
 - Probe: `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --markdown`
 - Artifact/result: `test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
 - Representative movement: same-frontier
-- Linked packages: `work/packages/done-20260526-rolling-restart-priority-recovery-deadlock-triage.md`, `work/packages/done-20260526-20260526-rolling-restart-three-theory-validation.md`, `work/packages/done-20260526-rolling-restart-operation-workflow-owner-workflow-progress-triage.md`, `work/packages/done-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md`, `work/packages/done-20260526-rolling-restart-operation-workflow-three-theory-recovery.md`, `work/packages/done-20260526-rolling-restart-three-theory-source-analysis-verification.md`
+- Linked packages: `work/packages/done-20260526-rolling-restart-priority-recovery-deadlock-triage.md`, `work/packages/done-20260526-20260526-rolling-restart-three-theory-validation.md`, `work/packages/done-20260526-rolling-restart-operation-workflow-owner-workflow-progress-triage.md`, `work/packages/done-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md`, `work/packages/done-20260526-rolling-restart-operation-workflow-three-theory-recovery.md`, `work/packages/done-20260526-rolling-restart-three-theory-source-analysis-verification.md`, `work/packages/done-20260526-local-query-routing-loopback-bypass.md`
 - Supersedes: none
 - Superseded by: none
 - Next implication: Inspect rebalancer background dispatch rates and queue limits.

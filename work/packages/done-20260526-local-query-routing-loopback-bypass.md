@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "active",
+  "status": "done",
   "intent": {
     "opened": "2026-05-26",
     "lane": "causal-escalation",
@@ -14,11 +14,13 @@
     "boundary": "snapshot_coverage",
     "dominantReason": "active_gate_timed_out",
     "currentState": "Scaffolded from representative evidence for active_gate_snapshot_coverage.",
-    "nextAction": "Implement local delivery bypass for query messages in message router delivery behaviors"
+    "nextAction": "Implement local delivery bypass for query messages in message router delivery behaviors",
+    "closed": "2026-05-26"
   },
   "scope": {
     "writeScope": [
-      "src/transport/message-router-delivery-pressure-routing.js"
+      "src/transport/message-router-delivery-pressure-routing.js",
+      "work/theory-ledger.md"
     ],
     "handoffFiles": [
       "test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json"
@@ -29,6 +31,7 @@
     ],
     "commitScope": [
       "src/transport/message-router-delivery-pressure-routing.js",
+      "work/theory-ledger.md",
       "work/packages/active-20260526-local-query-routing-loopback-bypass.md"
     ]
   },
@@ -166,7 +169,8 @@
     ],
     "oscillationCheck": "Frontier returned to snapshot_coverage after priority recovery, which requires causal-escalation lane to execute loopback query bypass.",
     "handoffInvariant": "WebSocket loopback query delivery must bypass external sockets and deliver locally."
-  }
+  },
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -321,3 +325,12 @@ Agent identity is optional provenance. Use the compact five-field shape for new 
 2. npm run work:scenario-triage -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --markdown
 3. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --markdown
 
+## Theory Ledger Update
+
+no ledger update
+
+## Commit And Push Ledger
+
+1. Focused package commit: 38c003708aa9f195f9f636d99abf34deb226fdf7
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

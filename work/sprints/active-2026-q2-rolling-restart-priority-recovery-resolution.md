@@ -31,21 +31,21 @@ Resolve the priority recovery event-driven wait/deadlock during rolling-restart 
 
 ```text
 Representative artifact: test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json
-Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / evidence_missing
-Active package: work/packages/done-20260526-rolling-restart-startup-active-gate-owner-snapshot-coverage-v2.md
+Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out
+Active package: work/packages/done-20260526-local-query-routing-loopback-bypass.md
 Active package owner: startup_active_gate_owner
 Active package boundary: snapshot_coverage
-Selected cause: evidence_missing
-Required action: Triage active_gate_snapshot_coverage with combined scenario evidence before runtime edits.
+Selected cause: active_gate_timed_out
+Required action: Implement local delivery bypass for query messages in message router delivery behaviors
 Representative status: active
-Causal outcome: migrate_owner_boundary
+Causal outcome: continue_local_fix
 Architecture gate: watching / unknown
 Expected delta: Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.
 Current state: Scaffolded from representative evidence for active_gate_snapshot_coverage.
-Allowed edits: unknown
-Candidate runtime files: unknown
-Forbidden edits: Owners decide admin readiness, bootstrap recovery readiness, and active-gate admission; diagnostics and harness evidence may observe but must not override owner outcomes.
-Required latest proof: falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json, regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --markdown, supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --markdown
+Allowed edits: src/transport/message-router-delivery-pressure-routing.js, work/theory-ledger.md
+Candidate runtime files: src/transport/message-router-delivery-pressure-routing.js
+Forbidden edits: WebSocket loopback query delivery must bypass external sockets and deliver locally.
+Required latest proof: falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json, regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --markdown, supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --markdown, supporting: npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --json
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
