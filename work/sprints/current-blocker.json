@@ -1,29 +1,38 @@
 {
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-workflow-markdown-admin-tooling.md",
-  "package": "none",
-  "status": "none",
-  "lane": "none",
+  "sprint": "none",
+  "package": "work/packages/active-test-close-temp.md",
+  "status": "active",
+  "lane": "lightweight-maintenance",
   "scenario": "none",
   "artifact": "none",
   "playback": "none",
-  "owner": "none",
-  "boundary": "none",
-  "dominantReason": "none",
-  "currentState": "No active work package. Start a new package when implementation resumes.",
-  "nextAction": "Create or activate one focused package for the next executable concern.",
-  "proof": [],
+  "owner": "workflow_tooling_owner",
+  "boundary": "close_check",
+  "dominantReason": "test_coverage",
+  "currentState": "Staged for close testing.",
+  "nextAction": "Succeed closure.",
+  "proof": [
+    "regression: node --test test/scripts/work-close.test.js"
+  ],
   "writeScope": [],
   "handoffFiles": [],
-  "generatedFiles": [
-    "work/sprints/current-blocker.json",
-    "work/sprints/current-blocker.md"
-  ],
+  "generatedFiles": [],
   "candidateRuntimeFiles": [],
   "commitScope": [],
   "touchedFiles": [],
-  "modelFit": {},
+  "theoryLedgerRefs": [],
+  "modelFit": {
+    "packageClass": "bounded-implementation",
+    "intendedMinimumModel": "gpt-5.3-codex-spark",
+    "scopeShape": "leaf-slice",
+    "outputProfile": "medium",
+    "ambiguityScore": 1,
+    "escalationTriggers": [
+      "test package expands"
+    ]
+  },
   "representativeResidual": {},
   "causalGovernance": {},
   "scenarioCausalClosure": {},
@@ -31,7 +40,13 @@
   "experimentOutcome": {},
   "rerunDecision": {},
   "classificationEfficiency": {},
-  "architectureDecisionGate": {},
-  "predecessor": null,
-  "theoryLedgerRefs": []
+  "architectureDecisionGate": {
+    "status": "not-required",
+    "trigger": "none",
+    "triggerEvidence": [],
+    "choices": [],
+    "selectedChoice": null,
+    "nextAction": "No architecture decision gate is required for this package."
+  },
+  "predecessor": null
 }

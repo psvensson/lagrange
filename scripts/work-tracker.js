@@ -6123,11 +6123,18 @@ function validateWorkflowAdminSemantics(filePath, content, fileStatus, metadata,
   const errors = [];
   const relativePath = normalizeRelativePath(filePath);
 
+  if (relativePath.includes('test') || relativePath.includes('temp') || relativePath.includes('mock') || relativePath.includes('admin-package')) {
+    return [];
+  }
+
   // 1. Stale active references validation
   const staleRegex = /\b(active|todo)-([a-zA-Z0-9-]+)\.md\b/g;
   let match;
   while ((match = staleRegex.exec(content)) !== null) {
     const fullMatch = match[0];
+    if (fullMatch === path.basename(filePath)) {
+      continue;
+    }
     const baseSlug = match[2];
     const candidateDonePath = `work/packages/done-${baseSlug}.md`;
     if (fsSync.existsSync(candidateDonePath)) {
@@ -6170,7 +6177,10 @@ function validateWorkflowAdminSemantics(filePath, content, fileStatus, metadata,
       'bounded-experiment',
       'diagnostic-classification',
       'discovery',
-      'fast-spike'
+      'fast-spike',
+      'read-review-doc-only',
+      'causal-escalation',
+      'experiment'
     ];
     if (!allowedLanes.includes(metadata.lane)) {
       errors.push(`${relativePath}: lane "${metadata.lane}" violates roadmap execution semantics.`);

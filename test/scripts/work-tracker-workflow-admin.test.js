@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import { execSync } from 'node:child_process';
 
-const TEST_PACKAGE_VALIDATOR_PATH = 'work/packages/active-temp-validator-test.md';
+const TEST_PACKAGE_VALIDATOR_PATH = 'work/packages/active-validation-spec-run.md';
 
 test('work-tracker workflow admin validations', async () => {
   // Read real package content to keep schema validation perfectly happy
-  const realContent = await fs.readFile('work/packages/active-20260526-workflow-admin-validator-enforcement.md', 'utf8');
-  
+  const realContent = await fs.readFile('work/packages/done-20260526-workflow-admin-validator-enforcement.md', 'utf8');
+
   // 1. Test stale active reference validation
   const staleContent = realContent + '\nThis contains a reference to active-20260526-workflow-publish-transaction-hardening.md which is closed.\n';
 
