@@ -17,7 +17,7 @@ Investigate the control-plane priority publication and ACK handoff dynamics duri
 - Confidence and evidence: Medium. The approved sprint options identify priority spread convergence as a highly relevant diagnostic path.
 - Expected green path: Run focused diagnostics, inspect coordinator publications and ACK handoff state machines, locate coordination mismatches, and prepare targeted local repairs.
 - Wrong direction signals: Raising timeouts or relaxing admission rules to pass tests.
-- Next best package: work/packages/active-20260526-outbound-message-queue-backpressure-stabilization.md
+- Next best package: work/packages/done-20260526-outbound-message-queue-backpressure-stabilization.md
 - Stop or escalate rule: Escalate if downstream/upstream protocol contradictions appear or if proof requires cross-owner changes.
 
 ## Current Edge Card
@@ -25,7 +25,7 @@ Investigate the control-plane priority publication and ACK handoff dynamics duri
 ```text
 Representative artifact: test-output/reports/rolling-restart-rerun-4.report.json
 Visible first frontier: transport_owner/message_routing
-Active package: work/packages/active-20260526-outbound-message-queue-backpressure-stabilization.md
+Active package: work/packages/done-20260526-outbound-message-queue-backpressure-stabilization.md
 Active package owner: transport_owner
 Active package boundary: message_routing
 Selected cause: accept_classified_backpressure
@@ -56,7 +56,7 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Lane: `diagnostic-classification`
    - Purpose: Explore publication coordinate state and ACK handoff logic.
    - First-run reason: The representative `rolling-restart` scenario experiences priority spread delays.
-2. [Outbound Message Queue Backpressure Stabilization](../packages/active-20260526-outbound-message-queue-backpressure-stabilization.md)
+2. [Outbound Message Queue Backpressure Stabilization](../packages/done-20260526-outbound-message-queue-backpressure-stabilization.md)
    - Lane: `scenario-release-gate`
    - Purpose: Separate metadata control signals from data messages to stabilize outbound queue.
    - First-run reason: The representative `rolling-restart` scenario experiences priority recovery rebalancer handoff stalls due to backpressure in outbound queues.

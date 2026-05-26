@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "active",
+  "status": "done",
   "intent": {
     "opened": "2026-05-26",
     "lane": "scenario-release-gate",
@@ -30,7 +30,7 @@
       "src/transport/message-router-shared-stage-4.js"
     ],
     "commitScope": [
-      "work/packages/active-20260526-outbound-message-queue-backpressure-stabilization.md",
+      "work/packages/done-20260526-outbound-message-queue-backpressure-stabilization.md",
       "work/sprints/active-2026-q2-rolling-restart-investigation.md",
       "work/sprints/current-blocker.json",
       "work/sprints/current-blocker.md",
@@ -154,7 +154,7 @@
       "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-rerun-4.report.json --owner transport_owner --boundary message_routing --dominant-reason accept_classified_backpressure",
       "update Sprint Strategy Brief and Current Edge Card from the route result",
       "npm run work:repair",
-      "npm run work:validate -- --pre-impl work/packages/active-20260526-outbound-message-queue-backpressure-stabilization.md"
+      "npm run work:validate -- --pre-impl work/packages/done-20260526-outbound-message-queue-backpressure-stabilization.md"
     ]
   },
   "architectureDecisionGate": {
@@ -277,7 +277,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `bounded-owner-runtime/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260526-outbound-message-queue-backpressure-stabilization.md`
+- Owned files: `work/packages/done-20260526-outbound-message-queue-backpressure-stabilization.md`
 - Forbidden files: `src/`
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -306,9 +306,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: transport_owner; files-changed: none; validation: npm run work:advance -- --check: yes; outcome: validated.
-- [ ] action: verification-fix; owner: transport_owner; files-changed: none; validation: npm run work:advance -- --check: yes; outcome: validated.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: validated.
+- [x] action: implementation; owner: transport_owner; files-changed: src/transport/message-router-shared-stage-2.js, src/transport/message-router-shared-stage-3.js; validation: npm test -- test/transport/message-router.test.js: pass (361 tests); parent revalidated focused proof: yes; no ledger update; outcome: validated.
+- [x] action: verification-fix; owner: transport_owner; files-changed: src/transport/message-router-shared-stage-2.js, src/transport/message-router-shared-stage-3.js; validation: npm run work:validate -- --pre-impl: ok; parent revalidated focused proof: yes; no ledger update; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: none; validation: no tracker-generated repair needed before package closure; parent revalidated focused proof: yes; no ledger update; outcome: not-needed.
 
 ## Validation
 

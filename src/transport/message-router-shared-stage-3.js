@@ -41,6 +41,7 @@ class OutboundDeliveryRegistryOwner {
     const queue = this.getOutboundQueue(nodeId);
     const deliveryPriority = normalizeOutboundDeliveryPriority(
       options.deliveryPriority,
+      options.targetAddress,
     );
     const deliverySource = resolveDeliverySource(
       options.targetAddress,
@@ -223,8 +224,10 @@ class OutboundDeliveryRegistryOwner {
       return;
     }
     while (queue.pending.length > TRANSPORT_NUM.ZERO) {
-      const item = dequeueNextPendingItem(queue);
-      item.reject(error);
+      const item = queue.pending.shift();
+      if (item) {
+        item.reject(error);
+      }
     }
   }
   failGracefully(nodeId, error) {
@@ -234,12 +237,14 @@ class OutboundDeliveryRegistryOwner {
     }
     const errorMessage = error?.message || ROUTER_ERROR_MSG.SHUTDOWN;
     while (queue.pending.length > TRANSPORT_NUM.ZERO) {
-      const item = dequeueNextPendingItem(queue);
-      item.resolve({
-        acknowledged: false,
-        error: errorMessage,
-        shutdown: true,
-      });
+      const item = queue.pending.shift();
+      if (item) {
+        item.resolve({
+          acknowledged: false,
+          error: errorMessage,
+          shutdown: true,
+        });
+      }
     }
   }
   buildPressureSummary() {

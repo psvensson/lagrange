@@ -4,6 +4,7 @@ import {
 } from '../constants/transport.js';
 import {buildTransportDeliveryOutcome} from './transport-semantic-outcome.js';
 import {DELIVERY_SOURCE_MESSAGE_UNWRAP_LIMIT, EMPTY_DELIVERY_SOURCE, LOCAL_NUM_ONE, MESSAGE_ROUTER_LITERAL, OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_DIVISOR, OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_MINIMUM, OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_STATE, OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_STATE_TABLE, OutboundDeliveryPriority, QUERY_DATA_PLANE_MESSAGE_TYPE, RETIRED_PENDING_RESPONSE_REASON, SERVICE_RESPONSE_DISPOSITION_KIND, buildTypelessCdcDeliverySource, buildTypelessQueryDeliverySource, extractSqlOperationKind, extractSqlTableName, isSupersedableRaftHeartbeatAppend, normalizeIdentifier, summarizeRaftAppendCommand} from './message-router-shared-stage-1.js';
+import {isCriticalTransportTargetAddress} from '../bootstrap/system-partition-classification.js';
 
 function resolveSemanticDeliverySourceMessage(message) {
   let semanticMessage = message;
@@ -191,10 +192,21 @@ function buildSupersededPendingResult(replacedItem) {
   };
 }
 
-function normalizeOutboundDeliveryPriority(priority) {
-  return priority === OutboundDeliveryPriority.CRITICAL ?
-    OutboundDeliveryPriority.CRITICAL :
-    OutboundDeliveryPriority.BACKGROUND;
+function normalizeOutboundDeliveryPriority(priority, targetAddress = null) {
+  if (priority === OutboundDeliveryPriority.CRITICAL) {
+    return OutboundDeliveryPriority.CRITICAL;
+  }
+  if (priority === OutboundDeliveryPriority.BACKGROUND) {
+    return OutboundDeliveryPriority.BACKGROUND;
+  }
+  if (
+    typeof targetAddress === TRANSPORT_TYPEOF.STRING &&
+    targetAddress.length > TRANSPORT_NUM.ZERO &&
+    isCriticalTransportTargetAddress({targetAddress})
+  ) {
+    return OutboundDeliveryPriority.CRITICAL;
+  }
+  return OutboundDeliveryPriority.BACKGROUND;
 }
 
 function countPendingByPriority(queue, priority) {
@@ -479,11 +491,43 @@ function resolveNextPendingItemIndex(queue) {
   ) {
     return -LOCAL_NUM_ONE;
   }
-  const criticalIndex = resolveNextCriticalPendingItemIndex(queue);
-  if (criticalIndex >= TRANSPORT_NUM.ZERO) {
-    return criticalIndex;
+
+  const preferredIndex = (() => {
+    const criticalIndex = resolveNextCriticalPendingItemIndex(queue);
+    if (criticalIndex >= TRANSPORT_NUM.ZERO) {
+      return criticalIndex;
+    }
+    return TRANSPORT_NUM.ZERO;
+  })();
+
+  if (preferredIndex >= TRANSPORT_NUM.ZERO && preferredIndex < queue.pending.length) {
+    const preferredItem = queue.pending[preferredIndex];
+    if (canDispatchPendingItem(queue, preferredItem)) {
+      return preferredIndex;
+    }
   }
-  return TRANSPORT_NUM.ZERO;
+
+  // Scan remaining CRITICAL items first to preserve priority
+  for (let i = 0; i < queue.pending.length; i++) {
+    const item = queue.pending[i];
+    if (item?.priority === OutboundDeliveryPriority.CRITICAL && i !== preferredIndex) {
+      if (canDispatchPendingItem(queue, item)) {
+        return i;
+      }
+    }
+  }
+
+  // Scan BACKGROUND items if no CRITICAL items can be dispatched
+  for (let i = 0; i < queue.pending.length; i++) {
+    const item = queue.pending[i];
+    if (item?.priority !== OutboundDeliveryPriority.CRITICAL && i !== preferredIndex) {
+      if (canDispatchPendingItem(queue, item)) {
+        return i;
+      }
+    }
+  }
+
+  return -LOCAL_NUM_ONE;
 }
 
 function peekNextPendingItem(queue) {
