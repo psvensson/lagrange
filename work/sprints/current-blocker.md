@@ -14,10 +14,19 @@ Implementation files:
 
 1. `roadmap.md`
 2. `.kiro/steering/roadmap.md`
-3. `work/README.md`
-4. `work/RULES.md`
-5. `work/releases/0.1-stabilization.md`
-6. `work/packages/active-20260526-roadmap-semantics-normalization.md`
+3. `.kiro/steering/workflow-guidelines/packages.md`
+4. `.kiro/steering/system-guidelines.md`
+5. `.kiro/steering/llm/core.md`
+6. `.kiro/steering/llm/boot.md`
+7. `work/README.md`
+8. `work/RULES.md`
+9. `work/releases/0.1-stabilization.md`
+10. `work/sprints/active-2026-q2-rolling-restart-investigation.md`
+11. `work/packages/done-20260526-roadmap-semantics-normalization.md`
+12. `.kiro/steering/llm/architecture.md`
+13. `.kiro/steering/llm/governance.md`
+14. `.kiro/steering/llm/manifest.json`
+15. `.kiro/steering/llm/rules.json`
 
 Expected implementation delta: unknown
 
@@ -27,7 +36,7 @@ Stop rule: No architecture decision gate is required for this package.
 
 Sprint: `work/sprints/active-2026-q2-rolling-restart-investigation.md`
 
-Package: `work/packages/active-20260526-roadmap-semantics-normalization.md`
+Package: `work/packages/done-20260526-roadmap-semantics-normalization.md`
 
 Workflow lane: `lightweight-maintenance`
 
@@ -241,10 +250,19 @@ Write scope:
 
 1. `roadmap.md`
 2. `.kiro/steering/roadmap.md`
-3. `work/README.md`
-4. `work/RULES.md`
-5. `work/releases/0.1-stabilization.md`
-6. `work/packages/active-20260526-roadmap-semantics-normalization.md`
+3. `.kiro/steering/workflow-guidelines/packages.md`
+4. `.kiro/steering/system-guidelines.md`
+5. `.kiro/steering/llm/core.md`
+6. `.kiro/steering/llm/boot.md`
+7. `work/README.md`
+8. `work/RULES.md`
+9. `work/releases/0.1-stabilization.md`
+10. `work/sprints/active-2026-q2-rolling-restart-investigation.md`
+11. `work/packages/done-20260526-roadmap-semantics-normalization.md`
+12. `.kiro/steering/llm/architecture.md`
+13. `.kiro/steering/llm/governance.md`
+14. `.kiro/steering/llm/manifest.json`
+15. `.kiro/steering/llm/rules.json`
 
 Handoff files:
 
@@ -252,11 +270,12 @@ Handoff files:
 
 Generated files:
 
-1. `.kiro/steering/llm/governance.md`
-2. `.kiro/steering/llm/manifest.json`
-3. `.kiro/steering/llm/rules.json`
-4. `work/sprints/current-blocker.json`
-5. `work/sprints/current-blocker.md`
+1. `.kiro/steering/llm/architecture.md`
+2. `.kiro/steering/llm/governance.md`
+3. `.kiro/steering/llm/manifest.json`
+4. `.kiro/steering/llm/rules.json`
+5. `work/sprints/current-blocker.json`
+6. `work/sprints/current-blocker.md`
 
 Candidate runtime files:
 
@@ -266,15 +285,21 @@ Commit scope:
 
 1. `roadmap.md`
 2. `.kiro/steering/roadmap.md`
-3. `work/README.md`
-4. `work/RULES.md`
-5. `work/releases/0.1-stabilization.md`
-6. `work/packages/active-20260526-roadmap-semantics-normalization.md`
-7. `.kiro/steering/llm/governance.md`
-8. `.kiro/steering/llm/manifest.json`
-9. `.kiro/steering/llm/rules.json`
-10. `work/sprints/current-blocker.json`
-11. `work/sprints/current-blocker.md`
+3. `.kiro/steering/workflow-guidelines/packages.md`
+4. `.kiro/steering/system-guidelines.md`
+5. `.kiro/steering/llm/core.md`
+6. `.kiro/steering/llm/boot.md`
+7. `work/README.md`
+8. `work/RULES.md`
+9. `work/releases/0.1-stabilization.md`
+10. `work/sprints/active-2026-q2-rolling-restart-investigation.md`
+11. `work/packages/done-20260526-roadmap-semantics-normalization.md`
+12. `.kiro/steering/llm/architecture.md`
+13. `.kiro/steering/llm/governance.md`
+14. `.kiro/steering/llm/manifest.json`
+15. `.kiro/steering/llm/rules.json`
+16. `work/sprints/current-blocker.json`
+17. `work/sprints/current-blocker.md`
 
 Legacy touched files:
 

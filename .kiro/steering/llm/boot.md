@@ -49,7 +49,7 @@ These are LLM-specific operational steps. Process semantics for each lane live i
 
 1. `npm run work:context`
 2. Read `core.md` and the smallest relevant domain pack.
-3. No package required unless implementation truth, roadmap status, or architecture ownership changes.
+3. No package required unless implementation truth, roadmap scope/state, or architecture ownership changes.
 4. For edits, run `git diff --check -- <files>`.
 5. **If a package was created**, finish with the closure tail (see below).
 

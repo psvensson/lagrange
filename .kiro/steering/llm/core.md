@@ -23,7 +23,7 @@ Use this list at cold start before any non-trivial work. Anchors point into [`wo
 2. **Do not bypass frozen decisions** or reopen established architecture routes without explicit Level 1 user override/confirmation. (§sprint-strategy)
 3. **Do not exceed file-size caps** when modifying or creating files (src ≤ 800 lines, test ≤ 1500 lines); refactor first. (§coding-constraints)
 4. **Do not skip `npm run work:context`** for non-trivial implementation work. (§validator-phases)
-5. **Do not edit without a bounded package** when implementation truth, roadmap status, or architecture ownership changes. (§lane-definitions)
+5. **Do not edit without a bounded package** when implementation truth, roadmap scope/state, or architecture ownership changes. (§lane-definitions)
 6. **Do not choose a heavy lane** when read-doc or maintenance proof is enough. (§lane-definitions)
 7. **Do not use raw JSON, raw logs, broad search, or ad-hoc `jq`** before canonical workflow tools. (§proof-requirements)
 8. **Do not write runtime/domain scalars inline**; use named constants or ingress normalization. (§coding-constraints)
@@ -53,7 +53,7 @@ Templates map 1-to-1 to canonical lanes from [`work/RULES.md#lane-definitions`](
 
 | Canonical lane | Template | Use when |
 | --- | --- | --- |
-| `read-doc` | [`work/templates/doc-only-package.md`](../../../work/templates/doc-only-package.md) | Docs-only edit; no implementation truth, roadmap status, or architecture ownership changes. |
+| `read-doc` | [`work/templates/doc-only-package.md`](../../../work/templates/doc-only-package.md) | Docs-only edit; no implementation truth, roadmap scope/state, or architecture ownership changes. |
 | `maintenance` | [`work/templates/lightweight-maintenance-package.md`](../../../work/templates/lightweight-maintenance-package.md) | Bounded tooling, templates, generated steering, package metadata, or test-only maintenance. |
 | `maintenance` (single-file) | [`work/templates/single-file-maintenance-package.md`](../../../work/templates/single-file-maintenance-package.md) | One file, no runtime contract change (use this narrower variant when scope fits). |
 | `proof` | [`work/templates/lightweight-maintenance-package.md`](../../../work/templates/lightweight-maintenance-package.md) (with `--lane test-only-proof`) | Tests, validation evidence, or diagnostic classification change without runtime behavior change. |

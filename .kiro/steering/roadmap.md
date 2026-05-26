@@ -13,32 +13,34 @@ last_reviewed: 2026-05-23
 
 ## Document Role
 
-This document governs how roadmap and scope documents are used during
-implementation work.
+This document governs how roadmap and scope documents constrain implementation
+work without replacing packages, tracks, releases, or generated blocker state.
 
 Use this file for:
 
-- implementation-driving roadmap authority
+- roadmap scope and sequence authority
 - AGPL scope and implementation-home checks
-- readiness rules for starting work from roadmap rows
+- readiness rules for starting work under roadmap rows
 - idea triage into roadmap rows or work packages
 
 Do not use this file for:
 
+- current blocker or active-package truth
+- release-gate closure truth
 - system behavior rules
 - testing policy
 - style guidance
 - current subsystem owner maps
 - package-local execution detail
 
-The canonical AGPL implementation roadmap lives at `../../roadmap.md`.
+The canonical AGPL feature sequence and scope map lives at `../../roadmap.md`.
 
 Cross-edition visibility lives at `../../product-roadmap.md`.
 Edition ownership and implementation-home rules live at `../../edition-matrix.md`.
 
 Use these documents as follows:
-- `../../roadmap.md` is the only roadmap that may drive specs, tasks, or code
-  in this repository.
+- `../../roadmap.md` constrains allowed AGPL feature scope and broad sequencing.
+  It does not activate implementation work or certify release readiness.
 - `../../product-roadmap.md` is visibility-only and must not be used as an
   implementation source here.
 - Any feature whose `Implementation home` is not `AGPL repo` in
@@ -60,7 +62,7 @@ Use the repository documents according to this ownership split:
 | Architecture entrypoint | `architecture/INDEX.md` | Canonical architecture entrypoint, current subsystem owner maps, and data flow index |
 | Architecture compatibility pointer | `architecture.md` | Compatibility pointer for older links only |
 | Architecture support docs | `architecture/*.md` | Current concrete owner maps and subsystem detail |
-| Implementation-driving roadmap | `roadmap.md` | Allowed implementation scope and status |
+| AGPL roadmap | `roadmap.md` | Allowed feature scope and broad sequence |
 | Visibility roadmap | `product-roadmap.md` | Cross-edition status only |
 | Scope matrix | `edition-matrix.md` | Edition and implementation-home mapping |
 | Internal work tracking | `work/*` | Ideas, work packages, sprint grouping, execution progress |
@@ -77,8 +79,8 @@ follow one of two paths:
 Use the paths as follows:
 
 1. Capture the idea in `work/ideas/` as `idea-YYYYMMDD-slug.md`.
-2. If the idea changes scope, product direction, or starts a broad new
-   implementation track, sharpen `../../roadmap.md` first.
+2. If the idea changes feature scope, product direction, or the broad sequence,
+   sharpen `../../roadmap.md` first.
 3. If the idea is already within approved scope and is bounded enough to
    execute directly, create a work package in `work/packages/`.
 4. Active implementation work begins only from
@@ -119,7 +121,8 @@ following are true:
    AGPL-scoped preparatory work only.
 2. The work does not implement paid-only behavior, paid-only operator flows, or
    paid-only control surfaces in this repository.
-3. The work remains consistent with `../../roadmap.md` and
+3. The work remains consistent with the scope and sequence in `../../roadmap.md`
+   and the edition ownership in
    `../../edition-matrix.md`.
 
 Architecture documents may mention Pro or Enterprise services only as examples
@@ -145,32 +148,31 @@ Before implementation tasks begin from a roadmap row:
    already-approved maintenance/refactor scope that makes them valid without a
    roadmap change.
 
-## Roadmap Status Truth Policy
+## Roadmap State Policy
 
-Roadmap status must be reconciled with current work-tracker and representative
-scenario evidence.
+Roadmap state is scope and sequence metadata. It is not package activation,
+release-gate proof, or current-blocker truth.
 
 Required workflow:
 
-1. A roadmap row may be treated as complete only when no active package or
-   active sprint is still fixing the same declared exit criterion.
-2. For resilience, topology, failure-simulation, production-guarantee, or
-   distributed-harness rows, completion requires named representative evidence,
-   not only focused unit or integration proof.
-3. If a package discovers that a completed roadmap row still has an active
-   representative blocker, the package must classify the mismatch as one of:
-   - capability-complete but gate-open
-   - status-overstated and requiring roadmap correction
-   - new maintenance concern outside the original row
-4. A sprint may not close while `../../roadmap.md` says a relevant exit
-   criterion is complete and the sprint's current package says that same
-   criterion still fails.
+1. Treat `../../roadmap.md` as a stable AGPL feature map: row presence and row
+   order constrain what can be scoped in this repository.
+2. Treat `work/packages/`, `work/sprints/current-blocker.*`,
+   `work/releases/*`, and `work/tracks/*` as the sources of truth for active
+   execution, representative evidence, release risk, and gate closure.
+3. A roadmap row marked available means the capability exists at roadmap scope;
+   it does not mean release readiness is green or that no active maintenance
+   package can still target that area.
+4. If implementation proves a roadmap row is absent, overbroad, out of AGPL
+   scope, or ordered incorrectly, classify that as a roadmap correction and fix
+   the row. If implementation proves only that a release gate remains red, keep
+   the live truth in release, track, sprint, and package files instead.
 5. Roadmap corrections discovered during implementation should land with the
    package or sprint closure that discovered them. Do not leave truth repair as
    an out-of-band memory item.
-6. If a broad row is marked complete but still has known guardrail failures in
-   the owner path it claims to close, the row must either name the remaining
-   guardrail package or be downgraded to a capability-only status.
+6. Do not use roadmap state to close packages, close sprints, or claim release
+   readiness. Those claims require the relevant package, sprint, release, and
+   track evidence.
 
 ## Sprint Continuation And Package Split Policy
 

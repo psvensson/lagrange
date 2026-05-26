@@ -99,12 +99,12 @@
     }
   ],
   "stats": {
-    "candidateCount": 325,
-    "dedupedRuleCount": 318,
-    "exportedRuleCount": 318,
+    "candidateCount": 321,
+    "dedupedRuleCount": 314,
+    "exportedRuleCount": 314,
     "aliasRuleCount": 11,
-    "masterRuleCount": 307,
-    "estimatedAllRulesTokens": 12436
+    "masterRuleCount": 303,
+    "estimatedAllRulesTokens": 12265
   },
   "rules": [
     {
@@ -605,7 +605,7 @@
         "ownership",
         "governance"
       ],
-      "rule": "Read/review/doc-only: answer questions or edit explanatory docs. No work package is required unless implementation truth, roadmap status, or architecture ownership changes.",
+      "rule": "Read/review/doc-only: answer questions or edit explanatory docs. No work package is required unless implementation truth, roadmap scope/state, or architecture ownership changes.",
       "score": 238,
       "sources": [
         {
@@ -1389,13 +1389,31 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 168,
-          "section": "Roadmap Steering Pointer > Roadmap Status Truth Policy"
+          "line": 170,
+          "section": "Roadmap Steering Pointer > Roadmap State Policy"
         }
       ]
     },
     {
       "id": "GOV-0002",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [
+        "readiness",
+        "governance"
+      ],
+      "rule": "Do not use roadmap state to close packages, close sprints, or claim release readiness. Those claims require the relevant package, sprint, release, and track evidence.",
+      "score": 226,
+      "sources": [
+        {
+          "file": "roadmap.md",
+          "line": 173,
+          "section": "Roadmap Steering Pointer > Roadmap State Policy"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0003",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -1404,7 +1422,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 185,
+          "line": 187,
           "section": "Roadmap Steering Pointer > Sprint Continuation And Package Split Policy"
         }
       ]
@@ -1527,7 +1545,7 @@
       ]
     },
     {
-      "id": "GOV-0003",
+      "id": "GOV-0004",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -1544,7 +1562,7 @@
       ]
     },
     {
-      "id": "GOV-0004",
+      "id": "GOV-0005",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -1561,7 +1579,7 @@
       ]
     },
     {
-      "id": "GOV-0005",
+      "id": "GOV-0006",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -1576,7 +1594,7 @@
       ]
     },
     {
-      "id": "GOV-0006",
+      "id": "GOV-0007",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -1591,7 +1609,7 @@
       ]
     },
     {
-      "id": "GOV-0007",
+      "id": "GOV-0008",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -1606,7 +1624,7 @@
       ]
     },
     {
-      "id": "GOV-0008",
+      "id": "GOV-0009",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -1621,7 +1639,7 @@
       ]
     },
     {
-      "id": "GOV-0009",
+      "id": "GOV-0010",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -1636,7 +1654,7 @@
       ]
     },
     {
-      "id": "GOV-0010",
+      "id": "GOV-0011",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -1653,7 +1671,7 @@
       ]
     },
     {
-      "id": "GOV-0011",
+      "id": "GOV-0012",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -1668,7 +1686,7 @@
       ]
     },
     {
-      "id": "GOV-0012",
+      "id": "GOV-0013",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2305,7 +2323,7 @@
       ]
     },
     {
-      "id": "GOV-0013",
+      "id": "GOV-0014",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2314,13 +2332,13 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 95,
+          "line": 97,
           "section": "Roadmap Steering Pointer > Work Intake And Execution Flow"
         }
       ]
     },
     {
-      "id": "GOV-0014",
+      "id": "GOV-0015",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2329,7 +2347,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 110,
+          "line": 112,
           "section": "Roadmap Steering Pointer > Work Intake And Execution Flow"
         }
       ]
@@ -2406,7 +2424,7 @@
           "section": "Testing — Harness & Execution > Test Duration Hard Limit"
         }
       ],
-      "canonical_of": "GOV-0026"
+      "canonical_of": "GOV-0027"
     },
     {
       "id": "TEST-0043",
@@ -2476,7 +2494,7 @@
       ]
     },
     {
-      "id": "GOV-0015",
+      "id": "GOV-0016",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2491,7 +2509,7 @@
       ]
     },
     {
-      "id": "GOV-0016",
+      "id": "GOV-0017",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2508,7 +2526,7 @@
       ]
     },
     {
-      "id": "GOV-0017",
+      "id": "GOV-0018",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2522,13 +2540,13 @@
         },
         {
           "file": "roadmap.md",
-          "line": 87,
+          "line": 89,
           "section": "Roadmap Steering Pointer > Work Intake And Execution Flow"
         }
       ]
     },
     {
-      "id": "GOV-0018",
+      "id": "GOV-0019",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2543,7 +2561,7 @@
       ]
     },
     {
-      "id": "GOV-0019",
+      "id": "GOV-0020",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2560,7 +2578,7 @@
       ]
     },
     {
-      "id": "GOV-0020",
+      "id": "GOV-0021",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2577,24 +2595,24 @@
       ]
     },
     {
-      "id": "GOV-0021",
+      "id": "GOV-0022",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
         "governance"
       ],
-      "rule": "Roadmap status must not outrun representative evidence.",
+      "rule": "Representative evidence must not be reclassified as roadmap truth when it belongs to the release, track, sprint, or package layer.",
       "score": 211,
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
           "line": 157,
-          "section": "Workflow — Packages & Closure > Roadmap And Work-Tracker Truth"
+          "section": "Workflow — Packages & Closure > Roadmap, Release, And Work-Tracker Truth"
         }
       ]
     },
     {
-      "id": "GOV-0022",
+      "id": "GOV-0023",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2609,7 +2627,7 @@
       ]
     },
     {
-      "id": "GOV-0023",
+      "id": "GOV-0024",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2624,7 +2642,7 @@
       ]
     },
     {
-      "id": "GOV-0024",
+      "id": "GOV-0025",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2641,7 +2659,7 @@
       ]
     },
     {
-      "id": "GOV-0025",
+      "id": "GOV-0026",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2656,7 +2674,7 @@
       ]
     },
     {
-      "id": "GOV-0026",
+      "id": "GOV-0027",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2674,7 +2692,7 @@
       ]
     },
     {
-      "id": "GOV-0027",
+      "id": "GOV-0028",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2758,7 +2776,7 @@
       ]
     },
     {
-      "id": "GOV-0028",
+      "id": "GOV-0029",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2769,22 +2787,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 135,
-          "section": "Roadmap Steering Pointer > Readiness To Start Work"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0029",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [],
-      "rule": "Broad rows must gain a linked spec or architecture document before active implementation starts.",
-      "score": 208,
-      "sources": [
-        {
-          "file": "roadmap.md",
-          "line": 137,
+          "line": 138,
           "section": "Roadmap Steering Pointer > Readiness To Start Work"
         }
       ]
@@ -2793,15 +2796,13 @@
       "id": "GOV-0030",
       "domain": "governance",
       "strength": "must",
-      "tags": [
-        "governance"
-      ],
-      "rule": "Non-trivial implementation changes must be driven by an active work package under work/packages/, unless the immediate work is the roadmap-sharpening step itself.",
+      "tags": [],
+      "rule": "Broad rows must gain a linked spec or architecture document before active implementation starts.",
       "score": 208,
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 141,
+          "line": 140,
           "section": "Roadmap Steering Pointer > Readiness To Start Work"
         }
       ]
@@ -2811,10 +2812,9 @@
       "domain": "governance",
       "strength": "must",
       "tags": [
-        "readiness",
         "governance"
       ],
-      "rule": "Direct work packages must cite the roadmap row they belong to, or the already-approved maintenance/refactor scope that makes them valid without a roadmap change.",
+      "rule": "Non-trivial implementation changes must be driven by an active work package under work/packages/, unless the immediate work is the roadmap-sharpening step itself.",
       "score": 208,
       "sources": [
         {
@@ -2829,15 +2829,16 @@
       "domain": "governance",
       "strength": "must",
       "tags": [
-        "ownership"
+        "readiness",
+        "governance"
       ],
-      "rule": "If a broad row is marked complete but still has known guardrail failures in the owner path it claims to close, the row must either name the remaining guardrail package or be downgraded to a capability-only status.",
+      "rule": "Direct work packages must cite the roadmap row they belong to, or the already-approved maintenance/refactor scope that makes them valid without a roadmap change.",
       "score": 208,
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 171,
-          "section": "Roadmap Steering Pointer > Roadmap Status Truth Policy"
+          "line": 147,
+          "section": "Roadmap Steering Pointer > Readiness To Start Work"
         }
       ]
     },
@@ -2853,7 +2854,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 183,
+          "line": 185,
           "section": "Roadmap Steering Pointer > Sprint Continuation And Package Split Policy"
         }
       ]
@@ -2870,7 +2871,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 204,
+          "line": 206,
           "section": "Roadmap Steering Pointer > Sprint Continuation And Package Split Policy"
         }
       ]
@@ -3248,7 +3249,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 125,
+          "line": 128,
           "section": "Roadmap Steering Pointer > AGPL Preparatory Work"
         }
       ]
@@ -3395,7 +3396,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 189,
+          "line": 191,
           "section": "Roadmap Steering Pointer > Sprint Continuation And Package Split Policy"
         }
       ]
@@ -3627,7 +3628,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 98,
+          "line": 100,
           "section": "Roadmap Steering Pointer > Work Intake And Execution Flow"
         }
       ]
@@ -3645,7 +3646,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 98,
+          "line": 100,
           "section": "Roadmap Steering Pointer > Work Intake And Execution Flow"
         }
       ]
@@ -3663,25 +3664,8 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 105,
+          "line": 107,
           "section": "Roadmap Steering Pointer > Work Intake And Execution Flow"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0050",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [
-        "governance"
-      ],
-      "rule": "Roadmap status must be reconciled with current work-tracker and representative scenario evidence.",
-      "score": 198,
-      "sources": [
-        {
-          "file": "roadmap.md",
-          "line": 150,
-          "section": "Roadmap Steering Pointer > Roadmap Status Truth Policy"
         }
       ]
     },
@@ -3906,7 +3890,7 @@
       ]
     },
     {
-      "id": "GOV-0051",
+      "id": "GOV-0050",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3928,7 +3912,7 @@
       ]
     },
     {
-      "id": "GOV-0052",
+      "id": "GOV-0051",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3945,7 +3929,7 @@
       ]
     },
     {
-      "id": "GOV-0053",
+      "id": "GOV-0052",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3960,7 +3944,7 @@
       ]
     },
     {
-      "id": "GOV-0054",
+      "id": "GOV-0053",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3977,7 +3961,7 @@
       ]
     },
     {
-      "id": "GOV-0055",
+      "id": "GOV-0054",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3992,7 +3976,7 @@
       ]
     },
     {
-      "id": "GOV-0056",
+      "id": "GOV-0055",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4007,7 +3991,7 @@
       ]
     },
     {
-      "id": "GOV-0057",
+      "id": "GOV-0056",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4022,7 +4006,7 @@
       ]
     },
     {
-      "id": "GOV-0058",
+      "id": "GOV-0057",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4039,7 +4023,7 @@
       ]
     },
     {
-      "id": "GOV-0059",
+      "id": "GOV-0058",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4054,7 +4038,7 @@
       ]
     },
     {
-      "id": "GOV-0060",
+      "id": "GOV-0059",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4069,7 +4053,7 @@
       ]
     },
     {
-      "id": "GOV-0061",
+      "id": "GOV-0060",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4084,7 +4068,7 @@
       ]
     },
     {
-      "id": "GOV-0062",
+      "id": "GOV-0061",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4099,7 +4083,7 @@
       ]
     },
     {
-      "id": "GOV-0063",
+      "id": "GOV-0062",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4116,7 +4100,7 @@
       ]
     },
     {
-      "id": "GOV-0064",
+      "id": "GOV-0063",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4131,7 +4115,7 @@
       ]
     },
     {
-      "id": "GOV-0065",
+      "id": "GOV-0064",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4146,7 +4130,7 @@
       ]
     },
     {
-      "id": "GOV-0066",
+      "id": "GOV-0065",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4178,7 +4162,7 @@
       ]
     },
     {
-      "id": "GOV-0067",
+      "id": "GOV-0066",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4195,7 +4179,7 @@
       ]
     },
     {
-      "id": "GOV-0068",
+      "id": "GOV-0067",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4301,7 +4285,7 @@
       ]
     },
     {
-      "id": "GOV-0069",
+      "id": "GOV-0068",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -4320,7 +4304,7 @@
       ]
     },
     {
-      "id": "GOV-0070",
+      "id": "GOV-0069",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4468,23 +4452,6 @@
       ]
     },
     {
-      "id": "GOV-0071",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [
-        "governance"
-      ],
-      "rule": "If a package discovers that a completed roadmap row still has an active representative blocker, the package must classify the mismatch as one of: - capability-complete but gate-open; - status-overstated and requiring roadmap correction; - new maintenance concern outside the original row",
-      "score": 184,
-      "sources": [
-        {
-          "file": "roadmap.md",
-          "line": 160,
-          "section": "Roadmap Steering Pointer > Roadmap Status Truth Policy"
-        }
-      ]
-    },
-    {
       "id": "TEST-0084",
       "domain": "testing",
       "strength": "must",
@@ -4556,7 +4523,7 @@
       ]
     },
     {
-      "id": "GOV-0072",
+      "id": "GOV-0070",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4571,7 +4538,7 @@
       ]
     },
     {
-      "id": "GOV-0073",
+      "id": "GOV-0071",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4586,7 +4553,7 @@
       ]
     },
     {
-      "id": "GOV-0074",
+      "id": "GOV-0072",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4601,7 +4568,7 @@
       ]
     },
     {
-      "id": "GOV-0075",
+      "id": "GOV-0073",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4619,7 +4586,7 @@
       ]
     },
     {
-      "id": "GOV-0076",
+      "id": "GOV-0074",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4768,7 +4735,7 @@
       ]
     },
     {
-      "id": "GOV-0077",
+      "id": "GOV-0075",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4783,7 +4750,7 @@
       ]
     },
     {
-      "id": "GOV-0078",
+      "id": "GOV-0076",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4873,7 +4840,7 @@
       ]
     },
     {
-      "id": "GOV-0079",
+      "id": "GOV-0077",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4890,7 +4857,7 @@
       ]
     },
     {
-      "id": "GOV-0080",
+      "id": "GOV-0078",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4907,7 +4874,7 @@
       ]
     },
     {
-      "id": "GOV-0081",
+      "id": "GOV-0079",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4971,7 +4938,7 @@
       ]
     },
     {
-      "id": "GOV-0082",
+      "id": "GOV-0080",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4982,42 +4949,8 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 139,
+          "line": 142,
           "section": "Roadmap Steering Pointer > Readiness To Start Work"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0083",
-      "domain": "governance",
-      "strength": "may",
-      "tags": [
-        "governance"
-      ],
-      "rule": "A roadmap row may be treated as complete only when no active package or active sprint is still fixing the same declared exit criterion.",
-      "score": 160,
-      "sources": [
-        {
-          "file": "roadmap.md",
-          "line": 155,
-          "section": "Roadmap Steering Pointer > Roadmap Status Truth Policy"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0084",
-      "domain": "governance",
-      "strength": "may",
-      "tags": [
-        "governance"
-      ],
-      "rule": "A sprint may not close while ../../roadmap.md says a relevant exit criterion is complete and the sprint's current package says that same criterion still fails.",
-      "score": 160,
-      "sources": [
-        {
-          "file": "roadmap.md",
-          "line": 165,
-          "section": "Roadmap Steering Pointer > Roadmap Status Truth Policy"
         }
       ]
     },
@@ -5054,7 +4987,7 @@
       ]
     },
     {
-      "id": "GOV-0085",
+      "id": "GOV-0081",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5071,7 +5004,7 @@
       ]
     },
     {
-      "id": "GOV-0086",
+      "id": "GOV-0082",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5088,7 +5021,7 @@
       ]
     },
     {
-      "id": "GOV-0087",
+      "id": "GOV-0083",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5118,7 +5051,7 @@
       ]
     },
     {
-      "id": "GOV-0088",
+      "id": "GOV-0084",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5127,7 +5060,7 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 105,
+          "line": 107,
           "section": "Roadmap Steering Pointer > Work Intake And Execution Flow"
         }
       ]
@@ -5150,7 +5083,7 @@
       ]
     },
     {
-      "id": "GOV-0089",
+      "id": "GOV-0085",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5167,7 +5100,7 @@
       ]
     },
     {
-      "id": "GOV-0090",
+      "id": "GOV-0086",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5182,7 +5115,7 @@
       ]
     },
     {
-      "id": "GOV-0091",
+      "id": "GOV-0087",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5199,7 +5132,7 @@
       ]
     },
     {
-      "id": "GOV-0092",
+      "id": "GOV-0088",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5214,7 +5147,7 @@
       ]
     },
     {
-      "id": "GOV-0093",
+      "id": "GOV-0089",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5231,7 +5164,7 @@
       ]
     },
     {
-      "id": "GOV-0094",
+      "id": "GOV-0090",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5246,7 +5179,7 @@
       ]
     },
     {
-      "id": "GOV-0095",
+      "id": "GOV-0091",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5263,7 +5196,7 @@
       ]
     },
     {
-      "id": "GOV-0096",
+      "id": "GOV-0092",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5281,7 +5214,7 @@
       ]
     },
     {
-      "id": "GOV-0097",
+      "id": "GOV-0093",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5311,7 +5244,7 @@
       ]
     },
     {
-      "id": "GOV-0098",
+      "id": "GOV-0094",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5322,13 +5255,13 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 125,
+          "line": 128,
           "section": "Roadmap Steering Pointer > AGPL Preparatory Work"
         }
       ]
     },
     {
-      "id": "GOV-0099",
+      "id": "GOV-0095",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5339,13 +5272,13 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 193,
+          "line": 195,
           "section": "Roadmap Steering Pointer > Sprint Continuation And Package Split Policy"
         }
       ]
     },
     {
-      "id": "GOV-0100",
+      "id": "GOV-0096",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5364,7 +5297,7 @@
       ]
     },
     {
-      "id": "GOV-0101",
+      "id": "GOV-0097",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5381,7 +5314,7 @@
       ]
     },
     {
-      "id": "GOV-0102",
+      "id": "GOV-0098",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5398,5 +5331,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-05-26T12:05:54.871Z"
+  "generatedAt": "2026-05-26T12:39:33.775Z"
 }

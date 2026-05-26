@@ -29,7 +29,7 @@ Test the three current rolling-restart theories, fix only confirmed bugs, rerun 
 ```text
 Representative artifact: none
 Visible first frontier: unknown
-Active package: work/packages/active-20260526-roadmap-semantics-normalization.md
+Active package: work/packages/done-20260526-roadmap-semantics-normalization.md
 Active package owner: workflow_tooling_owner
 Active package boundary: roadmap_authority
 Selected cause: roadmap_semantics_drift
@@ -39,7 +39,7 @@ Causal outcome: unknown
 Architecture gate: not-required / unknown
 Expected delta: unknown
 Current state: Roadmap mixes feature sequencing, implementation authorization, and live release status, making source-of-truth selection ambiguous.
-Allowed edits: roadmap.md, .kiro/steering/roadmap.md, work/README.md, work/RULES.md, work/releases/0.1-stabilization.md, work/packages/active-20260526-roadmap-semantics-normalization.md
+Allowed edits: roadmap.md, .kiro/steering/roadmap.md, .kiro/steering/workflow-guidelines/packages.md, .kiro/steering/system-guidelines.md, .kiro/steering/llm/core.md, .kiro/steering/llm/boot.md, work/README.md, work/RULES.md, work/releases/0.1-stabilization.md, work/sprints/active-2026-q2-rolling-restart-investigation.md, work/packages/done-20260526-roadmap-semantics-normalization.md, .kiro/steering/llm/architecture.md, .kiro/steering/llm/governance.md, .kiro/steering/llm/manifest.json, .kiro/steering/llm/rules.json
 Candidate runtime files: unknown
 Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
 Required latest proof: regression: npm run steering:llm:pack, regression: npm run work:advance -- --check
@@ -84,7 +84,7 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Lane: `causal-escalation`
    - Purpose: Analyze source code under H1, H2, H3, run scenarios, find and fix bugs, rerun rolling-restart to collect fresh evidence.
    - First-run reason: Test the three rolling-restart theories by analyzing source code, running experiments, and fixing bugs.
-8. [Roadmap Semantics Normalization](../packages/active-20260526-roadmap-semantics-normalization.md)
+8. [Roadmap Semantics Normalization](../packages/done-20260526-roadmap-semantics-normalization.md)
    - Lane: `lightweight-maintenance`
    - Purpose: Restore `roadmap.md` to stable feature sequence and AGPL scope semantics while moving live truth to tracker, release, and track documents.
    - First-run reason: Human review found roadmap semantics drift that can make LLM source-of-truth selection uncertain.

@@ -14,7 +14,7 @@ aliases below. Requirements are determined by the canonical lane group.
 
 | Canonical lane | Accepted aliases | Use when | Package requirement |
 | --- | --- | --- | --- |
-| `read-doc` | `read-review-doc-only` | Answering questions, reviewing, or editing explanatory docs without changing implementation truth. | No package unless implementation truth, roadmap status, architecture ownership, package truth, or validation obligations change. |
+| `read-doc` | `read-review-doc-only` | Answering questions, reviewing, or editing explanatory docs without changing implementation truth. | No package unless implementation truth, roadmap scope/state, architecture ownership, package truth, or validation obligations change. |
 | `maintenance` | `mechanical-maintenance`, `lightweight-maintenance` | Low-risk mechanical, tooling, template, generated steering, package metadata, or durable documentation cleanup. | Use one focused package and focused proof when tracker truth, package templates, workflow behavior, generated steering, or durable process docs change. Subagents are optional unless runtime ownership or shared contracts can change. |
 | `proof` | `test-only-proof`, `diagnostic-classification` | Tests, validation evidence, diagnostic classification, or proof-surface changes that do not alter runtime behavior. | Use the active package validation surface, or create one focused proof package when no active package owns the proof. Closure requires the focused proof and any required representative or diagnostic evidence. |
 | `experiment` | `bounded-experiment`, `fast-spike` | A bounded hypothesis, probe, or spike decides the next owner, boundary, action, or route. | Use a focused experiment/probe package with a pre-registered question, observable prediction or discriminator, proof command, and stop rule. Runtime changes are allowed only when the package explicitly owns the bounded experiment scope. |
@@ -108,7 +108,8 @@ All runtime code must strictly adhere to the following rules:
 ## Scope and Roadmap
 <a name="scope-and-roadmap"></a>
 
-*   All implementation work in this AGPL repository must be driven by `roadmap.md` or by rows mapped to `AGPL repo` in `edition-matrix.md`.
+*   All implementation work in this AGPL repository must stay within the feature scope and broad sequence defined by `roadmap.md`, and within rows mapped to `AGPL repo` in `edition-matrix.md`.
+*   `roadmap.md` is not an executable work queue or release-gate status board. Active implementation is authorized by work packages; live blocker and release truth live under `work/`.
 *   `product-roadmap.md` is a visibility board, not an implementation source. Do not implement Pro or Enterprise features here unless the request is explicitly AGPL-scoped preparatory work.
 
 ---

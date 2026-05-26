@@ -54,7 +54,7 @@ The system is called lagrange.
 Use the lightest process lane that protects the owner boundary:
 
 1. **Read/review/doc-only**: answer questions or edit explanatory docs. No work
-   package is required unless implementation truth, roadmap status, or
+   package is required unless implementation truth, roadmap scope/state, or
    architecture ownership changes.
 2. **Lightweight maintenance**: use one focused package and focused proof. Do
    not require causal ledgers, representative reruns, or delegated role

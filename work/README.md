@@ -5,6 +5,10 @@
 Internal execution planning, work packages, and sprint tracking live under
 `work/`.
 
+`roadmap.md` is the stable AGPL feature sequence and scope map. It does not
+activate packages, record the current blocker, or prove release gates. Use the
+documents under `work/` for executable state and live readiness truth.
+
 ## Directory Layout
 
 - `work/releases/`
@@ -39,7 +43,8 @@ Use one simple path for executable work:
 
 1. Capture the human idea.
 2. Triage it.
-3. Either sharpen `roadmap.md` first or create a direct work package.
+3. Sharpen `roadmap.md` first only when feature scope, product direction, or
+   broad sequence changes; otherwise create a direct work package.
 4. Work the package until done.
 5. Run `npm run work:close <package>` to validate, rename, refresh handoff,
    and stage the focused package slice.
@@ -50,14 +55,25 @@ Use one simple path for executable work:
 For release-scale stabilization, keep the layers distinct:
 
 ```text
+roadmap scope/sequence
+  -> release program
+    -> track
+      -> sprint
+        -> work package
+```
+
+Executable work still flows from the package upward:
+
+```text
 work package -> sprint -> track -> release program
 ```
 
-The release program owns release thesis and gates. Tracks own long-lived
-workstreams and cross-sprint invariants. Sprints group active execution and can
-be development, bugfix, stabilization, release-gate, or maintenance oriented.
-Packages remain the only executable unit and the only place to record package
-proof, validation, commit, and push ledgers.
+The roadmap constrains scope and sequence. The release program owns release
+thesis and gates. Tracks own long-lived workstreams and cross-sprint
+invariants. Sprints group active execution and can be development, bugfix,
+stabilization, release-gate, or maintenance oriented. Packages remain the only
+executable unit and the only place to record package proof, validation, commit,
+and push ledgers.
 
 For a compact dependency view between release tracks, sprints, and the active
 package, use `work/releases/0.1-dependency-map.md`.
@@ -209,7 +225,7 @@ the package explicitly records a heavier audit or architecture reason:
    pre-implementation validation in one pass.
 2. Use packages only for durable truth changes. Read-only answers, reviews,
    recommendations, and tiny docs-only observations stay in `read-doc` unless
-   they change implementation truth, roadmap status, architecture ownership,
+   they change implementation truth, roadmap scope/state, architecture ownership,
    package truth, or validation obligations.
 3. Representative reruns are the progress currency for release-gate sprints.
    Classification is an inline gate by default. Create a separate
@@ -539,7 +555,8 @@ proof is required.
 
 ## Triage Rule
 
-An idea must become a `roadmap.md` item first when it does any of these:
+An idea must become or update a `roadmap.md` item first when it does any of
+these:
 
 1. Adds a new feature area.
 2. Changes product scope or user-facing direction.
@@ -555,8 +572,10 @@ scope and is one of:
 4. Test harness stabilization.
 5. Architecture cleanup within an already-approved roadmap area.
 
-Direct work packages must still cite the roadmap row or existing subsystem they
-belong to.
+Direct work packages must still cite the roadmap row, existing subsystem, or
+already-approved maintenance/refactor scope they belong to. Do not use roadmap
+state as evidence that a release gate is green; cite the release, track,
+sprint, or package proof instead.
 
 ## Filename State Model
 

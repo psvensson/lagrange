@@ -42,7 +42,7 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 19. [ARCH-0012] Events may enqueue owner-key work; they must not execute long-running progression inline. _(see system-guidelines.md:231)_
 20. [ARCH-0015] Missing owner dependencies fail loudly with typed errors. They do not synthesize "allow by default" or equivalent fallback decisions. _(see system-guidelines.md:261)_
 21. [ARCH-0027] Participant executors emit outcomes and do not persist owner-managed phase transitions directly. _(see runtime-contracts.md:243)_
-22. [ARCH-0030] Read/review/doc-only: answer questions or edit explanatory docs. No work package is required unless implementation truth, roadmap status, or architecture ownership changes. _(see system-guidelines.md:56)_
+22. [ARCH-0030] Read/review/doc-only: answer questions or edit explanatory docs. No work package is required unless implementation truth, roadmap scope/state, or architecture ownership changes. _(see system-guidelines.md:56)_
 23. [ARCH-0032] Subscribers, bridges, queues, retry loops, cache hydration paths, and repair scheduling created by a phase must transfer to an explicit runtime owner before the phase completes. _(see system-guidelines.md:228)_
 24. [ARCH-0033] Package validation must prove the owner path and affected tail consumers. _(see system-guidelines.md:337)_
 25. [ARCH-0038] Bootstrap, join, and recovery phases must not remain the steady-state owner after the phase completes. _(see runtime-contracts.md:183)_

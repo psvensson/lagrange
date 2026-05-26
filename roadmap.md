@@ -34,7 +34,7 @@ linked spec or architecture document that makes the intended behavior concrete.
 | Symbol | Meaning |
 |--------|---------|
 | ✅     | Available at roadmap scope; release readiness may still require release-gate proof |
-| 🔧     | Active or approved implementation scope |
+| 🔧     | Approved implementation scope; execution still requires a work package |
 | 🔲     | Planned but not yet active implementation scope |
 
 ## Live Truth Pointers
@@ -71,7 +71,7 @@ Use `work/releases/0.1-stabilization.md` for release-gate truth,
 
 ### 0.1a. Topology Workflow Stabilization (March 2026)
 
-| Item | Status | Notes |
+| Item | Roadmap state | Scope notes |
 |------|--------|-------|
 | `replica_operations` single-writer cutover | ✅ | `RebalanceCoordinator` is the canonical writer/owner path |
 | Managed split durable-owner cutover | ✅ | `ManagedSplitWorkflow` owns split lifecycle and resume |
@@ -84,7 +84,7 @@ Use `work/releases/0.1-stabilization.md` for release-gate truth,
 
 ### 1. Distributed Transactions
 
-| Item | Status | Notes |
+| Item | Roadmap state | Scope notes |
 |------|--------|-------|
 | DistributedTransactionCoordinator skeleton | ✅ | Owns 2PC state machine |
 | Transaction state tables | ✅ | `sql_transactions`, `sql_transaction_participants`, `sql_write_operations` |
@@ -103,7 +103,7 @@ deterministic recovery/timeout handling.
 
 ### 2. Schema Migration Workflow
 
-| Item | Status |
+| Item | Roadmap state |
 |------|--------|
 | System table schema definitions | ✅ |
 | Schema version tracking | ✅ |
@@ -119,7 +119,7 @@ deterministic recovery/timeout handling.
 
 ### 3. Operational Visibility
 
-| Item | Status |
+| Item | Roadmap state |
 |------|--------|
 | Metrics instrumentation | ✅ |
 | Admin CLI | ✅ |
@@ -133,33 +133,32 @@ deterministic recovery/timeout handling.
 
 ### 4. Failure Simulations
 
-| Item | Capability Exists | Representative Gate Green | Notes |
-|------|-------------------|---------------------------|-------|
-| Distributed test harness | ✅ | ✅ | Harness exists and remains the proof surface |
-| Node failure tests | ✅ | ✅ | No active blocker contradicts this row |
-| Network partition tests | ✅ | ✅ | No active blocker contradicts this row |
-| Rolling restart tests | ✅ | 🔧 | Representative proof is carried by the active core topology control-plane rewrite track |
-| Node join under load | ✅ | ✅ | Historical representative proof exists |
-| Seed restart under load | ✅ | ✅ | No active blocker contradicts this row |
-| Sustained throughput tests | ✅ | 🔧 | Confirmation waits behind the active core topology control-plane rewrite track |
-| Write visibility tests | ✅ | ✅ | No active blocker contradicts this row |
-| WASM service failover | ✅ | ✅ | No active blocker contradicts this row |
-| Partition kill/heal | ✅ | ✅ | No active blocker contradicts this row |
-| 7-node stress scenarios | ✅ | 🔧 | Matrix re-entry waits on the active core topology control-plane rewrite track |
-| Postgres baseline comparison | ✅ | ✅ | No active blocker contradicts this row |
-| Invariant engine | ✅ | ✅ | Existing proof surface remains valid |
-| Disk full simulation | ✅ | ✅ | No active blocker contradicts this row |
-| Slow follower simulation | ✅ | ✅ | No active blocker contradicts this row |
-| In-cluster chaos injection | ✅ | ✅ | No active blocker contradicts this row |
+| Item | Roadmap state | Scope notes |
+|------|---------------|-------------|
+| Distributed test harness | ✅ | Harness exists and remains the proof surface |
+| Node failure tests | ✅ | Capability is in roadmap scope; live release-gate proof belongs in `work/releases/` |
+| Network partition tests | ✅ | Capability is in roadmap scope; live release-gate proof belongs in `work/releases/` |
+| Rolling restart tests | ✅ | Capability is in roadmap scope; current representative truth belongs in `work/sprints/current-blocker.md` and `work/releases/` |
+| Node join under load | ✅ | Capability is in roadmap scope; live release-gate proof belongs in `work/releases/` |
+| Seed restart under load | ✅ | Capability is in roadmap scope; live release-gate proof belongs in `work/releases/` |
+| Sustained throughput tests | ✅ | Capability is in roadmap scope; live release-gate proof belongs in `work/releases/` |
+| Write visibility tests | ✅ | Capability is in roadmap scope; live release-gate proof belongs in `work/releases/` |
+| WASM service failover | ✅ | Capability is in roadmap scope; live release-gate proof belongs in `work/releases/` |
+| Partition kill/heal | ✅ | Capability is in roadmap scope; live release-gate proof belongs in `work/releases/` |
+| 7-node stress scenarios | ✅ | Capability is in roadmap scope; live release-gate proof belongs in `work/releases/` |
+| Postgres baseline comparison | ✅ | Capability is in roadmap scope; live release-gate proof belongs in `work/releases/` |
+| Invariant engine | ✅ | Capability is in roadmap scope; live release-gate proof belongs in `work/releases/` |
+| Disk full simulation | ✅ | Capability is in roadmap scope; live release-gate proof belongs in `work/releases/` |
+| Slow follower simulation | ✅ | Capability is in roadmap scope; live release-gate proof belongs in `work/releases/` |
+| In-cluster chaos injection | ✅ | Capability is in roadmap scope; live release-gate proof belongs in `work/releases/` |
 
 ### Phase 0.1 Exit Criteria
 
 The system survives node failure, replica movement, rebalancing, and
 transaction retries without manual intervention.
 
-Exit remains open until the core topology control-plane rewrite proves the
-representative gates or moves each remaining failure into a narrower active
-blocker package with an explicit owner boundary and static drift ledger.
+The release program owns the live answer to whether these criteria are
+currently satisfied. This roadmap records the criteria and sequence only.
 
 ---
 
@@ -169,7 +168,7 @@ Focus shifts to developer experience.
 
 ### 1. Cluster Deployment Experience
 
-| Item | Status |
+| Item | Roadmap state |
 |------|--------|
 | Dockerfile | ✅ |
 | Bootstrap API | ✅ |
@@ -181,14 +180,14 @@ Focus shifts to developer experience.
 | `docker-compose` cluster | 🔲 |
 | Kubernetes Helm chart | 🔧 |
 
-`Kubernetes Helm chart` is the active row in this section. Further
+`Kubernetes Helm chart` is approved scope in this section. Further
 implementation work stays tied to a deployment description that covers values
 surface, networking, storage, bootstrap flow, and upgrade behavior before more
 task expansion begins.
 
 ### 2. Developer Workflow
 
-| Item | Status |
+| Item | Roadmap state |
 |------|--------|
 | Programmatic runtime | ✅ |
 | Iterator mode | ✅ |
@@ -206,7 +205,7 @@ Fast iteration for service authors. The goal is that the path from "I
 changed a line" to "I can test it in the cluster" stays under a few
 seconds for WASM services and under a minute for OCI containers.
 
-| Item | Status | Notes |
+| Item | Roadmap state | Scope notes |
 |------|--------|-------|
 | `lagrange service dev-install` zero-ceremony path | 🔲 | Point at local dir, CLI wraps in OCI layout, installs without registry push or full manifest |
 | `lagrange service init` scaffold | 🔲 | Generate minimal manifest + project structure for new services |
@@ -218,7 +217,7 @@ seconds for WASM services and under a minute for OCI containers.
 
 ### 4. Debugging Tools
 
-| Item | Status |
+| Item | Roadmap state |
 |------|--------|
 | Debug sessions | ✅ |
 | Breakpoints and snapshots | ✅ |
@@ -251,7 +250,7 @@ not outrank Phase 0.1 representative-gate closure or Phase 0.5 operator basics.
 These items are intentionally in scope for the AGPL repository even when they
 also enable future paid system services.
 
-| Item | Status | Notes |
+| Item | Roadmap state | Scope notes |
 |------|--------|-------|
 | Unified service lifecycle | ✅ | `ServiceLifecycleManager` + `ServiceReconciler` + `ServiceDispatcher` |
 | Built-in runtime services | ✅ | `sys-postgres-wire`, `sys-admin-meta`, `sys-wasm-meta` run on the service substrate |
@@ -272,7 +271,7 @@ also enable future paid system services.
 
 ### 2. PostgreSQL Compatibility
 
-| Item | Status |
+| Item | Roadmap state |
 |------|--------|
 | Postgres wire protocol | ✅ |
 | SQL dialect translation | ✅ |
@@ -285,7 +284,7 @@ also enable future paid system services.
 
 ### 3. Production Guarantees
 
-| Item | Status | Notes |
+| Item | Roadmap state | Scope notes |
 |------|--------|-------|
 | Replica count guarantees | ✅ | |
 | Replica recovery | ✅ | |
@@ -302,7 +301,7 @@ also enable future paid system services.
 
 ### 1. Multi-Stage Distributed Plans
 
-| Item | Status |
+| Item | Roadmap state |
 |------|--------|
 | Distributed query planner | ✅ |
 | Parallel coordinator | ✅ |
@@ -315,7 +314,7 @@ also enable future paid system services.
 
 ### 2. Advanced Runtime Services
 
-| Item | Status | Notes |
+| Item | Roadmap state | Scope notes |
 |------|--------|-------|
 | OCI container runtime | 🔧 | Process-isolated execution for container-packaged services. Align active work with `architecture/lagrange-service-registry.md`, `architecture/lagrange-service-manifest.md`, and `.kiro/specs/activation-cost-aware-placement/` |
 | OCI artifact fetch and extraction | 🔲 | Shared prerequisite: pull OCI artifacts, route by `media_type` to WASM or container activation |
@@ -339,7 +338,7 @@ enough for direct implementation tasks.
 
 #### Phase A — Stable External Service Contract
 
-| Item | Status | Notes |
+| Item | Roadmap state | Scope notes |
 |------|--------|-------|
 | Stable manifest registration contract | 🔲 | Versioned external contract for identity, runtime, capabilities, compatibility |
 | Stable service lifecycle API | 🔲 | Supported install/start/stop/upgrade hooks for third-party services |
@@ -350,7 +349,7 @@ enough for direct implementation tasks.
 
 #### Phase B — Advanced External Service APIs
 
-| Item | Status | Notes |
+| Item | Roadmap state | Scope notes |
 |------|--------|-------|
 | Upgrade / rollout API | 🔲 | Rolling, canary, all-at-once strategies |
 | External topology API | 🔲 | Supported node, partition, and leader introspection for installable services |
@@ -367,7 +366,7 @@ operator flow, desired durable state, and success criteria for the active slice.
 
 #### Artifact and Package Registry
 
-| Item | Status | Notes |
+| Item | Roadmap state | Scope notes |
 |------|--------|-------|
 | OCI artifact transport | 🔲 | Canonical and only artifact distribution format; all runtime kinds packaged as OCI |
 | Registry configuration (`add` / `list` / `remove`) | 🔲 | Multiple registries with priority and auth |
@@ -376,7 +375,7 @@ operator flow, desired durable state, and success criteria for the active slice.
 
 #### Manifest and Install UX
 
-| Item | Status | Notes |
+| Item | Roadmap state | Scope notes |
 |------|--------|-------|
 | Configuration schema support | 🔲 | JSON Schema for service config contracts |
 | Upgrade strategy declaration | 🔲 | Rolling, canary, all-at-once in manifest |
@@ -390,7 +389,7 @@ operator flow, desired durable state, and success criteria for the active slice.
 
 #### SQL / CLI Surface
 
-| Item | Status | Notes |
+| Item | Roadmap state | Scope notes |
 |------|--------|-------|
 | `INSTALL SERVICE` / `REMOVE SERVICE` / `UPGRADE SERVICE` SQL | 🔲 | Service lifecycle as first-class cluster operations |
 | `SHOW SERVICES` / `SHOW SERVICE REVISIONS` / `SHOW SERVICE INSTANCES` SQL | 🔲 | Observability via SQL |
@@ -409,7 +408,7 @@ coordination live in the same system:
 
 ### Native Artifact Store
 
-| Item | Status | Notes |
+| Item | Roadmap state | Scope notes |
 |------|--------|-------|
 | Artifact metadata tables (`artifacts`, `artifact_versions`, `artifact_objects`) | 🔲 | CDC-propagated system tables for artifact identity, versioning, and object tracking |
 | Blob-class chunk storage | 🔲 | Content-addressed immutable chunks in dedicated partitions with blob-optimized policies |

@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "active",
+  "status": "done",
   "intent": {
     "opened": "2026-05-26",
     "lane": "lightweight-maintenance",
@@ -14,20 +14,30 @@
     "boundary": "roadmap_authority",
     "dominantReason": "roadmap_semantics_drift",
     "currentState": "Roadmap mixes feature sequencing, implementation authorization, and live release status, making source-of-truth selection ambiguous.",
-    "nextAction": "Normalize roadmap semantics so roadmap.md is a stable AGPL feature sequence and scope map while live execution and release truth stay in work tracker, release, and track documents."
+    "nextAction": "Normalize roadmap semantics so roadmap.md is a stable AGPL feature sequence and scope map while live execution and release truth stay in work tracker, release, and track documents.",
+    "closed": "2026-05-26"
   },
   "scope": {
     "writeScope": [
       "roadmap.md",
       ".kiro/steering/roadmap.md",
+      ".kiro/steering/workflow-guidelines/packages.md",
+      ".kiro/steering/system-guidelines.md",
+      ".kiro/steering/llm/core.md",
+      ".kiro/steering/llm/boot.md",
       "work/README.md",
       "work/RULES.md",
       "work/releases/0.1-stabilization.md",
       "work/sprints/active-2026-q2-rolling-restart-investigation.md",
-      "work/packages/active-20260526-roadmap-semantics-normalization.md"
+      "work/packages/active-20260526-roadmap-semantics-normalization.md",
+      ".kiro/steering/llm/architecture.md",
+      ".kiro/steering/llm/governance.md",
+      ".kiro/steering/llm/manifest.json",
+      ".kiro/steering/llm/rules.json"
     ],
     "handoffFiles": [],
     "generatedFiles": [
+      ".kiro/steering/llm/architecture.md",
       ".kiro/steering/llm/governance.md",
       ".kiro/steering/llm/manifest.json",
       ".kiro/steering/llm/rules.json",
@@ -38,11 +48,16 @@
     "commitScope": [
       "roadmap.md",
       ".kiro/steering/roadmap.md",
+      ".kiro/steering/workflow-guidelines/packages.md",
+      ".kiro/steering/system-guidelines.md",
+      ".kiro/steering/llm/core.md",
+      ".kiro/steering/llm/boot.md",
       "work/README.md",
       "work/RULES.md",
       "work/releases/0.1-stabilization.md",
       "work/sprints/active-2026-q2-rolling-restart-investigation.md",
       "work/packages/active-20260526-roadmap-semantics-normalization.md",
+      ".kiro/steering/llm/architecture.md",
       ".kiro/steering/llm/governance.md",
       ".kiro/steering/llm/manifest.json",
       ".kiro/steering/llm/rules.json",
@@ -92,7 +107,8 @@
       "Prefer test-only-proof for tests that do not change runtime behavior.",
       "Prefer bounded-experiment for one same-owner hypothesis with inherited context."
     ]
-  }
+  },
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -170,11 +186,15 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 1. roadmap.md
 2. .kiro/steering/roadmap.md
-3. work/README.md
-4. work/RULES.md
-5. work/releases/0.1-stabilization.md
-6. work/sprints/active-2026-q2-rolling-restart-investigation.md
-7. work/packages/active-20260526-roadmap-semantics-normalization.md
+3. .kiro/steering/workflow-guidelines/packages.md
+4. .kiro/steering/system-guidelines.md
+5. .kiro/steering/llm/core.md
+6. .kiro/steering/llm/boot.md
+7. work/README.md
+8. work/RULES.md
+9. work/releases/0.1-stabilization.md
+10. work/sprints/active-2026-q2-rolling-restart-investigation.md
+11. work/packages/active-20260526-roadmap-semantics-normalization.md
 
 ## Out Of Scope
 
@@ -186,7 +206,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex-spark`
 - Scope shape: `leaf-slice`
 - Output profile: `medium`
-- Owned files: `roadmap.md`, `.kiro/steering/roadmap.md`, `work/README.md`, `work/RULES.md`, `work/releases/0.1-stabilization.md`, `work/sprints/active-2026-q2-rolling-restart-investigation.md`, `work/packages/active-20260526-roadmap-semantics-normalization.md`
+- Owned files: `roadmap.md`, `.kiro/steering/roadmap.md`, `.kiro/steering/workflow-guidelines/packages.md`, `.kiro/steering/system-guidelines.md`, `.kiro/steering/llm/core.md`, `.kiro/steering/llm/boot.md`, `work/README.md`, `work/RULES.md`, `work/releases/0.1-stabilization.md`, `work/sprints/active-2026-q2-rolling-restart-investigation.md`, `work/packages/active-20260526-roadmap-semantics-normalization.md`, `.kiro/steering/llm/architecture.md`, `.kiro/steering/llm/governance.md`, `.kiro/steering/llm/manifest.json`, `.kiro/steering/llm/rules.json`
 - Do-not-edit scope: `src/` outside declared writeScope
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -215,9 +235,17 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: <owner>; files-changed: <paths or none>; validation: <focused proof and parent revalidated focused proof: yes>; outcome: <validated|blocked>.
-- [ ] action: verification-fix; owner: <owner>; files-changed: <paths or none>; validation: <verification proof and parent revalidated focused proof: yes>; outcome: <validated|blocked>.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: <validated|not-needed>.
+- [x] action: implementation; owner: workflow_tooling_owner; files-changed: roadmap.md, .kiro/steering/roadmap.md, .kiro/steering/workflow-guidelines/packages.md, .kiro/steering/system-guidelines.md, .kiro/steering/llm/core.md, .kiro/steering/llm/boot.md, work/README.md, work/RULES.md, work/releases/0.1-stabilization.md, work/sprints/active-2026-q2-rolling-restart-investigation.md, work/packages/active-20260526-roadmap-semantics-normalization.md, .kiro/steering/llm/architecture.md, .kiro/steering/llm/governance.md, .kiro/steering/llm/manifest.json, .kiro/steering/llm/rules.json; validation: `npm run steering:llm:pack`, `npm run work:advance -- --check`, `npm run work:validate -- --entry work/packages/active-20260526-roadmap-semantics-normalization.md`, `npm run work:validate -- --pre-impl work/packages/active-20260526-roadmap-semantics-normalization.md`, `npm run work:package:doctor -- --suggest work/packages/active-20260526-roadmap-semantics-normalization.md`, `git diff --check`, targeted old-roadmap-authority `rg`; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: verification-fix; owner: Maxwell; files-changed: roadmap.md; validation: verifier found the `Active or approved implementation scope` legend wording still leaked live-work semantics; changed it to `Approved implementation scope; execution still requires a work package`, then reran `npm run steering:llm:pack`, `npm run work:advance -- --check`, entry/pre-impl validation, package doctor, `git diff --check`, and targeted old-roadmap-authority `rg`; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md, work/sprints/active-2026-q2-rolling-restart-investigation.md; validation: `npm run work:repair`; outcome: validated.
+
+Theory ledger: no ledger update. This package changes roadmap and workflow source-of-truth semantics only; it does not record new runtime, representative evidence, or causal-route knowledge.
+
+## Commit And Push Ledger
+
+1. Focused package commit: f694a705658548dd4bf90097a0679c47653798b4
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
 
 ## Validation
 

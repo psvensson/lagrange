@@ -152,22 +152,23 @@ Durable boundary changes update `architecture/current-owner-maps.md` or the
 relevant architecture record in the same work cycle. Mechanically checkable
 boundary rules get a static guardrail or a linked follow-on before closure.
 
-## Roadmap And Work-Tracker Truth
+## Roadmap, Release, And Work-Tracker Truth
 
-Roadmap status must not outrun representative evidence.
+Roadmap state is not release-gate proof. Representative evidence must not be
+reclassified as roadmap truth when it belongs to the release, track, sprint, or
+package layer.
 
 Required rules:
 
-1. A complete roadmap row means the capability exists and declared exit
-   evidence is not contradicted by an active package or representative
-   scenario.
-2. If a package fixes a failure that belongs to a completed roadmap row, the
-   package classifies the mismatch as capability-complete but gate-open,
-   status-overstated, or new maintenance concern.
-3. Scenario-driven rows such as failure simulation, topology stabilization, and
-   production guarantees require named representative evidence, not only unit
-   proof.
-4. Before sprint closure, reconcile active packages with `../../roadmap.md` and
-   `../../architecture/current-owner-maps.md`.
+1. `../../roadmap.md` constrains AGPL feature scope and broad sequence only.
+   It does not activate packages, close sprints, or certify release readiness.
+2. If a package fixes a failure under an available roadmap row, keep the live
+   blocker and proof in the package, sprint, track, and release documents.
+3. Scenario-driven release gates such as failure simulation, topology
+   stabilization, and production guarantees require named representative
+   evidence, not only roadmap state or unit proof.
+4. Before sprint closure, reconcile active packages with release, track, and
+   architecture owner truth; touch the roadmap only when feature scope,
+   sequencing, or AGPL applicability changed.
 5. Roadmap corrections discovered during implementation land with the package
    or sprint closure that discovered them.
