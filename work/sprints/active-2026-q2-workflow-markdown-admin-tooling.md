@@ -62,20 +62,20 @@ stale or manually drifted state.
 ```text
 Representative artifact: none
 Visible first frontier: unknown
-Active package: work/packages/done-20260526-workflow-admin-transaction-commands.md
+Active package: work/packages/done-20260526-workflow-admin-validator-enforcement.md
 Active package owner: workflow_tooling_owner
-Active package boundary: markdown_admin_route_transactions
+Active package boundary: markdown_admin_validation_contract
 Selected cause: manual_workflow_markdown_admin_latency
-Required action: Add transaction-safe admin commands for package routing, sprint advancement, track/release attachment, and package migration so recurring workflow state changes do not require hand-edited Markdown.
+Required action: Enforce tool-owned workflow Markdown semantics in validators and steering: reject stale active references, missing generated handoff refreshes, manual ledger drift, and roadmap execution semantics.
 Representative status: unknown
 Causal outcome: unknown
 Architecture gate: not-required / unknown
 Expected delta: unknown
 Current state: New package scaffolded from the shared work-package schema.
-Allowed edits: scripts/work-admin.js, scripts/work-package-route-after-rerun.js, scripts/work-sprint-advance.js, scripts/work-track-summary.js, scripts/work-tracker.js, scripts/list-commands.js, package.json, work/RULES.md, work/README.md, test/scripts/work-admin.test.js, test/scripts/work-sprint-advance.test.js
+Allowed edits: scripts/work-tracker.js, scripts/work-close.js, package.json, work/RULES.md, work/README.md, .kiro/steering/workflow-guidelines/packages.md, .kiro/steering/system-guidelines.md, .kiro/steering/llm/core.md, .kiro/steering/llm/boot.md, .kiro/steering/llm/governance.md, .kiro/steering/llm/rules.json, test/scripts/work-tracker-workflow-admin.test.js
 Candidate runtime files: unknown
 Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
-Required latest proof: regression: node --test test/scripts/work-admin.test.js test/scripts/work-sprint-advance.test.js, supporting: npm run work:admin -- --help, supporting: git diff --check -- scripts/work-admin.js scripts/work-package-route-after-rerun.js scripts/work-sprint-advance.js scripts/work-track-summary.js scripts/work-tracker.js scripts/list-commands.js package.json work/RULES.md work/README.md test/scripts/work-admin.test.js test/scripts/work-sprint-advance.test.js work/packages/done-20260526-workflow-admin-transaction-commands.md work/sprints/active-2026-q2-workflow-markdown-admin-tooling.md
+Required latest proof: regression: node --test test/scripts/work-tracker-workflow-admin.test.js, regression: npm run steering:llm:pack, supporting: git diff --check -- scripts/work-tracker.js scripts/work-close.js package.json work/RULES.md work/README.md .kiro/steering/workflow-guidelines/packages.md .kiro/steering/system-guidelines.md .kiro/steering/llm/core.md .kiro/steering/llm/boot.md .kiro/steering/llm/governance.md .kiro/steering/llm/rules.json .kiro/steering/llm/manifest.json test/scripts/work-tracker-workflow-admin.test.js work/packages/done-20260526-workflow-admin-validator-enforcement.md work/sprints/active-2026-q2-workflow-markdown-admin-tooling.md
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -121,7 +121,7 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - First-run reason: cross-document state changes are where manual Markdown
      edits most often create stale or contradictory tracker truth.
 
-5. [Workflow Admin Validator Enforcement](../packages/todo-20260526-workflow-admin-validator-enforcement.md)
+5. [Workflow Admin Validator Enforcement](../packages/done-20260526-workflow-admin-validator-enforcement.md)
    - Lane: `lightweight-maintenance`
    - Purpose: enforce tool-owned workflow Markdown semantics in validators and
      steering, including stale active references, missing generated handoff

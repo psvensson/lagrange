@@ -6119,6 +6119,67 @@ function validateDiscoveryRef(metadata, filePath) {
   return errors;
 }
 
+function validateWorkflowAdminSemantics(filePath, content, fileStatus, metadata, options = {}) {
+  const errors = [];
+  const relativePath = normalizeRelativePath(filePath);
+
+  // 1. Stale active references validation
+  const staleRegex = /\b(active|todo)-([a-zA-Z0-9-]+)\.md\b/g;
+  let match;
+  while ((match = staleRegex.exec(content)) !== null) {
+    const fullMatch = match[0];
+    const baseSlug = match[2];
+    const candidateDonePath = `work/packages/done-${baseSlug}.md`;
+    if (fsSync.existsSync(candidateDonePath)) {
+      errors.push(`${relativePath}: contains stale active reference "${fullMatch}" (package has been closed to "${path.basename(candidateDonePath)}").`);
+    }
+  }
+
+  // 2. Missing generated handoff refreshes validation
+  if (options.phase === VALIDATION_PHASE_CLOSURE && fileStatus === STATUS_ACTIVE) {
+    const blockerPath = 'work/sprints/current-blocker.json';
+    if (fsSync.existsSync(blockerPath)) {
+      try {
+        const blockerContent = fsSync.readFileSync(blockerPath, 'utf8');
+        const blocker = JSON.parse(blockerContent);
+        if (normalizeRelativePath(blocker.package) !== relativePath) {
+          errors.push(`${relativePath}: current-blocker.json is out of sync or missing generated handoff refresh (expected package "${relativePath}", got "${blocker.package}").`);
+        }
+      } catch (err) {
+        errors.push(`${relativePath}: error reading/parsing current-blocker.json: ${err.message}`);
+      }
+    } else {
+      errors.push(`${relativePath}: current-blocker.json is missing; generated handoff refresh is required.`);
+    }
+  }
+
+  // 3. Manual ledger drift & format drift
+  if (content.includes('parent revalidated focused proof') && !content.includes('parent revalidated focused proof: yes')) {
+    errors.push(`${relativePath}: parent revalidated focused proof must be exactly "yes" to prevent ledger drift.`);
+  }
+
+  // 4. Roadmap execution semantics
+  if (metadata && metadata.lane) {
+    const allowedLanes = [
+      'mechanical-maintenance',
+      'lightweight-maintenance',
+      'single-file-runtime',
+      'runtime-owner-boundary',
+      'scenario-release-gate',
+      'test-only-proof',
+      'bounded-experiment',
+      'diagnostic-classification',
+      'discovery',
+      'fast-spike'
+    ];
+    if (!allowedLanes.includes(metadata.lane)) {
+      errors.push(`${relativePath}: lane "${metadata.lane}" violates roadmap execution semantics.`);
+    }
+  }
+
+  return errors;
+}
+
 function isEpicPackage(filePath, content, options = {}) {
   if (options.kind === 'epic') {
     return true;
@@ -6196,6 +6257,7 @@ function runPackageValidationsSync(filePath, content, fileStatus, metadata, opti
 
   if (phase !== VALIDATION_PHASE_ENTRY && fileStatus === STATUS_ACTIVE) {
     errors.push(...validateDiscoveryRef(metadata, relativePath));
+    errors.push(...validateWorkflowAdminSemantics(filePath, content, fileStatus, metadata, { ...options, phase }));
   }
   errors.push(...validateTheoryLedgerReferenceContinuity(
     relativePath,
