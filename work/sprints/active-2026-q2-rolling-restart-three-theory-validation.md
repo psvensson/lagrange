@@ -20,25 +20,33 @@ Test the three current rolling-restart failure theories against the latest repre
 - Stop or escalate rule: if focused proof cannot distinguish the three theories or the rerun stays `evidence_missing` with no admin/recovery/evidence movement, stop for an autonomous architecture experiment or human escalation.
 - Next best package: open or focus the successor for `operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait`.
 
+## Theory Loop Sprint
+
+- Central problem: priority recovery eligible but no operation created during rolling-restart
+- Representative artifact: test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json
+- Success condition: rolling restart succeeds and all nodes reach ACTIVE status
+- Iteration rule: create or update one compact theory package with 1-3 theories, read source/log evidence first, implement only confirmed bugs, then record each theory as supported, avoided, falsified, fixed, migrated, or needs-rerun.
+- Ceremony budget: use `npm run work:theory-loop -- next|record|fix` for package and ledger updates before hand-editing markdown.
+
 ## Current Edge Card
 
 ```text
 Representative artifact: test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json
 Visible first frontier: priority_recovery_partition_progress / operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait
-Active package: work/packages/done-20260526-20260526-rolling-restart-three-theory-validation.md
+Active package: work/packages/done-20260526-rolling-restart-operation-workflow-owner-workflow-progress-triage.md
 Active package owner: operation_workflow_owner
 Active package boundary: workflow_progress
 Selected cause: priority_recovery_event_driven_wait
-Required action: Open or focus the successor for operation_workflow_owner / workflow_progress priority recovery event-driven wait; do not patch H1/H3 from the older evidence-missing artifact in this package.
+Required action: Triage priority_recovery_partition_progress with combined scenario evidence before runtime edits.
 Representative status: active
 Causal outcome: accept_classified_backpressure
-Architecture gate: selected / open-architecture-package
-Expected delta: The rerun populated active-gate evidence and migrated the first frontier to operation_workflow_owner / workflow_progress with priorityRecoveryResiduals witnessCount=5 and splitRequired=true.
-Current state: Three-theory sprint executed. H2 was confirmed as a diagnostics/report sidecar-loading bug and fixed by loading linked failure-bundle and triage sidecars before route, topology, causal, and representative summaries. Baseline H1/H3 are recorded as avoided symptoms (admin ECONNREFUSED after durable rejoin and control_snapshot_authority_unavailable), because no runtime patch was selected and the fresh rerun migrated. The post-diagnostics rolling-restart rerun failed on a migrated frontier: operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait with active-gate evidence populated.
-Allowed edits: work/packages/done-20260526-20260526-rolling-restart-three-theory-validation.md, work/sprints/active-2026-q2-rolling-restart-three-theory-validation.md, work/sprints/current-blocker.json, work/sprints/current-blocker.md, work/theory-ledger.md, work/README.md, package.json, scripts/list-commands.js, scripts/work-theory-ledger.js, scripts/work-theory-loop.js, scripts/work-tracker.js, test/scripts/work-theory-ledger.test.js, test/scripts/work-theory-loop.test.js, test/scripts/work-tracker-package-doctor-ledger.test.js, src/admin/admin-websocket-api-segment-1.js, src/admin/admin-control-snapshot-class-part-2.js, src/admin/admin-service-discovery-readiness-methods.js, src/bootstrap/bootstrap-api-server-methods.js, src/bootstrap/bootstrap-readiness-ladder.js, src/bootstrap/startup-recovery-coordinator.js, src/bootstrap/owners/bootstrap-readiness-owner-class-part-1.js, src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js, src/control-plane/control-plane-snapshot-owner.js, src/transport/message-router.js, scripts/artifact-sidecar-loader.js, scripts/analyze-causal-model.js, scripts/analyze-topology-convergence.js, scripts/summarize-representative-evidence.js, scripts/work-scenario-route.js, test/admin/admin-control-snapshot.test.js, test/bootstrap/bootstrap-api.test.js, test/bootstrap/bootstrap-readiness-ladder.test.js, test/bootstrap/startup-recovery-coordinator.test.js, test/distributed/harness/__tests__/cluster.test-part-2.js, test/distributed/harness/__tests__/cluster.test-part-4-control-snapshot-coverage.js, test/distributed/harness/__tests__/failure-bundle-core-07-test-cases.js, test/scripts/analyze-topology-convergence.test.js, test/scripts/summarize-representative-evidence.test.js, test/transport/message-router.test.js
-Candidate runtime files: src/admin/admin-websocket-api-segment-1.js, src/admin/admin-control-snapshot-class-part-2.js, src/admin/admin-service-discovery-readiness-methods.js, src/bootstrap/bootstrap-api-server-methods.js, src/bootstrap/bootstrap-readiness-ladder.js, src/bootstrap/startup-recovery-coordinator.js, src/bootstrap/owners/bootstrap-readiness-owner-class-part-1.js, src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js, src/control-plane/control-plane-snapshot-owner.js, src/transport/message-router.js
+Architecture gate: watching / unknown
+Expected delta: Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.
+Current state: Scaffolded from representative evidence for priority_recovery_partition_progress.
+Allowed edits: unknown
+Candidate runtime files: unknown
 Forbidden edits: Owners decide admin readiness, bootstrap recovery readiness, and active-gate admission; diagnostics and harness evidence may observe but must not override owner outcomes.
-Required latest proof: falsifier: npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-20260526T140236Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason evidence_missing --explain active_gate_snapshot_coverage, regression: npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json, baseline: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-three-theory-validation-20260526T140236Z.report.json --explain active_gate_snapshot_coverage, baseline: npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-three-theory-validation-20260526T140236Z.report.json, focused: node --test test/scripts/summarize-representative-evidence.test.js, focused: node --test --test-name-pattern "loads linked failure-bundle sidecars" test/scripts/analyze-topology-convergence.test.js, supporting: node --test test/scripts/work-theory-ledger.test.js test/scripts/work-tracker-package-doctor-ledger.test.js, supporting: node --test test/scripts/work-theory-loop.test.js, supporting: npm run work:theory-ledger -- validate, supporting: npm run work:theory-loop -- help, rerun: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --verbose, post-rerun: npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --json
+Required latest proof: falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json, regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --markdown, supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --markdown
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -56,6 +64,11 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Lane: `causal-escalation`
    - Purpose: Completed H1/H2/H3 discriminator; H2 diagnostics sidecar loading was fixed and rerun migrated to operation-workflow priority recovery.
    - First-run reason: Latest representative evidence routed to `active_gate_snapshot_coverage / evidence_missing` after priority recovery residuals reached zero.
+2. [Artifact Triage - operation_workflow_owner - workflow_progress](../packages/done-20260526-rolling-restart-operation-workflow-owner-workflow-progress-triage.md)
+   - Lane: `diagnostic-classification`
+   - Purpose: Triage priority_recovery_partition_progress with combined scenario evidence before runtime edits.
+   - First-run reason: Latest representative evidence routed to `operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait` after post-diagnostics rerun.
+
 
 ## Proof Ladder
 
