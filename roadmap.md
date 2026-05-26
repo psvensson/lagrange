@@ -1,9 +1,13 @@
 # Lagrange AGPL Roadmap
 
-This document is the implementation roadmap for the AGPL repository.
+This document is the stable AGPL feature sequence and scope map. It answers
+which features belong in this repository and the intended order in which broad
+capabilities mature.
 
-Only items in this file may be used to create specs, tasks, or code changes in
-this repository.
+This document does not activate packages, close release gates, record the
+current blocker, or certify that representative proof is green. Executable work
+is authorized by active work packages under `work/packages/`; live execution and
+release readiness live under `work/`.
 
 Cross-edition product status lives in `product-roadmap.md`.
 Edition ownership and implementation-home rules live in `edition-matrix.md`.
@@ -22,22 +26,28 @@ Lagrange evolves in stages:
 The roadmap preserves Lagrange's core advantage: data locality + programmable
 execution + strong distributed semantics.
 
-Broad rows may guide implementation only when they are paired with a linked spec
-or architecture document that makes the intended scope concrete.
+Broad rows may constrain implementation scope only when they are paired with a
+linked spec or architecture document that makes the intended behavior concrete.
 
-## Status Legend
+## Roadmap State Legend
 
-| Symbol | Meaning      |
-|--------|--------------|
-| ✅     | Done         |
-| 🔧     | In Progress  |
-| 🔲     | Not Started  |
+| Symbol | Meaning |
+|--------|---------|
+| ✅     | Available at roadmap scope; release readiness may still require release-gate proof |
+| 🔧     | Active or approved implementation scope |
+| 🔲     | Planned but not yet active implementation scope |
 
-For Phase 0.1 closure, status is split when runtime proof matters:
+## Live Truth Pointers
 
-1. `Capability Exists` means the implementation or guardrail exists.
-2. `Representative Gate Green` means the current representative proof for that
-   capability is green and not contradicted by an active sprint/package.
+Use these documents for mutable execution and readiness state:
+
+| Question | Source of truth |
+| --- | --- |
+| Current active package, blocker, owner, and next action | `npm run work:context`, `work/sprints/current-blocker.md` |
+| Release-gate thesis, risk, and closure state | `work/releases/0.1-stabilization.md` |
+| Release-specific ordering between tracks | `work/releases/0.1-dependency-map.md` |
+| Long-lived problem ownership and invariant state | `work/tracks/*.md` |
+| Package-local proof, validation, and closure evidence | `work/packages/*.md` |
 
 ---
 
@@ -50,23 +60,14 @@ partition groups, CDC propagation, deterministic control-plane workflows, and
 system-table cache. Before productization, a few foundational capabilities must
 be completed.
 
-### 0.1 Status Rebaseline
+### 0.1 Release Truth Pointer
 
-Phase 0.1 is capability-complete in several areas, but not exit-complete.
-Representative gate status is the current source of truth for closure.
+Phase 0.1 feature scope is listed below. Whether the release is currently
+exit-complete is intentionally not tracked in this roadmap.
 
-Open exit blockers as of May 23, 2026:
-
-| Exit area | Capability Exists | Representative Gate Green | Current blocker |
-|-----------|-------------------|---------------------------|-----------------|
-| Core topology control-plane rewrite | ✅ | 🔧 | Rewrite sprint closed in `work/sprints/archived/done-2026-q2-core-topology-control-plane-rewrite.md`; final package `work/packages/done-20260508-core-topology-legacy-path-deletion-and-proof.md` cut mutation readiness over to `projectionReadinessContract`; next representative harness rerun should open a fresh package only if it exposes a new owner-boundary blocker |
-| Spec-led runtime modularization follow-on | 🔲 | 🔧 | Active successor sprint in `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`; activated by human direction after the prior rolling-restart package closed |
-| Rolling restart under load | ✅ | 🔧 | Gate remains open, but the rolling-restart residuals are archived as predecessor evidence behind the core topology control-plane rewrite track |
-| Priority recovery progress under load | ✅ | 🔧 | Priority-recovery progress remains evidence for the operation-owner successor packages instead of a separate active representative track |
-| Workflow steering & template noise reduction | ✅ | 🔧 | Active sprint in `work/sprints/active-2026-q2-workflow-steering-core-logic-hardening.md`; active package `work/packages/active-20260523-steering-template-noise-reduction.md` is deduplicating rule compiler outputs, shrinking templates, and aligning subagent validation wording |
-| Metadata gateway and owner-ingress audit | ✅ | ✅ | `npm run test:metadata-gateway:audit` passed on April 26, 2026 |
-| Decision-boundary guardrail | ✅ | ✅ | `npm run audit:guideline:decision-boundaries` passed on April 26, 2026 |
-| Literal-owner guardrail | ✅ | ✅ | `npm run audit:guideline:literals` passed on April 27, 2026 with 0 new and 0 inherited violations; the inherited baseline is retired at 0 entries |
+Use `work/releases/0.1-stabilization.md` for release-gate truth,
+`work/releases/0.1-dependency-map.md` for track ordering, and
+`npm run work:context` for the active blocker.
 
 ### 0.1a. Topology Workflow Stabilization (March 2026)
 
