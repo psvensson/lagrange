@@ -25,21 +25,21 @@ Test the three current rolling-restart theories, fix only confirmed bugs, rerun 
 
 ```text
 Representative artifact: none
-Visible first frontier: priority_recovery_partition_progress
-Active package: work/packages/done-20260526-rolling-restart-three-theory-source-analysis-verification.md
-Active package owner: operation_workflow_owner
-Active package boundary: workflow_progress
-Selected cause: priority_recovery_event_driven_wait
-Required action: Analyze source code under H1, H2, H3, run scenarios, find and fix bugs, rerun rolling-restart to collect fresh evidence
-Representative status: reduced-migrated-after-h2-fix
+Visible first frontier: unknown
+Active package: work/packages/active-20260526-roadmap-semantics-normalization.md
+Active package owner: workflow_tooling_owner
+Active package boundary: roadmap_authority
+Selected cause: roadmap_semantics_drift
+Required action: Normalize roadmap semantics so roadmap.md is a stable AGPL feature sequence and scope map while live execution and release truth stay in work tracker, release, and track documents.
+Representative status: unknown
 Causal outcome: unknown
 Architecture gate: not-required / unknown
 Expected delta: unknown
-Current state: New package scaffolded from the shared work-package schema.
-Allowed edits: work/releases/0.1-dependency-map.md, work/tracks/topology-convergence.md, src/rebalancer/rebalance-coordinator-priority-budget-helper.js
+Current state: Roadmap mixes feature sequencing, implementation authorization, and live release status, making source-of-truth selection ambiguous.
+Allowed edits: roadmap.md, .kiro/steering/roadmap.md, work/README.md, work/RULES.md, work/releases/0.1-stabilization.md, work/packages/active-20260526-roadmap-semantics-normalization.md
 Candidate runtime files: unknown
 Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
-Required latest proof: falsifier: npm run work:advance -- --check, regression: npm run work:advance -- --check
+Required latest proof: regression: npm run steering:llm:pack, regression: npm run work:advance -- --check
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 

@@ -4,27 +4,32 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: No active work package. Start a new package when implementation resumes.
+Theory under test: Roadmap mixes feature sequencing, implementation authorization, and live release status, making source-of-truth selection ambiguous.
 
-Causal question: none
+Causal question: roadmap_semantics_drift
 
-Implementation slice: Create or activate one focused package for the next executable concern.
+Implementation slice: Normalize roadmap semantics so roadmap.md is a stable AGPL feature sequence and scope map while live execution and release truth stay in work tracker, release, and track documents.
 
 Implementation files:
 
-1. None recorded
+1. `roadmap.md`
+2. `.kiro/steering/roadmap.md`
+3. `work/README.md`
+4. `work/RULES.md`
+5. `work/releases/0.1-stabilization.md`
+6. `work/packages/active-20260526-roadmap-semantics-normalization.md`
 
 Expected implementation delta: unknown
 
-Falsifying probe: unknown
+Falsifying probe: regression: npm run steering:llm:pack
 
-Stop rule: unknown
+Stop rule: No architecture decision gate is required for this package.
 
 Sprint: `work/sprints/active-2026-q2-rolling-restart-investigation.md`
 
-Package: `none`
+Package: `work/packages/active-20260526-roadmap-semantics-normalization.md`
 
-Workflow lane: `none`
+Workflow lane: `lightweight-maintenance`
 
 Scenario: `none`
 
@@ -34,35 +39,37 @@ Playback: `none`
 
 ## Boundary
 
-Owner: `none`
+Owner: `workflow_tooling_owner`
 
-Boundary: `none`
+Boundary: `roadmap_authority`
 
-Dominant reason: `none`
+Dominant reason: `roadmap_semantics_drift`
 
-Current state: No active work package. Start a new package when implementation resumes.
+Current state: Roadmap mixes feature sequencing, implementation authorization, and live release status, making source-of-truth selection ambiguous.
 
 ## Next Action
 
-Create or activate one focused package for the next executable concern.
+Normalize roadmap semantics so roadmap.md is a stable AGPL feature sequence and scope map while live execution and release truth stay in work tracker, release, and track documents.
 
 ## Proof Ladder
 
-1. None recorded
+1. `regression: npm run steering:llm:pack`
+2. `regression: npm run work:advance -- --check`
 
 ## Model Fit
 
-Package class: `unknown`
+Package class: `bounded-implementation`
 
-Intended minimum model: `unknown`
+Intended minimum model: `gpt-5.3-codex-spark`
 
-Scope shape: `unknown`
+Scope shape: `leaf-slice`
 
-Output profile: `unknown`
+Output profile: `medium`
 
 Escalation triggers:
 
-1. None recorded
+1. `owned files expand beyond this package`
+2. `a frozen decision must be reopened`
 
 ## Theory Ledger References
 
@@ -212,9 +219,9 @@ Runtime promotion rule: `unknown`
 
 ## Architecture Decision Gate
 
-Status: `unknown`
+Status: `not-required`
 
-Trigger: `unknown`
+Trigger: `none`
 
 Trigger evidence:
 
@@ -226,13 +233,18 @@ Choices:
 
 Selected choice: `unknown`
 
-Gate next action: unknown
+Gate next action: No architecture decision gate is required for this package.
 
 ## Scope
 
 Write scope:
 
-1. None recorded
+1. `roadmap.md`
+2. `.kiro/steering/roadmap.md`
+3. `work/README.md`
+4. `work/RULES.md`
+5. `work/releases/0.1-stabilization.md`
+6. `work/packages/active-20260526-roadmap-semantics-normalization.md`
 
 Handoff files:
 
@@ -240,8 +252,11 @@ Handoff files:
 
 Generated files:
 
-1. `work/sprints/current-blocker.json`
-2. `work/sprints/current-blocker.md`
+1. `.kiro/steering/llm/governance.md`
+2. `.kiro/steering/llm/manifest.json`
+3. `.kiro/steering/llm/rules.json`
+4. `work/sprints/current-blocker.json`
+5. `work/sprints/current-blocker.md`
 
 Candidate runtime files:
 
@@ -249,7 +264,17 @@ Candidate runtime files:
 
 Commit scope:
 
-1. None recorded
+1. `roadmap.md`
+2. `.kiro/steering/roadmap.md`
+3. `work/README.md`
+4. `work/RULES.md`
+5. `work/releases/0.1-stabilization.md`
+6. `work/packages/active-20260526-roadmap-semantics-normalization.md`
+7. `.kiro/steering/llm/governance.md`
+8. `.kiro/steering/llm/manifest.json`
+9. `.kiro/steering/llm/rules.json`
+10. `work/sprints/current-blocker.json`
+11. `work/sprints/current-blocker.md`
 
 Legacy touched files:
 

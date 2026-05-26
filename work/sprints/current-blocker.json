@@ -2,28 +2,64 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-rolling-restart-investigation.md",
-  "package": "none",
-  "status": "none",
-  "lane": "none",
+  "package": "work/packages/active-20260526-roadmap-semantics-normalization.md",
+  "status": "active",
+  "lane": "lightweight-maintenance",
   "scenario": "none",
   "artifact": "none",
   "playback": "none",
-  "owner": "none",
-  "boundary": "none",
-  "dominantReason": "none",
-  "currentState": "No active work package. Start a new package when implementation resumes.",
-  "nextAction": "Create or activate one focused package for the next executable concern.",
-  "proof": [],
-  "writeScope": [],
+  "owner": "workflow_tooling_owner",
+  "boundary": "roadmap_authority",
+  "dominantReason": "roadmap_semantics_drift",
+  "currentState": "Roadmap mixes feature sequencing, implementation authorization, and live release status, making source-of-truth selection ambiguous.",
+  "nextAction": "Normalize roadmap semantics so roadmap.md is a stable AGPL feature sequence and scope map while live execution and release truth stay in work tracker, release, and track documents.",
+  "proof": [
+    "regression: npm run steering:llm:pack",
+    "regression: npm run work:advance -- --check"
+  ],
+  "writeScope": [
+    "roadmap.md",
+    ".kiro/steering/roadmap.md",
+    "work/README.md",
+    "work/RULES.md",
+    "work/releases/0.1-stabilization.md",
+    "work/packages/active-20260526-roadmap-semantics-normalization.md"
+  ],
   "handoffFiles": [],
   "generatedFiles": [
+    ".kiro/steering/llm/governance.md",
+    ".kiro/steering/llm/manifest.json",
+    ".kiro/steering/llm/rules.json",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
   ],
   "candidateRuntimeFiles": [],
-  "commitScope": [],
+  "commitScope": [
+    "roadmap.md",
+    ".kiro/steering/roadmap.md",
+    "work/README.md",
+    "work/RULES.md",
+    "work/releases/0.1-stabilization.md",
+    "work/packages/active-20260526-roadmap-semantics-normalization.md",
+    ".kiro/steering/llm/governance.md",
+    ".kiro/steering/llm/manifest.json",
+    ".kiro/steering/llm/rules.json",
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md"
+  ],
   "touchedFiles": [],
-  "modelFit": {},
+  "theoryLedgerRefs": [],
+  "modelFit": {
+    "packageClass": "bounded-implementation",
+    "intendedMinimumModel": "gpt-5.3-codex-spark",
+    "scopeShape": "leaf-slice",
+    "outputProfile": "medium",
+    "ambiguityScore": 1,
+    "escalationTriggers": [
+      "owned files expand beyond this package",
+      "a frozen decision must be reopened"
+    ]
+  },
   "representativeResidual": {},
   "causalGovernance": {},
   "scenarioCausalClosure": {},
@@ -31,7 +67,13 @@
   "experimentOutcome": {},
   "rerunDecision": {},
   "classificationEfficiency": {},
-  "architectureDecisionGate": {},
-  "predecessor": null,
-  "theoryLedgerRefs": []
+  "architectureDecisionGate": {
+    "status": "not-required",
+    "trigger": "none",
+    "triggerEvidence": [],
+    "choices": [],
+    "selectedChoice": null,
+    "nextAction": "No architecture decision gate is required for this package."
+  },
+  "predecessor": null
 }
