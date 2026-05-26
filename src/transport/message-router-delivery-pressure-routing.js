@@ -331,6 +331,14 @@ const MESSAGE_ROUTER_DELIVERY_PRESSURE_ROUTING_METHODS = Object.freeze({
     if (this.isQueryDataPlaneMessage(message)) {
       const queryTransportSelection =
         this.resolveQueryDataPlaneTransportSelection();
+      if (targetNodeId === this.nodeId && !queryTransportSelection?.service && this.isRegistered(targetAddress)) {
+        return this.deliverLocal(
+          targetAddress,
+          messageId,
+          message,
+          correlationId,
+        );
+      }
       const queryResult = await this.resolveQueryTransportDeliveryOutcome(
         targetAddress,
         message,
