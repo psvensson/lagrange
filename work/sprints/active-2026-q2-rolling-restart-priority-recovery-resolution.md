@@ -1,6 +1,6 @@
 # Rolling Restart Priority Recovery Resolution Sprint
 
-Status: done. Created on May 26, 2026.
+Status: active. Created on May 26, 2026.
 
 ## Goal
 
@@ -24,7 +24,7 @@ Resolve the priority recovery event-driven wait/deadlock during rolling-restart 
 
 - Central problem: priority recovery event-driven wait on priority_recovery_partition_progress
 - Representative artifact: test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json
-- Success condition: rolling restart succeeds and all nodes reach ACTIVE status
+- Success condition: rolling restart succeeds without a problem and all nodes reach ACTIVE status
 - Iteration rule: create one compact theory package targeting H1/H2/H3, trace variables/filters, and patch the root filter bug.
 
 ## Current Edge Card
@@ -32,7 +32,7 @@ Resolve the priority recovery event-driven wait/deadlock during rolling-restart 
 ```text
 Representative artifact: test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json
 Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out
-Active package: work/packages/done-20260526-local-query-routing-loopback-bypass.md
+Active package: work/packages/active-20260526-local-query-routing-loopback-bypass.md
 Active package owner: startup_active_gate_owner
 Active package boundary: snapshot_coverage
 Selected cause: active_gate_timed_out

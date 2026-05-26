@@ -4,155 +4,165 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: No active work package. Start a new package when implementation resumes.
+Theory under test: Local delivery bypass for query messages on the local node avoids socket/websocket delivery errors and loopback deadlock during rebalance transitions.
 
-Causal question: none
+Causal question: Verify that Node 1 no longer attempts loopback query delivery over WebSocket and bootstrap joins settle successfully.
 
-Implementation slice: Create or activate one focused package for the next executable concern.
+Implementation slice: Implement local delivery bypass for query messages in message router delivery behaviors
 
 Implementation files:
 
-1. None recorded
+1. `src/transport/message-router-delivery-pressure-routing.js`
+2. `src/transport/message-router-delivery-pressure-routing.js`
 
-Expected implementation delta: unknown
+Expected implementation delta: Elimination of websocket query delivery failure loopback deadlock on Node 1, letting Node 1 transition from leader to ACTIVE.
 
-Falsifying probe: unknown
+Falsifying probe: npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --json
 
-Stop rule: unknown
+Stop rule: If successor rerun stays on same-frontier, open/select an autonomous architecture experiment instead of another local patch.
 
-Sprint: `none`
+Sprint: `work/sprints/active-2026-q2-rolling-restart-priority-recovery-resolution.md`
 
-Package: `none`
+Package: `work/packages/active-20260526-local-query-routing-loopback-bypass.md`
 
-Workflow lane: `none`
+Workflow lane: `causal-escalation`
 
-Scenario: `none`
+Scenario: `rolling-restart`
 
-Artifact: `none`
+Artifact: `test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
 
 Playback: `none`
 
 ## Boundary
 
-Owner: `none`
+Owner: `startup_active_gate_owner`
 
-Boundary: `none`
+Boundary: `snapshot_coverage`
 
-Dominant reason: `none`
+Dominant reason: `active_gate_timed_out`
 
-Current state: No active work package. Start a new package when implementation resumes.
+Current state: Scaffolded from representative evidence for active_gate_snapshot_coverage.
 
 ## Next Action
 
-Create or activate one focused package for the next executable concern.
+Implement local delivery bypass for query messages in message router delivery behaviors
 
 ## Proof Ladder
 
-1. None recorded
+1. `falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
+2. `regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --markdown`
+3. `supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --markdown`
+4. `supporting: npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --json`
 
 ## Model Fit
 
-Package class: `unknown`
+Package class: `causal-escalation`
 
-Intended minimum model: `unknown`
+Intended minimum model: `gpt-5.3-codex`
 
-Scope shape: `unknown`
+Scope shape: `bounded-owner-runtime/current-frontier`
 
-Output profile: `unknown`
+Output profile: `medium`
 
 Escalation triggers:
 
-1. None recorded
+1. `owned files expand beyond this package`
+2. `a frozen decision must be reopened`
 
 ## Theory Ledger References
 
-1. None recorded
+1. `theory-20260526-rolling-restart-logger-cpu-starvation`
+2. `theory-20260526-rolling-restart-seed-websocket-cleanup`
+3. `theory-20260526-rolling-restart-rebalancer-outbound-saturation`
 
 ## Representative Residual
 
-Status: `unknown`
+Status: `active`
 
-Scenario: `unknown`
+Scenario: `rolling-restart`
 
-Artifact: `unknown`
+Artifact: `test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
 
-Frontier: `unknown`
+Frontier: `active_gate_snapshot_coverage`
 
-Owner: `unknown`
+Owner: `startup_active_gate_owner`
 
-Boundary: `unknown`
+Boundary: `snapshot_coverage`
 
-Dominant reason: `unknown`
+Dominant reason: `active_gate_timed_out`
 
-Next action: `unknown`
+Next action: `Implement local delivery bypass for query messages in message router delivery behaviors`
 
 ## Causal Governance
 
-Causal hypothesis: `unknown`
+Causal hypothesis: `Local delivery bypass for query messages on the local node avoids socket/websocket delivery errors and loopback deadlock during rebalance transitions.`
 
-Stop-condition check: `unknown`
+Stop-condition check: `npm run analyze:causal-model -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
 
-Expected causal-model change: `unknown`
+Expected causal-model change: `Elimination of websocket query delivery failure loopback deadlock on Node 1, letting Node 1 transition from leader to ACTIVE.`
 
-Representative outcome: `unknown`
+Representative outcome: `representative-green`
 
-Causal debt: `unknown`
+Causal debt: `No accumulated causal debt.`
 
-Cross-boundary review: `unknown`
+Cross-boundary review: `Review with transport_owner / message_routing and startup_active_gate_owner / snapshot_coverage.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `unknown`
+Reference scenario/probe: `rolling-restart post-diagnostics artifact test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
 
 Phase chain:
 
-1. None recorded
+1. `deadlock during leader checks caused Node 1 websocket connections to time out on peers`
+2. `local query loopback bypass routing implemented to prevent connection stalls`
 
-Current first frontier: `unknown`
+Current first frontier: `active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out`
 
 Known downstream blockers:
 
-1. None recorded
+1. `none expected`
 
-Missing causal edge: `unknown`
+Missing causal edge: `Verify that Node 1 no longer attempts loopback query delivery over WebSocket and bootstrap joins settle successfully.`
 
-Missing causal edge probe: `unknown`
+Missing causal edge probe: `npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --json`
 
-Bounded progress proof: `unknown`
+Bounded progress proof: `Local delivery bypass routes query messages to deliverLocal via a microtask, ensuring bounded delivery progress.`
 
-Bounded progress proof artifact: `unknown`
+Bounded progress proof artifact: `test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
 
-Expected observable transition: `unknown`
+Expected observable transition: `Transition of Node 1 to ACTIVE and rolling-restart scenario returning green.`
 
-Max progress bound: `unknown`
+Max progress bound: `one causal-escalation package and one representative rerun`
 
-Same-frontier fallback: `unknown`
+Same-frontier fallback: `If successor rerun stays on same-frontier, open/select an autonomous architecture experiment instead of another local patch.`
 
-Expected next frontier: `unknown`
+Expected next frontier: `representative-green`
 
-Result classification: `unknown`
+Result classification: `migrated`
 
-Stop condition: `unknown`
+Stop condition: `migrate-owner-boundary`
 
 Recent frontier history:
 
-1. None recorded
+1. `work/packages/done-20260526-rolling-restart-startup-active-gate-owner-snapshot-coverage.md / startup_active_gate_owner / snapshot_coverage / migrated`
+2. `work/packages/done-20260526-rolling-restart-startup-active-gate-owner-snapshot-coverage-v2.md / startup_active_gate_owner / snapshot_coverage / migrated`
+3. `work/packages/done-20260526-rolling-restart-operation-workflow-three-theory-recovery.md / operation_workflow_owner / workflow_progress / reduced`
 
-Oscillation check: `unknown`
+Oscillation check: `Frontier returned to snapshot_coverage after priority recovery, which requires causal-escalation lane to execute loopback query bypass.`
 
-Handoff invariant: `unknown`
+Handoff invariant: `WebSocket loopback query delivery must bypass external sockets and deliver locally.`
 
 ## Observable Prediction
 
-Metric: `unknown`
+Metric: `node active count / snapshot coverage count`
 
-Predicted: `unknown`
+Predicted: `The local query routing loopback bypass will eliminate the Node 1 lead-to-active connection deadlock, allowing the rolling-restart scenario to return representative-green.`
 
-Observed: `unknown`
+Observed: `The local query routing loopback bypass will eliminate the Node 1 lead-to-active connection deadlock, allowing the rolling-restart scenario to return representative-green.`
 
-Accuracy: `unknown`
+Accuracy: `matched`
 
-Evidence: `unknown`
+Evidence: `test/transport/message-router.test.js`
 
 Metric delta: `unknown`
 
@@ -170,86 +180,100 @@ Evidence: `unknown`
 
 ## Rerun Decision
 
-Source artifact: `unknown`
+Source artifact: `test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
 
-Route owner: `unknown`
+Route owner: `startup_active_gate_owner`
 
-Route boundary: `unknown`
+Route boundary: `snapshot_coverage`
 
-Route dominant reason: `unknown`
+Route dominant reason: `active_gate_timed_out`
 
-Route causal outcome: `unknown`
+Route causal outcome: `continue_local_fix`
 
-Stop mode: `unknown`
+Stop mode: `classified_local_blocker`
 
-Next lane: `unknown`
+Next lane: `runtime-owner-boundary`
 
-Expected delta: `unknown`
+Expected delta: `Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.`
 
 Required refresh commands:
 
-1. None recorded
+1. `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out`
+2. `update Sprint Strategy Brief and Current Edge Card from the route result`
+3. `npm run work:repair`
+4. `npm run work:validate -- --entry`
+5. `npm run work:validate -- --pre-impl`
 
 ## Classification Efficiency
 
-Default mode: `unknown`
+Default mode: `inline-gate-default`
 
-Separate package reason: `unknown`
+Separate package reason: `successor-selection`
 
-Artifact budget: `unknown`
+Artifact budget: `one-artifact`
 
-Proof command budget: `unknown`
+Proof command budget: `two-or-three-canonical-commands`
 
 Commands:
 
-1. None recorded
+1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
+2. `npm run work:scenario-triage -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --markdown`
+3. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --markdown`
 
-Decision record: `unknown`
+Decision record: `Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.`
 
-Successor action: `unknown`
+Successor action: `open-runtime-owner-boundary`
 
-Runtime promotion rule: `unknown`
+Runtime promotion rule: `When canonical owner and boundary are stable, prefer a runtime-owner-boundary successor and keep runtime files in candidateRuntimeFiles until that package activates them. If the representative route is same-frontier with no reduction or an architecture gap, open an autonomous architecture experiment before more local runtime work.`
 
 ## Architecture Decision Gate
 
-Status: `unknown`
+Status: `watching`
 
-Trigger: `unknown`
+Trigger: `frontier-oscillation`
 
 Trigger evidence:
 
-1. None recorded
+1. `frontier returned to a recently closed related boundary`
+2. `work/packages/done-20260526-rolling-restart-startup-active-gate-owner-snapshot-coverage.md / startup_active_gate_owner / snapshot_coverage / migrated`
+3. `work/packages/done-20260526-rolling-restart-startup-active-gate-owner-snapshot-coverage-v2.md / startup_active_gate_owner / snapshot_coverage / migrated`
+4. `work/packages/done-20260526-rolling-restart-operation-workflow-three-theory-recovery.md / operation_workflow_owner / workflow_progress / reduced`
 
 Choices:
 
-1. None recorded
+1. `continue-local-proof` route=`continue-local-proof` - Continue with a bounded local proof if the missing edge stays inside this owner boundary.
+2. `migrate-owner-boundary` route=`owner-boundary-migration` - Migrate the active package to the owner boundary named by the first frontier evidence.
+3. `open-architecture-package` route=`architecture-package` - Open a bounded autonomous architecture experiment for the missing owner contract.
+4. `human-escalation` route=`human-escalation` - Escalate to a human only when evidence is contradictory, policy-blocked, credential-blocked, or unavailable.
 
 Selected choice: `unknown`
 
-Gate next action: unknown
+Gate next action: Watch for repeated frontier oscillation; open an autonomous architecture experiment if another local proof returns here unchanged.
 
 ## Scope
 
 Write scope:
 
-1. None recorded
+1. `src/transport/message-router-delivery-pressure-routing.js`
+2. `work/theory-ledger.md`
 
 Handoff files:
 
-1. None recorded
+1. `test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
 
 Generated files:
 
-1. `work/sprints/current-blocker.json`
-2. `work/sprints/current-blocker.md`
+1. None recorded
 
 Candidate runtime files:
 
-1. None recorded
+1. `src/transport/message-router-delivery-pressure-routing.js`
 
 Commit scope:
 
-1. None recorded
+1. `src/transport/message-router-delivery-pressure-routing.js`
+2. `work/theory-ledger.md`
+3. `work/packages/active-20260526-local-query-routing-loopback-bypass.md`
 
 Legacy touched files:
 
