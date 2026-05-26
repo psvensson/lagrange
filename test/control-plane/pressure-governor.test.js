@@ -460,3 +460,51 @@ test('PressureGovernor defers background control-plane snapshot repair before cr
       'critical recovery mutation should stay on the control-plane reserve',
     );
   });
+
+test('PressureGovernor rate-limits pressure metric logging',
+  async (t) => {
+    let currentTime = 1000;
+    const logCalls = [];
+    const governor = new PressureGovernor({
+      nodeId: 'node-a',
+      now: () => currentTime,
+      logger: {
+        info(tag, data) {
+          logCalls.push({ tag, data });
+        },
+      },
+    });
+
+    const request = {
+      workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+      resourceKeys: ['join:repair'],
+      allowDegrade: true,
+      allowDefer: true,
+    };
+
+    governor.messageRouter = {
+      getOutboundPressureSummary() {
+        return {
+          backpressured: true,
+          saturatedNodeCount: 2,
+          totalPending: 96,
+          maxPendingUtilization: 1,
+        };
+      },
+    };
+
+    governor.evaluate(request);
+    t.equal(logCalls.length, 1, 'first emission should log');
+
+    governor.evaluate(request);
+    t.equal(logCalls.length, 1, 'second emission at same time should be rate-limited');
+
+    currentTime += 500;
+    governor.evaluate(request);
+    t.equal(logCalls.length, 1, 'emission after 500ms should still be rate-limited');
+
+    currentTime += 500;
+    governor.evaluate(request);
+    t.equal(logCalls.length, 2, 'emission after 1000ms should log');
+  });
+

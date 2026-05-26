@@ -357,6 +357,7 @@ class PressureGovernor {
     this.now = typeof options.now === TYPEOF.FUNCTION ? options.now : () => Date.now();
     this.messageRouter = options.messageRouter || null;
     this.logger = options.logger || null;
+    this.lastEmitTimes = new Map();
   }
   static getShared(options = {}) {
     const nodeId = normalizeNodeId(options.nodeId);
@@ -391,6 +392,16 @@ class PressureGovernor {
     if (decision.action === PRESSURE_GOVERNOR_ACTION.ALLOW && summary.backpressured !== true) {
       return;
     }
+    const key = `${decision.action}:${decision.reason}`;
+    const now = this.now();
+    const lastEmit = this.lastEmitTimes?.get(key) || 0;
+    if (now - lastEmit < 1000) {
+      return;
+    }
+    if (!this.lastEmitTimes) {
+      this.lastEmitTimes = new Map();
+    }
+    this.lastEmitTimes.set(key, now);
     try {
       this.logger.info(METRICS_LOG_TAG.PRESSURE_POLICY, {
         nodeId: this.nodeId,
