@@ -172,9 +172,6 @@ function resolveTrafficReadinessDelayMs(snapshot, delayMs, maxDelayMs) {
     }
   }
 
-  if (snapshot?.backpressured === true) {
-    return Math.min(baseDelay * NUM.TWO, maxDelayMs);
-  }
   return baseDelay;
 }
 

@@ -69,6 +69,7 @@
     "migration:raft:rollback-drill": "node scripts/run-raft-migration-rollback-drill.js",
     "distributed:all": "bash scripts/run-all-distributed-scenarios.sh --verbose",
     "distributed:rerun-failed": "bash scripts/rerun-failed-distributed-scenarios.sh --verbose",
+    "distributed:stop-containers": "node scripts/stop-distributed-harness-containers.js",
     "test:task27:invariant-suite": "bash scripts/run-task27-deterministic-invariant-suite.sh",
     "test:task27:distributed-stall-gate": "bash scripts/run-task27-distributed-stall-gate.sh --verbose",
     "test:task27:ci": "npm run test:task27:invariant-suite && npm run test:task27:distributed-stall-gate",

@@ -225,7 +225,7 @@ test('traffic-readiness-utils - metadata publication stays blocked for hard runt
     );
   });
 
-test('traffic-readiness-utils - scales delays dynamically under backpressure', async (t) => {
+test('traffic-readiness-utils - keeps retry hints stable under backpressure', async (t) => {
   const readinessStateNormal = createReadinessState({
     ready: false,
     phase: LIFECYCLE_PHASE.INIT,
@@ -275,6 +275,5 @@ test('traffic-readiness-utils - scales delays dynamically under backpressure', a
   }
 
   t.equal(sleepNormalDelay, 100, 'should sleep for retryAfterMs (100) under normal pressure');
-  t.equal(sleepBackpressuredDelay, 200, 'should double sleep for retryAfterMs (200) under backpressure');
+  t.equal(sleepBackpressuredDelay, 100, 'should keep retryAfterMs (100) under backpressure');
 });
-

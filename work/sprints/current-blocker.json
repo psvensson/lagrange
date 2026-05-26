@@ -1,190 +1,37 @@
 {
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-priority-spread-stabilization.md",
-  "package": "work/packages/active-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md",
-  "status": "active",
-  "lane": "causal-escalation",
-  "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json",
+  "sprint": "none",
+  "package": "none",
+  "status": "none",
+  "lane": "none",
+  "scenario": "none",
+  "artifact": "none",
   "playback": "none",
-  "owner": "startup_active_gate_owner",
-  "boundary": "snapshot_coverage",
-  "dominantReason": "active_gate_timed_out",
-  "currentState": "Control snapshot queries time out / disconnect under rolling restart due to premature WebSocket query connection teardown in closeStaleSnapshotLaneSockets during transient retryable delays.",
-  "nextAction": "Stabilize active-gate snapshot coverage by ensuring closeStaleSnapshotLaneSockets protects healthy, active WebSocket connections and activeClientId from premature closure during retry cycles.",
-  "proof": [
-    "falsifier: npm test -- test/admin/admin-control-snapshot-retry-decision.test.js # focused unit test verifying socket housekeeping logic",
-    "regression: npm run audit:runtime-grammar:file -- src/admin/admin-websocket-observation-methods.js # verify syntactical correctness of modified observation methods",
-    "supporting: npm run work:evidence-summary -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json # cite representative artifact evidence"
-  ],
-  "writeScope": [
-    "src/admin/admin-websocket-observation-methods.js",
-    "test/admin/admin-control-snapshot-retry-decision.test.js",
-    "work/packages/active-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md",
-    "scripts/list-commands.js",
-    "src/bootstrap/node-joining-ready-signal-readiness.js",
-    "src/bootstrap/traffic-readiness-utils.js",
-    "test/bootstrap/traffic-readiness-utils.test.js",
-    "test/distributed/README.local.md",
-    "test/distributed/harness/cluster-segment-1.js",
-    "scripts/stop-distributed-harness-containers.js",
-    "test/scripts/stop-distributed-harness-containers.test.js",
-    "work/packages/done-20260525-priority-spread-triage.md"
-  ],
-  "handoffFiles": [
-    "test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json"
-  ],
+  "owner": "none",
+  "boundary": "none",
+  "dominantReason": "none",
+  "currentState": "No active work package. Start a new package when implementation resumes.",
+  "nextAction": "Create or activate one focused package for the next executable concern.",
+  "proof": [],
+  "writeScope": [],
+  "handoffFiles": [],
   "generatedFiles": [
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
   ],
-  "candidateRuntimeFiles": [
-    "src/admin/admin-websocket-observation-methods.js"
-  ],
-  "commitScope": [
-    "src/admin/admin-websocket-observation-methods.js",
-    "test/admin/admin-control-snapshot-retry-decision.test.js",
-    "work/packages/active-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md",
-    "work/sprints/current-blocker.json",
-    "work/sprints/current-blocker.md",
-    "scripts/list-commands.js",
-    "src/bootstrap/node-joining-ready-signal-readiness.js",
-    "src/bootstrap/traffic-readiness-utils.js",
-    "test/bootstrap/traffic-readiness-utils.test.js",
-    "test/distributed/README.local.md",
-    "test/distributed/harness/cluster-segment-1.js",
-    "scripts/stop-distributed-harness-containers.js",
-    "test/scripts/stop-distributed-harness-containers.test.js",
-    "work/packages/done-20260525-priority-spread-triage.md"
-  ],
+  "candidateRuntimeFiles": [],
+  "commitScope": [],
   "touchedFiles": [],
-  "theoryLedgerRefs": [
-    "theory-20260525-priority-spread-triage-stub"
-  ],
-  "modelFit": {
-    "packageClass": "experiment",
-    "intendedMinimumModel": "gpt-5.3-codex-spark",
-    "scopeShape": "leaf-slice",
-    "outputProfile": "medium",
-    "ambiguityScore": 1,
-    "escalationTriggers": [
-      "owned files expand beyond this package",
-      "a frozen decision must be reopened"
-    ]
-  },
-  "representativeResidual": {
-    "status": "reduced",
-    "scenario": "rolling-restart",
-    "artifact": "test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json",
-    "frontier": "activeGateSnapshotCoverage",
-    "owner": "startup_active_gate_owner",
-    "boundary": "snapshot_coverage",
-    "dominantReason": "active_gate_timed_out",
-    "nextAction": "Stabilize active-gate snapshot coverage by ensuring closeStaleSnapshotLaneSockets protects healthy, active WebSocket connections and activeClientId from premature closure during retry cycles."
-  },
-  "causalGovernance": {
-    "hypothesis": "Ensuring closeStaleSnapshotLaneSockets does not close active query connections or healthy open sockets avoids premature query termination during transient rolling-restart delays.",
-    "stopConditionCheck": "Use npm run analyze:causal-model -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --explain active_gate_timed_out",
-    "expectedCausalModelChange": "This package stabilizes active-gate snapshot coverage by protecting active WebSocket connections.",
-    "representativeOutcome": "reduced",
-    "causalDebt": "The current rerun fails on activeGateSnapshotCoverage due to connection closed before response when retry is attempted on healthy nodes.",
-    "crossBoundaryReview": "All runtime files outside startup_active_gate_owner boundary stay frozen."
-  },
-  "scenarioCausalClosure": {
-    "referenceScenarioOrProbe": "rolling-restart",
-    "phaseChain": [
-      "fresh representative rerun completed",
-      "routed to startup_active_gate_owner snapshot_coverage active_gate_timed_out",
-      "introduce active WebSocket connection protection in closeStaleSnapshotLaneSockets"
-    ],
-    "currentFirstFrontier": "activeGateSnapshotCoverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out",
-    "knownDownstreamBlockers": [
-      "topology_publication_owner / publication_convergence remains downstream of active gate"
-    ],
-    "missingCausalEdge": "Whether active WebSocket connection protection prevents premature watchdog query termination.",
-    "missingCausalEdgeProbe": "npm test -- test/admin/admin-control-snapshot-retry-decision.test.js",
-    "falsifyingProbe": "npm test -- test/admin/admin-control-snapshot-retry-decision.test.js",
-    "boundedProgressProof": "Observation unit tests verify active connections and healthy open sockets are ignored during stale connection cleanup retry cycles to ensure query stream survival.",
-    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json",
-    "expectedObservableTransition": "active gate snapshot coverage reduces, migrates, or selects an architecture stop.",
-    "maxProgressBound": "one runtime package",
-    "sameFrontierFallback": "If canonical extractors cannot distinguish the route, close as architecture-gap.",
-    "expectedNextFrontier": "architecture-gap-stop or selected active-gate snapshot coverage runtime contract",
-    "resultClassification": "reduced",
-    "stopCondition": "continue-local-fix",
-    "recentFrontierHistory": [
-      "done-20260525-rolling-restart-fully-green-gate.md / release_gate_owner / rolling_restart_fully_green_gate / migrated",
-      "done-20260525-priority-spread-triage.md / topology_publication_owner / publication_convergence / priority_control_plane_spread_pending",
-      "done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md / startup_active_gate_owner / snapshot_coverage / reduced",
-      "done-20260525-rolling-restart-workflow-progress-dispatch-chain.md / operation_workflow_owner / workflow_progress / migrated",
-      "done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage-retry.md / startup_active_gate_owner / snapshot_coverage / reduced"
-    ],
-    "oscillationCheck": "This package is activated because of validator same-frontier/frontier-oscillation rules.",
-    "handoffInvariant": "Startup readiness remains downstream.",
-    "recentFrontierHistoryRecord": [
-      "done-20260525-rolling-restart-fully-green-gate.md / release_gate_owner / rolling_restart_fully_green_gate / migrated",
-      "done-20260525-priority-spread-triage.md / topology_publication_owner / publication_convergence / priority_control_plane_spread_pending"
-    ]
-  },
-  "observablePrediction": {
-    "metric": "active gate snapshot query connection status on lane snapshot",
-    "predicted": "active gate snapshot queries complete successfully instead of throwing connection closed before response when transient retryable delays trigger closeStaleSnapshotLaneSockets",
-    "observed": "active gate snapshot queries complete successfully instead of throwing connection closed before response when transient retryable delays trigger closeStaleSnapshotLaneSockets",
-    "accuracy": "matched",
-    "evidence": "test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json"
-  },
+  "modelFit": {},
+  "representativeResidual": {},
+  "causalGovernance": {},
+  "scenarioCausalClosure": {},
+  "observablePrediction": {},
   "experimentOutcome": {},
-  "rerunDecision": {
-    "sourceArtifact": "test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json",
-    "routeOwner": "startup_active_gate_owner",
-    "routeBoundary": "snapshot_coverage",
-    "routeDominantReason": "active_gate_timed_out",
-    "routeCausalOutcome": "continue_local_fix",
-    "stopMode": "classified_local_blocker",
-    "nextLane": "runtime-owner-boundary",
-    "expectedDelta": "Verify that socket housekeeping logic protects healthy open connections and resolves the premature connection closure symptom.",
-    "requiredRefreshCommands": [
-      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out",
-      "update Sprint Strategy Brief and Current Edge Card from the route result",
-      "npm run work:repair",
-      "npm run work:validate -- --pre-impl"
-    ]
-  },
-  "classificationEfficiency": {
-    "defaultMode": "inline-gate-default",
-    "separatePackageReason": "successor-selection",
-    "artifactBudget": "one-artifact",
-    "proofCommandBudget": "two-or-three-canonical-commands",
-    "commands": [
-      "npm test -- test/admin/admin-control-snapshot-retry-decision.test.js",
-      "npm run audit:runtime-grammar:file -- src/admin/admin-websocket-observation-methods.js"
-    ],
-    "decisionRecord": "Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.",
-    "successorAction": "open-runtime-owner-boundary",
-    "runtimePromotionRule": "When canonical owner and boundary are stable, prefer a runtime-owner-boundary successor and keep runtime files in candidateRuntimeFiles until that package activates them. If the representative route is same-frontier with no reduction or an architecture gap, open an autonomous architecture experiment before more local runtime work."
-  },
-  "architectureDecisionGate": {
-    "status": "selected",
-    "trigger": "frontier-oscillation",
-    "triggerEvidence": [
-      "frontier returned to a recently closed related boundary",
-      "work/packages/done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md / startup_active_gate_owner / snapshot_coverage / reduced",
-      "work/packages/done-20260525-rolling-restart-workflow-progress-dispatch-chain.md / operation_workflow_owner / workflow_progress / migrated",
-      "work/packages/done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage-retry.md / startup_active_gate_owner / snapshot_coverage / reduced"
-    ],
-    "choices": [
-      {
-        "id": "continue-local-proof",
-        "summary": "Continue with a bounded local proof if the missing edge stays inside this owner boundary.",
-        "route": "continue-local-proof",
-        "proof": [
-          "npm test -- test/admin/admin-control-snapshot-retry-decision.test.js"
-        ]
-      }
-    ],
-    "selectedChoice": "continue-local-proof",
-    "nextAction": "Stabilize active-gate snapshot coverage by ensuring closeStaleSnapshotLaneSockets protects healthy, active WebSocket connections and activeClientId from premature closure during retry cycles."
-  },
-  "predecessor": null
+  "rerunDecision": {},
+  "classificationEfficiency": {},
+  "architectureDecisionGate": {},
+  "predecessor": null,
+  "theoryLedgerRefs": []
 }

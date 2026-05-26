@@ -1,6 +1,6 @@
 # Priority Spread Stabilization Sprint
 
-Status: active. Opened on May 25, 2026.
+Status: done. Opened on May 25, 2026.
 
 ## Goal
 
@@ -24,22 +24,22 @@ Resolve the control-plane priority spread timeout during heavy-load rolling rest
 ## Current Edge Card
 
 ```text
-Representative artifact: test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json
-Visible first frontier: activeGateSnapshotCoverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out
-Active package: work/packages/done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md
-Active package owner: startup_active_gate_owner
-Active package boundary: snapshot_coverage
-Selected cause: active_gate_timed_out
-Required action: Stabilize active-gate snapshot coverage by ensuring closeStaleSnapshotLaneSockets protects healthy, active WebSocket connections and activeClientId from premature closure during retry cycles.
-Representative status: reduced
-Causal outcome: continue_local_fix
-Architecture gate: selected / continue-local-proof
-Expected delta: Verify that socket housekeeping logic protects healthy open connections and resolves the premature connection closure symptom.
-Current state: Control snapshot queries time out / disconnect under rolling restart due to premature WebSocket query connection teardown in closeStaleSnapshotLaneSockets during transient retryable delays.
-Allowed edits: src/admin/admin-websocket-observation-methods.js, test/admin/admin-control-snapshot-retry-decision.test.js, work/packages/done-20260525-rolling-restart-startup-active-gate-owner-snapshot-coverage.md, scripts/list-commands.js, src/bootstrap/node-joining-ready-signal-readiness.js, src/bootstrap/traffic-readiness-utils.js, test/bootstrap/traffic-readiness-utils.test.js, test/distributed/README.local.md, test/distributed/harness/cluster-segment-1.js, scripts/stop-distributed-harness-containers.js, test/scripts/stop-distributed-harness-containers.test.js, work/packages/done-20260525-priority-spread-triage.md
-Candidate runtime files: src/admin/admin-websocket-observation-methods.js
-Forbidden edits: Startup readiness remains downstream.
-Required latest proof: falsifier: npm test -- test/admin/admin-control-snapshot-retry-decision.test.js # focused unit test verifying socket housekeeping logic, regression: npm run audit:runtime-grammar:file -- src/admin/admin-websocket-observation-methods.js # verify syntactical correctness of modified observation methods, supporting: npm run work:evidence-summary -- test-output/reports/rolling-restart-operation-workflow-route-rerun-20260525.report.json # cite representative artifact evidence
+Representative artifact: none
+Visible first frontier: unknown
+Active package: work/packages/done-20260525-ready-signal-timeout-doubling-revert.md
+Active package owner: timeout-budget-normalization
+Active package boundary: recent-doubled-timeout-values
+Selected cause: backpressure-and-harness-timeouts-were-doubled
+Required action: Restore configured timeout budgets without removing readiness pressure observation.
+Representative status: unknown
+Causal outcome: unknown
+Architecture gate: not-required / unknown
+Expected delta: unknown
+Current state: Recent commits doubled bootstrap readiness retry delays under backpressure and doubled distributed harness default probe budgets.
+Allowed edits: src/bootstrap/node-joining-ready-signal-readiness.js, src/bootstrap/traffic-readiness-utils.js, test/bootstrap/traffic-readiness-utils.test.js, test/distributed/harness/cluster-segment-1.js, work/packages/done-20260525-ready-signal-timeout-doubling-revert.md, scripts/list-commands.js, test/distributed/README.local.md, scripts/stop-distributed-harness-containers.js, test/scripts/stop-distributed-harness-containers.test.js
+Candidate runtime files: src/bootstrap/node-joining-ready-signal-readiness.js, src/bootstrap/traffic-readiness-utils.js, test/distributed/harness/cluster-segment-1.js
+Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
+Required latest proof: falsifier: npm test -- test/bootstrap/traffic-readiness-utils.test.js # focused contract fixture and affected consumer proof, regression: npm run audit:runtime-grammar:file -- src/bootstrap/node-joining-ready-signal-readiness.js src/bootstrap/traffic-readiness-utils.js test/distributed/harness/cluster-segment-1.js # focused contract fixture and affected consumer proof, supporting: git diff --check -- src/bootstrap/node-joining-ready-signal-readiness.js src/bootstrap/traffic-readiness-utils.js test/bootstrap/traffic-readiness-utils.test.js test/distributed/harness/cluster-segment-1.js work/packages/done-20260525-ready-signal-timeout-doubling-revert.md
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 

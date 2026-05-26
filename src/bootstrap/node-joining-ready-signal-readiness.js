@@ -51,14 +51,12 @@ class NodeJoiningReadySignalReadiness extends NodeJoiningServiceSegment1 {
    * @private
    */
   async awaitLocalQueryTransportReadinessForReadySignal() {
-    const isBackpressured = this.isLocalRouterBackpressured();
-    const delayScale = isBackpressured ? NUM.TWO : NUM.ONE;
     await waitForLocalQueryTransportReadiness({
       messageRouter: this.messageRouter,
       sleep: (delayMs) => this.sleep(delayMs),
-      maxAttempts: this.config.readySignalMaxAttempts * (isBackpressured ? NUM.TWO : NUM.ONE),
-      initialDelayMs: this.config.readySignalRetryDelayMs * delayScale,
-      maxDelayMs: this.config.readySignalRetryMaxDelayMs * delayScale,
+      maxAttempts: this.config.readySignalMaxAttempts,
+      initialDelayMs: this.config.readySignalRetryDelayMs,
+      maxDelayMs: this.config.readySignalRetryMaxDelayMs,
       backoffMultiplier: this.config.readySignalRetryBackoffMultiplier,
       onRetry: ({attempt, maxAttempts, delayMs, readiness}) => {
         this.logger.warn(JOINING_LOG_MSG.READY_SIGNAL_RETRYING, {
@@ -82,16 +80,14 @@ class NodeJoiningReadySignalReadiness extends NodeJoiningServiceSegment1 {
    * @private
    */
   async awaitMetadataPublicationReadinessForReadySignal() {
-    const isBackpressured = this.isLocalRouterBackpressured();
-    const delayScale = isBackpressured ? NUM.TWO : NUM.ONE;
     await waitForMetadataPublicationReadiness({
       readinessState: this.bootstrapReadinessState,
       readinessSnapshotProvider: () =>
         this.getReadySignalMetadataPublicationReadinessSnapshot(),
       sleep: (delayMs) => this.sleep(delayMs),
-      maxAttempts: this.config.readySignalMaxAttempts * (isBackpressured ? NUM.TWO : NUM.ONE),
-      initialDelayMs: this.config.readySignalRetryDelayMs * delayScale,
-      maxDelayMs: this.config.readySignalRetryMaxDelayMs * delayScale,
+      maxAttempts: this.config.readySignalMaxAttempts,
+      initialDelayMs: this.config.readySignalRetryDelayMs,
+      maxDelayMs: this.config.readySignalRetryMaxDelayMs,
       backoffMultiplier: this.config.readySignalRetryBackoffMultiplier,
       onRetry: ({attempt, maxAttempts, delayMs, snapshot}) => {
         this.logger.warn(JOINING_LOG_MSG.READY_SIGNAL_RETRYING, {
@@ -201,22 +197,20 @@ class NodeJoiningReadySignalReadiness extends NodeJoiningServiceSegment1 {
       diskGb: stats.diskGb,
       diskUsagePercent: stats.diskUsagePercent,
     };
-    const isBackpressured = this.isLocalRouterBackpressured();
-    const delayScale = isBackpressured ? NUM.TWO : NUM.ONE;
     const maxAttempts = Number.isFinite(this.config.readySignalMaxAttempts) ?
-      Math.max(NUM.ONE, Math.floor(this.config.readySignalMaxAttempts * (isBackpressured ? NUM.TWO : NUM.ONE))) :
-      JOINING_DEFAULT.readySignalMaxAttempts * (isBackpressured ? NUM.TWO : NUM.ONE);
+      Math.max(NUM.ONE, Math.floor(this.config.readySignalMaxAttempts)) :
+      JOINING_DEFAULT.readySignalMaxAttempts;
     const maxDelayMs = Number.isFinite(this.config.readySignalRetryMaxDelayMs) ?
-      Math.max(NUM.ONE, Math.floor(this.config.readySignalRetryMaxDelayMs * delayScale)) :
-      JOINING_DEFAULT.readySignalRetryMaxDelayMs * delayScale;
+      Math.max(NUM.ONE, Math.floor(this.config.readySignalRetryMaxDelayMs)) :
+      JOINING_DEFAULT.readySignalRetryMaxDelayMs;
     const backoffMultiplier =
       Number.isFinite(this.config.readySignalRetryBackoffMultiplier) &&
       this.config.readySignalRetryBackoffMultiplier > NUM.ZERO ?
         this.config.readySignalRetryBackoffMultiplier :
         JOINING_DEFAULT.readySignalRetryBackoffMultiplier;
     let delayMs = Number.isFinite(this.config.readySignalRetryDelayMs) ?
-      Math.max(NUM.ONE, Math.floor(this.config.readySignalRetryDelayMs * delayScale)) :
-      JOINING_DEFAULT.readySignalRetryDelayMs * delayScale;
+      Math.max(NUM.ONE, Math.floor(this.config.readySignalRetryDelayMs)) :
+      JOINING_DEFAULT.readySignalRetryDelayMs;
     let lastError = null;
     for (let attempt = NUM.ONE; attempt <= maxAttempts; attempt++) {
       try {

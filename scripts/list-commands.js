@@ -233,6 +233,10 @@ const COMMAND_GROUPS = Object.freeze([
         command: 'npm run distributed:all',
         description: 'Run distributed scenarios with verbose output.',
       }),
+      Object.freeze({
+        command: 'npm run distributed:stop-containers -- [--dry-run|--remove|--containers-only|--processes-only]',
+        description: 'Stop local Docker containers and Node processes created by the distributed harness.',
+      }),
     ]),
   }),
 ]);

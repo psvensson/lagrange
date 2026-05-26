@@ -205,6 +205,30 @@ Explicit opt-in (same behavior as default local mode):
 node test/distributed/run.js --config test/distributed/config/local-three-node.json --fast-local --verbose
 ```
 
+Stop all local Docker containers and local Node.js processes created by the
+distributed harness:
+
+```bash
+npm run distributed:stop-containers
+```
+
+Preview without stopping, or also remove the containers:
+
+```bash
+npm run distributed:stop-containers -- --dry-run
+npm run distributed:stop-containers -- --remove
+```
+
+Scope the cleanup to only containers or only local processes:
+
+```bash
+npm run distributed:stop-containers -- --containers-only
+npm run distributed:stop-containers -- --processes-only
+```
+
+Fast-local runs may start the reusable containers again. Use `--no-fast-local`
+on the scenario runner when you want a run to avoid reusable containers.
+
 ## Config Files
 
 Common configs:
