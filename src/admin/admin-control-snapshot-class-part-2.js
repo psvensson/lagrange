@@ -102,9 +102,6 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
           fallbackSnapshot,
           fallbackEvaluation,
         );
-      if (!deferredSnapshot && options.forceAuthoritativeRepair === true) {
-        deferredSnapshot = fallbackSnapshot || localSnapshot;
-      }
     }
     if (!deferredSnapshot) {
       return CONTROL_SNAPSHOT_ABSENT_DEFERRED_SNAPSHOT;

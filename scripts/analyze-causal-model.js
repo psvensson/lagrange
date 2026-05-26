@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 
-import fs from 'node:fs';
 import process from 'node:process';
 import {buildCausalAnalysis, buildCausalAnalysisSchema} from '../src/diagnostics/index.js';
+import {
+  readArtifactWithSidecarsSync,
+} from './artifact-sidecar-loader.js';
 
 const ARG_HELP_SHORT = '-h';
 const ARG_HELP_LONG = '--help';
 const ARG_SCHEMA = '--schema';
-const ENCODING_UTF8 = 'utf8';
 const JSON_INDENT_SPACES = 2;
 const EXIT_SUCCESS = 0;
 const EXIT_USAGE = 1;
@@ -38,7 +39,7 @@ function main(argv) {
     return EXIT_USAGE;
   }
   try {
-    const artifact = JSON.parse(fs.readFileSync(artifactPath, ENCODING_UTF8));
+    const artifact = readArtifactWithSidecarsSync(artifactPath);
     writeJson(buildCausalAnalysis(artifact));
     return EXIT_SUCCESS;
   } catch (error) {

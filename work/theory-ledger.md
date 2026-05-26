@@ -217,3 +217,45 @@ Each entry must include these labels:
 - Supersedes: none
 - Superseded by: none
 - Next implication: Preserve or extract per-node snapshot probe witness success/freshness/publication evidence on the next pass; do not treat empty disagreement sets from failed probes as proof of a healthy best view.
+
+## theory-20260526-rolling-restart-restarted-node-admin-surface
+
+- Status: supported
+- Scenario/gate: rolling-restart / restarted-node recovery-ready
+- Owner/boundary: startup_active_gate_owner / snapshot_coverage
+- Hypothesis: The restarted node is reachable through bootstrap health but its admin surface never binds or becomes queryable after restart, leaving adminReady=false and controlPlaneRecoveryReady=false.
+- Probe: `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-three-theory-validation-20260526T140236Z.report.json`
+- Artifact/result: test-output/reports/rolling-restart-three-theory-validation-20260526T140236Z.report.json - restarted node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 remained reachable=true via bootstrap_health but admin probing failed with ECONNREFUSED 172.18.0.3:8081, ready=false, adminReady=false, controlPlaneRecoveryReady=false, readinessPhase=INIT. The post-diagnostics rerun at test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json did not repeat this as the selected failure shape.
+- Representative movement: migrated-after-diagnostics-rerun
+- Linked packages: `work/packages/active-20260526-20260526-rolling-restart-three-theory-validation.md`
+- Supersedes: none
+- Superseded by: none
+- Next implication: Keep this as a supported baseline symptom only; do not patch admin startup/listen unless a fresh artifact selects the restarted-node admin surface again.
+
+## theory-20260526-rolling-restart-active-gate-evidence-capture-gap
+
+- Status: supported
+- Scenario/gate: rolling-restart / active_gate_snapshot_coverage
+- Owner/boundary: startup_active_gate_owner / snapshot_coverage
+- Hypothesis: The active-gate/control-snapshot diagnostic path fails to retain selected snapshot coverage, expected node count, blockers, and probe outcome evidence, so the representative failure is classified evidence_missing instead of a concrete owner mechanism.
+- Probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-three-theory-validation-20260526T140236Z.report.json --explain active_gate_snapshot_coverage`
+- Artifact/result: confirmed and fixed. Report-level analyzers did not load linked `scenario.failureBundle.jsonPath` and `triageJsonPath`, so decisive sidecar evidence was dropped. Added `scripts/artifact-sidecar-loader.js` and wired route, topology, causal, and representative-summary analyzers to enrich reports from linked sidecars; focused sidecar regression tests passed.
+- Representative movement: migrated-after-diagnostics-rerun
+- Linked packages: `work/packages/active-20260526-20260526-rolling-restart-three-theory-validation.md`
+- Supersedes: none
+- Superseded by: none
+- Next implication: Continue from the post-diagnostics route `operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait`; H2 no longer blocks active-gate evidence classification for this artifact shape.
+
+## theory-20260526-rolling-restart-control-snapshot-authority-recovery
+
+- Status: supported
+- Scenario/gate: rolling-restart / restarted-node recovery-ready
+- Owner/boundary: startup_active_gate_owner / snapshot_coverage
+- Hypothesis: The restarted node cannot establish control-snapshot authority or publication recovery after restart, so bootstrap remains in INIT with control_snapshot_authority_unavailable and recovery diagnostics unavailable.
+- Probe: `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-three-theory-validation-20260526T140236Z.report.json`
+- Artifact/result: test-output/reports/rolling-restart-three-theory-validation-20260526T140236Z.report.json - bootstrapJoinProjectionBlocker=control_snapshot_authority_unavailable, publishedControlPlaneEpoch=unknown, priority_control_plane_recovery_diagnostics_unavailable, failed_query_operations_table=46, and inflight_owner_pressure=8. The post-diagnostics rerun migrated away from this restarted-node authority failure shape.
+- Representative movement: migrated-after-diagnostics-rerun
+- Linked packages: `work/packages/active-20260526-20260526-rolling-restart-three-theory-validation.md`
+- Supersedes: none
+- Superseded by: none
+- Next implication: Keep this as supported baseline evidence, but do not select a control-snapshot authority runtime patch until a fresh artifact reproduces that edge; current work should follow the priority recovery successor.

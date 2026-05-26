@@ -202,6 +202,8 @@ const SNAPSHOT_OBSERVATION_RETRY_AFTER_MS = 14976;
 const READINESS_CAUSE_NONE = 'none';
 const OPERATION_WORKFLOW_WITNESS_EVIDENCE_PATH =
   'report.scenarios[0].publicationConvergence.priorityRecoveryProgressSummary.topologyOperatorWitness';
+const FAILURE_BUNDLE_ACTIVE_GATE_PROGRESS_EVIDENCE_PATH =
+  'failureBundle.publicationConvergence.activeGate.progress';
 const TEMP_FIXTURE_PREFIX = 'topology-convergence-';
 const TEMP_FIXTURE_SUFFIX = '.json';
 
@@ -296,6 +298,34 @@ describe('analyze-topology-convergence CLI', () => {
     const expected = readJson(PRIORITY_PARTITION_WITNESS_ONLY_EXPECTED_PATH);
 
     assert.deepEqual(projectGoldenFrontier(output), expected);
+  });
+
+  it('loads linked failure-bundle sidecars before explaining report evidence', () => {
+    const {reportPath} = writeLinkedReportFixture();
+    const output = runAnalyzerJson(
+      reportPath,
+      ARG_EXPLAIN,
+      ACTIVE_GATE_EDGE_ID,
+    );
+
+    assert.equal(output.evidenceSnapshot.edgeId, ACTIVE_GATE_EDGE_ID);
+    assert.equal(output.evidenceSnapshot.owner, STARTUP_ACTIVE_GATE_OWNER);
+    assert.equal(output.evidenceSnapshot.boundary, SNAPSHOT_COVERAGE_BOUNDARY);
+    assert.equal(
+      output.evidenceSnapshot.evidencePath,
+      FAILURE_BUNDLE_ACTIVE_GATE_PROGRESS_EVIDENCE_PATH,
+    );
+    assert.equal(output.decisionOutcome.state, EDGE_STATE_BLOCKED);
+    assert.ok(output.evidenceSnapshot.reasons.includes(
+      ACTIVE_GATE_TIMED_OUT_REASON,
+    ));
+    assert.ok(output.evidenceSnapshot.reasons.includes(
+      SNAPSHOT_COVERAGE_INCOMPLETE_REASON,
+    ));
+    assert.equal(
+      output.evidenceSnapshot.source.snapshotCoverageNodeCount,
+      SNAPSHOT_COVERAGE_TWO_OF_FIVE,
+    );
   });
 
   it('keeps dominant witness owner and boundary when report summary omits progress classes', () => {
@@ -1192,6 +1222,70 @@ function writeTemporaryFixture(fixture) {
   const fixturePath = path.join(directory, TEMP_FIXTURE_SUFFIX);
   fs.writeFileSync(fixturePath, JSON.stringify(fixture), ENCODING_UTF8);
   return fixturePath;
+}
+
+function writeLinkedReportFixture() {
+  const directory = fs.mkdtempSync(
+    path.join(os.tmpdir(), TEMP_FIXTURE_PREFIX),
+  );
+  const bundlePath = path.join(directory, 'failure-bundle.json');
+  const reportPath = path.join(directory, 'report.report.json');
+  fs.writeFileSync(
+    bundlePath,
+    JSON.stringify(buildLinkedFailureBundleFixture()),
+    ENCODING_UTF8,
+  );
+  fs.writeFileSync(
+    reportPath,
+    JSON.stringify({
+      scenarios: [{
+        scenario: ROLLING_RESTART_SCENARIO,
+        passed: false,
+        publicationConvergence: {
+          publicationStatus: PUBLICATION_STATUS_UNKNOWN,
+          publicationPending: false,
+          pendingAckCount: 0,
+          blockedNodeCount: 0,
+          missingPublishedCount: 0,
+          prioritySpreadPending: false,
+        },
+        failureBundle: {
+          jsonPath: bundlePath,
+        },
+      }],
+    }),
+    ENCODING_UTF8,
+  );
+  return {reportPath, bundlePath};
+}
+
+function buildLinkedFailureBundleFixture() {
+  return {
+    scenario: ROLLING_RESTART_SCENARIO,
+    summary: {
+      passed: false,
+      dominantReason: 'admin_reachability_refused',
+      failureClass: 'startup_recovery_blocked',
+    },
+    publicationConvergence: {
+      publicationStatus: PUBLICATION_STATUS_UNKNOWN,
+      publicationPending: false,
+      pendingAckCount: 0,
+      blockedNodeCount: 0,
+      missingPublishedCount: 0,
+      prioritySpreadPending: false,
+      activeGate: {
+        state: ACTIVE_GATE_STATE_TIMED_OUT,
+        ready: false,
+        progress: {
+          expectedNodeCount: EXPECTED_NODE_COUNT,
+          snapshotCoverageNodeCount: SNAPSHOT_COVERAGE_TWO_OF_FIVE,
+          snapshotCoverageComplete: false,
+          blockers: ['snapshot_coverage=2/5'],
+        },
+      },
+    },
+  };
 }
 
 function runAnalyzerText(...args) {

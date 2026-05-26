@@ -2,6 +2,8 @@ import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {
   buildRepresentativeEvidenceSummary,
   renderMarkdown,
@@ -15,10 +17,19 @@ const FIXTURE_PATH =
   'test/scripts/__fixtures__/topology-convergence/active-gate-snapshot-partial-residual.fixture.json';
 const SUMMARY_SCHEMA = 'representative-evidence-summary-v1';
 const PRIORITY_RECOVERY_EDGE = 'priority_recovery_partition_progress';
+const ACTIVE_GATE_SNAPSHOT_EDGE = 'active_gate_snapshot_coverage';
 const OPERATION_WORKFLOW_OWNER = 'operation_workflow_owner';
+const STARTUP_ACTIVE_GATE_OWNER = 'startup_active_gate_owner';
 const REBALANCER_HANDOFF_BOUNDARY = 'rebalancer_handoff';
+const SNAPSHOT_COVERAGE_BOUNDARY = 'snapshot_coverage';
 const CLASSIFIED_BACKPRESSURE_OUTCOME = 'accept_classified_backpressure';
 const PRIORITY_RECOVERY_FAILURE_CLASS = 'priority_recovery_event_wait';
+const EVIDENCE_PATH_FAILURE_BUNDLE_ACTIVE_GATE_PROGRESS =
+  'failureBundle.publicationConvergence.activeGate.progress';
+const ACTIVE_GATE_TIMED_OUT_REASON = 'active_gate_timed_out';
+const SNAPSHOT_COVERAGE_INCOMPLETE_REASON = 'snapshot_coverage_incomplete';
+const SNAPSHOT_COVERAGE_COUNT = 2;
+const EXPECTED_NODE_COUNT = 5;
 
 function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, ENCODING_UTF8));
@@ -56,6 +67,36 @@ describe('representative evidence summary', () => {
     assert.equal(output.topology.firstFrontierEdgeId, PRIORITY_RECOVERY_EDGE);
   });
 
+  it('loads linked failure-bundle sidecars for report summaries', () => {
+    const {reportPath} = writeLinkedReportFixture();
+    const summary = buildRepresentativeEvidenceSummary(
+      reportPath,
+      readJson(reportPath),
+    );
+
+    assert.equal(summary.topology.firstFrontierEdgeId, ACTIVE_GATE_SNAPSHOT_EDGE);
+    assert.equal(summary.topology.dominantWitness.owner, STARTUP_ACTIVE_GATE_OWNER);
+    assert.equal(summary.topology.dominantWitness.boundary, SNAPSHOT_COVERAGE_BOUNDARY);
+    assert.equal(
+      summary.topology.dominantWitness.evidencePath,
+      EVIDENCE_PATH_FAILURE_BUNDLE_ACTIVE_GATE_PROGRESS,
+    );
+    assert.ok(
+      summary.topology.dominantWitness.reasons.includes(
+        ACTIVE_GATE_TIMED_OUT_REASON,
+      ),
+    );
+    assert.ok(
+      summary.topology.dominantWitness.reasons.includes(
+        SNAPSHOT_COVERAGE_INCOMPLETE_REASON,
+      ),
+    );
+    assert.equal(
+      summary.causal.criticalPath[0].edgeId,
+      ACTIVE_GATE_SNAPSHOT_EDGE,
+    );
+  });
+
   it('renders a compact markdown handoff', () => {
     const markdown = execFileSync(
       NODE_BIN,
@@ -69,3 +110,63 @@ describe('representative evidence summary', () => {
     assert.match(directMarkdown, /Critical Path Preview/u);
   });
 });
+
+function writeJson(filePath, value) {
+  fs.writeFileSync(filePath, JSON.stringify(value, null, 2), ENCODING_UTF8);
+}
+
+function writeLinkedReportFixture() {
+  const fixtureDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'representative-evidence-sidecar-'),
+  );
+  const bundlePath = path.join(fixtureDir, 'failure-bundle.json');
+  const reportPath = path.join(fixtureDir, 'report.report.json');
+  writeJson(bundlePath, buildSidecarFailureBundle());
+  writeJson(reportPath, {
+    scenarios: [{
+      scenario: 'rolling-restart',
+      passed: false,
+      publicationConvergence: {
+        publicationStatus: 'UNKNOWN',
+        publicationPending: false,
+        pendingAckCount: 0,
+        blockedNodeCount: 0,
+        missingPublishedCount: 0,
+        prioritySpreadPending: false,
+      },
+      failureBundle: {
+        jsonPath: bundlePath,
+      },
+    }],
+  });
+  return {reportPath, bundlePath};
+}
+
+function buildSidecarFailureBundle() {
+  return {
+    scenario: 'rolling-restart',
+    summary: {
+      passed: false,
+      dominantReason: 'admin_reachability_refused',
+      failureClass: 'startup_recovery_blocked',
+    },
+    publicationConvergence: {
+      publicationStatus: 'UNKNOWN',
+      publicationPending: false,
+      pendingAckCount: 0,
+      blockedNodeCount: 0,
+      missingPublishedCount: 0,
+      prioritySpreadPending: false,
+      activeGate: {
+        state: 'timed_out',
+        ready: false,
+        progress: {
+          expectedNodeCount: EXPECTED_NODE_COUNT,
+          snapshotCoverageNodeCount: SNAPSHOT_COVERAGE_COUNT,
+          snapshotCoverageComplete: false,
+          blockers: ['snapshot_coverage=2/5'],
+        },
+      },
+    },
+  };
+}

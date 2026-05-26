@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import {
@@ -15,6 +14,9 @@ import {
   buildTopologyConvergenceOwnerWitness,
   selectTopologyConvergenceDominantWitness,
 } from '../src/diagnostics/topology-convergence-graph.js';
+import {
+  readArtifactWithSidecarsSync,
+} from './artifact-sidecar-loader.js';
 
 const ARG_HELP_SHORT = '-h';
 const ARG_HELP_LONG = '--help';
@@ -24,7 +26,6 @@ const ARG_EXPLAIN = '--explain';
 const ARG_HANDOFF_PROBE = '--handoff-probe';
 const ARG_PACKAGE_EVIDENCE_BLOCK = '--package-evidence-block';
 const ARG_REPLAY_FIXTURE = '--replay-fixture';
-const ENCODING_UTF8 = 'utf8';
 const JSON_INDENT_SPACES = 2;
 const EXIT_SUCCESS = 0;
 const EXIT_USAGE = 1;
@@ -244,7 +245,7 @@ function main(argv) {
   }
 
   try {
-    const artifact = readJsonFile(parsedArgs.artifactPath);
+    const artifact = readArtifactWithSidecarsSync(parsedArgs.artifactPath);
     const graph = buildGraphForArtifact(parsedArgs.artifactPath, artifact);
     if (parsedArgs.mode === MODE_EXPLAIN) {
       process.stdout.write(
@@ -980,10 +981,6 @@ function renderPackageEvidenceBlock(graph, artifactPath) {
 function markdownField(label, value) {
   return `${MARKDOWN_LIST_PREFIX}${label}: ${MARKDOWN_CODE_DELIMITER}` +
     `${value}${MARKDOWN_CODE_DELIMITER}`;
-}
-
-function readJsonFile(filePath) {
-  return JSON.parse(fs.readFileSync(filePath, ENCODING_UTF8));
 }
 
 process.exitCode = main(process.argv);

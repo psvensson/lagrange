@@ -10,6 +10,9 @@ import {
   buildTopologyConvergenceGraphFromArtifacts,
   selectTopologyConvergenceDominantWitness,
 } from '../src/diagnostics/topology-convergence-graph.js';
+import {
+  enrichArtifactWithSidecarsSync,
+} from './artifact-sidecar-loader.js';
 
 const ARG_HELP_SHORT = '-h';
 const ARG_HELP_LONG = '--help';
@@ -141,8 +144,15 @@ function summarizeCausal(analysis) {
 }
 
 function buildRepresentativeEvidenceSummary(artifactPath, artifact) {
-  const topologyGraph = buildTopologyGraphForArtifact(artifactPath, artifact);
-  const causalAnalysis = buildCausalAnalysis(artifact);
+  const enrichedArtifact = enrichArtifactWithSidecarsSync(
+    artifactPath,
+    artifact,
+  );
+  const topologyGraph = buildTopologyGraphForArtifact(
+    artifactPath,
+    enrichedArtifact,
+  );
+  const causalAnalysis = buildCausalAnalysis(enrichedArtifact);
   return {
     schemaVersion: OUTPUT_SCHEMA_VERSION,
     sourceArtifact: artifactPath,

@@ -13,6 +13,9 @@ import {
   buildRepresentativeEvidenceSummary,
 } from './summarize-representative-evidence.js';
 import {
+  enrichArtifactWithSidecarsSync,
+} from './artifact-sidecar-loader.js';
+import {
   buildCausalAnalysis,
 } from '../src/diagnostics/index.js';
 
@@ -215,7 +218,11 @@ function suggestedSuccessorAction(route = {}, representativeEvidence = {}) {
 }
 
 async function buildScenarioRouteSummary(options = {}) {
-  const artifact = await readJsonFile(options.artifactPath);
+  const rawArtifact = await readJsonFile(options.artifactPath);
+  const artifact = enrichArtifactWithSidecarsSync(
+    options.artifactPath,
+    rawArtifact,
+  );
   const representativeEvidence = buildRepresentativeEvidenceSummary(
     options.artifactPath,
     artifact,
