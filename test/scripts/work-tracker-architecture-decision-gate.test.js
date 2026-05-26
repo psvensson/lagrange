@@ -227,6 +227,30 @@ describe('work tracker architecture decision gate validation', () => {
       assert.match(payload.nextAction, /autonomous architecture experiment/u);
     });
 
+  it('derives selected gate next action from the selected route', () => {
+    const payload = buildArchitectureDecisionGatePayload({
+      ...BASE_SCENARIO_METADATA,
+      architectureDecisionGate: {
+        status: 'selected',
+        trigger: 'frontier-oscillation',
+        triggerEvidence: ['higher-model review selected local proof'],
+        choices: [{
+          id: 'continue-local-proof',
+          summary: 'Proceed with local runtime proof.',
+          route: 'continue-local-proof',
+          proof: ['npm run work:evidence-summary -- report.json'],
+        }],
+        selectedChoice: 'continue-local-proof',
+        nextAction:
+          'Select an autonomous architecture experiment unless evidence is contradictory or blocked.',
+      },
+    }, WORK_TRACKER_TEST_FILE);
+
+    assert.equal(payload.selectedChoice, 'continue-local-proof');
+    assert.match(payload.nextAction, /selected local proof route/u);
+    assert.doesNotMatch(payload.nextAction, /autonomous architecture experiment/u);
+  });
+
   it('blocks runtime edits while oscillation is watching', () => {
     const metadata = {
       ...BASE_SCENARIO_METADATA,

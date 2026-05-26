@@ -34,6 +34,7 @@ const HELP_TEXT = [
   '',
   'Prints the current package, doctor findings, next subagent role, and the',
   'next bounded prompt. With --write it refreshes current-blocker first.',
+  'With --check, failed validation subcommands make this command fail.',
 ].join(NEWLINE);
 
 function normalizeText(value) {
@@ -87,19 +88,30 @@ function appendCommandResult(lines, title, result) {
     lines.push(result.stderr);
   }
   lines.push(`Exit status: \`${result.status}\``);
+  return result.status === EXIT_SUCCESS ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 
-async function buildAdvanceLines(args = []) {
+function validationCommandArgs(phaseFlag, packagePath) {
+  const commandArgs = ['validate', phaseFlag];
+  if (packagePath) {
+    commandArgs.push(packagePath);
+  }
+  return commandArgs;
+}
+
+async function buildAdvanceLines(args = [], options = {}) {
   if (args.includes(FLAG_HELP)) {
     return HELP_TEXT.split(NEWLINE);
   }
+  const commandStatuses = options.commandStatuses || [];
+  const packagePath = parseOptionValue(args, FLAG_PACKAGE);
   const lines = ['# Work Advance'];
   if (args.includes(FLAG_WRITE)) {
-    appendCommandResult(
+    commandStatuses.push(appendCommandResult(
       lines,
       'Current Blocker Refresh',
       runNodeScript('scripts/work-tracker.js', ['current-blocker', '--write']),
-    );
+    ));
   }
   const {currentBlocker, packageContent} = await resolvePackageBlocker(args);
   const theoryLedgerContext = await readTheoryLedgerContext();
@@ -150,22 +162,39 @@ async function buildAdvanceLines(args = []) {
       (await buildSubagentNextLines([])).join(NEWLINE),
   );
   if (args.includes(FLAG_CHECK)) {
-    appendCommandResult(
+    commandStatuses.push(appendCommandResult(
       lines,
       'Entry Validation',
-      runNodeScript('scripts/work-tracker.js', ['validate', '--entry']),
-    );
-    appendCommandResult(
+      runNodeScript(
+        'scripts/work-tracker.js',
+        validationCommandArgs('--entry', packagePath),
+      ),
+    ));
+    commandStatuses.push(appendCommandResult(
       lines,
       'Pre-Implementation Validation',
-      runNodeScript('scripts/work-tracker.js', ['validate', '--pre-impl']),
-    );
+      runNodeScript(
+        'scripts/work-tracker.js',
+        validationCommandArgs('--pre-impl', packagePath),
+      ),
+    ));
   }
   return lines;
 }
 
+async function buildAdvanceResult(args = []) {
+  const commandStatuses = [];
+  const lines = await buildAdvanceLines(args, {commandStatuses});
+  const status = commandStatuses.some((commandStatus) =>
+    commandStatus !== EXIT_SUCCESS) ? EXIT_FAILURE : EXIT_SUCCESS;
+  return {
+    output: `${lines.join(NEWLINE)}${NEWLINE}`,
+    status,
+  };
+}
+
 async function runCli(args = process.argv.slice(NUM_TWO)) {
-  return `${(await buildAdvanceLines(args)).join(NEWLINE)}${NEWLINE}`;
+  return (await buildAdvanceResult(args)).output;
 }
 
 function isDirectRun() {
@@ -173,10 +202,10 @@ function isDirectRun() {
 }
 
 if (isDirectRun()) {
-  runCli()
-    .then((output) => {
-      process.stdout.write(output);
-      process.exitCode = EXIT_SUCCESS;
+  buildAdvanceResult(process.argv.slice(NUM_TWO))
+    .then((result) => {
+      process.stdout.write(result.output);
+      process.exitCode = result.status;
     })
     .catch((error) => {
       process.stderr.write(`${error.message}${NEWLINE}`);
@@ -185,6 +214,7 @@ if (isDirectRun()) {
 }
 
 export {
+  buildAdvanceResult,
   buildAdvanceLines,
   runCli,
 };

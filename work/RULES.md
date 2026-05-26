@@ -33,7 +33,7 @@ When the lane is not obvious, use
 Validators execute in distinct phases to ensure the integrity of the codebase and workflow:
 
 1.  **Entry Phase (`--entry`)**: Validates the basic metadata shape, file paths, and formatting of a work package before it begins execution.
-2.  **Pre-Implementation Phase (`--pre-impl`)**: Validates that the owner, boundary, write scope, forbidden scope, proof, and stop rules are explicit and correct *before* any implementation code is modified.
+2.  **Pre-Implementation Phase (`--pre-impl`)**: Validates that the owner, boundary, write scope, do-not-edit scope, proof, and stop rules are explicit and correct *before* any implementation code is modified.
 3.  **Closure Phase (`--closure`)**: Validates that all focused proofs pass, all checklist items in the execution evidence are checked off, a theory ledger section exists, and the package is atomically closed before commit/push.
 
 ---
@@ -53,8 +53,9 @@ To guarantee stability, implementation changes must compile and pass structured 
 <a name="discovery-gate"></a>
 
 The Discovery Gate is a package-local pre-implementation framing step. It is
-not a lane, status, closure artifact, current-blocker replacement, or theory
-ledger entry.
+not a status, closure artifact, current-blocker replacement, or theory ledger
+entry. The `discovery` lane uses this gate as its required output contract; other
+lanes may also use the same gate when route ambiguity is material.
 
 Use it when owner, boundary, route, or proof ambiguity is material, including
 `modelFit.ambiguityScore >= 2`, competing owners or hypotheses, repeated
@@ -77,7 +78,7 @@ When used, record these fields in the package before implementation:
 Allowed outcomes:
 
 1. Continue the current package only after selected route, write scope,
-   forbidden scope, and proof are explicit.
+   do-not-edit scope, and proof are explicit.
 2. Open or use an `experiment`/probe package when the cheapest discriminator
    must run before implementation.
 3. Update current-blocker or successor truth only when the selected route

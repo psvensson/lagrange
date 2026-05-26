@@ -102,6 +102,9 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
           fallbackSnapshot,
           fallbackEvaluation,
         );
+      if (!deferredSnapshot && options.forceAuthoritativeRepair === true) {
+        deferredSnapshot = fallbackSnapshot || localSnapshot;
+      }
     }
     if (!deferredSnapshot) {
       return CONTROL_SNAPSHOT_ABSENT_DEFERRED_SNAPSHOT;
@@ -553,10 +556,12 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
     if (
       options.forceAuthoritativeRepair === true &&
       hasForcedRepairDeferredFailureCause(options.repair) &&
-      hasDeferredRepairLocalControlSnapshotCoverage(
+      (hasDeferredRepairLocalControlSnapshotCoverage(
         options.localSnapshot,
         options.repairEvaluation,
-      )
+      ) || isReadyLocalTransportDiagnostic(
+        options.repair?.[CONTROL_SNAPSHOT_LOCAL_TRANSPORT_FIELD],
+      ))
     ) {
       return true;
     }
@@ -571,7 +576,7 @@ class AdminControlSnapshotPart2 extends AdminControlSnapshotPart1 {
     }
     if (
       options.forceAuthoritativeRepair !== true &&
-      hasPressureOrTimeoutRepairCause(options.repair) &&
+      hasForcedRepairDeferredFailureCause(options.repair) &&
       isReadyLocalTransportDiagnostic(
         options.repair?.[CONTROL_SNAPSHOT_LOCAL_TRANSPORT_FIELD],
       )

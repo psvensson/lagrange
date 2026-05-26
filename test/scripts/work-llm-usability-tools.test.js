@@ -473,10 +473,11 @@ test('review subagent prompt caps review commands before runtime proof',
 
     t.match(prompt, /## Package Proof Ladder \(Implementation\/Parent-Owned\)/u);
     t.match(prompt, /Review verifies this ladder is coherent/u);
-    t.match(reviewBudget, /Default budget: four commands/u);
+    t.match(reviewBudget, /Default budget: five commands/u);
     t.match(reviewBudget, /work:package:doctor -- --suggest/u);
     t.match(reviewBudget, /done-20260518-predecessor\.md/u);
     t.match(reviewBudget, /work:scenario-route/u);
+    t.match(reviewBudget, /work:validate -- --entry/u);
     t.match(reviewBudget, /work:validate -- --pre-impl/u);
     t.match(reviewBudget, /Do not run focused runtime tests/u);
     t.match(reviewBudget, /Runtime proof and `npm run test:static` belong/u);
@@ -697,6 +698,7 @@ test('route-after-rerun prints the migration transaction without writing',
     t.match(rendered, /# Scenario Route/u);
     t.match(rendered, /## Required Refresh/u);
     t.match(rendered, /work:repair/u);
+    t.match(rendered, /work:validate -- --entry/u);
     t.match(rendered, /work:validate -- --pre-impl/u);
     t.match(rendered, /work:package:migrate -- --write --transaction/u);
     t.match(rendered, /Successor package command/u);

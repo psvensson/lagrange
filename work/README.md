@@ -262,7 +262,7 @@ the package explicitly records a heavier audit or architecture reason:
    changed.
 14. Use the `single-file-runtime` lane for a preselected one-file runtime slice
    intended for `gpt-5.4`. It still needs a Core Logic Brief, focused proof,
-   and explicit forbidden scope, and it must split as soon as a second runtime
+   and explicit do-not-edit scope, and it must split as soon as a second runtime
    file, shared contract, or owner migration is needed.
 15. Once canonical owner and boundary are stable and the route is local runtime
    work, prefer a `runtime-owner-boundary` successor over another
@@ -282,18 +282,20 @@ the package explicitly records a heavier audit or architecture reason:
 
 Use a `## Discovery Gate` as package-local thinking space when an LLM needs to
 compare plausible owners, boundaries, or routes before implementation scope is
-safe. It is not a new lane, a status system, a current-blocker replacement, or
-a theory-ledger entry.
+safe. It is not a status system, a current-blocker replacement, or a
+theory-ledger entry. The `discovery` lane is the package lane for route-selection
+work whose output is this gate; runtime, scenario, and maintenance packages may
+also carry the gate when ambiguity must be resolved before edits.
 
 Use the gate when any of these are true:
 
 1. `modelFit.ambiguityScore >= 2`
 2. multiple owners, boundaries, or hypotheses could explain the same symptom
 3. the package repeats a same-frontier or same-action pattern
-4. write scope, forbidden scope, or focused proof cannot be chosen without one
+4. write scope, do-not-edit scope, or focused proof cannot be chosen without one
    discriminator
 
-Skip the gate when owner, boundary, route, forbidden scope, and proof are
+Skip the gate when owner, boundary, route, do-not-edit scope, and proof are
 already explicit, especially for read-doc, doc-only, or straightforward
 maintenance packages.
 
@@ -575,7 +577,9 @@ Examples:
 - `superseded-20260409-control-plane-simplification.md`
 
 Do not create parallel status systems in both directory names and filenames.
-The filename is the status.
+The filename is the status. Metadata and generated current-blocker status fields
+are mirrors that must match the filename; they are present for validators and
+handoff tools, not as an independent source of truth.
 
 ## Package Rules
 
@@ -901,7 +905,7 @@ Packages whose intended minimum model is `gpt-5.3-codex-spark` are linted as
 bounded leaf slices. They must also name:
 
 1. `Owned files`
-2. `Forbidden files`
+2. `Do-not-edit scope`
 3. `Frozen decisions`
 4. `Escalation triggers`
 5. `Focused proof`
@@ -1088,7 +1092,8 @@ artifact, route owner, route boundary, route dominant reason, route causal
 outcome, stop mode, next lane, expected representative delta, and required
 refresh commands. The refresh commands must include route-after-rerun, Sprint
 Strategy Brief update, Current Edge Card update, `npm run work:current-blocker
--- --write`, and `npm run work:validate -- --pre-impl`.
+-- --write`, `npm run work:validate -- --entry`, and
+`npm run work:validate -- --pre-impl`.
 
 When the route owner and boundary are stable and the causal route is a local
 runtime fix, `rerunDecision.nextLane` should be `runtime-owner-boundary`.
@@ -1116,7 +1121,7 @@ Default rule:
 2. Treat active scenario reports, packages, and sprint files as handoff context
    unless the human explicitly asks to edit that active lane.
 3. Put the active runtime package, active sprint file, and runtime directories
-   in `Forbidden files` when the package is governance-only.
+   in `Do-not-edit scope` when the package is governance-only.
 4. Record runtime architecture ideas as contracts or backlog packages first.
    Implement them later only through a separate `runtime-owner-boundary` or
    `scenario-release-gate` package with focused proof.
@@ -1157,7 +1162,7 @@ Systemic release-gate sprints must also carry a higher-order execution gate:
    maximum bound are named.
 6. **Runtime backlog activation:** runtime implementation starts only from a
    backlog item that cites the blocker-path ledger row, architecture contract,
-   focused proof, forbidden files, and active-proof reconciliation.
+   focused proof, do-not-edit scope, and active-proof reconciliation.
 7. **Package cost:** periodic sprint review runs
    `npm run work:package:cost` and reports packages closed per representative
    movement point plus observable prediction accuracy. Owner/boundary rows with
@@ -1201,13 +1206,15 @@ Prefer:
 
 1. One idea file per idea.
 2. One work package per executable concern.
-3. One filename status.
+3. One filename status, with metadata and generated status fields treated only
+   as validated mirrors.
 4. One sprint file only when grouping adds real value.
 
 Avoid:
 
 1. Multiple backlog systems.
-2. Separate status fields and filename states that can drift.
+2. Separate status fields and filename states that can drift or compete for
+   authority.
 3. Large umbrella packages spanning unrelated concerns.
 4. Sprint docs that contain detailed execution steps better owned by packages.
 

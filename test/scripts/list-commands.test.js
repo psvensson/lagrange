@@ -17,7 +17,7 @@ const WORK_CONTEXT_BOOTSTRAP_COMMAND = 'npm run work:context -- --bootstrap';
 const WORK_ADVANCE_COMMAND = 'npm run work:advance';
 const WORK_LLM_START_COMMAND = 'npm run work:llm-start';
 const WORK_LANE_PICKER_COMMAND =
-  'npm run work:lane-picker -- --docs-only|--maintenance|--tests-only|--experiment|--runtime|--scenario';
+  'npm run work:lane-picker -- --docs-only|--maintenance|--tests-only|--experiment|--runtime|--scenario|--discovery';
 const WORK_DIRTY_SCOPE_COMMAND = 'npm run work:dirty-scope';
 const WORK_TRACKS_COMMAND = 'npm run work:tracks';
 const WORK_SPRINT_REMAINING_COMMAND = 'npm run work:sprint:remaining';

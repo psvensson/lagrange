@@ -258,6 +258,7 @@ const MODEL_FIT_SCOPE_SHAPE_LABEL = 'Scope shape';
 const MODEL_FIT_OUTPUT_PROFILE_LABEL = 'Output profile';
 const MODEL_FIT_OWNED_FILES_LABEL = 'Owned files';
 const MODEL_FIT_FORBIDDEN_FILES_LABEL = 'Forbidden files';
+const MODEL_FIT_DO_NOT_EDIT_SCOPE_LABEL = 'Do-not-edit scope';
 const MODEL_FIT_FROZEN_DECISIONS_LABEL = 'Frozen decisions';
 const MODEL_FIT_ESCALATION_TRIGGERS_LABEL = 'Escalation triggers';
 const MODEL_FIT_FOCUSED_PROOF_LABEL = 'Focused proof';
@@ -469,6 +470,7 @@ const RERUN_DECISION_REQUIRED_COMMAND_PATTERNS = Object.freeze([
   /\bSprint Strategy Brief\b/iu,
   /\bCurrent Edge Card\b/iu,
   /\b(?:work:repair|work:current-blocker)\b/iu,
+  /\bwork:validate\b[\s\S]*\bentry\b/iu,
   /\bwork:validate\b[\s\S]*\bpre-impl\b/iu,
 ]);
 const SAME_FRONTIER_RESULT = 'same-frontier';
@@ -541,6 +543,14 @@ const ARCHITECTURE_DECISION_GATE_NEXT_ACTION_SELECT =
   'Select an architecture route before runtime implementation; default to an architecture package.';
 const ARCHITECTURE_DECISION_GATE_NEXT_ACTION_WATCH =
   'Watch for repeated frontier oscillation; open an autonomous architecture experiment if another local proof returns here unchanged.';
+const ARCHITECTURE_DECISION_GATE_NEXT_ACTION_LOCAL_PROOF =
+  'Execute the selected local proof route; rerun canonical evidence before opening another architecture gate.';
+const ARCHITECTURE_DECISION_GATE_NEXT_ACTION_OWNER_MIGRATION =
+  'Execute the selected owner-boundary migration route before local runtime proof continues.';
+const ARCHITECTURE_DECISION_GATE_NEXT_ACTION_ARCHITECTURE_PACKAGE =
+  'Open the autonomous architecture experiment package before runtime implementation resumes.';
+const ARCHITECTURE_DECISION_GATE_NEXT_ACTION_HUMAN_ESCALATION =
+  'Stop for the recorded human escalation route before implementation continues.';
 const OBSERVABLE_PREDICTION_ACCURACY_PENDING = 'pending-before-observation';
 const OBSERVABLE_PREDICTION_ACCURACY_MATCHED = 'matched';
 const OBSERVABLE_PREDICTION_ACCURACY_PARTIAL = 'partial';
@@ -2077,6 +2087,16 @@ function findModelFitField(section, label) {
   return match ? normalizeLedgerFieldValue(match[NUM_ONE]) : null;
 }
 
+function findFirstModelFitField(section, labels) {
+  for (const label of labels) {
+    const value = findModelFitField(section, label);
+    if (value !== null) {
+      return value;
+    }
+  }
+  return null;
+}
+
 function findCoreLogicBriefField(section, label) {
   const fieldPattern = new RegExp(
     `${escapeRegExp(label)}:\\s*([^\\n]+)`,
@@ -2682,9 +2702,12 @@ export function validateModelFitContract(content, filePath, options = {}) {
       section,
       MODEL_FIT_OWNED_FILES_LABEL,
     ),
-    [MODEL_FIT_FORBIDDEN_FILES_LABEL]: findModelFitField(
+    [MODEL_FIT_FORBIDDEN_FILES_LABEL]: findFirstModelFitField(
       section,
-      MODEL_FIT_FORBIDDEN_FILES_LABEL,
+      [
+        MODEL_FIT_DO_NOT_EDIT_SCOPE_LABEL,
+        MODEL_FIT_FORBIDDEN_FILES_LABEL,
+      ],
     ),
     [MODEL_FIT_FROZEN_DECISIONS_LABEL]: findModelFitField(
       section,
@@ -3702,7 +3725,7 @@ function validateRerunDecisionRefreshCommands(filePath, commands) {
       errors.push(
         `${filePath}: rerunDecision.requiredRefreshCommands must cite ` +
         'route-after-rerun, Sprint Strategy Brief, Current Edge Card, ' +
-        'current-blocker refresh, and pre-implementation validation.',
+        'current-blocker refresh, entry validation, and pre-implementation validation.',
       );
       break;
     }
@@ -4552,13 +4575,59 @@ function normalizeArchitectureGateChoice(choice = {}) {
   };
 }
 
+function architectureGateSelectedChoice(choices, selectedChoice) {
+  return choices.find((choice) =>
+    isObjectRecord(choice) &&
+    normalizeLedgerText(choice.id) === selectedChoice);
+}
+
+function defaultArchitectureDecisionGateNextAction(gate = {}, choices = []) {
+  const status = normalizeLedgerText(gate.status);
+  if (status === ARCHITECTURE_DECISION_GATE_STATUS_WATCHING) {
+    return ARCHITECTURE_DECISION_GATE_NEXT_ACTION_WATCH;
+  }
+  if (
+    status === ARCHITECTURE_DECISION_GATE_STATUS_REQUIRED ||
+    status === ARCHITECTURE_DECISION_GATE_STATUS_PRESENTED
+  ) {
+    return ARCHITECTURE_DECISION_GATE_NEXT_ACTION_SELECT;
+  }
+  if (status !== ARCHITECTURE_DECISION_GATE_STATUS_SELECTED) {
+    return ARCHITECTURE_DECISION_GATE_NEXT_ACTION_PRESENT;
+  }
+  const selectedChoice = normalizeLedgerText(gate.selectedChoice);
+  const selected = architectureGateSelectedChoice(choices, selectedChoice);
+  const route = normalizeLedgerText(selected?.route);
+  if (route === ARCHITECTURE_DECISION_GATE_ROUTE_CONTINUE_LOCAL_PROOF) {
+    return ARCHITECTURE_DECISION_GATE_NEXT_ACTION_LOCAL_PROOF;
+  }
+  if (route === ARCHITECTURE_DECISION_GATE_ROUTE_OWNER_BOUNDARY_MIGRATION) {
+    return ARCHITECTURE_DECISION_GATE_NEXT_ACTION_OWNER_MIGRATION;
+  }
+  if (route === ARCHITECTURE_DECISION_GATE_ROUTE_ARCHITECTURE_PACKAGE) {
+    return ARCHITECTURE_DECISION_GATE_NEXT_ACTION_ARCHITECTURE_PACKAGE;
+  }
+  if (route === ARCHITECTURE_DECISION_GATE_ROUTE_HUMAN_ESCALATION) {
+    return ARCHITECTURE_DECISION_GATE_NEXT_ACTION_HUMAN_ESCALATION;
+  }
+  return ARCHITECTURE_DECISION_GATE_NEXT_ACTION_SELECT;
+}
+
 function normalizeArchitectureDecisionGate(gate = {}, metadata = {}) {
+  const status = normalizeLedgerText(gate.status) ||
+    ARCHITECTURE_DECISION_GATE_STATUS_REQUIRED;
   const choices = Array.isArray(gate.choices) ?
     gate.choices.map(normalizeArchitectureGateChoice) :
     architectureGateChoices(metadata);
+  const defaultNextAction = defaultArchitectureDecisionGateNextAction(
+    {
+      ...gate,
+      status,
+    },
+    choices,
+  );
   return {
-    status: normalizeLedgerText(gate.status) ||
-      ARCHITECTURE_DECISION_GATE_STATUS_REQUIRED,
+    status,
     trigger: normalizeLedgerText(gate.trigger) ||
       ARCHITECTURE_DECISION_GATE_TRIGGER_ARCHITECTURE_GAP,
     triggerEvidence: Array.isArray(gate.triggerEvidence) ?
@@ -4568,8 +4637,9 @@ function normalizeArchitectureDecisionGate(gate = {}, metadata = {}) {
     choices,
     selectedChoice: gate.selectedChoice === null ? null :
       normalizeLedgerText(gate.selectedChoice) || null,
-    nextAction: normalizeLedgerText(gate.nextAction) ||
-      ARCHITECTURE_DECISION_GATE_NEXT_ACTION_PRESENT,
+    nextAction: status === ARCHITECTURE_DECISION_GATE_STATUS_SELECTED ?
+      defaultNextAction :
+      normalizeLedgerText(gate.nextAction) || defaultNextAction,
   };
 }
 
@@ -4593,8 +4663,7 @@ export function buildArchitectureDecisionGatePayload(
       ),
       choices: architectureGateChoices(metadata),
       selectedChoice: ARCHITECTURE_DECISION_GATE_CHOICE_ID_ARCHITECTURE_PACKAGE,
-      nextAction:
-        'Open the autonomous architecture experiment package before runtime implementation resumes.',
+      nextAction: ARCHITECTURE_DECISION_GATE_NEXT_ACTION_ARCHITECTURE_PACKAGE,
     };
   }
 
@@ -7416,7 +7485,7 @@ function buildDoctorSuggestion(error) {
     return 'Record `rerunDecision` from `npm run work:package:route-after-rerun`: ' +
       'source artifact, route owner/boundary/dominant reason, causal outcome, ' +
       'stop mode, next lane, expected delta, and required refresh commands for ' +
-      'Sprint Strategy Brief, Current Edge Card, current-blocker, and pre-impl validation.';
+      'Sprint Strategy Brief, Current Edge Card, current-blocker, entry, and pre-impl validation.';
   }
   if (/classificationEfficiency/iu.test(error)) {
     return 'Add `classificationEfficiency` to pure classifier packages: ' +

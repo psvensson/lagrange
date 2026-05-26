@@ -199,7 +199,7 @@ Each entry must include these labels:
 - Probe: `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json`
 - Artifact/result: `test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json` - selected node `7493b0ab-a054-5fad-a91b-5e331db29304` timed out readiness probing, final playback warned that the snapshot lane query timed out after 15000ms, selected snapshot observation was `forced_repair/stale_usable/pending/applied/wait`, and log patterns included `failed_query_operations_table=46` and `query_timeout_5000ms=4`.
 - Representative movement: needs-rerun
-- Linked packages: `work/packages/active-20260526-rolling-restart-operation-workflow-three-theory-recovery.md`
+- Linked packages: `work/packages/active-20260526-rolling-restart-operation-workflow-three-theory-recovery.md`, `work/packages/active-20260526-rolling-restart-startup-active-gate-owner-snapshot-coverage.md`
 - Supersedes: none
 - Superseded by: none
 - Next implication: Focus the next proof on selected-source health, retry behavior, and alternative witness selection before changing operation workflow runtime code.

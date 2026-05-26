@@ -19,7 +19,7 @@ Preserve the highest-level owner boundary, choose the lightest process that prov
 
 Use this list at cold start before any non-trivial work. Anchors point into [`work/RULES.md`](../../../work/RULES.md).
 
-1. **Do not modify forbidden files** outside your package's declared `writeScope` (e.g. `src/` inside maintenance lanes). (§worktree-safety)
+1. **Do not modify do-not-edit scope** outside your package's declared `writeScope` (e.g. `src/` inside maintenance lanes). (§worktree-safety)
 2. **Do not bypass frozen decisions** or reopen established architecture routes without explicit Level 1 user override/confirmation. (§sprint-strategy)
 3. **Do not exceed file-size caps** when modifying or creating files (src ≤ 800 lines, test ≤ 1500 lines); refactor first. (§coding-constraints)
 4. **Do not skip `npm run work:context`** for non-trivial implementation work. (§validator-phases)

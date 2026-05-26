@@ -33,8 +33,9 @@ Canonical lane definitions and requirements live in [`work/RULES.md#lane-definit
 | `experiment` | `bounded-experiment`, `fast-spike` | A bounded hypothesis or probe decides the next owner/action. |
 | `runtime` | `single-file-runtime`, `runtime-owner-boundary` | Runtime behavior, owner contracts, shared metadata, diagnostics grammar, or affected consumers can change. |
 | `scenario` | `scenario-release-gate`, `causal-escalation` | Distributed, integration, load, release-gate, repeated same-frontier, or causal-closure work. |
+| `discovery` | `discovery` | Lateral analysis, exploratory scans, or route selection without runtime, test, or script writes. |
 
-Use `npm run work:lane-picker -- --docs-only|--maintenance|--tests-only|--experiment|--runtime|--scenario` when the lane is not obvious.
+Use `npm run work:lane-picker -- --docs-only|--maintenance|--tests-only|--experiment|--runtime|--scenario|--discovery` when the lane is not obvious.
 
 ## Per-Lane First Commands
 
@@ -66,8 +67,17 @@ These are LLM-specific operational steps. Process semantics for each lane live i
 
 1. `npm run work:context`
 2. Use the active package validation surface or create a `test-only-proof` package with `--write` if no active package owns the proof.
-3. Run the focused test/probe before broad suites.
-4. Finish with the closure tail (see below).
+3. If a package was created, run `npm run work:validate -- --entry <package>` and `npm run work:validate -- --pre-impl <package>`.
+4. Run the focused test/probe before broad suites.
+5. Finish with the closure tail (see below).
+
+### `discovery`
+
+1. `npm run work:context`
+2. Create or use a `discovery` package only when the route selection changes durable package, sprint, tracker, or ledger truth.
+3. Keep `writeScope` restricted to package files, sprint files, and `work/theory-ledger.md`; no runtime, test, or script writes.
+4. Record the Discovery Gate discriminator and selected route before promoting implementation work.
+5. If a package was created, run `npm run work:validate -- --entry <package>` and finish with the closure tail (see below).
 
 ### `runtime`
 
@@ -75,7 +85,7 @@ These are LLM-specific operational steps. Process semantics for each lane live i
 2. `npm run work:llm-start`
 3. Load `architecture.md` and `testing.md`.
 4. Ensure the package has a Core Logic Brief, exact write scope, proof ladder, static guardrail plan, and affected-consumer proof.
-5. Run `npm run work:validate -- --pre-impl <package>` before runtime edits.
+5. Run `npm run work:validate -- --entry <package>`, then `npm run work:validate -- --pre-impl <package>` before runtime edits.
 6. Use implementation plus verifier-fixer evidence before closure.
 7. Finish with the closure tail (see below).
 
@@ -86,9 +96,10 @@ These are LLM-specific operational steps. Process semantics for each lane live i
 3. Start from canonical evidence tools such as `work:evidence-summary`, `work:scenario-route`, or the focused extractor for the failure class.
 4. Load `governance.md`, `architecture.md`, and `testing.md`.
 5. Keep the Current Edge Card, causal closure fields, selected owner boundary, and stop mode in view.
-6. Prove the missing edge or fixture before broad representative reruns.
-7. Use separate verifier-fixer evidence before closure.
-8. Finish with the closure tail (see below).
+6. Run `npm run work:validate -- --entry <package>`, then `npm run work:validate -- --pre-impl <package>` before runtime or scenario edits.
+7. Prove the missing edge or fixture before broad representative reruns.
+8. Use separate verifier-fixer evidence before closure.
+9. Finish with the closure tail (see below).
 
 ### Closure Tail (every lane)
 

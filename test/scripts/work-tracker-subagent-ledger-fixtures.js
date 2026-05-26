@@ -72,6 +72,76 @@ export const LANE_BOUNDED_EXPERIMENT = 'bounded-experiment';
 export const LANE_SINGLE_FILE_RUNTIME = 'single-file-runtime';
 export const LANE_RUNTIME_OWNER_BOUNDARY = 'runtime-owner-boundary';
 export const LANE_CAUSAL_ESCALATION = 'causal-escalation';
+
+function withoutUndefinedFields(fields) {
+  return Object.fromEntries(
+    Object.entries(fields).filter(([, value]) => value !== undefined),
+  );
+}
+
+export function buildWorkPackageV2Metadata(metadata = {}) {
+  const proofCommands = metadata.proof ||
+    metadata.execution?.proof?.commands ||
+    [];
+  return {
+    ...metadata,
+    schema: 'work-package-v2',
+    intent: {
+      ...withoutUndefinedFields({
+        opened: metadata.opened,
+        closed: metadata.closed,
+        lane: metadata.lane,
+        scenario: metadata.scenario,
+        artifact: metadata.artifact,
+        playback: metadata.playback,
+        owner: metadata.owner,
+        boundary: metadata.boundary,
+        dominantReason: metadata.dominantReason,
+        currentState: metadata.currentState,
+        nextAction: metadata.nextAction,
+        predecessor: metadata.predecessor,
+        successor: metadata.successor,
+      }),
+      ...(metadata.intent || {}),
+    },
+    scope: {
+      writeScope: metadata.writeScope || metadata.scope?.writeScope || [],
+      handoffFiles: metadata.handoffFiles || metadata.scope?.handoffFiles || [],
+      generatedFiles: metadata.generatedFiles || metadata.scope?.generatedFiles || [],
+      candidateRuntimeFiles:
+        metadata.candidateRuntimeFiles ||
+        metadata.scope?.candidateRuntimeFiles ||
+        [],
+      commitScope: metadata.commitScope || metadata.scope?.commitScope || [],
+    },
+    gates: {
+      whyHighestLeverageNow:
+        metadata.whyHighestLeverageNow ||
+        metadata.gates?.whyHighestLeverageNow ||
+        'This package advances the active sprint goal with focused proof.',
+      stabilityCredit:
+        metadata.stabilityCredit ||
+        metadata.gates?.stabilityCredit ||
+        'local-proof-only',
+      ...withoutUndefinedFields({
+        representativeRerunCadence: metadata.representativeRerunCadence,
+        codeQualityAdmission: metadata.codeQualityAdmission,
+      }),
+      ...(metadata.gates || {}),
+    },
+    execution: {
+      theoryLedgerRefs:
+        metadata.theoryLedgerRefs ||
+        metadata.execution?.theoryLedgerRefs ||
+        [],
+      proof: {
+        commands: proofCommands,
+      },
+      ...(metadata.execution || {}),
+    },
+  };
+}
+
 export const CAUSAL_GOVERNANCE_VALID_METADATA = Object.freeze({
   status: WORK_TRACKER_ACTIVE_STATUS,
   scenario: 'rolling-restart',
@@ -146,6 +216,7 @@ export const RERUN_DECISION_VALID_METADATA = Object.freeze({
       'Update Sprint Strategy Brief from the route result.',
       'Update Current Edge Card from the route result.',
       'npm run work:repair',
+      'npm run work:validate -- --entry',
       'npm run work:validate -- --pre-impl',
     ]),
   }),
@@ -168,8 +239,8 @@ export const CLASSIFICATION_EFFICIENCY_VALID_METADATA = Object.freeze({
       'Stable owner/boundary local-fix routes open a runtime-owner-boundary successor.',
   }),
 });
-export const CLASSIFICATION_ONLY_FAST_PATH_METADATA = Object.freeze({
-  schema: 'work-package-v1',
+export const CLASSIFICATION_ONLY_FAST_PATH_METADATA = Object.freeze(
+  buildWorkPackageV2Metadata({
   status: WORK_TRACKER_ACTIVE_STATUS,
   opened: '2026-05-18',
   lane: LANE_CAUSAL_ESCALATION,
@@ -218,7 +289,7 @@ export const CLASSIFICATION_ONLY_FAST_PATH_METADATA = Object.freeze({
     SCENARIO_CAUSAL_CLOSURE_VALID_METADATA.scenarioCausalClosure,
   classificationEfficiency:
     CLASSIFICATION_EFFICIENCY_VALID_METADATA.classificationEfficiency,
-});
+}));
 export const CLASSIFICATION_ONLY_WITH_IMPLEMENTATION_SCOPE_METADATA = Object.freeze({
   ...CLASSIFICATION_ONLY_FAST_PATH_METADATA,
   writeScope: Object.freeze([
@@ -966,8 +1037,7 @@ export const WORK_TRACKER_DOCTOR_CONTENT = [
   '# Test Package',
   '',
   '<!-- work-package',
-  JSON.stringify({
-    schema: 'work-package-v1',
+  JSON.stringify(buildWorkPackageV2Metadata({
     status: 'active',
     opened: '2026-05-15',
     lane: LANE_LIGHTWEIGHT_MAINTENANCE,
@@ -993,7 +1063,7 @@ export const WORK_TRACKER_DOCTOR_CONTENT = [
       escalationTriggers: ['package doctor expands beyond work tracker'],
       ambiguityScore: 1,
     },
-  }, null, 2),
+  }), null, 2),
   '-->',
   '',
   '## Model Fit',

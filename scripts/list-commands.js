@@ -25,7 +25,7 @@ const COMMAND_GROUPS = Object.freeze([
         description: 'Print combined LLM handoff, doctor suggestions, dirty scope, model ledger, and evidence summary.',
       }),
       Object.freeze({
-        command: 'npm run work:lane-picker -- --docs-only|--maintenance|--tests-only|--experiment|--runtime|--scenario',
+        command: 'npm run work:lane-picker -- --docs-only|--maintenance|--tests-only|--experiment|--runtime|--scenario|--discovery',
         description: 'Recommend one canonical lane bucket and compatible package lane from a few workflow signals.',
       }),
       Object.freeze({

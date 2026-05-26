@@ -140,7 +140,8 @@ async function buildRouteAfterRerunLines(options = {}) {
     '- Update Sprint Strategy Brief from the route result.',
     '- Update Current Edge Card from the route result.',
     `- Refresh generated tracker handoff: \`npm run work:repair\``,
-    `- Enforce consistency: \`npm run work:validate -- --pre-impl\``,
+    `- Enforce entry consistency: \`npm run work:validate -- --entry\``,
+    `- Enforce pre-implementation consistency: \`npm run work:validate -- --pre-impl\``,
   ];
   if (!options.write) {
     lines.push(

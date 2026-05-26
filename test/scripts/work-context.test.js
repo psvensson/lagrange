@@ -634,11 +634,44 @@ test('work context bootstrap view collapses first commands and closure path',
 
     t.equal(lines[0], '# Work Bootstrap');
     t.match(rendered, 'npm run work:advance -- --check');
+    t.match(rendered, `npm run work:validate -- --entry ${TEST_PACKAGE_PATH}`);
+    t.match(rendered, `npm run work:validate -- --pre-impl ${TEST_PACKAGE_PATH}`);
     t.match(rendered, `npm run work:close ${TEST_PACKAGE_PATH}`);
     t.match(rendered, 'npm run work:sprint:advance -- --dry-run');
     t.match(rendered, '.kiro/steering/llm/boot.md');
     t.match(rendered, 'Owner / boundary: Bootstrap owner / Startup join');
     t.match(rendered, 'Write scope: ' + TEST_BOOTSTRAP_SOURCE_PATH);
+    t.end();
+  });
+
+test('work context qualifies broad do-not-edit scope when writeScope overlaps',
+  async (t) => {
+    const packageContent = [
+      '# Runtime Package',
+      '',
+      '## Model Fit',
+      '',
+      '- Do-not-edit scope: `src/`',
+      '',
+    ].join('\n');
+    const lines = await buildContextLines(TEST_BLOCKER, packageContent);
+    const rendered = lines.join('\n');
+    const alreadyQualifiedLines = await buildContextLines(TEST_BLOCKER, [
+      '# Runtime Package',
+      '',
+      '## Model Fit',
+      '',
+      '- Do-not-edit scope: `src/` outside declared writeScope',
+      '',
+    ].join('\n'));
+    const alreadyQualifiedRendered = alreadyQualifiedLines.join('\n');
+
+    t.match(rendered, 'Do-not-edit scope: src/ outside declared writeScope');
+    t.match(
+      alreadyQualifiedRendered,
+      'Do-not-edit scope: src/ outside declared writeScope',
+    );
+    t.notMatch(alreadyQualifiedRendered, /outside declared writeScope outside/u);
     t.end();
   });
 
@@ -837,6 +870,19 @@ test('work context routes optional code-scope packages through verifier-fixer',
     t.match(invalidVerification.status, /changed files:/u);
     t.equal(verified.role, 'none');
     t.match(verified.status, /verifier-fixer proof recorded/u);
+    t.end();
+  });
+
+test('work context marks stale nextAction after verifier-fixer evidence',
+  async (t) => {
+    const lines = await buildContextLines(
+      TEST_BLOCKER,
+      TEST_LIGHTWEIGHT_CODE_SCOPE_VERIFIED_CONTENT,
+    );
+    const rendered = lines.join('\n');
+
+    t.match(rendered, /Next action\. \(Implementation and verifier-fixer proof/u);
+    t.match(rendered, /resolve validation blockers before further edits/u);
     t.end();
   });
 

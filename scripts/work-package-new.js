@@ -647,7 +647,7 @@ function buildCausalDecisionContractLines(
       [
         'scope boundary',
         forbiddenScope,
-        'proof that needs forbidden scope means this package is the wrong slice',
+        'proof that needs do-not-edit scope means this package is the wrong slice',
         'stop, split, or migrate owner boundary',
         'no widened runtime scope inside this package',
         DEFAULT_ACCELERATION_PROOF,
@@ -656,7 +656,7 @@ function buildCausalDecisionContractLines(
     EMPTY_TEXT,
     `- Anti-symptom rationale: This package changes or classifies ${owner} / ` +
       `${boundary} directly; it does not patch downstream symptoms or widen ` +
-      'forbidden scope.',
+      'do-not-edit scope.',
     `- Falsifying focused probe: \`${firstProof}\``,
     `- Competing explanations: At minimum compare ${dominantReason} against ` +
       'downstream symptom lag, stale instrumentation, and wrong-owner routing ' +
@@ -873,7 +873,7 @@ function defaultAllowedDecisionDepth(lane) {
     case LANE_CAUSAL_ESCALATION:
       return 'planning and route selection; split executable children before implementation';
     default:
-      return 'bounded local edit after owner, scope, proof, and forbidden files are named';
+      return 'bounded local edit after owner, scope, proof, and do-not-edit scope are named';
   }
 }
 
@@ -937,13 +937,13 @@ function buildModelFitSplitMetadata(lane, metadata, flags = {}) {
     [MODEL_FIT_SPLIT_ALLOWED_DECISION_DEPTH_FIELD]:
       defaultAllowedDecisionDepth(lane),
     [MODEL_FIT_SPLIT_SAFE_TO_EXECUTE_WHEN_FIELD]: [
-      'owner, boundary, write scope, forbidden scope, proof, and kill rule stay as declared',
+      'owner, boundary, write scope, do-not-edit scope, proof, and kill rule stay as declared',
       'the executor does not need to choose architecture, migrate ownership, or reinterpret representative evidence',
       'the first focused proof gives a clear pass, fail, or escalate signal',
     ],
     [MODEL_FIT_SPLIT_SPLIT_TRIGGERS_FIELD]: [
       'write scope expands beyond the declared lower-model lane',
-      'proof requires forbidden scope, cross-owner reasoning, or architecture route selection',
+      'proof requires do-not-edit scope, cross-owner reasoning, or architecture route selection',
       'the implementation needs to decide system behavior instead of executing a named local mechanism',
     ],
     [MODEL_FIT_SPLIT_CHILD_CANDIDATES_FIELD]: childCandidates,
@@ -1000,6 +1000,7 @@ function buildRerunRefreshCommands(metadata) {
     ].join(' '),
     'update Sprint Strategy Brief and Current Edge Card from the route result',
     'npm run work:repair',
+    'npm run work:validate -- --entry',
     'npm run work:validate -- --pre-impl',
   ];
 }
@@ -1500,7 +1501,7 @@ async function buildPackageContent(flags = {}) {
     `- Next lane: \`${metadata[RERUN_DECISION_FIELD]?.[
       RERUN_DECISION_NEXT_LANE_FIELD
     ] || lane}\``,
-    '- Required after rerun: route-after-rerun, Sprint Strategy Brief and Current Edge Card update, current-blocker refresh, and pre-implementation validation.',
+    '- Required after rerun: route-after-rerun, Sprint Strategy Brief and Current Edge Card update, current-blocker refresh, entry validation, and pre-implementation validation.',
     EMPTY_TEXT,
     '## Classification Efficiency',
     EMPTY_TEXT,
@@ -1561,7 +1562,7 @@ async function buildPackageContent(flags = {}) {
     `- Scope shape: \`${metadata.modelFit.scopeShape}\``,
     `- Output profile: \`${metadata.modelFit.outputProfile}\``,
     `- Owned files: ${markdownInlineCodeList(ownedFiles, '`work/packages/<this-package>.md`')}`,
-    `- Forbidden files: ${markdownInlineCodeList(forbiddenFiles, '`src/`')}`,
+    `- Do-not-edit scope: ${markdownInlineCodeList(forbiddenFiles, '`src/` outside declared writeScope')}`,
     '- Frozen decisions: package scope and lane stay bounded unless explicitly escalated.',
     '- Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.',
     `- Focused proof: ${markdownInlineCodeList(modelFitProof, `\`${DEFAULT_ACCELERATION_PROOF}\``)}`,

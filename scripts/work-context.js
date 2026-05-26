@@ -85,6 +85,9 @@ const NPM_RUN_WORK_ADVANCE_COMMAND = 'npm run work:advance';
 const NPM_RUN_WORK_ADVANCE_CHECK_COMMAND = 'npm run work:advance -- --check';
 const NPM_RUN_WORK_LLM_START_COMMAND = 'npm run work:llm-start';
 const NPM_RUN_WORK_VALIDATE_COMMAND = 'npm run work:validate';
+const NPM_RUN_WORK_VALIDATE_ENTRY_COMMAND = 'npm run work:validate -- --entry';
+const NPM_RUN_WORK_VALIDATE_PRE_IMPL_COMMAND =
+  'npm run work:validate -- --pre-impl';
 const NPM_RUN_WORK_CLOSE_COMMAND = 'npm run work:close';
 const NPM_RUN_WORK_SPRINT_ADVANCE_DRY_RUN_COMMAND =
   'npm run work:sprint:advance -- --dry-run';
@@ -191,6 +194,11 @@ const PACKAGE_SECTION_SUBAGENT_PROGRESS_ATTEMPT_LEDGER =
   'Subagent Progress And Attempt Ledger';
 const PACKAGE_SECTION_MODEL_FIT = 'Model Fit';
 const MODEL_FIT_LABEL_FORBIDDEN_FILES = 'Forbidden files';
+const MODEL_FIT_LABEL_DO_NOT_EDIT_SCOPE = 'Do-not-edit scope';
+const DO_NOT_EDIT_SCOPE_OUTSIDE_WRITE_SCOPE_SUFFIX =
+  'outside declared writeScope';
+const WORKFLOW_STATE_READY_FOR_CLOSURE =
+  'Implementation and verifier-fixer proof are recorded; run entry, pre-implementation, and closure validation or resolve validation blockers before further edits.';
 const MESSAGE_CURRENT_BLOCKER_MISSING =
   'No current blocker handoff was found.';
 const MESSAGE_CURRENT_BLOCKER_HINT =
@@ -1307,6 +1315,17 @@ function buildSubagentSequencingStatus(
   );
 }
 
+function buildDisplayedNextAction(currentBlocker = {}, subagentStatus = {}) {
+  const nextAction = normalizeString(currentBlocker.nextAction) || DEFAULT_UNKNOWN;
+  if (
+    subagentStatus.role === SUBAGENT_ROLE_NONE &&
+    subagentStatus.status === SUBAGENT_STATUS_VERIFICATION_FIX_RECORDED
+  ) {
+    return `${nextAction} (${WORKFLOW_STATE_READY_FOR_CLOSURE})`;
+  }
+  return nextAction;
+}
+
 function buildSubagentProgressSummary(packageContent = EMPTY_STRING) {
   const progressItems = [
     ...extractMarkdownSection(
@@ -1591,13 +1610,26 @@ function splitMarkdownInlineList(value) {
     .filter((item) => item.length > NUM_ZERO);
 }
 
+function findFirstMarkdownFieldValue(section, labels) {
+  for (const label of labels) {
+    const value = findMarkdownFieldValue(section, label);
+    if (normalizeString(value).length > NUM_ZERO) {
+      return value;
+    }
+  }
+  return EMPTY_STRING;
+}
+
 function buildForbiddenScope(packageContent = EMPTY_STRING) {
   const modelFitSection = extractMarkdownSectionText(
     packageContent,
     PACKAGE_SECTION_MODEL_FIT,
   );
   const modelFitForbidden = splitMarkdownInlineList(
-    findMarkdownFieldValue(modelFitSection, MODEL_FIT_LABEL_FORBIDDEN_FILES),
+    findFirstMarkdownFieldValue(modelFitSection, [
+      MODEL_FIT_LABEL_DO_NOT_EDIT_SCOPE,
+      MODEL_FIT_LABEL_FORBIDDEN_FILES,
+    ]),
   );
   if (modelFitForbidden.length > NUM_ZERO) {
     return modelFitForbidden;
@@ -1605,6 +1637,47 @@ function buildForbiddenScope(packageContent = EMPTY_STRING) {
   return normalizeStringList(
     extractMarkdownSection(packageContent, PACKAGE_SECTION_OUT_OF_SCOPE),
   );
+}
+
+function normalizedScopePrefix(scopePath) {
+  const normalized = normalizeString(scopePath).replace(/\\/gu, '/');
+  if (normalized.endsWith('/')) {
+    return normalized;
+  }
+  return `${normalized}/`;
+}
+
+function removeDoNotEditScopeSuffix(scopePath) {
+  const normalized = normalizeString(scopePath);
+  const suffix = ` ${DO_NOT_EDIT_SCOPE_OUTSIDE_WRITE_SCOPE_SUFFIX}`;
+  return normalized.endsWith(suffix) ?
+    normalized.slice(NUM_ZERO, -suffix.length) :
+    normalized;
+}
+
+function scopeContainsPath(scopePath, filePath) {
+  const normalizedScope = removeDoNotEditScopeSuffix(scopePath)
+    .replace(/\\/gu, '/');
+  const normalizedPath = normalizeString(filePath).replace(/\\/gu, '/');
+  return normalizedPath === normalizedScope ||
+    normalizedPath.startsWith(normalizedScopePrefix(normalizedScope));
+}
+
+function describeDoNotEditScope(
+  currentBlocker = {},
+  packageContent = EMPTY_STRING,
+) {
+  const writeScope = buildWriteScope(currentBlocker);
+  return buildForbiddenScope(packageContent).map((scopePath) => {
+    if (scopePath.endsWith(DO_NOT_EDIT_SCOPE_OUTSIDE_WRITE_SCOPE_SUFFIX)) {
+      return scopePath;
+    }
+    const overlapsWriteScope = writeScope.some((writePath) =>
+      scopeContainsPath(scopePath, writePath));
+    return overlapsWriteScope ?
+      `${scopePath} ${DO_NOT_EDIT_SCOPE_OUTSIDE_WRITE_SCOPE_SUFFIX}` :
+      scopePath;
+  });
 }
 
 function hasRuntimeSourceScope(currentBlocker = {}) {
@@ -1658,7 +1731,7 @@ function buildRelevantSteeringRules(currentBlocker = {}, packageContent = EMPTY_
   if (LOWER_MODEL_EXECUTION_LANES.includes(currentBlocker.lane)) {
     appendActiveRule(
       rules,
-      'GOV-LOWER-MODEL Lower-model execution packages keep owner, boundary, write scope, proof, forbidden scope, and kill rule concrete; split or escalate on ambiguity.',
+      'GOV-LOWER-MODEL Lower-model execution packages keep owner, boundary, write scope, proof, do-not-edit scope, and kill rule concrete; split or escalate on ambiguity.',
     );
   }
   if (hasRuntimeSourceScope(currentBlocker)) {
@@ -1726,13 +1799,13 @@ function buildRelevantSteeringRules(currentBlocker = {}, packageContent = EMPTY_
 
 function buildActiveConstraintLines(currentBlocker = {}, packageContent = EMPTY_STRING) {
   const theoryFocus = buildTheoryImplementationFocus(currentBlocker);
-  const forbiddenScope = buildForbiddenScope(packageContent);
+  const doNotEditScope = describeDoNotEditScope(currentBlocker, packageContent);
   return [
     `Owner boundary: ${normalizeString(currentBlocker.owner) || DEFAULT_UNKNOWN} / ` +
       `${normalizeString(currentBlocker.boundary) || DEFAULT_UNKNOWN}`,
     `Dominant reason: ${normalizeString(currentBlocker.dominantReason) || DEFAULT_UNKNOWN}`,
     `Primary steering pack: ${primarySteeringPackLabel(currentBlocker)}`,
-    `Forbidden files/scope: ${forbiddenScope.join(', ') || DEFAULT_UNKNOWN}`,
+    `Do-not-edit scope: ${doNotEditScope.join(', ') || DEFAULT_UNKNOWN}`,
     `Proof ladder: ${normalizeStringList(currentBlocker.proof).join('; ') || DEFAULT_UNKNOWN}`,
     `Kill rule: ${theoryFocus.stopRule}`,
     ...buildRelevantSteeringRules(currentBlocker, packageContent)
@@ -2360,7 +2433,7 @@ async function buildContextLines(currentBlocker, packageContent, options = {}) {
   lines.push(normalizeString(currentBlocker.currentState) || DEFAULT_UNKNOWN);
 
   appendSection(lines, SECTION_NEXT_ACTION);
-  lines.push(normalizeString(currentBlocker.nextAction) || DEFAULT_UNKNOWN);
+  lines.push(buildDisplayedNextAction(currentBlocker, subagentStatus));
 
   appendSection(lines, SECTION_USEFUL_COMMANDS);
   appendList(lines, buildUsefulCommands(currentBlocker), DEFAULT_UNKNOWN);
@@ -2445,7 +2518,8 @@ function buildBootstrapLines(currentBlocker, packageContent = EMPTY_STRING) {
   if (hasPackage) {
     appendList(lines, [
       NPM_RUN_WORK_ADVANCE_CHECK_COMMAND,
-      `${NPM_RUN_WORK_VALIDATE_COMMAND} -- --pre-impl ${packagePath}`,
+      `${NPM_RUN_WORK_VALIDATE_ENTRY_COMMAND} ${packagePath}`,
+      `${NPM_RUN_WORK_VALIDATE_PRE_IMPL_COMMAND} ${packagePath}`,
       `${NPM_RUN_WORK_CLOSE_COMMAND} ${packagePath}`,
       NPM_RUN_WORK_SPRINT_ADVANCE_DRY_RUN_COMMAND,
       NPM_RUN_WORK_SPRINT_ADVANCE_WRITE_COMMAND,
@@ -2466,7 +2540,11 @@ function buildBootstrapLines(currentBlocker, packageContent = EMPTY_STRING) {
   appendKeyValue(lines, 'Lane', currentBlocker.lane);
   appendKeyValue(lines, 'Owner / boundary', `${currentBlocker.owner} / ${currentBlocker.boundary}`);
   appendKeyValue(lines, 'Write scope', buildWriteScope(currentBlocker).join(', '));
-  appendKeyValue(lines, 'Forbidden files', buildForbiddenScope(packageContent).join(', '));
+  appendKeyValue(
+    lines,
+    'Do-not-edit scope',
+    describeDoNotEditScope(currentBlocker, packageContent).join(', '),
+  );
   appendKeyValue(lines, 'Closure path', hasPackage ?
     `${NPM_RUN_WORK_CLOSE_COMMAND} ${packagePath}` :
     'create or activate one package first');

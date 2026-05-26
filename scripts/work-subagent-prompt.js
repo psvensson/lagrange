@@ -277,7 +277,7 @@ function roleTask(role, metadata, packagePath) {
   return [
     'Implement only this current package when scope, proof, and stop rule are explicit:',
     packagePath + '.',
-    'Do not widen beyond the write scope, forbidden files, frozen decisions,',
+    'Do not widen beyond the write scope, do-not-edit scope, frozen decisions,',
     'and proof ladder recorded below.',
   ].join(' ');
 }
@@ -334,6 +334,7 @@ function validationCommandLines(role, packagePath, metadata) {
   const lines = [
     `- \`npm run work:package:doctor -- --suggest ${packagePath}\``,
   ];
+  lines.push(`- \`npm run work:validate -- --entry ${packagePath}\``);
   lines.push(`- \`npm run work:validate -- --pre-impl ${packagePath}\``);
   for (const command of proofCommands) {
     lines.push(`- \`${command}\``);
@@ -401,8 +402,9 @@ function reviewRouteCommand(metadata, proofCommands) {
 
 function reviewCommandBudgetLines(packagePath, metadata, proofCommands) {
   const lines = [
-    '- Default budget: four commands. Stop after these unless they contradict package routing, scope, stale blocker state, or metadata shape.',
+    '- Default budget: five commands. Stop after these unless they contradict package routing, scope, stale blocker state, or metadata shape.',
     `- \`npm run work:package:doctor -- --suggest ${packagePath}\``,
+    `- \`npm run work:validate -- --entry ${packagePath}\``,
   ];
   const predecessor = commandIfConcrete(metadata.predecessor);
   if (predecessor) {

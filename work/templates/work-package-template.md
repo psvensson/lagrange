@@ -69,7 +69,7 @@ Out of scope:
 
 ## Discovery Gate
 
-- Status: `not-needed` when owner, boundary, route, forbidden scope, and proof
+- Status: `not-needed` when owner, boundary, route, do-not-edit scope, and proof
   are already explicit.
 - Symptom / decision question:
 - Current evidence:

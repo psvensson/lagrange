@@ -764,7 +764,7 @@ function renderSchemaReference() {
     '## Model-Fit Package Splitter',
     EMPTY_TEXT,
     '- Purpose: split broad work into lower-model execution packages before implementation whenever ownership, scope, and proof can be made mechanical.',
-    '- Package authoring should decide owner, boundary, hypothesis, proof, forbidden scope, and kill rule before assigning execution to a lower model.',
+    '- Package authoring should decide owner, boundary, hypothesis, proof, do-not-edit scope, and kill rule before assigning execution to a lower model.',
     EMPTY_TEXT,
     'Lower-model execution lanes:',
     EMPTY_TEXT,
