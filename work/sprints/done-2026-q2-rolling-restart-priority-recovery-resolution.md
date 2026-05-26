@@ -1,6 +1,6 @@
 # Rolling Restart Priority Recovery Resolution Sprint
 
-Status: active. Created on May 26, 2026.
+Status: done. Created on May 26, 2026.
 
 ## Goal
 
