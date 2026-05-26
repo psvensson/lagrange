@@ -97,6 +97,14 @@ const COMMAND_GROUPS = Object.freeze([
         description: 'Detect the next required subagent role for the active package and print its bounded prompt.',
       }),
       Object.freeze({
+        command: 'npm run work:summary -- [--json]',
+        description: 'Print a compact workflow state summary of active package, sprint queue, and next action hints.',
+      }),
+      Object.freeze({
+        command: 'npm run work:track-summary -- [--json]',
+        description: 'Print completeness percentage and task status summaries for all tracks and releases.',
+      }),
+      Object.freeze({
         command: 'npm run steering:llm:pack',
         description: 'Regenerate compact steering packs for prompt loading.',
       }),

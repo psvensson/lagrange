@@ -62,20 +62,20 @@ stale or manually drifted state.
 ```text
 Representative artifact: none
 Visible first frontier: unknown
-Active package: work/packages/done-20260526-workflow-markdown-intent-tools.md
+Active package: work/packages/done-20260526-workflow-summary-api-json-outputs.md
 Active package owner: workflow_tooling_owner
-Active package boundary: markdown_admin_intent_tools
+Active package boundary: markdown_admin_summary_surface
 Selected cause: manual_workflow_markdown_admin_latency
-Required action: Add structured commands for package evidence, no-ledger decisions, sprint queue edits, and Current Edge Card updates so LLMs mutate workflow Markdown by intent.
+Required action: Add compact package, sprint, track, release, and roadmap summary commands with JSON output and deterministic next-command hints so LLMs rarely need to load full workflow Markdown.
 Representative status: unknown
 Causal outcome: unknown
 Architecture gate: not-required / unknown
 Expected delta: unknown
 Current state: New package scaffolded from the shared work-package schema.
-Allowed edits: scripts/work-package-evidence.js, scripts/work-package-ledger.js, scripts/work-sprint-queue.js, scripts/work-tracker.js, scripts/list-commands.js, package.json, work/RULES.md, work/README.md, test/scripts/work-package-evidence.test.js, test/scripts/work-sprint-queue.test.js
+Allowed edits: scripts/work-summary.js, scripts/work-context.js, scripts/work-track-summary.js, scripts/list-commands.js, package.json, work/RULES.md, work/README.md, test/scripts/work-summary.test.js, test/scripts/work-context.test.js
 Candidate runtime files: unknown
 Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
-Required latest proof: regression: node --test test/scripts/work-package-evidence.test.js test/scripts/work-sprint-queue.test.js, supporting: npm run work:package:evidence -- --help, supporting: git diff --check -- scripts/work-package-evidence.js scripts/work-package-ledger.js scripts/work-sprint-queue.js scripts/work-tracker.js scripts/list-commands.js package.json work/RULES.md work/README.md test/scripts/work-package-evidence.test.js test/scripts/work-sprint-queue.test.js work/packages/done-20260526-workflow-markdown-intent-tools.md work/sprints/active-2026-q2-workflow-markdown-admin-tooling.md
+Required latest proof: regression: node --test test/scripts/work-summary.test.js test/scripts/work-context.test.js, supporting: npm run work:summary -- --help, supporting: git diff --check -- scripts/work-summary.js scripts/work-context.js scripts/work-track-summary.js scripts/list-commands.js package.json work/RULES.md work/README.md test/scripts/work-summary.test.js test/scripts/work-context.test.js work/packages/done-20260526-workflow-summary-api-json-outputs.md work/sprints/active-2026-q2-workflow-markdown-admin-tooling.md
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -107,7 +107,7 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - First-run reason: publish automation still depends on evidence, ledger,
      and sprint state being shaped consistently before closure.
 
-3. [Workflow Summary API And JSON Outputs](../packages/todo-20260526-workflow-summary-api-json-outputs.md)
+3. [Workflow Summary API And JSON Outputs](../packages/done-20260526-workflow-summary-api-json-outputs.md)
    - Lane: `lightweight-maintenance`
    - Purpose: add compact package, sprint, track, release, and roadmap summary
      commands with `--json` output and deterministic next-command hints.
