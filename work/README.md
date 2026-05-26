@@ -128,30 +128,34 @@ Use the tracker utility for current sprint/package mechanics:
    --next-action <action>` scaffolds a schema-valid work package. The
    scaffolder pre-fills Model Fit and Core Logic Brief defaults from the lane
    and model-ledger summary unless explicit Model Fit flags are provided.
-13. `npm run work:package:route-after-rerun -- --artifact <artifact>
+13. `npm run work:theory-loop -- start|next|record|fix` keeps low-ceremony
+   theory-loop sprints moving by creating compact 1-3 theory packages,
+   recording source/log discriminator outcomes, and updating the theory ledger
+   through intent flags before hand-editing markdown.
+14. `npm run work:package:route-after-rerun -- --artifact <artifact>
    --successor <active-successor>` combines the post-rerun route handoff with
    the package migration transaction when the successor already exists and is
    ready to become the active blocker. It also prints the required refresh
    sequence: update Sprint Strategy Brief, update Current Edge Card, run
    `npm run work:repair`, and run pre-implementation validation.
-14. `npm run work:repair` regenerates generated current-blocker files and the
+15. `npm run work:repair` regenerates generated current-blocker files and the
    active sprint Current Edge Card, then checks freshness. Use this instead of
    hand-editing generated tracker state.
-15. `npm run work:evidence-summary -- <artifact>` prints a compact deterministic
+16. `npm run work:evidence-summary -- <artifact>` prints a compact deterministic
    topology plus causal-model summary for LLM handoff before reading raw logs or
    large harness segment files.
-16. `npm run work:scenario-route -- <artifact> [--owner <owner>]
+17. `npm run work:scenario-route -- <artifact> [--owner <owner>]
    [--boundary <boundary>] [--explain <edge>]` combines representative
    evidence, causal routing, priority residuals, owner-file discovery, and a
    capped proof ladder into one handoff. Prefer this over listing multiple
    extractor commands in diagnostic classification packages.
-17. `npm run analyze:owner-files -- <owner> [boundary]` prints a ranked
+18. `npm run analyze:owner-files -- <owner> [boundary]` prints a ranked
     owner-to-files index so agents can inspect likely owner files before broad
     text search.
-18. `npm run analyze:priority-recovery-residuals -- <artifact>` extracts
+19. `npm run analyze:priority-recovery-residuals -- <artifact>` extracts
     priority-recovery partition witnesses by owner and boundary and prints
     package scaffolding commands for deliberate residual splits.
-19. `npm run work:subagent-prompt -- --role implementation|verification-fix
+20. `npm run work:subagent-prompt -- --role implementation|verification-fix
     --package work/packages/active-...md` generates bounded role prompts and
     the `## Execution Evidence` line shape to record after role execution.
     A real sub-agent may perform the role, but real-agent identity is optional
@@ -160,10 +164,10 @@ Use the tracker utility for current sprint/package mechanics:
     model and tells the parent to set it explicitly instead of relying on
     inherited high-model defaults. It records `## Execution Evidence`; agent
     identity is optional provenance.
-20. `npm run work:oversized-next -- --markdown` turns oversized
+21. `npm run work:oversized-next -- --markdown` turns oversized
     owner-boundary segment files into package-ready extraction candidates so
     file-size debt stays actionable rather than a broad background concern.
-21. `npm run work:validate -- --entry|--probe|--pre-impl|--closure` checks active and
+22. `npm run work:validate -- --entry|--probe|--pre-impl|--closure` checks active and
    metadata-bearing packages for filename/header drift, stale open checklist
    items, and lane-required execution proof at the requested phase. The default
    phase is `--pre-impl`; `--probe` validates experiment-lane hypothesis,

@@ -57,6 +57,10 @@ const COMMAND_GROUPS = Object.freeze([
         description: 'Validate, query, or append evidence-linked experiment/theory ledger entries.',
       }),
       Object.freeze({
+        command: 'npm run work:theory-loop -- start|next|record|fix',
+        description: 'Run low-ceremony theory-loop sprint, package, result, and ledger updates through intent flags.',
+      }),
+      Object.freeze({
         command: 'npm run work:validate -- --entry|--probe|--pre-impl|--closure',
         description: 'Validate active work-package metadata, probe packages, checklist state, and lane-required proof at a workflow phase.',
       }),

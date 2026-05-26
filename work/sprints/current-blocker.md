@@ -4,401 +4,252 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: The latest restarted-node recovery-ready failure is caused by one of three bounded edges: H1 the restarted node's admin service never binds after bootstrap health becomes reachable; H2 active-gate/control-snapshot evidence capture drops the decisive snapshot coverage and probe fields; H3 control-snapshot authority or publication recovery cannot establish after restart.
+Theory under test: No active work package. Start a new package when implementation resumes.
 
-Causal question: Which operation workflow or rebalancer edge owns priority_recovery_event_driven_wait after diagnostics evidence is complete.
+Causal question: none
 
-Implementation slice: Open or focus the successor for operation_workflow_owner / workflow_progress priority recovery event-driven wait; do not patch H1/H3 from the older evidence-missing artifact in this package.
+Implementation slice: Create or activate one focused package for the next executable concern.
 
 Implementation files:
 
-1. `scripts/work-theory-ledger.js`
-2. `scripts/work-tracker.js`
-3. `test/scripts/work-theory-ledger.test.js`
-4. `test/scripts/work-tracker-package-doctor-ledger.test.js`
-5. `src/admin/admin-websocket-api-segment-1.js`
-6. `src/admin/admin-control-snapshot-class-part-2.js`
-7. `src/admin/admin-service-discovery-readiness-methods.js`
-8. `src/bootstrap/bootstrap-api-server-methods.js`
-9. `src/bootstrap/bootstrap-readiness-ladder.js`
-10. `src/bootstrap/startup-recovery-coordinator.js`
-11. `src/bootstrap/owners/bootstrap-readiness-owner-class-part-1.js`
-12. `src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js`
-13. `src/control-plane/control-plane-snapshot-owner.js`
-14. `src/transport/message-router.js`
-15. `scripts/artifact-sidecar-loader.js`
-16. `scripts/analyze-causal-model.js`
-17. `scripts/analyze-topology-convergence.js`
-18. `scripts/summarize-representative-evidence.js`
-19. `scripts/work-scenario-route.js`
-20. `test/admin/admin-control-snapshot.test.js`
-21. `test/bootstrap/bootstrap-api.test.js`
-22. `test/bootstrap/bootstrap-readiness-ladder.test.js`
-23. `test/bootstrap/startup-recovery-coordinator.test.js`
-24. `test/distributed/harness/__tests__/cluster.test-part-2.js`
-25. `test/distributed/harness/__tests__/cluster.test-part-4-control-snapshot-coverage.js`
-26. `test/distributed/harness/__tests__/failure-bundle-core-07-test-cases.js`
-27. `test/scripts/analyze-topology-convergence.test.js`
-28. `test/scripts/summarize-representative-evidence.test.js`
-29. `test/transport/message-router.test.js`
-30. `src/admin/admin-websocket-api-segment-1.js`
-31. `src/admin/admin-control-snapshot-class-part-2.js`
-32. `src/admin/admin-service-discovery-readiness-methods.js`
-33. `src/bootstrap/bootstrap-api-server-methods.js`
-34. `src/bootstrap/bootstrap-readiness-ladder.js`
-35. `src/bootstrap/startup-recovery-coordinator.js`
-36. `src/bootstrap/owners/bootstrap-readiness-owner-class-part-1.js`
-37. `src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js`
-38. `src/control-plane/control-plane-snapshot-owner.js`
-39. `src/transport/message-router.js`
+1. None recorded
 
-Expected implementation delta: A confirmed fix should make restarted-node adminReady or controlPlaneRecoveryReady progress, populate active-gate snapshot coverage evidence, migrate the first frontier, or pass rolling-restart.
+Expected implementation delta: unknown
 
-Falsifying probe: npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --json
+Falsifying probe: unknown
 
-Stop rule: If a successor rerun stays on priority_recovery_event_driven_wait with the same residuals, split the operation workflow/rebalancer owner boundary instead of patching startup active-gate symptoms.
+Stop rule: unknown
 
 Sprint: `work/sprints/active-2026-q2-rolling-restart-three-theory-validation.md`
 
-Package: `work/packages/active-20260526-20260526-rolling-restart-three-theory-validation.md`
+Package: `none`
 
-Workflow lane: `causal-escalation`
+Workflow lane: `none`
 
-Scenario: `rolling-restart`
+Scenario: `none`
 
-Artifact: `test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
+Artifact: `none`
 
 Playback: `none`
 
 ## Boundary
 
-Owner: `operation_workflow_owner`
+Owner: `none`
 
-Boundary: `workflow_progress`
+Boundary: `none`
 
-Dominant reason: `priority_recovery_event_driven_wait`
+Dominant reason: `none`
 
-Current state: Three-theory sprint executed. H2 was confirmed as a diagnostics/report sidecar-loading bug and fixed by loading linked failure-bundle and triage sidecars before route, topology, causal, and representative summaries. Baseline H1/H3 are recorded as avoided symptoms (admin ECONNREFUSED after durable rejoin and control_snapshot_authority_unavailable), because no runtime patch was selected and the fresh rerun migrated. The post-diagnostics rolling-restart rerun failed on a migrated frontier: operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait with active-gate evidence populated.
+Current state: No active work package. Start a new package when implementation resumes.
 
 ## Next Action
 
-Open or focus the successor for operation_workflow_owner / workflow_progress priority recovery event-driven wait; do not patch H1/H3 from the older evidence-missing artifact in this package.
+Create or activate one focused package for the next executable concern.
 
 ## Proof Ladder
 
-1. `falsifier: npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-20260526T140236Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason evidence_missing --explain active_gate_snapshot_coverage`
-2. `regression: npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
-3. `baseline: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-three-theory-validation-20260526T140236Z.report.json --explain active_gate_snapshot_coverage`
-4. `baseline: npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-three-theory-validation-20260526T140236Z.report.json`
-5. `focused: node --test test/scripts/summarize-representative-evidence.test.js`
-6. `focused: node --test --test-name-pattern "loads linked failure-bundle sidecars" test/scripts/analyze-topology-convergence.test.js`
-7. `supporting: node --test test/scripts/work-theory-ledger.test.js test/scripts/work-tracker-package-doctor-ledger.test.js`
-8. `supporting: npm run work:theory-ledger -- validate`
-9. `rerun: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --verbose`
-10. `post-rerun: npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --json`
+1. None recorded
 
 ## Model Fit
 
-Package class: `runtime-owner-boundary`
+Package class: `unknown`
 
-Intended minimum model: `gpt-5.3-codex`
+Intended minimum model: `unknown`
 
-Scope shape: `bounded-owner-runtime/current-frontier`
+Scope shape: `unknown`
 
-Output profile: `medium`
+Output profile: `unknown`
 
 Escalation triggers:
 
-1. `owned files expand beyond this package`
-2. `runtime ownership changes`
-3. `representative scenario evidence changes`
+1. None recorded
 
 ## Theory Ledger References
 
-1. `theory-20260526-rolling-restart-restarted-node-admin-surface`
-2. `theory-20260526-rolling-restart-active-gate-evidence-capture-gap`
-3. `theory-20260526-rolling-restart-control-snapshot-authority-recovery`
+1. None recorded
 
 ## Representative Residual
 
-Status: `active`
+Status: `unknown`
 
-Scenario: `rolling-restart`
+Scenario: `unknown`
 
-Artifact: `test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
+Artifact: `unknown`
 
-Frontier: `priority_recovery_partition_progress`
+Frontier: `unknown`
 
-Owner: `operation_workflow_owner`
+Owner: `unknown`
 
-Boundary: `workflow_progress`
+Boundary: `unknown`
 
-Dominant reason: `priority_recovery_event_driven_wait`
+Dominant reason: `unknown`
 
-Next action: `Open or focus the successor for operation_workflow_owner / workflow_progress priority recovery event-driven wait.`
+Next action: `unknown`
 
 ## Causal Governance
 
-Causal hypothesis: `The latest restarted-node recovery-ready failure is caused by one of three bounded edges: H1 the restarted node's admin service never binds after bootstrap health becomes reachable; H2 active-gate/control-snapshot evidence capture drops the decisive snapshot coverage and probe fields; H3 control-snapshot authority or publication recovery cannot establish after restart.`
+Causal hypothesis: `unknown`
 
-Stop-condition check: `Run canonical route, distributed failure analysis, topology convergence explain, and `npm run analyze:causal-model -- test-output/reports/rolling-restart-three-theory-validation-20260526T140236Z.report.json` before source edits; inspect only owner-ranked files selected by those proofs.`
+Stop-condition check: `unknown`
 
-Expected causal-model change: `A confirmed fix should make restarted-node adminReady or controlPlaneRecoveryReady progress, populate active-gate snapshot coverage evidence, migrate the first frontier, or pass rolling-restart.`
+Expected causal-model change: `unknown`
 
-Representative outcome: `migrated`
+Representative outcome: `unknown`
 
-Causal debt: `Baseline sidecar evidence showed H1/H3 symptoms, but the confirmed source bug was H2: report-level analyzers did not dereference linked failure-bundle and triage sidecars. After the diagnostics fix, the fresh rerun exposed activeGate.progress and migrated to operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait, so H1/H2/H3 are avoided as old routes until fresh evidence selects them again.`
+Causal debt: `unknown`
 
-Cross-boundary review: `Admin, bootstrap recovery, and control-snapshot runtime edits are not selected from the older evidence-missing artifact. The successor edge belongs to operation workflow priority recovery event-driven wait.`
+Cross-boundary review: `unknown`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `rolling-restart post-diagnostics artifact test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
+Reference scenario/probe: `unknown`
 
 Phase chain:
 
-1. `previous focused proof cleared priority recovery residuals to zero`
-2. `post-source rolling-restart failed on restarted-node recovery-ready within 120000ms`
-3. `bootstrap health stayed reachable while admin probing refused connection`
-4. `sidecar-loading fix made linked failure-bundle evidence visible to route, topology, causal, and representative summaries`
-5. `post-diagnostics rerun failed with active-gate evidence populated and first frontier priority_recovery_partition_progress / operation_workflow_owner / workflow_progress`
+1. None recorded
 
-Current first frontier: `priority_recovery_partition_progress / operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait`
+Current first frontier: `unknown`
 
 Known downstream blockers:
 
-1. `post-diagnostics rerun has 4/5 active nodes and selected snapshot coverage 2/5`
-2. `priorityRecoveryResiduals witnessCount=5 with splitRequired=true`
-3. `priority recovery reports eligible_but_no_operation_created and needs_operation/recovering_in_flight`
-4. `selected active-gate evidence is now present at failureBundle.publicationConvergence.activeGate.progress`
+1. None recorded
 
-Missing causal edge: `Which operation workflow or rebalancer edge owns priority_recovery_event_driven_wait after diagnostics evidence is complete.`
+Missing causal edge: `unknown`
 
-Missing causal edge probe: `npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --json`
+Missing causal edge probe: `unknown`
 
-Bounded progress proof: `Open or focus a successor for operation_workflow_owner / workflow_progress priority recovery event-driven wait, specifically the dispatch/delivery path from eligible_but_no_operation_created to operation creation and progress; this package should not select H1/H3 runtime edits from the older artifact.`
+Bounded progress proof: `unknown`
 
-Bounded progress proof artifact: `test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
+Bounded progress proof artifact: `unknown`
 
-Expected observable transition: `successor priority recovery event-driven wait reduction, owner-boundary split, or representative green.`
+Expected observable transition: `unknown`
 
-Max progress bound: `one causal-escalation package and one representative rerun after source changes`
+Max progress bound: `unknown`
 
-Same-frontier fallback: `If a successor rerun stays on priority_recovery_event_driven_wait with the same residuals, split the operation workflow/rebalancer owner boundary instead of patching startup active-gate symptoms.`
+Same-frontier fallback: `unknown`
 
-Expected next frontier: `representative-green, reduced priority recovery residual, or split successor owner boundary`
+Expected next frontier: `unknown`
 
-Result classification: `migrated`
+Result classification: `unknown`
 
-Stop condition: `migrate-owner-boundary`
+Stop condition: `unknown`
 
 Recent frontier history:
 
-1. `test-output/reports/rolling-restart-owner-handoff-projection-rerun.report.json / operation_workflow_owner / workflow_progress / reduced`
-2. `test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json / operation_workflow_owner / workflow_progress / classified_backpressure`
-3. `test-output/reports/rolling-restart-three-theory-validation-20260526T140236Z.report.json / startup_active_gate_owner / snapshot_coverage / evidence_missing`
-4. `test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json / operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait`
+1. None recorded
 
-Oscillation check: `This reused active package is allowed because the prior representative rerun migrated owner boundary and the user requested a bounded three-theory sprint before further runtime edits.`
+Oscillation check: `unknown`
 
-Handoff invariant: `Owners decide admin readiness, bootstrap recovery readiness, and active-gate admission; diagnostics and harness evidence may observe but must not override owner outcomes.`
+Handoff invariant: `unknown`
 
 ## Observable Prediction
 
-Metric: `restarted-node adminReady/controlPlaneRecoveryReady, active-gate evidence completeness, first frontier, rolling-restart status`
+Metric: `unknown`
 
-Predicted: `A confirmed source fix or diagnostic repair makes restarted-node adminReady/controlPlaneRecoveryReady progress, fills active-gate snapshot coverage evidence, migrates the first frontier, or passes rolling-restart.`
+Predicted: `unknown`
 
-Observed: `H2 diagnostics repair populated active-gate evidence and migrated first frontier to operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait; rolling-restart remains red.`
+Observed: `unknown`
 
-Accuracy: `partial`
+Accuracy: `unknown`
 
-Evidence: `test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
+Evidence: `unknown`
 
-Metric delta: `1`
+Metric delta: `unknown`
 
 ## Experiment Outcome
 
-Distinguished hypothesis: `H2`
+Distinguished hypothesis: `unknown`
 
-Decision: `owner-boundary-migration`
+Decision: `unknown`
 
-Next owner: `operation_workflow_owner`
+Next owner: `unknown`
 
-Next boundary: `workflow_progress`
+Next boundary: `unknown`
 
-Evidence: `test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
+Evidence: `unknown`
 
 ## Rerun Decision
 
-Source artifact: `test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
+Source artifact: `unknown`
 
-Route owner: `operation_workflow_owner`
+Route owner: `unknown`
 
-Route boundary: `workflow_progress`
+Route boundary: `unknown`
 
-Route dominant reason: `priority_recovery_event_driven_wait`
+Route dominant reason: `unknown`
 
-Route causal outcome: `accept_classified_backpressure`
+Route causal outcome: `unknown`
 
-Stop mode: `classified_backpressure`
+Stop mode: `unknown`
 
-Next lane: `causal-escalation`
+Next lane: `unknown`
 
-Expected delta: `The rerun populated active-gate evidence and migrated the first frontier to operation_workflow_owner / workflow_progress with priorityRecoveryResiduals witnessCount=5 and splitRequired=true.`
+Expected delta: `unknown`
 
 Required refresh commands:
 
-1. `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait`
-2. `update Sprint Strategy Brief from the route result`
-3. `update Current Edge Card from the route result`
-4. `current-blocker refresh via npm run work:repair`
-5. `npm run work:repair`
-6. `npm run work:validate -- --entry`
-7. `npm run work:validate -- --pre-impl`
+1. None recorded
 
 ## Classification Efficiency
 
-Default mode: `inline-gate-default`
+Default mode: `unknown`
 
-Separate package reason: `successor-selection`
+Separate package reason: `unknown`
 
-Artifact budget: `one-artifact`
+Artifact budget: `unknown`
 
-Proof command budget: `two-or-three-canonical-commands`
+Proof command budget: `unknown`
 
 Commands:
 
-1. `npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --json`
-2. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
-3. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --explain active_gate_snapshot_coverage`
+1. None recorded
 
-Decision record: `Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.`
+Decision record: `unknown`
 
-Successor action: `update-current-package`
+Successor action: `unknown`
 
-Runtime promotion rule: `The selected bug was diagnostics-sidecar loading. Keep H1/H3 runtime files candidate-only unless fresh evidence selects them; continue runtime work in the operation-workflow successor.`
+Runtime promotion rule: `unknown`
 
 ## Architecture Decision Gate
 
-Status: `selected`
+Status: `unknown`
 
-Trigger: `frontier-oscillation`
+Trigger: `unknown`
 
 Trigger evidence:
 
-1. `The baseline artifact was evidence_missing for active_gate_snapshot_coverage and restarted-node recovery-ready failed with admin ECONNREFUSED.`
-2. `Linked failure-bundle sidecars contained decisive state that report-level analyzers did not load.`
-3. `After the sidecar-loading fix, the representative rerun exposed active-gate evidence and selected operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait.`
+1. None recorded
 
 Choices:
 
-1. `open-architecture-package` route=`architecture-package` - Completed by running this package as the three-theory discriminator and fixing the selected diagnostics mechanism.
-2. `continue-local-proof` route=`continue-local-proof` - Continue local proof in the operation-workflow successor selected by the post-diagnostics rerun.
-3. `human-escalation` route=`human-escalation` - Escalate only if the evidence is contradictory or required tooling is unavailable.
+1. None recorded
 
-Selected choice: `open-architecture-package`
+Selected choice: `unknown`
 
-Gate next action: Open the autonomous architecture experiment package before runtime implementation resumes.
+Gate next action: unknown
 
 ## Scope
 
 Write scope:
 
-1. `work/packages/active-20260526-20260526-rolling-restart-three-theory-validation.md`
-2. `work/sprints/active-2026-q2-rolling-restart-three-theory-validation.md`
-3. `work/sprints/current-blocker.json`
-4. `work/sprints/current-blocker.md`
-5. `work/theory-ledger.md`
-6. `scripts/work-theory-ledger.js`
-7. `scripts/work-tracker.js`
-8. `test/scripts/work-theory-ledger.test.js`
-9. `test/scripts/work-tracker-package-doctor-ledger.test.js`
-10. `src/admin/admin-websocket-api-segment-1.js`
-11. `src/admin/admin-control-snapshot-class-part-2.js`
-12. `src/admin/admin-service-discovery-readiness-methods.js`
-13. `src/bootstrap/bootstrap-api-server-methods.js`
-14. `src/bootstrap/bootstrap-readiness-ladder.js`
-15. `src/bootstrap/startup-recovery-coordinator.js`
-16. `src/bootstrap/owners/bootstrap-readiness-owner-class-part-1.js`
-17. `src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js`
-18. `src/control-plane/control-plane-snapshot-owner.js`
-19. `src/transport/message-router.js`
-20. `scripts/artifact-sidecar-loader.js`
-21. `scripts/analyze-causal-model.js`
-22. `scripts/analyze-topology-convergence.js`
-23. `scripts/summarize-representative-evidence.js`
-24. `scripts/work-scenario-route.js`
-25. `test/admin/admin-control-snapshot.test.js`
-26. `test/bootstrap/bootstrap-api.test.js`
-27. `test/bootstrap/bootstrap-readiness-ladder.test.js`
-28. `test/bootstrap/startup-recovery-coordinator.test.js`
-29. `test/distributed/harness/__tests__/cluster.test-part-2.js`
-30. `test/distributed/harness/__tests__/cluster.test-part-4-control-snapshot-coverage.js`
-31. `test/distributed/harness/__tests__/failure-bundle-core-07-test-cases.js`
-32. `test/scripts/analyze-topology-convergence.test.js`
-33. `test/scripts/summarize-representative-evidence.test.js`
-34. `test/transport/message-router.test.js`
+1. None recorded
 
 Handoff files:
 
-1. `test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json`
-2. `test-output/reports/rolling-restart-three-theory-validation-20260526T140236Z.report.json`
-3. `test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
+1. None recorded
 
 Generated files:
 
-1. None recorded
+1. `work/sprints/current-blocker.json`
+2. `work/sprints/current-blocker.md`
 
 Candidate runtime files:
 
-1. `src/admin/admin-websocket-api-segment-1.js`
-2. `src/admin/admin-control-snapshot-class-part-2.js`
-3. `src/admin/admin-service-discovery-readiness-methods.js`
-4. `src/bootstrap/bootstrap-api-server-methods.js`
-5. `src/bootstrap/bootstrap-readiness-ladder.js`
-6. `src/bootstrap/startup-recovery-coordinator.js`
-7. `src/bootstrap/owners/bootstrap-readiness-owner-class-part-1.js`
-8. `src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js`
-9. `src/control-plane/control-plane-snapshot-owner.js`
-10. `src/transport/message-router.js`
+1. None recorded
 
 Commit scope:
 
-1. `work/packages/active-20260526-20260526-rolling-restart-three-theory-validation.md`
-2. `work/sprints/active-2026-q2-rolling-restart-three-theory-validation.md`
-3. `work/sprints/current-blocker.json`
-4. `work/sprints/current-blocker.md`
-5. `work/theory-ledger.md`
-6. `scripts/work-theory-ledger.js`
-7. `scripts/work-tracker.js`
-8. `test/scripts/work-theory-ledger.test.js`
-9. `test/scripts/work-tracker-package-doctor-ledger.test.js`
-10. `src/admin/admin-websocket-api-segment-1.js`
-11. `src/admin/admin-control-snapshot-class-part-2.js`
-12. `src/admin/admin-service-discovery-readiness-methods.js`
-13. `src/bootstrap/bootstrap-api-server-methods.js`
-14. `src/bootstrap/bootstrap-readiness-ladder.js`
-15. `src/bootstrap/startup-recovery-coordinator.js`
-16. `src/bootstrap/owners/bootstrap-readiness-owner-class-part-1.js`
-17. `src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js`
-18. `src/control-plane/control-plane-snapshot-owner.js`
-19. `src/transport/message-router.js`
-20. `scripts/artifact-sidecar-loader.js`
-21. `scripts/analyze-causal-model.js`
-22. `scripts/analyze-topology-convergence.js`
-23. `scripts/summarize-representative-evidence.js`
-24. `scripts/work-scenario-route.js`
-25. `test/admin/admin-control-snapshot.test.js`
-26. `test/bootstrap/bootstrap-api.test.js`
-27. `test/bootstrap/bootstrap-readiness-ladder.test.js`
-28. `test/bootstrap/startup-recovery-coordinator.test.js`
-29. `test/distributed/harness/__tests__/cluster.test-part-2.js`
-30. `test/distributed/harness/__tests__/cluster.test-part-4-control-snapshot-coverage.js`
-31. `test/distributed/harness/__tests__/failure-bundle-core-07-test-cases.js`
-32. `test/scripts/analyze-topology-convergence.test.js`
-33. `test/scripts/summarize-representative-evidence.test.js`
-34. `test/transport/message-router.test.js`
+1. None recorded
 
 Legacy touched files:
 

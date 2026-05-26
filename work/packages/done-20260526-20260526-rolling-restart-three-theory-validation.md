@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "active",
+  "status": "done",
   "intent": {
     "opened": "2026-05-26",
     "lane": "causal-escalation",
@@ -14,7 +14,8 @@
     "boundary": "workflow_progress",
     "dominantReason": "priority_recovery_event_driven_wait",
     "currentState": "Three-theory sprint executed. H2 was confirmed as a diagnostics/report sidecar-loading bug and fixed by loading linked failure-bundle and triage sidecars before route, topology, causal, and representative summaries. Baseline H1/H3 are recorded as avoided symptoms (admin ECONNREFUSED after durable rejoin and control_snapshot_authority_unavailable), because no runtime patch was selected and the fresh rerun migrated. The post-diagnostics rolling-restart rerun failed on a migrated frontier: operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait with active-gate evidence populated.",
-    "nextAction": "Open or focus the successor for operation_workflow_owner / workflow_progress priority recovery event-driven wait; do not patch H1/H3 from the older evidence-missing artifact in this package."
+    "nextAction": "Open or focus the successor for operation_workflow_owner / workflow_progress priority recovery event-driven wait; do not patch H1/H3 from the older evidence-missing artifact in this package.",
+    "closed": "2026-05-26"
   },
   "scope": {
     "writeScope": [
@@ -23,9 +24,14 @@
       "work/sprints/current-blocker.json",
       "work/sprints/current-blocker.md",
       "work/theory-ledger.md",
+      "work/README.md",
+      "package.json",
+      "scripts/list-commands.js",
       "scripts/work-theory-ledger.js",
+      "scripts/work-theory-loop.js",
       "scripts/work-tracker.js",
       "test/scripts/work-theory-ledger.test.js",
+      "test/scripts/work-theory-loop.test.js",
       "test/scripts/work-tracker-package-doctor-ledger.test.js",
       "src/admin/admin-websocket-api-segment-1.js",
       "src/admin/admin-control-snapshot-class-part-2.js",
@@ -77,9 +83,14 @@
       "work/sprints/current-blocker.json",
       "work/sprints/current-blocker.md",
       "work/theory-ledger.md",
+      "work/README.md",
+      "package.json",
+      "scripts/list-commands.js",
       "scripts/work-theory-ledger.js",
+      "scripts/work-theory-loop.js",
       "scripts/work-tracker.js",
       "test/scripts/work-theory-ledger.test.js",
+      "test/scripts/work-theory-loop.test.js",
       "test/scripts/work-tracker-package-doctor-ledger.test.js",
       "src/admin/admin-websocket-api-segment-1.js",
       "src/admin/admin-control-snapshot-class-part-2.js",
@@ -140,7 +151,9 @@
         "focused: node --test test/scripts/summarize-representative-evidence.test.js",
         "focused: node --test --test-name-pattern \"loads linked failure-bundle sidecars\" test/scripts/analyze-topology-convergence.test.js",
         "supporting: node --test test/scripts/work-theory-ledger.test.js test/scripts/work-tracker-package-doctor-ledger.test.js",
+        "supporting: node --test test/scripts/work-theory-loop.test.js",
         "supporting: npm run work:theory-ledger -- validate",
+        "supporting: npm run work:theory-loop -- help",
         "rerun: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --verbose",
         "post-rerun: npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --json"
       ]
@@ -340,7 +353,8 @@
     "forbiddenScope": true,
     "proofCommands": true,
     "stopRule": true
-  }
+  },
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -462,6 +476,11 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
   theory avoidance before future sprints repeat old non-selected theories. The
   package scope now includes the theory-ledger validator, package-doctor guard,
   and focused workflow tests. Runtime scope remains unchanged.
+- User-requested low-ceremony sprint change: the user asked for a sprint mode
+  that spends most effort reading source/logs, testing a small theory batch,
+  recording outcomes, and creating the next compact package through tool calls.
+  The package scope now includes the theory-loop command, command index, README,
+  and focused CLI tests. Runtime scope remains unchanged.
 
 ## Model Fit
 
@@ -503,6 +522,7 @@ Agent identity is optional provenance. Use the compact five-field shape for new 
 - [x] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json,work/sprints/current-blocker.md,work/sprints/active-2026-q2-rolling-restart-three-theory-validation.md; validation: npm run work:repair PASS; parent revalidated focused proof: yes; parent revalidated focused proof: yes; outcome: validated.
 
 - [x] action: sprint-update; owner: workflow_tooling_owner; files-changed: work/theory-ledger.md, work/packages/active-20260526-20260526-rolling-restart-three-theory-validation.md; validation: recorded latest three theory refs for restarted-node admin surface, active-gate evidence capture gap, and control-snapshot authority recovery; parent revalidated focused proof: pending; outcome: active.
+- [x] action: workflow-tooling; owner: workflow_tooling_owner; files-changed: scripts/work-theory-loop.js, package.json, scripts/list-commands.js, test/scripts/work-theory-loop.test.js, work/README.md; validation: node --test test/scripts/work-theory-loop.test.js PASS; node --test test/scripts/work-theory-ledger.test.js test/scripts/work-tracker-package-doctor-ledger.test.js test/scripts/work-theory-loop.test.js PASS; npm run work:theory-loop -- help PASS; npm run work:help PASS; npm run work:validate -- --entry work/packages/active-20260526-20260526-rolling-restart-three-theory-validation.md PASS; npm run work:validate -- --pre-impl work/packages/active-20260526-20260526-rolling-restart-three-theory-validation.md PASS; parent revalidated focused proof: not-applicable workflow-only; outcome: validated.
 - [x] action: discriminator; owner: diagnostics_owner; files-changed: scripts/artifact-sidecar-loader.js, scripts/analyze-causal-model.js, scripts/analyze-topology-convergence.js, scripts/summarize-representative-evidence.js, scripts/work-scenario-route.js, test/scripts/analyze-topology-convergence.test.js, test/scripts/summarize-representative-evidence.test.js; validation: sidecar-linked baseline reroute confirmed H2 diagnostics/report loading gap; focused tests passed; parent revalidated focused proof: yes; outcome: H2 fixed.
 - [x] action: representative-rerun; owner: operation_workflow_owner; files-changed: none; validation: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --verbose FAIL; route: operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait; causalOutcome=accept_classified_backpressure; activeGate evidence path populated; parent revalidated focused proof: yes; outcome: migrated successor.
 ## Validation
@@ -516,8 +536,16 @@ Agent identity is optional provenance. Use the compact five-field shape for new 
 7. node --test --test-name-pattern "loads linked failure-bundle sidecars" test/scripts/summarize-representative-evidence.test.js
 8. node --test test/scripts/work-theory-ledger.test.js test/scripts/work-tracker-package-doctor-ledger.test.js
 9. npm run work:theory-ledger -- validate
-10. node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --verbose
-11. npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --json
+10. node --test test/scripts/work-theory-loop.test.js
+11. npm run work:theory-loop -- help
+12. node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --verbose
+13. npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --json
 12. npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json
 13. npm run analyze:topology-convergence -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --explain active_gate_snapshot_coverage
 14. npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json
+
+## Commit And Push Ledger
+
+1. Focused package commit: 083fa8e859fcee736b1703d4e50d28e0c292bf6a
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
