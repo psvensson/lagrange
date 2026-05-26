@@ -303,3 +303,9 @@ Agent identity is optional provenance. Use the compact five-field shape for new 
 
 1. `git diff --check -- <files>`
 
+## Commit And Push Ledger
+
+1. Focused package commit: 210700e92c15748770ad9efc4efe0f57e661e250
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
+

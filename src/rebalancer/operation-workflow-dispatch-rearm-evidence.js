@@ -470,7 +470,7 @@ function isOperationStepTimedOut(owner, operation, now = Date.now()) {
   if (owner.hasActiveTransitionRetryGrace(operation.operationId, now)) {
     return false;
   }
-  const updatedAt = Number(operation.updatedAt);
+  const updatedAt = Number(operation.updatedAt ?? operation.updatedAtMs);
   if (!Number.isFinite(updatedAt)) {
     return false;
   }
@@ -683,16 +683,20 @@ function buildCoordinatorCreatedRemoteHandoffTimeoutDecision(
     owner.isOperationStepTimedOut(operation, now);
   const operationStartedAtMs = Number.isFinite(operation?.createdAt) ?
     operation.createdAt :
-    Number.isFinite(operation?.updatedAt) ?
-      operation.updatedAt :
-      null;
+    Number.isFinite(operation?.createdAtMs) ?
+      operation.createdAtMs :
+      Number.isFinite(operation?.updatedAt) ?
+        operation.updatedAt :
+        Number.isFinite(operation?.updatedAtMs) ?
+          operation.updatedAtMs :
+          null;
   const usesOperationBudget =
     owner.shouldUseOperationBudgetTransitionRetryGrace(
       {
         partitionId: operation?.partitionId || null,
         workflowStep,
-        updatedAt: operation?.updatedAt,
-        createdAt: operation?.createdAt,
+        updatedAt: operation?.updatedAt ?? operation?.updatedAtMs,
+        createdAt: operation?.createdAt ?? operation?.createdAtMs,
       },
       workflowStep,
     );

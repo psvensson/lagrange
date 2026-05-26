@@ -56,9 +56,13 @@ class OperationWorkflowTransitionRetryGrace {
     const requestedGraceDeadlineMs = Date.now() + retryDelayMs;
     const durableProgressAtMs = Number.isFinite(context.updatedAt) ?
       context.updatedAt :
-      Number.isFinite(context.createdAt) ?
-        context.createdAt :
-        null;
+      Number.isFinite(context.updatedAtMs) ?
+        context.updatedAtMs :
+        Number.isFinite(context.createdAt) ?
+          context.createdAt :
+          Number.isFinite(context.createdAtMs) ?
+            context.createdAtMs :
+            null;
     const timeoutCeilingMs = this.resolveTimeoutCeilingMs(
       context,
       workflowStep,
@@ -112,7 +116,9 @@ class OperationWorkflowTransitionRetryGrace {
 
     const operationStartedAtMs = Number.isFinite(context.createdAt) ?
       context.createdAt :
-      durableProgressAtMs;
+      Number.isFinite(context.createdAtMs) ?
+        context.createdAtMs :
+        durableProgressAtMs;
     return (
       operationStartedAtMs +
       TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS

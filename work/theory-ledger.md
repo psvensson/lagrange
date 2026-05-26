@@ -257,7 +257,49 @@ Each entry must include these labels:
 - Probe: `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-three-theory-validation-20260526T140236Z.report.json`
 - Artifact/result: test-output/reports/rolling-restart-three-theory-validation-20260526T140236Z.report.json - bootstrapJoinProjectionBlocker=control_snapshot_authority_unavailable, publishedControlPlaneEpoch=unknown, priority_control_plane_recovery_diagnostics_unavailable, failed_query_operations_table=46, and inflight_owner_pressure=8. The post-diagnostics rerun migrated away from this restarted-node authority failure shape.
 - Representative movement: migrated-after-diagnostics-rerun
-- Linked packages: `work/packages/active-20260526-20260526-rolling-restart-three-theory-validation.md`
+- Linked packages: `work/packages/done-20260526-20260526-rolling-restart-three-theory-validation.md`
 - Supersedes: none
 - Superseded by: none
 - Next implication: Avoid selecting this baseline evidence for implementation; do not choose a control-snapshot authority runtime patch until a fresh artifact reproduces that edge, and current work should follow the priority recovery successor.
+
+## theory-20260526-rolling-restart-logger-cpu-starvation
+
+- Status: active
+- Scenario/gate: rolling-restart / bootstrap_joining
+- Owner/boundary: transport_owner / message_routing
+- Hypothesis: Under high backpressure/load, the logging inside `PressureGovernor.emitPressureMetric` floods stdout/stderr without rate-limiting, causing 100% CPU starvation and event loop latency that stalls seed contact bootstrap joins.
+- Probe: `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
+- Artifact/result: `test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json` - restarted node timeout joining seed node due to 100.3% CPU starvation on the seed node.
+- Representative movement: same-frontier
+- Linked packages: `work/packages/done-20260526-rolling-restart-priority-recovery-deadlock-triage.md`, `work/packages/done-20260526-outbound-message-queue-backpressure-stabilization.md`
+- Supersedes: none
+- Superseded by: none
+- Next implication: Add rate-limiting inside `PressureGovernor.emitPressureMetric` to prevent logging flooding under backpressure.
+
+## theory-20260526-rolling-restart-seed-websocket-cleanup
+
+- Status: active
+- Scenario/gate: rolling-restart / bootstrap_joining
+- Owner/boundary: transport_owner / message_routing
+- Hypothesis: Seed node's WebSocket/query transport fails to properly garbage-collect/clean up stale sockets or connection pool queues for restarted/inactive nodes, leading to file descriptor exhaustions and socket handshaking hangs.
+- Probe: `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
+- Artifact/result: `test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
+- Representative movement: same-frontier
+- Linked packages: `work/packages/done-20260526-rolling-restart-priority-recovery-deadlock-triage.md`, `work/packages/done-20260526-outbound-message-queue-backpressure-stabilization.md`
+- Supersedes: none
+- Superseded by: none
+- Next implication: Inspect WebSocket connection close handlers and keep-alive timeouts on the seed node.
+
+## theory-20260526-rolling-restart-rebalancer-outbound-saturation
+
+- Status: active
+- Scenario/gate: rolling-restart / priority_recovery_event_driven_wait
+- Owner/boundary: operation_workflow_owner / workflow_progress
+- Hypothesis: Rebalance coordinator background tasks aggressively queue priority recovery moves, saturating the outbound WebSocket queues on restarted nodes and delaying or dropping the critical readiness/joining handshakes.
+- Probe: `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --markdown`
+- Artifact/result: `test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
+- Representative movement: same-frontier
+- Linked packages: `work/packages/done-20260526-rolling-restart-priority-recovery-deadlock-triage.md`, `work/packages/done-20260526-20260526-rolling-restart-three-theory-validation.md`, `work/packages/done-20260526-rolling-restart-operation-workflow-owner-workflow-progress-triage.md`, `work/packages/done-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md`, `work/packages/done-20260526-rolling-restart-operation-workflow-three-theory-recovery.md`, `work/packages/done-20260526-rolling-restart-three-theory-source-analysis-verification.md`
+- Supersedes: none
+- Superseded by: none
+- Next implication: Inspect rebalancer background dispatch rates and queue limits.

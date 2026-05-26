@@ -517,10 +517,16 @@ class OperationWorkflowOwnerSegment7Stage2 extends OperationWorkflowOwnerSegment
       return;
     }
 
+    const startedAtMs =
+      operation.createdAt ??
+      operation.createdAtMs ??
+      operation.updatedAt ??
+      operation.updatedAtMs;
+
     const operationBudget = createTopLevelOperationBudget({
       configuredBudgetMs: TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS,
       operationName: 'rebalance',
-      startedAtMs: operation.createdAt || operation.updatedAt,
+      startedAtMs,
       now: () => now,
     });
 
@@ -538,7 +544,8 @@ class OperationWorkflowOwnerSegment7Stage2 extends OperationWorkflowOwnerSegment
       now: () => now,
     });
 
-    const elapsed = now - operation.updatedAt;
+    const updatedAt = operation.updatedAt ?? operation.updatedAtMs;
+    const elapsed = now - updatedAt;
     const stepExceeded = elapsed >= stepTimeout;
     const budgetExhausted = !stepAllocation.allowed;
 
