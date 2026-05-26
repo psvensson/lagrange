@@ -4,65 +4,68 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: No active work package. Start a new package when implementation resumes.
+Theory under test: The diagnostic-classification package will check if the rolling-restart is now fully green, and if not, classify the next successor edge.
 
-Causal question: none
+Causal question: Confirm whether the system successfully passes rolling-restart or encounters a new blocker.
 
-Implementation slice: Create or activate one focused package for the next executable concern.
+Implementation slice: Triage active_gate_snapshot_coverage with combined scenario evidence before runtime edits.
 
 Implementation files:
 
 1. None recorded
 
-Expected implementation delta: unknown
+Expected implementation delta: Successful classification of representative evidence to a successor lane or representative green.
 
-Falsifying probe: unknown
+Falsifying probe: npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --json
 
-Stop rule: unknown
+Stop rule: If successor rerun stays on same-frontier, open/select an autonomous architecture experiment instead of another local patch.
 
 Sprint: `work/sprints/active-2026-q2-rolling-restart-priority-recovery-resolution.md`
 
-Package: `none`
+Package: `work/packages/active-20260526-rolling-restart-startup-active-gate-owner-snapshot-coverage.md`
 
-Workflow lane: `none`
+Workflow lane: `diagnostic-classification`
 
-Scenario: `none`
+Scenario: `rolling-restart`
 
-Artifact: `none`
+Artifact: `test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
 
 Playback: `none`
 
 ## Boundary
 
-Owner: `none`
+Owner: `startup_active_gate_owner`
 
-Boundary: `none`
+Boundary: `snapshot_coverage`
 
-Dominant reason: `none`
+Dominant reason: `evidence_missing`
 
-Current state: No active work package. Start a new package when implementation resumes.
+Current state: Scaffolded from representative evidence for active_gate_snapshot_coverage.
 
 ## Next Action
 
-Create or activate one focused package for the next executable concern.
+Triage active_gate_snapshot_coverage with combined scenario evidence before runtime edits.
 
 ## Proof Ladder
 
-1. None recorded
+1. `falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
+2. `regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --markdown`
+3. `supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --markdown`
 
 ## Model Fit
 
-Package class: `unknown`
+Package class: `diagnostic-classification`
 
-Intended minimum model: `unknown`
+Intended minimum model: `gpt-5.3-codex`
 
-Scope shape: `unknown`
+Scope shape: `diagnostic-owner-evidence/current-artifact`
 
-Output profile: `unknown`
+Output profile: `medium`
 
 Escalation triggers:
 
-1. None recorded
+1. `owned files expand beyond this package`
+2. `a frozen decision must be reopened`
 
 ## Theory Ledger References
 
@@ -70,77 +73,78 @@ Escalation triggers:
 
 ## Representative Residual
 
-Status: `unknown`
+Status: `active`
 
-Scenario: `unknown`
+Scenario: `rolling-restart`
 
-Artifact: `unknown`
+Artifact: `test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
 
-Frontier: `unknown`
+Frontier: `active_gate_snapshot_coverage`
 
-Owner: `unknown`
+Owner: `startup_active_gate_owner`
 
-Boundary: `unknown`
+Boundary: `snapshot_coverage`
 
-Dominant reason: `unknown`
+Dominant reason: `evidence_missing`
 
-Next action: `unknown`
+Next action: `Triage active_gate_snapshot_coverage with combined scenario evidence before runtime edits.`
 
 ## Causal Governance
 
-Causal hypothesis: `unknown`
+Causal hypothesis: `The diagnostic-classification package will check if the rolling-restart is now fully green, and if not, classify the next successor edge.`
 
-Stop-condition check: `unknown`
+Stop-condition check: `npm run analyze:causal-model -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
 
-Expected causal-model change: `unknown`
+Expected causal-model change: `Successful classification of representative evidence to a successor lane or representative green.`
 
-Representative outcome: `unknown`
+Representative outcome: `representative-green`
 
-Causal debt: `unknown`
+Causal debt: `No accumulated causal debt.`
 
-Cross-boundary review: `unknown`
+Cross-boundary review: `Review with startup_active_gate_owner if active-gate snapshot coverage still times out.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `unknown`
+Reference scenario/probe: `rolling-restart post-diagnostics artifact test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
 
 Phase chain:
 
-1. None recorded
+1. `diagnostics fix resolved priority recovery deadlock and CPU starvation`
+2. `fresh diagnostic-classification successor package opened to rerun representative evidence and confirm green status`
 
-Current first frontier: `unknown`
+Current first frontier: `active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / evidence_missing`
 
 Known downstream blockers:
 
-1. None recorded
+1. `representative rerun evidence not yet generated post logger CPU starvation fix`
 
-Missing causal edge: `unknown`
+Missing causal edge: `Confirm whether the system successfully passes rolling-restart or encounters a new blocker.`
 
-Missing causal edge probe: `unknown`
+Missing causal edge probe: `npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --json`
 
-Bounded progress proof: `unknown`
+Bounded progress proof: `rerun representative evidence to check active-gate admission or reconcile bootstrap timeout`
 
-Bounded progress proof artifact: `unknown`
+Bounded progress proof artifact: `test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
 
-Expected observable transition: `unknown`
+Expected observable transition: `transition to representative-green or next concrete frontier`
 
-Max progress bound: `unknown`
+Max progress bound: `one diagnostic-classification package and one representative rerun`
 
-Same-frontier fallback: `unknown`
+Same-frontier fallback: `If successor rerun stays on same-frontier, open/select an autonomous architecture experiment instead of another local patch.`
 
-Expected next frontier: `unknown`
+Expected next frontier: `representative-green`
 
-Result classification: `unknown`
+Result classification: `pending-before-probe`
 
-Stop condition: `unknown`
+Stop condition: `continue-local-fix`
 
 Recent frontier history:
 
-1. None recorded
+1. `test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json / startup_active_gate_owner / snapshot_coverage / evidence_missing`
 
-Oscillation check: `unknown`
+Oscillation check: `This package is allowed because the prior representative rerun migrated owner boundary.`
 
-Handoff invariant: `unknown`
+Handoff invariant: `Owners decide admin readiness, bootstrap recovery readiness, and active-gate admission; diagnostics and harness evidence may observe but must not override owner outcomes.`
 
 ## Observable Prediction
 
@@ -170,63 +174,75 @@ Evidence: `unknown`
 
 ## Rerun Decision
 
-Source artifact: `unknown`
+Source artifact: `test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
 
-Route owner: `unknown`
+Route owner: `startup_active_gate_owner`
 
-Route boundary: `unknown`
+Route boundary: `snapshot_coverage`
 
-Route dominant reason: `unknown`
+Route dominant reason: `evidence_missing`
 
-Route causal outcome: `unknown`
+Route causal outcome: `migrate_owner_boundary`
 
-Stop mode: `unknown`
+Stop mode: `owner_boundary_migration`
 
-Next lane: `unknown`
+Next lane: `diagnostic-classification`
 
-Expected delta: `unknown`
+Expected delta: `Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.`
 
 Required refresh commands:
 
-1. None recorded
+1. `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason evidence_missing`
+2. `update Sprint Strategy Brief and Current Edge Card from the route result`
+3. `npm run work:repair`
+4. `npm run work:validate -- --entry`
+5. `npm run work:validate -- --pre-impl`
 
 ## Classification Efficiency
 
-Default mode: `unknown`
+Default mode: `separate-package-approved`
 
-Separate package reason: `unknown`
+Separate package reason: `successor-selection`
 
-Artifact budget: `unknown`
+Artifact budget: `one-artifact`
 
-Proof command budget: `unknown`
+Proof command budget: `two-or-three-canonical-commands`
 
 Commands:
 
-1. None recorded
+1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
+2. `npm run work:scenario-triage -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --markdown`
+3. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --markdown`
 
-Decision record: `unknown`
+Decision record: `Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.`
 
-Successor action: `unknown`
+Successor action: `rerun-representative-evidence`
 
-Runtime promotion rule: `unknown`
+Runtime promotion rule: `When canonical owner and boundary are stable, prefer a runtime-owner-boundary successor and keep runtime files in candidateRuntimeFiles until that package activates them. If the representative route is same-frontier with no reduction or an architecture gap, open an autonomous architecture experiment before more local runtime work.`
 
 ## Architecture Decision Gate
 
-Status: `unknown`
+Status: `watching`
 
-Trigger: `unknown`
+Trigger: `frontier-oscillation`
 
 Trigger evidence:
 
-1. None recorded
+1. `frontier returned to a recently closed related boundary`
+2. `work/packages/done-20260526-rolling-restart-startup-active-gate-owner-snapshot-coverage.md / startup_active_gate_owner / snapshot_coverage / migrated`
+3. `work/packages/done-20260526-rolling-restart-operation-workflow-three-theory-recovery.md / operation_workflow_owner / workflow_progress / reduced`
+4. `work/packages/done-20260526-rolling-restart-operation-workflow-owner-workflow-progress-triage.md / operation_workflow_owner / workflow_progress / classification-only`
 
 Choices:
 
-1. None recorded
+1. `continue-local-proof` route=`continue-local-proof` - Continue with a bounded local proof if the missing edge stays inside this owner boundary.
+2. `migrate-owner-boundary` route=`owner-boundary-migration` - Migrate the active package to the owner boundary named by the first frontier evidence.
+3. `open-architecture-package` route=`architecture-package` - Open a bounded autonomous architecture experiment for the missing owner contract.
+4. `human-escalation` route=`human-escalation` - Escalate to a human only when evidence is contradictory, policy-blocked, credential-blocked, or unavailable.
 
 Selected choice: `unknown`
 
-Gate next action: unknown
+Gate next action: Watch for repeated frontier oscillation; open an autonomous architecture experiment if another local proof returns here unchanged.
 
 ## Scope
 
@@ -236,12 +252,11 @@ Write scope:
 
 Handoff files:
 
-1. None recorded
+1. `test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
 
 Generated files:
 
-1. `work/sprints/current-blocker.json`
-2. `work/sprints/current-blocker.md`
+1. None recorded
 
 Candidate runtime files:
 
@@ -249,7 +264,7 @@ Candidate runtime files:
 
 Commit scope:
 
-1. None recorded
+1. `work/packages/active-20260526-rolling-restart-startup-active-gate-owner-snapshot-coverage.md`
 
 Legacy touched files:
 

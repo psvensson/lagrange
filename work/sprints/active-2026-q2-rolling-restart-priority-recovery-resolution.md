@@ -31,21 +31,21 @@ Resolve the priority recovery event-driven wait/deadlock during rolling-restart 
 
 ```text
 Representative artifact: test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json
-Visible first frontier: priority_recovery_partition_progress / operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait
-Active package: work/packages/done-20260526-rolling-restart-priority-recovery-deadlock-triage.md
-Active package owner: operation_workflow_owner
-Active package boundary: workflow_progress
-Selected cause: priority_recovery_event_driven_wait
-Required action: Triage rebalancer target selection and blocker filters to identify why priority recovery operations are not created.
+Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / evidence_missing
+Active package: work/packages/active-20260526-rolling-restart-startup-active-gate-owner-snapshot-coverage.md
+Active package owner: startup_active_gate_owner
+Active package boundary: snapshot_coverage
+Selected cause: evidence_missing
+Required action: Triage active_gate_snapshot_coverage with combined scenario evidence before runtime edits.
 Representative status: active
-Causal outcome: continue_local_fix
+Causal outcome: migrate_owner_boundary
 Architecture gate: watching / unknown
-Expected delta: Triage the priority recovery event-driven wait via logger CPU rate limiting.
-Current state: Scaffolded from representative evidence for priority_recovery_partition_progress.
-Allowed edits: src/control-plane/pressure-governor.js, src/rebalancer/operation-workflow-dispatch-rearm-evidence.js, src/rebalancer/operation-workflow-owner-segment-7-stage-2.js, src/rebalancer/operation-workflow-transition-retry-grace.js, test/control-plane/pressure-governor.test.js
-Candidate runtime files: src/control-plane/pressure-governor.js
+Expected delta: Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.
+Current state: Scaffolded from representative evidence for active_gate_snapshot_coverage.
+Allowed edits: unknown
+Candidate runtime files: unknown
 Forbidden edits: Owners decide admin readiness, bootstrap recovery readiness, and active-gate admission; diagnostics and harness evidence may observe but must not override owner outcomes.
-Required latest proof: falsifier: contract transition operation_workflow_owner workflow_progress priority_recovery_event_driven_wait npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --json, regression: contract transition operation_workflow_owner workflow_progress priority_recovery_event_driven_wait npm run work:evidence-summary -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json, supporting: contract transition operation_workflow_owner workflow_progress priority_recovery_event_driven_wait npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --markdown
+Required latest proof: falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json, regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --markdown, supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --markdown
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
