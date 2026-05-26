@@ -4,41 +4,27 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: Roadmap mixes feature sequencing, implementation authorization, and live release status, making source-of-truth selection ambiguous.
+Theory under test: No active work package. Start a new package when implementation resumes.
 
-Causal question: roadmap_semantics_drift
+Causal question: none
 
-Implementation slice: Normalize roadmap semantics so roadmap.md is a stable AGPL feature sequence and scope map while live execution and release truth stay in work tracker, release, and track documents.
+Implementation slice: Create or activate one focused package for the next executable concern.
 
 Implementation files:
 
-1. `roadmap.md`
-2. `.kiro/steering/roadmap.md`
-3. `.kiro/steering/workflow-guidelines/packages.md`
-4. `.kiro/steering/system-guidelines.md`
-5. `.kiro/steering/llm/core.md`
-6. `.kiro/steering/llm/boot.md`
-7. `work/README.md`
-8. `work/RULES.md`
-9. `work/releases/0.1-stabilization.md`
-10. `work/sprints/active-2026-q2-rolling-restart-investigation.md`
-11. `work/packages/done-20260526-roadmap-semantics-normalization.md`
-12. `.kiro/steering/llm/architecture.md`
-13. `.kiro/steering/llm/governance.md`
-14. `.kiro/steering/llm/manifest.json`
-15. `.kiro/steering/llm/rules.json`
+1. None recorded
 
 Expected implementation delta: unknown
 
-Falsifying probe: regression: npm run steering:llm:pack
+Falsifying probe: unknown
 
-Stop rule: No architecture decision gate is required for this package.
+Stop rule: unknown
 
-Sprint: `work/sprints/active-2026-q2-rolling-restart-investigation.md`
+Sprint: `work/sprints/active-2026-q2-workflow-markdown-admin-tooling.md`
 
-Package: `work/packages/done-20260526-roadmap-semantics-normalization.md`
+Package: `none`
 
-Workflow lane: `lightweight-maintenance`
+Workflow lane: `none`
 
 Scenario: `none`
 
@@ -48,37 +34,35 @@ Playback: `none`
 
 ## Boundary
 
-Owner: `workflow_tooling_owner`
+Owner: `none`
 
-Boundary: `roadmap_authority`
+Boundary: `none`
 
-Dominant reason: `roadmap_semantics_drift`
+Dominant reason: `none`
 
-Current state: Roadmap mixes feature sequencing, implementation authorization, and live release status, making source-of-truth selection ambiguous.
+Current state: No active work package. Start a new package when implementation resumes.
 
 ## Next Action
 
-Normalize roadmap semantics so roadmap.md is a stable AGPL feature sequence and scope map while live execution and release truth stay in work tracker, release, and track documents.
+Create or activate one focused package for the next executable concern.
 
 ## Proof Ladder
 
-1. `regression: npm run steering:llm:pack`
-2. `regression: npm run work:advance -- --check`
+1. None recorded
 
 ## Model Fit
 
-Package class: `bounded-implementation`
+Package class: `unknown`
 
-Intended minimum model: `gpt-5.3-codex-spark`
+Intended minimum model: `unknown`
 
-Scope shape: `leaf-slice`
+Scope shape: `unknown`
 
-Output profile: `medium`
+Output profile: `unknown`
 
 Escalation triggers:
 
-1. `owned files expand beyond this package`
-2. `a frozen decision must be reopened`
+1. None recorded
 
 ## Theory Ledger References
 
@@ -228,9 +212,9 @@ Runtime promotion rule: `unknown`
 
 ## Architecture Decision Gate
 
-Status: `not-required`
+Status: `unknown`
 
-Trigger: `none`
+Trigger: `unknown`
 
 Trigger evidence:
 
@@ -242,27 +226,13 @@ Choices:
 
 Selected choice: `unknown`
 
-Gate next action: No architecture decision gate is required for this package.
+Gate next action: unknown
 
 ## Scope
 
 Write scope:
 
-1. `roadmap.md`
-2. `.kiro/steering/roadmap.md`
-3. `.kiro/steering/workflow-guidelines/packages.md`
-4. `.kiro/steering/system-guidelines.md`
-5. `.kiro/steering/llm/core.md`
-6. `.kiro/steering/llm/boot.md`
-7. `work/README.md`
-8. `work/RULES.md`
-9. `work/releases/0.1-stabilization.md`
-10. `work/sprints/active-2026-q2-rolling-restart-investigation.md`
-11. `work/packages/done-20260526-roadmap-semantics-normalization.md`
-12. `.kiro/steering/llm/architecture.md`
-13. `.kiro/steering/llm/governance.md`
-14. `.kiro/steering/llm/manifest.json`
-15. `.kiro/steering/llm/rules.json`
+1. None recorded
 
 Handoff files:
 
@@ -270,12 +240,8 @@ Handoff files:
 
 Generated files:
 
-1. `.kiro/steering/llm/architecture.md`
-2. `.kiro/steering/llm/governance.md`
-3. `.kiro/steering/llm/manifest.json`
-4. `.kiro/steering/llm/rules.json`
-5. `work/sprints/current-blocker.json`
-6. `work/sprints/current-blocker.md`
+1. `work/sprints/current-blocker.json`
+2. `work/sprints/current-blocker.md`
 
 Candidate runtime files:
 
@@ -283,23 +249,7 @@ Candidate runtime files:
 
 Commit scope:
 
-1. `roadmap.md`
-2. `.kiro/steering/roadmap.md`
-3. `.kiro/steering/workflow-guidelines/packages.md`
-4. `.kiro/steering/system-guidelines.md`
-5. `.kiro/steering/llm/core.md`
-6. `.kiro/steering/llm/boot.md`
-7. `work/README.md`
-8. `work/RULES.md`
-9. `work/releases/0.1-stabilization.md`
-10. `work/sprints/active-2026-q2-rolling-restart-investigation.md`
-11. `work/packages/done-20260526-roadmap-semantics-normalization.md`
-12. `.kiro/steering/llm/architecture.md`
-13. `.kiro/steering/llm/governance.md`
-14. `.kiro/steering/llm/manifest.json`
-15. `.kiro/steering/llm/rules.json`
-16. `work/sprints/current-blocker.json`
-17. `work/sprints/current-blocker.md`
+1. None recorded
 
 Legacy touched files:
 

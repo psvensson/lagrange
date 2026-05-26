@@ -60,9 +60,9 @@ Latest current handoff state:
 
 - route-selection package:
   `work/packages/done-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md`
-- active sprint:
-  `work/sprints/active-2026-q2-rolling-restart-investigation.md`
-- active package:
+- latest reliability sprint:
+  `work/sprints/done-2026-q2-rolling-restart-investigation.md`
+- latest reliability package:
   `work/packages/done-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md`
 - rolling-restart artifact:
   `test-output/reports/rolling-restart-snapshot-freshness-rerun.report.json`
@@ -109,9 +109,9 @@ or produces a narrower owner-boundary blocker selected by canonical evidence.
 
 - Current route-selection package:
   `work/packages/done-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md`
-- Active reliability sprint:
-  `work/sprints/active-2026-q2-rolling-restart-investigation.md`
-- Active reliability package:
+- Latest reliability sprint:
+  `work/sprints/done-2026-q2-rolling-restart-investigation.md`
+- Latest reliability package:
   `work/packages/done-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md`
 - Selected immediate successor route:
   `operation_workflow_owner / workflow_progress` from
@@ -161,7 +161,7 @@ publication-evidence replay code rather than by the runtime owner alone.
 | `work/sprints/done-2026-q2-tell-tale-scenario-reliability.md` | `stabilization` / `scenario-release-gate` | done | Starts from the active-gate snapshot coverage architecture gap, then queues runtime successor, final adjudication repair, rolling-restart green gate, and tell-tale suite promotion. |
 | `work/sprints/done-2026-q2-rolling-restart-resume-activation.md` | `experiment` / `source-of-truth-repair` | done | Active-gate discriminator records owner-boundary migration and queues workflow-progress causal proof. |
 | `work/sprints/done-2026-q2-rolling-restart-fully-green.md` | `stabilization` / `scenario-release-gate` | done | Success criterion is representative-green rolling-restart; reduced or migrated evidence opens successors but does not close the sprint. |
-| `work/sprints/active-2026-q2-rolling-restart-investigation.md` | `stabilization` / `scenario-release-gate` | active | Current active sprint for `operation_workflow_owner / workflow_progress` artifact triage and workflow state repair before runtime promotion. |
+| `work/sprints/done-2026-q2-rolling-restart-investigation.md` | `stabilization` / `scenario-release-gate` | done | Completed investigation sprint for `operation_workflow_owner / workflow_progress` artifact triage and workflow state repair before runtime promotion. |
 
 
 ## Owner Boundaries

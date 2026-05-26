@@ -126,6 +126,14 @@ async function main() {
   const nextSprintContent = renumberSprintQueue(sprintContent);
   fs.writeFileSync(activeSprintPath, nextSprintContent, 'utf8');
 
+  // 5.5. Refresh the current blocker files
+  console.log('Refreshing current blocker...');
+  try {
+    execSync('node scripts/work-tracker.js current-blocker --write', { stdio: 'inherit' });
+  } catch (error) {
+    console.error('Failed to refresh current blocker:', error.message);
+  }
+
   // 6. Gather files to stage
   const commitScope = metadata.commitScope || [];
   const filesToStage = new Set();
@@ -162,7 +170,39 @@ async function main() {
     execSync(`git add "${file}"`);
   }
 
-  console.log('Package successfully closed!');
+  // 7. Auto-commit and update commit ledger if applicable
+  console.log('\nCreating focused close commit...');
+  try {
+    const parentCommitSha = execSync('git rev-parse HEAD', {encoding: 'utf8'}).trim();
+    const commitMsg = `close: ${metadata.intent?.title || doneName}`;
+    execSync(`git commit -m "${commitMsg}"`, { stdio: 'inherit' });
+    
+    // Now we are on the new commit. Get its SHA.
+    const newCommitSha = execSync('git rev-parse HEAD', {encoding: 'utf8'}).trim();
+    
+    // Replace parent commit SHA with new commit SHA in the done package file
+    if (fs.existsSync(relativeTargetPath)) {
+      let fileContent = fs.readFileSync(relativeTargetPath, 'utf8');
+      if (fileContent.includes(parentCommitSha)) {
+        console.log(`Updating commit ledger in ${relativeTargetPath} with actual commit SHA: ${newCommitSha}`);
+        fileContent = fileContent.replace(new RegExp(parentCommitSha, 'g'), newCommitSha);
+        fs.writeFileSync(relativeTargetPath, fileContent, 'utf8');
+        
+        // Re-stage the package file and amend the commit
+        execSync(`git add "${relativeTargetPath}"`);
+        execSync('git commit --amend --no-edit', { stdio: 'inherit' });
+        console.log('Commit ledger successfully hardened!');
+      }
+    }
+  } catch (err) {
+    console.error('Failed to create close commit:', err.message);
+    process.exit(1);
+  }
+
+  console.log('\nPackage successfully closed!');
+  console.log('\nNext steps:');
+  console.log('  1. Push the close commit to remote:   npm run work:sprint:push');
+  console.log('  2. Verify/advance the next package:   npm run work:advance -- --check');
 }
 
 main().catch((err) => {
