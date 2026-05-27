@@ -10,7 +10,7 @@ import {
   buildTopologyConvergenceGraphFromArtifacts,
   selectTopologyConvergenceDominantWitness,
 } from '../../src/diagnostics/topology-convergence-graph.js';
-import { CONTRACT_FIELD } from '../../src/diagnostics/topology-convergence-constants.js';
+import { CONTRACT_FIELD, OWNER_WITNESS_FIELD } from '../../src/diagnostics/topology-convergence-constants.js';
 
 const FIXTURE_SCENARIO = 'fixture-rolling-restart';
 const FIXTURE_PUBLICATION_EPOCH = 4;
@@ -1526,5 +1526,39 @@ describe('TopologyConvergenceGraph', () => {
       assert.ok(witness[CONTRACT_FIELD.EVIDENCE_PATH]);
       assert.ok(witness[CONTRACT_FIELD.BLOCKING_DEPENDENCY]);
     }
+  });
+
+  it('prefers explicit progress contracts over scattered inferred fields', () => {
+    const fixture = buildFixtureFailureBundle();
+    // Add explicit progress contract to publication Convergence
+    fixture.publicationConvergence.progressContract = {
+      owner: 'explicit_publication_owner',
+      boundary: 'explicit_publication_boundary',
+      state: 'explicit_publication_state',
+      reason: 'explicit_publication_reason',
+      nextAction: 'explicit_publication_next_action',
+      wakeSource: 'explicit_publication_wake_source',
+      retryAfterMs: 4200,
+      terminalState: 'explicit_publication_terminal_state',
+      evidencePath: 'explicit_publication_evidence_path',
+      blockingDependency: 'explicit_publication_blocking_dependency',
+    };
+
+    const graph = buildTopologyConvergenceGraphFromArtifacts({
+      failureBundle: fixture,
+    });
+
+    const witness = graph.ownerWitnesses.find(w => w[OWNER_WITNESS_FIELD.EDGE_ID] === 'publication_ack_convergence');
+    assert.ok(witness);
+    assert.equal(witness[CONTRACT_FIELD.OWNER], 'explicit_publication_owner');
+    assert.equal(witness[CONTRACT_FIELD.BOUNDARY], 'explicit_publication_boundary');
+    assert.equal(witness[CONTRACT_FIELD.STATE], 'explicit_publication_state');
+    assert.equal(witness[CONTRACT_FIELD.REASON], 'explicit_publication_reason');
+    assert.equal(witness[CONTRACT_FIELD.NEXT_ACTION], 'explicit_publication_next_action');
+    assert.equal(witness[CONTRACT_FIELD.WAKE_SOURCE], 'explicit_publication_wake_source');
+    assert.equal(witness[CONTRACT_FIELD.RETRY_AFTER_MS], 4200);
+    assert.equal(witness[CONTRACT_FIELD.TERMINAL_STATE], 'explicit_publication_terminal_state');
+    assert.equal(witness[CONTRACT_FIELD.EVIDENCE_PATH], 'explicit_publication_evidence_path');
+    assert.equal(witness[CONTRACT_FIELD.BLOCKING_DEPENDENCY], 'explicit_publication_blocking_dependency');
   });
 });

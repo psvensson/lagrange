@@ -741,3 +741,23 @@ export function joinValues(values) {
   }
   return values.map((value) => String(value)).join(LIST_SEPARATOR);
 }
+
+export function normalizeProgressContract(rawContract, fallback = {}) {
+  const contract = asRecord(rawContract);
+  const toText = (val, fallbackVal) => {
+    const s = String(val || fallbackVal || '').trim();
+    return s.length > 0 ? s : 'absent';
+  };
+  return {
+    owner: toText(contract.owner, fallback.owner),
+    boundary: toText(contract.boundary, fallback.boundary),
+    state: toText(contract.state || contract.contractState, fallback.state),
+    reason: toText(contract.reason, fallback.reason),
+    nextAction: toText(contract.nextAction || contract.progressNextAction, fallback.nextAction),
+    wakeSource: toText(contract.wakeSource, fallback.wakeSource),
+    retryAfterMs: typeof contract.retryAfterMs === 'number' ? contract.retryAfterMs : (typeof fallback.retryAfterMs === 'number' ? fallback.retryAfterMs : 0),
+    terminalState: toText(contract.terminalState, fallback.terminalState),
+    evidencePath: toText(contract.evidencePath, fallback.evidencePath),
+    blockingDependency: toText(contract.blockingDependency, fallback.blockingDependency),
+  };
+}

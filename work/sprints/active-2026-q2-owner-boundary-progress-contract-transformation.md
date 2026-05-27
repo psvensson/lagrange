@@ -55,22 +55,22 @@ Complete means:
 ## Current Edge Card
 
 ```text
-Representative artifact: none
-Visible first frontier: unknown
-Active package: work/packages/done-20260527-progress-contract-guardrails-and-package-templates.md
-Active package owner: workflow_tooling_owner
-Active package boundary: progress_contract_guardrails
-Selected cause: stranded_progress_contract_prevention
-Required action: Add workflow guardrails and package prompts that require progress contracts before runtime promotion.
-Representative status: unknown
-Causal outcome: unknown
-Architecture gate: not-required / unknown
-Expected delta: unknown
-Current state: Created todo package for making the progress-contract pattern repeatable in workflow tooling and package templates.
-Allowed edits: scripts/work-tracker.js, work/RULES.md, work/templates/sprint-strategy-brief.md, src/diagnostics/topology-convergence-constants.js, src/diagnostics/topology-convergence-owner-witness.js, test/diagnostics/topology-convergence-graph.test.js, test/scripts/work-tracker-package-doctor-ledger.test.js
+Representative artifact: test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json
+Visible first frontier: startup_readiness_owner / startup_support_evidence
+Active package: work/packages/done-20260527-startup-readiness-progress-contract-conversion.md
+Active package owner: startup_readiness_owner
+Active package boundary: startup_support_evidence
+Selected cause: readiness_retryable
+Required action: Convert readiness_retryable startup support to emit progress contract state, wake/retry source, and bounded terminal evidence.
+Representative status: live
+Causal outcome: migrate_owner_boundary
+Architecture gate: watching / unknown
+Expected delta: readiness_retryable paths emit one next action with wake source, retry timing, terminal state, and evidence path.
+Current state: Created todo package for the startup readiness conversion of readiness_retryable; wake, retry, terminal, and diagnostic evidence must stay inside startup_support_evidence.
+Allowed edits: src/bootstrap/node-joining-ready-signal-readiness.js, src/bootstrap/startup-recovery-coordinator.js, src/bootstrap/owners/bootstrap-request-owner-handler.js, test/bootstrap/node-joining-ready-signal-retry.test.js, test/bootstrap/startup-authority-consumption.test.js, src/diagnostics/causal-graph-builder.js, src/diagnostics/topology-convergence-graph.js, src/diagnostics/topology-convergence-normalizers.js, src/diagnostics/topology-convergence-owner-witness.js, test/diagnostics/topology-convergence-graph.test.js
 Candidate runtime files: unknown
-Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
-Required latest proof: regression: npm test -- test/scripts/work-tracker-package-doctor-ledger.test.js, supporting: npm run work:validate -- --entry, supporting: npm run work:validate -- --pre-impl
+Forbidden edits: startup readiness changes prefer progress contract and do not invent runtime behaviors.
+Required latest proof: falsifier: npm test -- test/bootstrap/node-joining-ready-signal-retry.test.js test/bootstrap/startup-authority-consumption.test.js, affected consumer: npm test -- test/diagnostics/topology-convergence-graph.test.js, regression: npm run work:evidence-summary -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 

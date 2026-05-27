@@ -97,29 +97,42 @@ export function buildTopologyConvergenceOwnerWitness(edge) {
     return buildAbsentTopologyConvergenceOwnerWitness();
   }
   const reason = selectOwnerWitnessDominantReason(edge);
+  const pc = edge.progressContract || (edge.source && edge.source.progressContract) || {};
+
+  const witnessOwner = pc.owner && pc.owner !== ABSENT_VALUE ? pc.owner : edge.owner;
+  const witnessBoundary = pc.boundary && pc.boundary !== ABSENT_VALUE ? pc.boundary : edge.boundary;
+  const witnessState = pc.state && pc.state !== ABSENT_VALUE ? pc.state : edge.state;
+  const witnessReason = pc.reason && pc.reason !== ABSENT_VALUE ? pc.reason : reason;
+  const witnessNextAction = pc.nextAction && pc.nextAction !== ABSENT_VALUE ? pc.nextAction : resolveOwnerWitnessNextAction(edge);
+  const witnessWakeSource = pc.wakeSource && pc.wakeSource !== ABSENT_VALUE ? pc.wakeSource : resolveOwnerWitnessWakeSource(edge);
+  const witnessRetryAfterMs = typeof pc.retryAfterMs === 'number' && pc.retryAfterMs > 0 ? pc.retryAfterMs : resolveOwnerWitnessRetryAfterMs(edge);
+  const witnessTerminalState = pc.terminalState && pc.terminalState !== ABSENT_VALUE ? pc.terminalState : resolveOwnerWitnessTerminalState(edge);
+  const witnessEvidencePath = pc.evidencePath && pc.evidencePath !== ABSENT_VALUE ? pc.evidencePath : edge.evidencePath;
+  const witnessBlockingDependency = pc.blockingDependency && pc.blockingDependency !== ABSENT_VALUE ? pc.blockingDependency : resolveOwnerWitnessBlockingDependency(edge);
+
   return {
     [OWNER_WITNESS_FIELD.EDGE_ID]: textOrAbsent(edge.id),
-    [OWNER_WITNESS_FIELD.OWNER]: textOrAbsent(edge.owner),
-    [OWNER_WITNESS_FIELD.BOUNDARY]: textOrAbsent(edge.boundary),
-    [OWNER_WITNESS_FIELD.STATE]: textOrAbsent(edge.state),
-    [OWNER_WITNESS_FIELD.FRONTIER_STATE]: textOrAbsent(edge.state),
-    [OWNER_WITNESS_FIELD.DOMINANT_REASON]: reason,
+    [OWNER_WITNESS_FIELD.OWNER]: textOrAbsent(witnessOwner),
+    [OWNER_WITNESS_FIELD.BOUNDARY]: textOrAbsent(witnessBoundary),
+    [OWNER_WITNESS_FIELD.STATE]: textOrAbsent(witnessState),
+    [OWNER_WITNESS_FIELD.FRONTIER_STATE]: textOrAbsent(witnessState),
+    [OWNER_WITNESS_FIELD.DOMINANT_REASON]: witnessReason,
     [OWNER_WITNESS_FIELD.REASONS]: arrayOrEmpty(edge.reasons),
-    [OWNER_WITNESS_FIELD.EVIDENCE_PATH]: textOrAbsent(edge.evidencePath),
+    [OWNER_WITNESS_FIELD.EVIDENCE_PATH]: textOrAbsent(witnessEvidencePath),
     [OWNER_WITNESS_FIELD.SOURCE]: asRecord(edge.source),
     [OWNER_WITNESS_FIELD.ROOT_CAUSE_CLASS]:
       EDGE_ROOT_CAUSE_CLASS[edge.id] || ROOT_CAUSE_CLASS_UNKNOWN,
     // Progress contract vocabulary
-    [CONTRACT_FIELD.OWNER]: textOrAbsent(edge.owner),
-    [CONTRACT_FIELD.BOUNDARY]: textOrAbsent(edge.boundary),
-    [CONTRACT_FIELD.STATE]: textOrAbsent(edge.state),
-    [CONTRACT_FIELD.REASON]: reason,
-    [CONTRACT_FIELD.NEXT_ACTION]: resolveOwnerWitnessNextAction(edge),
-    [CONTRACT_FIELD.WAKE_SOURCE]: resolveOwnerWitnessWakeSource(edge),
-    [CONTRACT_FIELD.RETRY_AFTER_MS]: resolveOwnerWitnessRetryAfterMs(edge),
-    [CONTRACT_FIELD.TERMINAL_STATE]: resolveOwnerWitnessTerminalState(edge),
-    [CONTRACT_FIELD.EVIDENCE_PATH]: textOrAbsent(edge.evidencePath),
-    [CONTRACT_FIELD.BLOCKING_DEPENDENCY]: resolveOwnerWitnessBlockingDependency(edge),
+    [CONTRACT_FIELD.OWNER]: textOrAbsent(witnessOwner),
+    [CONTRACT_FIELD.BOUNDARY]: textOrAbsent(witnessBoundary),
+    [CONTRACT_FIELD.STATE]: textOrAbsent(witnessState),
+    [CONTRACT_FIELD.REASON]: witnessReason,
+    [CONTRACT_FIELD.NEXT_ACTION]: witnessNextAction,
+    [CONTRACT_FIELD.WAKE_SOURCE]: witnessWakeSource,
+    [CONTRACT_FIELD.RETRY_AFTER_MS]: witnessRetryAfterMs,
+    [CONTRACT_FIELD.TERMINAL_STATE]: witnessTerminalState,
+    [CONTRACT_FIELD.EVIDENCE_PATH]: textOrAbsent(witnessEvidencePath),
+    [CONTRACT_FIELD.BLOCKING_DEPENDENCY]: witnessBlockingDependency,
   };
 }
 

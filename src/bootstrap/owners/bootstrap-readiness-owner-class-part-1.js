@@ -483,46 +483,58 @@ class BootstrapReadinessOwnerPart1 {
   }
   evaluateReadinessSnapshot() {
     const readinessState = this.getReadinessState();
+    let snapshot;
     if (
       !readinessState ||
       typeof readinessState.setDependency !== TYPEOF.FUNCTION
     ) {
       if (typeof readinessState?.evaluate === TYPEOF.FUNCTION) {
-        return readinessState.evaluate();
+        snapshot = readinessState.evaluate();
+      } else if (typeof readinessState?.getSnapshot === TYPEOF.FUNCTION) {
+        snapshot = readinessState.getSnapshot();
+      } else {
+        snapshot = {
+          ready: false,
+          phase: LIFECYCLE_PHASE.INIT,
+          state: BOOTSTRAP_PHASE.NOT_STARTED,
+          reasons: [BOOTSTRAP_API_PROBE_REASON.BOOTSTRAP_PHASE_INCOMPLETE],
+          retryAfterMs: NUM.ZERO,
+          timestamp: Date.now(),
+        };
       }
-      if (typeof readinessState?.getSnapshot === TYPEOF.FUNCTION) {
-        return readinessState.getSnapshot();
-      }
-      return {
-        ready: false,
-        phase: LIFECYCLE_PHASE.INIT,
-        state: BOOTSTRAP_PHASE.NOT_STARTED,
-        reasons: [BOOTSTRAP_API_PROBE_REASON.BOOTSTRAP_PHASE_INCOMPLETE],
-        retryAfterMs: NUM.ZERO,
-        timestamp: Date.now(),
-      };
+    } else {
+      const priorityControlPlaneRecoveryHealth =
+        this.getPriorityControlPlaneRecoveryHealth();
+      snapshot = this.evaluateReadinessSnapshotWithPriorityRecoveryHealth(
+        readinessState,
+        priorityControlPlaneRecoveryHealth,
+      );
     }
-    const priorityControlPlaneRecoveryHealth =
-      this.getPriorityControlPlaneRecoveryHealth();
-    return this.evaluateReadinessSnapshotWithPriorityRecoveryHealth(
-      readinessState,
-      priorityControlPlaneRecoveryHealth,
-    );
+    if (snapshot && snapshot.ready !== true && !snapshot.progressContract) {
+      snapshot.progressContract = this.buildStartupReadinessProgressContract(snapshot);
+    }
+    return snapshot;
   }
   async evaluateReadinessSnapshotAsync() {
     const readinessState = this.getReadinessState();
+    let snapshot;
     if (
       !readinessState ||
       typeof readinessState.setDependency !== TYPEOF.FUNCTION
     ) {
-      return this.evaluateReadinessSnapshot();
+      snapshot = this.evaluateReadinessSnapshot();
+    } else {
+      const priorityControlPlaneRecoveryHealth =
+        await this.getPriorityControlPlaneRecoveryHealthAsync();
+      snapshot = this.evaluateReadinessSnapshotWithPriorityRecoveryHealth(
+        readinessState,
+        priorityControlPlaneRecoveryHealth,
+      );
     }
-    const priorityControlPlaneRecoveryHealth =
-      await this.getPriorityControlPlaneRecoveryHealthAsync();
-    return this.evaluateReadinessSnapshotWithPriorityRecoveryHealth(
-      readinessState,
-      priorityControlPlaneRecoveryHealth,
-    );
+    if (snapshot && snapshot.ready !== true && !snapshot.progressContract) {
+      snapshot.progressContract = this.buildStartupReadinessProgressContract(snapshot);
+    }
+    return snapshot;
   }
 
   /**
@@ -667,7 +679,7 @@ class BootstrapReadinessOwnerPart1 {
       },
     );
     const snapshot = readinessState.evaluate();
-    return {
+    const finalSnapshot = {
       ...snapshot,
       startupAuthorityState:
         startupAuthority?.state ||
@@ -708,6 +720,61 @@ class BootstrapReadinessOwnerPart1 {
                 priorityControlPlaneRecoveryHealth.details.failureReason,
         } :
         {}),
+    };
+    if (finalSnapshot.ready !== true) {
+      finalSnapshot.progressContract = this.buildStartupReadinessProgressContract(finalSnapshot);
+    }
+    return finalSnapshot;
+  }
+
+  buildStartupReadinessProgressContract(snapshot) {
+    const reasons = Array.isArray(snapshot?.reasons) ? snapshot.reasons : [];
+    const primaryReason = reasons[0] || 'readiness_retryable';
+
+    let nextAction = 'wait_for_readiness_support';
+    let wakeSource = 'bootstrap';
+    let blockingDependency = 'readiness_support';
+
+    if (primaryReason === BOOTSTRAP_API_PROBE_REASON.BOOTSTRAP_PHASE_INCOMPLETE) {
+      nextAction = 'wait_for_bootstrap_phase';
+      wakeSource = 'bootstrap';
+      blockingDependency = 'bootstrap';
+    } else if (primaryReason === BOOTSTRAP_PIPELINE_ERROR_CODE.SQL_ENGINE_UNAVAILABLE) {
+      nextAction = 'wait_for_sql_engine';
+      wakeSource = 'sql_engine';
+      blockingDependency = 'sql_engine';
+    } else if (primaryReason === BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE) {
+      nextAction = 'wait_for_leader_metadata';
+      wakeSource = 'leader_metadata';
+      blockingDependency = 'leader_metadata';
+    } else if (primaryReason === BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY) {
+      nextAction = 'wait_for_runtime_wiring';
+      wakeSource = 'runtime_wiring';
+      blockingDependency = 'runtime_wiring';
+    } else if (primaryReason === LIFECYCLE_REASON.LOCAL_QUERY_TRANSPORT_NOT_READY) {
+      nextAction = 'wait_for_local_query_transport';
+      wakeSource = 'local_query_transport_event';
+      blockingDependency = 'local_query_transport';
+    } else if (
+      primaryReason === LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING ||
+      primaryReason === 'priority_control_plane_recovery_diagnostics_unavailable'
+    ) {
+      nextAction = 'wait_for_priority_control_plane_recovery';
+      wakeSource = 'priority_control_plane_recovery_event';
+      blockingDependency = 'priority_control_plane_recovery';
+    }
+
+    return {
+      owner: 'startup_readiness_owner',
+      boundary: 'startup_support_evidence',
+      state: 'readiness_retryable',
+      reason: primaryReason,
+      nextAction,
+      wakeSource,
+      retryAfterMs: typeof snapshot?.retryAfterMs === 'number' ? snapshot.retryAfterMs : 0,
+      terminalState: 'satisfied',
+      evidencePath: 'startup_support_evidence',
+      blockingDependency,
     };
   }
 }

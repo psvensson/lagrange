@@ -390,3 +390,93 @@ test('NodeJoiningService opens the ready heartbeat for seed-authorized INIT diag
       'metadata-publication readiness should not wait on diagnostics lag',
     );
   });
+
+test('buildLocalQueryTransportNotReadyError attaches progressContract with 10 strict keys',
+  async (t) => {
+    const { buildLocalQueryTransportNotReadyError } = await import('../../src/bootstrap/shared/local-query-transport-readiness.js');
+    const readiness = {
+      ready: false,
+      state: 'deferred',
+      reason: 'Query/data-plane message-group transport is not configured',
+      reasonCode: 'local_query_transport_not_ready',
+      errorCode: 'ROUTER_QUERY_TRANSPORT_NOT_READY',
+      retryAfterMs: 42,
+    };
+    const error = buildLocalQueryTransportNotReadyError(readiness);
+    t.ok(error.progressContract, 'progressContract should be attached to the error');
+    t.equal(error.progressContract.owner, 'startup_readiness_owner');
+    t.equal(error.progressContract.boundary, 'startup_support_evidence');
+    t.equal(error.progressContract.state, 'readiness_retryable');
+    t.equal(error.progressContract.reason, 'local_query_transport_not_ready');
+    t.equal(error.progressContract.nextAction, 'wait_for_local_query_transport');
+    t.equal(error.progressContract.wakeSource, 'local_query_transport_event');
+    t.equal(error.progressContract.retryAfterMs, 42);
+    t.equal(error.progressContract.terminalState, 'satisfied');
+    t.equal(error.progressContract.evidencePath, 'startup_support_evidence');
+    t.equal(error.progressContract.blockingDependency, 'local_query_transport');
+
+    t.ok(readiness.progressContract, 'progressContract should also be attached to the readiness object');
+  });
+
+test('buildLifecycleReadinessNotReadyError attaches progressContract with 10 strict keys',
+  async (t) => {
+    const { buildLifecycleReadinessNotReadyError } = await import('../../src/bootstrap/traffic-readiness-utils.js');
+    const snapshot = {
+      ready: false,
+      phase: 'CONTROL_READY',
+      state: 'warming',
+      reasons: ['LEADER_METADATA_INCOMPLETE'],
+      retryAfterMs: 120,
+    };
+    const error = buildLifecycleReadinessNotReadyError(snapshot, {
+      label: 'Lifecycle metadata publication readiness',
+      code: 'BOOTSTRAP_METADATA_PUBLICATION_NOT_READY',
+    });
+    t.ok(error.progressContract, 'progressContract should be attached to the error');
+    t.equal(error.progressContract.owner, 'startup_readiness_owner');
+    t.equal(error.progressContract.boundary, 'startup_support_evidence');
+    t.equal(error.progressContract.state, 'readiness_retryable');
+    t.equal(error.progressContract.reason, 'LEADER_METADATA_INCOMPLETE');
+    t.equal(error.progressContract.nextAction, 'wait_for_metadata_publication');
+    t.equal(error.progressContract.wakeSource, 'metadata_publication_event');
+    t.equal(error.progressContract.retryAfterMs, 120);
+    t.equal(error.progressContract.terminalState, 'satisfied');
+    t.equal(error.progressContract.evidencePath, 'startup_support_evidence');
+    t.equal(error.progressContract.blockingDependency, 'metadata_publication');
+
+    t.ok(snapshot.progressContract, 'progressContract should also be attached to the snapshot object');
+  });
+
+test('BootstrapReadinessOwner buildBootstrapNotReadyResponse attaches progressContract',
+  async (t) => {
+    const { BootstrapReadinessOwner } = await import('../../src/bootstrap/owners/bootstrap-readiness-owner-class-part-2.js');
+    const owner = new BootstrapReadinessOwner({
+      delegates: {
+        getReadinessState: () => ({
+          evaluate: () => ({
+            ready: false,
+            phase: 'INIT',
+            state: 'bootstrapping',
+            reasons: ['SQL_ENGINE_UNAVAILABLE'],
+            retryAfterMs: 50,
+          }),
+        }),
+      },
+    });
+    const response = owner.buildBootstrapNotReadyResponse({
+      error: 'Not ready',
+      code: 'SQL_ENGINE_UNAVAILABLE',
+    });
+    t.ok(response.progressContract, 'response should contain progressContract');
+    t.equal(response.progressContract.owner, 'startup_readiness_owner');
+    t.equal(response.progressContract.boundary, 'startup_support_evidence');
+    t.equal(response.progressContract.state, 'readiness_retryable');
+    t.equal(response.progressContract.reason, 'SQL_ENGINE_UNAVAILABLE');
+    t.equal(response.progressContract.nextAction, 'wait_for_sql_engine');
+    t.equal(response.progressContract.wakeSource, 'sql_engine');
+    t.equal(response.progressContract.retryAfterMs, 50);
+    t.equal(response.progressContract.terminalState, 'satisfied');
+    t.equal(response.progressContract.evidencePath, 'startup_support_evidence');
+    t.equal(response.progressContract.blockingDependency, 'sql_engine');
+  });
+

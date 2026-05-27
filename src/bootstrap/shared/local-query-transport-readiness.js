@@ -96,6 +96,24 @@ function buildLocalQueryTransportNotReadyError(readiness) {
   error.retryAfterMs =
     normalizePositiveInteger(readiness?.retryAfterMs, NUM.ZERO);
   error.localQueryTransport = readiness || null;
+
+  const progressContract = {
+    owner: 'startup_readiness_owner',
+    boundary: 'startup_support_evidence',
+    state: 'readiness_retryable',
+    reason: readiness?.reasonCode || 'local_query_transport_not_ready',
+    nextAction: 'wait_for_local_query_transport',
+    wakeSource: 'local_query_transport_event',
+    retryAfterMs: error.retryAfterMs,
+    terminalState: 'satisfied',
+    evidencePath: 'startup_support_evidence',
+    blockingDependency: 'local_query_transport',
+  };
+  error.progressContract = progressContract;
+  if (readiness) {
+    readiness.progressContract = progressContract;
+  }
+
   return error;
 }
 

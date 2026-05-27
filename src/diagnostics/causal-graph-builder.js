@@ -633,19 +633,26 @@ function buildMemberEdges(normalized) {
 }
 
 function buildWaits(normalized) {
-  const waitMode = textOrAbsent(normalized.dominantWitness.waitMode);
+  const pc = normalized.dominantWitness.progressContract || {};
+  const waitMode = textOrAbsent(pc.waitMode || (pc.state !== ABSENT_VALUE ? pc.state : '') || normalized.dominantWitness.waitMode);
   if (waitMode === ABSENT_VALUE) {
     return [];
   }
+  const owner = textOrUnknown(pc.owner || pc.currentOwner || normalized.dominantWitness.currentOwner);
+  const boundary = textOrUnknown(pc.boundary || pc.blockingBoundary || normalized.dominantWitness.blockingBoundary);
+  const stepAgeMs = numberOrUnknown(pc.stepAgeMs || normalized.dominantWitness.stepAgeMs);
+  const stepTimeoutMs = numberOrUnknown(pc.stepTimeoutMs || normalized.dominantWitness.stepTimeoutMs);
+  const nextRequiredAction = textOrUnknown(pc.nextRequiredAction || pc.nextAction || normalized.dominantWitness.nextRequiredAction);
+
   return [{
     id: `${DEPENDENCY_KIND.PRIORITY_RECOVERY}:${waitMode}`,
     waitMode,
     state: waitMode === WAIT_MODE_EVENT_DRIVEN ? WAIT_STATE_ACTIVE : WAIT_STATE_ABSENT,
-    owner: textOrUnknown(normalized.dominantWitness.currentOwner),
-    boundary: textOrUnknown(normalized.dominantWitness.blockingBoundary),
-    stepAgeMs: numberOrUnknown(normalized.dominantWitness.stepAgeMs),
-    stepTimeoutMs: numberOrUnknown(normalized.dominantWitness.stepTimeoutMs),
-    nextRequiredAction: textOrUnknown(normalized.dominantWitness.nextRequiredAction),
+    owner,
+    boundary,
+    stepAgeMs,
+    stepTimeoutMs,
+    nextRequiredAction,
   }];
 }
 

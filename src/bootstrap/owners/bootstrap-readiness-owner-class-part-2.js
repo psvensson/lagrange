@@ -483,6 +483,9 @@ class BootstrapReadinessOwner extends BootstrapReadinessOwnerPart1 {
         response[field] = [...options.leaderReadiness[field]];
       }
     }
+    if (snapshot?.progressContract || options?.progressContract) {
+      response.progressContract = snapshot?.progressContract || options?.progressContract;
+    }
     return response;
   }
   getReadinessSnapshotForDiagnostics() {

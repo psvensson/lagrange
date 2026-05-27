@@ -37,6 +37,7 @@ import {
   createTopologyConvergenceReasonList,
   flattenEvidencePath,
   joinValues,
+  normalizeProgressContract,
 } from './topology-convergence-normalizers.js';
 
 import {
@@ -208,15 +209,27 @@ function buildPublicationEdge(normalized) {
   const reasons = createTopologyConvergenceReasonList();
   const state = resolvePublicationState(evidence, reasons);
 
+  const rawContract = normalized.publication.progressContract ||
+                      (normalized.publication.progress && normalized.publication.progress.progressContract);
+  const progressContract = normalizeProgressContract(rawContract, {
+    owner: OWNER.TOPOLOGY_PUBLICATION,
+    boundary: BOUNDARY.PUBLICATION_CONVERGENCE,
+    evidencePath: normalized.evidencePath.publication,
+  });
+
   return buildEdge({
     id: EDGE_ID.PUBLICATION_ACK_CONVERGENCE,
     from: NODE_ID.PUBLICATION_CONVERGENCE,
     to: NODE_ID.ACTIVE_GATE_SNAPSHOT_COVERAGE,
     state,
-    owner: OWNER.TOPOLOGY_PUBLICATION,
-    boundary: BOUNDARY.PUBLICATION_CONVERGENCE,
-    evidencePath: normalized.evidencePath.publication,
-    source: evidence.source,
+    owner: progressContract.owner || OWNER.TOPOLOGY_PUBLICATION,
+    boundary: progressContract.boundary || BOUNDARY.PUBLICATION_CONVERGENCE,
+    evidencePath: progressContract.evidencePath || normalized.evidencePath.publication,
+    source: {
+      ...evidence.source,
+      progressContract,
+    },
+    progressContract,
     reasons,
     rank: RANK.PUBLICATION,
     dependencies: [],
@@ -229,14 +242,24 @@ function buildPriorityRecoveryEdge(normalized) {
   const reasons = createTopologyConvergenceReasonList();
   const state = resolvePriorityRecoveryState(evidence, reasons);
 
+  const rawContract = (normalized.progress && normalized.progress.progressContract) || 
+                      (normalized.progressSummary && normalized.progressSummary.progressContract) || 
+                      evidence.progressContract ||
+                      (normalized.progress && normalized.progress.priorityRecoveryProgressSummary && normalized.progress.priorityRecoveryProgressSummary.progressContract);
+  const progressContract = normalizeProgressContract(rawContract, {
+    owner: evidence.owner,
+    boundary: evidence.boundary,
+    evidencePath: evidence.evidencePath,
+  });
+
   return buildEdge({
     id: EDGE_ID.PRIORITY_RECOVERY_PARTITION_PROGRESS,
     from: NODE_ID.PRIORITY_RECOVERY_PROGRESS,
     to: NODE_ID.ACTIVE_GATE_SNAPSHOT_COVERAGE,
     state,
-    owner: evidence.owner,
-    boundary: evidence.boundary,
-    evidencePath: evidence.evidencePath,
+    owner: progressContract.owner || evidence.owner,
+    boundary: progressContract.boundary || evidence.boundary,
+    evidencePath: progressContract.evidencePath || evidence.evidencePath,
     source: {
       unresolvedSemanticStateIds: joinValues(evidence.semanticStateIds),
       blockedPartitionIds: joinValues(evidence.blockedPartitionIds),
@@ -246,7 +269,9 @@ function buildPriorityRecoveryEdge(normalized) {
         normalized.summary.failureClassification?.failureClass,
       ),
       ...buildPriorityRecoveryEvidenceSource(evidence),
+      progressContract,
     },
+    progressContract,
     reasons,
     rank: RANK.PRIORITY_RECOVERY,
     dependencies: [EDGE_ID.PUBLICATION_ACK_CONVERGENCE],
@@ -265,14 +290,23 @@ function buildActiveGateSnapshotEdge(normalized) {
     reasons,
   );
 
+  const rawContract = (progress && progress.progressContract) || 
+                      (normalized.activeGate && normalized.activeGate.progressContract) || 
+                      (normalized.activeGate && normalized.activeGate.progress && normalized.activeGate.progress.progressContract);
+  const progressContract = normalizeProgressContract(rawContract, {
+    owner: OWNER.ACTIVE_GATE,
+    boundary: BOUNDARY.SNAPSHOT_COVERAGE,
+    evidencePath: normalized.evidencePath.activeGateProgress,
+  });
+
   return buildEdge({
     id: EDGE_ID.ACTIVE_GATE_SNAPSHOT_COVERAGE,
     from: NODE_ID.ACTIVE_GATE_SNAPSHOT_COVERAGE,
     to: NODE_ID.READINESS_STARTUP_SUPPORT,
     state,
-    owner: OWNER.ACTIVE_GATE,
-    boundary: BOUNDARY.SNAPSHOT_COVERAGE,
-    evidencePath: normalized.evidencePath.activeGateProgress,
+    owner: progressContract.owner || OWNER.ACTIVE_GATE,
+    boundary: progressContract.boundary || BOUNDARY.SNAPSHOT_COVERAGE,
+    evidencePath: progressContract.evidencePath || normalized.evidencePath.activeGateProgress,
     source: {
       activeGateState: textOrUnknown(normalized.activeGate.state),
       snapshotCoverageComplete: booleanVariant(progress.snapshotCoverageComplete),
@@ -312,7 +346,9 @@ function buildActiveGateSnapshotEdge(normalized) {
       ),
       readinessDelayCause: textOrUnknown(progress.readinessDelay?.cause),
       blockers: joinValues(arrayOrEmpty(progress.blockers)),
+      progressContract,
     },
+    progressContract,
     reasons,
     rank: RANK.SNAPSHOT_COVERAGE,
     dependencies: [
@@ -331,14 +367,23 @@ function buildReadinessEdge(normalized) {
   const reasons = createTopologyConvergenceReasonList();
   const state = resolveReadinessState(readiness, normalized.activeGate, reasons);
 
+  const rawContract = (normalized.readiness && normalized.readiness.progressContract) || 
+                      (normalized.readinessFailure && normalized.readinessFailure.progressContract) ||
+                      (readiness && readiness.progressContract);
+  const progressContract = normalizeProgressContract(rawContract, {
+    owner: OWNER.READINESS,
+    boundary: BOUNDARY.STARTUP_SUPPORT_EVIDENCE,
+    evidencePath: normalized.evidencePath.readinessFailure,
+  });
+
   return buildEdge({
     id: EDGE_ID.READINESS_STARTUP_SUPPORT,
     from: NODE_ID.READINESS_STARTUP_SUPPORT,
     to: NODE_ID.TOP_FAILURE_REASONS,
     state,
-    owner: OWNER.READINESS,
-    boundary: BOUNDARY.STARTUP_SUPPORT_EVIDENCE,
-    evidencePath: normalized.evidencePath.readinessFailure,
+    owner: progressContract.owner || OWNER.READINESS,
+    boundary: progressContract.boundary || BOUNDARY.STARTUP_SUPPORT_EVIDENCE,
+    evidencePath: progressContract.evidencePath || normalized.evidencePath.readinessFailure,
     source: {
       mode: textOrUnknown(readiness.mode),
       classCode: textOrUnknown(readiness.classCode),
@@ -347,7 +392,9 @@ function buildReadinessEdge(normalized) {
       cause: textOrUnknown(readiness.cause),
       source: textOrUnknown(readiness.source),
       supportPath: readiness.supportPath,
+      progressContract,
     },
+    progressContract,
     reasons,
     rank: RANK.READINESS,
     dependencies: [EDGE_ID.ACTIVE_GATE_SNAPSHOT_COVERAGE],
@@ -360,18 +407,27 @@ function buildTopFailureReasonsEdge(normalized) {
     [REASON.TOP_FAILURES_PRESENT] :
     [REASON.TOP_FAILURES_ABSENT];
 
+  const rawContract = normalized.topFailures && normalized.topFailures.progressContract;
+  const progressContract = normalizeProgressContract(rawContract, {
+    owner: OWNER.FAILURE_CLASSIFIER,
+    boundary: BOUNDARY.FAILURE_REASON_RANKING,
+    evidencePath: SOURCE_PATH.TOP_REASONS,
+  });
+
   return buildEdge({
     id: EDGE_ID.TOP_FAILURE_REASONS,
     from: NODE_ID.TOP_FAILURE_REASONS,
     to: NODE_ID.TOP_FAILURE_REASONS,
     state: EDGE_STATE.SATISFIED,
-    owner: OWNER.FAILURE_CLASSIFIER,
-    boundary: BOUNDARY.FAILURE_REASON_RANKING,
-    evidencePath: SOURCE_PATH.TOP_REASONS,
+    owner: progressContract.owner || OWNER.FAILURE_CLASSIFIER,
+    boundary: progressContract.boundary || BOUNDARY.FAILURE_REASON_RANKING,
+    evidencePath: progressContract.evidencePath || SOURCE_PATH.TOP_REASONS,
     source: {
       topReasons: normalized.topReasons.map((entry) => entry.reason).join(REASON_SEPARATOR) ||
         ABSENT_VALUE,
+      progressContract,
     },
+    progressContract,
     reasons,
     rank: RANK.TOP_FAILURES,
     dependencies: [EDGE_ID.READINESS_STARTUP_SUPPORT],
@@ -394,6 +450,7 @@ function buildEdge(edge) {
     priority: edge.rank,
     dependencies: edge.dependencies,
     projectionHint: edge.projectionHint,
+    progressContract: edge.progressContract,
   };
 }
 

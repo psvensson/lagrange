@@ -147,6 +147,26 @@ function buildLifecycleReadinessNotReadyError(snapshot, options = {}) {
       LOCAL_STR_J2SMD;
   error.retryAfterMs = normalizePositiveInteger(snapshot?.retryAfterMs, null);
   error.lifecycleReadiness = snapshot || null;
+
+  const reasons = Array.isArray(snapshot?.reasons) ? snapshot.reasons : [];
+  const primaryReason = reasons[0] || 'lifecycle_metadata_publication_not_ready';
+  const progressContract = snapshot?.progressContract || {
+    owner: 'startup_readiness_owner',
+    boundary: 'startup_support_evidence',
+    state: 'readiness_retryable',
+    reason: primaryReason,
+    nextAction: label.toLowerCase().includes('metadata') ? 'wait_for_metadata_publication' : 'wait_for_traffic_readiness',
+    wakeSource: label.toLowerCase().includes('metadata') ? 'metadata_publication_event' : 'traffic_readiness_event',
+    retryAfterMs: typeof error.retryAfterMs === 'number' ? error.retryAfterMs : 0,
+    terminalState: 'satisfied',
+    evidencePath: 'startup_support_evidence',
+    blockingDependency: label.toLowerCase().includes('metadata') ? 'metadata_publication' : 'traffic_readiness',
+  };
+  error.progressContract = progressContract;
+  if (snapshot) {
+    snapshot.progressContract = progressContract;
+  }
+
   return error;
 }
 
@@ -300,6 +320,7 @@ function attachTrafficReadinessListener(readinessState, listener) {
 
 export {
   attachTrafficReadinessListener,
+  buildLifecycleReadinessNotReadyError,
   isBackgroundWorkReady,
   isBackgroundWorkReadySnapshot,
   getTrafficReadinessSnapshot,
