@@ -57,7 +57,7 @@ Complete means:
 ```text
 Representative artifact: test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json
 Visible first frontier: startup_active_gate_owner / snapshot_coverage
-Active package: work/packages/active-20260527-active-gate-snapshot-coverage-progress-contract-conversion.md
+Active package: work/packages/done-20260527-active-gate-snapshot-coverage-progress-contract-conversion.md
 Active package owner: startup_active_gate_owner
 Active package boundary: snapshot_coverage
 Selected cause: snapshot_coverage_incomplete
