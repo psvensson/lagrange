@@ -2,151 +2,36 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-rolling-restart-priority-recovery-resolution.md",
-  "package": "work/packages/active-20260527-rolling-restart-operation-workflow-owner-workflow-progress.md",
-  "status": "active",
-  "lane": "causal-escalation",
-  "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json",
+  "package": "none",
+  "status": "none",
+  "lane": "none",
+  "scenario": "none",
+  "artifact": "none",
   "playback": "none",
-  "owner": "operation_workflow_owner",
-  "boundary": "workflow_progress",
-  "dominantReason": "priority_recovery_event_driven_wait",
-  "currentState": "Fresh rolling-restart evidence moved the representative blocker from startup admin reachability to priority recovery workflow progress.",
-  "nextAction": "Classify persisted-not-dispatched priority recovery workflow progress, keep unrelated dirty runtime edits out of scope, then promote only a selected runtime successor or architecture stop before the next rolling-restart rerun.",
-  "proof": [
-    "falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json",
-    "regression: npm run work:scenario-route -- test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress",
-    "supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json --markdown"
-  ],
-  "writeScope": [
-    "work/theory-ledger.md"
-  ],
-  "handoffFiles": [
-    "test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json"
-  ],
+  "owner": "none",
+  "boundary": "none",
+  "dominantReason": "none",
+  "currentState": "No active work package. Start a new package when implementation resumes.",
+  "nextAction": "Create or activate one focused package for the next executable concern.",
+  "proof": [],
+  "writeScope": [],
+  "handoffFiles": [],
   "generatedFiles": [
-    "work/sprints/current-blocker.md",
-    "work/sprints/current-blocker.json"
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md"
   ],
   "candidateRuntimeFiles": [],
-  "commitScope": [
-    "work/packages/active-20260527-rolling-restart-operation-workflow-owner-workflow-progress.md",
-    "work/sprints/current-blocker.md",
-    "work/sprints/current-blocker.json",
-    "work/sprints/active-2026-q2-rolling-restart-priority-recovery-resolution.md",
-    "work/theory-ledger.md"
-  ],
+  "commitScope": [],
   "touchedFiles": [],
-  "theoryLedgerRefs": [
-    "theory-20260527-rolling-restart-priority-recovery-workflow-progress"
-  ],
-  "modelFit": {
-    "packageClass": "representative-frontier-closure",
-    "intendedMinimumModel": "gpt-5.3-codex",
-    "scopeShape": "owner-boundary-contraction/current-frontier",
-    "outputProfile": "medium",
-    "ambiguityScore": 1,
-    "escalationTriggers": [
-      "owned files expand beyond this package",
-      "fresh representative evidence changes owner or boundary"
-    ]
-  },
-  "representativeResidual": {
-    "status": "same-frontier",
-    "scenario": "rolling-restart",
-    "artifact": "test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json",
-    "frontier": "operation_workflow_owner / workflow_progress",
-    "owner": "operation_workflow_owner",
-    "boundary": "workflow_progress",
-    "dominantReason": "priority_recovery_event_driven_wait",
-    "nextAction": "Classify persisted-not-dispatched priority recovery workflow progress, keep unrelated dirty runtime edits out of scope, then promote only a selected runtime successor or architecture stop before the next rolling-restart rerun."
-  },
-  "causalGovernance": {
-    "hypothesis": "Priority recovery workflow progress remains persisted but not dispatched, so downstream startup and active-gate symptoms must not be patched until workflow progress advances, classifies backpressure, or selects an architecture stop.",
-    "stopConditionCheck": "Use npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json.",
-    "expectedCausalModelChange": "Classify operation workflow progress and decide whether a local workflow dispatch-progress successor or architecture stop owns the next move.",
-    "representativeOutcome": "same-frontier",
-    "causalDebt": "The latest causal model accepted classified backpressure but rolling-restart is still red; the successor must turn the classified priority recovery wait into concrete progress or a formal architecture stop.",
-    "crossBoundaryReview": "Startup readiness and active-gate snapshot coverage are downstream until operation workflow progress proves or falsifies the persisted-not-dispatched priority recovery path."
-  },
-  "scenarioCausalClosure": {
-    "referenceScenarioOrProbe": "rolling-restart",
-    "phaseChain": [
-      "startup readiness support proof passed and fresh representative evidence was collected",
-      "canonical route selected operation_workflow_owner / workflow_progress",
-      "topology convergence named priority_recovery_event_driven_wait with current step dispatch_pending planned",
-      "active-gate snapshot coverage remains downstream blocked by workflow progress"
-    ],
-    "currentFirstFrontier": "operation_workflow_owner/workflow_progress",
-    "knownDownstreamBlockers": [
-      "active_gate_snapshot_coverage",
-      "publication_missing_active_node=35a891b8-c1a0-5064-9c6e-2acfba61c2a7"
-    ],
-    "missingCausalEdge": "Operation workflow progress must explain why a priority recovery operation stayed dispatch_pending/planned instead of advancing.",
-    "missingCausalEdgeProbe": "npm run work:scenario-route -- test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress",
-    "falsifyingProbe": "npm run work:evidence-summary -- test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json",
-    "boundedProgressProof": "Advance, dispatch, reconcile, or classify the priority recovery workflow progress edge before touching active-gate or transport runtime.",
-    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json",
-    "expectedObservableTransition": "The next focused proof names the workflow progress file/scope, then the next rolling-restart run becomes green or moves to a new concrete frontier.",
-    "maxProgressBound": "one focused workflow-progress proof before representative rerun",
-    "sameFrontierFallback": "Open an autonomous architecture experiment if the same frontier repeats with no concrete reduction.",
-    "expectedNextFrontier": "operation_workflow_owner / workflow_progress",
-    "resultClassification": "same-frontier",
-    "stopCondition": "continue-local-fix",
-    "recentFrontierHistory": [
-      "done-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md",
-      "done-20260526-rolling-restart-operation-workflow-owner-rebalancer-handoff.md"
-    ],
-    "oscillationCheck": "This is the first post-startup-readiness operation workflow progress successor for the new artifact.",
-    "handoffInvariant": "Do not patch active-gate snapshot coverage, startup readiness, rebalancer handoff, or transport runtime until workflow progress is proven or formally migrated."
-  },
-  "observablePrediction": {
-    "metric": "workflow progress extractor state",
-    "predicted": "nonzero priority recovery operation remains dispatch_pending/planned with operation_workflow_owner / workflow_progress as the first frontier",
-    "observed": "priority recovery residual extractor reported three recovering_in_flight witnesses under operation_workflow_owner / workflow_progress, with dispatch_pending/planned still first frontier",
-    "accuracy": "matched",
-    "evidence": "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json --markdown",
-    "metricDelta": 0
-  },
+  "modelFit": {},
+  "representativeResidual": {},
+  "causalGovernance": {},
+  "scenarioCausalClosure": {},
+  "observablePrediction": {},
   "experimentOutcome": {},
-  "rerunDecision": {
-    "sourceArtifact": "test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json",
-    "routeOwner": "operation_workflow_owner",
-    "routeBoundary": "workflow_progress",
-    "routeDominantReason": "priority_recovery_event_driven_wait",
-    "routeCausalOutcome": "accept_classified_backpressure",
-    "stopMode": "classified_backpressure",
-    "nextLane": "causal-escalation",
-    "expectedDelta": "Classify the persisted-not-dispatched operation workflow progress residual and promote the smallest runtime proof or architecture stop before the next rolling-restart rerun.",
-    "requiredRefreshCommands": [
-      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait",
-      "update Sprint Strategy Brief and Current Edge Card from the route result",
-      "npm run work:repair",
-      "npm run work:validate -- --entry",
-      "npm run work:validate -- --pre-impl"
-    ]
-  },
-  "classificationEfficiency": {
-    "defaultMode": "inline-gate-default",
-    "separatePackageReason": "successor-selection",
-    "artifactBudget": "one-artifact",
-    "proofCommandBudget": "two-or-three-canonical-commands",
-    "commands": [
-      "npm run work:evidence-summary -- test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json",
-      "npm run work:scenario-route -- test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress",
-      "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json --markdown"
-    ],
-    "decisionRecord": "Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.",
-    "successorAction": "rerun-representative-evidence",
-    "runtimePromotionRule": "When canonical owner and boundary are stable, prefer a runtime-owner-boundary successor and keep runtime files in candidateRuntimeFiles until that package activates them. If the representative route is same-frontier with no reduction or an architecture gap, open an autonomous architecture experiment before more local runtime work."
-  },
-  "architectureDecisionGate": {
-    "status": "not-required",
-    "trigger": "none",
-    "triggerEvidence": [],
-    "choices": [],
-    "selectedChoice": null,
-    "nextAction": "No architecture decision gate is required for this package."
-  },
-  "predecessor": "work/packages/done-20260527-rolling-restart-startup-readiness-admin-reachability-support.md"
+  "rerunDecision": {},
+  "classificationEfficiency": {},
+  "architectureDecisionGate": {},
+  "predecessor": null,
+  "theoryLedgerRefs": []
 }

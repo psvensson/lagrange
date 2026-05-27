@@ -32,7 +32,7 @@ Resolve the priority recovery event-driven wait/deadlock during rolling-restart 
 ```text
 Representative artifact: test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json
 Visible first frontier: operation_workflow_owner/workflow_progress
-Active package: work/packages/active-20260527-rolling-restart-operation-workflow-owner-workflow-progress.md
+Active package: work/packages/done-20260527-rolling-restart-operation-workflow-owner-workflow-progress.md
 Active package owner: operation_workflow_owner
 Active package boundary: workflow_progress
 Selected cause: priority_recovery_event_driven_wait
@@ -45,7 +45,7 @@ Current state: Fresh rolling-restart evidence moved the representative blocker f
 Allowed edits: work/theory-ledger.md
 Candidate runtime files: unknown
 Forbidden edits: Do not patch active-gate snapshot coverage, startup readiness, rebalancer handoff, or transport runtime until workflow progress is proven or formally migrated.
-Required latest proof: falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json, regression: npm run work:scenario-route -- test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress, supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json --markdown
+Required latest proof: falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json, regression: npm run work:scenario-route -- test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress, supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json --markdown, selector: node --test-name-pattern "direct owner snapshot build enqueues dispatch-pending workflow progress re-entry" test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -62,6 +62,10 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Lane: `runtime-owner-boundary`
    - Purpose: Investigate the rebalancer target selection and blocker filters to identify why priority recovery operations are not created.
    - First-run reason: Latest representative evidence routed to `priority_recovery_event_driven_wait` with unresolved semantic states.
+2. [Rolling Restart Diagnostic Dispatch Pending Owner Reentry](../packages/todo-20260527-rolling-restart-diagnostic-dispatch-pending-owner-reentry.md)
+   - Lane: `runtime-owner-boundary`
+   - Purpose: Fix diagnostic dispatch-pending publication snapshots so owner advancement wakes the remote operation owner and arms bounded verification.
+   - First-run reason: Focused workflow-progress proof selected the diagnostic owner re-entry failure behind the current persisted-not-dispatched priority recovery residual.
 
 ## Proof Ladder
 

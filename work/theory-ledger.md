@@ -306,7 +306,7 @@ Each entry must include these labels:
 
 ## theory-20260527-rolling-restart-priority-recovery-workflow-progress
 
-- Status: active
+- Status: supported
 - Scenario/gate: rolling-restart / priority_recovery_event_driven_wait
 - Owner/boundary: operation_workflow_owner / workflow_progress
 - Hypothesis: Priority recovery work is present but remains persisted-not-dispatched, leaving downstream startup and active-gate symptoms blocked until operation workflow progress advances, classifies backpressure, or selects an architecture stop.

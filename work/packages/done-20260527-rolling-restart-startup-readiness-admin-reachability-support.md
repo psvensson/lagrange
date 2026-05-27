@@ -17,7 +17,7 @@
     "nextAction": "Prove and repair startup readiness/admin reachability support for admin_reachability_refused, then rerun rolling-restart until the representative scenario succeeds.",
     "predecessor": "work/packages/done-20260526-reconnect-handoff-architecture-experiment.md",
     "closed": "2026-05-27",
-    "successor": "work/packages/active-20260527-rolling-restart-operation-workflow-owner-workflow-progress.md"
+    "successor": "work/packages/done-20260527-rolling-restart-operation-workflow-owner-workflow-progress.md"
   },
   "scope": {
     "writeScope": [
