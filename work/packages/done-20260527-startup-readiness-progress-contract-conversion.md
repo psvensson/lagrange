@@ -16,7 +16,7 @@
     "currentState": "Created todo package for the startup readiness conversion of readiness_retryable; wake, retry, terminal, and diagnostic evidence must stay inside startup_support_evidence.",
     "nextAction": "Convert readiness_retryable startup support to emit progress contract state, wake/retry source, and bounded terminal evidence.",
     "closed": "2026-05-27",
-    "successor": "work/packages/todo-20260527-operation-workflow-progress-contract-conversion.md"
+    "successor": "work/packages/active-20260527-operation-workflow-progress-contract-conversion.md"
   },
   "scope": {
     "writeScope": [
@@ -191,7 +191,21 @@
       "npm run work:validate -- --entry",
       "npm run work:validate -- --pre-impl"
     ]
-  }
+  },
+  "implementation": {
+    "parentRevalidatedFocusedProof": true,
+    "filesChanged": [
+      "src/bootstrap/owners/bootstrap-readiness-owner-class-part-1.js",
+      "src/bootstrap/owners/bootstrap-readiness-owner-class-part-2.js",
+      "src/bootstrap/shared/local-query-transport-readiness.js",
+      "src/bootstrap/traffic-readiness-utils.js",
+      "test/bootstrap/node-joining-ready-signal-retry.test.js"
+    ]
+  },
+  "verificationFix": {
+    "parentRevalidatedFocusedProof": true
+  },
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -365,3 +379,9 @@ Agent identity is optional provenance. Use the compact five-field shape for new 
 
 1. npm test -- test/bootstrap/node-joining-ready-signal-retry.test.js test/bootstrap/startup-authority-consumption.test.js
 2. npm run audit:runtime-grammar:file -- src/bootstrap/node-joining-ready-signal-readiness.js src/bootstrap/startup-recovery-coordinator.js
+
+## Commit And Push Ledger
+
+1. Focused package commit: fc01198bcb61f92624e2fb63b9215e550225dc27
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

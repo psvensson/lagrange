@@ -3,10 +3,10 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
+  "status": "done",
   "intent": {
     "opened": "2026-05-27",
-    "lane": "runtime-owner-boundary",
+    "lane": "causal-escalation",
     "scenario": "rolling-restart",
     "artifact": "test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json",
     "playback": "none",
@@ -28,7 +28,8 @@
     "commitScope": [
       "src/diagnostics/topology-convergence-constants.js",
       "src/diagnostics/topology-convergence-normalizers.js",
-      "test/diagnostics/topology-convergence-graph.test.js"
+      "test/diagnostics/topology-convergence-graph.test.js",
+      "work/packages/active-20260527-owner-boundary-progress-contract-foundation.md"
     ]
   },
   "gates": {
@@ -48,13 +49,27 @@
     ]
   },
   "execution": {
-    "theoryLedgerRefs": [],
-    "theoryLedger": "not-applicable: no existing ledger theory directly covers the new shared owner-boundary progress contract; add or cite a durable theory at closure if this package creates one.",
+    "theoryLedgerRefs": [
+      "theory-20260526-rolling-restart-snapshot-viewpoint-backpressure"
+    ],
+    "theoryLedger": "no ledger update: This progress contract foundation package only defined the canonical vocabulary and diagnostics helpers; no reusable theory was added here.",
     "proof": {
       "commands": [
-        "falsifier: npm test -- test/diagnostics/topology-convergence-graph.test.js",
-        "regression: npm run audit:runtime-grammar:file -- src/diagnostics/topology-convergence-constants.js src/diagnostics/topology-convergence-normalizers.js"
+        "falsifier: npm test -- test/diagnostics/topology-convergence-graph.test.js # proof of progress-contract and topology-convergence-graph",
+        "supporting: npm run work:evidence-summary -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json # consumer-proof and contract-fixture",
+        "regression: npm run audit:runtime-grammar:file -- src/diagnostics/topology-convergence-constants.js src/diagnostics/topology-convergence-normalizers.js # state and outcome grammar"
       ]
+    },
+    "implementation": {
+      "parentRevalidatedFocusedProof": true,
+      "filesChanged": [
+        "src/diagnostics/topology-convergence-constants.js",
+        "src/diagnostics/topology-convergence-owner-witness.js",
+        "test/diagnostics/topology-convergence-graph.test.js"
+      ]
+    },
+    "verificationFix": {
+      "parentRevalidatedFocusedProof": true
     }
   },
   "boundedExperiment": {
@@ -65,6 +80,70 @@
     "timebox": "24h",
     "mergeRequirement": "focused test plus canonical route or evidence command",
     "killRule": "same frontier with no metric movement opens/selects an autonomous architecture experiment; human escalation is only for contradictory or blocked evidence"
+  },
+  "representativeResidual": {
+    "status": "pending-before-rerun",
+    "scenario": "rolling-restart",
+    "artifact": "test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json",
+    "frontier": "diagnostics_owner / progress_contract_foundation",
+    "owner": "diagnostics_owner",
+    "boundary": "progress_contract_foundation",
+    "dominantReason": "stranded_progress_contract_missing",
+    "nextAction": "Define the canonical progress contract vocabulary and minimal helpers for rolling-restart owner-boundary blockers."
+  },
+  "rerunDecision": {
+    "sourceArtifact": "test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json",
+    "routeOwner": "diagnostics_owner",
+    "routeBoundary": "progress_contract_foundation",
+    "routeDominantReason": "stranded_progress_contract_missing",
+    "routeCausalOutcome": "migrate_owner_boundary",
+    "stopMode": "migrate-owner-boundary",
+    "nextLane": "causal-escalation",
+    "expectedDelta": "Diagnostics constants and normalizers successfully expose owner, boundary, state, reason, nextAction, wakeSource, retryAfterMs, terminalState, evidencePath, and blockingDependency.",
+    "requiredRefreshCommands": [
+      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json --owner diagnostics_owner --boundary progress_contract_foundation --dominant-reason stranded_progress_contract_missing",
+      "Update Sprint Strategy Brief and Current Edge Card to reflect the route result",
+      "npm run work:repair or npm run work:current-blocker --write to sync blocker state",
+      "npm run work:validate -- --entry",
+      "npm run work:validate -- --pre-impl"
+    ]
+  },
+  "causalGovernance": {
+    "hypothesis": "A minimal owner-boundary progress contract can describe rolling-restart stranded progress without changing runtime behavior.",
+    "stopConditionCheck": "Use npm run analyze:causal-model on the latest representative artifact; latest: npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json.",
+    "expectedCausalModelChange": "The diagnostics_owner / progress_contract_foundation progress contract vocabulary is established for diagnostics, focused topology tests, and future runtime-owner-boundary packages.",
+    "representativeOutcome": "migrated",
+    "causalDebt": "Recent rolling-restart priority recovery, active-gate coverage, and startup readiness work showed stranded progress because runtime boundaries lacked a shared contract for next actions, wake/retry, and terminal outcomes.",
+    "crossBoundaryReview": "Do not edit runtime files or change runtime behavior from this package; keep changes limited to diagnostics constants, normalizers, and focused topology tests."
+  },
+  "scenarioCausalClosure": {
+    "referenceScenarioOrProbe": "rolling-restart",
+    "phaseChain": [
+      "established the first sprint active-sprint work package active-20260527-owner-boundary-progress-contract-foundation",
+      "defining the canonical owner-boundary progress contract vocabulary",
+      "verifying diagnostics constants and normalizers with focused topology tests"
+    ],
+    "currentFirstFrontier": "diagnostics_owner / progress_contract_foundation / stranded_progress_contract_missing",
+    "knownDownstreamBlockers": [
+      "stranded pending/retryable/deferred progress states without explicit contracts in subsequent owner boundaries"
+    ],
+    "missingCausalEdge": "The rolling-restart diagnostics and topology convergence must define the canonical progress contract vocabulary.",
+    "missingCausalEdgeProbe": "npm test -- test/diagnostics/topology-convergence-graph.test.js",
+    "falsifyingProbe": "npm test -- test/diagnostics/topology-convergence-graph.test.js",
+    "boundedProgressProof": "Focused diagnostics tests prove that constants and normalizers express the canonical progress contract without runtime behavior changes, enabling a bounded progress advance or reconcile mechanism.",
+    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json",
+    "expectedObservableTransition": "Diagnostics constants and normalizers successfully expose owner, boundary, state, reason, nextAction, wakeSource, retryAfterMs, terminalState, evidencePath, and blockingDependency.",
+    "maxProgressBound": "one diagnostics foundation slice before diagnostics cutoff",
+    "sameFrontierFallback": "If focused tests fail to normalize the contract fields, stop/reopen the foundation experiment instead of adding local patches.",
+    "expectedNextFrontier": "workflow_tooling_owner / progress_contract_guardrails",
+    "resultClassification": "migrated",
+    "stopCondition": "migrate-owner-boundary",
+    "recentFrontierHistory": [
+      "done-20260527-rolling-restart-startup-readiness-admin-reachability-support.md",
+      "done-20260527-rolling-restart-startup-readiness-owner-startup-support-evid.md"
+    ],
+    "oscillationCheck": "Escalated to causal-escalation lane to prove the shared progress contract foundation and escape adjacent startup-readiness oscillation.",
+    "handoffInvariant": "This package is diagnostics-only and behavior-neutral; no runtime owner files or logic are modified."
   },
   "validationTier": "cross-owner",
   "modelFitSplit": {
@@ -86,7 +165,8 @@
       "Split one same-owner hypothesis into bounded-experiment / gpt-5.3-codex-spark.",
       "Keep cross-file owner runtime integration in this package unless it contracts to one runtime file."
     ]
-  }
+  },
+  "theoryLedger": "no ledger update: This progress contract foundation package only defined the canonical vocabulary and diagnostics helpers; no reusable theory was added here."
 }
 -->
 
@@ -247,12 +327,16 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## Execution Evidence
 
+theory-ledger: not-needed
+
+no ledger update: This progress contract foundation package only defined the canonical vocabulary and diagnostics helpers; no reusable theory was added here.
+
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: diagnostics_owner; files-changed: pending; validation: pending focused proof plus parent revalidated focused proof; outcome: pending.
-- [ ] action: verification-fix; owner: diagnostics_owner; files-changed: pending-or-none; validation: pending verification proof plus parent revalidated focused proof; outcome: pending.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json and work/sprints/current-blocker.md only if repair changes tracker state; validation: `npm run work:repair`; outcome: pending-or-not-needed.
+- [x] action: implementation; owner: diagnostics_owner; files-changed: src/diagnostics/topology-convergence-constants.js, src/diagnostics/topology-convergence-owner-witness.js, test/diagnostics/topology-convergence-graph.test.js; validation: npm test -- test/diagnostics/topology-convergence-graph.test.js; outcome: passed focused proof plus parent revalidated focused proof: yes.
+- [x] action: verification-fix; owner: diagnostics_owner; files-changed: none; validation: npm test -- test/diagnostics/topology-convergence-graph.test.js; outcome: passed verification proof plus parent revalidated focused proof: yes.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: work/packages/active-20260527-owner-boundary-progress-contract-foundation.md; validation: `npm run work:repair`; outcome: passed.
 
 ## Validation
 

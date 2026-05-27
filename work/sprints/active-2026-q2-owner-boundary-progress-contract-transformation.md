@@ -56,21 +56,21 @@ Complete means:
 
 ```text
 Representative artifact: test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json
-Visible first frontier: startup_readiness_owner / startup_support_evidence
-Active package: work/packages/done-20260527-startup-readiness-progress-contract-conversion.md
-Active package owner: startup_readiness_owner
-Active package boundary: startup_support_evidence
-Selected cause: readiness_retryable
-Required action: Convert readiness_retryable startup support to emit progress contract state, wake/retry source, and bounded terminal evidence.
+Visible first frontier: operation_workflow_owner / workflow_progress
+Active package: work/packages/active-20260527-operation-workflow-progress-contract-conversion.md
+Active package owner: operation_workflow_owner
+Active package boundary: workflow_progress
+Selected cause: priority_recovery_event_driven_wait
+Required action: Convert priority recovery dispatch_pending/planned owner re-entry paths to explicit progress contracts with wake, retry, and terminal outcomes.
 Representative status: live
 Causal outcome: migrate_owner_boundary
 Architecture gate: watching / unknown
-Expected delta: readiness_retryable paths emit one next action with wake source, retry timing, terminal state, and evidence path.
-Current state: Created todo package for the startup readiness conversion of readiness_retryable; wake, retry, terminal, and diagnostic evidence must stay inside startup_support_evidence.
-Allowed edits: src/bootstrap/node-joining-ready-signal-readiness.js, src/bootstrap/startup-recovery-coordinator.js, src/bootstrap/owners/bootstrap-request-owner-handler.js, test/bootstrap/node-joining-ready-signal-retry.test.js, test/bootstrap/startup-authority-consumption.test.js, src/diagnostics/causal-graph-builder.js, src/diagnostics/topology-convergence-graph.js, src/diagnostics/topology-convergence-normalizers.js, src/diagnostics/topology-convergence-owner-witness.js, test/diagnostics/topology-convergence-graph.test.js
+Expected delta: priority recovery dispatch_pending/planned paths emit one next action with wake source, retry timing, terminal state, and evidence path.
+Current state: Created todo package for operation workflow conversion based on the supported priority-recovery workflow-progress theory; dispatch_pending and planned work must become bounded progress evidence.
+Allowed edits: src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js, src/rebalancer/operation-workflow-owner-ports.js, src/rebalancer/operation-workflow-owner-evidence.js, test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js, test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js, src/bootstrap/owners/bootstrap-readiness-owner-class-part-1.js, src/bootstrap/owners/bootstrap-readiness-owner-class-part-2.js, src/bootstrap/shared/local-query-transport-readiness.js, src/bootstrap/traffic-readiness-utils.js, src/diagnostics/causal-graph-builder.js, src/diagnostics/topology-convergence-graph.js, src/diagnostics/topology-convergence-normalizers.js, src/diagnostics/topology-convergence-owner-witness.js, test/bootstrap/node-joining-ready-signal-retry.test.js, test/diagnostics/topology-convergence-graph.test.js, work/packages/active-20260527-operation-workflow-progress-contract-conversion.md
 Candidate runtime files: unknown
-Forbidden edits: startup readiness changes prefer progress contract and do not invent runtime behaviors.
-Required latest proof: falsifier: npm test -- test/bootstrap/node-joining-ready-signal-retry.test.js test/bootstrap/startup-authority-consumption.test.js, affected consumer: npm test -- test/diagnostics/topology-convergence-graph.test.js, regression: npm run work:evidence-summary -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json
+Forbidden edits: operation workflow changes prefer progress contract and do not invent runtime behaviors.
+Required latest proof: falsifier: npm test -- test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js, regression: npm run audit:operation-progress-authority, regression: npm run work:evidence-summary -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 

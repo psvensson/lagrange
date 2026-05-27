@@ -3,10 +3,10 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
+  "status": "done",
   "intent": {
     "opened": "2026-05-27",
-    "lane": "runtime-owner-boundary",
+    "lane": "causal-escalation",
     "scenario": "rolling-restart",
     "artifact": "test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json",
     "playback": "none",
@@ -22,7 +22,9 @@
       "src/diagnostics/topology-convergence-edge-resolvers.js",
       "src/diagnostics/topology-convergence-normalizers.js",
       "scripts/analyze-topology-convergence.js",
-      "test/diagnostics/topology-convergence-graph.test.js"
+      "test/diagnostics/topology-convergence-graph.test.js",
+      "src/diagnostics/causal-graph-builder.js",
+      "src/diagnostics/topology-convergence-owner-witness.js"
     ],
     "handoffFiles": [],
     "generatedFiles": [],
@@ -32,7 +34,10 @@
       "src/diagnostics/topology-convergence-edge-resolvers.js",
       "src/diagnostics/topology-convergence-normalizers.js",
       "scripts/analyze-topology-convergence.js",
-      "test/diagnostics/topology-convergence-graph.test.js"
+      "test/diagnostics/topology-convergence-graph.test.js",
+      "work/packages/done-20260527-diagnostics-progress-contract-consumer-cutover.md",
+      "src/diagnostics/causal-graph-builder.js",
+      "src/diagnostics/topology-convergence-owner-witness.js"
     ]
   },
   "gates": {
@@ -52,13 +57,28 @@
     ]
   },
   "execution": {
-    "theoryLedgerRefs": [],
-    "theoryLedger": "not-applicable: no existing ledger theory directly covers diagnostics as a progress-contract consumer; add or cite a durable theory at closure if this package creates one.",
+    "theoryLedgerRefs": [
+      "theory-20260526-rolling-restart-snapshot-viewpoint-backpressure"
+    ],
+    "theoryLedger": "no ledger update: This diagnostics cutover package only modified consumer logic and routing to prefer progress contracts; no new durable theory was added here.",
     "proof": {
       "commands": [
         "falsifier: npm test -- test/diagnostics/topology-convergence-graph.test.js test/diagnostics/stop-condition-decision.test.js",
         "regression: npm run work:evidence-summary -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json"
       ]
+    },
+    "implementation": {
+      "parentRevalidatedFocusedProof": true,
+      "filesChanged": [
+        "src/diagnostics/topology-convergence-graph.js",
+        "src/diagnostics/topology-convergence-normalizers.js",
+        "src/diagnostics/topology-convergence-owner-witness.js",
+        "src/diagnostics/causal-graph-builder.js",
+        "test/diagnostics/topology-convergence-graph.test.js"
+      ]
+    },
+    "verificationFix": {
+      "parentRevalidatedFocusedProof": true
     }
   },
   "boundedExperiment": {
@@ -90,6 +110,93 @@
       "Split one same-owner hypothesis into bounded-experiment / gpt-5.3-codex-spark.",
       "Keep cross-file owner runtime integration in this package unless it contracts to one runtime file."
     ]
+  },
+  "theoryLedger": "no ledger update: This diagnostics cutover package only modified consumer logic and routing to prefer progress contracts; no new durable theory was added here.",
+  "causalGovernance": {
+    "hypothesis": "Topology convergence diagnostics must consume explicit progress contracts to prevent scattered ping-pong symptom fixes.",
+    "stopConditionCheck": "npm run analyze:causal-model -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json",
+    "expectedCausalModelChange": "Diagnostics convergence selects first frontiers based on owner progress contract instead of inferred symptoms.",
+    "representativeOutcome": "migrated",
+    "causalDebt": "Diagnostics routing initially relies on ad-hoc inferred fields which are now cuts over to the explicit contract.",
+    "crossBoundaryReview": "Review with topology convergence and progress contract foundation definitions."
+  },
+  "scenarioCausalClosure": {
+    "referenceScenarioOrProbe": "rolling-restart seed-contact-bounded-progress",
+    "phaseChain": [
+      "diagnostics cutover"
+    ],
+    "currentFirstFrontier": "diagnostics_owner / topology_convergence_progress_contract",
+    "knownDownstreamBlockers": [
+      "startup readiness remaining retryable state"
+    ],
+    "missingCausalEdge": "diagnostics consumes explicit progress contract",
+    "missingCausalEdgeProbe": "npm test -- test/diagnostics/topology-convergence-graph.test.js",
+    "falsifyingProbe": "npm test -- test/diagnostics/topology-convergence-graph.test.js",
+    "boundedProgressProof": "The topology convergence graph consumes progress contracts with explicit retry, wake, timeout, and terminal status to advance the routing.",
+    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json",
+    "expectedObservableTransition": "diagnostics prefers progress contract",
+    "maxProgressBound": "one diagnostics cutover slice",
+    "sameFrontierFallback": "autonomous architecture experiment",
+    "expectedNextFrontier": "diagnostics_owner / topology_convergence_progress_contract",
+    "resultClassification": "pending-before-probe",
+    "stopCondition": "migrate-owner-boundary",
+    "recentFrontierHistory": [
+      "done-20260527-rolling-restart-startup-active-gate-owner-snapshot-coverage.md / startup_active_gate_owner / snapshot_coverage / migrated"
+    ],
+    "oscillationCheck": "diagnostics consumes progress contract to prevent oscillating symptom-only fixes on the same artifact.",
+    "handoffInvariant": "diagnostics changes prefer progress contract and do not invent runtime behaviors."
+  },
+  "progressContract": {
+    "owner": "diagnostics_owner",
+    "boundary": "topology_convergence_progress_contract",
+    "state": "progress_contract_cutover",
+    "reason": "Make topology convergence and causal routing prefer explicit progress contracts over scattered inferred fields.",
+    "nextAction": "prefer progress contract",
+    "wakeSource": "diagnostics",
+    "retryAfterMs": 1000,
+    "terminalState": "satisfied",
+    "evidencePath": "test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json",
+    "blockingDependency": "no other blocking dependencies"
+  },
+  "representativeResidual": {
+    "status": "live",
+    "scenario": "rolling-restart",
+    "artifact": "test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json",
+    "frontier": "diagnostics_owner / topology_convergence_progress_contract -> startup_readiness_owner / startup_support_evidence",
+    "owner": "diagnostics_owner",
+    "boundary": "topology_convergence_progress_contract",
+    "dominantReason": "scattered_progress_inference",
+    "nextAction": "Cutover topology convergence to consume progress contracts."
+  },
+  "rerunDecision": {
+    "sourceArtifact": "test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json",
+    "routeOwner": "diagnostics_owner",
+    "routeBoundary": "topology_convergence_progress_contract",
+    "routeDominantReason": "scattered_progress_inference",
+    "routeCausalOutcome": "migrate_owner_boundary",
+    "stopMode": "migrate-owner-boundary",
+    "nextLane": "causal-escalation",
+    "expectedDelta": "Diagnostics convergence selects first frontiers based on owner progress contract instead of inferred symptoms.",
+    "requiredRefreshCommands": [
+      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json --owner diagnostics_owner --boundary topology_convergence_progress_contract --dominant-reason scattered_progress_inference",
+      "update Sprint Strategy Brief and Current Edge Card from the route result",
+      "npm run work:repair",
+      "npm run work:validate -- --entry",
+      "npm run work:validate -- --pre-impl"
+    ]
+  },
+  "implementation": {
+    "parentRevalidatedFocusedProof": true,
+    "filesChanged": [
+      "src/diagnostics/topology-convergence-graph.js",
+      "src/diagnostics/topology-convergence-normalizers.js",
+      "src/diagnostics/topology-convergence-owner-witness.js",
+      "src/diagnostics/causal-graph-builder.js",
+      "test/diagnostics/topology-convergence-graph.test.js"
+    ]
+  },
+  "verificationFix": {
+    "parentRevalidatedFocusedProof": true
   }
 }
 -->
@@ -256,9 +363,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: diagnostics_owner; files-changed: pending; validation: pending focused proof plus parent revalidated focused proof; outcome: pending.
-- [ ] action: verification-fix; owner: diagnostics_owner; files-changed: pending-or-none; validation: pending verification proof plus parent revalidated focused proof; outcome: pending.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json and work/sprints/current-blocker.md only if repair changes tracker state; validation: `npm run work:repair`; outcome: pending-or-not-needed.
+- [x] action: implementation; owner: diagnostics_owner; files-changed: src/diagnostics/topology-convergence-graph.js, src/diagnostics/topology-convergence-normalizers.js, src/diagnostics/topology-convergence-owner-witness.js, src/diagnostics/causal-graph-builder.js, test/diagnostics/topology-convergence-graph.test.js; validation: npm test -- test/diagnostics/topology-convergence-graph.test.js test/diagnostics/stop-condition-decision.test.js; parent revalidated focused proof: yes; outcome: pass.
+- [x] action: verification-fix; owner: diagnostics_owner; files-changed: none; validation: npm run analyze:causal-model -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json; parent revalidated focused proof: yes; outcome: pass.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: none; validation: npm run work:repair; parent revalidated focused proof: yes; outcome: pass.
 
 ## Validation
 

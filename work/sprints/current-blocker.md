@@ -4,143 +4,160 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: No active work package. Start a new package when implementation resumes.
+Theory under test: Priority recovery dispatch_pending/planned work is stranded because workflow progress lacks an explicit wake/retry/terminal contract.
 
-Causal question: none
+Causal question: operation workflow progress contract conversion
 
-Implementation slice: Create or activate one focused package for the next executable concern.
+Implementation slice: Convert priority recovery dispatch_pending/planned owner re-entry paths to explicit progress contracts with wake, retry, and terminal outcomes.
 
 Implementation files:
 
-1. None recorded
+1. `src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js`
+2. `src/rebalancer/operation-workflow-owner-ports.js`
+3. `src/rebalancer/operation-workflow-owner-evidence.js`
+4. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js`
+5. `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
+6. `src/bootstrap/owners/bootstrap-readiness-owner-class-part-1.js`
+7. `src/bootstrap/owners/bootstrap-readiness-owner-class-part-2.js`
+8. `src/bootstrap/shared/local-query-transport-readiness.js`
+9. `src/bootstrap/traffic-readiness-utils.js`
+10. `src/diagnostics/causal-graph-builder.js`
+11. `src/diagnostics/topology-convergence-graph.js`
+12. `src/diagnostics/topology-convergence-normalizers.js`
+13. `src/diagnostics/topology-convergence-owner-witness.js`
+14. `test/bootstrap/node-joining-ready-signal-retry.test.js`
+15. `test/diagnostics/topology-convergence-graph.test.js`
 
-Expected implementation delta: unknown
+Expected implementation delta: Convert priority recovery dispatch_pending/planned owner re-entry paths to explicit progress contracts with wake, retry, and terminal outcomes.
 
-Falsifying probe: unknown
+Falsifying probe: npm test -- test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js
 
-Stop rule: unknown
+Stop rule: autonomous architecture experiment
 
 Sprint: `work/sprints/active-2026-q2-owner-boundary-progress-contract-transformation.md`
 
-Package: `none`
+Package: `work/packages/active-20260527-operation-workflow-progress-contract-conversion.md`
 
-Workflow lane: `none`
+Workflow lane: `causal-escalation`
 
-Scenario: `none`
+Scenario: `rolling-restart`
 
-Artifact: `none`
+Artifact: `test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json`
 
 Playback: `none`
 
 ## Boundary
 
-Owner: `none`
+Owner: `operation_workflow_owner`
 
-Boundary: `none`
+Boundary: `workflow_progress`
 
-Dominant reason: `none`
+Dominant reason: `priority_recovery_event_driven_wait`
 
-Current state: No active work package. Start a new package when implementation resumes.
+Current state: Created todo package for operation workflow conversion based on the supported priority-recovery workflow-progress theory; dispatch_pending and planned work must become bounded progress evidence.
 
 ## Next Action
 
-Create or activate one focused package for the next executable concern.
+Convert priority recovery dispatch_pending/planned owner re-entry paths to explicit progress contracts with wake, retry, and terminal outcomes.
 
 ## Proof Ladder
 
-1. None recorded
+1. `falsifier: npm test -- test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
+2. `regression: npm run audit:operation-progress-authority`
+3. `regression: npm run work:evidence-summary -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json`
 
 ## Model Fit
 
-Package class: `unknown`
+Package class: `runtime-owner-boundary`
 
-Intended minimum model: `unknown`
+Intended minimum model: `gpt-5.3-codex`
 
-Scope shape: `unknown`
+Scope shape: `bounded-owner-runtime/current-frontier`
 
-Output profile: `unknown`
+Output profile: `medium`
 
 Escalation triggers:
 
-1. None recorded
+1. `owned files expand beyond this package`
+2. `a frozen decision must be reopened`
 
 ## Theory Ledger References
 
-1. None recorded
+1. `theory-20260527-rolling-restart-priority-recovery-workflow-progress`
 
 ## Representative Residual
 
-Status: `unknown`
+Status: `live`
 
-Scenario: `unknown`
+Scenario: `rolling-restart`
 
-Artifact: `unknown`
+Artifact: `test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json`
 
-Frontier: `unknown`
+Frontier: `operation_workflow_owner / workflow_progress -> startup_readiness_owner / startup_support_evidence`
 
-Owner: `unknown`
+Owner: `operation_workflow_owner`
 
-Boundary: `unknown`
+Boundary: `workflow_progress`
 
-Dominant reason: `unknown`
+Dominant reason: `priority_recovery_event_driven_wait`
 
-Next action: `unknown`
+Next action: `Convert priority recovery dispatch_pending/planned owner re-entry paths to explicit progress contracts.`
 
 ## Causal Governance
 
-Causal hypothesis: `unknown`
+Causal hypothesis: `Priority recovery dispatch_pending/planned work is stranded because workflow progress lacks an explicit wake/retry/terminal contract.`
 
-Stop-condition check: `unknown`
+Stop-condition check: `npm run analyze:causal-model -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json`
 
-Expected causal-model change: `unknown`
+Expected causal-model change: `Convert priority recovery dispatch_pending/planned owner re-entry paths to explicit progress contracts with wake, retry, and terminal outcomes.`
 
-Representative outcome: `unknown`
+Representative outcome: `migrated`
 
-Causal debt: `unknown`
+Causal debt: `dispatch_pending routes rely on local pending fields without progress contract format.`
 
-Cross-boundary review: `unknown`
+Cross-boundary review: `Review with operation workflow owner and progress contract foundation definitions.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `unknown`
+Reference scenario/probe: `rolling-restart seed-contact-bounded-progress`
 
 Phase chain:
 
-1. None recorded
+1. `operation workflow conversion`
 
-Current first frontier: `unknown`
+Current first frontier: `operation_workflow_owner / workflow_progress`
 
 Known downstream blockers:
 
-1. None recorded
+1. `startup active gate snapshot coverage progress contract conversion`
 
-Missing causal edge: `unknown`
+Missing causal edge: `operation workflow progress contract conversion`
 
-Missing causal edge probe: `unknown`
+Missing causal edge probe: `npm test -- test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js`
 
-Bounded progress proof: `unknown`
+Bounded progress proof: `Operation workflow emits progress contracts with explicit retry, wake, timeout, and terminal status.`
 
-Bounded progress proof artifact: `unknown`
+Bounded progress proof artifact: `test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json`
 
-Expected observable transition: `unknown`
+Expected observable transition: `operation workflow progress prefers progress contract`
 
-Max progress bound: `unknown`
+Max progress bound: `one operation workflow conversion slice`
 
-Same-frontier fallback: `unknown`
+Same-frontier fallback: `autonomous architecture experiment`
 
-Expected next frontier: `unknown`
+Expected next frontier: `operation_workflow_owner / workflow_progress`
 
-Result classification: `unknown`
+Result classification: `pending-before-probe`
 
-Stop condition: `unknown`
+Stop condition: `migrate-owner-boundary`
 
 Recent frontier history:
 
-1. None recorded
+1. `done-20260527-startup-readiness-progress-contract-conversion.md / startup_readiness_owner / startup_support_evidence / migrated`
 
-Oscillation check: `unknown`
+Oscillation check: `operation workflow conversion to prevent oscillating symptom-only fixes on the same artifact.`
 
-Handoff invariant: `unknown`
+Handoff invariant: `operation workflow changes prefer progress contract and do not invent runtime behaviors.`
 
 ## Observable Prediction
 
@@ -170,25 +187,29 @@ Evidence: `unknown`
 
 ## Rerun Decision
 
-Source artifact: `unknown`
+Source artifact: `test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json`
 
-Route owner: `unknown`
+Route owner: `operation_workflow_owner`
 
-Route boundary: `unknown`
+Route boundary: `workflow_progress`
 
-Route dominant reason: `unknown`
+Route dominant reason: `priority_recovery_event_driven_wait`
 
-Route causal outcome: `unknown`
+Route causal outcome: `migrate_owner_boundary`
 
-Stop mode: `unknown`
+Stop mode: `migrate-owner-boundary`
 
-Next lane: `unknown`
+Next lane: `causal-escalation`
 
-Expected delta: `unknown`
+Expected delta: `priority recovery dispatch_pending/planned paths emit one next action with wake source, retry timing, terminal state, and evidence path.`
 
 Required refresh commands:
 
-1. None recorded
+1. `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait`
+2. `update Sprint Strategy Brief and Current Edge Card from the route result`
+3. `npm run work:repair`
+4. `npm run work:validate -- --entry`
+5. `npm run work:validate -- --pre-impl`
 
 ## Classification Efficiency
 
@@ -212,27 +233,47 @@ Runtime promotion rule: `unknown`
 
 ## Architecture Decision Gate
 
-Status: `unknown`
+Status: `watching`
 
-Trigger: `unknown`
+Trigger: `frontier-oscillation`
 
 Trigger evidence:
 
-1. None recorded
+1. `adjacent owner-boundary fixes did not close the representative gate`
+2. `work/packages/done-20260527-rolling-restart-startup-readiness-owner-startup-support-evid.md / startup_readiness_owner / startup_support_evidence / migrated`
+3. `work/packages/done-20260527-rolling-restart-startup-readiness-admin-reachability-support.md / startup_readiness_owner / startup_support_evidence / migrated`
 
 Choices:
 
-1. None recorded
+1. `continue-local-proof` route=`continue-local-proof` - Continue with a bounded local proof if the missing edge stays inside this owner boundary.
+2. `migrate-owner-boundary` route=`owner-boundary-migration` - Migrate the active package to the owner boundary named by the first frontier evidence.
+3. `open-architecture-package` route=`architecture-package` - Open a bounded autonomous architecture experiment for the missing owner contract.
+4. `human-escalation` route=`human-escalation` - Escalate to a human only when evidence is contradictory, policy-blocked, credential-blocked, or unavailable.
 
 Selected choice: `unknown`
 
-Gate next action: unknown
+Gate next action: Watch for repeated frontier oscillation; open an autonomous architecture experiment if another local proof returns here unchanged.
 
 ## Scope
 
 Write scope:
 
-1. None recorded
+1. `src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js`
+2. `src/rebalancer/operation-workflow-owner-ports.js`
+3. `src/rebalancer/operation-workflow-owner-evidence.js`
+4. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js`
+5. `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
+6. `src/bootstrap/owners/bootstrap-readiness-owner-class-part-1.js`
+7. `src/bootstrap/owners/bootstrap-readiness-owner-class-part-2.js`
+8. `src/bootstrap/shared/local-query-transport-readiness.js`
+9. `src/bootstrap/traffic-readiness-utils.js`
+10. `src/diagnostics/causal-graph-builder.js`
+11. `src/diagnostics/topology-convergence-graph.js`
+12. `src/diagnostics/topology-convergence-normalizers.js`
+13. `src/diagnostics/topology-convergence-owner-witness.js`
+14. `test/bootstrap/node-joining-ready-signal-retry.test.js`
+15. `test/diagnostics/topology-convergence-graph.test.js`
+16. `work/packages/active-20260527-operation-workflow-progress-contract-conversion.md`
 
 Handoff files:
 
@@ -240,8 +281,7 @@ Handoff files:
 
 Generated files:
 
-1. `work/sprints/current-blocker.json`
-2. `work/sprints/current-blocker.md`
+1. None recorded
 
 Candidate runtime files:
 
@@ -249,7 +289,22 @@ Candidate runtime files:
 
 Commit scope:
 
-1. None recorded
+1. `src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js`
+2. `src/rebalancer/operation-workflow-owner-ports.js`
+3. `src/rebalancer/operation-workflow-owner-evidence.js`
+4. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js`
+5. `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
+6. `src/bootstrap/owners/bootstrap-readiness-owner-class-part-1.js`
+7. `src/bootstrap/owners/bootstrap-readiness-owner-class-part-2.js`
+8. `src/bootstrap/shared/local-query-transport-readiness.js`
+9. `src/bootstrap/traffic-readiness-utils.js`
+10. `src/diagnostics/causal-graph-builder.js`
+11. `src/diagnostics/topology-convergence-graph.js`
+12. `src/diagnostics/topology-convergence-normalizers.js`
+13. `src/diagnostics/topology-convergence-owner-witness.js`
+14. `test/bootstrap/node-joining-ready-signal-retry.test.js`
+15. `test/diagnostics/topology-convergence-graph.test.js`
+16. `work/packages/active-20260527-operation-workflow-progress-contract-conversion.md`
 
 Legacy touched files:
 
