@@ -2,36 +2,180 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-rolling-restart-priority-recovery-resolution.md",
-  "package": "none",
-  "status": "none",
-  "lane": "none",
-  "scenario": "none",
-  "artifact": "none",
+  "package": "work/packages/active-20260527-rolling-restart-startup-readiness-admin-reachability-support.md",
+  "status": "active",
+  "lane": "causal-escalation",
+  "scenario": "rolling-restart",
+  "artifact": "test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json",
   "playback": "none",
-  "owner": "none",
-  "boundary": "none",
-  "dominantReason": "none",
-  "currentState": "No active work package. Start a new package when implementation resumes.",
-  "nextAction": "Create or activate one focused package for the next executable concern.",
-  "proof": [],
-  "writeScope": [],
-  "handoffFiles": [],
-  "generatedFiles": [
-    "work/sprints/current-blocker.json",
-    "work/sprints/current-blocker.md"
+  "owner": "startup_readiness_owner",
+  "boundary": "startup_support_evidence",
+  "dominantReason": "admin_reachability_refused",
+  "currentState": "Architecture experiment selected startup_readiness_owner / startup_support_evidence because topology convergence classified the rebalancer handoff source as admin_reachability_refused and startup_recovery_blocked.",
+  "nextAction": "Prove and repair startup readiness/admin reachability support for admin_reachability_refused, then rerun rolling-restart until the representative scenario succeeds.",
+  "proof": [
+    "falsifier: npm test -- test/bootstrap/startup-authority-consumption.test.js test/bootstrap/node-joining-ready-signal-retry.test.js test/bootstrap/traffic-readiness-utils.test.js test/distributed/harness/__tests__/cluster.test-part-2.js test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js test/distributed/harness/__tests__/cluster.test-part-4-startup-snapshot-projection.js test/distributed/harness/__tests__/cluster-reachability-admin-proof-gate-test-cases.js",
+    "supporting: npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress",
+    "regression: npm run work:evidence-summary -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json",
+    "supporting: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json",
+    "supporting: npm run audit:guideline:literals -- src/bootstrap/startup-recovery-coordinator.js src/bootstrap/node-joining-ready-signal-readiness.js src/bootstrap/traffic-readiness-utils.js test/distributed/harness/startup-readiness-evidence.js test/distributed/harness/cluster-segment-5.js test/distributed/harness/cluster-segment-7-class-2.js test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js",
+    "supporting: npm run audit:guideline:decision-boundaries -- src/bootstrap/startup-recovery-coordinator.js src/bootstrap/node-joining-ready-signal-readiness.js src/bootstrap/traffic-readiness-utils.js test/distributed/harness/startup-readiness-evidence.js test/distributed/harness/cluster-segment-5.js test/distributed/harness/cluster-segment-7-class-2.js test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js",
+    "supporting: npm run audit:runtime-grammar:file -- src/bootstrap/startup-recovery-coordinator.js src/bootstrap/node-joining-ready-signal-readiness.js src/bootstrap/traffic-readiness-utils.js test/distributed/harness/startup-readiness-evidence.js test/distributed/harness/cluster-segment-5.js test/distributed/harness/cluster-segment-7-class-2.js test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js"
   ],
-  "candidateRuntimeFiles": [],
-  "commitScope": [],
+  "writeScope": [
+    "src/bootstrap/startup-recovery-coordinator.js",
+    "src/bootstrap/node-joining-ready-signal-readiness.js",
+    "src/bootstrap/traffic-readiness-utils.js",
+    "test/bootstrap/startup-authority-consumption.test.js",
+    "test/bootstrap/node-joining-ready-signal-retry.test.js",
+    "test/bootstrap/traffic-readiness-utils.test.js",
+    "test/distributed/harness/startup-readiness-evidence.js",
+    "test/distributed/harness/cluster-segment-5.js",
+    "test/distributed/harness/cluster-segment-7-class-2.js",
+    "test/distributed/harness/cluster-segment-7-class-4.js",
+    "test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js",
+    "test/distributed/harness/__tests__/cluster.test-part-2.js",
+    "test/distributed/harness/__tests__/cluster-part-2-node-reachability-test-cases.js",
+    "test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js",
+    "test/distributed/harness/__tests__/cluster.test-part-4-startup-snapshot-projection.js",
+    "test/distributed/harness/__tests__/cluster-reachability-admin-proof-gate-test-cases.js"
+  ],
+  "handoffFiles": [
+    "test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json"
+  ],
+  "generatedFiles": [
+    "work/sprints/current-blocker.md",
+    "work/sprints/current-blocker.json"
+  ],
+  "candidateRuntimeFiles": [
+    "src/bootstrap/startup-recovery-coordinator.js",
+    "src/bootstrap/node-joining-ready-signal-readiness.js",
+    "src/bootstrap/traffic-readiness-utils.js",
+    "test/distributed/harness/cluster-segment-5.js",
+    "test/distributed/harness/cluster-segment-7-class-2.js",
+    "test/distributed/harness/cluster-segment-7-class-4.js"
+  ],
+  "commitScope": [
+    "src/bootstrap/startup-recovery-coordinator.js",
+    "src/bootstrap/node-joining-ready-signal-readiness.js",
+    "src/bootstrap/traffic-readiness-utils.js",
+    "test/bootstrap/startup-authority-consumption.test.js",
+    "test/bootstrap/node-joining-ready-signal-retry.test.js",
+    "test/bootstrap/traffic-readiness-utils.test.js",
+    "test/distributed/harness/startup-readiness-evidence.js",
+    "test/distributed/harness/cluster-segment-5.js",
+    "test/distributed/harness/cluster-segment-7-class-2.js",
+    "test/distributed/harness/cluster-segment-7-class-4.js",
+    "test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js",
+    "test/distributed/harness/__tests__/cluster.test-part-2.js",
+    "test/distributed/harness/__tests__/cluster-part-2-node-reachability-test-cases.js",
+    "test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js",
+    "test/distributed/harness/__tests__/cluster.test-part-4-startup-snapshot-projection.js",
+    "test/distributed/harness/__tests__/cluster-reachability-admin-proof-gate-test-cases.js",
+    "work/packages/active-20260527-rolling-restart-startup-readiness-admin-reachability-support.md",
+    "work/sprints/current-blocker.md",
+    "work/sprints/current-blocker.json"
+  ],
   "touchedFiles": [],
-  "modelFit": {},
-  "representativeResidual": {},
-  "causalGovernance": {},
-  "scenarioCausalClosure": {},
+  "theoryLedgerRefs": [],
+  "modelFit": {
+    "packageClass": "runtime-owner-boundary",
+    "intendedMinimumModel": "gpt-5.3-codex",
+    "scopeShape": "bounded-owner-runtime/current-frontier",
+    "outputProfile": "medium",
+    "ambiguityScore": 1,
+    "escalationTriggers": [
+      "owned files expand beyond this package",
+      "a frozen decision must be reopened"
+    ]
+  },
+  "representativeResidual": {
+    "status": "pending-before-rerun",
+    "scenario": "rolling-restart",
+    "artifact": "test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json",
+    "frontier": "startup_readiness_owner / startup_support_evidence",
+    "owner": "startup_readiness_owner",
+    "boundary": "startup_support_evidence",
+    "dominantReason": "admin_reachability_refused",
+    "nextAction": "Prove and repair startup readiness/admin reachability support for admin_reachability_refused, then rerun rolling-restart until the representative scenario succeeds."
+  },
+  "causalGovernance": {
+    "hypothesis": "WebSocket transport reconnection hang under load prevents node bootstrap join convergence.",
+    "stopConditionCheck": "Use npm run analyze:causal-model on the latest representative artifact.",
+    "expectedCausalModelChange": "Select the startup readiness support owner boundary before runtime implementation resumes.",
+    "representativeOutcome": "migrated",
+    "causalDebt": "The priority recovery witness is still first frontier, but its source evidence names admin_reachability_refused and startup_recovery_blocked; startup readiness support must own the admin availability evidence before another rebalancer or message-router patch.",
+    "crossBoundaryReview": "Transport and rebalancer runtime remain frozen because canonical evidence did not distinguish message routing as the next owner."
+  },
+  "scenarioCausalClosure": {
+    "referenceScenarioOrProbe": "rolling-restart",
+    "phaseChain": [
+      "rolling-restart representative gate rerun completed",
+      "route evidence stayed at operation_workflow_owner / rebalancer_handoff",
+      "topology convergence source classified the handoff witness as admin_reachability_refused and startup_recovery_blocked",
+      "architecture experiment selected startup_readiness_owner / startup_support_evidence before another same-frontier runtime patch"
+    ],
+    "currentFirstFrontier": "operation_workflow_owner/rebalancer_handoff with startup_readiness_owner/startup_support_evidence selected as owner-boundary migration",
+    "knownDownstreamBlockers": [
+      "priority-recovery-reconnection"
+    ],
+    "missingCausalEdge": "Startup readiness/admin reachability support must explain admin_reachability_refused before rebalancer handoff or message-router runtime work resumes.",
+    "missingCausalEdgeProbe": "npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress",
+    "falsifyingProbe": "npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress",
+    "boundedProgressProof": "Decide the startup readiness support contract before dispatch or delivery runtime edits resume.",
+    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json",
+    "expectedObservableTransition": "Architecture decision selected with a concrete next owner, proof command, and no additional same-frontier local patch.",
+    "maxProgressBound": "one architecture experiment",
+    "sameFrontierFallback": "Open an autonomous architecture experiment rather than another local patch.",
+    "expectedNextFrontier": "startup_readiness_owner / startup_support_evidence",
+    "resultClassification": "migrated",
+    "stopCondition": "migrate-owner-boundary",
+    "recentFrontierHistory": [
+      "done-20260526-rolling-restart-operation-workflow-owner-rebalancer-handoff.md"
+    ],
+    "oscillationCheck": "Same-frontier evidence after local runtime fixes selected startup readiness support as the next owner contract.",
+    "handoffInvariant": "Rebalancer and message-router runtime implementation remains frozen until startup readiness/admin reachability support is proven or falsified."
+  },
   "observablePrediction": {},
   "experimentOutcome": {},
-  "rerunDecision": {},
-  "classificationEfficiency": {},
-  "architectureDecisionGate": {},
-  "predecessor": null,
-  "theoryLedgerRefs": []
+  "rerunDecision": {
+    "sourceArtifact": "test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json",
+    "routeOwner": "startup_readiness_owner",
+    "routeBoundary": "startup_support_evidence",
+    "routeDominantReason": "admin_reachability_refused",
+    "routeCausalOutcome": "migrate_owner_boundary",
+    "stopMode": "owner_boundary_migration",
+    "nextLane": "causal-escalation",
+    "expectedDelta": "Focused startup readiness proof should classify admin_reachability_refused as bounded startup support evidence, let recovery readiness proceed only through the startup owner contract, and the fresh rolling-restart representative should pass or expose a new named owner boundary.",
+    "requiredRefreshCommands": [
+      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --owner startup_readiness_owner --boundary startup_support_evidence --dominant-reason admin_reachability_refused",
+      "update Sprint Strategy Brief and Current Edge Card from the route result",
+      "npm run work:repair",
+      "npm run work:validate -- --entry",
+      "npm run work:validate -- --pre-impl"
+    ]
+  },
+  "classificationEfficiency": {
+    "defaultMode": "separate-package-approved",
+    "separatePackageReason": "successor-selection",
+    "artifactBudget": "one-artifact",
+    "proofCommandBudget": "two-or-three-canonical-commands",
+    "commands": [
+      "supporting: npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress",
+      "regression: npm run work:evidence-summary -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json",
+      "supporting: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json"
+    ],
+    "decisionRecord": "Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.",
+    "successorAction": "rerun-representative-evidence",
+    "runtimePromotionRule": "When canonical owner and boundary are stable, prefer a runtime-owner-boundary successor and keep runtime files in candidateRuntimeFiles until that package activates them. If the representative route is same-frontier with no reduction or an architecture gap, open an autonomous architecture experiment before more local runtime work."
+  },
+  "architectureDecisionGate": {
+    "status": "not-required",
+    "trigger": "none",
+    "triggerEvidence": [],
+    "choices": [],
+    "selectedChoice": null,
+    "nextAction": "No architecture decision gate is required for this package."
+  },
+  "predecessor": "work/packages/done-20260526-reconnect-handoff-architecture-experiment.md"
 }

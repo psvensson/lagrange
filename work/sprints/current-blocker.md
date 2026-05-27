@@ -4,65 +4,93 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: No active work package. Start a new package when implementation resumes.
+Theory under test: WebSocket transport reconnection hang under load prevents node bootstrap join convergence.
 
-Causal question: none
+Causal question: Startup readiness/admin reachability support must explain admin_reachability_refused before rebalancer handoff or message-router runtime work resumes.
 
-Implementation slice: Create or activate one focused package for the next executable concern.
+Implementation slice: Prove and repair startup readiness/admin reachability support for admin_reachability_refused, then rerun rolling-restart until the representative scenario succeeds.
 
 Implementation files:
 
-1. None recorded
+1. `src/bootstrap/startup-recovery-coordinator.js`
+2. `src/bootstrap/node-joining-ready-signal-readiness.js`
+3. `src/bootstrap/traffic-readiness-utils.js`
+4. `test/bootstrap/startup-authority-consumption.test.js`
+5. `test/bootstrap/node-joining-ready-signal-retry.test.js`
+6. `test/bootstrap/traffic-readiness-utils.test.js`
+7. `test/distributed/harness/startup-readiness-evidence.js`
+8. `test/distributed/harness/cluster-segment-5.js`
+9. `test/distributed/harness/cluster-segment-7-class-2.js`
+10. `test/distributed/harness/cluster-segment-7-class-4.js`
+11. `test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js`
+12. `test/distributed/harness/__tests__/cluster.test-part-2.js`
+13. `test/distributed/harness/__tests__/cluster-part-2-node-reachability-test-cases.js`
+14. `test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js`
+15. `test/distributed/harness/__tests__/cluster.test-part-4-startup-snapshot-projection.js`
+16. `test/distributed/harness/__tests__/cluster-reachability-admin-proof-gate-test-cases.js`
+17. `src/bootstrap/startup-recovery-coordinator.js`
+18. `src/bootstrap/node-joining-ready-signal-readiness.js`
+19. `src/bootstrap/traffic-readiness-utils.js`
+20. `test/distributed/harness/cluster-segment-5.js`
+21. `test/distributed/harness/cluster-segment-7-class-2.js`
+22. `test/distributed/harness/cluster-segment-7-class-4.js`
 
-Expected implementation delta: unknown
+Expected implementation delta: Select the startup readiness support owner boundary before runtime implementation resumes.
 
-Falsifying probe: unknown
+Falsifying probe: npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress
 
-Stop rule: unknown
+Stop rule: Open an autonomous architecture experiment rather than another local patch.
 
 Sprint: `work/sprints/active-2026-q2-rolling-restart-priority-recovery-resolution.md`
 
-Package: `none`
+Package: `work/packages/active-20260527-rolling-restart-startup-readiness-admin-reachability-support.md`
 
-Workflow lane: `none`
+Workflow lane: `causal-escalation`
 
-Scenario: `none`
+Scenario: `rolling-restart`
 
-Artifact: `none`
+Artifact: `test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
 
 Playback: `none`
 
 ## Boundary
 
-Owner: `none`
+Owner: `startup_readiness_owner`
 
-Boundary: `none`
+Boundary: `startup_support_evidence`
 
-Dominant reason: `none`
+Dominant reason: `admin_reachability_refused`
 
-Current state: No active work package. Start a new package when implementation resumes.
+Current state: Architecture experiment selected startup_readiness_owner / startup_support_evidence because topology convergence classified the rebalancer handoff source as admin_reachability_refused and startup_recovery_blocked.
 
 ## Next Action
 
-Create or activate one focused package for the next executable concern.
+Prove and repair startup readiness/admin reachability support for admin_reachability_refused, then rerun rolling-restart until the representative scenario succeeds.
 
 ## Proof Ladder
 
-1. None recorded
+1. `falsifier: npm test -- test/bootstrap/startup-authority-consumption.test.js test/bootstrap/node-joining-ready-signal-retry.test.js test/bootstrap/traffic-readiness-utils.test.js test/distributed/harness/__tests__/cluster.test-part-2.js test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js test/distributed/harness/__tests__/cluster.test-part-4-startup-snapshot-projection.js test/distributed/harness/__tests__/cluster-reachability-admin-proof-gate-test-cases.js`
+2. `supporting: npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress`
+3. `regression: npm run work:evidence-summary -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
+4. `supporting: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
+5. `supporting: npm run audit:guideline:literals -- src/bootstrap/startup-recovery-coordinator.js src/bootstrap/node-joining-ready-signal-readiness.js src/bootstrap/traffic-readiness-utils.js test/distributed/harness/startup-readiness-evidence.js test/distributed/harness/cluster-segment-5.js test/distributed/harness/cluster-segment-7-class-2.js test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js`
+6. `supporting: npm run audit:guideline:decision-boundaries -- src/bootstrap/startup-recovery-coordinator.js src/bootstrap/node-joining-ready-signal-readiness.js src/bootstrap/traffic-readiness-utils.js test/distributed/harness/startup-readiness-evidence.js test/distributed/harness/cluster-segment-5.js test/distributed/harness/cluster-segment-7-class-2.js test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js`
+7. `supporting: npm run audit:runtime-grammar:file -- src/bootstrap/startup-recovery-coordinator.js src/bootstrap/node-joining-ready-signal-readiness.js src/bootstrap/traffic-readiness-utils.js test/distributed/harness/startup-readiness-evidence.js test/distributed/harness/cluster-segment-5.js test/distributed/harness/cluster-segment-7-class-2.js test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js`
 
 ## Model Fit
 
-Package class: `unknown`
+Package class: `runtime-owner-boundary`
 
-Intended minimum model: `unknown`
+Intended minimum model: `gpt-5.3-codex`
 
-Scope shape: `unknown`
+Scope shape: `bounded-owner-runtime/current-frontier`
 
-Output profile: `unknown`
+Output profile: `medium`
 
 Escalation triggers:
 
-1. None recorded
+1. `owned files expand beyond this package`
+2. `a frozen decision must be reopened`
 
 ## Theory Ledger References
 
@@ -70,77 +98,80 @@ Escalation triggers:
 
 ## Representative Residual
 
-Status: `unknown`
+Status: `pending-before-rerun`
 
-Scenario: `unknown`
+Scenario: `rolling-restart`
 
-Artifact: `unknown`
+Artifact: `test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
 
-Frontier: `unknown`
+Frontier: `startup_readiness_owner / startup_support_evidence`
 
-Owner: `unknown`
+Owner: `startup_readiness_owner`
 
-Boundary: `unknown`
+Boundary: `startup_support_evidence`
 
-Dominant reason: `unknown`
+Dominant reason: `admin_reachability_refused`
 
-Next action: `unknown`
+Next action: `Prove and repair startup readiness/admin reachability support for admin_reachability_refused, then rerun rolling-restart until the representative scenario succeeds.`
 
 ## Causal Governance
 
-Causal hypothesis: `unknown`
+Causal hypothesis: `WebSocket transport reconnection hang under load prevents node bootstrap join convergence.`
 
-Stop-condition check: `unknown`
+Stop-condition check: `Use npm run analyze:causal-model on the latest representative artifact.`
 
-Expected causal-model change: `unknown`
+Expected causal-model change: `Select the startup readiness support owner boundary before runtime implementation resumes.`
 
-Representative outcome: `unknown`
+Representative outcome: `migrated`
 
-Causal debt: `unknown`
+Causal debt: `The priority recovery witness is still first frontier, but its source evidence names admin_reachability_refused and startup_recovery_blocked; startup readiness support must own the admin availability evidence before another rebalancer or message-router patch.`
 
-Cross-boundary review: `unknown`
+Cross-boundary review: `Transport and rebalancer runtime remain frozen because canonical evidence did not distinguish message routing as the next owner.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `unknown`
+Reference scenario/probe: `rolling-restart`
 
 Phase chain:
 
-1. None recorded
+1. `rolling-restart representative gate rerun completed`
+2. `route evidence stayed at operation_workflow_owner / rebalancer_handoff`
+3. `topology convergence source classified the handoff witness as admin_reachability_refused and startup_recovery_blocked`
+4. `architecture experiment selected startup_readiness_owner / startup_support_evidence before another same-frontier runtime patch`
 
-Current first frontier: `unknown`
+Current first frontier: `operation_workflow_owner/rebalancer_handoff with startup_readiness_owner/startup_support_evidence selected as owner-boundary migration`
 
 Known downstream blockers:
 
-1. None recorded
+1. `priority-recovery-reconnection`
 
-Missing causal edge: `unknown`
+Missing causal edge: `Startup readiness/admin reachability support must explain admin_reachability_refused before rebalancer handoff or message-router runtime work resumes.`
 
-Missing causal edge probe: `unknown`
+Missing causal edge probe: `npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress`
 
-Bounded progress proof: `unknown`
+Bounded progress proof: `Decide the startup readiness support contract before dispatch or delivery runtime edits resume.`
 
-Bounded progress proof artifact: `unknown`
+Bounded progress proof artifact: `test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
 
-Expected observable transition: `unknown`
+Expected observable transition: `Architecture decision selected with a concrete next owner, proof command, and no additional same-frontier local patch.`
 
-Max progress bound: `unknown`
+Max progress bound: `one architecture experiment`
 
-Same-frontier fallback: `unknown`
+Same-frontier fallback: `Open an autonomous architecture experiment rather than another local patch.`
 
-Expected next frontier: `unknown`
+Expected next frontier: `startup_readiness_owner / startup_support_evidence`
 
-Result classification: `unknown`
+Result classification: `migrated`
 
-Stop condition: `unknown`
+Stop condition: `migrate-owner-boundary`
 
 Recent frontier history:
 
-1. None recorded
+1. `done-20260526-rolling-restart-operation-workflow-owner-rebalancer-handoff.md`
 
-Oscillation check: `unknown`
+Oscillation check: `Same-frontier evidence after local runtime fixes selected startup readiness support as the next owner contract.`
 
-Handoff invariant: `unknown`
+Handoff invariant: `Rebalancer and message-router runtime implementation remains frozen until startup readiness/admin reachability support is proven or falsified.`
 
 ## Observable Prediction
 
@@ -170,51 +201,57 @@ Evidence: `unknown`
 
 ## Rerun Decision
 
-Source artifact: `unknown`
+Source artifact: `test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
 
-Route owner: `unknown`
+Route owner: `startup_readiness_owner`
 
-Route boundary: `unknown`
+Route boundary: `startup_support_evidence`
 
-Route dominant reason: `unknown`
+Route dominant reason: `admin_reachability_refused`
 
-Route causal outcome: `unknown`
+Route causal outcome: `migrate_owner_boundary`
 
-Stop mode: `unknown`
+Stop mode: `owner_boundary_migration`
 
-Next lane: `unknown`
+Next lane: `causal-escalation`
 
-Expected delta: `unknown`
+Expected delta: `Focused startup readiness proof should classify admin_reachability_refused as bounded startup support evidence, let recovery readiness proceed only through the startup owner contract, and the fresh rolling-restart representative should pass or expose a new named owner boundary.`
 
 Required refresh commands:
 
-1. None recorded
+1. `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --owner startup_readiness_owner --boundary startup_support_evidence --dominant-reason admin_reachability_refused`
+2. `update Sprint Strategy Brief and Current Edge Card from the route result`
+3. `npm run work:repair`
+4. `npm run work:validate -- --entry`
+5. `npm run work:validate -- --pre-impl`
 
 ## Classification Efficiency
 
-Default mode: `unknown`
+Default mode: `separate-package-approved`
 
-Separate package reason: `unknown`
+Separate package reason: `successor-selection`
 
-Artifact budget: `unknown`
+Artifact budget: `one-artifact`
 
-Proof command budget: `unknown`
+Proof command budget: `two-or-three-canonical-commands`
 
 Commands:
 
-1. None recorded
+1. `supporting: npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress`
+2. `regression: npm run work:evidence-summary -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
+3. `supporting: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
 
-Decision record: `unknown`
+Decision record: `Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.`
 
-Successor action: `unknown`
+Successor action: `rerun-representative-evidence`
 
-Runtime promotion rule: `unknown`
+Runtime promotion rule: `When canonical owner and boundary are stable, prefer a runtime-owner-boundary successor and keep runtime files in candidateRuntimeFiles until that package activates them. If the representative route is same-frontier with no reduction or an architecture gap, open an autonomous architecture experiment before more local runtime work.`
 
 ## Architecture Decision Gate
 
-Status: `unknown`
+Status: `not-required`
 
-Trigger: `unknown`
+Trigger: `none`
 
 Trigger evidence:
 
@@ -226,30 +263,68 @@ Choices:
 
 Selected choice: `unknown`
 
-Gate next action: unknown
+Gate next action: No architecture decision gate is required for this package.
 
 ## Scope
 
 Write scope:
 
-1. None recorded
+1. `src/bootstrap/startup-recovery-coordinator.js`
+2. `src/bootstrap/node-joining-ready-signal-readiness.js`
+3. `src/bootstrap/traffic-readiness-utils.js`
+4. `test/bootstrap/startup-authority-consumption.test.js`
+5. `test/bootstrap/node-joining-ready-signal-retry.test.js`
+6. `test/bootstrap/traffic-readiness-utils.test.js`
+7. `test/distributed/harness/startup-readiness-evidence.js`
+8. `test/distributed/harness/cluster-segment-5.js`
+9. `test/distributed/harness/cluster-segment-7-class-2.js`
+10. `test/distributed/harness/cluster-segment-7-class-4.js`
+11. `test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js`
+12. `test/distributed/harness/__tests__/cluster.test-part-2.js`
+13. `test/distributed/harness/__tests__/cluster-part-2-node-reachability-test-cases.js`
+14. `test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js`
+15. `test/distributed/harness/__tests__/cluster.test-part-4-startup-snapshot-projection.js`
+16. `test/distributed/harness/__tests__/cluster-reachability-admin-proof-gate-test-cases.js`
 
 Handoff files:
 
-1. None recorded
+1. `test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
 
 Generated files:
 
-1. `work/sprints/current-blocker.json`
-2. `work/sprints/current-blocker.md`
+1. `work/sprints/current-blocker.md`
+2. `work/sprints/current-blocker.json`
 
 Candidate runtime files:
 
-1. None recorded
+1. `src/bootstrap/startup-recovery-coordinator.js`
+2. `src/bootstrap/node-joining-ready-signal-readiness.js`
+3. `src/bootstrap/traffic-readiness-utils.js`
+4. `test/distributed/harness/cluster-segment-5.js`
+5. `test/distributed/harness/cluster-segment-7-class-2.js`
+6. `test/distributed/harness/cluster-segment-7-class-4.js`
 
 Commit scope:
 
-1. None recorded
+1. `src/bootstrap/startup-recovery-coordinator.js`
+2. `src/bootstrap/node-joining-ready-signal-readiness.js`
+3. `src/bootstrap/traffic-readiness-utils.js`
+4. `test/bootstrap/startup-authority-consumption.test.js`
+5. `test/bootstrap/node-joining-ready-signal-retry.test.js`
+6. `test/bootstrap/traffic-readiness-utils.test.js`
+7. `test/distributed/harness/startup-readiness-evidence.js`
+8. `test/distributed/harness/cluster-segment-5.js`
+9. `test/distributed/harness/cluster-segment-7-class-2.js`
+10. `test/distributed/harness/cluster-segment-7-class-4.js`
+11. `test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js`
+12. `test/distributed/harness/__tests__/cluster.test-part-2.js`
+13. `test/distributed/harness/__tests__/cluster-part-2-node-reachability-test-cases.js`
+14. `test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js`
+15. `test/distributed/harness/__tests__/cluster.test-part-4-startup-snapshot-projection.js`
+16. `test/distributed/harness/__tests__/cluster-reachability-admin-proof-gate-test-cases.js`
+17. `work/packages/active-20260527-rolling-restart-startup-readiness-admin-reachability-support.md`
+18. `work/sprints/current-blocker.md`
+19. `work/sprints/current-blocker.json`
 
 Legacy touched files:
 
