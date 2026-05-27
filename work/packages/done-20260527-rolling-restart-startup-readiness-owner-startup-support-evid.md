@@ -17,7 +17,7 @@
     "nextAction": "Classify the startup readiness retryable blocker and either promote one concrete runtime owner slice or open an architecture experiment if the route repeats without reduction.",
     "predecessor": "work/packages/done-20260527-rolling-restart-startup-active-gate-owner-snapshot-coverage.md",
     "closed": "2026-05-27",
-    "successor": "work/packages/active-20260527-rolling-restart-benchmark-load-admission-runtime.md"
+    "successor": "work/packages/done-20260527-rolling-restart-benchmark-load-admission-runtime.md"
   },
   "scope": {
     "writeScope": [
@@ -294,7 +294,7 @@ no ledger update: This classification package only selected the concrete runtime
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [x] action: implementation; owner: startup_readiness_owner; files-changed: work/packages/active-20260527-rolling-restart-startup-readiness-owner-startup-support-evid.md, work/packages/active-20260527-rolling-restart-benchmark-load-admission-runtime.md; validation: `npm run work:evidence-summary -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json`, `npm run work:scenario-triage -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json --markdown`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json --markdown`, `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json --owner startup_readiness_owner --boundary startup_support_evidence --dominant-reason readiness_retryable`; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: implementation; owner: startup_readiness_owner; files-changed: work/packages/active-20260527-rolling-restart-startup-readiness-owner-startup-support-evid.md, work/packages/done-20260527-rolling-restart-benchmark-load-admission-runtime.md; validation: `npm run work:evidence-summary -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json`, `npm run work:scenario-triage -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json --markdown`, `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json --markdown`, `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json --owner startup_readiness_owner --boundary startup_support_evidence --dominant-reason readiness_retryable`; parent revalidated focused proof: yes; outcome: validated.
 - [x] action: verification-fix; owner: startup_readiness_owner; files-changed: none; validation: selected concrete runtime successor and kept runtime files out of this diagnostic package; parent revalidated focused proof: yes; outcome: validated.
 - [x] action: repair; owner: workflow_tooling_owner; files-changed: none; validation: migration successor prepared for `npm run work:package:migrate`; parent revalidated focused proof: yes; outcome: not-needed.
 
