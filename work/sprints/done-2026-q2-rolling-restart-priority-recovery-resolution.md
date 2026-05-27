@@ -30,22 +30,22 @@ Resolve the priority recovery event-driven wait/deadlock during rolling-restart 
 ## Current Edge Card
 
 ```text
-Representative artifact: test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json
-Visible first frontier: startup_readiness_owner / startup_support_evidence / readiness_retryable
-Active package: work/packages/done-20260527-rolling-restart-benchmark-load-admission-runtime.md
-Active package owner: startup_readiness_owner
-Active package boundary: startup_support_evidence
-Selected cause: readiness_retryable
-Required action: Apply benchmark-table load admission gating to rolling restart before node restarts so readiness proof matches the actual load lane.
-Representative status: unknown
-Causal outcome: migrate_owner_boundary
-Architecture gate: selected / continue-local-proof
-Expected delta: Rolling restart uses benchmark-ready load nodes/table before starting sustained load, reducing startup readiness pressure and preventing zero-success load/restart recovery timeout.
-Current state: Scaffolded from representative evidence for readiness_startup_support.
-Allowed edits: test/distributed/scenarios/rolling-restart.js, test/distributed/harness/__tests__/rolling-restart-scenario.test.js, test/distributed/harness/__tests__/node-join-under-load-scenario.test.js, work/packages/done-20260527-rolling-restart-benchmark-load-admission-runtime.md, work/sprints/current-blocker.md, work/sprints/current-blocker.json, work/sprints/active-2026-q2-rolling-restart-priority-recovery-resolution.md, work/packages/done-20260527-rolling-restart-startup-readiness-owner-startup-support-evid.md
-Candidate runtime files: test/distributed/scenarios/table-distribution-helpers.js
-Forbidden edits: Runtime edits stay limited to rolling restart admission and focused tests unless validation names a different owner boundary.
-Required latest proof: falsifier: node --test test/distributed/harness/__tests__/rolling-restart-scenario.test.js # contract fixture: benchmark-ready admission transition gates startLoad and affected rolling-restart consumer proof, regression: node --test test/distributed/harness/__tests__/cluster.test-part-2.js test/distributed/harness/__tests__/node-join-under-load-scenario.test.js # consumer proof: shared benchmark admission behavior remains ready for node-join-under-load, supporting: npm run work:evidence-summary -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json # representative routing evidence, npm run work:evidence-summary -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json, npm run work:scenario-triage -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json --markdown, npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json --markdown
+Representative artifact: test-output/reports/rolling-restart-benchmark-load-admission-capped-warmup-20260527.report.json
+Visible first frontier: rebalancer_leader / operation_scheduling / priority_recovery_progress_blocked
+Active package: work/packages/done-20260527-rolling-restart-priority-recovery-stale-cache-scheduling.md
+Active package owner: rebalancer_leader
+Active package boundary: operation_scheduling
+Selected cause: priority_recovery_progress_blocked
+Required action: Allow priority recovery operation creation to bypass empty local node-cache admission when the publication planning snapshot already proves eligible active nodes.
+Representative status: migrated
+Causal outcome: ask_human
+Architecture gate: watching / unknown
+Expected delta: rolling-restart setup moves past eligible_but_no_operation_created for replica_operations-p1 and either reaches scenario load or migrates to the next concrete frontier
+Current state: Scaffolded from representative evidence for priority_recovery_partition_progress.
+Allowed edits: work/packages/done-20260527-rolling-restart-priority-recovery-stale-cache-scheduling.md, src/rebalancer/rebalancer-evaluation-methods.js, test/rebalancer/unified-rebalancer-part-5-2-stage-2.js, work/sprints/current-blocker.md, work/sprints/current-blocker.json, work/sprints/active-2026-q2-rolling-restart-priority-recovery-resolution.md
+Candidate runtime files: unknown
+Forbidden edits: Operation scheduling may use publication-derived priority recovery eligibility, but must not weaken owner workflow, active-gate, or startup readiness contracts.
+Required latest proof: falsifier: node --test-name-pattern "checkRebalance lets priority recovery operation creation bypass empty local node cache" test/rebalancer/unified-rebalancer.test-part-5-2.js # test/rebalancer/unified-rebalancer-part-5-2-stage-2.js, regression: node --test test/rebalancer/unified-rebalancer.test-part-5-2.js # test/rebalancer/unified-rebalancer-part-5-2-stage-2.js, supporting: npm run work:evidence-summary -- test-output/reports/rolling-restart-benchmark-load-admission-capped-warmup-20260527.report.json, representative: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-priority-recovery-stale-cache-scheduling.report.json --verbose, npm run work:evidence-summary -- test-output/reports/rolling-restart-benchmark-load-admission-capped-warmup-20260527.report.json, npm run work:scenario-triage -- test-output/reports/rolling-restart-benchmark-load-admission-capped-warmup-20260527.report.json --markdown, npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-benchmark-load-admission-capped-warmup-20260527.report.json --markdown
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -98,6 +98,11 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
     - Lane: `experiment`
     - Purpose: Distinguish whether restart recovery is blocked by seed-contact hang, readiness convergence heartbeat, or active-gate report attachment before the next runtime patch.
     - First-run reason: The post-startup-readiness representative still fails restarted-node admin readiness while the report omits canonical active-gate coverage and the playback sidecar contains deferred owner-recovery evidence.
+11. [Rolling Restart Priority Recovery Stale Cache Scheduling](../packages/done-20260527-rolling-restart-priority-recovery-stale-cache-scheduling.md)
+    - Lane: `causal-escalation`
+    - Purpose: Allow priority recovery operation creation to bypass empty local node-cache admission when the publication planning snapshot already proves eligible active nodes.
+    - First-run reason: Fresh representative evidence for priority_recovery_partition_progress at eligible_but_no_operation_created.
+
 
 ## Proof Ladder
 

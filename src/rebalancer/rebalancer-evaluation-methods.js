@@ -38,10 +38,21 @@ const REBALANCER_EVALUATION_METHODS = {
       actionableTargetReplicaCount: actionableTarget,
     });
 
+    let hasPriorityEligibleNodes = false;
+    if (this.isControlPlanePriorityPartition()) {
+      const decision = await this.getCurrentPriorityRecoveryFollowUpDecisionSnapshot();
+      if (decision) {
+        const eligibleNodeIds = this.resolvePriorityRecoveryFollowUpEligibleNodeIds(decision);
+        if (eligibleNodeIds && eligibleNodeIds.length > 0) {
+          hasPriorityEligibleNodes = true;
+        }
+      }
+    }
+
     // Skip rebalancing if cache appears unpopulated (no nodes known)
     // This prevents newly joined nodes from making incorrect decisions
     // before their cache is synchronized with the cluster state
-    if (availableNodes.length === UNIFIED_REBALANCER_LITERAL.ZERO) {
+    if (availableNodes.length === UNIFIED_REBALANCER_LITERAL.ZERO && !hasPriorityEligibleNodes) {
       this.logger.debug(REBALANCER_LOG_MSG.NO_AVAILABLE_NODES, {
         entityId: this.entityId,
         entityType: this.entityType,

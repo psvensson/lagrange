@@ -1160,6 +1160,138 @@ test(TEST_NAME.SUITE, async (t) => {
   );
 
   await t.test(
+    'checkRebalance lets priority recovery operation creation bypass empty local node cache',
+    async (t) => {
+      const TEST_PRIORITY_PARTITION_ID = 'sql_write_operations-p1';
+      const TEST_PUBLICATION_EPOCH = 7;
+      const TEST_REQUIRED_DISTINCT_NODE_COUNT = 3;
+      const TEST_READY_DISTINCT_NODE_COUNT = 1;
+      const TEST_SPREAD_GAP = 2;
+      const TEST_NODE_ID_A = 'node-1';
+      const TEST_NODE_ID_B = 'node-2';
+      const TEST_NODE_ID_C = 'node-3';
+      const TEST_BLOCKER_ELIGIBLE_NO_OPERATION =
+        'eligible_but_no_operation_created';
+      const TEST_NEXT_ACTION_CREATE_OPERATION = 'create_recovery_operation';
+      const nodes = Object.freeze([]);
+      const priorityPartitionSummary = Object.freeze({
+        satisfied: false,
+        requiredDistinctNodeCount: TEST_REQUIRED_DISTINCT_NODE_COUNT,
+        blockedPartitions: Object.freeze([Object.freeze({
+          partitionId: TEST_PRIORITY_PARTITION_ID,
+          readyDistinctNodeCount: TEST_READY_DISTINCT_NODE_COUNT,
+          requiredDistinctNodeCount: TEST_REQUIRED_DISTINCT_NODE_COUNT,
+          spreadGap: TEST_SPREAD_GAP,
+        })]),
+        missingPartitionIds: Object.freeze([TEST_PRIORITY_PARTITION_ID]),
+      });
+      const planningSnapshot = Object.freeze({
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        publishedActiveNodeIds: Object.freeze([
+          TEST_NODE_ID_A,
+          TEST_NODE_ID_B,
+          TEST_NODE_ID_C,
+        ]),
+        projectedServingNodeIds: Object.freeze([
+          TEST_NODE_ID_A,
+          TEST_NODE_ID_B,
+          TEST_NODE_ID_C,
+        ]),
+        locallyEligibleNodeIds: Object.freeze([
+          TEST_NODE_ID_A,
+          TEST_NODE_ID_B,
+          TEST_NODE_ID_C,
+        ]),
+        priorityPartitionSummary,
+        priorityRecoveryDecisionSnapshots: Object.freeze({
+          snapshots: Object.freeze([Object.freeze({
+            partitionId: TEST_PRIORITY_PARTITION_ID,
+            semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE.NEEDS_OPERATION,
+            blockerReasons: Object.freeze([
+              TEST_BLOCKER_ELIGIBLE_NO_OPERATION,
+            ]),
+            progress: Object.freeze({
+              nextRequiredAction: TEST_NEXT_ACTION_CREATE_OPERATION,
+            }),
+            planner: Object.freeze({
+              requiredDistinctNodeCount: TEST_REQUIRED_DISTINCT_NODE_COUNT,
+              readyDistinctNodeCount: TEST_READY_DISTINCT_NODE_COUNT,
+              spreadGap: TEST_SPREAD_GAP,
+            }),
+            admission: Object.freeze({
+              effectiveEligibleNodeIds: Object.freeze([
+                TEST_NODE_ID_A,
+                TEST_NODE_ID_B,
+                TEST_NODE_ID_C,
+              ]),
+            }),
+            publication: Object.freeze({
+              recoveryActiveNodeIds: Object.freeze([
+                TEST_NODE_ID_A,
+                TEST_NODE_ID_B,
+                TEST_NODE_ID_C,
+              ]),
+              concreteEligibleNodeIds: Object.freeze([
+                TEST_NODE_ID_A,
+                TEST_NODE_ID_B,
+                TEST_NODE_ID_C,
+              ]),
+              publishedActiveNodeIds: Object.freeze([
+                TEST_NODE_ID_A,
+                TEST_NODE_ID_B,
+                TEST_NODE_ID_C,
+              ]),
+            }),
+          })]),
+        }),
+      });
+      const cache = createMockCache([]);
+      const readinessService = {
+        ...createMockReadinessService(cache),
+        getPriorityRecoveryPlanningAnswerSync() {
+          return planningSnapshot;
+        },
+        membershipPublicationService: {
+          getLatestClusterPublicationSync() {
+            return {priorityPartitionSummary};
+          },
+        },
+      };
+      const rebalancer = createTestRebalancer({
+        entityId: TEST_PRIORITY_PARTITION_ID,
+        entityType: EntityType.PARTITION,
+        nodeId: TEST_NODE_ID_A,
+        nodes: [],
+        controlPlaneReadinessService: readinessService,
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.clusterReadinessConfirmed = true;
+      rebalancer.isStabilized = () => true;
+      rebalancer.getCriticalSystemTopologySettlingBlocker = () => null;
+      rebalancer.getCriticalSystemTrafficReadinessBlocker = () => null;
+      rebalancer.getCriticalSystemLocalServeReadinessBlocker = () => null;
+      rebalancer.getLocalControlPlaneMutationReadinessBlocker = () => null;
+
+      let evaluateCalls = TEST_NUMBER.ZERO;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+      rebalancer.scheduleNextCheck = () => {};
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        TEST_NUMBER.ONE,
+        'checkRebalance lets priority recovery operation creation bypass empty local node cache',
+      );
+    },
+  );
+
+  await t.test(
     TEST_NAME.ENQUEUES_PUBLICATION_EVENT_OPERATION_CREATION,
     async (t) => {
       const nodeRows = Object.freeze([
