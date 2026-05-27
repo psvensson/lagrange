@@ -215,7 +215,7 @@ gate.
 ## Scope Basis
 
 Sprint package 7 in
-`work/sprints/todo-2026-q2-owner-boundary-progress-contract-transformation.md`;
+`work/sprints/done-2026-q2-owner-boundary-progress-contract-transformation.md`;
 scope is limited to producing and routing the representative rolling-restart
 artifact plus updating this package.
 

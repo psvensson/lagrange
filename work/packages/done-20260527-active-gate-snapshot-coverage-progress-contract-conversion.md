@@ -205,7 +205,7 @@ retry work.
 ## Scope Basis
 
 Sprint package 6 in
-`work/sprints/todo-2026-q2-owner-boundary-progress-contract-transformation.md`;
+`work/sprints/done-2026-q2-owner-boundary-progress-contract-transformation.md`;
 scope is limited to active-gate snapshot coverage owner files, diagnostics
 adapters, and focused active-gate tests.
 

@@ -231,7 +231,7 @@ observable progress contract before downstream owners are patched again.
 ## Scope Basis
 
 Sprint package 5 in
-`work/sprints/todo-2026-q2-owner-boundary-progress-contract-transformation.md`;
+`work/sprints/done-2026-q2-owner-boundary-progress-contract-transformation.md`;
 scope is limited to operation workflow owner files and focused priority
 recovery tests.
 

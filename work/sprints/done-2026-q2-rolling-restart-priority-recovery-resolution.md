@@ -32,17 +32,17 @@ Resolve the priority recovery event-driven wait/deadlock during rolling-restart 
 ```text
 Representative artifact: test-output/reports/rolling-restart-benchmark-load-admission-capped-warmup-20260527.report.json
 Visible first frontier: rebalancer_leader / operation_scheduling / priority_recovery_progress_blocked
-Active package: work/packages/done-20260527-rolling-restart-priority-recovery-stale-cache-scheduling.md
+Active package: none
 Active package owner: rebalancer_leader
 Active package boundary: operation_scheduling
 Selected cause: priority_recovery_progress_blocked
-Required action: Allow priority recovery operation creation to bypass empty local node-cache admission when the publication planning snapshot already proves eligible active nodes.
+Required action: none; stale-cache scheduling package closed this priority recovery edge and later evidence selected active-gate snapshot coverage.
 Representative status: migrated
 Causal outcome: ask_human
 Architecture gate: watching / unknown
 Expected delta: rolling-restart setup moves past eligible_but_no_operation_created for replica_operations-p1 and either reaches scenario load or migrates to the next concrete frontier
-Current state: Scaffolded from representative evidence for priority_recovery_partition_progress.
-Allowed edits: work/packages/done-20260527-rolling-restart-priority-recovery-stale-cache-scheduling.md, src/rebalancer/rebalancer-evaluation-methods.js, test/rebalancer/unified-rebalancer-part-5-2-stage-2.js, work/sprints/current-blocker.md, work/sprints/current-blocker.json, work/sprints/active-2026-q2-rolling-restart-priority-recovery-resolution.md
+Current state: Closed after the stale-cache scheduling proof moved priority recovery past eligible_but_no_operation_created and produced the next representative artifact.
+Allowed edits: work/packages/done-20260527-rolling-restart-priority-recovery-stale-cache-scheduling.md, src/rebalancer/rebalancer-evaluation-methods.js, test/rebalancer/unified-rebalancer-part-5-2-stage-2.js, work/sprints/current-blocker.md, work/sprints/current-blocker.json, work/sprints/done-2026-q2-rolling-restart-priority-recovery-resolution.md
 Candidate runtime files: unknown
 Forbidden edits: Operation scheduling may use publication-derived priority recovery eligibility, but must not weaken owner workflow, active-gate, or startup readiness contracts.
 Required latest proof: falsifier: node --test-name-pattern "checkRebalance lets priority recovery operation creation bypass empty local node cache" test/rebalancer/unified-rebalancer.test-part-5-2.js # test/rebalancer/unified-rebalancer-part-5-2-stage-2.js, regression: node --test test/rebalancer/unified-rebalancer.test-part-5-2.js # test/rebalancer/unified-rebalancer-part-5-2-stage-2.js, supporting: npm run work:evidence-summary -- test-output/reports/rolling-restart-benchmark-load-admission-capped-warmup-20260527.report.json, representative: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-priority-recovery-stale-cache-scheduling.report.json --verbose, npm run work:evidence-summary -- test-output/reports/rolling-restart-benchmark-load-admission-capped-warmup-20260527.report.json, npm run work:scenario-triage -- test-output/reports/rolling-restart-benchmark-load-admission-capped-warmup-20260527.report.json --markdown, npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-benchmark-load-admission-capped-warmup-20260527.report.json --markdown

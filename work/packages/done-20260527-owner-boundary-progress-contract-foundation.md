@@ -179,7 +179,7 @@ proves the language before runtime owners adopt it.
 ## Scope Basis
 
 Sprint package 1 in
-`work/sprints/todo-2026-q2-owner-boundary-progress-contract-transformation.md`;
+`work/sprints/done-2026-q2-owner-boundary-progress-contract-transformation.md`;
 scope is limited to diagnostics constants, normalizers, and focused topology
 contract tests.
 

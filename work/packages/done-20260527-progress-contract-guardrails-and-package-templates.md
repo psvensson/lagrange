@@ -130,7 +130,7 @@ naming wake, retry, terminal, and evidence behavior.
 ## Scope Basis
 
 Sprint package 2 in
-`work/sprints/todo-2026-q2-owner-boundary-progress-contract-transformation.md`;
+`work/sprints/done-2026-q2-owner-boundary-progress-contract-transformation.md`;
 scope is limited to package schema, validation, template surfaces, and focused
 workflow-tooling proof.
 

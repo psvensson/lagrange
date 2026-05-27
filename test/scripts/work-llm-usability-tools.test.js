@@ -597,6 +597,23 @@ test('package scaffolder can infer package defaults from an artifact',
     t.match(rendered, /analyze:priority-recovery-residuals/u);
   });
 
+test('package scaffolder avoids placeholder prose for artifact-derived packages',
+  async (t) => {
+    const content = await buildPackageContent({
+      'from-artifact': FIXTURE_PATH,
+      'ledger': TEMP_LEDGER_PATH,
+    });
+
+    t.notMatch(content, /State the focused concern/u);
+    t.notMatch(content, /Approved maintenance scope/u);
+    t.notMatch(content, /Scaffolded from representative evidence/u);
+    t.notMatch(content, /emits the package outcome/u);
+    t.notMatch(content, /work\/packages\/<this-package>\.md/u);
+    t.notMatch(content, /<owner>|<package>|<artifact>|<paths or none>|<role>/u);
+    t.match(content, /npm run work:package:doctor -- --suggest work\/packages\/todo-/u);
+    t.match(content, /owner: operation_workflow_owner/u);
+  });
+
 test('owner file index ranks files that mention owner and boundary', async (t) => {
   await fs.rm(TEMP_OWNER_ROOT, {recursive: true, force: true});
   await fs.mkdir(path.join(TEMP_OWNER_ROOT, 'src', 'rebalancer'), {

@@ -398,7 +398,8 @@ async function resolveArtifactDefaults(flags = {}) {
   nextFlags = mergeScalarDefault(
     nextFlags,
     FLAG_CURRENT_STATE,
-    `Scaffolded from representative evidence for ${edgeId}.`,
+    `Representative evidence selects ${owner} / ${boundary} at ${edgeId}; ` +
+      'the package records the bounded next decision before runtime edits.',
   );
   nextFlags = mergeScalarDefault(
     nextFlags,
@@ -546,6 +547,18 @@ function firstFocusedProofCommand(proof = []) {
   return proof.map(normalizeText).find(Boolean) || DEFAULT_ACCELERATION_PROOF;
 }
 
+function artifactExtractorCommand(artifact) {
+  return artifact === DEFAULT_ARTIFACT ?
+    'record a concrete artifact, then run npm run work:evidence-summary' :
+    `npm run work:evidence-summary -- ${artifact}`;
+}
+
+function ownerDiscoveryCommand(owner, boundary) {
+  return boundary.length > NUM_ZERO ?
+    `npm run analyze:owner-files -- ${owner} ${boundary}` :
+    `npm run analyze:owner-files -- ${owner}`;
+}
+
 function markdownTableCell(value, fallback) {
   return normalizeText(value || fallback).replace(/\|/gu, '/');
 }
@@ -569,11 +582,10 @@ function buildCoreLogicBriefLines(
   const dominantReason = normalizeText(flags[FLAG_DOMINANT_REASON]);
   const artifact = normalizeText(flags[FLAG_ARTIFACT]) || DEFAULT_ARTIFACT;
   const nextAction = normalizeText(flags[FLAG_NEXT_ACTION]);
-  const emittedOutcome =
+  const emittedOutcome = nextAction ||
     normalizeText(metadata?.[RERUN_DECISION_FIELD]?.[
       RERUN_DECISION_CAUSAL_OUTCOME_FIELD
-    ]) ||
-    nextAction;
+    ]);
   const inputSignals = [
     artifact !== DEFAULT_ARTIFACT ? artifact : EMPTY_TEXT,
     markdownSentenceList(proof, nextAction),
@@ -582,7 +594,7 @@ function buildCoreLogicBriefLines(
     '## Core Logic Brief',
     EMPTY_TEXT,
     `- ${CORE_LOGIC_BRIEF_CANONICAL_OUTCOME_FIELD}: ` +
-      `${owner} / ${boundary} emits the package outcome for ` +
+      `${owner} / ${boundary} emits ${emittedOutcome} for ` +
       `${dominantReason}.`,
     `- ${CORE_LOGIC_BRIEF_INPUTS_FIELD}: ${inputSignals}.`,
     `- ${CORE_LOGIC_BRIEF_MODEL_FIELD}: The ${owner} / ${boundary} ` +
@@ -1293,7 +1305,13 @@ async function buildPackageContent(flags = {}) {
   const modelFitDefaults = defaultModelFitForLane(lane, modelLedgerSummary);
   const opened = normalizeText(flags[FLAG_OPENED]) || todayIsoDate();
   const status = normalizeText(flags[FLAG_STATUS]) || DEFAULT_STATUS;
+  const slug = normalizeText(flags[FLAG_SLUG]);
+  const packagePath = buildPackagePath(status, opened, slug);
   const proof = flags[FLAG_PROOF] || [];
+  const artifact = normalizeText(flags[FLAG_ARTIFACT]) || DEFAULT_ARTIFACT;
+  const owner = normalizeText(flags[FLAG_OWNER]);
+  const boundary = normalizeText(flags[FLAG_BOUNDARY]);
+  const dominantReason = normalizeText(flags[FLAG_DOMINANT_REASON]);
   const metadataProof = buildMetadataProofCommands(lane, proof);
   const modelFitProof = concreteModelFitProofCommands(proof);
   const legacyTouchedFiles = flags[FLAG_TOUCHED_FILE] || [];
@@ -1324,7 +1342,7 @@ async function buildPackageContent(flags = {}) {
     dominantReason: normalizeText(flags[FLAG_DOMINANT_REASON]),
     currentState:
       normalizeText(flags[FLAG_CURRENT_STATE]) ||
-      'New package scaffolded from the shared work-package schema.',
+      'Package opened with declared owner, boundary, scope, proof, and stop rule.',
     nextAction: normalizeText(flags[FLAG_NEXT_ACTION]),
     proof: metadataProof,
     representativeRerunCadence: flags['representative-rerun-cadence'] || (
@@ -1439,11 +1457,15 @@ async function buildPackageContent(flags = {}) {
     EMPTY_TEXT,
     '## Why',
     EMPTY_TEXT,
-    'State the focused concern and why this package owns it.',
+    `This package owns ${owner} / ${boundary} because the selected evidence ` +
+      `routes ${dominantReason} there. It must either move that owner ` +
+      'contract or preserve the classification before downstream symptoms are patched.',
     EMPTY_TEXT,
     '## Scope Basis',
     EMPTY_TEXT,
-    'Approved maintenance scope or roadmap row.',
+    artifact === DEFAULT_ARTIFACT ?
+      'Package metadata fixes the owner, boundary, lane, scope, proof, and stop rule before implementation.' :
+      `Canonical evidence source: \`${artifact}\`.`,
     EMPTY_TEXT,
     '## Workflow Lane',
     EMPTY_TEXT,
@@ -1531,10 +1553,10 @@ async function buildPackageContent(flags = {}) {
     EMPTY_TEXT,
     'Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc `jq`, use the canonical workflow command that owns the question:',
     EMPTY_TEXT,
-    '1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest <package>`, `npm run work:package:doctor -- --fix-dry-run <package>`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.',
-    '2. Representative evidence: `npm run work:evidence-summary -- <artifact>` plus any focused extractor for this failure class.',
-    '3. Owner discovery: `npm run analyze:owner-files -- <owner> [boundary]`.',
-    '4. Subagent sequencing: `npm run work:subagent-prompt -- --role <role> --package <package>`.',
+    `1. Package metadata or ledger edits: \`npm run work:package:doctor -- --suggest ${packagePath}\`, \`npm run work:package:doctor -- --fix-dry-run ${packagePath}\`, \`npm run work:package:schema\`, or \`npm run work:package:new -- ...\`.`,
+    `2. Representative evidence: \`${artifactExtractorCommand(artifact)}\` plus any focused extractor for this failure class.`,
+    `3. Owner discovery: \`${ownerDiscoveryCommand(owner, boundary)}\`.`,
+    `4. Subagent sequencing: \`npm run work:subagent-prompt -- --role review --package ${packagePath}\`.`,
     '5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.',
     EMPTY_TEXT,
     'If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which canonical extractor was tried and why it was insufficient.',
@@ -1542,7 +1564,7 @@ async function buildPackageContent(flags = {}) {
     '## Workflow Acceleration Contract',
     EMPTY_TEXT,
     '1. Use `npm run work:advance -- --check` before adding more package prose; it combines doctor, subagent-next, and entry/pre-implementation validation.',
-    '2. Keep the durable proof ladder to 3-5 commands by default: prefer `npm run work:scenario-route -- <artifact>` for representative routing, one focused test or extractor, and validation. Add static guardrails only when implementation files changed.',
+    `2. Keep the durable proof ladder to 3-5 commands by default: prefer \`npm run work:scenario-route -- ${artifact}\` for representative routing, one focused test or extractor, and validation. Add static guardrails only when implementation files changed.`,
     '3. If this package only changes package, sprint, tracker, or ledger files, the next pass must run representative evidence, close as classification-only, open a concrete bug package, or open/select an autonomous architecture experiment. Human gates are only for blocked/contradictory evidence.',
     '4. Once an architecture gate has a selected route, do not open another gate unless fresh canonical evidence contradicts the selected route.',
     '5. For bounded experiments, move quickly inside the inherited owner boundary, but do not merge without the stated focused proof and canonical evidence movement.',
@@ -1561,7 +1583,7 @@ async function buildPackageContent(flags = {}) {
     `- Intended minimum model: \`${metadata.modelFit.intendedMinimumModel}\``,
     `- Scope shape: \`${metadata.modelFit.scopeShape}\``,
     `- Output profile: \`${metadata.modelFit.outputProfile}\``,
-    `- Owned files: ${markdownInlineCodeList(ownedFiles, '`work/packages/<this-package>.md`')}`,
+    `- Owned files: ${markdownInlineCodeList(ownedFiles, `\`${packagePath}\``)}`,
     `- Do-not-edit scope: ${markdownInlineCodeList(forbiddenFiles, '`src/` outside declared writeScope')}`,
     '- Frozen decisions: package scope and lane stay bounded unless explicitly escalated.',
     '- Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.',
@@ -1575,9 +1597,9 @@ async function buildPackageContent(flags = {}) {
     'Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.',
     'Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.',
     EMPTY_TEXT,
-    '- [ ] action: implementation; owner: <owner>; files-changed: <paths or none>; validation: <focused proof and parent revalidated focused proof: yes>; outcome: <validated|blocked>.',
-    '- [ ] action: verification-fix; owner: <owner>; files-changed: <paths or none>; validation: <verification proof and parent revalidated focused proof: yes>; outcome: <validated|blocked>.',
-    '- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: <validated|not-needed>.',
+    `- [ ] action: implementation; owner: ${owner}; files-changed: none recorded yet; validation: ${firstFocusedProofCommand(modelFitProof)} and parent revalidated focused proof: yes before closure; outcome: pending.`,
+    `- [ ] action: verification-fix; owner: ${owner}; files-changed: none recorded yet; validation: verifier reruns focused proof and parent revalidated focused proof: yes before closure; outcome: pending.`,
+    '- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: pending.',
     EMPTY_TEXT,
     '## Validation',
     EMPTY_TEXT,

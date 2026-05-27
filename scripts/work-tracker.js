@@ -492,6 +492,58 @@ const SCENARIO_CAUSAL_CLOSURE_ARTIFACT_PATH_PATTERN = new RegExp(
     '(?:$|[\\s`\'".,;])',
   'u',
 );
+const PLACEHOLDER_ARTIFACT_PATH = 'test-output/report.json';
+const PACKAGE_SCAFFOLD_POLICY_OPENED_ON_OR_AFTER = '2026-05-27';
+const PACKAGE_SCAFFOLD_PLACEHOLDER_PATTERNS = Object.freeze([
+  {
+    label: 'generic Why placeholder',
+    pattern: /\bState the focused concern and why this package owns it\./iu,
+  },
+  {
+    label: 'generic Scope Basis placeholder',
+    pattern: /\bApproved maintenance scope or roadmap row\./iu,
+  },
+  {
+    label: 'schema scaffold current-state text',
+    pattern: /\bNew package scaffolded from the shared work-package schema\./iu,
+  },
+  {
+    label: 'representative scaffold current-state text',
+    pattern: /\bScaffolded from representative evidence\b/iu,
+  },
+  {
+    label: 'generic emitted package outcome',
+    pattern: /\bemits the package outcome\b/iu,
+  },
+  {
+    label: 'template package path',
+    pattern: /\bwork\/packages\/<this-package>\.md\b/iu,
+  },
+  {
+    label: 'template workflow command',
+    pattern: /\bnpm run work:[^`\n]*<(?:artifact|package|owner|role)[^>]*>/iu,
+  },
+  {
+    label: 'template execution owner',
+    pattern: /\bowner:\s*<owner>/iu,
+  },
+  {
+    label: 'template changed files',
+    pattern: /\bfiles-changed:\s*<paths or none>/iu,
+  },
+  {
+    label: 'template validation field',
+    pattern: /\bvalidation:\s*<[^>]+>/iu,
+  },
+  {
+    label: 'template outcome field',
+    pattern: /\boutcome:\s*<[^>]+>/iu,
+  },
+  {
+    label: 'template token',
+    pattern: /<(?:owner|package|artifact|paths or none|role|this-package)>/iu,
+  },
+]);
 const ARCHITECTURE_DECISION_GATE_FIELD = 'architectureDecisionGate';
 const ARCHITECTURE_DECISION_GATE_STATUS_NOT_REQUIRED = 'not-required';
 const ARCHITECTURE_DECISION_GATE_STATUS_REQUIRED = 'required';
@@ -5618,6 +5670,56 @@ function validateActiveScenarioMetadataShape(filePath, metadata) {
   return errors;
 }
 
+function packageScaffoldPolicyApplies(fileStatus, metadata, phase) {
+  const opened = normalizeLedgerText(metadata?.opened);
+  return phase === VALIDATION_PHASE_PRE_IMPL &&
+    [STATUS_ACTIVE, STATUS_TODO].includes(fileStatus) &&
+    opened.length > NUM_ZERO &&
+    opened >= PACKAGE_SCAFFOLD_POLICY_OPENED_ON_OR_AFTER;
+}
+
+export function validatePackageScaffoldReadiness(
+  content,
+  filePath,
+  metadata,
+  options = {},
+) {
+  const phase = options.phase || VALIDATION_PHASE_PRE_IMPL;
+  const status = options.status || normalizeLedgerText(metadata?.status);
+  if (!packageScaffoldPolicyApplies(status, metadata, phase)) {
+    return [];
+  }
+  const errors = [];
+  const artifact = normalizeLedgerText(metadata?.artifact);
+  if (artifact === PLACEHOLDER_ARTIFACT_PATH) {
+    errors.push(
+      `${filePath}: pre-implementation package must not use placeholder ` +
+        `artifact ${PLACEHOLDER_ARTIFACT_PATH}; cite a concrete report or ` +
+        'record artifact none.',
+    );
+  }
+  if (content.includes(PLACEHOLDER_ARTIFACT_PATH)) {
+    errors.push(
+      `${filePath}: pre-implementation package body must not cite ` +
+        `placeholder artifact ${PLACEHOLDER_ARTIFACT_PATH}.`,
+    );
+  }
+  const matchedLabels = new Set();
+  for (const {label, pattern} of PACKAGE_SCAFFOLD_PLACEHOLDER_PATTERNS) {
+    if (pattern.test(content)) {
+      matchedLabels.add(label);
+    }
+  }
+  for (const label of matchedLabels) {
+    errors.push(
+      `${filePath}: pre-implementation package contains scaffold ` +
+        `placeholder content (${label}); replace it with concrete owner, ` +
+        'artifact, scope, proof, or outcome text before activation.',
+    );
+  }
+  return errors;
+}
+
 function validateProofRoles(filePath, metadata = {}) {
   if (isEpicPackage(filePath)) {
     return [];
@@ -6338,6 +6440,12 @@ function runPackageValidationsSync(filePath, content, fileStatus, metadata, opti
   errors.push(
     ...validatePackageMetadataShape(relativePath, fileStatus, metadata),
   );
+  errors.push(...validatePackageScaffoldReadiness(
+    content,
+    relativePath,
+    metadata,
+    {phase, status: fileStatus},
+  ));
 
   const isEpic = isEpicPackage(filePath, content, options);
   if (isEpic) {

@@ -13,7 +13,7 @@
     "owner": "rebalancer_leader",
     "boundary": "operation_scheduling",
     "dominantReason": "priority_recovery_progress_blocked",
-    "currentState": "Scaffolded from representative evidence for priority_recovery_partition_progress.",
+    "currentState": "Fresh rolling-restart evidence selected rebalancer_leader / operation_scheduling / priority_recovery_progress_blocked after benchmark load admission; this package closes the stale local-node-cache scheduling edge.",
     "nextAction": "Allow priority recovery operation creation to bypass empty local node-cache admission when the publication planning snapshot already proves eligible active nodes."
   },
   "scope": {
@@ -23,7 +23,7 @@
       "test/rebalancer/unified-rebalancer-part-5-2-stage-2.js",
       "work/sprints/current-blocker.md",
       "work/sprints/current-blocker.json",
-      "work/sprints/active-2026-q2-rolling-restart-priority-recovery-resolution.md"
+      "work/sprints/done-2026-q2-rolling-restart-priority-recovery-resolution.md"
     ],
     "handoffFiles": [
       "test-output/reports/rolling-restart-benchmark-load-admission-capped-warmup-20260527.report.json"
@@ -36,12 +36,12 @@
       "test/rebalancer/unified-rebalancer-part-5-2-stage-2.js",
       "work/sprints/current-blocker.md",
       "work/sprints/current-blocker.json",
-      "work/sprints/active-2026-q2-rolling-restart-priority-recovery-resolution.md"
+      "work/sprints/done-2026-q2-rolling-restart-priority-recovery-resolution.md"
     ]
   },
   "gates": {
     "stabilityCredit": "local-proof-only",
-    "whyHighestLeverageNow": "This package advances the active sprint goal with focused proof."
+    "whyHighestLeverageNow": "This package advances the rolling-restart priority recovery resolution sprint by moving the representative frontier past eligible_but_no_operation_created into the next concrete active-gate contract edge."
   },
   "modelFit": {
     "packageClass": "causal-escalation",
@@ -178,11 +178,17 @@
 
 ## Why
 
-State the focused concern and why this package owns it.
+Fresh rolling-restart evidence reached `rebalancer_leader / operation_scheduling`
+with `priority_recovery_progress_blocked`: publication planning had eligible
+active nodes, but the local available-node cache was empty or stale. This
+package owns that edge because operation scheduling decides whether eligible
+publication-planning evidence is sufficient to create the priority recovery
+operation before downstream active-gate evidence is interpreted.
 
 ## Scope Basis
 
-Approved maintenance scope or roadmap row.
+Closed successor from the Rolling Restart Priority Recovery Resolution sprint
+after benchmark load admission exposed the stale-cache scheduling blocker.
 
 ## Workflow Lane
 
@@ -192,9 +198,9 @@ Approved maintenance scope or roadmap row.
 
 ## Core Logic Brief
 
-- Canonical outcome: rebalancer_leader / operation_scheduling emits the package outcome for priority_recovery_progress_blocked.
+- Canonical outcome: rebalancer_leader / operation_scheduling creates a priority recovery operation from publication-planning eligibility even when the local node cache is empty for priority_recovery_progress_blocked.
 - Inputs/signals: test-output/reports/rolling-restart-benchmark-load-admission-capped-warmup-20260527.report.json; falsifier: node --test-name-pattern "checkRebalance lets priority recovery operation creation bypass empty local node cache" test/rebalancer/unified-rebalancer.test-part-5-2.js; regression: node --test test/rebalancer/unified-rebalancer.test-part-5-2.js; supporting: npm run work:evidence-summary -- test-output/reports/rolling-restart-benchmark-load-admission-capped-warmup-20260527.report.json; representative: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-priority-recovery-stale-cache-scheduling.report.json --verbose; npm run work:evidence-summary -- test-output/reports/rolling-restart-benchmark-load-admission-capped-warmup-20260527.report.json; npm run work:scenario-triage -- test-output/reports/rolling-restart-benchmark-load-admission-capped-warmup-20260527.report.json --markdown; npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-benchmark-load-admission-capped-warmup-20260527.report.json --markdown.
-- State model or invariant: The rebalancer_leader / operation_scheduling decision table in the Causal Decision Contract maps priority_recovery_progress_blocked and route evidence to one emitted outcome: ask_human.
+- State model or invariant: The rebalancer_leader / operation_scheduling decision table in the Causal Decision Contract maps priority_recovery_progress_blocked and route evidence to one emitted outcome: allow priority recovery operation creation from publication planning when local cache is empty.
 - Non-goals and forbidden interpretations: Do not reinterpret downstream evidence, widen forbidden boundaries, or patch symptoms outside this package. Forbidden scope: none beyond lane and package scope.
 - Proof mapping: Implementation and tests must prove the rebalancer_leader / operation_scheduling invariant before representative or closure proof is accepted.
 - Wrong-slice trigger: Stop or split if the canonical outcome changes owner, boundary, required action, or needs files outside the declared scope.
@@ -248,10 +254,10 @@ Approved maintenance scope or roadmap row.
 
 Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc `jq`, use the canonical workflow command that owns the question:
 
-1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest <package>`, `npm run work:package:doctor -- --fix-dry-run <package>`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.
-2. Representative evidence: `npm run work:evidence-summary -- <artifact>` plus any focused extractor for this failure class.
-3. Owner discovery: `npm run analyze:owner-files -- <owner> [boundary]`.
-4. Subagent sequencing: `npm run work:subagent-prompt -- --role <role> --package <package>`.
+1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest work/packages/done-20260527-rolling-restart-priority-recovery-stale-cache-scheduling.md`, `npm run work:package:doctor -- --fix-dry-run work/packages/done-20260527-rolling-restart-priority-recovery-stale-cache-scheduling.md`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.
+2. Representative evidence: `npm run work:evidence-summary -- test-output/reports/rolling-restart-priority-recovery-stale-cache-scheduling.report.json` plus any focused extractor for this failure class.
+3. Owner discovery: `npm run analyze:owner-files -- rebalancer_leader operation_scheduling`.
+4. Subagent sequencing: `npm run work:subagent-prompt -- --role review --package work/packages/done-20260527-rolling-restart-priority-recovery-stale-cache-scheduling.md`.
 5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.
 
 If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which canonical extractor was tried and why it was insufficient.
@@ -259,7 +265,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 ## Workflow Acceleration Contract
 
 1. Use `npm run work:advance -- --check` before adding more package prose; it combines doctor, subagent-next, and entry/pre-implementation validation.
-2. Keep the durable proof ladder to 3-5 commands by default: prefer `npm run work:scenario-route -- <artifact>` for representative routing, one focused test or extractor, and validation. Add static guardrails only when implementation files changed.
+2. Keep the durable proof ladder to 3-5 commands by default: prefer `npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-stale-cache-scheduling.report.json` for representative routing, one focused test or extractor, and validation. Add static guardrails only when implementation files changed.
 3. If this package only changes package, sprint, tracker, or ledger files, the next pass must run representative evidence, close as classification-only, open a concrete bug package, or open/select an autonomous architecture experiment. Human gates are only for blocked/contradictory evidence.
 4. Once an architecture gate has a selected route, do not open another gate unless fresh canonical evidence contradicts the selected route.
 5. For bounded experiments, move quickly inside the inherited owner boundary, but do not merge without the stated focused proof and canonical evidence movement.
@@ -270,7 +276,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 2. test/rebalancer/unified-rebalancer-part-5-2-stage-2.js
 3. work/sprints/current-blocker.md
 4. work/sprints/current-blocker.json
-5. work/sprints/active-2026-q2-rolling-restart-priority-recovery-resolution.md
+5. work/sprints/done-2026-q2-rolling-restart-priority-recovery-resolution.md
 
 ## Out Of Scope
 
@@ -282,7 +288,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `bounded-owner-runtime/current-frontier`
 - Output profile: `medium`
-- Owned files: `src/rebalancer/rebalancer-evaluation-methods.js`, `test/rebalancer/unified-rebalancer-part-5-2-stage-2.js`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/sprints/active-2026-q2-rolling-restart-priority-recovery-resolution.md`
+- Owned files: `src/rebalancer/rebalancer-evaluation-methods.js`, `test/rebalancer/unified-rebalancer-part-5-2-stage-2.js`, `work/sprints/current-blocker.md`, `work/sprints/current-blocker.json`, `work/sprints/done-2026-q2-rolling-restart-priority-recovery-resolution.md`
 - Do-not-edit scope: `src/` outside declared writeScope
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.

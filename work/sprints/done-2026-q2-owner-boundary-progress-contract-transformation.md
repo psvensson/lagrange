@@ -1,6 +1,6 @@
 # Owner Boundary Progress Contract Transformation Sprint
 
-Status: todo. Created on May 27, 2026.
+Status: done. Created on May 27, 2026. Closed on May 27, 2026.
 
 ## Goal
 
@@ -46,8 +46,7 @@ Complete means:
   that only quiet downstream symptoms, diagnostics that infer owner state from
   unrelated fields, or another package that records pending/deferred/retryable
   state without a wake/retry/terminal path.
-- Next best package:
-  `work/packages/todo-20260527-owner-boundary-progress-contract-foundation.md`.
+- Next best package: none; this sprint is closed.
 - Stop or escalate rule: if one conversion cannot preserve owner/boundary or
   needs contradictory semantics, open an autonomous architecture experiment for
   that boundary before broadening the sprint.
@@ -55,22 +54,22 @@ Complete means:
 ## Current Edge Card
 
 ```text
-Representative artifact: none
-Visible first frontier: unknown
-Active package: work/packages/done-20260527-progress-contract-cleanup-and-adoption.md
+Representative artifact: test-output/reports/rolling-restart-progress-contract-proof.report.json
+Visible first frontier: explicit progress-contract frontier selected and routed by the representative proof
+Active package: none
 Active package owner: workflow_tooling_owner
 Active package boundary: progress_contract_adoption
 Selected cause: duplicate_progress_vocabulary_cleanup
-Required action: Remove converted ad hoc progress vocabulary, document the adopted pattern, and leave future packages with contract-ready examples.
-Representative status: unknown
-Causal outcome: unknown
+Required action: none; cleanup and adoption package closed the sprint.
+Representative status: migrated
+Causal outcome: progress-contract conversion complete; remaining work belongs to later rolling-restart evidence
 Architecture gate: not-required / unknown
-Expected delta: unknown
-Current state: Created todo package for cleanup and adoption after representative proof selects the final progress-contract shape.
+Expected delta: done packages 1 through 8 created, executed, and closed with representative progress-contract proof.
+Current state: Closed by work/packages/done-20260527-progress-contract-cleanup-and-adoption.md after package queue completion and validation.
 Allowed edits: work/RULES.md, .kiro/steering/llm/style.md, .kiro/steering/llm/testing.md, work/templates/sprint-strategy-brief.md, .kiro/steering/doctrine/state-encoding.md, .kiro/steering/workflow-guidelines/lifecycle.md, .kiro/steering/llm/rules.json, .kiro/steering/llm/architecture.md, .kiro/steering/llm/governance.md
 Candidate runtime files: unknown
 Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
-Required latest proof: regression: npm run steering:llm:pack, supporting: npm run work:validate -- --entry, supporting: npm run work:validate -- --pre-impl
+Required latest proof: regression: npm run steering:llm:pack, supporting: npm run work:validate -- --entry, supporting: npm run work:validate -- --pre-impl, closure: npm run work:validate -- --closure work/packages/done-20260527-owner-boundary-progress-contract-foundation.md work/packages/done-20260527-progress-contract-guardrails-and-package-templates.md work/packages/done-20260527-diagnostics-progress-contract-consumer-cutover.md work/packages/done-20260527-startup-readiness-progress-contract-conversion.md work/packages/done-20260527-operation-workflow-progress-contract-conversion.md work/packages/done-20260527-active-gate-snapshot-coverage-progress-contract-conversion.md work/packages/done-20260527-rolling-restart-progress-contract-representative-proof.md work/packages/done-20260527-progress-contract-cleanup-and-adoption.md
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -126,14 +125,14 @@ has a stronger envelope, but the package must map each concept explicitly.
    - Acceptance: diagnostics constants and focused topology tests can express
      owner, boundary, state, reason, next action, wake source, retry, terminal,
      evidence path, and blocking dependency without runtime behavior changes.
-2. [Progress Contract Guardrails And Package Templates](../packages/todo-20260527-progress-contract-guardrails-and-package-templates.md)
+2. [Progress Contract Guardrails And Package Templates](../packages/done-20260527-progress-contract-guardrails-and-package-templates.md)
    - Lane: `lightweight-maintenance`
    - Owner boundary: `workflow_tooling_owner / progress_contract_guardrails`
    - Purpose: require future runtime/scenario packages to name the progress
      contract they change before runtime promotion.
    - Acceptance: package validation or focused guardrail proof rejects new
      stranded progress states without wake/retry/terminal evidence.
-3. [Diagnostics Progress Contract Consumer Cutover](../packages/todo-20260527-diagnostics-progress-contract-consumer-cutover.md)
+3. [Diagnostics Progress Contract Consumer Cutover](../packages/done-20260527-diagnostics-progress-contract-consumer-cutover.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `diagnostics_owner /
      topology_convergence_progress_contract`
@@ -142,28 +141,28 @@ has a stronger envelope, but the package must map each concept explicitly.
    - Acceptance: diagnostics tests select the same or narrower first frontier
      from contract data and no longer need unrelated downstream symptoms for
      that choice.
-4. [Startup Readiness Progress Contract Conversion](../packages/todo-20260527-startup-readiness-progress-contract-conversion.md)
+4. [Startup Readiness Progress Contract Conversion](../packages/done-20260527-startup-readiness-progress-contract-conversion.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `startup_readiness_owner / startup_support_evidence`
    - Purpose: convert `readiness_retryable` startup support into contract
      state with wake/retry source and bounded terminal evidence.
    - Acceptance: focused bootstrap tests prove retryable readiness either
      re-enters, advances, or emits a terminal stop with diagnostic evidence.
-5. [Operation Workflow Progress Contract Conversion](../packages/todo-20260527-operation-workflow-progress-contract-conversion.md)
+5. [Operation Workflow Progress Contract Conversion](../packages/done-20260527-operation-workflow-progress-contract-conversion.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `operation_workflow_owner / workflow_progress`
    - Purpose: convert priority recovery `dispatch_pending` / `planned` owner
      re-entry paths to explicit progress contracts.
    - Acceptance: focused rebalancer tests prove persisted-not-dispatched work
      wakes, retries, reconciles, or emits a terminal owner outcome.
-6. [Active Gate Snapshot Coverage Progress Contract Conversion](../packages/todo-20260527-active-gate-snapshot-coverage-progress-contract-conversion.md)
+6. [Active Gate Snapshot Coverage Progress Contract Conversion](../packages/done-20260527-active-gate-snapshot-coverage-progress-contract-conversion.md)
    - Lane: `runtime-owner-boundary`
    - Owner boundary: `startup_active_gate_owner / snapshot_coverage`
    - Purpose: convert active-gate snapshot coverage to explicit bounded
      progress, retry, and terminal contract evidence.
    - Acceptance: active-gate and diagnostics tests prove coverage cannot mask
      upstream owner debt and emits one bounded next action.
-7. [Rolling Restart Progress Contract Representative Proof](../packages/todo-20260527-rolling-restart-progress-contract-representative-proof.md)
+7. [Rolling Restart Progress Contract Representative Proof](../packages/done-20260527-rolling-restart-progress-contract-representative-proof.md)
    - Lane: `scenario-release-gate`
    - Owner boundary: `release_gate_owner /
      rolling_restart_progress_contract_gate`
@@ -182,14 +181,12 @@ has a stronger envelope, but the package must map each concept explicitly.
 
 ## Activation Order
 
-Packages 1 through 3 are ordered and must run first. Packages 4 through 6 may
-be reordered only if the then-current representative frontier selects a
-specific converted boundary first. Package 7 runs after the converted boundary
-set is complete or explicitly deferred. Package 8 closes the sprint.
+Completed order: packages 1 through 3 established the contract and consumer
+path, packages 4 through 6 converted the selected owner boundaries, package 7
+ran representative proof, and package 8 closed cleanup/adoption.
 
-Only one package from this sprint should be active at a time. Do not activate
-this sprint until the current rolling-restart priority recovery sprint either
-closes or explicitly migrates its remaining work here.
+This sprint has no active package. Later rolling-restart evidence must open a
+separate successor package instead of reactivating this completed sprint.
 
 ## Non-Goals
 
@@ -203,7 +200,12 @@ closes or explicitly migrates its remaining work here.
 
 ## Closure Rule
 
-This sprint closes when packages 1 through 8 are done or explicitly superseded
-with current evidence, and the representative rolling-restart proof is green,
-reduced, migrated to one concrete frontier, or classified as an architecture
-gap with a selected follow-on package.
+Satisfied on May 27, 2026: packages 1 through 8 are done, the representative
+progress-contract proof migrated to a concrete frontier, and cleanup/adoption
+validated the durable steering/template rules.
+
+Closure validation:
+
+```bash
+npm run work:validate -- --closure work/packages/done-20260527-owner-boundary-progress-contract-foundation.md work/packages/done-20260527-progress-contract-guardrails-and-package-templates.md work/packages/done-20260527-diagnostics-progress-contract-consumer-cutover.md work/packages/done-20260527-startup-readiness-progress-contract-conversion.md work/packages/done-20260527-operation-workflow-progress-contract-conversion.md work/packages/done-20260527-active-gate-snapshot-coverage-progress-contract-conversion.md work/packages/done-20260527-rolling-restart-progress-contract-representative-proof.md work/packages/done-20260527-progress-contract-cleanup-and-adoption.md
+```

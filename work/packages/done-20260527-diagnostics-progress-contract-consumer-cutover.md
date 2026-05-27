@@ -210,7 +210,7 @@ to prefer owner-emitted progress evidence over scattered symptom inference.
 ## Scope Basis
 
 Sprint package 3 in
-`work/sprints/todo-2026-q2-owner-boundary-progress-contract-transformation.md`;
+`work/sprints/done-2026-q2-owner-boundary-progress-contract-transformation.md`;
 scope is limited to topology convergence diagnostics, edge resolution,
 normalization, and focused diagnostic tests.
 
