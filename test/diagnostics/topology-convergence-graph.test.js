@@ -10,6 +10,7 @@ import {
   buildTopologyConvergenceGraphFromArtifacts,
   selectTopologyConvergenceDominantWitness,
 } from '../../src/diagnostics/topology-convergence-graph.js';
+import { CONTRACT_FIELD } from '../../src/diagnostics/topology-convergence-constants.js';
 
 const FIXTURE_SCENARIO = 'fixture-rolling-restart';
 const FIXTURE_PUBLICATION_EPOCH = 4;
@@ -1505,5 +1506,25 @@ describe('TopologyConvergenceGraph', () => {
       [EDGE_SNAPSHOT_COVERAGE],
     );
     assertNoNullOrUndefined(graph);
+  });
+
+  it('covers owner, boundary, state, reason, nextAction, wakeSource, retryAfterMs, terminalState, evidencePath, and blockingDependency in progress contract witnesses', () => {
+    const graph = buildTopologyConvergenceGraphFromArtifacts({
+      failureBundle: buildFixtureFailureBundle(),
+    });
+
+    assert.ok(graph.ownerWitnesses.length > 0);
+    for (const witness of graph.ownerWitnesses) {
+      assert.ok(witness[CONTRACT_FIELD.OWNER]);
+      assert.ok(witness[CONTRACT_FIELD.BOUNDARY]);
+      assert.ok(witness[CONTRACT_FIELD.STATE]);
+      assert.ok(witness[CONTRACT_FIELD.REASON]);
+      assert.ok(witness[CONTRACT_FIELD.NEXT_ACTION]);
+      assert.ok(witness[CONTRACT_FIELD.WAKE_SOURCE]);
+      assert.equal(typeof witness[CONTRACT_FIELD.RETRY_AFTER_MS], 'number');
+      assert.ok(witness[CONTRACT_FIELD.TERMINAL_STATE]);
+      assert.ok(witness[CONTRACT_FIELD.EVIDENCE_PATH]);
+      assert.ok(witness[CONTRACT_FIELD.BLOCKING_DEPENDENCY]);
+    }
   });
 });

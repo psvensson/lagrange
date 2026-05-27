@@ -3094,6 +3094,106 @@ export function validateRepresentativeResidualContract(
   return errors;
 }
 
+export function findActiveSprintFileSync() {
+  try {
+    if (!fsSync.existsSync(WORK_SPRINTS_DIR)) {
+      return null;
+    }
+    const files = fsSync.readdirSync(WORK_SPRINTS_DIR);
+    for (const file of files) {
+      const fullPath = path.join(WORK_SPRINTS_DIR, file);
+      if (isGeneratedCurrentBlockerPath(fullPath)) {
+        continue;
+      }
+      if (file.endsWith('.md') && file.startsWith('active-')) {
+        return fullPath;
+      }
+    }
+  } catch (err) {
+    // ignore
+  }
+  return null;
+}
+
+export function metadataRequiresProgressContract(metadata, fileStatus, filePath) {
+  if (fileStatus !== STATUS_ACTIVE || !metadata || !filePath) {
+    return false;
+  }
+  const activeSprintFile = findActiveSprintFileSync();
+  if (!activeSprintFile) {
+    return false;
+  }
+  if (!activeSprintFile.includes('owner-boundary-progress-contract-transformation')) {
+    return false;
+  }
+  const isProgressLane = [
+    LANE_RUNTIME_OWNER_BOUNDARY,
+    LANE_CAUSAL_ESCALATION,
+    LANE_SCENARIO_RELEASE_GATE,
+    LANE_SINGLE_FILE_RUNTIME,
+  ].includes(metadata.lane);
+  if (!isProgressLane) {
+    return false;
+  }
+  try {
+    const filename = path.basename(filePath);
+    const sprintContent = fsSync.readFileSync(activeSprintFile, 'utf8');
+    return sprintContent.includes(filename);
+  } catch (err) {
+    return false;
+  }
+}
+
+
+export function validateProgressContract(metadata, filePath, options = {}) {
+  const requiresProgressContract = options[LEDGER_VALIDATION_REQUIRES_LEDGER] === true;
+  const progressContract = metadata?.progressContract;
+  if (!progressContract) {
+    return requiresProgressContract ?
+      [`${filePath}: metadata progressContract is required.`] :
+      [];
+  }
+  if (!isObjectRecord(progressContract)) {
+    return [`${filePath}: metadata progressContract must be an object.`];
+  }
+
+  const requiredFields = [
+    'owner',
+    'boundary',
+    'state',
+    'reason',
+    'nextAction',
+    'wakeSource',
+    'retryAfterMs',
+    'terminalState',
+    'evidencePath',
+    'blockingDependency'
+  ];
+
+  const errors = [];
+  for (const fieldName of requiredFields) {
+    const value = progressContract[fieldName];
+    if (fieldName === 'retryAfterMs') {
+      if (typeof value !== 'number' || value < 0) {
+        errors.push(`${filePath}: progressContract.retryAfterMs must be a non-negative number.`);
+      }
+    } else {
+      const normalizedValue = normalizeLedgerText(value);
+      if (
+        normalizedValue.length === 0 ||
+        MODEL_FIT_EMPTY_VALUE_PATTERN.test(normalizedValue) ||
+        LEDGER_TEMPLATE_PLACEHOLDER_PATTERN.test(normalizedValue) ||
+        normalizedValue.includes(LEDGER_PENDING_BEFORE_IMPLEMENTATION_MARKER)
+      ) {
+        errors.push(`${filePath}: progressContract.${fieldName} must be a concrete value.`);
+      }
+    }
+  }
+
+  return errors;
+}
+
+
 export function validateCausalGovernanceContract(
   metadata,
   filePath,
@@ -6438,6 +6538,11 @@ function runPackageValidationsSync(filePath, content, fileStatus, metadata, opti
       status: fileStatus,
     },
   ));
+  errors.push(...validateProgressContract(metadata, relativePath, {
+    [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+      metadataRequiresProgressContract(metadata, fileStatus, relativePath),
+    status: fileStatus,
+  }));
   const requiresCommitLedger =
     metadata !== null &&
     fileStatus !== STATUS_SUPERSEDED &&
@@ -7243,6 +7348,7 @@ function summarizeDoctorMetadata(metadata = {}) {
     owner: metadata.owner || DEFAULT_UNKNOWN,
     boundary: metadata.boundary || DEFAULT_UNKNOWN,
     dominantReason: metadata.dominantReason || DEFAULT_UNKNOWN,
+    progressContract: isObjectRecord(metadata.progressContract) ? 'recorded' : 'missing',
     scenarioCausalClosure: isObjectRecord(
       metadata[SCENARIO_CAUSAL_CLOSURE_METADATA_FIELD],
     ) ? 'recorded' : 'missing',
@@ -7732,6 +7838,7 @@ export function buildPackageDoctorLines(filePath, content, options = {}) {
     'Scenario causal closure',
     metadataSummary.scenarioCausalClosure,
   );
+  appendDoctorField(lines, 'Progress contract', metadataSummary.progressContract);
   appendDoctorField(lines, 'Write scope', String(metadataSummary.writeScopeCount));
   appendDoctorField(lines, 'Handoff files', String(metadataSummary.handoffFileCount));
   appendDoctorField(lines, 'Generated files', String(metadataSummary.generatedFileCount));

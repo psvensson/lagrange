@@ -20,7 +20,7 @@ Falsifying probe: unknown
 
 Stop rule: unknown
 
-Sprint: `work/sprints/active-2026-q2-rolling-restart-priority-recovery-resolution.md`
+Sprint: `work/sprints/active-2026-q2-owner-boundary-progress-contract-transformation.md`
 
 Package: `none`
 

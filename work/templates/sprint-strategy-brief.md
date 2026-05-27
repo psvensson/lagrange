@@ -4,6 +4,9 @@ Use this section near the top of active scenario-driven, release-gate, and
 causal-escalation sprint files. Keep each field concrete enough that a future
 package can tell whether it is still following the right strategic path.
 
+> [!NOTE]
+> Active packages in active progress contract sprints must declare the canonical `progressContract` metadata field in their front matter (containing: `owner`, `boundary`, `state`, `reason`, `nextAction`, `wakeSource`, `retryAfterMs`, `terminalState`, `evidencePath`, `blockingDependency`).
+
 ## Sprint Strategy Brief
 
 - Goal state: <concrete representative green or release-gate success condition>

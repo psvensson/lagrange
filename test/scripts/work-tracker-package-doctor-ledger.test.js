@@ -1216,5 +1216,58 @@ describe('work tracker package doctor', () => {
         assert.match(report.errors.join('\n'), /execution.implementation.parentRevalidatedFocusedProof must be true before closure/u);
       });
     });
+
+    describe('Progress Contract Validation', () => {
+      it('validates progressContract shape and fields', async () => {
+        const { validateProgressContract } = await import('../../scripts/work-tracker.js');
+        const invalidMetadata = {
+          status: 'active',
+          lane: 'runtime-owner-boundary',
+          progressContract: {
+            owner: 'todo',
+            boundary: 'startup_active_gate_owner',
+            state: 'pending',
+            reason: 'owner_reconcile_pending',
+            nextAction: 'wait_for_progress',
+            wakeSource: 'timer',
+            retryAfterMs: -1,
+            terminalState: 'none',
+            evidencePath: 'path/to/evidence',
+            blockingDependency: 'none',
+          }
+        };
+
+        const errors = validateProgressContract(invalidMetadata, 'work/packages/active-test.md', {
+          ledgerValidationRequiresLedger: true
+        });
+
+        assert.ok(errors.length > 0);
+        assert.match(errors.join('\n'), /progressContract.owner must be a concrete value/u);
+        assert.match(errors.join('\n'), /progressContract.retryAfterMs must be a non-negative number/u);
+
+        const validMetadata = {
+          status: 'active',
+          lane: 'runtime-owner-boundary',
+          progressContract: {
+            owner: 'startup_active_gate_owner',
+            boundary: 'snapshot_coverage',
+            state: 'pending',
+            reason: 'owner_reconcile_pending',
+            nextAction: 'wait_for_progress',
+            wakeSource: 'timer',
+            retryAfterMs: 1000,
+            terminalState: 'no_terminal_state',
+            evidencePath: 'path/to/evidence',
+            blockingDependency: 'no_blocking_dependency',
+          }
+        };
+
+        const validErrors = validateProgressContract(validMetadata, 'work/packages/active-test.md', {
+          ledgerValidationRequiresLedger: true
+        });
+        assert.deepEqual(validErrors, []);
+      });
+    });
   });
 });
+

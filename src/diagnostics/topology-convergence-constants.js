@@ -306,6 +306,19 @@ export const OWNER_WITNESS_FIELD = Object.freeze({
   ROOT_CAUSE_CLASS: 'rootCauseClass',
 });
 
+export const CONTRACT_FIELD = Object.freeze({
+  OWNER: 'owner',
+  BOUNDARY: 'boundary',
+  STATE: 'state',
+  REASON: 'reason',
+  NEXT_ACTION: 'nextAction',
+  WAKE_SOURCE: 'wakeSource',
+  RETRY_AFTER_MS: 'retryAfterMs',
+  TERMINAL_STATE: 'terminalState',
+  EVIDENCE_PATH: 'evidencePath',
+  BLOCKING_DEPENDENCY: 'blockingDependency',
+});
+
 export const EDGE_ROOT_CAUSE_CLASS = Object.freeze({
   [EDGE_ID.PUBLICATION_ACK_CONVERGENCE]: ROOT_CAUSE_CLASS_TOPOLOGY,
   [EDGE_ID.PRIORITY_RECOVERY_PARTITION_PROGRESS]: ROOT_CAUSE_CLASS_TOPOLOGY,
