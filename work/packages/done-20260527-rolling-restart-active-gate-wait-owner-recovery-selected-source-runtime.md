@@ -3,70 +3,90 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
+  "status": "done",
   "intent": {
     "opened": "2026-05-27",
-    "lane": "runtime-owner-boundary",
+    "lane": "experiment",
     "scenario": "rolling-restart",
-    "artifact": "test-output/reports/rolling-restart-priority-recovery-stale-cache-scheduling.report.json",
+    "artifact": "test-output/reports/rolling-restart-active-gate-theory-loop-resume-20260527T202818Z.report.json",
     "playback": "none",
     "owner": "startup_active_gate_owner",
     "boundary": "snapshot_coverage",
     "dominantReason": "active_gate_timed_out",
-    "currentState": "Representative evidence selects startup_active_gate_owner / snapshot_coverage at active_gate_snapshot_coverage; the package records the bounded next decision before runtime edits.",
-    "nextAction": "Implement bounded wait_owner_recovery selected-source timeout progress using admin-reachable selected source and alternative witness evidence, then rerun rolling-restart."
+    "currentState": "Fresh representative evidence stayed on active_gate_snapshot_coverage with zero priority-recovery residuals, selected_snapshot_source_timeout, snapshotCoverageNodeCount=1/5, selectedControlPlaneOwnerQueuePendingWrites=1, and requiredProgressMechanism=reconcile.",
+    "nextAction": "Open an autonomous architecture experiment for the repeated active-gate selected-source owner-recovery contract gap before any more local runtime patches.",
+    "closed": "2026-05-27"
   },
   "scope": {
     "writeScope": [
-      "test/distributed/harness/cluster-segment-7-class-5.js",
-      "test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js",
-      "test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-selected-source-test-cases.js",
-      "test/distributed/harness/__tests__/cluster-active-gate-startup-owner-handoff-test-cases.js"
+      "work/packages/todo-20260527-rolling-restart-active-gate-wait-owner-recovery-selected-source-runtime.md",
+      "work/packages/active-20260527-rolling-restart-active-gate-wait-owner-recovery-selected-source-runtime.md",
+      "work/sprints/active-2026-q2-rolling-restart-active-gate-theory-loop-resume.md",
+      "work/sprints/current-blocker.md",
+      "work/sprints/current-blocker.json"
     ],
     "handoffFiles": [
-      "test-output/reports/rolling-restart-priority-recovery-stale-cache-scheduling.report.json"
+      "test-output/reports/rolling-restart-active-gate-theory-loop-resume-20260527T202818Z.report.json"
     ],
     "generatedFiles": [],
     "candidateRuntimeFiles": [
+      "test/distributed/harness/cluster-segment-7-class-5.js",
+      "test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js",
+      "test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-selected-source-test-cases.js",
+      "test/distributed/harness/__tests__/cluster-active-gate-startup-owner-handoff-test-cases.js",
       "test/distributed/harness/cluster-segment-7-class-4-publication-coverage.js",
       "test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js"
     ],
     "commitScope": [
-      "test/distributed/harness/cluster-segment-7-class-5.js",
-      "test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js",
-      "test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-selected-source-test-cases.js",
-      "test/distributed/harness/__tests__/cluster-active-gate-startup-owner-handoff-test-cases.js"
+      "work/packages/todo-20260527-rolling-restart-active-gate-wait-owner-recovery-selected-source-runtime.md",
+      "work/packages/active-20260527-rolling-restart-active-gate-wait-owner-recovery-selected-source-runtime.md",
+      "work/sprints/active-2026-q2-rolling-restart-active-gate-theory-loop-resume.md",
+      "work/sprints/current-blocker.md",
+      "work/sprints/current-blocker.json"
     ]
   },
   "gates": {
     "stabilityCredit": "local-proof-only",
-    "whyHighestLeverageNow": "This package advances the active sprint goal with focused proof.",
-    "representativeRerunCadence": "scheduled-rerun-command"
+    "whyHighestLeverageNow": "This advances the active sprint goal by resolving the current first frontier active_gate_snapshot_coverage without a third same-frontier runtime patch; the package must distinguish one contract or stop before more source edits.",
+    "representativeRerunCadence": "architecture-stop-reason"
   },
   "modelFit": {
-    "packageClass": "runtime-owner-boundary",
+    "packageClass": "architecture-experiment",
     "intendedMinimumModel": "gpt-5.3-codex",
-    "scopeShape": "bounded-owner-runtime/current-frontier",
+    "scopeShape": "cross-owner-discriminator/current-frontier",
     "outputProfile": "medium",
-    "ambiguityScore": 1,
+    "ambiguityScore": 3,
     "escalationTriggers": [
       "owned files expand beyond this package",
       "a frozen decision must be reopened"
     ]
   },
   "execution": {
-    "theoryLedgerRefs": [],
+    "theoryLedgerRefs": [
+      "theory-20260526-rolling-restart-selected-snapshot-source-staleness",
+      "theory-20260526-rolling-restart-selected-view-best-view-evidence-gap",
+      "theory-20260526-rolling-restart-active-gate-evidence-capture-gap",
+      "theory-20260522-snapshot-watch-handoff-contract"
+    ],
+    "theoryLedger": "no-ledger-update",
     "proof": {
       "commands": [
-        "falsifier: npm test -- test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-selected-source-test-cases.js",
-        "regression: npm test -- test/distributed/harness/__tests__/cluster-active-gate-startup-owner-handoff-test-cases.js",
-        "supporting: npm run audit:guideline:literals -- test/distributed/harness/cluster-segment-7-class-5.js test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-selected-source-test-cases.js",
-        "supporting: npm run audit:guideline:decision-boundaries -- test/distributed/harness/cluster-segment-7-class-5.js",
-        "supporting: npm run audit:runtime-grammar:file -- test/distributed/harness/cluster-segment-7-class-5.js",
-        "npm run work:evidence-summary -- test-output/reports/rolling-restart-priority-recovery-stale-cache-scheduling.report.json",
-        "npm run work:scenario-triage -- test-output/reports/rolling-restart-priority-recovery-stale-cache-scheduling.report.json --markdown",
-        "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-priority-recovery-stale-cache-scheduling.report.json --markdown"
+        "falsifier: npm run work:scenario-route -- test-output/reports/rolling-restart-active-gate-theory-loop-resume-20260527T202818Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage",
+        "regression: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-theory-loop-resume-20260527T202818Z.report.json --handoff-probe",
+        "supporting: npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-active-gate-theory-loop-resume-20260527T202818Z.report.json"
       ]
+    },
+    "implementation": {
+      "parentRevalidatedFocusedProof": true,
+      "filesChanged": [
+        "work/packages/active-20260527-rolling-restart-active-gate-wait-owner-recovery-selected-source-runtime.md",
+        "work/sprints/active-2026-q2-rolling-restart-active-gate-theory-loop-resume.md",
+        "work/sprints/current-blocker.md",
+        "work/sprints/current-blocker.json"
+      ]
+    },
+    "verificationFix": {
+      "parentRevalidatedFocusedProof": true
     }
   },
   "modelFitSplit": {
@@ -89,37 +109,153 @@
       "Keep cross-file owner runtime integration in this package unless it contracts to one runtime file."
     ]
   },
+  "boundedExperiment": {
+    "hypothesis": "H1 Retry cadence/budget rearm: activeGate attempts remain at 1/8 while selectedSnapshotObservation requests retryAfterMs=15000, so the gate may terminate before the retry can observe. H2 Selected-source owner recovery: the single pending selected owner write and wait_owner_recovery handoff still own progress. H3 Selected-source health: the selected admin_ws source is stale despite an alternative witness. H4 Migration/architecture-gap: prior reducers already covered these local mechanisms and the next move is outside this owner boundary.",
+    "hypothesisDiscriminator": "H1 is selected if active_gate_attempts and active_gate_timeout exhaustion dominate while retryAfterMs remains bounded; H2 if ownerRecoveryQueue pendingWrites=1 and requiredProgressMechanism=reconcile dominate; H3 if selected-source health or alternative witness evidence dominates; H4 if canonical proof repeats prior mechanisms without a new contract.",
+    "expectedMetric": "selected successor contract plus activeGate attempts, active_gate_timeout state, selectedSnapshotObservationRetryAfterMs, selectedControlPlaneOwnerQueuePendingWrites, requiredProgressMechanism, snapshotCoverageNodeCount, and route owner/boundary",
+    "inheritsFrom": "work/packages/done-20260527-rolling-restart-active-gate-snapshot-coverage-post-stale-cache-route.md",
+    "timebox": "24h",
+    "mergeRequirement": "scenario route, topology handoff probe, topology active-gate explain, causal model, and one selected successor or architecture-gap stop",
+    "killRule": "Do not edit runtime files until this experiment names one concrete retry, budget, reconcile, selected-source health, migration, or architecture-gap outcome."
+  },
+  "validationTier": "cross-owner",
+  "inheritsContext": {
+    "owner": true,
+    "boundary": true,
+    "forbiddenScope": true,
+    "proofCommands": true,
+    "stopRule": true
+  },
   "classificationEfficiency": {
     "defaultMode": "inline-gate-default",
     "separatePackageReason": "successor-selection",
     "artifactBudget": "one-artifact",
     "proofCommandBudget": "two-or-three-canonical-commands",
     "commands": [
-      "falsifier: npm test -- test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-selected-source-test-cases.js",
-      "regression: npm test -- test/distributed/harness/__tests__/cluster-active-gate-startup-owner-handoff-test-cases.js",
-      "supporting: npm run audit:guideline:literals -- test/distributed/harness/cluster-segment-7-class-5.js test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-selected-source-test-cases.js"
+      "falsifier: npm run work:scenario-route -- test-output/reports/rolling-restart-active-gate-theory-loop-resume-20260527T202818Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage",
+      "regression: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-theory-loop-resume-20260527T202818Z.report.json --handoff-probe",
+      "supporting: npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-active-gate-theory-loop-resume-20260527T202818Z.report.json"
     ],
     "decisionRecord": "Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.",
-    "successorAction": "open-runtime-owner-boundary",
-    "runtimePromotionRule": "When canonical owner and boundary are stable, prefer a runtime-owner-boundary successor and keep runtime files in candidateRuntimeFiles until that package activates them. If the representative route is same-frontier with no reduction or an architecture gap, open an autonomous architecture experiment before more local runtime work."
+    "successorAction": "open-architecture-experiment",
+    "runtimePromotionRule": "Runtime files remain in candidateRuntimeFiles; same-frontier evidence with no reduction must select/open an autonomous architecture experiment instead of another runtime-owner-boundary local patch."
+  },
+  "causalGovernance": {
+    "hypothesis": "The fresh post-stale-cache artifact is not a generic readiness symptom: it carries an active-gate selected snapshot timeout with admin_ws reachability, an alternative snapshot witness, and exactly one selected owner-recovery pending write, so the next bounded proof must test the selected-source owner recovery progress contract.",
+    "stopConditionCheck": "Ran npm run analyze:causal-model, scenario-route, and topology handoff probe on test-output/reports/rolling-restart-active-gate-theory-loop-resume-20260527T202818Z.report.json before runtime edits.",
+    "expectedCausalModelChange": "The experiment selects an autonomous architecture experiment for the repeated active-gate selected-source owner-recovery contract gap; runtime files remain frozen in this package.",
+    "representativeOutcome": "same-frontier",
+    "causalDebt": "Fresh evidence still routes active_gate_snapshot_coverage with selectedSnapshotAdminReady=true, selectedSnapshotReachableBy=admin_health, alternativeSnapshotWitnessAvailable=true, pendingRecoveryCount=1, selectedControlPlaneOwnerQueuePendingWrites=1, requiredProgressMechanism=reconcile, active_gate_attempts=1/8, and active_gate_timeout exhausted.",
+    "crossBoundaryReview": "Do not change readiness, publication, operation workflow, timeout budgets, or diagnostics sidecar loading. This package may only change startup_active_gate_owner / snapshot_coverage focused harness behavior and affected consumer tests."
+  },
+  "scenarioCausalClosure": {
+    "referenceScenarioOrProbe": "rolling-restart active-gate selected source wait_owner_recovery after stale-cache scheduling",
+    "phaseChain": [
+      "priority recovery stale-cache scheduling cleared eligible_but_no_operation_created and zeroed priority-recovery residual witnesses",
+      "classification preserved startup_active_gate_owner / snapshot_coverage / active_gate_timed_out as the first frontier",
+      "detailed topology explain exposed wait_owner_recovery, selected-source timeout, admin_ws reachability, alternative witness availability, and one selected owner queue pending write",
+      "this runtime package owns one bounded selected-source owner-recovery proof before another same-frontier patch is allowed"
+    ],
+    "currentFirstFrontier": "active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out",
+    "knownDownstreamBlockers": [
+      "startup readiness and admin support evidence remain downstream while active-gate snapshot coverage is incomplete",
+      "operation workflow and priority recovery are not first blockers because residual witnesses are zero in the source artifact"
+    ],
+    "missingCausalEdge": "The active-gate selected snapshot source exposes retryAfterMs=15000 and activeGateAttempts=1/8 at terminal timeout, but the system has not selected whether the missing edge is retry-cadence/budget rearm, selected-source owner recovery, selected-source health, or owner-boundary migration.",
+    "missingCausalEdgeProbe": "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-theory-loop-resume-20260527T202818Z.report.json --handoff-probe",
+    "falsifyingProbe": "npm run work:scenario-route -- test-output/reports/rolling-restart-active-gate-theory-loop-resume-20260527T202818Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage",
+    "boundedProgressProof": "Architecture proof must select one retry, reconcile, drain, wake, timer, budget, or migration mechanism before any runtime patch resumes.",
+    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-active-gate-theory-loop-resume-20260527T202818Z.report.json",
+    "expectedObservableTransition": "Canonical proof repeated the same frontier without reduction and therefore selected an autonomous architecture experiment before more local runtime work.",
+    "maxProgressBound": "one architecture experiment only; no runtime edits in this package",
+    "sameFrontierFallback": "If representative rolling-restart returns startup_active_gate_owner / snapshot_coverage / active_gate_timed_out with selected_snapshot_source_timeout, snapshotCoverageNodeCount=1/5, and owner queue pending write unchanged, stop local runtime work and open/select an autonomous architecture experiment.",
+    "expectedNextFrontier": "selected retry-cadence/budget contract, selected-source owner recovery contract, migrated owner boundary, or architecture-gap stop",
+    "resultClassification": "same-frontier",
+    "stopCondition": "continue-local-fix",
+    "recentFrontierHistory": [
+      "done-20260527-rolling-restart-startup-active-gate-owner-snapshot-coverage.md / startup_active_gate_owner / snapshot_coverage / migrated",
+      "done-20260527-rolling-restart-startup-readiness-owner-startup-support-evid.md / startup_readiness_owner / startup_support_evidence / migrated",
+      "done-20260527-rolling-restart-startup-readiness-admin-reachability-support.md / startup_readiness_owner / startup_support_evidence / migrated"
+    ],
+    "oscillationCheck": "Allowed as a selected local proof because the predecessor classification package recorded fresh post-stale-cache evidence, zero priority-recovery residuals, selectedSnapshotAdminReady=true, selectedSnapshotReachableBy=admin_ws, alternativeSnapshotWitnessAvailable=true, and one selected owner queue pending write.",
+    "handoffInvariant": "The selected-source runtime proof may retry, reconcile, or explicitly defer owner recovery, but it must not promote runtime coverage or mutate publication/readiness ownership while snapshot coverage remains incomplete."
+  },
+  "observablePrediction": {
+    "metric": "selected_snapshot_source_timeout, snapshotCoverageNodeCount, and selectedControlPlaneOwnerQueuePendingWrites",
+    "predicted": "The focused proof will demonstrate bounded selected-source owner-recovery progress; fresh representative evidence should clear selected_snapshot_source_timeout, raise snapshotCoverageNodeCount above 1/5, reduce or explicitly defer the single selected owner queue pending write, migrate the frontier, or pass rolling-restart.",
+    "observed": "Fresh representative evidence remained same-frontier and selected H2: handoff required wait_owner_recovery, selectedControlPlaneOwnerQueuePendingWrites=1, requiredProgressMechanism=reconcile, selected_snapshot_source_timeout persisted, snapshotCoverageNodeCount stayed 1/5, active_gate_timeout exhausted at one attempt, and priority-recovery residuals stayed zero.",
+    "accuracy": "partial",
+    "evidence": "test-output/reports/rolling-restart-active-gate-theory-loop-resume-20260527T202818Z.report.json",
+    "metricDelta": 0
+  },
+  "architectureDecisionGate": {
+    "status": "selected",
+    "trigger": "frontier-oscillation",
+    "triggerEvidence": [
+      "frontier returned to startup_active_gate_owner / snapshot_coverage after priority recovery residuals were cleared",
+      "classification package preserved the fresh route instead of reopening stale readiness or operation workflow symptoms",
+      "topology explain exposes a new bounded selected-source owner-recovery discriminator: admin_ws reachability, alternative witness, and one pending selected owner queue write"
+    ],
+    "selectedChoice": "open-architecture-experiment",
+    "choices": [
+      {
+        "id": "continue-selected-source-owner-recovery-proof",
+        "summary": "Continue local proof only if the experiment names one concrete retry, budget, owner-recovery, or selected-source contract.",
+        "route": "continue-local-proof",
+        "proof": [
+          "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-theory-loop-resume-20260527T202818Z.report.json --handoff-probe",
+          "focused proof selected by this experiment"
+        ]
+      },
+      {
+        "id": "open-architecture-experiment",
+        "summary": "Stop local runtime work if the selected proof cannot move selected-source owner-recovery evidence after representative rerun.",
+        "route": "architecture-package",
+        "proof": [
+          "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-theory-loop-resume-20260527T202818Z.report.json --handoff-probe"
+        ]
+      }
+    ],
+    "nextAction": "Open the autonomous active-gate snapshot coverage contract architecture experiment."
+  },
+  "experimentOutcome": {
+    "distinguishedHypothesis": "H4",
+    "decision": "open-architecture-experiment",
+    "nextOwner": "startup_active_gate_owner",
+    "nextBoundary": "snapshot_coverage_contract_gap",
+    "evidence": "npm run work:scenario-route -- test-output/reports/rolling-restart-active-gate-theory-loop-resume-20260527T202818Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage; npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-theory-loop-resume-20260527T202818Z.report.json --handoff-probe; npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-active-gate-theory-loop-resume-20260527T202818Z.report.json"
   },
   "rerunDecision": {
-    "sourceArtifact": "test-output/reports/rolling-restart-priority-recovery-stale-cache-scheduling.report.json",
+    "sourceArtifact": "test-output/reports/rolling-restart-active-gate-theory-loop-resume-20260527T202818Z.report.json",
     "routeOwner": "startup_active_gate_owner",
     "routeBoundary": "snapshot_coverage",
     "routeDominantReason": "active_gate_timed_out",
-    "routeCausalOutcome": "continue_local_fix",
-    "stopMode": "classified_local_blocker",
-    "nextLane": "runtime-owner-boundary",
-    "expectedDelta": "Increase snapshotCoverageNodeCount above 1/5, drain or explicitly defer wait_owner_recovery owner queue, clear selected_snapshot_source_timeout, migrate owner/boundary, or pass rolling-restart.",
+    "routeCausalOutcome": "widen_architecture_work",
+    "stopMode": "architecture-gap-stop",
+    "nextLane": "experiment",
+    "expectedDelta": "Autonomous architecture experiment names the missing active-gate snapshot coverage contract before any more same-frontier runtime work.",
     "requiredRefreshCommands": [
-      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-priority-recovery-stale-cache-scheduling.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out",
+      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-active-gate-theory-loop-resume-20260527T202818Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out",
       "update Sprint Strategy Brief and Current Edge Card from the route result",
       "npm run work:repair",
       "npm run work:validate -- --entry",
       "npm run work:validate -- --pre-impl"
     ]
-  }
+  },
+  "theoryLedger": "no-ledger-update",
+  "implementation": {
+    "parentRevalidatedFocusedProof": true,
+    "filesChanged": [
+      "work/packages/active-20260527-rolling-restart-active-gate-wait-owner-recovery-selected-source-runtime.md",
+      "work/sprints/active-2026-q2-rolling-restart-active-gate-theory-loop-resume.md",
+      "work/sprints/current-blocker.md",
+      "work/sprints/current-blocker.json"
+    ]
+  },
+  "verificationFix": {
+    "parentRevalidatedFocusedProof": true
+  },
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -267,9 +403,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: startup_active_gate_owner; files-changed: none recorded yet; validation: falsifier: npm test -- test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-selected-source-test-cases.js and parent revalidated focused proof: yes before closure; outcome: pending.
-- [ ] action: verification-fix; owner: startup_active_gate_owner; files-changed: none recorded yet; validation: verifier reruns focused proof and parent revalidated focused proof: yes before closure; outcome: pending.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: pending.
+- [x] action: implementation; owner: workflow_tooling_owner; files-changed: work/packages/active-20260527-rolling-restart-active-gate-wait-owner-recovery-selected-source-runtime.md, work/sprints/active-2026-q2-rolling-restart-active-gate-theory-loop-resume.md, work/sprints/current-blocker.md, work/sprints/current-blocker.json; validation: npm run work:scenario-route -- test-output/reports/rolling-restart-active-gate-theory-loop-resume-20260527T202818Z.report.json; npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-theory-loop-resume-20260527T202818Z.report.json --handoff-probe; npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-active-gate-theory-loop-resume-20260527T202818Z.report.json; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: verification-fix; owner: workflow_tooling_owner; files-changed: none; validation: verified canonical route and handoff evidence on fresh artifact; parent revalidated focused proof: yes; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: npm run work:repair before closure; parent revalidated focused proof: yes; outcome: validated.
 
 ## Validation
 
@@ -282,3 +418,8 @@ Agent identity is optional provenance. Use the compact five-field shape for new 
 7. npm run work:scenario-triage -- test-output/reports/rolling-restart-priority-recovery-stale-cache-scheduling.report.json --markdown
 8. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-priority-recovery-stale-cache-scheduling.report.json --markdown
 
+## Commit And Push Ledger
+
+1. Focused package commit: 9afa4d16bfb7adeb39c2253dd5abe800a5a0ebfa
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

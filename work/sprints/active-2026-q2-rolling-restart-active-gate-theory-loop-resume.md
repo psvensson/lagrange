@@ -28,22 +28,22 @@ Resume the rolling-restart theory loop from the latest post-stale-cache represen
 ## Current Edge Card
 
 ```text
-Representative artifact: test-output/reports/rolling-restart-priority-recovery-stale-cache-scheduling.report.json
+Representative artifact: test-output/reports/rolling-restart-active-gate-theory-loop-resume-20260527T202818Z.report.json
 Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out
-Active package: work/packages/done-20260527-rolling-restart-active-gate-snapshot-coverage-post-stale-cache-route.md
+Active package: work/packages/done-20260527-rolling-restart-active-gate-wait-owner-recovery-selected-source-runtime.md
 Active package owner: startup_active_gate_owner
 Active package boundary: snapshot_coverage
 Selected cause: active_gate_timed_out
-Required action: Record the active-gate snapshot coverage route from the post-stale-cache representative artifact and open a runtime-owner-boundary successor only after the artifact and related active-gate theories are acknowledged.
-Representative status: classification-only
-Causal outcome: continue_local_fix
-Architecture gate: watching / unknown
-Expected delta: Latest post-stale-cache artifact selects active_gate_snapshot_coverage with zero priority-recovery residuals; this package preserves that route and prevents another incomplete or wrong-owner successor.
-Current state: Representative evidence selects startup_active_gate_owner / snapshot_coverage at active_gate_snapshot_coverage; the package records the bounded next decision before runtime edits.
-Allowed edits: work/packages/todo-20260527-rolling-restart-active-gate-snapshot-coverage-post-stale-cache-route.md, work/packages/done-20260527-rolling-restart-active-gate-snapshot-coverage-post-stale-cache-route.md, work/packages/todo-20260527-rolling-restart-active-gate-wait-owner-recovery-selected-source-runtime.md, work/sprints/active-2026-q2-rolling-restart-active-gate-theory-loop-resume.md, work/sprints/current-blocker.md, work/sprints/current-blocker.json
-Candidate runtime files: src/diagnostics/topology-convergence-graph.js, src/diagnostics/topology-convergence-normalizers.js, test/distributed/harness/active-gate-contract.js, test/distributed/harness/cluster-active-wait-diagnostics.js, test/diagnostics/topology-convergence-graph.test.js
-Forbidden edits: Classification may update package and sprint truth only; runtime files remain forbidden until a successor package activates them.
-Required latest proof: falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-priority-recovery-stale-cache-scheduling.report.json, regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-priority-recovery-stale-cache-scheduling.report.json --markdown, supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-priority-recovery-stale-cache-scheduling.report.json --markdown
+Required action: Open an autonomous architecture experiment for the repeated active-gate selected-source owner-recovery contract gap before any more local runtime patches.
+Representative status: unknown
+Causal outcome: widen_architecture_work
+Architecture gate: selected / open-architecture-experiment
+Expected delta: Autonomous architecture experiment names the missing active-gate snapshot coverage contract before any more same-frontier runtime work.
+Current state: Fresh representative evidence stayed on active_gate_snapshot_coverage with zero priority-recovery residuals, selected_snapshot_source_timeout, snapshotCoverageNodeCount=1/5, selectedControlPlaneOwnerQueuePendingWrites=1, and requiredProgressMechanism=reconcile.
+Allowed edits: work/packages/todo-20260527-rolling-restart-active-gate-wait-owner-recovery-selected-source-runtime.md, work/packages/done-20260527-rolling-restart-active-gate-wait-owner-recovery-selected-source-runtime.md, work/sprints/active-2026-q2-rolling-restart-active-gate-theory-loop-resume.md, work/sprints/current-blocker.md, work/sprints/current-blocker.json
+Candidate runtime files: test/distributed/harness/cluster-segment-7-class-5.js, test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js, test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-selected-source-test-cases.js, test/distributed/harness/__tests__/cluster-active-gate-startup-owner-handoff-test-cases.js, test/distributed/harness/cluster-segment-7-class-4-publication-coverage.js, test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js
+Forbidden edits: The selected-source runtime proof may retry, reconcile, or explicitly defer owner recovery, but it must not promote runtime coverage or mutate publication/readiness ownership while snapshot coverage remains incomplete.
+Required latest proof: falsifier: npm run work:scenario-route -- test-output/reports/rolling-restart-active-gate-theory-loop-resume-20260527T202818Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage, regression: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-theory-loop-resume-20260527T202818Z.report.json --handoff-probe, supporting: npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-active-gate-theory-loop-resume-20260527T202818Z.report.json
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -72,7 +72,7 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Lane: `diagnostic-classification`
    - Purpose: Classify and preserve the post-stale-cache active-gate snapshot coverage route, then select a concrete `runtime-owner-boundary` successor or architecture experiment without runtime edits in this package.
    - First-run reason: Latest post-stale-cache representative evidence selects `active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out` with zero priority-recovery residuals.
-2. [Rolling Restart Active Gate Wait Owner Recovery Selected Source Runtime](../packages/todo-20260527-rolling-restart-active-gate-wait-owner-recovery-selected-source-runtime.md)
+2. [Rolling Restart Active Gate Wait Owner Recovery Selected Source Runtime](../packages/done-20260527-rolling-restart-active-gate-wait-owner-recovery-selected-source-runtime.md)
    - Lane: `runtime-owner-boundary`
    - Purpose: Implement bounded wait_owner_recovery selected-source timeout progress using admin-reachable selected source and alternative witness evidence, then rerun rolling-restart.
    - First-run reason: Canonical route preserved `active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out`; detailed handoff evidence shows `wait_owner_recovery`, selected-source timeout, admin reachability, alternative witness availability, and one owner-queue pending write.
