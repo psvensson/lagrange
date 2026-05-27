@@ -29,21 +29,21 @@ Resume the rolling-restart theory loop from the latest post-stale-cache represen
 
 ```text
 Representative artifact: test-output/reports/rolling-restart-active-gate-theory-loop-resume-20260527T202818Z.report.json
-Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage_contract_gap / active_gate_timed_out (source route: snapshot_coverage)
-Active package: work/packages/done-20260527-rolling-restart-active-gate-snapshot-coverage-contract-architecture.md
+Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / selected_source_owner_recovery_reconcile / active_gate_timed_out (source route: snapshot_coverage)
+Active package: work/packages/done-20260527-rolling-restart-active-gate-owner-recovery-reconcile-runtime.md
 Active package owner: startup_active_gate_owner
-Active package boundary: snapshot_coverage_contract_gap
+Active package boundary: selected_source_owner_recovery_reconcile
 Selected cause: active_gate_timed_out
-Required action: Define the missing active-gate snapshot coverage progress contract across selected-source owner recovery, active-gate retry cadence, and alternative witness selection, then select one implementable successor or architecture stop.
+Required action: Implement the selected-source owner-recovery reconcile progress contract so bounded owner queue writes can wake or rearm active-gate snapshot coverage before terminal timeout.
 Representative status: unknown
 Causal outcome: continue_local_fix
-Architecture gate: selected / owner-recovery-reconcile-contract
-Expected delta: Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.
+Architecture gate: selected / continue-local-proof
+Expected delta: Selected-source owner-recovery reconcile progress clears or reduces selected_snapshot_source_timeout, reduces owner queue pending write evidence, increases snapshotCoverageNodeCount above 1/5, migrates the frontier, or makes rolling-restart green.
 Current state: Representative evidence selects startup_active_gate_owner / snapshot_coverage at active_gate_snapshot_coverage; the package records the bounded next decision before runtime edits.
-Allowed edits: work/packages/todo-20260527-rolling-restart-active-gate-snapshot-coverage-contract-architecture.md, work/packages/done-20260527-rolling-restart-active-gate-snapshot-coverage-contract-architecture.md, work/sprints/active-2026-q2-rolling-restart-active-gate-theory-loop-resume.md, work/sprints/current-blocker.md, work/sprints/current-blocker.json
-Candidate runtime files: test/distributed/harness/cluster-segment-7-class-5.js, test/distributed/harness/cluster-segment-7-class-4-publication-coverage.js, test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js, test/distributed/harness/cluster-control-snapshot-recovery.js, test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js, test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-selected-source-test-cases.js, test/distributed/harness/__tests__/cluster-active-gate-startup-owner-handoff-test-cases.js
-Forbidden edits: The experiment may select a contract but must not promote runtime coverage, mutate publication/readiness ownership, or edit runtime files.
-Required latest proof: falsifier: npm run work:scenario-route -- test-output/reports/rolling-restart-active-gate-theory-loop-resume-20260527T202818Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage, regression: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-theory-loop-resume-20260527T202818Z.report.json --handoff-probe, supporting: npm run analyze:causal-model -- test-output/reports/rolling-restart-active-gate-theory-loop-resume-20260527T202818Z.report.json
+Allowed edits: work/packages/todo-20260527-rolling-restart-active-gate-owner-recovery-reconcile-runtime.md, work/packages/done-20260527-rolling-restart-active-gate-owner-recovery-reconcile-runtime.md, work/sprints/active-2026-q2-rolling-restart-active-gate-theory-loop-resume.md, work/sprints/current-blocker.md, work/sprints/current-blocker.json, test/distributed/harness/cluster-segment-7-class-5.js, test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js, test/distributed/harness/cluster-control-snapshot-recovery.js, test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-fixtures.js, test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js, test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-selected-source-test-cases.js, test/distributed/harness/__tests__/cluster-active-gate-startup-owner-handoff-test-cases.js
+Candidate runtime files: unknown
+Forbidden edits: Owner recovery reconcile may wake/retry/defer active-gate snapshot coverage but must not promote runtime coverage while snapshot coverage is incomplete.
+Required latest proof: falsifier: npm test -- test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-test-cases.js test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-selected-source-test-cases.js # focused contract fixture for selected_source_owner_recovery_reconcile contract transition, regression: npm test -- test/distributed/harness/__tests__/cluster-active-gate-startup-owner-handoff-test-cases.js # affected consumer proof for active-gate owner recovery handoff, representative: npm run work:evidence-summary -- test-output/reports/rolling-restart-active-gate-theory-loop-resume-20260527T202818Z.report.json # representative routing evidence
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -80,6 +80,10 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Lane: `experiment`
    - Purpose: Define the missing active-gate snapshot coverage progress contract across selected-source owner recovery, active-gate retry cadence, and alternative witness selection, then select one implementable successor or architecture stop.
    - First-run reason: Fresh representative evidence repeated `active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out` with no metric reduction, so validator policy requires an autonomous architecture experiment before more local runtime patches.
+4. [Rolling Restart Active Gate Owner Recovery Reconcile Runtime](../packages/done-20260527-rolling-restart-active-gate-owner-recovery-reconcile-runtime.md)
+   - Lane: `runtime-owner-boundary`
+   - Purpose: Implement the selected-source owner-recovery reconcile progress contract so bounded owner queue writes can wake or rearm active-gate snapshot coverage before terminal timeout.
+   - First-run reason: The architecture experiment selected H2 from fresh handoff evidence: `requiredProgressMechanism=reconcile`, `selectedControlPlaneOwnerQueuePendingWrites=1`, `handoffOutcome=write_deferred`, zero priority-recovery residuals, and unchanged active-gate snapshot coverage.
 
 ## Activation Instructions
 

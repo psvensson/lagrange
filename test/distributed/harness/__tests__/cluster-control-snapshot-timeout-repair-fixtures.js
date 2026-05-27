@@ -240,8 +240,14 @@ export const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LATE_RETRY_FLOOR_TEST_NAME =
   'Unit: _probeControlSnapshotCoverage preserves late selected-source ' +
   'retry floor after timeout';
 export const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_RETRY_TEST_NAME =
-  'Unit: _probeControlSnapshotCoverage keeps load selected source retry on ' +
-  'base timeout';
+  'Unit: _probeControlSnapshotCoverage reserves owner-recovery budget for ' +
+  'load selected source retry';
+export const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_RETRY_EXHAUSTED_TEST_NAME =
+  'Unit: _probeControlSnapshotCoverage records load owner-recovery retry ' +
+  'after selected source timeout';
+export const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_HANDOFF_RETURN_TEST_NAME =
+  'Unit: _probeControlSnapshotCoverage returns after bounded load ' +
+  'owner-recovery handoff';
 export const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_ALTERNATIVE_WITNESS_TEST_NAME =
   'Unit: _probeControlSnapshotCoverage preserves an alternative query-success ' +
   'witness when selected source times out with higher coverage';
@@ -273,7 +279,11 @@ export const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_INITIAL_PROBE_MIN_MS =
   SELECTED_SNAPSHOT_SOURCE_TIMEOUT_INITIAL_PROBE_DRIFT_MS;
 export const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_STARTUP_RETRY_TIMEOUT_MS = 2500;
 export const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_INITIAL_TIMEOUT_MS = 5000;
-export const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_RETRY_TIMEOUT_MS = 15000;
+export const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_WIDE_DEADLINE_EXTENSION_MS =
+  30000;
+export const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_WIDE_INITIAL_TIMEOUT_MS =
+  15000;
+export const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_RETRY_TIMEOUT_MS = 2500;
 export const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_ERROR =
   'Admin API query timed out for node ' +
   SELECTED_SNAPSHOT_SOURCE_TIMEOUT_SELECTED_NODE_ID +
@@ -624,9 +634,13 @@ export const SNAPSHOT_TIMEOUT_REPAIR_ASSERTION = Object.freeze({
   LOAD_RETRY_FIRST_TIMEOUT:
     'load selected-source first probe should use the base snapshot timeout',
   LOAD_RETRY_TIMEOUT:
-    'load selected-source retry should keep the base snapshot timeout',
+    'load selected-source retry should reserve owner-recovery retry budget',
   LOAD_LANE_RESET:
     'load selected snapshot timeout should reset only the snapshot lane',
+  LOAD_HANDOFF_RETURN_PROBE_COUNT:
+    'load owner-recovery handoff should not probe remaining nodes after the selected source publishes a bounded handoff',
+  LOAD_HANDOFF_RETURN_PUBLISHED:
+    'load owner-recovery handoff should preserve the published active coverage witness',
   FORCED_REPAIR_SOURCE:
     'forced repair timeout fallback should preserve the selected admin-ready source',
   FORCED_REPAIR_CLEAR:

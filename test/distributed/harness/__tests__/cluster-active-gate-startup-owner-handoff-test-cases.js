@@ -69,6 +69,9 @@ const ACTIVE_GATE_STARTUP_OWNER_RECOVERY_SELECTED_TIMEOUT_TEST_NAME =
 const ACTIVE_GATE_STARTUP_OWNER_RECOVERY_INHERITED_TIMEOUT_TEST_NAME =
   'Unit: _probeClusterActiveState projects selected-timeout inherited ' +
   'readiness support during startup';
+const ACTIVE_GATE_STARTUP_SELECTED_SOURCE_RECONCILE_TIMEOUT_TEST_NAME =
+  'Unit: _probeClusterActiveState projects selected source readiness timeout ' +
+  'with owner-reconcile handoff';
 const ACTIVE_GATE_STARTUP_OWNER_RECONCILE_STALE_ACK_GUARDRAIL_TEST_NAME =
   'Unit: _probeClusterActiveState keeps stale selected ACK blocked without ' +
   'startup owner-reconcile handoff';
@@ -176,6 +179,13 @@ function buildStartupOwnerReconcilePartialCoverageCluster({
     ACTIVE_GATE_STARTUP_OWNER_RECONCILE_EMPTY_PENDING_RECOVERY_NODE_IDS,
   handoffMissingPublishedNodeIds =
     ACTIVE_GATE_STARTUP_OWNER_RECONCILE_MISSING_NODE_IDS,
+  readinessTimeoutNodeId = null,
+  selectedNodeId = SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE,
+  selectedObservedNodeIds =
+    ACTIVE_GATE_STARTUP_OWNER_RECONCILE_OBSERVED_NODE_IDS,
+  selectedPublishedActiveNodeIds =
+    ACTIVE_GATE_STARTUP_OWNER_RECONCILE_PUBLISHED_NODE_IDS,
+  publicationDisagreementByNodeId = null,
 }) {
   const cluster = createCluster({
     size: SNAPSHOT_REPLAY_TEST_CLUSTER_SIZE,
@@ -190,6 +200,9 @@ function buildStartupOwnerReconcilePartialCoverageCluster({
           NODE_ROLES.SEED :
           NODE_ROLES.JOINER,
       async probeBootstrapReadiness() {
+        if (nodeId === readinessTimeoutNodeId) {
+          throw new Error('Node readiness probe timed out for ' + nodeId);
+        }
         return {
           status: ACTIVE_GATE_STARTUP_OWNER_RECONCILE_STATUS,
           phase: ACTIVE_GATE_STARTUP_OWNER_RECONCILE_PHASE,
@@ -234,20 +247,21 @@ function buildStartupOwnerReconcilePartialCoverageCluster({
       expectedNodeCount: SNAPSHOT_REPLAY_TEST_CLUSTER_SIZE,
       bestCoverageNodeCount:
         ACTIVE_GATE_STARTUP_OWNER_RECONCILE_COVERAGE_COUNT,
-      selectedNodeId: SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE,
-      selectedSnapshotNodeId: SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE,
+      selectedNodeId,
+      selectedSnapshotNodeId: selectedNodeId,
       selectedAdminReady: true,
       selectedSnapshotAdminReady: true,
       selectedReachableBy: SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE,
       selectedSnapshotReachableBy: SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE,
       selectedError: null,
-      selectedObservedNodeIds:
-        ACTIVE_GATE_STARTUP_OWNER_RECONCILE_OBSERVED_NODE_IDS,
-      selectedPublishedActiveNodeIds:
-        ACTIVE_GATE_STARTUP_OWNER_RECONCILE_PUBLISHED_NODE_IDS,
+      selectedObservedNodeIds,
+      selectedPublishedActiveNodeIds,
       selectedMissingPublishedNodeIds:
         ACTIVE_GATE_STARTUP_OWNER_RECONCILE_MISSING_NODE_IDS,
       selectedPendingAckNodeIds: pendingAckNodeIds,
+      ...(publicationDisagreementByNodeId ?
+        {publicationDisagreementByNodeId} :
+        {}),
       selectedPublicationConvergenceGate: {
         ready: false,
         pendingAckNodeIds,
@@ -679,6 +693,60 @@ test(
       probeResult.allActive,
       true,
       'inherited readiness support should satisfy startup gate',
+    );
+  },
+);
+
+test(
+  ACTIVE_GATE_STARTUP_SELECTED_SOURCE_RECONCILE_TIMEOUT_TEST_NAME,
+  async () => {
+    const cluster = buildStartupOwnerReconcilePartialCoverageCluster({
+      includeOwnerReconcileHandoff: true,
+      pendingAckNodeIds:
+        ACTIVE_GATE_STARTUP_OWNER_RECONCILE_EMPTY_PENDING_ACK_NODE_IDS,
+      pendingReconcileNodeIds:
+        ACTIVE_GATE_STARTUP_OWNER_RECONCILE_NO_ACK_HANDOFF_NODE_IDS,
+      handoffMissingPublishedNodeIds:
+        ACTIVE_GATE_STARTUP_OWNER_RECONCILE_NO_ACK_HANDOFF_NODE_IDS,
+      readinessTimeoutNodeId: SNAPSHOT_REPLAY_TEST_NODE_ID.SEED,
+      selectedNodeId: SNAPSHOT_REPLAY_TEST_NODE_ID.SEED,
+      selectedObservedNodeIds: [
+        SNAPSHOT_REPLAY_TEST_NODE_ID.SEED,
+        SNAPSHOT_REPLAY_TEST_NODE_ID.STRONG_EXTRA,
+      ],
+      selectedPublishedActiveNodeIds: [SNAPSHOT_REPLAY_TEST_NODE_ID.SEED],
+      publicationDisagreementByNodeId: {
+        [SNAPSHOT_REPLAY_TEST_NODE_ID.SEED]: [
+          SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE,
+          SNAPSHOT_REPLAY_TEST_NODE_ID.ADMIN_READY_STALE,
+          SNAPSHOT_REPLAY_TEST_NODE_ID.STRONG_EXTRA,
+          SNAPSHOT_REPLAY_TEST_NODE_ID.STALE_EXTRA,
+        ],
+      },
+    });
+
+    const probeResult = await cluster._probeClusterActiveState(
+      Date.now() + ACTIVE_GATE_PARTIAL_RESIDUAL_TIMEOUT_MS,
+    );
+    const projectedDiagnostic = probeResult.nodeDiagnostics.find(
+      (diagnostic) =>
+        diagnostic.nodeId === SNAPSHOT_REPLAY_TEST_NODE_ID.SEED,
+    );
+
+    assert.strictEqual(
+      projectedDiagnostic.active,
+      true,
+      'selected snapshot source should project active despite stale peer debt',
+    );
+    assert.strictEqual(
+      projectedDiagnostic.admissionState,
+      ACTIVE_GATE_STARTUP_OWNER_RECOVERY_ADMISSION_DEGRADED,
+      'selected source projection stays degraded',
+    );
+    assert.strictEqual(
+      probeResult.allActive,
+      true,
+      'owner-reconcile partial coverage should satisfy startup gate',
     );
   },
 );

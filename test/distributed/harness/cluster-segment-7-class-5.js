@@ -27,6 +27,8 @@ import {
   buildTerminalControlSnapshotActiveGateHandoff,
   buildTerminalControlSnapshotRecoveryProgress,
   buildWaitOwnerRecoveryQueueProjection,
+  controlSnapshotOwnerRecoveryAllowsBoundedReturn,
+  controlSnapshotReasonAllowsActiveGateHandoff,
   hasControlSnapshotReachabilityFallback,
   resetSnapshotLaneAfterTimeout,
   resolveSnapshotRetryReason,
@@ -260,10 +262,14 @@ class Cluster5 extends Cluster4 {
         });
         if (retryReason !== CONTROL_SNAPSHOT_RETRY_REASON_NOT_APPLICABLE) {
           try {
+            const ownerRecoveryReconcilePending =
+              controlSnapshotReasonAllowsActiveGateHandoff([retryReason]) ===
+                true;
             const retrySnapshotTimeoutMs =
               resolveSnapshotRetryTimeoutMs(
                 snapshotTimeoutMs,
                 startupProbeTimeoutScale,
+                {ownerRecoveryReconcilePending},
               );
             finalSnapshotTimeoutMs = retrySnapshotTimeoutMs;
             const retrySnapshotResult = await node.getControlSnapshot({
@@ -384,7 +390,17 @@ class Cluster5 extends Cluster4 {
         firstReachabilityTimeoutMs,
       );
       snapshotProbeResults.push(firstResult);
-      if (firstResult.missingExpectedNodeCount !== ZERO && nodes.length > ONE) {
+      const ownerRecoveryHandoffAllowsBoundedReturn =
+        readinessMode === CLUSTER_READINESS_MODE_LOAD &&
+        controlSnapshotOwnerRecoveryAllowsBoundedReturn({
+          result: firstResult,
+          expectedNodeIds: [...expectedNodeSet],
+        });
+      if (
+        firstResult.missingExpectedNodeCount !== ZERO &&
+        nodes.length > ONE &&
+        ownerRecoveryHandoffAllowsBoundedReturn !== true
+      ) {
         const remainingSnapshotTimeoutMs = resolveSnapshotProbeTimeoutMs(
           CONTROL_SNAPSHOT_PROBE_TIMEOUT_MS,
         );

@@ -145,6 +145,22 @@ const STARTUP_SNAPSHOT_PROJECTION_DECISION_TABLE = Object.freeze([
       evidence.publicationGateReady === true &&
       evidence.snapshotCoverageComplete !== true &&
       evidence.selectedSnapshotAdminReady === true &&
+      evidence.snapshotWitnessClean === true &&
+      evidence.nodeSelectedSnapshotSource === true &&
+      evidence.nodeCanonicalActive === true,
+  }),
+  Object.freeze({
+    outcome: STARTUP_SNAPSHOT_PROJECTION_OUTCOME_APPLY,
+    matches: (evidence) =>
+      evidence.readinessMode === CLUSTER_READINESS_MODE_STARTUP &&
+      evidence.diagnosticActive !== true &&
+      (
+        evidence.timeoutShaped === true ||
+        evidence.adminProbeTimeoutShaped === true
+      ) &&
+      evidence.publicationGateReady === true &&
+      evidence.snapshotCoverageComplete !== true &&
+      evidence.selectedSnapshotAdminReady === true &&
       evidence.selectedSnapshotTimeoutOwnerRecoveryProjectionReady === true &&
       evidence.nodeSelectedOwnerRecoveryObserved === true &&
       evidence.nodePublicationDisagreementCount === ZERO,
@@ -453,6 +469,14 @@ function buildStartupSnapshotProjectionContext(
     snapshotCoverage.selectedReachabilityError.length > ZERO ?
       snapshotCoverage.selectedReachabilityError :
       null;
+  const selectedSnapshotNodeId =
+    typeof snapshotCoverage?.selectedSnapshotNodeId === TYPEOF_STRING &&
+    snapshotCoverage.selectedSnapshotNodeId.length > ZERO ?
+      snapshotCoverage.selectedSnapshotNodeId :
+      typeof snapshotCoverage?.selectedNodeId === TYPEOF_STRING &&
+          snapshotCoverage.selectedNodeId.length > ZERO ?
+        snapshotCoverage.selectedNodeId :
+        null;
   const publicationDisagreementByNodeId =
     snapshotCoverage?.publicationDisagreementByNodeId &&
     typeof snapshotCoverage.publicationDisagreementByNodeId === TYPEOF_OBJECT &&
@@ -485,6 +509,7 @@ function buildStartupSnapshotProjectionContext(
       ...selectedPublishedActiveNodeIds,
       ...ownerRecoveryPublishedActiveNodeIds,
     ]),
+    selectedSnapshotNodeId,
     selectedObservedNodeIds: normalizeDistinctStringArray(
       snapshotCoverage?.selectedObservedNodeIds,
     ),
@@ -559,6 +584,8 @@ function normalizeStartupSnapshotProjectionEvidence(
     nodeCanonicalActive:
       projectionContext.publishedActiveNodeIds.includes(nodeId) ||
       projectionContext.healthyReadinessNodeIds.includes(nodeId),
+    nodeSelectedSnapshotSource:
+      nodeId.length > ZERO && nodeId === projectionContext.selectedSnapshotNodeId,
     nodeSelectedSnapshotObserved:
       projectionContext.selectedObservedNodeIds.includes(nodeId),
     selectedSnapshotTimeoutOwnerRecoveryProjectionReady:
