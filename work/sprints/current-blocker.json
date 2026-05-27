@@ -1,7 +1,7 @@
 {
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
-  "sprint": "none",
+  "sprint": "work/sprints/active-2026-q2-rolling-restart-active-gate-theory-loop-resume.md",
   "package": "none",
   "status": "none",
   "lane": "none",

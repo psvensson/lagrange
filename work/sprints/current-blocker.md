@@ -20,7 +20,7 @@ Falsifying probe: unknown
 
 Stop rule: unknown
 
-Sprint: `none`
+Sprint: `work/sprints/active-2026-q2-rolling-restart-active-gate-theory-loop-resume.md`
 
 Package: `none`
 
