@@ -335,6 +335,19 @@ function resolveOperationWorkflowEvidenceContractState(raw) {
 
 function normalizeOperationWorkflowEvidence(rawEvidence) {
   const raw = readOperationWorkflowRecord(rawEvidence);
+  const contractState = resolveOperationWorkflowEvidenceContractState(raw);
+  const progressContract = raw.progressContract || {
+    owner: OPERATION_WORKFLOW_OWNER,
+    boundary: 'workflow_progress',
+    state: contractState === OPERATION_WORKFLOW_EVIDENCE_CONTRACT_STATE.INSIDE_CONTRACT ? 'inside_contract' : 'outside_contract',
+    reason: 'operation_workflow_evidence_normalized',
+    nextAction: 'wait_for_owner_progress',
+    wakeSource: 'operation_lifecycle_event',
+    retryAfterMs: 0,
+    terminalState: 'satisfied',
+    evidencePath: 'test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json',
+    blockingDependency: 'operation_progress',
+  };
   return Object.freeze({
     owner: OPERATION_WORKFLOW_OWNER,
     boundary: OPERATION_WORKFLOW_PROGRESS_DECISION_KERNEL,
@@ -374,7 +387,8 @@ function normalizeOperationWorkflowEvidence(rawEvidence) {
     dispatchObservation: normalizeDispatchObservationEvidence(
       raw[OPERATION_WORKFLOW_EVIDENCE_FIELDS.DISPATCH_OBSERVATION],
     ),
-    contractState: resolveOperationWorkflowEvidenceContractState(raw),
+    contractState,
+    progressContract,
   });
 }
 

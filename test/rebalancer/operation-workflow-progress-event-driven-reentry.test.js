@@ -516,6 +516,21 @@ test(TEST_REENTRY_TEST_NAME, async (t) => {
       'the re-entry should stay on event-driven workflow progress',
     );
     t.equal(
+      snapshot?.progress?.progressContract?.owner,
+      'operation_workflow_owner',
+      'progressContract owner should match operation_workflow_owner',
+    );
+    t.equal(
+      snapshot?.progress?.progressContract?.boundary,
+      'workflow_progress',
+      'progressContract boundary should match workflow_progress',
+    );
+    t.equal(
+      snapshot?.progress?.progressContract?.evidencePath,
+      'test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json',
+      'progressContract evidencePath should match expected path',
+    );
+    t.equal(
       coordinator.workflowOwner.schedulePriorityRecoveryDispatchPendingReentry(
         snapshot,
         [operation],

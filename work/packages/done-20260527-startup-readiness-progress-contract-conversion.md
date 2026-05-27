@@ -16,7 +16,7 @@
     "currentState": "Created todo package for the startup readiness conversion of readiness_retryable; wake, retry, terminal, and diagnostic evidence must stay inside startup_support_evidence.",
     "nextAction": "Convert readiness_retryable startup support to emit progress contract state, wake/retry source, and bounded terminal evidence.",
     "closed": "2026-05-27",
-    "successor": "work/packages/active-20260527-operation-workflow-progress-contract-conversion.md"
+    "successor": "work/packages/done-20260527-operation-workflow-progress-contract-conversion.md"
   },
   "scope": {
     "writeScope": [

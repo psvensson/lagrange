@@ -313,7 +313,7 @@ Each entry must include these labels:
 - Probe: `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json --markdown`
 - Artifact/result: `test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json` - priority recovery extraction reported three `recovering_in_flight` witnesses under `operation_workflow_owner / workflow_progress`, with `dispatch_pending` / `planned` still the first frontier.
 - Representative movement: same-frontier-narrowed
-- Linked packages: `work/packages/active-20260527-rolling-restart-operation-workflow-owner-workflow-progress.md`
+- Linked packages: `work/packages/active-20260527-rolling-restart-operation-workflow-owner-workflow-progress.md`, `work/packages/active-20260527-operation-workflow-progress-contract-conversion.md`
 - Supersedes: theory-20260526-rolling-restart-rebalancer-outbound-saturation
 - Superseded by: none
 - Next implication: Keep admin, transport, and generic rebalancer edits out of scope; run the focused workflow-progress proof, then open a runtime-owner-boundary successor only for the selected mechanism or open an architecture experiment if the same frontier repeats without reduction.

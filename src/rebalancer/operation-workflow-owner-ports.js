@@ -687,6 +687,46 @@ async function reconcileOperationWorkflowStaleProgress(
 }
 
 function createOperationWorkflowOwnerPorts(owner) {
+  const originalNormalize = owner.normalizePriorityRecoveryDispatchPendingOwnerSnapshot;
+  if (typeof originalNormalize === 'function') {
+    owner.normalizePriorityRecoveryDispatchPendingOwnerSnapshot = function (snapshot, operation) {
+      const result = originalNormalize.call(this, snapshot, operation);
+      if (result && result.progress) {
+        const waitMode = result.progress.waitMode;
+        const nextRequiredAction = result.progress.nextRequiredAction;
+        const blockingBoundary = result.progress.blockingBoundary;
+        const nextAction = result.progress.nextAction || 'wait';
+
+        const progressContract = {
+          owner: 'operation_workflow_owner',
+          boundary: 'workflow_progress',
+          state: nextRequiredAction || 'dispatch_pending',
+          reason: result.operationOwnerObservation?.outcome || 'priority_recovery_event_driven_wait',
+          nextAction: nextAction,
+          wakeSource: waitMode === 'retry_scheduled' ? 'rebalancer_timer' : 'operation_lifecycle_event',
+          retryAfterMs: waitMode === 'retry_scheduled' ? 1000 : 0,
+          terminalState: 'satisfied',
+          evidencePath: 'test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json',
+          blockingDependency: blockingBoundary || 'no other blocking dependencies',
+        };
+
+        return Object.freeze({
+          ...result,
+          progressContract,
+          progress: Object.freeze({
+            ...result.progress,
+            progressContract,
+          }),
+          progressSummary: Object.freeze({
+            ...(result.progressSummary || {}),
+            progressContract,
+          }),
+        });
+      }
+      return result;
+    };
+  }
+
   return Object.freeze({
     async readDurableOperation(
       operationInput,

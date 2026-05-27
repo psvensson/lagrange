@@ -2,196 +2,36 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-owner-boundary-progress-contract-transformation.md",
-  "package": "work/packages/active-20260527-operation-workflow-progress-contract-conversion.md",
-  "status": "active",
-  "lane": "causal-escalation",
-  "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json",
+  "package": "none",
+  "status": "none",
+  "lane": "none",
+  "scenario": "none",
+  "artifact": "none",
   "playback": "none",
-  "owner": "operation_workflow_owner",
-  "boundary": "workflow_progress",
-  "dominantReason": "priority_recovery_event_driven_wait",
-  "currentState": "Created todo package for operation workflow conversion based on the supported priority-recovery workflow-progress theory; dispatch_pending and planned work must become bounded progress evidence.",
-  "nextAction": "Convert priority recovery dispatch_pending/planned owner re-entry paths to explicit progress contracts with wake, retry, and terminal outcomes.",
-  "proof": [
-    "falsifier: npm test -- test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
-    "regression: npm run audit:operation-progress-authority",
-    "regression: npm run work:evidence-summary -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json"
-  ],
-  "writeScope": [
-    "src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js",
-    "src/rebalancer/operation-workflow-owner-ports.js",
-    "src/rebalancer/operation-workflow-owner-evidence.js",
-    "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js",
-    "test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
-    "src/bootstrap/owners/bootstrap-readiness-owner-class-part-1.js",
-    "src/bootstrap/owners/bootstrap-readiness-owner-class-part-2.js",
-    "src/bootstrap/shared/local-query-transport-readiness.js",
-    "src/bootstrap/traffic-readiness-utils.js",
-    "src/diagnostics/causal-graph-builder.js",
-    "src/diagnostics/topology-convergence-graph.js",
-    "src/diagnostics/topology-convergence-normalizers.js",
-    "src/diagnostics/topology-convergence-owner-witness.js",
-    "test/bootstrap/node-joining-ready-signal-retry.test.js",
-    "test/diagnostics/topology-convergence-graph.test.js",
-    "work/packages/active-20260527-operation-workflow-progress-contract-conversion.md"
-  ],
+  "owner": "none",
+  "boundary": "none",
+  "dominantReason": "none",
+  "currentState": "No active work package. Start a new package when implementation resumes.",
+  "nextAction": "Create or activate one focused package for the next executable concern.",
+  "proof": [],
+  "writeScope": [],
   "handoffFiles": [],
-  "generatedFiles": [],
+  "generatedFiles": [
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md"
+  ],
   "candidateRuntimeFiles": [],
-  "commitScope": [
-    "src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js",
-    "src/rebalancer/operation-workflow-owner-ports.js",
-    "src/rebalancer/operation-workflow-owner-evidence.js",
-    "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js",
-    "test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
-    "src/bootstrap/owners/bootstrap-readiness-owner-class-part-1.js",
-    "src/bootstrap/owners/bootstrap-readiness-owner-class-part-2.js",
-    "src/bootstrap/shared/local-query-transport-readiness.js",
-    "src/bootstrap/traffic-readiness-utils.js",
-    "src/diagnostics/causal-graph-builder.js",
-    "src/diagnostics/topology-convergence-graph.js",
-    "src/diagnostics/topology-convergence-normalizers.js",
-    "src/diagnostics/topology-convergence-owner-witness.js",
-    "test/bootstrap/node-joining-ready-signal-retry.test.js",
-    "test/diagnostics/topology-convergence-graph.test.js",
-    "work/packages/active-20260527-operation-workflow-progress-contract-conversion.md"
-  ],
+  "commitScope": [],
   "touchedFiles": [],
-  "theoryLedgerRefs": [
-    "theory-20260527-rolling-restart-priority-recovery-workflow-progress"
-  ],
-  "modelFit": {
-    "packageClass": "runtime-owner-boundary",
-    "intendedMinimumModel": "gpt-5.3-codex",
-    "scopeShape": "bounded-owner-runtime/current-frontier",
-    "outputProfile": "medium",
-    "ambiguityScore": 1,
-    "escalationTriggers": [
-      "owned files expand beyond this package",
-      "a frozen decision must be reopened"
-    ]
-  },
-  "representativeResidual": {
-    "status": "live",
-    "scenario": "rolling-restart",
-    "artifact": "test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json",
-    "frontier": "operation_workflow_owner / workflow_progress -> startup_readiness_owner / startup_support_evidence",
-    "owner": "operation_workflow_owner",
-    "boundary": "workflow_progress",
-    "dominantReason": "priority_recovery_event_driven_wait",
-    "nextAction": "Convert priority recovery dispatch_pending/planned owner re-entry paths to explicit progress contracts."
-  },
-  "causalGovernance": {
-    "hypothesis": "Priority recovery dispatch_pending/planned work is stranded because workflow progress lacks an explicit wake/retry/terminal contract.",
-    "stopConditionCheck": "npm run analyze:causal-model -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json",
-    "expectedCausalModelChange": "Convert priority recovery dispatch_pending/planned owner re-entry paths to explicit progress contracts with wake, retry, and terminal outcomes.",
-    "representativeOutcome": "migrated",
-    "causalDebt": "dispatch_pending routes rely on local pending fields without progress contract format.",
-    "crossBoundaryReview": "Review with operation workflow owner and progress contract foundation definitions."
-  },
-  "scenarioCausalClosure": {
-    "referenceScenarioOrProbe": "rolling-restart seed-contact-bounded-progress",
-    "phaseChain": [
-      "operation workflow conversion"
-    ],
-    "currentFirstFrontier": "operation_workflow_owner / workflow_progress",
-    "knownDownstreamBlockers": [
-      "startup active gate snapshot coverage progress contract conversion"
-    ],
-    "missingCausalEdge": "operation workflow progress contract conversion",
-    "missingCausalEdgeProbe": "npm test -- test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js",
-    "falsifyingProbe": "npm test -- test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js",
-    "boundedProgressProof": "Operation workflow emits progress contracts with explicit retry, wake, timeout, and terminal status.",
-    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json",
-    "expectedObservableTransition": "operation workflow progress prefers progress contract",
-    "maxProgressBound": "one operation workflow conversion slice",
-    "sameFrontierFallback": "autonomous architecture experiment",
-    "expectedNextFrontier": "operation_workflow_owner / workflow_progress",
-    "resultClassification": "pending-before-probe",
-    "stopCondition": "migrate-owner-boundary",
-    "recentFrontierHistory": [
-      "done-20260527-startup-readiness-progress-contract-conversion.md / startup_readiness_owner / startup_support_evidence / migrated"
-    ],
-    "oscillationCheck": "operation workflow conversion to prevent oscillating symptom-only fixes on the same artifact.",
-    "handoffInvariant": "operation workflow changes prefer progress contract and do not invent runtime behaviors."
-  },
+  "modelFit": {},
+  "representativeResidual": {},
+  "causalGovernance": {},
+  "scenarioCausalClosure": {},
   "observablePrediction": {},
   "experimentOutcome": {},
-  "rerunDecision": {
-    "sourceArtifact": "test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json",
-    "routeOwner": "operation_workflow_owner",
-    "routeBoundary": "workflow_progress",
-    "routeDominantReason": "priority_recovery_event_driven_wait",
-    "routeCausalOutcome": "migrate_owner_boundary",
-    "stopMode": "migrate-owner-boundary",
-    "nextLane": "causal-escalation",
-    "expectedDelta": "priority recovery dispatch_pending/planned paths emit one next action with wake source, retry timing, terminal state, and evidence path.",
-    "requiredRefreshCommands": [
-      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait",
-      "update Sprint Strategy Brief and Current Edge Card from the route result",
-      "npm run work:repair",
-      "npm run work:validate -- --entry",
-      "npm run work:validate -- --pre-impl"
-    ]
-  },
+  "rerunDecision": {},
   "classificationEfficiency": {},
-  "architectureDecisionGate": {
-    "status": "watching",
-    "trigger": "frontier-oscillation",
-    "triggerEvidence": [
-      "adjacent owner-boundary fixes did not close the representative gate",
-      "work/packages/done-20260527-rolling-restart-startup-readiness-owner-startup-support-evid.md / startup_readiness_owner / startup_support_evidence / migrated",
-      "work/packages/done-20260527-rolling-restart-startup-readiness-admin-reachability-support.md / startup_readiness_owner / startup_support_evidence / migrated"
-    ],
-    "choices": [
-      {
-        "id": "continue-local-proof",
-        "summary": "Continue with a bounded local proof if the missing edge stays inside this owner boundary.",
-        "route": "continue-local-proof",
-        "proof": [
-          "falsifier: npm test -- test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
-          "regression: npm run audit:operation-progress-authority",
-          "regression: npm run work:evidence-summary -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json",
-          "npm test -- test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js"
-        ]
-      },
-      {
-        "id": "migrate-owner-boundary",
-        "summary": "Migrate the active package to the owner boundary named by the first frontier evidence.",
-        "route": "owner-boundary-migration",
-        "proof": [
-          "falsifier: npm test -- test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
-          "regression: npm run audit:operation-progress-authority",
-          "regression: npm run work:evidence-summary -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json",
-          "npm test -- test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js"
-        ]
-      },
-      {
-        "id": "open-architecture-package",
-        "summary": "Open a bounded autonomous architecture experiment for the missing owner contract.",
-        "route": "architecture-package",
-        "proof": [
-          "falsifier: npm test -- test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
-          "regression: npm run audit:operation-progress-authority",
-          "regression: npm run work:evidence-summary -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json",
-          "npm test -- test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js"
-        ]
-      },
-      {
-        "id": "human-escalation",
-        "summary": "Escalate to a human only when evidence is contradictory, policy-blocked, credential-blocked, or unavailable.",
-        "route": "human-escalation",
-        "proof": [
-          "falsifier: npm test -- test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
-          "regression: npm run audit:operation-progress-authority",
-          "regression: npm run work:evidence-summary -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json",
-          "npm test -- test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js"
-        ]
-      }
-    ],
-    "selectedChoice": null,
-    "nextAction": "Watch for repeated frontier oscillation; open an autonomous architecture experiment if another local proof returns here unchanged."
-  },
-  "predecessor": null
+  "architectureDecisionGate": {},
+  "predecessor": null,
+  "theoryLedgerRefs": []
 }

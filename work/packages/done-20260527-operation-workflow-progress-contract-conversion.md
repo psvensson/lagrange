@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "active",
+  "status": "done",
   "intent": {
     "opened": "2026-05-27",
     "lane": "causal-escalation",
@@ -14,7 +14,8 @@
     "boundary": "workflow_progress",
     "dominantReason": "priority_recovery_event_driven_wait",
     "currentState": "Created todo package for operation workflow conversion based on the supported priority-recovery workflow-progress theory; dispatch_pending and planned work must become bounded progress evidence.",
-    "nextAction": "Convert priority recovery dispatch_pending/planned owner re-entry paths to explicit progress contracts with wake, retry, and terminal outcomes."
+    "nextAction": "Convert priority recovery dispatch_pending/planned owner re-entry paths to explicit progress contracts with wake, retry, and terminal outcomes.",
+    "closed": "2026-05-27"
   },
   "scope": {
     "writeScope": [
@@ -33,6 +34,8 @@
       "src/diagnostics/topology-convergence-owner-witness.js",
       "test/bootstrap/node-joining-ready-signal-retry.test.js",
       "test/diagnostics/topology-convergence-graph.test.js",
+      "scripts/check-operation-progress-authority.js",
+      "work/packages/done-20260527-startup-readiness-progress-contract-conversion.md",
       "work/packages/active-20260527-operation-workflow-progress-contract-conversion.md"
     ],
     "handoffFiles": [],
@@ -54,6 +57,8 @@
       "src/diagnostics/topology-convergence-owner-witness.js",
       "test/bootstrap/node-joining-ready-signal-retry.test.js",
       "test/diagnostics/topology-convergence-graph.test.js",
+      "scripts/check-operation-progress-authority.js",
+      "work/packages/done-20260527-startup-readiness-progress-contract-conversion.md",
       "work/packages/active-20260527-operation-workflow-progress-contract-conversion.md"
     ]
   },
@@ -84,6 +89,17 @@
         "regression: npm run audit:operation-progress-authority",
         "regression: npm run work:evidence-summary -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json"
       ]
+    },
+    "implementation": {
+      "parentRevalidatedFocusedProof": true,
+      "filesChanged": [
+        "src/rebalancer/operation-workflow-owner-evidence.js",
+        "src/rebalancer/operation-workflow-owner-ports.js",
+        "test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js"
+      ]
+    },
+    "verificationFix": {
+      "parentRevalidatedFocusedProof": true
     }
   },
   "boundedExperiment": {
@@ -189,7 +205,19 @@
       "npm run work:validate -- --pre-impl"
     ]
   },
-  "theoryLedger": "theory-20260527-rolling-restart-priority-recovery-workflow-progress: reuse the supported priority recovery workflow progress theory as the operation-workflow conversion source."
+  "theoryLedger": "theory-20260527-rolling-restart-priority-recovery-workflow-progress: reuse the supported priority recovery workflow progress theory as the operation-workflow conversion source.",
+  "implementation": {
+    "parentRevalidatedFocusedProof": true,
+    "filesChanged": [
+      "src/rebalancer/operation-workflow-owner-evidence.js",
+      "src/rebalancer/operation-workflow-owner-ports.js",
+      "test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js"
+    ]
+  },
+  "verificationFix": {
+    "parentRevalidatedFocusedProof": true
+  },
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -356,11 +384,17 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: operation_workflow_owner; files-changed: pending; validation: pending focused proof plus parent revalidated focused proof: yes; outcome: pending.
-- [ ] action: verification-fix; owner: operation_workflow_owner; files-changed: pending-or-none; validation: pending verification proof plus parent revalidated focused proof: yes; outcome: pending.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json and work/sprints/current-blocker.md only if repair changes tracker state; validation: `npm run work:repair`; outcome: pending-or-not-needed.
+- [x] action: implementation; owner: operation_workflow_owner; files-changed: src/rebalancer/operation-workflow-owner-evidence.js, src/rebalancer/operation-workflow-owner-ports.js, test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js; validation: npm test -- test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js; parent revalidated focused proof: yes; outcome: green.
+- [x] action: verification-fix; owner: operation_workflow_owner; files-changed: scripts/check-operation-progress-authority.js; validation: npm run audit:operation-progress-authority; parent revalidated focused proof: yes; outcome: green.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: npm run work:repair; parent revalidated focused proof: yes; outcome: green.
 
 ## Validation
 
 1. npm test -- test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js
 2. npm run audit:operation-progress-authority
+
+## Commit And Push Ledger
+
+1. Focused package commit: cc1f0ece9e5347e8cc178f8d0f8f53890befa23b
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

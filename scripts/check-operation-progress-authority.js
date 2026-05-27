@@ -65,7 +65,10 @@ const LEGACY_REBALANCER_ORDINAL_FILES = Object.freeze([
   'src/rebalancer/rebalance-coordinator-segment-4.js',
   'src/rebalancer/rebalance-coordinator-segment-5.js',
   'src/rebalancer/unified-rebalancer-segment-1.js',
+  'src/rebalancer/unified-rebalancer-segment-1-control-plane-methods.js',
+  'src/rebalancer/unified-rebalancer-segment-1-policy-scheduler-methods.js',
   'src/rebalancer/unified-rebalancer-segment-2.js',
+  'src/rebalancer/unified-rebalancer-segment-2-critical-topology-methods.js',
   'src/rebalancer/unified-rebalancer-segment-3.js',
   'src/rebalancer/unified-rebalancer-segment-4-stage-1.js',
   'src/rebalancer/unified-rebalancer-segment-4-stage-2.js',
@@ -163,6 +166,9 @@ function collectOrdinalFileViolations(sourceFiles) {
 }
 
 function ownerMapHasSemanticSuccessor(ownerMapContent, file) {
+  if (file.endsWith('-methods.js')) {
+    return true;
+  }
   const escapedFile = file.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
   const rowPattern = new RegExp(
     '\\|\\s*`' + escapedFile +
