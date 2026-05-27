@@ -9,43 +9,43 @@ Resolve the priority recovery event-driven wait/deadlock during rolling-restart 
 ## Sprint Strategy Brief
 
 - Goal state: representative `rolling-restart` is green, or fresh evidence shows a fully converged priority recovery lane.
-- Current causal thesis: The diagnostics bug in sidecar loading was successfully resolved. The post-diagnostics representative rerun has shifted from missing evidence to a specific event-driven deadlock in priority recovery (`operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait`).
-- Confidence and evidence: High that a real logical deadlock exists because `eligible_but_no_operation_created` occurs during rolling restart while priority recovery has unresolved semantic states.
+- Current causal thesis: Fresh May 27 evidence selects `operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait`; priority recovery work exists but remains persisted-not-dispatched, so downstream startup, active-gate, transport, and admin symptoms are not selectable until workflow progress is proven or migrated.
+- Confidence and evidence: High that the selected frontier is workflow progress because `work:scenario-route` and `analyze:priority-recovery-residuals` keep the first frontier at `dispatch_pending` / `planned` with three `recovering_in_flight` witnesses.
 - Competing hypotheses:
-  - H1/Theory A: Logger CPU Starvation. Rate-limiting or dampening is missing on `metrics.pressure.policy` metrics logging inside `PressureGovernor.emitPressureMetric`, causing CPU starvation under high backpressured load during bootstrap seed contact.
-  - H2/Theory B: Seed WebSocket/Transport Cleanup. Seed node's WebSocket or query transport is not properly cleaning up stale inactive-node connections, causing file descriptor exhaustions or connection pool queues to stall.
-  - H3/Theory C: Rebalancer Outbound Saturation. Rebalance coordinator's background work-class is aggressively dispatching priority recovery operations, saturating the outbound delivery queues on non-seed nodes and blocking critical control-plane replies.
-- Expected green path: Open a focused package in `work/packages/` to investigate the candidate nodes and filters inside `src/rebalancer/`, fix the filtering discrepancy, rerun the rolling-restart scenario, and verify convergence.
-- Wrong direction signals: arbitrary delay insertion, ignoring the rebalancer's planning gates, or forcing node status changes without addressing the priority recovery planning loop.
-- Stop or escalate rule: If candidate filters match specification but recovery remains stranded, stop for architectural reassessment of the readiness boundary.
+- H1/current: Workflow progress has persisted-not-dispatched priority recovery state that must advance, reconcile, or formally classify backpressure.
+- H2/avoided without fresh proof: Logger CPU starvation and seed WebSocket cleanup can explain old symptoms, but the latest route did not select transport_owner / message_routing.
+- H3/superseded: Generic rebalancer outbound saturation is replaced by the narrower workflow-progress theory in `theory-20260527-rolling-restart-priority-recovery-workflow-progress`.
+- Expected green path: run the focused workflow-progress proof, promote only the selected runtime-owner-boundary successor or architecture stop, rerun rolling-restart, and verify green or concrete frontier migration.
+- Wrong direction signals: adopting dirty runtime edits from unrelated files, patching transport/admin/active-gate symptoms before workflow progress proof, or opening another local patch after same-frontier evidence with no reduction.
+- Stop or escalate rule: If the focused workflow-progress proof repeats the same frontier with no concrete reduction, open/select an autonomous architecture experiment before more local runtime work.
 - Next best package: [Priority Recovery Deadlock Triage](../packages/done-20260526-rolling-restart-priority-recovery-deadlock-triage.md)
 
 ## Theory Loop Sprint
 
 - Central problem: priority recovery event-driven wait on priority_recovery_partition_progress
-- Representative artifact: test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json
+- Representative artifact: test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json
 - Success condition: rolling restart succeeds without a problem and all nodes reach ACTIVE status
-- Iteration rule: create one compact theory package targeting H1/H2/H3, trace variables/filters, and patch the root filter bug.
+- Iteration rule: keep the current package classification-only until workflow progress selects a concrete runtime owner; do not let repair or handoff tooling adopt dirty implementation files into classifier scope.
 
 ## Current Edge Card
 
 ```text
-Representative artifact: test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json
-Visible first frontier: operation_workflow_owner/rebalancer_handoff with startup_readiness_owner/startup_support_evidence selected as owner-boundary migration
-Active package: work/packages/active-20260527-rolling-restart-startup-readiness-admin-reachability-support.md
-Active package owner: startup_readiness_owner
-Active package boundary: startup_support_evidence
-Selected cause: admin_reachability_refused
-Required action: Prove and repair startup readiness/admin reachability support for admin_reachability_refused, then rerun rolling-restart until the representative scenario succeeds.
-Representative status: pending-before-rerun
-Causal outcome: migrate_owner_boundary
+Representative artifact: test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json
+Visible first frontier: operation_workflow_owner/workflow_progress
+Active package: work/packages/active-20260527-rolling-restart-operation-workflow-owner-workflow-progress.md
+Active package owner: operation_workflow_owner
+Active package boundary: workflow_progress
+Selected cause: priority_recovery_event_driven_wait
+Required action: Classify persisted-not-dispatched priority recovery workflow progress, keep unrelated dirty runtime edits out of scope, then promote only a selected runtime successor or architecture stop before the next rolling-restart rerun.
+Representative status: same-frontier
+Causal outcome: accept_classified_backpressure
 Architecture gate: not-required / unknown
-Expected delta: Focused startup readiness proof should classify admin_reachability_refused as bounded startup support evidence, let recovery readiness proceed only through the startup owner contract, and the fresh rolling-restart representative should pass or expose a new named owner boundary.
-Current state: Architecture experiment selected startup_readiness_owner / startup_support_evidence because topology convergence classified the rebalancer handoff source as admin_reachability_refused and startup_recovery_blocked.
-Allowed edits: src/bootstrap/startup-recovery-coordinator.js, src/bootstrap/node-joining-ready-signal-readiness.js, src/bootstrap/traffic-readiness-utils.js, test/bootstrap/startup-authority-consumption.test.js, test/bootstrap/node-joining-ready-signal-retry.test.js, test/bootstrap/traffic-readiness-utils.test.js, test/distributed/harness/startup-readiness-evidence.js, test/distributed/harness/cluster-segment-5.js, test/distributed/harness/cluster-segment-7-class-2.js, test/distributed/harness/cluster-segment-7-class-4.js, test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js, test/distributed/harness/__tests__/cluster.test-part-2.js, test/distributed/harness/__tests__/cluster-part-2-node-reachability-test-cases.js, test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js, test/distributed/harness/__tests__/cluster.test-part-4-startup-snapshot-projection.js, test/distributed/harness/__tests__/cluster-reachability-admin-proof-gate-test-cases.js
-Candidate runtime files: src/bootstrap/startup-recovery-coordinator.js, src/bootstrap/node-joining-ready-signal-readiness.js, src/bootstrap/traffic-readiness-utils.js, test/distributed/harness/cluster-segment-5.js, test/distributed/harness/cluster-segment-7-class-2.js, test/distributed/harness/cluster-segment-7-class-4.js
-Forbidden edits: Rebalancer and message-router runtime implementation remains frozen until startup readiness/admin reachability support is proven or falsified.
-Required latest proof: falsifier: npm test -- test/bootstrap/startup-authority-consumption.test.js test/bootstrap/node-joining-ready-signal-retry.test.js test/bootstrap/traffic-readiness-utils.test.js test/distributed/harness/__tests__/cluster.test-part-2.js test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js test/distributed/harness/__tests__/cluster.test-part-4-startup-snapshot-projection.js test/distributed/harness/__tests__/cluster-reachability-admin-proof-gate-test-cases.js, supporting: npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress, regression: npm run work:evidence-summary -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json, supporting: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json, supporting: npm run audit:guideline:literals -- src/bootstrap/startup-recovery-coordinator.js src/bootstrap/node-joining-ready-signal-readiness.js src/bootstrap/traffic-readiness-utils.js test/distributed/harness/startup-readiness-evidence.js test/distributed/harness/cluster-segment-5.js test/distributed/harness/cluster-segment-7-class-2.js test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js, supporting: npm run audit:guideline:decision-boundaries -- src/bootstrap/startup-recovery-coordinator.js src/bootstrap/node-joining-ready-signal-readiness.js src/bootstrap/traffic-readiness-utils.js test/distributed/harness/startup-readiness-evidence.js test/distributed/harness/cluster-segment-5.js test/distributed/harness/cluster-segment-7-class-2.js test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js, supporting: npm run audit:runtime-grammar:file -- src/bootstrap/startup-recovery-coordinator.js src/bootstrap/node-joining-ready-signal-readiness.js src/bootstrap/traffic-readiness-utils.js test/distributed/harness/startup-readiness-evidence.js test/distributed/harness/cluster-segment-5.js test/distributed/harness/cluster-segment-7-class-2.js test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js
+Expected delta: Classify the persisted-not-dispatched operation workflow progress residual and promote the smallest runtime proof or architecture stop before the next rolling-restart rerun.
+Current state: Fresh rolling-restart evidence moved the representative blocker from startup admin reachability to priority recovery workflow progress.
+Allowed edits: work/theory-ledger.md
+Candidate runtime files: unknown
+Forbidden edits: Do not patch active-gate snapshot coverage, startup readiness, rebalancer handoff, or transport runtime until workflow progress is proven or formally migrated.
+Required latest proof: falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json, regression: npm run work:scenario-route -- test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress, supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json --markdown
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 

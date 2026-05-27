@@ -17,7 +17,7 @@
     "nextAction": "Open or activate the startup_readiness_owner / startup_support_evidence successor before rebalancer or message-router runtime edits resume.",
     "predecessor": "work/packages/done-20260526-rolling-restart-operation-workflow-owner-rebalancer-handoff.md",
     "closed": "2026-05-27",
-    "successor": "work/packages/active-20260527-rolling-restart-startup-readiness-admin-reachability-support.md"
+    "successor": "work/packages/done-20260527-rolling-restart-startup-readiness-admin-reachability-support.md"
   },
   "scope": {
     "writeScope": [],
@@ -33,7 +33,7 @@
     "commitScope": [
       "work/packages/active-20260526-reconnect-handoff-architecture-experiment.md",
       "work/packages/done-20260526-rolling-restart-operation-workflow-owner-rebalancer-handoff.md",
-      "work/packages/active-20260527-rolling-restart-startup-readiness-admin-reachability-support.md"
+      "work/packages/done-20260527-rolling-restart-startup-readiness-admin-reachability-support.md"
     ]
   },
   "gates": {

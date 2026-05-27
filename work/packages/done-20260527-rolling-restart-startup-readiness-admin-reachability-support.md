@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "active",
+  "status": "done",
   "intent": {
     "opened": "2026-05-27",
     "lane": "causal-escalation",
@@ -15,7 +15,9 @@
     "dominantReason": "admin_reachability_refused",
     "currentState": "Architecture experiment selected startup_readiness_owner / startup_support_evidence because topology convergence classified the rebalancer handoff source as admin_reachability_refused and startup_recovery_blocked.",
     "nextAction": "Prove and repair startup readiness/admin reachability support for admin_reachability_refused, then rerun rolling-restart until the representative scenario succeeds.",
-    "predecessor": "work/packages/done-20260526-reconnect-handoff-architecture-experiment.md"
+    "predecessor": "work/packages/done-20260526-reconnect-handoff-architecture-experiment.md",
+    "closed": "2026-05-27",
+    "successor": "work/packages/active-20260527-rolling-restart-operation-workflow-owner-workflow-progress.md"
   },
   "scope": {
     "writeScope": [
@@ -231,7 +233,8 @@
     "oscillationCheck": "Fresh evidence moved away from startup readiness and back to workflow progress with a different source shape: planned dispatch rather than admin reachability refused.",
     "handoffInvariant": "Startup readiness package closes only by handing off to operation workflow progress; active-gate and transport runtime remain frozen until that successor proves or falsifies progress."
   },
-  "theoryLedger": "no ledger update: this package produced a bounded owner migration rather than a durable new runtime theory; successor records workflow-progress theory if fixed."
+  "theoryLedger": "no ledger update: this package produced a bounded owner migration rather than a durable new runtime theory; successor records workflow-progress theory if fixed.",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -415,6 +418,12 @@ Agent identity is optional provenance. Use the compact five-field shape for new 
 - [x] action: implementation; owner: startup_readiness_owner; files-changed: test/distributed/harness/cluster-segment-5.js, work/packages/active-20260527-rolling-restart-startup-readiness-admin-reachability-support.md, work/sprints/current-blocker.md, work/sprints/current-blocker.json; validation: `npm test -- test/bootstrap/startup-authority-consumption.test.js test/bootstrap/node-joining-ready-signal-retry.test.js test/bootstrap/traffic-readiness-utils.test.js test/distributed/harness/__tests__/cluster.test-part-2.js test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js test/distributed/harness/__tests__/cluster.test-part-4-startup-snapshot-projection.js test/distributed/harness/__tests__/cluster-reachability-admin-proof-gate-test-cases.js`, parent revalidated focused proof: yes; outcome: validated.
 - [x] action: verification-fix; owner: startup_readiness_owner; files-changed: work/packages/active-20260527-rolling-restart-startup-readiness-admin-reachability-support.md, work/sprints/current-blocker.md, work/sprints/current-blocker.json; validation: `npm run work:evidence-summary -- test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json`, `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json`, parent revalidated focused proof: yes; outcome: validated.
 - [x] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: validated.
+
+## Commit And Push Ledger
+
+1. Focused package commit: 43ee0cec32e55a541b50a6755c598caf66cbcfa5
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
 
 ## Validation
 

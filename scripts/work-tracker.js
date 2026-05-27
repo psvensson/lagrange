@@ -2898,10 +2898,9 @@ function metadataHasClassificationEfficiency(metadata = {}) {
   return isObjectRecord(metadata?.[CLASSIFICATION_EFFICIENCY_FIELD]);
 }
 
-function metadataIsPureClassificationPackage(metadata = {}) {
+export function metadataHasPureClassificationIntent(metadata = {}) {
   return metadata &&
     isScenarioDrivenMetadata(metadata) &&
-    !hasImplementationWriteScope(metadata) &&
     (
       metadataLane(metadata) === LANE_DIAGNOSTIC_CLASSIFICATION ||
       metadataHasClassificationOnlyOutcome(metadata) ||
@@ -2909,9 +2908,18 @@ function metadataIsPureClassificationPackage(metadata = {}) {
     );
 }
 
+function metadataIsPureClassificationPackage(metadata = {}) {
+  return metadataHasPureClassificationIntent(metadata) &&
+    !hasImplementationWriteScope(metadata);
+}
+
 export function metadataUsesPureClassificationFastPath(metadata = {}) {
   return metadataIsPureClassificationPackage(metadata) &&
     metadataHasClassificationEfficiency(metadata);
+}
+
+export function metadataAllowsRepairDirtyScopeAutocomplete(metadata = {}) {
+  return !metadataHasPureClassificationIntent(metadata);
 }
 
 function isMaterialOscillationResult(metadata) {
@@ -7348,13 +7356,16 @@ function validateClassificationOnlyImplementationScope(
   if (
     status !== STATUS_ACTIVE ||
     phase === VALIDATION_PHASE_ENTRY ||
-    !metadataHasClassificationOnlyOutcome(metadata) ||
+    !metadataHasPureClassificationIntent(metadata) ||
     !hasImplementationWriteScope(metadata)
   ) {
     return [];
   }
+  const scopeLabel = metadataHasClassificationOnlyOutcome(metadata)
+    ? 'classification-only result'
+    : 'pure classification package';
   return [
-    `${filePath}: classification-only result must not include runtime, test, ` +
+    `${filePath}: ${scopeLabel} must not include runtime, test, ` +
       'script, or report paths in writeScope/commitScope; move implementation ' +
       'paths to candidateRuntimeFiles or change the package outcome before ' +
       'pre-implementation.',
@@ -7421,6 +7432,8 @@ function buildProcessGuidanceLines(
   const hasImplementationWrites = hasImplementationWriteScope(metadata);
   const hasClassificationOnlyOutcome =
     metadataHasClassificationOnlyOutcome(metadata);
+  const hasPureClassificationIntent =
+    metadataHasPureClassificationIntent(metadata);
   const usesClassificationOnlyFastPath =
     metadataUsesClassificationOnlyFastPath(metadata);
   const usesPureClassificationFastPath =
@@ -7439,9 +7452,12 @@ function buildProcessGuidanceLines(
       'only when runtime/test/script/report writes move into write scope.',
     );
   }
-  if (hasClassificationOnlyOutcome && hasImplementationWrites) {
+  if (hasPureClassificationIntent && hasImplementationWrites) {
+    const scopeLabel = hasClassificationOnlyOutcome
+      ? 'Classification-only result'
+      : 'Pure classification package';
     lines.push(
-      'Classification-only result has implementation write scope. Move ' +
+      `${scopeLabel} has implementation write scope. Move ` +
       'implementation paths to candidateRuntimeFiles, or change the package ' +
       'outcome before runtime/test/script edits begin.',
     );
@@ -8778,39 +8794,41 @@ async function repairCommand() {
 
       // 2. Git status-based autocompletion for writeScope / commitScope
       let gitStatusFiles = [];
-      try {
-        const stdout = execSync('git status --porcelain', { encoding: 'utf8' });
-        gitStatusFiles = stdout
-          .split('\n')
-          .map(line => {
-            if (line.length < 4) return '';
-            let file = line.slice(3).trim();
-            if (file.startsWith('"') && file.endsWith('"')) {
-              file = file.slice(1, -1);
-            }
-            return file;
-          })
-          .filter(Boolean)
-          .filter(file => {
-            if (file.startsWith('work/packages/')) return false;
-            if (file.startsWith('work/sprints/')) return false;
-            if (file === 'work/model-ledger.jsonl') return false;
-            if (file === 'work/theory-ledger.md') return false;
-            if (file === 'package.json' || file === 'package-lock.json') return false;
+      if (metadataAllowsRepairDirtyScopeAutocomplete(metadata)) {
+        try {
+          const stdout = execSync('git status --porcelain', { encoding: 'utf8' });
+          gitStatusFiles = stdout
+            .split('\n')
+            .map(line => {
+              if (line.length < 4) return '';
+              let file = line.slice(3).trim();
+              if (file.startsWith('"') && file.endsWith('"')) {
+                file = file.slice(1, -1);
+              }
+              return file;
+            })
+            .filter(Boolean)
+            .filter(file => {
+              if (file.startsWith('work/packages/')) return false;
+              if (file.startsWith('work/sprints/')) return false;
+              if (file === 'work/model-ledger.jsonl') return false;
+              if (file === 'work/theory-ledger.md') return false;
+              if (file === 'package.json' || file === 'package-lock.json') return false;
 
-            if (metadata.lane === 'mechanical-maintenance' && isSourceWritePath(file)) {
-              return false;
-            }
-            if (metadata.lane === 'test-only-proof' && !isTestOnlyProofWritePath(file)) {
-              return false;
-            }
-            if (metadata.lane === 'read-review-doc-only') {
-              return false;
-            }
-            return true;
-          });
-      } catch (err) {
-        // ignore
+              if (metadata.lane === 'mechanical-maintenance' && isSourceWritePath(file)) {
+                return false;
+              }
+              if (metadata.lane === 'test-only-proof' && !isTestOnlyProofWritePath(file)) {
+                return false;
+              }
+              if (metadata.lane === 'read-review-doc-only') {
+                return false;
+              }
+              return true;
+            });
+        } catch (err) {
+          // ignore
+        }
       }
 
       if (gitStatusFiles.length > 0) {

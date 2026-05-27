@@ -14,11 +14,13 @@
     "boundary": "workflow_progress",
     "dominantReason": "priority_recovery_event_driven_wait",
     "currentState": "Fresh rolling-restart evidence moved the representative blocker from startup admin reachability to priority recovery workflow progress.",
-    "nextAction": "Classify and repair operation workflow progress for persisted-not-dispatched priority recovery, then rerun rolling-restart until it succeeds.",
+    "nextAction": "Classify persisted-not-dispatched priority recovery workflow progress, keep unrelated dirty runtime edits out of scope, then promote only a selected runtime successor or architecture stop before the next rolling-restart rerun.",
     "predecessor": "work/packages/done-20260527-rolling-restart-startup-readiness-admin-reachability-support.md"
   },
   "scope": {
-    "writeScope": [],
+    "writeScope": [
+      "work/theory-ledger.md"
+    ],
     "handoffFiles": [
       "test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json"
     ],
@@ -30,7 +32,9 @@
     "commitScope": [
       "work/packages/active-20260527-rolling-restart-operation-workflow-owner-workflow-progress.md",
       "work/sprints/current-blocker.md",
-      "work/sprints/current-blocker.json"
+      "work/sprints/current-blocker.json",
+      "work/sprints/active-2026-q2-rolling-restart-priority-recovery-resolution.md",
+      "work/theory-ledger.md"
     ]
   },
   "gates": {
@@ -38,9 +42,9 @@
     "whyHighestLeverageNow": "The latest representative route names operation workflow progress as the first frontier."
   },
   "modelFit": {
-    "packageClass": "runtime-owner-boundary",
+    "packageClass": "representative-frontier-closure",
     "intendedMinimumModel": "gpt-5.3-codex",
-    "scopeShape": "bounded-owner-runtime/current-frontier",
+    "scopeShape": "owner-boundary-contraction/current-frontier",
     "outputProfile": "medium",
     "ambiguityScore": 1,
     "escalationTriggers": [
@@ -49,8 +53,10 @@
     ]
   },
   "execution": {
-    "theoryLedgerRefs": [],
-    "theoryLedger": "planned-new-theory: classify the operation workflow progress residual before runtime promotion.",
+    "theoryLedgerRefs": [
+      "theory-20260527-rolling-restart-priority-recovery-workflow-progress"
+    ],
+    "theoryLedger": "theory-20260527-rolling-restart-priority-recovery-workflow-progress: latest evidence keeps the first frontier at operation workflow progress; transport and admin files are not selectable without fresh proof.",
     "proof": {
       "commands": [
         "falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json",
@@ -60,6 +66,14 @@
     }
   },
   "validationTier": "cross-owner",
+  "observablePrediction": {
+    "metric": "workflow progress extractor state",
+    "predicted": "nonzero priority recovery operation remains dispatch_pending/planned with operation_workflow_owner / workflow_progress as the first frontier",
+    "observed": "priority recovery residual extractor reported three recovering_in_flight witnesses under operation_workflow_owner / workflow_progress, with dispatch_pending/planned still first frontier",
+    "accuracy": "matched",
+    "evidence": "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json --markdown",
+    "metricDelta": 0
+  },
   "modelFitSplit": {
     "targetExecutionModel": "gpt-5.3-codex",
     "allowedDecisionDepth": "planning and route selection; split executable children before implementation",
@@ -87,7 +101,7 @@
     "owner": "operation_workflow_owner",
     "boundary": "workflow_progress",
     "dominantReason": "priority_recovery_event_driven_wait",
-    "nextAction": "Classify and repair operation workflow progress for persisted-not-dispatched priority recovery, then rerun rolling-restart until it succeeds."
+    "nextAction": "Classify persisted-not-dispatched priority recovery workflow progress, keep unrelated dirty runtime edits out of scope, then promote only a selected runtime successor or architecture stop before the next rolling-restart rerun."
   },
   "classificationEfficiency": {
     "defaultMode": "inline-gate-default",
@@ -121,9 +135,9 @@
     ]
   },
   "causalGovernance": {
-    "hypothesis": "WebSocket transport reconnection hang under load prevents node bootstrap join convergence.",
+    "hypothesis": "Priority recovery workflow progress remains persisted but not dispatched, so downstream startup and active-gate symptoms must not be patched until workflow progress advances, classifies backpressure, or selects an architecture stop.",
     "stopConditionCheck": "Use npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json.",
-    "expectedCausalModelChange": "Classify operation workflow progress and decide whether a local workflow dispatch-progress fix or architecture stop owns the next move.",
+    "expectedCausalModelChange": "Classify operation workflow progress and decide whether a local workflow dispatch-progress successor or architecture stop owns the next move.",
     "representativeOutcome": "same-frontier",
     "causalDebt": "The latest causal model accepted classified backpressure but rolling-restart is still red; the successor must turn the classified priority recovery wait into concrete progress or a formal architecture stop.",
     "crossBoundaryReview": "Startup readiness and active-gate snapshot coverage are downstream until operation workflow progress proves or falsifies the persisted-not-dispatched priority recovery path."
@@ -166,7 +180,7 @@
 
 Fresh rolling-restart evidence moved the active blocker to `operation_workflow_owner / workflow_progress`. The failing shape is no longer admin reachability refused; it is priority recovery workflow progress stuck at `dispatch_pending` / `planned`.
 
-Theory ledger: `planned-new-theory` - classify the operation workflow progress residual before runtime promotion.
+Theory ledger: `theory-20260527-rolling-restart-priority-recovery-workflow-progress` - classify the operation workflow progress residual before runtime promotion, and do not adopt unrelated dirty runtime edits.
 
 ## Workflow Lane
 

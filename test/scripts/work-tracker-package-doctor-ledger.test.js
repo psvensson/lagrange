@@ -385,6 +385,64 @@ describe('work tracker package doctor', () => {
     assert.match(rendered, /Classification-only result has implementation write scope/u);
   });
 
+  it('rejects classification-efficiency implementation scope before promotion', () => {
+    const implementationPaths = [
+      'src/rebalancer/operation-workflow-owner.js',
+      'test/rebalancer/operation-workflow-owner.test.js',
+      'scripts/work-tracker.js',
+      'test-output/reports/rolling-restart.report.json',
+    ];
+    for (const implementationPath of implementationPaths) {
+      const metadata = buildWorkPackageV2Metadata({
+        status: WORK_TRACKER_ACTIVE_STATUS,
+        opened: '2026-05-27',
+        lane: LANE_CAUSAL_ESCALATION,
+        scenario: 'rolling-restart',
+        artifact: 'test-output/reports/rerun.report.json',
+        playback: 'none',
+        owner: 'operation_workflow_owner',
+        boundary: 'workflow_progress',
+        dominantReason: 'priority_recovery_event_driven_wait',
+        currentState: 'Classifier package has selected the same frontier.',
+        nextAction: 'Open a successor before runtime scope is promoted.',
+        writeScope: Object.freeze([implementationPath]),
+        commitScope: Object.freeze([
+          'work/packages/active-test-package.md',
+          implementationPath,
+        ]),
+        modelFit: Object.freeze({
+          packageClass: 'representative-frontier-closure',
+          intendedMinimumModel: 'gpt-5.3-codex',
+          scopeShape: 'owner-boundary-contraction/current-frontier',
+          outputProfile: 'medium',
+          escalationTriggers: Object.freeze([
+            'runtime ownership changes',
+          ]),
+          ambiguityScore: 1,
+        }),
+        classificationEfficiency:
+          CLASSIFICATION_EFFICIENCY_VALID_METADATA.classificationEfficiency,
+      });
+      const content = [
+        '# Classification Efficiency Package',
+        '',
+        '<!-- work-package',
+        JSON.stringify(metadata, null, 2),
+        '-->',
+      ].join('\n');
+      const report = buildPackageDoctorLines(
+        WORK_TRACKER_LEDGER_TEST_FILE,
+        content,
+      );
+
+      assert.match(
+        report.errors.join('\n'),
+        /pure classification package must not include runtime, test, script, or report paths/u,
+        implementationPath,
+      );
+    }
+  });
+
   it('requires verifier-fixer proof for optional code-scope lanes at closure', () => {
     const openLedgerContent = WORK_TRACKER_DOCTOR_CONTENT.replace(
       /## Subagent Sequencing Ledger[\s\S]*$/u,

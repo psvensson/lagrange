@@ -4,129 +4,104 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: WebSocket transport reconnection hang under load prevents node bootstrap join convergence.
+Theory under test: Priority recovery workflow progress remains persisted but not dispatched, so downstream startup and active-gate symptoms must not be patched until workflow progress advances, classifies backpressure, or selects an architecture stop.
 
-Causal question: Startup readiness/admin reachability support must explain admin_reachability_refused before rebalancer handoff or message-router runtime work resumes.
+Causal question: Operation workflow progress must explain why a priority recovery operation stayed dispatch_pending/planned instead of advancing.
 
-Implementation slice: Prove and repair startup readiness/admin reachability support for admin_reachability_refused, then rerun rolling-restart until the representative scenario succeeds.
+Implementation slice: Classify persisted-not-dispatched priority recovery workflow progress, keep unrelated dirty runtime edits out of scope, then promote only a selected runtime successor or architecture stop before the next rolling-restart rerun.
 
 Implementation files:
 
-1. `src/bootstrap/startup-recovery-coordinator.js`
-2. `src/bootstrap/node-joining-ready-signal-readiness.js`
-3. `src/bootstrap/traffic-readiness-utils.js`
-4. `test/bootstrap/startup-authority-consumption.test.js`
-5. `test/bootstrap/node-joining-ready-signal-retry.test.js`
-6. `test/bootstrap/traffic-readiness-utils.test.js`
-7. `test/distributed/harness/startup-readiness-evidence.js`
-8. `test/distributed/harness/cluster-segment-5.js`
-9. `test/distributed/harness/cluster-segment-7-class-2.js`
-10. `test/distributed/harness/cluster-segment-7-class-4.js`
-11. `test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js`
-12. `test/distributed/harness/__tests__/cluster.test-part-2.js`
-13. `test/distributed/harness/__tests__/cluster-part-2-node-reachability-test-cases.js`
-14. `test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js`
-15. `test/distributed/harness/__tests__/cluster.test-part-4-startup-snapshot-projection.js`
-16. `test/distributed/harness/__tests__/cluster-reachability-admin-proof-gate-test-cases.js`
-17. `src/bootstrap/startup-recovery-coordinator.js`
-18. `src/bootstrap/node-joining-ready-signal-readiness.js`
-19. `src/bootstrap/traffic-readiness-utils.js`
-20. `test/distributed/harness/cluster-segment-5.js`
-21. `test/distributed/harness/cluster-segment-7-class-2.js`
-22. `test/distributed/harness/cluster-segment-7-class-4.js`
+1. `work/theory-ledger.md`
 
-Expected implementation delta: Select the startup readiness support owner boundary before runtime implementation resumes.
+Expected implementation delta: Classify operation workflow progress and decide whether a local workflow dispatch-progress successor or architecture stop owns the next move.
 
-Falsifying probe: npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress
+Falsifying probe: npm run work:scenario-route -- test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress
 
-Stop rule: Open an autonomous architecture experiment rather than another local patch.
+Stop rule: Open an autonomous architecture experiment if the same frontier repeats with no concrete reduction.
 
 Sprint: `work/sprints/active-2026-q2-rolling-restart-priority-recovery-resolution.md`
 
-Package: `work/packages/active-20260527-rolling-restart-startup-readiness-admin-reachability-support.md`
+Package: `work/packages/active-20260527-rolling-restart-operation-workflow-owner-workflow-progress.md`
 
 Workflow lane: `causal-escalation`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
+Artifact: `test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json`
 
 Playback: `none`
 
 ## Boundary
 
-Owner: `startup_readiness_owner`
+Owner: `operation_workflow_owner`
 
-Boundary: `startup_support_evidence`
+Boundary: `workflow_progress`
 
-Dominant reason: `admin_reachability_refused`
+Dominant reason: `priority_recovery_event_driven_wait`
 
-Current state: Architecture experiment selected startup_readiness_owner / startup_support_evidence because topology convergence classified the rebalancer handoff source as admin_reachability_refused and startup_recovery_blocked.
+Current state: Fresh rolling-restart evidence moved the representative blocker from startup admin reachability to priority recovery workflow progress.
 
 ## Next Action
 
-Prove and repair startup readiness/admin reachability support for admin_reachability_refused, then rerun rolling-restart until the representative scenario succeeds.
+Classify persisted-not-dispatched priority recovery workflow progress, keep unrelated dirty runtime edits out of scope, then promote only a selected runtime successor or architecture stop before the next rolling-restart rerun.
 
 ## Proof Ladder
 
-1. `falsifier: npm test -- test/bootstrap/startup-authority-consumption.test.js test/bootstrap/node-joining-ready-signal-retry.test.js test/bootstrap/traffic-readiness-utils.test.js test/distributed/harness/__tests__/cluster.test-part-2.js test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js test/distributed/harness/__tests__/cluster.test-part-4-startup-snapshot-projection.js test/distributed/harness/__tests__/cluster-reachability-admin-proof-gate-test-cases.js`
-2. `supporting: npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress`
-3. `regression: npm run work:evidence-summary -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
-4. `supporting: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
-5. `supporting: npm run audit:guideline:literals -- src/bootstrap/startup-recovery-coordinator.js src/bootstrap/node-joining-ready-signal-readiness.js src/bootstrap/traffic-readiness-utils.js test/distributed/harness/startup-readiness-evidence.js test/distributed/harness/cluster-segment-5.js test/distributed/harness/cluster-segment-7-class-2.js test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js`
-6. `supporting: npm run audit:guideline:decision-boundaries -- src/bootstrap/startup-recovery-coordinator.js src/bootstrap/node-joining-ready-signal-readiness.js src/bootstrap/traffic-readiness-utils.js test/distributed/harness/startup-readiness-evidence.js test/distributed/harness/cluster-segment-5.js test/distributed/harness/cluster-segment-7-class-2.js test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js`
-7. `supporting: npm run audit:runtime-grammar:file -- src/bootstrap/startup-recovery-coordinator.js src/bootstrap/node-joining-ready-signal-readiness.js src/bootstrap/traffic-readiness-utils.js test/distributed/harness/startup-readiness-evidence.js test/distributed/harness/cluster-segment-5.js test/distributed/harness/cluster-segment-7-class-2.js test/distributed/harness/cluster-segment-7-class-4.js test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js`
+1. `falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json`
+2. `regression: npm run work:scenario-route -- test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress`
+3. `supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json --markdown`
 
 ## Model Fit
 
-Package class: `runtime-owner-boundary`
+Package class: `representative-frontier-closure`
 
 Intended minimum model: `gpt-5.3-codex`
 
-Scope shape: `bounded-owner-runtime/current-frontier`
+Scope shape: `owner-boundary-contraction/current-frontier`
 
 Output profile: `medium`
 
 Escalation triggers:
 
 1. `owned files expand beyond this package`
-2. `a frozen decision must be reopened`
+2. `fresh representative evidence changes owner or boundary`
 
 ## Theory Ledger References
 
-1. None recorded
+1. `theory-20260527-rolling-restart-priority-recovery-workflow-progress`
 
 ## Representative Residual
 
-Status: `pending-before-rerun`
+Status: `same-frontier`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
+Artifact: `test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json`
 
-Frontier: `startup_readiness_owner / startup_support_evidence`
+Frontier: `operation_workflow_owner / workflow_progress`
 
-Owner: `startup_readiness_owner`
+Owner: `operation_workflow_owner`
 
-Boundary: `startup_support_evidence`
+Boundary: `workflow_progress`
 
-Dominant reason: `admin_reachability_refused`
+Dominant reason: `priority_recovery_event_driven_wait`
 
-Next action: `Prove and repair startup readiness/admin reachability support for admin_reachability_refused, then rerun rolling-restart until the representative scenario succeeds.`
+Next action: `Classify persisted-not-dispatched priority recovery workflow progress, keep unrelated dirty runtime edits out of scope, then promote only a selected runtime successor or architecture stop before the next rolling-restart rerun.`
 
 ## Causal Governance
 
-Causal hypothesis: `WebSocket transport reconnection hang under load prevents node bootstrap join convergence.`
+Causal hypothesis: `Priority recovery workflow progress remains persisted but not dispatched, so downstream startup and active-gate symptoms must not be patched until workflow progress advances, classifies backpressure, or selects an architecture stop.`
 
-Stop-condition check: `Use npm run analyze:causal-model on the latest representative artifact.`
+Stop-condition check: `Use npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json.`
 
-Expected causal-model change: `Select the startup readiness support owner boundary before runtime implementation resumes.`
+Expected causal-model change: `Classify operation workflow progress and decide whether a local workflow dispatch-progress successor or architecture stop owns the next move.`
 
-Representative outcome: `migrated`
+Representative outcome: `same-frontier`
 
-Causal debt: `The priority recovery witness is still first frontier, but its source evidence names admin_reachability_refused and startup_recovery_blocked; startup readiness support must own the admin availability evidence before another rebalancer or message-router patch.`
+Causal debt: `The latest causal model accepted classified backpressure but rolling-restart is still red; the successor must turn the classified priority recovery wait into concrete progress or a formal architecture stop.`
 
-Cross-boundary review: `Transport and rebalancer runtime remain frozen because canonical evidence did not distinguish message routing as the next owner.`
+Cross-boundary review: `Startup readiness and active-gate snapshot coverage are downstream until operation workflow progress proves or falsifies the persisted-not-dispatched priority recovery path.`
 
 ## Scenario Causal Closure
 
@@ -134,58 +109,60 @@ Reference scenario/probe: `rolling-restart`
 
 Phase chain:
 
-1. `rolling-restart representative gate rerun completed`
-2. `route evidence stayed at operation_workflow_owner / rebalancer_handoff`
-3. `topology convergence source classified the handoff witness as admin_reachability_refused and startup_recovery_blocked`
-4. `architecture experiment selected startup_readiness_owner / startup_support_evidence before another same-frontier runtime patch`
+1. `startup readiness support proof passed and fresh representative evidence was collected`
+2. `canonical route selected operation_workflow_owner / workflow_progress`
+3. `topology convergence named priority_recovery_event_driven_wait with current step dispatch_pending planned`
+4. `active-gate snapshot coverage remains downstream blocked by workflow progress`
 
-Current first frontier: `operation_workflow_owner/rebalancer_handoff with startup_readiness_owner/startup_support_evidence selected as owner-boundary migration`
+Current first frontier: `operation_workflow_owner/workflow_progress`
 
 Known downstream blockers:
 
-1. `priority-recovery-reconnection`
+1. `active_gate_snapshot_coverage`
+2. `publication_missing_active_node=35a891b8-c1a0-5064-9c6e-2acfba61c2a7`
 
-Missing causal edge: `Startup readiness/admin reachability support must explain admin_reachability_refused before rebalancer handoff or message-router runtime work resumes.`
+Missing causal edge: `Operation workflow progress must explain why a priority recovery operation stayed dispatch_pending/planned instead of advancing.`
 
-Missing causal edge probe: `npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress`
+Missing causal edge probe: `npm run work:scenario-route -- test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress`
 
-Bounded progress proof: `Decide the startup readiness support contract before dispatch or delivery runtime edits resume.`
+Bounded progress proof: `Advance, dispatch, reconcile, or classify the priority recovery workflow progress edge before touching active-gate or transport runtime.`
 
-Bounded progress proof artifact: `test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
+Bounded progress proof artifact: `test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json`
 
-Expected observable transition: `Architecture decision selected with a concrete next owner, proof command, and no additional same-frontier local patch.`
+Expected observable transition: `The next focused proof names the workflow progress file/scope, then the next rolling-restart run becomes green or moves to a new concrete frontier.`
 
-Max progress bound: `one architecture experiment`
+Max progress bound: `one focused workflow-progress proof before representative rerun`
 
-Same-frontier fallback: `Open an autonomous architecture experiment rather than another local patch.`
+Same-frontier fallback: `Open an autonomous architecture experiment if the same frontier repeats with no concrete reduction.`
 
-Expected next frontier: `startup_readiness_owner / startup_support_evidence`
+Expected next frontier: `operation_workflow_owner / workflow_progress`
 
-Result classification: `migrated`
+Result classification: `same-frontier`
 
-Stop condition: `migrate-owner-boundary`
+Stop condition: `continue-local-fix`
 
 Recent frontier history:
 
-1. `done-20260526-rolling-restart-operation-workflow-owner-rebalancer-handoff.md`
+1. `done-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md`
+2. `done-20260526-rolling-restart-operation-workflow-owner-rebalancer-handoff.md`
 
-Oscillation check: `Same-frontier evidence after local runtime fixes selected startup readiness support as the next owner contract.`
+Oscillation check: `This is the first post-startup-readiness operation workflow progress successor for the new artifact.`
 
-Handoff invariant: `Rebalancer and message-router runtime implementation remains frozen until startup readiness/admin reachability support is proven or falsified.`
+Handoff invariant: `Do not patch active-gate snapshot coverage, startup readiness, rebalancer handoff, or transport runtime until workflow progress is proven or formally migrated.`
 
 ## Observable Prediction
 
-Metric: `unknown`
+Metric: `workflow progress extractor state`
 
-Predicted: `unknown`
+Predicted: `nonzero priority recovery operation remains dispatch_pending/planned with operation_workflow_owner / workflow_progress as the first frontier`
 
-Observed: `unknown`
+Observed: `priority recovery residual extractor reported three recovering_in_flight witnesses under operation_workflow_owner / workflow_progress, with dispatch_pending/planned still first frontier`
 
-Accuracy: `unknown`
+Accuracy: `matched`
 
-Evidence: `unknown`
+Evidence: `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json --markdown`
 
-Metric delta: `unknown`
+Metric delta: `0`
 
 ## Experiment Outcome
 
@@ -201,25 +178,25 @@ Evidence: `unknown`
 
 ## Rerun Decision
 
-Source artifact: `test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
+Source artifact: `test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json`
 
-Route owner: `startup_readiness_owner`
+Route owner: `operation_workflow_owner`
 
-Route boundary: `startup_support_evidence`
+Route boundary: `workflow_progress`
 
-Route dominant reason: `admin_reachability_refused`
+Route dominant reason: `priority_recovery_event_driven_wait`
 
-Route causal outcome: `migrate_owner_boundary`
+Route causal outcome: `accept_classified_backpressure`
 
-Stop mode: `owner_boundary_migration`
+Stop mode: `classified_backpressure`
 
 Next lane: `causal-escalation`
 
-Expected delta: `Focused startup readiness proof should classify admin_reachability_refused as bounded startup support evidence, let recovery readiness proceed only through the startup owner contract, and the fresh rolling-restart representative should pass or expose a new named owner boundary.`
+Expected delta: `Classify the persisted-not-dispatched operation workflow progress residual and promote the smallest runtime proof or architecture stop before the next rolling-restart rerun.`
 
 Required refresh commands:
 
-1. `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --owner startup_readiness_owner --boundary startup_support_evidence --dominant-reason admin_reachability_refused`
+1. `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait`
 2. `update Sprint Strategy Brief and Current Edge Card from the route result`
 3. `npm run work:repair`
 4. `npm run work:validate -- --entry`
@@ -227,7 +204,7 @@ Required refresh commands:
 
 ## Classification Efficiency
 
-Default mode: `separate-package-approved`
+Default mode: `inline-gate-default`
 
 Separate package reason: `successor-selection`
 
@@ -237,9 +214,9 @@ Proof command budget: `two-or-three-canonical-commands`
 
 Commands:
 
-1. `supporting: npm run work:scenario-route -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress`
-2. `regression: npm run work:evidence-summary -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
-3. `supporting: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
+1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json`
+2. `npm run work:scenario-route -- test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress`
+3. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json --markdown`
 
 Decision record: `Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.`
 
@@ -269,26 +246,11 @@ Gate next action: No architecture decision gate is required for this package.
 
 Write scope:
 
-1. `src/bootstrap/startup-recovery-coordinator.js`
-2. `src/bootstrap/node-joining-ready-signal-readiness.js`
-3. `src/bootstrap/traffic-readiness-utils.js`
-4. `test/bootstrap/startup-authority-consumption.test.js`
-5. `test/bootstrap/node-joining-ready-signal-retry.test.js`
-6. `test/bootstrap/traffic-readiness-utils.test.js`
-7. `test/distributed/harness/startup-readiness-evidence.js`
-8. `test/distributed/harness/cluster-segment-5.js`
-9. `test/distributed/harness/cluster-segment-7-class-2.js`
-10. `test/distributed/harness/cluster-segment-7-class-4.js`
-11. `test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js`
-12. `test/distributed/harness/__tests__/cluster.test-part-2.js`
-13. `test/distributed/harness/__tests__/cluster-part-2-node-reachability-test-cases.js`
-14. `test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js`
-15. `test/distributed/harness/__tests__/cluster.test-part-4-startup-snapshot-projection.js`
-16. `test/distributed/harness/__tests__/cluster-reachability-admin-proof-gate-test-cases.js`
+1. `work/theory-ledger.md`
 
 Handoff files:
 
-1. `test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
+1. `test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json`
 
 Generated files:
 
@@ -297,34 +259,15 @@ Generated files:
 
 Candidate runtime files:
 
-1. `src/bootstrap/startup-recovery-coordinator.js`
-2. `src/bootstrap/node-joining-ready-signal-readiness.js`
-3. `src/bootstrap/traffic-readiness-utils.js`
-4. `test/distributed/harness/cluster-segment-5.js`
-5. `test/distributed/harness/cluster-segment-7-class-2.js`
-6. `test/distributed/harness/cluster-segment-7-class-4.js`
+1. None recorded
 
 Commit scope:
 
-1. `src/bootstrap/startup-recovery-coordinator.js`
-2. `src/bootstrap/node-joining-ready-signal-readiness.js`
-3. `src/bootstrap/traffic-readiness-utils.js`
-4. `test/bootstrap/startup-authority-consumption.test.js`
-5. `test/bootstrap/node-joining-ready-signal-retry.test.js`
-6. `test/bootstrap/traffic-readiness-utils.test.js`
-7. `test/distributed/harness/startup-readiness-evidence.js`
-8. `test/distributed/harness/cluster-segment-5.js`
-9. `test/distributed/harness/cluster-segment-7-class-2.js`
-10. `test/distributed/harness/cluster-segment-7-class-4.js`
-11. `test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js`
-12. `test/distributed/harness/__tests__/cluster.test-part-2.js`
-13. `test/distributed/harness/__tests__/cluster-part-2-node-reachability-test-cases.js`
-14. `test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js`
-15. `test/distributed/harness/__tests__/cluster.test-part-4-startup-snapshot-projection.js`
-16. `test/distributed/harness/__tests__/cluster-reachability-admin-proof-gate-test-cases.js`
-17. `work/packages/active-20260527-rolling-restart-startup-readiness-admin-reachability-support.md`
-18. `work/sprints/current-blocker.md`
-19. `work/sprints/current-blocker.json`
+1. `work/packages/active-20260527-rolling-restart-operation-workflow-owner-workflow-progress.md`
+2. `work/sprints/current-blocker.md`
+3. `work/sprints/current-blocker.json`
+4. `work/sprints/active-2026-q2-rolling-restart-priority-recovery-resolution.md`
+5. `work/theory-ledger.md`
 
 Legacy touched files:
 

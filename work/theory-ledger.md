@@ -264,42 +264,56 @@ Each entry must include these labels:
 
 ## theory-20260526-rolling-restart-logger-cpu-starvation
 
-- Status: active
+- Status: avoided
 - Scenario/gate: rolling-restart / bootstrap_joining
 - Owner/boundary: transport_owner / message_routing
 - Hypothesis: Under high backpressure/load, the logging inside `PressureGovernor.emitPressureMetric` floods stdout/stderr without rate-limiting, causing 100% CPU starvation and event loop latency that stalls seed contact bootstrap joins.
 - Probe: `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
-- Artifact/result: `test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json` - restarted node timeout joining seed node due to 100.3% CPU starvation on the seed node.
-- Representative movement: same-frontier
+- Artifact/result: `test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json` - restarted node timeout joining seed node due to 100.3% CPU starvation on the seed node. Fresh routing from `test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json` selected `operation_workflow_owner / workflow_progress`, not transport message routing.
+- Representative movement: migrated-after-fresh-route
 - Linked packages: `work/packages/done-20260526-rolling-restart-priority-recovery-deadlock-triage.md`, `work/packages/done-20260526-outbound-message-queue-backpressure-stabilization.md`, `work/packages/done-20260526-local-query-routing-loopback-bypass.md`
 - Supersedes: none
 - Superseded by: none
-- Next implication: Add rate-limiting inside `PressureGovernor.emitPressureMetric` to prevent logging flooding under backpressure.
+- Next implication: Do not select this transport/runtime patch while the current first frontier is workflow progress; require a fresh artifact that reselects transport_owner / message_routing before resuming this path.
 
 ## theory-20260526-rolling-restart-seed-websocket-cleanup
 
-- Status: active
+- Status: avoided
 - Scenario/gate: rolling-restart / bootstrap_joining
 - Owner/boundary: transport_owner / message_routing
 - Hypothesis: Seed node's WebSocket/query transport fails to properly garbage-collect/clean up stale sockets or connection pool queues for restarted/inactive nodes, leading to file descriptor exhaustions and socket handshaking hangs.
 - Probe: `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
-- Artifact/result: `test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
-- Representative movement: same-frontier
+- Artifact/result: `test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`; fresh routing from `test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json` selected `operation_workflow_owner / workflow_progress`, not WebSocket cleanup.
+- Representative movement: migrated-after-fresh-route
 - Linked packages: `work/packages/done-20260526-rolling-restart-priority-recovery-deadlock-triage.md`, `work/packages/done-20260526-outbound-message-queue-backpressure-stabilization.md`, `work/packages/done-20260526-local-query-routing-loopback-bypass.md`
 - Supersedes: none
 - Superseded by: none
-- Next implication: Inspect WebSocket connection close handlers and keep-alive timeouts on the seed node.
+- Next implication: Keep WebSocket cleanup out of scope unless a fresh representative artifact names transport_owner / message_routing again.
 
 ## theory-20260526-rolling-restart-rebalancer-outbound-saturation
 
-- Status: active
+- Status: superseded
 - Scenario/gate: rolling-restart / priority_recovery_event_driven_wait
 - Owner/boundary: operation_workflow_owner / workflow_progress
 - Hypothesis: Rebalance coordinator background tasks aggressively queue priority recovery moves, saturating the outbound WebSocket queues on restarted nodes and delaying or dropping the critical readiness/joining handshakes.
 - Probe: `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json --markdown`
-- Artifact/result: `test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`
-- Representative movement: same-frontier
+- Artifact/result: `test-output/reports/rolling-restart-three-theory-validation-post-diagnostics.report.json`; latest priority-recovery extraction from `test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json` kept the owner at workflow progress but narrowed the next question to persisted-not-dispatched operation progress rather than generic outbound saturation.
+- Representative movement: narrowed-after-fresh-route
 - Linked packages: `work/packages/done-20260526-rolling-restart-priority-recovery-deadlock-triage.md`, `work/packages/done-20260526-20260526-rolling-restart-three-theory-validation.md`, `work/packages/done-20260526-rolling-restart-operation-workflow-owner-workflow-progress-triage.md`, `work/packages/done-20260526-rolling-restart-operation-workflow-owner-workflow-progress.md`, `work/packages/done-20260526-rolling-restart-operation-workflow-three-theory-recovery.md`, `work/packages/done-20260526-rolling-restart-three-theory-source-analysis-verification.md`, `work/packages/done-20260526-local-query-routing-loopback-bypass.md`
 - Supersedes: none
+- Superseded by: theory-20260527-rolling-restart-priority-recovery-workflow-progress
+- Next implication: Use the 2026-05-27 workflow-progress theory for routing; do not inspect generic queue limits until the focused workflow-progress proof selects them.
+
+## theory-20260527-rolling-restart-priority-recovery-workflow-progress
+
+- Status: active
+- Scenario/gate: rolling-restart / priority_recovery_event_driven_wait
+- Owner/boundary: operation_workflow_owner / workflow_progress
+- Hypothesis: Priority recovery work is present but remains persisted-not-dispatched, leaving downstream startup and active-gate symptoms blocked until operation workflow progress advances, classifies backpressure, or selects an architecture stop.
+- Probe: `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json --markdown`
+- Artifact/result: `test-output/reports/rolling-restart-startup-readiness-http-stage-cap-20260527T000000Z.report.json` - priority recovery extraction reported three `recovering_in_flight` witnesses under `operation_workflow_owner / workflow_progress`, with `dispatch_pending` / `planned` still the first frontier.
+- Representative movement: same-frontier-narrowed
+- Linked packages: `work/packages/active-20260527-rolling-restart-operation-workflow-owner-workflow-progress.md`
+- Supersedes: theory-20260526-rolling-restart-rebalancer-outbound-saturation
 - Superseded by: none
-- Next implication: Inspect rebalancer background dispatch rates and queue limits.
+- Next implication: Keep admin, transport, and generic rebalancer edits out of scope; run the focused workflow-progress proof, then open a runtime-owner-boundary successor only for the selected mechanism or open an architecture experiment if the same frontier repeats without reduction.
