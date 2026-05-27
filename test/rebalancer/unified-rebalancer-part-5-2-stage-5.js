@@ -215,6 +215,8 @@ function createMockReadinessService(mockCache) {
               false,
             [CONTROL_PLANE_READINESS_DIMENSION
               .METADATA_PUBLICATION_HEALTHY]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION
+              .CONTROL_PLANE_PUBLISHED]: true,
             [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
             [CONTROL_PLANE_READINESS_DIMENSION
               .CONTROL_PLANE_RECOVERY_ELIGIBLE]: false,
@@ -243,12 +245,24 @@ function createMockReadinessService(mockCache) {
             healthy,
           [CONTROL_PLANE_READINESS_DIMENSION
             .METADATA_PUBLICATION_HEALTHY]: true,
+          [CONTROL_PLANE_READINESS_DIMENSION
+            .CONTROL_PLANE_PUBLISHED]: true,
           [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]:
             healthy,
           [CONTROL_PLANE_READINESS_DIMENSION
             .CONTROL_PLANE_RECOVERY_ELIGIBLE]: healthy,
           [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]:
             healthy,
+        },
+        projectionReadinessContract: {
+          ready: true,
+          state: 'serve_ready',
+          publication: {
+            ready: true,
+          },
+          priorityRecovery: {
+            active: false,
+          },
         },
         reasons: [],
       };
@@ -387,9 +401,9 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 5', async (t) => {
         entityType: EntityType.PARTITION,
         nodeId: 'node-1',
         nodes: [
-          {node_id: 'node-1', status: NodeStatus.ACTIVE},
-          {node_id: 'node-2', status: NodeStatus.ACTIVE},
-          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+          {node_id: 'node-1', status: NodeStatus.ACTIVE, ready_lease_expires_at: Date.now() + 600000},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE, ready_lease_expires_at: Date.now() + 600000},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE, ready_lease_expires_at: Date.now() + 600000},
         ],
         nodeEndpoints: [
           createNodeEndpoint('node-1'),

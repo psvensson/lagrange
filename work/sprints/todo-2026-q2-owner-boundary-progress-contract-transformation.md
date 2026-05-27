@@ -1,6 +1,6 @@
 # Owner Boundary Progress Contract Transformation Sprint
 
-Status: active. Created on May 27, 2026.
+Status: todo. Created on May 27, 2026.
 
 ## Goal
 
