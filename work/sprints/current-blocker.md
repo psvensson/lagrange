@@ -103,7 +103,7 @@ Stop-condition check: ``npm run analyze:causal-model -- test-output/reports/roll
 
 Expected causal-model change: `Rolling restart should route load through the same benchmark admission contract as node-join-under-load, so readiness proof and the actual load lane observe the same table readiness frontier.`
 
-Representative outcome: `pending-before-rerun`
+Representative outcome: `migrated`
 
 Causal debt: `The current representative artifact reaches load-readiness stability but sustained load records zero successful operations and table-scoped load admission failures before restart recovery times out.`
 
@@ -140,11 +140,11 @@ Max progress bound: `one rolling restart scenario admission slice before represe
 
 Same-frontier fallback: `If fresh evidence returns the same frontier and zero-success benchmark admission failures after this change, stop for an autonomous architecture experiment instead of another local patch.`
 
-Expected next frontier: `representative rerun reduced, migrated, or green after benchmark load admission gate`
+Expected next frontier: `rebalancer_leader / operation_scheduling / priority_recovery_progress_blocked`
 
-Result classification: `pending-before-probe`
+Result classification: `migrated`
 
-Stop condition: `continue-local-fix`
+Stop condition: `migrate-owner-boundary`
 
 Recent frontier history:
 
@@ -161,11 +161,11 @@ Metric: `rolling restart load admission before restart`
 
 Predicted: `Rolling restart waits for benchmark-ready load nodes on a benchmark partitioning table before sustained load and restart actions begin.`
 
-Observed: `pending-before-observation`
+Observed: `Focused proof passed; representative rerun no longer reached zero-success benchmark admission and instead failed during initial cluster setup at rebalancer_leader / operation_scheduling before the scenario body.`
 
-Accuracy: `pending-before-observation`
+Accuracy: `partial`
 
-Evidence: `pending-before-observation`
+Evidence: `test-output/reports/rolling-restart-benchmark-load-admission-capped-warmup-20260527.report.json`
 
 Metric delta: `unknown`
 
@@ -258,6 +258,7 @@ Write scope:
 5. `work/sprints/current-blocker.md`
 6. `work/sprints/current-blocker.json`
 7. `work/sprints/active-2026-q2-rolling-restart-priority-recovery-resolution.md`
+8. `work/packages/done-20260527-rolling-restart-startup-readiness-owner-startup-support-evid.md`
 
 Handoff files:
 
@@ -280,6 +281,7 @@ Commit scope:
 5. `work/sprints/current-blocker.md`
 6. `work/sprints/current-blocker.json`
 7. `work/sprints/active-2026-q2-rolling-restart-priority-recovery-resolution.md`
+8. `work/packages/done-20260527-rolling-restart-startup-readiness-owner-startup-support-evid.md`
 
 Legacy touched files:
 

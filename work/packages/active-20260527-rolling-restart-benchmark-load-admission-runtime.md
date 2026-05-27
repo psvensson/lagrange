@@ -145,7 +145,7 @@
     "hypothesis": "The readiness_retryable rolling-restart failure is amplified by starting sustained load and restart actions after generic /readyz stability while the actual table-scoped load lane still rejects the default logs workload.",
     "stopConditionCheck": "`npm run analyze:causal-model -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json` plus focused tests must prove rolling restart uses benchmark table creation plus benchmark-ready load-node admission before startLoad, and representative evidence must move away from zero-success load with local_benchmark_discovery_missing admission failures.",
     "expectedCausalModelChange": "Rolling restart should route load through the same benchmark admission contract as node-join-under-load, so readiness proof and the actual load lane observe the same table readiness frontier.",
-    "representativeOutcome": "pending-before-rerun",
+    "representativeOutcome": "migrated",
     "causalDebt": "The current representative artifact reaches load-readiness stability but sustained load records zero successful operations and table-scoped load admission failures before restart recovery times out.",
     "crossBoundaryReview": "Do not patch startup internals, active-gate diagnostics, transport, or rebalancer workflow from this package; keep changes to rolling restart scenario admission and focused harness tests."
   },
@@ -177,7 +177,8 @@
       "done-20260527-rolling-restart-startup-readiness-owner-startup-support-evid.md / startup_readiness_owner / startup_support_evidence / migrated"
     ],
     "oscillationCheck": "This package is allowed because the previous diagnostic package selected a concrete runtime successor from canonical route evidence; no further same-frontier local patch is allowed without metric movement.",
-    "handoffInvariant": "Runtime edits stay limited to rolling restart admission and focused tests unless validation names a different owner boundary."
+    "handoffInvariant": "Runtime edits stay limited to rolling restart admission and focused tests unless validation names a different owner boundary.",
+    "commitAndPushLedgerRequired": true
   }
 }
 -->
@@ -326,6 +327,8 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## Execution Evidence
 
+theory-ledger: not-needed
+
 theory-ledger: not-applicable because related readiness theories cover prior startup support routes, while this package owns the newly selected benchmark load-admission missing edge before restart sequencing.
 
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
@@ -343,3 +346,9 @@ Agent identity is optional provenance. Use the compact five-field shape for new 
 4. npm run work:evidence-summary -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json
 5. npm run work:scenario-triage -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json --markdown
 6. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json --markdown
+
+## Commit And Push Ledger
+
+1. Focused package commit: d01b2da38fab38ba52ab6ab355bc30ab53c214b8
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

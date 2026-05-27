@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "active",
+  "status": "todo",
   "intent": {
     "opened": "2026-05-27",
     "lane": "causal-escalation",
