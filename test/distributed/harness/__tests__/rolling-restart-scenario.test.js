@@ -21,10 +21,17 @@ const DEFAULT_POST_RESTART_QUIESCENCE_NO_PROGRESS_TIMEOUT_MS = 30000;
 const OVERRIDE_PRE_LOAD_READINESS_NO_PROGRESS_MAX_ATTEMPTS = 11;
 const OVERRIDE_POST_RESTART_LOAD_READINESS_NO_PROGRESS_MAX_ATTEMPTS = 7;
 const OVERRIDE_POST_RESTART_QUIESCENCE_NO_PROGRESS_TIMEOUT_MS = 2222;
+const SQL_CREATE_TABLE_IF_NOT_EXISTS = 'CREATE TABLE IF NOT EXISTS';
+const SQL_UPDATE_TABLE_POLICIES = 'UPDATE tables SET table_policies';
+const SQL_FROM_TABLES = 'FROM tables';
+const SQL_FROM_PARTITIONS = 'FROM partitions';
+const SQL_FROM_SERVICES = 'FROM services';
 const LOAD_READINESS_PHASE_PRE_LOAD = 'pre_load';
 const LOAD_READINESS_PHASE_POST_RESTART = 'post_restart';
 const SINGLE_SEED_NODE_ID = 'seed-1';
 const SINGLE_SEED_NODE_ROLE = 'seed';
+const BENCHMARK_TABLE_NAME = 'benchmark_events';
+const BENCHMARK_WORKLOAD_PROFILE = 'benchmark_events_mixed';
 const LOGS_TABLE_NAME = 'logs';
 const LOG_ID_COLUMN_NAME = 'log_id';
 const INITIAL_LOAD_TOTAL = 10;
@@ -36,6 +43,13 @@ const POSITIVE_POST_RESTART_QUIET_WINDOW_MS = 1;
 const EXPECTED_POST_RESTART_RECOVERY_STABLE_WINDOW_MS = 15000;
 const SHORT_BARRIER_TIMEOUT_MS = 200;
 const DEFAULT_CONSISTENCY_FORCE_REPAIR_AFTER_MS = 10000;
+const TABLE_POLICIES_JSON = JSON.stringify({
+  externalCdcAllowed: false,
+  splitStorageThreshold: 16384,
+  splitTrafficThreshold: 120,
+  mergeStorageThreshold: 1,
+  mergeTrafficThreshold: 1,
+});
 
 describe('rolling-restart scenario', () => {
   it('waits for load readiness before starting sustained load',
@@ -232,6 +246,137 @@ describe('rolling-restart scenario', () => {
         pollIntervalMs: 43,
         forceRepairAfterMs: 12,
       }]);
+    });
+
+  it('starts benchmark load only after table-local admission is planned',
+    async () => {
+      const calls = [];
+      let observedStartLoadOptions = null;
+      const query = async (sql) => {
+        if (sql.includes(SQL_CREATE_TABLE_IF_NOT_EXISTS)) {
+          calls.push('createBenchmarkTable');
+          return {rows: []};
+        }
+        if (sql.includes(SQL_UPDATE_TABLE_POLICIES)) {
+          calls.push('updateBenchmarkPolicies');
+          return {rows: []};
+        }
+        if (sql.includes(SQL_FROM_TABLES)) {
+          return {
+            rows: [{
+              table_id: 'tbl-benchmark-events-1',
+              table_policies: TABLE_POLICIES_JSON,
+            }],
+          };
+        }
+        if (sql.includes(SQL_FROM_PARTITIONS)) {
+          return {rows: [{partition_id: 'benchmark-events-p1'}]};
+        }
+        if (sql.includes(SQL_FROM_SERVICES)) {
+          return {
+            rows: [
+              {
+                partition_id: 'benchmark-events-p1',
+                node_id: 'seed-1',
+                status: 'active',
+              },
+              {
+                partition_id: 'benchmark-events-p1',
+                node_id: 'joiner-1',
+                status: 'active',
+              },
+            ],
+          };
+        }
+        return {rows: []};
+      };
+      const seedNode = {
+        id: 'seed-1',
+        role: 'seed',
+        query,
+      };
+      const joinerNode = {
+        id: 'joiner-1',
+        role: 'joiner',
+        query,
+      };
+
+      const cluster = {
+        getNodes: () => [seedNode, joinerNode],
+        waitForLoadReadinessStability: async (options = {}) => {
+          calls.push(['waitForLoadReadinessStability', options]);
+          if (options.loadReadinessPhase === LOAD_READINESS_PHASE_PRE_LOAD) {
+            throw new Error('generic load readiness timed out');
+          }
+        },
+        resolveBenchmarkReadyLoadNodes: async (options = {}) => {
+          calls.push(['resolveBenchmarkReadyLoadNodes', options]);
+          return [seedNode, joinerNode];
+        },
+        startLoad: (options = {}) => {
+          observedStartLoadOptions = options;
+          calls.push(['startLoad', options]);
+          return {
+            getMetrics: () => ({total: 10, success: 10}),
+            getAcknowledgedWrites: () => ({
+              tableName: BENCHMARK_TABLE_NAME,
+              idColumn: 'event_id',
+              ids: [],
+            }),
+            cancel: () => {},
+            waitComplete: async () => ({
+              total: 20,
+              success: 20,
+              failed: 0,
+            }),
+          };
+        },
+        restartNode: async (nodeId) => {
+          calls.push(['restartNode', nodeId]);
+          assert.deepEqual(
+            observedStartLoadOptions.nodeResolver().map((node) => node.id),
+            ['seed-1'],
+            'nodeResolver should withdraw the node being restarted',
+          );
+        },
+        waitForConvergence: async () => ({settledAfterMs: 1}),
+        waitForAllActive: async () => {},
+        waitForConsistencyConvergence: async () => {},
+      };
+
+      await run(cluster, {
+        preLoadReadinessStableWindowMs: 0,
+        preLoadReadinessTimeoutMs: 2000,
+        preRestartSettleMs: 0,
+        interRestartDelayMs: 0,
+        postRestartLoadSoakMs: 0,
+        postRestartQuietWindowMs: 0,
+      });
+
+      const startLoadIndex = calls.findIndex((call) =>
+        Array.isArray(call) && call[0] === 'startLoad');
+      const admissionIndex = calls.findIndex((call) =>
+        Array.isArray(call) && call[0] === 'resolveBenchmarkReadyLoadNodes');
+      assert.ok(admissionIndex >= 0);
+      assert.ok(startLoadIndex > admissionIndex);
+      assert.equal(
+        observedStartLoadOptions.tableName,
+        BENCHMARK_TABLE_NAME,
+      );
+      assert.equal(
+        observedStartLoadOptions.workloadProfile,
+        BENCHMARK_WORKLOAD_PROFILE,
+      );
+      assert.equal(typeof observedStartLoadOptions.nodeResolver, 'function');
+      assert.deepEqual(
+        observedStartLoadOptions.nodes.map((node) => node.id).sort(),
+        ['joiner-1', 'seed-1'],
+      );
+      assert.ok(
+        observedStartLoadOptions.opsPerSec < 30,
+        'benchmark load should be scaled to leave control-plane headroom',
+      );
+      assert.equal(observedStartLoadOptions.trackAcknowledgedWrites, true);
     });
 
   it('uses the guarded post-restart stability window as the final quiet period',

@@ -1067,6 +1067,8 @@ describe('node-join-under-load scenario', () => {
                   witnessIds: [],
                   eligibleNodeIds: [],
                   recoveryEligibleExcludedNodeIds: [],
+                  serialWaitOperationIds: [],
+                  serialWaitPartitionIds: [],
                   activeLearnerNodeIds: [],
                   promotableLearnerNodeIds: [],
                   operationIds: [],

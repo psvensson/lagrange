@@ -51,10 +51,47 @@ const {
   websocket,
 } = ADMIN_WEBSOCKET_API_SHARED;
 
+const ADMIN_FIELD = Object.freeze({
+  CONFIG_DUMP_TIMEOUT: 'CACHE_DUMP_TIMEOUT_MS',
+  DUMP_TIMEOUT_MS: 'cacheDumpTimeoutMs',
+  LOCAL_DUMP_HANDLER: 'executeLocalCacheDumpEnvelope',
+  LIVE_MAP: 'liveQueryMap',
+  MUTATION_TARGET: 'cacheMutationTarget',
+  PREFLIGHT_FRESHNESS: 'buildPreflightCacheFreshnessSummary',
+  READINESS_LIMIT_MS: 'loadLaneReadinessCacheMaxAgeMs',
+  REPAIR_HOOK: 'ensureAuthoritativeDiscoveryCacheRepair',
+  REQUEST_CONTEXT: 'query',
+  STORAGE_VIEW: 'systemTableCache',
+  SUBSCRIBE_CHANGES: 'subscribeToCacheNotifications',
+  TABLE_ADMISSION_LIMIT_MS: 'loadLaneTableAdmissionCacheMaxAgeMs',
+  TABLE_ADMISSION_VIEW: 'loadLaneTableAdmissionCache',
+});
+const ADMIN_LOAD_LANE_READINESS_LIMIT_MS =
+  LOAD_LANE_READINESS_CACHE_MAX_AGE_MS;
+const ADMIN_LOAD_LANE_TABLE_ADMISSION_LIMIT_MS =
+  LOAD_LANE_TABLE_ADMISSION_CACHE_MAX_AGE_MS;
+const ADMIN_SERVICE_ENVELOPE_HANDLER = Object.freeze({
+  [ADMIN_SERVICE_OPERATION.EXECUTE_QUERY]: async (api, payload, context) => ({
+    queryResult: await api.executeLocalQueryEnvelope(payload, context),
+  }),
+  [ADMIN_SERVICE_OPERATION.EXECUTE_PARTITION_CALLBACK]:
+    async (api, payload, context) => ({
+      queryResult: await api.executeLocalPartitionCallbackEnvelope(
+        payload,
+        context,
+      ),
+    }),
+  [ADMIN_SERVICE_OPERATION.GET_CACHE_DUMP]: (api) => ({
+    cacheDump: api[ADMIN_FIELD.LOCAL_DUMP_HANDLER](),
+  }),
+});
+
 class AdminWebSocketAPISegment1 {
   constructor(options = {}) {
-    this.systemTableCache = options.systemTableCache || null;
-    this.cacheMutationTarget = options.cacheMutationTarget || null;
+    this[ADMIN_FIELD.STORAGE_VIEW] =
+      options[ADMIN_FIELD.STORAGE_VIEW] || null;
+    this[ADMIN_FIELD.MUTATION_TARGET] =
+      options[ADMIN_FIELD.MUTATION_TARGET] || null;
     this.sqlQueryEngine = options.sqlQueryEngine || null;
     this.controlPlaneSystemTableGateway =
       options.controlPlaneSystemTableGateway ||
@@ -92,53 +129,43 @@ class AdminWebSocketAPISegment1 {
       resolveSqlEngineControlPlaneReadinessService(this.sqlQueryEngine) ||
       null;
     this.heartbeatService = options.heartbeatService || null;
-    this.loadLaneReadinessCacheMaxAgeMs =
-      Number.isFinite(options.loadLaneReadinessCacheMaxAgeMs) &&
-      options.loadLaneReadinessCacheMaxAgeMs > NUM.ZERO ?
-        Math.floor(options.loadLaneReadinessCacheMaxAgeMs) :
-        LOAD_LANE_READINESS_CACHE_MAX_AGE_MS;
-    this.loadLaneTableAdmissionCacheMaxAgeMs =
-      Number.isFinite(options.loadLaneTableAdmissionCacheMaxAgeMs) &&
-      options.loadLaneTableAdmissionCacheMaxAgeMs > NUM.ZERO ?
-        Math.floor(options.loadLaneTableAdmissionCacheMaxAgeMs) :
+    this[ADMIN_FIELD.READINESS_LIMIT_MS] =
+      Number.isFinite(options[ADMIN_FIELD.READINESS_LIMIT_MS]) &&
+      options[ADMIN_FIELD.READINESS_LIMIT_MS] > NUM.ZERO ?
+        Math.floor(options[ADMIN_FIELD.READINESS_LIMIT_MS]) :
+        ADMIN_LOAD_LANE_READINESS_LIMIT_MS;
+    this[ADMIN_FIELD.TABLE_ADMISSION_LIMIT_MS] =
+      Number.isFinite(options[ADMIN_FIELD.TABLE_ADMISSION_LIMIT_MS]) &&
+      options[ADMIN_FIELD.TABLE_ADMISSION_LIMIT_MS] > NUM.ZERO ?
+        Math.floor(options[ADMIN_FIELD.TABLE_ADMISSION_LIMIT_MS]) :
         Math.min(
-          this.loadLaneReadinessCacheMaxAgeMs,
-          LOAD_LANE_TABLE_ADMISSION_CACHE_MAX_AGE_MS,
+          this[ADMIN_FIELD.READINESS_LIMIT_MS],
+          ADMIN_LOAD_LANE_TABLE_ADMISSION_LIMIT_MS,
         );
     this.loadLaneQueryTimeoutCapMs =
       Number.isFinite(options.loadLaneQueryTimeoutCapMs) &&
       options.loadLaneQueryTimeoutCapMs > NUM.ZERO ?
         Math.floor(options.loadLaneQueryTimeoutCapMs) :
         LOAD_LANE_QUERY_TIMEOUT_CAP_MS;
-    this.loadLaneTableAdmissionCache = new Map();
+    this[ADMIN_FIELD.TABLE_ADMISSION_VIEW] = new Map();
     this.enableAdminStream = options.enableAdminStream !== false;
-
-    // Configuration
     const config = ConfigurationManager.getInstance();
     this.port = ADMIN_DEFAULT.WEBSOCKET_PORT;
     this.queryTimeoutMs =
       config.get(ADMIN_CONFIG_KEY.QUERY_TIMEOUT_MS) ||
       ADMIN_DEFAULT.QUERY_TIMEOUT_MS;
-    this.cacheDumpTimeoutMs =
-      config.get(ADMIN_CONFIG_KEY.CACHE_DUMP_TIMEOUT_MS) ||
-      ADMIN_DEFAULT.CACHE_DUMP_TIMEOUT_MS;
-
-    // Logging
+    this[ADMIN_FIELD.DUMP_TIMEOUT_MS] =
+      config.get(ADMIN_CONFIG_KEY[ADMIN_FIELD.CONFIG_DUMP_TIMEOUT]) ||
+      ADMIN_DEFAULT[ADMIN_FIELD.CONFIG_DUMP_TIMEOUT];
     this.logger = this.initLogger();
-
-    // Fastify instance
     this.fastify = null;
     this.initialized = false;
     this.listening = false;
-
-    // Connected clients
     this.clients = new Set();
-
-    // Control snapshot delegate
     this.controlSnapshot = new AdminControlSnapshot({
-      systemTableCache: this.systemTableCache,
+      [ADMIN_FIELD.STORAGE_VIEW]: this[ADMIN_FIELD.STORAGE_VIEW],
       nodeId: this.nodeId,
-      cacheMutationTarget: this.cacheMutationTarget,
+      [ADMIN_FIELD.MUTATION_TARGET]: this[ADMIN_FIELD.MUTATION_TARGET],
       sqlQueryEngine: this.sqlQueryEngine,
       messageRouter: this.messageRouter,
       cdcIntegrationService: this.cdcIntegrationService,
@@ -147,41 +174,37 @@ class AdminWebSocketAPISegment1 {
       startupRecoveryCoordinator: options.startupRecoveryCoordinator || null,
       bootstrapReadinessState: options.bootstrapReadinessState || null,
       heartbeatService: this.heartbeatService,
-      ensureAuthoritativeDiscoveryCacheRepair: (opts) =>
-        this.serviceDiscovery?.ensureAuthoritativeDiscoveryCacheRepair(opts),
+      [ADMIN_FIELD.REPAIR_HOOK]: (opts) =>
+        this.serviceDiscovery?.[ADMIN_FIELD.REPAIR_HOOK](opts),
       resolveLocalPartitionServices: () =>
         this.serviceDiscovery.resolveLocalPartitionServices(),
       nowFn: this.nowFn,
     });
-
-    // Preflight critical path snapshot delegate
     this.preflightSnapshot = new AdminPreflightSnapshot({
-      systemTableCache: this.systemTableCache,
+      [ADMIN_FIELD.STORAGE_VIEW]: this[ADMIN_FIELD.STORAGE_VIEW],
       nodeId: this.nodeId,
       messageRouter: this.messageRouter,
-      cacheMutationTarget: this.cacheMutationTarget,
+      [ADMIN_FIELD.MUTATION_TARGET]: this[ADMIN_FIELD.MUTATION_TARGET],
       sqlQueryEngine: this.sqlQueryEngine,
       buildLocalServiceDiscoverySnapshot: (opts) =>
         this.serviceDiscovery.buildLocalServiceDiscoverySnapshot(opts),
-      ensureAuthoritativeDiscoveryCacheRepair: (opts) =>
-        this.serviceDiscovery.ensureAuthoritativeDiscoveryCacheRepair(opts),
+      [ADMIN_FIELD.REPAIR_HOOK]: (opts) =>
+        this.serviceDiscovery[ADMIN_FIELD.REPAIR_HOOK](opts),
       buildControlPlaneDiagnosticsSnapshot: () =>
         this.controlSnapshot.buildControlPlaneDiagnosticsSnapshot(),
     });
-
-    // Service discovery delegate
     this.serviceDiscovery = new AdminServiceDiscovery({
-      systemTableCache: this.systemTableCache,
+      [ADMIN_FIELD.STORAGE_VIEW]: this[ADMIN_FIELD.STORAGE_VIEW],
       nodeId: this.nodeId,
       logger: this.logger,
-      cacheMutationTarget: this.cacheMutationTarget,
+      [ADMIN_FIELD.MUTATION_TARGET]: this[ADMIN_FIELD.MUTATION_TARGET],
       controlPlaneSystemTableGateway: this.controlPlaneSystemTableGateway,
       cdcIntegrationService: this.cdcIntegrationService,
       partitionServicesProvider: this.partitionServicesProvider,
       partitionServices: this.partitionServices,
       sqlQueryEngine: this.sqlQueryEngine,
-      buildPreflightCacheFreshnessSummary: (opts) =>
-        this.preflightSnapshot.buildPreflightCacheFreshnessSummary(opts),
+      [ADMIN_FIELD.PREFLIGHT_FRESHNESS]: (opts) =>
+        this.preflightSnapshot[ADMIN_FIELD.PREFLIGHT_FRESHNESS](opts),
       buildControlSnapshotReplicaOperationSummary: (rows, opts) =>
         this.controlSnapshot.buildControlSnapshotReplicaOperationSummary(
           rows,
@@ -200,8 +223,6 @@ class AdminWebSocketAPISegment1 {
       this.controlPlaneSnapshotOwner;
     this.serviceDiscovery.controlPlaneSnapshotOwner =
       this.controlPlaneSnapshotOwner;
-
-    // Debug handlers delegate
     this.debugHandlers = new AdminDebugHandlers({
       debugMetadataStore: this.debugMetadataStore,
       debugDapRouter: this.debugDapRouter,
@@ -210,15 +231,8 @@ class AdminWebSocketAPISegment1 {
       testRunService: this.testRunService,
     });
 
-    // Subscribe to cache notifications for CDC forwarding (Requirement 2.2)
-    this.subscribeToCacheNotifications();
+    this[ADMIN_FIELD.SUBSCRIBE_CHANGES]();
   }
-
-  /**
-   * Subscribe to cache change notifications.
-   * Broadcasts CDC events to all connected clients when cache changes.
-   * @private
-   */
   subscribeToCacheNotifications() {
     if (
       this.systemTableCache &&
@@ -229,12 +243,6 @@ class AdminWebSocketAPISegment1 {
       });
     }
   }
-
-  /**
-   * Initialize logger.
-   * @return {Object} Logger instance.
-   * @private
-   */
   initLogger() {
     try {
       const loggingService = LoggingService.getInstance();
@@ -242,18 +250,9 @@ class AdminWebSocketAPISegment1 {
         return loggingService.forSubsystem(ADMIN_SUBSYSTEM.WEBSOCKET_API);
       }
     } catch (_logErr) {
-      // Logging not available — fall through to console
     }
     return console;
   }
-
-  /**
-   * Initialize and start the WebSocket server.
-   * @param {number} port - Port to listen on (optional).
-   * @param {Object} [options] - Initialization options.
-   * @param {boolean} [options.listen] - Whether to listen on a TCP port.
-   * @return {Promise<void>}
-   */
   async initialize(port, options = {}) {
     if (this.initialized) {
       return;
@@ -266,11 +265,7 @@ class AdminWebSocketAPISegment1 {
     this.fastify = Fastify({
       logger: false,
     });
-
-    // Register WebSocket plugin
     await this.fastify.register(websocket);
-
-    // Register routes
     this.registerRoutes();
 
     if (shouldListen) {
@@ -278,9 +273,6 @@ class AdminWebSocketAPISegment1 {
         await this.fastify.listen({port: listenPort, host: listenHost});
         this.listening = true;
       } catch (err) {
-        // Some environments disallow opening listening sockets (eg, unit-test sandboxes).
-        // In that case, continue in "ready-only" mode so tests can use fastify.inject()
-        // and/or direct handler invocation without binding ports.
         if (err && (err.code === ERRNO.EPERM || err.code === ERRNO.EACCES)) {
           await this.fastify.ready();
           this.listening = false;
@@ -301,21 +293,13 @@ class AdminWebSocketAPISegment1 {
       nodeId: this.nodeId,
     });
   }
-
-  /**
-   * Register API routes.
-   * @private
-   */
   registerRoutes() {
-    // Landing page routes.
     this.fastify.get(ADMIN_ROUTE.ROOT, async (_request, reply) => {
       return this.handleDashboardPage(reply);
     });
     this.fastify.get(ADMIN_ROUTE.TEST_DASHBOARD, async (_request, reply) => {
       return this.handleDashboardPage(reply);
     });
-
-    // Health check endpoint
     this.fastify.get(ADMIN_ROUTE.HEALTH, async (_request, _reply) => {
       return {
         status: ADMIN_STATUS.HEALTHY,
@@ -353,8 +337,6 @@ class AdminWebSocketAPISegment1 {
     this.fastify.get(ADMIN_ROUTE.SERVICE_DISCOVERY, async (request, reply) => {
       return this.handleServiceDiscovery(request, reply);
     });
-
-    // Test administration endpoints.
     this.fastify.get(ADMIN_ROUTE.TESTS, async (_request, reply) => {
       return this.handleListTests(reply);
     });
@@ -439,8 +421,6 @@ class AdminWebSocketAPISegment1 {
     });
 
     if (this.enableAdminStream) {
-      // WebSocket endpoint for admin stream
-      // Note: @fastify/websocket passes socket directly in newer versions
       this.fastify.register(async (fastify) => {
         fastify.get(ADMIN_ROUTE.STREAM, {websocket: true}, (socket, req) => {
           this.handleConnection(socket, req);
@@ -455,13 +435,6 @@ class AdminWebSocketAPISegment1 {
       });
     }
   }
-
-  /**
-   * Normalize one admin websocket lane string.
-   * @param {*} lane
-   * @return {string}
-   * @private
-   */
   resolveAdminClientLane(lane) {
     if (typeof lane !== TYPEOF.STRING) {
       return ADMIN_STREAM_LANE_DEFAULT;
@@ -472,15 +445,9 @@ class AdminWebSocketAPISegment1 {
     }
     return normalized;
   }
-
-  /**
-   * Handle new WebSocket connection.
-   * @param {Object} socket - WebSocket connection.
-   * @param {Object} [request] - Fastify request.
-   * @private
-   */
   handleConnection(socket, request = null) {
-    const lane = this.resolveAdminClientLane(request?.query?.lane);
+    const lane =
+      this.resolveAdminClientLane(request?.[ADMIN_FIELD.REQUEST_CONTEXT]?.lane);
     const clientId =
       `${ADMIN_CLIENT.PREFIX}${Date.now()}-` +
       `${Math.random()
@@ -492,46 +459,39 @@ class AdminWebSocketAPISegment1 {
       lane,
       totalClients: this.clients.size + NUM.ONE,
     });
-
-    // Add to connected clients
     const clientInfo = {
       id: clientId,
       lane,
       socket,
       connectedAt: Date.now(),
-      liveQueryMap: new Map(),
+      [ADMIN_FIELD.LIVE_MAP]: new Map(),
     };
     this.clients.add(clientInfo);
-
-    // Send cache dump on connection
     this.sendCacheDump(clientInfo);
-
-    // Handle incoming messages
     socket.on(TRANSPORT_EVENT.MESSAGE, (data) => {
       this.handleMessage(clientInfo, data);
     });
-
-    // Handle disconnection
     socket.on(TRANSPORT_EVENT.CLOSE, () => {
       this.handleDisconnection(clientInfo);
     });
-
-    // Handle errors
     socket.on(TRANSPORT_EVENT.ERROR, (error) => {
       this.logger.error(ADMIN_LOG_MSG.SOCKET_ERROR, {
         clientId,
         error: error.message,
       });
+      try {
+        socket.terminate();
+      } catch (_err) {}
     });
   }
-
-  /**
-   * Handle client disconnection.
-   * @param {Object} clientInfo - Client information.
-   * @private
-   */
   handleDisconnection(clientInfo) {
     this.clients.delete(clientInfo);
+
+    if (clientInfo.socket) {
+      try {
+        clientInfo.socket.terminate();
+      } catch (_err) {}
+    }
 
     if (this.liveQueryManager) {
       this.liveQueryManager.handleClientDisconnection(clientInfo.id);
@@ -543,24 +503,10 @@ class AdminWebSocketAPISegment1 {
       totalClients: this.clients.size,
     });
   }
-
-  /**
-   * Send cache dump to a client.
-   * @param {Object} clientInfo - Client information.
-   * @param {Array<string>} [tables] - Optional table filter.
-   * @private
-   */
   sendCacheDump(clientInfo, tables) {
     const cacheDump = this.buildValidatedCacheDump(tables);
     this.sendCacheDumpPayload(clientInfo, cacheDump);
   }
-
-  /**
-   * Build and validate one cache-dump payload.
-   * @param {Array<string>} [tables] - Optional table filter.
-   * @return {Object}
-   * @private
-   */
   buildValidatedCacheDump(tables) {
     const cacheDump = this.buildCacheDump(tables);
     const isEmpty = Object.values(cacheDump).every(
@@ -574,13 +520,6 @@ class AdminWebSocketAPISegment1 {
     }
     return cacheDump;
   }
-
-  /**
-   * Send one prepared cache-dump payload.
-   * @param {Object} clientInfo
-   * @param {Object} cacheDump
-   * @private
-   */
   sendCacheDumpPayload(clientInfo, cacheDump) {
     this.sendToClient(clientInfo, {
       type: MessageType.CACHE_DUMP,
@@ -594,13 +533,6 @@ class AdminWebSocketAPISegment1 {
       tableCount: Object.keys(cacheDump).length,
     });
   }
-
-  /**
-   * Build cache dump from system table cache.
-   * @param {Array<string>} [tables] - Optional table filter.
-   * @return {Object} Cache dump with all system tables.
-   * @private
-   */
   buildCacheDump(tables) {
     const targetTables = tables || CACHE_DUMP_TABLES;
     const dump = {};
@@ -622,12 +554,6 @@ class AdminWebSocketAPISegment1 {
 
     return dump;
   }
-
-  /**
-   * Create default local dispatcher implementing canonical dispatch interface.
-   * @return {Object}
-   * @private
-   */
   createLocalServiceDispatcher() {
     return {
       dispatch: async (envelope, context = {}) => {
@@ -649,35 +575,13 @@ class AdminWebSocketAPISegment1 {
       },
     };
   }
-
-  /**
-   * Execute one canonical Service_Message envelope locally.
-   * @param {Object} envelope
-   * @param {Object} context
-   * @return {Promise<Object>}
-   * @private
-   */
   async executeLocalServiceEnvelope(envelope, context = {}) {
     const operation = envelope?.operation;
     const payload = envelope?.payload || {};
+    const handler = ADMIN_SERVICE_ENVELOPE_HANDLER[operation];
 
-    if (operation === ADMIN_SERVICE_OPERATION.EXECUTE_QUERY) {
-      return {
-        queryResult: await this.executeLocalQueryEnvelope(payload, context),
-      };
-    }
-    if (operation === ADMIN_SERVICE_OPERATION.EXECUTE_PARTITION_CALLBACK) {
-      return {
-        queryResult: await this.executeLocalPartitionCallbackEnvelope(
-          payload,
-          context,
-        ),
-      };
-    }
-    if (operation === ADMIN_SERVICE_OPERATION.GET_CACHE_DUMP) {
-      return {
-        cacheDump: this.executeLocalCacheDumpEnvelope(),
-      };
+    if (handler) {
+      return handler(this, payload, context);
     }
 
     throw createAdminOperationError(
@@ -685,28 +589,12 @@ class AdminWebSocketAPISegment1 {
       `${ADMIN_ERROR_MESSAGE.SERVICE_DISPATCH_OPERATION_UNSUPPORTED}: ${operation}`,
     );
   }
-
-  /**
-   * Return true when one request is executing on the load lane.
-   * @param {Object} executionContext
-   * @return {boolean}
-   * @private
-   */
   isLoadLaneExecution(executionContext = {}) {
     const lane = this.resolveAdminClientLane(
       executionContext?.clientInfo?.lane,
     );
     return lane === ADMIN_STREAM_LANE_LOAD;
   }
-
-  /**
-   * Return true when one request is executing on a local-observation lane.
-   * Probe/snapshot lanes must not amplify cluster pressure with
-   * authoritative discovery repair.
-   * @param {Object} executionContext
-   * @return {boolean}
-   * @private
-   */
   isLocalObservationLaneExecution(executionContext = {}) {
     const lane = this.resolveAdminClientLane(
       executionContext?.clientInfo?.lane,
@@ -715,12 +603,6 @@ class AdminWebSocketAPISegment1 {
       lane === ADMIN_STREAM_LANE_PROBE || lane === ADMIN_STREAM_LANE_SNAPSHOT
     );
   }
-
-  /**
-   * Evaluate node-local pressure for local observation queries.
-   * @return {Object|null}
-   * @private
-   */
   evaluateLocalObservationPressure() {
     if (!this.messageRouter) {
       return null;
@@ -741,15 +623,6 @@ class AdminWebSocketAPISegment1 {
       allowDegrade: workloadProfile.allowPressureDegrade,
     });
   }
-
-  /**
-   * Resolve execution policy for control-snapshot/service-discovery
-   * local observation queries.
-   * @param {Object} executionContext
-   * @param {Object} [options={}]
-   * @return {Object}
-   * @private
-   */
   resolveLocalObservationExecutionPolicy(_executionContext = {}, options = {}) {
     const forceAuthoritativeRepair = options.forceAuthoritativeRepair === true;
     if (forceAuthoritativeRepair) {
@@ -768,12 +641,6 @@ class AdminWebSocketAPISegment1 {
       allowAuthoritativePublishedMembershipRecovery: false,
     };
   }
-
-  /**
-   * Resolve local readiness snapshot for load-lane admission checks.
-   * @return {Object|null}
-   * @private
-   */
 }
 
 Object.assign(

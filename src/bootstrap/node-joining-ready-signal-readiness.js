@@ -5,7 +5,11 @@ import {
 } from './bootstrap-api-constants.js';
 import {
   LIFECYCLE_PHASE,
+  LIFECYCLE_REASON,
 } from './lifecycle-controller-constants.js';
+import {
+  canBypassBootstrapInitPriorityReasons,
+} from './startup-recovery-coordinator.js';
 import {
   isMetadataPublicationReadySnapshot,
 } from './traffic-readiness-utils.js';
@@ -131,11 +135,21 @@ class NodeJoiningReadySignalReadiness extends NodeJoiningServiceSegment1 {
     ) {
       return snapshot;
     }
-    const reasons = Array.isArray(snapshot.reasons) ?
+    const snapshotReasons = Array.isArray(snapshot.reasons) ?
       snapshot.reasons.filter((reason) =>
-        reason !== BOOTSTRAP_API_PROBE_REASON.BOOTSTRAP_PHASE_INCOMPLETE,
+        typeof reason === TYPEOF.STRING && reason.length > NUM.ZERO,
       ) :
       [];
+    if (canBypassBootstrapInitPriorityReasons(snapshotReasons, snapshot)) {
+      return {
+        ...snapshot,
+        phase: LIFECYCLE_PHASE.DEGRADED,
+        reasons: [LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING],
+      };
+    }
+    const reasons = snapshotReasons.filter((reason) =>
+      reason !== BOOTSTRAP_API_PROBE_REASON.BOOTSTRAP_PHASE_INCOMPLETE,
+    );
     const candidate = {
       ...snapshot,
       phase: LIFECYCLE_PHASE.DEGRADED,
@@ -212,6 +226,7 @@ class NodeJoiningReadySignalReadiness extends NodeJoiningServiceSegment1 {
       Math.max(NUM.ONE, Math.floor(this.config.readySignalRetryDelayMs)) :
       JOINING_DEFAULT.readySignalRetryDelayMs;
     let lastError = null;
+    const waitLogMessage = JOINING_LOG_MSG.READY_SIGNAL_RETRYING;
     for (let attempt = NUM.ONE; attempt <= maxAttempts; attempt++) {
       try {
         await heartbeat.sendHeartbeat(heartbeatPayload, capabilities);
@@ -226,7 +241,7 @@ class NodeJoiningReadySignalReadiness extends NodeJoiningServiceSegment1 {
         if (attempt >= maxAttempts) {
           break;
         }
-        this.logger.warn(JOINING_LOG_MSG.READY_SIGNAL_RETRYING, {
+        this.logger.warn(waitLogMessage, {
           nodeId: this.nodeId,
           attempt,
           maxAttempts,
@@ -317,7 +332,7 @@ class NodeJoiningReadySignalReadiness extends NodeJoiningServiceSegment1 {
     if (Number.isFinite(httpTimeoutMs) && httpTimeoutMs > NUM.ZERO) {
       return Math.floor(httpTimeoutMs);
     }
-    return null;
+    return JOINING_DEFAULT.leadershipWaitTimeoutMs;
   }
   /**
    * Activate non-critical periodic control-plane writers once the joining

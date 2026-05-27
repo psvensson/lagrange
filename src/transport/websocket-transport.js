@@ -1,9 +1,3 @@
-/**
- * WebSocketTransport - Inter-node communication using WebSocket.
- * Supports single WebSocket connection per node pair.
- * Requirements: 9.1, 4.16
- */
-
 import {EventEmitter} from 'events';
 import {v4 as uuidv4} from 'uuid';
 import WebSocket, {WebSocketServer} from 'ws';
@@ -43,18 +37,14 @@ import {
 const ConnectionState = CONNECTION_STATE;
 const WSMessageType = WS_MESSAGE_TYPE;
 
-/**
- * WebSocketTransport provides inter-node communication.
- * Maintains single WebSocket connection per node pair.
- */
+const MSG_TRANSPORT_NOT_INITIALIZED = 'Transport is not initialized';
+const MSG_REPLACING_CONNECTION = 'Replacing existing connection on new peer identification';
+const MSG_IGNORING_CLOSE_STALE = 'Ignoring close event for stale socket';
+const MSG_SKIPPING_RECONNECT_SCHEDULING = 'Skipping reconnect scheduling for non-canonical connection';
+const MSG_SKIPPING_RECONNECT_EXECUTION = 'Skipping reconnect execution for non-canonical connection';
+const MSG_CONNECTION_ESTABLISHMENT_TIMEOUT = 'Connection establishment timed out';
+
 class WebSocketTransport extends EventEmitter {
-  /**
-   * Create a new WebSocketTransport.
-   * @param {Object} options - Configuration options.
-   * @param {string} options.localNodeId - Local node ID.
-   * @param {string} options.localAddress - Local service address.
-   * @param {Array<Object>} options.peerNodes - Peer node configurations.
-   */
   constructor(options = {}) {
     super();
 
@@ -62,17 +52,9 @@ class WebSocketTransport extends EventEmitter {
     this.localAddress = options.localAddress ||
       TRANSPORT_FORMAT.buildLocalAddress(this.localNodeId);
     this.transportId = uuidv4();
-
-    // Peer connections (nodeId -> connection info)
     this.connections = new Map();
-
-    // Pending messages awaiting acknowledgment
     this.pendingMessages = new Map();
-
-    // Message handlers by address
     this.messageHandlers = new Map();
-
-    // Configuration
     const config = ConfigurationManager.getInstance();
     this.reconnectIntervalMs =
       config.get(TRANSPORT_CONFIG_KEY.RECONNECT_INTERVAL_MS) ||
@@ -92,38 +74,24 @@ class WebSocketTransport extends EventEmitter {
     this.wsHost =
       config.get(TRANSPORT_CONFIG_KEY.WS_HOST) ||
       TRANSPORT_DEFAULT.WS_HOST;
-
-    // Logging
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
       loggingService.forSubsystem(TRANSPORT_SUBSYSTEM.WEBSOCKET) : console;
-
-    // State
     this.initialized = false;
+    this.shutdownCalled = false;
     this.messageCount = TRANSPORT_NUM.ZERO;
-
-    // WebSocket server (if acting as server)
     this.server = null;
   }
-
-  /**
-   * Initialize the transport.
-   * @param {Object} options - Initialization options.
-   * @param {number} options.port - Port to listen on (if server).
-   * @param {Array<Object>} options.peerNodes - Peer nodes to connect to.
-   * @return {Promise<void>}
-   */
   async initialize(options = {}) {
     if (this.initialized) {
       return;
     }
+    this.shutdownCalled = false;
 
     this.logger.debug(WS_LOG_MSG.INITIALIZING, {
       transportId: this.transportId,
       localNodeId: this.localNodeId,
     });
-
-    // Connect to peer nodes if provided
     if (options.peerNodes &&
         options.peerNodes.length > TRANSPORT_NUM.ZERO) {
       for (const peer of options.peerNodes) {
@@ -138,18 +106,9 @@ class WebSocketTransport extends EventEmitter {
       localNodeId: this.localNodeId,
     });
   }
-
-  /**
-   * Start WebSocket server.
-   * @param {number} port - Port to listen on.
-   * @param {string} [host] - Host/interface to bind to.
-   * @return {Promise<void>}
-   */
   async startServer(port, host = null) {
     return new Promise((resolve, reject) => {
       try {
-        // Prefer binding to a specific host (usually 127.0.0.1) to avoid sandbox
-        // restrictions that may disallow binding to 0.0.0.0.
         const bindHost = host || this.wsHost || TRANSPORT_DEFAULT.WS_HOST;
         this.server = new WebSocketServer({port, host: bindHost});
 
@@ -178,28 +137,21 @@ class WebSocketTransport extends EventEmitter {
       }
     });
   }
-
-  /**
-   * Handle incoming WebSocket connection.
-   * @param {WebSocket} ws - WebSocket connection.
-   * @param {Object} _req - HTTP request.
-   * @private
-   */
   handleIncomingConnection(ws, _req) {
     const connectionId = uuidv4();
+    const connection = createIncomingConnectionRecord(connectionId, ws);
+    this.connections.set(connectionId, connection);
 
     this.logger.debug(WS_LOG_MSG.INCOMING_CONNECTION, {
       connectionId,
       transportId: this.transportId,
     });
-
-    // Set up message handler
     ws.on(TRANSPORT_EVENT.MESSAGE, (data) => {
       this.handleMessage(connectionId, ws, data);
     });
 
     ws.on(TRANSPORT_EVENT.CLOSE, () => {
-      this.handleConnectionClose(connectionId);
+      this.handleConnectionClose(connection.nodeId || connectionId, ws);
     });
 
     ws.on(TRANSPORT_EVENT.ERROR, (error) => {
@@ -207,35 +159,36 @@ class WebSocketTransport extends EventEmitter {
         connectionId,
         error: error.message,
       });
+      try {
+        ws.terminate();
+      } catch (_err) {}
     });
-
-    const connection = createIncomingConnectionRecord(connectionId, ws);
-
-    // Store connection temporarily until we know the peer node ID
-    this.connections.set(connectionId, connection);
 
     this.emit(TRANSPORT_EVENT.CONNECTION_ESTABLISHED, {
       connectionId,
       incoming: true,
     });
   }
-
-  /**
-   * Connect to a peer node.
-   * @param {Object} peer - Peer configuration.
-   * @param {string} peer.nodeId - Peer node ID.
-   * @param {string} peer.address - Peer WebSocket address.
-   * @return {Promise<void>}
-   */
   async connectToPeer(peer) {
     const {nodeId, address} = peer;
-
-    // Check if already connected
     if (this.connections.has(nodeId)) {
       const existing = this.connections.get(nodeId);
-      if (existing.state === ConnectionState.CONNECTED) {
-        this.logger.debug(WS_LOG_MSG.ALREADY_CONNECTED, {nodeId});
+      if (existing.state === ConnectionState.CONNECTED ||
+          existing.state === ConnectionState.CONNECTING) {
+        this.logger.debug(WS_LOG_MSG.ALREADY_CONNECTED, {
+          nodeId,
+          state: existing.state,
+        });
         return;
+      }
+      if (existing.ws) {
+        try {
+          existing.ws.terminate();
+        } catch (_err) {}
+      }
+      if (existing.reconnectTimeout) {
+        clearTimeout(existing.reconnectTimeout);
+        existing.reconnectTimeout = null;
       }
     }
 
@@ -255,20 +208,72 @@ class WebSocketTransport extends EventEmitter {
 
     await this.establishConnection(connectionInfo);
   }
-
-  /**
-   * Establish WebSocket connection to peer.
-   * @param {Object} connectionInfo - Connection information.
-   * @return {Promise<void>}
-   * @private
-   */
   async establishConnection(connectionInfo) {
     return new Promise((resolve, reject) => {
+      if (this.shutdownCalled) {
+        connectionInfo.state = ConnectionState.DISCONNECTED;
+        reject(new Error(MSG_TRANSPORT_NOT_INITIALIZED));
+        return;
+      }
+      let settled = false;
+      let timeoutId = null;
+      let ws = null;
+      const clearConnectTimeout = () => {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
+      };
+      const rejectConnection = (error) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearConnectTimeout();
+        connectionInfo.state = ConnectionState.DISCONNECTED;
+        if (connectionInfo.ws === ws) {
+          connectionInfo.ws = null;
+        }
+        reject(error);
+      };
       try {
-        const ws = new WebSocket(connectionInfo.address);
+        connectionInfo.state = ConnectionState.CONNECTING;
+        ws = new WebSocket(connectionInfo.address);
+        connectionInfo.ws = ws;
+
+        timeoutId = setTimeout(() => {
+          if (connectionInfo.state === ConnectionState.CONNECTING && connectionInfo.ws === ws) {
+            this.logger.warn(MSG_CONNECTION_ESTABLISHMENT_TIMEOUT, {
+              nodeId: connectionInfo.nodeId,
+              address: connectionInfo.address,
+            });
+            rejectConnection(new Error(MSG_CONNECTION_ESTABLISHMENT_TIMEOUT));
+            try {
+              ws.terminate();
+            } catch (_err) {}
+          }
+        }, this.messageTimeoutMs);
+        if (typeof timeoutId.unref === TRANSPORT_TYPEOF.FUNCTION) {
+          timeoutId.unref();
+        }
 
         ws.on(TRANSPORT_EVENT.OPEN, () => {
-          connectionInfo.ws = ws;
+          if (settled) {
+            return;
+          }
+          settled = true;
+          clearConnectTimeout();
+          if (this.connections.get(connectionInfo.nodeId) !== connectionInfo) {
+            connectionInfo.state = ConnectionState.CLOSED;
+            if (connectionInfo.ws === ws) {
+              connectionInfo.ws = null;
+            }
+            try {
+              ws.terminate();
+            } catch (_err) {}
+            resolve();
+            return;
+          }
           connectionInfo.state = ConnectionState.CONNECTED;
           connectionInfo.reconnectAttempts = TRANSPORT_NUM.ZERO;
 
@@ -276,11 +281,7 @@ class WebSocketTransport extends EventEmitter {
             nodeId: connectionInfo.nodeId,
             address: connectionInfo.address,
           });
-
-          // Send identification message
           this.sendIdentification(connectionInfo);
-
-          // Start ping interval
           this.startPingInterval(connectionInfo);
 
           this.emit(TRANSPORT_EVENT.CONNECTION_ESTABLISHED, {
@@ -296,7 +297,11 @@ class WebSocketTransport extends EventEmitter {
         });
 
         ws.on(TRANSPORT_EVENT.CLOSE, () => {
-          this.handleConnectionClose(connectionInfo.nodeId);
+          if (!settled) {
+            rejectConnection(new Error(WS_ERROR_MSG.NO_CONNECTION));
+            return;
+          }
+          this.handleConnectionClose(connectionInfo.nodeId, ws);
         });
 
         ws.on(TRANSPORT_EVENT.ERROR, (error) => {
@@ -305,36 +310,25 @@ class WebSocketTransport extends EventEmitter {
             error: error.message,
           });
 
-          if (connectionInfo.state === ConnectionState.CONNECTING) {
-            reject(error);
+          try {
+            ws.terminate();
+          } catch (_err) {}
+
+          if (connectionInfo.state === ConnectionState.CONNECTING && connectionInfo.ws === ws) {
+            rejectConnection(error);
           }
         });
       } catch (error) {
-        connectionInfo.state = ConnectionState.DISCONNECTED;
-        reject(error);
+        rejectConnection(error);
       }
     });
   }
-
-  /**
-   * Send identification message to peer.
-   * @param {Object} connectionInfo - Connection information.
-   * @private
-   */
   sendIdentification(connectionInfo) {
     this.sendRaw(
       connectionInfo.ws,
       buildIdentificationMessage(this.localNodeId, this.localAddress),
     );
   }
-
-  /**
-   * Handle incoming message.
-   * @param {string} connectionId - Connection or node ID.
-   * @param {WebSocket} ws - WebSocket connection.
-   * @param {Buffer|string} data - Message data.
-   * @private
-   */
   handleMessage(connectionId, ws, data) {
     try {
       const message = JSON.parse(data.toString());
@@ -344,38 +338,27 @@ class WebSocketTransport extends EventEmitter {
         type: message.type,
         messageId: message.messageId,
       });
-
-      // Handle identification
       if (message.type === WSMessageType.IDENTIFY) {
         this.handleIdentification(connectionId, ws, message);
         return;
       }
-
-      // Handle ping/pong
       if (message.type === WSMessageType.PING) {
         this.sendRaw(ws, buildPongMessage());
         return;
       }
 
       if (message.type === WSMessageType.PONG) {
-        // Update connection health
         return;
       }
-
-      // Handle acknowledgment
       if (message.type === WSMessageType.ACK) {
         this.handleAcknowledgment(message);
         return;
       }
-
-      // Handle service message
       if (message.type === WSMessageType.SERVICE_MESSAGE ||
           message.type === WSMessageType.RAFT_MESSAGE) {
         this.handleServiceMessage(ws, message);
         return;
       }
-
-      // Unknown message type
       this.logger.warn(WS_LOG_MSG.MESSAGE_UNKNOWN, {
         type: message.type,
         connectionId,
@@ -388,14 +371,6 @@ class WebSocketTransport extends EventEmitter {
       throw error;
     }
   }
-
-  /**
-   * Handle identification message.
-   * @param {string} connectionId - Connection ID.
-   * @param {WebSocket} ws - WebSocket connection.
-   * @param {Object} message - Identification message.
-   * @private
-   */
   handleIdentification(connectionId, ws, message) {
     const {nodeId} = message;
 
@@ -403,35 +378,37 @@ class WebSocketTransport extends EventEmitter {
       connectionId,
       nodeId,
     });
-
-    // Update connection with node ID
     const connection = this.connections.get(connectionId);
     if (connection && connection.isIncoming) {
       connection.nodeId = nodeId;
+      const existing = this.connections.get(nodeId);
+      if (existing) {
+        this.logger.warn(MSG_REPLACING_CONNECTION, {
+          nodeId,
+          existingConnectionId: existing.connectionId,
+          newConnectionId: connectionId,
+        });
 
-      // Re-key by node ID
+        if (existing.ws) {
+          try {
+            existing.ws.terminate();
+          } catch (_err) {}
+        }
+
+        this.handleConnectionClose(nodeId, existing.ws);
+      }
       this.connections.delete(connectionId);
       this.connections.set(nodeId, connection);
     }
 
     this.emit(TRANSPORT_EVENT.PEER_IDENTIFIED, {nodeId, connectionId});
   }
-
-  /**
-   * Handle service message.
-   * @param {WebSocket} ws - WebSocket connection.
-   * @param {Object} message - Service message.
-   * @private
-   */
   async handleServiceMessage(ws, message) {
     const {targetAddress, messageId, payload} = message;
-
-    // Find handler for target address
     const handler = this.messageHandlers.get(targetAddress);
 
     if (handler) {
       try {
-        // Await the handler result in case it's async
         const result = await handler({
           messageId,
           payload,
@@ -444,7 +421,6 @@ class WebSocketTransport extends EventEmitter {
         this.sendRaw(ws, buildServiceFailureAcknowledgment(messageId, error));
       }
     } else {
-      // No handler - emit event for external handling
       this.emit(TRANSPORT_EVENT.MESSAGE, {
         messageId,
         targetAddress,
@@ -452,17 +428,9 @@ class WebSocketTransport extends EventEmitter {
         sourceAddress: message.sourceAddress,
         sourceNodeId: message.sourceNodeId,
       });
-
-      // Send acknowledgment
       this.sendRaw(ws, buildServiceAcknowledgment(messageId));
     }
   }
-
-  /**
-   * Handle acknowledgment message.
-   * @param {Object} message - Acknowledgment message.
-   * @private
-   */
   handleAcknowledgment(message) {
     const {messageId, acknowledged, error, type: _type, ...rest} = message;
 
@@ -472,52 +440,62 @@ class WebSocketTransport extends EventEmitter {
       this.pendingMessages.delete(messageId);
 
       if (acknowledged) {
-        // Flat structure - spread all fields from ACK
         pending.resolve({messageId, acknowledged: true, ...rest});
       } else {
         pending.reject(new Error(error || TRANSPORT_ERROR_MSG.MESSAGE_NOT_ACKNOWLEDGED));
       }
     }
   }
-
-  /**
-   * Handle connection close.
-   * @param {string} nodeId - Node ID.
-   * @private
-   */
-  handleConnectionClose(nodeId) {
+  handleConnectionClose(nodeId, ws) {
     const connection = this.connections.get(nodeId);
 
     if (connection) {
+      if (ws && connection.ws !== ws) {
+        this.logger.debug(MSG_IGNORING_CLOSE_STALE, {
+          nodeId,
+          isIncoming: connection.isIncoming,
+        });
+        return;
+      }
+
       this.logger.info(WS_LOG_MSG.CONNECTION_CLOSED, {
         nodeId,
         connectionId: connection.connectionId,
       });
 
       connection.state = ConnectionState.DISCONNECTED;
+      if (connection.ws) {
+        try {
+          connection.ws.terminate();
+        } catch (_err) {}
+      }
       connection.ws = null;
-
-      // Stop ping interval
       if (connection.pingInterval) {
         clearInterval(connection.pingInterval);
         connection.pingInterval = null;
       }
 
       this.emit(TRANSPORT_EVENT.CONNECTION_CLOSED, {nodeId});
-
-      // Attempt reconnection for outgoing connections
       if (!connection.isIncoming) {
         this.scheduleReconnect(connection);
+      } else {
+        this.connections.delete(nodeId);
       }
     }
   }
-
-  /**
-   * Schedule reconnection attempt.
-   * @param {Object} connectionInfo - Connection information.
-   * @private
-   */
   scheduleReconnect(connectionInfo) {
+    if (this.connections.get(connectionInfo.nodeId) !== connectionInfo) {
+      this.logger.debug(MSG_SKIPPING_RECONNECT_SCHEDULING, {
+        nodeId: connectionInfo.nodeId,
+      });
+      return;
+    }
+
+    if (connectionInfo.reconnectTimeout) {
+      clearTimeout(connectionInfo.reconnectTimeout);
+      connectionInfo.reconnectTimeout = null;
+    }
+
     if (connectionInfo.reconnectAttempts >= this.reconnectMaxAttempts) {
       this.logger.error(WS_LOG_MSG.MAX_RECONNECTS_REACHED, {
         nodeId: connectionInfo.nodeId,
@@ -542,7 +520,17 @@ class WebSocketTransport extends EventEmitter {
       delayMs: delay,
     });
 
-    setTimeout(async () => {
+    connectionInfo.reconnectTimeout = setTimeout(async () => {
+      connectionInfo.reconnectTimeout = null;
+      if (this.connections.get(connectionInfo.nodeId) !== connectionInfo) {
+        this.logger.debug(MSG_SKIPPING_RECONNECT_EXECUTION, {
+          nodeId: connectionInfo.nodeId,
+        });
+        return;
+      }
+      if (this.shutdownCalled) {
+        return;
+      }
       try {
         await this.establishConnection(connectionInfo);
       } catch (error) {
@@ -550,16 +538,16 @@ class WebSocketTransport extends EventEmitter {
           nodeId: connectionInfo.nodeId,
           error: error.message,
         });
-        throw error;
+        if (!this.shutdownCalled &&
+            this.connections.get(connectionInfo.nodeId) === connectionInfo) {
+          this.scheduleReconnect(connectionInfo);
+        }
       }
     }, delay);
+    if (typeof connectionInfo.reconnectTimeout.unref === TRANSPORT_TYPEOF.FUNCTION) {
+      connectionInfo.reconnectTimeout.unref();
+    }
   }
-
-  /**
-   * Start ping interval for connection.
-   * @param {Object} connectionInfo - Connection information.
-   * @private
-   */
   startPingInterval(connectionInfo) {
     connectionInfo.pingInterval = setInterval(() => {
       if (connectionInfo.ws &&
@@ -572,12 +560,6 @@ class WebSocketTransport extends EventEmitter {
     }, this.pingIntervalMs);
     connectionInfo.pingInterval.unref();
   }
-
-  /**
-   * Register a message handler for an address.
-   * @param {string} address - Service address.
-   * @param {Function} handler - Message handler.
-   */
   register(address, handler) {
     if (typeof handler !== TRANSPORT_TYPEOF.FUNCTION) {
       throw new Error(TRANSPORT_ERROR_MSG.HANDLER_MUST_BE_FUNCTION);
@@ -590,23 +572,9 @@ class WebSocketTransport extends EventEmitter {
       transportId: this.transportId,
     });
   }
-
-  /**
-   * Unregister a message handler.
-   * @param {string} address - Service address.
-   */
   unregister(address) {
     this.messageHandlers.delete(address);
   }
-
-  /**
-   * Deliver a message to a target node/service.
-   * @param {string} targetAddress - Target service address.
-   * @param {Object} message - Message to deliver.
-   * @param {Object} options - Delivery options.
-   * @param {string} options.targetNodeId - Target node ID.
-   * @return {Promise<Object>} Delivery result.
-   */
   async deliver(targetAddress, message, options = {}) {
     const {targetNodeId} = options;
     const messageId = message.messageId || uuidv4();
@@ -622,16 +590,6 @@ class WebSocketTransport extends EventEmitter {
 
     return this.sendMessage(connection, targetAddress, messageId, message);
   }
-
-  /**
-   * Send message through connection.
-   * @param {Object} connection - Connection info.
-   * @param {string} targetAddress - Target address.
-   * @param {string} messageId - Message ID.
-   * @param {Object} payload - Message payload.
-   * @return {Promise<Object>} Send result.
-   * @private
-   */
   sendMessage(connection, targetAddress, messageId, payload) {
     return new Promise((resolve, reject) => {
       const message = buildDeliveryMessage({
@@ -641,52 +599,28 @@ class WebSocketTransport extends EventEmitter {
         sourceNodeId: this.localNodeId,
         payload,
       });
-
-      // Set up timeout
       const timeout = setTimeout(() => {
         this.pendingMessages.delete(messageId);
         resolve(buildMessageTimeoutResult(messageId));
       }, this.messageTimeoutMs);
-
-      // Track pending message
       this.pendingMessages.set(messageId, buildPendingMessageRecord({
         messageId,
         resolve,
         reject,
         timeout,
       }));
-
-      // Send message
       this.sendRaw(connection.ws, message);
     });
   }
-
-  /**
-   * Send raw message through WebSocket.
-   * @param {WebSocket} ws - WebSocket connection.
-   * @param {Object} message - Message to send.
-   * @private
-   */
   sendRaw(ws, message) {
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify(message));
     }
   }
-
-  /**
-   * Get connection state for a node.
-   * @param {string} nodeId - Node ID.
-   * @return {string|null} Connection state.
-   */
   getConnectionState(nodeId) {
     const connection = this.connections.get(nodeId);
     return connection ? connection.state : null;
   }
-
-  /**
-   * Get all connected node IDs.
-   * @return {Array<string>} Connected node IDs.
-   */
   getConnectedNodes() {
     const connected = [];
     for (const [nodeId, connection] of this.connections) {
@@ -696,11 +630,6 @@ class WebSocketTransport extends EventEmitter {
     }
     return connected;
   }
-
-  /**
-   * Get transport statistics.
-   * @return {Object} Transport stats.
-   */
   getStats() {
     return buildTransportStats({
       transportId: this.transportId,
@@ -713,29 +642,24 @@ class WebSocketTransport extends EventEmitter {
       connectedNodeCount: this.getConnectedNodes().length,
     });
   }
-
-  /**
-   * Shutdown the transport.
-   * @return {Promise<void>}
-   */
   async shutdown() {
+    this.shutdownCalled = true;
     this.logger.debug(WS_LOG_MSG.SHUTTING_DOWN, {
       transportId: this.transportId,
     });
-
-    // Close all connections - use terminate() for immediate cleanup
     for (const [, connection] of this.connections) {
       if (connection.pingInterval) {
         clearInterval(connection.pingInterval);
+      }
+      if (connection.reconnectTimeout) {
+        clearTimeout(connection.reconnectTimeout);
+        connection.reconnectTimeout = null;
       }
       if (connection.ws) {
         connection.ws.terminate();
       }
     }
-
-    // Close server and underlying HTTP server
     if (this.server) {
-      // Terminate all connected clients first
       for (const client of this.server.clients || []) {
         client.terminate();
       }
@@ -745,8 +669,6 @@ class WebSocketTransport extends EventEmitter {
       await new Promise((resolve) => {
         this.server.close(resolve);
       });
-
-      // Also close the underlying HTTP server if present
       if (httpServer) {
         if (typeof httpServer.closeAllConnections === TRANSPORT_TYPEOF.FUNCTION) {
           httpServer.closeAllConnections();
@@ -759,8 +681,6 @@ class WebSocketTransport extends EventEmitter {
         }
       }
     }
-
-    // Clear pending messages
     for (const [, pending] of this.pendingMessages) {
       clearTimeout(pending.timeout);
       pending.reject(new Error(WS_ERROR_MSG.SHUTDOWN));

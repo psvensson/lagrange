@@ -21,7 +21,10 @@ import {
   OWNER_CONTRACT_NEXT_ACTION,
   OWNER_CONTRACT_STATE,
 } from '../../../../src/control-plane/owner-contract-outcome.js';
-import {SERVICE_STATUS} from '../../../../src/constants/index.js';
+import {
+  SERVICE_STATUS,
+  TYPEOF,
+} from '../../../../src/constants/index.js';
 import {
   createCluster,
   NODE_ROLES,
@@ -415,6 +418,51 @@ const LOAD_READINESS_NO_PROGRESS_STABLE_WINDOW_MS = 1000;
 const LOAD_READINESS_NO_PROGRESS_TIMEOUT_MS = 200;
 const LOAD_READINESS_NO_PROGRESS_PHASE = 'pre_load';
 const LOAD_READINESS_NO_PROGRESS_STAGE = 'scenario.load-readiness.waiting';
+const ACTIVE_GATE_STRONG_ADMISSION_TEST_NAME =
+  'Unit: _waitForAllActive rejects CL-004 witness without strong admission';
+const ACTIVE_GATE_STRONG_ADMIN_PROOF_TEST_NAME =
+  'Unit: _waitForAllActive rejects CL-006 witness without strong admin proof';
+const ACTIVE_GATE_TEST_SEED_NODE_ID = 'seed-1';
+const ACTIVE_GATE_TEST_JOINER_ONE_NODE_ID = 'joiner-1';
+const ACTIVE_GATE_TEST_JOINER_TWO_NODE_ID = 'joiner-2';
+const ACTIVE_GATE_TEST_ACTIVE_STATE = SERVICE_STATUS.ACTIVE;
+const ACTIVE_GATE_STRONG_ADMISSION_CLUSTER_SIZE = 2;
+const ACTIVE_GATE_STRONG_ADMIN_PROOF_CLUSTER_SIZE = 3;
+const ACTIVE_GATE_STRONG_ADMISSION_CONVERGENCE_MS = 200;
+const ACTIVE_GATE_STRONG_ADMISSION_MAX_ATTEMPTS = 2;
+const ACTIVE_GATE_STRONG_ADMISSION_COVERAGE_COUNT = 0;
+const ACTIVE_GATE_STRONG_ADMIN_PROOF_COVERAGE_COUNT = 2;
+const ACTIVE_GATE_STRONG_ADMISSION_QUERY_TIMEOUT_MS = 3000;
+const ACTIVE_GATE_STRONG_ADMISSION_SELECTED_ERROR =
+  'Admin API query timed out for node ' +
+  ACTIVE_GATE_TEST_SEED_NODE_ID +
+  ' on lane snapshot after ' +
+  ACTIVE_GATE_STRONG_ADMISSION_QUERY_TIMEOUT_MS +
+  'ms';
+const ACTIVE_GATE_TIMEOUT_MESSAGE =
+  'Not all nodes reached ACTIVE state within';
+const ACTIVE_GATE_STRONG_ADMISSION_TIMEOUT_ASSERTION =
+  'startup snapshot timeout should timeout until active admission is strong';
+const ACTIVE_GATE_STRONG_ADMIN_PROOF_TIMEOUT_ASSERTION =
+  'startup publication lag witness should timeout when strong admission is absent';
+const ACTIVE_GATE_TIMEOUT_DIAGNOSTICS_ASSERTION =
+  'startup timeout should carry final timeout diagnostics';
+const ACTIVE_GATE_SNAPSHOT_TIMEOUT_CLASS_CODE = 'snapshot_timeout';
+const ACTIVE_GATE_NO_PROGRESS_TERMINAL_CLASS_CODE = 'no_progress_terminal';
+const ACTIVE_GATE_TERMINAL_RECOVERABILITY = 'terminal';
+const ACTIVE_GATE_NONE_CAUSE = 'none';
+const ACTIVE_GATE_STARTUP_MODE = 'startup';
+const ACTIVE_GATE_STRONG_ADMISSION_LOGS_ASSERTION =
+  'startup snapshot-timeout path should collect failure logs';
+const ACTIVE_GATE_STRONG_ADMIN_PROOF_PUBLISHED_NODE_IDS = Object.freeze([
+  ACTIVE_GATE_TEST_SEED_NODE_ID,
+  ACTIVE_GATE_TEST_JOINER_ONE_NODE_ID,
+]);
+const ACTIVE_GATE_STRONG_ADMIN_PROOF_MISSING_NODE_IDS = Object.freeze([
+  ACTIVE_GATE_TEST_JOINER_TWO_NODE_ID,
+]);
+const ACTIVE_GATE_STRONG_ADMIN_PROOF_LOGS_ASSERTION =
+  'startup publication-lag timeout should collect failure logs';
 /**
  * Feature: distributed-testing-framework
  * Property 5: Multi-Host Container Distribution
@@ -426,15 +474,16 @@ const LOAD_READINESS_NO_PROGRESS_STAGE = 'scenario.load-readiness.waiting';
  *
  * **Validates: Requirements 2.3**
  */
-test('Unit: _waitForAllActive rejects CL-004 witness without strong admission',
+test(ACTIVE_GATE_STRONG_ADMISSION_TEST_NAME,
   async () => {
     const cluster = createCluster({
-      size: 2,
-      docker: {socketPath: '/var/run/docker.sock'},
-      image: 'distributed-db:test',
+      size: ACTIVE_GATE_STRONG_ADMISSION_CLUSTER_SIZE,
+      docker: {socketPath: SNAPSHOT_REPLAY_TEST_DOCKER_SOCKET_PATH},
+      image: SNAPSHOT_REPLAY_TEST_IMAGE,
       timeouts: {
-        convergence: 200,
-        activeWaitNoProgressMaxAttempts: 2,
+        convergence: ACTIVE_GATE_STRONG_ADMISSION_CONVERGENCE_MS,
+        activeWaitNoProgressMaxAttempts:
+          ACTIVE_GATE_STRONG_ADMISSION_MAX_ATTEMPTS,
       },
     });
 
@@ -453,25 +502,24 @@ test('Unit: _waitForAllActive rejects CL-004 witness without strong admission',
       return {
         allActive: false,
         nodeDiagnostics: [{
-          nodeId: 'seed-1',
+          nodeId: ACTIVE_GATE_TEST_SEED_NODE_ID,
           active: true,
-          state: 'active',
+          state: ACTIVE_GATE_TEST_ACTIVE_STATE,
           reasons: [],
         }, {
-          nodeId: 'joiner-1',
+          nodeId: ACTIVE_GATE_TEST_JOINER_ONE_NODE_ID,
           active: true,
-          state: 'active',
+          state: ACTIVE_GATE_TEST_ACTIVE_STATE,
           reasons: [],
         }],
         snapshotCoverage: {
           completeCoverage: false,
-          expectedNodeCount: 2,
-          bestCoverageNodeCount: 0,
-          selectedNodeId: 'seed-1',
+          expectedNodeCount: ACTIVE_GATE_STRONG_ADMISSION_CLUSTER_SIZE,
+          bestCoverageNodeCount: ACTIVE_GATE_STRONG_ADMISSION_COVERAGE_COUNT,
+          selectedNodeId: ACTIVE_GATE_TEST_SEED_NODE_ID,
           selectedAdminReady: true,
-          selectedReachableBy: 'admin_health',
-          selectedError:
-            'Admin API query timed out for node seed-1 on lane snapshot after 3000ms',
+          selectedReachableBy: SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE,
+          selectedError: ACTIVE_GATE_STRONG_ADMISSION_SELECTED_ERROR,
         },
         publicationConvergenceGate: {
           ready: true,
@@ -493,31 +541,31 @@ test('Unit: _waitForAllActive rejects CL-004 witness without strong admission',
       },
       (error) => {
         timeoutError = error;
-        return typeof error?.message === 'string' &&
-          error.message.includes('Not all nodes reached ACTIVE state within');
+        return typeof error?.message === TYPEOF.STRING &&
+          error.message.includes(ACTIVE_GATE_TIMEOUT_MESSAGE);
       },
-      'startup snapshot timeout should timeout until active admission is strong',
+      ACTIVE_GATE_STRONG_ADMISSION_TIMEOUT_ASSERTION,
     );
     assert.ok(
       timeoutError?.diagnostics?.noProgress,
-      'startup timeout should carry final timeout diagnostics',
+      ACTIVE_GATE_TIMEOUT_DIAGNOSTICS_ASSERTION,
     );
     assert.equal(
       timeoutError?.diagnostics?.noProgress?.readinessFailure?.classCode,
-      'snapshot_timeout',
+      ACTIVE_GATE_SNAPSHOT_TIMEOUT_CLASS_CODE,
     );
     assert.equal(
       timeoutError?.diagnostics?.noProgress?.readinessFailure?.recoverability,
-      'terminal',
+      ACTIVE_GATE_TERMINAL_RECOVERABILITY,
     );
     assert.equal(
       timeoutError?.diagnostics?.noProgress?.readinessFailure?.mode,
-      'startup',
+      ACTIVE_GATE_STARTUP_MODE,
     );
     assert.equal(
       collectedFailureLogs,
       true,
-      'startup snapshot-timeout path should collect failure logs',
+      ACTIVE_GATE_STRONG_ADMISSION_LOGS_ASSERTION,
     );
   });
 
@@ -693,15 +741,16 @@ test(ACTIVE_GATE_REACHABILITY_DELAY_TEST_NAME,
     );
   });
 
-test('Unit: _waitForAllActive rejects CL-006 witness without strong admin proof',
+test(ACTIVE_GATE_STRONG_ADMIN_PROOF_TEST_NAME,
   async () => {
     const cluster = createCluster({
-      size: 3,
-      docker: {socketPath: '/var/run/docker.sock'},
-      image: 'distributed-db:test',
+      size: ACTIVE_GATE_STRONG_ADMIN_PROOF_CLUSTER_SIZE,
+      docker: {socketPath: SNAPSHOT_REPLAY_TEST_DOCKER_SOCKET_PATH},
+      image: SNAPSHOT_REPLAY_TEST_IMAGE,
       timeouts: {
-        convergence: 200,
-        activeWaitNoProgressMaxAttempts: 2,
+        convergence: ACTIVE_GATE_STRONG_ADMISSION_CONVERGENCE_MS,
+        activeWaitNoProgressMaxAttempts:
+          ACTIVE_GATE_STRONG_ADMISSION_MAX_ATTEMPTS,
       },
     });
 
@@ -717,43 +766,47 @@ test('Unit: _waitForAllActive rejects CL-006 witness without strong admin proof'
       return {
         allActive: false,
         nodeDiagnostics: [{
-          nodeId: 'seed-1',
+          nodeId: ACTIVE_GATE_TEST_SEED_NODE_ID,
           active: true,
-          state: 'active',
+          state: ACTIVE_GATE_TEST_ACTIVE_STATE,
           reasons: [],
         }, {
-          nodeId: 'joiner-1',
+          nodeId: ACTIVE_GATE_TEST_JOINER_ONE_NODE_ID,
           active: true,
-          state: 'active',
+          state: ACTIVE_GATE_TEST_ACTIVE_STATE,
           reasons: [],
         }, {
-          nodeId: 'joiner-2',
+          nodeId: ACTIVE_GATE_TEST_JOINER_TWO_NODE_ID,
           active: true,
-          state: 'active',
+          state: ACTIVE_GATE_TEST_ACTIVE_STATE,
           reasons: [],
         }],
         snapshotCoverage: {
           completeCoverage: false,
-          expectedNodeCount: 3,
-          bestCoverageNodeCount: 2,
-          selectedNodeId: 'seed-1',
+          expectedNodeCount: ACTIVE_GATE_STRONG_ADMIN_PROOF_CLUSTER_SIZE,
+          bestCoverageNodeCount:
+            ACTIVE_GATE_STRONG_ADMIN_PROOF_COVERAGE_COUNT,
+          selectedNodeId: ACTIVE_GATE_TEST_SEED_NODE_ID,
           selectedAdminReady: true,
-          selectedReachableBy: 'admin_health',
+          selectedReachableBy: SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE,
           selectedPublicationConvergence: {
-            publicationEpoch: 2,
-            publicationStatus: 'PUBLISHED',
-            publishedActiveNodeIds: ['seed-1', 'joiner-1'],
+            publicationEpoch: SNAPSHOT_REPLAY_TEST_STALE_PUBLICATION_EPOCH,
+            publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+            publishedActiveNodeIds:
+              ACTIVE_GATE_STRONG_ADMIN_PROOF_PUBLISHED_NODE_IDS,
             pendingAckNodeIds: [],
             priorityPartitionSummary: null,
           },
-          selectedPublishedActiveNodeIds: ['seed-1', 'joiner-1'],
-          selectedMissingPublishedNodeIds: ['joiner-2'],
+          selectedPublishedActiveNodeIds:
+            ACTIVE_GATE_STRONG_ADMIN_PROOF_PUBLISHED_NODE_IDS,
+          selectedMissingPublishedNodeIds:
+            ACTIVE_GATE_STRONG_ADMIN_PROOF_MISSING_NODE_IDS,
           selectedError: null,
         },
         publicationConvergenceGate: {
           ready: true,
           reasons: [],
-          publicationStatus: 'PUBLISHED',
+          publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
           pendingAckNodeIds: [],
           missingPublishedNodeIds: [],
           priorityPartitionSummary: null,
@@ -774,30 +827,30 @@ test('Unit: _waitForAllActive rejects CL-006 witness without strong admin proof'
       },
       (error) => {
         timeoutError = error;
-        return typeof error?.message === 'string' &&
-          error.message.includes('Not all nodes reached ACTIVE state within');
+        return typeof error?.message === TYPEOF.STRING &&
+          error.message.includes(ACTIVE_GATE_TIMEOUT_MESSAGE);
       },
-      'startup publication lag witness should timeout when strong admission is absent',
+      ACTIVE_GATE_STRONG_ADMIN_PROOF_TIMEOUT_ASSERTION,
     );
     assert.ok(
       timeoutError?.diagnostics?.noProgress,
-      'startup timeout should carry final timeout diagnostics',
+      ACTIVE_GATE_TIMEOUT_DIAGNOSTICS_ASSERTION,
     );
     assert.equal(
       timeoutError?.diagnostics?.noProgress?.readinessFailure?.classCode,
-      'no_progress_terminal',
+      ACTIVE_GATE_NO_PROGRESS_TERMINAL_CLASS_CODE,
     );
     assert.equal(
       timeoutError?.diagnostics?.noProgress?.readinessFailure?.cause,
-      'none',
+      ACTIVE_GATE_NONE_CAUSE,
     );
     assert.equal(
       timeoutError?.diagnostics?.noProgress?.readinessFailure?.mode,
-      'startup',
+      ACTIVE_GATE_STARTUP_MODE,
     );
     assert.equal(
       collectedFailureLogs,
       true,
-      'startup publication-lag timeout should collect failure logs',
+      ACTIVE_GATE_STRONG_ADMIN_PROOF_LOGS_ASSERTION,
     );
   });

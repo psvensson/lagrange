@@ -134,8 +134,12 @@ const PRIORITY_RECOVERY_PARTITION_WITNESS_EVIDENCE_PATH =
   'failureBundle.publicationConvergence.priorityRecoveryPartitionWitnesses';
 const PRIORITY_RECOVERY_PROGRESS_CLASS_EVIDENCE_PATH =
   'failureBundle.publicationConvergence.activeGate.progress.priorityRecoveryProgressClasses';
+const CONTROL_PLANE_SNAPSHOT_COVERAGE_EVIDENCE_PATH =
+  'failureBundle.controlPlane.activeGateSnapshotCoverage';
 const PUBLICATION_ACK_FRONTIER_PENDING_NODE_ID =
   '11601fe0-72d6-5853-8590-ec2881853e72';
+const ACTIVE_GATE_COVERAGE_SELECTED_NODE_ID =
+  '8be8d30f-4499-5eed-865c-71b4d529a67a';
 const PUBLICATION_ACK_FRONTIER_MISSING_NODE_IDS = Object.freeze([
   '35a891b8-c1a0-5064-9c6e-2acfba61c2a7',
   '8be8d30f-4499-5eed-865c-71b4d529a67a',
@@ -369,6 +373,56 @@ describe('TopologyConvergenceGraph', () => {
       triageSummary: SOURCE_PATH_ABSENT,
       report: SOURCE_PATH_ABSENT,
     });
+  });
+
+  it('uses control-plane snapshot coverage as active-gate progress evidence', () => {
+    const fixture = buildHealthyFixtureFailureBundle();
+    const graph = buildTopologyConvergenceGraphFromArtifacts({
+      failureBundle: {
+        ...fixture,
+        publicationConvergence: {
+          ...fixture.publicationConvergence,
+          activeGate: {},
+        },
+        controlPlane: {
+          activeGateSnapshotCoverage: {
+            completeCoverage: true,
+            expectedNodeCount: FIXTURE_EXPECTED_NODE_COUNT,
+            bestCoverageNodeCount: FIXTURE_EXPECTED_NODE_COUNT,
+            selectedSnapshotNodeId: ACTIVE_GATE_COVERAGE_SELECTED_NODE_ID,
+            selectedSnapshotObservationMode:
+              SELECTED_SNAPSHOT_OBSERVATION_MODE_REPAIR_DEFERRED,
+            selectedSnapshotObservationState:
+              SELECTED_SNAPSHOT_OBSERVATION_STATE_STALE,
+            selectedSnapshotObservationContractState:
+              SELECTED_SNAPSHOT_OBSERVATION_CONTRACT_PENDING,
+            selectedSnapshotObservationRefreshState:
+              SELECTED_SNAPSHOT_OBSERVATION_REFRESH_IDLE,
+            selectedSnapshotObservationNextAction:
+              SELECTED_SNAPSHOT_OBSERVATION_NEXT_ACTION_WAIT,
+            selectedSnapshotObservationReasonCodes: [
+              SELECTED_SNAPSHOT_OBSERVATION_REASON_COVERAGE_GAP,
+            ],
+            selectedSnapshotRepairDeferred: true,
+          },
+        },
+      },
+    });
+    const snapshotEdge = findEdge(graph.edges, EDGE_SNAPSHOT_COVERAGE);
+
+    assert.equal(snapshotEdge.state, EDGE_STATE.SATISFIED);
+    assert.equal(
+      snapshotEdge.evidencePath,
+      CONTROL_PLANE_SNAPSHOT_COVERAGE_EVIDENCE_PATH,
+    );
+    assert.equal(snapshotEdge.source.snapshotCoverageComplete, 'true');
+    assert.equal(
+      snapshotEdge.source.snapshotCoverageNodeCount,
+      FIXTURE_EXPECTED_NODE_COUNT,
+    );
+    assert.deepEqual(snapshotEdge.reasons, ['active_gate_ready']);
+    assert.notEqual(graph.summary.firstFrontierEdgeId, EDGE_SNAPSHOT_COVERAGE);
+    assertNoNullOrUndefined(graph);
   });
 
   it('normalizes active-gate no-progress readiness evidence as inherited support evidence', () => {

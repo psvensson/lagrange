@@ -3,6 +3,9 @@ import {
   INITIAL_PARTITION_IDS,
   SYSTEM_TABLE_NAME,
 } from '../bootstrap/system-table-schemas-constants.js';
+import {
+  PRIORITY_RECOVERY_OPERATION_OWNER_EFFECT_EXECUTION,
+} from '../control-plane/priority-recovery-operation-owner-observation.js';
 
 const {
   NUM,
@@ -158,12 +161,14 @@ const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_OWNER_WAIT_MODES =
 
 const PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_COMMAND =
   Object.freeze({
+    ADVANCE_EXISTING_OPERATION: 'advance_existing_operation_command',
     RECONCILE_STALE_PROGRESS: 'reconcile_stale_progress_command',
     WAKE_REMOTE_OWNER: 'wake_remote_owner_command',
   });
 
 const PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_ACTION =
   Object.freeze({
+    ADVANCE_EXISTING_OPERATION: 'advance_existing_operation',
     ARM_OWNER: 'arm_owner',
     RECONCILE_STALE_PROGRESS: 'reconcile_stale_progress',
     SCHEDULE_REMOTE_HANDOFF_RETRY: 'schedule_remote_handoff_retry',
@@ -172,6 +177,12 @@ const PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_ACTION =
 
 const PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_ACTION_BY_COMMAND =
   Object.freeze(new Map([
+    [
+      PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_COMMAND
+        .ADVANCE_EXISTING_OPERATION,
+      PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_ACTION
+        .ADVANCE_EXISTING_OPERATION,
+    ],
     [
       PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_COMMAND
         .RECONCILE_STALE_PROGRESS,
@@ -186,8 +197,68 @@ const PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_ACTION_BY_COMMAND =
     ],
   ]));
 
+const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_LOG_MESSAGE = Object.freeze({
+  BYPASS_REENTRANT_SCHEDULING:
+    'Bypassing re-entrant priority recovery dispatch scheduling',
+  ERROR_DURING_REENTRY:
+    'Error during priority recovery dispatch reentry',
+});
+
+function resolvePriorityRecoveryDispatchPendingDecisionSnapshotCapturedAt(
+  decisionSnapshot,
+) {
+  const capturedAtMs = Number(
+    decisionSnapshot?.observation?.provenance?.capturedAt ??
+      decisionSnapshot?.capturedAt,
+  );
+  return Number.isFinite(capturedAtMs) ? capturedAtMs : null;
+}
+
+function applyPriorityRecoveryDispatchPendingAdvanceExistingOperationEffect(
+  owner,
+  operation,
+  decisionSnapshot,
+) {
+  if (owner.repository.isOperationLocallyOwned(operation) === true) {
+    return owner.armCoordinatorCreatedOperation(operation);
+  }
+  const capturedAtMs =
+    resolvePriorityRecoveryDispatchPendingDecisionSnapshotCapturedAt(
+      decisionSnapshot,
+    );
+  return owner.operationWorkflowOwnerPorts.wakeRemoteOwner(operation, {
+    nowMs: capturedAtMs ?? Date.now(),
+  });
+}
+
+function shouldApplyPriorityRecoveryDispatchPendingOwnerEffectBeforeDrain(
+  decisionSnapshot,
+  options = {},
+) {
+  const operationOwnerObservation =
+    decisionSnapshot?.operationOwnerObservation;
+  return (
+    options.executeOwnerObservationEffect !== false &&
+    operationOwnerObservation?.effectCommand ===
+      PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_COMMAND
+        .ADVANCE_EXISTING_OPERATION &&
+    operationOwnerObservation?.effectExecution ===
+      PRIORITY_RECOVERY_OPERATION_OWNER_EFFECT_EXECUTION.NOT_EXECUTED
+  );
+}
+
 const PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_HANDLER =
   Object.freeze(new Map([
+    [
+      PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_ACTION
+        .ADVANCE_EXISTING_OPERATION,
+      (owner, operation, decisionSnapshot) =>
+        applyPriorityRecoveryDispatchPendingAdvanceExistingOperationEffect(
+          owner,
+          operation,
+          decisionSnapshot,
+        ),
+    ],
     [
       PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_ACTION.ARM_OWNER,
       (owner, operation) => owner.armCoordinatorCreatedOperation(operation),
@@ -402,6 +473,19 @@ async function applyPriorityRecoveryDispatchPendingOwnerProgress(
   decisionSnapshot,
   options = {},
 ) {
+  if (
+    shouldApplyPriorityRecoveryDispatchPendingOwnerEffectBeforeDrain(
+      decisionSnapshot,
+      options,
+    )
+  ) {
+    return applyPriorityRecoveryDispatchPendingOwnerEffectOrArm(
+      owner,
+      operation,
+      decisionSnapshot,
+      options,
+    );
+  }
   if (
     owner.shouldReconcilePriorityRecoveryDispatchPendingDrain(
       decisionSnapshot,
@@ -630,7 +714,8 @@ function schedulePriorityRecoveryDispatchPendingReentry(
   owner._reentryLocks = owner._reentryLocks || new Set();
   if (owner._reentryLocks.has(operationId)) {
     owner.logger.debug(
-      'Bypassing re-entrant priority recovery dispatch scheduling',
+      PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_LOG_MESSAGE
+        .BYPASS_REENTRANT_SCHEDULING,
       {
         operationId,
         partitionId: operation.partitionId,
@@ -649,10 +734,14 @@ function schedulePriorityRecoveryDispatchPendingReentry(
         options,
       );
     } catch (error) {
-      owner.logger.error('Error during priority recovery dispatch reentry', {
-        operationId,
-        error: error.message,
-      });
+      owner.logger.error(
+        PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_LOG_MESSAGE
+          .ERROR_DURING_REENTRY,
+        {
+          operationId,
+          error: error.message,
+        },
+      );
     } finally {
       owner._reentryLocks.delete(operationId);
     }
@@ -706,6 +795,7 @@ function applyPriorityRecoveryDispatchPendingOwnerEffectOrArm(
   return PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_HANDLER.get(action)(
     owner,
     operation,
+    decisionSnapshot,
   );
 }
 

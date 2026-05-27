@@ -42,6 +42,71 @@ const BOOTSTRAP_REQUEST_DEFER_STAGE = Object.freeze({
   RESPONSE_PREPARED: 'response_prepared',
   RETRYABLE_ERROR: 'retryable_error',
 });
+const BOOTSTRAP_REQUEST_BOUNDED_WORK_OUTCOME = Object.freeze({
+  COMPLETED: 'completed',
+  EXPIRED: 'expired',
+  FAILED: 'failed',
+});
+const CLIENT_ATTEMPT_DEADLINE_RESPONSE_GUARD_MS = NUM.HUNDRED;
+
+function resolveClientAttemptBoundedWorkTimeoutMs(clientAttemptDeadline) {
+  const deadlineMs = Number(clientAttemptDeadline?.deadlineMs);
+  const remainingBudgetMs = Number(clientAttemptDeadline?.remainingBudgetMs);
+  if (
+    !Number.isFinite(deadlineMs) ||
+    deadlineMs <= NUM.ZERO ||
+    !Number.isFinite(remainingBudgetMs) ||
+    remainingBudgetMs <= NUM.ZERO
+  ) {
+    return NUM.ZERO;
+  }
+  return Math.max(
+    NUM.ONE,
+    Math.floor(remainingBudgetMs) -
+      CLIENT_ATTEMPT_DEADLINE_RESPONSE_GUARD_MS,
+  );
+}
+
+async function awaitClientAttemptBoundedWork(action, clientAttemptDeadline) {
+  const timeoutMs =
+    resolveClientAttemptBoundedWorkTimeoutMs(clientAttemptDeadline);
+  if (timeoutMs <= NUM.ZERO) {
+    return {
+      outcome: BOOTSTRAP_REQUEST_BOUNDED_WORK_OUTCOME.COMPLETED,
+      value: await action(),
+    };
+  }
+
+  let timeoutHandle = null;
+  const timeoutResult = new Promise((resolve) => {
+    timeoutHandle = setTimeout(() => {
+      resolve({
+        outcome: BOOTSTRAP_REQUEST_BOUNDED_WORK_OUTCOME.EXPIRED,
+        observedAtMs: Date.now(),
+      });
+    }, timeoutMs);
+  });
+  const workResult = Promise.resolve()
+    .then(action)
+    .then(
+      (value) => ({
+        outcome: BOOTSTRAP_REQUEST_BOUNDED_WORK_OUTCOME.COMPLETED,
+        value,
+      }),
+      (error) => ({
+        outcome: BOOTSTRAP_REQUEST_BOUNDED_WORK_OUTCOME.FAILED,
+        error,
+      }),
+    );
+  const result = await Promise.race([workResult, timeoutResult]);
+  if (timeoutHandle) {
+    clearTimeout(timeoutHandle);
+  }
+  if (result.outcome === BOOTSTRAP_REQUEST_BOUNDED_WORK_OUTCOME.FAILED) {
+    throw result.error;
+  }
+  return result;
+}
 
 async function handleBootstrapRequest(request, reply) {
   const requestBody = request.body || {};
@@ -89,8 +154,29 @@ async function handleBootstrapRequest(request, reply) {
   }
 
   const bootstrapService = this.getBootstrapService();
-  const bootstrapJoinAdmissionSnapshot =
-    await this.getBootstrapJoinAdmissionSnapshot();
+  const bootstrapJoinAdmissionWork =
+    await awaitClientAttemptBoundedWork(
+      () => this.getBootstrapJoinAdmissionSnapshot(),
+      requestStartDeadlineSnapshot.clientAttemptDeadline,
+    );
+  if (
+    bootstrapJoinAdmissionWork.outcome ===
+      BOOTSTRAP_REQUEST_BOUNDED_WORK_OUTCOME.EXPIRED
+  ) {
+    return this.buildBootstrapRequestClientAttemptExpiredDeferredResponse(
+      reply,
+      {
+        nodeId,
+        nodeAddress,
+        deferStage:
+          BOOTSTRAP_REQUEST_DEFER_STAGE.BOOTSTRAP_JOIN_ADMISSION,
+        observedAtMs: bootstrapJoinAdmissionWork.observedAtMs,
+        clientAttemptDeadline:
+          requestStartDeadlineSnapshot.clientAttemptDeadline,
+      },
+    );
+  }
+  const bootstrapJoinAdmissionSnapshot = bootstrapJoinAdmissionWork.value;
   const bootstrapRequestAdmissionDecision =
     this.evaluateBootstrapRequestAdmissionDecision(
       bootstrapService,

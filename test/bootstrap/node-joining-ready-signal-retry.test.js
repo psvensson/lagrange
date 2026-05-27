@@ -3,6 +3,25 @@ import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
+import {
+  LIFECYCLE_PHASE,
+  LIFECYCLE_REASON,
+} from '../../src/bootstrap/lifecycle-controller-constants.js';
+
+const PRIORITY_CONTROL_PLANE_RECOVERY_DIAGNOSTICS_UNAVAILABLE =
+  'priority_control_plane_recovery_diagnostics_unavailable';
+const SEED_CONTACT_STARTUP_AUTHORITY = Object.freeze({
+  state: 'seed_locally_ready_unpublished',
+  authorityAvailable: true,
+  publicationObservationState: 'unpublished',
+});
+const BOOTSTRAP_INIT_DIAGNOSTICS_RECOVERY_REASONS = Object.freeze([
+  LIFECYCLE_REASON.BOOTSTRAP_PHASE_INCOMPLETE,
+  LIFECYCLE_REASON.SQL_ENGINE_UNAVAILABLE,
+  LIFECYCLE_REASON.LEADER_METADATA_INCOMPLETE,
+  LIFECYCLE_REASON.RUNTIME_WIRING_INCOMPLETE,
+  PRIORITY_CONTROL_PLANE_RECOVERY_DIAGNOSTICS_UNAVAILABLE,
+]);
 
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
@@ -292,4 +311,82 @@ test('NodeJoiningService opens the ready heartbeat during the lifecycle stable w
       'ready heartbeat should be sent while the lifecycle stable window is pending');
     t.same(sleepDelays, [],
       'metadata-publication readiness should not wait through the stable window');
+  });
+
+test('NodeJoiningService opens the ready heartbeat for seed-authorized INIT diagnostics lag',
+  async (t) => {
+    initializeTestEnvironment();
+
+    let heartbeatSent = 0;
+    const sleepDelays = [];
+
+    const service = new NodeJoiningService({
+      nodeId: 'node-ready-init-diagnostics-lag',
+      nodeAddress: 'ws://localhost:19095',
+      seedNodeAddress: 'http://localhost:18084',
+      config: {
+        readySignalMaxAttempts: 3,
+        readySignalRetryDelayMs: 1,
+        readySignalRetryMaxDelayMs: 1,
+        readySignalRetryBackoffMultiplier: 1,
+      },
+      sleep: async (delayMs) => {
+        sleepDelays.push(delayMs);
+      },
+    });
+    service.cdcSubscriptionsActive = true;
+    service.bootstrapResponse = {};
+    service.rpcClient = {};
+    service.cdcIntegrationService = {};
+    service.seedContactStartupAuthority = SEED_CONTACT_STARTUP_AUTHORITY;
+    service.hasOperationalMessageGroup = () => true;
+    service.messageRouter = {
+      getQueryDataPlaneTransportReadiness() {
+        return {ready: true, state: 'ready'};
+      },
+    };
+    service.bootstrapReadinessState = {
+      evaluate() {
+        return {
+          ready: false,
+          phase: LIFECYCLE_PHASE.INIT,
+          state: 'bootstrapping',
+          reasons: BOOTSTRAP_INIT_DIAGNOSTICS_RECOVERY_REASONS,
+          retryAfterMs: 1,
+        };
+      },
+    };
+    service.heartbeatService = {
+      sendHeartbeat: async () => {
+        heartbeatSent += 1;
+      },
+      start: () => {},
+    };
+
+    const originalGetInstance = NodeService.getInstance;
+    NodeService.getInstance = () => ({
+      getNodeStats: async () => ({
+        cpu: {count: 4, usagePercent: 10},
+        memory: {totalBytes: 1024, usagePercent: 20},
+        diskGb: 100,
+        diskUsagePercent: 30,
+      }),
+    });
+
+    try {
+      await service.signalReadyForReplicas();
+    } finally {
+      NodeService.getInstance = originalGetInstance;
+    }
+
+    t.equal(
+      heartbeatSent,
+      1,
+      'ready heartbeat should be sent when seed-authorized INIT is only diagnostics-lagged',
+    );
+    t.same(
+      sleepDelays,
+      [],
+      'metadata-publication readiness should not wait on diagnostics lag',
+    );
   });

@@ -14,6 +14,14 @@ import {
   TIMEOUTS,
 } from '../harness/constants.js';
 import {resolveScenarioOptions} from '../harness/scenario-config.js';
+import {
+  BENCHMARK_WORKLOAD_PROFILE,
+  TABLE_BOOTSTRAP_VISIBILITY_STATE,
+  createPartitioningBenchmarkLoadNodePlan,
+  ensureBenchmarkPartitioningTable,
+  resolvePartitioningBenchmarkLoadOpsPerSec,
+  resolvePartitioningLoadTableName,
+} from './table-distribution-helpers.js';
 
 const ACKNOWLEDGED_WRITE_ALIAS = 'ack_id';
 const ACKNOWLEDGED_WRITE_BATCH_SIZE = 100;
@@ -28,6 +36,9 @@ const POST_RESTART_CRITICAL_SYSTEM_SPREAD_REQUIRED = true;
 const POST_RESTART_CONTROL_PLANE_QUIESCENCE_NO_PROGRESS_TIMEOUT_MS = 30000;
 const POST_RESTART_LOAD_READINESS_NO_PROGRESS_MAX_ATTEMPTS = 5;
 const ROLLING_RESTART_REQUIRE_ADMIN_READY = true;
+const MIN_BENCHMARK_READY_LOAD_NODES = 2;
+const BENCHMARK_LOAD_ADMISSION_QUERY_TIMEOUT_MS = 1000;
+const BENCHMARK_PRE_LOAD_READINESS_WARMUP_TIMEOUT_MS = 30000;
 
 function normalizeFiniteNumber(value, fallback) {
   return Number.isFinite(value) ? value : fallback;
@@ -45,6 +56,130 @@ function rowsFromResult(result) {
     return result.rows;
   }
   return [];
+}
+
+function resolveClusterNodes(cluster) {
+  if (typeof cluster?.getNodes === 'function') {
+    return cluster.getNodes();
+  }
+  if (typeof cluster?.nodes === 'function') {
+    return cluster.nodes();
+  }
+  return [];
+}
+
+function resolveSeedNodeQueryHandle(rawSeedNode) {
+  if (!rawSeedNode || typeof rawSeedNode !== 'object') {
+    return null;
+  }
+  if (typeof rawSeedNode.query === 'function') {
+    return rawSeedNode;
+  }
+  if (typeof rawSeedNode.queryWithTimeout !== 'function') {
+    return null;
+  }
+  return {
+    ...rawSeedNode,
+    query(sql, params = []) {
+      return rawSeedNode.queryWithTimeout(sql, params);
+    },
+  };
+}
+
+function supportsBenchmarkLoadAdmissionPlanning(cluster) {
+  return typeof cluster?.resolveBenchmarkReadyLoadNodes === 'function' ||
+    typeof cluster?.resolveBenchmarkLoadAdmissionSnapshot === 'function';
+}
+
+function buildStaticLoadNodePlan(nodes) {
+  return {
+    initialNodes: nodes,
+    nodeResolver: () => nodes,
+    stop: () => {},
+  };
+}
+
+async function buildRollingRestartLoadPlan(cluster, scenarioOptions, {
+  clusterNodes,
+  loadOpsPerSec,
+  preLoadReadinessStableWindowMs,
+  preLoadReadinessTimeoutMs,
+}) {
+  if (!supportsBenchmarkLoadAdmissionPlanning(cluster)) {
+    return {
+      benchmarkAdmissionEnabled: false,
+      effectiveLoadOpsPerSec: loadOpsPerSec,
+      tableName: null,
+      workloadProfile: null,
+      loadNodePlan: buildStaticLoadNodePlan(clusterNodes),
+    };
+  }
+
+  const requestedTableName =
+    typeof scenarioOptions.tableName === 'string' &&
+    scenarioOptions.tableName.length > ZERO ?
+      scenarioOptions.tableName :
+      '';
+  const effectiveLoadTableName = resolvePartitioningLoadTableName(
+    cluster,
+    requestedTableName,
+    {
+      explicitTableName: requestedTableName.length > ZERO,
+    },
+  );
+  const seedNode = resolveSeedNodeQueryHandle(clusterNodes[ZERO]);
+  assert.ok(
+    seedNode,
+    'Rolling restart benchmark load admission requires a seed query handle',
+  );
+
+  const ensuredBenchmarkTable = await ensureBenchmarkPartitioningTable(
+    seedNode,
+    {
+      tableName: effectiveLoadTableName,
+      requiredBootstrapVisibilityState:
+        TABLE_BOOTSTRAP_VISIBILITY_STATE.PARTITIONS_VISIBLE,
+      queryNodes: clusterNodes,
+    },
+  );
+  const requiredNodeCount = Math.max(
+    1,
+    Math.min(
+      clusterNodes.length > ZERO ? clusterNodes.length : 1,
+      MIN_BENCHMARK_READY_LOAD_NODES,
+    ),
+  );
+  const loadNodePlan = await createPartitioningBenchmarkLoadNodePlan(
+    seedNode,
+    cluster,
+    {
+      tableName: effectiveLoadTableName,
+      tableId: ensuredBenchmarkTable?.tableId,
+      requiredNodeCount,
+      bootstrapRequiredNodeCount: requiredNodeCount,
+      timeoutMs: preLoadReadinessTimeoutMs,
+      stableWindowMs: preLoadReadinessStableWindowMs,
+      queryTimeoutMs: BENCHMARK_LOAD_ADMISSION_QUERY_TIMEOUT_MS,
+      queryNodes: clusterNodes,
+    },
+  );
+  assert.ok(
+    Array.isArray(loadNodePlan.initialNodes) &&
+      loadNodePlan.initialNodes.length > ZERO,
+    'Expected benchmark-ready load nodes before starting rolling restart load',
+  );
+
+  return {
+    benchmarkAdmissionEnabled: true,
+    effectiveLoadOpsPerSec: resolvePartitioningBenchmarkLoadOpsPerSec(
+      loadOpsPerSec,
+      loadNodePlan.initialNodes.length,
+      clusterNodes.length,
+    ),
+    tableName: effectiveLoadTableName,
+    workloadProfile: BENCHMARK_WORKLOAD_PROFILE,
+    loadNodePlan,
+  };
 }
 
 function escapeSql(value) {
@@ -335,144 +470,195 @@ async function run(cluster, options = {}) {
     postRestartConsistencyPollIntervalMs,
     postRestartConsistencyForceRepairAfterMs,
   } = resolveRollingRestartScenarioConfig(scenarioOptions);
+  const benchmarkAdmissionSupported =
+    supportsBenchmarkLoadAdmissionPlanning(cluster);
   // 1. Wait until the cluster is safe for load. Node-level ACTIVE is not
   // enough here: rolling restart load must not compete with startup priority
   // recovery for critical system partitions.
   if (typeof cluster.waitForLoadReadinessStability === 'function') {
-    await cluster.waitForLoadReadinessStability({
-      stableWindowMs: preLoadReadinessStableWindowMs,
-      timeoutMs: preLoadReadinessTimeoutMs,
-      noProgressMaxAttempts: preLoadReadinessNoProgressMaxAttempts,
-      loadReadinessPhase: LOAD_READINESS_PHASE_PRE_LOAD,
-    });
+    const preLoadReadinessTimeoutForGate = benchmarkAdmissionSupported ?
+      Math.min(
+        preLoadReadinessTimeoutMs,
+        BENCHMARK_PRE_LOAD_READINESS_WARMUP_TIMEOUT_MS,
+      ) :
+      preLoadReadinessTimeoutMs;
+    try {
+      await cluster.waitForLoadReadinessStability({
+        stableWindowMs: preLoadReadinessStableWindowMs,
+        timeoutMs: preLoadReadinessTimeoutForGate,
+        noProgressMaxAttempts: preLoadReadinessNoProgressMaxAttempts,
+        loadReadinessPhase: LOAD_READINESS_PHASE_PRE_LOAD,
+      });
+    } catch (error) {
+      if (!benchmarkAdmissionSupported) {
+        throw error;
+      }
+    }
   }
 
   // 2. Start sustained write load.
-  const initialNodes = cluster.getNodes();
-  const loadNodesById = new Map(
-    initialNodes.map((node) => [String(node.id), node]),
+  const initialNodes = resolveClusterNodes(cluster);
+  const rollingRestartLoadPlan = await buildRollingRestartLoadPlan(
+    cluster,
+    scenarioOptions,
+    {
+      clusterNodes: initialNodes,
+      loadOpsPerSec,
+      preLoadReadinessStableWindowMs,
+      preLoadReadinessTimeoutMs,
+    },
   );
   const availableLoadNodeIds = new Set(
     initialNodes.map((node) => String(node.id)),
   );
-  const resolveLoadNodes = () =>
-    Array.from(availableLoadNodeIds)
-      .map((nodeId) => loadNodesById.get(nodeId))
-      .filter((node) => node && typeof node.query === 'function');
+  const resolveLoadNodes = () => {
+    const plannedNodes =
+      typeof rollingRestartLoadPlan.loadNodePlan.nodeResolver === 'function' ?
+        rollingRestartLoadPlan.loadNodePlan.nodeResolver() :
+        rollingRestartLoadPlan.loadNodePlan.initialNodes;
+    return (Array.isArray(plannedNodes) ? plannedNodes : [])
+      .filter((node) => {
+        const nodeId = String(node?.id || '');
+        return node &&
+          availableLoadNodeIds.has(nodeId) &&
+          (
+            typeof node.query === 'function' ||
+            typeof node.queryWithTimeout === 'function'
+          );
+      });
+  };
 
   const loadRun = cluster.startLoad({
     nodes: resolveLoadNodes(),
     nodeResolver: resolveLoadNodes,
-    opsPerSec: loadOpsPerSec,
+    opsPerSec: rollingRestartLoadPlan.effectiveLoadOpsPerSec,
     duration: loadDuration,
     queryTimeoutMs,
     trackAcknowledgedWrites: true,
+    ...(rollingRestartLoadPlan.benchmarkAdmissionEnabled ?
+      {
+        tableName: rollingRestartLoadPlan.tableName,
+        workloadProfile: rollingRestartLoadPlan.workloadProfile,
+      } :
+      {}),
   });
+  let loadRunCompleted = false;
 
-  // 3. Let load stabilize before starting restarts.
-  await new Promise((r) => setTimeout(r, preRestartSettleMs));
-
-  // 4. Capture load progress before rolling restart.
-  const preRestartMetrics = loadRun.getMetrics();
-  const preRestartTotal = Number(preRestartMetrics?.total || ZERO);
-  const preRestartSuccess = Number(preRestartMetrics?.success || ZERO);
-
-  // 5. Restart each non-seed node one at a time.
-  const nodes = cluster.getNodes();
-  const nonSeedNodes = nodes.filter((n) => n.role !== 'seed');
-
-  for (const node of nonSeedNodes) {
-    availableLoadNodeIds.delete(String(node.id));
-    await cluster.restartNode(node.id, {
-      readinessTimeoutMs: perRestartActiveTimeoutMs,
-      requireAdminReady: ROLLING_RESTART_REQUIRE_ADMIN_READY,
-    });
-    availableLoadNodeIds.add(String(node.id));
-
-    // Brief pause between restarts.
-    await new Promise(
-      (r) => setTimeout(r, interRestartDelayMs),
-    );
-  }
-
-  // 6. Keep load running through the full rolling-restart sequence,
-  // then stop it explicitly so the measured window always covers both restarts.
-  await new Promise((r) => setTimeout(r, postRestartLoadSoakMs));
-  if (typeof loadRun.cancel === 'function') {
-    loadRun.cancel();
-  }
-  const metrics = await loadRun.waitComplete();
-  const acknowledgedWrites = typeof loadRun.getAcknowledgedWrites === 'function' ?
-    loadRun.getAcknowledgedWrites() :
-    null;
-
-  await cluster.waitForConvergence(
-    buildConvergenceOptions(perNodeConvergenceTimeoutMs),
-  );
-
-  // 7. Compute bounded disruption during rolling restarts.
-  const restartWindowTotal = Math.max(
-    ZERO,
-    Number(metrics?.total || ZERO) - preRestartTotal,
-  );
-  const restartWindowSuccess = Math.max(
-    ZERO,
-    Number(metrics?.success || ZERO) - preRestartSuccess,
-  );
-  const restartSuccessRate = restartWindowTotal > ZERO ?
-    restartWindowSuccess / restartWindowTotal :
-    1;
-
-  // 8. Ensure post-restart recovery is completely quiescent before final
-  // consistency checks. Startup ACTIVE alone does not prove the load-facing
-  // publication gate or in-flight priority replacement work has closed.
-  await waitForPostRestartRecoveryBarrier(cluster, {
-    perNodeConvergenceTimeoutMs,
-    postRestartActiveTimeoutMs,
-    postRestartQuietWindowMs,
-    postRestartControlPlaneQuiescenceNoProgressTimeoutMs,
-    postRestartLoadReadinessNoProgressMaxAttempts,
-  });
-
-  // 9. Assert final cluster consistency immediately after the guarded
-  // post-restart stability window. A raw sleep here can be invalidated by
-  // late recovery work that starts between the barrier and this assertion.
-  await cluster.waitForConsistencyConvergence({
-    timeoutMs: postRestartConsistencyTimeoutMs,
-    pollIntervalMs: postRestartConsistencyPollIntervalMs,
-    forceRepairAfterMs: postRestartConsistencyForceRepairAfterMs,
-  });
-
-  let acknowledgedWriteVisibility = null;
-  const failureMessages = [];
   try {
-    acknowledgedWriteVisibility =
-      await assertAcknowledgedWritesVisibleOnReachableNodes(
-        acknowledgedWrites,
-        cluster.getNodes(),
+    // 3. Let load stabilize before starting restarts.
+    await new Promise((r) => setTimeout(r, preRestartSettleMs));
+
+    // 4. Capture load progress before rolling restart.
+    const preRestartMetrics = loadRun.getMetrics();
+    const preRestartTotal = Number(preRestartMetrics?.total || ZERO);
+    const preRestartSuccess = Number(preRestartMetrics?.success || ZERO);
+
+    // 5. Restart each non-seed node one at a time.
+    const nodes = resolveClusterNodes(cluster);
+    const nonSeedNodes = nodes.filter((n) => n.role !== 'seed');
+
+    for (const node of nonSeedNodes) {
+      availableLoadNodeIds.delete(String(node.id));
+      await cluster.restartNode(node.id, {
+        readinessTimeoutMs: perRestartActiveTimeoutMs,
+        requireAdminReady: ROLLING_RESTART_REQUIRE_ADMIN_READY,
+      });
+      availableLoadNodeIds.add(String(node.id));
+
+      // Brief pause between restarts.
+      await new Promise(
+        (r) => setTimeout(r, interRestartDelayMs),
       );
-  } catch (error) {
-    failureMessages.push(error?.message || String(error));
-  }
-  if (restartSuccessRate < minRestartSuccessRate) {
-    failureMessages.unshift(
-      'Success rate during rolling restart below threshold: ' +
-      restartSuccessRate.toFixed(3) +
-      ' (expected >= ' + minRestartSuccessRate + ')',
+    }
+
+    // 6. Keep load running through the full rolling-restart sequence, then stop
+    // it explicitly so the measured window always covers both restarts.
+    await new Promise((r) => setTimeout(r, postRestartLoadSoakMs));
+    if (typeof loadRun.cancel === 'function') {
+      loadRun.cancel();
+    }
+    const metrics = await loadRun.waitComplete();
+    loadRunCompleted = true;
+    const acknowledgedWrites =
+      typeof loadRun.getAcknowledgedWrites === 'function' ?
+        loadRun.getAcknowledgedWrites() :
+        null;
+
+    await cluster.waitForConvergence(
+      buildConvergenceOptions(perNodeConvergenceTimeoutMs),
     );
+
+    // 7. Compute bounded disruption during rolling restarts.
+    const restartWindowTotal = Math.max(
+      ZERO,
+      Number(metrics?.total || ZERO) - preRestartTotal,
+    );
+    const restartWindowSuccess = Math.max(
+      ZERO,
+      Number(metrics?.success || ZERO) - preRestartSuccess,
+    );
+    const restartSuccessRate = restartWindowTotal > ZERO ?
+      restartWindowSuccess / restartWindowTotal :
+      1;
+
+    // 8. Ensure post-restart recovery is completely quiescent before final
+    // consistency checks. Startup ACTIVE alone does not prove the load-facing
+    // publication gate or in-flight priority replacement work has closed.
+    await waitForPostRestartRecoveryBarrier(cluster, {
+      perNodeConvergenceTimeoutMs,
+      postRestartActiveTimeoutMs,
+      postRestartQuietWindowMs,
+      postRestartControlPlaneQuiescenceNoProgressTimeoutMs,
+      postRestartLoadReadinessNoProgressMaxAttempts,
+    });
+
+    // 9. Assert final cluster consistency immediately after the guarded
+    // post-restart stability window. A raw sleep here can be invalidated by
+    // late recovery work that starts between the barrier and this assertion.
+    await cluster.waitForConsistencyConvergence({
+      timeoutMs: postRestartConsistencyTimeoutMs,
+      pollIntervalMs: postRestartConsistencyPollIntervalMs,
+      forceRepairAfterMs: postRestartConsistencyForceRepairAfterMs,
+    });
+
+    let acknowledgedWriteVisibility = null;
+    const failureMessages = [];
+    try {
+      acknowledgedWriteVisibility =
+        await assertAcknowledgedWritesVisibleOnReachableNodes(
+          acknowledgedWrites,
+          resolveClusterNodes(cluster),
+        );
+    } catch (error) {
+      failureMessages.push(error?.message || String(error));
+    }
+    if (restartSuccessRate < minRestartSuccessRate) {
+      failureMessages.unshift(
+        'Success rate during rolling restart below threshold: ' +
+        restartSuccessRate.toFixed(3) +
+        ' (expected >= ' + minRestartSuccessRate + ')',
+      );
+    }
+
+    assert.ok(
+      failureMessages.length === ZERO,
+      failureMessages.join('\n'),
+    );
+
+    return {
+      loadMetrics: metrics,
+      restartSuccessRate,
+      restartedNodes: nonSeedNodes.map((n) => n.id),
+      acknowledgedWriteVisibility,
+    };
+  } finally {
+    if (!loadRunCompleted && typeof loadRun.cancel === 'function') {
+      loadRun.cancel();
+    }
+    if (typeof rollingRestartLoadPlan.loadNodePlan.stop === 'function') {
+      await rollingRestartLoadPlan.loadNodePlan.stop();
+    }
   }
-
-  assert.ok(
-    failureMessages.length === ZERO,
-    failureMessages.join('\n'),
-  );
-
-  return {
-    loadMetrics: metrics,
-    restartSuccessRate,
-    restartedNodes: nonSeedNodes.map((n) => n.id),
-    acknowledgedWriteVisibility,
-  };
 }
 
 export {run};

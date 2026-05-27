@@ -205,6 +205,22 @@ const STARTUP_ADMIN_AVAILABILITY_SUPPORT_DECISION_TABLE = Object.freeze([
       evidence.nodeCanonicalActive === true &&
       evidence.nodePublicationDisagreementCount === ZERO,
   }),
+  Object.freeze({
+    outcome: STARTUP_ADMIN_AVAILABILITY_SUPPORT_OUTCOME_APPLY,
+    matches: (evidence) =>
+      evidence.readinessMode === CLUSTER_READINESS_MODE_LOAD &&
+      evidence.diagnosticActive !== true &&
+      (
+        evidence.adminAvailabilityTransient === true ||
+        evidence.adminProbeTimeoutShaped === true
+      ) &&
+      evidence.publicationGateReady === true &&
+      evidence.snapshotCoverageComplete !== true &&
+      evidence.selectedSnapshotAdminReady === true &&
+      evidence.selectedSnapshotTimeoutOwnerRecoveryProjectionReady === true &&
+      evidence.nodeCanonicalActive === true &&
+      evidence.nodePublicationDisagreementCount === ZERO,
+  }),
 ]);
 
 function hasSnapshotPublicationDiagnostics(snapshotCoverage) {

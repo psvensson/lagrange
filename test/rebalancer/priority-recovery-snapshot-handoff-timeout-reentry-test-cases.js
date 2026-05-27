@@ -1,7 +1,7 @@
 export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({registerCase, dependencies}) {
   const {
-    NUM, OPERATION_WORKFLOW_OWNER, PRIORITY_RECOVERY_ACTUATION_STATE, PRIORITY_RECOVERY_BLOCKING_BOUNDARY, PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION, PRIORITY_RECOVERY_WAIT_MODE, PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE, TEST_ASSERT_ACTIVE_HANDOFF_RETRY_BOUNDED,
-    TEST_ASSERT_ACTIVE_HANDOFF_RETRY_NO_INLINE_WAKE, TEST_ASSERT_ACTIVE_HANDOFF_RETRY_TIMER_PRESERVED, TEST_ASSERT_COUNT_ONLY_HANDOFF_NO_DUPLICATE_WAKE, TEST_ASSERT_COUNT_ONLY_HANDOFF_TIMERS_PRESERVED, TEST_ASSERT_COUNT_ONLY_HANDOFF_UNIQUE_RETRIES, TEST_ASSERT_OWNER_LANE_HELD_DEFERS_REENTRY, TEST_ASSERT_OWNER_LANE_HELD_NO_INLINE_WAKE, TEST_ASSERT_OWNER_LANE_HELD_RETRY_WAKES,
+    NUM, OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES, OPERATION_WORKFLOW_OWNER, PRIORITY_RECOVERY_ACTUATION_STATE, PRIORITY_RECOVERY_BLOCKING_BOUNDARY, PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION, PRIORITY_RECOVERY_OPERATION_OWNER_EFFECT_EXECUTION, PRIORITY_RECOVERY_WAIT_MODE, PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE, TEST_ADVANCE_EFFECT_CAPTURED_AT_REENTRY_TEST_NAME, TEST_ASSERT_ACTIVE_HANDOFF_RETRY_BOUNDED,
+    TEST_ASSERT_ACTIVE_HANDOFF_RETRY_NO_INLINE_WAKE, TEST_ASSERT_ACTIVE_HANDOFF_RETRY_TIMER_PRESERVED, TEST_ASSERT_ADVANCE_EFFECT_CAPTURED_AT_TARGET, TEST_ASSERT_ADVANCE_EFFECT_CAPTURED_AT_TIMER, TEST_ASSERT_ADVANCE_EFFECT_CAPTURED_AT_WAKE, TEST_ASSERT_COUNT_ONLY_HANDOFF_NO_DUPLICATE_WAKE, TEST_ASSERT_COUNT_ONLY_HANDOFF_TIMERS_PRESERVED, TEST_ASSERT_COUNT_ONLY_HANDOFF_UNIQUE_RETRIES, TEST_ASSERT_OWNER_LANE_HELD_DEFERS_REENTRY, TEST_ASSERT_OWNER_LANE_HELD_NO_INLINE_WAKE, TEST_ASSERT_OWNER_LANE_HELD_RETRY_WAKES,
     TEST_ASSERT_REPRESENTATIVE_HANDOFF_NO_DUPLICATE_WAKE, TEST_ASSERT_REPRESENTATIVE_HANDOFF_RETRY_BOUNDED, TEST_ASSERT_REPRESENTATIVE_HANDOFF_TIMER_PRESERVED, TEST_ASSERT_RETRY_SCHEDULED_REENTRY_TARGET, TEST_ASSERT_RETRY_SCHEDULED_REENTRY_TIMER, TEST_ASSERT_RETRY_SCHEDULED_REENTRY_WAKES, TEST_ASSERT_SNAPSHOT_REENTRY_ADVANCE_ACTION, TEST_ASSERT_SNAPSHOT_REENTRY_ARMS_RETRY,
     TEST_ASSERT_SNAPSHOT_REENTRY_NOT_TRANSITION_DEFERRED, TEST_ASSERT_SNAPSHOT_REENTRY_PRESERVES_PENDING, TEST_ASSERT_SNAPSHOT_REENTRY_TARGET, TEST_ASSERT_SNAPSHOT_REENTRY_WAKES_REMOTE_OWNER, TEST_AUTHORITATIVE_ONLY_OPERATION_ID, TEST_AUTHORITATIVE_ONLY_PARTITION_ID, TEST_AUTHORITATIVE_ONLY_REPLICA_ID, TEST_CAPTURED_AT_MS,
     TEST_DELIVERY_STATUS_INITIATED, TEST_EMPTY_LIST, TEST_EMPTY_VALUE, TEST_ENTITY_TYPE_PARTITION, TEST_EXPECTED_SENDING_REENTRY_ACTUATION_STATE, TEST_LOCAL_OWNER_PARTITION_ID, TEST_LOCAL_OWNER_REPLICA_ID, TEST_MICROTASK_DELAY_MS,
@@ -12,8 +12,34 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
     TEST_TIMEOUT_OVERRUN_MS, TEST_UNDEFINED_VALUE, WORKFLOW_STEP, buildDispatchPendingReentryPlanningSnapshot, buildTransactionCoordinator, createCoordinator,
   } = dependencies;
 
-registerCase('checkTimeouts supplements cache-visible priority scans with ' +
-  'authoritative no-step rows',
+const TEST_CACHE_VISIBLE_PRIORITY_SCAN_TEST_NAME =
+  'checkTimeouts supplements cache-visible priority scans with ' +
+  'authoritative no-step rows';
+const TEST_ASSERT_CACHE_VISIBLE_PRIORITY_AUTHORITATIVE_READ =
+  'priority timeout scans should supplement partial cache visibility with ' +
+  'one authoritative owner read';
+const TEST_ASSERT_AUTHORITATIVE_ONLY_LOCAL_DISPATCH =
+  'authoritative-only no-step priority rows should re-enter local dispatch';
+const TEST_ASSERT_AUTHORITATIVE_ONLY_DISPATCH_PROGRESS =
+  'authoritative-only no-step priority rows should persist dispatch progress';
+const TEST_ASSERT_AUTHORITATIVE_ONLY_REPLICA_HANDLER_DISPATCH =
+  'authoritative-only priority rows should dispatch through the replica ' +
+  'handler';
+const TEST_OWNER_LANE_HELD_REENTRY_TEST_NAME =
+  'priority recovery snapshots defer dispatch-pending re-entry when the ' +
+  'operation owner lane is already held';
+const TEST_AUTHORITATIVE_OBSERVATION_STATE_PRESENT = 'present';
+const TEST_ACTIVE_HANDOFF_RETRY_TEST_NAME =
+  'priority recovery snapshots surface retry-scheduled rebalancer handoff ' +
+  'progress while a remote handoff retry is already active';
+const TEST_REPRESENTATIVE_HANDOFF_RETRY_TEST_NAME =
+  'representative control-plane publication retry-scheduled handoff residual ' +
+  'preserves one bounded remote retry for duplicate witnesses';
+const TEST_PUBLICATION_COUNT_ONLY_HANDOFF_TEST_NAME =
+  'publication count-only retry-scheduled handoff residual preserves one ' +
+  'bounded remote retry per unique operation';
+
+registerCase(TEST_CACHE_VISIBLE_PRIORITY_SCAN_TEST_NAME,
 async (t) => {
   const deliveries = [];
   const authoritativeIncompleteReads = [];
@@ -192,24 +218,24 @@ async (t) => {
     authoritativeIncompleteReads.some((entry) =>
       entry.sql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT),
     ),
-    'priority timeout scans should supplement partial cache visibility with one authoritative owner read',
+    TEST_ASSERT_CACHE_VISIBLE_PRIORITY_AUTHORITATIVE_READ,
   );
   t.equal(
     authoritativeOnlyOperationRow.workflow_step,
     TEST_STEP_CREATING,
-    'authoritative-only no-step priority rows should re-enter local dispatch',
+    TEST_ASSERT_AUTHORITATIVE_ONLY_LOCAL_DISPATCH,
   );
   t.equal(
     authoritativeOnlyOperationRow.status,
     TEST_STATUS_CREATING,
-    'authoritative-only no-step priority rows should persist dispatch progress',
+    TEST_ASSERT_AUTHORITATIVE_ONLY_DISPATCH_PROGRESS,
   );
   t.ok(
     deliveries.some((delivery) =>
       delivery.target === TEST_REPLICA_HANDLER_DISPATCH_TARGET &&
       delivery.payload?.operationId === TEST_AUTHORITATIVE_ONLY_OPERATION_ID,
     ),
-    'authoritative-only priority rows should dispatch through the replica handler',
+    TEST_ASSERT_AUTHORITATIVE_ONLY_REPLICA_HANDLER_DISPATCH,
   );
 
   await coordinator.shutdown();
@@ -337,7 +363,7 @@ async (t) => {
     coordinator.workflowOwner.repository
       .getOperationsByEntityAuthoritativeObservation = async () => {
         return Object.freeze({
-          state: 'present',
+          state: TEST_AUTHORITATIVE_OBSERVATION_STATE_PRESENT,
           operationCount: NUM.ONE,
           operations: Object.freeze([operation]),
           deferredOutcome: null,
@@ -392,8 +418,7 @@ async (t) => {
 });
 
 
-registerCase('priority recovery snapshots defer dispatch-pending re-entry when the ' +
-  'operation owner lane is already held',
+registerCase(TEST_OWNER_LANE_HELD_REENTRY_TEST_NAME,
 async (t) => {
   const deliveries = [];
   const deferredTimers = [];
@@ -514,7 +539,7 @@ async (t) => {
     coordinator.workflowOwner.repository
       .getOperationsByEntityAuthoritativeObservation = async () => {
         return Object.freeze({
-          state: 'present',
+          state: TEST_AUTHORITATIVE_OBSERVATION_STATE_PRESENT,
           operationCount: NUM.ONE,
           operations: Object.freeze([operation]),
           deferredOutcome: null,
@@ -577,8 +602,7 @@ async (t) => {
   }
 });
 
-registerCase('priority recovery snapshots surface retry-scheduled rebalancer ' +
-  'handoff progress while a remote handoff retry is already active',
+registerCase(TEST_ACTIVE_HANDOFF_RETRY_TEST_NAME,
 async (t) => {
   const deliveries = [];
   const deferredTimers = [];
@@ -699,7 +723,7 @@ async (t) => {
     coordinator.workflowOwner.repository
       .getOperationsByEntityAuthoritativeObservation = async () => {
         return Object.freeze({
-          state: 'present',
+          state: TEST_AUTHORITATIVE_OBSERVATION_STATE_PRESENT,
           operationCount: NUM.ONE,
           operations: Object.freeze([operation]),
           deferredOutcome: null,
@@ -864,8 +888,124 @@ registerCase(TEST_RETRY_SCHEDULED_REENTRY_TEST_NAME, async (t) => {
   }
 });
 
-registerCase('representative control-plane publication retry-scheduled handoff ' +
-  'residual preserves one bounded remote retry for duplicate witnesses',
+registerCase(TEST_ADVANCE_EFFECT_CAPTURED_AT_REENTRY_TEST_NAME, async (t) => {
+  const deliveries = [];
+  const deferredTimers = [];
+  let nowMs =
+    TEST_CAPTURED_AT_MS +
+    (TEST_STEP_TIMEOUT_MS * NUM.FIVE) +
+    TEST_TIMEOUT_OVERRUN_MS;
+  const originalDateNow = Date.now;
+  Date.now = () => nowMs;
+  const operation = Object.freeze({
+    operationId: TEST_OPERATION_ID,
+    partitionId: TEST_LOCAL_OWNER_PARTITION_ID,
+    type: TEST_OPERATION_TYPE_REPLACE,
+    status: TEST_STATUS_PENDING,
+    workflowStep: WORKFLOW_STEP.SENDING,
+    sourceNodeId: TEST_SOURCE_NODE_ID,
+    targetNodeId: TEST_TARGET_NODE_ID,
+    replicaId: TEST_LOCAL_OWNER_REPLICA_ID,
+    createdAt: TEST_CAPTURED_AT_MS,
+    updatedAt: TEST_CAPTURED_AT_MS,
+  });
+  const snapshot = Object.freeze({
+    operationId: TEST_OPERATION_ID,
+    capturedAt: TEST_CAPTURED_AT_MS,
+    operationOwnerObservation: Object.freeze({
+      effectCommand:
+        OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES
+          .ADVANCE_EXISTING_OPERATION_COMMAND,
+      effectExecution:
+        PRIORITY_RECOVERY_OPERATION_OWNER_EFFECT_EXECUTION.NOT_EXECUTED,
+    }),
+    actuation: Object.freeze({
+      owner: OPERATION_WORKFLOW_OWNER,
+      state: PRIORITY_RECOVERY_ACTUATION_STATE.DISPATCHED_WAITING_PROGRESS,
+      workflowProgressPhaseId:
+        PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING,
+    }),
+    progress: Object.freeze({
+      currentOwner: OPERATION_WORKFLOW_OWNER,
+      nextRequiredAction:
+        PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
+      blockingBoundary:
+        PRIORITY_RECOVERY_BLOCKING_BOUNDARY.REBALANCER_HANDOFF,
+      waitMode: PRIORITY_RECOVERY_WAIT_MODE.RETRY_SCHEDULED,
+      workflowProgressPhaseId:
+        PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING,
+    }),
+  });
+  const coordinator = createCoordinator({
+    nodeId: TEST_OBSERVER_NODE_ID,
+    transactionCoordinator: buildTransactionCoordinator(),
+    systemTableCache: {
+      get() {
+        return TEST_EMPTY_VALUE;
+      },
+      getAll() {
+        return [];
+      },
+      filter() {
+        return [];
+      },
+    },
+    cdcIntegrationService: {
+      async waitForCacheUpdate() {},
+    },
+    messageRouter: {
+      async deliver(target, payload, options) {
+        deliveries.push({target, payload, options});
+        return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
+      },
+    },
+    tablePolicyService: {
+      async getPolicyForPartition() {
+        return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+      },
+    },
+    setTimeoutFn(fn, delayMs) {
+      const handle = {fn, delayMs};
+      deferredTimers.push(handle);
+      return handle;
+    },
+    clearTimeoutFn() {},
+    enableTimeouts: false,
+  });
+
+  try {
+    coordinator.initialize();
+    t.equal(
+      await coordinator.workflowOwner
+        .applyPriorityRecoveryDispatchPendingOwnerProgress(
+          operation,
+          snapshot,
+        ),
+      true,
+      TEST_ASSERT_ADVANCE_EFFECT_CAPTURED_AT_WAKE,
+    );
+    t.equal(
+      deliveries.length,
+      NUM.ONE,
+      TEST_ASSERT_ADVANCE_EFFECT_CAPTURED_AT_WAKE,
+    );
+    t.equal(
+      deliveries[NUM.ZERO]?.target,
+      TEST_REPLICA_DISPATCH_TARGET,
+      TEST_ASSERT_ADVANCE_EFFECT_CAPTURED_AT_TARGET,
+    );
+    t.equal(
+      deferredTimers.length,
+      NUM.ONE,
+      TEST_ASSERT_ADVANCE_EFFECT_CAPTURED_AT_TIMER,
+    );
+  } finally {
+    Date.now = originalDateNow;
+    await coordinator.shutdown();
+  }
+});
+
+registerCase(TEST_REPRESENTATIVE_HANDOFF_RETRY_TEST_NAME,
 async (t) => {
   const deliveries = [];
   const deferredTimers = [];
@@ -987,8 +1127,7 @@ async (t) => {
   }
 });
 
-registerCase('publication count-only retry-scheduled handoff residual preserves one ' +
-  'bounded remote retry per unique operation',
+registerCase(TEST_PUBLICATION_COUNT_ONLY_HANDOFF_TEST_NAME,
 async (t) => {
   const deliveries = [];
   const deferredTimers = [];

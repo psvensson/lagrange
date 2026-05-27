@@ -5,6 +5,9 @@ import {buildPriorityRecoveryDecisionSnapshot} from
 import {buildPriorityRecoveryObservationSnapshot} from
   '../../src/control-plane/priority-recovery-observation-snapshot.js';
 import {
+  PRIORITY_RECOVERY_OPERATION_OWNER_EFFECT_EXECUTION,
+} from '../../src/control-plane/priority-recovery-operation-owner-observation.js';
+import {
   PRIORITY_RECOVERY_ACTUATION_STATE,
   PRIORITY_RECOVERY_BLOCKING_BOUNDARY,
   PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION,
@@ -277,6 +280,9 @@ const TEST_ASSERT_ACTIVE_HANDOFF_RETRY_TIMER_PRESERVED =
 const TEST_RETRY_SCHEDULED_REENTRY_TEST_NAME =
   'retry-scheduled rebalancer handoff snapshots re-enter dispatch-pending ' +
   'owner progress';
+const TEST_ADVANCE_EFFECT_CAPTURED_AT_REENTRY_TEST_NAME =
+  'dispatch-pending owner observation effects wake remote handoff using ' +
+  'snapshot captured time';
 const TEST_TRANSITION_RETRY_SNAPSHOT_REENTRY_TEST_NAME =
   'coordinator-created dispatch-pending transition retries preserve the ' +
   'operation snapshot for deferred visibility re-entry';
@@ -296,6 +302,12 @@ const TEST_ASSERT_RETRY_SCHEDULED_REENTRY_TARGET =
   'retry-scheduled handoff re-entry should use the canonical dispatch ingress';
 const TEST_ASSERT_RETRY_SCHEDULED_REENTRY_TIMER =
   'retry-scheduled handoff re-entry should arm bounded handoff verification';
+const TEST_ASSERT_ADVANCE_EFFECT_CAPTURED_AT_WAKE =
+  'unexecuted advance-owner effects should wake the remote owner before drain';
+const TEST_ASSERT_ADVANCE_EFFECT_CAPTURED_AT_TARGET =
+  'advance-owner effect re-entry should use the canonical dispatch ingress';
+const TEST_ASSERT_ADVANCE_EFFECT_CAPTURED_AT_TIMER =
+  'advance-owner effect re-entry should arm bounded handoff verification';
 const TEST_ASSERT_REPRESENTATIVE_HANDOFF_RETRY_BOUNDED =
   'representative publication handoff retry should stay bounded';
 const TEST_ASSERT_REPRESENTATIVE_HANDOFF_NO_DUPLICATE_WAKE =
@@ -346,6 +358,7 @@ const TEST_ASSERT_TOPOLOGY_OPERATOR_SINGLE_CURRENT_STEP =
   'topology operator witness should expose exactly one current step';
 const TEST_ASSERT_TOPOLOGY_OPERATOR_SINGLE_NEXT_ACTION =
   'topology operator witness should expose one scalar next action';
+const TEST_STRING_TYPE = 'string';
 
 function buildDispatchPendingReentryPlanningSnapshot() {
   return Object.freeze({
@@ -413,7 +426,7 @@ function assertTopologyOperatorWitness(t, witness, expected) {
   );
   t.equal(
     typeof witness.nextAction,
-    'string',
+    TEST_STRING_TYPE,
     TEST_ASSERT_TOPOLOGY_OPERATOR_SINGLE_NEXT_ACTION,
   );
 }
@@ -605,15 +618,20 @@ const registrationDependencies = Object.freeze({
   PRIORITY_RECOVERY_ACTUATION_STATE,
   PRIORITY_RECOVERY_BLOCKING_BOUNDARY,
   PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION,
+  PRIORITY_RECOVERY_OPERATION_OWNER_EFFECT_EXECUTION,
   PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_ACTION,
   PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE,
   PRIORITY_RECOVERY_SEMANTIC_STATE,
   PRIORITY_RECOVERY_WAIT_MODE,
   PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE,
   TEST_ACTUAL_STATUS_ABSENT,
+  TEST_ADVANCE_EFFECT_CAPTURED_AT_REENTRY_TEST_NAME,
   TEST_ASSERT_ACTIVE_HANDOFF_RETRY_BOUNDED,
   TEST_ASSERT_ACTIVE_HANDOFF_RETRY_NO_INLINE_WAKE,
   TEST_ASSERT_ACTIVE_HANDOFF_RETRY_TIMER_PRESERVED,
+  TEST_ASSERT_ADVANCE_EFFECT_CAPTURED_AT_TARGET,
+  TEST_ASSERT_ADVANCE_EFFECT_CAPTURED_AT_TIMER,
+  TEST_ASSERT_ADVANCE_EFFECT_CAPTURED_AT_WAKE,
   TEST_ASSERT_COUNT_ONLY_HANDOFF_NO_DUPLICATE_WAKE,
   TEST_ASSERT_COUNT_ONLY_HANDOFF_TIMERS_PRESERVED,
   TEST_ASSERT_COUNT_ONLY_HANDOFF_UNIQUE_RETRIES,

@@ -77,7 +77,7 @@ const ADMIN_WEBSOCKET_LIFECYCLE_METHODS = {
   async shutdown() {
     for (const clientInfo of this.clients) {
       try {
-        clientInfo.socket.close();
+        clientInfo.socket.terminate();
       } catch (_closeErr) {
         // Ignore close errors during shutdown
       }

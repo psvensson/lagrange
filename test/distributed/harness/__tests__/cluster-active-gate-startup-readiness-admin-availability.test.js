@@ -6,8 +6,12 @@ import {
   NODE_ROLES,
 } from './cluster-test-helpers.js';
 
-const ADMIN_AVAILABILITY_TEST_NAME =
+const ADMIN_AVAILABILITY_STARTUP_TEST_NAME =
   'Unit: active gate consumes startup admin availability support contract';
+const ADMIN_AVAILABILITY_LOAD_TEST_NAME =
+  'Unit: active gate consumes load admin availability support contract';
+const ADMIN_AVAILABILITY_LOAD_UNREACHABLE_TEST_NAME =
+  'Unit: active gate consumes load admin availability unreachable contract';
 const ADMIN_AVAILABILITY_SEED_ID = 'seed-1';
 const ADMIN_AVAILABILITY_SELECTED_ID = 'selected-1';
 const ADMIN_AVAILABILITY_JOINER_ID = 'joiner-1';
@@ -39,8 +43,11 @@ const ADMIN_AVAILABILITY_OBSERVATION_RETRY = 'retry';
 const ADMIN_AVAILABILITY_OBSERVATION_SELECTED_TIMEOUT = 'selected_timeout';
 const ADMIN_AVAILABILITY_ACTIVE_STATE = 'active';
 const ADMIN_AVAILABILITY_PROJECTION_REASON = 'startup_admin_projection';
+const ADMIN_AVAILABILITY_LOAD_MODE = 'load';
 const ADMIN_AVAILABILITY_ADMIN_ERROR =
   'connect ECONNREFUSED 172.19.0.4:8081';
+const ADMIN_AVAILABILITY_ADMIN_UNREACHABLE_ERROR =
+  'connect EHOSTUNREACH 172.18.0.4:8081';
 const ADMIN_AVAILABILITY_SELECTED_SNAPSHOT_TIMEOUT =
   'Control snapshot query timed out for ' + ADMIN_AVAILABILITY_SELECTED_ID;
 
@@ -58,7 +65,11 @@ function makeActiveNode(id, role) {
   };
 }
 
-test(ADMIN_AVAILABILITY_TEST_NAME, async () => {
+async function probeAdminAvailabilityProjection(options = {}) {
+  const {
+    adminError = ADMIN_AVAILABILITY_ADMIN_ERROR,
+    ...probeOptions
+  } = options;
   const cluster = createCluster({
     size: ADMIN_AVAILABILITY_NODE_IDS.length,
     docker: {socketPath: ADMIN_AVAILABILITY_DOCKER_SOCKET},
@@ -79,8 +90,8 @@ test(ADMIN_AVAILABILITY_TEST_NAME, async () => {
       return {
         adminReady: false,
         reachable: true,
-        adminHealth: {error: ADMIN_AVAILABILITY_ADMIN_ERROR},
-        lastError: ADMIN_AVAILABILITY_ADMIN_ERROR,
+        adminHealth: {error: adminError},
+        lastError: adminError,
       };
     },
   });
@@ -136,9 +147,13 @@ test(ADMIN_AVAILABILITY_TEST_NAME, async () => {
     };
   };
 
-  const result = await cluster._probeClusterActiveState(
+  return cluster._probeClusterActiveState(
     Date.now() + ADMIN_AVAILABILITY_DEADLINE_MS,
+    probeOptions,
   );
+}
+
+function assertAdminAvailabilityProjected(result) {
   const projectedJoiner = result.nodeDiagnostics.find(
     (diagnostic) => diagnostic.nodeId === ADMIN_AVAILABILITY_JOINER_ID,
   );
@@ -155,4 +170,27 @@ test(ADMIN_AVAILABILITY_TEST_NAME, async () => {
     true,
   );
   assert.equal(result.snapshotCoverage.completeCoverage, false);
+}
+
+test(ADMIN_AVAILABILITY_STARTUP_TEST_NAME, async () => {
+  const result = await probeAdminAvailabilityProjection();
+
+  assertAdminAvailabilityProjected(result);
+});
+
+test(ADMIN_AVAILABILITY_LOAD_TEST_NAME, async () => {
+  const result = await probeAdminAvailabilityProjection({
+    mode: ADMIN_AVAILABILITY_LOAD_MODE,
+  });
+
+  assertAdminAvailabilityProjected(result);
+});
+
+test(ADMIN_AVAILABILITY_LOAD_UNREACHABLE_TEST_NAME, async () => {
+  const result = await probeAdminAvailabilityProjection({
+    mode: ADMIN_AVAILABILITY_LOAD_MODE,
+    adminError: ADMIN_AVAILABILITY_ADMIN_UNREACHABLE_ERROR,
+  });
+
+  assertAdminAvailabilityProjected(result);
 });

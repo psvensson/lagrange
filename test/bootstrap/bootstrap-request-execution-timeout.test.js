@@ -74,8 +74,11 @@ const TEST_LOCK_WAIT_OPERATION_NAME = 'bootstrap_request_execution';
 const TEST_LOCK_WAIT_BUDGET_MS = 5;
 const TEST_LOCK_WAIT_FAILSAFE_MS = 50;
 const TEST_LOCK_WAIT_SENTINEL = 'lock_wait_still_pending';
+const TEST_PRE_ADMISSION_FAILSAFE_SENTINEL =
+  'pre_admission_readiness_still_pending';
 const TEST_EXPIRED_CLIENT_ATTEMPT_LAG_MS = 1;
 const TEST_PRE_ADMISSION_CLIENT_ATTEMPT_BUDGET_MS = 100;
+const TEST_PRE_ADMISSION_CLIENT_ATTEMPT_SHORT_BUDGET_MS = 5;
 const TEST_PRE_ADMISSION_STALL_MS = 125;
 const TEST_IDLE_STAGE_CALL_COUNT = 0;
 const TEST_ACTIVE_STAGE_CALL_COUNT = 1;
@@ -480,6 +483,138 @@ test(
         api.inFlightBootstrapRequestCount,
         TEST_IDLE_STAGE_CALL_COUNT,
         'client attempts expired at the admission boundary should leave bootstrap admissions empty',
+      );
+    } finally {
+      await api.shutdown();
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+    }
+  },
+);
+
+test(
+  'BootstrapAPI bounds pre-admission readiness by the client attempt deadline',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const counters = {
+      bootstrapJoinAdmissionSnapshotCalls: TEST_IDLE_STAGE_CALL_COUNT,
+      admissionClaims: TEST_IDLE_STAGE_CALL_COUNT,
+      blockingMoveReplicaCalls: TEST_IDLE_STAGE_CALL_COUNT,
+      leaderReadinessCalls: TEST_IDLE_STAGE_CALL_COUNT,
+      assignmentCalls: TEST_IDLE_STAGE_CALL_COUNT,
+    };
+    const api = new BootstrapAPI({
+      seedNodeId: TEST_SEED_NODE_ID,
+      seedNodeAddress: TEST_SEED_NODE_ADDRESS,
+      systemTableCache: TEST_SYSTEM_TABLE_CACHE,
+      bootstrapAdmissionRetryAfterMs: TEST_RETRY_AFTER_MS,
+      bootstrapRequestExecutionBudgetMs: TEST_REQUEST_EXECUTION_BUDGET_MS,
+      controlPlaneReadinessService: {
+        getStartupAuthoritySnapshotSync() {
+          return TEST_STARTUP_AUTHORITY;
+        },
+      },
+    });
+
+    const acquireBootstrapAdmission =
+      api.acquireBootstrapAdmission.bind(api);
+    api.getBootstrapJoinAdmissionSnapshot = async () => {
+      counters.bootstrapJoinAdmissionSnapshotCalls +=
+        TEST_ACTIVE_STAGE_CALL_COUNT;
+      return new Promise(() => {});
+    };
+    api.acquireBootstrapAdmission = (snapshot) => {
+      counters.admissionClaims += TEST_ACTIVE_STAGE_CALL_COUNT;
+      return acquireBootstrapAdmission(snapshot);
+    };
+    api.getBlockingMoveReplicaBootstrapAdmissions = async () => {
+      counters.blockingMoveReplicaCalls += TEST_ACTIVE_STAGE_CALL_COUNT;
+      return TEST_EMPTY_LIST;
+    };
+    api.waitForServiceLeaders = async () => {
+      counters.leaderReadinessCalls += TEST_ACTIVE_STAGE_CALL_COUNT;
+      return TEST_READY_STATUS;
+    };
+    api.determineAndReserveMessageGroupAssignment = async () => {
+      counters.assignmentCalls += TEST_ACTIVE_STAGE_CALL_COUNT;
+      return TEST_ASSIGNMENT;
+    };
+
+    await api.initialize(0, {listen: TEST_LISTEN_DISABLED});
+
+    try {
+      const result = await Promise.race([
+        api.getFastify().inject({
+          method: 'POST',
+          url: '/bootstrap',
+          payload: {
+            nodeId: TEST_REQUEST_NODE_ID,
+            nodeAddress: TEST_REQUEST_NODE_ADDRESS,
+            [BOOTSTRAP_API_REQUEST_FIELD.CLIENT_ATTEMPT_DEADLINE_MS]:
+              Date.now() +
+                TEST_PRE_ADMISSION_CLIENT_ATTEMPT_SHORT_BUDGET_MS,
+          },
+        }),
+        new Promise((resolve) => {
+          setTimeout(
+            () => resolve(TEST_PRE_ADMISSION_FAILSAFE_SENTINEL),
+            TEST_LOCK_WAIT_FAILSAFE_MS,
+          );
+        }),
+      ]);
+
+      t.not(
+        result,
+        TEST_PRE_ADMISSION_FAILSAFE_SENTINEL,
+        'pre-admission readiness should observe the client deadline before the caller times out',
+      );
+      t.equal(
+        counters.bootstrapJoinAdmissionSnapshotCalls,
+        TEST_ACTIVE_STAGE_CALL_COUNT,
+        'initially valid client attempts should enter pre-admission readiness work',
+      );
+      t.equal(
+        result.statusCode,
+        HTTP_STATUS.SERVICE_UNAVAILABLE,
+        'deadline-bounded pre-admission readiness should defer bootstrap',
+      );
+      const body = JSON.parse(result.body);
+      t.equal(
+        body.code,
+        BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
+        'deadline-bounded pre-admission readiness should preserve bootstrap-not-ready code',
+      );
+      t.ok(
+        body.reasons.includes(
+          BOOTSTRAP_API_PROBE_REASON.CLIENT_ATTEMPT_DEADLINE_EXHAUSTED,
+        ),
+        'deadline-bounded pre-admission readiness should expose the client deadline blocker',
+      );
+      t.equal(
+        counters.admissionClaims,
+        TEST_IDLE_STAGE_CALL_COUNT,
+        'deadline-bounded pre-admission readiness should not claim an admission slot',
+      );
+      t.equal(
+        counters.blockingMoveReplicaCalls,
+        TEST_IDLE_STAGE_CALL_COUNT,
+        'deadline-bounded pre-admission readiness should not enter admitted blocking checks',
+      );
+      t.equal(
+        counters.leaderReadinessCalls,
+        TEST_IDLE_STAGE_CALL_COUNT,
+        'deadline-bounded pre-admission readiness should not enter leader readiness work',
+      );
+      t.equal(
+        counters.assignmentCalls,
+        TEST_IDLE_STAGE_CALL_COUNT,
+        'deadline-bounded pre-admission readiness should not enter assignment work',
+      );
+      t.equal(
+        api.inFlightBootstrapRequestCount,
+        TEST_IDLE_STAGE_CALL_COUNT,
+        'deadline-bounded pre-admission readiness should leave bootstrap admissions empty',
       );
     } finally {
       await api.shutdown();

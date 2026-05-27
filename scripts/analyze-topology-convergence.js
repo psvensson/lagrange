@@ -17,6 +17,9 @@ import {
 import {
   readArtifactWithSidecarsSync,
 } from './artifact-sidecar-loader.js';
+import {
+  normalizeActiveGateSnapshotCoverageProgress,
+} from '../src/diagnostics/topology-convergence-normalizers.js';
 
 const ARG_HELP_SHORT = '-h';
 const ARG_HELP_LONG = '--help';
@@ -37,12 +40,15 @@ const FILE_FAILURE_BUNDLE = 'failure-bundle.json';
 const FILE_TRIAGE_SUMMARY = 'triage-summary.json';
 const FILE_REPORT_SUFFIX = '.report.json';
 const PROPERTY_FAILURE_BUNDLE = 'failureBundle';
+const PROPERTY_REPORT = 'report';
 const PROPERTY_PUBLICATION_CONVERGENCE = 'publicationConvergence';
 const PROPERTY_SCENARIOS = 'scenarios';
 const PROPERTY_ACTIVE_GATE_PROGRESS = 'activeGateProgress';
 const PROPERTY_PROGRESS = 'progress';
 const PROPERTY_SUMMARY = 'summary';
 const PROPERTY_ACTIVE_GATE = 'activeGate';
+const PROPERTY_CONTROL_PLANE = 'controlPlane';
+const PROPERTY_ACTIVE_GATE_SNAPSHOT_COVERAGE = 'activeGateSnapshotCoverage';
 const PROPERTY_SELECTED_SNAPSHOT_ADMIN_READY = 'selectedSnapshotAdminReady';
 const PROPERTY_SELECTED_SNAPSHOT_NODE_ID = 'selectedSnapshotNodeId';
 const PROPERTY_SELECTED_SNAPSHOT_REACHABLE_BY = 'selectedSnapshotReachableBy';
@@ -575,26 +581,61 @@ function buildHandoffConsumerSnapshotDiagnostics(graph, artifact) {
 
 function selectHandoffArtifactProgress(graph, artifact) {
   const scenario = selectHandoffScenario(graph, artifact);
+  const failureBundle = firstRecordValue(
+    artifact?.[PROPERTY_FAILURE_BUNDLE],
+    scenario?.[PROPERTY_FAILURE_BUNDLE],
+  );
+  const controlPlane = recordOrNull(
+    failureBundle?.[PROPERTY_CONTROL_PLANE],
+  );
   const publicationConvergence =
     scenario?.[PROPERTY_PUBLICATION_CONVERGENCE] ||
+    artifact?.[PROPERTY_REPORT]?.[PROPERTY_PUBLICATION_CONVERGENCE] ||
     artifact?.[PROPERTY_PUBLICATION_CONVERGENCE] ||
+    failureBundle?.[PROPERTY_PUBLICATION_CONVERGENCE] ||
     {};
-  return (
+  return firstRecordValue(
     publicationConvergence?.activeGate?.[PROPERTY_ACTIVE_GATE_PROGRESS] ||
-    publicationConvergence?.activeGate?.[PROPERTY_PROGRESS] ||
-    publicationConvergence?.[PROPERTY_ACTIVE_GATE_PROGRESS] ||
-    publicationConvergence?.[PROPERTY_PROGRESS]
+      publicationConvergence?.activeGate?.[PROPERTY_PROGRESS],
+    publicationConvergence?.[PROPERTY_ACTIVE_GATE_PROGRESS],
+    publicationConvergence?.[PROPERTY_PROGRESS],
+    controlPlane?.[PROPERTY_ACTIVE_GATE_PROGRESS],
+    normalizeActiveGateSnapshotCoverageProgress(
+      controlPlane?.[PROPERTY_ACTIVE_GATE_SNAPSHOT_COVERAGE],
+    ),
   );
 }
 
 function selectHandoffScenario(graph, artifact) {
-  const scenarios = artifact?.[PROPERTY_SCENARIOS];
+  const report = artifact?.[PROPERTY_REPORT] || artifact;
+  const scenarios = report?.[PROPERTY_SCENARIOS];
   if (!Array.isArray(scenarios) || scenarios.length === NUM_ZERO) {
     return artifact;
   }
   const targetScenario = graph?.scenario;
   return scenarios.find((candidate) => candidate.scenario === targetScenario) ||
     scenarios[NUM_ZERO];
+}
+
+function recordOrNull(value) {
+  if (
+    value &&
+    typeof value === TYPEOF_OBJECT &&
+    Array.isArray(value) !== true
+  ) {
+    return value;
+  }
+  return null;
+}
+
+function firstRecordValue(...values) {
+  for (const value of values) {
+    const record = recordOrNull(value);
+    if (record && Object.keys(record).length > NUM_ZERO) {
+      return record;
+    }
+  }
+  return null;
 }
 
 function determineAlternativeSnapshotWitnessAvailability(

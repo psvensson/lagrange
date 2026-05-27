@@ -2,36 +2,150 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-rolling-restart-priority-recovery-resolution.md",
-  "package": "none",
-  "status": "none",
-  "lane": "none",
-  "scenario": "none",
-  "artifact": "none",
+  "package": "work/packages/active-20260527-rolling-restart-benchmark-load-admission-runtime.md",
+  "status": "active",
+  "lane": "runtime-owner-boundary",
+  "scenario": "rolling-restart",
+  "artifact": "test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json",
   "playback": "none",
-  "owner": "none",
-  "boundary": "none",
-  "dominantReason": "none",
-  "currentState": "No active work package. Start a new package when implementation resumes.",
-  "nextAction": "Create or activate one focused package for the next executable concern.",
-  "proof": [],
-  "writeScope": [],
-  "handoffFiles": [],
-  "generatedFiles": [
-    "work/sprints/current-blocker.json",
-    "work/sprints/current-blocker.md"
+  "owner": "startup_readiness_owner",
+  "boundary": "startup_support_evidence",
+  "dominantReason": "readiness_retryable",
+  "currentState": "Scaffolded from representative evidence for readiness_startup_support.",
+  "nextAction": "Apply benchmark-table load admission gating to rolling restart before node restarts so readiness proof matches the actual load lane.",
+  "proof": [
+    "falsifier: node --test test/distributed/harness/__tests__/rolling-restart-scenario.test.js # contract fixture: benchmark-ready admission transition gates startLoad and affected rolling-restart consumer proof",
+    "regression: node --test test/distributed/harness/__tests__/cluster.test-part-2.js test/distributed/harness/__tests__/node-join-under-load-scenario.test.js # consumer proof: shared benchmark admission behavior remains ready for node-join-under-load",
+    "supporting: npm run work:evidence-summary -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json # representative routing evidence",
+    "npm run work:evidence-summary -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json",
+    "npm run work:scenario-triage -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json --markdown",
+    "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json --markdown"
   ],
-  "candidateRuntimeFiles": [],
-  "commitScope": [],
+  "writeScope": [
+    "test/distributed/scenarios/rolling-restart.js",
+    "test/distributed/harness/__tests__/rolling-restart-scenario.test.js",
+    "test/distributed/harness/__tests__/node-join-under-load-scenario.test.js",
+    "work/packages/active-20260527-rolling-restart-benchmark-load-admission-runtime.md",
+    "work/sprints/current-blocker.md",
+    "work/sprints/current-blocker.json",
+    "work/sprints/active-2026-q2-rolling-restart-priority-recovery-resolution.md"
+  ],
+  "handoffFiles": [
+    "test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json"
+  ],
+  "generatedFiles": [],
+  "candidateRuntimeFiles": [
+    "test/distributed/scenarios/table-distribution-helpers.js"
+  ],
+  "commitScope": [
+    "test/distributed/scenarios/rolling-restart.js",
+    "test/distributed/harness/__tests__/rolling-restart-scenario.test.js",
+    "test/distributed/harness/__tests__/node-join-under-load-scenario.test.js",
+    "work/packages/active-20260527-rolling-restart-benchmark-load-admission-runtime.md",
+    "work/sprints/current-blocker.md",
+    "work/sprints/current-blocker.json",
+    "work/sprints/active-2026-q2-rolling-restart-priority-recovery-resolution.md"
+  ],
   "touchedFiles": [],
-  "modelFit": {},
+  "theoryLedgerRefs": [],
+  "modelFit": {
+    "packageClass": "runtime-owner-boundary",
+    "intendedMinimumModel": "gpt-5.3-codex",
+    "scopeShape": "bounded-owner-runtime/current-frontier",
+    "outputProfile": "medium",
+    "ambiguityScore": 1,
+    "escalationTriggers": [
+      "owned files expand beyond this package",
+      "a frozen decision must be reopened"
+    ]
+  },
   "representativeResidual": {},
-  "causalGovernance": {},
-  "scenarioCausalClosure": {},
-  "observablePrediction": {},
+  "causalGovernance": {
+    "hypothesis": "The readiness_retryable rolling-restart failure is amplified by starting sustained load and restart actions after generic /readyz stability while the actual table-scoped load lane still rejects the default logs workload.",
+    "stopConditionCheck": "`npm run analyze:causal-model -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json` plus focused tests must prove rolling restart uses benchmark table creation plus benchmark-ready load-node admission before startLoad, and representative evidence must move away from zero-success load with local_benchmark_discovery_missing admission failures.",
+    "expectedCausalModelChange": "Rolling restart should route load through the same benchmark admission contract as node-join-under-load, so readiness proof and the actual load lane observe the same table readiness frontier.",
+    "representativeOutcome": "pending-before-rerun",
+    "causalDebt": "The current representative artifact reaches load-readiness stability but sustained load records zero successful operations and table-scoped load admission failures before restart recovery times out.",
+    "crossBoundaryReview": "Do not patch startup internals, active-gate diagnostics, transport, or rebalancer workflow from this package; keep changes to rolling restart scenario admission and focused harness tests."
+  },
+  "scenarioCausalClosure": {
+    "referenceScenarioOrProbe": "rolling-restart benchmark load admission",
+    "phaseChain": [
+      "active-gate snapshot coverage satisfied from control-plane evidence",
+      "representative route migrated to startup_readiness_owner / startup_support_evidence / readiness_retryable",
+      "load readiness stable evidence showed generic readiness but sustained load had zero successes and benchmark admission denials"
+    ],
+    "currentFirstFrontier": "startup_readiness_owner / startup_support_evidence / readiness_retryable",
+    "knownDownstreamBlockers": [
+      "rolling restart recovery gate times out for a restarted node",
+      "sustained load begins against a table/load-lane that is not benchmark-admitted"
+    ],
+    "missingCausalEdge": "Rolling restart must align its pre-restart readiness proof with table-scoped benchmark load admission.",
+    "missingCausalEdgeProbe": "node --test test/distributed/harness/__tests__/rolling-restart-scenario.test.js",
+    "falsifyingProbe": "node --test test/distributed/harness/__tests__/rolling-restart-scenario.test.js",
+    "boundedProgressProof": "Focused tests prove benchmark table readiness, admission retry, and ready-node bounded progress gate startLoad and node restart sequencing; representative rerun proves the failure frontier moves, reduces, or goes green.",
+    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json",
+    "expectedObservableTransition": "Rolling restart no longer starts restart sequencing while benchmark load admission is missing or no load node is table-admitted.",
+    "maxProgressBound": "one rolling restart scenario admission slice before representative rerun",
+    "sameFrontierFallback": "If fresh evidence returns the same frontier and zero-success benchmark admission failures after this change, stop for an autonomous architecture experiment instead of another local patch.",
+    "expectedNextFrontier": "representative rerun reduced, migrated, or green after benchmark load admission gate",
+    "resultClassification": "pending-before-probe",
+    "stopCondition": "continue-local-fix",
+    "recentFrontierHistory": [
+      "done-20260527-rolling-restart-startup-active-gate-owner-snapshot-coverage.md / startup_active_gate_owner / snapshot_coverage / migrated",
+      "done-20260527-rolling-restart-startup-readiness-owner-startup-support-evid.md / startup_readiness_owner / startup_support_evidence / migrated"
+    ],
+    "oscillationCheck": "This package is allowed because the previous diagnostic package selected a concrete runtime successor from canonical route evidence; no further same-frontier local patch is allowed without metric movement.",
+    "handoffInvariant": "Runtime edits stay limited to rolling restart admission and focused tests unless validation names a different owner boundary."
+  },
+  "observablePrediction": {
+    "metric": "rolling restart load admission before restart",
+    "predicted": "Rolling restart waits for benchmark-ready load nodes on a benchmark partitioning table before sustained load and restart actions begin.",
+    "observed": "pending-before-observation",
+    "accuracy": "pending-before-observation",
+    "evidence": "pending-before-observation"
+  },
   "experimentOutcome": {},
-  "rerunDecision": {},
+  "rerunDecision": {
+    "sourceArtifact": "test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json",
+    "routeOwner": "startup_readiness_owner",
+    "routeBoundary": "startup_support_evidence",
+    "routeDominantReason": "readiness_retryable",
+    "routeCausalOutcome": "migrate_owner_boundary",
+    "stopMode": "owner_boundary_migration",
+    "nextLane": "runtime-owner-boundary",
+    "expectedDelta": "Rolling restart uses benchmark-ready load nodes/table before starting sustained load, reducing startup readiness pressure and preventing zero-success load/restart recovery timeout.",
+    "requiredRefreshCommands": [
+      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json --owner startup_readiness_owner --boundary startup_support_evidence --dominant-reason readiness_retryable",
+      "update Sprint Strategy Brief and Current Edge Card from the route result",
+      "npm run work:repair",
+      "npm run work:validate -- --entry",
+      "npm run work:validate -- --pre-impl"
+    ]
+  },
   "classificationEfficiency": {},
-  "architectureDecisionGate": {},
-  "predecessor": null,
-  "theoryLedgerRefs": []
+  "architectureDecisionGate": {
+    "status": "selected",
+    "trigger": "frontier-oscillation",
+    "triggerEvidence": [
+      "Frontier returned to startup_readiness_owner / startup_support_evidence after recent migrated packages.",
+      "The predecessor diagnostic selected a concrete missing edge: rolling restart generic readiness proof does not match table-scoped benchmark load admission.",
+      "This package is bounded to one local proof that aligns load admission before restart sequencing."
+    ],
+    "choices": [
+      {
+        "id": "continue-local-proof",
+        "summary": "Patch rolling restart to gate sustained load on benchmark table admission before restarts.",
+        "route": "continue-local-proof",
+        "proof": [
+          "node --test test/distributed/harness/__tests__/rolling-restart-scenario.test.js",
+          "node --test test/distributed/harness/__tests__/cluster.test-part-2.js test/distributed/harness/__tests__/node-join-under-load-scenario.test.js",
+          "npm run work:evidence-summary -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json"
+        ]
+      }
+    ],
+    "selectedChoice": "continue-local-proof",
+    "nextAction": "Execute the selected local proof route; rerun canonical evidence before opening another architecture gate."
+  },
+  "predecessor": null
 }

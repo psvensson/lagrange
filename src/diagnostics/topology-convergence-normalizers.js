@@ -5,6 +5,7 @@ import {
   FIRST_FRONTIER_INDEX,
   TOPOLOGY_CONVERGENCE_EMPTY_REASON_LIST,
   PUBLICATION_STATUS_PUBLISHED,
+  PUBLICATION_RECOVERY_PROTOCOL_PUBLICATION_PENDING,
   PUBLICATION_RECOVERY_PROTOCOL_UNPUBLISHED_OBSERVATION,
   PUBLICATION_OWNER_ACK_STATE_ACKNOWLEDGED,
   PUBLICATION_OWNER_ACK_STATE_NOT_REQUIRED,
@@ -13,6 +14,7 @@ import {
   PUBLICATION_OWNER_REVISION_STATE_CURRENT,
   PUBLICATION_OWNER_STREAM_OUTCOME_STALE,
   PUBLICATION_PENDING_STATUS_SET,
+  TOPOLOGY_OPERATOR_CURRENT_STEP_STATE_TERMINAL,
   SOURCE_PATH,
   SOURCE_FIELD,
   READINESS_SUPPORT_PATH,
@@ -189,7 +191,7 @@ export function isNonTerminalTopologyOperatorWitness(witness) {
     return false;
   }
   return textOrUnknown(record[SOURCE_FIELD.CURRENT_STEP_STATE]) !==
-    'terminal'; // TOPOLOGY_OPERATOR_CURRENT_STEP_STATE_TERMINAL
+    TOPOLOGY_OPERATOR_CURRENT_STEP_STATE_TERMINAL;
 }
 
 export function normalizePublicationEvidence(publication) {
@@ -258,7 +260,8 @@ export function isPublicationPendingEvidence(evidence) {
     (evidence.publicationPending === true &&
       evidence.missingPublishedCount === SOURCE_ORDER_BASE) ||
     PUBLICATION_PENDING_STATUS_SET.has(evidence.publicationStatus) ||
-    evidence.recoveryProtocolState === 'publication_pending'
+    evidence.recoveryProtocolState ===
+      PUBLICATION_RECOVERY_PROTOCOL_PUBLICATION_PENDING
   );
 }
 
@@ -382,6 +385,73 @@ export function buildReplayablePublicationActiveGateHandoffFromOwnerEvidence({
   });
 }
 
+export function normalizeActiveGateSnapshotCoverageProgress(snapshotCoverage) {
+  const coverage = asRecord(snapshotCoverage);
+  if (Object.keys(coverage).length === SOURCE_ORDER_BASE) {
+    return {};
+  }
+  const selectedObservedNodeIds = arrayOrEmpty(coverage.selectedObservedNodeIds);
+  return {
+    snapshotCoverageComplete: coverage.completeCoverage === true,
+    snapshotCoverageNodeCount: firstFiniteNumber(
+      coverage.bestCoverageNodeCount,
+      coverage.snapshotCoverageNodeCount,
+      selectedObservedNodeIds.length,
+    ),
+    expectedNodeCount: firstFiniteNumber(
+      coverage.expectedNodeCount,
+      coverage.bestCoverageNodeCount,
+      selectedObservedNodeIds.length,
+    ),
+    selectedSnapshotNodeId: firstText(
+      coverage.selectedSnapshotNodeId,
+      coverage.selectedNodeId,
+    ),
+    selectedSnapshotAdminReady: coverage.selectedSnapshotAdminReady,
+    selectedSnapshotReachableBy: firstText(
+      coverage.selectedSnapshotReachableBy,
+      coverage.selectedReachableBy,
+    ),
+    selectedSnapshotError: firstText(
+      coverage.selectedSnapshotError,
+      coverage.selectedError,
+      coverage.selectedSnapshotReachabilityError,
+      coverage.selectedReachabilityError,
+    ),
+    selectedSnapshotTimeoutMs: firstFiniteNumber(
+      coverage.selectedSnapshotTimeoutMs,
+      coverage.selectedTimeoutMs,
+    ),
+    selectedSnapshotObservationMode: firstText(
+      coverage.selectedSnapshotObservationMode,
+    ),
+    selectedSnapshotObservationState: firstText(
+      coverage.selectedSnapshotObservationState,
+      coverage.selectedSnapshotRevisionState,
+    ),
+    selectedSnapshotObservationContractState: firstText(
+      coverage.selectedSnapshotObservationContractState,
+    ),
+    selectedSnapshotObservationRefreshState: firstText(
+      coverage.selectedSnapshotObservationRefreshState,
+    ),
+    selectedSnapshotObservationNextAction: firstText(
+      coverage.selectedSnapshotObservationNextAction,
+    ),
+    selectedSnapshotObservationReasonCodes: arrayOrEmpty(
+      coverage.selectedSnapshotObservationReasonCodes,
+    ),
+    selectedSnapshotRepairDeferred:
+      coverage.selectedSnapshotRepairDeferred === true,
+    selectedPublishedActiveNodeIds: arrayOrEmpty(
+      coverage.selectedPublishedActiveNodeIds,
+    ),
+    selectedMissingPublishedNodeIds: arrayOrEmpty(
+      coverage.selectedMissingPublishedNodeIds,
+    ),
+  };
+}
+
 // Master input normalizer
 export function normalizeTopologyConvergenceInput(input = {}) {
   const report = selectReportRecord(input);
@@ -397,6 +467,7 @@ export function normalizeTopologyConvergenceInput(input = {}) {
     ),
   );
   const failureBundle = failureBundleEvidence.record;
+  const controlPlane = asRecord(failureBundle.controlPlane);
   const triageSummary = asRecord(input.triageSummary || input.triage);
   const priorityRecoveryObservation = asRecord(scenario.priorityRecoveryObservation);
   const summary = firstRecord(
@@ -444,6 +515,23 @@ export function normalizeTopologyConvergenceInput(input = {}) {
     recordCandidate(
       activeGate.bestProgress,
       flattenEvidencePath(activeGateEvidence.sourcePath, SOURCE_FIELD.BEST_PROGRESS),
+    ),
+    recordCandidate(
+      publication[SOURCE_FIELD.ACTIVE_GATE_PROGRESS],
+      flattenEvidencePath(
+        publicationEvidence.sourcePath,
+        SOURCE_FIELD.ACTIVE_GATE_PROGRESS,
+      ),
+    ),
+    recordCandidate(
+      controlPlane[SOURCE_FIELD.ACTIVE_GATE_PROGRESS],
+      SOURCE_PATH.FAILURE_BUNDLE_CONTROL_PLANE_ACTIVE_GATE_PROGRESS,
+    ),
+    recordCandidate(
+      normalizeActiveGateSnapshotCoverageProgress(
+        controlPlane[SOURCE_FIELD.ACTIVE_GATE_SNAPSHOT_COVERAGE],
+      ),
+      SOURCE_PATH.FAILURE_BUNDLE_CONTROL_PLANE_ACTIVE_GATE_SNAPSHOT_COVERAGE,
     ),
     recordCandidate(
       priorityRecoveryObservation.activeGateProgress,

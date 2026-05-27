@@ -351,6 +351,11 @@ function buildPressureAdmissionFailure(decision, overrides = {}) {
     tableName: overrides.tableName || null,
   };
 }
+const GLOBAL_LAST_EMIT_TIMES = new Map();
+let globalLastEmitTime = NUM.ZERO;
+const EMIT_PRESSURE_METRIC_LIMIT_MS = 1000;
+const EMIT_PRESSURE_GLOBAL_LIMIT_MS = 500;
+
 class PressureGovernor {
   constructor(options = {}) {
     this.nodeId = normalizeNodeId(options.nodeId);
@@ -371,6 +376,8 @@ class PressureGovernor {
   }
   static clearSharedForTests() {
     SHARED_GOVERNORS.clear();
+    GLOBAL_LAST_EMIT_TIMES.clear();
+    globalLastEmitTime = NUM.ZERO;
   }
   configure(options = {}) {
     if (Object.prototype.hasOwnProperty.call(options, PRESSURE_GOVERNOR_LITERAL.MESSAGEROUTER)) {
@@ -392,16 +399,28 @@ class PressureGovernor {
     if (decision.action === PRESSURE_GOVERNOR_ACTION.ALLOW && summary.backpressured !== true) {
       return;
     }
-    const key = `${decision.action}:${decision.reason}`;
+    const key = `${this.nodeId}:${decision.action}:${decision.reason}`;
     const now = this.now();
-    const lastEmit = this.lastEmitTimes?.get(key) || 0;
-    if (now - lastEmit < 1000) {
+    let lastEmit = GLOBAL_LAST_EMIT_TIMES.get(key) || NUM.ZERO;
+    let lastGlobalEmit = globalLastEmitTime || NUM.ZERO;
+    if (now < lastEmit) {
+      GLOBAL_LAST_EMIT_TIMES.delete(key);
+      lastEmit = NUM.ZERO;
+    }
+    if (now < lastGlobalEmit) {
+      globalLastEmitTime = NUM.ZERO;
+      lastGlobalEmit = NUM.ZERO;
+    }
+    if (now - lastEmit < EMIT_PRESSURE_METRIC_LIMIT_MS || now - lastGlobalEmit < EMIT_PRESSURE_GLOBAL_LIMIT_MS) {
       return;
     }
+    GLOBAL_LAST_EMIT_TIMES.set(key, now);
+    globalLastEmitTime = now;
     if (!this.lastEmitTimes) {
       this.lastEmitTimes = new Map();
     }
     this.lastEmitTimes.set(key, now);
+    this.lastGlobalEmitTime = now;
     try {
       this.logger.info(METRICS_LOG_TAG.PRESSURE_POLICY, {
         nodeId: this.nodeId,

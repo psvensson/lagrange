@@ -239,6 +239,10 @@ export const SOURCE_PATH = Object.freeze({
   REPORT_SCENARIO_PRIORITY_RECOVERY_OBSERVATION:
     'report.scenarios[0].priorityRecoveryObservation',
   REPORT_SCENARIO_READINESS_FAILURE: 'report.scenarios[0].readinessFailure',
+  FAILURE_BUNDLE_CONTROL_PLANE_ACTIVE_GATE_PROGRESS:
+    'failureBundle.controlPlane.activeGateProgress',
+  FAILURE_BUNDLE_CONTROL_PLANE_ACTIVE_GATE_SNAPSHOT_COVERAGE:
+    'failureBundle.controlPlane.activeGateSnapshotCoverage',
   PRIORITY_RECOVERY_PROGRESS_CLASSES:
     'publicationConvergence.activeGate.progress.priorityRecoveryProgressClasses',
   PRIORITY_RECOVERY_PROGRESS_SUMMARY:
@@ -257,6 +261,7 @@ export const SOURCE_PATH = Object.freeze({
 export const SOURCE_FIELD = Object.freeze({
   ACTIVE_GATE: 'activeGate',
   ACTIVE_GATE_PROGRESS: 'activeGateProgress',
+  ACTIVE_GATE_SNAPSHOT_COVERAGE: 'activeGateSnapshotCoverage',
   BEST_PROGRESS: 'bestProgress',
   BLOCKING_BOUNDARY: 'blockingBoundary',
   BOUNDARY: 'boundary',

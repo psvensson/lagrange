@@ -62,6 +62,8 @@ function normalizeLifecyclePhase(phase) {
     normalizedPhase :
     null;
 }
+const PRIORITY_CONTROL_PLANE_RECOVERY_DIAGNOSTICS_UNAVAILABLE =
+  'priority_control_plane_recovery_diagnostics_unavailable';
 
 function normalizeReasonCodes(snapshot) {
   return normalizeReasonCodeArray(snapshot?.reasons);
@@ -145,11 +147,16 @@ const BOOTSTRAP_INIT_PRIORITY_BYPASS_REASONS = Object.freeze([
   LIFECYCLE_REASON.LEADER_METADATA_INCOMPLETE,
   LIFECYCLE_REASON.RUNTIME_WIRING_INCOMPLETE,
   LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+  PRIORITY_CONTROL_PLANE_RECOVERY_DIAGNOSTICS_UNAVAILABLE,
   LIFECYCLE_REASON.LOCAL_QUERY_TRANSPORT_NOT_READY,
 ]);
 const BOOTSTRAP_INIT_PRIORITY_BYPASS_REASON_SET = new Set(
   BOOTSTRAP_INIT_PRIORITY_BYPASS_REASONS,
 );
+const BOOTSTRAP_INIT_PRIORITY_RECOVERY_REASON_SET = new Set([
+  LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+  PRIORITY_CONTROL_PLANE_RECOVERY_DIAGNOSTICS_UNAVAILABLE,
+]);
 
 function canBypassBootstrapInitPriorityReasons(reasonCodes, snapshot) {
   if (!snapshot || snapshot.draining === true) {
@@ -163,8 +170,8 @@ function canBypassBootstrapInitPriorityReasons(reasonCodes, snapshot) {
   if (normalizedReasonCodes.length === NUM.ZERO) {
     return false;
   }
-  if (!normalizedReasonCodes.includes(
-    LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+  if (!normalizedReasonCodes.some((reason) =>
+    BOOTSTRAP_INIT_PRIORITY_RECOVERY_REASON_SET.has(reason),
   )) {
     return false;
   }

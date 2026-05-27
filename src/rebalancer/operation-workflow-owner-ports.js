@@ -653,9 +653,17 @@ async function dispatchOperationWorkflowLocalOwner(owner, operation, context) {
   }
 }
 
-async function wakeOperationWorkflowRemoteOwner(owner, operation) {
+async function wakeOperationWorkflowRemoteOwner(
+  owner,
+  operation,
+  context = OPERATION_WORKFLOW_OWNER_PORT_DEFAULT_CONTEXT,
+) {
+  const nowMs = Number.isFinite(context?.nowMs) ? context.nowMs : Date.now();
   const handoffTimeoutDecision =
-    owner.buildCoordinatorCreatedRemoteHandoffTimeoutDecision?.(operation);
+    owner.buildCoordinatorCreatedRemoteHandoffTimeoutDecision?.(
+      operation,
+      nowMs,
+    );
   if (handoffTimeoutDecision?.shouldStop === true) {
     owner.clearCreatedOperationHandoffRetry?.(operation.operationId);
     return false;
@@ -744,8 +752,8 @@ function createOperationWorkflowOwnerPorts(owner) {
     dispatchLocalOwner(operation, context) {
       return dispatchOperationWorkflowLocalOwner(owner, operation, context);
     },
-    wakeRemoteOwner(operation) {
-      return wakeOperationWorkflowRemoteOwner(owner, operation);
+    wakeRemoteOwner(operation, context) {
+      return wakeOperationWorkflowRemoteOwner(owner, operation, context);
     },
     advanceExistingOperation(operation, context) {
       return owner.reconcileOperationLifecycle(operation, context);

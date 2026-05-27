@@ -20,6 +20,15 @@ const BOOTSTRAP_INIT_PRIORITY_RECOVERY_REASONS = Object.freeze([
   LIFECYCLE_REASON.RUNTIME_WIRING_INCOMPLETE,
   LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
 ]);
+const PRIORITY_CONTROL_PLANE_RECOVERY_DIAGNOSTICS_UNAVAILABLE =
+  'priority_control_plane_recovery_diagnostics_unavailable';
+const BOOTSTRAP_INIT_DIAGNOSTICS_RECOVERY_REASONS = Object.freeze([
+  LIFECYCLE_REASON.BOOTSTRAP_PHASE_INCOMPLETE,
+  LIFECYCLE_REASON.SQL_ENGINE_UNAVAILABLE,
+  LIFECYCLE_REASON.LEADER_METADATA_INCOMPLETE,
+  LIFECYCLE_REASON.RUNTIME_WIRING_INCOMPLETE,
+  PRIORITY_CONTROL_PLANE_RECOVERY_DIAGNOSTICS_UNAVAILABLE,
+]);
 const STARTUP_AUTHORITY_PUBLICATION_UNPUBLISHED = 'unpublished';
 
 function createCache(rowsByTable = {}) {
@@ -157,6 +166,7 @@ test('StartupRecoveryCoordinator treats seed-authorized bootstrap INIT as contro
   });
 
   const result = coordinator.evaluate({
+    partitionId: 'control_plane_publications-p1',
     allowBootstrapInitPriorityBypass: true,
     startupAuthority: {
       state: STARTUP_AUTHORITY_STATE.SEED_LOCALLY_READY_UNPUBLISHED,
@@ -171,6 +181,39 @@ test('StartupRecoveryCoordinator treats seed-authorized bootstrap INIT as contro
     STARTUP_RECOVERY_STAGE.CONTROL_PLANE_RECOVERY_READY,
   );
   t.equal(result.recoveryBlocked, false);
+  t.end();
+});
+
+test('StartupRecoveryCoordinator treats seed-authorized bootstrap INIT diagnostics lag as recovery-ready', async (t) => {
+  const coordinator = new StartupRecoveryCoordinator({
+    readinessState: {
+      evaluate() {
+        return {
+          ready: false,
+          phase: 'INIT',
+          reasons: BOOTSTRAP_INIT_DIAGNOSTICS_RECOVERY_REASONS,
+        };
+      },
+    },
+  });
+
+  const result = coordinator.evaluate({
+    partitionId: 'control_plane_publications-p1',
+    allowBootstrapInitPriorityBypass: true,
+    startupAuthority: {
+      state: STARTUP_AUTHORITY_STATE.SEED_LOCALLY_READY_UNPUBLISHED,
+      authorityAvailable: true,
+      publicationObservationState: STARTUP_AUTHORITY_PUBLICATION_UNPUBLISHED,
+    },
+  });
+
+  t.equal(result.controlPlaneRecoveryReady, true);
+  t.equal(
+    result.recoveryStage,
+    STARTUP_RECOVERY_STAGE.CONTROL_PLANE_RECOVERY_READY,
+  );
+  t.equal(result.recoveryBlocked, false);
+  t.equal(result.shouldBypassLocalPriorityControlPlaneStartupReadiness, true);
   t.end();
 });
 
