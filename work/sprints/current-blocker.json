@@ -2,184 +2,36 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-owner-boundary-progress-contract-transformation.md",
-  "package": "work/packages/active-20260527-rolling-restart-startup-active-gate-owner-snapshot-coverage.md",
-  "status": "active",
-  "lane": "diagnostic-classification",
-  "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-progress-contract-proof.report.json",
+  "package": "none",
+  "status": "none",
+  "lane": "none",
+  "scenario": "none",
+  "artifact": "none",
   "playback": "none",
-  "owner": "startup_active_gate_owner",
-  "boundary": "snapshot_coverage",
-  "dominantReason": "snapshot_coverage_incomplete",
-  "currentState": "Scaffolded from representative evidence for active_gate_snapshot_coverage.",
-  "nextAction": "Triage active_gate_snapshot_coverage with combined scenario evidence before runtime edits.",
-  "proof": [
-    "falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-progress-contract-proof.report.json",
-    "regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-progress-contract-proof.report.json --markdown",
-    "supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-progress-contract-proof.report.json --markdown"
-  ],
+  "owner": "none",
+  "boundary": "none",
+  "dominantReason": "none",
+  "currentState": "No active work package. Start a new package when implementation resumes.",
+  "nextAction": "Create or activate one focused package for the next executable concern.",
+  "proof": [],
   "writeScope": [],
-  "handoffFiles": [
-    "test-output/reports/rolling-restart-progress-contract-proof.report.json"
+  "handoffFiles": [],
+  "generatedFiles": [
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md"
   ],
-  "generatedFiles": [],
   "candidateRuntimeFiles": [],
-  "commitScope": [
-    "work/packages/active-20260527-rolling-restart-startup-active-gate-owner-snapshot-coverage.md"
-  ],
+  "commitScope": [],
   "touchedFiles": [],
-  "theoryLedgerRefs": [],
-  "modelFit": {
-    "packageClass": "diagnostic-classification",
-    "intendedMinimumModel": "gpt-5.3-codex",
-    "scopeShape": "diagnostic-owner-evidence/current-artifact",
-    "outputProfile": "medium",
-    "ambiguityScore": 1,
-    "escalationTriggers": [
-      "owned files expand beyond this package",
-      "a frozen decision must be reopened"
-    ]
-  },
-  "representativeResidual": {
-    "status": "classification-only",
-    "scenario": "rolling-restart",
-    "artifact": "test-output/reports/rolling-restart-progress-contract-proof.report.json",
-    "frontier": "snapshot_coverage",
-    "owner": "startup_active_gate_owner",
-    "boundary": "snapshot_coverage",
-    "dominantReason": "snapshot_coverage_incomplete",
-    "nextAction": "Triage active_gate_snapshot_coverage with combined scenario evidence before runtime edits."
-  },
-  "causalGovernance": {
-    "hypothesis": "After converted owner boundaries, rolling-restart evidence should be green or route to one explicit progress-contract frontier instead of an ambiguous stranded state.",
-    "stopConditionCheck": "npm run analyze:causal-model -- test-output/reports/rolling-restart-progress-contract-proof.report.json",
-    "expectedCausalModelChange": "The representative rolling-restart proof is green, reduced, migrated to one concrete frontier, or classified as an architecture gap.",
-    "representativeOutcome": "migrated",
-    "causalDebt": "Rolling restart pre-restart/restart sequencing stranded progress without explicit contracts.",
-    "crossBoundaryReview": "Review with all transformed boundaries: workflow progress, snapshot coverage, and startup readiness."
-  },
-  "scenarioCausalClosure": {
-    "referenceScenarioOrProbe": "rolling-restart progress contract representative proof",
-    "phaseChain": [
-      "diagnostics cutover",
-      "startup readiness conversion",
-      "workflow progress conversion",
-      "active-gate snapshot coverage conversion"
-    ],
-    "currentFirstFrontier": "startup_active_gate_owner / snapshot_coverage",
-    "knownDownstreamBlockers": [
-      "representative scenario progress-contract validation"
-    ],
-    "missingCausalEdge": "rolling-restart scenario uses progress contracts",
-    "missingCausalEdgeProbe": "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-progress-contract-proof.report.json --verbose",
-    "falsifyingProbe": "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-progress-contract-proof.report.json --verbose",
-    "boundedProgressProof": "Running the representative rolling-restart scenario proves the system either reaches green or terminates cleanly at a progress contract edge with bounded retry and timeout controls.",
-    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-progress-contract-proof.report.json",
-    "expectedObservableTransition": "Ambiguous stranded progress states are resolved into progress contracts.",
-    "maxProgressBound": "representative scenario release gate run",
-    "sameFrontierFallback": "autonomous architecture experiment",
-    "expectedNextFrontier": "startup_active_gate_owner / snapshot_coverage",
-    "resultClassification": "pending-before-probe",
-    "stopCondition": "representative-green",
-    "recentFrontierHistory": [
-      "done-20260527-diagnostics-progress-contract-consumer-cutover.md / diagnostics_owner / topology_convergence_progress_contract / migrated",
-      "done-20260527-startup-readiness-progress-contract-conversion.md / startup_readiness_owner / startup_support_evidence / migrated",
-      "done-20260527-operation-workflow-progress-contract-conversion.md / operation_workflow_owner / workflow_progress / migrated",
-      "done-20260527-active-gate-snapshot-coverage-progress-contract-conversion.md / startup_active_gate_owner / snapshot_coverage / migrated"
-    ],
-    "oscillationCheck": "oscillations are guarded by transformed progress contracts",
-    "handoffInvariant": "no implementation edits are allowed under scenario-release-gate without a child package"
-  },
+  "modelFit": {},
+  "representativeResidual": {},
+  "causalGovernance": {},
+  "scenarioCausalClosure": {},
   "observablePrediction": {},
   "experimentOutcome": {},
-  "rerunDecision": {
-    "sourceArtifact": "test-output/reports/rolling-restart-progress-contract-proof.report.json",
-    "routeOwner": "startup_active_gate_owner",
-    "routeBoundary": "snapshot_coverage",
-    "routeDominantReason": "snapshot_coverage_incomplete",
-    "routeCausalOutcome": "migrate_owner_boundary",
-    "stopMode": "owner_boundary_migration",
-    "nextLane": "diagnostic-classification",
-    "expectedDelta": "Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.",
-    "requiredRefreshCommands": [
-      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-progress-contract-proof.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason snapshot_coverage_incomplete",
-      "update Sprint Strategy Brief and Current Edge Card from the route result",
-      "npm run work:repair",
-      "npm run work:validate -- --entry",
-      "npm run work:validate -- --pre-impl"
-    ]
-  },
-  "classificationEfficiency": {
-    "defaultMode": "separate-package-approved",
-    "separatePackageReason": "successor-selection",
-    "artifactBudget": "one-artifact",
-    "proofCommandBudget": "two-or-three-canonical-commands",
-    "commands": [
-      "npm run work:evidence-summary -- test-output/reports/rolling-restart-progress-contract-proof.report.json",
-      "npm run work:scenario-triage -- test-output/reports/rolling-restart-progress-contract-proof.report.json --markdown",
-      "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-progress-contract-proof.report.json --markdown"
-    ],
-    "decisionRecord": "Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.",
-    "successorAction": "rerun-representative-evidence",
-    "runtimePromotionRule": "When canonical owner and boundary are stable, prefer a runtime-owner-boundary successor and keep runtime files in candidateRuntimeFiles until that package activates them. If the representative route is same-frontier with no reduction or an architecture gap, open an autonomous architecture experiment before more local runtime work."
-  },
-  "architectureDecisionGate": {
-    "status": "watching",
-    "trigger": "frontier-oscillation",
-    "triggerEvidence": [
-      "frontier returned to a recently closed related boundary",
-      "work/packages/done-20260527-rolling-restart-startup-active-gate-owner-snapshot-coverage.md / startup_active_gate_owner / snapshot_coverage / migrated",
-      "work/packages/done-20260527-rolling-restart-startup-readiness-owner-startup-support-evid.md / startup_readiness_owner / startup_support_evidence / migrated",
-      "work/packages/done-20260527-rolling-restart-startup-readiness-admin-reachability-support.md / startup_readiness_owner / startup_support_evidence / migrated"
-    ],
-    "choices": [
-      {
-        "id": "continue-local-proof",
-        "summary": "Continue with a bounded local proof if the missing edge stays inside this owner boundary.",
-        "route": "continue-local-proof",
-        "proof": [
-          "falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-progress-contract-proof.report.json",
-          "regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-progress-contract-proof.report.json --markdown",
-          "supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-progress-contract-proof.report.json --markdown",
-          "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-progress-contract-proof.report.json --verbose"
-        ]
-      },
-      {
-        "id": "migrate-owner-boundary",
-        "summary": "Migrate the active package to the owner boundary named by the first frontier evidence.",
-        "route": "owner-boundary-migration",
-        "proof": [
-          "falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-progress-contract-proof.report.json",
-          "regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-progress-contract-proof.report.json --markdown",
-          "supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-progress-contract-proof.report.json --markdown",
-          "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-progress-contract-proof.report.json --verbose"
-        ]
-      },
-      {
-        "id": "open-architecture-package",
-        "summary": "Open a bounded autonomous architecture experiment for the missing owner contract.",
-        "route": "architecture-package",
-        "proof": [
-          "falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-progress-contract-proof.report.json",
-          "regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-progress-contract-proof.report.json --markdown",
-          "supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-progress-contract-proof.report.json --markdown",
-          "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-progress-contract-proof.report.json --verbose"
-        ]
-      },
-      {
-        "id": "human-escalation",
-        "summary": "Escalate to a human only when evidence is contradictory, policy-blocked, credential-blocked, or unavailable.",
-        "route": "human-escalation",
-        "proof": [
-          "falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-progress-contract-proof.report.json",
-          "regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-progress-contract-proof.report.json --markdown",
-          "supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-progress-contract-proof.report.json --markdown",
-          "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-progress-contract-proof.report.json --verbose"
-        ]
-      }
-    ],
-    "selectedChoice": null,
-    "nextAction": "Watch for repeated frontier oscillation; open an autonomous architecture experiment if another local proof returns here unchanged."
-  },
-  "predecessor": null
+  "rerunDecision": {},
+  "classificationEfficiency": {},
+  "architectureDecisionGate": {},
+  "predecessor": null,
+  "theoryLedgerRefs": []
 }

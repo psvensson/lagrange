@@ -57,7 +57,7 @@ Complete means:
 ```text
 Representative artifact: test-output/reports/rolling-restart-progress-contract-proof.report.json
 Visible first frontier: startup_active_gate_owner / snapshot_coverage
-Active package: work/packages/active-20260527-rolling-restart-startup-active-gate-owner-snapshot-coverage.md
+Active package: work/packages/done-20260527-rolling-restart-startup-active-gate-owner-snapshot-coverage-triage.md
 Active package owner: startup_active_gate_owner
 Active package boundary: snapshot_coverage
 Selected cause: snapshot_coverage_incomplete
@@ -67,7 +67,7 @@ Causal outcome: migrate_owner_boundary
 Architecture gate: watching / unknown
 Expected delta: Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.
 Current state: Scaffolded from representative evidence for active_gate_snapshot_coverage.
-Allowed edits: unknown
+Allowed edits: work/packages/done-20260527-rolling-restart-progress-contract-representative-proof.md
 Candidate runtime files: unknown
 Forbidden edits: no implementation edits are allowed under scenario-release-gate without a child package
 Required latest proof: falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-progress-contract-proof.report.json, regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-progress-contract-proof.report.json --markdown, supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-progress-contract-proof.report.json --markdown

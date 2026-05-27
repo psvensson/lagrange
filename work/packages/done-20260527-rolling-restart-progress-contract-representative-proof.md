@@ -16,7 +16,7 @@
     "currentState": "Created todo package for the representative release-gate checkpoint after contract conversions; further local patching is not authorized until rolling-restart is routed.",
     "nextAction": "Run rolling-restart after converted owner boundaries and route the artifact to green, reduced, migrated, or architecture-gap.",
     "closed": "2026-05-27",
-    "successor": "work/packages/active-20260527-rolling-restart-startup-active-gate-owner-snapshot-coverage.md"
+    "successor": "work/packages/done-20260527-rolling-restart-startup-active-gate-owner-snapshot-coverage-triage.md"
   },
   "scope": {
     "writeScope": [
