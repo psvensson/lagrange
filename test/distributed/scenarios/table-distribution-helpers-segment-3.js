@@ -110,6 +110,7 @@ const {
   forceRepairControlSnapshotAcrossQueryNodes,
   queryControlSingle,
   queryControlSingleWithProgressRetry,
+  queryTableDistribution,
   rowsFromResult,
   escapeSql,
   resolveBenchmarkTableName,

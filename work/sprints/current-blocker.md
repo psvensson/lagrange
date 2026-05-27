@@ -4,65 +4,68 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: No active work package. Start a new package when implementation resumes.
+Theory under test: Selected snapshot source remains admin-reachable but repair-deferred, and active-gate snapshot coverage has no detected owner-recovery handoff to rearm or promote an alternate witness.
 
-Causal question: none
+Causal question: Active-gate snapshot coverage has no selected architecture contract for repair-deferred selected source with no owner-recovery handoff detected.
 
-Implementation slice: Create or activate one focused package for the next executable concern.
+Implementation slice: Triage active_gate_snapshot_coverage with combined scenario evidence before runtime edits.
 
 Implementation files:
 
 1. None recorded
 
-Expected implementation delta: unknown
+Expected implementation delta: The architecture package records whether the missing active-gate contract is repair-deferred handoff rearming, alternate witness promotion, or an architecture stop.
 
-Falsifying probe: unknown
+Falsifying probe: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json --handoff-probe
 
-Stop rule: unknown
+Stop rule: If the architecture proof cannot distinguish a successor contract, record architecture-gap stop instead of opening another local runtime package.
 
 Sprint: `work/sprints/active-2026-q2-rolling-restart-active-gate-theory-loop-resume.md`
 
-Package: `none`
+Package: `work/packages/active-20260527-rolling-restart-startup-active-gate-owner-snapshot-coverage.md`
 
-Workflow lane: `none`
+Workflow lane: `experiment`
 
-Scenario: `none`
+Scenario: `rolling-restart`
 
-Artifact: `none`
+Artifact: `test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json`
 
 Playback: `none`
 
 ## Boundary
 
-Owner: `none`
+Owner: `startup_active_gate_owner`
 
-Boundary: `none`
+Boundary: `snapshot_coverage`
 
-Dominant reason: `none`
+Dominant reason: `snapshot_coverage_incomplete`
 
-Current state: No active work package. Start a new package when implementation resumes.
+Current state: Representative evidence selects startup_active_gate_owner / snapshot_coverage at active_gate_snapshot_coverage; the package records the bounded next decision before runtime edits.
 
 ## Next Action
 
-Create or activate one focused package for the next executable concern.
+Triage active_gate_snapshot_coverage with combined scenario evidence before runtime edits.
 
 ## Proof Ladder
 
-1. None recorded
+1. `falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json`
+2. `regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json --markdown`
+3. `supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json --markdown`
 
 ## Model Fit
 
-Package class: `unknown`
+Package class: `experiment`
 
-Intended minimum model: `unknown`
+Intended minimum model: `gpt-5.3-codex-spark`
 
-Scope shape: `unknown`
+Scope shape: `leaf-slice`
 
-Output profile: `unknown`
+Output profile: `medium`
 
 Escalation triggers:
 
-1. None recorded
+1. `owned files expand beyond this package`
+2. `a frozen decision must be reopened`
 
 ## Theory Ledger References
 
@@ -88,51 +91,55 @@ Next action: `unknown`
 
 ## Causal Governance
 
-Causal hypothesis: `unknown`
+Causal hypothesis: `Selected snapshot source remains admin-reachable but repair-deferred, and active-gate snapshot coverage has no detected owner-recovery handoff to rearm or promote an alternate witness.`
 
-Stop-condition check: `unknown`
+Stop-condition check: `Run npm run analyze:causal-model on test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json, then use the handoff probe and scenario route before any runtime edits; select one architecture successor or stop.`
 
-Expected causal-model change: `unknown`
+Expected causal-model change: `The architecture package records whether the missing active-gate contract is repair-deferred handoff rearming, alternate witness promotion, or an architecture stop.`
 
-Representative outcome: `unknown`
+Representative outcome: `pending-before-rerun`
 
-Causal debt: `unknown`
+Causal debt: `Fresh representative evidence repeated the table partition visibility timeout after focused bootstrap proof, while canonical handoff evidence reports selectedSnapshotObservationState=deferred_refresh, runtimePromotionAllowed=false, pendingRecoveryCount=0, and snapshotCoverageNodeCount=1/5.`
 
-Cross-boundary review: `unknown`
+Cross-boundary review: `Do not patch benchmark table bootstrap, startup readiness, priority recovery, or timeout budgets in this architecture package; runtime files remain candidates until the contract decision is selected.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `unknown`
+Reference scenario/probe: `rolling-restart active-gate snapshot coverage repair-deferred architecture`
 
 Phase chain:
 
-1. None recorded
+1. `owner-recovery reconcile cleared active_gate_timed_out`
+2. `benchmark table bootstrap local proof passed`
+3. `representative rerun repeated benchmark_events partition visibility timeout`
+4. `handoff probe routed the missing progress back to active_gate_snapshot_coverage with repair_deferred selected snapshot observation`
 
-Current first frontier: `unknown`
+Current first frontier: `startup_active_gate_owner / snapshot_coverage / snapshot_coverage_incomplete`
 
 Known downstream blockers:
 
-1. None recorded
+1. `rolling restart cannot establish load admission while selected snapshot coverage stays 1/5`
+2. `table bootstrap reports no repair attempted because the selected admin path remains repair-deferred`
 
-Missing causal edge: `unknown`
+Missing causal edge: `Active-gate snapshot coverage has no selected architecture contract for repair-deferred selected source with no owner-recovery handoff detected.`
 
-Missing causal edge probe: `unknown`
+Missing causal edge probe: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json --handoff-probe`
 
-Bounded progress proof: `unknown`
+Bounded progress proof: `The experiment must select one implementable active-gate repair-deferred handoff contract with a concrete wake, retry, reconcile, timer, or bounded advance mechanism, or record an architecture stop before another runtime patch.`
 
-Bounded progress proof artifact: `unknown`
+Bounded progress proof artifact: `test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json`
 
-Expected observable transition: `unknown`
+Expected observable transition: `The loop stops same-slice runtime edits and promotes one architecture-selected successor or architecture stop.`
 
-Max progress bound: `unknown`
+Max progress bound: `one architecture experiment package; no runtime edits before selection`
 
-Same-frontier fallback: `unknown`
+Same-frontier fallback: `If the architecture proof cannot distinguish a successor contract, record architecture-gap stop instead of opening another local runtime package.`
 
-Expected next frontier: `unknown`
+Expected next frontier: `selected active-gate runtime successor, architecture-gap stop, or representative-green after a later runtime package`
 
-Result classification: `unknown`
+Result classification: `pending-before-probe`
 
-Stop condition: `unknown`
+Stop condition: `continue-local-fix`
 
 Recent frontier history:
 
@@ -144,15 +151,15 @@ Handoff invariant: `unknown`
 
 ## Observable Prediction
 
-Metric: `unknown`
+Metric: `Architecture package selects one implementable active-gate repair-deferred handoff contract or records an architecture stop before another runtime patch.`
 
-Predicted: `unknown`
+Predicted: `Architecture package selects one implementable active-gate repair-deferred handoff contract or records an architecture stop before another runtime patch.`
 
-Observed: `unknown`
+Observed: `pending-before-observation`
 
-Accuracy: `unknown`
+Accuracy: `pending-before-observation`
 
-Evidence: `unknown`
+Evidence: `pending-before-observation`
 
 Metric delta: `unknown`
 
@@ -170,63 +177,75 @@ Evidence: `unknown`
 
 ## Rerun Decision
 
-Source artifact: `unknown`
+Source artifact: `test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json`
 
-Route owner: `unknown`
+Route owner: `startup_active_gate_owner`
 
-Route boundary: `unknown`
+Route boundary: `snapshot_coverage`
 
-Route dominant reason: `unknown`
+Route dominant reason: `snapshot_coverage_incomplete`
 
-Route causal outcome: `unknown`
+Route causal outcome: `migrate_owner_boundary`
 
-Stop mode: `unknown`
+Stop mode: `owner_boundary_migration`
 
-Next lane: `unknown`
+Next lane: `experiment`
 
-Expected delta: `unknown`
+Expected delta: `Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.`
 
 Required refresh commands:
 
-1. None recorded
+1. `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason snapshot_coverage_incomplete`
+2. `update Sprint Strategy Brief and Current Edge Card from the route result`
+3. `npm run work:repair`
+4. `npm run work:validate -- --entry`
+5. `npm run work:validate -- --pre-impl`
 
 ## Classification Efficiency
 
-Default mode: `unknown`
+Default mode: `inline-gate-default`
 
-Separate package reason: `unknown`
+Separate package reason: `successor-selection`
 
-Artifact budget: `unknown`
+Artifact budget: `one-artifact`
 
-Proof command budget: `unknown`
+Proof command budget: `two-or-three-canonical-commands`
 
 Commands:
 
-1. None recorded
+1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json`
+2. `npm run work:scenario-triage -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json --markdown`
+3. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json --markdown`
 
-Decision record: `unknown`
+Decision record: `Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.`
 
-Successor action: `unknown`
+Successor action: `open-architecture-experiment`
 
-Runtime promotion rule: `unknown`
+Runtime promotion rule: `When canonical owner and boundary are stable, prefer a runtime-owner-boundary successor and keep runtime files in candidateRuntimeFiles until that package activates them. If the representative route is same-frontier with no reduction or an architecture gap, open an autonomous architecture experiment before more local runtime work.`
 
 ## Architecture Decision Gate
 
-Status: `unknown`
+Status: `watching`
 
-Trigger: `unknown`
+Trigger: `frontier-oscillation`
 
 Trigger evidence:
 
-1. None recorded
+1. `frontier returned to a recently closed related boundary`
+2. `work/packages/done-20260527-rolling-restart-startup-active-gate-owner-snapshot-coverage.md / startup_active_gate_owner / snapshot_coverage / migrated`
+3. `work/packages/done-20260527-rolling-restart-startup-readiness-owner-startup-support-evid.md / startup_readiness_owner / startup_support_evidence / migrated`
+4. `work/packages/done-20260527-rolling-restart-startup-readiness-admin-reachability-support.md / startup_readiness_owner / startup_support_evidence / migrated`
 
 Choices:
 
-1. None recorded
+1. `continue-local-proof` route=`continue-local-proof` - Continue with a bounded local proof if the missing edge stays inside this owner boundary.
+2. `migrate-owner-boundary` route=`owner-boundary-migration` - Migrate the active package to the owner boundary named by the first frontier evidence.
+3. `open-architecture-package` route=`architecture-package` - Open a bounded autonomous architecture experiment for the missing owner contract.
+4. `human-escalation` route=`human-escalation` - Escalate to a human only when evidence is contradictory, policy-blocked, credential-blocked, or unavailable.
 
 Selected choice: `unknown`
 
-Gate next action: unknown
+Gate next action: Watch for repeated frontier oscillation; open an autonomous architecture experiment if another local proof returns here unchanged.
 
 ## Scope
 
@@ -236,12 +255,11 @@ Write scope:
 
 Handoff files:
 
-1. None recorded
+1. `test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json`
 
 Generated files:
 
-1. `work/sprints/current-blocker.json`
-2. `work/sprints/current-blocker.md`
+1. None recorded
 
 Candidate runtime files:
 
@@ -249,7 +267,7 @@ Candidate runtime files:
 
 Commit scope:
 
-1. None recorded
+1. `work/packages/active-20260527-rolling-restart-startup-active-gate-owner-snapshot-coverage.md`
 
 Legacy touched files:
 

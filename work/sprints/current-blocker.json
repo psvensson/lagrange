@@ -2,36 +2,174 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-rolling-restart-active-gate-theory-loop-resume.md",
-  "package": "none",
-  "status": "none",
-  "lane": "none",
-  "scenario": "none",
-  "artifact": "none",
+  "package": "work/packages/active-20260527-rolling-restart-startup-active-gate-owner-snapshot-coverage.md",
+  "status": "active",
+  "lane": "experiment",
+  "scenario": "rolling-restart",
+  "artifact": "test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json",
   "playback": "none",
-  "owner": "none",
-  "boundary": "none",
-  "dominantReason": "none",
-  "currentState": "No active work package. Start a new package when implementation resumes.",
-  "nextAction": "Create or activate one focused package for the next executable concern.",
-  "proof": [],
-  "writeScope": [],
-  "handoffFiles": [],
-  "generatedFiles": [
-    "work/sprints/current-blocker.json",
-    "work/sprints/current-blocker.md"
+  "owner": "startup_active_gate_owner",
+  "boundary": "snapshot_coverage",
+  "dominantReason": "snapshot_coverage_incomplete",
+  "currentState": "Representative evidence selects startup_active_gate_owner / snapshot_coverage at active_gate_snapshot_coverage; the package records the bounded next decision before runtime edits.",
+  "nextAction": "Triage active_gate_snapshot_coverage with combined scenario evidence before runtime edits.",
+  "proof": [
+    "falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json",
+    "regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json --markdown",
+    "supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json --markdown"
   ],
+  "writeScope": [],
+  "handoffFiles": [
+    "test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json"
+  ],
+  "generatedFiles": [],
   "candidateRuntimeFiles": [],
-  "commitScope": [],
+  "commitScope": [
+    "work/packages/active-20260527-rolling-restart-startup-active-gate-owner-snapshot-coverage.md"
+  ],
   "touchedFiles": [],
-  "modelFit": {},
+  "theoryLedgerRefs": [],
+  "modelFit": {
+    "packageClass": "experiment",
+    "intendedMinimumModel": "gpt-5.3-codex-spark",
+    "scopeShape": "leaf-slice",
+    "outputProfile": "medium",
+    "ambiguityScore": 1,
+    "escalationTriggers": [
+      "owned files expand beyond this package",
+      "a frozen decision must be reopened"
+    ]
+  },
   "representativeResidual": {},
-  "causalGovernance": {},
-  "scenarioCausalClosure": {},
-  "observablePrediction": {},
+  "causalGovernance": {
+    "hypothesis": "Selected snapshot source remains admin-reachable but repair-deferred, and active-gate snapshot coverage has no detected owner-recovery handoff to rearm or promote an alternate witness.",
+    "stopConditionCheck": "Run npm run analyze:causal-model on test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json, then use the handoff probe and scenario route before any runtime edits; select one architecture successor or stop.",
+    "expectedCausalModelChange": "The architecture package records whether the missing active-gate contract is repair-deferred handoff rearming, alternate witness promotion, or an architecture stop.",
+    "representativeOutcome": "pending-before-rerun",
+    "causalDebt": "Fresh representative evidence repeated the table partition visibility timeout after focused bootstrap proof, while canonical handoff evidence reports selectedSnapshotObservationState=deferred_refresh, runtimePromotionAllowed=false, pendingRecoveryCount=0, and snapshotCoverageNodeCount=1/5.",
+    "crossBoundaryReview": "Do not patch benchmark table bootstrap, startup readiness, priority recovery, or timeout budgets in this architecture package; runtime files remain candidates until the contract decision is selected."
+  },
+  "scenarioCausalClosure": {
+    "referenceScenarioOrProbe": "rolling-restart active-gate snapshot coverage repair-deferred architecture",
+    "phaseChain": [
+      "owner-recovery reconcile cleared active_gate_timed_out",
+      "benchmark table bootstrap local proof passed",
+      "representative rerun repeated benchmark_events partition visibility timeout",
+      "handoff probe routed the missing progress back to active_gate_snapshot_coverage with repair_deferred selected snapshot observation"
+    ],
+    "currentFirstFrontier": "startup_active_gate_owner / snapshot_coverage / snapshot_coverage_incomplete",
+    "knownDownstreamBlockers": [
+      "rolling restart cannot establish load admission while selected snapshot coverage stays 1/5",
+      "table bootstrap reports no repair attempted because the selected admin path remains repair-deferred"
+    ],
+    "missingCausalEdge": "Active-gate snapshot coverage has no selected architecture contract for repair-deferred selected source with no owner-recovery handoff detected.",
+    "missingCausalEdgeProbe": "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json --handoff-probe",
+    "falsifyingProbe": "npm run work:scenario-route -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason snapshot_coverage_incomplete --explain active_gate_snapshot_coverage --markdown",
+    "boundedProgressProof": "The experiment must select one implementable active-gate repair-deferred handoff contract with a concrete wake, retry, reconcile, timer, or bounded advance mechanism, or record an architecture stop before another runtime patch.",
+    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json",
+    "expectedObservableTransition": "The loop stops same-slice runtime edits and promotes one architecture-selected successor or architecture stop.",
+    "maxProgressBound": "one architecture experiment package; no runtime edits before selection",
+    "sameFrontierFallback": "If the architecture proof cannot distinguish a successor contract, record architecture-gap stop instead of opening another local runtime package.",
+    "expectedNextFrontier": "selected active-gate runtime successor, architecture-gap stop, or representative-green after a later runtime package",
+    "resultClassification": "pending-before-probe",
+    "stopCondition": "continue-local-fix"
+  },
+  "observablePrediction": {
+    "metric": "Architecture package selects one implementable active-gate repair-deferred handoff contract or records an architecture stop before another runtime patch.",
+    "predicted": "Architecture package selects one implementable active-gate repair-deferred handoff contract or records an architecture stop before another runtime patch.",
+    "observed": "pending-before-observation",
+    "accuracy": "pending-before-observation",
+    "evidence": "pending-before-observation"
+  },
   "experimentOutcome": {},
-  "rerunDecision": {},
-  "classificationEfficiency": {},
-  "architectureDecisionGate": {},
-  "predecessor": null,
-  "theoryLedgerRefs": []
+  "rerunDecision": {
+    "sourceArtifact": "test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json",
+    "routeOwner": "startup_active_gate_owner",
+    "routeBoundary": "snapshot_coverage",
+    "routeDominantReason": "snapshot_coverage_incomplete",
+    "routeCausalOutcome": "migrate_owner_boundary",
+    "stopMode": "owner_boundary_migration",
+    "nextLane": "experiment",
+    "expectedDelta": "Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.",
+    "requiredRefreshCommands": [
+      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason snapshot_coverage_incomplete",
+      "update Sprint Strategy Brief and Current Edge Card from the route result",
+      "npm run work:repair",
+      "npm run work:validate -- --entry",
+      "npm run work:validate -- --pre-impl"
+    ]
+  },
+  "classificationEfficiency": {
+    "defaultMode": "inline-gate-default",
+    "separatePackageReason": "successor-selection",
+    "artifactBudget": "one-artifact",
+    "proofCommandBudget": "two-or-three-canonical-commands",
+    "commands": [
+      "npm run work:evidence-summary -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json",
+      "npm run work:scenario-triage -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json --markdown",
+      "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json --markdown"
+    ],
+    "decisionRecord": "Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.",
+    "successorAction": "open-architecture-experiment",
+    "runtimePromotionRule": "When canonical owner and boundary are stable, prefer a runtime-owner-boundary successor and keep runtime files in candidateRuntimeFiles until that package activates them. If the representative route is same-frontier with no reduction or an architecture gap, open an autonomous architecture experiment before more local runtime work."
+  },
+  "architectureDecisionGate": {
+    "status": "watching",
+    "trigger": "frontier-oscillation",
+    "triggerEvidence": [
+      "frontier returned to a recently closed related boundary",
+      "work/packages/done-20260527-rolling-restart-startup-active-gate-owner-snapshot-coverage.md / startup_active_gate_owner / snapshot_coverage / migrated",
+      "work/packages/done-20260527-rolling-restart-startup-readiness-owner-startup-support-evid.md / startup_readiness_owner / startup_support_evidence / migrated",
+      "work/packages/done-20260527-rolling-restart-startup-readiness-admin-reachability-support.md / startup_readiness_owner / startup_support_evidence / migrated"
+    ],
+    "choices": [
+      {
+        "id": "continue-local-proof",
+        "summary": "Continue with a bounded local proof if the missing edge stays inside this owner boundary.",
+        "route": "continue-local-proof",
+        "proof": [
+          "falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json",
+          "regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json --markdown",
+          "supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json --markdown",
+          "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json --handoff-probe"
+        ]
+      },
+      {
+        "id": "migrate-owner-boundary",
+        "summary": "Migrate the active package to the owner boundary named by the first frontier evidence.",
+        "route": "owner-boundary-migration",
+        "proof": [
+          "falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json",
+          "regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json --markdown",
+          "supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json --markdown",
+          "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json --handoff-probe"
+        ]
+      },
+      {
+        "id": "open-architecture-package",
+        "summary": "Open a bounded autonomous architecture experiment for the missing owner contract.",
+        "route": "architecture-package",
+        "proof": [
+          "falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json",
+          "regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json --markdown",
+          "supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json --markdown",
+          "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json --handoff-probe"
+        ]
+      },
+      {
+        "id": "human-escalation",
+        "summary": "Escalate to a human only when evidence is contradictory, policy-blocked, credential-blocked, or unavailable.",
+        "route": "human-escalation",
+        "proof": [
+          "falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json",
+          "regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json --markdown",
+          "supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json --markdown",
+          "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json --handoff-probe"
+        ]
+      }
+    ],
+    "selectedChoice": null,
+    "nextAction": "Watch for repeated frontier oscillation; open an autonomous architecture experiment if another local proof returns here unchanged."
+  },
+  "predecessor": null
 }

@@ -28,22 +28,22 @@ Resume the rolling-restart theory loop from the latest post-stale-cache represen
 ## Current Edge Card
 
 ```text
-Representative artifact: test-output/reports/rolling-restart-active-gate-owner-recovery-bounded-return-runtime-20260527T213301Z.report.json
-Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / snapshot_coverage_incomplete
-Active package: work/packages/done-20260527-rolling-restart-active-gate-snapshot-coverage-post-owner-recovery-route.md
+Representative artifact: test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json
+Visible first frontier: startup_active_gate_owner / snapshot_coverage / snapshot_coverage_incomplete
+Active package: work/packages/active-20260527-rolling-restart-startup-active-gate-owner-snapshot-coverage.md
 Active package owner: startup_active_gate_owner
 Active package boundary: snapshot_coverage
 Selected cause: snapshot_coverage_incomplete
-Required action: Close as migrated and activate the benchmark table bootstrap primary-rotation runtime successor before more rolling-restart runtime edits.
-Representative status: migrated
+Required action: Triage active_gate_snapshot_coverage with combined scenario evidence before runtime edits.
+Representative status: unknown
 Causal outcome: migrate_owner_boundary
 Architecture gate: watching / unknown
 Expected delta: Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.
 Current state: Representative evidence selects startup_active_gate_owner / snapshot_coverage at active_gate_snapshot_coverage; the package records the bounded next decision before runtime edits.
-Allowed edits: work/packages/done-20260527-rolling-restart-active-gate-snapshot-coverage-post-owner-recovery-route.md, work/packages/todo-20260527-rolling-restart-benchmark-table-bootstrap-primary-rotation-runtime.md, work/sprints/active-2026-q2-rolling-restart-active-gate-theory-loop-resume.md, work/sprints/current-blocker.md, work/sprints/current-blocker.json
+Allowed edits: unknown
 Candidate runtime files: unknown
-Forbidden edits: Classification may update package and sprint truth only; runtime files remain forbidden until a successor package activates them.
-Required latest proof: falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-active-gate-owner-recovery-bounded-return-runtime-20260527T213301Z.report.json, regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-active-gate-owner-recovery-bounded-return-runtime-20260527T213301Z.report.json --markdown, supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-active-gate-owner-recovery-bounded-return-runtime-20260527T213301Z.report.json --markdown
+Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
+Required latest proof: falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json, regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json --markdown, supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json --markdown
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -88,10 +88,14 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Lane: `diagnostic-classification`
    - Purpose: Classify the fresh post-owner-recovery representative route before any new runtime work.
    - First-run reason: Fresh representative evidence migrated away from `active_gate_timed_out` to `snapshot_coverage_incomplete` with causal outcome `migrate_owner_boundary` and stop mode `owner_boundary_migration`.
-6. [Rolling Restart Benchmark Table Bootstrap Primary Rotation Runtime](../packages/todo-20260527-rolling-restart-benchmark-table-bootstrap-primary-rotation-runtime.md)
+6. [Rolling Restart Benchmark Table Bootstrap Primary Rotation Runtime](../packages/done-20260527-rolling-restart-benchmark-table-bootstrap-primary-rotation-runtime.md)
    - Lane: `runtime-owner-boundary`
    - Purpose: Allow benchmark table bootstrap to rotate or repair after control-lane create timeouts so rolling-restart load admission can establish partition visibility.
    - First-run reason: The fresh representative run failed after active-gate timeout cleared with `benchmark_events` partition visibility blocked by an admin control-lane create timeout on the seed.
+7. [Artifact Triage - startup_active_gate_owner - snapshot_coverage](../packages/active-20260527-rolling-restart-startup-active-gate-owner-snapshot-coverage.md)
+   - Lane: `experiment`
+   - Purpose: Select the autonomous active-gate snapshot coverage contract move for repair-deferred selected snapshot source with no owner-recovery handoff detected.
+   - First-run reason: Fresh representative evidence repeated the benchmark table partition visibility timeout with no rotation/repair metric movement, while canonical handoff evidence routes back to `startup_active_gate_owner / snapshot_coverage` with `runtimePromotionAllowed=false`.
 
 ## Activation Instructions
 
