@@ -55,22 +55,22 @@ Complete means:
 ## Current Edge Card
 
 ```text
-Representative artifact: test-output/reports/rolling-restart-progress-contract-proof.report.json
-Visible first frontier: startup_active_gate_owner / snapshot_coverage
-Active package: work/packages/done-20260527-rolling-restart-startup-active-gate-owner-snapshot-coverage-triage.md
-Active package owner: startup_active_gate_owner
-Active package boundary: snapshot_coverage
-Selected cause: snapshot_coverage_incomplete
-Required action: Triage active_gate_snapshot_coverage with combined scenario evidence before runtime edits.
-Representative status: classification-only
-Causal outcome: migrate_owner_boundary
-Architecture gate: watching / unknown
-Expected delta: Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.
-Current state: Scaffolded from representative evidence for active_gate_snapshot_coverage.
-Allowed edits: work/packages/done-20260527-rolling-restart-progress-contract-representative-proof.md
+Representative artifact: none
+Visible first frontier: unknown
+Active package: work/packages/done-20260527-progress-contract-cleanup-and-adoption.md
+Active package owner: workflow_tooling_owner
+Active package boundary: progress_contract_adoption
+Selected cause: duplicate_progress_vocabulary_cleanup
+Required action: Remove converted ad hoc progress vocabulary, document the adopted pattern, and leave future packages with contract-ready examples.
+Representative status: unknown
+Causal outcome: unknown
+Architecture gate: not-required / unknown
+Expected delta: unknown
+Current state: Created todo package for cleanup and adoption after representative proof selects the final progress-contract shape.
+Allowed edits: work/RULES.md, .kiro/steering/llm/style.md, .kiro/steering/llm/testing.md, work/templates/sprint-strategy-brief.md, .kiro/steering/doctrine/state-encoding.md, .kiro/steering/workflow-guidelines/lifecycle.md, .kiro/steering/llm/rules.json, .kiro/steering/llm/architecture.md, .kiro/steering/llm/governance.md
 Candidate runtime files: unknown
-Forbidden edits: no implementation edits are allowed under scenario-release-gate without a child package
-Required latest proof: falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-progress-contract-proof.report.json, regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-progress-contract-proof.report.json --markdown, supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-progress-contract-proof.report.json --markdown
+Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
+Required latest proof: regression: npm run steering:llm:pack, supporting: npm run work:validate -- --entry, supporting: npm run work:validate -- --pre-impl
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -171,7 +171,7 @@ has a stronger envelope, but the package must map each concept explicitly.
      the artifact to green, reduced, migrated, or architecture-gap.
    - Acceptance: fresh representative artifact has no ambiguous stranded
      progress state; if red, the first frontier is one explicit contract edge.
-8. [Progress Contract Cleanup And Adoption](../packages/todo-20260527-progress-contract-cleanup-and-adoption.md)
+8. [Progress Contract Cleanup And Adoption](../packages/done-20260527-progress-contract-cleanup-and-adoption.md)
    - Lane: `lightweight-maintenance`
    - Owner boundary: `workflow_tooling_owner / progress_contract_adoption`
    - Purpose: remove converted ad hoc progress vocabulary, document the
