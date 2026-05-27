@@ -2,36 +2,171 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-owner-boundary-progress-contract-transformation.md",
-  "package": "none",
-  "status": "none",
-  "lane": "none",
-  "scenario": "none",
-  "artifact": "none",
+  "package": "work/packages/active-20260527-active-gate-snapshot-coverage-progress-contract-conversion.md",
+  "status": "active",
+  "lane": "causal-escalation",
+  "scenario": "rolling-restart",
+  "artifact": "test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json",
   "playback": "none",
-  "owner": "none",
-  "boundary": "none",
-  "dominantReason": "none",
-  "currentState": "No active work package. Start a new package when implementation resumes.",
-  "nextAction": "Create or activate one focused package for the next executable concern.",
-  "proof": [],
-  "writeScope": [],
-  "handoffFiles": [],
-  "generatedFiles": [
-    "work/sprints/current-blocker.json",
-    "work/sprints/current-blocker.md"
+  "owner": "startup_active_gate_owner",
+  "boundary": "snapshot_coverage",
+  "dominantReason": "snapshot_coverage_incomplete",
+  "currentState": "Created todo package for active-gate snapshot coverage conversion; coverage shortfalls must expose bounded progress or an upstream blocking dependency.",
+  "nextAction": "Convert active-gate snapshot coverage to explicit bounded progress, retry, and terminal contract evidence.",
+  "proof": [
+    "falsifier: npm test -- test/diagnostics/topology-convergence-graph.test.js test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js",
+    "regression: npm run work:evidence-summary -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json"
   ],
+  "writeScope": [
+    "src/diagnostics/topology-convergence-normalizers.js",
+    "test/distributed/harness/startup-readiness-evidence.js",
+    "test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js",
+    "test/diagnostics/topology-convergence-graph.test.js",
+    "test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js",
+    "src/diagnostics/topology-convergence-graph.js"
+  ],
+  "handoffFiles": [],
+  "generatedFiles": [],
   "candidateRuntimeFiles": [],
-  "commitScope": [],
+  "commitScope": [
+    "src/diagnostics/topology-convergence-normalizers.js",
+    "test/distributed/harness/startup-readiness-evidence.js",
+    "test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js",
+    "test/diagnostics/topology-convergence-graph.test.js",
+    "test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js",
+    "work/packages/active-20260527-active-gate-snapshot-coverage-progress-contract-conversion.md",
+    "src/diagnostics/topology-convergence-graph.js"
+  ],
   "touchedFiles": [],
-  "modelFit": {},
-  "representativeResidual": {},
-  "causalGovernance": {},
-  "scenarioCausalClosure": {},
+  "theoryLedgerRefs": [],
+  "modelFit": {
+    "packageClass": "runtime-owner-boundary",
+    "intendedMinimumModel": "gpt-5.3-codex",
+    "scopeShape": "bounded-owner-runtime/current-frontier",
+    "outputProfile": "medium",
+    "ambiguityScore": 1,
+    "escalationTriggers": [
+      "owned files expand beyond this package",
+      "a frozen decision must be reopened"
+    ]
+  },
+  "representativeResidual": {
+    "status": "live",
+    "scenario": "rolling-restart",
+    "artifact": "test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json",
+    "frontier": "startup_active_gate_owner / snapshot_coverage -> release_gate_owner / rolling_restart_progress_contract_gate",
+    "owner": "startup_active_gate_owner",
+    "boundary": "snapshot_coverage",
+    "dominantReason": "snapshot_coverage_incomplete",
+    "nextAction": "Convert active-gate snapshot coverage to explicit bounded progress."
+  },
+  "causalGovernance": {
+    "hypothesis": "Active-gate snapshot coverage should expose bounded progress while preserving upstream owner debt instead of masking it as coverage lag.",
+    "stopConditionCheck": "npm run analyze:causal-model -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json",
+    "expectedCausalModelChange": "Convert active-gate snapshot coverage to explicit bounded progress, retry, and terminal contract evidence.",
+    "representativeOutcome": "migrated",
+    "causalDebt": "snapshot coverage is inferred from lag without progress contract format.",
+    "crossBoundaryReview": "Review with startup active gate owner and progress contract foundation definitions."
+  },
+  "scenarioCausalClosure": {
+    "referenceScenarioOrProbe": "rolling-restart seed-contact-bounded-progress",
+    "phaseChain": [
+      "active-gate snapshot coverage conversion"
+    ],
+    "currentFirstFrontier": "startup_active_gate_owner / snapshot_coverage",
+    "knownDownstreamBlockers": [
+      "rolling restart progress contract representative proof"
+    ],
+    "missingCausalEdge": "active-gate snapshot coverage progress contract conversion",
+    "missingCausalEdgeProbe": "npm test -- test/diagnostics/topology-convergence-graph.test.js",
+    "falsifyingProbe": "npm test -- test/diagnostics/topology-convergence-graph.test.js",
+    "boundedProgressProof": "Active-gate snapshot coverage emits progress contracts with explicit retry, wake, timeout, and terminal status.",
+    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json",
+    "expectedObservableTransition": "active-gate snapshot coverage prefers progress contract",
+    "maxProgressBound": "one active-gate snapshot coverage conversion slice",
+    "sameFrontierFallback": "autonomous architecture experiment",
+    "expectedNextFrontier": "startup_active_gate_owner / snapshot_coverage",
+    "resultClassification": "pending-before-probe",
+    "stopCondition": "migrate-owner-boundary",
+    "recentFrontierHistory": [
+      "done-20260527-operation-workflow-progress-contract-conversion.md / operation_workflow_owner / workflow_progress / migrated"
+    ],
+    "oscillationCheck": "active-gate snapshot coverage conversion to prevent oscillating symptom-only fixes on the same artifact.",
+    "handoffInvariant": "active-gate changes prefer progress contract and do not invent runtime behaviors."
+  },
   "observablePrediction": {},
   "experimentOutcome": {},
-  "rerunDecision": {},
+  "rerunDecision": {
+    "sourceArtifact": "test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json",
+    "routeOwner": "startup_active_gate_owner",
+    "routeBoundary": "snapshot_coverage",
+    "routeDominantReason": "snapshot_coverage_incomplete",
+    "routeCausalOutcome": "migrate_owner_boundary",
+    "stopMode": "migrate-owner-boundary",
+    "nextLane": "causal-escalation",
+    "expectedDelta": "active-gate snapshot coverage emits one next action with wake source, retry timing, terminal state, and evidence path.",
+    "requiredRefreshCommands": [
+      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason snapshot_coverage_incomplete",
+      "update Sprint Strategy Brief and Current Edge Card from the route result",
+      "npm run work:repair",
+      "npm run work:validate -- --entry",
+      "npm run work:validate -- --pre-impl"
+    ]
+  },
   "classificationEfficiency": {},
-  "architectureDecisionGate": {},
-  "predecessor": null,
-  "theoryLedgerRefs": []
+  "architectureDecisionGate": {
+    "status": "watching",
+    "trigger": "frontier-oscillation",
+    "triggerEvidence": [
+      "frontier returned to a recently closed related boundary",
+      "work/packages/done-20260527-rolling-restart-startup-active-gate-owner-snapshot-coverage.md / startup_active_gate_owner / snapshot_coverage / migrated",
+      "work/packages/done-20260527-rolling-restart-startup-readiness-owner-startup-support-evid.md / startup_readiness_owner / startup_support_evidence / migrated",
+      "work/packages/done-20260527-rolling-restart-startup-readiness-admin-reachability-support.md / startup_readiness_owner / startup_support_evidence / migrated"
+    ],
+    "choices": [
+      {
+        "id": "continue-local-proof",
+        "summary": "Continue with a bounded local proof if the missing edge stays inside this owner boundary.",
+        "route": "continue-local-proof",
+        "proof": [
+          "falsifier: npm test -- test/diagnostics/topology-convergence-graph.test.js test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js",
+          "regression: npm run work:evidence-summary -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json",
+          "npm test -- test/diagnostics/topology-convergence-graph.test.js"
+        ]
+      },
+      {
+        "id": "migrate-owner-boundary",
+        "summary": "Migrate the active package to the owner boundary named by the first frontier evidence.",
+        "route": "owner-boundary-migration",
+        "proof": [
+          "falsifier: npm test -- test/diagnostics/topology-convergence-graph.test.js test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js",
+          "regression: npm run work:evidence-summary -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json",
+          "npm test -- test/diagnostics/topology-convergence-graph.test.js"
+        ]
+      },
+      {
+        "id": "open-architecture-package",
+        "summary": "Open a bounded autonomous architecture experiment for the missing owner contract.",
+        "route": "architecture-package",
+        "proof": [
+          "falsifier: npm test -- test/diagnostics/topology-convergence-graph.test.js test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js",
+          "regression: npm run work:evidence-summary -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json",
+          "npm test -- test/diagnostics/topology-convergence-graph.test.js"
+        ]
+      },
+      {
+        "id": "human-escalation",
+        "summary": "Escalate to a human only when evidence is contradictory, policy-blocked, credential-blocked, or unavailable.",
+        "route": "human-escalation",
+        "proof": [
+          "falsifier: npm test -- test/diagnostics/topology-convergence-graph.test.js test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js",
+          "regression: npm run work:evidence-summary -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json",
+          "npm test -- test/diagnostics/topology-convergence-graph.test.js"
+        ]
+      }
+    ],
+    "selectedChoice": null,
+    "nextAction": "Watch for repeated frontier oscillation; open an autonomous architecture experiment if another local proof returns here unchanged."
+  },
+  "predecessor": null
 }

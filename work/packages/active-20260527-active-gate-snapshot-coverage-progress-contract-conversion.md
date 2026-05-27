@@ -3,10 +3,10 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
+  "status": "active",
   "intent": {
     "opened": "2026-05-27",
-    "lane": "runtime-owner-boundary",
+    "lane": "causal-escalation",
     "scenario": "rolling-restart",
     "artifact": "test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json",
     "playback": "none",
@@ -22,7 +22,8 @@
       "test/distributed/harness/startup-readiness-evidence.js",
       "test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js",
       "test/diagnostics/topology-convergence-graph.test.js",
-      "test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js"
+      "test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js",
+      "src/diagnostics/topology-convergence-graph.js"
     ],
     "handoffFiles": [],
     "generatedFiles": [],
@@ -32,7 +33,9 @@
       "test/distributed/harness/startup-readiness-evidence.js",
       "test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js",
       "test/diagnostics/topology-convergence-graph.test.js",
-      "test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js"
+      "test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js",
+      "work/packages/active-20260527-active-gate-snapshot-coverage-progress-contract-conversion.md",
+      "src/diagnostics/topology-convergence-graph.js"
     ]
   },
   "gates": {
@@ -53,12 +56,23 @@
   },
   "execution": {
     "theoryLedgerRefs": [],
-    "theoryLedger": "not-applicable: no existing ledger theory directly covers active-gate snapshot coverage as a bounded progress-contract conversion; add or cite a durable theory at closure if this package creates one.",
+    "theoryLedger": "no ledger update: This package only converted active-gate snapshot coverage to explicit bounded progress-contract formats.",
     "proof": {
       "commands": [
         "falsifier: npm test -- test/diagnostics/topology-convergence-graph.test.js test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js",
         "regression: npm run work:evidence-summary -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json"
       ]
+    },
+    "implementation": {
+      "parentRevalidatedFocusedProof": true,
+      "filesChanged": [
+        "src/diagnostics/topology-convergence-graph.js",
+        "src/diagnostics/topology-convergence-normalizers.js",
+        "test/diagnostics/topology-convergence-graph.test.js"
+      ]
+    },
+    "verificationFix": {
+      "parentRevalidatedFocusedProof": true
     }
   },
   "boundedExperiment": {
@@ -90,6 +104,91 @@
       "Split one same-owner hypothesis into bounded-experiment / gpt-5.3-codex-spark.",
       "Keep cross-file owner runtime integration in this package unless it contracts to one runtime file."
     ]
+  },
+  "causalGovernance": {
+    "hypothesis": "Active-gate snapshot coverage should expose bounded progress while preserving upstream owner debt instead of masking it as coverage lag.",
+    "stopConditionCheck": "npm run analyze:causal-model -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json",
+    "expectedCausalModelChange": "Convert active-gate snapshot coverage to explicit bounded progress, retry, and terminal contract evidence.",
+    "representativeOutcome": "migrated",
+    "causalDebt": "snapshot coverage is inferred from lag without progress contract format.",
+    "crossBoundaryReview": "Review with startup active gate owner and progress contract foundation definitions."
+  },
+  "scenarioCausalClosure": {
+    "referenceScenarioOrProbe": "rolling-restart seed-contact-bounded-progress",
+    "phaseChain": [
+      "active-gate snapshot coverage conversion"
+    ],
+    "currentFirstFrontier": "startup_active_gate_owner / snapshot_coverage",
+    "knownDownstreamBlockers": [
+      "rolling restart progress contract representative proof"
+    ],
+    "missingCausalEdge": "active-gate snapshot coverage progress contract conversion",
+    "missingCausalEdgeProbe": "npm test -- test/diagnostics/topology-convergence-graph.test.js",
+    "falsifyingProbe": "npm test -- test/diagnostics/topology-convergence-graph.test.js",
+    "boundedProgressProof": "Active-gate snapshot coverage emits progress contracts with explicit retry, wake, timeout, and terminal status.",
+    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json",
+    "expectedObservableTransition": "active-gate snapshot coverage prefers progress contract",
+    "maxProgressBound": "one active-gate snapshot coverage conversion slice",
+    "sameFrontierFallback": "autonomous architecture experiment",
+    "expectedNextFrontier": "startup_active_gate_owner / snapshot_coverage",
+    "resultClassification": "pending-before-probe",
+    "stopCondition": "migrate-owner-boundary",
+    "recentFrontierHistory": [
+      "done-20260527-operation-workflow-progress-contract-conversion.md / operation_workflow_owner / workflow_progress / migrated"
+    ],
+    "oscillationCheck": "active-gate snapshot coverage conversion to prevent oscillating symptom-only fixes on the same artifact.",
+    "handoffInvariant": "active-gate changes prefer progress contract and do not invent runtime behaviors."
+  },
+  "progressContract": {
+    "owner": "startup_active_gate_owner",
+    "boundary": "snapshot_coverage",
+    "state": "progress_contract_conversion",
+    "reason": "Convert active-gate snapshot coverage to explicit bounded progress, retry, and terminal contract evidence.",
+    "nextAction": "convert progress contract",
+    "wakeSource": "active-gate",
+    "retryAfterMs": 1000,
+    "terminalState": "satisfied",
+    "evidencePath": "test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json",
+    "blockingDependency": "no other blocking dependencies"
+  },
+  "representativeResidual": {
+    "status": "live",
+    "scenario": "rolling-restart",
+    "artifact": "test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json",
+    "frontier": "startup_active_gate_owner / snapshot_coverage -> release_gate_owner / rolling_restart_progress_contract_gate",
+    "owner": "startup_active_gate_owner",
+    "boundary": "snapshot_coverage",
+    "dominantReason": "snapshot_coverage_incomplete",
+    "nextAction": "Convert active-gate snapshot coverage to explicit bounded progress."
+  },
+  "rerunDecision": {
+    "sourceArtifact": "test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json",
+    "routeOwner": "startup_active_gate_owner",
+    "routeBoundary": "snapshot_coverage",
+    "routeDominantReason": "snapshot_coverage_incomplete",
+    "routeCausalOutcome": "migrate_owner_boundary",
+    "stopMode": "migrate-owner-boundary",
+    "nextLane": "causal-escalation",
+    "expectedDelta": "active-gate snapshot coverage emits one next action with wake source, retry timing, terminal state, and evidence path.",
+    "requiredRefreshCommands": [
+      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason snapshot_coverage_incomplete",
+      "update Sprint Strategy Brief and Current Edge Card from the route result",
+      "npm run work:repair",
+      "npm run work:validate -- --entry",
+      "npm run work:validate -- --pre-impl"
+    ]
+  },
+  "theoryLedger": "not-applicable: no existing ledger theory directly covers active-gate snapshot coverage as a bounded progress-contract conversion; add or cite a durable theory at closure if this package creates one.",
+  "implementation": {
+    "parentRevalidatedFocusedProof": true,
+    "filesChanged": [
+      "src/diagnostics/topology-convergence-graph.js",
+      "src/diagnostics/topology-convergence-normalizers.js",
+      "test/diagnostics/topology-convergence-graph.test.js"
+    ]
+  },
+  "verificationFix": {
+    "parentRevalidatedFocusedProof": true
   }
 }
 -->
@@ -257,11 +356,17 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: startup_active_gate_owner; files-changed: pending; validation: pending focused proof plus parent revalidated focused proof; outcome: pending.
-- [ ] action: verification-fix; owner: startup_active_gate_owner; files-changed: pending-or-none; validation: pending verification proof plus parent revalidated focused proof; outcome: pending.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json and work/sprints/current-blocker.md only if repair changes tracker state; validation: `npm run work:repair`; outcome: pending-or-not-needed.
+- [x] action: implementation; owner: startup_active_gate_owner; files-changed: src/diagnostics/topology-convergence-graph.js, src/diagnostics/topology-convergence-normalizers.js, test/diagnostics/topology-convergence-graph.test.js; validation: node test/diagnostics/topology-convergence-graph.test.js and node test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js passed; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: verification-fix; owner: startup_active_gate_owner; files-changed: none; validation: all validation tests verified clean; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json and work/sprints/current-blocker.md only if repair changes tracker state; validation: `npm run work:repair`; parent revalidated focused proof: yes; outcome: pending-or-not-needed.
 
 ## Validation
 
 1. npm test -- test/diagnostics/topology-convergence-graph.test.js test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js
 2. npm run work:evidence-summary -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json
+
+## Commit And Push Ledger
+
+1. Focused package commit: 32766fe0a373b9e4aee7de7718e2fb8d197607a9
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

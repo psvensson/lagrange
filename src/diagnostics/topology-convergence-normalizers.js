@@ -21,6 +21,8 @@ import {
   READINESS_RECOVERABILITY_RULES,
   READINESS_INHERITED_ACTIVE_GATE_SUPPORT_RULES,
   LIST_SEPARATOR,
+  OWNER,
+  BOUNDARY,
 } from './topology-convergence-constants.js';
 
 import {
@@ -391,8 +393,43 @@ export function normalizeActiveGateSnapshotCoverageProgress(snapshotCoverage) {
     return {};
   }
   const selectedObservedNodeIds = arrayOrEmpty(coverage.selectedObservedNodeIds);
-  return {
-    snapshotCoverageComplete: coverage.completeCoverage === true,
+  const completeCoverage = coverage.completeCoverage === true || coverage.snapshotCoverageComplete === true;
+  const rawContract = coverage.progressContract || coverage.progress?.progressContract;
+  
+  const isRepairDeferred = coverage.selectedSnapshotRepairDeferred === true || coverage.selectedSnapshotObservationMode === 'repair_deferred';
+  const selectedSnapshotError = firstText(
+    coverage.selectedSnapshotError,
+    coverage.selectedError,
+    coverage.selectedSnapshotReachabilityError,
+    coverage.selectedReachabilityError,
+  );
+  
+  const fallbackState = completeCoverage ? 'satisfied' : (isRepairDeferred ? 'deferred' : (selectedSnapshotError ? 'blocked' : 'deferred'));
+  const fallbackReason = completeCoverage ? 'snapshot_coverage_complete' : (selectedSnapshotError ? `snapshot_coverage_incomplete: ${selectedSnapshotError}` : 'snapshot_coverage_incomplete');
+  const fallbackNextAction = completeCoverage ? 'none' : (coverage.selectedSnapshotObservationNextAction || 'retry');
+  const fallbackWakeSource = completeCoverage ? 'none' : 'active-gate';
+  const fallbackRetryAfterMs = completeCoverage ? 0 : (typeof coverage.selectedSnapshotObservationRetryAfterMs === 'number' ? coverage.selectedSnapshotObservationRetryAfterMs : 1000);
+  const fallbackTerminalState = 'satisfied';
+  const fallbackBlockingDependency = 'none';
+
+  let progressContract;
+  if (rawContract) {
+    progressContract = normalizeProgressContract(rawContract, {
+      owner: OWNER.ACTIVE_GATE,
+      boundary: BOUNDARY.SNAPSHOT_COVERAGE,
+      state: fallbackState,
+      reason: fallbackReason,
+      nextAction: fallbackNextAction,
+      wakeSource: fallbackWakeSource,
+      retryAfterMs: fallbackRetryAfterMs,
+      terminalState: fallbackTerminalState,
+      evidencePath: ABSENT_VALUE,
+      blockingDependency: fallbackBlockingDependency,
+    });
+  }
+
+  const result = {
+    snapshotCoverageComplete: completeCoverage,
     snapshotCoverageNodeCount: firstFiniteNumber(
       coverage.bestCoverageNodeCount,
       coverage.snapshotCoverageNodeCount,
@@ -412,12 +449,7 @@ export function normalizeActiveGateSnapshotCoverageProgress(snapshotCoverage) {
       coverage.selectedSnapshotReachableBy,
       coverage.selectedReachableBy,
     ),
-    selectedSnapshotError: firstText(
-      coverage.selectedSnapshotError,
-      coverage.selectedError,
-      coverage.selectedSnapshotReachabilityError,
-      coverage.selectedReachabilityError,
-    ),
+    selectedSnapshotError,
     selectedSnapshotTimeoutMs: firstFiniteNumber(
       coverage.selectedSnapshotTimeoutMs,
       coverage.selectedTimeoutMs,
@@ -441,8 +473,7 @@ export function normalizeActiveGateSnapshotCoverageProgress(snapshotCoverage) {
     selectedSnapshotObservationReasonCodes: arrayOrEmpty(
       coverage.selectedSnapshotObservationReasonCodes,
     ),
-    selectedSnapshotRepairDeferred:
-      coverage.selectedSnapshotRepairDeferred === true,
+    selectedSnapshotRepairDeferred: isRepairDeferred,
     selectedPublishedActiveNodeIds: arrayOrEmpty(
       coverage.selectedPublishedActiveNodeIds,
     ),
@@ -450,6 +481,11 @@ export function normalizeActiveGateSnapshotCoverageProgress(snapshotCoverage) {
       coverage.selectedMissingPublishedNodeIds,
     ),
   };
+
+  if (progressContract) {
+    result.progressContract = progressContract;
+  }
+  return result;
 }
 
 // Master input normalizer
@@ -543,7 +579,10 @@ export function normalizeTopologyConvergenceInput(input = {}) {
     recordCandidate(scenario.priorityRecoveryProgress, SOURCE_PATH.REPORT_SCENARIO),
     recordCandidate(scenario.priorityRecoveryProgressSummary, SOURCE_PATH.REPORT_SCENARIO),
   );
-  const progress = progressEvidence.record;
+  const progress = {
+    ...progressEvidence.record,
+    ...normalizeActiveGateSnapshotCoverageProgress(progressEvidence.record),
+  };
   const publicationActiveGateHandoffEvidence = firstRecordWithSource(
     recordCandidate(
       publication[SOURCE_FIELD.PUBLICATION_ACTIVE_GATE_HANDOFF],
@@ -745,7 +784,11 @@ export function joinValues(values) {
 export function normalizeProgressContract(rawContract, fallback = {}) {
   const contract = asRecord(rawContract);
   const toText = (val, fallbackVal) => {
-    const s = String(val || fallbackVal || '').trim();
+    let checkVal = val;
+    if (checkVal === 'absent') {
+      checkVal = '';
+    }
+    const s = String(checkVal || fallbackVal || '').trim();
     return s.length > 0 ? s : 'absent';
   };
   return {

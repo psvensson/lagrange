@@ -293,10 +293,28 @@ function buildActiveGateSnapshotEdge(normalized) {
   const rawContract = (progress && progress.progressContract) || 
                       (normalized.activeGate && normalized.activeGate.progressContract) || 
                       (normalized.activeGate && normalized.activeGate.progress && normalized.activeGate.progress.progressContract);
+
+  const completeCoverage = progress.snapshotCoverageComplete === true || normalized.activeGate.ready === true;
+  const isRepairDeferred = progress.selectedSnapshotRepairDeferred === true || progress.selectedSnapshotObservationMode === 'repair_deferred';
+  const fallbackState = completeCoverage ? 'satisfied' : (isRepairDeferred ? 'deferred' : state);
+  const fallbackReason = completeCoverage ? 'snapshot_coverage_complete' : (reasons[0] || 'snapshot_coverage_incomplete');
+  const fallbackNextAction = completeCoverage ? 'none' : (progress.selectedSnapshotObservationNextAction || 'retry');
+  const fallbackWakeSource = completeCoverage ? 'none' : 'active-gate';
+  const fallbackRetryAfterMs = completeCoverage ? 0 : (typeof progress.selectedSnapshotObservationRetryAfterMs === 'number' ? progress.selectedSnapshotObservationRetryAfterMs : 1000);
+  const fallbackTerminalState = 'satisfied';
+  const fallbackBlockingDependency = 'none';
+
   const progressContract = normalizeProgressContract(rawContract, {
     owner: OWNER.ACTIVE_GATE,
     boundary: BOUNDARY.SNAPSHOT_COVERAGE,
+    state: fallbackState,
+    reason: fallbackReason,
+    nextAction: fallbackNextAction,
+    wakeSource: fallbackWakeSource,
+    retryAfterMs: fallbackRetryAfterMs,
+    terminalState: fallbackTerminalState,
     evidencePath: normalized.evidencePath.activeGateProgress,
+    blockingDependency: fallbackBlockingDependency,
   });
 
   return buildEdge({

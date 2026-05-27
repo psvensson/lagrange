@@ -422,8 +422,50 @@ describe('TopologyConvergenceGraph', () => {
       FIXTURE_EXPECTED_NODE_COUNT,
     );
     assert.deepEqual(snapshotEdge.reasons, ['active_gate_ready']);
+    assert.equal(snapshotEdge.source.progressContract.owner, 'startup_active_gate_owner');
+    assert.equal(snapshotEdge.source.progressContract.boundary, 'snapshot_coverage');
+    assert.equal(snapshotEdge.source.progressContract.state, 'satisfied');
     assert.notEqual(graph.summary.firstFrontierEdgeId, EDGE_SNAPSHOT_COVERAGE);
     assertNoNullOrUndefined(graph);
+  });
+
+  it('normalizes incomplete active-gate snapshot coverage to a progress contract', () => {
+    const graph = buildTopologyConvergenceGraphFromArtifacts({
+      failureBundle: {
+        scenario: FIXTURE_SCENARIO,
+        publicationConvergence: {
+          publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+          pendingAckCount: ZERO_COUNT,
+          blockedNodeCount: ZERO_COUNT,
+          missingPublishedCount: ZERO_COUNT,
+          activeGate: {
+            state: ACTIVE_GATE_STATE_TIMED_OUT,
+            ready: false,
+            progress: {
+              completeCoverage: false,
+              expectedNodeCount: FIXTURE_EXPECTED_NODE_COUNT,
+              bestCoverageNodeCount: FIXTURE_SNAPSHOT_COVERAGE_COUNT,
+              selectedSnapshotNodeId: ACTIVE_GATE_COVERAGE_SELECTED_NODE_ID,
+              selectedSnapshotObservationMode:
+                SELECTED_SNAPSHOT_OBSERVATION_MODE_REPAIR_DEFERRED,
+              selectedSnapshotObservationNextAction: 'retry',
+              selectedSnapshotObservationRetryAfterMs: 500,
+              selectedSnapshotRepairDeferred: true,
+            },
+          },
+        },
+      },
+    });
+    const snapshotEdge = findEdge(graph.edges, EDGE_SNAPSHOT_COVERAGE);
+
+    assert.equal(snapshotEdge.state, EDGE_STATE.BLOCKED);
+    const contract = snapshotEdge.source.progressContract;
+    assert.equal(contract.owner, 'startup_active_gate_owner');
+    assert.equal(contract.boundary, 'snapshot_coverage');
+    assert.equal(contract.state, 'deferred');
+    assert.equal(contract.nextAction, 'retry');
+    assert.equal(contract.retryAfterMs, 500);
+    assert.equal(contract.wakeSource, 'active-gate');
   });
 
   it('normalizes active-gate no-progress readiness evidence as inherited support evidence', () => {
