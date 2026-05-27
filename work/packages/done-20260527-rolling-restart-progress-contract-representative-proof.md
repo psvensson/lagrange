@@ -3,10 +3,10 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
+  "status": "done",
   "intent": {
     "opened": "2026-05-27",
-    "lane": "scenario-release-gate",
+    "lane": "causal-escalation",
     "scenario": "rolling-restart",
     "artifact": "test-output/reports/rolling-restart-progress-contract-proof.report.json",
     "playback": "none",
@@ -14,11 +14,13 @@
     "boundary": "rolling_restart_progress_contract_gate",
     "dominantReason": "representative_contract_proof",
     "currentState": "Created todo package for the representative release-gate checkpoint after contract conversions; further local patching is not authorized until rolling-restart is routed.",
-    "nextAction": "Run rolling-restart after converted owner boundaries and route the artifact to green, reduced, migrated, or architecture-gap."
+    "nextAction": "Run rolling-restart after converted owner boundaries and route the artifact to green, reduced, migrated, or architecture-gap.",
+    "closed": "2026-05-27",
+    "successor": "work/packages/active-20260527-rolling-restart-startup-active-gate-owner-snapshot-coverage.md"
   },
   "scope": {
     "writeScope": [
-      "work/packages/todo-20260527-rolling-restart-progress-contract-representative-proof.md"
+      "work/packages/active-20260527-rolling-restart-progress-contract-representative-proof.md"
     ],
     "handoffFiles": [
       "test-output/reports/rolling-restart-progress-contract-proof.report.json"
@@ -26,7 +28,7 @@
     "generatedFiles": [],
     "candidateRuntimeFiles": [],
     "commitScope": [
-      "work/packages/todo-20260527-rolling-restart-progress-contract-representative-proof.md"
+      "work/packages/active-20260527-rolling-restart-progress-contract-representative-proof.md"
     ]
   },
   "gates": {
@@ -47,13 +49,120 @@
   },
   "execution": {
     "theoryLedgerRefs": [],
-    "theoryLedger": "not-applicable: no existing ledger theory directly covers the representative progress-contract gate; add or cite a durable theory at closure if this package creates one.",
+    "theoryLedger": "no-ledger-update",
     "proof": {
       "commands": [
         "falsifier: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-progress-contract-proof.report.json --verbose",
         "regression: npm run work:scenario-route -- test-output/reports/rolling-restart-progress-contract-proof.report.json"
       ]
+    },
+    "implementation": {
+      "parentRevalidatedFocusedProof": true,
+      "filesChanged": []
+    },
+    "verificationFix": {
+      "parentRevalidatedFocusedProof": true
     }
+  },
+  "representativeResidual": {
+    "status": "classification-only",
+    "scenario": "rolling-restart",
+    "artifact": "test-output/reports/rolling-restart-progress-contract-proof.report.json",
+    "frontier": "rolling_restart_progress_contract_gate",
+    "owner": "release_gate_owner",
+    "boundary": "rolling_restart_progress_contract_gate",
+    "dominantReason": "representative_contract_proof",
+    "nextAction": "Run rolling-restart after converted owner boundaries and route the artifact to green, reduced, migrated, or architecture-gap."
+  },
+  "classificationEfficiency": {
+    "defaultMode": "inline-gate-default",
+    "separatePackageReason": "successor-selection",
+    "artifactBudget": "one-artifact",
+    "proofCommandBudget": "two-or-three-canonical-commands",
+    "commands": [
+      "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-progress-contract-proof.report.json --verbose",
+      "npm run work:scenario-route -- test-output/reports/rolling-restart-progress-contract-proof.report.json"
+    ],
+    "decisionRecord": "Keep classification inside the package unless route truth changes.",
+    "successorAction": "update-current-package",
+    "runtimePromotionRule": "Stable owner/boundary routes move to runtime-owner-boundary work."
+  },
+  "causalGovernance": {
+    "hypothesis": "After converted owner boundaries, rolling-restart evidence should be green or route to one explicit progress-contract frontier instead of an ambiguous stranded state.",
+    "stopConditionCheck": "npm run analyze:causal-model -- test-output/reports/rolling-restart-progress-contract-proof.report.json",
+    "expectedCausalModelChange": "The representative rolling-restart proof is green, reduced, migrated to one concrete frontier, or classified as an architecture gap.",
+    "representativeOutcome": "migrated",
+    "causalDebt": "Rolling restart pre-restart/restart sequencing stranded progress without explicit contracts.",
+    "crossBoundaryReview": "Review with all transformed boundaries: workflow progress, snapshot coverage, and startup readiness."
+  },
+  "scenarioCausalClosure": {
+    "referenceScenarioOrProbe": "rolling-restart progress contract representative proof",
+    "phaseChain": [
+      "diagnostics cutover",
+      "startup readiness conversion",
+      "workflow progress conversion",
+      "active-gate snapshot coverage conversion"
+    ],
+    "currentFirstFrontier": "release_gate_owner / rolling_restart_progress_contract_gate",
+    "knownDownstreamBlockers": [
+      "representative scenario progress-contract validation"
+    ],
+    "missingCausalEdge": "rolling-restart scenario uses progress contracts",
+    "missingCausalEdgeProbe": "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-progress-contract-proof.report.json --verbose",
+    "falsifyingProbe": "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-progress-contract-proof.report.json --verbose",
+    "boundedProgressProof": "Running the representative rolling-restart scenario proves the system either reaches green or terminates cleanly at a progress contract edge with bounded retry and timeout controls.",
+    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-progress-contract-proof.report.json",
+    "expectedObservableTransition": "Ambiguous stranded progress states are resolved into progress contracts.",
+    "maxProgressBound": "representative scenario release gate run",
+    "sameFrontierFallback": "autonomous architecture experiment",
+    "expectedNextFrontier": "release_gate_owner / rolling_restart_progress_contract_gate",
+    "resultClassification": "pending-before-probe",
+    "stopCondition": "representative-green",
+    "recentFrontierHistory": [
+      "done-20260527-diagnostics-progress-contract-consumer-cutover.md / diagnostics_owner / topology_convergence_progress_contract / migrated",
+      "done-20260527-startup-readiness-progress-contract-conversion.md / startup_readiness_owner / startup_support_evidence / migrated",
+      "done-20260527-operation-workflow-progress-contract-conversion.md / operation_workflow_owner / workflow_progress / migrated",
+      "done-20260527-active-gate-snapshot-coverage-progress-contract-conversion.md / startup_active_gate_owner / snapshot_coverage / migrated"
+    ],
+    "oscillationCheck": "oscillations are guarded by transformed progress contracts",
+    "handoffInvariant": "no implementation edits are allowed under scenario-release-gate without a child package"
+  },
+  "progressContract": {
+    "owner": "release_gate_owner",
+    "boundary": "rolling_restart_progress_contract_gate",
+    "state": "representative_proof",
+    "reason": "Run rolling-restart after converted owner boundaries and route the artifact to green, reduced, migrated, or architecture-gap.",
+    "nextAction": "run representative proof",
+    "wakeSource": "release-gate",
+    "retryAfterMs": 1000,
+    "terminalState": "satisfied",
+    "evidencePath": "test-output/reports/rolling-restart-progress-contract-proof.report.json",
+    "blockingDependency": "no other blocking dependencies"
+  },
+  "observablePrediction": {
+    "falsificationCondition": "The representative rerun returns an ambiguous stranded progress state or fails to show progress-contract routing.",
+    "metric": "ambiguous stranded progress states",
+    "predicted": "zero ambiguous stranded states; all states are green or progress-contract-routed",
+    "observed": "zero ambiguous stranded states; all states are green or progress-contract-routed",
+    "accuracy": "matched",
+    "evidence": "test-output/reports/rolling-restart-progress-contract-proof.report.json"
+  },
+  "rerunDecision": {
+    "sourceArtifact": "test-output/reports/rolling-restart-progress-contract-proof.report.json",
+    "routeOwner": "release_gate_owner",
+    "routeBoundary": "rolling_restart_progress_contract_gate",
+    "routeDominantReason": "representative_contract_proof",
+    "routeCausalOutcome": "pending-before-rerun",
+    "stopMode": "pending-before-rerun",
+    "expectedDelta": "Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.",
+    "nextLane": "causal-escalation",
+    "requiredRefreshCommands": [
+      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-progress-contract-proof.report.json --owner release_gate_owner --boundary rolling_restart_progress_contract_gate --dominant-reason representative_contract_proof",
+      "update Sprint Strategy Brief and Current Edge Card from the route result",
+      "npm run work:repair",
+      "npm run work:validate -- --entry",
+      "npm run work:validate -- --pre-impl"
+    ]
   },
   "boundedExperiment": {
     "hypothesis": "After converted owner boundaries, rolling-restart evidence should be green or route to one explicit progress-contract frontier instead of an ambiguous stranded state.",
@@ -83,7 +192,16 @@
       "Create Spark-safe mechanical or test-only children once execution is unambiguous.",
       "Create a gpt-5.4 single-file-runtime child only after the runtime owner file is selected."
     ]
-  }
+  },
+  "theoryLedger": "not-applicable: no existing ledger theory directly covers the representative progress-contract gate; add or cite a durable theory at closure if this package creates one.",
+  "implementation": {
+    "parentRevalidatedFocusedProof": true,
+    "filesChanged": []
+  },
+  "verificationFix": {
+    "parentRevalidatedFocusedProof": true
+  },
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -186,10 +304,10 @@ artifact plus updating this package.
 
 Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc `jq`, use the canonical workflow command that owns the question:
 
-1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest work/packages/todo-20260527-rolling-restart-progress-contract-representative-proof.md` or `npm run work:package:schema`.
+1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest work/packages/active-20260527-rolling-restart-progress-contract-representative-proof.md` or `npm run work:package:schema`.
 2. Representative evidence: `npm run work:evidence-summary -- test-output/reports/rolling-restart-progress-contract-proof.report.json`.
 3. Owner discovery: `npm run analyze:owner-files -- release_gate_owner rolling_restart_progress_contract_gate`.
-4. Subagent sequencing: `npm run work:subagent-prompt -- --role verifier-fixer --package work/packages/todo-20260527-rolling-restart-progress-contract-representative-proof.md`.
+4. Subagent sequencing: `npm run work:subagent-prompt -- --role verifier-fixer --package work/packages/active-20260527-rolling-restart-progress-contract-representative-proof.md`.
 5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.
 
 If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which canonical extractor was tried and why it was insufficient.
@@ -204,7 +322,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## In Scope
 
-1. work/packages/todo-20260527-rolling-restart-progress-contract-representative-proof.md
+1. work/packages/active-20260527-rolling-restart-progress-contract-representative-proof.md
 
 ## Out Of Scope
 
@@ -216,7 +334,7 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `bounded-owner-runtime/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/todo-20260527-rolling-restart-progress-contract-representative-proof.md`
+- Owned files: `work/packages/active-20260527-rolling-restart-progress-contract-representative-proof.md`
 - Do-not-edit scope: `src/` outside declared writeScope
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -245,11 +363,18 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: release_gate_owner; files-changed: pending; validation: pending representative proof plus parent revalidated focused proof; outcome: pending.
-- [ ] action: verification-fix; owner: release_gate_owner; files-changed: pending-or-none; validation: pending verification proof plus parent revalidated focused proof; outcome: pending.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json and work/sprints/current-blocker.md only if repair changes tracker state; validation: `npm run work:repair`; outcome: pending-or-not-needed.
+- [x] action: implementation; owner: release_gate_owner; files-changed: none; validation: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-progress-contract-proof.report.json --verbose; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: verification-fix; owner: release_gate_owner; files-changed: none; validation: npm run work:validate -- --pre-impl; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: none; validation: `npm run work:repair`; outcome: validated.
+
+## Commit And Push Ledger
+
+1. Focused package commit: aef3c42e8bd76d237056dceffb3cef1189085b4c
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
 
 ## Validation
 
 1. node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-progress-contract-proof.report.json --verbose
 2. npm run work:scenario-route -- test-output/reports/rolling-restart-progress-contract-proof.report.json
+

@@ -55,22 +55,22 @@ Complete means:
 ## Current Edge Card
 
 ```text
-Representative artifact: test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json
+Representative artifact: test-output/reports/rolling-restart-progress-contract-proof.report.json
 Visible first frontier: startup_active_gate_owner / snapshot_coverage
-Active package: work/packages/done-20260527-active-gate-snapshot-coverage-progress-contract-conversion.md
+Active package: work/packages/active-20260527-rolling-restart-startup-active-gate-owner-snapshot-coverage.md
 Active package owner: startup_active_gate_owner
 Active package boundary: snapshot_coverage
 Selected cause: snapshot_coverage_incomplete
-Required action: Convert active-gate snapshot coverage to explicit bounded progress, retry, and terminal contract evidence.
-Representative status: live
+Required action: Triage active_gate_snapshot_coverage with combined scenario evidence before runtime edits.
+Representative status: classification-only
 Causal outcome: migrate_owner_boundary
 Architecture gate: watching / unknown
-Expected delta: active-gate snapshot coverage emits one next action with wake source, retry timing, terminal state, and evidence path.
-Current state: Created todo package for active-gate snapshot coverage conversion; coverage shortfalls must expose bounded progress or an upstream blocking dependency.
-Allowed edits: src/diagnostics/topology-convergence-normalizers.js, test/distributed/harness/startup-readiness-evidence.js, test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js, test/diagnostics/topology-convergence-graph.test.js, test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js, src/diagnostics/topology-convergence-graph.js
+Expected delta: Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.
+Current state: Scaffolded from representative evidence for active_gate_snapshot_coverage.
+Allowed edits: unknown
 Candidate runtime files: unknown
-Forbidden edits: active-gate changes prefer progress contract and do not invent runtime behaviors.
-Required latest proof: falsifier: npm test -- test/diagnostics/topology-convergence-graph.test.js test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js, regression: npm run work:evidence-summary -- test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json
+Forbidden edits: no implementation edits are allowed under scenario-release-gate without a child package
+Required latest proof: falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-progress-contract-proof.report.json, regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-progress-contract-proof.report.json --markdown, supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-progress-contract-proof.report.json --markdown
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
