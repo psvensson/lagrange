@@ -116,6 +116,8 @@ Packages touching startup, join, rejoin, readiness, admission, recovery,
 convergence, rebalancing, or other lifecycle progression declare a progress
 grammar.
 
+Every owner-boundary progress contract must explicitly declare the canonical 10-field progress contract shape (`owner`, `boundary`, `state`, `reason`, `nextAction`, `wakeSource`, `retryAfterMs`, `terminalState`, `evidencePath`, `blockingDependency`) using local constants rather than inline strings. Packages that touch or modify control-plane progression or owner boundaries must document their active progress contract shape under the `progressContract` metadata in their front matter.
+
 Required fields:
 
 1. canonical state or outcome vocabulary

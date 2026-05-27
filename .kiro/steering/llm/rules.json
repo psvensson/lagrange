@@ -99,12 +99,12 @@
     }
   ],
   "stats": {
-    "candidateCount": 321,
-    "dedupedRuleCount": 314,
-    "exportedRuleCount": 314,
+    "candidateCount": 323,
+    "dedupedRuleCount": 316,
+    "exportedRuleCount": 316,
     "aliasRuleCount": 11,
-    "masterRuleCount": 303,
-    "estimatedAllRulesTokens": 12278
+    "masterRuleCount": 305,
+    "estimatedAllRulesTokens": 12399
   },
   "rules": [
     {
@@ -3979,6 +3979,23 @@
       "id": "GOV-0055",
       "domain": "governance",
       "strength": "must",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "Packages that touch or modify control-plane progression or owner boundaries must document their active progress contract shape under the progressContract metadata in their front matter.",
+      "score": 193,
+      "sources": [
+        {
+          "file": "workflow-guidelines/lifecycle.md",
+          "line": 119,
+          "section": "Workflow — Lanes & Lifecycle > Lifecycle Progress Grammar"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0056",
+      "domain": "governance",
+      "strength": "must",
       "tags": [],
       "rule": "Every completed work-package slice MUST end in a focused commit and push before the next slice starts.",
       "score": 193,
@@ -3991,7 +4008,7 @@
       ]
     },
     {
-      "id": "GOV-0056",
+      "id": "GOV-0057",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4006,7 +4023,7 @@
       ]
     },
     {
-      "id": "GOV-0057",
+      "id": "GOV-0058",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4023,7 +4040,7 @@
       ]
     },
     {
-      "id": "GOV-0058",
+      "id": "GOV-0059",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4038,7 +4055,7 @@
       ]
     },
     {
-      "id": "GOV-0059",
+      "id": "GOV-0060",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4053,7 +4070,7 @@
       ]
     },
     {
-      "id": "GOV-0060",
+      "id": "GOV-0061",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4068,7 +4085,7 @@
       ]
     },
     {
-      "id": "GOV-0061",
+      "id": "GOV-0062",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4083,7 +4100,7 @@
       ]
     },
     {
-      "id": "GOV-0062",
+      "id": "GOV-0063",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4100,7 +4117,7 @@
       ]
     },
     {
-      "id": "GOV-0063",
+      "id": "GOV-0064",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4115,7 +4132,7 @@
       ]
     },
     {
-      "id": "GOV-0064",
+      "id": "GOV-0065",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4130,7 +4147,7 @@
       ]
     },
     {
-      "id": "GOV-0065",
+      "id": "GOV-0066",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4162,7 +4179,7 @@
       ]
     },
     {
-      "id": "GOV-0066",
+      "id": "GOV-0067",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4179,7 +4196,7 @@
       ]
     },
     {
-      "id": "GOV-0067",
+      "id": "GOV-0068",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4285,7 +4302,7 @@
       ]
     },
     {
-      "id": "GOV-0068",
+      "id": "GOV-0069",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -4304,7 +4321,7 @@
       ]
     },
     {
-      "id": "GOV-0069",
+      "id": "GOV-0070",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4523,7 +4540,7 @@
       ]
     },
     {
-      "id": "GOV-0070",
+      "id": "GOV-0071",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4538,7 +4555,7 @@
       ]
     },
     {
-      "id": "GOV-0071",
+      "id": "GOV-0072",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4553,7 +4570,7 @@
       ]
     },
     {
-      "id": "GOV-0072",
+      "id": "GOV-0073",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4568,7 +4585,7 @@
       ]
     },
     {
-      "id": "GOV-0073",
+      "id": "GOV-0074",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4586,7 +4603,7 @@
       ]
     },
     {
-      "id": "GOV-0074",
+      "id": "GOV-0075",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4735,7 +4752,7 @@
       ]
     },
     {
-      "id": "GOV-0075",
+      "id": "GOV-0076",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4750,7 +4767,7 @@
       ]
     },
     {
-      "id": "GOV-0076",
+      "id": "GOV-0077",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4840,7 +4857,25 @@
       ]
     },
     {
-      "id": "GOV-0077",
+      "id": "GOV-0078",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [
+        "ownership",
+        "style"
+      ],
+      "rule": "Every owner-boundary progress contract must explicitly declare the canonical 10-field progress contract shape (owner, boundary, state, reason, nextAction, wakeSource, retryAfterMs, terminalState, evidencePath, blockingDependency) using local constants rather than inline strings.",
+      "score": 169,
+      "sources": [
+        {
+          "file": "workflow-guidelines/lifecycle.md",
+          "line": 119,
+          "section": "Workflow — Lanes & Lifecycle > Lifecycle Progress Grammar"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0079",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4857,7 +4892,7 @@
       ]
     },
     {
-      "id": "GOV-0078",
+      "id": "GOV-0080",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4874,7 +4909,7 @@
       ]
     },
     {
-      "id": "GOV-0079",
+      "id": "GOV-0081",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4938,7 +4973,7 @@
       ]
     },
     {
-      "id": "GOV-0080",
+      "id": "GOV-0082",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4987,7 +5022,7 @@
       ]
     },
     {
-      "id": "GOV-0081",
+      "id": "GOV-0083",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5004,7 +5039,7 @@
       ]
     },
     {
-      "id": "GOV-0082",
+      "id": "GOV-0084",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5021,7 +5056,7 @@
       ]
     },
     {
-      "id": "GOV-0083",
+      "id": "GOV-0085",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5051,7 +5086,7 @@
       ]
     },
     {
-      "id": "GOV-0084",
+      "id": "GOV-0086",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5083,7 +5118,7 @@
       ]
     },
     {
-      "id": "GOV-0085",
+      "id": "GOV-0087",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5100,7 +5135,7 @@
       ]
     },
     {
-      "id": "GOV-0086",
+      "id": "GOV-0088",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5115,7 +5150,7 @@
       ]
     },
     {
-      "id": "GOV-0087",
+      "id": "GOV-0089",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5132,7 +5167,7 @@
       ]
     },
     {
-      "id": "GOV-0088",
+      "id": "GOV-0090",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5147,7 +5182,7 @@
       ]
     },
     {
-      "id": "GOV-0089",
+      "id": "GOV-0091",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5164,7 +5199,7 @@
       ]
     },
     {
-      "id": "GOV-0090",
+      "id": "GOV-0092",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5179,7 +5214,7 @@
       ]
     },
     {
-      "id": "GOV-0091",
+      "id": "GOV-0093",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5196,7 +5231,7 @@
       ]
     },
     {
-      "id": "GOV-0092",
+      "id": "GOV-0094",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5214,7 +5249,7 @@
       ]
     },
     {
-      "id": "GOV-0093",
+      "id": "GOV-0095",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5244,7 +5279,7 @@
       ]
     },
     {
-      "id": "GOV-0094",
+      "id": "GOV-0096",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5261,7 +5296,7 @@
       ]
     },
     {
-      "id": "GOV-0095",
+      "id": "GOV-0097",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5278,7 +5313,7 @@
       ]
     },
     {
-      "id": "GOV-0096",
+      "id": "GOV-0098",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5297,7 +5332,7 @@
       ]
     },
     {
-      "id": "GOV-0097",
+      "id": "GOV-0099",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5314,7 +5349,7 @@
       ]
     },
     {
-      "id": "GOV-0098",
+      "id": "GOV-0100",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5331,5 +5366,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-05-26T13:29:55.502Z"
+  "generatedAt": "2026-05-27T18:52:05.490Z"
 }

@@ -97,7 +97,7 @@ table.
 
 When a boundary owns progress through startup, join, rejoin, readiness,
 admission, recovery, convergence, or rebalancing, the design is not done until
-the progress vocabulary is explicit.
+the progress vocabulary is explicit and follows the canonical 10-field progress contract shape (`owner`, `boundary`, `state`, `reason`, `nextAction`, `wakeSource`, `retryAfterMs`, `terminalState`, `evidencePath`, `blockingDependency`).
 
 Prefer:
 
