@@ -208,6 +208,27 @@ function compareArtifacts(oldFields, newFields) {
     result.ruledOutMechanisms.push('unknown');
   }
 
+  // Emergent-class detection from cross-rerun behavior
+  // coupled_invariants: 3+ invariant blockers stay stable together
+  if (result.invariantBlockers.length >= 3) {
+    result.ruledInMechanisms.push('coupled_invariants (three or more invariants hold in lockstep across reruns)');
+  }
+  // feedback_amplification: attempts increased while coverage stayed flat or worsened
+  if (
+    newFields.attempts > oldFields.attempts &&
+    newFields.snapshotCoverageNodeCount <= oldFields.snapshotCoverageNodeCount
+  ) {
+    result.ruledInMechanisms.push('feedback_amplification (retry attempts increased without corresponding coverage gain)');
+  }
+  // emergent_oscillation: frontier state changed but reverted via differing handoffReason between reruns
+  if (
+    oldFields.frontierState === newFields.frontierState &&
+    oldFields.handoffReason !== newFields.handoffReason &&
+    oldFields.snapshotCoverageNodeCount === newFields.snapshotCoverageNodeCount
+  ) {
+    result.ruledInMechanisms.push('emergent_oscillation (frontier state stable but handoff reason alternates across reruns)');
+  }
+
   // Recommended next loop action:
   // Escalation if blockers are invariant across multiple runs
   if (result.invariantBlockers.length >= 3) {

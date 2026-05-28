@@ -53,6 +53,19 @@ import {
   SYSTEM_THEORY_TRANSITION_OWNER_FIELD,
   SYSTEM_THEORY_TRANSITION_TABLE_FIELD,
   SYSTEM_THEORY_WHOLE_SYSTEM_INVARIANT_FIELD,
+  SYSTEM_THEORY_WHOLE_SYSTEM_INVARIANTS_FIELD,
+  SYSTEM_THEORY_INVARIANT_ENTRY_INVARIANT_FIELD,
+  SYSTEM_THEORY_INVARIANT_ENTRY_COUPLED_WITH_FIELD,
+  SYSTEM_THEORY_INVARIANT_ENTRY_COUPLING_NOTE_FIELD,
+  MODEL_THEORY_FIELD,
+  MODEL_THEORY_FIELDS,
+  MODEL_THEORY_KIND_FIELD,
+  MODEL_THEORY_EXECUTABLE_ARTIFACT_FIELD,
+  MODEL_THEORY_PROPERTIES_PROVEN_FIELD,
+  MODEL_THEORY_ASSUMPTIONS_FIELD,
+  MODEL_THEORY_COUNTER_EXAMPLE_HANDLING_FIELD,
+  MODEL_THEORY_LINKED_SYSTEM_THEORY_REF_FIELD,
+  MODEL_THEORY_VALID_KINDS,
   SLICE_THEORY_FALSIFIER_FIELD,
   SLICE_THEORY_FIELD,
   SLICE_THEORY_FIELDS,
@@ -723,7 +736,9 @@ const MODEL_FIT_FOCUSED_PROOF_COMMAND_PATTERN = new RegExp(
   'iu',
 );
 const TWO_LEVEL_THEORY_MECHANISM_PATTERN =
-  /\b(?:observation_gap|selection_gap|admission_gap|transition_gap|scheduling_gap|budget_gap|concurrency_gap|contract_gap|ownership_gap|downstream_symptom)\b/iu;
+  /\b(?:observation_gap|selection_gap|admission_gap|transition_gap|scheduling_gap|budget_gap|concurrency_gap|contract_gap|ownership_gap|downstream_symptom|coupled_invariants|emergent_oscillation|protocol_mismatch|feedback_amplification)\b/iu;
+const TWO_LEVEL_THEORY_EMERGENT_MECHANISM_PATTERN =
+  /\b(?:coupled_invariants|emergent_oscillation|protocol_mismatch|feedback_amplification)\b/iu;
 const TWO_LEVEL_THEORY_SCORE_PATTERN = /\b(?:high|medium|low)\b/iu;
 const MODEL_FIT_REQUIRED_SPARK_LABELS = Object.freeze([
   MODEL_FIT_OWNED_FILES_LABEL,
@@ -5891,12 +5906,201 @@ function validateSystemTheory(filePath, systemTheory) {
     systemTheory,
     SYSTEM_THEORY_ARCHITECTURE_GAP_TRIGGERS_FIELD,
   ));
-  errors.push(...validateTwoLevelConcreteField(
+  errors.push(...validateSystemTheoryWholeSystemInvariants(
     filePath,
-    `${SYSTEM_THEORY_FIELD}.${SYSTEM_THEORY_WHOLE_SYSTEM_INVARIANT_FIELD}`,
-    systemTheory[SYSTEM_THEORY_WHOLE_SYSTEM_INVARIANT_FIELD],
+    systemTheory,
   ));
   return errors;
+}
+
+function validateSystemTheoryWholeSystemInvariants(filePath, systemTheory) {
+  const errors = [];
+  const scalar = systemTheory[SYSTEM_THEORY_WHOLE_SYSTEM_INVARIANT_FIELD];
+  const list = systemTheory[SYSTEM_THEORY_WHOLE_SYSTEM_INVARIANTS_FIELD];
+  const hasScalar = scalar !== undefined && scalar !== null;
+  const hasList = list !== undefined && list !== null;
+  if (!hasScalar && !hasList) {
+    errors.push(
+      `${filePath}: ${SYSTEM_THEORY_FIELD}.` +
+      `${SYSTEM_THEORY_WHOLE_SYSTEM_INVARIANT_FIELD} or ` +
+      `${SYSTEM_THEORY_WHOLE_SYSTEM_INVARIANTS_FIELD} must be present.`,
+    );
+    return errors;
+  }
+  if (hasScalar && !hasList) {
+    errors.push(...validateTwoLevelConcreteField(
+      filePath,
+      `${SYSTEM_THEORY_FIELD}.${SYSTEM_THEORY_WHOLE_SYSTEM_INVARIANT_FIELD}`,
+      scalar,
+    ));
+  }
+  if (!hasList) {
+    return errors;
+  }
+  const fieldPath =
+    `${SYSTEM_THEORY_FIELD}.${SYSTEM_THEORY_WHOLE_SYSTEM_INVARIANTS_FIELD}`;
+  if (!Array.isArray(list)) {
+    errors.push(`${filePath}: ${fieldPath} must be an array.`);
+    return errors;
+  }
+  if (list.length === NUM_ZERO) {
+    errors.push(
+      `${filePath}: ${fieldPath} must contain at least one invariant entry.`,
+    );
+    return errors;
+  }
+  let anyCoupling = false;
+  for (let index = NUM_ZERO; index < list.length; index += NUM_ONE) {
+    const entry = list[index];
+    const entryPath = `${fieldPath}[${index}]`;
+    if (!isObjectRecord(entry)) {
+      errors.push(`${filePath}: ${entryPath} must be an object.`);
+      continue;
+    }
+    errors.push(...validateTwoLevelConcreteField(
+      filePath,
+      `${entryPath}.${SYSTEM_THEORY_INVARIANT_ENTRY_INVARIANT_FIELD}`,
+      entry[SYSTEM_THEORY_INVARIANT_ENTRY_INVARIANT_FIELD],
+    ));
+    const coupledWith =
+      entry[SYSTEM_THEORY_INVARIANT_ENTRY_COUPLED_WITH_FIELD];
+    if (!Array.isArray(coupledWith)) {
+      errors.push(
+        `${filePath}: ${entryPath}.` +
+        `${SYSTEM_THEORY_INVARIANT_ENTRY_COUPLED_WITH_FIELD} must be an array.`,
+      );
+    } else if (coupledWith.length > NUM_ZERO) {
+      anyCoupling = true;
+      for (let j = NUM_ZERO; j < coupledWith.length; j += NUM_ONE) {
+        errors.push(...validateTwoLevelConcreteField(
+          filePath,
+          `${entryPath}.` +
+          `${SYSTEM_THEORY_INVARIANT_ENTRY_COUPLED_WITH_FIELD}[${j}]`,
+          coupledWith[j],
+        ));
+      }
+    }
+    errors.push(...validateTwoLevelConcreteField(
+      filePath,
+      `${entryPath}.${SYSTEM_THEORY_INVARIANT_ENTRY_COUPLING_NOTE_FIELD}`,
+      entry[SYSTEM_THEORY_INVARIANT_ENTRY_COUPLING_NOTE_FIELD],
+    ));
+  }
+  if (list.length > NUM_ONE && !anyCoupling) {
+    errors.push(
+      `${filePath}: ${fieldPath}: when more than one invariant is listed, ` +
+      'at least one entry must declare a non-empty coupledWith list ' +
+      '(coupled-invariants-undeclared).',
+    );
+  }
+  return errors;
+}
+
+function validateModelTheory(filePath, modelTheory) {
+  if (modelTheory === undefined || modelTheory === null) {
+    return [];
+  }
+  if (!isObjectRecord(modelTheory)) {
+    return [`${filePath}: metadata ${MODEL_THEORY_FIELD} must be an object.`];
+  }
+  const errors = [];
+  const kind = modelTheory[MODEL_THEORY_KIND_FIELD];
+  const kindPath = `${MODEL_THEORY_FIELD}.${MODEL_THEORY_KIND_FIELD}`;
+  errors.push(...validateTwoLevelConcreteField(filePath, kindPath, kind));
+  if (
+    typeof kind === 'string' &&
+    kind.length > NUM_ZERO &&
+    !MODEL_THEORY_VALID_KINDS.includes(kind)
+  ) {
+    errors.push(
+      `${filePath}: ${kindPath} must be one of ` +
+      `${MODEL_THEORY_VALID_KINDS.join(', ')}.`,
+    );
+  }
+  const artifact = modelTheory[MODEL_THEORY_EXECUTABLE_ARTIFACT_FIELD];
+  const artifactPath =
+    `${MODEL_THEORY_FIELD}.${MODEL_THEORY_EXECUTABLE_ARTIFACT_FIELD}`;
+  errors.push(...validateTwoLevelConcreteField(
+    filePath,
+    artifactPath,
+    artifact,
+  ));
+  if (
+    typeof artifact === 'string' &&
+    artifact.length > NUM_ZERO &&
+    !/^(?:test|scripts|docs\/specs)\//u.test(artifact)
+  ) {
+    errors.push(
+      `${filePath}: ${artifactPath} must point under test/, scripts/, ` +
+      'or docs/specs/.',
+    );
+  }
+  errors.push(...validateTwoLevelConcreteArray(
+    filePath,
+    MODEL_THEORY_FIELD,
+    modelTheory,
+    MODEL_THEORY_PROPERTIES_PROVEN_FIELD,
+  ));
+  errors.push(...validateTwoLevelConcreteArray(
+    filePath,
+    MODEL_THEORY_FIELD,
+    modelTheory,
+    MODEL_THEORY_ASSUMPTIONS_FIELD,
+  ));
+  errors.push(...validateTwoLevelConcreteField(
+    filePath,
+    `${MODEL_THEORY_FIELD}.${MODEL_THEORY_COUNTER_EXAMPLE_HANDLING_FIELD}`,
+    modelTheory[MODEL_THEORY_COUNTER_EXAMPLE_HANDLING_FIELD],
+  ));
+  errors.push(...validateTwoLevelConcreteField(
+    filePath,
+    `${MODEL_THEORY_FIELD}.${MODEL_THEORY_LINKED_SYSTEM_THEORY_REF_FIELD}`,
+    modelTheory[MODEL_THEORY_LINKED_SYSTEM_THEORY_REF_FIELD],
+  ));
+  return errors;
+}
+
+function isModelTheoryComplete(modelTheory) {
+  if (!isObjectRecord(modelTheory)) {
+    return false;
+  }
+  const kind = modelTheory[MODEL_THEORY_KIND_FIELD];
+  if (
+    typeof kind !== 'string' ||
+    !MODEL_THEORY_VALID_KINDS.includes(kind)
+  ) {
+    return false;
+  }
+  const artifact = modelTheory[MODEL_THEORY_EXECUTABLE_ARTIFACT_FIELD];
+  if (
+    typeof artifact !== 'string' ||
+    !/^(?:test|scripts|docs\/specs)\//u.test(artifact)
+  ) {
+    return false;
+  }
+  const properties = modelTheory[MODEL_THEORY_PROPERTIES_PROVEN_FIELD];
+  if (!Array.isArray(properties) || properties.length === NUM_ZERO) {
+    return false;
+  }
+  const assumptions = modelTheory[MODEL_THEORY_ASSUMPTIONS_FIELD];
+  if (!Array.isArray(assumptions) || assumptions.length === NUM_ZERO) {
+    return false;
+  }
+  if (
+    !isConcreteMetadataText(
+      modelTheory[MODEL_THEORY_COUNTER_EXAMPLE_HANDLING_FIELD],
+    )
+  ) {
+    return false;
+  }
+  if (
+    !isConcreteMetadataText(
+      modelTheory[MODEL_THEORY_LINKED_SYSTEM_THEORY_REF_FIELD],
+    )
+  ) {
+    return false;
+  }
+  return true;
 }
 
 function validateTheoryFitScore(filePath, score) {
@@ -6030,6 +6234,7 @@ export function validateTwoLevelTheoryContract(
   if (sliceTheory !== undefined) {
     errors.push(...validateSliceTheory(filePath, sliceTheory));
   }
+  errors.push(...validateModelTheory(filePath, metadata?.[MODEL_THEORY_FIELD]));
   return errors;
 }
 
@@ -8698,15 +8903,28 @@ export function validateTheoryLoopPackageContract(
   }
   const writeScope = metadataScopeList(metadata, SCOPE_FIELD_WRITE_SCOPE);
   const commitScope = metadataScopeList(metadata, SCOPE_FIELD_COMMIT_SCOPE);
-  if (!writeScope.some(isSourceWritePath)) {
+  const modelTheory = metadata?.[MODEL_THEORY_FIELD];
+  const modelTheoryExempts = isModelTheoryComplete(modelTheory);
+  if (!writeScope.some(isSourceWritePath) && !modelTheoryExempts) {
     errors.push(
-      `${filePath}: theory-loop package writeScope must include at least one src/ source file.`,
+      `${filePath}: theory-loop package writeScope must include at least one src/ source file ` +
+      `(or declare a complete metadata.${MODEL_THEORY_FIELD} block with all six required fields).`,
     );
   }
-  if (!commitScope.some(isSourceWritePath)) {
+  if (!commitScope.some(isSourceWritePath) && !modelTheoryExempts) {
     errors.push(
-      `${filePath}: theory-loop package commitScope must include the promoted src/ source file.`,
+      `${filePath}: theory-loop package commitScope must include the promoted src/ source file ` +
+      `(or declare a complete metadata.${MODEL_THEORY_FIELD} block with all six required fields).`,
     );
+  }
+  if (modelTheoryExempts) {
+    const artifact = modelTheory[MODEL_THEORY_EXECUTABLE_ARTIFACT_FIELD];
+    if (!writeScope.includes(artifact) && !commitScope.includes(artifact)) {
+      errors.push(
+        `${filePath}: modelTheory.${MODEL_THEORY_EXECUTABLE_ARTIFACT_FIELD} (${artifact}) ` +
+        'must appear in writeScope or commitScope so the executable model is owned by this package.',
+      );
+    }
   }
   if (!proofHasRole(metadata, 'falsifier')) {
     errors.push(

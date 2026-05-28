@@ -131,6 +131,22 @@ function classifyArtifact(summary, artifact) {
   if (reasonsStr.includes('disagree') || reasonsStr.includes('mismatch') || reasonsStr.includes('contract')) {
     candidateMechanisms.push('contract_gap');
   }
+  // Emergent-class detection
+  if (reasonsStr.includes('oscillat') || reasonsStr.includes('flip') || reasonsStr.includes('toggle') || reasonsStr.includes('alternat')) {
+    candidateMechanisms.push('emergent_oscillation');
+  }
+  if (reasonsStr.includes('amplif') || (reasonsStr.includes('retry') && reasonsStr.includes('increase')) || reasonsStr.includes('positive feedback')) {
+    candidateMechanisms.push('feedback_amplification');
+  }
+  if (reasonsStr.includes('coupled') || reasonsStr.includes('lockstep') || (reasonsStr.match(/invariant/g) || []).length >= 2) {
+    candidateMechanisms.push('coupled_invariants');
+  }
+  // protocol_mismatch: three or more distinct owners mentioned in reasons
+  const ownerMatches = reasonsStr.match(/\b\w+_owner\b/g) || [];
+  const distinctOwners = new Set(ownerMatches);
+  if (distinctOwners.size >= 3 || (reasonsStr.includes('protocol') && reasonsStr.includes('disagree'))) {
+    candidateMechanisms.push('protocol_mismatch');
+  }
 
   // Default fallback if no specific heuristics match
   if (candidateMechanisms.length === 0) {

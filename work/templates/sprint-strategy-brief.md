@@ -73,7 +73,7 @@ shape of failure.
 3. System theory: record the phase chain, owner-boundary map, stable and changed facts, competing and eliminated theories, downstream symptoms, transition table, migration triggers, architecture-gap triggers, and invariant.
 4. Slice theory: record the selected mechanism, source/test contract, focused falsifier, expected representative movement, kill rule, theory-fit score, and wrong-slice triggers.
 5. Missing system object: record the runtime code, vocabulary, invariant, owner contract, evidence projection, fixture coverage, or architecture policy that is absent.
-6. Failure mechanism taxonomy term: record one of observation_gap, selection_gap, admission_gap, transition_gap, scheduling_gap, budget_gap, concurrency_gap, contract_gap, ownership_gap, or downstream_symptom.
+6. Failure mechanism taxonomy term: record one of observation_gap, selection_gap, admission_gap, transition_gap, scheduling_gap, budget_gap, concurrency_gap, contract_gap, ownership_gap, downstream_symptom, coupled_invariants, emergent_oscillation, protocol_mismatch, or feedback_amplification.
 7. Next package as experiment: record the theory being tested and the owner, boundary, and files implied by that theory.
 8. Falsifier: record evidence that redirects owner, boundary, package sequence, or escalation path.
 9. Negative proof: record proof that the change does not reintroduce old debt, reinterpret downstream symptoms, or depend on stale diagnostics.

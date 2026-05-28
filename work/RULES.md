@@ -110,6 +110,10 @@ To prevent repeated local patches on unchanged evidence, all non-trivial scenari
 8. `contract_gap`: producer and consumer disagree on the meaning of state or evidence.
 9. `ownership_gap`: no single owner has authority for the decision.
 10. `downstream_symptom`: visible failure inherits from an upstream blocker.
+11. `coupled_invariants`: two or more whole-system invariants drift together or oppose each other; no single-mechanism fix moves the visible blocker because the blocker is the coupling itself. Use when fixing one invariant predictably degrades another, or when two invariants are observed to hold/fail in lockstep across reruns.
+12. `emergent_oscillation`: the system flips between adjacent states with no owner-owned terminal action; no single transition is missing, but the chosen transitions form a non-terminating cycle. Use when consecutive packages move the frontier into a state that the loop already visited in the same boundary.
+13. `protocol_mismatch`: three or more owners disagree on phase semantics, contract, or evidence meaning simultaneously. Distinct from `contract_gap` (two owners) — escalates to a protocol-level theory, not a local contract patch.
+14. `feedback_amplification`: a corrective action increases the very signal it observes. Use when retry, wake, or reconcile cadence is observed to correlate positively with the metric it is meant to reduce.
 
 Before implementation, packages in that scope must expose a mechanism card containing:
 *   **Failure mechanism**: classified taxonomy term.
@@ -144,10 +148,22 @@ Do not treat those packages as pre-implementation ready unless they record both
 `systemTheory` is the whole-system causal map. It must record the problem
 statement, phase chain, owner-boundary map, stable facts, changed facts,
 competing theories, eliminated theories, downstream symptoms, transition table,
-ownership migration triggers, architecture-gap triggers, and one whole-system
-invariant. The transition table names the input signal, owner, missing
-transition, expected evidence, focused falsifier, and migration trigger for each
-material owner boundary.
+ownership migration triggers, architecture-gap triggers, and **at least one
+whole-system invariant** (legacy scalar `wholeSystemInvariant` accepted; new
+packages should use the list form `wholeSystemInvariants` to record coupled
+invariants explicitly). The transition table names the input signal, owner,
+missing transition, expected evidence, focused falsifier, and migration trigger
+for each material owner boundary.
+
+When `wholeSystemInvariants` is used it MUST be an array of objects with the
+fields `invariant` (the invariant text), `coupledWith` (array of zero or more
+other invariant names that move together with it, by exact `invariant`
+substring match), and `couplingNote` (concrete explanation of the coupling, or
+the literal `none` when the invariant is independent). At least one entry is
+required; when more than one entry is present, at least one entry MUST declare
+a non-empty `coupledWith` list, otherwise the validator rejects the package
+with a `coupled-invariants-undeclared` error — coupled-invariants reasoning is
+the whole point of the list form.
 
 `sliceTheory` is the package-local executable contract. It must cite the system
 theory, name the selected system theory, selected mechanism, source/test
@@ -156,10 +172,25 @@ theory-fit score, and wrong-slice triggers. The theory-fit score uses concrete
 high/medium/low rationale for evidence fit, owner-boundary fit, falsifiability,
 representative movement, and downstream risk containment.
 
+`modelTheory` is the optional third tier. Use it when the system theory needs
+an executable specification (state model, simulator, invariant spec, or
+property test) that cannot be expressed as a single `src/` slice. A package
+declaring `modelTheory` is exempt from the Real Package Rule's `src/`-write
+requirement **only when** the modelTheory block declares `modelKind`
+(`state-model` | `simulator` | `invariant-spec` | `property-test`),
+`executableArtifact` (a real file path under `test/`, `scripts/`, or
+`docs/specs/`), `propertiesProven` (non-empty list of named properties),
+`assumptions` (non-empty list, or the literal `none`), `counterExampleHandling`
+(what happens if the model falsifies a property), and `linkedSystemTheoryRef`
+(reference to the systemTheory whose invariant the model formalizes). The
+package's falsifier proof command MUST execute the model and fail on property
+violation. Without all six fields, the model-theory exemption does not apply
+and the package is held to the normal source-code rule.
+
 Evidence-only reasoning stays at sprint level. Promote a package only when
-slice theory can execute one declared source/test contract, migrate ownership,
-or close as architecture-gap. If system theory cannot select a slice, do not
-open another local runtime patch.
+slice theory (or model theory) can execute one declared source/test contract,
+migrate ownership, or close as architecture-gap. If system theory cannot select
+a slice, do not open another local runtime patch.
 
 ---
 
@@ -184,8 +215,12 @@ sections:
    expected movement, negative result meaning, and escalation rule.
 3. `Theory Option Set`: 2-4 competing options. Each option names a mechanism,
    intervention style, `src/` source-code modification, cheapest
-   discriminator, promotion trigger, and rejection signal. Options are not work
-   packages.
+   discriminator, promotion trigger, rejection signal, and **`layer:`** drawn
+   from the layer vocabulary `{protocol, scheduling, ownership, observation,
+   topology, model}`. The set MUST contain options at **two or more distinct
+   layers**; a single-layer option set is rejected by the theory-loop sprint
+   shape validator because it cannot represent a holistic alternative. Options
+   are not work packages.
 4. `Creative Move Menu`: domain-neutral moves that force alternatives, such as
    ownership inversion, minimal trace capture, opposite intervention, boundary
    swap, or missing-object search.
@@ -211,6 +246,39 @@ Queue discipline is part of the shape: keep one active executable package and
 do not create speculative successor packages. A successor package is created
 only after the active package produces fresh route evidence or a discriminator
 selects a different option.
+
+### Compositional Auto-Promote Rule
+
+The frontier-history tool (`npm run work:frontier-history`) emits a
+`compositionalSignals` block when a single owner/boundary has three or more
+consecutive closed packages whose selected mechanisms match any of the
+saturation patterns:
+
+* same mechanism repeated three times in a row,
+* any pair from `{transition_gap+scheduling_gap, contract_gap+ownership_gap,
+  concurrency_gap+budget_gap}` alternating,
+* any occurrence of an emergent-class term (`coupled_invariants`,
+  `emergent_oscillation`, `protocol_mismatch`, `feedback_amplification`).
+
+When a compositional signal fires, the `--pre-impl` validator refuses to
+promote another local slice on the same owner/boundary with the saturated
+mechanism unless the next package is a `systemTheory` revision opened by
+`npm run work:system-theory:rederive --owner <owner> --boundary <boundary>
+--write`. The rederive command consumes the compositional signal and stamps
+the new `systemTheoryRederivedAt` date on the active sprint.
+
+### Periodic Re-derivation Checkpoint
+
+Active sprints record `systemTheoryRederivedAt` (ISO date) on a single header
+line. The gating command
+`npm run work:system-theory:rederive -- --check-due --sprint <active-sprint.md>`
+counts `done-*` packages whose date prefix is ≥ that stamp; when the count
+meets or exceeds `--threshold` (default 5), the command exits non-zero and
+the next package activation MUST be a systemTheory revision package (slug
+containing `system-theory-rederive` or package metadata
+`lane: system-theory-rederive`). Sprints without `systemTheoryRederivedAt`
+have the gate inactive (the command exits zero with `gate inactive`), so this
+is fully additive for legacy sprints.
 
 Closure discipline is stricter: a theory loop sprint continues indefinitely
 until the original `Evidence Anchor` success condition is met. It must not

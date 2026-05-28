@@ -100,6 +100,15 @@ const OPTION_REQUIRED_FIELDS = Object.freeze([
   'discriminator',
   'promotion',
   'rejection',
+  'layer',
+]);
+const OPTION_LAYER_VOCABULARY = Object.freeze([
+  'protocol',
+  'scheduling',
+  'ownership',
+  'observation',
+  'topology',
+  'model',
 ]);
 const THEORY_LOOP_FIELD = 'theoryLoop';
 const THEORY_LOOP_SOURCE_PACKAGE_ENFORCEMENT =
@@ -276,6 +285,7 @@ function validateTheories(theories) {
   if (theories.length < NUM_TWO || theories.length > NUM_FOUR) {
     throw new Error('Theory-loop option sets require 2-4 --theory values.');
   }
+  const layersSeen = new Set();
   for (const theory of theories) {
     const missing = OPTION_REQUIRED_FIELDS.filter((field) =>
       !new RegExp(`\\b${field}\\s*:`, 'iu').test(theory));
@@ -284,6 +294,22 @@ function validateTheories(theories) {
         `Theory-loop option "${theory}" must include ${OPTION_REQUIRED_FIELDS.join(', ')} fields.`,
       );
     }
+    const layerMatch = theory.match(/\blayer\s*:\s*([a-z]+)/iu);
+    const layerValue = layerMatch ? layerMatch[1].toLowerCase() : '';
+    if (!OPTION_LAYER_VOCABULARY.includes(layerValue)) {
+      throw new Error(
+        `Theory-loop option "${theory}" must declare layer: as one of ` +
+        `${OPTION_LAYER_VOCABULARY.join(', ')}.`,
+      );
+    }
+    layersSeen.add(layerValue);
+  }
+  if (layersSeen.size < NUM_TWO) {
+    throw new Error(
+      'Theory-loop option set must span at least two distinct layers ' +
+      `from {${OPTION_LAYER_VOCABULARY.join(', ')}}; a single-layer option set ` +
+      'cannot represent a holistic alternative.',
+    );
   }
 }
 

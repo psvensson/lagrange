@@ -201,6 +201,94 @@ function filterAndSummarizeHistory(parsedPackages, ownerFilter, boundaryFilter, 
   }));
 }
 
+const EMERGENT_MECHANISM_TERMS = Object.freeze([
+  'coupled_invariants',
+  'emergent_oscillation',
+  'protocol_mismatch',
+  'feedback_amplification',
+]);
+const COMPOSITIONAL_PAIRS = Object.freeze([
+  ['transition_gap', 'scheduling_gap'],
+  ['contract_gap', 'ownership_gap'],
+  ['concurrency_gap', 'budget_gap'],
+]);
+const COMPOSITIONAL_MIN_REPEAT = 3;
+const MECHANISM_TAXONOMY_PATTERN =
+  /\b(?:observation_gap|selection_gap|admission_gap|transition_gap|scheduling_gap|budget_gap|concurrency_gap|contract_gap|ownership_gap|downstream_symptom|coupled_invariants|emergent_oscillation|protocol_mismatch|feedback_amplification)\b/iu;
+
+function extractMechanismTerm(value) {
+  if (!value || typeof value !== 'string') return null;
+  const match = value.match(MECHANISM_TAXONOMY_PATTERN);
+  return match ? match[0].toLowerCase() : null;
+}
+
+function detectCompositionalSignals(history) {
+  // history is newest-first per filterAndSummarizeHistory; reorder oldest-first for sequence reasoning.
+  const ordered = [...history].reverse();
+  const mechanisms = ordered
+    .map((item) => extractMechanismTerm(item.failureMechanism))
+    .filter(Boolean);
+
+  const signals = [];
+
+  // Pattern 1: emergent-class term present anywhere in window
+  for (const term of EMERGENT_MECHANISM_TERMS) {
+    if (mechanisms.includes(term)) {
+      signals.push({
+        pattern: 'emergent-class-present',
+        mechanism: term,
+        recommendation: 'auto-promote-systemTheory-rev',
+        reason: `Emergent-class mechanism ${term} present in frontier history; ` +
+          `local slice cannot resolve emergent dynamics.`,
+      });
+    }
+  }
+
+  // Pattern 2: same mechanism repeated 3+ in a row
+  for (let i = 0; i + COMPOSITIONAL_MIN_REPEAT <= mechanisms.length; i++) {
+    const window = mechanisms.slice(i, i + COMPOSITIONAL_MIN_REPEAT);
+    if (window.every((m) => m === window[0]) && window[0]) {
+      signals.push({
+        pattern: 'same-mechanism-repeat',
+        mechanism: window[0],
+        recommendation: 'auto-promote-systemTheory-rev',
+        reason: `Mechanism ${window[0]} selected in ${COMPOSITIONAL_MIN_REPEAT} ` +
+          `consecutive packages without invariant movement.`,
+      });
+      break;
+    }
+  }
+
+  // Pattern 3: alternating pair from COMPOSITIONAL_PAIRS
+  for (const [a, b] of COMPOSITIONAL_PAIRS) {
+    for (let i = 0; i + COMPOSITIONAL_MIN_REPEAT <= mechanisms.length; i++) {
+      const window = mechanisms.slice(i, i + COMPOSITIONAL_MIN_REPEAT);
+      const hasA = window.includes(a);
+      const hasB = window.includes(b);
+      const onlyAB = window.every((m) => m === a || m === b);
+      if (hasA && hasB && onlyAB) {
+        signals.push({
+          pattern: 'compositional-pair-alternation',
+          mechanism: `${a}+${b}`,
+          recommendation: 'auto-promote-systemTheory-rev',
+          reason: `Mechanisms ${a} and ${b} alternate across ` +
+            `${COMPOSITIONAL_MIN_REPEAT} consecutive packages; this pair ` +
+            'indicates a systemic coupling rather than two independent gaps.',
+        });
+        break;
+      }
+    }
+  }
+
+  // De-duplicate by pattern+mechanism
+  const dedup = new Map();
+  for (const sig of signals) {
+    const key = `${sig.pattern}|${sig.mechanism}`;
+    if (!dedup.has(key)) dedup.set(key, sig);
+  }
+  return Array.from(dedup.values());
+}
+
 function renderTextHistory(history, owner, boundary) {
   const lines = [
     '================================================================================',
@@ -229,6 +317,19 @@ function renderTextHistory(history, owner, boundary) {
         lines.push(`Next Owner / Boundary: ${item.nextOwnerBoundary}`);
       }
       lines.push('--------------------------------------------------------------------------------');
+    }
+
+    const signals = detectCompositionalSignals(history);
+    lines.push('');
+    lines.push('COMPOSITIONAL SIGNALS:');
+    if (signals.length === 0) {
+      lines.push('  - none (varied mechanisms, no saturation pattern detected)');
+    } else {
+      for (const sig of signals) {
+        lines.push(`  - [${sig.pattern}] mechanism=${sig.mechanism}`);
+        lines.push(`      recommendation: ${sig.recommendation}`);
+        lines.push(`      reason: ${sig.reason}`);
+      }
     }
   }
 
@@ -267,7 +368,10 @@ function main(argv) {
     );
 
     const output = parsedArgs.isJsonFormat ?
-      JSON.stringify(history, null, 2) :
+      JSON.stringify({
+        history,
+        compositionalSignals: detectCompositionalSignals(history),
+      }, null, 2) :
       renderTextHistory(history, parsedArgs.owner, parsedArgs.boundary);
 
     process.stdout.write(`${output}\n`);
@@ -286,4 +390,7 @@ export {
   parsePackageFile,
   filterAndSummarizeHistory,
   renderTextHistory,
+  detectCompositionalSignals,
+  EMERGENT_MECHANISM_TERMS,
+  COMPOSITIONAL_PAIRS,
 };

@@ -105,7 +105,7 @@ frontier.
 
 ## Mechanism Card
 
-- Failure mechanism: <observation_gap | selection_gap | admission_gap | transition_gap | scheduling_gap | budget_gap | concurrency_gap | contract_gap | ownership_gap | downstream_symptom>
+- Failure mechanism: <observation_gap | selection_gap | admission_gap | transition_gap | scheduling_gap | budget_gap | concurrency_gap | contract_gap | ownership_gap | downstream_symptom | coupled_invariants | emergent_oscillation | protocol_mismatch | feedback_amplification>
 - Stable facts:
 - Changed facts:
 - Why not the alternatives:

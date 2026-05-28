@@ -15,9 +15,9 @@ const PACKAGE_PATH = 'work/packages/todo-20260526-priority-recovery-theory-loop.
 const THEORY_ID = 'theory-20260526-priority-recovery-wait';
 const DISCRIMINATOR = 'npm run work:scenario-route -- artifact.json';
 const THEORY_OPTIONS = Object.freeze([
-  'H1 priority waiter misses admission; mechanism: admission_gap; intervention: add owner admission proof; modification: src/rebalancer/priority-recovery.js; discriminator: npm run work:scenario-route -- artifact.json; promotion: artifact shows wait without admission; rejection: admission is already visible',
-  'H2 priority recovery wake is stale; mechanism: scheduling_gap; intervention: rearm recovery wake; modification: src/rebalancer/priority-recovery.js; discriminator: node --test test/rebalancer/priority-recovery.test.js; promotion: admission exists without wake; rejection: wake fires before wait repeats',
-  'H3 workflow owner is wrong; mechanism: ownership_gap; intervention: migrate owner boundary; modification: src/rebalancer/owner-boundary.js; discriminator: npm run analyze:owner-explain -- artifact.json workflow_progress; promotion: route names another owner; rejection: workflow owner has authority',
+  'H1 priority waiter misses admission; mechanism: admission_gap; intervention: add owner admission proof; modification: src/rebalancer/priority-recovery.js; discriminator: npm run work:scenario-route -- artifact.json; promotion: artifact shows wait without admission; rejection: admission is already visible; layer: ownership',
+  'H2 priority recovery wake is stale; mechanism: scheduling_gap; intervention: rearm recovery wake; modification: src/rebalancer/priority-recovery.js; discriminator: node --test test/rebalancer/priority-recovery.test.js; promotion: admission exists without wake; rejection: wake fires before wait repeats; layer: scheduling',
+  'H3 workflow owner is wrong; mechanism: ownership_gap; intervention: migrate owner boundary; modification: src/rebalancer/owner-boundary.js; discriminator: npm run analyze:owner-explain -- artifact.json workflow_progress; promotion: route names another owner; rejection: workflow owner has authority; layer: protocol',
 ]);
 const CONTEXT = Object.freeze({
   owner: 'operation_workflow_owner',
@@ -103,7 +103,7 @@ test('package section requires a concrete option set and discriminator', (t) => 
       writeScope: ['src/rebalancer/priority-recovery.js'],
       theories: ['one', 'two'],
     }),
-    /must include mechanism, intervention, modification, discriminator, promotion, rejection fields/u,
+    /must include mechanism, intervention, modification, discriminator, promotion, rejection, layer fields/u,
   );
   t.throws(
     () => renderTheoryLoopPackageSection({
