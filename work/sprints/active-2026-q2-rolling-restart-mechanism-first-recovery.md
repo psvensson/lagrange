@@ -14,7 +14,7 @@ Make `rolling-restart` representative-green with all nodes ACTIVE, or produce on
 - Confidence and evidence: High confidence that pending ACK and priority recovery are not current blockers from the cited representative report, `work:scenario-route`, `work:frontier-history`, and `analyze:causal-model`; medium confidence in startup-active-gate ownership because the route selects it while typed handoff migration remains live.
 - Expected green path: the active autonomous architecture package selects a concrete snapshot coverage source/test contract, owner-boundary migration, or architecture-gap stop before any runtime child package opens.
 - Wrong direction signals: editing selected-source ordering, readiness, admin API, transport, table bootstrap, generic timeouts, or promotion gates before owner recovery progress exists; opening another classifier from the same artifact; using placeholder report timestamps.
-- Next best package: [Rolling Restart Active Gate Snapshot Coverage Autonomous Architecture](../packages/active-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md)
+- Next best package: [Rolling Restart Active Gate Snapshot Coverage Autonomous Architecture](../packages/done-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md)
 - Stop or escalate rule: because fresh evidence returned to repeated `startup_active_gate_owner / snapshot_coverage`, the next package must keep two-level theory: first explain the whole-system causal map, then select one executable source/test contract, migration, or architecture-gap stop. Human escalation is only for contradictory or blocked evidence.
 
 ## Evidence Anchor
@@ -106,17 +106,17 @@ After the active package's discriminator, fix, or representative rerun, record t
 ```text
 Representative artifact: test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json
 Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out
-Active package: work/packages/active-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md
+Active package: work/packages/done-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md
 Active package owner: startup_active_gate_owner
 Active package boundary: snapshot_coverage
 Selected cause: active_gate_timed_out
 Required action: Run an autonomous architecture experiment that selects the exact snapshot coverage contract, owner-boundary migration, or architecture-gap stop before runtime edits.
-Representative status: pending-before-probe
+Representative status: same-frontier
 Causal outcome: continue_local_fix
-Architecture gate: selected / autonomous-architecture-experiment
+Architecture gate: selected / runtime-owner-boundary
 Expected delta: Select an autonomous architecture route for repeated active_gate_snapshot_coverage before runtime promotion.
 Current state: Fresh representative evidence cleared priority-recovery residuals and returned to active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage, but repeated recent same-boundary runtime packages block another local runtime patch.
-Allowed edits: work/packages/active-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md, work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md, work/sprints/current-blocker.md, work/sprints/current-blocker.json, .kiro/steering/schemas/work-package.schema.json, .kiro/steering/workflow-guidelines/closure.md, scripts/work-package-new.js, scripts/work-package-schema.js, scripts/work-subagent-prompt.js, scripts/work-tracker.js, test/scripts/work-tracker-contract-ledger.test.js, test/scripts/work-tracker-subagent-ledger-fixtures.js, work/README.md, work/RULES.md, work/templates/sprint-strategy-brief.md, .kiro/steering/llm/governance.md, .kiro/steering/llm/manifest.json, .kiro/steering/llm/rules.json, test/scripts/work-llm-usability-tools.test.js
+Allowed edits: work/packages/done-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md, work/packages/done-20260528-priority-recovery-split-residual-architecture-experiment.md, work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md, work/sprints/current-blocker.md, work/sprints/current-blocker.json, .kiro/steering/schemas/work-package.schema.json, .kiro/steering/workflow-guidelines/closure.md, scripts/work-package-new.js, scripts/work-package-schema.js, scripts/work-subagent-prompt.js, scripts/work-tracker.js, test/scripts/work-tracker-contract-ledger.test.js, test/scripts/work-tracker-subagent-ledger-fixtures.js, work/README.md, work/RULES.md, work/templates/sprint-strategy-brief.md, .kiro/steering/llm/governance.md, .kiro/steering/llm/manifest.json, .kiro/steering/llm/rules.json, test/scripts/work-llm-usability-tools.test.js
 Candidate runtime files: src/control-plane/owner-queue.js, src/control-plane/snapshot-service.js, src/control-plane/membership-publication-active-gate-reconcile.js, src/admin/admin-control-snapshot-publication-convergence-diagnostics.js
 Forbidden edits: Runtime promotion remains blocked until this architecture package selects one owner-owned contract or migration route.
 Required latest proof: falsifier: npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage, regression: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12, supporting: npm run analyze:causal-model -- test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json

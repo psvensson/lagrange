@@ -16,12 +16,12 @@
     "currentState": "Priority recovery is the first frontier, but residuals split across workflow_progress and rebalancer_handoff on unchanged representative evidence.",
     "nextAction": "Select the architecture route for split priority-recovery residuals before runtime promotion.",
     "closed": "2026-05-28",
-    "successor": "work/packages/active-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md"
+    "successor": "work/packages/done-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md"
   },
   "scope": {
     "writeScope": [
       "work/packages/active-20260528-priority-recovery-split-residual-architecture-experiment.md",
-      "work/packages/active-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md",
+      "work/packages/done-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md",
       "work/packages/done-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md",
       "work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md",
       "work/sprints/current-blocker.md",
@@ -42,7 +42,7 @@
     ],
     "commitScope": [
       "work/packages/active-20260528-priority-recovery-split-residual-architecture-experiment.md",
-      "work/packages/active-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md",
+      "work/packages/done-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md",
       "work/packages/done-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md",
       "work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md",
       "work/sprints/current-blocker.md",
@@ -82,7 +82,7 @@
       "parentRevalidatedFocusedProof": true,
       "filesChanged": [
         "work/packages/active-20260528-priority-recovery-split-residual-architecture-experiment.md",
-        "work/packages/active-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md",
+        "work/packages/done-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md",
         "work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md",
         "work/sprints/current-blocker.md",
         "work/sprints/current-blocker.json"
@@ -210,8 +210,8 @@
         "summary": "Activate the autonomous architecture experiment required before another repeated startup active-gate runtime package.",
         "route": "architecture-package",
         "proof": [
-          "npm run work:validate -- --entry work/packages/active-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md",
-          "npm run work:validate -- --pre-impl work/packages/active-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md"
+          "npm run work:validate -- --entry work/packages/done-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md",
+          "npm run work:validate -- --pre-impl work/packages/done-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md"
         ]
       }
     ]
@@ -224,7 +224,7 @@
     "commands": [
       "npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage",
       "npm run work:advance -- --check",
-      "npm run work:validate -- --entry work/packages/active-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md"
+      "npm run work:validate -- --entry work/packages/done-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md"
     ],
     "decisionRecord": "Fresh rerun evidence selected migration away from priority recovery and validator history selected autonomous architecture before startup active-gate runtime work.",
     "successorAction": "open-architecture-experiment",
@@ -240,12 +240,12 @@
     "nextLane": "causal-escalation",
     "expectedDelta": "Open autonomous architecture experiment for repeated active_gate_snapshot_coverage before runtime promotion.",
     "requiredRefreshCommands": [
-      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json --package work/packages/active-20260528-priority-recovery-split-residual-architecture-experiment.md --successor work/packages/active-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md --write",
+      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json --package work/packages/active-20260528-priority-recovery-split-residual-architecture-experiment.md --successor work/packages/done-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md --write",
       "update Sprint Strategy Brief from the route result",
       "update Current Edge Card from the route result",
       "current-blocker refresh: npm run work:repair",
-      "npm run work:validate -- --entry work/packages/active-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md",
-      "npm run work:validate -- --pre-impl work/packages/active-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md"
+      "npm run work:validate -- --entry work/packages/done-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md",
+      "npm run work:validate -- --pre-impl work/packages/done-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md"
     ]
   },
   "experimentOutcome": {
@@ -260,7 +260,7 @@
     "parentRevalidatedFocusedProof": true,
     "filesChanged": [
       "work/packages/active-20260528-priority-recovery-split-residual-architecture-experiment.md",
-      "work/packages/active-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md",
+      "work/packages/done-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md",
       "work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md",
       "work/sprints/current-blocker.md",
       "work/sprints/current-blocker.json"
@@ -305,8 +305,8 @@ The priority-recovery classifier found split residual ownership on the inherited
 
 ## Execution Evidence
 
-- [x] action: implementation; owner: operation_workflow_owner; files-changed: work/packages/active-20260528-priority-recovery-split-residual-architecture-experiment.md, work/packages/active-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md; validation: npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage; parent revalidated focused proof: yes; outcome: validated.
-- [x] action: verification-fix; owner: operation_workflow_owner; files-changed: none; validation: npm run work:validate -- --entry work/packages/active-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md and npm run work:validate -- --pre-impl work/packages/active-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: implementation; owner: operation_workflow_owner; files-changed: work/packages/active-20260528-priority-recovery-split-residual-architecture-experiment.md, work/packages/done-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md; validation: npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: verification-fix; owner: operation_workflow_owner; files-changed: none; validation: npm run work:validate -- --entry work/packages/done-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md and npm run work:validate -- --pre-impl work/packages/done-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md; parent revalidated focused proof: yes; outcome: validated.
 - [x] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: npm run work:repair; outcome: validated.
 
 ## Validation
@@ -315,8 +315,8 @@ The priority-recovery classifier found split residual ownership on the inherited
 2. `npm run analyze:causal-model -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json`
 3. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --markdown`
 4. `npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage`
-5. `npm run work:validate -- --entry work/packages/active-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md`
-6. `npm run work:validate -- --pre-impl work/packages/active-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md`
+5. `npm run work:validate -- --entry work/packages/done-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md`
+6. `npm run work:validate -- --pre-impl work/packages/done-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md`
 
 ## Commit And Push Ledger
 
