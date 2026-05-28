@@ -174,9 +174,7 @@ representative movement, and downstream risk containment.
 
 `modelTheory` is the optional third tier. Use it when the system theory needs
 an executable specification (state model, simulator, invariant spec, or
-property test) that cannot be expressed as a single `src/` slice. A package
-declaring `modelTheory` is exempt from the Real Package Rule's `src/`-write
-requirement **only when** the modelTheory block declares `modelKind`
+property test) that supports source work. It must declare `modelKind`
 (`state-model` | `simulator` | `invariant-spec` | `property-test`),
 `executableArtifact` (a real file path under `test/`, `scripts/`, or
 `docs/specs/`), `propertiesProven` (non-empty list of named properties),
@@ -184,13 +182,14 @@ requirement **only when** the modelTheory block declares `modelKind`
 (what happens if the model falsifies a property), and `linkedSystemTheoryRef`
 (reference to the systemTheory whose invariant the model formalizes). The
 package's falsifier proof command MUST execute the model and fail on property
-violation. Without all six fields, the model-theory exemption does not apply
-and the package is held to the normal source-code rule.
+violation. `modelTheory` does not exempt a theory loop package from changing
+declared `src/` source code; model-only or evidence-only reasoning stays at
+sprint level until it selects a source-code slice.
 
 Evidence-only reasoning stays at sprint level. Promote a package only when
-slice theory (or model theory) can execute one declared source/test contract,
-migrate ownership, or close as architecture-gap. If system theory cannot select
-a slice, do not open another local runtime patch.
+slice theory can execute one declared `src/` source/test contract, change that
+source code, and verify the theory. If system theory cannot select a source
+slice, do not open a theory-loop work package.
 
 ---
 
@@ -227,13 +226,15 @@ sections:
 5. `Discriminator First`: name or run the cheapest discriminator before code
    edits unless the active package already owns that discriminator as its first
    proof.
-6. `Real Package Rule`: a theory loop work package exists only for a promoted
-   theory that will change `src/` source code inside declared write scope,
-   verify the theory with a falsifying proof command, record the result, and
-   create or link the successor package. Classification-only, evidence-only
-   inspection, route comparison, or source/log reading without source-code
-   modification stays as sprint-level discrimination; do not promote it to a
-   work package.
+6. `Real Package Rule`: a theory loop work package exists only for one
+   promoted theory that will change a concrete `src/` source file inside
+   declared write scope, verify the theory with falsifier and regression proof,
+   and record the result. Classification-only, evidence-only inspection, route
+   comparison, source/log reading, package-only edits, or creating the next
+   package without source-code modification stays as sprint-level
+   discrimination; do not promote it to a work package. A successor package may
+   be linked only after the source change and proof have produced fresh
+   evidence; successor creation is never the package's implementation payload.
 7. `Promotion Rule`: only the option selected by fresh evidence or a
    discriminator becomes one executable package with explicit owner, boundary,
    write scope, proof, and stop rule.

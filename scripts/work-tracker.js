@@ -828,6 +828,9 @@ const LEDGER_FIELD_TRAILING_PUNCTUATION_PATTERN = /[.;]\s*$/u;
 const EMPTY_PROOF_CLI_VALUE_PATTERN =
   /\s--(?:artifact|output)\s+(?:""|'')(?=\s|$)/u;
 const MALFORMED_REPORT_ARTIFACT_PATTERN = /\S+-\.report\.json\b/iu;
+const CONCRETE_SOURCE_FILE_PATTERN = /^src\/[^*?\n]+\.js$/u;
+const THEORY_LOOP_NON_EXECUTABLE_CONTRACT_PATTERN =
+  /\b(?:do\s+not\s+edit(?:\s+new)?\s+source|source\s+changes?\s+stay\s+blocked|metadata\s+pass|route-only|evidence-only|classification-only|package-only|successor-creation-only|creating\s+(?:a\s+)?new\s+package|create\s+(?:or\s+link\s+)?(?:the\s+)?successor\s+package\s+without\s+source)\b/iu;
 const AGENT_ID_PATTERN_TEXT =
   '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 const AGENT_PROOF_PATTERN_TEXT =
@@ -6065,49 +6068,6 @@ function validateModelTheory(filePath, modelTheory) {
   return errors;
 }
 
-function isModelTheoryComplete(modelTheory) {
-  if (!isObjectRecord(modelTheory)) {
-    return false;
-  }
-  const kind = modelTheory[MODEL_THEORY_KIND_FIELD];
-  if (
-    typeof kind !== 'string' ||
-    !MODEL_THEORY_VALID_KINDS.includes(kind)
-  ) {
-    return false;
-  }
-  const artifact = modelTheory[MODEL_THEORY_EXECUTABLE_ARTIFACT_FIELD];
-  if (
-    typeof artifact !== 'string' ||
-    !/^(?:test|scripts|docs\/specs)\//u.test(artifact)
-  ) {
-    return false;
-  }
-  const properties = modelTheory[MODEL_THEORY_PROPERTIES_PROVEN_FIELD];
-  if (!Array.isArray(properties) || properties.length === NUM_ZERO) {
-    return false;
-  }
-  const assumptions = modelTheory[MODEL_THEORY_ASSUMPTIONS_FIELD];
-  if (!Array.isArray(assumptions) || assumptions.length === NUM_ZERO) {
-    return false;
-  }
-  if (
-    !isConcreteMetadataText(
-      modelTheory[MODEL_THEORY_COUNTER_EXAMPLE_HANDLING_FIELD],
-    )
-  ) {
-    return false;
-  }
-  if (
-    !isConcreteMetadataText(
-      modelTheory[MODEL_THEORY_LINKED_SYSTEM_THEORY_REF_FIELD],
-    )
-  ) {
-    return false;
-  }
-  return true;
-}
-
 function validateTheoryFitScore(filePath, score) {
   const fieldPath =
     `${SLICE_THEORY_FIELD}.${SLICE_THEORY_THEORY_FIT_SCORE_FIELD}`;
@@ -6716,6 +6676,11 @@ function metadataScopeList(metadata, fieldName) {
 
 function isSourceWritePath(filePath) {
   return normalizeLedgerText(filePath).startsWith('src/');
+}
+
+function isConcreteSourceFilePath(filePath) {
+  const normalized = normalizeLedgerText(filePath).replace(/\\/gu, '/');
+  return CONCRETE_SOURCE_FILE_PATTERN.test(normalized);
 }
 
 function isTestOnlyProofWritePath(filePath) {
@@ -8993,28 +8958,15 @@ export function validateTheoryLoopPackageContract(
   }
   const writeScope = metadataScopeList(metadata, SCOPE_FIELD_WRITE_SCOPE);
   const commitScope = metadataScopeList(metadata, SCOPE_FIELD_COMMIT_SCOPE);
-  const modelTheory = metadata?.[MODEL_THEORY_FIELD];
-  const modelTheoryExempts = isModelTheoryComplete(modelTheory);
-  if (!writeScope.some(isSourceWritePath) && !modelTheoryExempts) {
+  if (!writeScope.some(isConcreteSourceFilePath)) {
     errors.push(
-      `${filePath}: theory-loop package writeScope must include at least one src/ source file ` +
-      `(or declare a complete metadata.${MODEL_THEORY_FIELD} block with all six required fields).`,
+      `${filePath}: theory-loop package writeScope must include at least one concrete src/ .js source file.`,
     );
   }
-  if (!commitScope.some(isSourceWritePath) && !modelTheoryExempts) {
+  if (!commitScope.some(isConcreteSourceFilePath)) {
     errors.push(
-      `${filePath}: theory-loop package commitScope must include the promoted src/ source file ` +
-      `(or declare a complete metadata.${MODEL_THEORY_FIELD} block with all six required fields).`,
+      `${filePath}: theory-loop package commitScope must include the promoted concrete src/ .js source file.`,
     );
-  }
-  if (modelTheoryExempts) {
-    const artifact = modelTheory[MODEL_THEORY_EXECUTABLE_ARTIFACT_FIELD];
-    if (!writeScope.includes(artifact) && !commitScope.includes(artifact)) {
-      errors.push(
-        `${filePath}: modelTheory.${MODEL_THEORY_EXECUTABLE_ARTIFACT_FIELD} (${artifact}) ` +
-        'must appear in writeScope or commitScope so the executable model is owned by this package.',
-      );
-    }
   }
   if (!proofHasRole(metadata, 'falsifier')) {
     errors.push(
@@ -9044,11 +8996,20 @@ export function validateTheoryLoopPackageContract(
   );
   if (
     metadata?.[SLICE_THEORY_FIELD] &&
-    !/\bsrc\//iu.test(sliceSourceContract)
+    !/\bsrc\/[^*?\s]+\.js\b/iu.test(sliceSourceContract)
   ) {
     errors.push(
       `${filePath}: sliceTheory.${SLICE_THEORY_SOURCE_TEST_CONTRACT_FIELD} ` +
-      'must name the src/ source-code contract tested by this package.',
+      'must name the concrete src/ .js source-code contract tested by this package.',
+    );
+  }
+  if (
+    metadata?.[SLICE_THEORY_FIELD] &&
+    THEORY_LOOP_NON_EXECUTABLE_CONTRACT_PATTERN.test(sliceSourceContract)
+  ) {
+    errors.push(
+      `${filePath}: sliceTheory.${SLICE_THEORY_SOURCE_TEST_CONTRACT_FIELD} ` +
+      'must describe an executable source edit, not reading, routing, metadata, or successor-package work.',
     );
   }
   if (status === STATUS_DONE || phase === VALIDATION_PHASE_CLOSURE) {

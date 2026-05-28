@@ -121,10 +121,61 @@ test('theory-loop package validator rejects classification-only and non-source p
     'work/packages/active-theory-loop.md',
     {status: 'active'},
   );
+  const globOnlyErrors = validateTheoryLoopPackageContract(
+    theoryLoopContent(),
+    theoryLoopMetadata({
+      writeScope: ['src/control-plane/*.js'],
+      commitScope: ['src/control-plane/*.js'],
+      sliceTheory: {
+        ...theoryLoopMetadata().sliceTheory,
+        sourceTestContract: 'Change src/control-plane/*.js after source discovery.',
+      },
+    }),
+    'work/packages/active-theory-loop.md',
+    {status: 'active'},
+  );
 
   t.match(classificationErrors.join('\n'), /cannot be classification-only/u);
-  t.match(testOnlyErrors.join('\n'), /writeScope must include at least one src\/ source file/u);
-  t.match(testOnlyErrors.join('\n'), /commitScope must include the promoted src\/ source file/u);
+  t.match(testOnlyErrors.join('\n'), /writeScope must include at least one concrete src\/ \.js source file/u);
+  t.match(testOnlyErrors.join('\n'), /commitScope must include the promoted concrete src\/ \.js source file/u);
+  t.match(globOnlyErrors.join('\n'), /concrete src\/ \.js source file/u);
+  t.match(globOnlyErrors.join('\n'), /concrete src\/ \.js source-code contract/u);
+  t.end();
+});
+
+test('theory-loop package validator rejects model-only and non-executable source contracts', (t) => {
+  const modelOnlyErrors = validateTheoryLoopPackageContract(
+    theoryLoopContent(),
+    theoryLoopMetadata({
+      writeScope: ['test/model/priority-recovery-model.test.js'],
+      commitScope: ['test/model/priority-recovery-model.test.js'],
+      modelTheory: {
+        modelKind: 'state-model',
+        executableArtifact: 'test/model/priority-recovery-model.test.js',
+        propertiesProven: ['handoff eventually progresses'],
+        assumptions: ['none'],
+        counterExampleHandling: 'record counterexample and reject the theory',
+        linkedSystemTheoryRef: 'work/packages/active-theory-loop.md systemTheory',
+      },
+    }),
+    'work/packages/active-theory-loop.md',
+    {status: 'active'},
+  );
+  const nonExecutableErrors = validateTheoryLoopPackageContract(
+    theoryLoopContent(),
+    theoryLoopMetadata({
+      sliceTheory: {
+        ...theoryLoopMetadata().sliceTheory,
+        sourceTestContract: 'Do not edit new source in this metadata pass; create a successor package after reading src/control-plane/snapshot-service.js.',
+      },
+    }),
+    'work/packages/active-theory-loop.md',
+    {status: 'active'},
+  );
+
+  t.match(modelOnlyErrors.join('\n'), /writeScope must include at least one concrete src\/ \.js source file/u);
+  t.match(modelOnlyErrors.join('\n'), /commitScope must include the promoted concrete src\/ \.js source file/u);
+  t.match(nonExecutableErrors.join('\n'), /must describe an executable source edit/u);
   t.end();
 });
 
@@ -293,33 +344,55 @@ test('theory-loop sprint closure needs explicit success evidence', (t) => {
 test('theory-loop package scaffolder enforces src scope and emits marker metadata', async (t) => {
   await t.rejects(
     buildPackageContent({
-      title: 'Theory Loop Bad Package',
-      slug: 'theory-loop-bad-package',
-      lane: 'causal-escalation',
-      owner: 'startup_active_gate_owner',
-      boundary: 'snapshot_coverage',
+      'title': 'Theory Loop Bad Package',
+      'slug': 'theory-loop-bad-package',
+      'lane': 'causal-escalation',
+      'owner': 'startup_active_gate_owner',
+      'boundary': 'snapshot_coverage',
       'dominant-reason': 'active_gate_timed_out',
       'next-action': 'Test a promoted theory.',
-      proof: ['npm test -- test/distributed/harness/__tests__/rolling-restart.test.js'],
+      'proof': [
+        'falsifier: npm run work:scenario-route -- test-output/reports/rolling-restart.report.json',
+        'regression: npm test -- test/distributed/harness/__tests__/rolling-restart.test.js',
+      ],
       'write-scope': ['test/distributed/harness/__tests__/rolling-restart.test.js'],
       'theory-loop': true,
-      ledger: 'test-output/missing-ledger.jsonl',
+      'ledger': 'test-output/missing-ledger.jsonl',
     }),
-    /require at least one --write-scope path under src\//u,
+    /require at least one concrete --write-scope file under src\/ ending in \.js/u,
+  );
+  await t.rejects(
+    buildPackageContent({
+      'title': 'Theory Loop Missing Proof Roles',
+      'slug': 'theory-loop-missing-proof-roles',
+      'lane': 'causal-escalation',
+      'owner': 'startup_active_gate_owner',
+      'boundary': 'snapshot_coverage',
+      'dominant-reason': 'active_gate_timed_out',
+      'next-action': 'Test a promoted theory.',
+      'proof': ['npm test -- test/distributed/harness/__tests__/rolling-restart.test.js'],
+      'write-scope': ['src/control-plane/snapshot-service.js'],
+      'theory-loop': true,
+      'ledger': 'test-output/missing-ledger.jsonl',
+    }),
+    /require a proof command prefixed with falsifier:/u,
   );
 
   const content = await buildPackageContent({
-    title: 'Theory Loop Source Package',
-    slug: 'theory-loop-source-package',
-    lane: 'causal-escalation',
-    owner: 'startup_active_gate_owner',
-    boundary: 'snapshot_coverage',
+    'title': 'Theory Loop Source Package',
+    'slug': 'theory-loop-source-package',
+    'lane': 'causal-escalation',
+    'owner': 'startup_active_gate_owner',
+    'boundary': 'snapshot_coverage',
     'dominant-reason': 'active_gate_timed_out',
     'next-action': 'Test a promoted theory.',
-    proof: ['npm test -- test/distributed/harness/__tests__/rolling-restart.test.js'],
+    'proof': [
+      'falsifier: npm run work:scenario-route -- test-output/reports/rolling-restart.report.json',
+      'regression: npm test -- test/distributed/harness/__tests__/rolling-restart.test.js',
+    ],
     'write-scope': ['src/control-plane/snapshot-service.js'],
     'theory-loop': true,
-    ledger: 'test-output/missing-ledger.jsonl',
+    'ledger': 'test-output/missing-ledger.jsonl',
   });
   const metadata = parsePackageMetadata(
     content,

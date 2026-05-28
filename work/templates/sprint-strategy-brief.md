@@ -42,11 +42,12 @@ evidence-linked; options are hypotheses to compare, not queued future packages.
    produce a non-obvious option.
 6. Discriminator First: cheapest discriminator runs or is named before code
    edits unless the active package owns it as first proof.
-7. Real Package Rule: a promoted theory-loop work package must change `src/`
-   source code inside declared write scope, verify the theory with a falsifying
-   proof command, record the result, and create or link the successor package;
-   evidence-only and classification-only discriminators remain in the sprint
-   until they promote real source work.
+7. Real Package Rule: a promoted theory-loop work package must change one
+   concrete `src/` source file inside declared write scope, verify the theory
+   with falsifier and regression proof, and record the result. Evidence-only,
+   classification-only, route-only, source/log-reading-only, package-only, or
+   successor-creation-only work remains in the sprint until it promotes real
+   source work.
 8. Promotion Rule: only the evidence-selected option becomes one executable
    package with explicit owner, boundary, write scope, proof, and stop rule.
 9. Learning Rule: record supported, avoided, falsified, fixed, migrated,

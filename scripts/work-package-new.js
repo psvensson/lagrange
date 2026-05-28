@@ -623,6 +623,16 @@ function isSourceWritePath(filePath) {
   return normalizeText(filePath).replace(/\\/gu, '/').startsWith('src/');
 }
 
+function isConcreteSourceFilePath(filePath) {
+  const normalized = normalizeText(filePath).replace(/\\/gu, '/');
+  return /^src\/[^*?\n]+\.js$/u.test(normalized);
+}
+
+function proofCommandsHaveRole(proof = [], role) {
+  const rolePattern = new RegExp(`^${role}\\s*:`, 'iu');
+  return proof.map(normalizeText).some((command) => rolePattern.test(command));
+}
+
 async function activeTheoryLoopSprintRequiresSourcePackages() {
   const sprintDir = path.join('work', 'sprints');
   try {
@@ -654,6 +664,7 @@ function validateTheoryLoopPackageFlags({
   commitScope = [],
   isClassificationOnly = false,
   lane = EMPTY_TEXT,
+  proof = [],
   writeScope = [],
 }) {
   const errors = [];
@@ -667,14 +678,24 @@ function validateTheoryLoopPackageFlags({
       `theory-loop packages cannot use lane ${LANE_DIAGNOSTIC_CLASSIFICATION}; a promoted option must execute as a source-changing package.`,
     );
   }
-  if (!writeScope.some(isSourceWritePath)) {
+  if (!writeScope.some(isConcreteSourceFilePath)) {
     errors.push(
-      'theory-loop packages require at least one --write-scope path under src/.',
+      'theory-loop packages require at least one concrete --write-scope file under src/ ending in .js.',
     );
   }
-  if (!commitScope.some(isSourceWritePath)) {
+  if (!commitScope.some(isConcreteSourceFilePath)) {
     errors.push(
-      'theory-loop packages require commitScope to include the promoted src/ source path.',
+      'theory-loop packages require commitScope to include the promoted concrete src/ .js file.',
+    );
+  }
+  if (!proofCommandsHaveRole(proof, PROOF_ROLE_FALSIFIER)) {
+    errors.push(
+      'theory-loop packages require a proof command prefixed with falsifier:.',
+    );
+  }
+  if (!proofCommandsHaveRole(proof, PROOF_ROLE_REGRESSION)) {
+    errors.push(
+      'theory-loop packages require a proof command prefixed with regression:.',
     );
   }
   if (errors.length > NUM_ZERO) {
@@ -1387,8 +1408,8 @@ function buildTheoryLoopPackageContractLines(metadata = {}) {
     `- Promoted theory: ${theoryLoop[THEORY_LOOP_PROMOTED_THEORY_FIELD]}`,
     `- Sprint-goal delta: ${theoryLoop[THEORY_LOOP_SPRINT_GOAL_DELTA_FIELD]}`,
     `- Required source write: ${markdownInlineCodeList(sourceWrites, '`src/` path required before implementation')}`,
-    '- Package size rule: this package must test one promoted theory by changing declared `src/` source code, running falsifier and regression proof, recording the theory result, and creating or linking the successor package before closure.',
-    '- Forbidden stop shape: classification-only, evidence-only, route-only, and source/log inspection-only outcomes stay in the sprint and must not become work packages.',
+    '- Package size rule: this package must test one promoted theory by changing declared `src/` source code, running falsifier and regression proof, and recording the theory result before closure.',
+    '- Forbidden stop shape: classification-only, evidence-only, route-only, source/log inspection-only, package-only, and successor-creation-only outcomes stay in the sprint and must not become work packages.',
     EMPTY_TEXT,
   ];
 }
@@ -1745,6 +1766,7 @@ async function buildPackageContent(flags = {}) {
       commitScope,
       isClassificationOnly,
       lane,
+      proof,
       writeScope,
     });
   }
