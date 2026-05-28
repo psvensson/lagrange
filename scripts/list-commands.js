@@ -65,6 +65,10 @@ const COMMAND_GROUPS = Object.freeze([
         description: 'Print a structured mechanism card containing failure mechanism, stable facts, changed facts, and expected movement.',
       }),
       Object.freeze({
+        command: 'npm run work:artifact-compare -- <old-artifact.json> <new-artifact.json>',
+        description: 'Compare two evidence artifacts and report stable facts, changed facts, invariant blockers, and plausible mechanism movements.',
+      }),
+      Object.freeze({
         command: 'npm run work:validate -- --entry|--probe|--pre-impl|--closure',
         description: 'Validate active work-package metadata, probe packages, checklist state, and lane-required proof at a workflow phase.',
       }),

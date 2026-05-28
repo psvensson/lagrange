@@ -129,6 +129,7 @@
     "work:theory-ledger": "node scripts/work-theory-ledger.js",
     "work:theory-loop": "node scripts/work-theory-loop.js",
     "work:mechanism-card": "node scripts/work-mechanism-card.js",
+    "work:artifact-compare": "node scripts/work-artifact-compare.js",
     "work:subagent-next": "node scripts/work-subagent-next.js",
     "work:subagent-prompt": "node scripts/work-subagent-prompt.js",
     "work:evidence-summary": "node scripts/summarize-representative-evidence.js",
