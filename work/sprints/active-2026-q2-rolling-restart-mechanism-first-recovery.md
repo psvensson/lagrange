@@ -104,23 +104,23 @@ After the active package's discriminator, fix, or representative rerun, record t
 ## Current Edge Card
 
 ```text
-Representative artifact: test-output/reports/rolling-restart-startup-active-gate-owner-snapshot-coverage-v3-20260528T142633Z.report.json
+Representative artifact: test-output/reports/rolling-restart-startup-active-gate-owner-snapshot-coverage-v4-20260528T150137Z.report.json
 Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out
-Active package: work/packages/done-20260528-rolling-restart-startup-active-gate-owner-snapshot-coverage-v4.md
+Active package: work/packages/done-20260528-startup-active-gate-snapshot-coverage-architecture-v5.md
 Active package owner: startup_active_gate_owner
 Active package boundary: snapshot_coverage
 Selected cause: active_gate_timed_out
-Required action: Triage active_gate_timed_out with SQL query engine unavailable in active-gate snapshot publication diagnostics
-Representative status: same-frontier
+Required action: Open the failure-bundle SQL availability diagnostics capture proof package before another local runtime patch.
+Representative status: migrated
 Causal outcome: continue_local_fix
-Architecture gate: watching / unknown
-Expected delta: Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.
-Current state: Package opened with declared owner, boundary, scope, proof, and stop rule.
-Allowed edits: src/admin/admin-control-snapshot-publication-convergence-diagnostics.js, src/admin/admin-control-snapshot-class-part-5.js, src/control-plane/membership-publication-active-gate-reconcile.js, src/control-plane/snapshot-service.js, test/admin/admin-control-snapshot-publication-convergence-active-gate-test-cases.js
-Candidate runtime files: unknown
-Forbidden edits: Active-gate snapshot coverage must not promote runtime coverage while SQL query visibility is absent for restarted nodes.
-Required latest proof: falsifier: npm test -- test/admin/admin-control-snapshot-publication-convergence-active-gate-test-cases.js # focused contract fixture for bounded SQL query engine availability retry transition, regression: npm test -- test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js # affected consumer proof for SQL unavailable admin availability contract, supporting: npm run work:scenario-route -- test-output/reports/rolling-restart-startup-active-gate-owner-snapshot-coverage-v3-20260528T142633Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage # representative routing evidence, supporting: npm run analyze:causal-model -- test-output/reports/rolling-restart-startup-active-gate-owner-snapshot-coverage-v3-20260528T142633Z.report.json, supporting: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12
-Allowed stop modes: representative-green, owner-boundary-migration, architecture-gap, success-condition-met; same-frontier, classification-only, needs-rerun, pending, and unknown keep sprint active
+Architecture gate: selected / failure-bundle-diagnostics-contract
+Expected delta: Classify whether the absent SQL query engine availability observation selects failure-bundle diagnostics capture, active-gate diagnostics capture, owner-boundary migration, or architecture-gap stop.
+Current state: Fresh representative v4 evidence repeated startup_active_gate_owner / snapshot_coverage / active_gate_timed_out and the playback does not contain SQL query engine availability fields.
+Allowed edits: work/packages/done-20260528-startup-active-gate-snapshot-coverage-architecture-v5.md, work/packages/todo-20260528-failure-bundle-sql-availability-diagnostics-capture.md, work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md, work/sprints/current-blocker.md, work/sprints/current-blocker.json
+Candidate runtime files: src/admin/admin-control-snapshot-publication-convergence-diagnostics.js, test/distributed/harness/failure-bundle-diagnostics-artifact-builder.js, test/distributed/harness/cluster-segment-7-alpha-load-readiness.js, test/distributed/harness/active-gate-contract.js
+Forbidden edits: Runtime promotion remains blocked while SQL query engine availability is absent from representative evidence.
+Required latest proof: falsifier: npm run work:scenario-route -- test-output/reports/rolling-restart-startup-active-gate-owner-snapshot-coverage-v4-20260528T150137Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage, regression: npm run analyze:causal-model -- test-output/reports/rolling-restart-startup-active-gate-owner-snapshot-coverage-v4-20260528T150137Z.report.json, supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-startup-active-gate-owner-snapshot-coverage-v4-20260528T150137Z.report.json, supporting: rg -n 'queryEngineAvailability|queryEngineAvailable|sql_query_engine' test-output/reports/.playback/rolling-restart-startup-active-gate-owner-snapshot-coverage-v4-20260528T150137Z/rolling-restart
+Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
 ## Mechanism Classification
@@ -176,10 +176,14 @@ This sprint intentionally contains one active executable package and no speculat
    - Lane: `runtime-owner-boundary`
    - Purpose: Convert observed `pendingWrites=1` / `enqueued=true` owner recovery into drain, wake, retry, or reconcile progress before active-gate snapshot coverage repeats.
    - First-run reason: The architecture discriminator selected this concrete owner-local contract after ACK debt closed and enqueue admission was no longer the missing edge.
-8. [Startup Active Gate Snapshot Coverage Architecture v5](../packages/todo-20260528-startup-active-gate-snapshot-coverage-architecture-v5.md)
+8. [Startup Active Gate Snapshot Coverage Architecture v5](../packages/done-20260528-startup-active-gate-snapshot-coverage-architecture-v5.md)
    - Lane: `experiment`
    - Purpose: Select the architecture route for the missing SQL query engine availability observation before another local runtime patch.
    - First-run reason: The v4 representative rerun repeated `startup_active_gate_owner / snapshot_coverage / active_gate_timed_out` and playback did not contain SQL query engine availability fields, so the active package kill rule requires an autonomous architecture experiment.
+9. [Failure Bundle SQL Availability Diagnostics Capture](../packages/todo-20260528-failure-bundle-sql-availability-diagnostics-capture.md)
+   - Lane: `test-only-proof`
+   - Purpose: Preserve SQL query engine availability fields in failure-bundle active-gate diagnostics playback.
+   - First-run reason: Architecture v5 selected diagnostics_owner / failure_bundle_diagnostics_capture after route and causal-model stayed on active_gate_snapshot_coverage while playback lacked SQL query availability fields.
 
 ## Sprint Proof Ladder
 
