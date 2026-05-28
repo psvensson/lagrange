@@ -16,12 +16,12 @@
     "currentState": "Fresh representative evidence moved off startup_active_gate_owner: all five nodes report active, snapshot coverage moved to 3/5, and the canonical route now selects priority_recovery_partition_progress under operation_workflow_owner / workflow_progress.",
     "nextAction": "Classify the priority recovery residual groups and select rerun, runtime work, or architecture escalation before editing operation workflow runtime.",
     "closed": "2026-05-28",
-    "successor": "work/packages/active-20260528-priority-recovery-split-residual-architecture-experiment.md"
+    "successor": "work/packages/done-20260528-priority-recovery-split-residual-architecture-experiment.md"
   },
   "scope": {
     "writeScope": [
       "work/packages/active-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md",
-      "work/packages/active-20260528-priority-recovery-split-residual-architecture-experiment.md",
+      "work/packages/done-20260528-priority-recovery-split-residual-architecture-experiment.md",
       "work/packages/done-20260528-rolling-restart-owner-recovery-queue-drain-runtime.md",
       "work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md",
       "work/sprints/current-blocker.md",
@@ -37,7 +37,7 @@
     "candidateRuntimeFiles": [],
     "commitScope": [
       "work/packages/active-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md",
-      "work/packages/active-20260528-priority-recovery-split-residual-architecture-experiment.md",
+      "work/packages/done-20260528-priority-recovery-split-residual-architecture-experiment.md",
       "work/packages/done-20260528-rolling-restart-owner-recovery-queue-drain-runtime.md",
       "work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md",
       "work/sprints/current-blocker.md",
@@ -74,7 +74,7 @@
       "parentRevalidatedFocusedProof": true,
       "filesChanged": [
         "work/packages/active-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md",
-        "work/packages/active-20260528-priority-recovery-split-residual-architecture-experiment.md"
+        "work/packages/done-20260528-priority-recovery-split-residual-architecture-experiment.md"
       ]
     },
     "verificationFix": {
@@ -198,8 +198,8 @@
       "update Sprint Strategy Brief from the route result",
       "update Current Edge Card from the route result",
       "current-blocker refresh: npm run work:repair",
-      "npm run work:validate -- --entry work/packages/active-20260528-priority-recovery-split-residual-architecture-experiment.md",
-      "npm run work:validate -- --pre-impl work/packages/active-20260528-priority-recovery-split-residual-architecture-experiment.md"
+      "npm run work:validate -- --entry work/packages/done-20260528-priority-recovery-split-residual-architecture-experiment.md",
+      "npm run work:validate -- --pre-impl work/packages/done-20260528-priority-recovery-split-residual-architecture-experiment.md"
     ]
   },
   "commitAndPushLedgerRequired": true,
@@ -208,7 +208,7 @@
     "parentRevalidatedFocusedProof": true,
     "filesChanged": [
       "work/packages/active-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md",
-      "work/packages/active-20260528-priority-recovery-split-residual-architecture-experiment.md"
+      "work/packages/done-20260528-priority-recovery-split-residual-architecture-experiment.md"
     ]
   },
   "verificationFix": {
@@ -246,8 +246,8 @@ The owner-recovery queue package moved the representative route. This package re
 
 ## Execution Evidence
 
-- [x] action: implementation; owner: operation_workflow_owner; files-changed: work/packages/active-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md, work/packages/active-20260528-priority-recovery-split-residual-architecture-experiment.md; validation: `npm run work:evidence-summary -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json`, `npm run work:scenario-triage -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --markdown`, and `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --markdown` pass; parent revalidated focused proof: yes; outcome: validated.
-- [x] action: verification-fix; owner: operation_workflow_owner; files-changed: work/packages/active-20260528-priority-recovery-split-residual-architecture-experiment.md; validation: successor entry/pre-impl validation passed for split priority recovery architecture experiment; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: implementation; owner: operation_workflow_owner; files-changed: work/packages/active-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md, work/packages/done-20260528-priority-recovery-split-residual-architecture-experiment.md; validation: `npm run work:evidence-summary -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json`, `npm run work:scenario-triage -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --markdown`, and `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --markdown` pass; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: verification-fix; owner: operation_workflow_owner; files-changed: work/packages/done-20260528-priority-recovery-split-residual-architecture-experiment.md; validation: successor entry/pre-impl validation passed for split priority recovery architecture experiment; parent revalidated focused proof: yes; outcome: validated.
 - [x] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: npm run work:repair pending after migration; parent revalidated focused proof: yes; outcome: validated.
 
 ## Commit And Push Ledger

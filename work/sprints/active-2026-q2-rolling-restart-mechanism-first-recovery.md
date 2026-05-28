@@ -98,22 +98,22 @@ After the active package's discriminator, fix, or representative rerun, record t
 ## Current Edge Card
 
 ```text
-Representative artifact: test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json
-Visible first frontier: priority_recovery_partition_progress / operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait
-Active package: work/packages/active-20260528-priority-recovery-split-residual-architecture-experiment.md
-Active package owner: operation_workflow_owner
-Active package boundary: workflow_progress
-Selected cause: priority_recovery_event_driven_wait
-Required action: Select the architecture route for split priority-recovery residuals before runtime promotion.
-Representative status: classification-only
-Causal outcome: accept_classified_backpressure
-Architecture gate: selected / architecture-package-select-route
-Expected delta: Select route for split priority-recovery residuals before runtime promotion.
-Current state: Priority recovery is the first frontier, but residuals split across workflow_progress and rebalancer_handoff on unchanged representative evidence.
-Allowed edits: work/packages/active-20260528-priority-recovery-split-residual-architecture-experiment.md, work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md, work/sprints/current-blocker.md, work/sprints/current-blocker.json
-Candidate runtime files: src/control-plane/owner-queue.js, src/control-plane/snapshot-service.js, src/control-plane/membership-publication-active-gate-reconcile.js
-Forbidden edits: Runtime promotion remains blocked until architecture selects one owner-boundary route.
-Required latest proof: falsifier: npm run work:scenario-route -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress, regression: npm run analyze:causal-model -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json, supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --markdown
+Representative artifact: test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json
+Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out
+Active package: work/packages/active-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md
+Active package owner: startup_active_gate_owner
+Active package boundary: snapshot_coverage
+Selected cause: active_gate_timed_out
+Required action: Run an autonomous architecture experiment that selects the exact snapshot coverage contract, owner-boundary migration, or architecture-gap stop before runtime edits.
+Representative status: pending-before-probe
+Causal outcome: continue_local_fix
+Architecture gate: selected / autonomous-architecture-experiment
+Expected delta: Select an autonomous architecture route for repeated active_gate_snapshot_coverage before runtime promotion.
+Current state: Fresh representative evidence cleared priority-recovery residuals and returned to active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage, but repeated recent same-boundary runtime packages block another local runtime patch.
+Allowed edits: work/packages/active-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md, work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md, work/sprints/current-blocker.md, work/sprints/current-blocker.json
+Candidate runtime files: src/control-plane/owner-queue.js, src/control-plane/snapshot-service.js, src/control-plane/membership-publication-active-gate-reconcile.js, src/admin/admin-control-snapshot-publication-convergence-diagnostics.js
+Forbidden edits: Runtime promotion remains blocked until this architecture package selects one owner-owned contract or migration route.
+Required latest proof: falsifier: npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage, regression: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12, supporting: npm run analyze:causal-model -- test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
