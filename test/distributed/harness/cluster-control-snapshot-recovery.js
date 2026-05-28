@@ -174,6 +174,7 @@ const OWNER_RECOVERY_HANDOFF_RETURN_DECISION_TABLE = Object.freeze([
       evidence.publishedCoversExpected === true &&
       evidence.missingPublishedCount === ZERO &&
       evidence.ownerQueueBounded === true &&
+      evidence.alternativeSnapshotWitnessAvailable !== true &&
       evidence.handoffOutcomeBounded === true,
   }),
 ]);
@@ -503,6 +504,7 @@ function buildWaitOwnerRecoveryQueueProjection({
 function normalizeOwnerRecoveryHandoffReturnEvidence({
   result = null,
   expectedNodeIds = [],
+  alternativeSnapshotWitnessAvailable = false,
 } = {}) {
   const activeGateHandoff =
     result?.publicationActiveGateHandoff &&
@@ -595,6 +597,8 @@ function normalizeOwnerRecoveryHandoffReturnEvidence({
       expectedIds.length > ZERO &&
       expectedIds.every((nodeId) => publishedActiveNodeIds.includes(nodeId)),
     missingPublishedCount,
+    alternativeSnapshotWitnessAvailable:
+      alternativeSnapshotWitnessAvailable === true,
     ownerQueueBounded:
       ownerQueueDepth !== null &&
       ownerQueuePendingWrites >= Math.max(ONE, pendingRecoveryCount) &&
@@ -631,10 +635,12 @@ function decideOwnerRecoveryHandoffReturn(evidence) {
 function controlSnapshotOwnerRecoveryAllowsBoundedReturn({
   result = null,
   expectedNodeIds = [],
+  alternativeSnapshotWitnessAvailable = false,
 } = {}) {
   const evidence = normalizeOwnerRecoveryHandoffReturnEvidence({
     result,
     expectedNodeIds,
+    alternativeSnapshotWitnessAvailable,
   });
   return decideOwnerRecoveryHandoffReturn(evidence).returnAfterHandoff === true;
 }

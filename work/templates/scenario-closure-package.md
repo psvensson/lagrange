@@ -103,6 +103,20 @@ frontier.
 - Current boundary:
 - Current dominant reason:
 
+## Mechanism Card
+
+- Failure mechanism: <observation_gap | selection_gap | admission_gap | transition_gap | scheduling_gap | budget_gap | concurrency_gap | contract_gap | ownership_gap | downstream_symptom>
+- Stable facts:
+- Changed facts:
+- Why not the alternatives:
+- Owner who decides:
+- Current code or workflow action:
+- Missing transition or missing observation:
+- Smallest falsifying probe:
+- Expected movement:
+- Negative result means:
+- Escalation rule:
+
 ## Discovery Gate
 
 - Status: required when owner, boundary, route, or proof ambiguity is material;

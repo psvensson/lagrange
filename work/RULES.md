@@ -93,6 +93,37 @@ Allowed outcomes:
 
 ---
 
+## Mechanism Taxonomy and Card Contract
+<a name="mechanism-taxonomy-and-card-contract"></a>
+
+To prevent repeated local patches on unchanged evidence, all non-trivial scenario, runtime, experiment, proof, or workflow-tooling packages must classify their failure pathway using this domain-neutral mechanism taxonomy:
+
+1. `observation_gap`: evidence is missing, stale, or misleading.
+2. `selection_gap`: the system chooses the wrong source, candidate, route, owner, or witness.
+3. `admission_gap`: valid work exists but is not admitted.
+4. `transition_gap`: state is observed but no owner-owned action changes it.
+5. `scheduling_gap`: an action exists but is not woken, retried, or rearmed.
+6. `budget_gap`: valid work cannot complete inside the bounded attempt.
+7. `concurrency_gap`: work fans out, races, starves, or consumes shared budget incorrectly.
+8. `contract_gap`: producer and consumer disagree on the meaning of state or evidence.
+9. `ownership_gap`: no single owner has authority for the decision.
+10. `downstream_symptom`: visible failure inherits from an upstream blocker.
+
+Before implementation, the package must expose a mechanism card containing:
+*   **Failure mechanism**: classified taxonomy term.
+*   **Stable facts**: invariants and evidence that remain unchanged.
+*   **Changed facts**: inputs, metrics, or states that moved.
+*   **Why not the alternatives**: rejected competing hypotheses.
+*   **Owner who decides**: authority for the fix.
+*   **Current code or workflow action**: existing active handler/policy.
+*   **Missing transition or missing observation**: what must be added.
+*   **Smallest falsifying probe**: simplest local test or command.
+*   **Expected movement**: observable metrics or transitions.
+*   **Negative result means**: failure interpretation.
+*   **Escalation rule**: what to do if expected movement fails to occur.
+
+---
+
 ## Coding Constraints
 <a name="coding-constraints"></a>
 

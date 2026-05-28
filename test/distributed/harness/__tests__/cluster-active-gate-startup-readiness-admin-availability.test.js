@@ -9,9 +9,11 @@ import {
 const ADMIN_AVAILABILITY_STARTUP_TEST_NAME =
   'Unit: active gate consumes startup admin availability support contract';
 const ADMIN_AVAILABILITY_LOAD_TEST_NAME =
-  'Unit: active gate consumes load admin availability support contract';
+  'Unit: active gate blocks load admin availability without queryability contract';
 const ADMIN_AVAILABILITY_LOAD_UNREACHABLE_TEST_NAME =
-  'Unit: active gate consumes load admin availability unreachable contract';
+  'Unit: active gate blocks load admin availability unreachable contract';
+const ADMIN_AVAILABILITY_LOAD_SQL_UNAVAILABLE_TEST_NAME =
+  'Unit: active gate blocks load admin availability SQL unavailable contract';
 const ADMIN_AVAILABILITY_SEED_ID = 'seed-1';
 const ADMIN_AVAILABILITY_SELECTED_ID = 'selected-1';
 const ADMIN_AVAILABILITY_JOINER_ID = 'joiner-1';
@@ -48,6 +50,8 @@ const ADMIN_AVAILABILITY_ADMIN_ERROR =
   'connect ECONNREFUSED 172.19.0.4:8081';
 const ADMIN_AVAILABILITY_ADMIN_UNREACHABLE_ERROR =
   'connect EHOSTUNREACH 172.18.0.4:8081';
+const ADMIN_AVAILABILITY_ADMIN_SQL_UNAVAILABLE_ERROR =
+  'SQL query engine not available';
 const ADMIN_AVAILABILITY_SELECTED_SNAPSHOT_TIMEOUT =
   'Control snapshot query timed out for ' + ADMIN_AVAILABILITY_SELECTED_ID;
 
@@ -172,6 +176,30 @@ function assertAdminAvailabilityProjected(result) {
   assert.equal(result.snapshotCoverage.completeCoverage, false);
 }
 
+function assertAdminAvailabilityBlocked(result, expectedAdminError) {
+  const projectedJoiner = result.nodeDiagnostics.find(
+    (diagnostic) => diagnostic.nodeId === ADMIN_AVAILABILITY_JOINER_ID,
+  );
+
+  assert.equal(result.allActive, false);
+  assert.equal(projectedJoiner?.active, false);
+  assert.notEqual(
+    projectedJoiner?.activitySource,
+    ADMIN_AVAILABILITY_PROJECTION_REASON,
+  );
+  assert.equal(
+    projectedJoiner?.reasons.includes(ADMIN_AVAILABILITY_PROJECTION_REASON),
+    false,
+  );
+  assert.equal(
+    projectedJoiner?.reasons.includes(
+      'admin_not_ready=' + expectedAdminError,
+    ),
+    true,
+  );
+  assert.equal(result.snapshotCoverage.completeCoverage, false);
+}
+
 test(ADMIN_AVAILABILITY_STARTUP_TEST_NAME, async () => {
   const result = await probeAdminAvailabilityProjection();
 
@@ -183,7 +211,7 @@ test(ADMIN_AVAILABILITY_LOAD_TEST_NAME, async () => {
     mode: ADMIN_AVAILABILITY_LOAD_MODE,
   });
 
-  assertAdminAvailabilityProjected(result);
+  assertAdminAvailabilityBlocked(result, ADMIN_AVAILABILITY_ADMIN_ERROR);
 });
 
 test(ADMIN_AVAILABILITY_LOAD_UNREACHABLE_TEST_NAME, async () => {
@@ -192,5 +220,20 @@ test(ADMIN_AVAILABILITY_LOAD_UNREACHABLE_TEST_NAME, async () => {
     adminError: ADMIN_AVAILABILITY_ADMIN_UNREACHABLE_ERROR,
   });
 
-  assertAdminAvailabilityProjected(result);
+  assertAdminAvailabilityBlocked(
+    result,
+    ADMIN_AVAILABILITY_ADMIN_UNREACHABLE_ERROR,
+  );
+});
+
+test(ADMIN_AVAILABILITY_LOAD_SQL_UNAVAILABLE_TEST_NAME, async () => {
+  const result = await probeAdminAvailabilityProjection({
+    mode: ADMIN_AVAILABILITY_LOAD_MODE,
+    adminError: ADMIN_AVAILABILITY_ADMIN_SQL_UNAVAILABLE_ERROR,
+  });
+
+  assertAdminAvailabilityBlocked(
+    result,
+    ADMIN_AVAILABILITY_ADMIN_SQL_UNAVAILABLE_ERROR,
+  );
 });

@@ -18,6 +18,7 @@ import {
 } from './cluster-segment-7-class-4-publication-coverage.js';
 
 const {
+  ACTIVE_POLL_INTERVAL_MS,
   ACTIVE_PROBE_ACTIVITY_SOURCE_BOOTSTRAP_READINESS,
   ACTIVE_PROBE_ACTIVITY_SOURCE_STARTUP_ADMIN_PROJECTION,
   ACTIVE_PROBE_ACTIVITY_SOURCE_STATUS,
@@ -76,6 +77,8 @@ const CONTROL_SNAPSHOT_SUMMARY_EXPECTED_MINIMUM_REVISION_UNAVAILABLE = null;
 const CONTROL_SNAPSHOT_SUMMARY_REVISION_GAP_UNAVAILABLE = null;
 const CONTROL_SNAPSHOT_SUMMARY_RESUME_TOKEN_UNAVAILABLE = null;
 const CONTROL_SNAPSHOT_PUBLICATION_SUMMARY_UNAVAILABLE = null;
+const LOAD_ACTIVE_GATE_SNAPSHOT_COVERAGE_ATTEMPT_TIMEOUT_MS =
+  ACTIVE_POLL_INTERVAL_MS;
 
 class Cluster4 extends Cluster3 {
   async _probeClusterActiveState(deadline, options = {}) {
@@ -319,8 +322,15 @@ class Cluster4 extends Cluster3 {
         }
       }),
     );
+    const snapshotCoverageDeadline =
+      readinessMode === CLUSTER_READINESS_MODE_LOAD ?
+        Math.min(
+          deadline,
+          Date.now() + LOAD_ACTIVE_GATE_SNAPSHOT_COVERAGE_ATTEMPT_TIMEOUT_MS,
+        ) :
+        deadline;
     const snapshotCoveragePromise = this._probeControlSnapshotCoverage(
-      deadline,
+      snapshotCoverageDeadline,
       expectedNodeIds,
       {
         forceRepair: options.forceRepair === true,

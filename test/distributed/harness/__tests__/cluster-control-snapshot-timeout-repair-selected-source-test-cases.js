@@ -18,6 +18,8 @@ import {
   SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LATE_RETRY_FLOOR_TEST_NAME,
   SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_INITIAL_TIMEOUT_MS,
   SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_HANDOFF_RETURN_TEST_NAME,
+  SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_REACHABILITY_PREFILTER_TEST_NAME,
+  SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_REMAINING_WITNESS_TEST_NAME,
   SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_MODE,
   SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_RETRY_EXHAUSTED_TEST_NAME,
   SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_RETRY_TEST_NAME,
@@ -29,6 +31,7 @@ import {
   SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_ID,
   SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_IDS,
   SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_TEST_NAME,
+  SELECTED_SNAPSHOT_SOURCE_TIMEOUT_REMAINING_WITNESS_DELAY_MS,
   SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RETRY_AFTER_TOLERANCE_MS,
   SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RETRY_EXHAUSTED_TEST_NAME,
   SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RETRY_REASON,
@@ -1165,23 +1168,24 @@ test(SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_HANDOFF_RETURN_TEST_NAME,
       SNAPSHOT_REPLAY_TEST_BOUNDED_RETRY_CALL_COUNT,
       SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.LOAD_HANDOFF_RETURN_PROBE_COUNT,
     );
-    assert.ok(
-      snapshotProbeCalls.every((call) =>
-        call.nodeId === SNAPSHOT_REPLAY_TEST_NODE_ID.SEED),
+    assert.deepStrictEqual(
+      [...new Set(snapshotProbeCalls.map((call) => call.nodeId))],
+      [SNAPSHOT_REPLAY_TEST_NODE_ID.SEED],
       SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.LOAD_HANDOFF_RETURN_PROBE_COUNT,
     );
+    assert.strictEqual(
+      resetCalls.length,
+      SNAPSHOT_REPLAY_TEST_BOUNDED_RETRY_CALL_COUNT,
+      SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.LOAD_LANE_RESET,
+    );
     assert.deepStrictEqual(
-      resetCalls,
-      [
-        {
-          nodeId: SNAPSHOT_REPLAY_TEST_NODE_ID.SEED,
-          lane: SELECTED_SNAPSHOT_SOURCE_TIMEOUT_SNAPSHOT_LANE,
-        },
-        {
-          nodeId: SNAPSHOT_REPLAY_TEST_NODE_ID.SEED,
-          lane: SELECTED_SNAPSHOT_SOURCE_TIMEOUT_SNAPSHOT_LANE,
-        },
-      ],
+      [...new Set(resetCalls.map((call) => call.nodeId))],
+      [SNAPSHOT_REPLAY_TEST_NODE_ID.SEED],
+      SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.LOAD_LANE_RESET,
+    );
+    assert.ok(
+      resetCalls.every((call) =>
+        call.lane === SELECTED_SNAPSHOT_SOURCE_TIMEOUT_SNAPSHOT_LANE),
       SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.LOAD_LANE_RESET,
     );
     assert.strictEqual(
@@ -1221,5 +1225,212 @@ test(SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_HANDOFF_RETURN_TEST_NAME,
       },
       SNAPSHOT_TIMEOUT_REPAIR_ASSERTION
         .STARTUP_RETRY_EXHAUSTED_OWNER_QUEUE,
+    );
+  });
+
+test(SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_REACHABILITY_PREFILTER_TEST_NAME,
+  async () => {
+    const cluster = createCluster({
+      size: SNAPSHOT_REPLAY_TEST_CLUSTER_SIZE,
+      docker: {socketPath: SNAPSHOT_REPLAY_TEST_DOCKER_SOCKET_PATH},
+      image: SNAPSHOT_REPLAY_TEST_IMAGE,
+    });
+    const snapshotProbeCalls = [];
+    const reachabilityProbeCalls = [];
+
+    for (const nodeId of SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS) {
+      cluster._nodes.set(nodeId, {
+        id: nodeId,
+        role:
+          nodeId === SNAPSHOT_REPLAY_TEST_NODE_ID.SEED ?
+            NODE_ROLES.SEED :
+            NODE_ROLES.JOINER,
+        async getStatus() {
+          return {rows: [{status: SERVICE_STATUS.ACTIVE}]};
+        },
+        async getReachabilityDiagnostics(options = {}) {
+          reachabilityProbeCalls.push({
+            nodeId,
+            skipBootstrapReadiness: options.skipBootstrapReadiness === true,
+          });
+          const adminReady =
+            nodeId === SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_ID;
+          return {
+            reachable: adminReady,
+            adminReady,
+            reachableBy: adminReady ?
+              SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE :
+              null,
+            lastError: null,
+          };
+        },
+        async getControlSnapshot(options = {}) {
+          snapshotProbeCalls.push({
+            nodeId,
+            timeoutMs: options.timeoutMs,
+            lane: options.lane,
+          });
+          if (nodeId === SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_ID) {
+            return {
+              rows: [{
+                nodes: SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS,
+                capturedAtMs:
+                  SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_CAPTURED_AT_MS,
+              }],
+            };
+          }
+          throw new Error(
+            SELECTED_SNAPSHOT_SOURCE_TIMEOUT_UNSELECTED_ERROR_PREFIX + nodeId,
+          );
+        },
+        async getLogs(_options) {
+          return SNAPSHOT_REPLAY_TEST_EMPTY_LOG;
+        },
+      });
+    }
+
+    const coverage = await cluster._probeControlSnapshotCoverage(
+      Date.now() +
+        SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_WIDE_DEADLINE_EXTENSION_MS,
+      SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS,
+      {readinessMode: SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_MODE},
+    );
+
+    assert.strictEqual(
+      snapshotProbeCalls[SNAPSHOT_REPLAY_TEST_FIRST_CALL_INDEX]?.nodeId,
+      SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_ID,
+      SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.LOAD_REACHABILITY_PREFILTER_SOURCE,
+    );
+    assert.ok(
+      !snapshotProbeCalls.some((call) =>
+        call.nodeId === SNAPSHOT_REPLAY_TEST_NODE_ID.SEED),
+      SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.LOAD_REACHABILITY_PREFILTER_SEED,
+    );
+    assert.ok(
+      reachabilityProbeCalls.every((call) =>
+        call.skipBootstrapReadiness === true),
+      SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.LOAD_REACHABILITY_PREFILTER_REQUEST,
+    );
+    assert.strictEqual(
+      coverage.selectedSnapshotNodeId,
+      SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_ID,
+      SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.LOAD_REACHABILITY_PREFILTER_SOURCE,
+    );
+    assert.strictEqual(
+      coverage.completeCoverage,
+      true,
+      SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.LOAD_REACHABILITY_PREFILTER_SOURCE,
+    );
+  });
+
+test(SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_REMAINING_WITNESS_TEST_NAME,
+  async () => {
+    const cluster = createCluster({
+      size: SNAPSHOT_REPLAY_TEST_CLUSTER_SIZE,
+      docker: {socketPath: SNAPSHOT_REPLAY_TEST_DOCKER_SOCKET_PATH},
+      image: SNAPSHOT_REPLAY_TEST_IMAGE,
+    });
+    const snapshotProbeCalls = [];
+    let currentRemainingSnapshotProbes = 0;
+    let maxRemainingSnapshotProbes = 0;
+    const querySuccessNodeId = SNAPSHOT_REPLAY_TEST_NODE_ID.STRONG_EXTRA;
+
+    const delayRemainingSnapshotProbe = async (nodeId) => {
+      if (nodeId === SNAPSHOT_REPLAY_TEST_NODE_ID.SEED) {
+        return;
+      }
+      currentRemainingSnapshotProbes += 1;
+      maxRemainingSnapshotProbes = Math.max(
+        maxRemainingSnapshotProbes,
+        currentRemainingSnapshotProbes,
+      );
+      try {
+        await new Promise((resolve) => {
+          setTimeout(
+            resolve,
+            SELECTED_SNAPSHOT_SOURCE_TIMEOUT_REMAINING_WITNESS_DELAY_MS,
+          );
+        });
+      } finally {
+        currentRemainingSnapshotProbes -= 1;
+      }
+    };
+
+    for (const nodeId of SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS) {
+      cluster._nodes.set(nodeId, {
+        id: nodeId,
+        role:
+          nodeId === SNAPSHOT_REPLAY_TEST_NODE_ID.SEED ?
+            NODE_ROLES.SEED :
+            NODE_ROLES.JOINER,
+        async getStatus() {
+          return {rows: [{status: SERVICE_STATUS.ACTIVE}]};
+        },
+        async getReachabilityDiagnostics(options = {}) {
+          return {
+            reachable: true,
+            adminReady: true,
+            reachableBy: SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE,
+            lastError: null,
+            skipBootstrapReadiness: options.skipBootstrapReadiness === true,
+          };
+        },
+        async getControlSnapshot(options = {}) {
+          snapshotProbeCalls.push({
+            nodeId,
+            timeoutMs: options.timeoutMs,
+            lane: options.lane,
+          });
+          await delayRemainingSnapshotProbe(nodeId);
+          if (nodeId === SNAPSHOT_REPLAY_TEST_NODE_ID.SEED) {
+            throw new Error(buildSelectedSnapshotSourceTimeoutError(
+              nodeId,
+              options.timeoutMs,
+            ));
+          }
+          if (nodeId === querySuccessNodeId) {
+            return {
+              rows: [{
+                nodes: SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS,
+                capturedAtMs:
+                  SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_CAPTURED_AT_MS,
+              }],
+            };
+          }
+          throw new Error(
+            SELECTED_SNAPSHOT_SOURCE_TIMEOUT_UNSELECTED_ERROR_PREFIX + nodeId,
+          );
+        },
+        async getLogs(_options) {
+          return SNAPSHOT_REPLAY_TEST_EMPTY_LOG;
+        },
+      });
+    }
+
+    const coverage = await cluster._probeControlSnapshotCoverage(
+      Date.now() +
+        SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_WIDE_DEADLINE_EXTENSION_MS,
+      SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS,
+      {readinessMode: SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_MODE},
+    );
+
+    assert.strictEqual(
+      maxRemainingSnapshotProbes,
+      SNAPSHOT_REPLAY_TEST_SINGLE_CALL_COUNT,
+      SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.LOAD_REMAINING_WITNESS_CONCURRENCY,
+    );
+    assert.strictEqual(
+      coverage.selectedSnapshotNodeId,
+      querySuccessNodeId,
+      SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.LOAD_REMAINING_WITNESS_SELECTION,
+    );
+    assert.strictEqual(
+      coverage.completeCoverage,
+      true,
+      SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.LOAD_REMAINING_WITNESS_SELECTION,
+    );
+    assert.ok(
+      snapshotProbeCalls.some((call) => call.nodeId === querySuccessNodeId),
+      SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.LOAD_REMAINING_WITNESS_SELECTION,
     );
   });

@@ -141,6 +141,23 @@ const {
   shouldDeferAuthoritativeRepair,
 } = TABLE_DISTRIBUTION_HELPERS_SEGMENT_2;
 
+const TABLE_BOOTSTRAP_SQL_ENGINE_UNAVAILABLE_FRAGMENT =
+  'SQL query engine not available';
+const TABLE_BOOTSTRAP_MULTI_NODE_CREATE_ATTEMPT_TIMEOUT_MS = 5000;
+const TABLE_BOOTSTRAP_SQL_ENGINE_UNAVAILABLE_GRACE_MS = 60000;
+
+function isTableBootstrapCandidateUnavailableError(error) {
+  const message = String(error?.message || error || '');
+  return message.includes(TABLE_BOOTSTRAP_SQL_ENGINE_UNAVAILABLE_FRAGMENT);
+}
+
+function isTableBootstrapCreatePrimaryAdvanceError(error) {
+  return (
+    isTimeoutShapedError(error) ||
+    isTableBootstrapCandidateUnavailableError(error)
+  );
+}
+
 function shouldForceAuthoritativeRepairAfterTimedOutCreate(options = {}) {
   if (options.createTimeoutObserved !== true) {
     return false;
@@ -205,7 +222,7 @@ function resolveMutationVisibilityWarning(options = {}) {
 }
 
 function shouldAdvanceTimedOutCreateMutationPrimary(options = {}) {
-  if (!isTimeoutShapedError(options.lastCreateError)) {
+  if (!isTableBootstrapCreatePrimaryAdvanceError(options.lastCreateError)) {
     return false;
   }
   if (
@@ -256,7 +273,103 @@ function resolveTableBootstrapRepairQueryNodes(options = {}) {
   ) {
     return visibilityQueryNodes;
   }
+  if (
+    options.createTimeoutObserved === true &&
+    observedBootstrapVisibilityState === TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE &&
+    visibilityQueryNodes.length > attemptedCreateQueryNodes.length
+  ) {
+    return visibilityQueryNodes;
+  }
   return attemptedCreateQueryNodes;
+}
+
+function shouldDeferTableBootstrapRepairForUnavailableCreate(options = {}) {
+  if (!isTableBootstrapCandidateUnavailableError(options.lastCreateError)) {
+    return false;
+  }
+  return (
+    options?.bootstrapVisibilitySnapshot?.state ===
+    TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE
+  );
+}
+
+function shouldUseUnattemptedTableBootstrapVisibilityNodes(options = {}) {
+  if (!isTableBootstrapCreatePrimaryAdvanceError(options.lastCreateError)) {
+    return false;
+  }
+  if (
+    !Array.isArray(options.createQueryNodes) ||
+    options.createQueryNodes.length <= ONE
+  ) {
+    return false;
+  }
+  if (
+    !Number.isInteger(options.createPrimaryNodeIndex) ||
+    options.createPrimaryNodeIndex >= options.createQueryNodes.length - ONE
+  ) {
+    return false;
+  }
+  return (
+    options?.bootstrapVisibilitySnapshot?.state ===
+    TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE
+  );
+}
+
+function resolveTableBootstrapVisibilityQueryContext(
+  seedNode,
+  options = {},
+) {
+  if (!shouldUseUnattemptedTableBootstrapVisibilityNodes(options)) {
+    return {
+      seedNode,
+      options: options.baseOptions || {},
+    };
+  }
+  const unattemptedQueryNodes = options.createQueryNodes.slice(
+    options.createPrimaryNodeIndex + ONE,
+  );
+  return {
+    seedNode: unattemptedQueryNodes[ZERO] || seedNode,
+    options: {
+      ...(options.baseOptions || {}),
+      queryNodes: unattemptedQueryNodes.slice(ONE),
+      fallbackNodes: unattemptedQueryNodes.slice(ONE),
+    },
+  };
+}
+
+function shouldCycleTableBootstrapCreatePrimary(options = {}) {
+  if (!isTableBootstrapCandidateUnavailableError(options.lastCreateError)) {
+    return false;
+  }
+  if (
+    !Array.isArray(options.createQueryNodes) ||
+    options.createQueryNodes.length <= ONE
+  ) {
+    return false;
+  }
+  return (
+    options?.bootstrapVisibilitySnapshot?.state ===
+    TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE
+  );
+}
+
+function resolveNextTableBootstrapCreatePrimaryIndex(options = {}) {
+  const createQueryNodes = Array.isArray(options.createQueryNodes) ?
+    options.createQueryNodes :
+    [];
+  if (createQueryNodes.length <= ONE) {
+    return ZERO;
+  }
+  const createPrimaryNodeIndex = Number.isInteger(
+    options.createPrimaryNodeIndex,
+  ) ?
+    options.createPrimaryNodeIndex :
+    ZERO;
+  if (createPrimaryNodeIndex < createQueryNodes.length - ONE) {
+    return createPrimaryNodeIndex + ONE;
+  }
+  return ONE;
 }
 
 function resolveRequiredTableBootstrapVisibilityState(options = {}) {
@@ -284,6 +397,12 @@ function resolveTableBootstrapCreateTimeoutMs(options = {}) {
   const createQueryNodeCount = Array.isArray(options.createQueryNodes) ?
     options.createQueryNodes.length :
     ZERO;
+  const createAttemptTimeoutCapMs = createQueryNodeCount > ONE ?
+    Math.min(
+      POLICY_APPLY_ATTEMPT_TIMEOUT_MS,
+      TABLE_BOOTSTRAP_MULTI_NODE_CREATE_ATTEMPT_TIMEOUT_MS,
+    ) :
+    POLICY_APPLY_ATTEMPT_TIMEOUT_MS;
   const requiresExtendedBootstrapVisibility =
     tableBootstrapVisibilityStateSatisfiesRequirement(
       TABLE_BOOTSTRAP_VISIBILITY_STATE.PARTITIONS_VISIBLE,
@@ -291,17 +410,106 @@ function resolveTableBootstrapCreateTimeoutMs(options = {}) {
     );
   if (!requiresExtendedBootstrapVisibility || createQueryNodeCount <= ONE) {
     return Math.min(
-      POLICY_APPLY_ATTEMPT_TIMEOUT_MS,
+      createAttemptTimeoutCapMs,
       remainingBootstrapTimeoutMs,
     );
   }
   return Math.max(
     ONE,
     Math.min(
-      POLICY_APPLY_ATTEMPT_TIMEOUT_MS,
+      createAttemptTimeoutCapMs,
       remainingBootstrapTimeoutMs -
         TABLE_BOOTSTRAP_POST_CREATE_VISIBILITY_RESERVE_MS,
     ),
+  );
+}
+
+function shouldAttemptTableBootstrapCreate(options = {}) {
+  const createQueryNodeCount = Array.isArray(options.createQueryNodes) ?
+    options.createQueryNodes.length :
+    ZERO;
+  const requiredBootstrapVisibilityState =
+    typeof options.requiredBootstrapVisibilityState === 'string' ?
+      options.requiredBootstrapVisibilityState :
+      TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE;
+  const remainingBootstrapTimeoutMs =
+    Number.isFinite(options.deadlineAtMs) ?
+      Math.floor(options.deadlineAtMs - Date.now()) :
+      ZERO;
+  if (remainingBootstrapTimeoutMs <= ZERO) {
+    return false;
+  }
+  if (createQueryNodeCount <= ONE) {
+    return true;
+  }
+  const requiresExtendedBootstrapVisibility =
+    tableBootstrapVisibilityStateSatisfiesRequirement(
+      TABLE_BOOTSTRAP_VISIBILITY_STATE.PARTITIONS_VISIBLE,
+      requiredBootstrapVisibilityState,
+    );
+  if (!requiresExtendedBootstrapVisibility) {
+    return true;
+  }
+  const createAttemptTimeoutCapMs = createQueryNodeCount > ONE ?
+    Math.min(
+      POLICY_APPLY_ATTEMPT_TIMEOUT_MS,
+      TABLE_BOOTSTRAP_MULTI_NODE_CREATE_ATTEMPT_TIMEOUT_MS,
+    ) :
+    POLICY_APPLY_ATTEMPT_TIMEOUT_MS;
+  return (
+    remainingBootstrapTimeoutMs >=
+    TABLE_BOOTSTRAP_POST_CREATE_VISIBILITY_RESERVE_MS +
+      createAttemptTimeoutCapMs
+  );
+}
+
+function shouldExtendTableBootstrapForUnavailableCreate(options = {}) {
+  if (!isTableBootstrapCandidateUnavailableError(options.lastCreateError)) {
+    return false;
+  }
+  if (
+    !Array.isArray(options.createQueryNodes) ||
+    options.createQueryNodes.length <= ONE
+  ) {
+    return false;
+  }
+  if (
+    options?.bootstrapVisibilitySnapshot?.state !==
+    TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE
+  ) {
+    return false;
+  }
+  if (
+    !Number.isFinite(options.deadlineAtMs) ||
+    !Number.isFinite(options.unavailableGraceDeadlineAtMs)
+  ) {
+    return false;
+  }
+  const now = Date.now();
+  if (now < options.deadlineAtMs) {
+    return false;
+  }
+  return (
+    now +
+      TABLE_BOOTSTRAP_POST_CREATE_VISIBILITY_RESERVE_MS +
+      TABLE_BOOTSTRAP_MULTI_NODE_CREATE_ATTEMPT_TIMEOUT_MS <=
+    options.unavailableGraceDeadlineAtMs
+  );
+}
+
+function resolveExtendedTableBootstrapDeadlineForUnavailableCreate(
+  options = {},
+) {
+  const unavailableGraceDeadlineAtMs = Number.isFinite(
+    options.unavailableGraceDeadlineAtMs,
+  ) ?
+    options.unavailableGraceDeadlineAtMs :
+    Date.now();
+  return Math.min(
+    unavailableGraceDeadlineAtMs,
+    Date.now() +
+      TABLE_BOOTSTRAP_POST_CREATE_VISIBILITY_RESERVE_MS +
+      TABLE_BOOTSTRAP_MULTI_NODE_CREATE_ATTEMPT_TIMEOUT_MS,
   );
 }
 
@@ -636,7 +844,7 @@ async function ensureBenchmarkPartitioningTable(seedNode, options = {}) {
     SQL_CREATE_TABLE_PREFIX + resolvedTableName + SQL_CREATE_TABLE_SUFFIX;
   const createQueryNodes = resolveControlQueryNodes(seedNode, options);
   let createPrimaryNodeIndex = ZERO;
-  const deadline =
+  let deadline =
     Date.now() +
     (tableBootstrapVisibilityStateSatisfiesRequirement(
       TABLE_BOOTSTRAP_VISIBILITY_STATE.PARTITIONS_VISIBLE,
@@ -644,6 +852,8 @@ async function ensureBenchmarkPartitioningTable(seedNode, options = {}) {
     ) ?
       TABLE_BOOTSTRAP_TIMEOUT_MS :
       TABLE_ID_VISIBILITY_TIMEOUT_MS);
+  const unavailableGraceDeadline =
+    deadline + TABLE_BOOTSTRAP_SQL_ENGINE_UNAVAILABLE_GRACE_MS;
   let createTimeoutError = null;
   let lastCreateError = null;
   let lastCreateErrorObject = null;
@@ -654,57 +864,85 @@ async function ensureBenchmarkPartitioningTable(seedNode, options = {}) {
   let bootstrapVisibilitySnapshot = buildTableBootstrapVisibilitySnapshot();
   let tableVisibilityRepairAttempted = false;
   let tableVisibilityRepairApplied = false;
-  while (Date.now() <= deadline) {
-    const createPrimaryNode =
-      createQueryNodes[createPrimaryNodeIndex] || seedNode;
-    const remainingCreateQueryNodes = createQueryNodes.filter(
-      (_node, index) => {
-        return index !== createPrimaryNodeIndex;
-      },
-    );
-    const createAttemptTimeoutMs = resolveTableBootstrapCreateTimeoutMs({
-      deadlineAtMs: deadline,
-      requiredBootstrapVisibilityState,
-      createQueryNodes,
-    });
-    try {
-      const createResult = await queryControl(
-        createPrimaryNode,
-        createSql,
-        [],
-        {
-          timeoutMs: createAttemptTimeoutMs,
-          lane: CONTROL_QUERY_LANE_CONTROL,
-          executionMode: CONTROL_QUERY_EXECUTION_MODE.MUTATION_SINGLE_FLIGHT,
-          queryNodes: remainingCreateQueryNodes,
+  let postRepairVisibilitySweepPending = false;
+  while (Date.now() <= deadline || postRepairVisibilitySweepPending) {
+    const visibilitySweepOnly = postRepairVisibilitySweepPending;
+    postRepairVisibilitySweepPending = false;
+    if (!visibilitySweepOnly) {
+      const createPrimaryNode =
+        createQueryNodes[createPrimaryNodeIndex] || seedNode;
+      const remainingCreateQueryNodes = createQueryNodes.filter(
+        (_node, index) => {
+          return index !== createPrimaryNodeIndex;
         },
       );
-      createVisibilitySummary = advanceMutationVisibilitySummary(
-        createVisibilitySummary,
-        createResult,
-      );
-      lastCreateError = null;
-      lastCreateErrorObject = null;
-    } catch (error) {
       if (
-        !isTimeoutShapedError(error) &&
-        !isRetryableControlPlaneProgressError(error)
+        shouldAttemptTableBootstrapCreate({
+          deadlineAtMs: deadline,
+          requiredBootstrapVisibilityState,
+          createQueryNodes,
+        })
       ) {
-        throw error;
+        const createAttemptTimeoutMs = resolveTableBootstrapCreateTimeoutMs({
+          deadlineAtMs: deadline,
+          requiredBootstrapVisibilityState,
+          createQueryNodes,
+        });
+        try {
+          const createResult = await queryControl(
+            createPrimaryNode,
+            createSql,
+            [],
+            {
+              timeoutMs: createAttemptTimeoutMs,
+              lane: CONTROL_QUERY_LANE_CONTROL,
+              executionMode:
+                CONTROL_QUERY_EXECUTION_MODE.MUTATION_SINGLE_FLIGHT,
+              queryNodes: remainingCreateQueryNodes,
+            },
+          );
+          createVisibilitySummary = advanceMutationVisibilitySummary(
+            createVisibilitySummary,
+            createResult,
+          );
+          lastCreateError = null;
+          lastCreateErrorObject = null;
+        } catch (error) {
+          if (
+            !isTimeoutShapedError(error) &&
+            !isTableBootstrapCandidateUnavailableError(error) &&
+            !isRetryableControlPlaneProgressError(error)
+          ) {
+            throw error;
+          }
+          createVisibilitySummary = advanceMutationVisibilitySummary(
+            createVisibilitySummary,
+            error,
+          );
+          if (isTimeoutShapedError(error)) {
+            createTimeoutError = String(error?.message || error);
+          }
+          lastCreateError = String(error?.message || error);
+          lastCreateErrorObject = error;
+        }
       }
-      createVisibilitySummary = advanceMutationVisibilitySummary(
-        createVisibilitySummary,
-        error,
-      );
-      if (isTimeoutShapedError(error)) {
-        createTimeoutError = String(error?.message || error);
-      }
-      lastCreateError = String(error?.message || error);
-      lastCreateErrorObject = error;
     }
 
+    const visibilityQueryContext =
+      resolveTableBootstrapVisibilityQueryContext(seedNode, {
+        baseOptions: options,
+        lastCreateError: lastCreateErrorObject,
+        createQueryNodes,
+        createPrimaryNodeIndex,
+        bootstrapVisibilitySnapshot,
+      });
+
     try {
-      const tableId = await queryTableId(seedNode, resolvedTableName, options);
+      const tableId = await queryTableId(
+        visibilityQueryContext.seedNode,
+        resolvedTableName,
+        visibilityQueryContext.options,
+      );
       if (tableId) {
         bootstrapVisibilitySnapshot = buildTableBootstrapVisibilitySnapshot({
           tableId,
@@ -726,9 +964,9 @@ async function ensureBenchmarkPartitioningTable(seedNode, options = {}) {
         }
         try {
           const partitionIds = await queryPartitionIdsByTableId(
-            seedNode,
+            visibilityQueryContext.seedNode,
             tableId,
-            options,
+            visibilityQueryContext.options,
           );
           if (partitionIds.length <= ZERO) {
             bootstrapVisibilitySnapshot = buildTableBootstrapVisibilitySnapshot(
@@ -762,11 +1000,13 @@ async function ensureBenchmarkPartitioningTable(seedNode, options = {}) {
                 bootstrapVisibilitySnapshot,
               });
             }
-            const distribution = await queryTableDistribution(seedNode, {
-              tableName: resolvedTableName,
-              queryNodes: options.queryNodes,
-              fallbackNodes: options.fallbackNodes,
-            });
+            const distribution = await queryTableDistribution(
+              visibilityQueryContext.seedNode,
+              {
+                ...visibilityQueryContext.options,
+                tableName: resolvedTableName,
+              },
+            );
             bootstrapVisibilitySnapshot = buildTableBootstrapVisibilitySnapshot(
               {
                 tableId,
@@ -806,6 +1046,9 @@ async function ensureBenchmarkPartitioningTable(seedNode, options = {}) {
       lastVisibilityError = String(error?.message || error);
     }
 
+    if (visibilitySweepOnly) {
+      break;
+    }
     if (
       shouldAdvanceTimedOutCreateMutationPrimary({
         lastCreateError: lastCreateErrorObject,
@@ -815,11 +1058,29 @@ async function ensureBenchmarkPartitioningTable(seedNode, options = {}) {
         bootstrapVisibilitySnapshot,
       })
     ) {
-      createPrimaryNodeIndex += ONE;
-      continue;
+      if (Date.now() < deadline) {
+        createPrimaryNodeIndex += ONE;
+        continue;
+      }
+    }
+    if (
+      shouldCycleTableBootstrapCreatePrimary({
+        lastCreateError: lastCreateErrorObject,
+        createQueryNodes,
+        bootstrapVisibilitySnapshot,
+      })
+    ) {
+      createPrimaryNodeIndex = resolveNextTableBootstrapCreatePrimaryIndex({
+        createQueryNodes,
+        createPrimaryNodeIndex,
+      });
     }
     if (
       !tableVisibilityRepairAttempted &&
+      !shouldDeferTableBootstrapRepairForUnavailableCreate({
+        lastCreateError: lastCreateErrorObject,
+        bootstrapVisibilitySnapshot,
+      }) &&
       (!shouldDeferAuthoritativeRepair(createVisibilitySummary) ||
         shouldForceAuthoritativeRepairAfterTimedOutCreate({
           createTimeoutObserved: createTimeoutError !== null,
@@ -837,13 +1098,36 @@ async function ensureBenchmarkPartitioningTable(seedNode, options = {}) {
         attemptedCreateQueryNodes,
         visibilityQueryNodes: createQueryNodes,
         observedBootstrapVisibilityState: bootstrapVisibilitySnapshot.state,
+        createTimeoutObserved: createTimeoutError !== null,
       });
-      tableVisibilityRepairApplied =
-        (await forceRepairControlSnapshotAcrossQueryNodes(seedNode, {
+      const repairApplied = await forceRepairControlSnapshotAcrossQueryNodes(
+        seedNode,
+        {
           ...options,
           queryNodes: repairQueryNodes,
           fallbackNodes: repairQueryNodes,
-        })) || tableVisibilityRepairApplied;
+        },
+      );
+      tableVisibilityRepairApplied =
+        repairApplied || tableVisibilityRepairApplied;
+      if (Date.now() >= deadline) {
+        postRepairVisibilitySweepPending = true;
+        continue;
+      }
+    }
+    if (
+      shouldExtendTableBootstrapForUnavailableCreate({
+        lastCreateError: lastCreateErrorObject,
+        createQueryNodes,
+        bootstrapVisibilitySnapshot,
+        deadlineAtMs: deadline,
+        unavailableGraceDeadlineAtMs: unavailableGraceDeadline,
+      })
+    ) {
+      deadline = resolveExtendedTableBootstrapDeadlineForUnavailableCreate({
+        unavailableGraceDeadlineAtMs: unavailableGraceDeadline,
+      });
+      continue;
     }
 
     if (Date.now() >= deadline) {

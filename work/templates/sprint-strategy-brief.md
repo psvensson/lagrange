@@ -27,8 +27,10 @@ shape of failure.
 1. Contradiction: <facts that appear simultaneously true and need one system-level explanation>
 2. Competing causal theories: <producer, consumer, lifecycle, retry/wake, admission/gating, observability, and stale-evidence explanations>
 3. Missing system object: <runtime code, vocabulary, invariant, owner contract, evidence projection, fixture coverage, or architecture policy>
-4. Next package as experiment: <the theory being tested and the owner/boundary/files implied by that theory>
-5. Falsifier: <evidence that redirects owner, boundary, package sequence, or escalation path>
-6. Negative proof: <proof the change does not reintroduce old debt, reinterpret downstream symptoms, or depend on stale diagnostics>
-7. Representative checkpoint: <fresh route or rerun required before another local patch on the same unchanged artifact>
-8. Stop rule: <condition that opens/selects an autonomous architecture experiment instead of another local patch; human escalation only for blocked/contradictory evidence>
+4. Failure mechanism taxonomy term: <observation_gap | selection_gap | admission_gap | transition_gap | scheduling_gap | budget_gap | concurrency_gap | contract_gap | ownership_gap | downstream_symptom>
+5. Next package as experiment: <the theory being tested and the owner/boundary/files implied by that theory>
+6. Falsifier: <evidence that redirects owner, boundary, package sequence, or escalation path>
+7. Negative proof: <proof the change does not reintroduce old debt, reinterpret downstream symptoms, or depend on stale diagnostics>
+8. Representative checkpoint: <fresh route or rerun required before another local patch on the same unchanged artifact>
+9. Expected mechanism movement: <how the mechanism classification or boundary is expected to move or migrate after this change>
+10. Stop rule: <condition that opens/selects an autonomous architecture experiment instead of another local patch; human escalation only for blocked/contradictory evidence>

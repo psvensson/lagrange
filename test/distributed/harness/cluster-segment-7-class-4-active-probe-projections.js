@@ -90,27 +90,6 @@ const LOAD_PUBLICATION_GATE_PROJECTION_DECISION_TABLE = Object.freeze([
       evidence.nodeCanonicalActive === true &&
       evidence.nodePublicationDisagreementCount === ZERO,
   }),
-  Object.freeze({
-    outcome: LOAD_PUBLICATION_GATE_PROJECTION_OUTCOME_APPLY,
-    matches: (evidence) =>
-      evidence.readinessMode === CLUSTER_READINESS_MODE_LOAD &&
-      evidence.publicationGateReady === true &&
-      evidence.snapshotCoverageComplete !== true &&
-      evidence.selectedSnapshotAdminReady === true &&
-      evidence.selectedSnapshotTimeoutOwnerRecoveryProjectionReady === true &&
-      evidence.diagnosticActive !== true &&
-      evidence.diagnosticActivitySource ===
-        ACTIVE_PROBE_ACTIVITY_SOURCE_TRAFFIC_READINESS &&
-      evidence.nodeCanonicalActive === true &&
-      evidence.nodePublicationDisagreementCount === ZERO &&
-      (
-        evidence.timeoutShaped === true ||
-        (
-          evidence.diagnosticErrorPresent !== true &&
-          evidence.projectableReasonSetComplete === true
-        )
-      ),
-  }),
 ]);
 const STARTUP_SNAPSHOT_PROJECTION_OUTCOME_KEEP = Object.freeze({
   project: false,
@@ -214,22 +193,6 @@ const STARTUP_ADMIN_AVAILABILITY_SUPPORT_DECISION_TABLE = Object.freeze([
       evidence.readinessMode === CLUSTER_READINESS_MODE_STARTUP &&
       evidence.diagnosticActive !== true &&
       evidence.adminAvailabilityTransient === true &&
-      evidence.publicationGateReady === true &&
-      evidence.snapshotCoverageComplete !== true &&
-      evidence.selectedSnapshotAdminReady === true &&
-      evidence.selectedSnapshotTimeoutOwnerRecoveryProjectionReady === true &&
-      evidence.nodeCanonicalActive === true &&
-      evidence.nodePublicationDisagreementCount === ZERO,
-  }),
-  Object.freeze({
-    outcome: STARTUP_ADMIN_AVAILABILITY_SUPPORT_OUTCOME_APPLY,
-    matches: (evidence) =>
-      evidence.readinessMode === CLUSTER_READINESS_MODE_LOAD &&
-      evidence.diagnosticActive !== true &&
-      (
-        evidence.adminAvailabilityTransient === true ||
-        evidence.adminProbeTimeoutShaped === true
-      ) &&
       evidence.publicationGateReady === true &&
       evidence.snapshotCoverageComplete !== true &&
       evidence.selectedSnapshotAdminReady === true &&

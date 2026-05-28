@@ -248,6 +248,12 @@ export const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_RETRY_EXHAUSTED_TEST_NAME =
 export const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_HANDOFF_RETURN_TEST_NAME =
   'Unit: _probeControlSnapshotCoverage returns after bounded load ' +
   'owner-recovery handoff';
+export const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_REACHABILITY_PREFILTER_TEST_NAME =
+  'Unit: _probeControlSnapshotCoverage prefilters load snapshot probes by ' +
+  'admin reachability';
+export const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_REMAINING_WITNESS_TEST_NAME =
+  'Unit: _probeControlSnapshotCoverage bounds load remaining snapshot ' +
+  'witness probes after selected-source timeout';
 export const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_ALTERNATIVE_WITNESS_TEST_NAME =
   'Unit: _probeControlSnapshotCoverage preserves an alternative query-success ' +
   'witness when selected source times out with higher coverage';
@@ -284,6 +290,7 @@ export const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_WIDE_DEADLINE_EXTENSION_MS =
 export const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_WIDE_INITIAL_TIMEOUT_MS =
   15000;
 export const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_RETRY_TIMEOUT_MS = 2500;
+export const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_REMAINING_WITNESS_DELAY_MS = 0;
 export const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_ERROR =
   'Admin API query timed out for node ' +
   SELECTED_SNAPSHOT_SOURCE_TIMEOUT_SELECTED_NODE_ID +
@@ -638,9 +645,21 @@ export const SNAPSHOT_TIMEOUT_REPAIR_ASSERTION = Object.freeze({
   LOAD_LANE_RESET:
     'load selected snapshot timeout should reset only the snapshot lane',
   LOAD_HANDOFF_RETURN_PROBE_COUNT:
-    'load owner-recovery handoff should not probe remaining nodes after the selected source publishes a bounded handoff',
+    'load owner-recovery handoff should return after the selected source publishes a bounded handoff with no alternative witness',
   LOAD_HANDOFF_RETURN_PUBLISHED:
     'load owner-recovery handoff should preserve the published active coverage witness',
+  LOAD_REACHABILITY_PREFILTER_SOURCE:
+    'load reachability prefilter should try an admin-ready witness before the non-admin-ready seed',
+  LOAD_REACHABILITY_PREFILTER_SEED:
+    'load reachability prefilter should not spend snapshot budget on the non-admin-ready seed before admin-ready witnesses',
+  LOAD_REACHABILITY_PREFILTER_REQUEST:
+    'load reachability prefilter should use the admin-only reachability request',
+  LOAD_REMAINING_WITNESS_CONCURRENCY:
+    'load remaining snapshot witnesses should be bounded to one in-flight ' +
+    'snapshot probe after selected-source timeout',
+  LOAD_REMAINING_WITNESS_SELECTION:
+    'load bounded remaining witness probing should still select the later ' +
+    'query-success witness',
   FORCED_REPAIR_SOURCE:
     'forced repair timeout fallback should preserve the selected admin-ready source',
   FORCED_REPAIR_CLEAR:

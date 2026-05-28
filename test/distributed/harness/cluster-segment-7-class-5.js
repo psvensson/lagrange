@@ -81,6 +81,9 @@ const {
 } = CLUSTER_SEGMENT_7_CLASS_SHARED;
 import {Cluster4} from './cluster-segment-7-class-4.js';
 
+const LOAD_REACHABILITY_PREFLIGHT_RANK_UNKNOWN = 2;
+const LOAD_REACHABILITY_PREFLIGHT_RANK_NOT_READY = 3;
+
 class Cluster5 extends Cluster4 {
   async _probeControlSnapshotCoverage(
     deadline,
@@ -124,6 +127,36 @@ class Cluster5 extends Cluster4 {
         CONTROL_SNAPSHOT_LATE_REACHABILITY_TIMEOUT_FLOOR_MS,
       );
     };
+    const queryReachabilityDiagnostics = async (
+      node,
+      reachabilityTimeoutMs,
+    ) => {
+      if (typeof node.getReachabilityDiagnostics !== 'function') {
+        return {
+          diagnostics: null,
+          error: null,
+        };
+      }
+      try {
+        return {
+          diagnostics: await withTimeout(
+            node.getReachabilityDiagnostics({
+              timeoutMs: reachabilityTimeoutMs,
+              skipBootstrapReadiness: true,
+            }),
+            reachabilityTimeoutMs,
+            'Control snapshot reachability probe timed out for ' + node.id,
+          ),
+          error: null,
+        };
+      } catch (error) {
+        return {
+          diagnostics: null,
+          error: normalizeProbeError(error),
+        };
+      }
+    };
+    const loadReachabilityPreflightByNodeId = new Map();
     const probeNodeSnapshotCoverage = async (
       node,
       snapshotTimeoutMs,
@@ -222,21 +255,19 @@ class Cluster5 extends Cluster4 {
         };
       };
       const probeReachabilityDiagnostics = async () => {
-        if (typeof node.getReachabilityDiagnostics !== 'function') {
+        const preflight =
+          loadReachabilityPreflightByNodeId.get(String(node.id));
+        if (preflight) {
+          reachabilityDiagnostics = preflight.diagnostics;
+          reachabilityError = preflight.error;
           return;
         }
-        try {
-          reachabilityDiagnostics = await withTimeout(
-            node.getReachabilityDiagnostics({
-              timeoutMs: reachabilityTimeoutMs,
-              skipBootstrapReadiness: true,
-            }),
-            reachabilityTimeoutMs,
-            'Control snapshot reachability probe timed out for ' + node.id,
-          );
-        } catch (error) {
-          reachabilityError = normalizeProbeError(error);
-        }
+        const probeResult = await queryReachabilityDiagnostics(
+          node,
+          reachabilityTimeoutMs,
+        );
+        reachabilityDiagnostics = probeResult.diagnostics;
+        reachabilityError = probeResult.error;
       };
       try {
         const snapshotResult = await node.getControlSnapshot({
@@ -377,7 +408,63 @@ class Cluster5 extends Cluster4 {
       }
     };
     const snapshotProbeResults = [];
+    const loadSnapshotCoverageAttemptDeadlineExpired = () => {
+      return readinessMode === CLUSTER_READINESS_MODE_LOAD &&
+        Date.now() >= deadline;
+    };
     if (nodes.length > ZERO) {
+      if (
+        readinessMode === CLUSTER_READINESS_MODE_LOAD &&
+        nodes.length > ONE
+      ) {
+        const preflightReachabilityTimeoutMs =
+          resolveReachabilityProbeTimeoutMs(
+            CONTROL_SNAPSHOT_REACHABILITY_PROBE_TIMEOUT_MS,
+          );
+        const originalNodeOrder = new Map(
+          nodes.map((node, index) => [String(node.id), index]),
+        );
+        const preflightResults = await Promise.all(
+          nodes.map(async (node) => {
+            return {
+              node,
+              result: await queryReachabilityDiagnostics(
+                node,
+                preflightReachabilityTimeoutMs,
+              ),
+            };
+          }),
+        );
+        for (const {node, result} of preflightResults) {
+          loadReachabilityPreflightByNodeId.set(String(node.id), result);
+        }
+        const reachabilityRank = (node) => {
+          const preflight =
+            loadReachabilityPreflightByNodeId.get(String(node.id));
+          const diagnostics = preflight?.diagnostics;
+          if (diagnostics?.adminReady === true) {
+            return ZERO;
+          }
+          if (diagnostics?.reachable === true) {
+            return ONE;
+          }
+          if (!preflight || !diagnostics) {
+            return LOAD_REACHABILITY_PREFLIGHT_RANK_UNKNOWN;
+          }
+          return LOAD_REACHABILITY_PREFLIGHT_RANK_NOT_READY;
+        };
+        nodes.sort((left, right) => {
+          const leftRank = reachabilityRank(left);
+          const rightRank = reachabilityRank(right);
+          if (leftRank !== rightRank) {
+            return leftRank - rightRank;
+          }
+          return (
+            (originalNodeOrder.get(String(left.id)) ?? ZERO) -
+            (originalNodeOrder.get(String(right.id)) ?? ZERO)
+          );
+        });
+      }
       const firstSnapshotTimeoutMs = resolveSnapshotProbeTimeoutMs(
         CONTROL_SNAPSHOT_PROBE_TIMEOUT_MS,
       );
@@ -390,16 +477,30 @@ class Cluster5 extends Cluster4 {
         firstReachabilityTimeoutMs,
       );
       snapshotProbeResults.push(firstResult);
+      const loadAlternativeSnapshotWitnessAvailable =
+        readinessMode === CLUSTER_READINESS_MODE_LOAD &&
+        nodes.slice(ONE).some((node) => {
+          const preflight =
+            loadReachabilityPreflightByNodeId.get(String(node.id));
+          const diagnostics = preflight?.diagnostics;
+          return (
+            diagnostics?.adminReady === true ||
+            diagnostics?.reachable === true
+          );
+        });
       const ownerRecoveryHandoffAllowsBoundedReturn =
         readinessMode === CLUSTER_READINESS_MODE_LOAD &&
         controlSnapshotOwnerRecoveryAllowsBoundedReturn({
           result: firstResult,
           expectedNodeIds: [...expectedNodeSet],
+          alternativeSnapshotWitnessAvailable:
+            loadAlternativeSnapshotWitnessAvailable,
         });
       if (
         firstResult.missingExpectedNodeCount !== ZERO &&
         nodes.length > ONE &&
-        ownerRecoveryHandoffAllowsBoundedReturn !== true
+        ownerRecoveryHandoffAllowsBoundedReturn !== true &&
+        loadSnapshotCoverageAttemptDeadlineExpired() !== true
       ) {
         const remainingSnapshotTimeoutMs = resolveSnapshotProbeTimeoutMs(
           CONTROL_SNAPSHOT_PROBE_TIMEOUT_MS,
@@ -408,16 +509,31 @@ class Cluster5 extends Cluster4 {
           resolveReachabilityProbeTimeoutMs(
             CONTROL_SNAPSHOT_REACHABILITY_PROBE_TIMEOUT_MS,
           );
-        const remainingResults = await Promise.all(
-          nodes.slice(1).map((node) => {
-            return probeNodeSnapshotCoverage(
+        const remainingNodes = nodes.slice(1);
+        if (readinessMode === CLUSTER_READINESS_MODE_LOAD) {
+          for (const node of remainingNodes) {
+            if (loadSnapshotCoverageAttemptDeadlineExpired()) {
+              break;
+            }
+            const remainingResult = await probeNodeSnapshotCoverage(
               node,
               remainingSnapshotTimeoutMs,
               remainingReachabilityTimeoutMs,
             );
-          }),
-        );
-        snapshotProbeResults.push(...remainingResults);
+            snapshotProbeResults.push(remainingResult);
+          }
+        } else {
+          const remainingResults = await Promise.all(
+            remainingNodes.map((node) => {
+              return probeNodeSnapshotCoverage(
+                node,
+                remainingSnapshotTimeoutMs,
+                remainingReachabilityTimeoutMs,
+              );
+            }),
+          );
+          snapshotProbeResults.push(...remainingResults);
+        }
       }
     }
     const bestCoverageNodeCount = snapshotProbeResults.reduce(
