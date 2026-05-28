@@ -4,65 +4,72 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: No active work package. Start a new package when implementation resumes.
+Theory under test: After owner-recovery queue progress, the first blocking edge is event-driven priority recovery workflow progress.
 
-Causal question: none
+Causal question: Priority recovery residual groups must be classified before runtime workflow edits.
 
-Implementation slice: Create or activate one focused package for the next executable concern.
+Implementation slice: Classify the priority recovery residual groups and select rerun, runtime work, or architecture escalation before editing operation workflow runtime.
 
 Implementation files:
 
-1. None recorded
+1. `work/packages/active-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md`
+2. `work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md`
+3. `work/sprints/current-blocker.md`
+4. `work/sprints/current-blocker.json`
 
-Expected implementation delta: unknown
+Expected implementation delta: Classification should decide rerun evidence, runtime workflow-progress work, or architecture escalation without editing startup active-gate owner recovery.
 
-Falsifying probe: unknown
+Falsifying probe: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --markdown
 
-Stop rule: unknown
+Stop rule: same-frontier residuals after classification require runtime-owner-boundary or architecture escalation.
 
 Sprint: `work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md`
 
-Package: `none`
+Package: `work/packages/active-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md`
 
-Workflow lane: `none`
+Workflow lane: `diagnostic-classification`
 
-Scenario: `none`
+Scenario: `rolling-restart`
 
-Artifact: `none`
+Artifact: `test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json`
 
 Playback: `none`
 
 ## Boundary
 
-Owner: `none`
+Owner: `operation_workflow_owner`
 
-Boundary: `none`
+Boundary: `workflow_progress`
 
-Dominant reason: `none`
+Dominant reason: `priority_recovery_event_driven_wait`
 
-Current state: No active work package. Start a new package when implementation resumes.
+Current state: Fresh representative evidence moved off startup_active_gate_owner: all five nodes report active, snapshot coverage moved to 3/5, and the canonical route now selects priority_recovery_partition_progress under operation_workflow_owner / workflow_progress.
 
 ## Next Action
 
-Create or activate one focused package for the next executable concern.
+Classify the priority recovery residual groups and select rerun, runtime work, or architecture escalation before editing operation workflow runtime.
 
 ## Proof Ladder
 
-1. None recorded
+1. `falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json`
+2. `regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --markdown`
+3. `supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --markdown`
 
 ## Model Fit
 
-Package class: `unknown`
+Package class: `diagnostic-classification`
 
-Intended minimum model: `unknown`
+Intended minimum model: `gpt-5.3-codex`
 
-Scope shape: `unknown`
+Scope shape: `diagnostic-owner-evidence/current-artifact`
 
-Output profile: `unknown`
+Output profile: `medium`
 
 Escalation triggers:
 
-1. None recorded
+1. `owned files expand beyond package and sprint tracker files`
+2. `runtime ownership or shared operation workflow contracts must change`
+3. `fresh route evidence contradicts operation_workflow_owner / workflow_progress`
 
 ## Theory Ledger References
 
@@ -70,69 +77,72 @@ Escalation triggers:
 
 ## Representative Residual
 
-Status: `unknown`
+Status: `migrated`
 
-Scenario: `unknown`
+Scenario: `rolling-restart`
 
-Artifact: `unknown`
+Artifact: `test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json`
 
-Frontier: `unknown`
+Frontier: `priority_recovery_partition_progress`
 
-Owner: `unknown`
+Owner: `operation_workflow_owner`
 
-Boundary: `unknown`
+Boundary: `workflow_progress`
 
-Dominant reason: `unknown`
+Dominant reason: `priority_recovery_event_driven_wait`
 
-Next action: `unknown`
+Next action: `Classify priority recovery residuals before runtime edits.`
 
 ## Causal Governance
 
-Causal hypothesis: `unknown`
+Causal hypothesis: `After owner-recovery queue progress, the first blocking edge is event-driven priority recovery workflow progress.`
 
-Stop-condition check: `unknown`
+Stop-condition check: `npm run analyze:causal-model -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json`
 
-Expected causal-model change: `unknown`
+Expected causal-model change: `Classification should decide rerun evidence, runtime workflow-progress work, or architecture escalation without editing startup active-gate owner recovery.`
 
-Representative outcome: `unknown`
+Representative outcome: `migrated`
 
-Causal debt: `unknown`
+Causal debt: `Fresh evidence reports all nodes active, snapshotCoverage=3/5, publication OPEN, pendingAck=1, and priority_recovery_partition_progress with splitRequired=true.`
 
-Cross-boundary review: `unknown`
+Cross-boundary review: `Keep startup active-gate owner recovery, selected-source ordering, generic timeout budgets, admin API, transport, table bootstrap, and promotion gates frozen until this owner boundary is classified.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `unknown`
+Reference scenario/probe: `rolling-restart operation workflow progress classification`
 
 Phase chain:
 
-1. None recorded
+1. `owner recovery queue fixture passed locally`
+2. `representative active nodes moved to 5/5 and snapshot coverage moved to 3/5`
+3. `fresh route selected priority_recovery_partition_progress under operation_workflow_owner / workflow_progress`
 
-Current first frontier: `unknown`
+Current first frontier: `priority_recovery_partition_progress / operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait`
 
 Known downstream blockers:
 
-1. None recorded
+1. `publication remains OPEN while priority recovery progresses`
+2. `startup readiness remains downstream while rolling-restart is not representative-green`
 
-Missing causal edge: `unknown`
+Missing causal edge: `Priority recovery residual groups must be classified before runtime workflow edits.`
 
-Missing causal edge probe: `unknown`
+Missing causal edge probe: `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --markdown`
 
-Bounded progress proof: `unknown`
+Bounded progress proof: `Classification must preserve the residual groups and select rerun, runtime dispatch/advance work, or architecture escalation.`
 
-Bounded progress proof artifact: `unknown`
+Bounded progress proof artifact: `test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json`
 
-Expected observable transition: `unknown`
+Expected observable transition: `next package closes as classification-only, opens runtime workflow progress work, reruns representative evidence, or escalates architecture.`
 
-Max progress bound: `unknown`
+Max progress bound: `one classification package before runtime promotion`
 
-Same-frontier fallback: `unknown`
+Same-frontier fallback: `same-frontier residuals after classification require runtime-owner-boundary or architecture escalation.`
 
-Expected next frontier: `unknown`
+Expected next frontier: `representative-green, runtime workflow progress package, rerun decision, or architecture escalation`
 
-Result classification: `unknown`
+Result classification: `pending-before-probe`
 
-Stop condition: `unknown`
+Stop condition: `classification-only-stop`
 
 Recent frontier history:
 
@@ -170,51 +180,58 @@ Evidence: `unknown`
 
 ## Rerun Decision
 
-Source artifact: `unknown`
+Source artifact: `test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json`
 
-Route owner: `unknown`
+Route owner: `operation_workflow_owner`
 
-Route boundary: `unknown`
+Route boundary: `workflow_progress`
 
-Route dominant reason: `unknown`
+Route dominant reason: `priority_recovery_event_driven_wait`
 
-Route causal outcome: `unknown`
+Route causal outcome: `accept_classified_backpressure`
 
-Stop mode: `unknown`
+Stop mode: `classified_backpressure`
 
-Next lane: `unknown`
+Next lane: `diagnostic-classification`
 
-Expected delta: `unknown`
+Expected delta: `Classify whether priority recovery residuals need rerun evidence, runtime workflow progress work, or architecture escalation.`
 
 Required refresh commands:
 
-1. None recorded
+1. `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait`
+2. `update Sprint Strategy Brief from the route result`
+3. `update Current Edge Card from the route result`
+4. `current-blocker refresh: npm run work:repair`
+5. `npm run work:validate -- --entry work/packages/active-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md`
+6. `npm run work:validate -- --pre-impl work/packages/active-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md`
 
 ## Classification Efficiency
 
-Default mode: `unknown`
+Default mode: `separate-package-approved`
 
-Separate package reason: `unknown`
+Separate package reason: `successor-selection`
 
-Artifact budget: `unknown`
+Artifact budget: `one-artifact`
 
-Proof command budget: `unknown`
+Proof command budget: `two-or-three-canonical-commands`
 
 Commands:
 
-1. None recorded
+1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json`
+2. `npm run work:scenario-triage -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --markdown`
+3. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --markdown`
 
-Decision record: `unknown`
+Decision record: `Record the new owner boundary and residual split before promoting runtime work.`
 
-Successor action: `unknown`
+Successor action: `rerun-representative-evidence`
 
-Runtime promotion rule: `unknown`
+Runtime promotion rule: `If this owner boundary remains stable after classification, open a runtime-owner-boundary successor; if the route is unchanged backpressure, rerun representative evidence before runtime promotion.`
 
 ## Architecture Decision Gate
 
-Status: `unknown`
+Status: `not-required`
 
-Trigger: `unknown`
+Trigger: `none`
 
 Trigger evidence:
 
@@ -226,22 +243,25 @@ Choices:
 
 Selected choice: `unknown`
 
-Gate next action: unknown
+Gate next action: No architecture decision gate is required for this package.
 
 ## Scope
 
 Write scope:
 
-1. None recorded
+1. `work/packages/active-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md`
+2. `work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md`
+3. `work/sprints/current-blocker.md`
+4. `work/sprints/current-blocker.json`
 
 Handoff files:
 
-1. None recorded
+1. `test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json`
 
 Generated files:
 
-1. `work/sprints/current-blocker.json`
-2. `work/sprints/current-blocker.md`
+1. `work/sprints/current-blocker.md`
+2. `work/sprints/current-blocker.json`
 
 Candidate runtime files:
 
@@ -249,7 +269,10 @@ Candidate runtime files:
 
 Commit scope:
 
-1. None recorded
+1. `work/packages/active-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md`
+2. `work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md`
+3. `work/sprints/current-blocker.md`
+4. `work/sprints/current-blocker.json`
 
 Legacy touched files:
 

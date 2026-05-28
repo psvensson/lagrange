@@ -2,36 +2,139 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md",
-  "package": "none",
-  "status": "none",
-  "lane": "none",
-  "scenario": "none",
-  "artifact": "none",
+  "package": "work/packages/active-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md",
+  "status": "active",
+  "lane": "diagnostic-classification",
+  "scenario": "rolling-restart",
+  "artifact": "test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json",
   "playback": "none",
-  "owner": "none",
-  "boundary": "none",
-  "dominantReason": "none",
-  "currentState": "No active work package. Start a new package when implementation resumes.",
-  "nextAction": "Create or activate one focused package for the next executable concern.",
-  "proof": [],
-  "writeScope": [],
-  "handoffFiles": [],
+  "owner": "operation_workflow_owner",
+  "boundary": "workflow_progress",
+  "dominantReason": "priority_recovery_event_driven_wait",
+  "currentState": "Fresh representative evidence moved off startup_active_gate_owner: all five nodes report active, snapshot coverage moved to 3/5, and the canonical route now selects priority_recovery_partition_progress under operation_workflow_owner / workflow_progress.",
+  "nextAction": "Classify the priority recovery residual groups and select rerun, runtime work, or architecture escalation before editing operation workflow runtime.",
+  "proof": [
+    "falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json",
+    "regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --markdown",
+    "supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --markdown"
+  ],
+  "writeScope": [
+    "work/packages/active-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md",
+    "work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md",
+    "work/sprints/current-blocker.md",
+    "work/sprints/current-blocker.json"
+  ],
+  "handoffFiles": [
+    "test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json"
+  ],
   "generatedFiles": [
-    "work/sprints/current-blocker.json",
-    "work/sprints/current-blocker.md"
+    "work/sprints/current-blocker.md",
+    "work/sprints/current-blocker.json"
   ],
   "candidateRuntimeFiles": [],
-  "commitScope": [],
+  "commitScope": [
+    "work/packages/active-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md",
+    "work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md",
+    "work/sprints/current-blocker.md",
+    "work/sprints/current-blocker.json"
+  ],
   "touchedFiles": [],
-  "modelFit": {},
-  "representativeResidual": {},
-  "causalGovernance": {},
-  "scenarioCausalClosure": {},
+  "theoryLedgerRefs": [],
+  "modelFit": {
+    "packageClass": "diagnostic-classification",
+    "intendedMinimumModel": "gpt-5.3-codex",
+    "scopeShape": "diagnostic-owner-evidence/current-artifact",
+    "outputProfile": "medium",
+    "ambiguityScore": 1,
+    "escalationTriggers": [
+      "owned files expand beyond package and sprint tracker files",
+      "runtime ownership or shared operation workflow contracts must change",
+      "fresh route evidence contradicts operation_workflow_owner / workflow_progress"
+    ]
+  },
+  "representativeResidual": {
+    "status": "migrated",
+    "scenario": "rolling-restart",
+    "artifact": "test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json",
+    "frontier": "priority_recovery_partition_progress",
+    "owner": "operation_workflow_owner",
+    "boundary": "workflow_progress",
+    "dominantReason": "priority_recovery_event_driven_wait",
+    "nextAction": "Classify priority recovery residuals before runtime edits."
+  },
+  "causalGovernance": {
+    "hypothesis": "After owner-recovery queue progress, the first blocking edge is event-driven priority recovery workflow progress.",
+    "stopConditionCheck": "npm run analyze:causal-model -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json",
+    "expectedCausalModelChange": "Classification should decide rerun evidence, runtime workflow-progress work, or architecture escalation without editing startup active-gate owner recovery.",
+    "representativeOutcome": "migrated",
+    "causalDebt": "Fresh evidence reports all nodes active, snapshotCoverage=3/5, publication OPEN, pendingAck=1, and priority_recovery_partition_progress with splitRequired=true.",
+    "crossBoundaryReview": "Keep startup active-gate owner recovery, selected-source ordering, generic timeout budgets, admin API, transport, table bootstrap, and promotion gates frozen until this owner boundary is classified."
+  },
+  "scenarioCausalClosure": {
+    "referenceScenarioOrProbe": "rolling-restart operation workflow progress classification",
+    "phaseChain": [
+      "owner recovery queue fixture passed locally",
+      "representative active nodes moved to 5/5 and snapshot coverage moved to 3/5",
+      "fresh route selected priority_recovery_partition_progress under operation_workflow_owner / workflow_progress"
+    ],
+    "currentFirstFrontier": "priority_recovery_partition_progress / operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait",
+    "knownDownstreamBlockers": [
+      "publication remains OPEN while priority recovery progresses",
+      "startup readiness remains downstream while rolling-restart is not representative-green"
+    ],
+    "missingCausalEdge": "Priority recovery residual groups must be classified before runtime workflow edits.",
+    "missingCausalEdgeProbe": "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --markdown",
+    "falsifyingProbe": "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --markdown",
+    "boundedProgressProof": "Classification must preserve the residual groups and select rerun, runtime dispatch/advance work, or architecture escalation.",
+    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json",
+    "expectedObservableTransition": "next package closes as classification-only, opens runtime workflow progress work, reruns representative evidence, or escalates architecture.",
+    "maxProgressBound": "one classification package before runtime promotion",
+    "sameFrontierFallback": "same-frontier residuals after classification require runtime-owner-boundary or architecture escalation.",
+    "expectedNextFrontier": "representative-green, runtime workflow progress package, rerun decision, or architecture escalation",
+    "resultClassification": "pending-before-probe",
+    "stopCondition": "classification-only-stop"
+  },
   "observablePrediction": {},
   "experimentOutcome": {},
-  "rerunDecision": {},
-  "classificationEfficiency": {},
-  "architectureDecisionGate": {},
-  "predecessor": null,
-  "theoryLedgerRefs": []
+  "rerunDecision": {
+    "sourceArtifact": "test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json",
+    "routeOwner": "operation_workflow_owner",
+    "routeBoundary": "workflow_progress",
+    "routeDominantReason": "priority_recovery_event_driven_wait",
+    "routeCausalOutcome": "accept_classified_backpressure",
+    "stopMode": "classified_backpressure",
+    "nextLane": "diagnostic-classification",
+    "expectedDelta": "Classify whether priority recovery residuals need rerun evidence, runtime workflow progress work, or architecture escalation.",
+    "requiredRefreshCommands": [
+      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait",
+      "update Sprint Strategy Brief from the route result",
+      "update Current Edge Card from the route result",
+      "current-blocker refresh: npm run work:repair",
+      "npm run work:validate -- --entry work/packages/active-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md",
+      "npm run work:validate -- --pre-impl work/packages/active-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md"
+    ]
+  },
+  "classificationEfficiency": {
+    "defaultMode": "separate-package-approved",
+    "separatePackageReason": "successor-selection",
+    "artifactBudget": "one-artifact",
+    "proofCommandBudget": "two-or-three-canonical-commands",
+    "commands": [
+      "npm run work:evidence-summary -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json",
+      "npm run work:scenario-triage -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --markdown",
+      "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --markdown"
+    ],
+    "decisionRecord": "Record the new owner boundary and residual split before promoting runtime work.",
+    "successorAction": "rerun-representative-evidence",
+    "runtimePromotionRule": "If this owner boundary remains stable after classification, open a runtime-owner-boundary successor; if the route is unchanged backpressure, rerun representative evidence before runtime promotion."
+  },
+  "architectureDecisionGate": {
+    "status": "not-required",
+    "trigger": "none",
+    "triggerEvidence": [],
+    "choices": [],
+    "selectedChoice": null,
+    "nextAction": "No architecture decision gate is required for this package."
+  },
+  "predecessor": null
 }

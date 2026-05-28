@@ -14,7 +14,7 @@ Make `rolling-restart` representative-green with all nodes ACTIVE, or produce on
 - Confidence and evidence: High confidence that pending ACK eligibility is not the active blocker from `npm test -- test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-selected-source-test-cases.js`, `work:package:route-after-rerun`, `work:evidence-summary`, `work:scenario-route`, and `work:artifact-compare` on `test-output/reports/rolling-restart-pending-ack-eligibility-20260528T090300Z.report.json`.
 - Expected green path: close the pending eligibility proof as H1 falsified, then select an architecture or owner-migration discriminator before any further local runtime package. The next executable package must name the owner contract that turns `write_deferred` and `owner_reconcile_pending` into coverage progress or prove the boundary must migrate.
 - Wrong direction signals: editing selected-source ordering, readiness, admin API, transport, table bootstrap, generic timeouts, or promotion gates before owner recovery progress exists; opening another classifier from the same artifact; using placeholder report timestamps.
-- Next best package: [Rolling Restart Snapshot Coverage Architecture Discriminator](../packages/done-20260528-rolling-restart-snapshot-coverage-architecture-discriminator.md)
+- Next best package: [Rolling Restart Owner Recovery Queue Drain Runtime](../packages/done-20260528-rolling-restart-owner-recovery-queue-drain-runtime.md)
 - Stop or escalate rule: because the representative rerun repeated `owner_reconcile_pending`, `write_deferred`, and coverage `1/5` after the focused proof, update this option set and open/select owner-boundary migration or an autonomous architecture experiment before another local runtime patch. Human escalation is only for contradictory or blocked evidence.
 
 ## Evidence Anchor
@@ -98,22 +98,22 @@ After the active package's discriminator, fix, or representative rerun, record t
 ## Current Edge Card
 
 ```text
-Representative artifact: test-output/reports/rolling-restart-pending-ack-eligibility-20260528T090300Z.report.json
-Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out
-Active package: work/packages/done-20260528-rolling-restart-snapshot-coverage-architecture-discriminator.md
-Active package owner: startup_active_gate_owner
-Active package boundary: snapshot_coverage
-Selected cause: active_gate_timed_out
-Required action: Close this discriminator and open a runtime-owner-boundary successor for owner-recovery queue drain/wake progress into snapshot coverage.
-Representative status: classification-only
-Causal outcome: continue_local_fix
-Architecture gate: selected / owner-recovery-queue-drain-contract
-Expected delta: Open a runtime-owner-boundary successor that drains or wakes the observed owner-recovery queue write into reconcile or coverage progress.
-Current state: Architecture proof selected the local startup active-gate contract: the owner recovery queue is observed and enqueued with pendingWrites=1, but pendingWriteGrowthCount=0, pendingReconcileCount=0, and snapshotCoverage=1/5 remain stuck.
-Allowed edits: work/packages/done-20260528-rolling-restart-snapshot-coverage-architecture-discriminator.md, work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md, work/sprints/current-blocker.md, work/sprints/current-blocker.json
-Candidate runtime files: src/admin/admin-control-snapshot-publication-convergence-diagnostics.js, src/admin/admin-control-snapshot-publication-handoff.js, test/distributed/harness/failure-bundle-diagnostics-artifact-builder.js
-Forbidden edits: Do not treat route evidence as representative green; the selected successor must prove queued owner-recovery progress before promotion.
-Required latest proof: falsifier: npm run work:artifact-compare -- test-output/reports/rolling-restart-active-gate-owner-reconcile-retry-20260528T040351Z.report.json test-output/reports/rolling-restart-pending-ack-eligibility-20260528T090300Z.report.json, regression: npm run work:scenario-route -- test-output/reports/rolling-restart-pending-ack-eligibility-20260528T090300Z.report.json, supporting: npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage
+Representative artifact: test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json
+Visible first frontier: priority_recovery_partition_progress / operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait
+Active package: work/packages/active-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md
+Active package owner: operation_workflow_owner
+Active package boundary: workflow_progress
+Selected cause: priority_recovery_event_driven_wait
+Required action: Classify the priority recovery residual groups and select rerun, runtime work, or architecture escalation before editing operation workflow runtime.
+Representative status: migrated
+Causal outcome: accept_classified_backpressure
+Architecture gate: not-required / unknown
+Expected delta: Classify whether priority recovery residuals need rerun evidence, runtime workflow progress work, or architecture escalation.
+Current state: Fresh representative evidence moved off startup_active_gate_owner: all five nodes report active, snapshot coverage moved to 3/5, and the canonical route now selects priority_recovery_partition_progress under operation_workflow_owner / workflow_progress.
+Allowed edits: work/packages/active-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md, work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md, work/sprints/current-blocker.md, work/sprints/current-blocker.json
+Candidate runtime files: unknown
+Forbidden edits: owned files expand beyond package and sprint tracker files, runtime ownership or shared operation workflow contracts must change, fresh route evidence contradicts operation_workflow_owner / workflow_progress
+Required latest proof: falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json, regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --markdown, supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --markdown
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -166,6 +166,10 @@ This sprint intentionally contains one active executable package and no speculat
    - Lane: `causal-escalation`
    - Purpose: Select the architecture contract, owner-boundary migration, or architecture-gap stop for `write_deferred` recovery-to-coverage progress before runtime edits.
    - First-run reason: The fresh representative rerun closed ACK debt but repeated `snapshotCoverage=1/5`, `owner_reconcile_pending`, and `write_deferred`, so another local runtime package is blocked until the architecture route is selected.
+7. [Rolling Restart Owner Recovery Queue Drain Runtime](../packages/done-20260528-rolling-restart-owner-recovery-queue-drain-runtime.md)
+   - Lane: `runtime-owner-boundary`
+   - Purpose: Convert observed `pendingWrites=1` / `enqueued=true` owner recovery into drain, wake, retry, or reconcile progress before active-gate snapshot coverage repeats.
+   - First-run reason: The architecture discriminator selected this concrete owner-local contract after ACK debt closed and enqueue admission was no longer the missing edge.
 
 ## Sprint Proof Ladder
 
