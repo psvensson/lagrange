@@ -7,7 +7,7 @@ import {
 } from './cluster-test-helpers.js';
 
 const LOAD_OWNER_RECOVERY_TEST_NAME =
-  'Unit: load active gate blocks selected timeout owner recovery';
+  'Unit: load active gate re-enters selected timeout owner recovery';
 const LOAD_OWNER_RECOVERY_NODE_TIMEOUT = 'node-timeout';
 const LOAD_OWNER_RECOVERY_NODE_DEGRADED_A = 'node-degraded-a';
 const LOAD_OWNER_RECOVERY_NODE_SELECTED = 'node-selected';
@@ -49,6 +49,8 @@ const LOAD_OWNER_RECOVERY_PRIORITY_RECOVERY_PENDING =
   'PRIORITY_CONTROL_PLANE_RECOVERY_PENDING';
 const LOAD_OWNER_RECOVERY_PROJECTION_SOURCE =
   'load_publication_gate_projection';
+const LOAD_OWNER_RECOVERY_PROJECTION_REASON =
+  'load_publication_gate_ready';
 const LOAD_OWNER_RECOVERY_SELECTED_SNAPSHOT_TIMEOUT =
   'Admin API query timed out for node ' +
   LOAD_OWNER_RECOVERY_NODE_SELECTED +
@@ -184,7 +186,7 @@ test(LOAD_OWNER_RECOVERY_TEST_NAME, async () => {
       selectedMembershipPublicationHandoffOutcome: {
         state: LOAD_OWNER_RECOVERY_HANDOFF_OUTCOME_WRITE_DEFERRED,
         reasonCode: LOAD_OWNER_RECOVERY_HANDOFF_REASON_OWNER_RECONCILE,
-        enqueued: false,
+        enqueued: true,
         retryAfterMs: LOAD_OWNER_RECOVERY_RETRY_AFTER_MS,
       },
       selectedControlPlaneOwnerQueueDepth: {
@@ -203,12 +205,23 @@ test(LOAD_OWNER_RECOVERY_TEST_NAME, async () => {
     observedSnapshotCoverageDeadline < activeGateDeadline,
     true,
   );
-  assert.equal(result.allActive, false);
+  assert.equal(result.allActive, true);
   assert.equal(result.snapshotCoverage.completeCoverage, false);
   assert.deepEqual(result.snapshotCoverage.selectedPublishedActiveNodeIds, []);
   assert.equal(result.publicationConvergenceGate.ready, true);
 
   const projectedDiagnostics = result.nodeDiagnostics.filter((diagnostic) =>
     diagnostic.activitySource === LOAD_OWNER_RECOVERY_PROJECTION_SOURCE);
-  assert.equal(projectedDiagnostics.length, LOAD_OWNER_RECOVERY_ZERO_COUNT);
+  assert.equal(
+    projectedDiagnostics.length,
+    LOAD_OWNER_RECOVERY_NODE_IDS.length - LOAD_OWNER_RECOVERY_SINGLE_COUNT,
+  );
+  for (const diagnostic of projectedDiagnostics) {
+    assert.equal(diagnostic.active, true);
+    assert.equal(diagnostic.state, LOAD_OWNER_RECOVERY_ACTIVE_STATE);
+    assert.equal(
+      diagnostic.reasons.includes(LOAD_OWNER_RECOVERY_PROJECTION_REASON),
+      true,
+    );
+  }
 });

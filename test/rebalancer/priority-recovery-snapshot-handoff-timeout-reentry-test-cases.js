@@ -32,6 +32,8 @@ const TEST_AUTHORITATIVE_OBSERVATION_STATE_PRESENT = 'present';
 const TEST_ACTIVE_HANDOFF_RETRY_TEST_NAME =
   'priority recovery snapshots surface retry-scheduled rebalancer handoff ' +
   'progress while a remote handoff retry is already active';
+const TEST_REBALANCER_HANDOFF_RETRY_WAKE_SOURCE =
+  'rebalancer_handoff_retry';
 const TEST_REPRESENTATIVE_HANDOFF_RETRY_TEST_NAME =
   'representative control-plane publication retry-scheduled handoff residual ' +
   'preserves one bounded remote retry for duplicate witnesses';
@@ -763,6 +765,21 @@ async (t) => {
     t.equal(
       snapshot?.progress?.waitMode,
       PRIORITY_RECOVERY_WAIT_MODE.RETRY_SCHEDULED,
+      TEST_ASSERT_ACTIVE_HANDOFF_RETRY_BOUNDED,
+    );
+    t.match(
+      snapshot?.progress?.progressContract,
+      {
+        owner: OPERATION_WORKFLOW_OWNER,
+        boundary: PRIORITY_RECOVERY_BLOCKING_BOUNDARY.REBALANCER_HANDOFF,
+        wakeSource: TEST_REBALANCER_HANDOFF_RETRY_WAKE_SOURCE,
+        blockingDependency:
+          PRIORITY_RECOVERY_BLOCKING_BOUNDARY.REBALANCER_HANDOFF,
+      },
+      TEST_ASSERT_ACTIVE_HANDOFF_RETRY_BOUNDED,
+    );
+    t.ok(
+      snapshot?.progress?.progressContract?.retryAfterMs > NUM.ZERO,
       TEST_ASSERT_ACTIVE_HANDOFF_RETRY_BOUNDED,
     );
     t.equal(

@@ -4,209 +4,228 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: No active work package. Start a new package when implementation resumes.
+Theory under test: H1 is selected unless falsifier: node --test test/distributed/harness/__tests__/table-distribution-helpers-bootstrap-primary-rotation.test.js proves a different owner boundary or architecture gap.
 
-Causal question: none
+Causal question: rolling-restart currently routes readiness_probe_timeout to startup_readiness_owner / startup_support_evidence; the package must explain the whole phase chain before selecting the executable slice.
 
-Implementation slice: Create or activate one focused package for the next executable concern.
+Implementation slice: Implementation may edit only declared source files src/bootstrap/bootstrap-api-control-plane-methods.js after the falsifier keeps the package inside the selected owner boundary.
 
 Implementation files:
 
-1. None recorded
+1. `src/bootstrap/bootstrap-api-control-plane-methods.js`
+2. `test/distributed/scenarios/table-distribution-helpers-segment-3.js`
+3. `test/distributed/harness/__tests__/table-distribution-helpers-bootstrap-primary-rotation.test.js`
 
-Expected implementation delta: unknown
+Expected implementation delta: selected route moves to a concrete transition, owner-boundary migration, or architecture-gap stop.
 
-Falsifying probe: unknown
+Falsifying probe: falsifier: node --test test/distributed/harness/__tests__/table-distribution-helpers-bootstrap-primary-rotation.test.js
 
-Stop rule: unknown
+Stop rule: Stop on unchanged same-frontier, no-reduction, or architecture-gap evidence instead of widening the package.
 
-Sprint: `none`
+Sprint: `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
 
-Package: `none`
+Package: `work/packages/active-20260528-rolling-restart-benchmark-table-bootstrap-sql-unavailable-repair.md`
 
-Workflow lane: `none`
+Workflow lane: `causal-escalation`
 
-Scenario: `none`
+Scenario: `rolling-restart`
 
-Artifact: `none`
+Artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-owner-recovery-source-reentry.report.json`
 
 Playback: `none`
 
 ## Boundary
 
-Owner: `none`
+Owner: `startup_readiness_owner`
 
-Boundary: `none`
+Boundary: `startup_support_evidence`
 
-Dominant reason: `none`
+Dominant reason: `readiness_probe_timeout`
 
-Current state: No active work package. Start a new package when implementation resumes.
+Current state: Promoted theory-loop package for fresh rolling-restart representative evidence that terminates with benchmark_events SQL query engine unavailable and authoritativeRepairAttempted=false after the owner-recovery source theory did not move snapshot coverage.
 
 ## Next Action
 
-Create or activate one focused package for the next executable concern.
+Run the promoted discriminator, inspect source/log evidence, and record option learning before any successor package is created.
 
 ## Proof Ladder
 
-1. None recorded
+1. `falsifier: node --test test/distributed/harness/__tests__/table-distribution-helpers-bootstrap-primary-rotation.test.js`
+2. `regression: node --test test/distributed/harness/__tests__/table-distribution-helpers-bootstrap-primary-rotation.test.js`
+3. `supporting: npm run work:frontier-history -- --owner startup_readiness_owner --boundary startup_support_evidence --limit 12`
 
 ## Model Fit
 
-Package class: `unknown`
+Package class: `runtime-owner-boundary`
 
-Intended minimum model: `unknown`
+Intended minimum model: `gpt-5.3-codex`
 
-Scope shape: `unknown`
+Scope shape: `bounded-owner-runtime/current-frontier`
 
-Output profile: `unknown`
+Output profile: `medium`
 
 Escalation triggers:
 
-1. None recorded
+1. `owned files expand beyond this package`
+2. `a frozen decision must be reopened`
 
 ## System Theory
 
-Problem statement: unknown
+Problem statement: rolling-restart currently routes readiness_probe_timeout to startup_readiness_owner / startup_support_evidence; the package must explain the whole phase chain before selecting the executable slice.
 
 Phase chain:
 
-1. None recorded
+1. `Representative evidence comes from test-output/reports/rolling-restart-spec-led-runtime-modularization-owner-recovery-source-reentry.report.json.`
+2. `readiness_probe_timeout is the current selected symptom.`
+3. `startup_readiness_owner / startup_support_evidence is the declared decision boundary for this package.`
 
 Owner-boundary map:
 
-1. None recorded
+1. `startup_readiness_owner / startup_support_evidence: selected package owner and boundary.`
+2. `Downstream owners remain frozen until the falsifier selects migration.`
 
 Stable facts:
 
-1. None recorded
+1. `Scenario remains rolling-restart.`
+2. `Package lane remains causal-escalation.`
+3. `Declared owner boundary remains startup_readiness_owner / startup_support_evidence.`
 
 Changed facts:
 
-1. None recorded
+1. `This package was opened from test-output/reports/rolling-restart-spec-led-runtime-modularization-owner-recovery-source-reentry.report.json.`
+2. `The active action is Run the promoted discriminator, inspect source/log evidence, and record option learning before any successor package is created..`
 
 Competing theories:
 
-1. None recorded
+1. `H1 startup_readiness_owner / startup_support_evidence owns the missing transition for readiness_probe_timeout.`
+2. `H2 the same symptom is inherited from a different owner boundary or architecture gap.`
 
 Eliminated theories:
 
-1. None recorded
+1. `No eliminated theory is durable until the package proof records a contrary artifact or command result.`
 
 Downstream symptoms:
 
-1. None recorded
+1. `Downstream symptoms stay frozen until H1 selects a concrete transition or H2 selects migration.`
 
 Transition table:
 
-1. None recorded
+1. Input `readiness_probe_timeout` owner `startup_readiness_owner / startup_support_evidence`; missing `selected evidence must become a named owner-owned transition, migration, or stop.`; expected `focused proof selects the transition, migrates ownership, or records architecture-gap evidence.`; falsifier `falsifier: node --test test/distributed/harness/__tests__/table-distribution-helpers-bootstrap-primary-rotation.test.js`; migration trigger `the falsifier names a different owner boundary or proves this boundary cannot own the transition.`
 
 Ownership migration triggers:
 
-1. None recorded
+1. `Migrate only when focused evidence names the alternate deciding owner and boundary.`
 
 Architecture-gap triggers:
 
-1. None recorded
+1. `Stop as architecture-gap when focused evidence cannot select an owner-owned transition or migration.`
 
-Whole-system invariant: unknown
+Whole-system invariant: Runtime edits are allowed only after the system theory selects one owner-owned transition or migration route.
 
 ## Slice Theory
 
-System theory reference: unknown
+System theory reference: work/packages/todo-20260528-rolling-restart-benchmark-table-bootstrap-sql-unavailable-repair.md systemTheory
 
-Selected system theory: unknown
+Selected system theory: H1 is selected unless falsifier: node --test test/distributed/harness/__tests__/table-distribution-helpers-bootstrap-primary-rotation.test.js proves a different owner boundary or architecture gap.
 
-Selected mechanism: unknown
+Selected mechanism: contract_gap with ownership_gap as the first alternate
 
-Source/test contract: unknown
+Source/test contract: Implementation may edit only declared source files src/bootstrap/bootstrap-api-control-plane-methods.js after the falsifier keeps the package inside the selected owner boundary.
 
-Falsifier: unknown
+Falsifier: falsifier: node --test test/distributed/harness/__tests__/table-distribution-helpers-bootstrap-primary-rotation.test.js
 
-Representative expected movement: unknown
+Representative expected movement: selected route moves to a concrete transition, owner-boundary migration, or architecture-gap stop.
 
-Kill rule: unknown
+Kill rule: Stop on unchanged same-frontier, no-reduction, or architecture-gap evidence instead of widening the package.
 
 Theory-fit score:
 
-1. `evidenceFit`: unknown
-2. `ownerBoundaryFit`: unknown
-3. `falsifiability`: unknown
-4. `representativeMovement`: unknown
-5. `downstreamRiskContainment`: unknown
+1. `evidenceFit`: medium - generated from declared package evidence before proof execution.
+2. `ownerBoundaryFit`: medium - owner boundary is declared as startup_readiness_owner / startup_support_evidence.
+3. `falsifiability`: high - falsifier is falsifier: node --test test/distributed/harness/__tests__/table-distribution-helpers-bootstrap-primary-rotation.test.js.
+4. `representativeMovement`: medium - expected movement is route selection, migration, or architecture-gap stop.
+5. `downstreamRiskContainment`: high - downstream symptoms remain frozen until owner selection is proven.
 
 Wrong-slice triggers:
 
-1. None recorded
+1. `proof selects a different owner boundary`
+2. `proof requires runtime files outside writeScope`
+3. `proof cannot select a concrete transition or migration`
 
 ## Theory Ledger References
 
-1. None recorded
+1. `theory-20260528-rolling-restart-active-gate-snapshot-coverage-source-contract`
 
 ## Representative Residual
 
-Status: `unknown`
+Status: `active-theory-loop`
 
-Scenario: `unknown`
+Scenario: `rolling-restart`
 
-Artifact: `unknown`
+Artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-owner-recovery-source-reentry.report.json`
 
-Frontier: `unknown`
+Frontier: `readiness_probe_timeout / startup_readiness_owner / startup_support_evidence`
 
-Owner: `unknown`
+Owner: `startup_readiness_owner`
 
-Boundary: `unknown`
+Boundary: `startup_support_evidence`
 
-Dominant reason: `unknown`
+Dominant reason: `readiness_probe_timeout`
 
-Next action: `unknown`
+Next action: `Run the promoted discriminator, inspect source/log evidence, and record option learning before any successor package is created.`
 
 ## Causal Governance
 
-Causal hypothesis: `unknown`
+Causal hypothesis: `Load-mode active-gate snapshot coverage terminalizes after selected snapshot timeout even though owner recovery is queued and priority-recovery witnesses are zero, because the owner-recovery path does not re-enter reconcile or bounded coverage progress.`
 
-Stop-condition check: `unknown`
+Stop-condition check: `npm run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json`
 
-Expected causal-model change: `unknown`
+Expected causal-model change: `Focused proof selects a bounded owner-recovery re-entry/reconcile transition, migrates to diagnostics signal-conflict ownership, records architecture-gap, or moves representative attempts, coverage, owner boundary, or green.`
 
-Representative outcome: `unknown`
+Representative outcome: `pending-before-rerun`
 
-Causal debt: `unknown`
+Causal debt: `Fresh representative evidence has zero priority-recovery residual witnesses but active-gate progress still reports one pending owner-recovery node, write_deferred/enqueued handoff, selected_snapshot_source_timeout, and snapshotCoverageNodeCount=1/5.`
 
-Cross-boundary review: `unknown`
+Cross-boundary review: `Do not reopen rebalancer handoff, generic active-gate timeout budgets, readiness, table bootstrap, or transport unless the focused discriminator selects that owner boundary.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `unknown`
+Reference scenario/probe: `rolling-restart active-gate owner-recovery reentry`
 
 Phase chain:
 
-1. None recorded
+1. `operation_workflow_owner / rebalancer_handoff focused proof passed`
+2. `fresh representative rerun removed priority_recovery_partition_progress as first frontier`
+3. `priority-recovery residual witnesses are zero`
+4. `active-gate snapshot coverage remains blocked with owner_reconcile_pending and selected_snapshot_source_timeout`
 
-Current first frontier: `unknown`
+Current first frontier: `active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage_owner_recovery_reentry / active_gate_timed_out`
 
 Known downstream blockers:
 
-1. None recorded
+1. `startup readiness inherits active-gate no-progress`
+2. `benchmark table visibility remains downstream while active-gate snapshot coverage is incomplete`
+3. `scenario triage reports priority_recovery_zero_witness_conflict while owner recovery remains pending`
 
-Missing causal edge: `unknown`
+Missing causal edge: `Load-mode selected-timeout owner recovery needs a bounded re-entry, reconcile, coverage-progress, migration, or diagnostic-conflict transition when priority-recovery witnesses are zero.`
 
-Missing causal edge probe: `unknown`
+Missing causal edge probe: `npm test -- test/distributed/harness/__tests__/cluster-active-gate-load-selected-timeout-owner-recovery.test.js`
 
-Bounded progress proof: `unknown`
+Bounded progress proof: `Focused proof must show selected-timeout owner recovery can re-enter reconcile or coverage progress, or select diagnostics/architecture migration before runtime edits.`
 
-Bounded progress proof artifact: `unknown`
+Bounded progress proof artifact: `test/distributed/harness/__tests__/cluster-active-gate-load-selected-timeout-owner-recovery.test.js`
 
-Expected observable transition: `unknown`
+Expected observable transition: `Focused proof selects a concrete source transition; representative rerun moves active-gate attempts, snapshot coverage, owner boundary, or passes.`
 
-Max progress bound: `unknown`
+Max progress bound: `one selected owner-recovery reentry source package before representative rerun and route recording`
 
-Same-frontier fallback: `unknown`
+Same-frontier fallback: `Same-frontier active_gate_snapshot_coverage with no attempt, coverage, or owner-boundary movement opens architecture rederive instead of another local patch.`
 
-Expected next frontier: `unknown`
+Expected next frontier: `representative-green, active-gate progress movement, diagnostics signal-conflict migration, or architecture-gap`
 
-Result classification: `unknown`
+Result classification: `pending-before-probe`
 
-Stop condition: `unknown`
+Stop condition: `continue-local-fix`
 
 Recent frontier history:
 
@@ -218,15 +237,15 @@ Handoff invariant: `unknown`
 
 ## Observable Prediction
 
-Metric: `unknown`
+Metric: `rolling-restart / startup_readiness_owner / startup_support_evidence / representative route`
 
-Predicted: `unknown`
+Predicted: `Run the promoted discriminator, inspect source/log evidence, and record option learning before any successor package is created.`
 
-Observed: `unknown`
+Observed: `pending-before-observation`
 
-Accuracy: `unknown`
+Accuracy: `pending-before-observation`
 
-Evidence: `unknown`
+Evidence: `pending-before-representative-rerun`
 
 Metric delta: `unknown`
 
@@ -244,69 +263,58 @@ Evidence: `unknown`
 
 ## Rerun Decision
 
-Source artifact: `unknown`
+Source artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-owner-recovery-source-reentry.report.json`
 
-Route owner: `unknown`
+Route owner: `startup_readiness_owner`
 
-Route boundary: `unknown`
+Route boundary: `startup_support_evidence`
 
-Route dominant reason: `unknown`
+Route dominant reason: `readiness_probe_timeout`
 
-Route causal outcome: `unknown`
+Route causal outcome: `pending-before-rerun`
 
-Stop mode: `unknown`
+Stop mode: `pending-before-rerun`
 
-Next lane: `unknown`
+Next lane: `causal-escalation`
 
-Expected delta: `unknown`
+Expected delta: `Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.`
 
 Required refresh commands:
 
-1. None recorded
-
-## Classification Efficiency
-
-Default mode: `unknown`
-
-Separate package reason: `unknown`
-
-Artifact budget: `unknown`
-
-Proof command budget: `unknown`
-
-Commands:
-
-1. None recorded
-
-Decision record: `unknown`
-
-Successor action: `unknown`
-
-Runtime promotion rule: `unknown`
+1. `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-spec-led-runtime-modularization-owner-recovery-source-reentry.report.json --owner startup_readiness_owner --boundary startup_support_evidence --dominant-reason readiness_probe_timeout`
+2. `update Sprint Strategy Brief and Current Edge Card from the route result`
+3. `npm run work:repair`
+4. `npm run work:validate -- --entry`
+5. `npm run work:validate -- --pre-impl`
 
 ## Architecture Decision Gate
 
-Status: `unknown`
+Status: `selected`
 
-Trigger: `unknown`
+Trigger: `frontier-oscillation`
 
 Trigger evidence:
 
-1. None recorded
+1. `priority-recovery residual witnesses are zero in the fresh representative artifact`
+2. `scenario-triage flags priority_recovery_zero_witness_conflict while owner recovery remains pending`
+3. `frontier-history rejects another generic startup_active_gate_owner / snapshot_coverage runtime package`
 
 Choices:
 
-1. None recorded
+1. `owner-recovery-reentry-discriminator` route=`continue-local-proof` - Promote the selected-timeout owner-recovery re-entry source proof.
+2. `diagnostics-signal-conflict` route=`architecture-package` - Migrate to diagnostics_owner / scenario_triage_signal_conflict if the focused proof cannot choose source work from contradictory evidence.
 
-Selected choice: `unknown`
+Selected choice: `owner-recovery-reentry-discriminator`
 
-Gate next action: unknown
+Gate next action: Execute the selected local proof route; rerun canonical evidence before opening another architecture gate.
 
 ## Scope
 
 Write scope:
 
-1. None recorded
+1. `src/bootstrap/bootstrap-api-control-plane-methods.js`
+2. `test/distributed/scenarios/table-distribution-helpers-segment-3.js`
+3. `test/distributed/harness/__tests__/table-distribution-helpers-bootstrap-primary-rotation.test.js`
 
 Handoff files:
 
@@ -314,8 +322,7 @@ Handoff files:
 
 Generated files:
 
-1. `work/sprints/current-blocker.json`
-2. `work/sprints/current-blocker.md`
+1. None recorded
 
 Candidate runtime files:
 
@@ -323,7 +330,9 @@ Candidate runtime files:
 
 Commit scope:
 
-1. None recorded
+1. `src/bootstrap/bootstrap-api-control-plane-methods.js`
+2. `test/distributed/scenarios/table-distribution-helpers-segment-3.js`
+3. `test/distributed/harness/__tests__/table-distribution-helpers-bootstrap-primary-rotation.test.js`
 
 Legacy touched files:
 

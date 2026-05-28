@@ -1,39 +1,225 @@
 {
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
-  "sprint": "none",
-  "package": "none",
-  "status": "none",
-  "lane": "none",
-  "scenario": "none",
-  "artifact": "none",
+  "sprint": "work/sprints/active-2026-q2-spec-led-runtime-modularization.md",
+  "package": "work/packages/active-20260528-rolling-restart-benchmark-table-bootstrap-sql-unavailable-repair.md",
+  "status": "active",
+  "lane": "causal-escalation",
+  "scenario": "rolling-restart",
+  "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-owner-recovery-source-reentry.report.json",
   "playback": "none",
-  "owner": "none",
-  "boundary": "none",
-  "dominantReason": "none",
-  "currentState": "No active work package. Start a new package when implementation resumes.",
-  "nextAction": "Create or activate one focused package for the next executable concern.",
-  "proof": [],
-  "writeScope": [],
-  "handoffFiles": [],
-  "generatedFiles": [
-    "work/sprints/current-blocker.json",
-    "work/sprints/current-blocker.md"
+  "owner": "startup_readiness_owner",
+  "boundary": "startup_support_evidence",
+  "dominantReason": "readiness_probe_timeout",
+  "currentState": "Promoted theory-loop package for fresh rolling-restart representative evidence that terminates with benchmark_events SQL query engine unavailable and authoritativeRepairAttempted=false after the owner-recovery source theory did not move snapshot coverage.",
+  "nextAction": "Run the promoted discriminator, inspect source/log evidence, and record option learning before any successor package is created.",
+  "proof": [
+    "falsifier: node --test test/distributed/harness/__tests__/table-distribution-helpers-bootstrap-primary-rotation.test.js",
+    "regression: node --test test/distributed/harness/__tests__/table-distribution-helpers-bootstrap-primary-rotation.test.js",
+    "supporting: npm run work:frontier-history -- --owner startup_readiness_owner --boundary startup_support_evidence --limit 12"
   ],
+  "writeScope": [
+    "src/bootstrap/bootstrap-api-control-plane-methods.js",
+    "test/distributed/scenarios/table-distribution-helpers-segment-3.js",
+    "test/distributed/harness/__tests__/table-distribution-helpers-bootstrap-primary-rotation.test.js"
+  ],
+  "handoffFiles": [],
+  "generatedFiles": [],
   "candidateRuntimeFiles": [],
-  "commitScope": [],
+  "commitScope": [
+    "src/bootstrap/bootstrap-api-control-plane-methods.js",
+    "test/distributed/scenarios/table-distribution-helpers-segment-3.js",
+    "test/distributed/harness/__tests__/table-distribution-helpers-bootstrap-primary-rotation.test.js"
+  ],
   "touchedFiles": [],
-  "modelFit": {},
-  "representativeResidual": {},
-  "causalGovernance": {},
-  "scenarioCausalClosure": {},
-  "observablePrediction": {},
+  "theoryLedgerRefs": [
+    "theory-20260528-rolling-restart-active-gate-snapshot-coverage-source-contract"
+  ],
+  "modelFit": {
+    "packageClass": "runtime-owner-boundary",
+    "intendedMinimumModel": "gpt-5.3-codex",
+    "scopeShape": "bounded-owner-runtime/current-frontier",
+    "outputProfile": "medium",
+    "ambiguityScore": 1,
+    "escalationTriggers": [
+      "owned files expand beyond this package",
+      "a frozen decision must be reopened"
+    ]
+  },
+  "representativeResidual": {
+    "status": "active-theory-loop",
+    "scenario": "rolling-restart",
+    "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-owner-recovery-source-reentry.report.json",
+    "frontier": "readiness_probe_timeout / startup_readiness_owner / startup_support_evidence",
+    "owner": "startup_readiness_owner",
+    "boundary": "startup_support_evidence",
+    "dominantReason": "readiness_probe_timeout",
+    "nextAction": "Run the promoted discriminator, inspect source/log evidence, and record option learning before any successor package is created."
+  },
+  "theoryLoop": {
+    "enforcement": "source-code-package-required",
+    "promotedTheory": "Run the promoted discriminator, inspect source/log evidence, and record option learning before any successor package is created.",
+    "sprintGoalDelta": "Run the promoted discriminator, inspect source/log evidence, and record option learning before any successor package is created.",
+    "sourceChangeRequired": true,
+    "successorRequired": true
+  },
+  "causalGovernance": {
+    "hypothesis": "Load-mode active-gate snapshot coverage terminalizes after selected snapshot timeout even though owner recovery is queued and priority-recovery witnesses are zero, because the owner-recovery path does not re-enter reconcile or bounded coverage progress.",
+    "stopConditionCheck": "npm run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json",
+    "expectedCausalModelChange": "Focused proof selects a bounded owner-recovery re-entry/reconcile transition, migrates to diagnostics signal-conflict ownership, records architecture-gap, or moves representative attempts, coverage, owner boundary, or green.",
+    "representativeOutcome": "pending-before-rerun",
+    "causalDebt": "Fresh representative evidence has zero priority-recovery residual witnesses but active-gate progress still reports one pending owner-recovery node, write_deferred/enqueued handoff, selected_snapshot_source_timeout, and snapshotCoverageNodeCount=1/5.",
+    "crossBoundaryReview": "Do not reopen rebalancer handoff, generic active-gate timeout budgets, readiness, table bootstrap, or transport unless the focused discriminator selects that owner boundary."
+  },
+  "scenarioCausalClosure": {
+    "referenceScenarioOrProbe": "rolling-restart active-gate owner-recovery reentry",
+    "phaseChain": [
+      "operation_workflow_owner / rebalancer_handoff focused proof passed",
+      "fresh representative rerun removed priority_recovery_partition_progress as first frontier",
+      "priority-recovery residual witnesses are zero",
+      "active-gate snapshot coverage remains blocked with owner_reconcile_pending and selected_snapshot_source_timeout"
+    ],
+    "currentFirstFrontier": "active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage_owner_recovery_reentry / active_gate_timed_out",
+    "knownDownstreamBlockers": [
+      "startup readiness inherits active-gate no-progress",
+      "benchmark table visibility remains downstream while active-gate snapshot coverage is incomplete",
+      "scenario triage reports priority_recovery_zero_witness_conflict while owner recovery remains pending"
+    ],
+    "missingCausalEdge": "Load-mode selected-timeout owner recovery needs a bounded re-entry, reconcile, coverage-progress, migration, or diagnostic-conflict transition when priority-recovery witnesses are zero.",
+    "missingCausalEdgeProbe": "npm test -- test/distributed/harness/__tests__/cluster-active-gate-load-selected-timeout-owner-recovery.test.js",
+    "falsifyingProbe": "npm test -- test/distributed/harness/__tests__/cluster-active-gate-load-selected-timeout-owner-recovery.test.js",
+    "boundedProgressProof": "Focused proof must show selected-timeout owner recovery can re-enter reconcile or coverage progress, or select diagnostics/architecture migration before runtime edits.",
+    "boundedProgressProofArtifact": "test/distributed/harness/__tests__/cluster-active-gate-load-selected-timeout-owner-recovery.test.js",
+    "expectedObservableTransition": "Focused proof selects a concrete source transition; representative rerun moves active-gate attempts, snapshot coverage, owner boundary, or passes.",
+    "maxProgressBound": "one selected owner-recovery reentry source package before representative rerun and route recording",
+    "sameFrontierFallback": "Same-frontier active_gate_snapshot_coverage with no attempt, coverage, or owner-boundary movement opens architecture rederive instead of another local patch.",
+    "expectedNextFrontier": "representative-green, active-gate progress movement, diagnostics signal-conflict migration, or architecture-gap",
+    "resultClassification": "pending-before-probe",
+    "stopCondition": "continue-local-fix"
+  },
+  "observablePrediction": {
+    "metric": "rolling-restart / startup_readiness_owner / startup_support_evidence / representative route",
+    "predicted": "Run the promoted discriminator, inspect source/log evidence, and record option learning before any successor package is created.",
+    "observed": "pending-before-observation",
+    "accuracy": "pending-before-observation",
+    "evidence": "pending-before-representative-rerun"
+  },
   "experimentOutcome": {},
-  "rerunDecision": {},
-  "classificationEfficiency": {},
-  "systemTheory": {},
-  "sliceTheory": {},
-  "architectureDecisionGate": {},
-  "predecessor": null,
-  "theoryLedgerRefs": []
+  "rerunDecision": {
+    "sourceArtifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-owner-recovery-source-reentry.report.json",
+    "routeOwner": "startup_readiness_owner",
+    "routeBoundary": "startup_support_evidence",
+    "routeDominantReason": "readiness_probe_timeout",
+    "routeCausalOutcome": "pending-before-rerun",
+    "stopMode": "pending-before-rerun",
+    "nextLane": "causal-escalation",
+    "expectedDelta": "Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.",
+    "requiredRefreshCommands": [
+      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-spec-led-runtime-modularization-owner-recovery-source-reentry.report.json --owner startup_readiness_owner --boundary startup_support_evidence --dominant-reason readiness_probe_timeout",
+      "update Sprint Strategy Brief and Current Edge Card from the route result",
+      "npm run work:repair",
+      "npm run work:validate -- --entry",
+      "npm run work:validate -- --pre-impl"
+    ]
+  },
+  "systemTheory": {
+    "problemStatement": "rolling-restart currently routes readiness_probe_timeout to startup_readiness_owner / startup_support_evidence; the package must explain the whole phase chain before selecting the executable slice.",
+    "phaseChain": [
+      "Representative evidence comes from test-output/reports/rolling-restart-spec-led-runtime-modularization-owner-recovery-source-reentry.report.json.",
+      "readiness_probe_timeout is the current selected symptom.",
+      "startup_readiness_owner / startup_support_evidence is the declared decision boundary for this package."
+    ],
+    "ownerBoundaryMap": [
+      "startup_readiness_owner / startup_support_evidence: selected package owner and boundary.",
+      "Downstream owners remain frozen until the falsifier selects migration."
+    ],
+    "stableFacts": [
+      "Scenario remains rolling-restart.",
+      "Package lane remains causal-escalation.",
+      "Declared owner boundary remains startup_readiness_owner / startup_support_evidence."
+    ],
+    "changedFacts": [
+      "This package was opened from test-output/reports/rolling-restart-spec-led-runtime-modularization-owner-recovery-source-reentry.report.json.",
+      "The active action is Run the promoted discriminator, inspect source/log evidence, and record option learning before any successor package is created.."
+    ],
+    "competingTheories": [
+      "H1 startup_readiness_owner / startup_support_evidence owns the missing transition for readiness_probe_timeout.",
+      "H2 the same symptom is inherited from a different owner boundary or architecture gap."
+    ],
+    "eliminatedTheories": [
+      "No eliminated theory is durable until the package proof records a contrary artifact or command result."
+    ],
+    "downstreamSymptoms": [
+      "Downstream symptoms stay frozen until H1 selects a concrete transition or H2 selects migration."
+    ],
+    "transitionTable": [
+      {
+        "inputSignal": "readiness_probe_timeout",
+        "owner": "startup_readiness_owner / startup_support_evidence",
+        "missingTransition": "selected evidence must become a named owner-owned transition, migration, or stop.",
+        "expectedEvidence": "focused proof selects the transition, migrates ownership, or records architecture-gap evidence.",
+        "falsifier": "falsifier: node --test test/distributed/harness/__tests__/table-distribution-helpers-bootstrap-primary-rotation.test.js",
+        "migrationTrigger": "the falsifier names a different owner boundary or proves this boundary cannot own the transition."
+      }
+    ],
+    "ownershipMigrationTriggers": [
+      "Migrate only when focused evidence names the alternate deciding owner and boundary."
+    ],
+    "architectureGapTriggers": [
+      "Stop as architecture-gap when focused evidence cannot select an owner-owned transition or migration."
+    ],
+    "wholeSystemInvariant": "Runtime edits are allowed only after the system theory selects one owner-owned transition or migration route."
+  },
+  "sliceTheory": {
+    "systemTheoryRef": "work/packages/todo-20260528-rolling-restart-benchmark-table-bootstrap-sql-unavailable-repair.md systemTheory",
+    "selectedSystemTheory": "H1 is selected unless falsifier: node --test test/distributed/harness/__tests__/table-distribution-helpers-bootstrap-primary-rotation.test.js proves a different owner boundary or architecture gap.",
+    "selectedMechanism": "contract_gap with ownership_gap as the first alternate",
+    "sourceTestContract": "Implementation may edit only declared source files src/bootstrap/bootstrap-api-control-plane-methods.js after the falsifier keeps the package inside the selected owner boundary.",
+    "falsifier": "falsifier: node --test test/distributed/harness/__tests__/table-distribution-helpers-bootstrap-primary-rotation.test.js",
+    "representativeExpectedMovement": "selected route moves to a concrete transition, owner-boundary migration, or architecture-gap stop.",
+    "killRule": "Stop on unchanged same-frontier, no-reduction, or architecture-gap evidence instead of widening the package.",
+    "theoryFitScore": {
+      "evidenceFit": "medium - generated from declared package evidence before proof execution.",
+      "ownerBoundaryFit": "medium - owner boundary is declared as startup_readiness_owner / startup_support_evidence.",
+      "falsifiability": "high - falsifier is falsifier: node --test test/distributed/harness/__tests__/table-distribution-helpers-bootstrap-primary-rotation.test.js.",
+      "representativeMovement": "medium - expected movement is route selection, migration, or architecture-gap stop.",
+      "downstreamRiskContainment": "high - downstream symptoms remain frozen until owner selection is proven."
+    },
+    "wrongSliceTriggers": [
+      "proof selects a different owner boundary",
+      "proof requires runtime files outside writeScope",
+      "proof cannot select a concrete transition or migration"
+    ]
+  },
+  "architectureDecisionGate": {
+    "status": "selected",
+    "trigger": "frontier-oscillation",
+    "triggerEvidence": [
+      "priority-recovery residual witnesses are zero in the fresh representative artifact",
+      "scenario-triage flags priority_recovery_zero_witness_conflict while owner recovery remains pending",
+      "frontier-history rejects another generic startup_active_gate_owner / snapshot_coverage runtime package"
+    ],
+    "choices": [
+      {
+        "id": "owner-recovery-reentry-discriminator",
+        "summary": "Promote the selected-timeout owner-recovery re-entry source proof.",
+        "route": "continue-local-proof",
+        "proof": [
+          "npm test -- test/distributed/harness/__tests__/cluster-active-gate-load-selected-timeout-owner-recovery.test.js",
+          "npm run work:scenario-triage -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --markdown"
+        ]
+      },
+      {
+        "id": "diagnostics-signal-conflict",
+        "summary": "Migrate to diagnostics_owner / scenario_triage_signal_conflict if the focused proof cannot choose source work from contradictory evidence.",
+        "route": "architecture-package",
+        "proof": [
+          "npm run work:scenario-triage -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --markdown"
+        ]
+      }
+    ],
+    "selectedChoice": "owner-recovery-reentry-discriminator",
+    "nextAction": "Execute the selected local proof route; rerun canonical evidence before opening another architecture gate."
+  },
+  "predecessor": "work/packages/done-20260528-spec-led-runtime-modularization-active-gate-owner-recovery-reentry.md"
 }

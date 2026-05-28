@@ -35,7 +35,6 @@ import {
   normalizeControlPlaneConvergenceRetryAfterMs,
 } from './membership-publication-control-plane-convergence.js';
 import {SnapshotService} from './snapshot-service.js';
-
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_SCHEMA_VERSION = 1;
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_REASON =
   'active_gate_handoff_owner_reconcile';
@@ -96,7 +95,6 @@ const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_VISIBILITY_CONTEXT =
     [ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
       .SKIP_PUBLICATION_WRITE_READBACK]: false,
   });
-
 function selectLatestActiveGateMembershipPublicationRow(rows = [], options = {}) {
   const expectedStatus =
     typeof options.status === TYPEOF.STRING ?
@@ -141,7 +139,6 @@ function selectLatestActiveGateMembershipPublicationRow(rows = [], options = {})
   return normalizedRows[NUM.ZERO] ||
     ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_ABSENT_ROW;
 }
-
 function buildActiveGateMembershipPublicationPublishedBaselineRow(target) {
   const handoffContract =
     target?.handoffContract && typeof target.handoffContract === TYPEOF.OBJECT ?
@@ -166,7 +163,6 @@ function buildActiveGateMembershipPublicationPublishedBaselineRow(target) {
     acknowledged_node_ids: [...publishedActiveNodeIds],
   };
 }
-
 function resolveActiveGateMembershipPublicationLatestRow(
   publicationActiveGateHandoff,
   target,
@@ -201,7 +197,6 @@ function resolveActiveGateMembershipPublicationLatestRow(
     buildActiveGateMembershipPublicationPublishedBaselineRow(target),
   ]);
 }
-
 function resolveActiveGateMembershipPublicationLatestPublishedRow(
   publicationActiveGateHandoff,
   target,
@@ -231,7 +226,6 @@ function resolveActiveGateMembershipPublicationLatestPublishedRow(
     {status: MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED},
   );
 }
-
 function resolveActiveGateMembershipPublicationPreloadedRows(
   options,
   fieldName,
@@ -241,7 +235,6 @@ function resolveActiveGateMembershipPublicationPreloadedRows(
     rows :
     ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_ROWS;
 }
-
 function activeGateMembershipPublicationNodeListContainsAll(
   observedValues,
   targetValues,
@@ -251,7 +244,6 @@ function activeGateMembershipPublicationNodeListContainsAll(
     observedNodeIds.has(nodeId),
   );
 }
-
 function isActiveGateMembershipPublicationRowVisibleForTarget(
   publicationRow,
   target,
@@ -281,7 +273,6 @@ function isActiveGateMembershipPublicationRowVisibleForTarget(
     )
   );
 }
-
 function buildActiveGateMembershipPublicationVisibleReadRows(
   reconcileOutcome,
   nowMs,
@@ -306,7 +297,6 @@ function buildActiveGateMembershipPublicationVisibleReadRows(
     return true;
   });
 }
-
 function resolveActiveGateMembershipPublicationReconcileOutcomeRow(
   reconcileOutcome,
   nowMs,
@@ -319,7 +309,6 @@ function resolveActiveGateMembershipPublicationReconcileOutcomeRow(
     normalizeControlPlanePublicationRow(publicationRows[NUM.ZERO]) :
     ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_OUTCOME;
 }
-
 function buildActiveGateMembershipPublicationReconcileContext({
   publicationActiveGateHandoff,
   target,
@@ -412,7 +401,6 @@ function buildActiveGateMembershipPublicationReconcileContext({
       {}),
   };
 }
-
 function buildActiveGateMembershipPublicationReconcileOutcome(
   state,
   options = {},
@@ -451,7 +439,6 @@ function buildActiveGateMembershipPublicationReconcileOutcome(
       {}),
   });
 }
-
 function buildActiveGateMembershipPublicationDeferredContext(
   context,
   reconcileOutcome = ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_OUTCOME,
@@ -476,7 +463,6 @@ function buildActiveGateMembershipPublicationDeferredContext(
       ACTIVE_GATE_MEMBERSHIP_PUBLICATION_DEFERRED_SKIP_WRITE_READBACK,
   };
 }
-
 function shouldRouteActiveGateMembershipPublicationReconcile(options = {}) {
   return hasExplicitMembershipPublicationTarget(options) !== true &&
     hasPublicationActiveGateOwnerReconcileSignal(
@@ -486,7 +472,6 @@ function shouldRouteActiveGateMembershipPublicationReconcile(options = {}) {
       ],
     ) === true;
 }
-
 function resolveActiveGateMembershipPublicationErrorOutcome(error) {
   if (error?.activeGateMembershipPublicationReadbackFailed === true) {
     return ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME.WRITE_DEFERRED;
@@ -511,7 +496,6 @@ function resolveActiveGateMembershipPublicationErrorOutcome(error) {
   }
   return ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_TEXT;
 }
-
 function isActiveGateMembershipPublicationHandoffRetryAccepted(
   rawEnqueueOutcome,
   controlPlaneConvergence,
@@ -520,7 +504,6 @@ function isActiveGateMembershipPublicationHandoffRetryAccepted(
     controlPlaneConvergence?.pressureOutcome ===
       CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_ADMITTED;
 }
-
 function resolveActiveGateMembershipPublicationDeferredReasonCode(
   target,
   controlPlaneConvergence,
@@ -538,7 +521,6 @@ function resolveActiveGateMembershipPublicationDeferredReasonCode(
     handoffReasonCode :
     null;
 }
-
 async function readActiveGateMembershipPublicationVisibleRow(
   coordinator,
   publicationRow,
@@ -575,7 +557,6 @@ async function readActiveGateMembershipPublicationVisibleRow(
     normalizeControlPlanePublicationRow(durableRow) :
     ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_ABSENT_ROW;
 }
-
 async function readActiveGateMembershipPublicationVisibleReconcileRow(
   coordinator,
   reconcileOutcome,
@@ -606,7 +587,6 @@ async function readActiveGateMembershipPublicationVisibleReconcileRow(
   }
   return ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_ABSENT_ROW;
 }
-
 async function reconcileActiveGateMembershipPublication(
   coordinator,
   publicationActiveGateHandoff,
@@ -616,18 +596,23 @@ async function reconcileActiveGateMembershipPublication(
     publicationActiveGateHandoff,
   );
   if (target.reconcileRequired !== true) {
+    let drainedSnapshotQueue = false;
     if (
       target.handoffContract?.nextAction ===
         PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.WAIT_OWNER_RECOVERY &&
       target.handoffContract.pendingRecoveryCount > NUM.ZERO
     ) {
-      await SnapshotService.drainQueueForSnapshot();
+      drainedSnapshotQueue =
+        (await SnapshotService.drainQueueForSnapshot()) > NUM.ZERO;
     }
     return buildActiveGateMembershipPublicationReconcileOutcome(
       target.handoffContract ?
         ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME.TARGET_BLOCKED :
         ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME.NO_CHANGE,
-      {target},
+      {
+        target,
+        enqueued: drainedSnapshotQueue,
+      },
     );
   }
   await SnapshotService.drainQueueForSnapshot();
@@ -806,7 +791,6 @@ async function reconcileActiveGateMembershipPublication(
     );
   }
 }
-
 export {ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME};
 export {ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD};
 export {readActiveGateMembershipPublicationVisibleRow};

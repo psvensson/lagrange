@@ -90,6 +90,38 @@ const LOAD_PUBLICATION_GATE_PROJECTION_DECISION_TABLE = Object.freeze([
       evidence.nodeCanonicalActive === true &&
       evidence.nodePublicationDisagreementCount === ZERO,
   }),
+  Object.freeze({
+    outcome: LOAD_PUBLICATION_GATE_PROJECTION_OUTCOME_APPLY,
+    matches: (evidence) =>
+      evidence.readinessMode === CLUSTER_READINESS_MODE_LOAD &&
+      evidence.publicationGateReady === true &&
+      evidence.snapshotCoverageComplete !== true &&
+      evidence.selectedSnapshotAdminReady === true &&
+      evidence.selectedSnapshotTimeoutOwnerRecoveryProjectionReady === true &&
+      evidence.diagnosticActive !== true &&
+      evidence.diagnosticErrorPresent !== true &&
+      evidence.diagnosticActivitySource ===
+        ACTIVE_PROBE_ACTIVITY_SOURCE_TRAFFIC_READINESS &&
+      evidence.nodeCanonicalActive === true &&
+      evidence.nodePublicationDisagreementCount === ZERO &&
+      evidence.reasonCount > ZERO &&
+      evidence.projectableReasonSetComplete === true,
+  }),
+  Object.freeze({
+    outcome: LOAD_PUBLICATION_GATE_PROJECTION_OUTCOME_APPLY,
+    matches: (evidence) =>
+      evidence.readinessMode === CLUSTER_READINESS_MODE_LOAD &&
+      evidence.publicationGateReady === true &&
+      evidence.snapshotCoverageComplete !== true &&
+      evidence.selectedSnapshotAdminReady === true &&
+      evidence.selectedSnapshotTimeoutOwnerRecoveryProjectionReady === true &&
+      evidence.diagnosticActive !== true &&
+      evidence.timeoutShaped === true &&
+      evidence.diagnosticActivitySource ===
+        ACTIVE_PROBE_ACTIVITY_SOURCE_TRAFFIC_READINESS &&
+      evidence.nodeCanonicalActive === true &&
+      evidence.nodePublicationDisagreementCount === ZERO,
+  }),
 ]);
 const STARTUP_SNAPSHOT_PROJECTION_OUTCOME_KEEP = Object.freeze({
   project: false,
