@@ -63,6 +63,7 @@ const ADMIN_CONTROL_SNAPSHOT_LITERAL = Object.freeze({
   NODE_ID: 'node_id',
   READY_LEASE_EXPIRES_AT: 'ready_lease_expires_at',
   READY_LEASE_EXPIRES_AT_CAMEL: 'readyLeaseExpiresAt',
+  COMMA: ',',
 });
 const CONTROL_SNAPSHOT_CACHE_STALE_THRESHOLD_MS = 5000;
 /**
@@ -395,6 +396,60 @@ function mergeControlSnapshotActiveNodeViewsWithPublicationOwnerTruth(
     ]),
   };
 }
+function resolveControlSnapshotUnavailableActiveCandidateNodeIds(
+  controlPlaneDiagnostics = null,
+  publicationConvergence = null,
+) {
+  const pendingAckNodeIds = Array.isArray(
+    publicationConvergence?.pendingAckNodeIds,
+  ) ?
+    publicationConvergence.pendingAckNodeIds :
+    Array.isArray(
+      publicationConvergence?.membershipLifecycleSummary?.pendingAckNodeIds,
+    ) ?
+      publicationConvergence.membershipLifecycleSummary.pendingAckNodeIds :
+      ADMIN_CACHE_DUMP.EMPTY;
+  const directHandoff =
+    controlPlaneDiagnostics?.publicationActiveGateHandoff;
+  const nestedHandoff =
+    publicationConvergence?.publicationActiveGateHandoff;
+  const pendingRecoveryNodeIds = [
+    ...(directHandoff &&
+      Array.isArray(directHandoff.pendingRecoveryNodeIds) ?
+      directHandoff.pendingRecoveryNodeIds :
+      ADMIN_CACHE_DUMP.EMPTY),
+    ...(nestedHandoff &&
+      Array.isArray(nestedHandoff.pendingRecoveryNodeIds) ?
+      nestedHandoff.pendingRecoveryNodeIds :
+      ADMIN_CACHE_DUMP.EMPTY),
+  ];
+  const commaSeparatedRecovery =
+    controlPlaneDiagnostics
+      ?.publicationActiveGateHandoffPendingRecoveryNodeIds ||
+    controlPlaneDiagnostics?.activeGateOwnerCohortPendingRecoveryNodeIds;
+  if (
+    commaSeparatedRecovery &&
+    typeof commaSeparatedRecovery === TYPEOF.STRING
+  ) {
+    pendingRecoveryNodeIds.push(
+      ...commaSeparatedRecovery
+        .split(ADMIN_CONTROL_SNAPSHOT_LITERAL.COMMA)
+        .map((nodeId) => nodeId.trim())
+        .filter((nodeId) => nodeId.length > NUM.ZERO),
+    );
+  }
+  return new Set(normalizeControlSnapshotNodeIdList([
+    ...pendingAckNodeIds,
+    ...pendingRecoveryNodeIds,
+  ]));
+}
+function filterControlSnapshotAvailableCandidateNodeIds(
+  nodeIds,
+  unavailableNodeIds,
+) {
+  return normalizeControlSnapshotNodeIdList(nodeIds)
+    .filter((nodeId) => !unavailableNodeIds.has(nodeId));
+}
 // ── AdminControlSnapshot class ──────────────────────────────────────────────
 /**
  * Control snapshot builder.
@@ -446,53 +501,31 @@ class AdminControlSnapshotPart3 extends AdminControlSnapshotPart2 {
         activeNodeViews,
         publicationConvergence,
       );
-
-    const pcPendingAckNodeIds = Array.isArray(publicationConvergence?.pendingAckNodeIds)
-      ? publicationConvergence.pendingAckNodeIds
-      : Array.isArray(publicationConvergence?.membershipLifecycleSummary?.pendingAckNodeIds)
-      ? publicationConvergence.membershipLifecycleSummary.pendingAckNodeIds
-      : [];
-
-    let pcPendingRecoveryNodeIds = [];
-    const directHandoff = controlPlaneDiagnostics?.publicationActiveGateHandoff;
-    const nestedHandoff = publicationConvergence?.publicationActiveGateHandoff;
-
-    if (directHandoff && Array.isArray(directHandoff.pendingRecoveryNodeIds)) {
-      pcPendingRecoveryNodeIds = directHandoff.pendingRecoveryNodeIds;
-    } else if (nestedHandoff && Array.isArray(nestedHandoff.pendingRecoveryNodeIds)) {
-      pcPendingRecoveryNodeIds = nestedHandoff.pendingRecoveryNodeIds;
-    }
-
-    const commaSeparatedRecovery =
-      controlPlaneDiagnostics?.publicationActiveGateHandoffPendingRecoveryNodeIds ||
-      controlPlaneDiagnostics?.activeGateOwnerCohortPendingRecoveryNodeIds;
-    if (commaSeparatedRecovery && typeof commaSeparatedRecovery === 'string') {
-      const parsed = commaSeparatedRecovery.split(',').map(x => x.trim()).filter(Boolean);
-      pcPendingRecoveryNodeIds = [...pcPendingRecoveryNodeIds, ...parsed];
-    }
-
-    const unreachableOrRecoveringNodeIds = new Set(
-      normalizeControlSnapshotNodeIdList([
-        ...pcPendingAckNodeIds,
-        ...pcPendingRecoveryNodeIds,
-      ])
-    );
-
-    const filteredLocallyEligibleNodeIds = [
-      ...activeNodeViewsWithOwnerTruth.locallyEligibleNodeIds,
-    ].filter((nodeId) => !unreachableOrRecoveringNodeIds.has(nodeId));
-
-    const filteredProjectedServingNodeIds = [
-      ...activeNodeViewsWithOwnerTruth.projectedServingNodeIds,
-    ].filter((nodeId) => !unreachableOrRecoveringNodeIds.has(nodeId));
-
-    const filteredEffectiveActiveNodeIds = [
-      ...activeNodeViewsWithOwnerTruth.effectiveActiveNodeIds,
-    ].filter((nodeId) => !unreachableOrRecoveringNodeIds.has(nodeId));
-
-    const filteredProjectedActiveNodeIds = [
-      ...activeNodeViewsWithOwnerTruth.projectedActiveNodeIds,
-    ].filter((nodeId) => !unreachableOrRecoveringNodeIds.has(nodeId));
+    const unavailableActiveCandidateNodeIds =
+      resolveControlSnapshotUnavailableActiveCandidateNodeIds(
+        controlPlaneDiagnostics,
+        publicationConvergence,
+      );
+    const filteredLocallyEligibleNodeIds =
+      filterControlSnapshotAvailableCandidateNodeIds(
+        activeNodeViewsWithOwnerTruth.locallyEligibleNodeIds,
+        unavailableActiveCandidateNodeIds,
+      );
+    const filteredProjectedServingNodeIds =
+      filterControlSnapshotAvailableCandidateNodeIds(
+        activeNodeViewsWithOwnerTruth.projectedServingNodeIds,
+        unavailableActiveCandidateNodeIds,
+      );
+    const filteredEffectiveActiveNodeIds =
+      filterControlSnapshotAvailableCandidateNodeIds(
+        activeNodeViewsWithOwnerTruth.effectiveActiveNodeIds,
+        unavailableActiveCandidateNodeIds,
+      );
+    const filteredProjectedActiveNodeIds =
+      filterControlSnapshotAvailableCandidateNodeIds(
+        activeNodeViewsWithOwnerTruth.projectedActiveNodeIds,
+        unavailableActiveCandidateNodeIds,
+      );
 
     return {
       authoritativeSource: activeNodeViewsWithOwnerTruth.authoritativeSource,

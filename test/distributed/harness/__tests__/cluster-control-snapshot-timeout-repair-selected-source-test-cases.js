@@ -2,6 +2,7 @@ import {
   ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE,
   assert,
   buildSelectedSnapshotSourceTimeoutError,
+  CONTROL_PLANE_PUBLICATION_STATUS,
   CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE,
   CONTROL_PLANE_SNAPSHOT_REFRESH_STATE,
   createCluster,
@@ -77,6 +78,14 @@ import {
   SNAPSHOT_TIMEOUT_REPAIR_ASSERTION,
   test,
 } from './cluster-control-snapshot-timeout-repair-fixtures.js';
+import {AdminControlSnapshot} from
+  '../../../../src/admin/admin-control-snapshot.js';
+import {STATE} from '../../../../src/constants/index.js';
+
+const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_PENDING_ELIGIBILITY_TEST_NAME =
+  'Unit: resolveControlSnapshotNodeViews excludes pending ACK/recovery candidates';
+const SNAPSHOT_TIMEOUT_REPAIR_PENDING_ELIGIBILITY_ASSERTION =
+  'pending ACK and recovery nodes must not remain in active snapshot candidate vectors';
 /**
  * Feature: distributed-testing-framework
  * Property 5: Multi-Host Container Distribution
@@ -88,6 +97,57 @@ import {
  *
  * **Validates: Requirements 2.3**
  */
+test(SELECTED_SNAPSHOT_SOURCE_TIMEOUT_PENDING_ELIGIBILITY_TEST_NAME,
+  async () => {
+    const pendingAckNodeId = SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE;
+    const pendingRecoveryNodeId =
+      SNAPSHOT_REPLAY_TEST_NODE_ID.ADMIN_READY_STALE;
+    const blockedNodeIds = [pendingAckNodeId, pendingRecoveryNodeId];
+    const snapshot = new AdminControlSnapshot({
+      nodeId: SNAPSHOT_REPLAY_TEST_NODE_ID.SEED,
+      nowFn: () => SELECTED_SNAPSHOT_SOURCE_TIMEOUT_CAPTURED_AT_MS,
+    });
+
+    const activeNodeViews = snapshot.resolveControlSnapshotNodeViews(
+      SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS.map((nodeId) => ({
+        node_id: nodeId,
+        status: SERVICE_STATUS.ACTIVE,
+        connection_state: STATE.READY,
+        ready_lease_expires_at:
+          SELECTED_SNAPSHOT_SOURCE_TIMEOUT_CAPTURED_AT_MS +
+          SNAPSHOT_REPLAY_TEST_DEADLINE_EXTENSION_MS,
+      })),
+      [],
+      [],
+      {
+        publicationConvergence: {
+          status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+          publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+          publishedActiveNodeIds: SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS,
+          pendingAckNodeIds: [pendingAckNodeId],
+          membershipLifecycleSummary: {
+            pendingAckNodeIds: [pendingAckNodeId],
+          },
+        },
+        publicationActiveGateHandoff: {
+          pendingRecoveryNodeIds: [pendingRecoveryNodeId],
+        },
+      },
+      [],
+    );
+
+    assert.deepStrictEqual(
+      [
+        ...activeNodeViews.locallyEligibleNodeIds,
+        ...activeNodeViews.projectedServingNodeIds,
+        ...activeNodeViews.effectiveActiveNodeIds,
+        ...activeNodeViews.projectedActiveNodeIds,
+      ].filter((nodeId) => blockedNodeIds.includes(nodeId)),
+      [],
+      SNAPSHOT_TIMEOUT_REPAIR_PENDING_ELIGIBILITY_ASSERTION,
+    );
+  });
+
 test(SNAPSHOT_REPLAY_TEST_LATE_TIMEOUT_TEST_NAME,
 async () => {
   const cluster = createCluster({
