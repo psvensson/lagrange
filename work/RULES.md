@@ -175,7 +175,10 @@ Before starting or rewriting a theory loop sprint, record these concrete
 sections:
 
 1. `Evidence Anchor`: current problem, representative artifact, success
-   condition, stable facts, changed facts, and current unknowns.
+   condition, stable facts, changed facts, and current unknowns. The success
+   condition must be the original representative or release success metric, not
+   an alternate stop such as architecture-gap, owner-boundary-migration,
+   classification, or route selection.
 2. `Mechanism Card`: the mechanism taxonomy term, rejected alternatives,
    deciding owner, missing transition or observation, smallest falsifier,
    expected movement, negative result meaning, and escalation rule.
@@ -210,13 +213,17 @@ only after the active package produces fresh route evidence or a discriminator
 selects a different option.
 
 Closure discipline is stricter: a theory loop sprint continues indefinitely
-until its success condition is met. It must not close as `done` for
-same-frontier, classification-only, needs-rerun, pending, or unknown outcomes.
-To close it, add `## Theory Loop Success Evidence` with
-`Success condition met: yes`, a fresh representative evidence command or
-artifact, a result of `representative-green`, `owner-boundary-migration`,
-`architecture-gap`, or `success-condition-met`, and the concrete reason
-continuation stops.
+until the original `Evidence Anchor` success condition is met. It must not
+close as `done` for same-frontier, classification-only, needs-rerun, pending,
+unknown, architecture-gap, owner-boundary-migration, route-selection, or other
+alternate outcomes unless that exact outcome was the success condition recorded
+when the sprint started. To close it, add `## Theory Loop Success Evidence`
+with `Success condition met: yes`, `Matched success condition: <the exact
+Evidence Anchor success condition>`, a fresh representative evidence command
+or artifact, `Result: success-condition-met`, and the concrete reason
+continuation stops. Two-level theory may navigate through migrations,
+architecture gaps, and rejected theories as package learning, but those are not
+sprint success metrics by themselves.
 
 ---
 

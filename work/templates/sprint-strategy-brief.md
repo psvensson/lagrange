@@ -24,7 +24,10 @@ Use this section for theory-loop sprints. Keep the entries concrete and
 evidence-linked; options are hypotheses to compare, not queued future packages.
 
 1. Evidence Anchor: current problem, representative artifact, success
-   condition, stable facts, changed facts, and current unknowns.
+   condition, stable facts, changed facts, and current unknowns. The success
+   condition must name the original representative or release success metric,
+   not an alternate stop such as architecture-gap, owner-boundary-migration,
+   classification, or route selection.
 2. Mechanism Card: mechanism taxonomy term, rejected alternatives, deciding
    owner, missing transition or observation, smallest falsifier, expected
    movement, negative result meaning, and escalation rule.
@@ -49,11 +52,15 @@ evidence-linked; options are hypotheses to compare, not queued future packages.
 9. Learning Rule: record supported, avoided, falsified, fixed, migrated,
    representative-green, architecture-gap, or needs-rerun before selecting a
    successor.
-10. Closure Rule: the sprint continues indefinitely until its success condition
-    is met. Close only after `## Theory Loop Success Evidence` records
-    `Success condition met: yes`, fresh representative evidence, a successful
-    result, and why continuation stops. Same-frontier, classification-only,
-    needs-rerun, pending, or unknown outcomes keep the sprint active.
+10. Closure Rule: the sprint continues indefinitely until the original
+    `Evidence Anchor` success condition is met. Close only after
+    `## Theory Loop Success Evidence` records `Success condition met: yes`,
+    `Matched success condition` equal to the original success condition, fresh
+    representative evidence, `Result: success-condition-met`, and why
+    continuation stops. Same-frontier, classification-only, needs-rerun,
+    pending, unknown, migration, architecture-gap, and route-selection outcomes
+    keep the sprint active unless they exactly match the original success
+    condition.
 
 ## Sprint Systemic Insight Gate
 

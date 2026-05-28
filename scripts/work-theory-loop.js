@@ -301,6 +301,7 @@ export function renderTheoryLoopSprintSection(options = {}) {
     '## Theory Loop Sprint',
     '',
     `- Evidence anchor: central problem = ${problem}; representative artifact = ${context.artifact}; success condition = ${success}.`,
+    '- Success condition invariant: the Evidence Anchor success condition is the original representative or release success metric, not an architecture-gap, owner-boundary migration, classification, or route-selection stop.',
     '- Stable facts:',
     renderMarkdownList(context.stableFacts),
     '- Changed facts:',
@@ -317,7 +318,7 @@ export function renderTheoryLoopSprintSection(options = {}) {
     '- Promotion rule: create or activate one executable package only when fresh evidence or a discriminator selects one option with explicit owner, boundary, write scope, proof, and stop rule.',
     '- Learning rule: record each option as supported, avoided, falsified, fixed, migrated, representative-green, architecture-gap, or needs-rerun, then revise the option set before another patch.',
     '- Queue discipline: keep one active executable package and no speculative package queue; successor packages are created only from fresh route evidence.',
-    '- Closure invariant: the sprint continues indefinitely until the success condition is met; close only after `## Theory Loop Success Evidence` records `Success condition met: yes` with fresh representative evidence and a successful result.',
+    '- Closure invariant: the sprint continues indefinitely until the original success condition is met; close only after `## Theory Loop Success Evidence` records `Success condition met: yes`, `Matched success condition` equal to the Evidence Anchor success condition, fresh representative evidence, and `Result: success-condition-met`.',
     '- Ceremony budget: use `npm run work:theory-loop -- next|record|fix` for package and ledger updates before hand-editing markdown.',
   ].join(NEWLINE);
 }
@@ -337,6 +338,7 @@ export function renderTheoryLoopPackageSection(options = {}) {
     '## Theory Loop',
     '',
     `- Evidence anchor: central problem = ${problem}; representative artifact = ${context.artifact}; success condition = ${success}.`,
+    '- Success condition invariant: the Evidence Anchor success condition is the original representative or release success metric, not an architecture-gap, owner-boundary migration, classification, or route-selection stop.',
     '- Stable facts:',
     renderMarkdownList(context.stableFacts),
     '- Changed facts:',

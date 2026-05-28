@@ -277,9 +277,9 @@ const CURRENT_EDGE_CARD_ALLOWED_STOP_MODES =
   'representative-green, migrated, reduced, same-frontier, ' +
   'classification-only, architecture-gap, human-escalation';
 const CURRENT_EDGE_CARD_THEORY_LOOP_STOP_MODES =
-  'representative-green, owner-boundary-migration, architecture-gap, ' +
-  'success-condition-met; same-frontier, classification-only, needs-rerun, ' +
-  'pending, and unknown keep sprint active';
+  'success-condition-met only; representative-green, owner-boundary-migration, ' +
+  'architecture-gap, same-frontier, classification-only, needs-rerun, pending, ' +
+  'and unknown are package outcomes unless they exactly match the original sprint success condition';
 const CURRENT_EDGE_CARD_FIELD_PACKAGE = 'active package';
 const CURRENT_EDGE_CARD_FIELD_ARTIFACT = 'artifact';
 const CURRENT_EDGE_CARD_FIELD_OWNER = 'owner';
@@ -359,17 +359,18 @@ const SPRINT_STRATEGY_BRIEF_FIELDS = Object.freeze([
 ]);
 const THEORY_LOOP_SUCCESS_EVIDENCE_HEADING =
   '## Theory Loop Success Evidence';
+const THEORY_LOOP_EVIDENCE_ANCHOR_HEADING = '## Evidence Anchor';
 const THEORY_LOOP_SUCCESS_CONDITION_MET_LABEL = 'Success condition met';
+const THEORY_LOOP_ORIGINAL_SUCCESS_CONDITION_LABEL = 'Success condition';
+const THEORY_LOOP_MATCHED_SUCCESS_CONDITION_LABEL =
+  'Matched success condition';
 const THEORY_LOOP_FRESH_REPRESENTATIVE_EVIDENCE_LABEL =
   'Fresh representative evidence';
 const THEORY_LOOP_RESULT_LABEL = 'Result';
 const THEORY_LOOP_CONTINUATION_STOPPED_LABEL = 'Continuation stopped because';
-const THEORY_LOOP_SUCCESS_RESULT_VALUES = Object.freeze([
-  'representative-green',
-  'owner-boundary-migration',
-  'architecture-gap',
-  'success-condition-met',
-]);
+const THEORY_LOOP_SUCCESS_RESULT_VALUE = 'success-condition-met';
+const THEORY_LOOP_FORBIDDEN_SUCCESS_CONDITION_PATTERN =
+  /\b(?:architecture[-\s]+gap|architecture[-\s]+stop|owner[-\s]+boundary[-\s]+migration|same[-\s]+frontier|classification[-\s]+only|needs[-\s]+rerun|route[-\s]+selection|human[-\s]+escalation)\b/iu;
 const THEORY_LOOP_PACKAGE_RESULT_VALUES = Object.freeze([
   'fixed',
   'avoided',
@@ -381,7 +382,7 @@ const THEORY_LOOP_PACKAGE_RESULT_VALUES = Object.freeze([
   'needs-rerun',
 ]);
 const THEORY_LOOP_UNFINISHED_RESULT_PATTERN =
-  /\b(?:same-frontier|classification-only|needs-rerun|pending|unknown|not[-\s]+met|no)\b/iu;
+  /\b(?:same-frontier|classification-only|needs-rerun|pending|unknown|not[-\s]+met)\b/iu;
 const MODEL_FIT_SPARK_SAFE_CLASS = 'spark-safe';
 const MODEL_FIT_SPARK_MODEL = 'gpt-5.3-codex-spark';
 const MODEL_FIT_LEAF_SLICE_SCOPE = 'leaf-slice';
@@ -1072,6 +1073,13 @@ function extractSprintStrategyBriefSection(content) {
   return extractMarkdownLevelTwoSection(
     content,
     SPRINT_STRATEGY_BRIEF_HEADING,
+  );
+}
+
+function extractTheoryLoopEvidenceAnchorSection(content) {
+  return extractMarkdownLevelTwoSection(
+    content,
+    THEORY_LOOP_EVIDENCE_ANCHOR_HEADING,
   );
 }
 
@@ -2971,12 +2979,19 @@ export function validateTheoryLoopSprintClosure(
   if (!isTheoryLoopSprint(content, filePath) || status !== STATUS_DONE) {
     return [];
   }
+  const evidenceAnchorSection = extractTheoryLoopEvidenceAnchorSection(content);
+  const originalSuccessCondition = evidenceAnchorSection ?
+    findTheoryLoopSuccessEvidenceField(
+      evidenceAnchorSection,
+      THEORY_LOOP_ORIGINAL_SUCCESS_CONDITION_LABEL,
+    ) :
+    null;
   const section = extractTheoryLoopSuccessEvidenceSection(content);
   if (!section) {
     return [
       `${filePath}: theory-loop sprint is marked done but lacks ` +
       `${THEORY_LOOP_SUCCESS_EVIDENCE_HEADING}; theory-loop sprints must ` +
-      'continue until the success condition is met by fresh representative evidence.',
+      'continue until the original success condition is met by fresh representative evidence.',
     ];
   }
   const errors = [];
@@ -2992,10 +3007,28 @@ export function validateTheoryLoopSprintClosure(
     section,
     THEORY_LOOP_RESULT_LABEL,
   );
+  const matchedSuccessCondition = findTheoryLoopSuccessEvidenceField(
+    section,
+    THEORY_LOOP_MATCHED_SUCCESS_CONDITION_LABEL,
+  );
   const continuationStopped = findTheoryLoopSuccessEvidenceField(
     section,
     THEORY_LOOP_CONTINUATION_STOPPED_LABEL,
   );
+  errors.push(...validateConcreteTheoryLoopSuccessField(
+    filePath,
+    THEORY_LOOP_ORIGINAL_SUCCESS_CONDITION_LABEL,
+    originalSuccessCondition,
+  ));
+  if (
+    originalSuccessCondition !== null &&
+    THEORY_LOOP_FORBIDDEN_SUCCESS_CONDITION_PATTERN.test(originalSuccessCondition)
+  ) {
+    errors.push(
+      `${filePath}: Evidence Anchor ${THEORY_LOOP_ORIGINAL_SUCCESS_CONDITION_LABEL} ` +
+      'must name the original representative or release success metric, not an alternate stop such as architecture-gap, owner-boundary-migration, classification, or route selection.',
+    );
+  }
   errors.push(...validateConcreteTheoryLoopSuccessField(
     filePath,
     THEORY_LOOP_SUCCESS_CONDITION_MET_LABEL,
@@ -3013,6 +3046,11 @@ export function validateTheoryLoopSprintClosure(
   ));
   errors.push(...validateConcreteTheoryLoopSuccessField(
     filePath,
+    THEORY_LOOP_MATCHED_SUCCESS_CONDITION_LABEL,
+    matchedSuccessCondition,
+  ));
+  errors.push(...validateConcreteTheoryLoopSuccessField(
+    filePath,
     THEORY_LOOP_CONTINUATION_STOPPED_LABEL,
     continuationStopped,
   ));
@@ -3025,17 +3063,32 @@ export function validateTheoryLoopSprintClosure(
   const normalizedResult = normalizeLedgerText(result).toLowerCase();
   if (
     normalizedResult.length > NUM_ZERO &&
-    !THEORY_LOOP_SUCCESS_RESULT_VALUES.includes(normalizedResult)
+    normalizedResult !== THEORY_LOOP_SUCCESS_RESULT_VALUE
   ) {
     errors.push(
       `${filePath}: Theory Loop Success Evidence ${THEORY_LOOP_RESULT_LABEL} ` +
-      `must be one of ${THEORY_LOOP_SUCCESS_RESULT_VALUES.join(', ')}.`,
+      `must be ${THEORY_LOOP_SUCCESS_RESULT_VALUE}; architecture-gap, ` +
+      'migration, classification, or route selection are package learning ' +
+      'outcomes, not sprint success.',
+    );
+  }
+  if (
+    originalSuccessCondition !== null &&
+    matchedSuccessCondition !== null &&
+    matchedSuccessCondition !== originalSuccessCondition
+  ) {
+    errors.push(
+      `${filePath}: Theory Loop Success Evidence ` +
+      `${THEORY_LOOP_MATCHED_SUCCESS_CONDITION_LABEL} must exactly match the ` +
+      `original Evidence Anchor ${THEORY_LOOP_ORIGINAL_SUCCESS_CONDITION_LABEL}.`,
     );
   }
   const closureText = [
+    originalSuccessCondition,
     successConditionMet,
     freshEvidence,
     result,
+    matchedSuccessCondition,
     continuationStopped,
   ].map(normalizeLedgerText).join(' ');
   if (THEORY_LOOP_UNFINISHED_RESULT_PATTERN.test(closureText)) {

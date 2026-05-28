@@ -143,8 +143,9 @@ Use the tracker utility for current sprint/package mechanics:
    a successor package; evidence-only or classification-only discrimination
    stays in the sprint until it selects real source work. A theory-loop sprint
    stays active indefinitely and can close only after `## Theory Loop Success
-   Evidence` records `Success condition met: yes` with fresh representative
-   evidence.
+   Evidence` records `Success condition met: yes`, `Matched success condition`
+   equal to the original `Evidence Anchor` success condition, fresh
+   representative evidence, and `Result: success-condition-met`.
 14. `npm run work:package:route-after-rerun -- --artifact <artifact>
    --successor <active-successor>` combines the post-rerun route handoff with
    the package migration transaction when the successor already exists and is

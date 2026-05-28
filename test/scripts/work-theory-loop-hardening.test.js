@@ -202,6 +202,10 @@ test('theory-loop sprint closure needs explicit success evidence', (t) => {
     '',
     'Status: done.',
     '',
+    '## Evidence Anchor',
+    '',
+    '- Success condition: rolling-restart representative run passes with all nodes ACTIVE',
+    '',
     '## Theory Option Set',
     '',
     '1. H1',
@@ -220,10 +224,28 @@ test('theory-loop sprint closure needs explicit success evidence', (t) => {
     '## Theory Loop Success Evidence',
     '',
     '- Success condition met: yes',
+    '- Matched success condition: rolling-restart representative run passes with all nodes ACTIVE',
     '- Fresh representative evidence: npm run work:scenario-route -- test-output/reports/rolling-restart-green.report.json',
-    '- Result: representative-green',
+    '- Result: success-condition-met',
     '- Continuation stopped because: the representative success condition is met.',
   ].join('\n');
+  const alternateMetricSprint = finishedSprint.replace(
+    '- Result: success-condition-met',
+    '- Result: architecture-gap',
+  );
+  const mismatchedSuccessSprint = finishedSprint.replace(
+    '- Matched success condition: rolling-restart representative run passes with all nodes ACTIVE',
+    '- Matched success condition: architecture-gap',
+  );
+  const alternateStartMetricSprint = finishedSprint
+    .replace(
+      '- Success condition: rolling-restart representative run passes with all nodes ACTIVE',
+      '- Success condition: rolling-restart representative run passes or closes as architecture-gap',
+    )
+    .replace(
+      '- Matched success condition: rolling-restart representative run passes with all nodes ACTIVE',
+      '- Matched success condition: rolling-restart representative run passes or closes as architecture-gap',
+    );
 
   t.match(
     validateTheoryLoopSprintClosure(
@@ -231,7 +253,31 @@ test('theory-loop sprint closure needs explicit success evidence', (t) => {
       'work/sprints/done-theory-loop.md',
       {status: 'done'},
     ).join('\n'),
-    /must continue until the success condition is met/u,
+    /must continue until the original success condition is met/u,
+  );
+  t.match(
+    validateTheoryLoopSprintClosure(
+      alternateMetricSprint,
+      'work/sprints/done-theory-loop.md',
+      {status: 'done'},
+    ).join('\n'),
+    /must be success-condition-met/u,
+  );
+  t.match(
+    validateTheoryLoopSprintClosure(
+      mismatchedSuccessSprint,
+      'work/sprints/done-theory-loop.md',
+      {status: 'done'},
+    ).join('\n'),
+    /must exactly match/u,
+  );
+  t.match(
+    validateTheoryLoopSprintClosure(
+      alternateStartMetricSprint,
+      'work/sprints/done-theory-loop.md',
+      {status: 'done'},
+    ).join('\n'),
+    /must name the original representative or release success metric/u,
   );
   t.same(
     validateTheoryLoopSprintClosure(
@@ -320,7 +366,7 @@ test('sprint advance refuses theory-loop closure before success evidence', async
 
   await t.rejects(
     buildSprintAdvancePlan({root}),
-    /continue indefinitely until the success condition is met/u,
+    /continue indefinitely until the original success condition is met/u,
   );
 });
 
@@ -338,8 +384,8 @@ test('current edge card does not present classification-only as a theory-loop st
     candidateRuntimeFiles: [],
   });
 
-  t.match(card, /Allowed stop modes: representative-green, owner-boundary-migration, architecture-gap, success-condition-met/u);
-  t.match(card, /classification-only, needs-rerun, pending, and unknown keep sprint active/u);
+  t.match(card, /Allowed stop modes: success-condition-met only/u);
+  t.match(card, /architecture-gap, same-frontier, classification-only, needs-rerun, pending, and unknown are package outcomes/u);
   t.notMatch(card, /Allowed stop modes:.*same-frontier, classification-only, architecture-gap/u);
   t.end();
 });

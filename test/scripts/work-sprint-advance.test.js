@@ -179,6 +179,162 @@ test('sprint advance refuses a sprint with active packages', async (t) => {
   );
 });
 
+test('sprint advance refuses theory-loop closure on alternate success metric', async (t) => {
+  const root = await makeTempRoot(t);
+  await writeFixture(root, ACTIVE_SPRINT, [
+    '# Alpha Sprint',
+    '',
+    'Status: active.',
+    '',
+    '## Evidence Anchor',
+    '',
+    '- Success condition: rolling-restart representative run passes with all nodes ACTIVE',
+    '',
+    '## Theory Option Set',
+    '',
+    '1. H1',
+    '',
+    '## Discriminator First',
+    '',
+    '- run the discriminator',
+    '',
+    '## Real Package Rule',
+    '',
+    '- source packages only',
+    '',
+    '## Theory Loop Success Evidence',
+    '',
+    '- Success condition met: yes',
+    '- Matched success condition: rolling-restart representative run passes with all nodes ACTIVE',
+    '- Fresh representative evidence: npm run work:scenario-route -- test-output/reports/rolling-restart.report.json',
+    '- Result: architecture-gap',
+    '- Continuation stopped because: the architecture path selected a stop.',
+    '',
+  ].join('\n'));
+
+  await t.rejects(
+    buildSprintAdvancePlan({root}),
+    /closure result must be success-condition-met/u,
+  );
+});
+
+test('sprint advance requires closure to match the original success condition', async (t) => {
+  const root = await makeTempRoot(t);
+  await writeFixture(root, ACTIVE_SPRINT, [
+    '# Alpha Sprint',
+    '',
+    'Status: active.',
+    '',
+    '## Evidence Anchor',
+    '',
+    '- Success condition: rolling-restart representative run passes with all nodes ACTIVE',
+    '',
+    '## Theory Option Set',
+    '',
+    '1. H1',
+    '',
+    '## Discriminator First',
+    '',
+    '- run the discriminator',
+    '',
+    '## Real Package Rule',
+    '',
+    '- source packages only',
+    '',
+    '## Theory Loop Success Evidence',
+    '',
+    '- Success condition met: yes',
+    '- Matched success condition: architecture-gap',
+    '- Fresh representative evidence: npm run work:scenario-route -- test-output/reports/rolling-restart.report.json',
+    '- Result: success-condition-met',
+    '- Continuation stopped because: the representative success condition is met.',
+    '',
+  ].join('\n'));
+
+  await t.rejects(
+    buildSprintAdvancePlan({root}),
+    /Matched success condition must exactly match/u,
+  );
+});
+
+test('sprint advance rejects alternate stop labels in theory-loop success condition', async (t) => {
+  const root = await makeTempRoot(t);
+  await writeFixture(root, ACTIVE_SPRINT, [
+    '# Alpha Sprint',
+    '',
+    'Status: active.',
+    '',
+    '## Evidence Anchor',
+    '',
+    '- Success condition: rolling-restart representative run passes or closes as architecture-gap',
+    '',
+    '## Theory Option Set',
+    '',
+    '1. H1',
+    '',
+    '## Discriminator First',
+    '',
+    '- run the discriminator',
+    '',
+    '## Real Package Rule',
+    '',
+    '- source packages only',
+    '',
+    '## Theory Loop Success Evidence',
+    '',
+    '- Success condition met: yes',
+    '- Matched success condition: rolling-restart representative run passes or closes as architecture-gap',
+    '- Fresh representative evidence: npm run work:scenario-route -- test-output/reports/rolling-restart.report.json',
+    '- Result: success-condition-met',
+    '- Continuation stopped because: the representative success condition is met.',
+    '',
+  ].join('\n'));
+
+  await t.rejects(
+    buildSprintAdvancePlan({root}),
+    /must name the original representative or release success metric/u,
+  );
+});
+
+test('sprint advance accepts theory-loop closure only on the original success condition', async (t) => {
+  const root = await makeTempRoot(t);
+  await writeFixture(root, ACTIVE_SPRINT, [
+    '# Alpha Sprint',
+    '',
+    'Status: active.',
+    '',
+    '## Evidence Anchor',
+    '',
+    '- Success condition: rolling-restart representative run passes with all nodes ACTIVE',
+    '',
+    '## Theory Option Set',
+    '',
+    '1. H1',
+    '',
+    '## Discriminator First',
+    '',
+    '- run the discriminator',
+    '',
+    '## Real Package Rule',
+    '',
+    '- source packages only',
+    '',
+    '## Theory Loop Success Evidence',
+    '',
+    '- Success condition met: yes',
+    '- Matched success condition: rolling-restart representative run passes with all nodes ACTIVE',
+    '- Fresh representative evidence: npm run work:scenario-route -- test-output/reports/rolling-restart-green.report.json',
+    '- Result: success-condition-met',
+    '- Continuation stopped because: the representative success condition is met.',
+    '',
+  ].join('\n'));
+
+  const plan = await buildSprintAdvancePlan({root});
+
+  t.equal(plan.packagesLeft, 0);
+  t.equal(plan.doneSprintPath, DONE_SPRINT);
+});
+
 test('sprint advance renderer shows the files that will change', async (t) => {
   const root = await writeCompleteSprintFixture(t);
   const plan = await buildSprintAdvancePlan({root});

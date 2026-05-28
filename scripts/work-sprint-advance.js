@@ -29,19 +29,17 @@ const PROCESS_ARG_SCRIPT_INDEX = 1;
 const SCRIPT_FILE_NAME = 'work-sprint-advance.js';
 const THEORY_LOOP_SUCCESS_EVIDENCE_HEADING =
   '## Theory Loop Success Evidence';
-const THEORY_LOOP_SUCCESS_RESULT_VALUES = Object.freeze([
-  'representative-green',
-  'owner-boundary-migration',
-  'architecture-gap',
-  'success-condition-met',
-]);
+const THEORY_LOOP_EVIDENCE_ANCHOR_HEADING = '## Evidence Anchor';
+const THEORY_LOOP_SUCCESS_RESULT_VALUE = 'success-condition-met';
+const THEORY_LOOP_FORBIDDEN_SUCCESS_CONDITION_PATTERN =
+  /\b(?:architecture[-\s]+gap|architecture[-\s]+stop|owner[-\s]+boundary[-\s]+migration|same[-\s]+frontier|classification[-\s]+only|needs[-\s]+rerun|route[-\s]+selection|human[-\s]+escalation)\b/iu;
 const THEORY_LOOP_UNFINISHED_RESULT_PATTERN =
-  /\b(?:same-frontier|classification-only|needs-rerun|pending|unknown|not[-\s]+met|no)\b/iu;
+  /\b(?:same-frontier|classification-only|needs-rerun|pending|unknown|not[-\s]+met)\b/iu;
 const HELP_TEXT = [
   'Usage: node scripts/work-sprint-advance.js [--dry-run|--write] [--sprint <active-sprint.md>] [--force]',
   '',
   'Closes the active sprint only when no active or todo packages remain.',
-  'Theory-loop sprints also require ## Theory Loop Success Evidence with Success condition met: yes.',
+  'Theory-loop sprints also require ## Theory Loop Success Evidence proving the original success condition is met.',
   'With --write, renames active-*.md to done-*.md and updates track/release references.',
   'Without --write, runs as a dry run.',
 ].join(NEWLINE);
@@ -128,6 +126,13 @@ function validateTheoryLoopSuccessEvidence(content, sprintPath) {
   if (!isTheoryLoopSprint(content, sprintPath)) {
     return [];
   }
+  const evidenceAnchorSection = extractMarkdownLevelTwoSection(
+    content,
+    THEORY_LOOP_EVIDENCE_ANCHOR_HEADING,
+  );
+  const originalSuccessCondition = evidenceAnchorSection ?
+    findMarkdownField(evidenceAnchorSection, 'Success condition') :
+    EMPTY_TEXT;
   const section = extractMarkdownLevelTwoSection(
     content,
     THEORY_LOOP_SUCCESS_EVIDENCE_HEADING,
@@ -140,11 +145,28 @@ function validateTheoryLoopSuccessEvidence(content, sprintPath) {
   const successConditionMet = findMarkdownField(section, 'Success condition met');
   const freshEvidence = findMarkdownField(section, 'Fresh representative evidence');
   const result = findMarkdownField(section, 'Result');
+  const matchedSuccessCondition = findMarkdownField(
+    section,
+    'Matched success condition',
+  );
   const continuationStopped = findMarkdownField(
     section,
     'Continuation stopped because',
   );
   const errors = [];
+  if (!originalSuccessCondition) {
+    errors.push(
+      `${sprintPath}: theory-loop sprint closure requires an original ` +
+      'Evidence Anchor Success condition.',
+    );
+  } else if (
+    THEORY_LOOP_FORBIDDEN_SUCCESS_CONDITION_PATTERN.test(originalSuccessCondition)
+  ) {
+    errors.push(
+      `${sprintPath}: theory-loop sprint Evidence Anchor Success condition ` +
+      'must name the original representative or release success metric, not an alternate stop such as architecture-gap, owner-boundary-migration, classification, or route selection.',
+    );
+  }
   if (successConditionMet.toLowerCase() !== 'yes') {
     errors.push(
       `${sprintPath}: theory-loop sprint cannot close until Success condition met: yes.`,
@@ -155,10 +177,24 @@ function validateTheoryLoopSuccessEvidence(content, sprintPath) {
       `${sprintPath}: theory-loop sprint closure requires fresh representative evidence.`,
     );
   }
-  if (!THEORY_LOOP_SUCCESS_RESULT_VALUES.includes(result.toLowerCase())) {
+  if (result.toLowerCase() !== THEORY_LOOP_SUCCESS_RESULT_VALUE) {
     errors.push(
-      `${sprintPath}: theory-loop sprint closure result must be one of ` +
-      `${THEORY_LOOP_SUCCESS_RESULT_VALUES.join(', ')}.`,
+      `${sprintPath}: theory-loop sprint closure result must be ` +
+      `${THEORY_LOOP_SUCCESS_RESULT_VALUE}; architecture-gap, migration, ` +
+      'classification, or route selection are package learning outcomes, not sprint success.',
+    );
+  }
+  if (!matchedSuccessCondition) {
+    errors.push(
+      `${sprintPath}: theory-loop sprint closure requires Matched success condition.`,
+    );
+  } else if (
+    originalSuccessCondition &&
+    matchedSuccessCondition !== originalSuccessCondition
+  ) {
+    errors.push(
+      `${sprintPath}: theory-loop sprint closure Matched success condition ` +
+      'must exactly match the original Evidence Anchor Success condition.',
     );
   }
   if (!continuationStopped) {
@@ -171,6 +207,7 @@ function validateTheoryLoopSuccessEvidence(content, sprintPath) {
       successConditionMet,
       freshEvidence,
       result,
+      matchedSuccessCondition,
       continuationStopped,
     ].join(' '))
   ) {
@@ -273,7 +310,7 @@ async function buildSprintAdvancePlan(options = {}) {
     throw new Error(
       [
         ...theoryLoopClosureErrors,
-        'Theory-loop sprints continue indefinitely until the success condition is met; create or activate the successor package instead of closing the sprint.',
+        'Theory-loop sprints continue indefinitely until the original success condition is met; create or activate the successor package instead of closing the sprint.',
       ].join(NEWLINE),
     );
   }
