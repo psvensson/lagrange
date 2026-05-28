@@ -22,20 +22,20 @@ Upgrade the theory loop from an artifact-routing package queue into a general ca
 ```text
 Representative artifact: none
 Visible first frontier: unknown
-Active package: work/packages/done-20260528-theory-loop-mechanism-card-command.md
+Active package: work/packages/done-20260528-theory-loop-artifact-compare-invariants.md
 Active package owner: workflow_tooling_owner
-Active package boundary: mechanism_card_cli
+Active package boundary: artifact_compare_invariant_extractor
 Selected cause: workflow_improvement
-Required action: Add a work:mechanism-card command that emits a structured mechanism card from a package or representative artifact.
+Required action: Add a work:artifact-compare command that reports stable facts, changed facts, invariant blockers, and plausible mechanism movement between two artifacts.
 Representative status: unknown
 Causal outcome: unknown
 Architecture gate: not-required / unknown
 Expected delta: unknown
-Current state: The mechanism card contract exists only as planned workflow text; agents still have to synthesize mechanism cards manually.
-Allowed edits: package.json, scripts/list-commands.js, scripts/work-mechanism-card.js, test/scripts/work-mechanism-card.test.js
+Current state: Agents compare representative reruns by hand, so invariant blockers and presentation-only churn are easy to miss.
+Allowed edits: package.json, scripts/list-commands.js, scripts/work-artifact-compare.js, test/scripts/work-artifact-compare.test.js
 Candidate runtime files: unknown
-Forbidden edits: the command requires raw report parsing before canonical summaries are tried, the classifier becomes active-gate-specific, the command changes package tracker state
-Required latest proof: regression: npm test -- test/scripts/work-mechanism-card.test.js, supporting: npm run work:mechanism-card -- work/packages/done-20260528-theory-loop-mechanism-card-command.md, supporting: npm run work:validate -- --entry work/packages/done-20260528-theory-loop-mechanism-card-command.md, supporting: npm run work:validate -- --pre-impl work/packages/done-20260528-theory-loop-mechanism-card-command.md, supporting: git diff --check -- package.json scripts/list-commands.js scripts/work-mechanism-card.js test/scripts/work-mechanism-card.test.js
+Forbidden edits: the command mutates work state, the comparison requires hard-coded rolling-restart field paths, canonical evidence tools cannot provide enough normalized fields
+Required latest proof: regression: npm test -- test/scripts/work-artifact-compare.test.js, supporting: npm run work:artifact-compare -- test-output/reports/rolling-restart-active-gate-snapshot-coverage-retry-cadence-20260528T033446Z.report.json test-output/reports/rolling-restart-active-gate-owner-reconcile-retry-20260528T040351Z.report.json, supporting: npm run work:validate -- --entry work/packages/todo-20260528-theory-loop-artifact-compare-invariants.md, supporting: npm run work:validate -- --pre-impl work/packages/todo-20260528-theory-loop-artifact-compare-invariants.md, supporting: git diff --check -- package.json scripts/list-commands.js scripts/work-artifact-compare.js test/scripts/work-artifact-compare.test.js
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -100,7 +100,7 @@ Expected action bias: define or execute an owner-recovery retry/enqueue transiti
    - Lane: `lightweight-maintenance`
    - Purpose: Add `npm run work:mechanism-card -- path-to-artifact-or-package` to emit a structured mechanism card from canonical package and evidence fields.
    - First-run reason: The mechanism card must be repeatable by tooling rather than recreated from memory in each handoff.
-3. [Theory Loop Artifact Compare Invariants](../packages/todo-20260528-theory-loop-artifact-compare-invariants.md)
+3. [Theory Loop Artifact Compare Invariants](../packages/done-20260528-theory-loop-artifact-compare-invariants.md)
    - Lane: `lightweight-maintenance`
    - Purpose: Add `npm run work:artifact-compare -- old-artifact.json new-artifact.json` to list stable facts, changed facts, invariant blockers, and plausible mechanism movement.
    - First-run reason: Same-frontier loops need an automatic distinction between real movement and presentation-only churn.
