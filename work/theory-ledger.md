@@ -317,3 +317,17 @@ Each entry must include these labels:
 - Supersedes: theory-20260526-rolling-restart-rebalancer-outbound-saturation
 - Superseded by: none
 - Next implication: Keep admin, transport, and generic rebalancer edits out of scope; run the focused workflow-progress proof, then open a runtime-owner-boundary successor only for the selected mechanism or open an architecture experiment if the same frontier repeats without reduction.
+
+## theory-20260528-rolling-restart-active-gate-snapshot-coverage-source-contract
+
+- Status: supported
+- Scenario/gate: rolling-restart / active_gate_snapshot_coverage
+- Owner/boundary: startup_active_gate_owner / snapshot_coverage
+- Hypothesis: Proactively bypassing or draining the write queue for critical active-gate snapshot operations stabilizes the active gate snapshot coverage under rolling-restart.
+- Probe: `npm test -- test/distributed/harness/__tests__/cluster-active-gate-startup-owner-handoff-test-cases.js`
+- Artifact/result: test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json
+- Representative movement: same-frontier
+- Linked packages: `work/packages/active-20260528-rolling-restart-active-gate-snapshot-coverage-source-contract.md`, `work/packages/active-20260528-rolling-restart-active-gate-owner-reconcile-pending-recovery-contract.md`, `work/packages/active-20260528-rolling-restart-startup-active-gate-owner-snapshot-coverage.md`
+- Supersedes: none
+- Superseded by: none
+- Next implication: Verify that bypassing logs table write queue resolves active_gate_timed_out frontier.

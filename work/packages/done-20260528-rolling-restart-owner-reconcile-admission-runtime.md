@@ -17,7 +17,7 @@
     "nextAction": "Make write-deferred active-gate owner recovery admit, enqueue, or wake observable reconcile progress before the active-gate snapshot coverage retry repeats.",
     "predecessor": "work/packages/done-20260528-theory-loop-active-gate-calibration-proof.md",
     "closed": "2026-05-28",
-    "successor": "work/packages/active-20260528-rolling-restart-startup-active-gate-owner-snapshot-coverage.md"
+    "successor": "work/packages/done-20260528-rolling-restart-startup-active-gate-owner-snapshot-coverage.md"
   },
   "scope": {
     "writeScope": [
