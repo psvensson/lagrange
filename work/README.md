@@ -372,7 +372,10 @@ Relationship to existing structures:
 2. The Decision Experiment Gate applies to runtime, scenario, and causal lanes
    after a route is selected. It tests the chosen implementation hypothesis;
    the Discovery Gate prevents choosing that hypothesis by momentum alone.
-3. Execution Evidence records implementation and verification-fix proof. Optional
+3. The Two-Level Theory Contract applies when the route is repeated,
+   architecture-gated, owner-migration, or causal-escalation work. It separates
+   whole-system causal mapping from the one executable slice.
+4. Execution Evidence records implementation and verification-fix proof. Optional
    explorer, skeptic, or integrator notes are provenance only and do not replace
    required closure roles.
 
@@ -428,6 +431,28 @@ scope is promoted. The package scaffolder emits the gate for strict runtime and
 scenario lanes, validators enforce it before implementation, and delegated role
 prompts include it so review, fix, and implementation agents test the same
 decision experiment.
+
+## Two-Level Theory Contract
+
+Active causal-escalation, architecture-gated, owner-migration, and repeated
+same-frontier packages must carry `systemTheory` and `sliceTheory` metadata
+before implementation.
+
+`systemTheory` captures the whole-system causal map: problem statement, phase
+chain, owner-boundary map, stable and changed facts, competing and eliminated
+theories, downstream symptoms, transition table, migration triggers,
+architecture-gap triggers, and whole-system invariant.
+
+`sliceTheory` turns that map into the one executable package contract. It cites
+the system theory, names the selected theory and mechanism, source/test
+contract, falsifier, expected representative movement, kill rule, theory-fit
+score, and wrong-slice triggers. Theory-fit score fields use high, medium, or
+low with a rationale.
+
+The scaffolder emits both fields for scenario causal packages, current-blocker
+renders both fields into handoffs, subagent prompts include them, and
+pre-implementation validation blocks local runtime work when repeated frontier
+evidence has no system-level selection.
 
 ## Tool-First LLM Workflow
 

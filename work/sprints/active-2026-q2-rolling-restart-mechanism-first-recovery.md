@@ -9,35 +9,41 @@ Make `rolling-restart` representative-green with all nodes ACTIVE, or produce on
 ## Sprint Strategy Brief
 
 - Goal state: `rolling-restart` passes, or the fresh route after the active package proves a named owner-boundary migration or architecture stop.
-- Current causal thesis: the pending ACK/recovery eligibility contract is now locally proven and the fresh representative artifact reports `pendingAck=0`, `publication_ack_closed`, and `enqueued=true`; the active blocker remains `active_gate_snapshot_coverage` with `snapshotCoverageNodeCount=1/5`, `owner_reconcile_pending`, `write_deferred`, selected snapshot timeout, and exhausted active-gate attempts.
-- Competing hypotheses: H1 pending ACK/recovery eligibility was the active blocker and is now falsified; H2 the active-gate snapshot coverage progress contract lacks an architecture-level transition from write-deferred owner recovery to coverage progress; H3 the typed snapshot handoff owner boundary must migrate before local runtime edits; H4 selected-source timeout is downstream until the coverage owner contract changes.
-- Confidence and evidence: High confidence that pending ACK eligibility is not the active blocker from `npm test -- test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-selected-source-test-cases.js`, `work:package:route-after-rerun`, `work:evidence-summary`, `work:scenario-route`, and `work:artifact-compare` on `test-output/reports/rolling-restart-pending-ack-eligibility-20260528T090300Z.report.json`.
-- Expected green path: close the pending eligibility proof as H1 falsified, then select an architecture or owner-migration discriminator before any further local runtime package. The next executable package must name the owner contract that turns `write_deferred` and `owner_reconcile_pending` into coverage progress or prove the boundary must migrate.
+- Current causal thesis: fresh representative evidence at `test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json` cleared priority-recovery residual witnesses and returned to `active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out`; the active blocker is now the missing snapshot coverage contract, migration, or architecture-gap stop.
+- Competing hypotheses: H1 the startup active-gate owner lacks a wake, retry, reconcile, drain, or handoff contract from available evidence to coverage progress; H2 typed snapshot handoff ownership belongs to startup readiness or another owner boundary; H3 no existing owner contract can bridge the evidence to coverage progress and the correct result is architecture-gap; H4 selected-source timeout stays downstream until snapshot coverage moves.
+- Confidence and evidence: High confidence that pending ACK and priority recovery are not current blockers from the cited representative report, `work:scenario-route`, `work:frontier-history`, and `analyze:causal-model`; medium confidence in startup-active-gate ownership because the route selects it while typed handoff migration remains live.
+- Expected green path: the active autonomous architecture package selects a concrete snapshot coverage source/test contract, owner-boundary migration, or architecture-gap stop before any runtime child package opens.
 - Wrong direction signals: editing selected-source ordering, readiness, admin API, transport, table bootstrap, generic timeouts, or promotion gates before owner recovery progress exists; opening another classifier from the same artifact; using placeholder report timestamps.
-- Next best package: [Rolling Restart Owner Recovery Queue Drain Runtime](../packages/done-20260528-rolling-restart-owner-recovery-queue-drain-runtime.md)
-- Stop or escalate rule: because the representative rerun repeated `owner_reconcile_pending`, `write_deferred`, and coverage `1/5` after the focused proof, update this option set and open/select owner-boundary migration or an autonomous architecture experiment before another local runtime patch. Human escalation is only for contradictory or blocked evidence.
+- Next best package: [Rolling Restart Active Gate Snapshot Coverage Autonomous Architecture](../packages/active-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md)
+- Stop or escalate rule: because fresh evidence returned to repeated `startup_active_gate_owner / snapshot_coverage`, the next package must keep two-level theory: first explain the whole-system causal map, then select one executable source/test contract, migration, or architecture-gap stop. Human escalation is only for contradictory or blocked evidence.
 
 ## Evidence Anchor
 
-- Current problem: `rolling-restart` remains red at active-gate snapshot coverage after the pending ACK/recovery candidate contract is locally proven and representative ACK debt is closed.
-- Representative artifact: `test-output/reports/rolling-restart-pending-ack-eligibility-20260528T090300Z.report.json`.
-- Comparison artifact: `test-output/reports/rolling-restart-active-gate-snapshot-coverage-retry-cadence-20260528T033446Z.report.json`.
-- Success condition: representative `rolling-restart` passes, moves snapshot coverage beyond `1/5`, clears `owner_reconcile_pending`, moves `pendingReconcileCount` above `0`, or produces a fresh route that names an owner-boundary migration or architecture stop.
-- Stable facts: `owner_reconcile_pending`, `write_deferred`, `snapshotCoverageNodeCount=1/5`, selected snapshot source timeout, and startup active gate remains the selected owner.
-- Changed facts: pending ACK eligibility is locally proven, representative `pendingAck=0`, publication ACK is closed, owner recovery enqueue moved from `false` to `true`, and active-gate attempts moved from `2/8` to `3/8`.
-- Current unknowns: whether the remaining missing edge is a startup active-gate coverage progress contract, a typed handoff owner migration, or a selected-source timeout that only becomes actionable after the owner boundary changes.
+- Current problem: `rolling-restart` remains red at active-gate snapshot coverage after priority recovery residuals clear and fresh route evidence returns to `startup_active_gate_owner / snapshot_coverage`.
+- Representative artifact: `test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json`.
+- Comparison artifact: `test-output/reports/rolling-restart-pending-ack-eligibility-20260528T090300Z.report.json`.
+- Success condition: representative `rolling-restart` passes, moves snapshot coverage beyond `1/5`, selects a concrete snapshot coverage contract, proves an owner-boundary migration, or closes as architecture-gap.
+- Stable facts: `active_gate_snapshot_coverage`, `active_gate_timed_out`, priority residual witness count `0`, selected snapshot source timeout, and startup active gate remain selected by the fresh route.
+- Changed facts: priority recovery split evidence no longer reproduces as the first frontier, the active blocker moved back from workflow progress to snapshot coverage, and runtime promotion is blocked pending architecture route selection.
+- Current unknowns: whether the remaining missing edge is a startup active-gate coverage progress contract, a typed handoff owner migration, an architecture-gap, or a selected-source timeout that only becomes actionable after snapshot coverage moves.
 
 ## Mechanism Card
 
-- Failure mechanism: `contract_gap`, with `ownership_gap` retained as the first alternate after H1 falsification.
-- Rejected alternatives: pending ACK/recovery eligibility is rejected as the active blocker because the focused fixture passes and the fresh artifact reports `pendingAck=0`; `observation_gap` is rejected because route, handoff, queue, retry, and coverage facts are visible; selected-source ordering remains downstream while active-gate snapshot coverage is the first frontier.
+- Failure mechanism: `contract_gap`, with `ownership_gap` retained as the first alternate after priority recovery residuals cleared.
+- Rejected alternatives: pending ACK, recovery eligibility, and priority recovery residuals are rejected as current blockers because the fresh route reports zero priority residual witnesses and selects active-gate snapshot coverage; `observation_gap` is rejected because route, handoff, queue, retry, and coverage facts are visible; selected-source ordering remains downstream while active-gate snapshot coverage is the first frontier.
 - Owner who decides: `startup_active_gate_owner`.
 - Current action: active-gate exhausts snapshot coverage attempts with owner recovery still `write_deferred` and coverage still `1/5`.
 - Missing transition or observation: the owner boundary must explain how write-deferred owner recovery becomes coverage progress, or prove the typed handoff/coverage owner must migrate.
-- Smallest falsifier: `npm run work:artifact-compare -- test-output/reports/rolling-restart-active-gate-owner-reconcile-retry-20260528T040351Z.report.json test-output/reports/rolling-restart-pending-ack-eligibility-20260528T090300Z.report.json`.
+- Smallest falsifier: `npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage`.
 - Expected movement: an architecture or owner-migration discriminator names the next owner contract before any local runtime edit.
 - Negative result means: unchanged invariant evidence stops local runtime patching.
 - Escalation rule: no second local runtime package may run from unchanged `owner_reconcile_pending`, `write_deferred`, and coverage `1/5` evidence.
+
+## Two-Level Theory Rule
+
+1. System theory comes first for repeated frontiers, architecture packages, and owner migrations. It must name the phase chain, owner-boundary map, stable and changed facts, competing and eliminated theories, downstream symptoms, transition table, migration triggers, architecture-gap triggers, and whole-system invariant.
+2. Slice theory follows only after the system theory has selected the current explanation. It must cite the system theory, name one source/test contract, one focused falsifier, expected representative movement, kill rule, theory-fit score, and wrong-slice triggers.
+3. Evidence-only reasoning stays at sprint level. A real package opens only when the slice theory can execute a declared contract or close as migration or architecture-gap.
 
 ## Theory Option Set
 
@@ -81,11 +87,11 @@ Make `rolling-restart` representative-green with all nodes ACTIVE, or produce on
 
 ## Discriminator First
 
-The active package executes H1 because current evidence already promotes it. It must run entry/pre-implementation validation, the topology handoff probe, and the focused selected-source repair fixture before runtime edits. H2, H3, and H4 cannot become packages until those probes or fresh representative route evidence select them.
+The active package executes the two-level discriminator for H2/H3/H4: `work:scenario-route` confirms the fresh frontier, `work:frontier-history` proves repeated same-boundary risk, and `analyze:causal-model` must either select the startup active-gate source/test contract, migrate owner boundary, or close as architecture-gap. Runtime edits remain blocked until that discriminator selects the slice.
 
 ## Promotion Rule
 
-Only the evidence-selected option becomes executable work. The active package owns H1 with explicit owner, boundary, write scope, proof, and stop rule. A successor is created only by fresh route-after-rerun evidence or a focused discriminator that rejects H1 and selects H2, H3, or H4.
+Only the evidence-selected option becomes executable work. The active package owns architecture route selection with explicit owner, boundary, write scope, proof, system theory, slice theory, and stop rule. A runtime successor is created only after fresh proof selects one source/test contract inside a declared owner boundary.
 
 ## Real Package Rule
 
@@ -110,7 +116,7 @@ Causal outcome: continue_local_fix
 Architecture gate: selected / autonomous-architecture-experiment
 Expected delta: Select an autonomous architecture route for repeated active_gate_snapshot_coverage before runtime promotion.
 Current state: Fresh representative evidence cleared priority-recovery residuals and returned to active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage, but repeated recent same-boundary runtime packages block another local runtime patch.
-Allowed edits: work/packages/active-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md, work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md, work/sprints/current-blocker.md, work/sprints/current-blocker.json
+Allowed edits: work/packages/active-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md, work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md, work/sprints/current-blocker.md, work/sprints/current-blocker.json, .kiro/steering/schemas/work-package.schema.json, .kiro/steering/workflow-guidelines/closure.md, scripts/work-package-new.js, scripts/work-package-schema.js, scripts/work-subagent-prompt.js, scripts/work-tracker.js, test/scripts/work-tracker-contract-ledger.test.js, test/scripts/work-tracker-subagent-ledger-fixtures.js, work/README.md, work/RULES.md, work/templates/sprint-strategy-brief.md, .kiro/steering/llm/governance.md, .kiro/steering/llm/manifest.json, .kiro/steering/llm/rules.json, test/scripts/work-llm-usability-tools.test.js
 Candidate runtime files: src/control-plane/owner-queue.js, src/control-plane/snapshot-service.js, src/control-plane/membership-publication-active-gate-reconcile.js, src/admin/admin-control-snapshot-publication-convergence-diagnostics.js
 Forbidden edits: Runtime promotion remains blocked until this architecture package selects one owner-owned contract or migration route.
 Required latest proof: falsifier: npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage, regression: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12, supporting: npm run analyze:causal-model -- test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json

@@ -4,24 +4,31 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: Repeated startup active-gate snapshot coverage failures require an architecture discriminator before another local runtime patch.
+Theory under test: H1 startup_active_gate_owner owns a missing snapshot coverage wake, retry, reconcile, drain, or handoff contract, with H2 ownership migration and H3 architecture-gap as live alternates.
 
-Causal question: The owner-owned snapshot coverage contract must choose wake, retry, reconcile, drain, handoff, or migration before runtime implementation resumes.
+Causal question: Rolling restart returned to active_gate_snapshot_coverage after priority recovery residuals cleared; the whole system needs a causal map that explains how startup active-gate snapshot coverage turns wake, retry, reconcile, drain, or handoff evidence into coverage progress or an explicit migration.
 
-Implementation slice: Run an autonomous architecture experiment that selects the exact snapshot coverage contract, owner-boundary migration, or architecture-gap stop before runtime edits.
+Implementation slice: This package makes no runtime source or test edits; it must select the concrete snapshot coverage source/test contract or migration before any runtime child package opens.
 
 Implementation files:
 
-1. `src/control-plane/owner-queue.js`
-2. `src/control-plane/snapshot-service.js`
-3. `src/control-plane/membership-publication-active-gate-reconcile.js`
-4. `src/admin/admin-control-snapshot-publication-convergence-diagnostics.js`
+1. `scripts/work-package-new.js`
+2. `scripts/work-package-schema.js`
+3. `scripts/work-subagent-prompt.js`
+4. `scripts/work-tracker.js`
+5. `test/scripts/work-tracker-contract-ledger.test.js`
+6. `test/scripts/work-tracker-subagent-ledger-fixtures.js`
+7. `test/scripts/work-llm-usability-tools.test.js`
+8. `src/control-plane/owner-queue.js`
+9. `src/control-plane/snapshot-service.js`
+10. `src/control-plane/membership-publication-active-gate-reconcile.js`
+11. `src/admin/admin-control-snapshot-publication-convergence-diagnostics.js`
 
-Expected implementation delta: The package selects a concrete wake, retry, reconcile, drain, owner-boundary migration, or architecture-gap stop for snapshot coverage progress.
+Expected implementation delta: selected snapshot coverage contract, owner-boundary migration, or architecture-gap stop before runtime promotion
 
-Falsifying probe: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12
+Falsifying probe: npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage
 
-Stop rule: If the architecture proof cannot select a concrete contract or migration, stop as architecture-gap.
+Stop rule: If proof cannot select a concrete contract or migration, stop as architecture-gap instead of opening another same-frontier runtime patch.
 
 Sprint: `work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md`
 
@@ -70,6 +77,106 @@ Escalation triggers:
 1. `proof selects a concrete runtime file and source/test contract`
 2. `proof names a different owner boundary for snapshot coverage progress`
 3. `fresh evidence contradicts startup_active_gate_owner / snapshot_coverage ownership`
+
+## System Theory
+
+Problem statement: Rolling restart returned to active_gate_snapshot_coverage after priority recovery residuals cleared; the whole system needs a causal map that explains how startup active-gate snapshot coverage turns wake, retry, reconcile, drain, or handoff evidence into coverage progress or an explicit migration.
+
+Phase chain:
+
+1. `owner recovery queue drain proof moved priority recovery to the first frontier`
+2. `priority recovery split architecture rerun cleared priority residual witnesses`
+3. `fresh route returned to active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage`
+4. `downstream selected-source timeout, startup readiness, and benchmark bootstrap remain frozen until snapshot coverage progress has an owner-owned contract`
+
+Owner-boundary map:
+
+1. `startup_active_gate_owner / snapshot_coverage owns the current active-gate snapshot coverage decision`
+2. `operation_workflow_owner / workflow_progress is the prior migrated priority recovery boundary and is not current unless proof reselects it`
+3. `startup_readiness_owner / startup_support_evidence is downstream unless proof migrates the active gate readiness contract`
+4. `topology_publication_owner / publication_convergence is frozen unless causal-model proof selects publication convergence as the deciding boundary`
+
+Stable facts:
+
+1. `fresh route selects active_gate_snapshot_coverage with active_gate_timed_out`
+2. `priority recovery residual witness count is zero in the cited representative report`
+3. `recent frontier history already includes repeated startup_active_gate_owner / snapshot_coverage runtime packages`
+4. `runtime promotion is blocked until this package selects a contract, migration, or architecture-gap stop`
+
+Changed facts:
+
+1. `the priority_recovery_partition_progress split did not reproduce on the fresh architecture rerun`
+2. `the active blocker migrated back from operation_workflow_owner / workflow_progress to startup_active_gate_owner / snapshot_coverage`
+3. `prior queue-drain proof moved active-node evidence before the current rerun returned to snapshot coverage`
+
+Competing theories:
+
+1. `H1 startup_active_gate_owner owns a missing snapshot coverage wake, retry, reconcile, drain, or handoff contract`
+2. `H2 typed snapshot handoff ownership belongs to startup_readiness_owner or another consumer boundary`
+3. `H3 no existing owner contract can connect the available evidence to coverage progress, so the correct result is architecture-gap`
+4. `H4 selected-source timeout is only a downstream symptom that becomes actionable after snapshot coverage moves`
+
+Eliminated theories:
+
+1. `pending ACK or recovery eligibility is not the current first frontier because priority recovery residual witnesses are zero`
+2. `priority_recovery_partition_progress is not the current first frontier in the fresh route result`
+3. `generic timeout, transport, admin API, table bootstrap, and promotion-gate edits are frozen because the cited artifact does not select them`
+
+Downstream symptoms:
+
+1. `selected-source timeout remains downstream until active gate snapshot coverage progress is selected`
+2. `startup readiness remains downstream unless the architecture proof migrates ownership`
+3. `benchmark table bootstrap remains downstream while active gate snapshot coverage is incomplete`
+
+Transition table:
+
+1. Input `priorityRecoveryResiduals.witnessCount=0 plus active_gate_snapshot_coverage with active_gate_timed_out` owner `startup_active_gate_owner / snapshot_coverage`; missing `owner-owned wake, retry, reconcile, drain, or handoff contract from available evidence to snapshot coverage progress`; expected `scenario-route, frontier-history, and causal-model proof select the contract, owner-boundary migration, or architecture-gap stop`; falsifier `npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage`; migration trigger `proof names a different deciding owner for the snapshot coverage transition`
+2. Input `selected-source timeout remains visible after active gate coverage stalls` owner `downstream selected-source owner is frozen until upstream coverage progresses`; missing `evidence that selected-source timeout precedes snapshot coverage rather than inheriting from it`; expected `causal-model proof reorders the phase chain and names selected-source as the first frontier`; falsifier `npm run analyze:causal-model -- test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json`; migration trigger `causal-model proof shows selected-source timeout is upstream of active_gate_snapshot_coverage`
+
+Ownership migration triggers:
+
+1. `scenario-route or causal-model proof names startup_readiness_owner / startup_support_evidence as the deciding boundary`
+2. `proof names typed snapshot handoff ownership outside startup_active_gate_owner / snapshot_coverage`
+3. `proof selects selected-source or topology publication as upstream of active_gate_snapshot_coverage`
+
+Architecture-gap triggers:
+
+1. `scenario-route, frontier-history, and causal-model proof cannot select an owner-owned contract`
+2. `proof would require runtime source edits before selecting the source/test contract`
+3. `fresh evidence repeats the same frontier after a selected local contract without movement`
+
+Whole-system invariant: No runtime patch is valid until the architecture proof selects one owner-owned snapshot coverage transition, one owner-boundary migration, or an architecture-gap stop.
+
+## Slice Theory
+
+System theory reference: systemTheory in this package and the active sprint Current Edge Card
+
+Selected system theory: H1 startup_active_gate_owner owns a missing snapshot coverage wake, retry, reconcile, drain, or handoff contract, with H2 ownership migration and H3 architecture-gap as live alternates.
+
+Selected mechanism: contract_gap with ownership_gap alternate
+
+Source/test contract: This package makes no runtime source or test edits; it must select the concrete snapshot coverage source/test contract or migration before any runtime child package opens.
+
+Falsifier: npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage
+
+Representative expected movement: selected snapshot coverage contract, owner-boundary migration, or architecture-gap stop before runtime promotion
+
+Kill rule: If proof cannot select a concrete contract or migration, stop as architecture-gap instead of opening another same-frontier runtime patch.
+
+Theory-fit score:
+
+1. `evidenceFit`: high - fresh route, zero priority residual witnesses, and frontier history all select the same snapshot coverage frontier
+2. `ownerBoundaryFit`: medium - startup_active_gate_owner is currently selected, while typed handoff ownership remains a live migration alternate
+3. `falsifiability`: high - scenario-route, frontier-history, and causal-model commands can falsify the selected owner boundary before edits
+4. `representativeMovement`: medium - the expected movement is architecture route selection before representative-green runtime proof
+5. `downstreamRiskContainment`: high - downstream timeout, readiness, and bootstrap symptoms stay frozen until the owner contract is selected
+
+Wrong-slice triggers:
+
+1. `proof selects startup_readiness_owner, selected-source, topology publication, or another owner boundary`
+2. `proof requires editing src/ or test/ before the architecture route is selected`
+3. `proof cannot name a contract or migration and therefore must close as architecture-gap`
+4. `fresh representative evidence contradicts active_gate_snapshot_coverage as the first frontier`
 
 ## Theory Ledger References
 
@@ -242,6 +349,21 @@ Write scope:
 2. `work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md`
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`
+5. `.kiro/steering/schemas/work-package.schema.json`
+6. `.kiro/steering/workflow-guidelines/closure.md`
+7. `scripts/work-package-new.js`
+8. `scripts/work-package-schema.js`
+9. `scripts/work-subagent-prompt.js`
+10. `scripts/work-tracker.js`
+11. `test/scripts/work-tracker-contract-ledger.test.js`
+12. `test/scripts/work-tracker-subagent-ledger-fixtures.js`
+13. `work/README.md`
+14. `work/RULES.md`
+15. `work/templates/sprint-strategy-brief.md`
+16. `.kiro/steering/llm/governance.md`
+17. `.kiro/steering/llm/manifest.json`
+18. `.kiro/steering/llm/rules.json`
+19. `test/scripts/work-llm-usability-tools.test.js`
 
 Handoff files:
 
@@ -265,6 +387,21 @@ Commit scope:
 2. `work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md`
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`
+5. `.kiro/steering/schemas/work-package.schema.json`
+6. `.kiro/steering/workflow-guidelines/closure.md`
+7. `scripts/work-package-new.js`
+8. `scripts/work-package-schema.js`
+9. `scripts/work-subagent-prompt.js`
+10. `scripts/work-tracker.js`
+11. `test/scripts/work-tracker-contract-ledger.test.js`
+12. `test/scripts/work-tracker-subagent-ledger-fixtures.js`
+13. `work/README.md`
+14. `work/RULES.md`
+15. `work/templates/sprint-strategy-brief.md`
+16. `.kiro/steering/llm/governance.md`
+17. `.kiro/steering/llm/manifest.json`
+18. `.kiro/steering/llm/rules.json`
+19. `test/scripts/work-llm-usability-tools.test.js`
 
 Legacy touched files:
 

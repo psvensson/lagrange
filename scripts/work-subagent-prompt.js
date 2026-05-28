@@ -9,6 +9,9 @@ import {
   MODEL_FIT_SPLIT_SAFE_TO_EXECUTE_WHEN_FIELD,
   MODEL_FIT_SPLIT_SPLIT_TRIGGERS_FIELD,
   MODEL_FIT_SPLIT_TARGET_MODEL_FIELD,
+  SLICE_THEORY_FIELD,
+  SYSTEM_THEORY_FIELD,
+  THEORY_FIT_SCORE_FIELDS,
   SUBAGENT_ATTEMPT_STATUSES,
   VALID_OUTPUT_PROFILES,
   defaultOutputProfileForLane,
@@ -243,6 +246,84 @@ function decisionExperimentGate(content) {
   ) || 'Not recorded.';
 }
 
+function transitionRows(rows = []) {
+  const normalizedRows = Array.isArray(rows) ? rows : [];
+  if (normalizedRows.length === NUM_ZERO) {
+    return '- None recorded.';
+  }
+  return normalizedRows.map((row) =>
+    '- Input ' +
+    `\`${normalizeText(row.inputSignal) || 'unknown'}\`; owner ` +
+    `\`${normalizeText(row.owner) || 'unknown'}\`; missing ` +
+    `\`${normalizeText(row.missingTransition) || 'unknown'}\`; expected ` +
+    `\`${normalizeText(row.expectedEvidence) || 'unknown'}\`; falsifier ` +
+    `\`${normalizeText(row.falsifier) || 'unknown'}\`; migration trigger ` +
+    `\`${normalizeText(row.migrationTrigger) || 'unknown'}\`.`,
+  ).join(NEWLINE);
+}
+
+function theoryFitScore(score = {}) {
+  if (!score || typeof score !== 'object' || Array.isArray(score)) {
+    return '- None recorded.';
+  }
+  return THEORY_FIT_SCORE_FIELDS.map((fieldName) =>
+    `- \`${fieldName}\`: ${normalizeText(score[fieldName]) || 'unknown'}`,
+  ).join(NEWLINE);
+}
+
+function twoLevelTheoryLines(metadata = {}) {
+  const systemTheory = metadata[SYSTEM_THEORY_FIELD];
+  const sliceTheory = metadata[SLICE_THEORY_FIELD];
+  if (!systemTheory && !sliceTheory) {
+    return [
+      '## Two-Level Theory',
+      EMPTY_TEXT,
+      'Not recorded.',
+    ];
+  }
+  return [
+    '## System Theory',
+    EMPTY_TEXT,
+    `Problem statement: ${normalizeText(systemTheory?.problemStatement) || 'unknown'}`,
+    EMPTY_TEXT,
+    'Phase chain:',
+    plainList(systemTheory?.phaseChain),
+    EMPTY_TEXT,
+    'Owner-boundary map:',
+    plainList(systemTheory?.ownerBoundaryMap),
+    EMPTY_TEXT,
+    'Competing theories:',
+    plainList(systemTheory?.competingTheories),
+    EMPTY_TEXT,
+    'Eliminated theories:',
+    plainList(systemTheory?.eliminatedTheories),
+    EMPTY_TEXT,
+    'Downstream symptoms:',
+    plainList(systemTheory?.downstreamSymptoms),
+    EMPTY_TEXT,
+    'Transition table:',
+    transitionRows(systemTheory?.transitionTable),
+    EMPTY_TEXT,
+    `Whole-system invariant: ${normalizeText(systemTheory?.wholeSystemInvariant) || 'unknown'}`,
+    EMPTY_TEXT,
+    '## Slice Theory',
+    EMPTY_TEXT,
+    `System theory reference: ${normalizeText(sliceTheory?.systemTheoryRef) || 'unknown'}`,
+    `Selected system theory: ${normalizeText(sliceTheory?.selectedSystemTheory) || 'unknown'}`,
+    `Selected mechanism: ${normalizeText(sliceTheory?.selectedMechanism) || 'unknown'}`,
+    `Source/test contract: ${normalizeText(sliceTheory?.sourceTestContract) || 'unknown'}`,
+    `Falsifier: ${normalizeText(sliceTheory?.falsifier) || 'unknown'}`,
+    `Representative movement: ${normalizeText(sliceTheory?.representativeExpectedMovement) || 'unknown'}`,
+    `Kill rule: ${normalizeText(sliceTheory?.killRule) || 'unknown'}`,
+    EMPTY_TEXT,
+    'Theory-fit score:',
+    theoryFitScore(sliceTheory?.theoryFitScore),
+    EMPTY_TEXT,
+    'Wrong-slice triggers:',
+    plainList(sliceTheory?.wrongSliceTriggers),
+  ];
+}
+
 function roleTask(role, metadata, packagePath) {
   if (role === ROLE_VERIFICATION_FIX) {
     return [
@@ -295,16 +376,16 @@ function ledgerLine(role, packagePath, flags = {}) {
   }
   if (role === ROLE_FIX) {
     return `- [x] action: fix; owner: ${ownerValue}; ` +
-      `files-changed: <paths or none>; validation: fixed ${packagePath}; ` +
+      `files-changed: concrete paths fixed or none; validation: fixed ${packagePath}; ` +
       'outcome: validated.';
   }
   if (role === ROLE_VERIFICATION_FIX) {
     return `- [x] action: verification-fix; owner: ${ownerValue}; ` +
-      `files-changed: <paths or none>; validation: verified and fixed ${packagePath}; ` +
+      `files-changed: concrete paths fixed or none; validation: verified and fixed ${packagePath}; ` +
       'parent revalidated focused proof: yes; outcome: validated.';
   }
   return `- [x] action: implementation; owner: ${ownerValue}; ` +
-    `files-changed: <paths or none>; validation: implemented ${packagePath}; ` +
+    `files-changed: concrete paths changed or none; validation: implemented ${packagePath}; ` +
     'parent revalidated focused proof: yes; outcome: validated.';
 }
 
@@ -506,6 +587,8 @@ function buildSubagentPrompt(role, packagePath, content, args = []) {
     EMPTY_TEXT,
     decisionExperimentGate(content),
     EMPTY_TEXT,
+    ...twoLevelTheoryLines(metadata),
+    EMPTY_TEXT,
     '## Systemic Thinking Check',
     EMPTY_TEXT,
     '- Treat this role as part of the Decision Experiment Gate: test the decision question before treating implementation as justified.',
@@ -578,8 +661,9 @@ function buildSubagentPrompt(role, packagePath, content, args = []) {
     EMPTY_TEXT,
     'Use this shape:',
     EMPTY_TEXT,
-    `- [ ] action: ${role}; owner: ${metadata.owner || '<owner>'}; files-changed: <paths or none>; validation: <command/result/files>; outcome: <running|partial-unvalidated|validated|superseded|blocked>.`,
-    `- [ ] action: ${role} falsification; owner: ${metadata.owner || '<owner>'}; files-changed: none; validation: wrong-slice evidence would be <owner/boundary/result change>; outcome: validated.`,
+    `- [ ] action: ${role}; owner: ${metadata.owner || 'unassigned-owner'}; files-changed: none; validation: npm run work:validate -- --pre-impl ${packagePath}; outcome: running.`,
+    `- [ ] action: ${role} falsification; owner: ${metadata.owner || 'unassigned-owner'}; files-changed: none; validation: wrong-slice evidence would change the recorded owner, boundary, or representative result; outcome: validated.`,
+    'Before checking an item, replace `none`, `running`, and the example validation command with the concrete edited paths, final result, and commands actually run.',
     EMPTY_TEXT,
     'If blocked, append `blocker:` instead of `next:` and stop for the parent session rather than continuing silently.',
     EMPTY_TEXT,

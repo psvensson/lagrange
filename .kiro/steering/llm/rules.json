@@ -99,12 +99,12 @@
     }
   ],
   "stats": {
-    "candidateCount": 326,
-    "dedupedRuleCount": 319,
-    "exportedRuleCount": 319,
+    "candidateCount": 329,
+    "dedupedRuleCount": 322,
+    "exportedRuleCount": 322,
     "aliasRuleCount": 11,
-    "masterRuleCount": 308,
-    "estimatedAllRulesTokens": 12537
+    "masterRuleCount": 311,
+    "estimatedAllRulesTokens": 12640
   },
   "rules": [
     {
@@ -1565,23 +1565,6 @@
       "id": "GOV-0005",
       "domain": "governance",
       "strength": "must_not",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "Do not create another classification-only package from the same unchanged artifact unless owner/boundary, package class, or stop condition changes. Close, rerun fresh evidence, or escalate.",
-      "score": 221,
-      "sources": [
-        {
-          "file": "workflow-guidelines/closure.md",
-          "line": 212,
-          "section": "Workflow — Decision & Closure Gates > Classification-Only Fast Path"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0006",
-      "domain": "governance",
-      "strength": "must_not",
       "tags": [],
       "rule": "Escalate to causal analysis when repeated local fixes or classifications do not make the representative gate pass.",
       "score": 221,
@@ -1594,7 +1577,7 @@
       ]
     },
     {
-      "id": "GOV-0007",
+      "id": "GOV-0006",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -1609,7 +1592,7 @@
       ]
     },
     {
-      "id": "GOV-0008",
+      "id": "GOV-0007",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -1624,7 +1607,7 @@
       ]
     },
     {
-      "id": "GOV-0009",
+      "id": "GOV-0008",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -1639,7 +1622,7 @@
       ]
     },
     {
-      "id": "GOV-0010",
+      "id": "GOV-0009",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -1650,6 +1633,23 @@
           "file": "workflow-guidelines/subagents.md",
           "line": 210,
           "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0010",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "Do not create another classification-only package from the same unchanged artifact unless owner/boundary, package class, or stop condition changes. Close, rerun fresh evidence, or escalate.",
+      "score": 220,
+      "sources": [
+        {
+          "file": "workflow-guidelines/closure.md",
+          "line": 260,
+          "section": "Workflow — Decision & Closure Gates > Classification-Only Fast Path"
         }
       ]
     },
@@ -1665,7 +1665,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 351,
+          "line": 399,
           "section": "Workflow — Decision & Closure Gates > Sprint Architecture Decision Gate"
         }
       ]
@@ -1680,7 +1680,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 427,
+          "line": 475,
           "section": "Workflow — Decision & Closure Gates > Scenario Failure Migration"
         }
       ]
@@ -1693,11 +1693,11 @@
         "ownership"
       ],
       "rule": "Escalate to causal analysis when two focused fixes in adjacent owner boundaries are green locally but do not produce representative green or monotonic representative reduction.",
-      "score": 220,
+      "score": 219,
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 469,
+          "line": 517,
           "section": "Workflow — Decision & Closure Gates > Frontier Oscillation Escalation"
         }
       ]
@@ -2424,7 +2424,7 @@
           "section": "Testing — Harness & Execution > Test Duration Hard Limit"
         }
       ],
-      "canonical_of": "GOV-0027"
+      "canonical_of": "GOV-0028"
     },
     {
       "id": "TEST-0043",
@@ -2497,19 +2497,36 @@
       "id": "GOV-0016",
       "domain": "governance",
       "strength": "must_not",
-      "tags": [],
-      "rule": "Do not open another classification package from the same unchanged artifact.",
+      "tags": [
+        "readiness"
+      ],
+      "rule": "Do not treat those packages as pre-implementation ready unless they record both systemTheory and sliceTheory with the fields below.",
       "score": 211,
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 240,
-          "section": "Workflow — Decision & Closure Gates > Classification Efficiency Contract"
+          "line": 129,
+          "section": "Workflow — Decision & Closure Gates > Two-Level Theory Contract"
         }
       ]
     },
     {
       "id": "GOV-0017",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "If the system theory cannot select a slice, do not open another local runtime patch.",
+      "score": 211,
+      "sources": [
+        {
+          "file": "workflow-guidelines/closure.md",
+          "line": 166,
+          "section": "Workflow — Decision & Closure Gates > Two-Level Theory Contract"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0018",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2526,7 +2543,7 @@
       ]
     },
     {
-      "id": "GOV-0018",
+      "id": "GOV-0019",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2546,7 +2563,7 @@
       ]
     },
     {
-      "id": "GOV-0019",
+      "id": "GOV-0020",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2561,7 +2578,7 @@
       ]
     },
     {
-      "id": "GOV-0020",
+      "id": "GOV-0021",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2578,7 +2595,7 @@
       ]
     },
     {
-      "id": "GOV-0021",
+      "id": "GOV-0022",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2595,7 +2612,7 @@
       ]
     },
     {
-      "id": "GOV-0022",
+      "id": "GOV-0023",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2612,7 +2629,7 @@
       ]
     },
     {
-      "id": "GOV-0023",
+      "id": "GOV-0024",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2627,7 +2644,7 @@
       ]
     },
     {
-      "id": "GOV-0024",
+      "id": "GOV-0025",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2642,7 +2659,7 @@
       ]
     },
     {
-      "id": "GOV-0025",
+      "id": "GOV-0026",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2659,7 +2676,7 @@
       ]
     },
     {
-      "id": "GOV-0026",
+      "id": "GOV-0027",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2674,7 +2691,7 @@
       ]
     },
     {
-      "id": "GOV-0027",
+      "id": "GOV-0028",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2692,7 +2709,7 @@
       ]
     },
     {
-      "id": "GOV-0028",
+      "id": "GOV-0029",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2707,6 +2724,21 @@
           "file": "workflow-guidelines/validators.md",
           "line": 35,
           "section": "Workflow — Validators & Drift > Static Drift Ledger"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0030",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Do not open another classification package from the same unchanged artifact.",
+      "score": 210,
+      "sources": [
+        {
+          "file": "workflow-guidelines/closure.md",
+          "line": 288,
+          "section": "Workflow — Decision & Closure Gates > Classification Efficiency Contract"
         }
       ]
     },
@@ -2776,7 +2808,7 @@
       ]
     },
     {
-      "id": "GOV-0029",
+      "id": "GOV-0031",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2793,7 +2825,7 @@
       ]
     },
     {
-      "id": "GOV-0030",
+      "id": "GOV-0032",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -2808,7 +2840,7 @@
       ]
     },
     {
-      "id": "GOV-0031",
+      "id": "GOV-0033",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2825,7 +2857,7 @@
       ]
     },
     {
-      "id": "GOV-0032",
+      "id": "GOV-0034",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2843,7 +2875,7 @@
       ]
     },
     {
-      "id": "GOV-0033",
+      "id": "GOV-0035",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2860,7 +2892,7 @@
       ]
     },
     {
-      "id": "GOV-0034",
+      "id": "GOV-0036",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3238,7 +3270,7 @@
       ]
     },
     {
-      "id": "GOV-0035",
+      "id": "GOV-0037",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3255,7 +3287,7 @@
       ]
     },
     {
-      "id": "GOV-0036",
+      "id": "GOV-0038",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3272,7 +3304,7 @@
       ]
     },
     {
-      "id": "GOV-0037",
+      "id": "GOV-0039",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3281,13 +3313,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 150,
+          "line": 198,
           "section": "Workflow — Decision & Closure Gates > Discovery Gate"
         }
       ]
     },
     {
-      "id": "GOV-0038",
+      "id": "GOV-0040",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3298,13 +3330,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 152,
+          "line": 200,
           "section": "Workflow — Decision & Closure Gates > Discovery Gate"
         }
       ]
     },
     {
-      "id": "GOV-0039",
+      "id": "GOV-0041",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3319,7 +3351,7 @@
       ]
     },
     {
-      "id": "GOV-0040",
+      "id": "GOV-0042",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3336,7 +3368,7 @@
       ]
     },
     {
-      "id": "GOV-0041",
+      "id": "GOV-0043",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3385,7 +3417,7 @@
       ]
     },
     {
-      "id": "GOV-0042",
+      "id": "GOV-0044",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3402,7 +3434,7 @@
       ]
     },
     {
-      "id": "GOV-0043",
+      "id": "GOV-0045",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3413,13 +3445,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 287,
+          "line": 335,
           "section": "Workflow — Decision & Closure Gates > Sprint Architecture Decision Gate"
         }
       ]
     },
     {
-      "id": "GOV-0044",
+      "id": "GOV-0046",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3430,13 +3462,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 310,
+          "line": 358,
           "section": "Workflow — Decision & Closure Gates > Sprint Architecture Decision Gate"
         }
       ]
     },
     {
-      "id": "GOV-0045",
+      "id": "GOV-0047",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3445,13 +3477,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 342,
+          "line": 390,
           "section": "Workflow — Decision & Closure Gates > Sprint Architecture Decision Gate"
         }
       ]
     },
     {
-      "id": "GOV-0046",
+      "id": "GOV-0048",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3462,7 +3494,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 424,
+          "line": 472,
           "section": "Workflow — Decision & Closure Gates > Scenario Failure Migration"
         }
       ]
@@ -3619,7 +3651,7 @@
       ]
     },
     {
-      "id": "GOV-0047",
+      "id": "GOV-0049",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3634,7 +3666,7 @@
       ]
     },
     {
-      "id": "GOV-0048",
+      "id": "GOV-0050",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3652,7 +3684,7 @@
       ]
     },
     {
-      "id": "GOV-0049",
+      "id": "GOV-0051",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3890,7 +3922,7 @@
       ]
     },
     {
-      "id": "GOV-0050",
+      "id": "GOV-0052",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3906,13 +3938,13 @@
         },
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 247,
+          "line": 295,
           "section": "Workflow — Decision & Closure Gates > Decision Experiment Gate"
         }
       ]
     },
     {
-      "id": "GOV-0051",
+      "id": "GOV-0053",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3929,7 +3961,7 @@
       ]
     },
     {
-      "id": "GOV-0052",
+      "id": "GOV-0054",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3944,7 +3976,7 @@
       ]
     },
     {
-      "id": "GOV-0053",
+      "id": "GOV-0055",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3961,7 +3993,7 @@
       ]
     },
     {
-      "id": "GOV-0054",
+      "id": "GOV-0056",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3976,7 +4008,24 @@
       ]
     },
     {
-      "id": "GOV-0055",
+      "id": "GOV-0057",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "Active causal-escalation, architecture-gated, owner-boundary migration, and repeated-frontier packages must split theory into two metadata levels before implementation.",
+      "score": 193,
+      "sources": [
+        {
+          "file": "workflow-guidelines/closure.md",
+          "line": 125,
+          "section": "Workflow — Decision & Closure Gates > Two-Level Theory Contract"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0058",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3993,7 +4042,7 @@
       ]
     },
     {
-      "id": "GOV-0056",
+      "id": "GOV-0059",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4008,7 +4057,7 @@
       ]
     },
     {
-      "id": "GOV-0057",
+      "id": "GOV-0060",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4023,7 +4072,7 @@
       ]
     },
     {
-      "id": "GOV-0058",
+      "id": "GOV-0061",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4038,7 +4087,7 @@
       ]
     },
     {
-      "id": "GOV-0059",
+      "id": "GOV-0062",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4055,7 +4104,7 @@
       ]
     },
     {
-      "id": "GOV-0060",
+      "id": "GOV-0063",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4070,7 +4119,7 @@
       ]
     },
     {
-      "id": "GOV-0061",
+      "id": "GOV-0064",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4085,7 +4134,7 @@
       ]
     },
     {
-      "id": "GOV-0062",
+      "id": "GOV-0065",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4100,7 +4149,7 @@
       ]
     },
     {
-      "id": "GOV-0063",
+      "id": "GOV-0066",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4115,7 +4164,7 @@
       ]
     },
     {
-      "id": "GOV-0064",
+      "id": "GOV-0067",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4132,7 +4181,7 @@
       ]
     },
     {
-      "id": "GOV-0065",
+      "id": "GOV-0068",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4147,7 +4196,7 @@
       ]
     },
     {
-      "id": "GOV-0066",
+      "id": "GOV-0069",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4162,7 +4211,7 @@
       ]
     },
     {
-      "id": "GOV-0067",
+      "id": "GOV-0070",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4194,7 +4243,7 @@
       ]
     },
     {
-      "id": "GOV-0068",
+      "id": "GOV-0071",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4205,13 +4254,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 379,
+          "line": 427,
           "section": "Workflow — Decision & Closure Gates > Scenario Causal Closure Ledger"
         }
       ]
     },
     {
-      "id": "GOV-0069",
+      "id": "GOV-0072",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4222,7 +4271,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 430,
+          "line": 478,
           "section": "Workflow — Decision & Closure Gates > Scenario Failure Migration"
         }
       ]
@@ -4317,7 +4366,7 @@
       ]
     },
     {
-      "id": "GOV-0070",
+      "id": "GOV-0073",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -4336,7 +4385,7 @@
       ]
     },
     {
-      "id": "GOV-0071",
+      "id": "GOV-0074",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4555,7 +4604,7 @@
       ]
     },
     {
-      "id": "GOV-0072",
+      "id": "GOV-0075",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4570,7 +4619,7 @@
       ]
     },
     {
-      "id": "GOV-0073",
+      "id": "GOV-0076",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4585,7 +4634,7 @@
       ]
     },
     {
-      "id": "GOV-0074",
+      "id": "GOV-0077",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4594,13 +4643,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 322,
+          "line": 370,
           "section": "Workflow — Decision & Closure Gates > Sprint Architecture Decision Gate"
         }
       ]
     },
     {
-      "id": "GOV-0075",
+      "id": "GOV-0078",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4612,13 +4661,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 326,
+          "line": 374,
           "section": "Workflow — Decision & Closure Gates > Sprint Architecture Decision Gate"
         }
       ]
     },
     {
-      "id": "GOV-0076",
+      "id": "GOV-0079",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4629,7 +4678,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 420,
+          "line": 468,
           "section": "Workflow — Decision & Closure Gates > Scenario Failure Migration"
         }
       ]
@@ -4767,7 +4816,7 @@
       ]
     },
     {
-      "id": "GOV-0077",
+      "id": "GOV-0080",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4782,7 +4831,7 @@
       ]
     },
     {
-      "id": "GOV-0078",
+      "id": "GOV-0081",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4791,7 +4840,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 154,
+          "line": 202,
           "section": "Workflow — Decision & Closure Gates > Discovery Gate"
         }
       ]
@@ -4872,7 +4921,7 @@
       ]
     },
     {
-      "id": "GOV-0079",
+      "id": "GOV-0082",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4890,7 +4939,7 @@
       ]
     },
     {
-      "id": "GOV-0080",
+      "id": "GOV-0083",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4907,7 +4956,7 @@
       ]
     },
     {
-      "id": "GOV-0081",
+      "id": "GOV-0084",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4924,18 +4973,18 @@
       ]
     },
     {
-      "id": "GOV-0082",
+      "id": "GOV-0085",
       "domain": "governance",
       "strength": "must",
       "tags": [
         "ownership"
       ],
       "rule": "If the same two boundaries alternate again without representative green or monotonic reduction, the next validation surface must be a replayable handoff fixture or missing-edge probe that includes both owners before more runtime edits start.",
-      "score": 168,
+      "score": 167,
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 488,
+          "line": 536,
           "section": "Workflow — Decision & Closure Gates > Frontier Oscillation Escalation"
         }
       ]
@@ -4988,7 +5037,7 @@
       ]
     },
     {
-      "id": "GOV-0083",
+      "id": "GOV-0086",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5037,7 +5086,7 @@
       ]
     },
     {
-      "id": "GOV-0084",
+      "id": "GOV-0087",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5054,7 +5103,7 @@
       ]
     },
     {
-      "id": "GOV-0085",
+      "id": "GOV-0088",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5071,7 +5120,7 @@
       ]
     },
     {
-      "id": "GOV-0086",
+      "id": "GOV-0089",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5101,7 +5150,7 @@
       ]
     },
     {
-      "id": "GOV-0087",
+      "id": "GOV-0090",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5133,7 +5182,7 @@
       ]
     },
     {
-      "id": "GOV-0088",
+      "id": "GOV-0091",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5150,7 +5199,7 @@
       ]
     },
     {
-      "id": "GOV-0089",
+      "id": "GOV-0092",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5165,7 +5214,7 @@
       ]
     },
     {
-      "id": "GOV-0090",
+      "id": "GOV-0093",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5180,7 +5229,7 @@
       ]
     },
     {
-      "id": "GOV-0091",
+      "id": "GOV-0094",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5197,7 +5246,7 @@
       ]
     },
     {
-      "id": "GOV-0092",
+      "id": "GOV-0095",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5212,7 +5261,7 @@
       ]
     },
     {
-      "id": "GOV-0093",
+      "id": "GOV-0096",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5229,7 +5278,7 @@
       ]
     },
     {
-      "id": "GOV-0094",
+      "id": "GOV-0097",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5244,7 +5293,7 @@
       ]
     },
     {
-      "id": "GOV-0095",
+      "id": "GOV-0098",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5255,13 +5304,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 277,
+          "line": 325,
           "section": "Workflow — Decision & Closure Gates > Sprint Architecture Decision Gate"
         }
       ]
     },
     {
-      "id": "GOV-0096",
+      "id": "GOV-0099",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5269,26 +5318,26 @@
         "readiness"
       ],
       "rule": "If an active package is already in the causal-escalation lane, it may continue only when it explicitly owns that handoff, names the missing cross-boundary causal edge, and keeps same-owner evidence in the same package.",
-      "score": 144,
+      "score": 143,
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 473,
+          "line": 521,
           "section": "Workflow — Decision & Closure Gates > Frontier Oscillation Escalation"
         }
       ]
     },
     {
-      "id": "GOV-0097",
+      "id": "GOV-0100",
       "domain": "governance",
       "strength": "may",
       "tags": [],
       "rule": "No further runtime patch in either oscillating boundary may start until that handoff package identifies the failing causal edge.",
-      "score": 144,
+      "score": 143,
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 488,
+          "line": 536,
           "section": "Workflow — Decision & Closure Gates > Frontier Oscillation Escalation"
         }
       ]
@@ -5309,7 +5358,7 @@
       ]
     },
     {
-      "id": "GOV-0098",
+      "id": "GOV-0101",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5326,7 +5375,7 @@
       ]
     },
     {
-      "id": "GOV-0099",
+      "id": "GOV-0102",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5343,7 +5392,7 @@
       ]
     },
     {
-      "id": "GOV-0100",
+      "id": "GOV-0103",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5360,7 +5409,7 @@
       ]
     },
     {
-      "id": "GOV-0101",
+      "id": "GOV-0104",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5379,7 +5428,7 @@
       ]
     },
     {
-      "id": "GOV-0102",
+      "id": "GOV-0105",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5396,7 +5445,7 @@
       ]
     },
     {
-      "id": "GOV-0103",
+      "id": "GOV-0106",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5407,11 +5456,11 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 379,
+          "line": 427,
           "section": "Workflow — Decision & Closure Gates > Scenario Causal Closure Ledger"
         }
       ]
     }
   ],
-  "generatedAt": "2026-05-28T08:36:33.028Z"
+  "generatedAt": "2026-05-28T11:25:42.285Z"
 }

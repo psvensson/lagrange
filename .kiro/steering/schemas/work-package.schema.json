@@ -328,6 +328,144 @@
         "escalationRule": { "type": "string" }
       },
       "additionalProperties": false
+    },
+    "systemTheory": {
+      "type": "object",
+      "required": [
+        "problemStatement",
+        "phaseChain",
+        "ownerBoundaryMap",
+        "stableFacts",
+        "changedFacts",
+        "competingTheories",
+        "eliminatedTheories",
+        "downstreamSymptoms",
+        "transitionTable",
+        "ownershipMigrationTriggers",
+        "architectureGapTriggers",
+        "wholeSystemInvariant"
+      ],
+      "properties": {
+        "problemStatement": { "type": "string" },
+        "phaseChain": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "type": "string" }
+        },
+        "ownerBoundaryMap": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        },
+        "stableFacts": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        },
+        "changedFacts": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        },
+        "competingTheories": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "type": "string" }
+        },
+        "eliminatedTheories": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        },
+        "downstreamSymptoms": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        },
+        "transitionTable": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": [
+              "inputSignal",
+              "owner",
+              "missingTransition",
+              "expectedEvidence",
+              "falsifier",
+              "migrationTrigger"
+            ],
+            "properties": {
+              "inputSignal": { "type": "string" },
+              "owner": { "type": "string" },
+              "missingTransition": { "type": "string" },
+              "expectedEvidence": { "type": "string" },
+              "falsifier": { "type": "string" },
+              "migrationTrigger": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "ownershipMigrationTriggers": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        },
+        "architectureGapTriggers": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        },
+        "wholeSystemInvariant": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "sliceTheory": {
+      "type": "object",
+      "required": [
+        "systemTheoryRef",
+        "selectedSystemTheory",
+        "selectedMechanism",
+        "sourceTestContract",
+        "falsifier",
+        "representativeExpectedMovement",
+        "killRule",
+        "theoryFitScore",
+        "wrongSliceTriggers"
+      ],
+      "properties": {
+        "systemTheoryRef": { "type": "string" },
+        "selectedSystemTheory": { "type": "string" },
+        "selectedMechanism": { "type": "string" },
+        "sourceTestContract": { "type": "string" },
+        "falsifier": { "type": "string" },
+        "representativeExpectedMovement": { "type": "string" },
+        "killRule": { "type": "string" },
+        "theoryFitScore": {
+          "type": "object",
+          "required": [
+            "evidenceFit",
+            "ownerBoundaryFit",
+            "falsifiability",
+            "representativeMovement",
+            "downstreamRiskContainment"
+          ],
+          "properties": {
+            "evidenceFit": { "type": "string" },
+            "ownerBoundaryFit": { "type": "string" },
+            "falsifiability": { "type": "string" },
+            "representativeMovement": { "type": "string" },
+            "downstreamRiskContainment": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "wrongSliceTriggers": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
     }
   }
 }

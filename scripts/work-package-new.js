@@ -9,6 +9,7 @@ import {buildRepresentativeEvidenceSummary} from './summarize-representative-evi
 import {buildSummary, readLedgerEntries} from './model-ledger.js';
 import {parsePackageMetadata} from './work-tracker.js';
 import {
+  ARCHITECTURE_DECISION_GATE_FIELD,
   CLASSIFICATION_EFFICIENCY_ARTIFACT_BUDGET_FIELD,
   CLASSIFICATION_EFFICIENCY_COMMANDS_FIELD,
   CLASSIFICATION_EFFICIENCY_DECISION_RECORD_FIELD,
@@ -60,11 +61,48 @@ import {
   RERUN_DECISION_ROUTE_OWNER_FIELD,
   RERUN_DECISION_SOURCE_ARTIFACT_FIELD,
   RERUN_DECISION_STOP_MODE_FIELD,
+  OWNER_BOUNDARY_MIGRATION_PROOF_FIELD,
   SCOPE_FIELD_CANDIDATE_RUNTIME_FILES,
   SCOPE_FIELD_COMMIT_SCOPE,
   SCOPE_FIELD_GENERATED_FILES,
   SCOPE_FIELD_HANDOFF_FILES,
   SCOPE_FIELD_WRITE_SCOPE,
+  SLICE_THEORY_FALSIFIER_FIELD,
+  SLICE_THEORY_FIELD,
+  SLICE_THEORY_KILL_RULE_FIELD,
+  SLICE_THEORY_REPRESENTATIVE_MOVEMENT_FIELD,
+  SLICE_THEORY_SELECTED_MECHANISM_FIELD,
+  SLICE_THEORY_SELECTED_THEORY_FIELD,
+  SLICE_THEORY_SOURCE_TEST_CONTRACT_FIELD,
+  SLICE_THEORY_SYSTEM_REF_FIELD,
+  SLICE_THEORY_THEORY_FIT_SCORE_FIELD,
+  SLICE_THEORY_WRONG_SLICE_TRIGGERS_FIELD,
+  SYSTEM_THEORY_ARCHITECTURE_GAP_TRIGGERS_FIELD,
+  SYSTEM_THEORY_CHANGED_FACTS_FIELD,
+  SYSTEM_THEORY_COMPETING_THEORIES_FIELD,
+  SYSTEM_THEORY_DOWNSTREAM_SYMPTOMS_FIELD,
+  SYSTEM_THEORY_ELIMINATED_THEORIES_FIELD,
+  SYSTEM_THEORY_FIELD,
+  SYSTEM_THEORY_OWNER_BOUNDARY_MAP_FIELD,
+  SYSTEM_THEORY_OWNERSHIP_MIGRATION_TRIGGERS_FIELD,
+  SYSTEM_THEORY_PHASE_CHAIN_FIELD,
+  SYSTEM_THEORY_PROBLEM_STATEMENT_FIELD,
+  SYSTEM_THEORY_STABLE_FACTS_FIELD,
+  SYSTEM_THEORY_TRANSITION_EXPECTED_EVIDENCE_FIELD,
+  SYSTEM_THEORY_TRANSITION_FALSIFIER_FIELD,
+  SYSTEM_THEORY_TRANSITION_INPUT_SIGNAL_FIELD,
+  SYSTEM_THEORY_TRANSITION_MIGRATION_TRIGGER_FIELD,
+  SYSTEM_THEORY_TRANSITION_MISSING_TRANSITION_FIELD,
+  SYSTEM_THEORY_TRANSITION_OWNER_FIELD,
+  SYSTEM_THEORY_TRANSITION_TABLE_FIELD,
+  SYSTEM_THEORY_WHOLE_SYSTEM_INVARIANT_FIELD,
+  SCENARIO_CAUSAL_CLOSURE_OSCILLATION_CHECK_FIELD,
+  SCENARIO_CAUSAL_CLOSURE_RECENT_FRONTIER_HISTORY_FIELD,
+  THEORY_FIT_SCORE_DOWNSTREAM_RISK_FIELD,
+  THEORY_FIT_SCORE_EVIDENCE_FIT_FIELD,
+  THEORY_FIT_SCORE_FALSIFIABILITY_FIELD,
+  THEORY_FIT_SCORE_OWNER_BOUNDARY_FIT_FIELD,
+  THEORY_FIT_SCORE_REPRESENTATIVE_MOVEMENT_FIELD,
   VALID_PACKAGE_STATUSES,
   VALID_OUTPUT_PROFILES,
   VALIDATION_TIER_FIELD,
@@ -981,6 +1019,237 @@ function buildModelFitSplitLines(metadata = {}) {
   ];
 }
 
+function twoLevelTheoryRequiredForGeneratedPackage(lane, metadata = {}) {
+  const ambiguityScore = Number(metadata.modelFit?.ambiguityScore);
+  return lane === LANE_CAUSAL_ESCALATION ||
+    lane === LANE_SCENARIO_RELEASE_GATE ||
+    hasGeneratedArchitectureDecisionGate(metadata) ||
+    hasGeneratedOwnerMigrationProof(metadata) ||
+    hasGeneratedRepeatedFrontierSignal(metadata) ||
+    (
+      Number.isFinite(ambiguityScore) &&
+      ambiguityScore >= NUM_TWO &&
+      coreLogicBriefRequiredForLane(lane)
+    );
+}
+
+function hasGeneratedArchitectureDecisionGate(metadata = {}) {
+  const gate = metadata[ARCHITECTURE_DECISION_GATE_FIELD];
+  if (!gate || typeof gate !== 'object' || Array.isArray(gate)) {
+    return false;
+  }
+  const status = normalizeText(gate.status);
+  const trigger = normalizeText(gate.trigger);
+  const route = normalizeText(gate.route || gate.selectedRoute);
+  return (
+    status.length > NUM_ZERO &&
+    status !== 'not-required'
+  ) || (
+    trigger.length > NUM_ZERO &&
+    trigger !== 'none'
+  ) || route === 'architecture-package';
+}
+
+function hasGeneratedOwnerMigrationProof(metadata = {}) {
+  const proof = metadata[OWNER_BOUNDARY_MIGRATION_PROOF_FIELD];
+  return Boolean(proof && typeof proof === 'object' && !Array.isArray(proof));
+}
+
+function hasGeneratedRepeatedFrontierSignal(metadata = {}) {
+  const closure = metadata.scenarioCausalClosure;
+  if (!closure || typeof closure !== 'object' || Array.isArray(closure)) {
+    return false;
+  }
+  const recentFrontierHistory =
+    closure[SCENARIO_CAUSAL_CLOSURE_RECENT_FRONTIER_HISTORY_FIELD];
+  if (
+    Array.isArray(recentFrontierHistory) &&
+    recentFrontierHistory.length > NUM_ZERO
+  ) {
+    return true;
+  }
+  return /\b(?:same-frontier|oscillat|repeat|unchanged|no[-\s]+reduction)\b/iu
+    .test([
+      closure[SCENARIO_CAUSAL_CLOSURE_OSCILLATION_CHECK_FIELD],
+      closure.sameFrontierFallback,
+      closure.stopCondition,
+      closure.resultClassification,
+    ].map(normalizeText).join(' '));
+}
+
+function buildTwoLevelTheoryMetadata(
+  lane,
+  metadata = {},
+  proof = [],
+  packagePath = 'work/packages/package.md',
+) {
+  if (!twoLevelTheoryRequiredForGeneratedPackage(lane, metadata)) {
+    return null;
+  }
+  const owner = normalizeText(metadata.owner) || 'unassigned-owner';
+  const boundary = normalizeText(metadata.boundary) || 'unassigned-boundary';
+  const dominantReason =
+    normalizeText(metadata.dominantReason) || 'unclassified-dominant-reason';
+  const scenario = normalizeText(metadata.scenario) || DEFAULT_SCENARIO;
+  const artifact = normalizeText(metadata.artifact) || DEFAULT_ARTIFACT;
+  const falsifier = firstFocusedProofCommand(proof);
+  const ownerBoundary = `${owner} / ${boundary}`;
+  return {
+    [SYSTEM_THEORY_FIELD]: {
+      [SYSTEM_THEORY_PROBLEM_STATEMENT_FIELD]:
+        `${scenario} currently routes ${dominantReason} to ${ownerBoundary}; ` +
+        'the package must explain the whole phase chain before selecting the executable slice.',
+      [SYSTEM_THEORY_PHASE_CHAIN_FIELD]: [
+        `Representative evidence comes from ${artifact}.`,
+        `${dominantReason} is the current selected symptom.`,
+        `${ownerBoundary} is the declared decision boundary for this package.`,
+      ],
+      [SYSTEM_THEORY_OWNER_BOUNDARY_MAP_FIELD]: [
+        `${ownerBoundary}: selected package owner and boundary.`,
+        'Downstream owners remain frozen until the falsifier selects migration.',
+      ],
+      [SYSTEM_THEORY_STABLE_FACTS_FIELD]: [
+        `Scenario remains ${scenario}.`,
+        `Package lane remains ${lane}.`,
+        `Declared owner boundary remains ${ownerBoundary}.`,
+      ],
+      [SYSTEM_THEORY_CHANGED_FACTS_FIELD]: [
+        `This package was opened from ${artifact}.`,
+        `The active action is ${normalizeText(metadata.nextAction) || 'run the declared falsifier before implementation'}.`,
+      ],
+      [SYSTEM_THEORY_COMPETING_THEORIES_FIELD]: [
+        `H1 ${ownerBoundary} owns the missing transition for ${dominantReason}.`,
+        `H2 the same symptom is inherited from a different owner boundary or architecture gap.`,
+      ],
+      [SYSTEM_THEORY_ELIMINATED_THEORIES_FIELD]: [
+        'No eliminated theory is durable until the package proof records a contrary artifact or command result.',
+      ],
+      [SYSTEM_THEORY_DOWNSTREAM_SYMPTOMS_FIELD]: [
+        'Downstream symptoms stay frozen until H1 selects a concrete transition or H2 selects migration.',
+      ],
+      [SYSTEM_THEORY_TRANSITION_TABLE_FIELD]: [
+        {
+          [SYSTEM_THEORY_TRANSITION_INPUT_SIGNAL_FIELD]: dominantReason,
+          [SYSTEM_THEORY_TRANSITION_OWNER_FIELD]: ownerBoundary,
+          [SYSTEM_THEORY_TRANSITION_MISSING_TRANSITION_FIELD]:
+            'selected evidence must become a named owner-owned transition, migration, or stop.',
+          [SYSTEM_THEORY_TRANSITION_EXPECTED_EVIDENCE_FIELD]:
+            'focused proof selects the transition, migrates ownership, or records architecture-gap evidence.',
+          [SYSTEM_THEORY_TRANSITION_FALSIFIER_FIELD]: falsifier,
+          [SYSTEM_THEORY_TRANSITION_MIGRATION_TRIGGER_FIELD]:
+            'the falsifier names a different owner boundary or proves this boundary cannot own the transition.',
+        },
+      ],
+      [SYSTEM_THEORY_OWNERSHIP_MIGRATION_TRIGGERS_FIELD]: [
+        'Migrate only when focused evidence names the alternate deciding owner and boundary.',
+      ],
+      [SYSTEM_THEORY_ARCHITECTURE_GAP_TRIGGERS_FIELD]: [
+        'Stop as architecture-gap when focused evidence cannot select an owner-owned transition or migration.',
+      ],
+      [SYSTEM_THEORY_WHOLE_SYSTEM_INVARIANT_FIELD]:
+        'Runtime edits are allowed only after the system theory selects one owner-owned transition or migration route.',
+    },
+    [SLICE_THEORY_FIELD]: {
+      [SLICE_THEORY_SYSTEM_REF_FIELD]:
+        `${packagePath} ${SYSTEM_THEORY_FIELD}`,
+      [SLICE_THEORY_SELECTED_THEORY_FIELD]:
+        `H1 is selected unless ${falsifier} proves a different owner boundary or architecture gap.`,
+      [SLICE_THEORY_SELECTED_MECHANISM_FIELD]:
+        'contract_gap with ownership_gap as the first alternate',
+      [SLICE_THEORY_SOURCE_TEST_CONTRACT_FIELD]:
+        'Implementation may edit only declared writeScope after the falsifier keeps the package inside the selected owner boundary.',
+      [SLICE_THEORY_FALSIFIER_FIELD]: falsifier,
+      [SLICE_THEORY_REPRESENTATIVE_MOVEMENT_FIELD]:
+        'selected route moves to a concrete transition, owner-boundary migration, or architecture-gap stop.',
+      [SLICE_THEORY_KILL_RULE_FIELD]:
+        'Stop on unchanged same-frontier, no-reduction, or architecture-gap evidence instead of widening the package.',
+      [SLICE_THEORY_THEORY_FIT_SCORE_FIELD]: {
+        [THEORY_FIT_SCORE_EVIDENCE_FIT_FIELD]:
+          'medium - generated from declared package evidence before proof execution.',
+        [THEORY_FIT_SCORE_OWNER_BOUNDARY_FIT_FIELD]:
+          `medium - owner boundary is declared as ${ownerBoundary}.`,
+        [THEORY_FIT_SCORE_FALSIFIABILITY_FIELD]:
+          `high - falsifier is ${falsifier}.`,
+        [THEORY_FIT_SCORE_REPRESENTATIVE_MOVEMENT_FIELD]:
+          'medium - expected movement is route selection, migration, or architecture-gap stop.',
+        [THEORY_FIT_SCORE_DOWNSTREAM_RISK_FIELD]:
+          'high - downstream symptoms remain frozen until owner selection is proven.',
+      },
+      [SLICE_THEORY_WRONG_SLICE_TRIGGERS_FIELD]: [
+        'proof selects a different owner boundary',
+        'proof requires runtime files outside writeScope',
+        'proof cannot select a concrete transition or migration',
+      ],
+    },
+  };
+}
+
+function formatTransitionRows(rows = []) {
+  return markdownList(rows.map((row) =>
+    `Input \`${row[SYSTEM_THEORY_TRANSITION_INPUT_SIGNAL_FIELD]}\`; owner ` +
+    `\`${row[SYSTEM_THEORY_TRANSITION_OWNER_FIELD]}\`; missing ` +
+    `\`${row[SYSTEM_THEORY_TRANSITION_MISSING_TRANSITION_FIELD]}\`; expected ` +
+    `\`${row[SYSTEM_THEORY_TRANSITION_EXPECTED_EVIDENCE_FIELD]}\`; ` +
+    `falsifier \`${row[SYSTEM_THEORY_TRANSITION_FALSIFIER_FIELD]}\`; ` +
+    `migration trigger \`${row[SYSTEM_THEORY_TRANSITION_MIGRATION_TRIGGER_FIELD]}\`.`,
+  ), 'No transition row recorded.');
+}
+
+function buildTwoLevelTheoryLines(metadata = {}) {
+  const systemTheory = metadata[SYSTEM_THEORY_FIELD];
+  const sliceTheory = metadata[SLICE_THEORY_FIELD];
+  if (!systemTheory || !sliceTheory) {
+    return [];
+  }
+  const score = sliceTheory[SLICE_THEORY_THEORY_FIT_SCORE_FIELD] || {};
+  return [
+    '## System Theory',
+    EMPTY_TEXT,
+    `- Problem statement: ${systemTheory[SYSTEM_THEORY_PROBLEM_STATEMENT_FIELD]}`,
+    '- Phase chain:',
+    markdownList(systemTheory[SYSTEM_THEORY_PHASE_CHAIN_FIELD], 'Phase chain is recorded in metadata.'),
+    '- Owner-boundary map:',
+    markdownList(systemTheory[SYSTEM_THEORY_OWNER_BOUNDARY_MAP_FIELD], 'Owner-boundary map is recorded in metadata.'),
+    '- Stable facts:',
+    markdownList(systemTheory[SYSTEM_THEORY_STABLE_FACTS_FIELD], 'Stable facts are recorded in metadata.'),
+    '- Changed facts:',
+    markdownList(systemTheory[SYSTEM_THEORY_CHANGED_FACTS_FIELD], 'Changed facts are recorded in metadata.'),
+    '- Competing theories:',
+    markdownList(systemTheory[SYSTEM_THEORY_COMPETING_THEORIES_FIELD], 'Competing theories are recorded in metadata.'),
+    '- Eliminated theories:',
+    markdownList(systemTheory[SYSTEM_THEORY_ELIMINATED_THEORIES_FIELD], 'Eliminated theories are recorded in metadata.'),
+    '- Downstream symptoms:',
+    markdownList(systemTheory[SYSTEM_THEORY_DOWNSTREAM_SYMPTOMS_FIELD], 'Downstream symptoms are recorded in metadata.'),
+    '- Transition table:',
+    formatTransitionRows(systemTheory[SYSTEM_THEORY_TRANSITION_TABLE_FIELD]),
+    '- Ownership migration triggers:',
+    markdownList(systemTheory[SYSTEM_THEORY_OWNERSHIP_MIGRATION_TRIGGERS_FIELD], 'Migration triggers are recorded in metadata.'),
+    '- Architecture-gap triggers:',
+    markdownList(systemTheory[SYSTEM_THEORY_ARCHITECTURE_GAP_TRIGGERS_FIELD], 'Architecture-gap triggers are recorded in metadata.'),
+    `- Whole-system invariant: ${systemTheory[SYSTEM_THEORY_WHOLE_SYSTEM_INVARIANT_FIELD]}`,
+    EMPTY_TEXT,
+    '## Slice Theory',
+    EMPTY_TEXT,
+    `- System theory reference: ${sliceTheory[SLICE_THEORY_SYSTEM_REF_FIELD]}`,
+    `- Selected system theory: ${sliceTheory[SLICE_THEORY_SELECTED_THEORY_FIELD]}`,
+    `- Selected mechanism: ${sliceTheory[SLICE_THEORY_SELECTED_MECHANISM_FIELD]}`,
+    `- Source/test contract: ${sliceTheory[SLICE_THEORY_SOURCE_TEST_CONTRACT_FIELD]}`,
+    `- Falsifier: \`${sliceTheory[SLICE_THEORY_FALSIFIER_FIELD]}\``,
+    `- Representative expected movement: ${sliceTheory[SLICE_THEORY_REPRESENTATIVE_MOVEMENT_FIELD]}`,
+    `- Kill rule: ${sliceTheory[SLICE_THEORY_KILL_RULE_FIELD]}`,
+    '- Theory-fit score:',
+    markdownList([
+      `Evidence fit: ${score[THEORY_FIT_SCORE_EVIDENCE_FIT_FIELD]}`,
+      `Owner-boundary fit: ${score[THEORY_FIT_SCORE_OWNER_BOUNDARY_FIT_FIELD]}`,
+      `Falsifiability: ${score[THEORY_FIT_SCORE_FALSIFIABILITY_FIELD]}`,
+      `Representative movement: ${score[THEORY_FIT_SCORE_REPRESENTATIVE_MOVEMENT_FIELD]}`,
+      `Downstream risk containment: ${score[THEORY_FIT_SCORE_DOWNSTREAM_RISK_FIELD]}`,
+    ], 'Theory-fit score is recorded in metadata.'),
+    '- Wrong-slice triggers:',
+    markdownList(sliceTheory[SLICE_THEORY_WRONG_SLICE_TRIGGERS_FIELD], 'Wrong-slice triggers are recorded in metadata.'),
+  ];
+}
+
 function buildClassificationOnlyFastPathLines(isClassificationOnly) {
   if (!isClassificationOnly) {
     return [];
@@ -1442,10 +1711,28 @@ async function buildPackageContent(flags = {}) {
         if (predMetadata.scenarioCausalClosure) {
           metadata.scenarioCausalClosure = predMetadata.scenarioCausalClosure;
         }
+        if (predMetadata[ARCHITECTURE_DECISION_GATE_FIELD]) {
+          metadata[ARCHITECTURE_DECISION_GATE_FIELD] =
+            predMetadata[ARCHITECTURE_DECISION_GATE_FIELD];
+        }
+        if (predMetadata[OWNER_BOUNDARY_MIGRATION_PROOF_FIELD]) {
+          metadata[OWNER_BOUNDARY_MIGRATION_PROOF_FIELD] =
+            predMetadata[OWNER_BOUNDARY_MIGRATION_PROOF_FIELD];
+        }
       }
     } catch (e) {
       // ignore if predecessor file does not exist or fails to parse
     }
+  }
+  const twoLevelTheory = buildTwoLevelTheoryMetadata(
+    lane,
+    metadata,
+    modelFitProof,
+    packagePath,
+  );
+  if (twoLevelTheory) {
+    metadata[SYSTEM_THEORY_FIELD] = twoLevelTheory[SYSTEM_THEORY_FIELD];
+    metadata[SLICE_THEORY_FIELD] = twoLevelTheory[SLICE_THEORY_FIELD];
   }
 
   return [
@@ -1484,6 +1771,8 @@ async function buildPackageContent(flags = {}) {
     ),
     EMPTY_TEXT,
     ...buildDecisionExperimentGateLines(lane, flags, proof, metadata),
+    EMPTY_TEXT,
+    ...buildTwoLevelTheoryLines(metadata),
     EMPTY_TEXT,
     ...buildBoundedExperimentLines(metadata),
     EMPTY_TEXT,

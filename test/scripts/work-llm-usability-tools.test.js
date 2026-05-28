@@ -88,6 +88,10 @@ test('shared package schema lists validator enums for LLM scaffolding', (t) => {
   t.match(rendered, /Core Logic Brief/u);
   t.match(rendered, /Causal Decision Contract/u);
   t.match(rendered, /Decision Experiment Gate/u);
+  t.match(rendered, /Two-Level Theory/u);
+  t.match(rendered, /systemTheory/u);
+  t.match(rendered, /sliceTheory/u);
+  t.match(rendered, /theoryFitScore/u);
   t.match(rendered, /Canonical outcome/u);
   t.match(rendered, /State model or invariant/u);
   t.match(rendered, /Falsifying focused probe/u);
@@ -595,6 +599,198 @@ test('package scaffolder can infer package defaults from an artifact',
     t.match(rendered, /"classificationEfficiency": \{/u);
     t.match(rendered, /work:scenario-triage/u);
     t.match(rendered, /analyze:priority-recovery-residuals/u);
+  });
+
+test('package scaffolder emits two-level theory after inherited repeated frontier metadata',
+  async (t) => {
+    await fs.mkdir(TEMP_PACKAGE_ROOT, {recursive: true});
+    const predecessorPath = path.join(
+      TEMP_PACKAGE_ROOT,
+      'done-20260512-repeated-frontier-predecessor.md',
+    );
+    await fs.writeFile(
+      predecessorPath,
+      [
+        '# Repeated Frontier Predecessor',
+        '',
+        '<!-- work-package',
+        JSON.stringify({
+          status: 'done',
+          lane: 'runtime-owner-boundary',
+          scenario: 'rolling-restart',
+          scenarioCausalClosure: {
+            recentFrontierHistory: [
+              'startup_active_gate_owner / snapshot_coverage repeated',
+            ],
+            oscillationCheck: 'same-frontier repeated after local runtime proof',
+            resultClassification: 'same-frontier',
+            stopCondition: 'architecture-gap-stop',
+          },
+        }, null, 2),
+        '-->',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const content = await buildPackageContent({
+      'title': TEST_TITLE,
+      'slug': 'repeated-frontier-child',
+      'opened': '2026-05-12',
+      'status': 'active',
+      'lane': 'runtime-owner-boundary',
+      'scenario': 'rolling-restart',
+      'artifact': 'test-output/reports/repeated-frontier.report.json',
+      'owner': 'startup_active_gate_owner',
+      'boundary': 'snapshot_coverage',
+      'dominant-reason': 'active_gate_timed_out',
+      'next-action': 'Select the snapshot coverage contract before runtime work.',
+      'proof': [
+        'npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12',
+      ],
+      'write-scope': ['work/packages/active-repeated-frontier-child.md'],
+      'predecessor': predecessorPath,
+      'ledger': TEMP_LEDGER_PATH,
+    });
+    const metadata = parseRawPackageMetadata(content);
+    const prompt = buildSubagentPrompt(
+      'implementation',
+      TEMP_PACKAGE_PATH,
+      content,
+    );
+
+    t.ok(metadata.systemTheory);
+    t.ok(metadata.sliceTheory);
+    t.match(content, /## System Theory/u);
+    t.match(content, /## Slice Theory/u);
+    t.match(content, /Theory-fit score/u);
+    t.match(prompt, /## System Theory/u);
+    t.match(prompt, /## Slice Theory/u);
+    t.match(prompt, /Theory-fit score/u);
+    t.notMatch(prompt, /files-changed: <paths or none>/u);
+    t.notMatch(prompt, /validation: <command\/result\/files>/u);
+    t.notMatch(
+      prompt,
+      /wrong-slice evidence would be <owner\/boundary\/result change>/u,
+    );
+  });
+
+test('package scaffolder emits two-level theory after inherited architecture gate metadata',
+  async (t) => {
+    await fs.mkdir(TEMP_PACKAGE_ROOT, {recursive: true});
+    const predecessorPath = path.join(
+      TEMP_PACKAGE_ROOT,
+      'done-20260512-architecture-gate-predecessor.md',
+    );
+    await fs.writeFile(
+      predecessorPath,
+      [
+        '# Architecture Gate Predecessor',
+        '',
+        '<!-- work-package',
+        JSON.stringify({
+          status: 'done',
+          lane: 'runtime-owner-boundary',
+          scenario: 'rolling-restart',
+          architectureDecisionGate: {
+            status: 'selected',
+            trigger: 'frontier-oscillation',
+            selectedChoice: 'autonomous-architecture-experiment',
+            route: 'architecture-package',
+          },
+        }, null, 2),
+        '-->',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const content = await buildPackageContent({
+      'title': TEST_TITLE,
+      'slug': 'architecture-gate-child',
+      'opened': '2026-05-12',
+      'status': 'active',
+      'lane': 'runtime-owner-boundary',
+      'scenario': 'rolling-restart',
+      'artifact': 'test-output/reports/architecture-gate.report.json',
+      'owner': 'startup_active_gate_owner',
+      'boundary': 'snapshot_coverage',
+      'dominant-reason': 'active_gate_timed_out',
+      'next-action': 'Select the architecture route before runtime work.',
+      'proof': [
+        'npm run work:scenario-route -- test-output/reports/architecture-gate.report.json --owner startup_active_gate_owner --boundary snapshot_coverage',
+      ],
+      'write-scope': ['work/packages/active-architecture-gate-child.md'],
+      'predecessor': predecessorPath,
+      'ledger': TEMP_LEDGER_PATH,
+    });
+    const metadata = parseRawPackageMetadata(content);
+
+    t.equal(metadata.architectureDecisionGate.route, 'architecture-package');
+    t.ok(metadata.systemTheory);
+    t.ok(metadata.sliceTheory);
+    t.match(content, /## System Theory/u);
+    t.match(content, /## Slice Theory/u);
+  });
+
+test('package scaffolder emits two-level theory after inherited owner migration metadata',
+  async (t) => {
+    await fs.mkdir(TEMP_PACKAGE_ROOT, {recursive: true});
+    const predecessorPath = path.join(
+      TEMP_PACKAGE_ROOT,
+      'done-20260512-owner-migration-predecessor.md',
+    );
+    await fs.writeFile(
+      predecessorPath,
+      [
+        '# Owner Migration Predecessor',
+        '',
+        '<!-- work-package',
+        JSON.stringify({
+          status: 'done',
+          lane: 'runtime-owner-boundary',
+          scenario: 'rolling-restart',
+          ownerBoundaryMigrationProof: {
+            fromOwner: 'startup_active_gate_owner',
+            fromBoundary: 'snapshot_coverage',
+            toOwner: 'snapshot_publication_owner',
+            toBoundary: 'publication_progress',
+            reason: 'focused proof selected publication ownership',
+            evidence: 'npm run analyze:causal-model -- test-output/reports/migration.report.json',
+          },
+        }, null, 2),
+        '-->',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const content = await buildPackageContent({
+      'title': TEST_TITLE,
+      'slug': 'owner-migration-child',
+      'opened': '2026-05-12',
+      'status': 'active',
+      'lane': 'runtime-owner-boundary',
+      'scenario': 'rolling-restart',
+      'artifact': 'test-output/reports/migration.report.json',
+      'owner': 'startup_active_gate_owner',
+      'boundary': 'snapshot_coverage',
+      'dominant-reason': 'active_gate_timed_out',
+      'next-action': 'Confirm migration before runtime work.',
+      'proof': [
+        'npm run analyze:causal-model -- test-output/reports/migration.report.json',
+      ],
+      'write-scope': ['work/packages/active-owner-migration-child.md'],
+      'predecessor': predecessorPath,
+      'ledger': TEMP_LEDGER_PATH,
+    });
+    const metadata = parseRawPackageMetadata(content);
+
+    t.equal(
+      metadata.ownerBoundaryMigrationProof.toOwner,
+      'snapshot_publication_owner',
+    );
+    t.ok(metadata.systemTheory);
+    t.ok(metadata.sliceTheory);
+    t.match(content, /## System Theory/u);
+    t.match(content, /## Slice Theory/u);
   });
 
 test('package scaffolder avoids placeholder prose for artifact-derived packages',

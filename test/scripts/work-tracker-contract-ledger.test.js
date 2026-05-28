@@ -1,4 +1,4 @@
-import {CAUSAL_DECISION_CONTRACT_INVALID_CONTENT, CAUSAL_DECISION_CONTRACT_OSCILLATION_METADATA, CAUSAL_DECISION_CONTRACT_VALID_CONTENT, CAUSAL_GOVERNANCE_INVALID_METADATA, CAUSAL_GOVERNANCE_MISSING_METADATA, CAUSAL_GOVERNANCE_VALID_METADATA, CLASSIFICATION_EFFICIENCY_VALID_METADATA, CLASSIFICATION_ONLY_FAST_PATH_METADATA, CLASSIFICATION_ONLY_WITH_IMPLEMENTATION_SCOPE_METADATA, CORE_LOGIC_BRIEF_GENERIC_CONTENT, CORE_LOGIC_BRIEF_INCOMPLETE_CONTENT, CORE_LOGIC_BRIEF_NOT_NEEDED_CONTENT, CORE_LOGIC_BRIEF_VALID_CONTENT, DECISION_EXPERIMENT_GATE_INVALID_CONTENT, DECISION_EXPERIMENT_GATE_VALID_CONTENT, FIX_AGENT_ID, IMPLEMENTATION_AGENT_ID, LANE_BOUNDED_EXPERIMENT, LANE_CAUSAL_ESCALATION, LANE_DIAGNOSTIC_CLASSIFICATION, LANE_EXPERIMENT, LANE_LIGHTWEIGHT_MAINTENANCE, LANE_MECHANICAL_MAINTENANCE, LANE_READ_REVIEW_DOC_ONLY, LANE_RUNTIME_OWNER_BOUNDARY, LANE_SINGLE_FILE_RUNTIME, LANE_TEST_ONLY_PROOF, MODEL_FIT_INCOMPLETE_SPARK_SAFE_CONTENT, MODEL_FIT_MISSING_CONTENT, MODEL_FIT_VALID_SPARK_SAFE_CONTENT, REPRESENTATIVE_RESIDUAL_INVALID_METADATA, REPRESENTATIVE_RESIDUAL_MISSING_METADATA, REPRESENTATIVE_RESIDUAL_VALID_METADATA, RERUN_DECISION_VALID_METADATA, REVIEW_AGENT_ID, SCENARIO_CAUSAL_CLOSURE_INVALID_METADATA, SCENARIO_CAUSAL_CLOSURE_MISSING_METADATA, SCENARIO_CAUSAL_CLOSURE_VALID_METADATA, SPRINT_STRATEGY_BRIEF_INCOMPLETE_CONTENT, SPRINT_STRATEGY_BRIEF_VALID_CONTENT, TEST_COMMIT_SHA, TEST_PUSH_TARGET, TEST_THEORY_LEDGER_REF, WORK_TRACKER_ACTIVE_DOCTOR_FILE, WORK_TRACKER_ACTIVE_STATUS, WORK_TRACKER_ATTEMPT_LEDGER_BAD_CONTENT, WORK_TRACKER_ATTEMPT_LEDGER_CLEAN_CONTENT, WORK_TRACKER_ATTEMPT_LEDGER_CODEX_NAMED_AGENT_CONTENT, WORK_TRACKER_ATTEMPT_LEDGER_GENERIC_IDENTITY_CONTENT, WORK_TRACKER_ATTEMPT_LEDGER_NOT_NEEDED_CONTENT, WORK_TRACKER_ATTEMPT_LEDGER_OPEN_PARTIAL_CONTENT, WORK_TRACKER_ATTEMPT_LEDGER_PARTIAL_CONTENT, WORK_TRACKER_ATTEMPT_LEDGER_SUPERSEDED_CONTENT, WORK_TRACKER_COMBINED_PROGRESS_ATTEMPT_LEDGER_CONTENT, WORK_TRACKER_COMBINED_PROGRESS_ATTEMPT_LEDGER_LOCAL_RUNTIME_CONTENT, WORK_TRACKER_COMMIT_LEDGER_LEGACY_VALID_CONTENT, WORK_TRACKER_COMMIT_LEDGER_PENDING_CONTENT, WORK_TRACKER_COMMIT_LEDGER_TEMPLATE_CONTENT, WORK_TRACKER_COMMIT_LEDGER_VALID_CONTENT, WORK_TRACKER_CURRENT_BLOCKER_MARKDOWN, WORK_TRACKER_DOCTOR_CONTENT, WORK_TRACKER_DONE_STATUS, WORK_TRACKER_DONE_TEST_FILE, WORK_TRACKER_EXECUTION_EVIDENCE_CLEAN_CONTENT, WORK_TRACKER_EXECUTION_EVIDENCE_FIVE_FIELD_CONTENT, WORK_TRACKER_EXECUTION_EVIDENCE_OPEN_CONTENT, WORK_TRACKER_EXECUTION_EVIDENCE_UNVALIDATED_CONTENT, WORK_TRACKER_EXECUTION_EVIDENCE_VERIFIED_CONTENT, WORK_TRACKER_EXECUTION_EVIDENCE_VERIFIED_NO_CHANGES_CONTENT, WORK_TRACKER_EXECUTION_EVIDENCE_WITH_AGENT_CONTENT, WORK_TRACKER_FUTURE_DONE_STRICT_CONTENT, WORK_TRACKER_FUTURE_DONE_TEST_FILE, WORK_TRACKER_LEDGER_AMBIGUOUS_REVIEW_NOT_NEEDED_CONTENT, WORK_TRACKER_LEDGER_BAD_NOT_NEEDED_CONTENT, WORK_TRACKER_LEDGER_CHECKED_PENDING_CONTENT, WORK_TRACKER_LEDGER_CHECKED_TEMPLATE_CONTENT, WORK_TRACKER_LEDGER_CLEAN_CONTENT, WORK_TRACKER_LEDGER_FIRST_PACKAGE_CONTENT, WORK_TRACKER_LEDGER_FIXES_REQUIRED_CONTENT, WORK_TRACKER_LEDGER_LEGACY_DONE_CONTENT, WORK_TRACKER_LEDGER_LOCAL_IMPLEMENTATION_CONTENT, WORK_TRACKER_LEDGER_LOCAL_PATH_CONTENT, WORK_TRACKER_LEDGER_LOCAL_PATH_TEST_FILE, WORK_TRACKER_LEDGER_MANUAL_FIX_NOTE_CONTENT, WORK_TRACKER_LEDGER_NO_AGENT_ID_CONTENT, WORK_TRACKER_LEDGER_NO_LEDGER_CONTENT, WORK_TRACKER_LEDGER_NUMBERED_PRE_IMPL_CONTENT, WORK_TRACKER_LEDGER_OPEN_CONTENT, WORK_TRACKER_LEDGER_PRE_IMPL_CONTENT, WORK_TRACKER_LEDGER_REVIEW_FIXED_METADATA_CONTENT, WORK_TRACKER_LEDGER_REVIEW_FIXED_RUNTIME_CONTENT, WORK_TRACKER_LEDGER_REVIEW_FIXED_WRONG_AGENT_CONTENT, WORK_TRACKER_LEDGER_TEST_FILE, WORK_TRACKER_LEDGER_UNAVAILABLE_CONTENT, WORK_TRACKER_LEDGER_UNVALIDATED_IMPLEMENTATION_CONTENT, WORK_TRACKER_PROGRESS_LEDGER_BAD_CONTENT, WORK_TRACKER_PROGRESS_LEDGER_CLEAN_CONTENT, WORK_TRACKER_PROGRESS_LEDGER_NOT_NEEDED_CONTENT, WORK_TRACKER_PROGRESS_LEDGER_OPEN_CONTENT, assert, buildCurrentBlockerPayload, buildPackageDoctorLines, buildWorkPackageV2Metadata, describe, findActivePackageLinkInSprint, isGeneratedCurrentBlockerPath, it, metadataHasClassificationOnlyOutcome, metadataRequiresSubagentSequencing, metadataUsesClassificationOnlyFastPath, metadataUsesPureClassificationFastPath, path, renderCurrentBlockerMarkdown, renderCurrentEdgeCardSection, resolveSprintPackageReference, upsertSprintCurrentEdgeCard, validateActiveWorkReferences, validateCausalDecisionContract, validateCausalGovernanceContract, validateClassificationEfficiencyContract, validateCommitAndPushLedger, validateContractProofRequirement, validateCoreLogicBrief, validateCurrentBlockerPayloadFreshness, validateCurrentBlockerSnapshot, validateDecisionExperimentGate, validateExecutionEvidenceLedger, validateExperimentOutcomeContract, validateFrontierOscillationContract, validateModelFitContract, validateObservablePredictionContract, validatePackageMetadataShape, validateProbePackageContract, validateRepresentativeResidualContract, validateRequiredPreImplProbeContract, validateRerunDecisionContract, validateSameFrontierStopContract, validateScenarioCausalClosureContract, validateScenarioFrontierOwnerBoundaryContract, validateSprintCurrentEdgeCard, validateSprintStrategyBrief, validateSubagentAttemptLedger, validateSubagentProgressLedger, validateSubagentSequencingLedger} from './work-tracker-subagent-ledger-fixtures.js';
+import {CAUSAL_DECISION_CONTRACT_INVALID_CONTENT, CAUSAL_DECISION_CONTRACT_OSCILLATION_METADATA, CAUSAL_DECISION_CONTRACT_VALID_CONTENT, CAUSAL_GOVERNANCE_INVALID_METADATA, CAUSAL_GOVERNANCE_MISSING_METADATA, CAUSAL_GOVERNANCE_VALID_METADATA, CLASSIFICATION_EFFICIENCY_VALID_METADATA, CLASSIFICATION_ONLY_FAST_PATH_METADATA, CLASSIFICATION_ONLY_WITH_IMPLEMENTATION_SCOPE_METADATA, CORE_LOGIC_BRIEF_GENERIC_CONTENT, CORE_LOGIC_BRIEF_INCOMPLETE_CONTENT, CORE_LOGIC_BRIEF_NOT_NEEDED_CONTENT, CORE_LOGIC_BRIEF_VALID_CONTENT, DECISION_EXPERIMENT_GATE_INVALID_CONTENT, DECISION_EXPERIMENT_GATE_VALID_CONTENT, FIX_AGENT_ID, IMPLEMENTATION_AGENT_ID, LANE_BOUNDED_EXPERIMENT, LANE_CAUSAL_ESCALATION, LANE_DIAGNOSTIC_CLASSIFICATION, LANE_EXPERIMENT, LANE_LIGHTWEIGHT_MAINTENANCE, LANE_MECHANICAL_MAINTENANCE, LANE_READ_REVIEW_DOC_ONLY, LANE_RUNTIME_OWNER_BOUNDARY, LANE_SINGLE_FILE_RUNTIME, LANE_TEST_ONLY_PROOF, MODEL_FIT_INCOMPLETE_SPARK_SAFE_CONTENT, MODEL_FIT_MISSING_CONTENT, MODEL_FIT_VALID_SPARK_SAFE_CONTENT, REPRESENTATIVE_RESIDUAL_INVALID_METADATA, REPRESENTATIVE_RESIDUAL_MISSING_METADATA, REPRESENTATIVE_RESIDUAL_VALID_METADATA, RERUN_DECISION_VALID_METADATA, REVIEW_AGENT_ID, SCENARIO_CAUSAL_CLOSURE_INVALID_METADATA, SCENARIO_CAUSAL_CLOSURE_MISSING_METADATA, SCENARIO_CAUSAL_CLOSURE_VALID_METADATA, SPRINT_STRATEGY_BRIEF_INCOMPLETE_CONTENT, SPRINT_STRATEGY_BRIEF_VALID_CONTENT, TEST_COMMIT_SHA, TEST_PUSH_TARGET, TEST_THEORY_LEDGER_REF, WORK_TRACKER_ACTIVE_DOCTOR_FILE, WORK_TRACKER_ACTIVE_STATUS, WORK_TRACKER_ATTEMPT_LEDGER_BAD_CONTENT, WORK_TRACKER_ATTEMPT_LEDGER_CLEAN_CONTENT, WORK_TRACKER_ATTEMPT_LEDGER_CODEX_NAMED_AGENT_CONTENT, WORK_TRACKER_ATTEMPT_LEDGER_GENERIC_IDENTITY_CONTENT, WORK_TRACKER_ATTEMPT_LEDGER_NOT_NEEDED_CONTENT, WORK_TRACKER_ATTEMPT_LEDGER_OPEN_PARTIAL_CONTENT, WORK_TRACKER_ATTEMPT_LEDGER_PARTIAL_CONTENT, WORK_TRACKER_ATTEMPT_LEDGER_SUPERSEDED_CONTENT, WORK_TRACKER_COMBINED_PROGRESS_ATTEMPT_LEDGER_CONTENT, WORK_TRACKER_COMBINED_PROGRESS_ATTEMPT_LEDGER_LOCAL_RUNTIME_CONTENT, WORK_TRACKER_COMMIT_LEDGER_LEGACY_VALID_CONTENT, WORK_TRACKER_COMMIT_LEDGER_PENDING_CONTENT, WORK_TRACKER_COMMIT_LEDGER_TEMPLATE_CONTENT, WORK_TRACKER_COMMIT_LEDGER_VALID_CONTENT, WORK_TRACKER_CURRENT_BLOCKER_MARKDOWN, WORK_TRACKER_DOCTOR_CONTENT, WORK_TRACKER_DONE_STATUS, WORK_TRACKER_DONE_TEST_FILE, WORK_TRACKER_EXECUTION_EVIDENCE_CLEAN_CONTENT, WORK_TRACKER_EXECUTION_EVIDENCE_FIVE_FIELD_CONTENT, WORK_TRACKER_EXECUTION_EVIDENCE_OPEN_CONTENT, WORK_TRACKER_EXECUTION_EVIDENCE_UNVALIDATED_CONTENT, WORK_TRACKER_EXECUTION_EVIDENCE_VERIFIED_CONTENT, WORK_TRACKER_EXECUTION_EVIDENCE_VERIFIED_NO_CHANGES_CONTENT, WORK_TRACKER_EXECUTION_EVIDENCE_WITH_AGENT_CONTENT, WORK_TRACKER_FUTURE_DONE_STRICT_CONTENT, WORK_TRACKER_FUTURE_DONE_TEST_FILE, WORK_TRACKER_LEDGER_AMBIGUOUS_REVIEW_NOT_NEEDED_CONTENT, WORK_TRACKER_LEDGER_BAD_NOT_NEEDED_CONTENT, WORK_TRACKER_LEDGER_CHECKED_PENDING_CONTENT, WORK_TRACKER_LEDGER_CHECKED_TEMPLATE_CONTENT, WORK_TRACKER_LEDGER_CLEAN_CONTENT, WORK_TRACKER_LEDGER_FIRST_PACKAGE_CONTENT, WORK_TRACKER_LEDGER_FIXES_REQUIRED_CONTENT, WORK_TRACKER_LEDGER_LEGACY_DONE_CONTENT, WORK_TRACKER_LEDGER_LOCAL_IMPLEMENTATION_CONTENT, WORK_TRACKER_LEDGER_LOCAL_PATH_CONTENT, WORK_TRACKER_LEDGER_LOCAL_PATH_TEST_FILE, WORK_TRACKER_LEDGER_MANUAL_FIX_NOTE_CONTENT, WORK_TRACKER_LEDGER_NO_AGENT_ID_CONTENT, WORK_TRACKER_LEDGER_NO_LEDGER_CONTENT, WORK_TRACKER_LEDGER_NUMBERED_PRE_IMPL_CONTENT, WORK_TRACKER_LEDGER_OPEN_CONTENT, WORK_TRACKER_LEDGER_PRE_IMPL_CONTENT, WORK_TRACKER_LEDGER_REVIEW_FIXED_METADATA_CONTENT, WORK_TRACKER_LEDGER_REVIEW_FIXED_RUNTIME_CONTENT, WORK_TRACKER_LEDGER_REVIEW_FIXED_WRONG_AGENT_CONTENT, WORK_TRACKER_LEDGER_TEST_FILE, WORK_TRACKER_LEDGER_UNAVAILABLE_CONTENT, WORK_TRACKER_LEDGER_UNVALIDATED_IMPLEMENTATION_CONTENT, WORK_TRACKER_PROGRESS_LEDGER_BAD_CONTENT, WORK_TRACKER_PROGRESS_LEDGER_CLEAN_CONTENT, WORK_TRACKER_PROGRESS_LEDGER_NOT_NEEDED_CONTENT, WORK_TRACKER_PROGRESS_LEDGER_OPEN_CONTENT, assert, buildCurrentBlockerPayload, buildPackageDoctorLines, buildWorkPackageV2Metadata, describe, findActivePackageLinkInSprint, isGeneratedCurrentBlockerPath, it, metadataHasClassificationOnlyOutcome, metadataRequiresSubagentSequencing, metadataUsesClassificationOnlyFastPath, metadataUsesPureClassificationFastPath, path, renderCurrentBlockerMarkdown, renderCurrentEdgeCardSection, resolveSprintPackageReference, upsertSprintCurrentEdgeCard, validateActiveWorkReferences, validateCausalDecisionContract, validateCausalGovernanceContract, validateClassificationEfficiencyContract, validateCommitAndPushLedger, validateContractProofRequirement, validateCoreLogicBrief, validateCurrentBlockerPayloadFreshness, validateCurrentBlockerSnapshot, validateDecisionExperimentGate, validateExecutionEvidenceLedger, validateExperimentOutcomeContract, validateFrontierOscillationContract, validateModelFitContract, validateObservablePredictionContract, validatePackageMetadataShape, validateProbePackageContract, validateRepresentativeResidualContract, validateRequiredPreImplProbeContract, validateRerunDecisionContract, validateSameFrontierStopContract, validateScenarioCausalClosureContract, validateScenarioFrontierOwnerBoundaryContract, validateSprintCurrentEdgeCard, validateSprintStrategyBrief, validateSubagentAttemptLedger, validateSubagentProgressLedger, validateSubagentSequencingLedger, validateTwoLevelTheoryContract} from './work-tracker-subagent-ledger-fixtures.js';
 
 describe('work tracker commit and push ledger validation', () => {
   it('grandfathers historical done packages without commit and push proof', () => {
@@ -298,6 +298,251 @@ describe('work tracker decision experiment gate validation', () => {
 
     assert.match(vagueErrors.join('\n'), /hypothesis discriminator/u);
     assert.deepEqual(discriminatingErrors, []);
+  });
+});
+
+describe('work tracker two-level theory validation', () => {
+  const validTwoLevelTheoryMetadata = {
+    status: WORK_TRACKER_ACTIVE_STATUS,
+    lane: LANE_CAUSAL_ESCALATION,
+    scenario: 'rolling-restart',
+    owner: 'startup_active_gate_owner',
+    boundary: 'snapshot_coverage',
+    dominantReason: 'active_gate_timed_out',
+    modelFit: {
+      ambiguityScore: 2,
+    },
+    architectureDecisionGate: {
+      status: 'selected',
+      trigger: 'frontier-oscillation',
+      triggerEvidence: ['same frontier returned after rerun'],
+      selectedChoice: 'open-architecture-package',
+      choices: [
+        {
+          id: 'open-architecture-package',
+          route: 'architecture-package',
+          summary: 'open architecture package',
+          proof: ['npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage'],
+        },
+      ],
+    },
+    systemTheory: {
+      problemStatement:
+        'Snapshot coverage repeatedly times out, so the system theory must pick the owner transition before runtime edits.',
+      phaseChain: [
+        'priority recovery residual cleared',
+        'active gate snapshot coverage returned',
+      ],
+      ownerBoundaryMap: [
+        'startup_active_gate_owner / snapshot_coverage owns the current active gate snapshot coverage decision',
+      ],
+      stableFacts: [
+        'route still names active_gate_timed_out',
+      ],
+      changedFacts: [
+        'priority recovery residual witness count is zero',
+      ],
+      competingTheories: [
+        'H1 startup active gate lacks a snapshot coverage contract',
+        'H2 the symptom belongs to a different owner boundary or architecture gap',
+      ],
+      eliminatedTheories: [
+        'priority recovery residual is eliminated by fresh zero-witness evidence',
+      ],
+      downstreamSymptoms: [
+        'selected-source timeout remains downstream until snapshot coverage moves',
+      ],
+      transitionTable: [
+        {
+          inputSignal: 'active_gate_snapshot_coverage',
+          owner: 'startup_active_gate_owner / snapshot_coverage',
+          missingTransition: 'wake or reconcile transition from evidence to coverage progress',
+          expectedEvidence: 'selected contract, migration, or architecture-gap stop',
+          falsifier: 'npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage',
+          migrationTrigger: 'proof names a different owner boundary',
+        },
+      ],
+      ownershipMigrationTriggers: [
+        'proof names a typed handoff owner instead of startup active gate owner',
+      ],
+      architectureGapTriggers: [
+        'proof cannot select any owner-owned transition or migration',
+      ],
+      wholeSystemInvariant:
+        'runtime edits wait for a selected owner-owned transition or migration',
+    },
+    sliceTheory: {
+      systemTheoryRef: 'current package systemTheory',
+      selectedSystemTheory:
+        'H1 startup active gate lacks a snapshot coverage contract',
+      selectedMechanism: 'contract_gap with ownership_gap alternate',
+      sourceTestContract:
+        'this package selects the source/test contract before runtime source edits',
+      falsifier: 'npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage',
+      representativeExpectedMovement:
+        'selected contract, owner-boundary migration, or architecture-gap stop',
+      killRule:
+        'stop on unchanged same-frontier or no-reduction evidence as architecture-gap',
+      theoryFitScore: {
+        evidenceFit: 'high - fresh route and history agree',
+        ownerBoundaryFit: 'medium - owner is selected but migration remains possible',
+        falsifiability: 'high - focused frontier-history command can falsify it',
+        representativeMovement: 'medium - movement is route selection before runtime',
+        downstreamRiskContainment:
+          'high - downstream symptoms remain frozen until selection',
+      },
+      wrongSliceTriggers: [
+        'proof selects a different owner',
+        'proof needs runtime source edits before contract selection',
+      ],
+    },
+  };
+
+  it('requires system and slice theories when causal architecture packages ask for them', () => {
+    const {systemTheory, sliceTheory, ...metadata} = validTwoLevelTheoryMetadata;
+    const errors = validateTwoLevelTheoryContract(
+      metadata,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true, status: WORK_TRACKER_ACTIVE_STATUS},
+    );
+
+    assert.match(errors.join('\n'), /metadata systemTheory is required/u);
+    assert.match(errors.join('\n'), /metadata sliceTheory is required/u);
+  });
+
+  it('automatically detects package categories that require two-level theory', () => {
+    const baseMetadata = {
+      status: WORK_TRACKER_ACTIVE_STATUS,
+      lane: LANE_RUNTIME_OWNER_BOUNDARY,
+      scenario: 'none',
+      owner: 'startup_active_gate_owner',
+      boundary: 'snapshot_coverage',
+      dominantReason: 'active_gate_timed_out',
+    };
+    const requiredCases = [
+      {
+        ...baseMetadata,
+        lane: LANE_CAUSAL_ESCALATION,
+      },
+      {
+        ...baseMetadata,
+        architectureDecisionGate: {
+          status: 'selected',
+          trigger: 'none',
+          selectedChoice: 'open-architecture-package',
+          choices: [],
+        },
+      },
+      {
+        ...baseMetadata,
+        ownerBoundaryMigrationProof: {
+          fromOwner: 'startup_active_gate_owner',
+          fromBoundary: 'snapshot_coverage',
+          toOwner: 'startup_readiness_owner',
+          toBoundary: 'startup_support_evidence',
+          reason: 'typed handoff owns readiness evidence',
+          evidence: 'npm run analyze:causal-model -- test-output/reports/example.report.json',
+        },
+      },
+      {
+        ...baseMetadata,
+        scenario: 'rolling-restart',
+        scenarioCausalClosure: {
+          recentFrontierHistory: [
+            'done-package.md / startup_active_gate_owner / snapshot_coverage / same-frontier',
+          ],
+        },
+      },
+    ];
+
+    for (const metadata of requiredCases) {
+      const errors = validateTwoLevelTheoryContract(
+        metadata,
+        WORK_TRACKER_LEDGER_TEST_FILE,
+        {status: WORK_TRACKER_ACTIVE_STATUS},
+      );
+      assert.match(errors.join('\n'), /metadata systemTheory is required/u);
+      assert.match(errors.join('\n'), /metadata sliceTheory is required/u);
+    }
+
+    const optionalErrors = validateTwoLevelTheoryContract(
+      baseMetadata,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {status: WORK_TRACKER_ACTIVE_STATUS},
+    );
+    assert.deepEqual(optionalErrors, []);
+  });
+
+  it('accepts a complete system theory plus executable slice theory', () => {
+    const errors = validateTwoLevelTheoryContract(
+      validTwoLevelTheoryMetadata,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true, status: WORK_TRACKER_ACTIVE_STATUS},
+    );
+
+    assert.deepEqual(errors, []);
+  });
+
+  it('rejects placeholders, non-command falsifiers, missing fit scores, and vague mechanisms', () => {
+    const errors = validateTwoLevelTheoryContract(
+      {
+        ...validTwoLevelTheoryMetadata,
+        systemTheory: {
+          ...validTwoLevelTheoryMetadata.systemTheory,
+          competingTheories: ['H1 only'],
+          transitionTable: [
+            {
+              ...validTwoLevelTheoryMetadata.systemTheory.transitionTable[0],
+              falsifier: 'frontier history review',
+            },
+          ],
+        },
+        sliceTheory: {
+          ...validTwoLevelTheoryMetadata.sliceTheory,
+          selectedMechanism: 'unclear',
+          falsifier: 'frontier history review',
+          theoryFitScore: {
+            ...validTwoLevelTheoryMetadata.sliceTheory.theoryFitScore,
+            evidenceFit: 'fresh route and history agree',
+          },
+          wrongSliceTriggers: ['<owner>'],
+        },
+      },
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true, status: WORK_TRACKER_ACTIVE_STATUS},
+    );
+
+    assert.match(errors.join('\n'), /competingTheories/u);
+    assert.match(errors.join('\n'), /must name a focused command/u);
+    assert.match(errors.join('\n'), /mechanism taxonomy term/u);
+    assert.match(errors.join('\n'), /high, medium, or low/u);
+    assert.match(errors.join('\n'), /wrongSliceTriggers/u);
+  });
+
+  it('includes system and slice theories in current-blocker handoff text', () => {
+    const payload = buildCurrentBlockerPayload(
+      'work/sprints/active-test-sprint.md',
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {
+        ...validTwoLevelTheoryMetadata,
+        currentState: 'active architecture discriminator is selected',
+        nextAction: 'select contract, migration, or architecture-gap stop',
+        proof: [
+          'falsifier: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage',
+        ],
+        writeScope: [WORK_TRACKER_LEDGER_TEST_FILE],
+        commitScope: [WORK_TRACKER_LEDGER_TEST_FILE],
+      },
+    );
+    const markdown = renderCurrentBlockerMarkdown(payload);
+
+    assert.equal(
+      payload.systemTheory.problemStatement,
+      validTwoLevelTheoryMetadata.systemTheory.problemStatement,
+    );
+    assert.match(markdown, /## System Theory/u);
+    assert.match(markdown, /## Slice Theory/u);
+    assert.match(markdown, /Theory-fit score/u);
   });
 });
 

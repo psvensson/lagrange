@@ -8,7 +8,7 @@ parent_index: ../workflow-guidelines/INDEX.md
 last_reviewed: 2026-05-23
 ---
 
-> **Canonical source.** Discovery Gate, Core Logic Brief Gate, Decision Experiment Gate, Sprint Architecture Decision Gate, Classification fast-path, Causal closure ledger. Index: [`INDEX.md`](INDEX.md).
+> **Canonical source.** Discovery Gate, Core Logic Brief Gate, Decision Experiment Gate, Two-Level Theory Contract, Sprint Architecture Decision Gate, Classification fast-path, Causal closure ledger. Index: [`INDEX.md`](INDEX.md).
 
 # Workflow — Decision & Closure Gates
 
@@ -119,6 +119,54 @@ Required:
 9. Sprint Architecture Decision Gate when the sprint may continue local proof,
    migrate owner boundary, classify `architecture-gap`, or route broad
    architecture work.
+
+## Two-Level Theory Contract
+
+Active `causal-escalation`, architecture-gated, owner-boundary migration, and
+repeated-frontier packages must split theory into two metadata levels before
+implementation.
+
+Do not treat those packages as pre-implementation ready unless they record both
+`systemTheory` and `sliceTheory` with the fields below.
+
+`systemTheory` is the whole-system causal map. It records:
+
+1. Problem statement.
+2. Phase chain.
+3. Owner-boundary map.
+4. Stable facts.
+5. Changed facts.
+6. Competing theories.
+7. Eliminated theories.
+8. Downstream symptoms.
+9. Transition table.
+10. Ownership migration triggers.
+11. Architecture-gap triggers.
+12. Whole-system invariant.
+
+Each transition-table row names the input signal, owner, missing transition,
+expected evidence, focused falsifier, and migration trigger.
+
+`sliceTheory` is the package-local executable contract. It records:
+
+1. System theory reference.
+2. Selected system theory.
+3. Selected mechanism.
+4. Source/test contract.
+5. Focused falsifier.
+6. Representative expected movement.
+7. Kill rule.
+8. Theory-fit score.
+9. Wrong-slice triggers.
+
+Theory-fit score uses concrete high/medium/low rationale for evidence fit,
+owner-boundary fit, falsifiability, representative movement, and downstream risk
+containment.
+
+Evidence-only theorizing remains sprint-level work. A package is promoted only
+when the slice can execute one declared source/test contract, migrate ownership,
+or close as architecture-gap. If the system theory cannot select a slice, do
+not open another local runtime patch.
 
 ## Discovery Gate
 

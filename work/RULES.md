@@ -130,6 +130,38 @@ mechanism` or omit the card when validation does not require it.
 
 ---
 
+## Two-Level Theory Contract
+<a name="two-level-theory-contract"></a>
+
+Repeated frontiers, architecture-gated packages, owner-boundary migrations, and
+`causal-escalation` work must separate whole-system theory from executable slice
+theory before implementation.
+
+Do not treat those packages as pre-implementation ready unless they record both
+`systemTheory` and `sliceTheory` with the fields below.
+
+`systemTheory` is the whole-system causal map. It must record the problem
+statement, phase chain, owner-boundary map, stable facts, changed facts,
+competing theories, eliminated theories, downstream symptoms, transition table,
+ownership migration triggers, architecture-gap triggers, and one whole-system
+invariant. The transition table names the input signal, owner, missing
+transition, expected evidence, focused falsifier, and migration trigger for each
+material owner boundary.
+
+`sliceTheory` is the package-local executable contract. It must cite the system
+theory, name the selected system theory, selected mechanism, source/test
+contract, focused falsifier, expected representative movement, kill rule,
+theory-fit score, and wrong-slice triggers. The theory-fit score uses concrete
+high/medium/low rationale for evidence fit, owner-boundary fit, falsifiability,
+representative movement, and downstream risk containment.
+
+Evidence-only reasoning stays at sprint level. Promote a package only when
+slice theory can execute one declared source/test contract, migrate ownership,
+or close as architecture-gap. If system theory cannot select a slice, do not
+open another local runtime patch.
+
+---
+
 ## Theory Loop Sprint Shape
 <a name="theory-loop-sprint-shape"></a>
 

@@ -28,6 +28,39 @@ import {
   EXPERIMENT_OUTCOME_FIELD,
   EXPERIMENT_OUTCOME_NEXT_BOUNDARY_FIELD,
   EXPERIMENT_OUTCOME_NEXT_OWNER_FIELD,
+  SYSTEM_THEORY_ARCHITECTURE_GAP_TRIGGERS_FIELD,
+  SYSTEM_THEORY_CHANGED_FACTS_FIELD,
+  SYSTEM_THEORY_COMPETING_THEORIES_FIELD,
+  SYSTEM_THEORY_DOWNSTREAM_SYMPTOMS_FIELD,
+  SYSTEM_THEORY_ELIMINATED_THEORIES_FIELD,
+  SYSTEM_THEORY_FIELD,
+  SYSTEM_THEORY_FIELDS,
+  SYSTEM_THEORY_OWNER_BOUNDARY_MAP_FIELD,
+  SYSTEM_THEORY_OWNERSHIP_MIGRATION_TRIGGERS_FIELD,
+  SYSTEM_THEORY_PHASE_CHAIN_FIELD,
+  SYSTEM_THEORY_PROBLEM_STATEMENT_FIELD,
+  SYSTEM_THEORY_STABLE_FACTS_FIELD,
+  SYSTEM_THEORY_TRANSITION_EXPECTED_EVIDENCE_FIELD,
+  SYSTEM_THEORY_TRANSITION_FALSIFIER_FIELD,
+  SYSTEM_THEORY_TRANSITION_FIELDS,
+  SYSTEM_THEORY_TRANSITION_INPUT_SIGNAL_FIELD,
+  SYSTEM_THEORY_TRANSITION_MIGRATION_TRIGGER_FIELD,
+  SYSTEM_THEORY_TRANSITION_MISSING_TRANSITION_FIELD,
+  SYSTEM_THEORY_TRANSITION_OWNER_FIELD,
+  SYSTEM_THEORY_TRANSITION_TABLE_FIELD,
+  SYSTEM_THEORY_WHOLE_SYSTEM_INVARIANT_FIELD,
+  SLICE_THEORY_FALSIFIER_FIELD,
+  SLICE_THEORY_FIELD,
+  SLICE_THEORY_FIELDS,
+  SLICE_THEORY_KILL_RULE_FIELD,
+  SLICE_THEORY_REPRESENTATIVE_MOVEMENT_FIELD,
+  SLICE_THEORY_SELECTED_MECHANISM_FIELD,
+  SLICE_THEORY_SELECTED_THEORY_FIELD,
+  SLICE_THEORY_SOURCE_TEST_CONTRACT_FIELD,
+  SLICE_THEORY_SYSTEM_REF_FIELD,
+  SLICE_THEORY_THEORY_FIT_SCORE_FIELD,
+  SLICE_THEORY_WRONG_SLICE_TRIGGERS_FIELD,
+  THEORY_FIT_SCORE_FIELDS,
   BOUNDED_EXPERIMENT_DISCRIMINATOR_FIELD,
   BOUNDED_EXPERIMENT_EXPECTED_METRIC_FIELD,
   BOUNDED_EXPERIMENT_FIELD,
@@ -643,6 +676,9 @@ const MODEL_FIT_FOCUSED_PROOF_COMMAND_PATTERN = new RegExp(
     'node(?:\\s+--test)?|tap|rg|git\\s+diff)\\b',
   'iu',
 );
+const TWO_LEVEL_THEORY_MECHANISM_PATTERN =
+  /\b(?:observation_gap|selection_gap|admission_gap|transition_gap|scheduling_gap|budget_gap|concurrency_gap|contract_gap|ownership_gap|downstream_symptom)\b/iu;
+const TWO_LEVEL_THEORY_SCORE_PATTERN = /\b(?:high|medium|low)\b/iu;
 const MODEL_FIT_REQUIRED_SPARK_LABELS = Object.freeze([
   MODEL_FIT_OWNED_FILES_LABEL,
   MODEL_FIT_FORBIDDEN_FILES_LABEL,
@@ -5128,6 +5164,68 @@ function metadataHasSelectedArchitecturePackageRoute(metadata = {}) {
     ARCHITECTURE_DECISION_GATE_ROUTE_ARCHITECTURE_PACKAGE;
 }
 
+function metadataHasActiveArchitectureDecisionGate(metadata = {}) {
+  const gate = metadata?.[ARCHITECTURE_DECISION_GATE_FIELD];
+  if (!isObjectRecord(gate)) {
+    return metadataHasSelectedArchitecturePackageRoute(metadata);
+  }
+  const status = normalizeLedgerText(gate.status);
+  const trigger = normalizeLedgerText(gate.trigger);
+  return status.length > NUM_ZERO &&
+    status !== ARCHITECTURE_DECISION_GATE_STATUS_NOT_REQUIRED &&
+    (
+      trigger !== ARCHITECTURE_DECISION_GATE_TRIGGER_NONE ||
+      [
+        ARCHITECTURE_DECISION_GATE_STATUS_REQUIRED,
+        ARCHITECTURE_DECISION_GATE_STATUS_PRESENTED,
+        ARCHITECTURE_DECISION_GATE_STATUS_SELECTED,
+        ARCHITECTURE_DECISION_GATE_STATUS_WATCHING,
+      ].includes(status)
+    );
+}
+
+function metadataHasRepeatedFrontierSignal(metadata = {}) {
+  const closure = metadata?.[SCENARIO_CAUSAL_CLOSURE_METADATA_FIELD];
+  if (!isObjectRecord(closure)) {
+    return false;
+  }
+  const recentFrontierHistory = Array.isArray(closure.recentFrontierHistory) ?
+    closure.recentFrontierHistory : [];
+  if (recentFrontierHistory.length > NUM_ZERO) {
+    return true;
+  }
+  return /\b(?:same-frontier|oscillat|repeat|unchanged|no[-\s]+reduction)\b/iu
+    .test([
+      closure.oscillationCheck,
+      closure.sameFrontierFallback,
+      closure.stopCondition,
+      closure.resultClassification,
+    ].map(normalizeLedgerText).join(' '));
+}
+
+function metadataRequiresTwoLevelTheory(metadata, fileStatus, phase) {
+  if (
+    fileStatus !== STATUS_ACTIVE ||
+    phase === VALIDATION_PHASE_ENTRY ||
+    !metadata
+  ) {
+    return false;
+  }
+  const ambiguityScore = Number(
+    metadata?.[METADATA_FIELD_MODEL_FIT]?.ambiguityScore,
+  );
+  return metadataLane(metadata) === LANE_CAUSAL_ESCALATION ||
+    metadataHasSelectedArchitecturePackageRoute(metadata) ||
+    metadataIsOwnerBoundaryMigrationPackage(metadata) ||
+    metadataHasActiveArchitectureDecisionGate(metadata) ||
+    metadataHasRepeatedFrontierSignal(metadata) ||
+    (
+      Number.isFinite(ambiguityScore) &&
+      ambiguityScore >= NUM_TWO &&
+      coreLogicBriefRequiredForLane(metadataLane(metadata))
+    );
+}
+
 function metadataHasSameFrontierHumanException(metadata = {}) {
   const route = selectedArchitectureGateRoute(metadata);
   const stopCondition = scenarioClosureStopCondition(metadata);
@@ -5287,6 +5385,304 @@ export function validateArchitectureDecisionGateContract(
       `${filePath}: architectureDecisionGate cannot be not-required when ` +
       'scenario evidence classified an architecture-gap.',
     );
+  }
+  return errors;
+}
+
+function validateTwoLevelConcreteField(filePath, fieldPath, value) {
+  if (isConcreteMetadataText(value)) {
+    return [];
+  }
+  return [`${filePath}: ${fieldPath} must be a concrete two-level theory value.`];
+}
+
+function validateTwoLevelConcreteArray(
+  filePath,
+  parentField,
+  metadata,
+  fieldName,
+  minLength = NUM_ONE,
+) {
+  const value = metadata?.[fieldName];
+  const fieldPath = `${parentField}.${fieldName}`;
+  if (!Array.isArray(value)) {
+    return [`${filePath}: ${fieldPath} must be an array.`];
+  }
+  const errors = [];
+  if (value.length < minLength) {
+    errors.push(
+      `${filePath}: ${fieldPath} must contain at least ${minLength} ` +
+      'concrete item(s).',
+    );
+  }
+  for (let index = NUM_ZERO; index < value.length; index += NUM_ONE) {
+    errors.push(...validateTwoLevelConcreteField(
+      filePath,
+      `${fieldPath}[${index}]`,
+      value[index],
+    ));
+  }
+  return errors;
+}
+
+function validateTwoLevelCommandField(filePath, fieldPath, value) {
+  const errors = validateTwoLevelConcreteField(filePath, fieldPath, value);
+  const normalized = normalizeLedgerText(value);
+  if (
+    normalized.length > NUM_ZERO &&
+    !MODEL_FIT_FOCUSED_PROOF_COMMAND_PATTERN.test(normalized)
+  ) {
+    errors.push(`${filePath}: ${fieldPath} must name a focused command.`);
+  }
+  return errors;
+}
+
+function validateSystemTheoryTransitionTable(filePath, systemTheory) {
+  const transitionTable =
+    systemTheory?.[SYSTEM_THEORY_TRANSITION_TABLE_FIELD];
+  const fieldPath =
+    `${SYSTEM_THEORY_FIELD}.${SYSTEM_THEORY_TRANSITION_TABLE_FIELD}`;
+  if (!Array.isArray(transitionTable)) {
+    return [`${filePath}: ${fieldPath} must be an array.`];
+  }
+  const errors = [];
+  if (transitionTable.length === NUM_ZERO) {
+    errors.push(
+      `${filePath}: ${fieldPath} must contain at least one transition row.`,
+    );
+  }
+  for (let index = NUM_ZERO; index < transitionTable.length; index += NUM_ONE) {
+    const row = transitionTable[index];
+    const rowPath = `${fieldPath}[${index}]`;
+    if (!isObjectRecord(row)) {
+      errors.push(`${filePath}: ${rowPath} must be an object.`);
+      continue;
+    }
+    for (const fieldName of SYSTEM_THEORY_TRANSITION_FIELDS) {
+      const valuePath = `${rowPath}.${fieldName}`;
+      if (fieldName === SYSTEM_THEORY_TRANSITION_FALSIFIER_FIELD) {
+        errors.push(...validateTwoLevelCommandField(
+          filePath,
+          valuePath,
+          row[fieldName],
+        ));
+      } else {
+        errors.push(...validateTwoLevelConcreteField(
+          filePath,
+          valuePath,
+          row[fieldName],
+        ));
+      }
+    }
+  }
+  return errors;
+}
+
+function validateSystemTheory(filePath, systemTheory) {
+  if (!isObjectRecord(systemTheory)) {
+    return [`${filePath}: metadata ${SYSTEM_THEORY_FIELD} must be an object.`];
+  }
+  const errors = [];
+  errors.push(...validateTwoLevelConcreteField(
+    filePath,
+    `${SYSTEM_THEORY_FIELD}.${SYSTEM_THEORY_PROBLEM_STATEMENT_FIELD}`,
+    systemTheory[SYSTEM_THEORY_PROBLEM_STATEMENT_FIELD],
+  ));
+  errors.push(...validateTwoLevelConcreteArray(
+    filePath,
+    SYSTEM_THEORY_FIELD,
+    systemTheory,
+    SYSTEM_THEORY_PHASE_CHAIN_FIELD,
+    NUM_TWO,
+  ));
+  errors.push(...validateTwoLevelConcreteArray(
+    filePath,
+    SYSTEM_THEORY_FIELD,
+    systemTheory,
+    SYSTEM_THEORY_OWNER_BOUNDARY_MAP_FIELD,
+  ));
+  errors.push(...validateTwoLevelConcreteArray(
+    filePath,
+    SYSTEM_THEORY_FIELD,
+    systemTheory,
+    SYSTEM_THEORY_STABLE_FACTS_FIELD,
+  ));
+  errors.push(...validateTwoLevelConcreteArray(
+    filePath,
+    SYSTEM_THEORY_FIELD,
+    systemTheory,
+    SYSTEM_THEORY_CHANGED_FACTS_FIELD,
+  ));
+  errors.push(...validateTwoLevelConcreteArray(
+    filePath,
+    SYSTEM_THEORY_FIELD,
+    systemTheory,
+    SYSTEM_THEORY_COMPETING_THEORIES_FIELD,
+    NUM_TWO,
+  ));
+  errors.push(...validateTwoLevelConcreteArray(
+    filePath,
+    SYSTEM_THEORY_FIELD,
+    systemTheory,
+    SYSTEM_THEORY_ELIMINATED_THEORIES_FIELD,
+  ));
+  errors.push(...validateTwoLevelConcreteArray(
+    filePath,
+    SYSTEM_THEORY_FIELD,
+    systemTheory,
+    SYSTEM_THEORY_DOWNSTREAM_SYMPTOMS_FIELD,
+  ));
+  errors.push(...validateSystemTheoryTransitionTable(filePath, systemTheory));
+  errors.push(...validateTwoLevelConcreteArray(
+    filePath,
+    SYSTEM_THEORY_FIELD,
+    systemTheory,
+    SYSTEM_THEORY_OWNERSHIP_MIGRATION_TRIGGERS_FIELD,
+  ));
+  errors.push(...validateTwoLevelConcreteArray(
+    filePath,
+    SYSTEM_THEORY_FIELD,
+    systemTheory,
+    SYSTEM_THEORY_ARCHITECTURE_GAP_TRIGGERS_FIELD,
+  ));
+  errors.push(...validateTwoLevelConcreteField(
+    filePath,
+    `${SYSTEM_THEORY_FIELD}.${SYSTEM_THEORY_WHOLE_SYSTEM_INVARIANT_FIELD}`,
+    systemTheory[SYSTEM_THEORY_WHOLE_SYSTEM_INVARIANT_FIELD],
+  ));
+  return errors;
+}
+
+function validateTheoryFitScore(filePath, score) {
+  const fieldPath =
+    `${SLICE_THEORY_FIELD}.${SLICE_THEORY_THEORY_FIT_SCORE_FIELD}`;
+  if (!isObjectRecord(score)) {
+    return [`${filePath}: ${fieldPath} must be an object.`];
+  }
+  const errors = [];
+  for (const fieldName of THEORY_FIT_SCORE_FIELDS) {
+    const valuePath = `${fieldPath}.${fieldName}`;
+    const value = score[fieldName];
+    errors.push(...validateTwoLevelConcreteField(filePath, valuePath, value));
+    const normalized = normalizeLedgerText(value);
+    if (
+      normalized.length > NUM_ZERO &&
+      !TWO_LEVEL_THEORY_SCORE_PATTERN.test(normalized)
+    ) {
+      errors.push(
+        `${filePath}: ${valuePath} must include a high, medium, or low ` +
+        'fit score with rationale.',
+      );
+    }
+  }
+  return errors;
+}
+
+function validateSliceTheory(filePath, sliceTheory) {
+  if (!isObjectRecord(sliceTheory)) {
+    return [`${filePath}: metadata ${SLICE_THEORY_FIELD} must be an object.`];
+  }
+  const errors = [];
+  for (const fieldName of SLICE_THEORY_FIELDS) {
+    if (fieldName === SLICE_THEORY_THEORY_FIT_SCORE_FIELD) {
+      errors.push(...validateTheoryFitScore(filePath, sliceTheory[fieldName]));
+      continue;
+    }
+    if (fieldName === SLICE_THEORY_WRONG_SLICE_TRIGGERS_FIELD) {
+      errors.push(...validateTwoLevelConcreteArray(
+        filePath,
+        SLICE_THEORY_FIELD,
+        sliceTheory,
+        fieldName,
+      ));
+      continue;
+    }
+    const fieldPath = `${SLICE_THEORY_FIELD}.${fieldName}`;
+    if (fieldName === SLICE_THEORY_FALSIFIER_FIELD) {
+      errors.push(...validateTwoLevelCommandField(
+        filePath,
+        fieldPath,
+        sliceTheory[fieldName],
+      ));
+    } else {
+      errors.push(...validateTwoLevelConcreteField(
+        filePath,
+        fieldPath,
+        sliceTheory[fieldName],
+      ));
+    }
+  }
+  const selectedMechanism = normalizeLedgerText(
+    sliceTheory[SLICE_THEORY_SELECTED_MECHANISM_FIELD],
+  );
+  if (
+    selectedMechanism.length > NUM_ZERO &&
+    !TWO_LEVEL_THEORY_MECHANISM_PATTERN.test(selectedMechanism)
+  ) {
+    errors.push(
+      `${filePath}: ${SLICE_THEORY_FIELD}.` +
+      `${SLICE_THEORY_SELECTED_MECHANISM_FIELD} must name a mechanism ` +
+      'taxonomy term such as contract_gap or ownership_gap.',
+    );
+  }
+  const movement = normalizeLedgerText(
+    sliceTheory[SLICE_THEORY_REPRESENTATIVE_MOVEMENT_FIELD],
+  );
+  if (
+    movement.length > NUM_ZERO &&
+    !REPRESENTATIVE_MOVEMENT_PREDICTION_PATTERN.test(movement) &&
+    !/\b(?:contract|architecture[-\s]+gap|route selection|selected route)\b/iu.test(movement)
+  ) {
+    errors.push(
+      `${filePath}: ${SLICE_THEORY_FIELD}.` +
+      `${SLICE_THEORY_REPRESENTATIVE_MOVEMENT_FIELD} must name a concrete ` +
+      'frontier move, migration, route selection, representative green, or architecture-gap result.',
+    );
+  }
+  const killRule = normalizeLedgerText(sliceTheory[SLICE_THEORY_KILL_RULE_FIELD]);
+  if (
+    killRule.length > NUM_ZERO &&
+    !DECISION_EXPERIMENT_KILL_RULE_PATTERN.test(killRule)
+  ) {
+    errors.push(
+      `${filePath}: ${SLICE_THEORY_FIELD}.${SLICE_THEORY_KILL_RULE_FIELD} ` +
+      'must stop or escalate on unchanged evidence, same-frontier evidence, ' +
+      'no-reduction evidence, or architecture-gap evidence.',
+    );
+  }
+  return errors;
+}
+
+export function validateTwoLevelTheoryContract(
+  metadata,
+  filePath,
+  options = {},
+) {
+  const phase = options.phase || VALIDATION_PHASE_PRE_IMPL;
+  const fileStatus = options.status || normalizeLedgerText(metadata?.status);
+  const requiresTheory =
+    options[LEDGER_VALIDATION_REQUIRES_LEDGER] === true ||
+    metadataRequiresTwoLevelTheory(metadata, fileStatus, phase);
+  const systemTheory = metadata?.[SYSTEM_THEORY_FIELD];
+  const sliceTheory = metadata?.[SLICE_THEORY_FIELD];
+  const errors = [];
+  if (!systemTheory && requiresTheory) {
+    errors.push(
+      `${filePath}: metadata ${SYSTEM_THEORY_FIELD} is required for active ` +
+      'causal-escalation, architecture-gated, owner-migration, or repeated-frontier packages.',
+    );
+  }
+  if (!sliceTheory && requiresTheory) {
+    errors.push(
+      `${filePath}: metadata ${SLICE_THEORY_FIELD} is required for active ` +
+      'causal-escalation, architecture-gated, owner-migration, or repeated-frontier packages.',
+    );
+  }
+  if (systemTheory !== undefined) {
+    errors.push(...validateSystemTheory(filePath, systemTheory));
+  }
+  if (sliceTheory !== undefined) {
+    errors.push(...validateSliceTheory(filePath, sliceTheory));
   }
   return errors;
 }
@@ -6777,6 +7173,16 @@ function runPackageValidationsSync(filePath, content, fileStatus, metadata, opti
       status: fileStatus,
     },
   ));
+  errors.push(...validateTwoLevelTheoryContract(
+    metadata,
+    relativePath,
+    {
+      [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+        metadataRequiresTwoLevelTheory(metadata, fileStatus, phase),
+      phase,
+      status: fileStatus,
+    },
+  ));
   errors.push(...validateProgressContract(metadata, relativePath, {
     [LEDGER_VALIDATION_REQUIRES_LEDGER]:
       metadataRequiresProgressContract(metadata, fileStatus, relativePath),
@@ -7975,6 +8381,12 @@ function buildDoctorSuggestion(error) {
       'before another local implementation package. Use human escalation only ' +
       'when evidence is contradictory, policy-blocked, credential-blocked, or unavailable.';
   }
+  if (/systemTheory|sliceTheory|two-level theory/iu.test(error)) {
+    return 'Record `systemTheory` for the whole-system causal map and ' +
+      '`sliceTheory` for the one executable package contract, including a ' +
+      'focused falsifier, representative movement, kill rule, wrong-slice ' +
+      'triggers, and high/medium/low theory-fit scores.';
+  }
   if (/architectureDecisionGate/iu.test(error)) {
     return 'Record `architectureDecisionGate` with concrete choices, proof, ' +
       'and a selected architecture route before runtime implementation resumes. ' +
@@ -8373,6 +8785,8 @@ export function buildCurrentBlockerPayload(
     experimentOutcome: metadata[EXPERIMENT_OUTCOME_FIELD] || {},
     rerunDecision: metadata[RERUN_DECISION_FIELD] || {},
     classificationEfficiency: metadata[CLASSIFICATION_EFFICIENCY_FIELD],
+    systemTheory: metadata[SYSTEM_THEORY_FIELD] || {},
+    sliceTheory: metadata[SLICE_THEORY_FIELD] || {},
     architectureDecisionGate: buildArchitectureDecisionGatePayload(
       metadata,
       activePackageFile,
@@ -8418,6 +8832,8 @@ function buildNoActiveCurrentBlockerPayload(activeSprintFile = null) {
     experimentOutcome: {},
     rerunDecision: {},
     classificationEfficiency: {},
+    systemTheory: {},
+    sliceTheory: {},
     architectureDecisionGate: {},
     predecessor: null,
     theoryLedgerRefs: [],
@@ -8451,27 +8867,35 @@ function currentBlockerImplementationFiles(payload) {
 function currentBlockerTheoryFocus(payload) {
   return {
     theoryUnderTest: firstCurrentBlockerValue([
+      payload.sliceTheory?.selectedSystemTheory,
       payload.causalGovernance?.hypothesis,
       payload.currentState,
     ]),
     causalQuestion: firstCurrentBlockerValue([
+      payload.systemTheory?.problemStatement,
       payload.scenarioCausalClosure?.missingCausalEdge,
       payload.dominantReason,
     ]),
-    implementationSlice: firstCurrentBlockerValue([payload.nextAction]),
+    implementationSlice: firstCurrentBlockerValue([
+      payload.sliceTheory?.sourceTestContract,
+      payload.nextAction,
+    ]),
     implementationFiles: currentBlockerImplementationFiles(payload),
     expectedImplementationDelta: firstCurrentBlockerValue([
+      payload.sliceTheory?.representativeExpectedMovement,
       payload.causalGovernance?.expectedCausalModelChange,
       payload.scenarioCausalClosure?.expectedObservableTransition,
       payload.observablePrediction?.predicted,
       payload.rerunDecision?.expectedDelta,
     ]),
     falsifyingProbe: firstCurrentBlockerValue([
+      payload.sliceTheory?.falsifier,
       payload.scenarioCausalClosure?.missingCausalEdgeProbe,
       payload.causalGovernance?.stopConditionCheck,
       normalizeMetadataStringList(payload.proof)[NUM_ZERO],
     ]),
     stopRule: firstCurrentBlockerValue([
+      payload.sliceTheory?.killRule,
       payload.scenarioCausalClosure?.sameFrontierFallback,
       payload.scenarioCausalClosure?.stopCondition,
       payload.architectureDecisionGate?.nextAction,
@@ -8487,6 +8911,30 @@ function formatArchitectureGateChoices(choices) {
     `${index + NUM_ONE}. \`${choice.id || DEFAULT_UNKNOWN}\` ` +
     `route=\`${choice.route || DEFAULT_UNKNOWN}\` - ` +
     `${choice.summary || DEFAULT_UNKNOWN}`,
+  ).join(NEWLINE);
+}
+
+function formatSystemTheoryTransitionTable(rows = []) {
+  if (!Array.isArray(rows) || rows.length === NUM_ZERO) {
+    return '1. None recorded';
+  }
+  return rows.map((row, index) =>
+    `${index + NUM_ONE}. Input \`${row.inputSignal || DEFAULT_UNKNOWN}\` ` +
+    `owner \`${row.owner || DEFAULT_UNKNOWN}\`; missing ` +
+    `\`${row.missingTransition || DEFAULT_UNKNOWN}\`; expected ` +
+    `\`${row.expectedEvidence || DEFAULT_UNKNOWN}\`; falsifier ` +
+    `\`${row.falsifier || DEFAULT_UNKNOWN}\`; migration trigger ` +
+    `\`${row.migrationTrigger || DEFAULT_UNKNOWN}\``,
+  ).join(NEWLINE);
+}
+
+function formatTheoryFitScore(score = {}) {
+  if (!isObjectRecord(score)) {
+    return '1. None recorded';
+  }
+  return THEORY_FIT_SCORE_FIELDS.map((fieldName, index) =>
+    `${index + NUM_ONE}. \`${fieldName}\`: ` +
+    `${score[fieldName] || DEFAULT_UNKNOWN}`,
   ).join(NEWLINE);
 }
 
@@ -8787,6 +9235,85 @@ export function renderCurrentBlockerMarkdown(payload) {
     '',
     formatMarkdownList(payload.modelFit?.escalationTriggers || []),
     '',
+    '## System Theory',
+    '',
+    'Problem statement: ' +
+      `${payload.systemTheory?.problemStatement || DEFAULT_UNKNOWN}`,
+    '',
+    'Phase chain:',
+    '',
+    formatMarkdownList(payload.systemTheory?.phaseChain || []),
+    '',
+    'Owner-boundary map:',
+    '',
+    formatMarkdownList(payload.systemTheory?.ownerBoundaryMap || []),
+    '',
+    'Stable facts:',
+    '',
+    formatMarkdownList(payload.systemTheory?.stableFacts || []),
+    '',
+    'Changed facts:',
+    '',
+    formatMarkdownList(payload.systemTheory?.changedFacts || []),
+    '',
+    'Competing theories:',
+    '',
+    formatMarkdownList(payload.systemTheory?.competingTheories || []),
+    '',
+    'Eliminated theories:',
+    '',
+    formatMarkdownList(payload.systemTheory?.eliminatedTheories || []),
+    '',
+    'Downstream symptoms:',
+    '',
+    formatMarkdownList(payload.systemTheory?.downstreamSymptoms || []),
+    '',
+    'Transition table:',
+    '',
+    formatSystemTheoryTransitionTable(payload.systemTheory?.transitionTable || []),
+    '',
+    'Ownership migration triggers:',
+    '',
+    formatMarkdownList(payload.systemTheory?.ownershipMigrationTriggers || []),
+    '',
+    'Architecture-gap triggers:',
+    '',
+    formatMarkdownList(payload.systemTheory?.architectureGapTriggers || []),
+    '',
+    'Whole-system invariant: ' +
+      `${payload.systemTheory?.wholeSystemInvariant || DEFAULT_UNKNOWN}`,
+    '',
+    '## Slice Theory',
+    '',
+    'System theory reference: ' +
+      `${payload.sliceTheory?.systemTheoryRef || DEFAULT_UNKNOWN}`,
+    '',
+    'Selected system theory: ' +
+      `${payload.sliceTheory?.selectedSystemTheory || DEFAULT_UNKNOWN}`,
+    '',
+    'Selected mechanism: ' +
+      `${payload.sliceTheory?.selectedMechanism || DEFAULT_UNKNOWN}`,
+    '',
+    'Source/test contract: ' +
+      `${payload.sliceTheory?.sourceTestContract || DEFAULT_UNKNOWN}`,
+    '',
+    'Falsifier: ' +
+      `${payload.sliceTheory?.falsifier || DEFAULT_UNKNOWN}`,
+    '',
+    'Representative expected movement: ' +
+      `${payload.sliceTheory?.representativeExpectedMovement || DEFAULT_UNKNOWN}`,
+    '',
+    'Kill rule: ' +
+      `${payload.sliceTheory?.killRule || DEFAULT_UNKNOWN}`,
+    '',
+    'Theory-fit score:',
+    '',
+    formatTheoryFitScore(payload.sliceTheory?.theoryFitScore || {}),
+    '',
+    'Wrong-slice triggers:',
+    '',
+    formatMarkdownList(payload.sliceTheory?.wrongSliceTriggers || []),
+    '',
     '## Theory Ledger References',
     '',
     formatMarkdownList(payload.theoryLedgerRefs || []),
@@ -9038,6 +9565,16 @@ async function currentBlockerCommand(args) {
     ...validateScenarioCausalClosureContract(metadata, relativePackagePath, {
       [LEDGER_VALIDATION_REQUIRES_LEDGER]: isScenarioDrivenMetadata(metadata),
       status: STATUS_ACTIVE,
+    }),
+    ...validateTwoLevelTheoryContract(metadata, relativePackagePath, {
+      [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+        metadataRequiresTwoLevelTheory(
+          metadata,
+          STATUS_ACTIVE,
+          VALIDATION_PHASE_PRE_IMPL,
+        ),
+      status: STATUS_ACTIVE,
+      phase: VALIDATION_PHASE_PRE_IMPL,
     }),
   ];
   if (generationErrors.length > NUM_ZERO) {
