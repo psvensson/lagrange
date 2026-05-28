@@ -1,6 +1,6 @@
 # Theory Loop Causal Learning Upgrade Sprint
 
-Status: active. Created on May 28, 2026.
+Status: done. Created on May 28, 2026.
 
 ## Goal
 
@@ -20,22 +20,22 @@ Upgrade the theory loop from an artifact-routing package queue into a general ca
 ## Current Edge Card
 
 ```text
-Representative artifact: none
-Visible first frontier: unknown
-Active package: work/packages/done-20260528-theory-loop-negative-learning-frontier-history.md
+Representative artifact: test-output/reports/rolling-restart-active-gate-owner-reconcile-retry-20260528T040351Z.report.json
+Visible first frontier: active_gate_snapshot_coverage
+Active package: work/packages/done-20260528-theory-loop-active-gate-calibration-proof.md
 Active package owner: workflow_tooling_owner
-Active package boundary: negative_learning_frontier_history
-Selected cause: workflow_improvement
-Required action: Add negative-learning and frontier-history commands that summarize prior package learning before another local patch is selected.
+Active package boundary: theory_loop_active_gate_calibration
+Selected cause: active_gate_timed_out
+Required action: Prove the upgraded theory loop classifies the active-gate evidence as a transition or scheduling gap and rejects another witness-selection, timeout-only, or downstream-symptom package from unchanged evidence.
 Representative status: unknown
-Causal outcome: unknown
+Causal outcome: continue_local_fix
 Architecture gate: not-required / unknown
-Expected delta: unknown
-Current state: Closed packages contain useful evidence, but the workflow has no focused command that surfaces mechanisms ruled out, invariant blockers, and repeated owner/boundary history before a new package opens.
-Allowed edits: package.json, scripts/list-commands.js, scripts/work-negative-learning.js, scripts/work-frontier-history.js, test/scripts/work-negative-learning.test.js, test/scripts/work-frontier-history.test.js
-Candidate runtime files: unknown
-Forbidden edits: commands need to mutate packages, frontier history requires full raw report parsing instead of package metadata, output cannot distinguish repeated frontier from repeated mechanism
-Required latest proof: regression: npm test -- test/scripts/work-negative-learning.test.js test/scripts/work-frontier-history.test.js, supporting: npm run work:negative-learning -- --package-dir work/packages --limit 12, supporting: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12, supporting: npm run work:validate -- --entry work/packages/todo-20260528-theory-loop-negative-learning-frontier-history.md, supporting: npm run work:validate -- --pre-impl work/packages/todo-20260528-theory-loop-negative-learning-frontier-history.md, supporting: git diff --check -- package.json scripts/list-commands.js scripts/work-negative-learning.js scripts/work-frontier-history.js test/scripts/work-negative-learning.test.js test/scripts/work-frontier-history.test.js
+Expected delta: migrate owner or open architecture gate (to prevent loop oscillation on invariant blockers)
+Current state: The current active-gate evidence stayed on snapshot coverage with owner_reconcile_pending, write_deferred, enqueued=false, pendingReconcileCount=0, and snapshotCoverageNodeCount=1/5 after witness-selection, bounded-return, and retry-cadence work.
+Allowed edits: test/scripts/work-theory-loop-active-gate-calibration.test.js
+Candidate runtime files: test/distributed/harness/cluster-segment-7-class-5.js, test/distributed/harness/cluster-control-snapshot-recovery.js, test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-selected-source-test-cases.js
+Forbidden edits: the proof requires runtime changes, the tools cannot classify the evidence without active-gate-specific branches, the active-gate artifacts are missing or contradict current blocker state
+Required latest proof: falsifier: npm test -- test/scripts/work-theory-loop-active-gate-calibration.test.js, regression: npm run work:artifact-compare -- test-output/reports/rolling-restart-active-gate-snapshot-coverage-retry-cadence-20260528T033446Z.report.json test-output/reports/rolling-restart-active-gate-owner-reconcile-retry-20260528T040351Z.report.json, supporting: npm run work:mechanism-card -- test-output/reports/rolling-restart-active-gate-owner-reconcile-retry-20260528T040351Z.report.json, supporting: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12, supporting: npm run work:validate -- --entry work/packages/done-20260528-theory-loop-active-gate-calibration-proof.md, supporting: npm run work:validate -- --pre-impl work/packages/done-20260528-theory-loop-active-gate-calibration-proof.md, supporting: git diff --check -- test/scripts/work-theory-loop-active-gate-calibration.test.js
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -92,7 +92,7 @@ Expected action bias: define or execute an owner-recovery retry/enqueue transiti
 
 ## Package Queue
 
-1. [Theory Loop Mechanism Taxonomy And Card Contract](../packages/todo-20260528-theory-loop-mechanism-taxonomy-and-card-contract.md)
+1. [Theory Loop Mechanism Taxonomy And Card Contract](../packages/done-20260528-theory-loop-mechanism-taxonomy-and-card-contract.md)
    - Lane: `lightweight-maintenance`
    - Purpose: Add the general mechanism taxonomy and mechanism-card contract to canonical workflow rules and package/sprint templates.
    - First-run reason: The workflow must classify missing behavior before choosing implementation, otherwise repeated same-frontier packages can keep changing adjacent symptoms.
@@ -112,7 +112,7 @@ Expected action bias: define or execute an owner-recovery retry/enqueue transiti
    - Lane: `lightweight-maintenance`
    - Purpose: Add commands that extract package learning lines and repeated owner/boundary/mechanism history before a new local patch is opened.
    - First-run reason: Agents need durable memory of mechanisms ruled out and metrics that stayed unchanged.
-6. [Theory Loop Active Gate Calibration Proof](../packages/todo-20260528-theory-loop-active-gate-calibration-proof.md)
+6. [Theory Loop Active Gate Calibration Proof](../packages/done-20260528-theory-loop-active-gate-calibration-proof.md)
    - Lane: `experiment`
    - Purpose: Use the new commands on the current rolling-restart active-gate artifacts and prove the upgraded loop selects transition or scheduling work rather than another witness-selection, timeout, or downstream-symptom package.
    - First-run reason: The sprint must improve the current failure pattern while staying general for future problem domains.

@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "active",
+  "status": "superseded",
   "intent": {
     "opened": "2026-05-27",
     "lane": "experiment",
@@ -13,18 +13,28 @@
     "owner": "startup_active_gate_owner",
     "boundary": "snapshot_coverage",
     "dominantReason": "snapshot_coverage_incomplete",
-    "currentState": "Representative evidence selects startup_active_gate_owner / snapshot_coverage at active_gate_snapshot_coverage; the package records the bounded next decision before runtime edits.",
-    "nextAction": "Triage active_gate_snapshot_coverage with combined scenario evidence before runtime edits."
+    "currentState": "Canonical topology evidence still exposes active_gate_snapshot_coverage, but timeline and failure-phase evidence show active gate and load readiness already passed before benchmark_events partition bootstrap failed.",
+    "nextAction": "Migrate to the benchmark table bootstrap control-timeout runtime successor.",
+    "successor": "work/packages/done-20260527-rolling-restart-benchmark-table-bootstrap-control-timeout-runtime.md",
+    "closed": "2026-05-27"
   },
   "scope": {
-    "writeScope": [],
+    "writeScope": [
+      "work/packages/done-20260527-rolling-restart-benchmark-table-bootstrap-primary-rotation-runtime.md",
+      "work/packages/done-20260527-rolling-restart-startup-active-gate-owner-snapshot-coverage.md"
+    ],
     "handoffFiles": [
       "test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json"
     ],
     "generatedFiles": [],
-    "candidateRuntimeFiles": [],
+    "candidateRuntimeFiles": [
+      "test/distributed/scenarios/table-distribution-helpers-segment-3.js",
+      "test/distributed/harness/__tests__/table-distribution-helpers-bootstrap-primary-rotation.test.js"
+    ],
     "commitScope": [
-      "work/packages/active-20260527-rolling-restart-startup-active-gate-owner-snapshot-coverage.md"
+      "work/packages/active-20260527-rolling-restart-startup-active-gate-owner-snapshot-coverage.md",
+      "work/packages/done-20260527-rolling-restart-benchmark-table-bootstrap-primary-rotation-runtime.md",
+      "work/packages/done-20260527-rolling-restart-startup-active-gate-owner-snapshot-coverage.md"
     ]
   },
   "gates": {
@@ -44,13 +54,23 @@
   },
   "execution": {
     "theoryLedgerRefs": [],
-    "theoryLedger": "not-applicable: this architecture experiment selects the next active-gate snapshot coverage contract and will record or cite a durable theory at closure if it creates one.",
+    "theoryLedger": "no ledger update: not-applicable because this classification only migrates to the already evidenced benchmark table bootstrap successor.",
     "proof": {
       "commands": [
         "falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json",
         "regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json --markdown",
         "supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json --markdown"
       ]
+    },
+    "implementation": {
+      "parentRevalidatedFocusedProof": true,
+      "filesChanged": [
+        "work/packages/active-20260527-rolling-restart-startup-active-gate-owner-snapshot-coverage.md",
+        "work/sprints/active-2026-q2-rolling-restart-active-gate-theory-loop-resume.md"
+      ]
+    },
+    "verificationFix": {
+      "parentRevalidatedFocusedProof": true
     }
   },
   "boundedExperiment": {
@@ -66,9 +86,9 @@
   "observablePrediction": {
     "metric": "Architecture package selects one implementable active-gate repair-deferred handoff contract or records an architecture stop before another runtime patch.",
     "predicted": "Architecture package selects one implementable active-gate repair-deferred handoff contract or records an architecture stop before another runtime patch.",
-    "observed": "pending-before-observation",
-    "accuracy": "pending-before-observation",
-    "evidence": "pending-before-observation"
+    "observed": "Selected benchmark table bootstrap control-timeout runtime successor because stage evidence reached setup.cluster.active and scenario.load-readiness.stable before the benchmark_events partition visibility timeout.",
+    "accuracy": "partial",
+    "evidence": "test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json"
   },
   "modelFitSplit": {
     "targetExecutionModel": "gpt-5.3-codex-spark",
@@ -119,13 +139,20 @@
       "npm run work:validate -- --pre-impl"
     ]
   },
+  "experimentOutcome": {
+    "distinguishedHypothesis": "H2",
+    "decision": "owner-boundary-migration",
+    "nextOwner": "startup_readiness_owner",
+    "nextBoundary": "startup_support_evidence",
+    "evidence": "test-output/reports/.playback/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z/rolling-restart/events.ndjson; test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json"
+  },
   "causalGovernance": {
     "hypothesis": "Selected snapshot source remains admin-reachable but repair-deferred, and active-gate snapshot coverage has no detected owner-recovery handoff to rearm or promote an alternate witness.",
     "stopConditionCheck": "Run npm run analyze:causal-model on test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json, then use the handoff probe and scenario route before any runtime edits; select one architecture successor or stop.",
     "expectedCausalModelChange": "The architecture package records whether the missing active-gate contract is repair-deferred handoff rearming, alternate witness promotion, or an architecture stop.",
-    "representativeOutcome": "pending-before-rerun",
+    "representativeOutcome": "migrated",
     "causalDebt": "Fresh representative evidence repeated the table partition visibility timeout after focused bootstrap proof, while canonical handoff evidence reports selectedSnapshotObservationState=deferred_refresh, runtimePromotionAllowed=false, pendingRecoveryCount=0, and snapshotCoverageNodeCount=1/5.",
-    "crossBoundaryReview": "Do not patch benchmark table bootstrap, startup readiness, priority recovery, or timeout budgets in this architecture package; runtime files remain candidates until the contract decision is selected."
+    "crossBoundaryReview": "Do not patch runtime files in this architecture package; benchmark table bootstrap runtime files are promoted only in the active successor package."
   },
   "scenarioCausalClosure": {
     "referenceScenarioOrProbe": "rolling-restart active-gate snapshot coverage repair-deferred architecture",
@@ -148,11 +175,22 @@
     "expectedObservableTransition": "The loop stops same-slice runtime edits and promotes one architecture-selected successor or architecture stop.",
     "maxProgressBound": "one architecture experiment package; no runtime edits before selection",
     "sameFrontierFallback": "If the architecture proof cannot distinguish a successor contract, record architecture-gap stop instead of opening another local runtime package.",
-    "expectedNextFrontier": "selected active-gate runtime successor, architecture-gap stop, or representative-green after a later runtime package",
-    "resultClassification": "pending-before-probe",
-    "stopCondition": "continue-local-fix"
+    "expectedNextFrontier": "benchmark table bootstrap control-timeout runtime successor",
+    "resultClassification": "migrated",
+    "stopCondition": "migrate-owner-boundary"
   },
-  "theoryLedger": "not-applicable: this architecture experiment selects the next active-gate snapshot coverage contract and will record or cite a durable theory at closure if it creates one."
+  "theoryLedger": "no ledger update: not-applicable because this classification only migrates to the already evidenced benchmark table bootstrap successor.",
+  "implementation": {
+    "parentRevalidatedFocusedProof": true,
+    "filesChanged": [
+      "work/packages/active-20260527-rolling-restart-startup-active-gate-owner-snapshot-coverage.md",
+      "work/sprints/active-2026-q2-rolling-restart-active-gate-theory-loop-resume.md"
+    ]
+  },
+  "verificationFix": {
+    "parentRevalidatedFocusedProof": true
+  },
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -288,9 +326,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: startup_active_gate_owner; files-changed: none recorded yet; validation: npm run work:evidence-summary -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json and parent revalidated focused proof: yes before closure; outcome: pending.
-- [ ] action: verification-fix; owner: startup_active_gate_owner; files-changed: none recorded yet; validation: verifier reruns focused proof and parent revalidated focused proof: yes before closure; outcome: pending.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: pending.
+- [x] action: implementation; owner: startup_active_gate_owner; files-changed: work/packages/active-20260527-rolling-restart-startup-active-gate-owner-snapshot-coverage.md, work/sprints/active-2026-q2-rolling-restart-active-gate-theory-loop-resume.md; validation: npm run work:evidence-summary -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json; npm run work:scenario-triage -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json --markdown; npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json --markdown; npm run analyze:topology-convergence -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json --handoff-probe; outcome: validated.
+- [x] action: verification-fix; owner: startup_active_gate_owner; files-changed: none after implementation evidence; validation: timeline/failure-bundle fallback after canonical extraction showed setup.cluster.active and scenario.load-readiness.stable before benchmark_events partition visibility timeout; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair` before successor closure; outcome: validated.
 
 ## Validation
 

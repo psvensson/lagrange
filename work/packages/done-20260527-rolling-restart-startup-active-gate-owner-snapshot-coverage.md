@@ -20,7 +20,7 @@
   },
   "scope": {
     "writeScope": [
-      "work/packages/active-20260527-rolling-restart-startup-active-gate-owner-snapshot-coverage.md",
+      "work/packages/superseded-20260527-rolling-restart-startup-active-gate-owner-snapshot-coverage.md",
       "work/sprints/current-blocker.md",
       "work/sprints/current-blocker.json",
       "work/sprints/active-2026-q2-rolling-restart-priority-recovery-resolution.md",
@@ -41,7 +41,7 @@
       "test/diagnostics/topology-convergence-graph.test.js"
     ],
     "commitScope": [
-      "work/packages/active-20260527-rolling-restart-startup-active-gate-owner-snapshot-coverage.md",
+      "work/packages/superseded-20260527-rolling-restart-startup-active-gate-owner-snapshot-coverage.md",
       "work/sprints/current-blocker.md",
       "work/sprints/current-blocker.json",
       "work/sprints/active-2026-q2-rolling-restart-priority-recovery-resolution.md",

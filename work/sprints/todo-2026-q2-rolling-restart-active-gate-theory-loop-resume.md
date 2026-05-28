@@ -1,6 +1,6 @@
 # Rolling Restart Active Gate Theory Loop Resume Sprint
 
-Status: active. Created on May 27, 2026.
+Status: todo. Created on May 27, 2026.
 
 ## Goal
 
@@ -28,22 +28,22 @@ Resume the rolling-restart theory loop from the latest post-stale-cache represen
 ## Current Edge Card
 
 ```text
-Representative artifact: test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json
-Visible first frontier: startup_active_gate_owner / snapshot_coverage / snapshot_coverage_incomplete
-Active package: work/packages/active-20260527-rolling-restart-startup-active-gate-owner-snapshot-coverage.md
+Representative artifact: test-output/reports/rolling-restart-active-gate-snapshot-coverage-retry-cadence-20260528T033446Z.report.json
+Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage_owner_reconcile_retry_contract / active_gate_timed_out; canonical route boundary remains snapshot_coverage
+Active package: work/packages/active-20260528-rolling-restart-active-gate-owner-reconcile-retry-runtime.md
 Active package owner: startup_active_gate_owner
-Active package boundary: snapshot_coverage
-Selected cause: snapshot_coverage_incomplete
-Required action: Triage active_gate_snapshot_coverage with combined scenario evidence before runtime edits.
-Representative status: unknown
-Causal outcome: migrate_owner_boundary
-Architecture gate: watching / unknown
-Expected delta: Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.
-Current state: Representative evidence selects startup_active_gate_owner / snapshot_coverage at active_gate_snapshot_coverage; the package records the bounded next decision before runtime edits.
-Allowed edits: unknown
-Candidate runtime files: unknown
-Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
-Required latest proof: falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json, regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json --markdown, supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-benchmark-table-bootstrap-primary-rotation-20260527T215357Z.report.json --markdown
+Active package boundary: snapshot_coverage_owner_reconcile_retry_contract
+Selected cause: active_gate_timed_out
+Required action: Make write-deferred active-gate owner recovery produce bounded observable reconcile progress before snapshot coverage retries time out.
+Representative status: migrated
+Causal outcome: continue_local_fix
+Architecture gate: selected / owner-reconcile-retry-contract
+Expected delta: Representative rerun should clear owner_reconcile_pending, move snapshotCoverageNodeCount beyond 1/5, migrate owner boundary, or pass rolling-restart.
+Current state: Architecture proof selected owner-reconcile retry because retry cadence moved attempts to 2/8 but topology handoff still reports owner_reconcile_pending, write_deferred, enqueued=false, pendingRecoveryCount=1, and requiredProgressMechanism=reconcile.
+Allowed edits: test/distributed/harness/cluster-segment-7-class-5.js, test/distributed/harness/cluster-control-snapshot-recovery.js, test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-selected-source-test-cases.js, test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-fixtures.js, work/packages/active-20260528-rolling-restart-active-gate-owner-reconcile-retry-runtime.md, work/packages/active-20260528-rolling-restart-active-gate-owner-reconcile-no-progress-architecture.md, work/packages/done-20260528-rolling-restart-active-gate-snapshot-coverage-owner-reconcile-architecture.md, work/sprints/active-2026-q2-rolling-restart-active-gate-theory-loop-resume.md, work/sprints/current-blocker.md, work/sprints/current-blocker.json, test/distributed/harness/__tests__/cluster-active-gate-load-selected-timeout-owner-recovery.test.js, test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js, test/distributed/harness/__tests__/table-distribution-helpers-bootstrap-primary-rotation.test.js, test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js, test/distributed/harness/cluster-segment-7-class-4-publication-coverage.js, test/distributed/harness/cluster-segment-7-class-4.js, test/distributed/scenarios/table-distribution-helpers-segment-3.js
+Candidate runtime files: test/distributed/harness/cluster-segment-7-class-4.js, test/distributed/harness/cluster-segment-7-class-5.js, test/distributed/harness/cluster-control-snapshot-recovery.js, test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-selected-source-test-cases.js, test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-fixtures.js, test/distributed/harness/__tests__/cluster-active-gate-load-selected-timeout-owner-recovery.test.js
+Forbidden edits: Runtime promotion remains blocked while snapshot coverage is incomplete; this package changes only owner-reconcile retry behavior.
+Required latest proof: falsifier: focused owner-reconcile retry fixture proves write-deferred owner recovery is retried or enqueued before active-gate snapshot coverage gives up: npm test -- test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-selected-source-test-cases.js, regression: affected consumer proof active-gate retry-cadence and selected-timeout owner recovery contract remains blocking: npm test -- test/distributed/harness/__tests__/cluster-active-gate-load-selected-timeout-owner-recovery.test.js, supporting: npm run audit:runtime-grammar:file -- test/distributed/harness/cluster-segment-7-class-5.js test/distributed/harness/cluster-control-snapshot-recovery.js, representative: timeout 1800s node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-active-gate-owner-reconcile-retry-20260528T000000Z.report.json --fast-local --verbose
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -92,10 +92,14 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Lane: `runtime-owner-boundary`
    - Purpose: Allow benchmark table bootstrap to rotate or repair after control-lane create timeouts so rolling-restart load admission can establish partition visibility.
    - First-run reason: The fresh representative run failed after active-gate timeout cleared with `benchmark_events` partition visibility blocked by an admin control-lane create timeout on the seed.
-7. [Artifact Triage - startup_active_gate_owner - snapshot_coverage](../packages/active-20260527-rolling-restart-startup-active-gate-owner-snapshot-coverage.md)
+7. [Artifact Triage - startup_active_gate_owner - snapshot_coverage](../packages/superseded-20260527-rolling-restart-startup-active-gate-owner-snapshot-coverage.md)
    - Lane: `experiment`
    - Purpose: Select the autonomous active-gate snapshot coverage contract move for repair-deferred selected snapshot source with no owner-recovery handoff detected.
    - First-run reason: Fresh representative evidence repeated the benchmark table partition visibility timeout with no rotation/repair metric movement, while canonical handoff evidence routes back to `startup_active_gate_owner / snapshot_coverage` with `runtimePromotionAllowed=false`.
+8. [Rolling Restart Benchmark Table Bootstrap Control Timeout Runtime](../packages/done-20260527-rolling-restart-benchmark-table-bootstrap-control-timeout-runtime.md)
+   - Lane: `runtime-owner-boundary`
+   - Purpose: Fix benchmark table bootstrap so a selected control-lane create timeout cannot consume the entire bootstrap visibility budget before rotating, repairing, or observing partition visibility on an alternate query node.
+   - First-run reason: The timeline shows active gate and load readiness succeeded before `benchmark_events` partition visibility timed out with `authoritativeRepairAttempted=false`.
 
 ## Activation Instructions
 

@@ -16,7 +16,7 @@
     "currentState": "Focused table-bootstrap rotation and repair contracts pass, but the representative rerun returned the same partition-visibility timeout with no repair attempted.",
     "nextAction": "Close as migrated to the active-gate snapshot coverage architecture successor before another local runtime patch.",
     "closed": "2026-05-27",
-    "successor": "work/packages/active-20260527-rolling-restart-startup-active-gate-owner-snapshot-coverage.md"
+    "successor": "work/packages/superseded-20260527-rolling-restart-startup-active-gate-owner-snapshot-coverage.md"
   },
   "scope": {
     "writeScope": [
