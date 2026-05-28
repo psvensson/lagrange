@@ -24,7 +24,7 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 4. [GOV-0007] Do not archive package files into a second package-status directory. _(see workflow-guidelines/packages.md:28)_
 5. [GOV-0008] Run validation before committing so current-blocker never points at a missing active-... package. _(see workflow-guidelines/packages.md:78)_
 6. [GOV-0009] If the fixture/probe is missing, create the fixture/probe or stop as evidence-incomplete. Do not patch runtime from a representative red run alone. _(see workflow-guidelines/subagents.md:210)_
-7. [GOV-0012] Do not open a new package merely because artifact path, epoch, node ids, counts, attempts, timings, timestamps, or presentation shape changed. _(see workflow-guidelines/closure.md:475)_
+7. [GOV-0012] Do not open a new package merely because artifact path, epoch, node ids, counts, attempts, timings, timestamps, or presentation shape changed. _(see workflow-guidelines/closure.md:480)_
 8. [GOV-0014] Sprint files do not replace work packages. _(see roadmap.md:97)_
 9. [GOV-0015] docs/ is reserved for end-user or operator-facing documentation. Internal planning, work-package execution, and sprint tracking must not live there. _(see roadmap.md:112)_
 10. [GOV-0017] If the system theory cannot select a slice, do not open another local runtime patch. _(see workflow-guidelines/closure.md:166)_
@@ -34,14 +34,14 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 14. [GOV-0025] work/sprints/current-blocker.json is generated handoff state, but it must not be stale. _(see workflow-guidelines/subagents.md:170)_
 15. [GOV-0027] Do not name new representative rerun outputs with placeholder timestamps such as T000000Z; placeholder names make lineage ambiguous and can hide accidental overwrite. _(see workflow-guidelines/subagents.md:243)_
 16. [GOV-0028] Do not close if relevant guardrail counts increase. _(see workflow-guidelines/validators.md:35)_
-17. [GOV-0030] Do not open another classification package from the same unchanged artifact. _(see workflow-guidelines/closure.md:288)_
+17. [GOV-0030] Do not open another classification package from the same unchanged artifact. _(see workflow-guidelines/closure.md:293)_
 
 ### Ownership & Authority Policies
 
 18. [GOV-0004] Non-goals and forbidden interpretations: meanings, consumers, owner boundaries, or downstream symptoms this package must not treat as authority. _(see workflow-guidelines/closure.md:29)_
 19. [GOV-0010] Do not create another classification-only package from the same unchanged artifact unless owner/boundary, package class, or stop condition changes. Close, rerun fresh evidence, or escalate. _(see workflow-guidelines/closure.md:260)_
-20. [GOV-0011] Refresh the sprint gate card whenever the representative artifact, canonical owner boundary, or required action changes. _(see workflow-guidelines/closure.md:399)_
-21. [GOV-0013] Escalate to causal analysis when two focused fixes in adjacent owner boundaries are green locally but do not produce representative green or monotonic representative reduction. _(see workflow-guidelines/closure.md:517)_
+20. [GOV-0011] Refresh the sprint gate card whenever the representative artifact, canonical owner boundary, or required action changes. _(see workflow-guidelines/closure.md:404)_
+21. [GOV-0013] Escalate to causal analysis when two focused fixes in adjacent owner boundaries are green locally but do not produce representative green or monotonic representative reduction. _(see workflow-guidelines/closure.md:522)_
 22. [GOV-0018] Use the lightweight maintenance lane for small internal docs, workflow, template, and tooling changes that do not change runtime ownership or shared runtime contracts. _(see workflow-guidelines/lifecycle.md:69)_
 23. [GOV-0021] Do not create new headings, sidecar files, ledger rows, or current-blocker edits from discovery thinking unless the selected route changes owner, boundary, required action, stop condition, successor, or durable theory. _(see workflow-guidelines/packages.md:86)_
 

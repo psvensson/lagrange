@@ -1,39 +1,278 @@
 {
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
-  "sprint": "none",
-  "package": "none",
-  "status": "none",
-  "lane": "none",
-  "scenario": "none",
-  "artifact": "none",
+  "sprint": "work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md",
+  "package": "work/packages/active-20260528-rolling-restart-active-gate-snapshot-coverage-source-contract.md",
+  "status": "active",
+  "lane": "causal-escalation",
+  "scenario": "rolling-restart",
+  "artifact": "test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json",
   "playback": "none",
-  "owner": "none",
-  "boundary": "none",
-  "dominantReason": "none",
-  "currentState": "No active work package. Start a new package when implementation resumes.",
-  "nextAction": "Create or activate one focused package for the next executable concern.",
-  "proof": [],
-  "writeScope": [],
-  "handoffFiles": [],
-  "generatedFiles": [
-    "work/sprints/current-blocker.json",
-    "work/sprints/current-blocker.md"
+  "owner": "startup_active_gate_owner",
+  "boundary": "snapshot_coverage",
+  "dominantReason": "active_gate_timed_out",
+  "currentState": "Fresh representative evidence cleared priority-recovery residuals and returned to active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage; the sprint remains active until rolling-restart passes or this source theory proves migration or architecture-gap stop.",
+  "nextAction": "Test the promoted snapshot coverage source contract in src/control-plane/snapshot-service.js, run the route falsifier and regression proof, record the theory-loop result, rerun representative rolling-restart evidence, and create the successor package from that fresh result.",
+  "proof": [
+    "falsifier: npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage",
+    "supporting: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12",
+    "regression: npm test -- test/distributed/harness/__tests__/cluster-active-gate-startup-owner-handoff-test-cases.js",
+    "supporting: npm run analyze:causal-model -- test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json",
+    "supporting: timeout 1800s node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-active-gate-snapshot-coverage-source-contract-20260528T122757Z.report.json --fast-local --verbose && npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-active-gate-snapshot-coverage-source-contract-20260528T122757Z.report.json --package work/packages/active-20260528-rolling-restart-active-gate-snapshot-coverage-source-contract.md"
   ],
-  "candidateRuntimeFiles": [],
-  "commitScope": [],
+  "writeScope": [
+    "src/control-plane/snapshot-service.js",
+    ".kiro/steering/llm/governance.md",
+    ".kiro/steering/llm/rules.json",
+    ".kiro/steering/schemas/work-package.schema.json",
+    ".kiro/steering/workflow-guidelines/closure.md",
+    "scripts/work-package-new.js",
+    "scripts/work-package-schema.js",
+    "scripts/work-sprint-advance.js",
+    "scripts/work-theory-loop.js",
+    "scripts/work-tracker.js",
+    "test/scripts/work-theory-loop.test.js",
+    "work/README.md",
+    "work/RULES.md",
+    "work/templates/sprint-strategy-brief.md",
+    "test/scripts/work-theory-loop-hardening.test.js"
+  ],
+  "handoffFiles": [
+    "test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json"
+  ],
+  "generatedFiles": [],
+  "candidateRuntimeFiles": [
+    "src/control-plane/owner-queue.js",
+    "src/control-plane/membership-publication-active-gate-reconcile.js",
+    "src/admin/admin-control-snapshot-publication-convergence-diagnostics.js"
+  ],
+  "commitScope": [
+    "src/control-plane/snapshot-service.js",
+    ".kiro/steering/llm/governance.md",
+    ".kiro/steering/llm/rules.json",
+    ".kiro/steering/schemas/work-package.schema.json",
+    ".kiro/steering/workflow-guidelines/closure.md",
+    "scripts/work-package-new.js",
+    "scripts/work-package-schema.js",
+    "scripts/work-sprint-advance.js",
+    "scripts/work-theory-loop.js",
+    "scripts/work-tracker.js",
+    "test/scripts/work-theory-loop.test.js",
+    "work/README.md",
+    "work/RULES.md",
+    "work/templates/sprint-strategy-brief.md",
+    "test/scripts/work-theory-loop-hardening.test.js",
+    "work/packages/active-20260528-rolling-restart-active-gate-snapshot-coverage-source-contract.md"
+  ],
   "touchedFiles": [],
-  "modelFit": {},
-  "representativeResidual": {},
-  "causalGovernance": {},
-  "scenarioCausalClosure": {},
-  "observablePrediction": {},
+  "theoryLedgerRefs": [
+    "theory-20260522-snapshot-watch-handoff-contract",
+    "theory-20260526-rolling-restart-active-gate-evidence-capture-gap",
+    "theory-20260526-rolling-restart-restarted-node-admin-surface",
+    "theory-20260526-rolling-restart-control-snapshot-authority-recovery"
+  ],
+  "modelFit": {
+    "packageClass": "runtime-owner-boundary",
+    "intendedMinimumModel": "gpt-5.3-codex",
+    "scopeShape": "bounded-owner-runtime/current-frontier",
+    "outputProfile": "medium",
+    "ambiguityScore": 1,
+    "escalationTriggers": [
+      "owned files expand beyond this package",
+      "a frozen decision must be reopened"
+    ]
+  },
+  "representativeResidual": {
+    "status": "active-theory-loop",
+    "scenario": "rolling-restart",
+    "artifact": "test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json",
+    "frontier": "active_gate_timed_out / startup_active_gate_owner / snapshot_coverage",
+    "owner": "startup_active_gate_owner",
+    "boundary": "snapshot_coverage",
+    "dominantReason": "active_gate_timed_out",
+    "nextAction": "Test the promoted snapshot coverage source contract in src/control-plane/snapshot-service.js, run the route falsifier and regression proof, record the theory-loop result, rerun representative rolling-restart evidence, and create the successor package from that fresh result."
+  },
+  "theoryLoop": {
+    "enforcement": "source-code-package-required",
+    "promotedTheory": "Test the promoted snapshot coverage source contract in src/control-plane/snapshot-service.js, run the route falsifier and regression proof, record the theory-loop result, rerun representative rolling-restart evidence, and create the successor package from that fresh result.",
+    "sprintGoalDelta": "Test the promoted snapshot coverage source contract in src/control-plane/snapshot-service.js, run the route falsifier and regression proof, record the theory-loop result, rerun representative rolling-restart evidence, and create the successor package from that fresh result.",
+    "sourceChangeRequired": true,
+    "successorRequired": true
+  },
+  "causalGovernance": {
+    "hypothesis": "Repeated startup active-gate snapshot coverage failures require an architecture discriminator before another local runtime patch.",
+    "stopConditionCheck": "npm run analyze:causal-model -- test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json",
+    "expectedCausalModelChange": "The package selects a concrete wake, retry, reconcile, drain, owner-boundary migration, or architecture-gap stop for snapshot coverage progress.",
+    "representativeOutcome": "same-frontier",
+    "causalDebt": "Recent packages already exercised startup_active_gate_owner / snapshot_coverage runtime routes, and fresh evidence again reports active_gate_timed_out after priority-recovery residuals clear.",
+    "crossBoundaryReview": "Operation workflow, generic rebalancer, transport, admin API, table bootstrap, generic timeout, and promotion gates remain frozen unless canonical proof selects them."
+  },
+  "scenarioCausalClosure": {
+    "referenceScenarioOrProbe": "rolling-restart active gate snapshot coverage autonomous architecture",
+    "phaseChain": [
+      "owner recovery queue drain proof moved priority recovery to the first frontier",
+      "priority recovery architecture rerun cleared priority residual witnesses",
+      "fresh route returned to active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage"
+    ],
+    "currentFirstFrontier": "active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out",
+    "knownDownstreamBlockers": [
+      "benchmark table bootstrap remains downstream while active gate snapshot coverage is incomplete",
+      "selected-source timeout remains downstream until the owner coverage contract is selected",
+      "startup readiness remains downstream unless the architecture proof migrates ownership"
+    ],
+    "missingCausalEdge": "The owner-owned snapshot coverage contract must choose wake, retry, reconcile, drain, handoff, or migration before runtime implementation resumes.",
+    "missingCausalEdgeProbe": "npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12",
+    "falsifyingProbe": "npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage",
+    "boundedProgressProof": "Architecture must select a concrete wake, retry, reconcile, drain, dispatch, or owner-boundary migration mechanism before runtime edits resume.",
+    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json",
+    "expectedObservableTransition": "selected snapshot coverage contract, owner-boundary migration, or architecture-gap stop",
+    "maxProgressBound": "one autonomous architecture experiment with no runtime edits",
+    "sameFrontierFallback": "If the architecture proof cannot select a concrete contract or migration, stop as architecture-gap.",
+    "expectedNextFrontier": "selected startup active-gate snapshot coverage contract or migration",
+    "resultClassification": "same-frontier",
+    "stopCondition": "continue-local-fix",
+    "recentFrontierHistory": [
+      "done-20260528-rolling-restart-startup-active-gate-owner-snapshot-coverage.md / startup_active_gate_owner / snapshot_coverage / same-frontier",
+      "done-20260528-rolling-restart-startup-active-gate-owner-snapshot-coverage-v2.md / startup_active_gate_owner / snapshot_coverage / same-frontier",
+      "done-20260528-rolling-restart-snapshot-coverage-architecture-discriminator.md / startup_active_gate_owner / snapshot_coverage / classification-only",
+      "done-20260528-priority-recovery-split-residual-architecture-experiment.md / operation_workflow_owner / workflow_progress / migrated"
+    ],
+    "oscillationCheck": "This package is activated because validator same-frontier rules rejected another startup_active_gate_owner / snapshot_coverage runtime package.",
+    "handoffInvariant": "Runtime promotion remains blocked until this architecture package selects one owner-owned contract or migration route."
+  },
+  "observablePrediction": {
+    "metric": "rolling-restart / startup_active_gate_owner / snapshot_coverage / representative route",
+    "predicted": "Fresh representative evidence after the src/control-plane/snapshot-service.js source theory moves from same-frontier active_gate_timed_out to reduced, migrated, architecture-gap, or representative-green.",
+    "observed": "pending-before-observation",
+    "accuracy": "pending-before-observation",
+    "evidence": "pending-before-representative-rerun"
+  },
   "experimentOutcome": {},
-  "rerunDecision": {},
-  "classificationEfficiency": {},
-  "systemTheory": {},
-  "sliceTheory": {},
-  "architectureDecisionGate": {},
-  "predecessor": null,
-  "theoryLedgerRefs": []
+  "rerunDecision": {
+    "sourceArtifact": "test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json",
+    "routeOwner": "startup_active_gate_owner",
+    "routeBoundary": "snapshot_coverage",
+    "routeDominantReason": "active_gate_timed_out",
+    "routeCausalOutcome": "pending-before-rerun",
+    "stopMode": "pending-before-rerun",
+    "nextLane": "causal-escalation",
+    "expectedDelta": "Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.",
+    "requiredRefreshCommands": [
+      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out",
+      "update Sprint Strategy Brief and Current Edge Card from the route result",
+      "npm run work:repair",
+      "npm run work:validate -- --entry",
+      "npm run work:validate -- --pre-impl"
+    ]
+  },
+  "systemTheory": {
+    "problemStatement": "rolling-restart currently routes active_gate_timed_out to startup_active_gate_owner / snapshot_coverage; the package must explain the whole phase chain before selecting the executable slice.",
+    "phaseChain": [
+      "Representative evidence comes from test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json.",
+      "active_gate_timed_out is the current selected symptom.",
+      "startup_active_gate_owner / snapshot_coverage is the declared decision boundary for this package."
+    ],
+    "ownerBoundaryMap": [
+      "startup_active_gate_owner / snapshot_coverage: selected package owner and boundary.",
+      "Downstream owners remain frozen until the falsifier selects migration."
+    ],
+    "stableFacts": [
+      "Scenario remains rolling-restart.",
+      "Package lane remains causal-escalation.",
+      "Declared owner boundary remains startup_active_gate_owner / snapshot_coverage."
+    ],
+    "changedFacts": [
+      "This package was opened from test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json.",
+      "The active action is Test the promoted snapshot coverage source contract in src/control-plane/snapshot-service.js, run the route falsifier and regression proof, record the theory-loop result, rerun representative rolling-restart evidence, and create the successor package from that fresh result.."
+    ],
+    "competingTheories": [
+      "H1 startup_active_gate_owner / snapshot_coverage owns the missing transition for active_gate_timed_out.",
+      "H2 the same symptom is inherited from a different owner boundary or architecture gap."
+    ],
+    "eliminatedTheories": [
+      "No eliminated theory is durable until the package proof records a contrary artifact or command result."
+    ],
+    "downstreamSymptoms": [
+      "Downstream symptoms stay frozen until H1 selects a concrete transition or H2 selects migration."
+    ],
+    "transitionTable": [
+      {
+        "inputSignal": "active_gate_timed_out",
+        "owner": "startup_active_gate_owner / snapshot_coverage",
+        "missingTransition": "selected evidence must become a named owner-owned transition, migration, or stop.",
+        "expectedEvidence": "focused proof selects the transition, migrates ownership, or records architecture-gap evidence.",
+        "falsifier": "falsifier: npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage",
+        "migrationTrigger": "the falsifier names a different owner boundary or proves this boundary cannot own the transition."
+      }
+    ],
+    "ownershipMigrationTriggers": [
+      "Migrate only when focused evidence names the alternate deciding owner and boundary."
+    ],
+    "architectureGapTriggers": [
+      "Stop as architecture-gap when focused evidence cannot select an owner-owned transition or migration."
+    ],
+    "wholeSystemInvariant": "Runtime edits are allowed only after the system theory selects one owner-owned transition or migration route."
+  },
+  "sliceTheory": {
+    "systemTheoryRef": "work/packages/active-20260528-rolling-restart-active-gate-snapshot-coverage-source-contract.md systemTheory",
+    "selectedSystemTheory": "H1 is selected unless falsifier: npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage proves a different owner boundary or architecture gap.",
+    "selectedMechanism": "contract_gap with ownership_gap as the first alternate",
+    "sourceTestContract": "Implementation may edit only declared source files src/control-plane/snapshot-service.js after the falsifier keeps the package inside the selected owner boundary.",
+    "falsifier": "falsifier: npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage",
+    "representativeExpectedMovement": "selected route moves to a concrete transition, owner-boundary migration, or architecture-gap stop.",
+    "killRule": "Stop on unchanged same-frontier, no-reduction, or architecture-gap evidence instead of widening the package.",
+    "theoryFitScore": {
+      "evidenceFit": "medium - generated from declared package evidence before proof execution.",
+      "ownerBoundaryFit": "medium - owner boundary is declared as startup_active_gate_owner / snapshot_coverage.",
+      "falsifiability": "high - falsifier is falsifier: npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage.",
+      "representativeMovement": "medium - expected movement is route selection, migration, or architecture-gap stop.",
+      "downstreamRiskContainment": "high - downstream symptoms remain frozen until owner selection is proven."
+    },
+    "wrongSliceTriggers": [
+      "proof selects a different owner boundary",
+      "proof requires runtime files outside writeScope",
+      "proof cannot select a concrete transition or migration"
+    ]
+  },
+  "architectureDecisionGate": {
+    "status": "selected",
+    "trigger": "frontier-oscillation",
+    "triggerEvidence": [
+      "route-after-rerun selected startup_active_gate_owner / snapshot_coverage",
+      "priority recovery residual witness count is 0",
+      "validator rejected another runtime-owner-boundary package for this repeated snapshot coverage frontier"
+    ],
+    "choices": [
+      {
+        "id": "runtime-owner-boundary",
+        "summary": "Open runtime-owner-boundary successor for startup active-gate snapshot coverage.",
+        "route": "continue-local-proof",
+        "proof": [
+          "npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage",
+          "npm run analyze:causal-model -- test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json"
+        ]
+      },
+      {
+        "id": "autonomous-architecture-experiment",
+        "summary": "Use this package to select the snapshot coverage contract before runtime implementation resumes.",
+        "route": "architecture-package",
+        "proof": [
+          "npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage",
+          "npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12",
+          "npm run analyze:causal-model -- test-output/reports/rolling-restart-priority-recovery-split-architecture-20260528T101601Z.report.json"
+        ]
+      },
+      {
+        "id": "owner-boundary-migration",
+        "summary": "Migrate only if canonical proof names a different deciding owner.",
+        "route": "owner-boundary-migration",
+        "proof": [
+          "selected by this package before runtime edits"
+        ]
+      }
+    ],
+    "selectedChoice": "runtime-owner-boundary",
+    "nextAction": "Execute the selected local proof route; rerun canonical evidence before opening another architecture gate."
+  },
+  "predecessor": "work/packages/done-20260528-rolling-restart-active-gate-snapshot-coverage-autonomous-architecture.md"
 }

@@ -260,6 +260,11 @@ Fast-path rules:
 6. Do not create another classification-only package from the same unchanged
    artifact unless owner/boundary, package class, or stop condition changes.
    Close, rerun fresh evidence, or escalate.
+7. This fast path is forbidden for theory-loop work packages and cannot close a
+   theory-loop sprint. In theory-loop sprints, classification-only evidence is
+   sprint-level discrimination until it promotes a real `src/` source-code
+   package, and the sprint continues until its success condition is met by
+   fresh representative evidence.
 
 ## Classification Efficiency Contract
 

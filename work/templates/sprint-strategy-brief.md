@@ -29,7 +29,7 @@ evidence-linked; options are hypotheses to compare, not queued future packages.
    owner, missing transition or observation, smallest falsifier, expected
    movement, negative result meaning, and escalation rule.
 3. Theory Option Set: 2-4 options, each with mechanism, intervention style,
-   source or test code modification, cheapest discriminator, promotion trigger,
+   `src/` source-code modification, cheapest discriminator, promotion trigger,
    and rejection signal.
 4. Two-Level Theory Rule: repeated-frontier, architecture-gated, owner-migration,
    and causal-escalation sprints first record the whole-system theory, then
@@ -39,15 +39,21 @@ evidence-linked; options are hypotheses to compare, not queued future packages.
    produce a non-obvious option.
 6. Discriminator First: cheapest discriminator runs or is named before code
    edits unless the active package owns it as first proof.
-7. Real Package Rule: a promoted theory-loop work package must change source or
-   test code inside declared write scope, verify the theory with a falsifying
-   proof command, and record the result; evidence-only discriminators remain in
-   the sprint until they promote real code work.
+7. Real Package Rule: a promoted theory-loop work package must change `src/`
+   source code inside declared write scope, verify the theory with a falsifying
+   proof command, record the result, and create or link the successor package;
+   evidence-only and classification-only discriminators remain in the sprint
+   until they promote real source work.
 8. Promotion Rule: only the evidence-selected option becomes one executable
    package with explicit owner, boundary, write scope, proof, and stop rule.
 9. Learning Rule: record supported, avoided, falsified, fixed, migrated,
    representative-green, architecture-gap, or needs-rerun before selecting a
    successor.
+10. Closure Rule: the sprint continues indefinitely until its success condition
+    is met. Close only after `## Theory Loop Success Evidence` records
+    `Success condition met: yes`, fresh representative evidence, a successful
+    result, and why continuation stops. Same-frontier, classification-only,
+    needs-rerun, pending, or unknown outcomes keep the sprint active.
 
 ## Sprint Systemic Insight Gate
 

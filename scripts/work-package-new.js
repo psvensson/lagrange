@@ -103,6 +103,13 @@ import {
   THEORY_FIT_SCORE_FALSIFIABILITY_FIELD,
   THEORY_FIT_SCORE_OWNER_BOUNDARY_FIT_FIELD,
   THEORY_FIT_SCORE_REPRESENTATIVE_MOVEMENT_FIELD,
+  THEORY_LOOP_ENFORCEMENT_FIELD,
+  THEORY_LOOP_ENFORCEMENT_SOURCE_PACKAGE,
+  THEORY_LOOP_FIELD,
+  THEORY_LOOP_PROMOTED_THEORY_FIELD,
+  THEORY_LOOP_SOURCE_CHANGE_REQUIRED_FIELD,
+  THEORY_LOOP_SPRINT_GOAL_DELTA_FIELD,
+  THEORY_LOOP_SUCCESSOR_REQUIRED_FIELD,
   VALID_PACKAGE_STATUSES,
   VALID_OUTPUT_PROFILES,
   VALIDATION_TIER_FIELD,
@@ -177,6 +184,7 @@ const FLAG_MERGE_REQUIREMENT = 'merge-requirement';
 const FLAG_KILL_RULE = 'kill-rule';
 const FLAG_VALIDATION_TIER = 'validation-tier';
 const FLAG_SPLIT_CANDIDATE = 'split-candidate';
+const FLAG_THEORY_LOOP = 'theory-loop';
 const FLAG_SCHEMA = 'schema';
 const FLAG_HELP = 'help';
 const EMPTY_TEXT = '';
@@ -274,6 +282,7 @@ const HELP_TEXT = [
   '  --output-profile <small|medium|high|extra-high>',
   '  --from-artifact <artifact.json>  Infer owner, boundary, evidence, proof, and defaults from representative evidence.',
   '  --classification-only  Scaffold a no-implementation fast-path package with runtime files held as candidates.',
+  '  --theory-loop  Require a source-code theory-loop package: src/ write scope, falsifier/regression proof, no classification-only fast path, and successor closure.',
   '  --route-causal-outcome <outcome>  Record the post-rerun route outcome that created this package.',
   '  --route-stop-mode <mode>  Record the post-rerun stop mode that created this package.',
   '  --expected-delta <text>  Record the expected representative delta before implementation.',
@@ -315,6 +324,7 @@ function parseArgs(args = []) {
         FLAG_SCHEMA,
         FLAG_HELP,
         FLAG_CLASSIFICATION_ONLY,
+        FLAG_THEORY_LOOP,
       ].includes(flagName)
     ) {
       flags[flagName] = true;
@@ -591,6 +601,69 @@ function artifactExtractorCommand(artifact) {
     `npm run work:evidence-summary -- ${artifact}`;
 }
 
+function isSourceWritePath(filePath) {
+  return normalizeText(filePath).replace(/\\/gu, '/').startsWith('src/');
+}
+
+async function activeTheoryLoopSprintRequiresSourcePackages() {
+  const sprintDir = path.join('work', 'sprints');
+  try {
+    const entries = await fs.readdir(sprintDir, {withFileTypes: true});
+    const activeSprintFiles = entries
+      .filter((entry) => entry.isFile() && /^active-.+\.md$/u.test(entry.name))
+      .map((entry) => path.join(sprintDir, entry.name))
+      .sort();
+    for (const sprintFile of activeSprintFiles) {
+      const sprintContent = await fs.readFile(sprintFile, ENCODING_UTF8);
+      if (
+        /^## Theory Loop Sprint\b/mu.test(sprintContent) ||
+        (
+          /^## Theory Option Set\b/mu.test(sprintContent) &&
+          /^## Discriminator First\b/mu.test(sprintContent) &&
+          /^## Real Package Rule\b/mu.test(sprintContent)
+        )
+      ) {
+        return true;
+      }
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+
+function validateTheoryLoopPackageFlags({
+  commitScope = [],
+  isClassificationOnly = false,
+  lane = EMPTY_TEXT,
+  writeScope = [],
+}) {
+  const errors = [];
+  if (isClassificationOnly) {
+    errors.push(
+      'theory-loop packages cannot use --classification-only; keep evidence-only classification in the sprint until it selects real src/ work.',
+    );
+  }
+  if (normalizeText(lane) === LANE_DIAGNOSTIC_CLASSIFICATION) {
+    errors.push(
+      `theory-loop packages cannot use lane ${LANE_DIAGNOSTIC_CLASSIFICATION}; a promoted option must execute as a source-changing package.`,
+    );
+  }
+  if (!writeScope.some(isSourceWritePath)) {
+    errors.push(
+      'theory-loop packages require at least one --write-scope path under src/.',
+    );
+  }
+  if (!commitScope.some(isSourceWritePath)) {
+    errors.push(
+      'theory-loop packages require commitScope to include the promoted src/ source path.',
+    );
+  }
+  if (errors.length > NUM_ZERO) {
+    throw new Error(errors.join(NEWLINE));
+  }
+}
+
 function ownerDiscoveryCommand(owner, boundary) {
   return boundary.length > NUM_ZERO ?
     `npm run analyze:owner-files -- ${owner} ${boundary}` :
@@ -850,6 +923,31 @@ function buildObservablePredictionMetadata(lane, flags = {}, metadata = {}) {
   };
 }
 
+function buildTheoryLoopObservablePredictionMetadata(flags = {}, metadata = {}) {
+  const expectedDelta = normalizeText(flags[FLAG_EXPECTED_DELTA]) ||
+    normalizeText(metadata?.[THEORY_LOOP_FIELD]?.[
+      THEORY_LOOP_SPRINT_GOAL_DELTA_FIELD
+    ]) ||
+    normalizeText(metadata.nextAction) ||
+    'fresh representative evidence moves toward success, migration, or architecture-gap stop';
+  const metric = [
+    normalizeText(metadata.scenario) || DEFAULT_SCENARIO,
+    normalizeText(metadata.owner) || 'owner',
+    normalizeText(metadata.boundary) || 'boundary',
+    'representative route',
+  ].join(' / ');
+  return {
+    [OBSERVABLE_PREDICTION_METRIC_FIELD]: metric,
+    [OBSERVABLE_PREDICTION_PREDICTED_FIELD]: expectedDelta,
+    [OBSERVABLE_PREDICTION_OBSERVED_FIELD]:
+      OBSERVABLE_PREDICTION_ACCURACY_PENDING,
+    [OBSERVABLE_PREDICTION_ACCURACY_FIELD]:
+      OBSERVABLE_PREDICTION_ACCURACY_PENDING,
+    [OBSERVABLE_PREDICTION_EVIDENCE_FIELD]:
+      'pending-before-representative-rerun',
+  };
+}
+
 function buildInheritsContextMetadata(lane, flags = {}) {
   const inherits = normalizeText(flags[FLAG_INHERITS]);
   if (
@@ -1021,7 +1119,8 @@ function buildModelFitSplitLines(metadata = {}) {
 
 function twoLevelTheoryRequiredForGeneratedPackage(lane, metadata = {}) {
   const ambiguityScore = Number(metadata.modelFit?.ambiguityScore);
-  return lane === LANE_CAUSAL_ESCALATION ||
+  return metadata[THEORY_LOOP_FIELD] !== undefined ||
+    lane === LANE_CAUSAL_ESCALATION ||
     lane === LANE_SCENARIO_RELEASE_GATE ||
     hasGeneratedArchitectureDecisionGate(metadata) ||
     hasGeneratedOwnerMigrationProof(metadata) ||
@@ -1094,6 +1193,12 @@ function buildTwoLevelTheoryMetadata(
   const artifact = normalizeText(metadata.artifact) || DEFAULT_ARTIFACT;
   const falsifier = firstFocusedProofCommand(proof);
   const ownerBoundary = `${owner} / ${boundary}`;
+  const sourceWriteScope = (metadata[SCOPE_FIELD_WRITE_SCOPE] || [])
+    .map(normalizeText)
+    .filter(isSourceWritePath);
+  const sourceWriteContract = sourceWriteScope.length > NUM_ZERO ?
+    `Implementation may edit only declared source files ${sourceWriteScope.join(', ')} after the falsifier keeps the package inside the selected owner boundary.` :
+    'Implementation may edit only declared src/ source files after the falsifier keeps the package inside the selected owner boundary.';
   return {
     [SYSTEM_THEORY_FIELD]: {
       [SYSTEM_THEORY_PROBLEM_STATEMENT_FIELD]:
@@ -1157,7 +1262,7 @@ function buildTwoLevelTheoryMetadata(
       [SLICE_THEORY_SELECTED_MECHANISM_FIELD]:
         'contract_gap with ownership_gap as the first alternate',
       [SLICE_THEORY_SOURCE_TEST_CONTRACT_FIELD]:
-        'Implementation may edit only declared writeScope after the falsifier keeps the package inside the selected owner boundary.',
+        sourceWriteContract,
       [SLICE_THEORY_FALSIFIER_FIELD]: falsifier,
       [SLICE_THEORY_REPRESENTATIVE_MOVEMENT_FIELD]:
         'selected route moves to a concrete transition, owner-boundary migration, or architecture-gap stop.',
@@ -1247,6 +1352,26 @@ function buildTwoLevelTheoryLines(metadata = {}) {
     ], 'Theory-fit score is recorded in metadata.'),
     '- Wrong-slice triggers:',
     markdownList(sliceTheory[SLICE_THEORY_WRONG_SLICE_TRIGGERS_FIELD], 'Wrong-slice triggers are recorded in metadata.'),
+  ];
+}
+
+function buildTheoryLoopPackageContractLines(metadata = {}) {
+  const theoryLoop = metadata[THEORY_LOOP_FIELD];
+  if (!theoryLoop) {
+    return [];
+  }
+  const sourceWrites = (metadata[SCOPE_FIELD_WRITE_SCOPE] || [])
+    .filter(isSourceWritePath);
+  return [
+    '## Theory Loop Package Contract',
+    EMPTY_TEXT,
+    `- Enforcement: \`${theoryLoop[THEORY_LOOP_ENFORCEMENT_FIELD]}\``,
+    `- Promoted theory: ${theoryLoop[THEORY_LOOP_PROMOTED_THEORY_FIELD]}`,
+    `- Sprint-goal delta: ${theoryLoop[THEORY_LOOP_SPRINT_GOAL_DELTA_FIELD]}`,
+    `- Required source write: ${markdownInlineCodeList(sourceWrites, '`src/` path required before implementation')}`,
+    '- Package size rule: this package must test one promoted theory by changing declared `src/` source code, running falsifier and regression proof, recording the theory result, and creating or linking the successor package before closure.',
+    '- Forbidden stop shape: classification-only, evidence-only, route-only, and source/log inspection-only outcomes stay in the sprint and must not become work packages.',
+    EMPTY_TEXT,
   ];
 }
 
@@ -1570,6 +1695,7 @@ async function buildPackageContent(flags = {}) {
   flags = await resolveArtifactDefaults(flags);
   const lane = normalizeText(flags[FLAG_LANE]) || LANE_LIGHTWEIGHT_MAINTENANCE;
   const isClassificationOnly = flags[FLAG_CLASSIFICATION_ONLY] === true;
+  const isTheoryLoopPackage = flags[FLAG_THEORY_LOOP] === true;
   const modelLedgerSummary = await buildModelLedgerSummary(flags);
   const modelFitDefaults = defaultModelFitForLane(lane, modelLedgerSummary);
   const opened = normalizeText(flags[FLAG_OPENED]) || todayIsoDate();
@@ -1596,6 +1722,14 @@ async function buildPackageContent(flags = {}) {
     ...writeScope,
     ...generatedFiles,
   ];
+  if (isTheoryLoopPackage) {
+    validateTheoryLoopPackageFlags({
+      commitScope,
+      isClassificationOnly,
+      lane,
+      writeScope,
+    });
+  }
   const ownedFiles = writeScope;
   const forbiddenFiles = flags[FLAG_FORBIDDEN_FILE] || [];
   const metadata = {
@@ -1645,6 +1779,47 @@ async function buildPackageContent(flags = {}) {
       ],
     },
   };
+  if (isTheoryLoopPackage) {
+    metadata[THEORY_LOOP_FIELD] = {
+      [THEORY_LOOP_ENFORCEMENT_FIELD]:
+        THEORY_LOOP_ENFORCEMENT_SOURCE_PACKAGE,
+      [THEORY_LOOP_PROMOTED_THEORY_FIELD]:
+        normalizeText(flags[FLAG_HYPOTHESIS]) ||
+        normalizeText(flags[FLAG_NEXT_ACTION]) ||
+        'promoted option selected by the theory-loop discriminator',
+      [THEORY_LOOP_SPRINT_GOAL_DELTA_FIELD]:
+        normalizeText(flags[FLAG_EXPECTED_DELTA]) ||
+        normalizeText(flags[FLAG_NEXT_ACTION]) ||
+        'source change should move the sprint toward the recorded success condition',
+      [THEORY_LOOP_SOURCE_CHANGE_REQUIRED_FIELD]: true,
+      [THEORY_LOOP_SUCCESSOR_REQUIRED_FIELD]: true,
+    };
+    metadata.representativeResidual = {
+      status: 'active-theory-loop',
+      scenario: metadata.scenario,
+      artifact: metadata.artifact,
+      frontier: `${metadata.dominantReason} / ${metadata.owner} / ${metadata.boundary}`,
+      owner: metadata.owner,
+      boundary: metadata.boundary,
+      dominantReason: metadata.dominantReason,
+      nextAction: metadata.nextAction,
+    };
+    metadata.mechanismCard = {
+      failureMechanism: 'contract_gap with ownership_gap as the first alternate',
+      stableFacts: `Representative artifact ${metadata.artifact} selects ${metadata.owner} / ${metadata.boundary}.`,
+      changedFacts: 'This theory-loop package promotes one source-code theory for implementation.',
+      rejectedAlternatives: 'Classification-only, evidence-only, and downstream symptom packages are not valid package work in a theory-loop sprint.',
+      ownerWhoDecides: metadata.owner,
+      currentAction: metadata.currentState,
+      missingTransitionOrObservation: metadata.nextAction,
+      smallestFalsifyingProbe: firstFocusedProofCommand(modelFitProof),
+      expectedMovement: 'The source change must move representative evidence toward success, migration, or architecture-gap stop.',
+      negativeResultMeans: 'Record the theory result and create the next successor package instead of closing the sprint.',
+      escalationRule: 'Same-frontier or needs-rerun evidence keeps the theory-loop sprint active.',
+    };
+    metadata[OBSERVABLE_PREDICTION_FIELD] =
+      buildTheoryLoopObservablePredictionMetadata(flags, metadata);
+  }
   const boundedExperiment = buildBoundedExperimentMetadata(lane, flags);
   if (boundedExperiment) {
     metadata[BOUNDED_EXPERIMENT_FIELD] = boundedExperiment;
@@ -1774,6 +1949,8 @@ async function buildPackageContent(flags = {}) {
     EMPTY_TEXT,
     ...buildTwoLevelTheoryLines(metadata),
     EMPTY_TEXT,
+    ...buildTheoryLoopPackageContractLines(metadata),
+    EMPTY_TEXT,
     ...buildBoundedExperimentLines(metadata),
     EMPTY_TEXT,
     ...buildObservablePredictionLines(metadata),
@@ -1854,7 +2031,9 @@ async function buildPackageContent(flags = {}) {
     EMPTY_TEXT,
     '1. Use `npm run work:advance -- --check` before adding more package prose; it combines doctor, subagent-next, and entry/pre-implementation validation.',
     `2. Keep the durable proof ladder to 3-5 commands by default: prefer \`npm run work:scenario-route -- ${artifact}\` for representative routing, one focused test or extractor, and validation. Add static guardrails only when implementation files changed.`,
-    '3. If this package only changes package, sprint, tracker, or ledger files, the next pass must run representative evidence, close as classification-only, open a concrete bug package, or open/select an autonomous architecture experiment. Human gates are only for blocked/contradictory evidence.',
+    isTheoryLoopPackage ?
+      '3. In a theory-loop package, package/sprint/tracker/ledger-only work is not a closure shape; keep classification evidence in the sprint, run representative evidence, and create or activate the next `src/` successor package instead of closing as classification-only.' :
+      '3. If this package only changes package, sprint, tracker, or ledger files, the next pass must run representative evidence, close as classification-only, open a concrete bug package, or open/select an autonomous architecture experiment. Human gates are only for blocked/contradictory evidence.',
     '4. Once an architecture gate has a selected route, do not open another gate unless fresh canonical evidence contradicts the selected route.',
     '5. For bounded experiments, move quickly inside the inherited owner boundary, but do not merge without the stated focused proof and canonical evidence movement.',
     EMPTY_TEXT,
@@ -1906,6 +2085,16 @@ async function runCli(args = process.argv.slice(NUM_TWO)) {
     return renderSchemaReference();
   }
   flags = await resolveArtifactDefaults(flags);
+  if (
+    flags[FLAG_WRITE] === true &&
+    flags[FLAG_THEORY_LOOP] !== true &&
+    await activeTheoryLoopSprintRequiresSourcePackages()
+  ) {
+    flags = {
+      ...flags,
+      [FLAG_THEORY_LOOP]: true,
+    };
+  }
   validateFlags(flags);
   const opened = normalizeText(flags[FLAG_OPENED]) || todayIsoDate();
   const status = normalizeText(flags[FLAG_STATUS]) || DEFAULT_STATUS;

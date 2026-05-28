@@ -398,6 +398,25 @@ const THEORY_FIT_SCORE_FIELDS = Object.freeze([
   THEORY_FIT_SCORE_REPRESENTATIVE_MOVEMENT_FIELD,
   THEORY_FIT_SCORE_DOWNSTREAM_RISK_FIELD,
 ]);
+const THEORY_LOOP_FIELD = 'theoryLoop';
+const THEORY_LOOP_ENFORCEMENT_FIELD = 'enforcement';
+const THEORY_LOOP_PROMOTED_THEORY_FIELD = 'promotedTheory';
+const THEORY_LOOP_SPRINT_GOAL_DELTA_FIELD = 'sprintGoalDelta';
+const THEORY_LOOP_RESULT_FIELD = 'result';
+const THEORY_LOOP_SUCCESSOR_PACKAGE_FIELD = 'successorPackage';
+const THEORY_LOOP_SOURCE_CHANGE_REQUIRED_FIELD = 'sourceChangeRequired';
+const THEORY_LOOP_SUCCESSOR_REQUIRED_FIELD = 'successorRequired';
+const THEORY_LOOP_ENFORCEMENT_SOURCE_PACKAGE =
+  'source-code-package-required';
+const THEORY_LOOP_FIELDS = Object.freeze([
+  THEORY_LOOP_ENFORCEMENT_FIELD,
+  THEORY_LOOP_PROMOTED_THEORY_FIELD,
+  THEORY_LOOP_SPRINT_GOAL_DELTA_FIELD,
+  THEORY_LOOP_RESULT_FIELD,
+  THEORY_LOOP_SUCCESSOR_PACKAGE_FIELD,
+  THEORY_LOOP_SOURCE_CHANGE_REQUIRED_FIELD,
+  THEORY_LOOP_SUCCESSOR_REQUIRED_FIELD,
+]);
 const LOWER_MODEL_WORKFLOW_LANES = Object.freeze([
   LANE_READ_REVIEW_DOC_ONLY,
   LANE_MECHANICAL_MAINTENANCE,
@@ -939,6 +958,17 @@ function renderSchemaReference() {
     EMPTY_TEXT,
     renderEnumList(THEORY_FIT_SCORE_FIELDS),
     EMPTY_TEXT,
+    '## Theory Loop Source Package',
+    EMPTY_TEXT,
+    `- Metadata field: \`${THEORY_LOOP_FIELD}\``,
+    '- Purpose: marks theory-loop packages that must carry one promoted theory through source-code change, falsifying proof, result recording, and successor creation.',
+    '- Enforcement value: `source-code-package-required`.',
+    '- Classification-only packages are forbidden in theory-loop sprints; evidence-only discrimination remains in the sprint until it promotes real `src/` work.',
+    EMPTY_TEXT,
+    'Fields:',
+    EMPTY_TEXT,
+    renderEnumList(THEORY_LOOP_FIELDS),
+    EMPTY_TEXT,
     '## Representative Residual',
     EMPTY_TEXT,
     `- Metadata field: \`${REPRESENTATIVE_RESIDUAL_FIELD}\``,
@@ -1170,6 +1200,16 @@ export {
   THEORY_FIT_SCORE_FIELDS,
   THEORY_FIT_SCORE_OWNER_BOUNDARY_FIT_FIELD,
   THEORY_FIT_SCORE_REPRESENTATIVE_MOVEMENT_FIELD,
+  THEORY_LOOP_ENFORCEMENT_FIELD,
+  THEORY_LOOP_ENFORCEMENT_SOURCE_PACKAGE,
+  THEORY_LOOP_FIELD,
+  THEORY_LOOP_FIELDS,
+  THEORY_LOOP_PROMOTED_THEORY_FIELD,
+  THEORY_LOOP_RESULT_FIELD,
+  THEORY_LOOP_SOURCE_CHANGE_REQUIRED_FIELD,
+  THEORY_LOOP_SPRINT_GOAL_DELTA_FIELD,
+  THEORY_LOOP_SUCCESSOR_PACKAGE_FIELD,
+  THEORY_LOOP_SUCCESSOR_REQUIRED_FIELD,
   BOUNDED_EXPERIMENT_DISCRIMINATOR_FIELD,
   BOUNDED_EXPERIMENT_EXPECTED_METRIC_FIELD,
   BOUNDED_EXPERIMENT_FIELD,

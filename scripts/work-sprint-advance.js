@@ -27,10 +27,21 @@ const STATUS_ACTIVE = 'active';
 const STATUS_DONE = 'done';
 const PROCESS_ARG_SCRIPT_INDEX = 1;
 const SCRIPT_FILE_NAME = 'work-sprint-advance.js';
+const THEORY_LOOP_SUCCESS_EVIDENCE_HEADING =
+  '## Theory Loop Success Evidence';
+const THEORY_LOOP_SUCCESS_RESULT_VALUES = Object.freeze([
+  'representative-green',
+  'owner-boundary-migration',
+  'architecture-gap',
+  'success-condition-met',
+]);
+const THEORY_LOOP_UNFINISHED_RESULT_PATTERN =
+  /\b(?:same-frontier|classification-only|needs-rerun|pending|unknown|not[-\s]+met|no)\b/iu;
 const HELP_TEXT = [
   'Usage: node scripts/work-sprint-advance.js [--dry-run|--write] [--sprint <active-sprint.md>] [--force]',
   '',
   'Closes the active sprint only when no active or todo packages remain.',
+  'Theory-loop sprints also require ## Theory Loop Success Evidence with Success condition met: yes.',
   'With --write, renames active-*.md to done-*.md and updates track/release references.',
   'Without --write, runs as a dry run.',
 ].join(NEWLINE);
@@ -58,6 +69,116 @@ function sprintDonePath(activeSprintPath) {
 
 function replaceSprintStatus(content) {
   return content.replace(/\bStatus:\s*active\b/u, 'Status: done');
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+}
+
+function extractMarkdownLevelTwoSection(content, heading) {
+  const headingPattern = new RegExp(
+    `(^|${NEWLINE})${escapeRegExp(heading)}(?:${NEWLINE}|$)`,
+    'u',
+  );
+  const headingMatch = headingPattern.exec(content);
+  if (!headingMatch) {
+    return null;
+  }
+  const headingIndex = headingMatch.index +
+    (headingMatch[1] === NEWLINE ? 1 : 0);
+  const nextHeadingIndex = content.indexOf(`${NEWLINE}## `, headingIndex + heading.length);
+  return nextHeadingIndex < 0 ?
+    content.slice(headingIndex) :
+    content.slice(headingIndex, nextHeadingIndex);
+}
+
+function normalizeLedgerText(value) {
+  return String(value || EMPTY_TEXT).replace(/\s+/gu, ' ').trim();
+}
+
+function normalizeLedgerFieldValue(value) {
+  return normalizeLedgerText(value)
+    .replace(/^`|`$/gu, '')
+    .replace(/[.;]\s*$/u, '')
+    .trim();
+}
+
+function findMarkdownField(section, label) {
+  const fieldPattern = new RegExp(`${escapeRegExp(label)}:\\s*([^\\n]+)`, 'iu');
+  const match = fieldPattern.exec(section);
+  return match ? normalizeLedgerFieldValue(match[1]) : EMPTY_TEXT;
+}
+
+function isTheoryLoopSprint(content, filePath = EMPTY_TEXT) {
+  return (
+    /^## Theory Loop Sprint\b/mu.test(content) ||
+    (
+      /^## Theory Option Set\b/mu.test(content) &&
+      /^## Discriminator First\b/mu.test(content) &&
+      /^## Real Package Rule\b/mu.test(content)
+    ) ||
+    (
+      /theory-loop/iu.test(normalizeLedgerText(filePath)) &&
+      /^## Theory Loop Generative Brief\b/mu.test(content)
+    )
+  );
+}
+
+function validateTheoryLoopSuccessEvidence(content, sprintPath) {
+  if (!isTheoryLoopSprint(content, sprintPath)) {
+    return [];
+  }
+  const section = extractMarkdownLevelTwoSection(
+    content,
+    THEORY_LOOP_SUCCESS_EVIDENCE_HEADING,
+  );
+  if (!section) {
+    return [
+      `${sprintPath}: theory-loop sprint cannot close without ${THEORY_LOOP_SUCCESS_EVIDENCE_HEADING}.`,
+    ];
+  }
+  const successConditionMet = findMarkdownField(section, 'Success condition met');
+  const freshEvidence = findMarkdownField(section, 'Fresh representative evidence');
+  const result = findMarkdownField(section, 'Result');
+  const continuationStopped = findMarkdownField(
+    section,
+    'Continuation stopped because',
+  );
+  const errors = [];
+  if (successConditionMet.toLowerCase() !== 'yes') {
+    errors.push(
+      `${sprintPath}: theory-loop sprint cannot close until Success condition met: yes.`,
+    );
+  }
+  if (!freshEvidence) {
+    errors.push(
+      `${sprintPath}: theory-loop sprint closure requires fresh representative evidence.`,
+    );
+  }
+  if (!THEORY_LOOP_SUCCESS_RESULT_VALUES.includes(result.toLowerCase())) {
+    errors.push(
+      `${sprintPath}: theory-loop sprint closure result must be one of ` +
+      `${THEORY_LOOP_SUCCESS_RESULT_VALUES.join(', ')}.`,
+    );
+  }
+  if (!continuationStopped) {
+    errors.push(
+      `${sprintPath}: theory-loop sprint closure must explain why continuation stops.`,
+    );
+  }
+  if (
+    THEORY_LOOP_UNFINISHED_RESULT_PATTERN.test([
+      successConditionMet,
+      freshEvidence,
+      result,
+      continuationStopped,
+    ].join(' '))
+  ) {
+    errors.push(
+      `${sprintPath}: theory-loop sprint closure still describes unfinished work; keep the sprint active and create the next successor package.`,
+    );
+  }
+  return errors;
 }
 
 function updateReferenceContent(content, activeSprintPath, doneSprintPath) {
@@ -144,6 +265,18 @@ async function buildSprintAdvancePlan(options = {}) {
     path.join(root, activeSprintPath),
     ENCODING_UTF8,
   );
+  const theoryLoopClosureErrors = validateTheoryLoopSuccessEvidence(
+    sprintContent,
+    activeSprintPath,
+  );
+  if (theoryLoopClosureErrors.length > 0) {
+    throw new Error(
+      [
+        ...theoryLoopClosureErrors,
+        'Theory-loop sprints continue indefinitely until the success condition is met; create or activate the successor package instead of closing the sprint.',
+      ].join(NEWLINE),
+    );
+  }
   const nextSprintContent = replaceSprintStatus(sprintContent);
   const referenceUpdates = await findReferenceUpdates(
     root,

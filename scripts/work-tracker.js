@@ -117,6 +117,13 @@ import {
   SCOPE_FIELD_GENERATED_FILES,
   SCOPE_FIELD_HANDOFF_FILES,
   SCOPE_FIELD_WRITE_SCOPE,
+  THEORY_LOOP_ENFORCEMENT_FIELD,
+  THEORY_LOOP_ENFORCEMENT_SOURCE_PACKAGE,
+  THEORY_LOOP_FIELD,
+  THEORY_LOOP_RESULT_FIELD,
+  THEORY_LOOP_SOURCE_CHANGE_REQUIRED_FIELD,
+  THEORY_LOOP_SUCCESSOR_PACKAGE_FIELD,
+  THEORY_LOOP_SUCCESSOR_REQUIRED_FIELD,
   THEORY_LEDGER_REFS_FIELD,
   SUBAGENT_ATTEMPT_STATUSES,
   SUBAGENT_OPTIONAL_LANES,
@@ -262,6 +269,10 @@ const CURRENT_EDGE_CARD_CODE_FENCE_CLOSE = '```';
 const CURRENT_EDGE_CARD_ALLOWED_STOP_MODES =
   'representative-green, migrated, reduced, same-frontier, ' +
   'classification-only, architecture-gap, human-escalation';
+const CURRENT_EDGE_CARD_THEORY_LOOP_STOP_MODES =
+  'representative-green, owner-boundary-migration, architecture-gap, ' +
+  'success-condition-met; same-frontier, classification-only, needs-rerun, ' +
+  'pending, and unknown keep sprint active';
 const CURRENT_EDGE_CARD_FIELD_PACKAGE = 'active package';
 const CURRENT_EDGE_CARD_FIELD_ARTIFACT = 'artifact';
 const CURRENT_EDGE_CARD_FIELD_OWNER = 'owner';
@@ -339,6 +350,31 @@ const SPRINT_STRATEGY_BRIEF_FIELDS = Object.freeze([
   SPRINT_STRATEGY_BRIEF_NEXT_BEST_PACKAGE_LABEL,
   SPRINT_STRATEGY_BRIEF_STOP_OR_ESCALATE_RULE_LABEL,
 ]);
+const THEORY_LOOP_SUCCESS_EVIDENCE_HEADING =
+  '## Theory Loop Success Evidence';
+const THEORY_LOOP_SUCCESS_CONDITION_MET_LABEL = 'Success condition met';
+const THEORY_LOOP_FRESH_REPRESENTATIVE_EVIDENCE_LABEL =
+  'Fresh representative evidence';
+const THEORY_LOOP_RESULT_LABEL = 'Result';
+const THEORY_LOOP_CONTINUATION_STOPPED_LABEL = 'Continuation stopped because';
+const THEORY_LOOP_SUCCESS_RESULT_VALUES = Object.freeze([
+  'representative-green',
+  'owner-boundary-migration',
+  'architecture-gap',
+  'success-condition-met',
+]);
+const THEORY_LOOP_PACKAGE_RESULT_VALUES = Object.freeze([
+  'fixed',
+  'avoided',
+  'supported',
+  'falsified',
+  'migrated',
+  'representative-green',
+  'architecture-gap',
+  'needs-rerun',
+]);
+const THEORY_LOOP_UNFINISHED_RESULT_PATTERN =
+  /\b(?:same-frontier|classification-only|needs-rerun|pending|unknown|not[-\s]+met|no)\b/iu;
 const MODEL_FIT_SPARK_SAFE_CLASS = 'spark-safe';
 const MODEL_FIT_SPARK_MODEL = 'gpt-5.3-codex-spark';
 const MODEL_FIT_LEAF_SLICE_SCOPE = 'leaf-slice';
@@ -759,6 +795,9 @@ const LEDGER_PENDING_BEFORE_IMPLEMENTATION_MARKER =
 const LEDGER_TEMPLATE_PLACEHOLDER_PATTERN = /<[^>\n]+>/u;
 const LEDGER_MARKDOWN_CODE_DELIMITER = '`';
 const LEDGER_FIELD_TRAILING_PUNCTUATION_PATTERN = /[.;]\s*$/u;
+const EMPTY_PROOF_CLI_VALUE_PATTERN =
+  /\s--(?:artifact|output)\s+(?:""|'')(?=\s|$)/u;
+const MALFORMED_REPORT_ARTIFACT_PATTERN = /\S+-\.report\.json\b/iu;
 const AGENT_ID_PATTERN_TEXT =
   '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 const AGENT_PROOF_PATTERN_TEXT =
@@ -1018,6 +1057,13 @@ function extractSprintStrategyBriefSection(content) {
   return extractMarkdownLevelTwoSection(
     content,
     SPRINT_STRATEGY_BRIEF_HEADING,
+  );
+}
+
+function extractTheoryLoopSuccessEvidenceSection(content) {
+  return extractMarkdownLevelTwoSection(
+    content,
+    THEORY_LOOP_SUCCESS_EVIDENCE_HEADING,
   );
 }
 
@@ -2205,6 +2251,15 @@ function findSprintStrategyBriefField(section, label) {
   return match ? normalizeLedgerFieldValue(match[NUM_ONE]) : null;
 }
 
+function findTheoryLoopSuccessEvidenceField(section, label) {
+  const fieldPattern = new RegExp(
+    `${escapeRegExp(label)}:\\s*([^\\n]+)`,
+    'iu',
+  );
+  const match = fieldPattern.exec(section);
+  return match ? normalizeLedgerFieldValue(match[NUM_ONE]) : null;
+}
+
 function metadataRequiresCoreLogicBrief(metadata) {
   return metadata !== null &&
     coreLogicBriefRequiredForLane(metadataLane(metadata));
@@ -2759,6 +2814,125 @@ export function validateSprintStrategyBrief(content, filePath, options = {}) {
         label,
         findSprintStrategyBriefField(section, label),
       ),
+    );
+  }
+  return errors;
+}
+
+function isTheoryLoopSprint(content, filePath = EMPTY_TEXT) {
+  return (
+    /^## Theory Loop Sprint\b/mu.test(content) ||
+    (
+      /^## Theory Option Set\b/mu.test(content) &&
+      /^## Discriminator First\b/mu.test(content) &&
+      /^## Real Package Rule\b/mu.test(content)
+    ) ||
+    (
+      /theory-loop/iu.test(normalizeLedgerText(filePath)) &&
+      /^## Theory Loop Generative Brief\b/mu.test(content)
+    )
+  );
+}
+
+function validateConcreteTheoryLoopSuccessField(filePath, label, value) {
+  if (value === null) {
+    return [
+      `${filePath}: Theory Loop Success Evidence is missing ${label}.`,
+    ];
+  }
+  if (
+    value.length === NUM_ZERO ||
+    MODEL_FIT_EMPTY_VALUE_PATTERN.test(value) ||
+    LEDGER_TEMPLATE_PLACEHOLDER_PATTERN.test(value) ||
+    value.includes(LEDGER_PENDING_BEFORE_IMPLEMENTATION_MARKER)
+  ) {
+    return [
+      `${filePath}: Theory Loop Success Evidence ${label} must be a concrete value.`,
+    ];
+  }
+  return [];
+}
+
+export function validateTheoryLoopSprintClosure(
+  content,
+  filePath,
+  options = {},
+) {
+  const status = options.status || EMPTY_TEXT;
+  if (!isTheoryLoopSprint(content, filePath) || status !== STATUS_DONE) {
+    return [];
+  }
+  const section = extractTheoryLoopSuccessEvidenceSection(content);
+  if (!section) {
+    return [
+      `${filePath}: theory-loop sprint is marked done but lacks ` +
+      `${THEORY_LOOP_SUCCESS_EVIDENCE_HEADING}; theory-loop sprints must ` +
+      'continue until the success condition is met by fresh representative evidence.',
+    ];
+  }
+  const errors = [];
+  const successConditionMet = findTheoryLoopSuccessEvidenceField(
+    section,
+    THEORY_LOOP_SUCCESS_CONDITION_MET_LABEL,
+  );
+  const freshEvidence = findTheoryLoopSuccessEvidenceField(
+    section,
+    THEORY_LOOP_FRESH_REPRESENTATIVE_EVIDENCE_LABEL,
+  );
+  const result = findTheoryLoopSuccessEvidenceField(
+    section,
+    THEORY_LOOP_RESULT_LABEL,
+  );
+  const continuationStopped = findTheoryLoopSuccessEvidenceField(
+    section,
+    THEORY_LOOP_CONTINUATION_STOPPED_LABEL,
+  );
+  errors.push(...validateConcreteTheoryLoopSuccessField(
+    filePath,
+    THEORY_LOOP_SUCCESS_CONDITION_MET_LABEL,
+    successConditionMet,
+  ));
+  errors.push(...validateConcreteTheoryLoopSuccessField(
+    filePath,
+    THEORY_LOOP_FRESH_REPRESENTATIVE_EVIDENCE_LABEL,
+    freshEvidence,
+  ));
+  errors.push(...validateConcreteTheoryLoopSuccessField(
+    filePath,
+    THEORY_LOOP_RESULT_LABEL,
+    result,
+  ));
+  errors.push(...validateConcreteTheoryLoopSuccessField(
+    filePath,
+    THEORY_LOOP_CONTINUATION_STOPPED_LABEL,
+    continuationStopped,
+  ));
+  if (normalizeLedgerText(successConditionMet).toLowerCase() !== 'yes') {
+    errors.push(
+      `${filePath}: Theory Loop Success Evidence ` +
+      `${THEORY_LOOP_SUCCESS_CONDITION_MET_LABEL} must be exactly "yes" before the sprint can close.`,
+    );
+  }
+  const normalizedResult = normalizeLedgerText(result).toLowerCase();
+  if (
+    normalizedResult.length > NUM_ZERO &&
+    !THEORY_LOOP_SUCCESS_RESULT_VALUES.includes(normalizedResult)
+  ) {
+    errors.push(
+      `${filePath}: Theory Loop Success Evidence ${THEORY_LOOP_RESULT_LABEL} ` +
+      `must be one of ${THEORY_LOOP_SUCCESS_RESULT_VALUES.join(', ')}.`,
+    );
+  }
+  const closureText = [
+    successConditionMet,
+    freshEvidence,
+    result,
+    continuationStopped,
+  ].map(normalizeLedgerText).join(' ');
+  if (THEORY_LOOP_UNFINISHED_RESULT_PATTERN.test(closureText)) {
+    errors.push(
+      `${filePath}: Theory Loop Success Evidence describes unfinished work; ` +
+      'same-frontier, classification-only, needs-rerun, pending, unknown, or not-met results cannot close a theory-loop sprint.',
     );
   }
   return errors;
@@ -7183,6 +7357,15 @@ function runPackageValidationsSync(filePath, content, fileStatus, metadata, opti
       status: fileStatus,
     },
   ));
+  errors.push(...validateTheoryLoopPackageContract(
+    content,
+    metadata,
+    relativePath,
+    {
+      phase,
+      status: fileStatus,
+    },
+  ));
   errors.push(...validateProgressContract(metadata, relativePath, {
     [LEDGER_VALIDATION_REQUIRES_LEDGER]:
       metadataRequiresProgressContract(metadata, fileStatus, relativePath),
@@ -7303,6 +7486,9 @@ async function validateSprintFile(filePath) {
   }
   errors.push(...validateSprintStrategyBrief(content, relativePath, {
     [LEDGER_VALIDATION_REQUIRES_LEDGER]: fileStatus === STATUS_ACTIVE,
+  }));
+  errors.push(...validateTheoryLoopSprintClosure(content, relativePath, {
+    status: fileStatus,
   }));
   if (fileStatus === STATUS_ACTIVE) {
     const activePayload = await buildActiveSprintCurrentBlockerPayload(filePath);
@@ -8093,9 +8279,207 @@ function metadataProofCommands(metadata = {}) {
   return normalizeMetadataStringList(rawProof);
 }
 
+function validateTheoryLoopProofCommands(metadata = {}, filePath) {
+  const proofCommands = metadataProofCommands(metadata);
+  const errors = [];
+  if (proofCommands.some((command) =>
+    EMPTY_PROOF_CLI_VALUE_PATTERN.test(command)
+  )) {
+    errors.push(
+      `${filePath}: theory-loop package proof must not pass an empty ` +
+      '--artifact or --output value; use a concrete representative evidence path.',
+    );
+  }
+  if (proofCommands.some((command) =>
+    MALFORMED_REPORT_ARTIFACT_PATTERN.test(command)
+  )) {
+    errors.push(
+      `${filePath}: theory-loop package proof must not cite a malformed ` +
+      'report path ending in -.report.json.',
+    );
+  }
+  return errors;
+}
+
 function hasImplementationWriteScope(metadata = {}) {
   return metadataWritePaths(metadata)
     .some((filePath) => IMPLEMENTATION_WRITE_PATH_PATTERN.test(filePath));
+}
+
+function metadataIsTheoryLoopPackage(metadata = {}, content = EMPTY_TEXT) {
+  const theoryLoop = metadata?.[THEORY_LOOP_FIELD];
+  return (
+    isObjectRecord(theoryLoop) &&
+    normalizeLedgerText(theoryLoop[THEORY_LOOP_ENFORCEMENT_FIELD]) ===
+      THEORY_LOOP_ENFORCEMENT_SOURCE_PACKAGE
+  ) ||
+    /^## Theory Loop\b/mu.test(content) ||
+    /^## Theory Loop Package Contract\b/mu.test(content);
+}
+
+function proofHasRole(metadata = {}, role) {
+  const rawProof = metadata[METADATA_FIELD_PROOF] || [];
+  return Array.isArray(rawProof) &&
+    rawProof.map(parseProofCommand)
+      .filter(Boolean)
+      .some((command) => command.role === role);
+}
+
+function theoryLoopSuccessorPackage(metadata = {}) {
+  return normalizeLedgerText(
+    metadata?.[THEORY_LOOP_FIELD]?.[
+      THEORY_LOOP_SUCCESSOR_PACKAGE_FIELD
+    ] ||
+      metadata?.successor ||
+      metadata?.intent?.successor,
+  );
+}
+
+function theoryLoopImplementationChangedSource(content, metadata = {}) {
+  const executionFiles = metadata?.execution?.implementation?.filesChanged;
+  if (
+    Array.isArray(executionFiles) &&
+    executionFiles.map(normalizeLedgerText).some(isSourceWritePath)
+  ) {
+    return true;
+  }
+  const ledger = extractExecutionEvidenceLedger(content);
+  if (!ledger) {
+    return false;
+  }
+  const implementationItem = findImplementationExecutionEvidenceItem(
+    extractCheckedChecklistItems(ledger),
+  );
+  return implementationItem ?
+    /\bfiles-changed\s*:[^\n]*\bsrc\//iu.test(implementationItem) ||
+      /\bchanged files\s*:[^\n]*\bsrc\//iu.test(implementationItem) :
+    false;
+}
+
+export function validateTheoryLoopPackageContract(
+  content,
+  metadata = {},
+  filePath,
+  options = {},
+) {
+  if (!metadataIsTheoryLoopPackage(metadata, content)) {
+    return [];
+  }
+  const phase = options.phase || VALIDATION_PHASE_PRE_IMPL;
+  const status = options.status || normalizeLedgerText(metadata?.status);
+  const errors = [];
+  const theoryLoop = metadata?.[THEORY_LOOP_FIELD];
+  if (!isObjectRecord(theoryLoop)) {
+    errors.push(
+      `${filePath}: theory-loop package must declare metadata.${THEORY_LOOP_FIELD} ` +
+      `with enforcement ${THEORY_LOOP_ENFORCEMENT_SOURCE_PACKAGE}.`,
+    );
+  } else {
+    if (
+      normalizeLedgerText(theoryLoop[THEORY_LOOP_ENFORCEMENT_FIELD]) !==
+      THEORY_LOOP_ENFORCEMENT_SOURCE_PACKAGE
+    ) {
+      errors.push(
+        `${filePath}: theoryLoop.${THEORY_LOOP_ENFORCEMENT_FIELD} must be ` +
+        `${THEORY_LOOP_ENFORCEMENT_SOURCE_PACKAGE}.`,
+      );
+    }
+    if (theoryLoop[THEORY_LOOP_SOURCE_CHANGE_REQUIRED_FIELD] !== true) {
+      errors.push(
+        `${filePath}: theoryLoop.${THEORY_LOOP_SOURCE_CHANGE_REQUIRED_FIELD} must be true.`,
+      );
+    }
+    if (theoryLoop[THEORY_LOOP_SUCCESSOR_REQUIRED_FIELD] !== true) {
+      errors.push(
+        `${filePath}: theoryLoop.${THEORY_LOOP_SUCCESSOR_REQUIRED_FIELD} must be true.`,
+      );
+    }
+  }
+  if (metadataHasPureClassificationIntent(metadata)) {
+    errors.push(
+      `${filePath}: theory-loop packages cannot be classification-only; ` +
+      'classification-only evidence stays in the sprint until it promotes real src/ work.',
+    );
+  }
+  const writeScope = metadataScopeList(metadata, SCOPE_FIELD_WRITE_SCOPE);
+  const commitScope = metadataScopeList(metadata, SCOPE_FIELD_COMMIT_SCOPE);
+  if (!writeScope.some(isSourceWritePath)) {
+    errors.push(
+      `${filePath}: theory-loop package writeScope must include at least one src/ source file.`,
+    );
+  }
+  if (!commitScope.some(isSourceWritePath)) {
+    errors.push(
+      `${filePath}: theory-loop package commitScope must include the promoted src/ source file.`,
+    );
+  }
+  if (!proofHasRole(metadata, 'falsifier')) {
+    errors.push(
+      `${filePath}: theory-loop package proof must include a falsifier command.`,
+    );
+  }
+  if (!proofHasRole(metadata, 'regression')) {
+    errors.push(
+      `${filePath}: theory-loop package proof must include a regression command.`,
+    );
+  }
+  errors.push(...validateTheoryLoopProofCommands(metadata, filePath));
+  if (!metadata?.[SYSTEM_THEORY_FIELD]) {
+    errors.push(
+      `${filePath}: theory-loop package must include metadata.${SYSTEM_THEORY_FIELD} before implementation.`,
+    );
+  }
+  if (!metadata?.[SLICE_THEORY_FIELD]) {
+    errors.push(
+      `${filePath}: theory-loop package must include metadata.${SLICE_THEORY_FIELD} before implementation.`,
+    );
+  }
+  const sliceSourceContract = normalizeLedgerText(
+    metadata?.[SLICE_THEORY_FIELD]?.[
+      SLICE_THEORY_SOURCE_TEST_CONTRACT_FIELD
+    ],
+  );
+  if (
+    metadata?.[SLICE_THEORY_FIELD] &&
+    !/\bsrc\//iu.test(sliceSourceContract)
+  ) {
+    errors.push(
+      `${filePath}: sliceTheory.${SLICE_THEORY_SOURCE_TEST_CONTRACT_FIELD} ` +
+      'must name the src/ source-code contract tested by this package.',
+    );
+  }
+  if (status === STATUS_DONE || phase === VALIDATION_PHASE_CLOSURE) {
+    if (
+      !isObjectRecord(theoryLoop) ||
+      !THEORY_LOOP_PACKAGE_RESULT_VALUES.includes(
+        normalizeLedgerText(theoryLoop[THEORY_LOOP_RESULT_FIELD]).toLowerCase(),
+      )
+    ) {
+      errors.push(
+        `${filePath}: theory-loop package closure must record theoryLoop.${THEORY_LOOP_RESULT_FIELD} ` +
+        `as one of ${THEORY_LOOP_PACKAGE_RESULT_VALUES.join(', ')}.`,
+      );
+    }
+    if (!theoryLoopImplementationChangedSource(content, metadata)) {
+      errors.push(
+        `${filePath}: theory-loop package closure must record checked implementation evidence with files-changed under src/.`,
+      );
+    }
+    const successorPackage = theoryLoopSuccessorPackage(metadata);
+    if (!/^work\/packages\/(?:todo|active)-.+\.md$/u.test(successorPackage)) {
+      errors.push(
+        `${filePath}: theory-loop package closure must create and link a successor package in theoryLoop.${THEORY_LOOP_SUCCESSOR_PACKAGE_FIELD} or successor.`,
+      );
+    } else if (
+      options.successorExists !== true &&
+      !fsSync.existsSync(path.join(process.cwd(), successorPackage))
+    ) {
+      errors.push(
+        `${filePath}: linked theory-loop successor package does not exist: ${successorPackage}.`,
+      );
+    }
+  }
+  return errors;
 }
 
 function validateClassificationOnlyImplementationScope(
@@ -8779,6 +9163,7 @@ export function buildCurrentBlockerPayload(
     representativeResidual: isObjectRecord(
       metadata[REPRESENTATIVE_RESIDUAL_METADATA_FIELD],
     ) ? metadata[REPRESENTATIVE_RESIDUAL_METADATA_FIELD] : {},
+    theoryLoop: metadata[THEORY_LOOP_FIELD] || {},
     causalGovernance: metadata.causalGovernance || {},
     scenarioCausalClosure: metadata.scenarioCausalClosure || {},
     observablePrediction: metadata[OBSERVABLE_PREDICTION_FIELD] || {},
@@ -8980,6 +9365,20 @@ function currentEdgeCardForbiddenEdits(payload) {
   );
 }
 
+function currentEdgeCardIsTheoryLoop(payload) {
+  return normalizeLedgerText(payload?.representativeResidual?.status) ===
+    'active-theory-loop' ||
+    normalizeLedgerText(payload?.theoryLoop?.[
+      THEORY_LOOP_ENFORCEMENT_FIELD
+    ]) === THEORY_LOOP_ENFORCEMENT_SOURCE_PACKAGE;
+}
+
+function currentEdgeCardAllowedStopModes(payload) {
+  return currentEdgeCardIsTheoryLoop(payload) ?
+    CURRENT_EDGE_CARD_THEORY_LOOP_STOP_MODES :
+    CURRENT_EDGE_CARD_ALLOWED_STOP_MODES;
+}
+
 export function renderCurrentEdgeCardSection(payload) {
   return [
     CURRENT_EDGE_CARD_HEADING,
@@ -9012,7 +9411,7 @@ export function renderCurrentEdgeCardSection(payload) {
       `${formatCurrentEdgeCardList(payload.candidateRuntimeFiles)}`,
     `Forbidden edits: ${currentEdgeCardForbiddenEdits(payload)}`,
     `Required latest proof: ${formatCurrentEdgeCardList(payload.proof)}`,
-    `Allowed stop modes: ${CURRENT_EDGE_CARD_ALLOWED_STOP_MODES}`,
+    `Allowed stop modes: ${currentEdgeCardAllowedStopModes(payload)}`,
     CURRENT_EDGE_CARD_CODE_FENCE_CLOSE,
   ].join(NEWLINE);
 }

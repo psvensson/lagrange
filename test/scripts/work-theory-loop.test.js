@@ -15,7 +15,7 @@ const PACKAGE_PATH = 'work/packages/todo-20260526-priority-recovery-theory-loop.
 const THEORY_ID = 'theory-20260526-priority-recovery-wait';
 const DISCRIMINATOR = 'npm run work:scenario-route -- artifact.json';
 const THEORY_OPTIONS = Object.freeze([
-  'H1 priority waiter misses admission; mechanism: admission_gap; intervention: add owner admission proof; modification: test/rebalancer/priority-recovery.test.js; discriminator: npm run work:scenario-route -- artifact.json; promotion: artifact shows wait without admission; rejection: admission is already visible',
+  'H1 priority waiter misses admission; mechanism: admission_gap; intervention: add owner admission proof; modification: src/rebalancer/priority-recovery.js; discriminator: npm run work:scenario-route -- artifact.json; promotion: artifact shows wait without admission; rejection: admission is already visible',
   'H2 priority recovery wake is stale; mechanism: scheduling_gap; intervention: rearm recovery wake; modification: src/rebalancer/priority-recovery.js; discriminator: node --test test/rebalancer/priority-recovery.test.js; promotion: admission exists without wake; rejection: wake fires before wait repeats',
   'H3 workflow owner is wrong; mechanism: ownership_gap; intervention: migrate owner boundary; modification: src/rebalancer/owner-boundary.js; discriminator: npm run analyze:owner-explain -- artifact.json workflow_progress; promotion: route names another owner; rejection: workflow owner has authority',
 ]);
@@ -47,7 +47,7 @@ test('start section records central problem and ceremony budget', (t) => {
   t.match(section, /Mechanism card: mechanism = admission_gap/u);
   t.match(section, /Stable facts:\n- priority waiter remains pending/u);
   t.match(section, /Theory option set: options are hypotheses/u);
-  t.match(section, /source\/test modification/u);
+  t.match(section, /src\/ source-code modification/u);
   t.match(section, /2\. H2 priority recovery wake is stale/u);
   t.match(section, /Creative move menu:/u);
   t.match(section, /Real package rule: a theory-loop work package exists only/u);
@@ -72,16 +72,16 @@ test('package section requires a concrete option set and discriminator', (t) => 
     success: 'fresh route migrates or passes',
     ...CONTEXT,
     inspect: ['src/rebalancer/priority-recovery.js'],
-    writeScope: ['test/rebalancer/priority-recovery.test.js'],
+    writeScope: ['src/rebalancer/priority-recovery.js'],
     theories: THEORY_OPTIONS,
   });
 
   t.match(section, /smallest falsifier = `npm run work:scenario-route -- artifact.json`/u);
-  t.match(section, /Promoted modification scope:\n- test\/rebalancer\/priority-recovery\.test\.js/u);
+  t.match(section, /Promoted modification scope:\n- src\/rebalancer\/priority-recovery\.js/u);
   t.match(section, /Theory option set: first option is the promoted path/u);
   t.match(section, /1\. H1 priority waiter misses admission/u);
   t.match(section, /3\. H3 workflow owner is wrong/u);
-  t.match(section, /must test the promoted theory by changing source or test code/u);
+  t.match(section, /must test the promoted theory by changing src\/ source code/u);
   t.match(section, /Promotion rule: this package may change code only for the promoted option/u);
   t.throws(
     () => renderTheoryLoopPackageSection({
@@ -89,7 +89,7 @@ test('package section requires a concrete option set and discriminator', (t) => 
       artifact: 'artifact.json',
       success: 'fresh route moves',
       ...CONTEXT,
-      writeScope: ['test/rebalancer/priority-recovery.test.js'],
+      writeScope: ['src/rebalancer/priority-recovery.js'],
       theories: ['one'],
     }),
     /require 2-4 --theory values/u,
@@ -100,7 +100,7 @@ test('package section requires a concrete option set and discriminator', (t) => 
       artifact: 'artifact.json',
       success: 'fresh route moves',
       ...CONTEXT,
-      writeScope: ['test/rebalancer/priority-recovery.test.js'],
+      writeScope: ['src/rebalancer/priority-recovery.js'],
       theories: ['one', 'two'],
     }),
     /must include mechanism, intervention, modification, discriminator, promotion, rejection fields/u,
@@ -114,7 +114,7 @@ test('package section requires a concrete option set and discriminator', (t) => 
       writeScope: ['work/packages/todo-only.md'],
       theories: THEORY_OPTIONS.slice(0, 2),
     }),
-    /require at least one --write-scope source or test code file/u,
+    /require at least one --write-scope src\/ source code file/u,
   );
   t.end();
 });
@@ -156,7 +156,7 @@ test('package scaffolder args select causal-escalation proof and scopes', (t) =>
     discriminator: DISCRIMINATOR,
     validation: 'node --test test/rebalancer/priority-recovery.test.js',
     inspect: ['src/rebalancer/priority-recovery.js'],
-    writeScope: ['test/rebalancer/priority-recovery.test.js'],
+    writeScope: ['src/rebalancer/priority-recovery.js'],
   });
   const joined = args.join('\n');
 
@@ -164,8 +164,10 @@ test('package scaffolder args select causal-escalation proof and scopes', (t) =>
   t.equal(args[args.indexOf('--status') + 1], 'todo');
   t.match(joined, /falsifier: npm run work:scenario-route -- artifact\.json/u);
   t.match(joined, /regression: node --test test\/rebalancer\/priority-recovery\.test\.js/u);
+  t.match(joined, /supporting: npm run work:frontier-history -- --owner operation_workflow_owner --boundary workflow_progress --limit 12/u);
   t.match(joined, /--candidate-runtime-file\nsrc\/rebalancer\/priority-recovery\.js/u);
-  t.match(joined, /--write-scope\ntest\/rebalancer\/priority-recovery\.test\.js/u);
+  t.match(joined, /--theory-loop/u);
+  t.match(joined, /--write-scope\nsrc\/rebalancer\/priority-recovery\.js/u);
   t.throws(
     () => buildPackageNewArgs({
       title: 'Priority Recovery Theory Loop',
@@ -191,7 +193,7 @@ test('package scaffolder args select causal-escalation proof and scopes', (t) =>
       discriminator: DISCRIMINATOR,
       writeScope: ['work/packages/todo-only.md'],
     }),
-    /require at least one --write-scope source or test code file/u,
+    /require at least one --write-scope src\/ source code file/u,
   );
   t.end();
 });
@@ -306,11 +308,11 @@ test('dry-run cli prints package creation command without writing files', async 
     '--escalation',
     'do not open another local patch on unchanged priority wait evidence',
     '--write-scope',
-    'test/rebalancer/priority-recovery.test.js',
+    'src/rebalancer/priority-recovery.js',
   ]);
 
   t.match(output, /Would create work\/packages\/todo-\d{8}-priority-recovery-theory-loop\.md/u);
-  t.match(output, /node scripts\/work-package-new\.js --status todo/u);
+  t.match(output, /node scripts\/work-package-new\.js --theory-loop --status todo/u);
   t.match(output, /"Priority Recovery Theory Loop"/u);
   t.match(output, /## Theory Loop/u);
   t.match(output, /Theory option set: first option is the promoted path/u);

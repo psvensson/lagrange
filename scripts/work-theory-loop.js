@@ -21,6 +21,8 @@ const PACKAGES_DIR = path.join('work', 'packages');
 const SPRINTS_DIR = path.join('work', 'sprints');
 const THEORY_LEDGER_PATH = path.join('work', 'theory-ledger.md');
 const CURRENT_BLOCKER_JSON = path.join('work', 'sprints', 'current-blocker.json');
+const PACKAGE_METADATA_OPEN = '<!-- work-package';
+const PACKAGE_METADATA_CLOSE = '-->';
 const COMMAND_START = 'start';
 const COMMAND_NEXT = 'next';
 const COMMAND_RECORD = 'record';
@@ -99,6 +101,9 @@ const OPTION_REQUIRED_FIELDS = Object.freeze([
   'promotion',
   'rejection',
 ]);
+const THEORY_LOOP_FIELD = 'theoryLoop';
+const THEORY_LOOP_SOURCE_PACKAGE_ENFORCEMENT =
+  'source-code-package-required';
 const DEFAULT_CREATIVE_MOVES = Object.freeze([
   'invert ownership: ask which owner would make the blocker impossible',
   'minimal trace: capture the smallest event that would prove progress',
@@ -108,7 +113,7 @@ const DEFAULT_CREATIVE_MOVES = Object.freeze([
 const HELP_TEXT = [
   'Usage:',
   '  node scripts/work-theory-loop.js start --problem <text> --artifact <path> --success <text> --owner <owner> --mechanism <term> --stable-fact <text> --changed-fact <text> --rejected-alternative <text> --current-action <text> --missing-edge <text> --discriminator <command> --expected-movement <text> --negative-result <text> --escalation <text> --theory <structured-option> --theory <structured-option> [--theory <structured-option>] [--theory <structured-option>] [--move <move>] [--write]',
-  '  node scripts/work-theory-loop.js next --title <title> --slug <slug> --problem <text> --artifact <path> --success <text> --owner <owner> --boundary <boundary> --dominant-reason <reason> --mechanism <term> --stable-fact <text> --changed-fact <text> --rejected-alternative <text> --current-action <text> --missing-edge <text> --discriminator <command> --expected-movement <text> --negative-result <text> --escalation <text> --theory <structured-option> --theory <structured-option> [--theory <structured-option>] [--theory <structured-option>] --write-scope <source-or-test-file> [--write-scope <source-or-test-file>] [--move <move>] [--write]',
+  '  node scripts/work-theory-loop.js next --title <title> --slug <slug> --problem <text> --artifact <path> --success <text> --owner <owner> --boundary <boundary> --dominant-reason <reason> --mechanism <term> --stable-fact <text> --changed-fact <text> --rejected-alternative <text> --current-action <text> --missing-edge <text> --discriminator <command> --expected-movement <text> --negative-result <text> --escalation <text> --theory <structured-option> --theory <structured-option> [--theory <structured-option>] [--theory <structured-option>] --write-scope <src-file> [--write-scope <src-file>] [--move <move>] [--write]',
   '  node scripts/work-theory-loop.js record --theory <id-or-label> --result <result> --evidence <text> [--package <path>] [--ledger-status <status>] [--write]',
   '  node scripts/work-theory-loop.js fix --theory <id-or-label> --evidence <text> --files <paths> --validation <command> [--package <path>] [--write]',
   '',
@@ -252,20 +257,16 @@ function requireConcreteContext(options = {}) {
   return context;
 }
 
-function isSourceOrTestCodePath(filePath) {
+function isSourceCodePath(filePath) {
   const normalized = normalizeWhitespace(filePath).replace(/\\/gu, '/');
-  if (!normalized || normalized.startsWith('work/')) {
-    return false;
-  }
-  return /^(src|scripts|test|tests|lib|tools)\//u.test(normalized) ||
-    /\.(cjs|mjs|js|jsx|ts|tsx|sh)$/u.test(normalized);
+  return normalized.startsWith('src/');
 }
 
 function requireRealModificationScope(writeScope = []) {
   const normalized = (writeScope || []).map(normalizeWhitespace).filter(Boolean);
-  if (!normalized.some(isSourceOrTestCodePath)) {
+  if (!normalized.some(isSourceCodePath)) {
     throw new Error(
-      'Theory-loop work packages require at least one --write-scope source or test code file.',
+      'Theory-loop work packages require at least one --write-scope src/ source code file.',
     );
   }
   return normalized;
@@ -307,15 +308,16 @@ export function renderTheoryLoopSprintSection(options = {}) {
     `- Mechanism card: mechanism = ${context.mechanism}; deciding owner = ${context.owner}; current action = ${context.currentAction}; missing transition or observation = ${context.missingEdge}; smallest falsifier = \`${context.discriminator}\`; expected movement = ${context.expectedMovement}; negative result means = ${context.negativeResult}; escalation rule = ${context.escalation}.`,
     '- Rejected alternatives:',
     renderMarkdownList(context.rejectedAlternatives),
-    '- Theory option set: options are hypotheses to compare, not future packages; each option names mechanism, intervention, source/test modification, discriminator, promotion, and rejection.',
+    '- Theory option set: options are hypotheses to compare, not future packages; each option names mechanism, intervention, src/ source-code modification, discriminator, promotion, and rejection.',
     renderNumberedList(theories),
     '- Creative move menu:',
     renderMarkdownList(moves),
     '- Discriminator first: run or name the cheapest discriminator for each viable option before code edits; the active package executes only the promoted option.',
-    '- Real package rule: a theory-loop work package exists only for a promoted theory with an in-scope source or test code modification, a falsifying verification command, and result recording. Evidence-only discriminators stay in the sprint until they promote real code work.',
+    '- Real package rule: a theory-loop work package exists only for a promoted theory with an in-scope src/ source-code modification, a falsifying verification command, result recording, and successor package creation. Evidence-only discriminators stay in the sprint until they promote real source work.',
     '- Promotion rule: create or activate one executable package only when fresh evidence or a discriminator selects one option with explicit owner, boundary, write scope, proof, and stop rule.',
     '- Learning rule: record each option as supported, avoided, falsified, fixed, migrated, representative-green, architecture-gap, or needs-rerun, then revise the option set before another patch.',
     '- Queue discipline: keep one active executable package and no speculative package queue; successor packages are created only from fresh route evidence.',
+    '- Closure invariant: the sprint continues indefinitely until the success condition is met; close only after `## Theory Loop Success Evidence` records `Success condition met: yes` with fresh representative evidence and a successful result.',
     '- Ceremony budget: use `npm run work:theory-loop -- next|record|fix` for package and ledger updates before hand-editing markdown.',
   ].join(NEWLINE);
 }
@@ -346,12 +348,12 @@ export function renderTheoryLoopPackageSection(options = {}) {
     renderMarkdownList(options.inspect || []),
     '- Promoted modification scope:',
     renderMarkdownList(writeScope),
-    '- Theory option set: first option is the promoted path; remaining options stay as alternatives until evidence selects them. Each option names mechanism, intervention, source/test modification, discriminator, promotion, and rejection.',
+    '- Theory option set: first option is the promoted path; remaining options stay as alternatives until evidence selects them. Each option names mechanism, intervention, src/ source-code modification, discriminator, promotion, and rejection.',
     renderNumberedList(theories),
     '- Creative move menu:',
     renderMarkdownList(moves),
     '- Discriminator first: inspect evidence and run the promoted discriminator before code edits.',
-    '- Real package rule: this package must test the promoted theory by changing source or test code inside the promoted modification scope, then verify whether the theory was correct. If no source/test code modification remains, close the option as avoided or falsified instead of treating it as a work package.',
+    '- Real package rule: this package must test the promoted theory by changing src/ source code inside the promoted modification scope, then verify whether the theory was correct. If no source-code modification remains, close the option as avoided or falsified in the sprint instead of treating it as a work package.',
     '- Promotion rule: this package may change code only for the promoted option; alternatives become packages only after fresh evidence selects them.',
     '- Learning rule: record supported, avoided, falsified, fixed, migrated, representative-green, architecture-gap, or needs-rerun before selecting any successor.',
     '- Result recording: use `npm run work:theory-loop -- record --theory <id-or-label> --result <result> --evidence <text> --write` after each discriminator or fix.',
@@ -386,6 +388,64 @@ export function upsertSection(content, heading, section) {
   }
   const trimmed = String(content || EMPTY).replace(/\s+$/u, EMPTY);
   return `${trimmed}${NEWLINE}${NEWLINE}${section}${NEWLINE}`;
+}
+
+function parsePackageMetadataBlock(content) {
+  const openIndex = String(content || EMPTY).indexOf(PACKAGE_METADATA_OPEN);
+  if (openIndex < NUM_ZERO) {
+    return null;
+  }
+  const jsonStart = openIndex + PACKAGE_METADATA_OPEN.length;
+  const closeIndex = String(content).indexOf(PACKAGE_METADATA_CLOSE, jsonStart);
+  if (closeIndex < NUM_ZERO) {
+    return null;
+  }
+  const jsonText = String(content).slice(jsonStart, closeIndex).trim();
+  return {
+    closeIndex,
+    jsonStart,
+    metadata: JSON.parse(jsonText),
+  };
+}
+
+function replacePackageMetadataBlock(content, parsed, metadata) {
+  return [
+    content.slice(NUM_ZERO, parsed.jsonStart),
+    NEWLINE,
+    JSON.stringify(metadata, null, NUM_TWO),
+    NEWLINE,
+    content.slice(parsed.closeIndex),
+  ].join(EMPTY);
+}
+
+function upsertTheoryLoopMetadata(content, patch = {}) {
+  const parsed = parsePackageMetadataBlock(content);
+  if (!parsed) {
+    return content;
+  }
+  const metadata = parsed.metadata;
+  metadata[THEORY_LOOP_FIELD] = {
+    enforcement: THEORY_LOOP_SOURCE_PACKAGE_ENFORCEMENT,
+    promotedTheory:
+      metadata[THEORY_LOOP_FIELD]?.promotedTheory ||
+      metadata.intent?.nextAction ||
+      'promoted theory selected by the theory-loop discriminator',
+    sprintGoalDelta:
+      metadata[THEORY_LOOP_FIELD]?.sprintGoalDelta ||
+      metadata.intent?.nextAction ||
+      'source change should move the sprint toward the recorded success condition',
+    sourceChangeRequired: true,
+    successorRequired: true,
+    ...(metadata[THEORY_LOOP_FIELD] || {}),
+    ...patch,
+  };
+  if (patch.successorPackage) {
+    metadata.intent = {
+      ...(metadata.intent || {}),
+      successor: patch.successorPackage,
+    };
+  }
+  return replacePackageMetadataBlock(content, parsed, metadata);
 }
 
 export function appendSprintQueueItem(content, item = {}) {
@@ -452,6 +512,7 @@ export function buildPackageNewArgs(options = {}) {
   }
   const args = [
     'scripts/work-package-new.js',
+    '--theory-loop',
     '--status',
     DEFAULT_STATUS,
     '--lane',
@@ -477,9 +538,14 @@ export function buildPackageNewArgs(options = {}) {
     `falsifier: ${discriminator}`,
     '--proof',
     `regression: ${validation}`,
+    '--proof',
+    `supporting: npm run work:frontier-history -- --owner ${owner} --boundary ${boundary} --limit 12`,
   ];
   for (const writePath of writeScope) {
     args.push('--write-scope', writePath);
+  }
+  if (normalizeText(options.predecessor)) {
+    args.push('--predecessor', normalizeText(options.predecessor));
   }
   for (const inspectPath of options.inspect || []) {
     args.push('--candidate-runtime-file', inspectPath);
@@ -570,6 +636,22 @@ async function findActivePackageFile() {
   return active[NUM_ZERO];
 }
 
+async function findOptionalActiveTheoryLoopPackageFile() {
+  try {
+    const packagePath = await findActivePackageFile();
+    const content = await fs.readFile(packagePath, ENCODING_UTF8);
+    if (
+      /^## Theory Loop\b/mu.test(content) ||
+      /"theoryLoop"\s*:/u.test(content)
+    ) {
+      return packagePath;
+    }
+  } catch {
+    return EMPTY;
+  }
+  return EMPTY;
+}
+
 async function runStart(flags) {
   const sprintPath = firstFlag(flags, FLAG_SPRINT) || await findActiveSprintFile();
   const section = renderTheoryLoopSprintSection({
@@ -608,6 +690,9 @@ async function runNext(flags) {
   const opened = todayIsoDate();
   const slug = requireFlag(flags, FLAG_SLUG);
   const packagePath = packagePathFor(DEFAULT_STATUS, opened, slug);
+  const predecessorPackage =
+    firstFlag(flags, FLAG_PACKAGE) ||
+    await findOptionalActiveTheoryLoopPackageFile();
   const options = {
     title: requireFlag(flags, FLAG_TITLE),
     slug,
@@ -633,6 +718,7 @@ async function runNext(flags) {
     moves: repeatedFlag(flags, FLAG_MOVE),
     inspect: repeatedFlag(flags, FLAG_INSPECT),
     writeScope: repeatedFlag(flags, FLAG_WRITE_SCOPE),
+    predecessor: predecessorPackage,
   };
   const section = renderTheoryLoopPackageSection(options);
   const args = buildPackageNewArgs(options);
@@ -662,6 +748,16 @@ async function runNext(flags) {
       `Fresh evidence promoted option 1 from ${theories.length} theory options; discriminator: ${options.discriminator}.`,
   });
   await fs.writeFile(sprintPath, nextSprintContent, ENCODING_UTF8);
+  if (predecessorPackage && predecessorPackage !== packagePath) {
+    const predecessorContent = await fs.readFile(predecessorPackage, ENCODING_UTF8);
+    await fs.writeFile(
+      predecessorPackage,
+      upsertTheoryLoopMetadata(predecessorContent, {
+        successorPackage: packagePath,
+      }),
+      ENCODING_UTF8,
+    );
+  }
   return `Created ${packagePath} and queued it in ${sprintPath}.`;
 }
 
@@ -688,7 +784,7 @@ async function runRecord(flags, forcedResult = EMPTY) {
   const content = await fs.readFile(packagePath, ENCODING_UTF8);
   await fs.writeFile(
     packagePath,
-    appendTheoryLoopResult(content, record),
+    upsertTheoryLoopMetadata(appendTheoryLoopResult(content, record), {result}),
     ENCODING_UTF8,
   );
   if (ledgerStatus && THEORY_ID_PATTERN.test(record.theory)) {

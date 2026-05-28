@@ -179,7 +179,7 @@ sections:
    deciding owner, missing transition or observation, smallest falsifier,
    expected movement, negative result meaning, and escalation rule.
 3. `Theory Option Set`: 2-4 competing options. Each option names a mechanism,
-   intervention style, source or test code modification, cheapest
+   intervention style, `src/` source-code modification, cheapest
    discriminator, promotion trigger, and rejection signal. Options are not work
    packages.
 4. `Creative Move Menu`: domain-neutral moves that force alternatives, such as
@@ -189,11 +189,12 @@ sections:
    edits unless the active package already owns that discriminator as its first
    proof.
 6. `Real Package Rule`: a theory loop work package exists only for a promoted
-   theory that will change source or test code inside declared write scope,
-   verify the theory with a falsifying proof command, and record the result. If
-   the next step is evidence-only inspection, route comparison, or source/log
-   reading without code modification, keep it as sprint-level discrimination;
-   do not promote it to a work package.
+   theory that will change `src/` source code inside declared write scope,
+   verify the theory with a falsifying proof command, record the result, and
+   create or link the successor package. Classification-only, evidence-only
+   inspection, route comparison, or source/log reading without source-code
+   modification stays as sprint-level discrimination; do not promote it to a
+   work package.
 7. `Promotion Rule`: only the option selected by fresh evidence or a
    discriminator becomes one executable package with explicit owner, boundary,
    write scope, proof, and stop rule.
@@ -206,6 +207,15 @@ Queue discipline is part of the shape: keep one active executable package and
 do not create speculative successor packages. A successor package is created
 only after the active package produces fresh route evidence or a discriminator
 selects a different option.
+
+Closure discipline is stricter: a theory loop sprint continues indefinitely
+until its success condition is met. It must not close as `done` for
+same-frontier, classification-only, needs-rerun, pending, or unknown outcomes.
+To close it, add `## Theory Loop Success Evidence` with
+`Success condition met: yes`, a fresh representative evidence command or
+artifact, a result of `representative-green`, `owner-boundary-migration`,
+`architecture-gap`, or `success-condition-met`, and the concrete reason
+continuation stops.
 
 ---
 

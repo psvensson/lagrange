@@ -138,9 +138,13 @@ Use the tracker utility for current sprint/package mechanics:
    `next` require a concrete representative artifact, mechanism-card fields,
    and structured options containing `mechanism:`, `intervention:`,
    `modification:`, `discriminator:`, `promotion:`, and `rejection:`. A
-   promoted theory-loop work package must include at least one source or test
-   code `--write-scope`; evidence-only discrimination stays in the sprint
-   until it selects real code work.
+   promoted theory-loop work package must include at least one `src/` source
+   code `--write-scope`, falsifier and regression proof, result recording, and
+   a successor package; evidence-only or classification-only discrimination
+   stays in the sprint until it selects real source work. A theory-loop sprint
+   stays active indefinitely and can close only after `## Theory Loop Success
+   Evidence` records `Success condition met: yes` with fresh representative
+   evidence.
 14. `npm run work:package:route-after-rerun -- --artifact <artifact>
    --successor <active-successor>` combines the post-rerun route handoff with
    the package migration transaction when the successor already exists and is

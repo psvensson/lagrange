@@ -466,6 +466,53 @@
         }
       },
       "additionalProperties": false
+    },
+    "theoryLoop": {
+      "type": "object",
+      "required": [
+        "enforcement",
+        "promotedTheory",
+        "sprintGoalDelta",
+        "sourceChangeRequired",
+        "successorRequired"
+      ],
+      "properties": {
+        "enforcement": {
+          "type": "string",
+          "enum": ["source-code-package-required"]
+        },
+        "promotedTheory": {
+          "type": "string"
+        },
+        "sprintGoalDelta": {
+          "type": "string"
+        },
+        "result": {
+          "type": "string",
+          "enum": [
+            "fixed",
+            "avoided",
+            "supported",
+            "falsified",
+            "migrated",
+            "representative-green",
+            "architecture-gap",
+            "needs-rerun"
+          ]
+        },
+        "successorPackage": {
+          "type": "string"
+        },
+        "sourceChangeRequired": {
+          "type": "boolean",
+          "enum": [true]
+        },
+        "successorRequired": {
+          "type": "boolean",
+          "enum": [true]
+        }
+      },
+      "additionalProperties": false
     }
   }
 }
