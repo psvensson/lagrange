@@ -89,22 +89,22 @@ After the active package's discriminator, fix, or representative rerun, record t
 ## Current Edge Card
 
 ```text
-Representative artifact: test-output/reports/rolling-restart-active-gate-snapshot-coverage-prefilter-20260528T071443Z.report.json
-Visible first frontier: operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait
-Active package: work/packages/done-20260528-rolling-restart-operation-workflow-owner-workflow-progress.md
-Active package owner: operation_workflow_owner
-Active package boundary: workflow_progress
-Selected cause: priority_recovery_event_driven_wait
-Required action: Classify priority recovery event driven wait and select successor action.
-Representative status: active
-Causal outcome: accept_classified_backpressure
-Architecture gate: not-required / unknown
-Expected delta: Canonical classification identifies whether priority recovery event driven wait remains the blocker.
-Current state: Active gate snapshot coverage prefiltering implemented successfully; representative rerun clears active gate snapshot timeout and exposes next frontier at priority recovery event driven wait.
-Allowed edits: work/packages/done-20260528-rolling-restart-operation-workflow-owner-workflow-progress.md, work/sprints/current-blocker.md, work/sprints/current-blocker.json
+Representative artifact: test-output/reports/rolling-restart-check-success-20260528T0722.report.json
+Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out
+Active package: work/packages/done-20260528-rolling-restart-startup-active-gate-owner-snapshot-coverage-v2.md
+Active package owner: startup_active_gate_owner
+Active package boundary: snapshot_coverage
+Selected cause: active_gate_timed_out
+Required action: Triage active_gate_snapshot_coverage with combined scenario evidence before runtime edits.
+Representative status: same-frontier
+Causal outcome: continue_local_fix
+Architecture gate: selected / open-architecture-package
+Expected delta: Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.
+Current state: Representative evidence selects startup_active_gate_owner / snapshot_coverage at active_gate_snapshot_coverage; the package records the bounded next decision before runtime edits.
+Allowed edits: work/packages/done-20260528-rolling-restart-startup-active-gate-owner-snapshot-coverage-v2.md, work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md
 Candidate runtime files: unknown
-Forbidden edits: Classification selects successor and does not edit runtime.
-Required latest proof: falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-active-gate-snapshot-coverage-prefilter-20260528T071443Z.report.json, regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-active-gate-snapshot-coverage-prefilter-20260528T071443Z.report.json --markdown, supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-active-gate-snapshot-coverage-prefilter-20260528T071443Z.report.json --markdown
+Forbidden edits: Runtime promotion remains blocked while snapshot coverage is incomplete.
+Required latest proof: falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-check-success-20260528T0722.report.json, regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-check-success-20260528T0722.report.json --markdown, supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-check-success-20260528T0722.report.json --markdown
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -141,6 +141,10 @@ This sprint intentionally contains one active executable package and no speculat
    - Lane: `runtime-owner-boundary`
    - Purpose: Triage active_gate_snapshot_coverage with combined scenario evidence before runtime edits.
    - First-run reason: The fresh representative rerun after admitting reconcile progress selects startup_active_gate_owner / snapshot_coverage as a classified local blocker, which requires triage and verification before promoting runtime changes.
+3. [Rolling Restart Startup Active Gate Owner Snapshot Coverage v2](../packages/done-20260528-rolling-restart-startup-active-gate-owner-snapshot-coverage-v2.md)
+   - Lane: `causal-escalation`
+   - Purpose: Triage active_gate_snapshot_coverage with combined scenario evidence before runtime edits.
+   - First-run reason: The fresh representative rerun after prefiltering is still failing with active gate snapshot coverage timeout, requiring causal triage on startup_active_gate_owner / snapshot_coverage before further runtime edits.
 
 ## Sprint Proof Ladder
 
