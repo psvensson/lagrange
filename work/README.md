@@ -137,7 +137,10 @@ Use the tracker utility for current sprint/package mechanics:
    updates through intent flags before hand-editing markdown. `start` and
    `next` require a concrete representative artifact, mechanism-card fields,
    and structured options containing `mechanism:`, `intervention:`,
-   `discriminator:`, `promotion:`, and `rejection:`.
+   `modification:`, `discriminator:`, `promotion:`, and `rejection:`. A
+   promoted theory-loop work package must include at least one source or test
+   code `--write-scope`; evidence-only discrimination stays in the sprint
+   until it selects real code work.
 14. `npm run work:package:route-after-rerun -- --artifact <artifact>
    --successor <active-successor>` combines the post-rerun route handoff with
    the package migration transaction when the successor already exists and is

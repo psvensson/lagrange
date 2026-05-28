@@ -147,18 +147,25 @@ sections:
    deciding owner, missing transition or observation, smallest falsifier,
    expected movement, negative result meaning, and escalation rule.
 3. `Theory Option Set`: 2-4 competing options. Each option names a mechanism,
-   intervention style, cheapest discriminator, promotion trigger, and rejection
-   signal. Options are not work packages.
+   intervention style, source or test code modification, cheapest
+   discriminator, promotion trigger, and rejection signal. Options are not work
+   packages.
 4. `Creative Move Menu`: domain-neutral moves that force alternatives, such as
    ownership inversion, minimal trace capture, opposite intervention, boundary
    swap, or missing-object search.
 5. `Discriminator First`: name or run the cheapest discriminator before code
    edits unless the active package already owns that discriminator as its first
    proof.
-6. `Promotion Rule`: only the option selected by fresh evidence or a
+6. `Real Package Rule`: a theory loop work package exists only for a promoted
+   theory that will change source or test code inside declared write scope,
+   verify the theory with a falsifying proof command, and record the result. If
+   the next step is evidence-only inspection, route comparison, or source/log
+   reading without code modification, keep it as sprint-level discrimination;
+   do not promote it to a work package.
+7. `Promotion Rule`: only the option selected by fresh evidence or a
    discriminator becomes one executable package with explicit owner, boundary,
    write scope, proof, and stop rule.
-7. `Learning Rule`: after the discriminator or fix, record whether each option
+8. `Learning Rule`: after the discriminator or fix, record whether each option
    is supported, avoided, falsified, fixed, migrated, representative-green,
    architecture-gap, or needs-rerun, then revise the option set before another
    local patch.

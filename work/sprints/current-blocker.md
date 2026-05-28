@@ -4,252 +4,283 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: No active work package. Start a new package when implementation resumes.
+Theory under test: The first actionable edge is an eligibility contract: pending ACK or recovering nodes must be removed before active-gate snapshot coverage can pick a viable candidate cohort.
 
-Causal question: none
+Causal question: Pending ACK and pending recovery node ids must be excluded from local active snapshot candidate vectors before coverage attempts select snapshot sources.
 
-Implementation slice: Create or activate one focused package for the next executable concern.
+Implementation slice: Add or adjust the focused snapshot coverage fixture so pending ACK and pending recovery node ids are excluded from locally eligible, projected serving, effective active, and projected active snapshot candidates; then rerun the representative rolling-restart route.
 
 Implementation files:
 
-1. None recorded
+1. `src/admin/admin-control-snapshot-class-part-3.js`
+2. `test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-selected-source-test-cases.js`
+3. `scripts/work-theory-loop.js`
+4. `test/scripts/work-theory-loop.test.js`
+5. `src/admin/admin-control-snapshot-publication-convergence-diagnostics.js`
+6. `src/admin/admin-control-snapshot-publication-handoff.js`
+7. `test/distributed/harness/failure-bundle-diagnostics-artifact-builder.js`
 
-Expected implementation delta: unknown
+Expected implementation delta: After the focused contract proof, fresh representative routing should pass, reduce snapshot coverage residuals, migrate the owner boundary, or record same-frontier with H1 falsified.
 
-Falsifying probe: unknown
+Falsifying probe: npm test -- test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-selected-source-test-cases.js
 
-Stop rule: unknown
+Stop rule: Update the sprint option set and select a new promoted theory before opening another local runtime package.
 
-Sprint: `none`
+Sprint: `work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md`
 
-Package: `none`
+Package: `work/packages/active-20260528-rolling-restart-pending-ack-eligibility-contract-proof.md`
 
-Workflow lane: `none`
+Workflow lane: `bounded-experiment`
 
-Scenario: `none`
+Scenario: `rolling-restart`
 
-Artifact: `none`
+Artifact: `test-output/reports/rolling-restart-active-gate-owner-reconcile-retry-20260528T040351Z.report.json`
 
 Playback: `none`
 
 ## Boundary
 
-Owner: `none`
+Owner: `startup_active_gate_owner`
 
-Boundary: `none`
+Boundary: `snapshot_coverage_pending_ack_eligibility_contract`
 
-Dominant reason: `none`
+Dominant reason: `snapshot_coverage_incomplete`
 
-Current state: No active work package. Start a new package when implementation resumes.
+Current state: The latest package filtered pending ACK and pending recovery node ids out of active snapshot eligibility, but the theory still needs a focused source/test contract proof before another representative rerun can decide whether the eligibility gap was the active blocker.
 
 ## Next Action
 
-Create or activate one focused package for the next executable concern.
+Add or adjust the focused snapshot coverage fixture so pending ACK and pending recovery node ids are excluded from locally eligible, projected serving, effective active, and projected active snapshot candidates; then rerun the representative rolling-restart route.
 
 ## Proof Ladder
 
-1. None recorded
+1. `falsifier: pending ACK/recovery ids must be removed from local snapshot eligibility vectors after package source/test edits: npm test -- test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-selected-source-test-cases.js`
+2. `regression: active package remains structurally valid after source/test proof is recorded: npm run work:validate -- --pre-impl work/packages/active-20260528-rolling-restart-pending-ack-eligibility-contract-proof.md`
+3. `supporting: runtime grammar for the snapshot eligibility source path: npm run audit:runtime-grammar:file -- src/admin/admin-control-snapshot-class-part-3.js`
+4. `supporting: fresh representative route after focused source/test proof: bash -lc 'RUN_ID=$(date -u +%Y%m%dT%H%M%SZ); REPORT=test-output/reports/rolling-restart-pending-ack-eligibility-${RUN_ID}.report.json; timeout 1800s node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output "$REPORT" --fast-local --verbose; npm run work:package:route-after-rerun -- --artifact "$REPORT" --package work/packages/active-20260528-rolling-restart-pending-ack-eligibility-contract-proof.md'`
+5. `supporting: whitespace proof for package-owned files: git diff --check -- src/admin/admin-control-snapshot-class-part-3.js test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-selected-source-test-cases.js work/packages/active-20260528-rolling-restart-pending-ack-eligibility-contract-proof.md work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md`
 
 ## Model Fit
 
-Package class: `unknown`
+Package class: `bounded-experiment`
 
-Intended minimum model: `unknown`
+Intended minimum model: `gpt-5.3-codex`
 
-Scope shape: `unknown`
+Scope shape: `single-owner source/test contract proof`
 
-Output profile: `unknown`
+Output profile: `medium`
 
 Escalation triggers:
 
-1. None recorded
+1. `proof requires selected-source ordering, admin API, transport, table bootstrap, startup readiness, or generic timeout edits`
+2. `focused proof shows pending ACK and pending recovery ids are already excluded before this package's code path`
+3. `fresh representative route repeats active_gate_snapshot_coverage with unchanged coverage and no eligibility metric movement`
 
 ## Theory Ledger References
 
-1. None recorded
+1. `theory-20260522-snapshot-watch-handoff-contract`
+2. `theory-20260526-rolling-restart-active-gate-evidence-capture-gap`
 
 ## Representative Residual
 
-Status: `unknown`
+Status: `pending-before-rerun`
 
-Scenario: `unknown`
+Scenario: `rolling-restart`
 
-Artifact: `unknown`
+Artifact: `test-output/reports/rolling-restart-active-gate-owner-reconcile-retry-20260528T040351Z.report.json`
 
-Frontier: `unknown`
+Frontier: `active_gate_snapshot_coverage`
 
-Owner: `unknown`
+Owner: `startup_active_gate_owner`
 
-Boundary: `unknown`
+Boundary: `snapshot_coverage`
 
-Dominant reason: `unknown`
+Dominant reason: `snapshot_coverage_incomplete`
 
-Next action: `unknown`
+Next action: `Prove the pending ACK/recovery eligibility contract and reroute fresh rolling-restart evidence.`
 
 ## Causal Governance
 
-Causal hypothesis: `unknown`
+Causal hypothesis: `The first actionable edge is an eligibility contract: pending ACK or recovering nodes must be removed before active-gate snapshot coverage can pick a viable candidate cohort.`
 
-Stop-condition check: `unknown`
+Stop-condition check: `npm run analyze:causal-model -- test-output/reports/rolling-restart-active-gate-owner-reconcile-retry-20260528T040351Z.report.json`
 
-Expected causal-model change: `unknown`
+Expected causal-model change: `After the focused contract proof, fresh representative routing should pass, reduce snapshot coverage residuals, migrate the owner boundary, or record same-frontier with H1 falsified.`
 
-Representative outcome: `unknown`
+Representative outcome: `pending-before-rerun`
 
-Causal debt: `unknown`
+Causal debt: `The predecessor changed source filtering without a dedicated fixture that proves every local eligibility vector excludes pending ACK and pending recovery ids.`
 
-Cross-boundary review: `unknown`
+Cross-boundary review: `Selected-source ordering, generic timeout budgets, startup readiness, admin API, transport, table bootstrap, and promotion gates are forbidden unless fresh route evidence selects them.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `unknown`
+Reference scenario/probe: `rolling-restart pending ACK eligibility contract proof`
 
 Phase chain:
 
-1. None recorded
+1. `owner-reconcile admission work moved the sprint to active-gate snapshot coverage`
+2. `pending ACK eligibility filtering was added as the latest local mechanism`
+3. `this package makes that mechanism falsifiable before another representative rerun`
 
-Current first frontier: `unknown`
+Current first frontier: `active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage_pending_ack_eligibility_contract / snapshot_coverage_incomplete`
 
 Known downstream blockers:
 
-1. None recorded
+1. `selected-source timeout remains downstream until the viable candidate set is proven`
+2. `startup readiness remains downstream while active-gate snapshot coverage is incomplete`
+3. `benchmark table bootstrap remains downstream while snapshot coverage is incomplete`
 
-Missing causal edge: `unknown`
+Missing causal edge: `Pending ACK and pending recovery node ids must be excluded from local active snapshot candidate vectors before coverage attempts select snapshot sources.`
 
-Missing causal edge probe: `unknown`
+Missing causal edge probe: `npm test -- test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-selected-source-test-cases.js`
 
-Bounded progress proof: `unknown`
+Bounded progress proof: `Focused source/test proof must fail when a pending ACK or pending recovery node remains in locally eligible, projected serving, effective active, or projected active candidates before the active-gate retry and reconcile path advances.`
 
-Bounded progress proof artifact: `unknown`
+Bounded progress proof artifact: `work/packages/done-20260528-rolling-restart-pending-ack-eligibility-filter.md`
 
-Expected observable transition: `unknown`
+Expected observable transition: `candidate vectors exclude pending ACK/recovery ids; representative rerun passes, reduces snapshot coverage residuals, migrates owner boundary, or records H1 falsified same-frontier.`
 
-Max progress bound: `unknown`
+Max progress bound: `one source/test contract package and one representative rerun before revising the theory option set`
 
-Same-frontier fallback: `unknown`
+Same-frontier fallback: `Update the sprint option set and select a new promoted theory before opening another local runtime package.`
 
-Expected next frontier: `unknown`
+Expected next frontier: `representative-green, snapshot coverage movement, selected next owner boundary, or H1 falsified same-frontier`
 
-Result classification: `unknown`
+Result classification: `pending-before-probe`
 
-Stop condition: `unknown`
+Stop condition: `continue-local-fix`
 
 Recent frontier history:
 
-1. None recorded
+1. `done-20260528-rolling-restart-owner-reconcile-admission-runtime.md / startup_active_gate_owner / snapshot_coverage_owner_reconcile_admission_contract / reduced`
+2. `done-20260528-rolling-restart-startup-active-gate-owner-snapshot-coverage.md / startup_active_gate_owner / snapshot_coverage / classified`
+3. `done-20260528-rolling-restart-startup-active-gate-owner-snapshot-coverage-v2.md / startup_active_gate_owner / snapshot_coverage / classified`
+4. `done-20260528-rolling-restart-pending-ack-eligibility-filter.md / startup_active_gate_owner / snapshot_coverage / local-filter-applied`
 
-Oscillation check: `unknown`
+Oscillation check: `This package is not another classifier; it requires source/test modification and a falsifying proof for the promoted eligibility theory.`
 
-Handoff invariant: `unknown`
+Handoff invariant: `Do not treat local proof as representative green; route fresh rolling-restart evidence after the focused contract proof.`
 
 ## Observable Prediction
 
-Metric: `unknown`
+Metric: `pending ACK/recovery ids in active snapshot candidate vectors`
 
-Predicted: `unknown`
+Predicted: `0 pending ACK or pending recovery node ids remain in locallyEligibleNodeIds, projectedServingNodeIds, effectiveActiveNodeIds, and projectedActiveNodeIds after the package-owned source/test change.`
 
-Observed: `unknown`
+Observed: `pending-focused-proof`
 
-Accuracy: `unknown`
+Accuracy: `pending-before-observation`
 
-Evidence: `unknown`
+Evidence: `work/packages/done-20260528-rolling-restart-pending-ack-eligibility-filter.md`
 
-Metric delta: `unknown`
+Metric delta: `0`
 
 ## Experiment Outcome
 
-Distinguished hypothesis: `unknown`
+Distinguished hypothesis: `H1`
 
-Decision: `unknown`
+Decision: `open-runtime-owner-boundary`
 
-Next owner: `unknown`
+Next owner: `startup_active_gate_owner`
 
-Next boundary: `unknown`
+Next boundary: `snapshot_coverage_pending_ack_eligibility_contract`
 
-Evidence: `unknown`
+Evidence: `work/packages/done-20260528-rolling-restart-pending-ack-eligibility-filter.md`
 
 ## Rerun Decision
 
-Source artifact: `unknown`
+Source artifact: `test-output/reports/rolling-restart-active-gate-owner-reconcile-retry-20260528T040351Z.report.json`
 
-Route owner: `unknown`
+Route owner: `startup_active_gate_owner`
 
-Route boundary: `unknown`
+Route boundary: `snapshot_coverage_pending_ack_eligibility_contract`
 
-Route dominant reason: `unknown`
+Route dominant reason: `snapshot_coverage_incomplete`
 
-Route causal outcome: `unknown`
+Route causal outcome: `continue_local_proof`
 
-Stop mode: `unknown`
+Stop mode: `pending-before-rerun`
 
-Next lane: `unknown`
+Next lane: `bounded-experiment`
 
-Expected delta: `unknown`
+Expected delta: `Fresh representative route should pass, move snapshot coverage beyond the current frontier, migrate owner boundary, or record H1 falsified same-frontier.`
 
 Required refresh commands:
 
-1. None recorded
-
-## Classification Efficiency
-
-Default mode: `unknown`
-
-Separate package reason: `unknown`
-
-Artifact budget: `unknown`
-
-Proof command budget: `unknown`
-
-Commands:
-
-1. None recorded
-
-Decision record: `unknown`
-
-Successor action: `unknown`
-
-Runtime promotion rule: `unknown`
+1. `bash -lc 'RUN_ID=$(date -u +%Y%m%dT%H%M%SZ); REPORT=test-output/reports/rolling-restart-pending-ack-eligibility-${RUN_ID}.report.json; timeout 1800s node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output "$REPORT" --fast-local --verbose; npm run work:package:route-after-rerun -- --artifact "$REPORT" --package work/packages/active-20260528-rolling-restart-pending-ack-eligibility-contract-proof.md'`
+2. `update Sprint Strategy Brief and Current Edge Card from the route result`
+3. `npm run work:repair`
+4. `npm run work:validate -- --entry work/packages/active-20260528-rolling-restart-pending-ack-eligibility-contract-proof.md`
+5. `npm run work:validate -- --pre-impl work/packages/active-20260528-rolling-restart-pending-ack-eligibility-contract-proof.md`
 
 ## Architecture Decision Gate
 
-Status: `unknown`
+Status: `selected`
 
-Trigger: `unknown`
+Trigger: `frontier-oscillation`
 
 Trigger evidence:
 
-1. None recorded
+1. `the predecessor narrowed the mechanism to pending ACK/recovery eligibility filtering`
+2. `the active sprint now requires real theory-loop packages with source/test modification and falsifying proof`
+3. `no active package currently owns the first executable theory-loop proof`
 
 Choices:
 
-1. None recorded
+1. `pending-ack-eligibility-contract-proof` route=`continue-local-proof` - Modify source/test scope to prove pending ACK and pending recovery nodes cannot remain active snapshot candidates.
+2. `route-only-classification` route=`architecture-package` - Run representative routing without a source/test contract proof.
 
-Selected choice: `unknown`
+Selected choice: `pending-ack-eligibility-contract-proof`
 
-Gate next action: unknown
+Gate next action: Execute the selected local proof route; rerun canonical evidence before opening another architecture gate.
 
 ## Scope
 
 Write scope:
 
-1. None recorded
+1. `src/admin/admin-control-snapshot-class-part-3.js`
+2. `test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-selected-source-test-cases.js`
+3. `work/packages/active-20260528-rolling-restart-pending-ack-eligibility-contract-proof.md`
+4. `work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md`
+5. `work/sprints/current-blocker.md`
+6. `work/sprints/current-blocker.json`
+7. `scripts/work-theory-loop.js`
+8. `test/scripts/work-theory-loop.test.js`
+9. `work/README.md`
+10. `work/RULES.md`
+11. `work/templates/sprint-strategy-brief.md`
 
 Handoff files:
 
-1. None recorded
+1. `work/packages/done-20260528-rolling-restart-pending-ack-eligibility-filter.md`
+2. `test-output/reports/rolling-restart-active-gate-owner-reconcile-retry-20260528T040351Z.report.json`
 
 Generated files:
 
-1. `work/sprints/current-blocker.json`
-2. `work/sprints/current-blocker.md`
+1. `work/sprints/current-blocker.md`
+2. `work/sprints/current-blocker.json`
 
 Candidate runtime files:
 
-1. None recorded
+1. `src/admin/admin-control-snapshot-publication-convergence-diagnostics.js`
+2. `src/admin/admin-control-snapshot-publication-handoff.js`
+3. `test/distributed/harness/failure-bundle-diagnostics-artifact-builder.js`
 
 Commit scope:
 
-1. None recorded
+1. `src/admin/admin-control-snapshot-class-part-3.js`
+2. `test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-selected-source-test-cases.js`
+3. `work/packages/active-20260528-rolling-restart-pending-ack-eligibility-contract-proof.md`
+4. `work/packages/done-20260528-rolling-restart-pending-ack-eligibility-filter.md`
+5. `work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md`
+6. `work/sprints/current-blocker.md`
+7. `work/sprints/current-blocker.json`
+8. `scripts/work-theory-loop.js`
+9. `test/scripts/work-theory-loop.test.js`
+10. `work/README.md`
+11. `work/RULES.md`
+12. `work/templates/sprint-strategy-brief.md`
 
 Legacy touched files:
 

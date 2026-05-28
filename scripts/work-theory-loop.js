@@ -94,6 +94,7 @@ const THEORY_ID_PATTERN = /^theory-[0-9]{8}-[a-z0-9-]+$/u;
 const OPTION_REQUIRED_FIELDS = Object.freeze([
   'mechanism',
   'intervention',
+  'modification',
   'discriminator',
   'promotion',
   'rejection',
@@ -107,11 +108,11 @@ const DEFAULT_CREATIVE_MOVES = Object.freeze([
 const HELP_TEXT = [
   'Usage:',
   '  node scripts/work-theory-loop.js start --problem <text> --artifact <path> --success <text> --owner <owner> --mechanism <term> --stable-fact <text> --changed-fact <text> --rejected-alternative <text> --current-action <text> --missing-edge <text> --discriminator <command> --expected-movement <text> --negative-result <text> --escalation <text> --theory <structured-option> --theory <structured-option> [--theory <structured-option>] [--theory <structured-option>] [--move <move>] [--write]',
-  '  node scripts/work-theory-loop.js next --title <title> --slug <slug> --problem <text> --artifact <path> --success <text> --owner <owner> --boundary <boundary> --dominant-reason <reason> --mechanism <term> --stable-fact <text> --changed-fact <text> --rejected-alternative <text> --current-action <text> --missing-edge <text> --discriminator <command> --expected-movement <text> --negative-result <text> --escalation <text> --theory <structured-option> --theory <structured-option> [--theory <structured-option>] [--theory <structured-option>] [--move <move>] [--write]',
+  '  node scripts/work-theory-loop.js next --title <title> --slug <slug> --problem <text> --artifact <path> --success <text> --owner <owner> --boundary <boundary> --dominant-reason <reason> --mechanism <term> --stable-fact <text> --changed-fact <text> --rejected-alternative <text> --current-action <text> --missing-edge <text> --discriminator <command> --expected-movement <text> --negative-result <text> --escalation <text> --theory <structured-option> --theory <structured-option> [--theory <structured-option>] [--theory <structured-option>] --write-scope <source-or-test-file> [--write-scope <source-or-test-file>] [--move <move>] [--write]',
   '  node scripts/work-theory-loop.js record --theory <id-or-label> --result <result> --evidence <text> [--package <path>] [--ledger-status <status>] [--write]',
   '  node scripts/work-theory-loop.js fix --theory <id-or-label> --evidence <text> --files <paths> --validation <command> [--package <path>] [--write]',
   '',
-  'Structured option fields: mechanism:, intervention:, discriminator:, promotion:, rejection:',
+  'Structured option fields: mechanism:, intervention:, modification:, discriminator:, promotion:, rejection:',
   'Results: fixed, avoided, supported, falsified, migrated, representative-green, architecture-gap, needs-rerun',
 ].join(NEWLINE);
 
@@ -251,6 +252,25 @@ function requireConcreteContext(options = {}) {
   return context;
 }
 
+function isSourceOrTestCodePath(filePath) {
+  const normalized = normalizeWhitespace(filePath).replace(/\\/gu, '/');
+  if (!normalized || normalized.startsWith('work/')) {
+    return false;
+  }
+  return /^(src|scripts|test|tests|lib|tools)\//u.test(normalized) ||
+    /\.(cjs|mjs|js|jsx|ts|tsx|sh)$/u.test(normalized);
+}
+
+function requireRealModificationScope(writeScope = []) {
+  const normalized = (writeScope || []).map(normalizeWhitespace).filter(Boolean);
+  if (!normalized.some(isSourceOrTestCodePath)) {
+    throw new Error(
+      'Theory-loop work packages require at least one --write-scope source or test code file.',
+    );
+  }
+  return normalized;
+}
+
 function validateTheories(theories) {
   if (theories.length < NUM_TWO || theories.length > NUM_FOUR) {
     throw new Error('Theory-loop option sets require 2-4 --theory values.');
@@ -287,11 +307,12 @@ export function renderTheoryLoopSprintSection(options = {}) {
     `- Mechanism card: mechanism = ${context.mechanism}; deciding owner = ${context.owner}; current action = ${context.currentAction}; missing transition or observation = ${context.missingEdge}; smallest falsifier = \`${context.discriminator}\`; expected movement = ${context.expectedMovement}; negative result means = ${context.negativeResult}; escalation rule = ${context.escalation}.`,
     '- Rejected alternatives:',
     renderMarkdownList(context.rejectedAlternatives),
-    '- Theory option set: options are hypotheses to compare, not future packages; each option names mechanism, intervention, discriminator, promotion, and rejection.',
+    '- Theory option set: options are hypotheses to compare, not future packages; each option names mechanism, intervention, source/test modification, discriminator, promotion, and rejection.',
     renderNumberedList(theories),
     '- Creative move menu:',
     renderMarkdownList(moves),
     '- Discriminator first: run or name the cheapest discriminator for each viable option before code edits; the active package executes only the promoted option.',
+    '- Real package rule: a theory-loop work package exists only for a promoted theory with an in-scope source or test code modification, a falsifying verification command, and result recording. Evidence-only discriminators stay in the sprint until they promote real code work.',
     '- Promotion rule: create or activate one executable package only when fresh evidence or a discriminator selects one option with explicit owner, boundary, write scope, proof, and stop rule.',
     '- Learning rule: record each option as supported, avoided, falsified, fixed, migrated, representative-green, architecture-gap, or needs-rerun, then revise the option set before another patch.',
     '- Queue discipline: keep one active executable package and no speculative package queue; successor packages are created only from fresh route evidence.',
@@ -305,6 +326,7 @@ export function renderTheoryLoopPackageSection(options = {}) {
   const theories = options.theories || [];
   const moves = options.moves?.length ? options.moves : DEFAULT_CREATIVE_MOVES;
   const context = requireConcreteContext(options);
+  const writeScope = requireRealModificationScope(options.writeScope);
   validateTheories(theories);
   if (!problem || !success) {
     throw new Error('Theory-loop package requires problem and success text.');
@@ -322,11 +344,14 @@ export function renderTheoryLoopPackageSection(options = {}) {
     renderMarkdownList(context.rejectedAlternatives),
     '- Source/log inspection targets:',
     renderMarkdownList(options.inspect || []),
-    '- Theory option set: first option is the promoted path; remaining options stay as alternatives until evidence selects them. Each option names mechanism, intervention, discriminator, promotion, and rejection.',
+    '- Promoted modification scope:',
+    renderMarkdownList(writeScope),
+    '- Theory option set: first option is the promoted path; remaining options stay as alternatives until evidence selects them. Each option names mechanism, intervention, source/test modification, discriminator, promotion, and rejection.',
     renderNumberedList(theories),
     '- Creative move menu:',
     renderMarkdownList(moves),
     '- Discriminator first: inspect evidence and run the promoted discriminator before code edits.',
+    '- Real package rule: this package must test the promoted theory by changing source or test code inside the promoted modification scope, then verify whether the theory was correct. If no source/test code modification remains, close the option as avoided or falsified instead of treating it as a work package.',
     '- Promotion rule: this package may change code only for the promoted option; alternatives become packages only after fresh evidence selects them.',
     '- Learning rule: record supported, avoided, falsified, fixed, migrated, representative-green, architecture-gap, or needs-rerun before selecting any successor.',
     '- Result recording: use `npm run work:theory-loop -- record --theory <id-or-label> --result <result> --evidence <text> --write` after each discriminator or fix.',
@@ -409,6 +434,7 @@ export function buildPackageNewArgs(options = {}) {
   const discriminator = normalizeText(options.discriminator);
   const problem = normalizeText(options.problem);
   const artifact = requireConcreteArtifact(options.artifact);
+  const writeScope = requireRealModificationScope(options.writeScope);
   const validation = normalizeText(options.validation) || discriminator;
   for (const [label, value] of Object.entries({
     title,
@@ -452,7 +478,7 @@ export function buildPackageNewArgs(options = {}) {
     '--proof',
     `regression: ${validation}`,
   ];
-  for (const writePath of options.writeScope || []) {
+  for (const writePath of writeScope) {
     args.push('--write-scope', writePath);
   }
   for (const inspectPath of options.inspect || []) {

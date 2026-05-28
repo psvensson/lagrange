@@ -15,9 +15,9 @@ const PACKAGE_PATH = 'work/packages/todo-20260526-priority-recovery-theory-loop.
 const THEORY_ID = 'theory-20260526-priority-recovery-wait';
 const DISCRIMINATOR = 'npm run work:scenario-route -- artifact.json';
 const THEORY_OPTIONS = Object.freeze([
-  'H1 priority waiter misses admission; mechanism: admission_gap; intervention: add owner admission proof; discriminator: npm run work:scenario-route -- artifact.json; promotion: artifact shows wait without admission; rejection: admission is already visible',
-  'H2 priority recovery wake is stale; mechanism: scheduling_gap; intervention: rearm recovery wake; discriminator: node --test test/rebalancer/priority-recovery.test.js; promotion: admission exists without wake; rejection: wake fires before wait repeats',
-  'H3 workflow owner is wrong; mechanism: ownership_gap; intervention: migrate owner boundary; discriminator: npm run analyze:owner-explain -- artifact.json workflow_progress; promotion: route names another owner; rejection: workflow owner has authority',
+  'H1 priority waiter misses admission; mechanism: admission_gap; intervention: add owner admission proof; modification: test/rebalancer/priority-recovery.test.js; discriminator: npm run work:scenario-route -- artifact.json; promotion: artifact shows wait without admission; rejection: admission is already visible',
+  'H2 priority recovery wake is stale; mechanism: scheduling_gap; intervention: rearm recovery wake; modification: src/rebalancer/priority-recovery.js; discriminator: node --test test/rebalancer/priority-recovery.test.js; promotion: admission exists without wake; rejection: wake fires before wait repeats',
+  'H3 workflow owner is wrong; mechanism: ownership_gap; intervention: migrate owner boundary; modification: src/rebalancer/owner-boundary.js; discriminator: npm run analyze:owner-explain -- artifact.json workflow_progress; promotion: route names another owner; rejection: workflow owner has authority',
 ]);
 const CONTEXT = Object.freeze({
   owner: 'operation_workflow_owner',
@@ -47,8 +47,10 @@ test('start section records central problem and ceremony budget', (t) => {
   t.match(section, /Mechanism card: mechanism = admission_gap/u);
   t.match(section, /Stable facts:\n- priority waiter remains pending/u);
   t.match(section, /Theory option set: options are hypotheses/u);
+  t.match(section, /source\/test modification/u);
   t.match(section, /2\. H2 priority recovery wake is stale/u);
   t.match(section, /Creative move menu:/u);
+  t.match(section, /Real package rule: a theory-loop work package exists only/u);
   t.match(section, /Promotion rule: create or activate one executable package/u);
   t.match(section, /work:theory-loop -- next\|record\|fix/u);
   t.throws(
@@ -70,13 +72,16 @@ test('package section requires a concrete option set and discriminator', (t) => 
     success: 'fresh route migrates or passes',
     ...CONTEXT,
     inspect: ['src/rebalancer/priority-recovery.js'],
+    writeScope: ['test/rebalancer/priority-recovery.test.js'],
     theories: THEORY_OPTIONS,
   });
 
   t.match(section, /smallest falsifier = `npm run work:scenario-route -- artifact.json`/u);
+  t.match(section, /Promoted modification scope:\n- test\/rebalancer\/priority-recovery\.test\.js/u);
   t.match(section, /Theory option set: first option is the promoted path/u);
   t.match(section, /1\. H1 priority waiter misses admission/u);
   t.match(section, /3\. H3 workflow owner is wrong/u);
+  t.match(section, /must test the promoted theory by changing source or test code/u);
   t.match(section, /Promotion rule: this package may change code only for the promoted option/u);
   t.throws(
     () => renderTheoryLoopPackageSection({
@@ -84,6 +89,7 @@ test('package section requires a concrete option set and discriminator', (t) => 
       artifact: 'artifact.json',
       success: 'fresh route moves',
       ...CONTEXT,
+      writeScope: ['test/rebalancer/priority-recovery.test.js'],
       theories: ['one'],
     }),
     /require 2-4 --theory values/u,
@@ -94,9 +100,21 @@ test('package section requires a concrete option set and discriminator', (t) => 
       artifact: 'artifact.json',
       success: 'fresh route moves',
       ...CONTEXT,
+      writeScope: ['test/rebalancer/priority-recovery.test.js'],
       theories: ['one', 'two'],
     }),
-    /must include mechanism, intervention, discriminator, promotion, rejection fields/u,
+    /must include mechanism, intervention, modification, discriminator, promotion, rejection fields/u,
+  );
+  t.throws(
+    () => renderTheoryLoopPackageSection({
+      problem: 'no code modification',
+      artifact: 'artifact.json',
+      success: 'fresh route moves',
+      ...CONTEXT,
+      writeScope: ['work/packages/todo-only.md'],
+      theories: THEORY_OPTIONS.slice(0, 2),
+    }),
+    /require at least one --write-scope source or test code file/u,
   );
   t.end();
 });
@@ -160,6 +178,20 @@ test('package scaffolder args select causal-escalation proof and scopes', (t) =>
       discriminator: DISCRIMINATOR,
     }),
     /requires a concrete representative artifact/u,
+  );
+  t.throws(
+    () => buildPackageNewArgs({
+      title: 'Priority Recovery Theory Loop',
+      slug: 'priority-recovery-theory-loop',
+      owner: 'operation_workflow_owner',
+      boundary: 'workflow_progress',
+      dominantReason: 'priority_recovery_event_driven_wait',
+      problem: 'rolling restart priority wait',
+      artifact: 'artifact.json',
+      discriminator: DISCRIMINATOR,
+      writeScope: ['work/packages/todo-only.md'],
+    }),
+    /require at least one --write-scope source or test code file/u,
   );
   t.end();
 });
@@ -273,6 +305,8 @@ test('dry-run cli prints package creation command without writing files', async 
     'stop for owner-boundary migration',
     '--escalation',
     'do not open another local patch on unchanged priority wait evidence',
+    '--write-scope',
+    'test/rebalancer/priority-recovery.test.js',
   ]);
 
   t.match(output, /Would create work\/packages\/todo-\d{8}-priority-recovery-theory-loop\.md/u);
@@ -285,6 +319,8 @@ test('dry-run cli prints package creation command without writing files', async 
 test('record dry-run maps theory evidence into one ledger-ready line', async (t) => {
   const output = await runCli([
     'record',
+    '--package',
+    PACKAGE_PATH,
     '--theory',
     THEORY_ID,
     '--result',

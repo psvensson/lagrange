@@ -446,28 +446,68 @@ class AdminControlSnapshotPart3 extends AdminControlSnapshotPart2 {
         activeNodeViews,
         publicationConvergence,
       );
+
+    const pcPendingAckNodeIds = Array.isArray(publicationConvergence?.pendingAckNodeIds)
+      ? publicationConvergence.pendingAckNodeIds
+      : Array.isArray(publicationConvergence?.membershipLifecycleSummary?.pendingAckNodeIds)
+      ? publicationConvergence.membershipLifecycleSummary.pendingAckNodeIds
+      : [];
+
+    let pcPendingRecoveryNodeIds = [];
+    const directHandoff = controlPlaneDiagnostics?.publicationActiveGateHandoff;
+    const nestedHandoff = publicationConvergence?.publicationActiveGateHandoff;
+
+    if (directHandoff && Array.isArray(directHandoff.pendingRecoveryNodeIds)) {
+      pcPendingRecoveryNodeIds = directHandoff.pendingRecoveryNodeIds;
+    } else if (nestedHandoff && Array.isArray(nestedHandoff.pendingRecoveryNodeIds)) {
+      pcPendingRecoveryNodeIds = nestedHandoff.pendingRecoveryNodeIds;
+    }
+
+    const commaSeparatedRecovery =
+      controlPlaneDiagnostics?.publicationActiveGateHandoffPendingRecoveryNodeIds ||
+      controlPlaneDiagnostics?.activeGateOwnerCohortPendingRecoveryNodeIds;
+    if (commaSeparatedRecovery && typeof commaSeparatedRecovery === 'string') {
+      const parsed = commaSeparatedRecovery.split(',').map(x => x.trim()).filter(Boolean);
+      pcPendingRecoveryNodeIds = [...pcPendingRecoveryNodeIds, ...parsed];
+    }
+
+    const unreachableOrRecoveringNodeIds = new Set(
+      normalizeControlSnapshotNodeIdList([
+        ...pcPendingAckNodeIds,
+        ...pcPendingRecoveryNodeIds,
+      ])
+    );
+
+    const filteredLocallyEligibleNodeIds = [
+      ...activeNodeViewsWithOwnerTruth.locallyEligibleNodeIds,
+    ].filter((nodeId) => !unreachableOrRecoveringNodeIds.has(nodeId));
+
+    const filteredProjectedServingNodeIds = [
+      ...activeNodeViewsWithOwnerTruth.projectedServingNodeIds,
+    ].filter((nodeId) => !unreachableOrRecoveringNodeIds.has(nodeId));
+
+    const filteredEffectiveActiveNodeIds = [
+      ...activeNodeViewsWithOwnerTruth.effectiveActiveNodeIds,
+    ].filter((nodeId) => !unreachableOrRecoveringNodeIds.has(nodeId));
+
+    const filteredProjectedActiveNodeIds = [
+      ...activeNodeViewsWithOwnerTruth.projectedActiveNodeIds,
+    ].filter((nodeId) => !unreachableOrRecoveringNodeIds.has(nodeId));
+
     return {
       authoritativeSource: activeNodeViewsWithOwnerTruth.authoritativeSource,
       authoritativeActiveNodeIds: [
         ...activeNodeViewsWithOwnerTruth.authoritativeActiveNodeIds,
       ],
-      projectedServingNodeIds: [
-        ...activeNodeViewsWithOwnerTruth.projectedServingNodeIds,
-      ],
-      locallyEligibleNodeIds: [
-        ...activeNodeViewsWithOwnerTruth.locallyEligibleNodeIds,
-      ],
+      projectedServingNodeIds: filteredProjectedServingNodeIds,
+      locallyEligibleNodeIds: filteredLocallyEligibleNodeIds,
       suspectedOrTransitioningNodeIds: [
         ...activeNodeViewsWithOwnerTruth.suspectedOrTransitioningNodeIds,
       ],
       membershipFreeze: activeNodeViewsWithOwnerTruth.membershipFreeze,
       effectiveSource: activeNodeViewsWithOwnerTruth.effectiveSource,
-      effectiveActiveNodeIds: [
-        ...activeNodeViewsWithOwnerTruth.effectiveActiveNodeIds,
-      ],
-      projectedActiveNodeIds: [
-        ...activeNodeViewsWithOwnerTruth.projectedActiveNodeIds,
-      ],
+      effectiveActiveNodeIds: filteredEffectiveActiveNodeIds,
+      projectedActiveNodeIds: filteredProjectedActiveNodeIds,
       publishedActiveNodeIds: Array.isArray(
         activeNodeViewsWithOwnerTruth.publishedActiveNodeIds,
       ) ?
