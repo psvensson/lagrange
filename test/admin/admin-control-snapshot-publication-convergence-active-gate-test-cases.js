@@ -10,6 +10,26 @@ import {
 } from '../../src/control-plane/publication-recovery-evidence.js';
 import * as ACTIVE_GATE_SNAPSHOT_TEST_STATE from './admin-control-snapshot-active-gate-fixture-state.js';
 
+const PUBLICATION_CONVERGENCE_QUERY_ENGINE_NODE_ID = 'node-1';
+const PUBLICATION_CONVERGENCE_QUERY_ENGINE_NOW_MS = 1000;
+const PUBLICATION_CONVERGENCE_QUERY_ENGINE_EPOCH = 12;
+const PUBLICATION_CONVERGENCE_QUERY_ENGINE_STATUS = 'ACK_PENDING';
+const PUBLICATION_CONVERGENCE_QUERY_ENGINE_STATE_AVAILABLE = 'available';
+const PUBLICATION_CONVERGENCE_QUERY_ENGINE_STATE_UNAVAILABLE = 'unavailable';
+const PUBLICATION_CONVERGENCE_QUERY_ENGINE_REASON_AVAILABLE =
+  'sql_query_engine_available';
+const PUBLICATION_CONVERGENCE_QUERY_ENGINE_REASON_UNAVAILABLE =
+  'sql_query_engine_unavailable';
+
+function buildPublicationConvergenceQueryEnginePublication() {
+  return {
+    publicationEpoch: PUBLICATION_CONVERGENCE_QUERY_ENGINE_EPOCH,
+    status: PUBLICATION_CONVERGENCE_QUERY_ENGINE_STATUS,
+    publishedActiveNodeIds: [PUBLICATION_CONVERGENCE_QUERY_ENGINE_NODE_ID],
+    requiredAckNodeIds: [PUBLICATION_CONVERGENCE_QUERY_ENGINE_NODE_ID],
+    acknowledgedNodeIds: [PUBLICATION_CONVERGENCE_QUERY_ENGINE_NODE_ID],
+  };
+}
 
 test('AdminControlSnapshot routes publication convergence through the shared recovery protocol snapshot',
   async (t) => {
@@ -63,6 +83,57 @@ test('AdminControlSnapshot routes publication convergence through the shared rec
         },
       },
       'admin convergence diagnostics should preserve canonical node participation',
+    );
+  });
+
+test('AdminControlSnapshot exposes SQL query engine availability in publication convergence diagnostics',
+  async (t) => {
+    const unavailableSnapshot = new AdminControlSnapshot({
+      nodeId: PUBLICATION_CONVERGENCE_QUERY_ENGINE_NODE_ID,
+      nowFn: () => PUBLICATION_CONVERGENCE_QUERY_ENGINE_NOW_MS,
+    });
+    const unavailableDiagnostics =
+      unavailableSnapshot.resolvePublicationConvergenceDiagnostics(
+        [],
+        buildPublicationConvergenceQueryEnginePublication(),
+      );
+
+    t.match(
+      unavailableDiagnostics,
+      {
+        queryEngineAvailable: false,
+        queryEngineAvailability: {
+          state: PUBLICATION_CONVERGENCE_QUERY_ENGINE_STATE_UNAVAILABLE,
+          reasonCode:
+            PUBLICATION_CONVERGENCE_QUERY_ENGINE_REASON_UNAVAILABLE,
+        },
+      },
+      'publication convergence should identify unavailable SQL query engine before active-gate visibility waits',
+    );
+
+    const availableSnapshot = new AdminControlSnapshot({
+      nodeId: PUBLICATION_CONVERGENCE_QUERY_ENGINE_NODE_ID,
+      nowFn: () => PUBLICATION_CONVERGENCE_QUERY_ENGINE_NOW_MS,
+    });
+    const availableDiagnostics =
+      availableSnapshot.resolvePublicationConvergenceDiagnostics(
+        [],
+        buildPublicationConvergenceQueryEnginePublication(),
+        {
+          queryEngineAvailable: true,
+        },
+      );
+
+    t.match(
+      availableDiagnostics,
+      {
+        queryEngineAvailable: true,
+        queryEngineAvailability: {
+          state: PUBLICATION_CONVERGENCE_QUERY_ENGINE_STATE_AVAILABLE,
+          reasonCode: PUBLICATION_CONVERGENCE_QUERY_ENGINE_REASON_AVAILABLE,
+        },
+      },
+      'publication convergence should identify executable SQL query engine before active-gate visibility waits',
     );
   });
 
@@ -176,6 +247,9 @@ test('AdminControlSnapshot carries authoritative published fallback through loca
           return ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_EMPTY_ROWS;
         },
       },
+      sqlQueryEngine: {
+        executeRequest() {},
+      },
       controlPlaneReadinessService: {
         async getAllNodeReadiness() {
           return [{
@@ -223,6 +297,12 @@ test('AdminControlSnapshot carries authoritative published fallback through loca
         ?.publishedActiveNodeIds,
       [...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS],
       'strict published membership observation should remain aligned with producer diagnostics',
+    );
+    t.equal(
+      result.controlPlaneDiagnostics.publicationConvergence
+        ?.queryEngineAvailable,
+      true,
+      'producer diagnostics should carry SQL query engine availability from the control snapshot instance',
     );
     t.equal(
       result.controlPlaneDiagnostics.publicationActiveGateHandoff

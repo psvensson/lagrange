@@ -50,6 +50,10 @@ const STATUS_ACTIVE = 'active';
 const CONTROL_PLANE_DIAGNOSTICS_SCHEMA_VERSION = 1;
 const CONTROL_PLANE_DIAGNOSTICS_CDC_REPLAY_LIMIT = 5;
 const PRIORITY_RECOVERY_DECISION_SNAPSHOT_SCHEMA_VERSION = 1;
+const CONTROL_SNAPSHOT_RUNTIME_READER_FIELD = 'sqlQueryEngine';
+const CONTROL_SNAPSHOT_RUNTIME_READER_EXECUTE_REQUEST_METHOD = 'executeRequest';
+const CONTROL_SNAPSHOT_PUBLICATION_READER_AVAILABLE_FIELD =
+  'queryEngineAvailable';
 const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_OPTIONS = Object.freeze({
   allowOwnerLaneRetry: true,
 });
@@ -175,6 +179,14 @@ function buildCdcReplayRetentionDiagnostics(partitionServices) {
     byPartitionId,
   };
 }
+function hasControlSnapshotRuntimeReaderAvailable(runtimeReader = null) {
+  return Boolean(
+    runtimeReader &&
+    typeof runtimeReader[
+      CONTROL_SNAPSHOT_RUNTIME_READER_EXECUTE_REQUEST_METHOD
+    ] === TYPEOF.FUNCTION,
+  );
+}
 // ── AdminControlSnapshot class ──────────────────────────────────────────────
 /**
  * Control snapshot builder.
@@ -297,6 +309,9 @@ class AdminControlSnapshotPart5 extends AdminControlSnapshotPart4 {
     }
     const publicationMode =
       this.resolvePublicationModeDiagnostics(readinessEntries);
+    const readerAvailable = hasControlSnapshotRuntimeReaderAvailable(
+      this[CONTROL_SNAPSHOT_RUNTIME_READER_FIELD],
+    );
     const publicationConvergence =
       this.resolvePublicationConvergenceDiagnostics(
         readinessEntries,
@@ -308,6 +323,8 @@ class AdminControlSnapshotPart5 extends AdminControlSnapshotPart4 {
             options.reconcileAuthoritativeMembershipPublication === true,
           publicationActiveGateHandoff:
             options.publicationActiveGateHandoff,
+          [CONTROL_SNAPSHOT_PUBLICATION_READER_AVAILABLE_FIELD]:
+            readerAvailable,
         },
       );
     const readinessTransitionsByNodeId =
@@ -398,6 +415,10 @@ class AdminControlSnapshotPart5 extends AdminControlSnapshotPart4 {
         this.resolvePublicationConvergenceDiagnostics(
           ADMIN_CACHE_DUMP.EMPTY,
           observedPublishedMembership,
+          {
+            [CONTROL_SNAPSHOT_PUBLICATION_READER_AVAILABLE_FIELD]:
+              readerAvailable,
+          },
         ),
       heartbeatPublication,
       readinessByNodeId,

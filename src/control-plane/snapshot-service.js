@@ -15,14 +15,15 @@ class SnapshotService {
   }
 
   /**
-   * Proactively bypass/drain the write queue for critical active-gate snapshot operations.
+   * Proactively bypass/drain the write queue for critical snapshot operations.
    * @return {Promise<number>} The number of written entries drained.
    */
   static async drainQueueForSnapshot() {
+    let drainedCount = LOCAL_NUM_ZERO;
     if (this.isQueuePressureDetected()) {
-      return await OwnerQueue.drain();
+      drainedCount = await OwnerQueue.drain();
     }
-    return LOCAL_NUM_ZERO;
+    return drainedCount;
   }
 }
 

@@ -11,6 +11,7 @@ import {
 } from './control-plane-error-classification.js';
 import {normalizeControlPlanePublicationRow} from './system-row-normalizers.js';
 import {
+  PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION,
   hasPublicationActiveGateOwnerReconcileSignal,
   resolvePublicationActiveGateMembershipPublicationTarget,
 } from './publication-active-gate-handoff-contract.js';
@@ -33,6 +34,7 @@ import {
   buildCriticalConvergenceErrorOutcome,
   normalizeControlPlaneConvergenceRetryAfterMs,
 } from './membership-publication-control-plane-convergence.js';
+import {SnapshotService} from './snapshot-service.js';
 
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_SCHEMA_VERSION = 1;
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_REASON =
@@ -48,6 +50,7 @@ const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_DEFERRED_SKIP_WRITE_READBACK = true;
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_SKIP_CACHE_WAIT = true;
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_ROWS =
   Object.freeze([]);
+const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_ABSENT_ROW = null;
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_OUTCOME = Object.freeze({});
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME = Object.freeze({
   NO_CHANGE: 'no_change',
@@ -86,6 +89,13 @@ const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD =
     SERVICE_ROWS: 'serviceRows',
     SKIP_PUBLICATION_WRITE_READBACK: 'skipPublicationWriteReadback',
   });
+const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_VISIBILITY_CONTEXT =
+  Object.freeze({
+    [ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
+      .SKIP_CACHE_WAIT]: ACTIVE_GATE_MEMBERSHIP_PUBLICATION_SKIP_CACHE_WAIT,
+    [ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
+      .SKIP_PUBLICATION_WRITE_READBACK]: false,
+  });
 
 function selectLatestActiveGateMembershipPublicationRow(rows = [], options = {}) {
   const expectedStatus =
@@ -95,7 +105,7 @@ function selectLatestActiveGateMembershipPublicationRow(rows = [], options = {})
   const normalizedRows = (Array.isArray(rows) ? rows : [])
     .map((row) => {
       if (!row || typeof row !== TYPEOF.OBJECT) {
-        return null;
+        return ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_ABSENT_ROW;
       }
       return normalizeControlPlanePublicationRow(
         row[
@@ -114,7 +124,7 @@ function selectLatestActiveGateMembershipPublicationRow(rows = [], options = {})
       ),
     );
   if (normalizedRows.length === NUM.ZERO) {
-    return null;
+    return ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_ABSENT_ROW;
   }
   normalizedRows.sort((left, right) => {
     const epochDelta =
@@ -128,7 +138,8 @@ function selectLatestActiveGateMembershipPublicationRow(rows = [], options = {})
       (left.updatedAt || left.publishedAt || NUM.ZERO)
     );
   });
-  return normalizedRows[NUM.ZERO] || null;
+  return normalizedRows[NUM.ZERO] ||
+    ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_ABSENT_ROW;
 }
 
 function buildActiveGateMembershipPublicationPublishedBaselineRow(target) {
@@ -140,7 +151,7 @@ function buildActiveGateMembershipPublicationPublishedBaselineRow(target) {
     handoffContract?.publishedActiveNodeIds,
   );
   if (publishedActiveNodeIds.length === NUM.ZERO) {
-    return null;
+    return ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_ABSENT_ROW;
   }
   const publicationEpoch = normalizePositiveInteger(
     handoffContract?.publicationEpoch,
@@ -166,7 +177,7 @@ function resolveActiveGateMembershipPublicationLatestRow(
     typeof publicationActiveGateHandoff !== TYPEOF.OBJECT ||
     Array.isArray(publicationActiveGateHandoff)
   ) {
-    return null;
+    return ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_ABSENT_ROW;
   }
   const publicationConvergence =
     publicationActiveGateHandoff[
@@ -339,8 +350,7 @@ function buildActiveGateMembershipPublicationReconcileContext({
       .ALLOW_PENDING_VISIBILITY]: true,
     [ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
       .ALLOW_PRESSURE_DEFER]: false,
-    [ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
-      .SKIP_CACHE_WAIT]: ACTIVE_GATE_MEMBERSHIP_PUBLICATION_SKIP_CACHE_WAIT,
+    ...ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_VISIBILITY_CONTEXT,
     [ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
       .ALLOW_EMPTY_PRELOADED_ROWS]:
       ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_ALLOW_EMPTY_PRELOADED_ROWS,
@@ -388,8 +398,6 @@ function buildActiveGateMembershipPublicationReconcileContext({
       ),
     [ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
       .PUBLICATION_ACTIVE_GATE_HANDOFF]: publicationActiveGateHandoff,
-    [ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
-      .SKIP_PUBLICATION_WRITE_READBACK]: false,
     ...(latestPublicationRow ?
       {
         [ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
@@ -545,7 +553,7 @@ async function readActiveGateMembershipPublicationVisibleRow(
     typeof coordinator.controlPlanePublicationsOwner.getPublication !==
       TYPEOF.FUNCTION
   ) {
-    return null;
+    return ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_ABSENT_ROW;
   }
   let durableRow = null;
   try {
@@ -565,7 +573,7 @@ async function readActiveGateMembershipPublicationVisibleRow(
     target,
   ) ?
     normalizeControlPlanePublicationRow(durableRow) :
-    null;
+    ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_ABSENT_ROW;
 }
 
 async function readActiveGateMembershipPublicationVisibleReconcileRow(
@@ -596,7 +604,7 @@ async function readActiveGateMembershipPublicationVisibleReconcileRow(
       throw error;
     }
   }
-  return null;
+  return ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_ABSENT_ROW;
 }
 
 async function reconcileActiveGateMembershipPublication(
@@ -608,6 +616,13 @@ async function reconcileActiveGateMembershipPublication(
     publicationActiveGateHandoff,
   );
   if (target.reconcileRequired !== true) {
+    if (
+      target.handoffContract?.nextAction ===
+        PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.WAIT_OWNER_RECOVERY &&
+      target.handoffContract.pendingRecoveryCount > NUM.ZERO
+    ) {
+      await SnapshotService.drainQueueForSnapshot();
+    }
     return buildActiveGateMembershipPublicationReconcileOutcome(
       target.handoffContract ?
         ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME.TARGET_BLOCKED :
@@ -615,6 +630,7 @@ async function reconcileActiveGateMembershipPublication(
       {target},
     );
   }
+  await SnapshotService.drainQueueForSnapshot();
   const context = buildActiveGateMembershipPublicationReconcileContext({
     publicationActiveGateHandoff,
     target,

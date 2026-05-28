@@ -13,6 +13,13 @@ const LOCAL_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD = Object.freeze({
   PUBLICATION_ACTIVE_GATE_HANDOFF: 'publicationActiveGateHandoff',
   PUBLISHED_ACTIVE_NODE_IDS: 'publishedActiveNodeIds',
 });
+const LOCAL_PUBLICATION_ACTIVE_GATE_HANDOFF_UNAVAILABLE = Object.freeze({
+  handoffAvailable: false,
+});
+const LOCAL_PUBLICATION_QUERY_ENGINE_REASON_CODE = Object.freeze({
+  AVAILABLE: 'sql_query_engine_available',
+  UNAVAILABLE: 'sql_query_engine_unavailable',
+});
 const LOCAL_PUBLICATION_SELECTION_DECISION = Object.freeze({
   FALLBACK: 'fallback',
   READINESS: 'readiness',
@@ -55,13 +62,33 @@ function createAdminControlSnapshotPublicationConvergenceDiagnosticsMethods(
     buildPublicationRecoveryProtocolSnapshot,
   } = factoryOptions;
 
+  const buildPublicationQueryEngineAvailability = (options = {}) => {
+    const queryEngineAvailable = Boolean(
+      options.queryEngineAvailable === true,
+    );
+    return Object.freeze({
+      state: queryEngineAvailable ?
+        LOCAL_PUBLICATION_DIAGNOSTIC_STATE.AVAILABLE :
+        LOCAL_PUBLICATION_DIAGNOSTIC_STATE.UNAVAILABLE,
+      reasonCode: queryEngineAvailable ?
+        LOCAL_PUBLICATION_QUERY_ENGINE_REASON_CODE.AVAILABLE :
+        LOCAL_PUBLICATION_QUERY_ENGINE_REASON_CODE.UNAVAILABLE,
+      queryEngineAvailable,
+    });
+  };
+
   return {
     resolvePublicationConvergenceDiagnostics(
       readinessEntries = [],
       fallbackPublication = null,
       options = {},
     ) {
+      const queryEngineAvailability =
+        buildPublicationQueryEngineAvailability(options);
       const unavailablePublicationDiagnostics = Object.freeze({
+        queryEngineAvailable:
+          queryEngineAvailability.queryEngineAvailable,
+        queryEngineAvailability,
         publicationObservation: Object.freeze(
           {state: LOCAL_PUBLICATION_DIAGNOSTIC_STATE.UNAVAILABLE},
         ),
@@ -106,7 +133,7 @@ function createAdminControlSnapshotPublicationConvergenceDiagnosticsMethods(
         );
       const selectPublicationActiveGateHandoff = (value = null) => {
         if (!value || typeof value !== TYPEOF.OBJECT || Array.isArray(value)) {
-          return null;
+          return LOCAL_PUBLICATION_ACTIVE_GATE_HANDOFF_UNAVAILABLE;
         }
         const nestedHandoff =
           value[
@@ -128,7 +155,9 @@ function createAdminControlSnapshotPublicationConvergenceDiagnosticsMethods(
         const selectedHandoff = selectPublicationActiveGateHandoff(
           publicationActiveGateHandoff,
         );
-        if (!selectedHandoff) {
+        if (
+          selectedHandoff === LOCAL_PUBLICATION_ACTIVE_GATE_HANDOFF_UNAVAILABLE
+        ) {
           return Object.freeze({
             reconcileTargetNodeIds: Object.freeze([]),
             reconcileSignalAvailable: false,
@@ -211,6 +240,9 @@ function createAdminControlSnapshotPublicationConvergenceDiagnosticsMethods(
         const publishedAtKnown = Number.isFinite(timestampFields.publishedAt);
         const updatedAtKnown = Number.isFinite(timestampFields.updatedAt);
         return {
+          queryEngineAvailable:
+            queryEngineAvailability.queryEngineAvailable,
+          queryEngineAvailability,
           publicationObservation: {
             state: LOCAL_PUBLICATION_DIAGNOSTIC_STATE.AVAILABLE,
             epoch: publicationSnapshot.publicationEpoch,
