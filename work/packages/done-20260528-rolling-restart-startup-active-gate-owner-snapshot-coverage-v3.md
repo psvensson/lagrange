@@ -38,6 +38,14 @@
     "whyHighestLeverageNow": "This package advances the active sprint goal with focused proof.",
     "representativeRerunCadence": "scheduled-rerun-command"
   },
+  "closureSummary": {
+    "resultClassification": "same-frontier",
+    "predictionAccuracy": "partial",
+    "observedMovement": "Fresh representative evidence stayed on startup_active_gate_owner / snapshot_coverage / active_gate_timed_out but exposed SQL query engine unavailable during active-gate visibility.",
+    "successorReason": "The next package needed a source successor for SQL query engine availability diagnostics instead of another generic snapshot coverage patch.",
+    "nextOwnerBoundary": "startup_active_gate_owner / snapshot_coverage",
+    "evidenceArtifact": "test-output/reports/rolling-restart-startup-active-gate-owner-snapshot-coverage-v3-20260528T142633Z.report.json"
+  },
   "modelFit": {
     "packageClass": "causal-escalation",
     "intendedMinimumModel": "gpt-5.3-codex",

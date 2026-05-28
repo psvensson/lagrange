@@ -50,6 +50,14 @@
     "whyHighestLeverageNow": "The active v4 package hit its kill rule: fresh representative evidence repeated the same frontier and did not expose SQL query engine availability fields.",
     "representativeRerunCadence": "architecture-stop-reason"
   },
+  "closureSummary": {
+    "resultClassification": "migrated",
+    "predictionAccuracy": "matched",
+    "observedMovement": "Architecture proof selected diagnostics_owner / failure_bundle_diagnostics_capture because representative playback lacked SQL query engine availability fields.",
+    "successorReason": "Open the failure-bundle SQL availability diagnostics capture proof before another local runtime patch.",
+    "nextOwnerBoundary": "diagnostics_owner / failure_bundle_diagnostics_capture",
+    "evidenceArtifact": "test-output/reports/rolling-restart-startup-active-gate-owner-snapshot-coverage-v4-20260528T150137Z.report.json"
+  },
   "modelFit": {
     "packageClass": "bounded-experiment",
     "intendedMinimumModel": "gpt-5.3-codex",

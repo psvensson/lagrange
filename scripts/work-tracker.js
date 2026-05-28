@@ -22,6 +22,10 @@ import {
   CLASSIFICATION_EFFICIENCY_SEPARATE_PACKAGE_REASONS,
   CLASSIFICATION_EFFICIENCY_SUCCESSOR_ACTION_FIELD,
   CLASSIFICATION_EFFICIENCY_SUCCESSOR_ACTIONS,
+  CLOSURE_SUMMARY_FIELD,
+  CLOSURE_SUMMARY_FIELDS,
+  CLOSURE_SUMMARY_PREDICTION_ACCURACY_FIELD,
+  CLOSURE_SUMMARY_RESULT_FIELD,
   EXPERIMENT_OUTCOME_DECISION_FIELD,
   EXPERIMENT_OUTCOME_DISTINGUISHED_HYPOTHESIS_FIELD,
   EXPERIMENT_OUTCOME_EVIDENCE_FIELD,
@@ -178,6 +182,8 @@ const [
   CORE_LOGIC_BRIEF_PROOF_FIELD,
   CORE_LOGIC_BRIEF_WRONG_SLICE_FIELD,
 ] = CORE_LOGIC_BRIEF_FIELDS;
+
+const CLOSURE_SUMMARY_ADOPTION_DATE = '2026-05-28';
 
 const ENCODING_UTF8 = 'utf8';
 const EMPTY_TEXT = '';
@@ -687,6 +693,8 @@ const OBSERVABLE_PREDICTION_ACCURACIES = Object.freeze([
   OBSERVABLE_PREDICTION_ACCURACY_MISSED,
   OBSERVABLE_PREDICTION_ACCURACY_CONTRADICTED,
 ]);
+const CLOSURE_SUMMARY_PENDING_VALUE_PATTERN =
+  /^(?:pending(?:\s+closure)?|pending-before-(?:probe|observation))$/iu;
 const EXPERIMENT_OUTCOME_DECISION_OPEN_RUNTIME = 'open-runtime-owner-boundary';
 const EXPERIMENT_OUTCOME_DECISION_OPEN_ARCHITECTURE =
   'open-architecture-experiment';
@@ -6587,6 +6595,87 @@ function validateProofRoles(filePath, metadata = {}) {
   return errors;
 }
 
+function validateClosureSummaryMetadata(filePath, metadata = {}, options = {}) {
+  const errors = [];
+  const summary = metadata[CLOSURE_SUMMARY_FIELD];
+  const shouldRequireOnClosure = options.requires === true;
+  const isClosurePhase = options.phase === VALIDATION_PHASE_CLOSURE;
+
+  if (summary === undefined) {
+    return shouldRequireOnClosure ?
+      [`${filePath}: metadata ${CLOSURE_SUMMARY_FIELD} is required for package closure after ${CLOSURE_SUMMARY_ADOPTION_DATE}.`] :
+      errors;
+  }
+  if (!isObjectRecord(summary)) {
+    return [`${filePath}: metadata ${CLOSURE_SUMMARY_FIELD} must be an object.`];
+  }
+  for (const fieldName of CLOSURE_SUMMARY_FIELDS) {
+    const value = normalizeLedgerText(summary[fieldName]);
+    if (value.length === NUM_ZERO) {
+      errors.push(
+        `${filePath}: metadata ${CLOSURE_SUMMARY_FIELD}.${fieldName} must be a non-empty string.`,
+      );
+    } else if (isClosurePhase && (
+      MODEL_FIT_EMPTY_VALUE_PATTERN.test(value) ||
+      LEDGER_TEMPLATE_PLACEHOLDER_PATTERN.test(value) ||
+      value.includes(LEDGER_PENDING_BEFORE_IMPLEMENTATION_MARKER) ||
+      CLOSURE_SUMMARY_PENDING_VALUE_PATTERN.test(value)
+    )) {
+      errors.push(
+        `${filePath}: metadata ${CLOSURE_SUMMARY_FIELD}.${fieldName} must be concrete at closure.`,
+      );
+    }
+  }
+  const resultClassification = normalizeLedgerText(
+    summary[CLOSURE_SUMMARY_RESULT_FIELD],
+  ).toLowerCase();
+  if (
+    resultClassification.length > NUM_ZERO &&
+    !SCENARIO_CAUSAL_CLOSURE_VALID_RESULT_CLASSIFICATIONS.includes(
+      resultClassification,
+    )
+  ) {
+    errors.push(
+      `${filePath}: metadata ${CLOSURE_SUMMARY_FIELD}.` +
+        `${CLOSURE_SUMMARY_RESULT_FIELD} must be one of ` +
+        `${SCENARIO_CAUSAL_CLOSURE_VALID_RESULT_CLASSIFICATIONS.join(', ')}.`,
+    );
+  }
+  if (
+    isClosurePhase &&
+    resultClassification === 'pending-before-probe'
+  ) {
+    errors.push(
+      `${filePath}: metadata ${CLOSURE_SUMMARY_FIELD}.` +
+        `${CLOSURE_SUMMARY_RESULT_FIELD} cannot remain pending-before-probe at closure.`,
+    );
+  }
+  const predictionAccuracy = normalizeLedgerText(
+    summary[CLOSURE_SUMMARY_PREDICTION_ACCURACY_FIELD],
+  ).toLowerCase();
+  if (
+    predictionAccuracy.length > NUM_ZERO &&
+    !OBSERVABLE_PREDICTION_ACCURACIES.includes(predictionAccuracy)
+  ) {
+    errors.push(
+      `${filePath}: metadata ${CLOSURE_SUMMARY_FIELD}.` +
+        `${CLOSURE_SUMMARY_PREDICTION_ACCURACY_FIELD} must be one of ` +
+        `${OBSERVABLE_PREDICTION_ACCURACIES.join(', ')}.`,
+    );
+  }
+  if (
+    isClosurePhase &&
+    predictionAccuracy === OBSERVABLE_PREDICTION_ACCURACY_PENDING
+  ) {
+    errors.push(
+      `${filePath}: metadata ${CLOSURE_SUMMARY_FIELD}.` +
+        `${CLOSURE_SUMMARY_PREDICTION_ACCURACY_FIELD} cannot remain ` +
+        `${OBSERVABLE_PREDICTION_ACCURACY_PENDING} at closure.`,
+    );
+  }
+  return errors;
+}
+
 export function validatePackageMetadataShape(filePath, fileStatus, metadata) {
   const errors = [];
   if (!metadata) {
@@ -6774,6 +6863,8 @@ export function validatePackageMetadataShape(filePath, fileStatus, metadata) {
       );
     }
   }
+
+  errors.push(...validateClosureSummaryMetadata(filePath, metadata));
 
   if (fileStatus === STATUS_ACTIVE) {
     errors.push(...validateActivePackageMetadataShape(filePath, metadata));
@@ -7525,6 +7616,13 @@ function runPackageValidationsSync(filePath, content, fileStatus, metadata, opti
   errors.push(...validateExecutableContracts(metadata, relativePath, { phase, status: fileStatus }));
   errors.push(...validateContractProofRequirement(metadata, relativePath, { phase, status: fileStatus }));
   errors.push(...validateMechanismCardGate(content, metadata, relativePath, { phase, status: fileStatus }));
+  errors.push(...validateClosureSummaryMetadata(relativePath, metadata, {
+    requires:
+      phase === VALIDATION_PHASE_CLOSURE &&
+      fileStatus === STATUS_ACTIVE,
+    phase,
+    status: fileStatus,
+  }));
 
   return errors;
 }
@@ -10578,6 +10676,20 @@ async function movePackageCommand(args, fallbackTargetStatus, requiresSuccessor)
   const successorPath = successor ? normalizeRelativePath(normalizeCliPath(successor)) : null;
   if (successorPath && targetMetadata) {
     targetMetadata.successor = successorPath;
+  }
+  if (targetStatus === STATUS_DONE && targetMetadata) {
+    const closureSummaryErrors = validateClosureSummaryMetadata(
+      normalizeRelativePath(targetPath),
+      targetMetadata,
+      {
+        requires: true,
+        phase: VALIDATION_PHASE_CLOSURE,
+        status: targetStatus,
+      },
+    );
+    if (closureSummaryErrors.length > NUM_ZERO) {
+      throw new Error(closureSummaryErrors.join(NEWLINE));
+    }
   }
   const migrationSuccessor = requiresSuccessor ?
     await validateMigrationSuccessorPackage(successorPath) :

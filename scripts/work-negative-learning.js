@@ -4,10 +4,19 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
+import {normalizeMetadata} from './work-package-schema.js';
 
 const ENCODING_UTF8 = 'utf8';
 const EXIT_SUCCESS = 0;
 const EXIT_FAILURE = 2;
+const EMPTY_TIMESTAMP = '00000000T000000Z';
+const STATUS_SORT_RANK = Object.freeze({
+  active: '4',
+  done: '3',
+  todo: '2',
+  superseded: '1',
+  unknown: '0',
+});
 
 const HELP_TEXT = [
   'Usage: npm run work:negative-learning -- [--package-dir <dir>] [--limit <num>] [--json]',
@@ -38,6 +47,37 @@ function parseCliArgs(args) {
   return {helpRequested, packageDir, limit, isJsonFormat};
 }
 
+function normalizeDateKey(value) {
+  const match = String(value || '').match(/\b(20\d{2})-?(\d{2})-?(\d{2})\b/u);
+  return match ? `${match[1]}${match[2]}${match[3]}` : '';
+}
+
+function extractSortableTimestamp(...values) {
+  for (const value of values) {
+    const match = String(value || '').match(/\b(20\d{6}T\d{6}Z)\b/u);
+    if (match) {
+      return match[1];
+    }
+  }
+  return '';
+}
+
+function packageSortKey(pkg = {}) {
+  const timestamp = pkg.evidenceTimestamp ||
+    extractSortableTimestamp(pkg.artifact, pkg.fileName, pkg.filePath);
+  const dateKey =
+    (timestamp ? timestamp.slice(0, 8) : '') ||
+    normalizeDateKey(pkg.dateStr) ||
+    normalizeDateKey(pkg.opened);
+  const statusRank = STATUS_SORT_RANK[pkg.status] || STATUS_SORT_RANK.unknown;
+  return [
+    dateKey,
+    statusRank,
+    timestamp || EMPTY_TIMESTAMP,
+    pkg.fileName || '',
+  ].join('|');
+}
+
 function parsePackageFile(filePath) {
   try {
     const content = fs.readFileSync(filePath, ENCODING_UTF8);
@@ -49,11 +89,12 @@ function parsePackageFile(filePath) {
     let metadata = {};
     if (metadataMatch && metadataMatch[1]) {
       try {
-        metadata = JSON.parse(metadataMatch[1].trim());
+        metadata = normalizeMetadata(JSON.parse(metadataMatch[1].trim()), filePath);
       } catch (_e) {
         // Ignored
       }
     }
+    const closureSummary = metadata.closureSummary || {};
 
     // Extract Mechanism Card fields
     const cardSectionRegex = /## Mechanism Card\s*\n([\s\S]*?)(?=\n##|$)/i;
@@ -77,45 +118,63 @@ function parsePackageFile(filePath) {
     // Extract date from filename if possible: e.g. active-20260528-title.md
     const dateRegex = /\d{8}/;
     const dateMatch = fileName.match(dateRegex);
-    const dateStr = dateMatch ? dateMatch[0] : (metadata.intent?.opened || '');
+    const opened = metadata.intent?.opened || metadata.opened || 'unknown';
+    const owner = metadata.intent?.owner || metadata.owner || 'unknown';
+    const boundary = metadata.intent?.boundary || metadata.boundary || 'unknown';
+    const artifact =
+      closureSummary.evidenceArtifact ||
+      metadata.intent?.artifact ||
+      metadata.artifact ||
+      'none';
+    const evidenceTimestamp = extractSortableTimestamp(
+      closureSummary.evidenceArtifact,
+      metadata.intent?.artifact,
+      metadata.artifact,
+      fileName,
+    );
+    const dateStr = dateMatch ? dateMatch[0] : opened;
 
     // Ruled out mechanisms
     const whyNot = cardFields.whynotthealternatives || metadata.mechanismCard?.rejectedAlternatives || '';
-    const negMeans = cardFields.negativeresultmeans || metadata.mechanismCard?.negativeResultMeans || '';
+    const negMeans = closureSummary.successorReason || cardFields.negativeresultmeans || metadata.mechanismCard?.negativeResultMeans || '';
 
     // Stable invariants
     const stableFacts = cardFields.stablefacts || metadata.mechanismCard?.stableFacts || '';
 
     // Next mechanism to test
-    const nextMech = cardFields.expectedmovement || metadata.mechanismCard?.expectedMovement || '';
+    const nextMech = closureSummary.nextOwnerBoundary || cardFields.expectedmovement || metadata.mechanismCard?.expectedMovement || '';
 
-    return {
+    const parsed = {
       fileName,
       filePath,
       status: metadata.status || 'unknown',
-      opened: metadata.intent?.opened || 'unknown',
+      opened,
       dateStr,
       title: fileName.replace(/^(done|active|todo|superseded)-\d{8}-/, '').replace(/\.md$/, '').replace(/-/g, ' '),
-      lane: metadata.intent?.lane || 'unknown',
-      owner: metadata.intent?.owner || 'unknown',
-      boundary: metadata.intent?.boundary || 'unknown',
-      currentState: metadata.intent?.currentState || 'unknown',
+      lane: metadata.intent?.lane || metadata.lane || 'unknown',
+      owner,
+      boundary,
+      artifact,
+      evidenceTimestamp,
+      currentState: closureSummary.observedMovement || metadata.intent?.currentState || 'unknown',
       nextAction: metadata.intent?.nextAction || 'unknown',
       whyNotAlternatives: whyNot,
       negativeResultMeans: negMeans,
       stableFacts,
       expectedMovement: nextMech,
     };
+    parsed.sortKey = packageSortKey(parsed);
+    return parsed;
   } catch (_error) {
     return null;
   }
 }
 
 function summarizeLessons(parsedPackages, limit) {
-  // Sort by dateStr descending (most recent first)
+  // Sort newest first, including same-day artifact timestamps when available.
   const sorted = parsedPackages
     .filter(Boolean)
-    .sort((a, b) => b.dateStr.localeCompare(a.dateStr));
+    .sort((a, b) => packageSortKey(b).localeCompare(packageSortKey(a)));
 
   const limited = sorted.slice(0, limit);
   const lessons = [];

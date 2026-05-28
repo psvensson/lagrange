@@ -47,6 +47,14 @@
       "regression: focused script or test",
       "supporting: git diff --check -- <files>"
     ]
+  },
+  "closureSummary": {
+    "resultClassification": "pending-before-probe",
+    "predictionAccuracy": "pending-before-observation",
+    "observedMovement": "pending closure",
+    "successorReason": "pending closure",
+    "nextOwnerBoundary": "pending closure",
+    "evidenceArtifact": "pending closure"
   }
 }
 -->

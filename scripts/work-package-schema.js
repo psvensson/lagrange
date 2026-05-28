@@ -239,6 +239,21 @@ const OBSERVABLE_PREDICTION_FIELDS = Object.freeze([
   OBSERVABLE_PREDICTION_EVIDENCE_FIELD,
   OBSERVABLE_PREDICTION_METRIC_DELTA_FIELD,
 ]);
+const CLOSURE_SUMMARY_FIELD = 'closureSummary';
+const CLOSURE_SUMMARY_RESULT_FIELD = 'resultClassification';
+const CLOSURE_SUMMARY_PREDICTION_ACCURACY_FIELD = 'predictionAccuracy';
+const CLOSURE_SUMMARY_OBSERVED_MOVEMENT_FIELD = 'observedMovement';
+const CLOSURE_SUMMARY_SUCCESSOR_REASON_FIELD = 'successorReason';
+const CLOSURE_SUMMARY_NEXT_OWNER_BOUNDARY_FIELD = 'nextOwnerBoundary';
+const CLOSURE_SUMMARY_EVIDENCE_ARTIFACT_FIELD = 'evidenceArtifact';
+const CLOSURE_SUMMARY_FIELDS = Object.freeze([
+  CLOSURE_SUMMARY_RESULT_FIELD,
+  CLOSURE_SUMMARY_PREDICTION_ACCURACY_FIELD,
+  CLOSURE_SUMMARY_OBSERVED_MOVEMENT_FIELD,
+  CLOSURE_SUMMARY_SUCCESSOR_REASON_FIELD,
+  CLOSURE_SUMMARY_NEXT_OWNER_BOUNDARY_FIELD,
+  CLOSURE_SUMMARY_EVIDENCE_ARTIFACT_FIELD,
+]);
 const EXPERIMENT_OUTCOME_FIELD = 'experimentOutcome';
 const EXPERIMENT_OUTCOME_DISTINGUISHED_HYPOTHESIS_FIELD =
   'distinguishedHypothesis';
@@ -1011,6 +1026,17 @@ function renderSchemaReference() {
     EMPTY_TEXT,
     renderEnumList(OBSERVABLE_PREDICTION_FIELDS),
     EMPTY_TEXT,
+    '## Closure Summary',
+    EMPTY_TEXT,
+    `- Metadata field: \`${CLOSURE_SUMMARY_FIELD}\``,
+    '- Purpose: put the closed-package outcome, prediction result, movement, successor reason, next owner/boundary, and evidence artifact in the first metadata block so summary tooling does not infer it from long prose.',
+    '- Required by package close/migrate for new done packages after adoption; historical packages may omit it, but tools prefer it when present.',
+    '- Template pending values are allowed before closure, but closure validation requires concrete values and rejects pending placeholders.',
+    EMPTY_TEXT,
+    'Fields:',
+    EMPTY_TEXT,
+    renderEnumList(CLOSURE_SUMMARY_FIELDS),
+    EMPTY_TEXT,
     '## Experiment Outcome',
     EMPTY_TEXT,
     `- Metadata field: \`${EXPERIMENT_OUTCOME_FIELD}\``,
@@ -1154,6 +1180,14 @@ export {
   CLASSIFICATION_EFFICIENCY_SEPARATE_PACKAGE_REASONS,
   CLASSIFICATION_EFFICIENCY_SUCCESSOR_ACTION_FIELD,
   CLASSIFICATION_EFFICIENCY_SUCCESSOR_ACTIONS,
+  CLOSURE_SUMMARY_EVIDENCE_ARTIFACT_FIELD,
+  CLOSURE_SUMMARY_FIELD,
+  CLOSURE_SUMMARY_FIELDS,
+  CLOSURE_SUMMARY_NEXT_OWNER_BOUNDARY_FIELD,
+  CLOSURE_SUMMARY_OBSERVED_MOVEMENT_FIELD,
+  CLOSURE_SUMMARY_PREDICTION_ACCURACY_FIELD,
+  CLOSURE_SUMMARY_RESULT_FIELD,
+  CLOSURE_SUMMARY_SUCCESSOR_REASON_FIELD,
   EXPERIMENT_OUTCOME_DECISION_FIELD,
   EXPERIMENT_OUTCOME_DECISIONS,
   EXPERIMENT_OUTCOME_DISTINGUISHED_HYPOTHESIS_FIELD,

@@ -22,7 +22,15 @@
   "handoffFiles": [],
   "generatedFiles": [],
   "candidateRuntimeFiles": [],
-  "commitScope": ["path/to/file", "work/packages/done-YYYYMMDD-slug.md"]
+  "commitScope": ["path/to/file", "work/packages/done-YYYYMMDD-slug.md"],
+  "closureSummary": {
+    "resultClassification": "pending-before-probe",
+    "predictionAccuracy": "pending-before-observation",
+    "observedMovement": "pending closure",
+    "successorReason": "pending closure",
+    "nextOwnerBoundary": "pending closure",
+    "evidenceArtifact": "pending closure"
+  }
 }
 -->
 

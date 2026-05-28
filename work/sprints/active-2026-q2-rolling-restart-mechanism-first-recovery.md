@@ -101,25 +101,31 @@ A theory-loop work package must test its promoted theory through an in-scope `sr
 
 After the active package's discriminator, fix, or representative rerun, record the option result as supported, avoided, falsified, fixed, migrated, representative-green, architecture-gap, or needs-rerun. Then update this option set before any further local patch so the sprint keeps generating new solutions without accumulating speculative package tracks.
 
+## Closure Summary Policy
+
+Closed packages in this sprint should record `closureSummary` in their top metadata block before closure. The summary must state `resultClassification`, `predictionAccuracy`, `observedMovement`, `successorReason`, `nextOwnerBoundary`, and `evidenceArtifact` so `work:package:cost`, `work:frontier-history`, and `work:negative-learning` can read the package outcome without prose inference.
+
+For repeated `startup_active_gate_owner / snapshot_coverage` work, the closure summary is the first source of truth for whether the package moved the representative frontier, stayed same-frontier, migrated to diagnostics ownership, or selected architecture-gap handling. Do not rely on `v3`/`v4` naming alone to communicate movement.
+
 ## Current Edge Card
 
 ```text
-Representative artifact: test-output/reports/rolling-restart-startup-active-gate-owner-snapshot-coverage-v4-20260528T150137Z.report.json
-Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out
-Active package: work/packages/done-20260528-startup-active-gate-snapshot-coverage-architecture-v5.md
-Active package owner: startup_active_gate_owner
-Active package boundary: snapshot_coverage
-Selected cause: active_gate_timed_out
-Required action: Open the failure-bundle SQL availability diagnostics capture proof package before another local runtime patch.
-Representative status: migrated
-Causal outcome: continue_local_fix
-Architecture gate: selected / failure-bundle-diagnostics-contract
-Expected delta: Classify whether the absent SQL query engine availability observation selects failure-bundle diagnostics capture, active-gate diagnostics capture, owner-boundary migration, or architecture-gap stop.
-Current state: Fresh representative v4 evidence repeated startup_active_gate_owner / snapshot_coverage / active_gate_timed_out and the playback does not contain SQL query engine availability fields.
-Allowed edits: work/packages/done-20260528-startup-active-gate-snapshot-coverage-architecture-v5.md, work/packages/todo-20260528-failure-bundle-sql-availability-diagnostics-capture.md, work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md, work/sprints/current-blocker.md, work/sprints/current-blocker.json
-Candidate runtime files: src/admin/admin-control-snapshot-publication-convergence-diagnostics.js, test/distributed/harness/failure-bundle-diagnostics-artifact-builder.js, test/distributed/harness/cluster-segment-7-alpha-load-readiness.js, test/distributed/harness/active-gate-contract.js
-Forbidden edits: Runtime promotion remains blocked while SQL query engine availability is absent from representative evidence.
-Required latest proof: falsifier: npm run work:scenario-route -- test-output/reports/rolling-restart-startup-active-gate-owner-snapshot-coverage-v4-20260528T150137Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage, regression: npm run analyze:causal-model -- test-output/reports/rolling-restart-startup-active-gate-owner-snapshot-coverage-v4-20260528T150137Z.report.json, supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-startup-active-gate-owner-snapshot-coverage-v4-20260528T150137Z.report.json, supporting: rg -n 'queryEngineAvailability|queryEngineAvailable|sql_query_engine' test-output/reports/.playback/rolling-restart-startup-active-gate-owner-snapshot-coverage-v4-20260528T150137Z/rolling-restart
+Representative artifact: none
+Visible first frontier: unknown
+Active package: work/packages/active-20260528-work-tracking-closure-summary-adoption.md
+Active package owner: workflow_tooling_owner
+Active package boundary: work_tracking_signal_density
+Selected cause: closure_summary_missing
+Required action: Add structured closure summaries to schema, tooling, and current sprint/package records.
+Representative status: unknown
+Causal outcome: unknown
+Architecture gate: not-required / unknown
+Expected delta: unknown
+Current state: Recent packages bury closure outcomes behind long setup metadata, and frontier tooling reports many unknown or high-overlap results.
+Allowed edits: scripts/work-package-schema.js, scripts/work-tracker.js, scripts/work-package-cost.js, scripts/work-frontier-history.js, scripts/work-negative-learning.js, test/scripts/work-llm-usability-tools.test.js, test/scripts/work-frontier-history.test.js, test/scripts/work-negative-learning.test.js, work/templates/lightweight-maintenance-package.md, work/templates/doc-only-package.md, work/templates/single-file-maintenance-package.md, work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md, work/packages/active-20260528-work-tracking-closure-summary-adoption.md, work/packages/done-20260528-failure-bundle-sql-availability-diagnostics-capture.md, work/packages/done-20260528-startup-active-gate-snapshot-coverage-architecture-v5.md, work/packages/done-20260528-rolling-restart-startup-active-gate-owner-snapshot-coverage-v4.md, work/packages/done-20260528-rolling-restart-startup-active-gate-owner-snapshot-coverage-v3.md, work/packages/done-20260528-rolling-restart-startup-active-gate-owner-snapshot-coverage.md, work/packages/done-20260528-rolling-restart-active-gate-owner-reconcile-pending-recovery-contract.md
+Candidate runtime files: unknown
+Forbidden edits: schema changes would invalidate historical packages, work scope expands into runtime or scenario behavior, current sprint routing changes beyond tracking summary adoption
+Required latest proof: regression: npm test -- test/scripts/work-llm-usability-tools.test.js test/scripts/work-frontier-history.test.js test/scripts/work-negative-learning.test.js, supporting: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 6, supporting: npm run work:negative-learning -- --package-dir work/packages --limit 6, supporting: git diff --check -- scripts/work-package-schema.js scripts/work-tracker.js scripts/work-package-cost.js scripts/work-frontier-history.js scripts/work-negative-learning.js test/scripts/work-llm-usability-tools.test.js test/scripts/work-frontier-history.test.js test/scripts/work-negative-learning.test.js work/templates/lightweight-maintenance-package.md work/templates/doc-only-package.md work/templates/single-file-maintenance-package.md work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md work/sprints/current-blocker.md work/sprints/current-blocker.json work/packages/active-20260528-work-tracking-closure-summary-adoption.md work/packages/done-20260528-failure-bundle-sql-availability-diagnostics-capture.md work/packages/done-20260528-startup-active-gate-snapshot-coverage-architecture-v5.md work/packages/done-20260528-rolling-restart-startup-active-gate-owner-snapshot-coverage-v4.md work/packages/done-20260528-rolling-restart-startup-active-gate-owner-snapshot-coverage-v3.md work/packages/done-20260528-rolling-restart-startup-active-gate-owner-snapshot-coverage.md work/packages/done-20260528-rolling-restart-active-gate-owner-reconcile-pending-recovery-contract.md
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -180,10 +186,14 @@ This sprint intentionally contains one active executable package and no speculat
    - Lane: `experiment`
    - Purpose: Select the architecture route for the missing SQL query engine availability observation before another local runtime patch.
    - First-run reason: The v4 representative rerun repeated `startup_active_gate_owner / snapshot_coverage / active_gate_timed_out` and playback did not contain SQL query engine availability fields, so the active package kill rule requires an autonomous architecture experiment.
-9. [Failure Bundle SQL Availability Diagnostics Capture](../packages/todo-20260528-failure-bundle-sql-availability-diagnostics-capture.md)
+9. [Failure Bundle SQL Availability Diagnostics Capture](../packages/done-20260528-failure-bundle-sql-availability-diagnostics-capture.md)
    - Lane: `test-only-proof`
    - Purpose: Preserve SQL query engine availability fields in failure-bundle active-gate diagnostics playback.
    - First-run reason: Architecture v5 selected diagnostics_owner / failure_bundle_diagnostics_capture after route and causal-model stayed on active_gate_snapshot_coverage while playback lacked SQL query availability fields.
+10. [Work Tracking Closure Summary Adoption](../packages/active-20260528-work-tracking-closure-summary-adoption.md)
+   - Lane: `lightweight-maintenance`
+   - Purpose: Add closure summaries to workflow tooling, current sprint tracking, and the six most recent package records.
+   - First-run reason: The active rolling-restart representative gate needs high-signal tracking for repeated same-frontier and diagnostics-migration packages before the next runtime package is selected.
 
 ## Sprint Proof Ladder
 

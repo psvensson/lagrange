@@ -4,10 +4,19 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
+import {normalizeMetadata} from './work-package-schema.js';
 
 const ENCODING_UTF8 = 'utf8';
 const EXIT_SUCCESS = 0;
 const EXIT_FAILURE = 2;
+const EMPTY_TIMESTAMP = '00000000T000000Z';
+const STATUS_SORT_RANK = Object.freeze({
+  active: '4',
+  done: '3',
+  todo: '2',
+  superseded: '1',
+  unknown: '0',
+});
 
 const HELP_TEXT = [
   'Usage: npm run work:frontier-history -- [--package-dir <dir>] [--owner <owner>] [--boundary <boundary>] [--limit <num>] [--json]',
@@ -44,6 +53,37 @@ function parseCliArgs(args) {
   return {helpRequested, packageDir, owner, boundary, limit, isJsonFormat};
 }
 
+function normalizeDateKey(value) {
+  const match = String(value || '').match(/\b(20\d{2})-?(\d{2})-?(\d{2})\b/u);
+  return match ? `${match[1]}${match[2]}${match[3]}` : '';
+}
+
+function extractSortableTimestamp(...values) {
+  for (const value of values) {
+    const match = String(value || '').match(/\b(20\d{6}T\d{6}Z)\b/u);
+    if (match) {
+      return match[1];
+    }
+  }
+  return '';
+}
+
+function packageSortKey(pkg = {}) {
+  const timestamp = pkg.evidenceTimestamp ||
+    extractSortableTimestamp(pkg.artifact, pkg.fileName, pkg.filePath);
+  const dateKey =
+    (timestamp ? timestamp.slice(0, 8) : '') ||
+    normalizeDateKey(pkg.dateStr) ||
+    normalizeDateKey(pkg.opened);
+  const statusRank = STATUS_SORT_RANK[pkg.status] || STATUS_SORT_RANK.unknown;
+  return [
+    dateKey,
+    timestamp || EMPTY_TIMESTAMP,
+    statusRank,
+    pkg.fileName || '',
+  ].join('|');
+}
+
 function parsePackageFile(filePath) {
   try {
     const content = fs.readFileSync(filePath, ENCODING_UTF8);
@@ -55,11 +95,12 @@ function parsePackageFile(filePath) {
     let metadata = {};
     if (metadataMatch && metadataMatch[1]) {
       try {
-        metadata = JSON.parse(metadataMatch[1].trim());
+        metadata = normalizeMetadata(JSON.parse(metadataMatch[1].trim()), filePath);
       } catch (_e) {
         // Ignored
       }
     }
+    const closureSummary = metadata.closureSummary || {};
 
     // Extract Mechanism Card fields
     const cardSectionRegex = /## Mechanism Card\s*\n([\s\S]*?)(?=\n##|$)/i;
@@ -82,33 +123,53 @@ function parsePackageFile(filePath) {
 
     const dateRegex = /\d{8}/;
     const dateMatch = fileName.match(dateRegex);
-    const dateStr = dateMatch ? dateMatch[0] : (metadata.intent?.opened || '');
+    const owner = metadata.intent?.owner || metadata.owner || 'unknown';
+    const boundary = metadata.intent?.boundary || metadata.boundary || 'unknown';
+    const opened = metadata.intent?.opened || metadata.opened || 'unknown';
+    const artifact =
+      closureSummary.evidenceArtifact ||
+      metadata.intent?.artifact ||
+      metadata.artifact ||
+      'none';
+    const evidenceTimestamp = extractSortableTimestamp(
+      closureSummary.evidenceArtifact,
+      metadata.intent?.artifact,
+      metadata.artifact,
+      fileName,
+    );
+    const dateStr = dateMatch ? dateMatch[0] : opened;
 
-    return {
+    const parsed = {
       fileName,
       filePath,
       status: metadata.status || 'unknown',
-      opened: metadata.intent?.opened || 'unknown',
+      opened,
       dateStr,
       title: fileName.replace(/^(done|active|todo|superseded)-\d{8}-/, '').replace(/\.md$/, '').replace(/-/g, ' '),
-      lane: metadata.intent?.lane || 'unknown',
-      owner: metadata.intent?.owner || 'unknown',
-      boundary: metadata.intent?.boundary || 'unknown',
-      artifact: metadata.intent?.artifact || 'none',
+      lane: metadata.intent?.lane || metadata.lane || 'unknown',
+      owner,
+      boundary,
+      artifact,
+      evidenceTimestamp,
       failureMechanism: cardFields.failuremechanism || metadata.mechanismCard?.failureMechanism || 'unknown',
-      expectedMovement: cardFields.expectedmovement || metadata.mechanismCard?.expectedMovement || 'unknown',
-      outcome: cardFields.negativeresultmeans || metadata.mechanismCard?.negativeResultMeans || 'unknown',
+      expectedMovement: closureSummary.observedMovement || cardFields.expectedmovement || metadata.mechanismCard?.expectedMovement || 'unknown',
+      outcome: closureSummary.successorReason || cardFields.negativeresultmeans || metadata.mechanismCard?.negativeResultMeans || 'unknown',
+      resultClassification: closureSummary.resultClassification || 'unknown',
+      predictionAccuracy: closureSummary.predictionAccuracy || 'unknown',
+      nextOwnerBoundary: closureSummary.nextOwnerBoundary || 'unknown',
     };
+    parsed.sortKey = packageSortKey(parsed);
+    return parsed;
   } catch (_error) {
     return null;
   }
 }
 
 function filterAndSummarizeHistory(parsedPackages, ownerFilter, boundaryFilter, limit) {
-  // Sort by dateStr descending (most recent first)
+  // Sort newest first, including same-day artifact timestamps when available.
   const sorted = parsedPackages
     .filter(Boolean)
-    .sort((a, b) => b.dateStr.localeCompare(a.dateStr));
+    .sort((a, b) => packageSortKey(b).localeCompare(packageSortKey(a)));
 
   const filtered = sorted.filter((pkg) => {
     let match = true;
@@ -134,6 +195,9 @@ function filterAndSummarizeHistory(parsedPackages, ownerFilter, boundaryFilter, 
     failureMechanism: pkg.failureMechanism,
     expectedMovement: pkg.expectedMovement,
     outcome: pkg.outcome,
+    resultClassification: pkg.resultClassification,
+    predictionAccuracy: pkg.predictionAccuracy,
+    nextOwnerBoundary: pkg.nextOwnerBoundary,
   }));
 }
 
@@ -153,8 +217,17 @@ function renderTextHistory(history, owner, boundary) {
       lines.push(`Owner / Boundary: ${item.owner} / ${item.boundary}`);
       lines.push(`Artifact Cited: ${item.artifact}`);
       lines.push(`Mechanism Class: ${item.failureMechanism}`);
+      if (item.resultClassification && item.resultClassification !== 'unknown') {
+        lines.push(`Result Classification: ${item.resultClassification}`);
+      }
+      if (item.predictionAccuracy && item.predictionAccuracy !== 'unknown') {
+        lines.push(`Prediction Accuracy: ${item.predictionAccuracy}`);
+      }
       lines.push(`Expected Movement: ${item.expectedMovement}`);
       lines.push(`Outcome: ${item.outcome}`);
+      if (item.nextOwnerBoundary && item.nextOwnerBoundary !== 'unknown') {
+        lines.push(`Next Owner / Boundary: ${item.nextOwnerBoundary}`);
+      }
       lines.push('--------------------------------------------------------------------------------');
     }
   }

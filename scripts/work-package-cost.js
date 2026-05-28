@@ -73,14 +73,18 @@ function parsePackageMetadata(content, filePath) {
 
 function scenarioResult(metadata = {}) {
   return normalizeText(
-    metadata.scenarioCausalClosure?.resultClassification ||
+    metadata.closureSummary?.resultClassification ||
+      metadata.scenarioCausalClosure?.resultClassification ||
       metadata.causalGovernance?.representativeOutcome ||
       metadata.representativeResidual?.status,
   ).toLowerCase();
 }
 
 function predictionAccuracy(metadata = {}) {
-  return normalizeText(metadata.observablePrediction?.accuracy).toLowerCase();
+  return normalizeText(
+    metadata.closureSummary?.predictionAccuracy ||
+      metadata.observablePrediction?.accuracy,
+  ).toLowerCase();
 }
 
 function numericMovementPoints(metadata = {}) {

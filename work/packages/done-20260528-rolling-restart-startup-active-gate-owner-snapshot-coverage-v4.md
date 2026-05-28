@@ -45,6 +45,14 @@
     "whyHighestLeverageNow": "This package advances the active sprint goal with focused proof.",
     "representativeRerunCadence": "scheduled-rerun-command"
   },
+  "closureSummary": {
+    "resultClassification": "same-frontier",
+    "predictionAccuracy": "missed",
+    "observedMovement": "Fresh representative v4 evidence stayed on startup_active_gate_owner / snapshot_coverage / active_gate_timed_out and playback lacked SQL query engine availability fields.",
+    "successorReason": "The package kill rule selected an autonomous architecture experiment before more local runtime patching.",
+    "nextOwnerBoundary": "startup_active_gate_owner / snapshot_coverage",
+    "evidenceArtifact": "test-output/reports/rolling-restart-startup-active-gate-owner-snapshot-coverage-v4-20260528T150137Z.report.json"
+  },
   "modelFit": {
     "packageClass": "causal-escalation",
     "intendedMinimumModel": "gpt-5.3-codex",

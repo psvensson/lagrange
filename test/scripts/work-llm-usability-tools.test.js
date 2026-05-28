@@ -7,7 +7,10 @@ import {buildPriorityRecoveryResiduals} from '../../scripts/analyze-priority-rec
 import {buildSubagentPrompt} from '../../scripts/work-subagent-prompt.js';
 import {buildSubagentNextLines} from '../../scripts/work-subagent-next.js';
 import {buildPackageContent, runCli} from '../../scripts/work-package-new.js';
-import {parsePackageMetadata} from '../../scripts/work-tracker.js';
+import {
+  parsePackageMetadata,
+  validatePackageMetadataShape,
+} from '../../scripts/work-tracker.js';
 import {
   buildRouteAfterRerunLines,
 } from '../../scripts/work-package-route-after-rerun.js';
@@ -120,6 +123,9 @@ test('shared package schema lists validator enums for LLM scaffolding', (t) => {
   t.match(rendered, /Observable Prediction/u);
   t.match(rendered, /observablePrediction/u);
   t.match(rendered, /accuracy/u);
+  t.match(rendered, /Closure Summary/u);
+  t.match(rendered, /closureSummary/u);
+  t.match(rendered, /resultClassification/u);
   t.match(rendered, /Experiment Outcome/u);
   t.match(rendered, /experimentOutcome/u);
   t.match(rendered, /distinguishedHypothesis/u);
@@ -134,6 +140,87 @@ test('shared package schema lists validator enums for LLM scaffolding', (t) => {
   t.match(rendered, /single-owner/u);
   t.match(rendered, /Classification-Only Fast Path/u);
   t.match(rendered, /candidateRuntimeFiles/u);
+  t.end();
+});
+
+test('package metadata validates closure summary shape when present', (t) => {
+  const baseMetadata = {
+    schema: 'work-package-v2',
+    status: 'done',
+    opened: '2026-05-28',
+    scenario: 'none',
+    owner: 'workflow_tooling_owner',
+    boundary: 'work_tracking_signal_density',
+    nextAction: 'Track closure outcomes.',
+    stabilityCredit: 'local-proof-only',
+    whyHighestLeverageNow:
+      'The active sprint representative gate needs denser package closure outcomes.',
+  };
+  const invalidObjectErrors = validatePackageMetadataShape(
+    'done-20260528-tracking-test.md',
+    'done',
+    {...baseMetadata, closureSummary: 'not-an-object'},
+  ).join('\n');
+  const missingFieldErrors = validatePackageMetadataShape(
+    'done-20260528-tracking-test.md',
+    'done',
+    {
+      ...baseMetadata,
+      closureSummary: {
+        resultClassification: 'classification-only',
+        predictionAccuracy: 'matched',
+        observedMovement: 'Tooling consumed the summary.',
+        successorReason: '',
+        nextOwnerBoundary: 'startup_active_gate_owner / snapshot_coverage',
+        evidenceArtifact: 'work/packages/done-20260528-tracking-test.md',
+      },
+    },
+  ).join('\n');
+  const invalidEnumErrors = validatePackageMetadataShape(
+    'done-20260528-tracking-test.md',
+    'done',
+    {
+      ...baseMetadata,
+      closureSummary: {
+        resultClassification: 'not-a-result',
+        predictionAccuracy: 'not-an-accuracy',
+        observedMovement: 'Tooling consumed the summary.',
+        successorReason: 'No successor required.',
+        nextOwnerBoundary: 'startup_active_gate_owner / snapshot_coverage',
+        evidenceArtifact: 'work/packages/done-20260528-tracking-test.md',
+      },
+    },
+  ).join('\n');
+  const validErrors = validatePackageMetadataShape(
+    'done-20260528-tracking-test.md',
+    'done',
+    {
+      ...baseMetadata,
+      closureSummary: {
+        resultClassification: 'classification-only',
+        predictionAccuracy: 'matched',
+        observedMovement: 'Tooling consumed the summary.',
+        successorReason: 'No successor required.',
+        nextOwnerBoundary: 'startup_active_gate_owner / snapshot_coverage',
+        evidenceArtifact: 'work/packages/done-20260528-tracking-test.md',
+      },
+    },
+  ).join('\n');
+
+  t.match(invalidObjectErrors, /metadata closureSummary must be an object/u);
+  t.match(
+    missingFieldErrors,
+    /metadata closureSummary\.successorReason must be a non-empty string/u,
+  );
+  t.match(
+    invalidEnumErrors,
+    /metadata closureSummary\.resultClassification must be one of/u,
+  );
+  t.match(
+    invalidEnumErrors,
+    /metadata closureSummary\.predictionAccuracy must be one of/u,
+  );
+  t.notMatch(validErrors, /closureSummary/u);
   t.end();
 });
 
@@ -419,8 +506,11 @@ test('package cost summary reports movement and prediction accuracy', (t) => {
         lane: 'runtime-owner-boundary',
         owner: 'operation_workflow_owner',
         boundary: 'workflow_progress',
-        scenarioCausalClosure: {resultClassification: 'reduced'},
-        observablePrediction: {accuracy: 'matched', metricDelta: 0.5},
+        closureSummary: {
+          resultClassification: 'reduced',
+          predictionAccuracy: 'matched',
+        },
+        observablePrediction: {accuracy: 'contradicted', metricDelta: 0.5},
       },
     },
     {

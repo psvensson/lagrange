@@ -17,6 +17,14 @@ tap.test('work-negative-learning unit tests', async (t) => {
     "boundary": "test_boundary",
     "currentState": "Original state explanation here.",
     "nextAction": "Perform first task."
+  },
+  "closureSummary": {
+    "resultClassification": "same-frontier",
+    "predictionAccuracy": "missed",
+    "observedMovement": "summary lesson",
+    "successorReason": "summary successor reason",
+    "nextOwnerBoundary": "next_owner / next_boundary",
+    "evidenceArtifact": "summary-artifact.json"
   }
 }
 -->
@@ -35,11 +43,11 @@ tap.test('work-negative-learning unit tests', async (t) => {
     t.equal(parsed.status, 'done');
     t.equal(parsed.owner, 'test_owner');
     t.equal(parsed.boundary, 'test_boundary');
-    t.equal(parsed.currentState, 'Original state explanation here.');
+    t.equal(parsed.currentState, 'summary lesson');
     t.equal(parsed.whyNotAlternatives, 'observation_gap');
     t.equal(parsed.stableFacts, 'stable invariants here');
-    t.equal(parsed.expectedMovement, '1/8 to 2/8');
-    t.equal(parsed.negativeResultMeans, 'rollback');
+    t.equal(parsed.expectedMovement, 'next_owner / next_boundary');
+    t.equal(parsed.negativeResultMeans, 'summary successor reason');
 
     fs.unlinkSync(dummyPackagePath);
     t.end();
@@ -74,15 +82,31 @@ tap.test('work-negative-learning unit tests', async (t) => {
         negativeResultMeans: 'means 2',
         stableFacts: 'facts 2',
         expectedMovement: 'movement 2',
+        artifact: 'artifact-20260525T110000Z.report.json',
+      },
+      {
+        fileName: 'done-20260525-third.md',
+        dateStr: '20260525',
+        status: 'done',
+        title: 'third',
+        lane: 'lightweight-maintenance',
+        owner: 'owner3',
+        boundary: 'boundary3',
+        currentState: 'lesson 3',
+        whyNotAlternatives: 'rejected 3',
+        negativeResultMeans: 'means 3',
+        stableFacts: 'facts 3',
+        expectedMovement: 'movement 3',
+        artifact: 'artifact-20260525T120000Z.report.json',
       },
     ];
 
     const lessons = summarizeLessons(packages, 1);
     t.equal(lessons.length, 1, 'Limit applied correctly');
-    t.equal(lessons[0].package, 'done-20260525-second.md', 'Most recent package returned first');
-    t.equal(lessons[0].ruledOutMechanisms, 'rejected 2; means 2');
-    t.equal(lessons[0].invariantFacts, 'facts 2');
-    t.equal(lessons[0].nextMechanismProposed, 'movement 2');
+    t.equal(lessons[0].package, 'done-20260525-third.md', 'Same-day artifact timestamp sorts first');
+    t.equal(lessons[0].ruledOutMechanisms, 'rejected 3; means 3');
+    t.equal(lessons[0].invariantFacts, 'facts 3');
+    t.equal(lessons[0].nextMechanismProposed, 'movement 3');
     t.end();
   });
 
