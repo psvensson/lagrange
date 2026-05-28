@@ -311,6 +311,23 @@
         }
       },
       "additionalProperties": false
+    },
+    "mechanismCard": {
+      "type": "object",
+      "properties": {
+        "failureMechanism": { "type": "string" },
+        "stableFacts": { "type": "string" },
+        "changedFacts": { "type": "string" },
+        "rejectedAlternatives": { "type": "string" },
+        "ownerWhoDecides": { "type": "string" },
+        "currentAction": { "type": "string" },
+        "missingTransitionOrObservation": { "type": "string" },
+        "smallestFalsifyingProbe": { "type": "string" },
+        "expectedMovement": { "type": "string" },
+        "negativeResultMeans": { "type": "string" },
+        "escalationRule": { "type": "string" }
+      },
+      "additionalProperties": false
     }
   }
 }

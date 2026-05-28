@@ -107,6 +107,8 @@ import {
   REPRESENTATIVE_RERUN_CADENCE_VALID_VALUES,
   CODE_QUALITY_ADMISSION_REASONS,
   coreLogicBriefRequiredForLane,
+  MECHANISM_CARD_FIELD,
+  MECHANISM_CARD_FIELDS,
 } from './work-package-schema.js';
 import {
   findMissingTheoryLedgerRefs,
@@ -2309,6 +2311,135 @@ function metadataRequiresOscillationGuard(metadata, fileStatus) {
     normalizeMetadataStringList(
       scenarioClosure[SCENARIO_CAUSAL_CLOSURE_RECENT_FRONTIER_HISTORY_FIELD],
     ).length > NUM_ZERO;
+}
+
+export function validateMechanismCardGate(content, metadata, filePath, options = {}) {
+  const status = options.status || (metadata && normalizeLedgerText(metadata.status));
+  const isTargetStatus = status === STATUS_ACTIVE || status === STATUS_TODO;
+  if (!isTargetStatus) {
+    return [];
+  }
+
+  const isTheoryLoopLane = [
+    LANE_DIAGNOSTIC_CLASSIFICATION,
+    LANE_EXPERIMENT,
+    LANE_BOUNDED_EXPERIMENT,
+    LANE_RUNTIME_OWNER_BOUNDARY,
+    LANE_SCENARIO_RELEASE_GATE,
+    LANE_CAUSAL_ESCALATION,
+    'diagnostic-classification',
+    'experiment',
+    'bounded-experiment',
+    'runtime-owner-boundary',
+    'scenario-release-gate',
+    'causal-escalation',
+  ].includes(metadata?.lane);
+
+  const isTheoryLoopTooling =
+    metadata?.lane === LANE_LIGHTWEIGHT_MAINTENANCE &&
+    (
+      /theory-loop/iu.test(filePath) ||
+      /mechanism-card/iu.test(filePath) ||
+      /artifact-compare/iu.test(filePath) ||
+      /negative-learning/iu.test(filePath) ||
+      /theory_loop/iu.test(metadata?.boundary || '') ||
+      /mechanism_card/iu.test(metadata?.boundary || '')
+    );
+
+  if (!isTheoryLoopLane && !isTheoryLoopTooling) {
+    return [];
+  }
+
+  const errors = [];
+  const hasMetadataCard = metadata && metadata.mechanismCard && typeof metadata.mechanismCard === 'object';
+  const hasMarkdownSection = content.includes('## Mechanism Card');
+
+  if (!hasMetadataCard && !hasMarkdownSection) {
+    errors.push(
+      `${filePath}: non-trivial theory-loop package requires mechanism-card readiness; ` +
+      `expose a mechanismCard metadata object or declare a ## Mechanism Card section.`
+    );
+    return errors;
+  }
+
+  const requiredFields = [
+    'failureMechanism',
+    'stableFacts',
+    'changedFacts',
+    'rejectedAlternatives',
+    'ownerWhoDecides',
+    'currentAction',
+    'missingTransitionOrObservation',
+    'smallestFalsifyingProbe',
+    'expectedMovement',
+    'negativeResultMeans',
+    'escalationRule'
+  ];
+
+  if (hasMetadataCard) {
+    const card = metadata.mechanismCard;
+    for (const field of requiredFields) {
+      if (card[field] === undefined) {
+        errors.push(`${filePath}: metadata mechanismCard is missing required field ${field}.`);
+      } else {
+        const val = String(card[field]).trim();
+        if (val.length === 0) {
+          errors.push(`${filePath}: metadata mechanismCard.${field} must not be empty.`);
+        } else if (val.includes('<placeholder>') || val.startsWith('<')) {
+          if (status === STATUS_ACTIVE) {
+            errors.push(`${filePath}: metadata mechanismCard.${field} must be a concrete value.`);
+          }
+        }
+      }
+    }
+  } else {
+    const section = extractMarkdownLevelTwoSection(content, '## Mechanism Card');
+    if (section === null) {
+      errors.push(`${filePath}: ## Mechanism Card section is missing.`);
+    } else {
+      const sectionText = String(section);
+      const fieldPatterns = {
+        failureMechanism: [/Failure\s+Mechanism\s*:\s*(.*)/iu],
+        stableFacts: [/Stable\s+Facts\s*:\s*(.*)/iu],
+        changedFacts: [/Changed\s+Facts\s*:\s*(.*)/iu],
+        rejectedAlternatives: [/(?:Rejected\s+Alternatives|Why\s+not\s+the\s+alternatives)\s*:\s*(.*)/iu],
+        ownerWhoDecides: [/Owner\s+who\s+decides\s*:\s*(.*)/iu],
+        currentAction: [/(?:Current\s+Action|Current\s+code\s+or\s+workflow\s+action)\s*:\s*(.*)/iu],
+        missingTransitionOrObservation: [/(?:Missing\s+Transition\s+Or\s+Observation|Missing\s+transition\s+or\s+missing\s+observation)\s*:\s*(.*)/iu],
+        smallestFalsifyingProbe: [/Smallest\s+falsifying\s+probe\s*:\s*(.*)/iu],
+        expectedMovement: [/Expected\s+movement\s*:\s*(.*)/iu],
+        negativeResultMeans: [/Negative\s+result\s+means\s*:\s*(.*)/iu],
+        escalationRule: [/Escalation\s+rule\s*:\s*(.*)/iu],
+      };
+
+      for (const field of requiredFields) {
+        const val = findMarkdownField(sectionText, fieldPatterns[field]);
+        if (val === null) {
+          errors.push(`${filePath}: ## Mechanism Card section is missing required field ${field}.`);
+        } else {
+          if (val.length === 0) {
+            errors.push(`${filePath}: ## Mechanism Card field ${field} must not be empty.`);
+          } else if (val.includes('<placeholder>') || val.startsWith('<')) {
+            if (status === STATUS_ACTIVE) {
+              errors.push(`${filePath}: ## Mechanism Card field ${field} must be a concrete value.`);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return errors;
+}
+
+function findMarkdownField(sectionText, patterns) {
+  for (const pattern of patterns) {
+    const match = sectionText.match(pattern);
+    if (match) {
+      return match[1].trim();
+    }
+  }
+  return null;
 }
 
 export function validateCausalDecisionContract(
@@ -6672,6 +6803,7 @@ function runPackageValidationsSync(filePath, content, fileStatus, metadata, opti
   ));
   errors.push(...validateExecutableContracts(metadata, relativePath, { phase, status: fileStatus }));
   errors.push(...validateContractProofRequirement(metadata, relativePath, { phase, status: fileStatus }));
+  errors.push(...validateMechanismCardGate(content, metadata, relativePath, { phase, status: fileStatus }));
 
   return errors;
 }

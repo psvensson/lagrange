@@ -55,6 +55,20 @@
 - In: one bounded tooling, template, test, or package-truth slice.
 - Out: runtime ownership, shared contracts, representative scenario routing.
 
+## Mechanism Card
+
+- Failure mechanism: <placeholder>
+- Stable facts: <placeholder>
+- Changed facts: <placeholder>
+- Rejected alternatives: <placeholder>
+- Owner who decides: <placeholder>
+- Current action: <placeholder>
+- Missing transition or observation: <placeholder>
+- Smallest falsifying probe: <placeholder>
+- Expected movement: <placeholder>
+- Negative result means: <placeholder>
+- Escalation rule: <placeholder>
+
 ## Validation
 
 1. Focused script or test:

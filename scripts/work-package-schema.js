@@ -553,6 +553,21 @@ const SCENARIO_CAUSAL_CLOSURE_FRONTIER_OSCILLATION_FIELDS = Object.freeze([
   SCENARIO_CAUSAL_CLOSURE_HANDOFF_INVARIANT_FIELD,
 ]);
 
+const MECHANISM_CARD_FIELD = 'mechanismCard';
+const MECHANISM_CARD_FIELDS = Object.freeze([
+  'failureMechanism',
+  'stableFacts',
+  'changedFacts',
+  'rejectedAlternatives',
+  'ownerWhoDecides',
+  'currentAction',
+  'missingTransitionOrObservation',
+  'smallestFalsifyingProbe',
+  'expectedMovement',
+  'negativeResultMeans',
+  'escalationRule',
+]);
+
 const VALIDATION_PHASES = Object.freeze([
   VALIDATION_PHASE_ENTRY,
   VALIDATION_PHASE_PROBE,
@@ -975,6 +990,10 @@ function renderSchemaReference() {
     EMPTY_TEXT,
     renderEnumList(SCENARIO_CAUSAL_CLOSURE_PROGRESS_MECHANISMS),
     EMPTY_TEXT,
+    '## Mechanism Card Fields',
+    EMPTY_TEXT,
+    renderEnumList(MECHANISM_CARD_FIELDS),
+    EMPTY_TEXT,
   ].join(NEWLINE);
 }
 
@@ -1105,6 +1124,8 @@ export {
   SCOPE_FIELD_HANDOFF_FILES,
   SCOPE_FIELD_WRITE_SCOPE,
   THEORY_LEDGER_REFS_FIELD,
+  MECHANISM_CARD_FIELD,
+  MECHANISM_CARD_FIELDS,
   SUBAGENT_OPTIONAL_LANES,
   SUBAGENT_ATTEMPT_STATUSES,
   SUBAGENT_UNAVAILABLE_STATES,
