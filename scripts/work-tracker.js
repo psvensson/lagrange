@@ -174,6 +174,11 @@ import {
   validateTheoryLedgerContent,
   THEORY_LEDGER_FIELDS,
 } from './work-theory-ledger.js';
+import {
+  parsePackageFile as parseFrontierHistoryPackageFile,
+  filterAndSummarizeHistory as filterFrontierHistory,
+  detectCompositionalSignals,
+} from './work-frontier-history.js';
 
 let globalKindOption = null;
 let globalDryRunOption = false;
@@ -6238,6 +6243,86 @@ export function validateTwoLevelTheoryContract(
   return errors;
 }
 
+const COMPOSITIONAL_GATE_PACKAGE_DIR = 'work/packages';
+const COMPOSITIONAL_GATE_HISTORY_LIMIT = 12;
+const COMPOSITIONAL_GATE_REVISION_SLUG_PATTERNS = [
+  /system-theory-rederive/iu,
+  /system-theory-revision/iu,
+  /system-theory-rev\b/iu,
+  /whole-system-theory/iu,
+];
+const COMPOSITIONAL_GATE_REVISION_LANE_VALUES = new Set([
+  'system-theory-rederive',
+  'system-theory-revision',
+  'theory-rederive',
+]);
+
+function metadataIsSystemTheoryRevision(metadata, filePath) {
+  if (!metadata || typeof metadata !== 'object') return false;
+  const lane = normalizeLedgerText(metadata.lane);
+  if (lane && COMPOSITIONAL_GATE_REVISION_LANE_VALUES.has(lane)) return true;
+  const kind = normalizeLedgerText(metadata.packageKind || metadata.kind);
+  if (kind && COMPOSITIONAL_GATE_REVISION_LANE_VALUES.has(kind)) return true;
+  if (metadata.systemTheoryRevision === true) return true;
+  const slug = String(filePath || '').toLowerCase();
+  return COMPOSITIONAL_GATE_REVISION_SLUG_PATTERNS.some((re) => re.test(slug));
+}
+
+function loadCompositionalSignalsFromFrontier(packageDir, owner, boundary) {
+  if (!owner || !boundary) return {signals: [], history: []};
+  let entries;
+  try {
+    entries = fsSync.readdirSync(packageDir);
+  } catch (_error) {
+    return {signals: [], history: []};
+  }
+  const mdFiles = entries.filter((f) =>
+    f.endsWith('.md') &&
+    (f.startsWith('done-') || f.startsWith('active-') || f.startsWith('superseded-')),
+  );
+  const parsed = mdFiles
+    .map((f) => parseFrontierHistoryPackageFile(path.join(packageDir, f)))
+    .filter(Boolean);
+  const history = filterFrontierHistory(parsed, owner, boundary, COMPOSITIONAL_GATE_HISTORY_LIMIT);
+  return {history, signals: detectCompositionalSignals(history)};
+}
+
+export function validateCompositionalAutoPromoteGate(
+  metadata,
+  filePath,
+  options = {},
+) {
+  const errors = [];
+  if (!metadata || typeof metadata !== 'object') return errors;
+  const phase = options.phase || VALIDATION_PHASE_PRE_IMPL;
+  const fileStatus = options.status || normalizeLedgerText(metadata.status);
+  if (phase !== VALIDATION_PHASE_PRE_IMPL) return errors;
+  if (fileStatus !== STATUS_ACTIVE && fileStatus !== STATUS_TODO) return errors;
+  const owner = normalizeLedgerText(metadata.owner);
+  const boundary = normalizeLedgerText(metadata.boundary);
+  if (!owner || !boundary) return errors;
+  if (metadataIsSystemTheoryRevision(metadata, filePath)) return errors;
+  const packageDir = options.packageDir
+    ? path.resolve(options.packageDir)
+    : path.resolve(process.cwd(), COMPOSITIONAL_GATE_PACKAGE_DIR);
+  const {signals} = loadCompositionalSignalsFromFrontier(packageDir, owner, boundary);
+  if (signals.length === 0) return errors;
+  const summary = signals
+    .map((s) => `${s.pattern}:${s.mechanism}`)
+    .join(', ');
+  errors.push(
+    `${filePath}: compositional-gate-blocked — ${signals.length} compositional ` +
+    `signal(s) fired for owner=${owner} boundary=${boundary} ` +
+    `(${summary}). Per work/RULES.md "Compositional Auto-Promote Rule", ` +
+    'no further local slice may be promoted on this owner/boundary until a ' +
+    'systemTheory revision package is opened. Open a package with lane ' +
+    '"system-theory-rederive" (or set systemTheoryRevision: true), or run ' +
+    '`npm run work:system-theory:rederive -- --owner ' + owner +
+    ' --boundary ' + boundary + '` for guidance.',
+  );
+  return errors;
+}
+
 function normalizeCliPath(filePath) {
   return path.normalize(
     path.isAbsolute(filePath) ? filePath : path.join(process.cwd(), filePath),
@@ -7850,6 +7935,11 @@ function runPackageValidationsSync(filePath, content, fileStatus, metadata, opti
       status: fileStatus,
     },
   ));
+  errors.push(...validateCompositionalAutoPromoteGate(metadata, relativePath, {
+    phase,
+    status: fileStatus,
+    packageDir: options.packageDir,
+  }));
   errors.push(...validateTheoryLoopPackageContract(
     content,
     metadata,

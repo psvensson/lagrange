@@ -260,12 +260,18 @@ saturation patterns:
 * any occurrence of an emergent-class term (`coupled_invariants`,
   `emergent_oscillation`, `protocol_mismatch`, `feedback_amplification`).
 
-When a compositional signal fires, the `--pre-impl` validator refuses to
-promote another local slice on the same owner/boundary with the saturated
-mechanism unless the next package is a `systemTheory` revision opened by
-`npm run work:system-theory:rederive --owner <owner> --boundary <boundary>
---write`. The rederive command consumes the compositional signal and stamps
-the new `systemTheoryRederivedAt` date on the active sprint.
+When a compositional signal fires, the `--pre-impl` validator
+(`validateCompositionalAutoPromoteGate` in `scripts/work-tracker.js`) refuses
+to promote another local slice on the same owner/boundary unless the next
+package is a `systemTheory` revision. A package counts as a revision when
+its `lane` is `system-theory-rederive` (or `system-theory-revision` /
+`theory-rederive`), or its metadata sets `systemTheoryRevision: true`, or
+its slug contains `system-theory-rederive` / `system-theory-revision` /
+`system-theory-rev` / `whole-system-theory`. The blocker error is
+`compositional-gate-blocked` and references the saturated mechanism. The
+companion command `npm run work:system-theory:rederive -- --owner <owner>
+--boundary <boundary>` produces the structured `proposedSystemTheoryRevision`
+scaffold and stamps `systemTheoryRederivedAt` on the active sprint.
 
 ### Periodic Re-derivation Checkpoint
 
