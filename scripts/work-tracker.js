@@ -6156,7 +6156,7 @@ export function parsePackageMetadata(content, filePath) {
   }
 }
 
-function replacePackageMetadata(content, metadata) {
+export function replacePackageMetadata(content, metadata) {
   const openIndex = content.indexOf(PACKAGE_METADATA_OPEN);
   if (openIndex < NUM_ZERO) {
     return content;
@@ -6201,9 +6201,21 @@ function replacePackageMetadata(content, metadata) {
     for (const [section, keys] of Object.entries(v2Keys)) {
       for (const k of keys) {
         if (metadata[k] !== undefined) {
+          if (
+            section === 'gates' &&
+            k === 'codeQualityAdmission' &&
+            isObjectRecord(metadata[k]) &&
+            typeof metadataToSave.gates?.[k] === 'string'
+          ) {
+            continue;
+          }
           metadataToSave[section][k] = metadata[k];
         }
       }
+    }
+
+    if (isObjectRecord(metadata.codeQualityAdmission)) {
+      metadataToSave.codeQualityAdmission = metadata.codeQualityAdmission;
     }
 
     if (metadata.proof !== undefined) {

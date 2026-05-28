@@ -9,6 +9,7 @@ import {buildSubagentNextLines} from '../../scripts/work-subagent-next.js';
 import {buildPackageContent, runCli} from '../../scripts/work-package-new.js';
 import {
   parsePackageMetadata,
+  replacePackageMetadata,
   validatePackageMetadataShape,
 } from '../../scripts/work-tracker.js';
 import {
@@ -221,6 +222,76 @@ test('package metadata validates closure summary shape when present', (t) => {
     /metadata closureSummary\.predictionAccuracy must be one of/u,
   );
   t.notMatch(validErrors, /closureSummary/u);
+  t.end();
+});
+
+test('package metadata serialization preserves code quality gate scalar', (t) => {
+  const admission = {
+    reason: 'improves-evidence-fidelity',
+    evidence: 'Package summaries make closure tooling more direct.',
+  };
+  const content = [
+    '# Serializer Test',
+    '',
+    '<!-- work-package',
+    JSON.stringify({
+      schema: 'work-package-v2',
+      status: 'active',
+      intent: {
+        opened: '2026-05-28',
+        lane: 'lightweight-maintenance',
+        scenario: 'none',
+        artifact: 'none',
+        playback: 'none',
+        owner: 'workflow_tooling_owner',
+        boundary: 'work_tracking_signal_density',
+        dominantReason: 'closure_summary_missing',
+        currentState: 'Closure summaries are being adopted.',
+        nextAction: 'Serialize package metadata.',
+      },
+      scope: {
+        writeScope: ['scripts/work-tracker.js'],
+        handoffFiles: [],
+        generatedFiles: [],
+        candidateRuntimeFiles: [],
+        commitScope: ['scripts/work-tracker.js'],
+      },
+      gates: {
+        stabilityCredit: 'local-proof-only',
+        whyHighestLeverageNow:
+          'The active sprint needs closure tooling to preserve denser package summaries.',
+        codeQualityAdmission: 'improves-evidence-fidelity',
+      },
+      codeQualityAdmission: admission,
+      modelFit: {
+        packageClass: 'bounded-implementation',
+        intendedMinimumModel: 'gpt-5.3-codex-spark',
+        scopeShape: 'workflow-tooling-and-package-records',
+        outputProfile: 'medium',
+        ambiguityScore: 1,
+        escalationTriggers: ['serializer changes become schema changes'],
+      },
+      execution: {
+        theoryLedgerRefs: [],
+        proof: {commands: ['npm test -- test/scripts/work-llm-usability-tools.test.js']},
+      },
+    }, null, 2),
+    '-->',
+    '',
+  ].join('\n');
+
+  const metadata = parsePackageMetadata(
+    content,
+    'work/packages/active-20260528-serializer-test.md',
+  );
+  const serialized = replacePackageMetadata(content, metadata);
+  const rawMetadata = parseRawPackageMetadata(serialized);
+
+  t.equal(
+    rawMetadata.gates.codeQualityAdmission,
+    'improves-evidence-fidelity',
+  );
+  t.same(rawMetadata.codeQualityAdmission, admission);
   t.end();
 });
 
