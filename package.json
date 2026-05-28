@@ -130,6 +130,8 @@
     "work:theory-loop": "node scripts/work-theory-loop.js",
     "work:mechanism-card": "node scripts/work-mechanism-card.js",
     "work:artifact-compare": "node scripts/work-artifact-compare.js",
+    "work:negative-learning": "node scripts/work-negative-learning.js",
+    "work:frontier-history": "node scripts/work-frontier-history.js",
     "work:subagent-next": "node scripts/work-subagent-next.js",
     "work:subagent-prompt": "node scripts/work-subagent-prompt.js",
     "work:evidence-summary": "node scripts/summarize-representative-evidence.js",

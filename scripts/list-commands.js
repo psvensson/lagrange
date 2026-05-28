@@ -69,6 +69,14 @@ const COMMAND_GROUPS = Object.freeze([
         description: 'Compare two evidence artifacts and report stable facts, changed facts, invariant blockers, and plausible mechanism movements.',
       }),
       Object.freeze({
+        command: 'npm run work:negative-learning -- --package-dir work/packages --limit 12',
+        description: 'Summarize recent package lessons, mechanisms ruled out, invariant facts, and the next mechanism to test.',
+      }),
+      Object.freeze({
+        command: 'npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12',
+        description: 'Summarize repeated owner/boundary/mechanism history, movement classifications, and package outcomes.',
+      }),
+      Object.freeze({
         command: 'npm run work:validate -- --entry|--probe|--pre-impl|--closure',
         description: 'Validate active work-package metadata, probe packages, checklist state, and lane-required proof at a workflow phase.',
       }),

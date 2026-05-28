@@ -22,20 +22,20 @@ Upgrade the theory loop from an artifact-routing package queue into a general ca
 ```text
 Representative artifact: none
 Visible first frontier: unknown
-Active package: work/packages/done-20260528-theory-loop-validator-templates-and-gates.md
+Active package: work/packages/done-20260528-theory-loop-negative-learning-frontier-history.md
 Active package owner: workflow_tooling_owner
-Active package boundary: mechanism_card_validator_gate
+Active package boundary: negative_learning_frontier_history
 Selected cause: workflow_improvement
-Required action: Wire mechanism-card, expected-movement, and negative-learning fields into templates, schema help, and validator checks.
+Required action: Add negative-learning and frontier-history commands that summarize prior package learning before another local patch is selected.
 Representative status: unknown
 Causal outcome: unknown
 Architecture gate: not-required / unknown
 Expected delta: unknown
-Current state: Mechanism cards can be produced by tools, but package readiness still does not require them for non-trivial theory-loop work.
-Allowed edits: .kiro/steering/schemas/work-package.schema.json, scripts/work-package-schema.js, scripts/work-tracker.js, work/templates/lightweight-maintenance-package.md, work/templates/runtime-owner-package.md, work/templates/scenario-closure-package.md, test/scripts/work-tracker-mechanism-card-gate.test.js
+Current state: Closed packages contain useful evidence, but the workflow has no focused command that surfaces mechanisms ruled out, invariant blockers, and repeated owner/boundary history before a new package opens.
+Allowed edits: package.json, scripts/list-commands.js, scripts/work-negative-learning.js, scripts/work-frontier-history.js, test/scripts/work-negative-learning.test.js, test/scripts/work-frontier-history.test.js
 Candidate runtime files: unknown
-Forbidden edits: validator changes reject historical closed packages, schema changes require migration of active packages, mechanism-card enforcement cannot distinguish trivial docs-only packages from theory-loop packages
-Required latest proof: regression: npm test -- test/scripts/work-tracker-mechanism-card-gate.test.js, supporting: npm run work:package:schema, supporting: npm run work:validate -- --entry work/packages/todo-20260528-theory-loop-validator-templates-and-gates.md, supporting: npm run work:validate -- --pre-impl work/packages/todo-20260528-theory-loop-validator-templates-and-gates.md, supporting: git diff --check -- .kiro/steering/schemas/work-package.schema.json scripts/work-package-schema.js scripts/work-tracker.js work/templates/lightweight-maintenance-package.md work/templates/runtime-owner-package.md work/templates/scenario-closure-package.md test/scripts/work-tracker-mechanism-card-gate.test.js
+Forbidden edits: commands need to mutate packages, frontier history requires full raw report parsing instead of package metadata, output cannot distinguish repeated frontier from repeated mechanism
+Required latest proof: regression: npm test -- test/scripts/work-negative-learning.test.js test/scripts/work-frontier-history.test.js, supporting: npm run work:negative-learning -- --package-dir work/packages --limit 12, supporting: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12, supporting: npm run work:validate -- --entry work/packages/todo-20260528-theory-loop-negative-learning-frontier-history.md, supporting: npm run work:validate -- --pre-impl work/packages/todo-20260528-theory-loop-negative-learning-frontier-history.md, supporting: git diff --check -- package.json scripts/list-commands.js scripts/work-negative-learning.js scripts/work-frontier-history.js test/scripts/work-negative-learning.test.js test/scripts/work-frontier-history.test.js
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -108,7 +108,7 @@ Expected action bias: define or execute an owner-recovery retry/enqueue transiti
    - Lane: `lightweight-maintenance`
    - Purpose: Wire mechanism cards, expected movement, and negative-learning requirements into package templates, schema help, and validators.
    - First-run reason: The contract should become part of package readiness, not an optional prose habit.
-5. [Theory Loop Negative Learning Frontier History](../packages/todo-20260528-theory-loop-negative-learning-frontier-history.md)
+5. [Theory Loop Negative Learning Frontier History](../packages/done-20260528-theory-loop-negative-learning-frontier-history.md)
    - Lane: `lightweight-maintenance`
    - Purpose: Add commands that extract package learning lines and repeated owner/boundary/mechanism history before a new local patch is opened.
    - First-run reason: Agents need durable memory of mechanisms ruled out and metrics that stayed unchanged.
