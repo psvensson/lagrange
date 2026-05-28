@@ -1,6 +1,6 @@
 # Rolling Restart Mechanism First Recovery Sprint
 
-Status: active. Created on May 28, 2026.
+Status: done. Created on May 28, 2026.
 
 ## Goal
 
@@ -209,6 +209,15 @@ This sprint intentionally contains one active executable package and no speculat
 6. `npm run work:validate -- --entry work/packages/done-20260528-rolling-restart-owner-reconcile-admission-runtime.md`
 7. `npm run work:validate -- --pre-impl work/packages/done-20260528-rolling-restart-owner-reconcile-admission-runtime.md`
 8. `git diff --check -- work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md work/packages/done-20260528-rolling-restart-owner-reconcile-admission-runtime.md work/sprints/superseded-2026-q2-rolling-restart-active-gate-theory-loop-resume.md work/packages/superseded-20260528-rolling-restart-active-gate-owner-reconcile-retry-runtime.md work/packages/superseded-20260528-rolling-restart-active-gate-owner-reconcile-no-progress-architecture.md work/packages/superseded-20260527-rolling-restart-active-gate-snapshot-coverage-post-stale-cache-route.md scripts/work-theory-loop.js test/scripts/work-theory-loop.test.js scripts/list-commands.js work/README.md work/RULES.md work/templates/sprint-strategy-brief.md`
+
+## Theory Loop Success Evidence
+
+- Success condition met: yes.
+- Result: architecture-gap.
+- Fresh representative evidence: `test-output/reports/rolling-restart-startup-active-gate-owner-snapshot-coverage-v4-20260528T150137Z.report.json`.
+- Deciding package: `work/packages/done-20260528-rolling-restart-startup-active-gate-owner-snapshot-coverage-v6.md`.
+- Evidence commands: `npm run work:scenario-route -- test-output/reports/rolling-restart-startup-active-gate-owner-snapshot-coverage-v4-20260528T150137Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage`; `npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 8`; `npm run work:negative-learning -- --package-dir work/packages --limit 8`; `npm run analyze:causal-model -- test-output/reports/rolling-restart-startup-active-gate-owner-snapshot-coverage-v4-20260528T150137Z.report.json`.
+- Continuation stopped because: the post-diagnostics architecture package selected architecture-gap; canonical route evidence remains on `startup_active_gate_owner / snapshot_coverage`, source-contract and owner-boundary-migration choices were rejected by proof, and the frontier-oscillation/two-shot rule blocks further same-boundary runtime work from this evidence.
 
 ## Closure Rules
 
