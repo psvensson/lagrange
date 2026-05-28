@@ -187,6 +187,7 @@ const NUM_TWO = 2;
 const NUM_THREE = 3;
 const NUM_FOUR = 4;
 const NUM_FIVE = 5;
+const NUM_MINUS_ONE = -1;
 const DATE_SLICE_END = 10;
 const EXIT_SUCCESS = 0;
 const EXIT_FAILURE = 1;
@@ -876,6 +877,7 @@ const LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION = 'allowOpenImplementation';
 const LEDGER_VALIDATION_ALLOW_UNAVAILABLE_SUBAGENTS =
   'allowUnavailableSubagents';
 const LEDGER_VALIDATION_REQUIRES_VERIFICATION_FIX = 'requiresVerificationFix';
+const LEDGER_VALIDATION_REQUIRES_FRESHNESS_REVIEW = 'requiresFreshnessReview';
 const SUBAGENT_UNAVAILABLE_REASON_PATTERN = /\breason\s*:\s*\S+/iu;
 const SUBAGENT_PROGRESS_EVIDENCE_FIELD_PATTERN = /\bevidence\s*:/iu;
 const SUBAGENT_PROGRESS_NEXT_OR_BLOCKER_FIELD_PATTERN =
@@ -911,9 +913,14 @@ const SUBAGENT_ATTEMPT_UNVALIDATED_STATUSES = Object.freeze([
 ]);
 const SUBAGENT_ATTEMPT_VALIDATED_STATUS = 'validated';
 const SUBAGENT_ATTEMPT_SUPERSEDED_STATUS = 'superseded';
-const EXECUTION_EVIDENCE_IMPLEMENTATION_PATTERN = /\bimplementation\b/iu;
+const EXECUTION_EVIDENCE_IMPLEMENTATION_PATTERN =
+  /(?:^(?:-\s*)?\[[xX]\]\s*(?:action\s*:\s*)?implementation\b|\baction\s*:\s*implementation\b)/iu;
 const EXECUTION_EVIDENCE_VERIFICATION_FIX_PATTERN =
-  /\bverification-fix\b/iu;
+  /(?:^(?:-\s*)?\[[xX]\]\s*(?:action\s*:\s*)?verification-fix\b|\baction\s*:\s*verification-fix\b)/iu;
+const EXECUTION_EVIDENCE_FRESHNESS_REVIEW_PATTERN =
+  /(?:^(?:-\s*)?\[[xX]\]\s*(?:action\s*:\s*)?freshness-review\b|\baction\s*:\s*freshness-review\b)/iu;
+const EXECUTION_EVIDENCE_FRESHNESS_REVIEW_DECISION_PATTERN =
+  /\b(?:freshness\s+decision|decision)\s*:\s*`?fresh`?/iu;
 const EXECUTION_EVIDENCE_TERMINAL_STATUS_PATTERN =
   /\bstatus\s*:\s*`?(?:validated|passed|green|success|done|superseded)`?/iu;
 const EXECUTION_EVIDENCE_TERMINAL_OUTCOME_PATTERN =
@@ -1513,12 +1520,72 @@ function hasExecutionEvidenceChangedFilesField(content) {
   );
 }
 
+function findExecutionEvidenceItem(checkedItems = [], pattern) {
+  return checkedItems.find((item) => pattern.test(item));
+}
+
+function findExecutionEvidenceItemIndex(checkedItems = [], pattern) {
+  return checkedItems.findIndex((item) => pattern.test(item));
+}
+
+function hasRealExecutionEvidenceAgentProof(content) {
+  const contentWithoutPaths = content.replace(FILE_PATH_TOKEN_PATTERN, '');
+  return AGENT_PROOF_PATTERN_TEXT_RE.test(contentWithoutPaths) &&
+    !NON_REAL_IDENTITY_PATTERN.test(contentWithoutPaths);
+}
+
+function validateFreshnessReviewExecutionEvidenceItem(content, filePath) {
+  const errors = [];
+  if (!hasTerminalExecutionEvidenceItem(content)) {
+    errors.push(
+      `${filePath}: Execution Evidence freshness-review item must record ` +
+      'status or outcome validated, passed, green, success, or done.',
+    );
+  }
+  if (!hasRealExecutionEvidenceAgentProof(content)) {
+    errors.push(
+      `${filePath}: Execution Evidence freshness-review item must record ` +
+      'a real Agent <name> (<agent-id>) from a fresh subagent.',
+    );
+  }
+  if (!EXECUTION_EVIDENCE_FRESHNESS_REVIEW_DECISION_PATTERN.test(content)) {
+    errors.push(
+      `${filePath}: Execution Evidence freshness-review item must record ` +
+      '`decision: fresh` before implementation.',
+    );
+  }
+  return errors;
+}
+
 export function validateExecutionEvidenceLedger(content, filePath, options = {}) {
   const metadata = options.metadata;
   const execution = metadata && metadata.execution;
 
-  if (execution && (execution.implementation || execution.verificationFix || execution.theoryLedger || execution.repair)) {
+  if (execution && (execution.freshnessReview || execution.implementation || execution.verificationFix || execution.theoryLedger || execution.repair)) {
     const errors = [];
+    if (options[LEDGER_VALIDATION_REQUIRES_FRESHNESS_REVIEW] === true) {
+      if (!execution.freshnessReview) {
+        errors.push(
+          `${filePath}: execution.freshnessReview front-matter object is ` +
+          'required before implementation.',
+        );
+      } else {
+        if (execution.freshnessReview.decision !== 'fresh') {
+          errors.push(
+            `${filePath}: execution.freshnessReview.decision must be ` +
+            '`fresh` before implementation.',
+          );
+        }
+        if (!new RegExp(`^${AGENT_ID_PATTERN_TEXT}$`, 'iu').test(
+          normalizeLedgerText(execution.freshnessReview.agentId),
+        )) {
+          errors.push(
+            `${filePath}: execution.freshnessReview.agentId must record ` +
+            'the real subagent id.',
+          );
+        }
+      }
+    }
     if (options[LEDGER_VALIDATION_REQUIRES_LEDGER] && options[LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION] !== true) {
       if (!execution.implementation) {
         errors.push(
@@ -1589,10 +1656,44 @@ export function validateExecutionEvidenceLedger(content, filePath, options = {})
       options,
     ));
   }
+  const freshnessReviewItem = findExecutionEvidenceItem(
+    checkedItems,
+    EXECUTION_EVIDENCE_FRESHNESS_REVIEW_PATTERN,
+  );
   const implementationItem =
     findImplementationExecutionEvidenceItem(checkedItems);
   const verificationFixItem =
     findVerificationFixExecutionEvidenceItem(checkedItems);
+  if (options[LEDGER_VALIDATION_REQUIRES_FRESHNESS_REVIEW] === true) {
+    if (!freshnessReviewItem) {
+      errors.push(
+        `${filePath}: Execution Evidence must include a checked ` +
+        'freshness-review item before implementation.',
+      );
+    } else {
+      errors.push(...validateFreshnessReviewExecutionEvidenceItem(
+        freshnessReviewItem,
+        filePath,
+      ));
+      const freshnessReviewIndex = findExecutionEvidenceItemIndex(
+        checkedItems,
+        EXECUTION_EVIDENCE_FRESHNESS_REVIEW_PATTERN,
+      );
+      const implementationIndex = findExecutionEvidenceItemIndex(
+        checkedItems,
+        EXECUTION_EVIDENCE_IMPLEMENTATION_PATTERN,
+      );
+      if (
+        implementationIndex !== NUM_MINUS_ONE &&
+        freshnessReviewIndex > implementationIndex
+      ) {
+        errors.push(
+          `${filePath}: Execution Evidence freshness-review item must appear ` +
+          'before implementation.',
+        );
+      }
+    }
+  }
   if (
     options[LEDGER_VALIDATION_REQUIRES_LEDGER] &&
     options[LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION] !== true
@@ -3373,6 +3474,16 @@ export function metadataRequiresSubagentSequencing(metadata) {
     return false;
   }
   return !SUBAGENT_OPTIONAL_LANES.includes(metadataLane(metadata));
+}
+
+export function metadataRequiresFreshnessReview(metadata) {
+  if (!metadata) {
+    return false;
+  }
+  const freshnessMode = normalizeLedgerText(
+    metadata.freshness || metadata.gates?.freshness || metadata.strictFreshness,
+  );
+  return freshnessMode === 'strict' || metadataRequiresSubagentSequencing(metadata);
 }
 
 export function metadataRequiresVerificationFix(metadata) {
@@ -6689,6 +6800,10 @@ function resolveValidationPhase(args = []) {
 }
 
 function buildSubagentValidationOptions(fileStatus, metadata, phase, options = {}) {
+  const requiresFreshnessReview =
+    phase !== VALIDATION_PHASE_ENTRY &&
+    fileStatus === STATUS_ACTIVE &&
+    metadataRequiresFreshnessReview(metadata);
   const requiresVerificationFix =
     phase === VALIDATION_PHASE_CLOSURE &&
     fileStatus !== STATUS_SUPERSEDED &&
@@ -6699,11 +6814,16 @@ function buildSubagentValidationOptions(fileStatus, metadata, phase, options = {
     metadataRequiresSubagentSequencing(metadata);
   const requiresSubagentLedger =
     metadata !== null &&
-    (metadataRequiresSubagentSequencing(metadata) || requiresVerificationFix) &&
+    (
+      metadataRequiresSubagentSequencing(metadata) ||
+      requiresFreshnessReview ||
+      requiresVerificationFix
+    ) &&
     (
       (fileStatus === STATUS_ACTIVE && phase === VALIDATION_PHASE_CLOSURE) ||
       isCurrentPolicyClosedSubagentMetadata(fileStatus, metadata) ||
       forceClosedPackageLedger ||
+      requiresFreshnessReview ||
       requiresVerificationFix
     ) &&
     phase !== VALIDATION_PHASE_ENTRY;
@@ -6711,6 +6831,7 @@ function buildSubagentValidationOptions(fileStatus, metadata, phase, options = {
     skipSubagentLedger:
       phase === VALIDATION_PHASE_ENTRY || fileStatus === STATUS_SUPERSEDED,
     requiresSubagentLedger,
+    requiresFreshnessReview,
     requiresVerificationFix,
     allowOpenImplementation:
       phase === VALIDATION_PHASE_PRE_IMPL && fileStatus === STATUS_ACTIVE,
@@ -7211,7 +7332,11 @@ function runPackageValidationsSync(filePath, content, fileStatus, metadata, opti
   if (!subagentValidation.skipSubagentLedger) {
     const hasExecutionEvidence =
       (extractExecutionEvidenceLedger(content) !== null) ||
-      (metadata && metadata.execution && (metadata.execution.implementation || metadata.execution.verificationFix));
+      (metadata && metadata.execution && (
+        metadata.execution.freshnessReview ||
+        metadata.execution.implementation ||
+        metadata.execution.verificationFix
+      ));
     if (hasExecutionEvidence) {
       errors.push(...validateExecutionEvidenceLedger(content, relativePath, {
         [LEDGER_VALIDATION_REQUIRES_LEDGER]:
@@ -7220,10 +7345,17 @@ function runPackageValidationsSync(filePath, content, fileStatus, metadata, opti
           subagentValidation.allowOpenImplementation,
         [LEDGER_VALIDATION_ALLOW_PENDING_SUBAGENT_LEDGER]:
           fileStatus === STATUS_TODO,
+        [LEDGER_VALIDATION_REQUIRES_FRESHNESS_REVIEW]:
+          subagentValidation.requiresFreshnessReview,
         [LEDGER_VALIDATION_REQUIRES_VERIFICATION_FIX]:
           subagentValidation.requiresVerificationFix,
         metadata,
       }));
+    } else if (subagentValidation.requiresFreshnessReview) {
+      errors.push(
+        `${relativePath}: Execution Evidence is required with a checked ` +
+        'freshness-review item from a new subagent before implementation.',
+      );
     } else if (subagentValidation.requiresVerificationFix) {
       errors.push(
         `${relativePath}: Execution Evidence is required with checked ` +

@@ -109,7 +109,34 @@ const TEST_LIGHTWEIGHT_CODE_SCOPE_INVALID_VERIFICATION_CONTENT = [
 ].join('\n');
 const REVIEW_AGENT_ID = '019e02b6-1920-7130-b040-da2e6f4efbc4';
 const FIX_AGENT_ID = '019e02b7-ece3-73a2-a664-389d40dfd575';
+const FRESHNESS_AGENT_ID = '019e02b8-1111-7333-a444-389d40dfd575';
 const IMPLEMENTATION_AGENT_ID = '019e02b9-7651-7851-bc85-a0cef8a90176';
+const TEST_STRICT_PACKAGE_CONTENT = [
+  '# Strict Package',
+  '',
+  '<!-- work-package',
+  JSON.stringify({
+    schema: 'work-package-v1',
+    status: 'active',
+    lane: 'runtime-owner-boundary',
+    scenario: 'none',
+    owner: 'workflow_tooling_owner',
+    boundary: 'subagent_freshness',
+    currentState: 'Strict package needs fresh context.',
+    nextAction: 'Check freshness before implementation.',
+  }, null, 2),
+  '-->',
+  '',
+].join('\n');
+const TEST_STRICT_PACKAGE_FRESH_CONTENT = [
+  TEST_STRICT_PACKAGE_CONTENT,
+  '## Execution Evidence',
+  '',
+  '- [x] action: freshness-review; owner: Agent Freshness (' +
+    FRESHNESS_AGENT_ID +
+    '); files-changed: none; validation: npm run work:context; decision: fresh; outcome: validated.',
+  '',
+].join('\n');
 const TEST_PACKAGE_REVIEW_ONLY_CONTENT = [
   '# Test Package',
   '',
@@ -836,6 +863,24 @@ test('work context treats lightweight lanes as subagent optional', (t) => {
   t.match(lightweight.status, /not required/u);
   t.end();
 });
+
+test('work context requires freshness-review before strict implementation',
+  (t) => {
+    const missingFreshness = buildSubagentSequencingStatus(
+      TEST_STRICT_PACKAGE_CONTENT,
+      TEST_PACKAGE_PATH,
+    );
+    const fresh = buildSubagentSequencingStatus(
+      TEST_STRICT_PACKAGE_FRESH_CONTENT,
+      TEST_PACKAGE_PATH,
+    );
+
+    t.equal(missingFreshness.role, 'freshness-review');
+    t.match(missingFreshness.status, /Freshness review missing/u);
+    t.equal(fresh.role, 'implementation');
+    t.match(fresh.status, /Execution evidence not recorded/u);
+    t.end();
+  });
 
 test('work context routes optional code-scope packages through verifier-fixer',
   (t) => {

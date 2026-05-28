@@ -12,6 +12,7 @@ import {
   collectPackageHistoryEntries,
   findActivePackageFile,
   findActiveSprintFile,
+  metadataRequiresFreshnessReview,
   metadataRequiresSubagentSequencing,
   metadataRequiresVerificationFix,
   validateExecutionEvidenceLedger,
@@ -215,9 +216,12 @@ const SUBAGENT_LEDGER_FIX_LABEL =
 const SUBAGENT_LEDGER_IMPLEMENTATION_LABEL = 'Implementation subagent recorded';
 const SUBAGENT_ROLE_REVIEW = 'review';
 const SUBAGENT_ROLE_FIX = 'fix';
+const SUBAGENT_ROLE_FRESHNESS_REVIEW = 'freshness-review';
 const SUBAGENT_ROLE_IMPLEMENTATION = 'implementation';
 const SUBAGENT_ROLE_VERIFICATION_FIX = 'verification-fix';
 const SUBAGENT_ROLE_NONE = 'none';
+const SUBAGENT_STATUS_FRESHNESS_REVIEW_MISSING =
+  'Freshness review missing; spawn a new freshness-review subagent for this work package before implementation.';
 const SUBAGENT_STATUS_LEDGER_MISSING =
   'Execution evidence not recorded; implementation may proceed as one executor pass, then verifier-fixer evidence is required before closure when scope changes code, tests, scripts, or tracker truth.';
 const SUBAGENT_STATUS_REVIEW_MISSING =
@@ -242,9 +246,12 @@ const SUBAGENT_STATUS_NOT_REQUIRED =
   'Execution evidence only; subagent sequencing is not required for this workflow lane or classification-only fast path.';
 const SUBAGENT_PROGRESS_CHECKED_ITEM_PATTERN = /^\[[xX]\]\s*/u;
 const SUBAGENT_LEDGER_CHECKED_LINE_PATTERN = /^-\s*\[[xX]\]\s*/mu;
-const EXECUTION_EVIDENCE_IMPLEMENTATION_PATTERN = /\bimplementation\b/iu;
+const EXECUTION_EVIDENCE_IMPLEMENTATION_PATTERN =
+  /(?:^\[[xX]\]\s*(?:action\s*:\s*)?implementation\b|\baction\s*:\s*implementation\b)/iu;
 const EXECUTION_EVIDENCE_VERIFICATION_FIX_PATTERN =
-  /\bverification-fix\b/iu;
+  /(?:^\[[xX]\]\s*(?:action\s*:\s*)?verification-fix\b|\baction\s*:\s*verification-fix\b)/iu;
+const EXECUTION_EVIDENCE_FRESHNESS_REVIEW_PATTERN =
+  /(?:^\[[xX]\]\s*(?:action\s*:\s*)?freshness-review\b|\baction\s*:\s*freshness-review\b)/iu;
 const EXECUTION_EVIDENCE_PARENT_REVALIDATED_PATTERN =
   /\b(?:parent\s+revalidated\s+(?:focused\s+)?proof|parent\s+validation)\s*:\s*`?yes`?/iu;
 const SUBAGENT_PROGRESS_ITEM_LIMIT = 3;
@@ -266,10 +273,13 @@ const SUBAGENT_REVIEW_FIXED_METADATA_SCOPE_PATTERN =
 const SUBAGENT_NON_REAL_IDENTITY_PATTERN =
   /\b(?:current-session|current session|parent\s+codex|manual|local|session)\b/iu;
 const SUBAGENT_SEQUENCE_ORDER_ERROR_PATTERN = /entries must appear/iu;
+const SUBAGENT_FRESHNESS_REVIEW_ERROR_PATTERN = /freshness-review/iu;
 const SUBAGENT_FIX_ERROR_PATTERN =
   /fix (?:entry|package|agent)|not-needed/iu;
 const SUBAGENT_IMPLEMENTATION_ERROR_PATTERN = /implementation/iu;
 const LEDGER_VALIDATION_REQUIRES_LEDGER = 'requiresLedger';
+const LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION = 'allowOpenImplementation';
+const LEDGER_VALIDATION_REQUIRES_FRESHNESS_REVIEW = 'requiresFreshnessReview';
 const LEDGER_VALIDATION_REQUIRES_VERIFICATION_FIX = 'requiresVerificationFix';
 const LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES = 'requiresStrictEntries';
 const FIELD_LABELS = Object.freeze({
@@ -1065,6 +1075,9 @@ function hasRealAgentProof(ledgerItem) {
 
 function findStrictValidationRole(errors) {
   const firstError = errors[NUM_ZERO] || EMPTY_STRING;
+  if (SUBAGENT_FRESHNESS_REVIEW_ERROR_PATTERN.test(firstError)) {
+    return SUBAGENT_ROLE_FRESHNESS_REVIEW;
+  }
   if (SUBAGENT_SEQUENCE_ORDER_ERROR_PATTERN.test(firstError)) {
     return SUBAGENT_ROLE_REVIEW;
   }
@@ -1101,6 +1114,13 @@ function findCheckedImplementationExecutionEvidence(packageContent) {
       EXECUTION_EVIDENCE_IMPLEMENTATION_PATTERN.test(item));
 }
 
+function findCheckedFreshnessReviewExecutionEvidence(packageContent) {
+  return extractMarkdownSection(packageContent, PACKAGE_SECTION_EXECUTION_EVIDENCE)
+    .find((item) =>
+      SUBAGENT_PROGRESS_CHECKED_ITEM_PATTERN.test(item) &&
+      EXECUTION_EVIDENCE_FRESHNESS_REVIEW_PATTERN.test(item));
+}
+
 function findCheckedVerificationFixExecutionEvidence(packageContent) {
   return extractMarkdownSection(packageContent, PACKAGE_SECTION_EXECUTION_EVIDENCE)
     .find((item) =>
@@ -1122,9 +1142,11 @@ function buildSubagentSequencingStatus(
     );
   }
   const metadata = parseOptionalPackageMetadata(packageContent, packagePath);
+  const requiresFreshnessReview = metadataRequiresFreshnessReview(metadata);
   const requiresVerificationFix = metadataRequiresVerificationFix(metadata);
   if (
     metadata &&
+    !requiresFreshnessReview &&
     !metadataRequiresSubagentSequencing(metadata) &&
     !requiresVerificationFix
   ) {
@@ -1132,6 +1154,37 @@ function buildSubagentSequencingStatus(
       SUBAGENT_ROLE_NONE,
       SUBAGENT_STATUS_NOT_REQUIRED,
     );
+  }
+  const freshnessReviewItem =
+    findCheckedFreshnessReviewExecutionEvidence(packageContent);
+  const hasStructuredFreshnessReview = Boolean(
+    metadata?.execution?.freshnessReview,
+  );
+  if (requiresFreshnessReview) {
+    if (!freshnessReviewItem && !hasStructuredFreshnessReview) {
+      return buildSubagentRoleStatus(
+        SUBAGENT_ROLE_FRESHNESS_REVIEW,
+        SUBAGENT_STATUS_FRESHNESS_REVIEW_MISSING,
+      );
+    }
+    const normalizedPackagePath = normalizeString(packagePath);
+    if (normalizedPackagePath.length > NUM_ZERO) {
+      const freshnessReviewErrors = validateExecutionEvidenceLedger(
+        packageContent,
+        normalizedPackagePath,
+        {
+          [LEDGER_VALIDATION_REQUIRES_LEDGER]: true,
+          [LEDGER_VALIDATION_ALLOW_OPEN_IMPLEMENTATION]: true,
+          [LEDGER_VALIDATION_REQUIRES_FRESHNESS_REVIEW]: true,
+        },
+      );
+      if (freshnessReviewErrors.length > NUM_ZERO) {
+        return buildSubagentRoleStatus(
+          SUBAGENT_ROLE_FRESHNESS_REVIEW,
+          buildStrictValidationStatus(freshnessReviewErrors),
+        );
+      }
+    }
   }
   const executionEvidenceItem =
     findCheckedImplementationExecutionEvidence(packageContent);

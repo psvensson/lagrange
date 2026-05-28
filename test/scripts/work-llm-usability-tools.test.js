@@ -965,6 +965,22 @@ test('subagent prompt generator emits bounded task and ledger guidance',
     t.match(prompt, /Agent identity is optional provenance/u);
   });
 
+test('subagent prompt generator emits freshness-review gate guidance',
+  async (t) => {
+    const content = await writeTempPackage();
+    const prompt = buildSubagentPrompt(
+      'freshness-review',
+      TEMP_PACKAGE_PATH,
+      content,
+    );
+
+    t.match(prompt, /freshness-review Subagent Prompt/u);
+    t.match(prompt, /Start a new subagent instance/u);
+    t.match(prompt, /decision: fresh/u);
+    t.match(prompt, /Agent <name> \(<agent-id>\)/u);
+    t.match(prompt, /local or parent-session evidence does not satisfy/u);
+  });
+
 test('subagent-next emits the next required role and prompt', async (t) => {
   await writeTempPackage();
   const lines = await buildSubagentNextLines([

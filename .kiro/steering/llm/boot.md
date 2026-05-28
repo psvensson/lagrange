@@ -86,8 +86,9 @@ These are LLM-specific operational steps. Process semantics for each lane live i
 3. Load `architecture.md` and `testing.md`.
 4. Ensure the package has a Core Logic Brief, exact write scope, proof ladder, static guardrail plan, and affected-consumer proof.
 5. Run `npm run work:validate -- --entry <package>`, then `npm run work:validate -- --pre-impl <package>` before runtime edits.
-6. Use implementation plus verifier-fixer evidence before closure.
-7. Finish with the closure tail (see below).
+6. Use a new real `freshness-review` subagent before implementation; only checked `decision: fresh` evidence gates runtime edits.
+7. Use implementation plus verifier-fixer evidence before closure.
+8. Finish with the closure tail (see below).
 
 ### `scenario`
 
@@ -97,9 +98,10 @@ These are LLM-specific operational steps. Process semantics for each lane live i
 4. Load `governance.md`, `architecture.md`, and `testing.md`.
 5. Keep the Current Edge Card, causal closure fields, selected owner boundary, and stop mode in view.
 6. Run `npm run work:validate -- --entry <package>`, then `npm run work:validate -- --pre-impl <package>` before runtime or scenario edits.
-7. Prove the missing edge or fixture before broad representative reruns.
-8. Use separate verifier-fixer evidence before closure.
-9. Finish with the closure tail (see below).
+7. Use a new real `freshness-review` subagent before implementation; only checked `decision: fresh` evidence gates runtime or scenario edits.
+8. Prove the missing edge or fixture before broad representative reruns.
+9. Use separate verifier-fixer evidence before closure.
+10. Finish with the closure tail (see below).
 
 ### Closure Tail (every lane)
 

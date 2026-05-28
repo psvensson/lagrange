@@ -109,7 +109,7 @@ const COMMAND_GROUPS = Object.freeze([
         description: 'Summarize closed packages per representative movement point and observable prediction accuracy.',
       }),
       Object.freeze({
-        command: 'npm run work:subagent-prompt -- --role <role> --package <package>',
+        command: 'npm run work:subagent-prompt -- --role freshness-review|implementation|verification-fix --package <package>',
         description: 'Generate bounded subagent prompts plus sequencing and progress ledger guidance.',
       }),
       Object.freeze({

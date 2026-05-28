@@ -7,6 +7,7 @@ import {
   findActivePackageLinkInSprint,
   isGeneratedCurrentBlockerPath,
   metadataHasClassificationOnlyOutcome,
+  metadataRequiresFreshnessReview,
   metadataRequiresSubagentSequencing,
   metadataUsesClassificationOnlyFastPath,
   metadataUsesPureClassificationFastPath,
@@ -59,6 +60,7 @@ export const WORK_TRACKER_ACTIVE_DOCTOR_FILE =
 export const REVIEW_AGENT_ID = '019e02b6-1920-7130-b040-da2e6f4efbc4';
 export const FIX_AGENT_ID = '019e02b7-ece3-73a2-a664-389d40dfd575';
 export const IMPLEMENTATION_AGENT_ID = '019e02b9-7651-7851-bc85-a0cef8a90176';
+export const FRESHNESS_AGENT_ID = '019e02b8-1111-7333-a444-389d40dfd575';
 export const TEST_COMMIT_SHA = 'abcdef1234567890abcdef1234567890abcdef12';
 export const TEST_PUSH_TARGET = 'origin/main';
 export const TEST_THEORY_LEDGER_REF = 'theory-20260522-ledger-test';
@@ -589,6 +591,24 @@ export const WORK_TRACKER_EXECUTION_EVIDENCE_CLEAN_CONTENT = [
   '## Execution Evidence',
   '',
   '- [x] implementation: status: validated; evidence: npm test -- test/example.test.js; parent revalidated focused proof: yes; next: closure.',
+  '',
+].join('\n');
+export const WORK_TRACKER_EXECUTION_EVIDENCE_FRESH_CONTENT = [
+  '# Test Package',
+  '',
+  '## Execution Evidence',
+  '',
+  '- [x] action: freshness-review; owner: Agent Freshness (' +
+    FRESHNESS_AGENT_ID +
+    '); files-changed: none; validation: npm run work:context; decision: fresh; outcome: validated.',
+  '',
+].join('\n');
+export const WORK_TRACKER_EXECUTION_EVIDENCE_FRESH_INVALID_LOCAL_CONTENT = [
+  '# Test Package',
+  '',
+  '## Execution Evidence',
+  '',
+  '- [x] action: freshness-review; owner: local; files-changed: none; validation: npm run work:context; decision: fresh; outcome: validated.',
   '',
 ].join('\n');
 export const WORK_TRACKER_EXECUTION_EVIDENCE_VERIFIED_CONTENT = [
@@ -1154,4 +1174,4 @@ export const WORK_TRACKER_COMMIT_LEDGER_PENDING_CONTENT = [
   '',
 ].join('\n');
 
-export {assert, buildCurrentBlockerPayload, buildPackageDoctorLines, describe, findActivePackageLinkInSprint, isGeneratedCurrentBlockerPath, it, metadataHasClassificationOnlyOutcome, metadataRequiresSubagentSequencing, metadataUsesClassificationOnlyFastPath, metadataUsesPureClassificationFastPath, path, renderCurrentBlockerMarkdown, renderCurrentEdgeCardSection, resolveSprintPackageReference, upsertSprintCurrentEdgeCard, validateActiveWorkReferences, validateCausalDecisionContract, validateCausalGovernanceContract, validateClassificationEfficiencyContract, validateCommitAndPushLedger, validateContractProofRequirement, validateCoreLogicBrief, validateCurrentBlockerPayloadFreshness, validateCurrentBlockerSnapshot, validateDecisionExperimentGate, validateExecutionEvidenceLedger, validateExperimentOutcomeContract, validateFrontierOscillationContract, validateModelFitContract, validateObservablePredictionContract, validatePackageMetadataShape, validatePackageScaffoldReadiness, validateProbePackageContract, validateRepresentativeResidualContract, validateRequiredPreImplProbeContract, validateRerunDecisionContract, validateSameFrontierStopContract, validateScenarioCausalClosureContract, validateScenarioFrontierOwnerBoundaryContract, validateSprintCurrentEdgeCard, validateSprintStrategyBrief, validateSubagentAttemptLedger, validateSubagentProgressLedger, validateSubagentSequencingLedger, validateTwoLevelTheoryContract};
+export {assert, buildCurrentBlockerPayload, buildPackageDoctorLines, describe, findActivePackageLinkInSprint, isGeneratedCurrentBlockerPath, it, metadataHasClassificationOnlyOutcome, metadataRequiresFreshnessReview, metadataRequiresSubagentSequencing, metadataUsesClassificationOnlyFastPath, metadataUsesPureClassificationFastPath, path, renderCurrentBlockerMarkdown, renderCurrentEdgeCardSection, resolveSprintPackageReference, upsertSprintCurrentEdgeCard, validateActiveWorkReferences, validateCausalDecisionContract, validateCausalGovernanceContract, validateClassificationEfficiencyContract, validateCommitAndPushLedger, validateContractProofRequirement, validateCoreLogicBrief, validateCurrentBlockerPayloadFreshness, validateCurrentBlockerSnapshot, validateDecisionExperimentGate, validateExecutionEvidenceLedger, validateExperimentOutcomeContract, validateFrontierOscillationContract, validateModelFitContract, validateObservablePredictionContract, validatePackageMetadataShape, validatePackageScaffoldReadiness, validateProbePackageContract, validateRepresentativeResidualContract, validateRequiredPreImplProbeContract, validateRerunDecisionContract, validateSameFrontierStopContract, validateScenarioCausalClosureContract, validateScenarioFrontierOwnerBoundaryContract, validateSprintCurrentEdgeCard, validateSprintStrategyBrief, validateSubagentAttemptLedger, validateSubagentProgressLedger, validateSubagentSequencingLedger, validateTwoLevelTheoryContract};

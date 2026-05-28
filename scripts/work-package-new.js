@@ -110,6 +110,7 @@ import {
   THEORY_LOOP_SOURCE_CHANGE_REQUIRED_FIELD,
   THEORY_LOOP_SPRINT_GOAL_DELTA_FIELD,
   THEORY_LOOP_SUCCESSOR_REQUIRED_FIELD,
+  SUBAGENT_OPTIONAL_LANES,
   VALID_PACKAGE_STATUSES,
   VALID_OUTPUT_PROFILES,
   VALIDATION_TIER_FIELD,
@@ -593,6 +594,23 @@ function markdownSentenceList(values = [], fallback) {
 
 function firstFocusedProofCommand(proof = []) {
   return proof.map(normalizeText).find(Boolean) || DEFAULT_ACCELERATION_PROOF;
+}
+
+function packageRequiresFreshnessReview(metadata = {}) {
+  return !SUBAGENT_OPTIONAL_LANES.includes(normalizeText(metadata.lane));
+}
+
+function freshnessReviewEvidenceLine(metadata = {}, packagePath) {
+  if (!packageRequiresFreshnessReview(metadata)) {
+    return [];
+  }
+  return [
+    '- [ ] action: freshness-review; owner: Agent <name> (<agent-id>); ' +
+    'files-changed: none; validation: npm run work:context; ' +
+    `npm run work:package:doctor -- --suggest ${packagePath}; ` +
+    `npm run work:validate -- --entry ${packagePath}; ` +
+    'decision: fresh; outcome: pending.',
+  ];
 }
 
 function artifactExtractorCommand(artifact) {
@@ -2065,6 +2083,7 @@ async function buildPackageContent(flags = {}) {
     'Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.',
     'Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.',
     EMPTY_TEXT,
+    ...freshnessReviewEvidenceLine(metadata, packagePath),
     `- [ ] action: implementation; owner: ${owner}; files-changed: none recorded yet; validation: ${firstFocusedProofCommand(modelFitProof)} and parent revalidated focused proof: yes before closure; outcome: pending.`,
     `- [ ] action: verification-fix; owner: ${owner}; files-changed: none recorded yet; validation: verifier reruns focused proof and parent revalidated focused proof: yes before closure; outcome: pending.`,
     '- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: pending.',

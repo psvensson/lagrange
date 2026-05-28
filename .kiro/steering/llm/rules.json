@@ -99,12 +99,12 @@
     }
   ],
   "stats": {
-    "candidateCount": 330,
-    "dedupedRuleCount": 323,
-    "exportedRuleCount": 323,
+    "candidateCount": 332,
+    "dedupedRuleCount": 325,
+    "exportedRuleCount": 325,
     "aliasRuleCount": 11,
-    "masterRuleCount": 312,
-    "estimatedAllRulesTokens": 12724
+    "masterRuleCount": 314,
+    "estimatedAllRulesTokens": 12835
   },
   "rules": [
     {
@@ -1631,7 +1631,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 210,
+          "line": 227,
           "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
@@ -2633,12 +2633,12 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "These optional roles do not replace the implementation and verification-fix closure roles.",
+      "rule": "freshness-review is different: parent-session, local/manual, or generic Codex labels do not satisfy it.",
       "score": 211,
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 38,
+          "line": 25,
           "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
         }
       ]
@@ -2648,18 +2648,33 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "work/sprints/current-blocker.json is generated handoff state, but it must not be stale.",
+      "rule": "These optional roles do not replace the freshness-review, implementation, and verification-fix roles when those roles are required.",
       "score": 211,
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 170,
-          "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
+          "line": 54,
+          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
         }
       ]
     },
     {
       "id": "GOV-0026",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "work/sprints/current-blocker.json is generated handoff state, but it must not be stale.",
+      "score": 211,
+      "sources": [
+        {
+          "file": "workflow-guidelines/subagents.md",
+          "line": 187,
+          "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0027",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2670,22 +2685,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 196,
-          "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0027",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "Do not name new representative rerun outputs with placeholder timestamps such as T000000Z; placeholder names make lineage ambiguous and can hide accidental overwrite.",
-      "score": 211,
-      "sources": [
-        {
-          "file": "workflow-guidelines/subagents.md",
-          "line": 243,
+          "line": 213,
           "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
@@ -2739,6 +2739,21 @@
           "file": "workflow-guidelines/closure.md",
           "line": 293,
           "section": "Workflow — Decision & Closure Gates > Classification Efficiency Contract"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0031",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Do not name new representative rerun outputs with placeholder timestamps such as T000000Z; placeholder names make lineage ambiguous and can hide accidental overwrite.",
+      "score": 210,
+      "sources": [
+        {
+          "file": "workflow-guidelines/subagents.md",
+          "line": 260,
+          "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
     },
@@ -2808,7 +2823,7 @@
       ]
     },
     {
-      "id": "GOV-0031",
+      "id": "GOV-0032",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2825,7 +2840,7 @@
       ]
     },
     {
-      "id": "GOV-0032",
+      "id": "GOV-0033",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -2840,7 +2855,7 @@
       ]
     },
     {
-      "id": "GOV-0033",
+      "id": "GOV-0034",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2857,7 +2872,7 @@
       ]
     },
     {
-      "id": "GOV-0034",
+      "id": "GOV-0035",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2875,7 +2890,7 @@
       ]
     },
     {
-      "id": "GOV-0035",
+      "id": "GOV-0036",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2892,7 +2907,7 @@
       ]
     },
     {
-      "id": "GOV-0036",
+      "id": "GOV-0037",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3270,7 +3285,7 @@
       ]
     },
     {
-      "id": "GOV-0037",
+      "id": "GOV-0038",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3287,7 +3302,7 @@
       ]
     },
     {
-      "id": "GOV-0038",
+      "id": "GOV-0039",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3304,7 +3319,7 @@
       ]
     },
     {
-      "id": "GOV-0039",
+      "id": "GOV-0040",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3319,7 +3334,7 @@
       ]
     },
     {
-      "id": "GOV-0040",
+      "id": "GOV-0041",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3336,7 +3351,7 @@
       ]
     },
     {
-      "id": "GOV-0041",
+      "id": "GOV-0042",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3351,7 +3366,7 @@
       ]
     },
     {
-      "id": "GOV-0042",
+      "id": "GOV-0043",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3368,7 +3383,7 @@
       ]
     },
     {
-      "id": "GOV-0043",
+      "id": "GOV-0044",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3417,7 +3432,7 @@
       ]
     },
     {
-      "id": "GOV-0044",
+      "id": "GOV-0045",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3434,7 +3449,7 @@
       ]
     },
     {
-      "id": "GOV-0045",
+      "id": "GOV-0046",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3451,7 +3466,7 @@
       ]
     },
     {
-      "id": "GOV-0046",
+      "id": "GOV-0047",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3468,7 +3483,7 @@
       ]
     },
     {
-      "id": "GOV-0047",
+      "id": "GOV-0048",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3483,7 +3498,7 @@
       ]
     },
     {
-      "id": "GOV-0048",
+      "id": "GOV-0049",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3651,7 +3666,7 @@
       ]
     },
     {
-      "id": "GOV-0049",
+      "id": "GOV-0050",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3666,7 +3681,7 @@
       ]
     },
     {
-      "id": "GOV-0050",
+      "id": "GOV-0051",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3684,7 +3699,7 @@
       ]
     },
     {
-      "id": "GOV-0051",
+      "id": "GOV-0052",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3702,7 +3717,7 @@
       ]
     },
     {
-      "id": "GOV-0052",
+      "id": "GOV-0053",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3937,7 +3952,7 @@
       ]
     },
     {
-      "id": "GOV-0053",
+      "id": "GOV-0054",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3959,7 +3974,7 @@
       ]
     },
     {
-      "id": "GOV-0054",
+      "id": "GOV-0055",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3976,7 +3991,7 @@
       ]
     },
     {
-      "id": "GOV-0055",
+      "id": "GOV-0056",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3991,7 +4006,7 @@
       ]
     },
     {
-      "id": "GOV-0056",
+      "id": "GOV-0057",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4008,7 +4023,7 @@
       ]
     },
     {
-      "id": "GOV-0057",
+      "id": "GOV-0058",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4023,7 +4038,7 @@
       ]
     },
     {
-      "id": "GOV-0058",
+      "id": "GOV-0059",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4040,7 +4055,7 @@
       ]
     },
     {
-      "id": "GOV-0059",
+      "id": "GOV-0060",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4057,7 +4072,7 @@
       ]
     },
     {
-      "id": "GOV-0060",
+      "id": "GOV-0061",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4072,7 +4087,7 @@
       ]
     },
     {
-      "id": "GOV-0061",
+      "id": "GOV-0062",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4087,7 +4102,7 @@
       ]
     },
     {
-      "id": "GOV-0062",
+      "id": "GOV-0063",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4102,7 +4117,7 @@
       ]
     },
     {
-      "id": "GOV-0063",
+      "id": "GOV-0064",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4119,7 +4134,7 @@
       ]
     },
     {
-      "id": "GOV-0064",
+      "id": "GOV-0065",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4128,22 +4143,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 44,
-          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0065",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [],
-      "rule": "Review may cite runtime/static proof as required later; implementation, verification-fix, and parent revalidation run it.",
-      "score": 193,
-      "sources": [
-        {
-          "file": "workflow-guidelines/subagents.md",
-          "line": 67,
+          "line": 61,
           "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
         }
       ]
@@ -4153,12 +4153,12 @@
       "domain": "governance",
       "strength": "must",
       "tags": [],
-      "rule": "interrupted and partial-unvalidated attempts must be followed by a checked superseded/discarded/revalidated line before closure.",
+      "rule": "Review may cite runtime/static proof as required later; implementation, verification-fix, and parent revalidation run it.",
       "score": 193,
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 81,
+          "line": 84,
           "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
         }
       ]
@@ -4168,13 +4168,13 @@
       "domain": "governance",
       "strength": "must",
       "tags": [],
-      "rule": "Scenario-driven packages and active sprint snapshots must include a compact Current Edge Card that an LLM can keep in working memory without rereading the full package history.",
+      "rule": "interrupted and partial-unvalidated attempts must be followed by a checked superseded/discarded/revalidated line before closure.",
       "score": 193,
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 181,
-          "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
+          "line": 98,
+          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
         }
       ]
     },
@@ -4182,36 +4182,19 @@
       "id": "GOV-0068",
       "domain": "governance",
       "strength": "must",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "That fast path should avoid a broad package unless canonical evidence changes owner, boundary, or required action.",
+      "tags": [],
+      "rule": "Scenario-driven packages and active sprint snapshots must include a compact Current Edge Card that an LLM can keep in working memory without rereading the full package history.",
       "score": 193,
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 240,
+          "line": 198,
           "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
     },
     {
       "id": "GOV-0069",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [],
-      "rule": "Representative artifacts must use real unique timestamps or otherwise unique run identifiers.",
-      "score": 193,
-      "sources": [
-        {
-          "file": "workflow-guidelines/subagents.md",
-          "line": 243,
-          "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0070",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4226,7 +4209,7 @@
       ]
     },
     {
-      "id": "GOV-0071",
+      "id": "GOV-0070",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4258,7 +4241,7 @@
       ]
     },
     {
-      "id": "GOV-0072",
+      "id": "GOV-0071",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4275,7 +4258,7 @@
       ]
     },
     {
-      "id": "GOV-0073",
+      "id": "GOV-0072",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4288,6 +4271,38 @@
           "file": "workflow-guidelines/closure.md",
           "line": 483,
           "section": "Workflow — Decision & Closure Gates > Scenario Failure Migration"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0073",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "That fast path should avoid a broad package unless canonical evidence changes owner, boundary, or required action.",
+      "score": 192,
+      "sources": [
+        {
+          "file": "workflow-guidelines/subagents.md",
+          "line": 257,
+          "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0074",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [],
+      "rule": "Representative artifacts must use real unique timestamps or otherwise unique run identifiers.",
+      "score": 192,
+      "sources": [
+        {
+          "file": "workflow-guidelines/subagents.md",
+          "line": 260,
+          "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
     },
@@ -4381,7 +4396,22 @@
       ]
     },
     {
-      "id": "GOV-0074",
+      "id": "GOV-0075",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "If delegation is unavailable, record one of human-waived, tool-unavailable, or blocked-by-environment-policy with reason: ... as a blocker; do not check the freshness gate as fresh unless a later real sub-agent records fresh proof.",
+      "score": 187,
+      "sources": [
+        {
+          "file": "workflow-guidelines/subagents.md",
+          "line": 25,
+          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0076",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -4394,13 +4424,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 67,
+          "line": 84,
           "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
         }
       ]
     },
     {
-      "id": "GOV-0075",
+      "id": "GOV-0077",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4409,7 +4439,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 90,
+          "line": 107,
           "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
         }
       ]
@@ -4619,7 +4649,7 @@
       ]
     },
     {
-      "id": "GOV-0076",
+      "id": "GOV-0078",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4634,7 +4664,7 @@
       ]
     },
     {
-      "id": "GOV-0077",
+      "id": "GOV-0079",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4643,13 +4673,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 130,
+          "line": 147,
           "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
         }
       ]
     },
     {
-      "id": "GOV-0078",
+      "id": "GOV-0080",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4664,7 +4694,7 @@
       ]
     },
     {
-      "id": "GOV-0079",
+      "id": "GOV-0081",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4682,7 +4712,7 @@
       ]
     },
     {
-      "id": "GOV-0080",
+      "id": "GOV-0082",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4831,7 +4861,7 @@
       ]
     },
     {
-      "id": "GOV-0081",
+      "id": "GOV-0083",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4846,7 +4876,7 @@
       ]
     },
     {
-      "id": "GOV-0082",
+      "id": "GOV-0084",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4936,7 +4966,7 @@
       ]
     },
     {
-      "id": "GOV-0083",
+      "id": "GOV-0085",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4954,7 +4984,7 @@
       ]
     },
     {
-      "id": "GOV-0084",
+      "id": "GOV-0086",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4965,13 +4995,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 44,
+          "line": 61,
           "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
         }
       ]
     },
     {
-      "id": "GOV-0085",
+      "id": "GOV-0087",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4982,13 +5012,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 101,
+          "line": 118,
           "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
         }
       ]
     },
     {
-      "id": "GOV-0086",
+      "id": "GOV-0088",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -5052,7 +5082,7 @@
       ]
     },
     {
-      "id": "GOV-0087",
+      "id": "GOV-0089",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5101,7 +5131,7 @@
       ]
     },
     {
-      "id": "GOV-0088",
+      "id": "GOV-0090",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5118,7 +5148,7 @@
       ]
     },
     {
-      "id": "GOV-0089",
+      "id": "GOV-0091",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5129,13 +5159,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 150,
+          "line": 167,
           "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
         }
       ]
     },
     {
-      "id": "GOV-0090",
+      "id": "GOV-0092",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5144,7 +5174,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 213,
+          "line": 230,
           "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
@@ -5165,7 +5195,7 @@
       ]
     },
     {
-      "id": "GOV-0091",
+      "id": "GOV-0093",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5197,7 +5227,7 @@
       ]
     },
     {
-      "id": "GOV-0092",
+      "id": "GOV-0094",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5214,7 +5244,7 @@
       ]
     },
     {
-      "id": "GOV-0093",
+      "id": "GOV-0095",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5229,7 +5259,7 @@
       ]
     },
     {
-      "id": "GOV-0094",
+      "id": "GOV-0096",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5244,7 +5274,7 @@
       ]
     },
     {
-      "id": "GOV-0095",
+      "id": "GOV-0097",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5261,39 +5291,39 @@
       ]
     },
     {
-      "id": "GOV-0096",
+      "id": "GOV-0098",
       "domain": "governance",
       "strength": "may",
       "tags": [],
-      "rule": "A real sub-agent may perform either role, but real sub-agent identity is optional provenance.",
+      "rule": "A real sub-agent may perform implementation or verification-fix, but real sub-agent identity is optional provenance for those closure roles.",
       "score": 145,
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 21,
+          "line": 25,
           "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
         }
       ]
     },
     {
-      "id": "GOV-0097",
+      "id": "GOV-0099",
       "domain": "governance",
       "strength": "may",
       "tags": [
         "testing"
       ],
-      "rule": "The parent session may perform a role directly when that is the lightest valid path.",
+      "rule": "The parent session may perform those roles directly when that is the lightest valid path.",
       "score": 145,
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 21,
+          "line": 25,
           "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
         }
       ]
     },
     {
-      "id": "GOV-0098",
+      "id": "GOV-0100",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5302,13 +5332,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 81,
+          "line": 98,
           "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
         }
       ]
     },
     {
-      "id": "GOV-0099",
+      "id": "GOV-0101",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5325,7 +5355,7 @@
       ]
     },
     {
-      "id": "GOV-0100",
+      "id": "GOV-0102",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5343,7 +5373,7 @@
       ]
     },
     {
-      "id": "GOV-0101",
+      "id": "GOV-0103",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5373,7 +5403,7 @@
       ]
     },
     {
-      "id": "GOV-0102",
+      "id": "GOV-0104",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5390,7 +5420,7 @@
       ]
     },
     {
-      "id": "GOV-0103",
+      "id": "GOV-0105",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5407,7 +5437,7 @@
       ]
     },
     {
-      "id": "GOV-0104",
+      "id": "GOV-0106",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5424,7 +5454,7 @@
       ]
     },
     {
-      "id": "GOV-0105",
+      "id": "GOV-0107",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5437,13 +5467,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 138,
+          "line": 155,
           "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
         }
       ]
     },
     {
-      "id": "GOV-0106",
+      "id": "GOV-0108",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5454,13 +5484,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 145,
+          "line": 162,
           "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
         }
       ]
     },
     {
-      "id": "GOV-0107",
+      "id": "GOV-0109",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5477,5 +5507,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-05-28T12:24:49.487Z"
+  "generatedAt": "2026-05-28T15:20:01.478Z"
 }

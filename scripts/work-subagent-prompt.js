@@ -27,6 +27,7 @@ const NUM_TWO = 2;
 const NUM_MINUS_ONE = -1;
 const ROLE_REVIEW = 'review';
 const ROLE_FIX = 'fix';
+const ROLE_FRESHNESS_REVIEW = 'freshness-review';
 const ROLE_IMPLEMENTATION = 'implementation';
 const ROLE_VERIFICATION_FIX = 'verification-fix';
 const FLAG_ROLE = '--role';
@@ -60,6 +61,7 @@ const OUTPUT_PROFILE_EXTRA_HIGH = 'extra-high';
 const VALID_ROLES = Object.freeze([
   ROLE_REVIEW,
   ROLE_FIX,
+  ROLE_FRESHNESS_REVIEW,
   ROLE_IMPLEMENTATION,
   ROLE_VERIFICATION_FIX,
 ]);
@@ -75,7 +77,7 @@ const OUTPUT_GUIDANCE_BY_PROFILE = Object.freeze({
 });
 const HELP_TEXT = [
   'Usage:',
-  '  node scripts/work-subagent-prompt.js --role implementation|verification-fix --package <package.md>',
+  '  node scripts/work-subagent-prompt.js --role freshness-review|implementation|verification-fix --package <package.md>',
   '  node scripts/work-subagent-prompt.js --role review|fix --package <package.md>  # legacy',
   '',
   'Optional:',
@@ -325,6 +327,16 @@ function twoLevelTheoryLines(metadata = {}) {
 }
 
 function roleTask(role, metadata, packagePath) {
+  if (role === ROLE_FRESHNESS_REVIEW) {
+    return [
+      'Start a new subagent instance for this work package before implementation.',
+      'Independently confirm that current-blocker, package metadata, route evidence,',
+      'owner, boundary, proof ladder, and write scope are still current.',
+      'Do not edit runtime, test, script, or package files except to report a blocker.',
+      'Return exactly one decision: fresh, stale, migrate, split, architecture-gap, or blocked.',
+      'Only decision fresh may gate implementation.',
+    ].join(' ');
+  }
   if (role === ROLE_VERIFICATION_FIX) {
     return [
       'Verify the last implementation for this package as a separate verifier-fixer.',
@@ -369,6 +381,9 @@ function ledgerLine(role, packagePath, flags = {}) {
   const ownerValue = agentName && agentId ?
     `Agent ${agentName} (${agentId})` :
     'local';
+  const freshnessAgentValue = agentName && agentId ?
+    `Agent ${agentName} (${agentId})` :
+    'Agent <name> (<agent-id>)';
   if (role === ROLE_REVIEW) {
     return `- [x] action: review; owner: ${ownerValue}; ` +
       'files-changed: none; ' +
@@ -383,6 +398,13 @@ function ledgerLine(role, packagePath, flags = {}) {
     return `- [x] action: verification-fix; owner: ${ownerValue}; ` +
       `files-changed: concrete paths fixed or none; validation: verified and fixed ${packagePath}; ` +
       'parent revalidated focused proof: yes; outcome: validated.';
+  }
+  if (role === ROLE_FRESHNESS_REVIEW) {
+    return `- [x] action: freshness-review; owner: ${freshnessAgentValue}; ` +
+      'files-changed: none; validation: npm run work:context; ' +
+      `npm run work:package:doctor -- --suggest ${packagePath}; ` +
+      `npm run work:validate -- --entry ${packagePath}; ` +
+      'decision: fresh; outcome: validated.';
   }
   return `- [x] action: implementation; owner: ${ownerValue}; ` +
     `files-changed: concrete paths changed or none; validation: implemented ${packagePath}; ` +
@@ -411,6 +433,25 @@ function validationCommandLines(role, packagePath, metadata) {
     [];
   if (role === ROLE_REVIEW) {
     return reviewCommandBudgetLines(packagePath, metadata, proofCommands);
+  }
+  if (role === ROLE_FRESHNESS_REVIEW) {
+    const lines = [
+      '- `npm run work:context`',
+      `- \`npm run work:package:doctor -- --suggest ${packagePath}\``,
+      `- \`npm run work:validate -- --entry ${packagePath}\``,
+    ];
+    const routeCommand = reviewRouteCommand(metadata, proofCommands);
+    if (routeCommand) {
+      lines.push(`- \`${routeCommand}\``);
+    }
+    const frontierCommand = firstCommandMatching(
+      proofCommands,
+      /\bnpm run work:frontier-history\b/u,
+    );
+    if (frontierCommand) {
+      lines.push(`- \`${frontierCommand}\``);
+    }
+    return lines.join(NEWLINE);
   }
   const lines = [
     `- \`npm run work:package:doctor -- --suggest ${packagePath}\``,
@@ -538,6 +579,13 @@ function validationInstructionLines(role) {
       'Runtime proof and `npm run test:static` belong to implementation and parent revalidation; review may cite them as required later without running them.',
     ].join(NEWLINE);
   }
+  if (role === ROLE_FRESHNESS_REVIEW) {
+    return [
+      'Run only the freshness commands above by default. Do not implement or repair runtime files in this role.',
+      'Record `decision: fresh` only when current-blocker, package metadata, route evidence, owner, boundary, proof ladder, and write scope agree.',
+      'For stale, migrate, split, architecture-gap, or blocked decisions, report the exact mismatch and stop without checking a freshness-review evidence item as fresh.',
+    ].join(NEWLINE);
+  }
   return [
     'Run the exact command shapes above unless the command is impossible in this environment. Do not add ad hoc Jest or TAP flags such as `--runInBand`, do not invent runner flags, and do not substitute broad raw-log sampling for the listed canonical commands. This repo uses `npm test -- test/path.test.js` for focused TAP test files.',
     'Worker-reported validation is handoff evidence only; the parent session must rerun focused proof locally before recording final implementation completion.',
@@ -658,10 +706,15 @@ function buildSubagentPrompt(role, packagePath, content, args = []) {
     role === ROLE_VERIFICATION_FIX ?
       'For verification-fix, fix in-scope findings directly and include `files-changed:` in the checked evidence item.' :
       EMPTY_TEXT,
+    role === ROLE_FRESHNESS_REVIEW ?
+      'For freshness-review, the checked evidence must name a real `Agent <name> (<agent-id>)` and include `decision: fresh`; local or parent-session evidence does not satisfy this gate.' :
+      EMPTY_TEXT,
     EMPTY_TEXT,
     'Use this shape:',
     EMPTY_TEXT,
-    `- [ ] action: ${role}; owner: ${metadata.owner || 'unassigned-owner'}; files-changed: none; validation: npm run work:validate -- --pre-impl ${packagePath}; outcome: running.`,
+    role === ROLE_FRESHNESS_REVIEW ?
+      `- [ ] action: freshness-review; owner: Agent <name> (<agent-id>); files-changed: none; validation: npm run work:context; npm run work:package:doctor -- --suggest ${packagePath}; npm run work:validate -- --entry ${packagePath}; decision: fresh; outcome: running.` :
+      `- [ ] action: ${role}; owner: ${metadata.owner || 'unassigned-owner'}; files-changed: none; validation: npm run work:validate -- --pre-impl ${packagePath}; outcome: running.`,
     `- [ ] action: ${role} falsification; owner: ${metadata.owner || 'unassigned-owner'}; files-changed: none; validation: wrong-slice evidence would change the recorded owner, boundary, or representative result; outcome: validated.`,
     'Before checking an item, replace `none`, `running`, and the example validation command with the concrete edited paths, final result, and commands actually run.',
     EMPTY_TEXT,
@@ -675,7 +728,9 @@ function buildSubagentPrompt(role, packagePath, content, args = []) {
     EMPTY_TEXT,
     '## Ledger Line',
     EMPTY_TEXT,
-    role === ROLE_IMPLEMENTATION ?
+    role === ROLE_FRESHNESS_REVIEW ?
+      'Record this freshness gate only after a new real subagent verifies the package is fresh:' :
+      role === ROLE_IMPLEMENTATION ?
       'The parent session records this implementation evidence only after rerunning the focused proof locally and truthfully adding `parent revalidated focused proof: yes`:' :
       role === ROLE_VERIFICATION_FIX ?
         'The parent session records this verifier-fixer evidence only after rerunning the focused proof locally and truthfully adding `parent revalidated focused proof: yes`:' :

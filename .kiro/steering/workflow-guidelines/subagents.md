@@ -14,32 +14,49 @@ last_reviewed: 2026-05-23
 
 ## Execution Roles And Optional Sub-Agents
 
-Package closure is role-based. The required closure roles are
-`implementation` and, when the package changes code, tests, scripts, runtime
-contracts, tracker truth, or generated handoff state, `verification-fix`.
+Package execution and closure are role-based. Strict workflow packages
+(`runtime-owner-boundary`, `scenario-release-gate`, `causal-escalation`, and
+any package with `freshness: "strict"` or `gates.freshness: "strict"`) require
+a new real `freshness-review` sub-agent before implementation. The required
+closure roles are `implementation` and, when the package changes code, tests,
+scripts, runtime contracts, tracker truth, or generated handoff state,
+`verification-fix`.
 
-A real sub-agent may perform either role, but real sub-agent identity is
-optional provenance. The parent session may perform a role directly when that
-is the lightest valid path. If delegation is unavailable or intentionally
-waived, record one of `human-waived`, `tool-unavailable`, or
-`blocked-by-environment-policy` with `reason: ...` instead of inventing a
-real agent id.
+A real sub-agent may perform `implementation` or `verification-fix`, but real
+sub-agent identity is optional provenance for those closure roles. The parent
+session may perform those roles directly when that is the lightest valid path.
+`freshness-review` is different: parent-session, local/manual, or generic
+Codex labels do not satisfy it. If delegation is unavailable, record one of
+`human-waived`, `tool-unavailable`, or `blocked-by-environment-policy` with
+`reason: ...` as a blocker; do not check the freshness gate as fresh unless a
+later real sub-agent records fresh proof.
 
 Default closure sequence:
 
-1. `implementation` role inspects, edits, runs focused proof, and records
+1. `freshness-review` role starts from repository state only, checks
+   current-blocker, package metadata, route evidence, owner, boundary, proof
+   ladder, and write scope, then records exactly one decision: `fresh`,
+   `stale`, `migrate`, `split`, `architecture-gap`, or `blocked`.
+2. `implementation` role inspects, edits, runs focused proof, and records
    files changed.
-2. `verification-fix` role independently verifies the last package work, fixes
+3. `verification-fix` role independently verifies the last package work, fixes
    in-scope defects when needed, reruns focused proof, and records files
    changed.
-3. The parent session reruns the focused package proof locally before package
+4. The parent session reruns the focused package proof locally before package
    closure.
+
+Freshness evidence is per-package. It does not carry from a predecessor,
+successor, prior sprint package, or prior model context. Any change to package
+metadata, current-blocker truth, owner, boundary, proof ladder, write scope, or
+route evidence after the freshness review expires the gate and requires a new
+freshness-review before implementation continues.
 
 Review, owner-path mapping, metadata repair, artifact extraction, and Discovery
 Gate explorer/skeptic/integrator work are optional planning or support roles.
 Use them when scenario, release-gate, causal-escalation, or package metadata
 complexity makes them useful. These optional roles do not replace the
-`implementation` and `verification-fix` closure roles.
+`freshness-review`, `implementation`, and `verification-fix` roles when those
+roles are required.
 
 Discovery roles are provenance for bounded lateral analysis. They may help
 compare candidate owners, hypotheses, or discriminators, but their output must
