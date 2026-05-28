@@ -100,20 +100,20 @@ After the active package's discriminator, fix, or representative rerun, record t
 ```text
 Representative artifact: test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json
 Visible first frontier: priority_recovery_partition_progress / operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait
-Active package: work/packages/active-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md
+Active package: work/packages/active-20260528-priority-recovery-split-residual-architecture-experiment.md
 Active package owner: operation_workflow_owner
 Active package boundary: workflow_progress
 Selected cause: priority_recovery_event_driven_wait
-Required action: Classify the priority recovery residual groups and select rerun, runtime work, or architecture escalation before editing operation workflow runtime.
-Representative status: migrated
+Required action: Select the architecture route for split priority-recovery residuals before runtime promotion.
+Representative status: classification-only
 Causal outcome: accept_classified_backpressure
-Architecture gate: not-required / unknown
-Expected delta: Classify whether priority recovery residuals need rerun evidence, runtime workflow progress work, or architecture escalation.
-Current state: Fresh representative evidence moved off startup_active_gate_owner: all five nodes report active, snapshot coverage moved to 3/5, and the canonical route now selects priority_recovery_partition_progress under operation_workflow_owner / workflow_progress.
-Allowed edits: work/packages/active-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md, work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md, work/sprints/current-blocker.md, work/sprints/current-blocker.json
-Candidate runtime files: unknown
-Forbidden edits: owned files expand beyond package and sprint tracker files, runtime ownership or shared operation workflow contracts must change, fresh route evidence contradicts operation_workflow_owner / workflow_progress
-Required latest proof: falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json, regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --markdown, supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --markdown
+Architecture gate: selected / architecture-package-select-route
+Expected delta: Select route for split priority-recovery residuals before runtime promotion.
+Current state: Priority recovery is the first frontier, but residuals split across workflow_progress and rebalancer_handoff on unchanged representative evidence.
+Allowed edits: work/packages/active-20260528-priority-recovery-split-residual-architecture-experiment.md, work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md, work/sprints/current-blocker.md, work/sprints/current-blocker.json
+Candidate runtime files: src/control-plane/owner-queue.js, src/control-plane/snapshot-service.js, src/control-plane/membership-publication-active-gate-reconcile.js
+Forbidden edits: Runtime promotion remains blocked until architecture selects one owner-boundary route.
+Required latest proof: falsifier: npm run work:scenario-route -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress, regression: npm run analyze:causal-model -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json, supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --markdown
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 

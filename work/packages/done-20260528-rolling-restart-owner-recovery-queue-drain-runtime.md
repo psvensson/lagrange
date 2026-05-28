@@ -17,7 +17,7 @@
     "nextAction": "Make the queued owner-recovery write produce bounded reconcile, wake, retry, or drain progress before active-gate snapshot coverage repeats.",
     "predecessor": "work/packages/done-20260528-rolling-restart-snapshot-coverage-architecture-discriminator.md",
     "closed": "2026-05-28",
-    "successor": "work/packages/active-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md"
+    "successor": "work/packages/done-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md"
   },
   "scope": {
     "writeScope": [
@@ -26,7 +26,7 @@
       "test/distributed/harness/__tests__/cluster-active-gate-startup-owner-handoff-test-cases.js",
       "test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-selected-source-test-cases.js",
       "work/packages/active-20260528-rolling-restart-owner-recovery-queue-drain-runtime.md",
-      "work/packages/active-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md",
+      "work/packages/done-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md",
       "work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md",
       "work/sprints/current-blocker.md",
       "work/sprints/current-blocker.json"
@@ -50,7 +50,7 @@
       "test/distributed/harness/__tests__/cluster-active-gate-startup-owner-handoff-test-cases.js",
       "test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-selected-source-test-cases.js",
       "work/packages/active-20260528-rolling-restart-owner-recovery-queue-drain-runtime.md",
-      "work/packages/active-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md",
+      "work/packages/done-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md",
       "work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md",
       "work/sprints/current-blocker.md",
       "work/sprints/current-blocker.json"
@@ -94,7 +94,7 @@
         "test/distributed/harness/cluster-segment-7-class-4-publication-coverage.js",
         "test/distributed/harness/__tests__/cluster-active-gate-startup-owner-handoff-test-cases.js",
         "work/packages/active-20260528-rolling-restart-owner-recovery-queue-drain-runtime.md",
-        "work/packages/active-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md",
+        "work/packages/done-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md",
         "work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md",
         "work/sprints/current-blocker.md",
         "work/sprints/current-blocker.json"
@@ -246,7 +246,7 @@
     "nextLane": "diagnostic-classification",
     "expectedDelta": "Classify whether priority recovery residuals need rerun evidence, runtime workflow progress work, or architecture escalation.",
     "requiredRefreshCommands": [
-      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --package work/packages/active-20260528-rolling-restart-owner-recovery-queue-drain-runtime.md --successor work/packages/active-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md",
+      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --package work/packages/active-20260528-rolling-restart-owner-recovery-queue-drain-runtime.md --successor work/packages/done-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md",
       "update Sprint Strategy Brief from the route result",
       "update Current Edge Card from the route result",
       "current-blocker refresh: npm run work:repair",
@@ -280,7 +280,7 @@
       "test/distributed/harness/cluster-segment-7-class-4-publication-coverage.js",
       "test/distributed/harness/__tests__/cluster-active-gate-startup-owner-handoff-test-cases.js",
       "work/packages/active-20260528-rolling-restart-owner-recovery-queue-drain-runtime.md",
-      "work/packages/active-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md",
+      "work/packages/done-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md",
       "work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md",
       "work/sprints/current-blocker.md",
       "work/sprints/current-blocker.json"
@@ -369,7 +369,7 @@ The architecture discriminator selected a concrete local contract: owner recover
 ## Execution Evidence
 
 - [x] action: implementation; owner: startup_active_gate_owner; files-changed: test/distributed/harness/cluster-segment-7-class-4-publication-coverage.js, test/distributed/harness/__tests__/cluster-active-gate-startup-owner-handoff-test-cases.js, work/packages/active-20260528-rolling-restart-owner-recovery-queue-drain-runtime.md; validation: `npm test -- test/distributed/harness/__tests__/cluster-active-gate-startup-owner-handoff-test-cases.js` pass, `npm test -- test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-selected-source-test-cases.js` pass, `npm run audit:runtime-grammar:file -- test/distributed/harness/cluster-control-snapshot-recovery.js` pass, `npm run audit:runtime-grammar:file -- test/distributed/harness/cluster-segment-7-class-4-publication-coverage.js` pass; parent revalidated focused proof: yes; outcome: validated.
-- [x] action: verification-fix; owner: startup_active_gate_owner; files-changed: work/packages/active-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md; validation: representative rerun `test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json` failed but route migrated to `operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait`, snapshot coverage moved to `3/5`, active nodes reached `5/5`, and successor entry/pre-impl validation passed; parent revalidated focused proof: yes; outcome: migrated.
+- [x] action: verification-fix; owner: startup_active_gate_owner; files-changed: work/packages/done-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md; validation: representative rerun `test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json` failed but route migrated to `operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait`, snapshot coverage moved to `3/5`, active nodes reached `5/5`, and successor entry/pre-impl validation passed; parent revalidated focused proof: yes; outcome: migrated.
 - [x] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md, work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md; validation: `npm run work:repair` pass; parent revalidated focused proof: yes; outcome: validated.
 
 ## Commit And Push Ledger

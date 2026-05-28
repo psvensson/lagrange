@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "active",
+  "status": "done",
   "intent": {
     "opened": "2026-05-28",
     "lane": "diagnostic-classification",
@@ -14,11 +14,15 @@
     "boundary": "workflow_progress",
     "dominantReason": "priority_recovery_event_driven_wait",
     "currentState": "Fresh representative evidence moved off startup_active_gate_owner: all five nodes report active, snapshot coverage moved to 3/5, and the canonical route now selects priority_recovery_partition_progress under operation_workflow_owner / workflow_progress.",
-    "nextAction": "Classify the priority recovery residual groups and select rerun, runtime work, or architecture escalation before editing operation workflow runtime."
+    "nextAction": "Classify the priority recovery residual groups and select rerun, runtime work, or architecture escalation before editing operation workflow runtime.",
+    "closed": "2026-05-28",
+    "successor": "work/packages/active-20260528-priority-recovery-split-residual-architecture-experiment.md"
   },
   "scope": {
     "writeScope": [
       "work/packages/active-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md",
+      "work/packages/active-20260528-priority-recovery-split-residual-architecture-experiment.md",
+      "work/packages/done-20260528-rolling-restart-owner-recovery-queue-drain-runtime.md",
       "work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md",
       "work/sprints/current-blocker.md",
       "work/sprints/current-blocker.json"
@@ -33,6 +37,8 @@
     "candidateRuntimeFiles": [],
     "commitScope": [
       "work/packages/active-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md",
+      "work/packages/active-20260528-priority-recovery-split-residual-architecture-experiment.md",
+      "work/packages/done-20260528-rolling-restart-owner-recovery-queue-drain-runtime.md",
       "work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md",
       "work/sprints/current-blocker.md",
       "work/sprints/current-blocker.json"
@@ -56,12 +62,26 @@
   },
   "execution": {
     "theoryLedgerRefs": [],
+    "theoryLedger": "no-ledger-update",
     "proof": {
       "commands": [
         "falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json",
         "regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --markdown",
         "supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --markdown"
       ]
+    },
+    "implementation": {
+      "parentRevalidatedFocusedProof": true,
+      "filesChanged": [
+        "work/packages/active-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md",
+        "work/packages/active-20260528-priority-recovery-split-residual-architecture-experiment.md"
+      ]
+    },
+    "verificationFix": {
+      "parentRevalidatedFocusedProof": true
+    },
+    "repair": {
+      "validationCommand": "npm run work:repair"
     }
   },
   "mechanismCard": {
@@ -112,12 +132,12 @@
     "falsifyingProbe": "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --markdown",
     "boundedProgressProof": "Classification must preserve the residual groups and select rerun, runtime dispatch/advance work, or architecture escalation.",
     "boundedProgressProofArtifact": "test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json",
-    "expectedObservableTransition": "next package closes as classification-only, opens runtime workflow progress work, reruns representative evidence, or escalates architecture.",
+    "expectedObservableTransition": "next package closes as classification-only and opens an autonomous architecture experiment for split priority recovery residuals.",
     "maxProgressBound": "one classification package before runtime promotion",
     "sameFrontierFallback": "same-frontier residuals after classification require runtime-owner-boundary or architecture escalation.",
-    "expectedNextFrontier": "representative-green, runtime workflow progress package, rerun decision, or architecture escalation",
-    "resultClassification": "pending-before-probe",
-    "stopCondition": "classification-only-stop"
+    "expectedNextFrontier": "priority recovery split residual architecture experiment",
+    "resultClassification": "classification-only",
+    "stopCondition": "architecture-gap-stop"
   },
   "classificationEfficiency": {
     "defaultMode": "separate-package-approved",
@@ -129,9 +149,40 @@
       "npm run work:scenario-triage -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --markdown",
       "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --markdown"
     ],
-    "decisionRecord": "Record the new owner boundary and residual split before promoting runtime work.",
-    "successorAction": "rerun-representative-evidence",
-    "runtimePromotionRule": "If this owner boundary remains stable after classification, open a runtime-owner-boundary successor; if the route is unchanged backpressure, rerun representative evidence before runtime promotion."
+    "decisionRecord": "Residual extractor found splitRequired=true across workflow_progress and rebalancer_handoff, so runtime promotion is blocked until an autonomous architecture experiment selects a route.",
+    "successorAction": "open-architecture-experiment",
+    "runtimePromotionRule": "Do not open workflow runtime work on unchanged splitRequired evidence; the successor architecture experiment must select workflow_progress runtime, rebalancer split, rerun, or architecture stop."
+  },
+  "architectureDecisionGate": {
+    "status": "selected",
+    "trigger": "frontier-oscillation",
+    "triggerEvidence": [
+      "priority recovery residual extractor reports splitRequired=true",
+      "workflow_progress has three recovering_in_flight witnesses and rebalancer_handoff has one witness",
+      "same-frontier runtime promotion is blocked on unchanged split residual evidence"
+    ],
+    "selectedChoice": "architecture-package-select-route",
+    "nextAction": "Open the split priority-recovery residual architecture experiment before runtime work.",
+    "choices": [
+      {
+        "id": "architecture-package-select-route",
+        "summary": "Use one causal escalation package to choose workflow_progress runtime, rebalancer split, rerun, or architecture stop.",
+        "route": "architecture-package",
+        "proof": [
+          "npm run work:scenario-route -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress",
+          "npm run analyze:causal-model -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json",
+          "npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --markdown"
+        ]
+      },
+      {
+        "id": "continue-local-proof",
+        "summary": "Open workflow_progress runtime only after the architecture proof selects a concrete dispatch or advance mechanism.",
+        "route": "continue-local-proof",
+        "proof": [
+          "selected by the architecture experiment before runtime edits"
+        ]
+      }
+    ]
   },
   "rerunDecision": {
     "sourceArtifact": "test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json",
@@ -141,15 +192,30 @@
     "routeCausalOutcome": "accept_classified_backpressure",
     "stopMode": "classified_backpressure",
     "nextLane": "diagnostic-classification",
-    "expectedDelta": "Classify whether priority recovery residuals need rerun evidence, runtime workflow progress work, or architecture escalation.",
+    "expectedDelta": "Open a causal escalation package to select the route for split priority recovery residuals before runtime promotion.",
     "requiredRefreshCommands": [
       "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait",
       "update Sprint Strategy Brief from the route result",
       "update Current Edge Card from the route result",
       "current-blocker refresh: npm run work:repair",
-      "npm run work:validate -- --entry work/packages/active-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md",
-      "npm run work:validate -- --pre-impl work/packages/active-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md"
+      "npm run work:validate -- --entry work/packages/active-20260528-priority-recovery-split-residual-architecture-experiment.md",
+      "npm run work:validate -- --pre-impl work/packages/active-20260528-priority-recovery-split-residual-architecture-experiment.md"
     ]
+  },
+  "commitAndPushLedgerRequired": true,
+  "theoryLedger": "no-ledger-update",
+  "implementation": {
+    "parentRevalidatedFocusedProof": true,
+    "filesChanged": [
+      "work/packages/active-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md",
+      "work/packages/active-20260528-priority-recovery-split-residual-architecture-experiment.md"
+    ]
+  },
+  "verificationFix": {
+    "parentRevalidatedFocusedProof": true
+  },
+  "repair": {
+    "validationCommand": "npm run work:repair"
   }
 }
 -->
@@ -180,9 +246,15 @@ The owner-recovery queue package moved the representative route. This package re
 
 ## Execution Evidence
 
-- [ ] action: implementation; owner: operation_workflow_owner; files-changed: none recorded yet; validation: npm run work:evidence-summary -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json; outcome: pending.
-- [ ] action: verification-fix; owner: operation_workflow_owner; files-changed: none recorded yet; validation: verifier reruns focused proof before closure; outcome: pending.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: npm run work:repair; outcome: pending.
+- [x] action: implementation; owner: operation_workflow_owner; files-changed: work/packages/active-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md, work/packages/active-20260528-priority-recovery-split-residual-architecture-experiment.md; validation: `npm run work:evidence-summary -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json`, `npm run work:scenario-triage -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --markdown`, and `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --markdown` pass; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: verification-fix; owner: operation_workflow_owner; files-changed: work/packages/active-20260528-priority-recovery-split-residual-architecture-experiment.md; validation: successor entry/pre-impl validation passed for split priority recovery architecture experiment; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: npm run work:repair pending after migration; parent revalidated focused proof: yes; outcome: validated.
+
+## Commit And Push Ledger
+
+1. Focused package commit: f6c809d28e474d858123068967ca881448774708
+2. Pushed to: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
 
 ## Validation
 

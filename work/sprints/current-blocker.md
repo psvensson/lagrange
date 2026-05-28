@@ -4,30 +4,29 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: After owner-recovery queue progress, the first blocking edge is event-driven priority recovery workflow progress.
+Theory under test: Split priority-recovery residuals require architecture route selection before workflow_progress runtime promotion.
 
-Causal question: Priority recovery residual groups must be classified before runtime workflow edits.
+Causal question: Architecture must decide whether workflow_progress dispatch/advance, rebalancer handoff, rerun evidence, or architecture stop owns the next move.
 
-Implementation slice: Classify the priority recovery residual groups and select rerun, runtime work, or architecture escalation before editing operation workflow runtime.
+Implementation slice: Select the architecture route for split priority-recovery residuals before runtime promotion.
 
 Implementation files:
 
-1. `work/packages/active-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md`
-2. `work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md`
-3. `work/sprints/current-blocker.md`
-4. `work/sprints/current-blocker.json`
+1. `src/control-plane/owner-queue.js`
+2. `src/control-plane/snapshot-service.js`
+3. `src/control-plane/membership-publication-active-gate-reconcile.js`
 
-Expected implementation delta: Classification should decide rerun evidence, runtime workflow-progress work, or architecture escalation without editing startup active-gate owner recovery.
+Expected implementation delta: The package selects a concrete runtime child, split owner-boundary child, rerun decision, or architecture-gap stop.
 
 Falsifying probe: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --markdown
 
-Stop rule: same-frontier residuals after classification require runtime-owner-boundary or architecture escalation.
+Stop rule: If canonical evidence cannot select a route from this artifact, stop at architecture-gap rather than opening another local runtime patch.
 
 Sprint: `work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md`
 
-Package: `work/packages/active-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md`
+Package: `work/packages/active-20260528-priority-recovery-split-residual-architecture-experiment.md`
 
-Workflow lane: `diagnostic-classification`
+Workflow lane: `causal-escalation`
 
 Scenario: `rolling-restart`
 
@@ -43,41 +42,41 @@ Boundary: `workflow_progress`
 
 Dominant reason: `priority_recovery_event_driven_wait`
 
-Current state: Fresh representative evidence moved off startup_active_gate_owner: all five nodes report active, snapshot coverage moved to 3/5, and the canonical route now selects priority_recovery_partition_progress under operation_workflow_owner / workflow_progress.
+Current state: Priority recovery is the first frontier, but residuals split across workflow_progress and rebalancer_handoff on unchanged representative evidence.
 
 ## Next Action
 
-Classify the priority recovery residual groups and select rerun, runtime work, or architecture escalation before editing operation workflow runtime.
+Select the architecture route for split priority-recovery residuals before runtime promotion.
 
 ## Proof Ladder
 
-1. `falsifier: npm run work:evidence-summary -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json`
-2. `regression: npm run work:scenario-triage -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --markdown`
+1. `falsifier: npm run work:scenario-route -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress`
+2. `regression: npm run analyze:causal-model -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json`
 3. `supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --markdown`
 
 ## Model Fit
 
-Package class: `diagnostic-classification`
+Package class: `architecture-gap-analysis`
 
 Intended minimum model: `gpt-5.3-codex`
 
-Scope shape: `diagnostic-owner-evidence/current-artifact`
+Scope shape: `scenario-causal-escalation`
 
 Output profile: `medium`
 
 Escalation triggers:
 
-1. `owned files expand beyond package and sprint tracker files`
-2. `runtime ownership or shared operation workflow contracts must change`
-3. `fresh route evidence contradicts operation_workflow_owner / workflow_progress`
+1. `proof selects a runtime owner-boundary child`
+2. `proof selects rebalancer_handoff as the first actionable owner boundary`
+3. `fresh evidence contradicts the split priority-recovery residual shape`
 
 ## Theory Ledger References
 
-1. None recorded
+1. `theory-20260527-rolling-restart-priority-recovery-workflow-progress`
 
 ## Representative Residual
 
-Status: `migrated`
+Status: `classification-only`
 
 Scenario: `rolling-restart`
 
@@ -91,92 +90,93 @@ Boundary: `workflow_progress`
 
 Dominant reason: `priority_recovery_event_driven_wait`
 
-Next action: `Classify priority recovery residuals before runtime edits.`
+Next action: `Select architecture route for split priority recovery residuals.`
 
 ## Causal Governance
 
-Causal hypothesis: `After owner-recovery queue progress, the first blocking edge is event-driven priority recovery workflow progress.`
+Causal hypothesis: `Split priority-recovery residuals require architecture route selection before workflow_progress runtime promotion.`
 
 Stop-condition check: `npm run analyze:causal-model -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json`
 
-Expected causal-model change: `Classification should decide rerun evidence, runtime workflow-progress work, or architecture escalation without editing startup active-gate owner recovery.`
+Expected causal-model change: `The package selects a concrete runtime child, split owner-boundary child, rerun decision, or architecture-gap stop.`
 
-Representative outcome: `migrated`
+Representative outcome: `classification-only`
 
-Causal debt: `Fresh evidence reports all nodes active, snapshotCoverage=3/5, publication OPEN, pendingAck=1, and priority_recovery_partition_progress with splitRequired=true.`
+Causal debt: `Fresh evidence reports four priority-recovery witnesses across two operation workflow owner-boundary groups with splitRequired=true.`
 
-Cross-boundary review: `Keep startup active-gate owner recovery, selected-source ordering, generic timeout budgets, admin API, transport, table bootstrap, and promotion gates frozen until this owner boundary is classified.`
+Cross-boundary review: `Keep startup active-gate owner recovery, selected-source ordering, generic timeout budgets, admin API, transport, table bootstrap, and promotion gates frozen.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `rolling-restart operation workflow progress classification`
+Reference scenario/probe: `rolling-restart split priority recovery residual architecture experiment`
 
 Phase chain:
 
-1. `owner recovery queue fixture passed locally`
-2. `representative active nodes moved to 5/5 and snapshot coverage moved to 3/5`
-3. `fresh route selected priority_recovery_partition_progress under operation_workflow_owner / workflow_progress`
+1. `owner recovery queue proof moved active nodes to 5/5 and snapshotCoverage to 3/5`
+2. `classification identified priority_recovery_partition_progress under operation_workflow_owner / workflow_progress`
+3. `priority residual extractor split four recovering_in_flight witnesses across workflow_progress and rebalancer_handoff`
 
 Current first frontier: `priority_recovery_partition_progress / operation_workflow_owner / workflow_progress / priority_recovery_event_driven_wait`
 
 Known downstream blockers:
 
-1. `publication remains OPEN while priority recovery progresses`
-2. `startup readiness remains downstream while rolling-restart is not representative-green`
+1. `startup active-gate snapshot coverage remains downstream until priority recovery progresses`
+2. `rebalancer_handoff may own a split residual if architecture selects that route`
 
-Missing causal edge: `Priority recovery residual groups must be classified before runtime workflow edits.`
+Missing causal edge: `Architecture must decide whether workflow_progress dispatch/advance, rebalancer handoff, rerun evidence, or architecture stop owns the next move.`
 
 Missing causal edge probe: `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --markdown`
 
-Bounded progress proof: `Classification must preserve the residual groups and select rerun, runtime dispatch/advance work, or architecture escalation.`
+Bounded progress proof: `Causal escalation must select a concrete dispatch, advance, handoff, rerun, or architecture-stop progress mechanism before runtime edits resume.`
 
 Bounded progress proof artifact: `test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json`
 
-Expected observable transition: `next package closes as classification-only, opens runtime workflow progress work, reruns representative evidence, or escalates architecture.`
+Expected observable transition: `A selected runtime child, owner-boundary split, rerun decision, or architecture stop replaces same-frontier local patching.`
 
-Max progress bound: `one classification package before runtime promotion`
+Max progress bound: `one causal escalation package with no runtime edits`
 
-Same-frontier fallback: `same-frontier residuals after classification require runtime-owner-boundary or architecture escalation.`
+Same-frontier fallback: `If canonical evidence cannot select a route from this artifact, stop at architecture-gap rather than opening another local runtime patch.`
 
-Expected next frontier: `representative-green, runtime workflow progress package, rerun decision, or architecture escalation`
+Expected next frontier: `selected priority recovery runtime child, rebalancer split, rerun decision, or architecture-gap stop`
 
 Result classification: `pending-before-probe`
 
-Stop condition: `classification-only-stop`
+Stop condition: `architecture-gap-stop`
 
 Recent frontier history:
 
-1. None recorded
+1. `done-20260528-rolling-restart-owner-recovery-queue-drain-runtime.md / startup_active_gate_owner / snapshot_coverage_owner_recovery_queue_drain / migrated`
+2. `done-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md / operation_workflow_owner / workflow_progress / splitRequired`
 
-Oscillation check: `unknown`
+Oscillation check: `This is the autonomous architecture experiment required after classification found splitRequired=true on unchanged priority-recovery evidence.`
 
-Handoff invariant: `unknown`
+Handoff invariant: `Runtime promotion remains blocked until architecture selects one owner-boundary route.`
 
 ## Observable Prediction
 
-Metric: `unknown`
+Metric: `priority_recovery split residual route selection`
 
-Predicted: `unknown`
+Predicted: `The architecture experiment selects workflow_progress runtime, rebalancer_handoff split, rerun representative evidence, or architecture-gap stop before runtime edits resume.`
 
-Observed: `unknown`
+Observed: `pending-before-observation`
 
-Accuracy: `unknown`
+Accuracy: `pending-before-observation`
 
-Evidence: `unknown`
+Evidence: `test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json`
 
-Metric delta: `unknown`
+Metric delta: `0`
 
 ## Experiment Outcome
 
-Distinguished hypothesis: `unknown`
+Distinguished hypothesis: `H1`
 
-Decision: `unknown`
+Decision: `open-architecture-experiment`
 
-Next owner: `unknown`
+Next owner: `operation_workflow_owner`
 
-Next boundary: `unknown`
+Next boundary: `workflow_progress`
 
-Evidence: `unknown`
+Evidence: `test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json`
 
 ## Rerun Decision
 
@@ -192,9 +192,9 @@ Route causal outcome: `accept_classified_backpressure`
 
 Stop mode: `classified_backpressure`
 
-Next lane: `diagnostic-classification`
+Next lane: `causal-escalation`
 
-Expected delta: `Classify whether priority recovery residuals need rerun evidence, runtime workflow progress work, or architecture escalation.`
+Expected delta: `Select route for split priority-recovery residuals before runtime promotion.`
 
 Required refresh commands:
 
@@ -202,14 +202,14 @@ Required refresh commands:
 2. `update Sprint Strategy Brief from the route result`
 3. `update Current Edge Card from the route result`
 4. `current-blocker refresh: npm run work:repair`
-5. `npm run work:validate -- --entry work/packages/active-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md`
-6. `npm run work:validate -- --pre-impl work/packages/active-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md`
+5. `npm run work:validate -- --entry work/packages/active-20260528-priority-recovery-split-residual-architecture-experiment.md`
+6. `npm run work:validate -- --pre-impl work/packages/active-20260528-priority-recovery-split-residual-architecture-experiment.md`
 
 ## Classification Efficiency
 
 Default mode: `separate-package-approved`
 
-Separate package reason: `successor-selection`
+Separate package reason: `architecture-or-human-stop`
 
 Artifact budget: `one-artifact`
 
@@ -217,39 +217,42 @@ Proof command budget: `two-or-three-canonical-commands`
 
 Commands:
 
-1. `npm run work:evidence-summary -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json`
-2. `npm run work:scenario-triage -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --markdown`
+1. `npm run work:scenario-route -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --owner operation_workflow_owner --boundary workflow_progress --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress`
+2. `npm run analyze:causal-model -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json`
 3. `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-owner-recovery-queue-drain-20260528T094536Z.report.json --markdown`
 
-Decision record: `Record the new owner boundary and residual split before promoting runtime work.`
+Decision record: `Record whether split priority-recovery evidence selects runtime workflow progress, rebalancer split, rerun, or architecture-gap stop.`
 
-Successor action: `rerun-representative-evidence`
+Successor action: `open-architecture-experiment`
 
-Runtime promotion rule: `If this owner boundary remains stable after classification, open a runtime-owner-boundary successor; if the route is unchanged backpressure, rerun representative evidence before runtime promotion.`
+Runtime promotion rule: `Do not open runtime work until this architecture package selects one route.`
 
 ## Architecture Decision Gate
 
-Status: `not-required`
+Status: `selected`
 
-Trigger: `none`
+Trigger: `frontier-oscillation`
 
 Trigger evidence:
 
-1. None recorded
+1. `classification proof found priority_recovery_partition_progress with splitRequired=true`
+2. `workflow_progress has three recovering_in_flight witnesses and rebalancer_handoff has one witness`
+3. `same-frontier local runtime promotion is blocked until architecture selects a route`
 
 Choices:
 
-1. None recorded
+1. `architecture-package-select-route` route=`architecture-package` - Use one causal escalation package to choose workflow_progress runtime, rebalancer split, rerun, or architecture stop.
+2. `continue-local-proof` route=`continue-local-proof` - Open workflow_progress runtime only if the architecture proof selects a concrete dispatch or advance mechanism.
 
-Selected choice: `unknown`
+Selected choice: `architecture-package-select-route`
 
-Gate next action: No architecture decision gate is required for this package.
+Gate next action: Open the autonomous architecture experiment package before runtime implementation resumes.
 
 ## Scope
 
 Write scope:
 
-1. `work/packages/active-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md`
+1. `work/packages/active-20260528-priority-recovery-split-residual-architecture-experiment.md`
 2. `work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md`
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`
@@ -265,11 +268,13 @@ Generated files:
 
 Candidate runtime files:
 
-1. None recorded
+1. `src/control-plane/owner-queue.js`
+2. `src/control-plane/snapshot-service.js`
+3. `src/control-plane/membership-publication-active-gate-reconcile.js`
 
 Commit scope:
 
-1. `work/packages/active-20260528-rolling-restart-priority-recovery-operation-workflow-classification.md`
+1. `work/packages/active-20260528-priority-recovery-split-residual-architecture-experiment.md`
 2. `work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md`
 3. `work/sprints/current-blocker.md`
 4. `work/sprints/current-blocker.json`
