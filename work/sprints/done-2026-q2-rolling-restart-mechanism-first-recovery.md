@@ -1,6 +1,6 @@
 # Rolling Restart Mechanism First Recovery Sprint
 
-Status: active. Created on May 28, 2026.
+Status: done. Created on May 28, 2026.
 
 ## Goal
 
