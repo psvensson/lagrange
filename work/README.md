@@ -129,9 +129,12 @@ Use the tracker utility for current sprint/package mechanics:
    scaffolder pre-fills Model Fit and Core Logic Brief defaults from the lane
    and model-ledger summary unless explicit Model Fit flags are provided.
 13. `npm run work:theory-loop -- start|next|record|fix` keeps low-ceremony
-   theory-loop sprints moving by creating compact 1-3 theory packages,
-   recording source/log discriminator outcomes, and updating the theory ledger
-   through intent flags before hand-editing markdown.
+   theory-loop sprints moving with concrete 2-4 option sets, one promoted
+   executable package, source/log discriminator outcomes, and theory-ledger
+   updates through intent flags before hand-editing markdown. `start` and
+   `next` require a concrete representative artifact, mechanism-card fields,
+   and structured options containing `mechanism:`, `intervention:`,
+   `discriminator:`, `promotion:`, and `rejection:`.
 14. `npm run work:package:route-after-rerun -- --artifact <artifact>
    --successor <active-successor>` combines the post-rerun route handoff with
    the package migration transaction when the successor already exists and is

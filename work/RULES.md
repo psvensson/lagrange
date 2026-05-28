@@ -124,6 +124,46 @@ Before implementation, the package must expose a mechanism card containing:
 
 ---
 
+## Theory Loop Sprint Shape
+<a name="theory-loop-sprint-shape"></a>
+
+A theory loop sprint is a small generative decision loop, not a backlog of
+prewritten fixes. Use this shape when the next correct package depends on
+learning why the current problem persists across evidence, owners, boundaries,
+or mechanism classifications.
+
+Before starting or rewriting a theory loop sprint, record these concrete
+sections:
+
+1. `Evidence Anchor`: current problem, representative artifact, success
+   condition, stable facts, changed facts, and current unknowns.
+2. `Mechanism Card`: the mechanism taxonomy term, rejected alternatives,
+   deciding owner, missing transition or observation, smallest falsifier,
+   expected movement, negative result meaning, and escalation rule.
+3. `Theory Option Set`: 2-4 competing options. Each option names a mechanism,
+   intervention style, cheapest discriminator, promotion trigger, and rejection
+   signal. Options are not work packages.
+4. `Creative Move Menu`: domain-neutral moves that force alternatives, such as
+   ownership inversion, minimal trace capture, opposite intervention, boundary
+   swap, or missing-object search.
+5. `Discriminator First`: name or run the cheapest discriminator before code
+   edits unless the active package already owns that discriminator as its first
+   proof.
+6. `Promotion Rule`: only the option selected by fresh evidence or a
+   discriminator becomes one executable package with explicit owner, boundary,
+   write scope, proof, and stop rule.
+7. `Learning Rule`: after the discriminator or fix, record whether each option
+   is supported, avoided, falsified, fixed, migrated, representative-green,
+   architecture-gap, or needs-rerun, then revise the option set before another
+   local patch.
+
+Queue discipline is part of the shape: keep one active executable package and
+do not create speculative successor packages. A successor package is created
+only after the active package produces fresh route evidence or a discriminator
+selects a different option.
+
+---
+
 ## Coding Constraints
 <a name="coding-constraints"></a>
 

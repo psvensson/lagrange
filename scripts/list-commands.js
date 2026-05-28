@@ -58,7 +58,7 @@ const COMMAND_GROUPS = Object.freeze([
       }),
       Object.freeze({
         command: 'npm run work:theory-loop -- start|next|record|fix',
-        description: 'Run low-ceremony theory-loop sprint, package, result, and ledger updates through intent flags.',
+        description: 'Run low-ceremony theory-loop option-set, package, result, and ledger updates through intent flags.',
       }),
       Object.freeze({
         command: 'npm run work:mechanism-card -- <path-to-package-or-artifact>',

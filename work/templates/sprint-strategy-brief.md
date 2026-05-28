@@ -18,6 +18,29 @@ package can tell whether it is still following the right strategic path.
 - Next best package: <next package to continue or activate after the current package closes>
 - Stop or escalate rule: <condition that opens/selects autonomous architecture experiment, causal escalation, or human-only escalation for blocked/contradictory evidence>
 
+## Theory Loop Generative Brief
+
+Use this section for theory-loop sprints. Keep the entries concrete and
+evidence-linked; options are hypotheses to compare, not queued future packages.
+
+1. Evidence Anchor: current problem, representative artifact, success
+   condition, stable facts, changed facts, and current unknowns.
+2. Mechanism Card: mechanism taxonomy term, rejected alternatives, deciding
+   owner, missing transition or observation, smallest falsifier, expected
+   movement, negative result meaning, and escalation rule.
+3. Theory Option Set: 2-4 options, each with mechanism, intervention style,
+   cheapest discriminator, promotion trigger, and rejection signal.
+4. Creative Move Menu: ownership inversion, minimal trace, opposite
+   intervention, boundary swap, missing object, or another named move that can
+   produce a non-obvious option.
+5. Discriminator First: cheapest discriminator runs or is named before code
+   edits unless the active package owns it as first proof.
+6. Promotion Rule: only the evidence-selected option becomes one executable
+   package with explicit owner, boundary, write scope, proof, and stop rule.
+7. Learning Rule: record supported, avoided, falsified, fixed, migrated,
+   representative-green, architecture-gap, or needs-rerun before selecting a
+   successor.
+
 ## Sprint Systemic Insight Gate
 
 Use this section when a sprint starts producing adjacent-owner bounces,

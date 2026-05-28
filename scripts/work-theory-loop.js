@@ -13,7 +13,7 @@ const SPACE = ' ';
 const NUM_ZERO = 0;
 const NUM_ONE = 1;
 const NUM_TWO = 2;
-const NUM_THREE = 3;
+const NUM_FOUR = 4;
 const EXIT_SUCCESS = 0;
 const EXIT_FAILURE = 1;
 const FLAG_PREFIX = '--';
@@ -36,7 +36,17 @@ const FLAG_SUCCESS = 'success';
 const FLAG_OWNER = 'owner';
 const FLAG_BOUNDARY = 'boundary';
 const FLAG_DOMINANT_REASON = 'dominant-reason';
+const FLAG_MECHANISM = 'mechanism';
+const FLAG_STABLE_FACT = 'stable-fact';
+const FLAG_CHANGED_FACT = 'changed-fact';
+const FLAG_REJECTED_ALTERNATIVE = 'rejected-alternative';
+const FLAG_CURRENT_ACTION = 'current-action';
+const FLAG_MISSING_EDGE = 'missing-edge';
+const FLAG_EXPECTED_MOVEMENT = 'expected-movement';
+const FLAG_NEGATIVE_RESULT = 'negative-result';
+const FLAG_ESCALATION = 'escalation';
 const FLAG_THEORY = 'theory';
+const FLAG_MOVE = 'move';
 const FLAG_DISCRIMINATOR = 'discriminator';
 const FLAG_INSPECT = 'inspect';
 const FLAG_WRITE_SCOPE = 'write-scope';
@@ -49,8 +59,8 @@ const FLAG_LEDGER_STATUS = 'ledger-status';
 const FLAG_FIRST_RUN_REASON = 'first-run-reason';
 const DEFAULT_STATUS = 'todo';
 const DEFAULT_LANE = 'causal-escalation';
-const DEFAULT_SCENARIO = 'none';
-const DEFAULT_ARTIFACT = 'none';
+const PLACEHOLDER_NONE = 'none';
+const DEFAULT_SCENARIO = PLACEHOLDER_NONE;
 const DEFAULT_RESULT = 'supported';
 const RESULT_FIXED = 'fixed';
 const RESULT_AVOIDED = 'avoided';
@@ -81,13 +91,27 @@ const LEDGER_STATUS_BY_RESULT = Object.freeze({
   [RESULT_NEEDS_RERUN]: 'needs-rerun',
 });
 const THEORY_ID_PATTERN = /^theory-[0-9]{8}-[a-z0-9-]+$/u;
+const OPTION_REQUIRED_FIELDS = Object.freeze([
+  'mechanism',
+  'intervention',
+  'discriminator',
+  'promotion',
+  'rejection',
+]);
+const DEFAULT_CREATIVE_MOVES = Object.freeze([
+  'invert ownership: ask which owner would make the blocker impossible',
+  'minimal trace: capture the smallest event that would prove progress',
+  'opposite intervention: prove the system should wait instead of push',
+  'boundary swap: test whether the named owner lacks authority',
+]);
 const HELP_TEXT = [
   'Usage:',
-  '  node scripts/work-theory-loop.js start --problem <text> --artifact <path> --success <text> [--write]',
-  '  node scripts/work-theory-loop.js next --title <title> --slug <slug> --problem <text> --owner <owner> --boundary <boundary> --dominant-reason <reason> --theory <text> [--theory <text>] [--theory <text>] --discriminator <command> [--write]',
+  '  node scripts/work-theory-loop.js start --problem <text> --artifact <path> --success <text> --owner <owner> --mechanism <term> --stable-fact <text> --changed-fact <text> --rejected-alternative <text> --current-action <text> --missing-edge <text> --discriminator <command> --expected-movement <text> --negative-result <text> --escalation <text> --theory <structured-option> --theory <structured-option> [--theory <structured-option>] [--theory <structured-option>] [--move <move>] [--write]',
+  '  node scripts/work-theory-loop.js next --title <title> --slug <slug> --problem <text> --artifact <path> --success <text> --owner <owner> --boundary <boundary> --dominant-reason <reason> --mechanism <term> --stable-fact <text> --changed-fact <text> --rejected-alternative <text> --current-action <text> --missing-edge <text> --discriminator <command> --expected-movement <text> --negative-result <text> --escalation <text> --theory <structured-option> --theory <structured-option> [--theory <structured-option>] [--theory <structured-option>] [--move <move>] [--write]',
   '  node scripts/work-theory-loop.js record --theory <id-or-label> --result <result> --evidence <text> [--package <path>] [--ledger-status <status>] [--write]',
   '  node scripts/work-theory-loop.js fix --theory <id-or-label> --evidence <text> --files <paths> --validation <command> [--package <path>] [--write]',
   '',
+  'Structured option fields: mechanism:, intervention:, discriminator:, promotion:, rejection:',
   'Results: fixed, avoided, supported, falsified, migrated, representative-green, architecture-gap, needs-rerun',
 ].join(NEWLINE);
 
@@ -181,49 +205,130 @@ function renderMarkdownList(values, fallback = 'none') {
   return values.map((value) => `- ${value}`).join(NEWLINE);
 }
 
+function renderNumberedList(values) {
+  return values.map((value, index) => `${index + NUM_ONE}. ${value}`).join(NEWLINE);
+}
+
+function requireConcreteArtifact(value) {
+  const artifact = normalizeWhitespace(value);
+  if (!artifact || artifact === PLACEHOLDER_NONE) {
+    throw new Error('Theory-loop requires a concrete representative artifact.');
+  }
+  return artifact;
+}
+
+function requireList(values, label) {
+  const normalized = (values || []).map(normalizeWhitespace).filter(Boolean);
+  if (!normalized.length) {
+    throw new Error(`Theory-loop requires at least one ${label}.`);
+  }
+  return normalized;
+}
+
+function requireConcreteContext(options = {}) {
+  const context = {
+    artifact: requireConcreteArtifact(options.artifact),
+    owner: normalizeWhitespace(options.owner),
+    mechanism: normalizeWhitespace(options.mechanism),
+    stableFacts: requireList(options.stableFacts, 'stable fact'),
+    changedFacts: requireList(options.changedFacts, 'changed fact'),
+    rejectedAlternatives: requireList(options.rejectedAlternatives, 'rejected alternative'),
+    currentAction: normalizeWhitespace(options.currentAction),
+    missingEdge: normalizeWhitespace(options.missingEdge),
+    discriminator: normalizeWhitespace(options.discriminator),
+    expectedMovement: normalizeWhitespace(options.expectedMovement),
+    negativeResult: normalizeWhitespace(options.negativeResult),
+    escalation: normalizeWhitespace(options.escalation),
+  };
+  for (const [label, value] of Object.entries(context)) {
+    if (Array.isArray(value)) {
+      continue;
+    }
+    if (!value) {
+      throw new Error(`Theory-loop requires concrete ${label}.`);
+    }
+  }
+  return context;
+}
+
 function validateTheories(theories) {
-  if (theories.length < NUM_ONE || theories.length > NUM_THREE) {
-    throw new Error('Theory-loop packages require 1-3 --theory values.');
+  if (theories.length < NUM_TWO || theories.length > NUM_FOUR) {
+    throw new Error('Theory-loop option sets require 2-4 --theory values.');
+  }
+  for (const theory of theories) {
+    const missing = OPTION_REQUIRED_FIELDS.filter((field) =>
+      !new RegExp(`\\b${field}\\s*:`, 'iu').test(theory));
+    if (missing.length) {
+      throw new Error(
+        `Theory-loop option "${theory}" must include ${OPTION_REQUIRED_FIELDS.join(', ')} fields.`,
+      );
+    }
   }
 }
 
 export function renderTheoryLoopSprintSection(options = {}) {
   const problem = normalizeWhitespace(options.problem);
-  const artifact = normalizeWhitespace(options.artifact || DEFAULT_ARTIFACT);
   const success = normalizeWhitespace(options.success);
+  const theories = options.theories || [];
+  const moves = options.moves?.length ? options.moves : DEFAULT_CREATIVE_MOVES;
+  const context = requireConcreteContext(options);
+  validateTheories(theories);
   if (!problem || !success) {
     throw new Error('Theory-loop sprint start requires problem and success text.');
   }
   return [
     '## Theory Loop Sprint',
     '',
-    `- Central problem: ${problem}`,
-    `- Representative artifact: ${artifact}`,
-    `- Success condition: ${success}`,
-    '- Iteration rule: create or update one compact theory package with 1-3 theories, read source/log evidence first, implement only confirmed bugs, then record each theory as supported, avoided, falsified, fixed, migrated, or needs-rerun.',
+    `- Evidence anchor: central problem = ${problem}; representative artifact = ${context.artifact}; success condition = ${success}.`,
+    '- Stable facts:',
+    renderMarkdownList(context.stableFacts),
+    '- Changed facts:',
+    renderMarkdownList(context.changedFacts),
+    `- Mechanism card: mechanism = ${context.mechanism}; deciding owner = ${context.owner}; current action = ${context.currentAction}; missing transition or observation = ${context.missingEdge}; smallest falsifier = \`${context.discriminator}\`; expected movement = ${context.expectedMovement}; negative result means = ${context.negativeResult}; escalation rule = ${context.escalation}.`,
+    '- Rejected alternatives:',
+    renderMarkdownList(context.rejectedAlternatives),
+    '- Theory option set: options are hypotheses to compare, not future packages; each option names mechanism, intervention, discriminator, promotion, and rejection.',
+    renderNumberedList(theories),
+    '- Creative move menu:',
+    renderMarkdownList(moves),
+    '- Discriminator first: run or name the cheapest discriminator for each viable option before code edits; the active package executes only the promoted option.',
+    '- Promotion rule: create or activate one executable package only when fresh evidence or a discriminator selects one option with explicit owner, boundary, write scope, proof, and stop rule.',
+    '- Learning rule: record each option as supported, avoided, falsified, fixed, migrated, representative-green, architecture-gap, or needs-rerun, then revise the option set before another patch.',
+    '- Queue discipline: keep one active executable package and no speculative package queue; successor packages are created only from fresh route evidence.',
     '- Ceremony budget: use `npm run work:theory-loop -- next|record|fix` for package and ledger updates before hand-editing markdown.',
   ].join(NEWLINE);
 }
 
 export function renderTheoryLoopPackageSection(options = {}) {
   const problem = normalizeWhitespace(options.problem);
-  const artifact = normalizeWhitespace(options.artifact || DEFAULT_ARTIFACT);
-  const discriminator = normalizeWhitespace(options.discriminator);
+  const success = normalizeWhitespace(options.success);
   const theories = options.theories || [];
+  const moves = options.moves?.length ? options.moves : DEFAULT_CREATIVE_MOVES;
+  const context = requireConcreteContext(options);
   validateTheories(theories);
-  if (!problem || !discriminator) {
-    throw new Error('Theory-loop package requires problem and discriminator text.');
+  if (!problem || !success) {
+    throw new Error('Theory-loop package requires problem and success text.');
   }
   return [
     '## Theory Loop',
     '',
-    `- Central problem: ${problem}`,
-    `- Representative artifact: ${artifact}`,
-    `- Cheap discriminator: \`${discriminator}\``,
+    `- Evidence anchor: central problem = ${problem}; representative artifact = ${context.artifact}; success condition = ${success}.`,
+    '- Stable facts:',
+    renderMarkdownList(context.stableFacts),
+    '- Changed facts:',
+    renderMarkdownList(context.changedFacts),
+    `- Mechanism card: mechanism = ${context.mechanism}; deciding owner = ${context.owner}; current action = ${context.currentAction}; missing transition or observation = ${context.missingEdge}; smallest falsifier = \`${context.discriminator}\`; expected movement = ${context.expectedMovement}; negative result means = ${context.negativeResult}; escalation rule = ${context.escalation}.`,
+    '- Rejected alternatives:',
+    renderMarkdownList(context.rejectedAlternatives),
     '- Source/log inspection targets:',
     renderMarkdownList(options.inspect || []),
-    '- Theory batch:',
-    ...theories.map((theory, index) => `${index + NUM_ONE}. ${theory}`),
+    '- Theory option set: first option is the promoted path; remaining options stay as alternatives until evidence selects them. Each option names mechanism, intervention, discriminator, promotion, and rejection.',
+    renderNumberedList(theories),
+    '- Creative move menu:',
+    renderMarkdownList(moves),
+    '- Discriminator first: inspect evidence and run the promoted discriminator before code edits.',
+    '- Promotion rule: this package may change code only for the promoted option; alternatives become packages only after fresh evidence selects them.',
+    '- Learning rule: record supported, avoided, falsified, fixed, migrated, representative-green, architecture-gap, or needs-rerun before selecting any successor.',
     '- Result recording: use `npm run work:theory-loop -- record --theory <id-or-label> --result <result> --evidence <text> --write` after each discriminator or fix.',
   ].join(NEWLINE);
 }
@@ -271,7 +376,7 @@ export function appendSprintQueueItem(content, item = {}) {
   const lane = normalizeText(item.lane) || DEFAULT_LANE;
   const purpose = normalizeText(item.purpose) || 'Run a compact theory loop iteration.';
   const firstRunReason = normalizeText(item.firstRunReason) ||
-    'Central problem needs a small theory batch and cheap discriminator.';
+    'Fresh evidence promoted one theory option and selected the cheapest discriminator.';
   const queueItem = [
     `1. [${title}](${link})`,
     `   - Lane: \`${lane}\``,
@@ -303,6 +408,7 @@ export function buildPackageNewArgs(options = {}) {
   const dominantReason = normalizeText(options.dominantReason);
   const discriminator = normalizeText(options.discriminator);
   const problem = normalizeText(options.problem);
+  const artifact = requireConcreteArtifact(options.artifact);
   const validation = normalizeText(options.validation) || discriminator;
   for (const [label, value] of Object.entries({
     title,
@@ -312,6 +418,7 @@ export function buildPackageNewArgs(options = {}) {
     'dominant-reason': dominantReason,
     discriminator,
     problem,
+    artifact,
   })) {
     if (!value) {
       throw new Error(`Theory-loop next requires ${label}.`);
@@ -335,11 +442,11 @@ export function buildPackageNewArgs(options = {}) {
     dominantReason,
     '--next-action',
     normalizeText(options.nextAction) ||
-      'Run the theory-loop discriminator, inspect source/log evidence, and record each theory result.',
+      'Run the promoted discriminator, inspect source/log evidence, and record option learning before any successor package is created.',
     '--current-state',
-    `Theory-loop package for ${problem}.`,
+    `Promoted theory-loop package for ${problem}.`,
     '--artifact',
-    normalizeText(options.artifact) || DEFAULT_ARTIFACT,
+    artifact,
     '--proof',
     `falsifier: ${discriminator}`,
     '--proof',
@@ -441,8 +548,21 @@ async function runStart(flags) {
   const sprintPath = firstFlag(flags, FLAG_SPRINT) || await findActiveSprintFile();
   const section = renderTheoryLoopSprintSection({
     problem: requireFlag(flags, FLAG_PROBLEM),
-    artifact: firstFlag(flags, FLAG_ARTIFACT, DEFAULT_ARTIFACT),
+    artifact: requireFlag(flags, FLAG_ARTIFACT),
     success: requireFlag(flags, FLAG_SUCCESS),
+    owner: requireFlag(flags, FLAG_OWNER),
+    mechanism: requireFlag(flags, FLAG_MECHANISM),
+    stableFacts: repeatedFlag(flags, FLAG_STABLE_FACT),
+    changedFacts: repeatedFlag(flags, FLAG_CHANGED_FACT),
+    rejectedAlternatives: repeatedFlag(flags, FLAG_REJECTED_ALTERNATIVE),
+    currentAction: requireFlag(flags, FLAG_CURRENT_ACTION),
+    missingEdge: requireFlag(flags, FLAG_MISSING_EDGE),
+    discriminator: requireFlag(flags, FLAG_DISCRIMINATOR),
+    expectedMovement: requireFlag(flags, FLAG_EXPECTED_MOVEMENT),
+    negativeResult: requireFlag(flags, FLAG_NEGATIVE_RESULT),
+    escalation: requireFlag(flags, FLAG_ESCALATION),
+    theories: repeatedFlag(flags, FLAG_THEORY),
+    moves: repeatedFlag(flags, FLAG_MOVE),
   });
   if (!hasFlag(flags, FLAG_WRITE)) {
     return section;
@@ -466,14 +586,25 @@ async function runNext(flags) {
     title: requireFlag(flags, FLAG_TITLE),
     slug,
     problem: requireFlag(flags, FLAG_PROBLEM),
-    artifact: firstFlag(flags, FLAG_ARTIFACT, DEFAULT_ARTIFACT),
+    artifact: requireFlag(flags, FLAG_ARTIFACT),
+    success: requireFlag(flags, FLAG_SUCCESS),
     owner: requireFlag(flags, FLAG_OWNER),
     boundary: requireFlag(flags, FLAG_BOUNDARY),
     dominantReason: requireFlag(flags, FLAG_DOMINANT_REASON),
+    mechanism: requireFlag(flags, FLAG_MECHANISM),
+    stableFacts: repeatedFlag(flags, FLAG_STABLE_FACT),
+    changedFacts: repeatedFlag(flags, FLAG_CHANGED_FACT),
+    rejectedAlternatives: repeatedFlag(flags, FLAG_REJECTED_ALTERNATIVE),
+    currentAction: requireFlag(flags, FLAG_CURRENT_ACTION),
+    missingEdge: requireFlag(flags, FLAG_MISSING_EDGE),
     discriminator: requireFlag(flags, FLAG_DISCRIMINATOR),
+    expectedMovement: requireFlag(flags, FLAG_EXPECTED_MOVEMENT),
+    negativeResult: requireFlag(flags, FLAG_NEGATIVE_RESULT),
+    escalation: requireFlag(flags, FLAG_ESCALATION),
     validation: firstFlag(flags, FLAG_VALIDATION),
     nextAction: firstFlag(flags, FLAG_NEXT_ACTION),
     theories,
+    moves: repeatedFlag(flags, FLAG_MOVE),
     inspect: repeatedFlag(flags, FLAG_INSPECT),
     writeScope: repeatedFlag(flags, FLAG_WRITE_SCOPE),
   };
@@ -502,7 +633,7 @@ async function runNext(flags) {
     lane: DEFAULT_LANE,
     purpose: `Theory loop: ${options.problem}`,
     firstRunReason: firstFlag(flags, FLAG_FIRST_RUN_REASON) ||
-      `Test ${theories.length} theories with ${options.discriminator}.`,
+      `Fresh evidence promoted option 1 from ${theories.length} theory options; discriminator: ${options.discriminator}.`,
   });
   await fs.writeFile(sprintPath, nextSprintContent, ENCODING_UTF8);
   return `Created ${packagePath} and queued it in ${sprintPath}.`;

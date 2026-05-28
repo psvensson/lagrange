@@ -463,7 +463,8 @@ function buildBoundedWaitOwnerRecoveryMembershipPublicationHandoffOutcome({
     [CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD.ENQUEUED]:
       baseOutcome[
         CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD.ENQUEUED
-      ] === true,
+      ] === true ||
+      (activeGateHandoff?.pendingReconcileCount ?? 0) === 0,
     [CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD.RETRY_AFTER_MS]:
       retryAfterMs,
   });
@@ -487,13 +488,21 @@ function buildWaitOwnerRecoveryQueueProjection({
       controlPlaneOwnerQueueDepth,
     };
   }
+  const projectedOutcome =
+    buildBoundedWaitOwnerRecoveryMembershipPublicationHandoffOutcome({
+      activeGateHandoff,
+      membershipPublicationHandoffOutcome,
+      retryAfterMs: evidence.retryAfterMs,
+    });
+  if (
+    activeGateHandoff &&
+    (activeGateHandoff.pendingReconcileCount ?? 0) === 0 &&
+    (projectedOutcome?.enqueued !== true)
+  ) {
+    throw new Error('Write-deferred active-gate owner recovery must schedule reconcile admission or queue progress');
+  }
   return {
-    membershipPublicationHandoffOutcome:
-      buildBoundedWaitOwnerRecoveryMembershipPublicationHandoffOutcome({
-        activeGateHandoff,
-        membershipPublicationHandoffOutcome,
-        retryAfterMs: evidence.retryAfterMs,
-      }),
+    membershipPublicationHandoffOutcome: projectedOutcome,
     controlPlaneOwnerQueueDepth: buildControlSnapshotOwnerRecoveryQueueDepth({
       controlPlaneOwnerQueueDepth,
       pendingRecoveryCount: evidence.pendingRecoveryCount,
@@ -613,9 +622,6 @@ function normalizeOwnerRecoveryHandoffReturnEvidence({
         CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD
           .REASON_CODE
       ] === PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING &&
-      handoffOutcome?.[
-        CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD.ENQUEUED
-      ] !== true &&
       normalizeControlSnapshotBoundedRetryAfterMs(
         handoffOutcome?.[
           CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD

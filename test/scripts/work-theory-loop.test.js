@@ -13,47 +13,90 @@ import {
 
 const PACKAGE_PATH = 'work/packages/todo-20260526-priority-recovery-theory-loop.md';
 const THEORY_ID = 'theory-20260526-priority-recovery-wait';
+const DISCRIMINATOR = 'npm run work:scenario-route -- artifact.json';
+const THEORY_OPTIONS = Object.freeze([
+  'H1 priority waiter misses admission; mechanism: admission_gap; intervention: add owner admission proof; discriminator: npm run work:scenario-route -- artifact.json; promotion: artifact shows wait without admission; rejection: admission is already visible',
+  'H2 priority recovery wake is stale; mechanism: scheduling_gap; intervention: rearm recovery wake; discriminator: node --test test/rebalancer/priority-recovery.test.js; promotion: admission exists without wake; rejection: wake fires before wait repeats',
+  'H3 workflow owner is wrong; mechanism: ownership_gap; intervention: migrate owner boundary; discriminator: npm run analyze:owner-explain -- artifact.json workflow_progress; promotion: route names another owner; rejection: workflow owner has authority',
+]);
+const CONTEXT = Object.freeze({
+  owner: 'operation_workflow_owner',
+  mechanism: 'admission_gap',
+  stableFacts: ['priority waiter remains pending'],
+  changedFacts: ['retry cadence moved but progress did not'],
+  rejectedAlternatives: ['observation_gap is rejected because wait evidence is visible'],
+  currentAction: 'workflow retries while recovery remains pending',
+  missingEdge: 'priority recovery must be admitted into workflow progress',
+  discriminator: DISCRIMINATOR,
+  expectedMovement: 'pending priority wait clears or owner boundary migrates',
+  negativeResult: 'stop for owner-boundary migration',
+  escalation: 'do not open another local patch on unchanged priority wait evidence',
+});
 
 test('start section records central problem and ceremony budget', (t) => {
   const section = renderTheoryLoopSprintSection({
     problem: 'rolling restart stalls on priority recovery',
     artifact: 'test-output/reports/rolling-restart.report.json',
     success: 'representative rerun migrates or passes',
+    ...CONTEXT,
+    theories: THEORY_OPTIONS,
   });
 
   t.match(section, /## Theory Loop Sprint/u);
-  t.match(section, /Central problem: rolling restart stalls/u);
+  t.match(section, /Evidence anchor: central problem = rolling restart stalls/u);
+  t.match(section, /Mechanism card: mechanism = admission_gap/u);
+  t.match(section, /Stable facts:\n- priority waiter remains pending/u);
+  t.match(section, /Theory option set: options are hypotheses/u);
+  t.match(section, /2\. H2 priority recovery wake is stale/u);
+  t.match(section, /Creative move menu:/u);
+  t.match(section, /Promotion rule: create or activate one executable package/u);
   t.match(section, /work:theory-loop -- next\|record\|fix/u);
   t.throws(
-    () => renderTheoryLoopSprintSection({problem: 'missing success'}),
+    () => renderTheoryLoopSprintSection({
+      problem: 'missing success',
+      artifact: 'artifact.json',
+      ...CONTEXT,
+      theories: THEORY_OPTIONS.slice(0, 2),
+    }),
     /requires problem and success/u,
   );
   t.end();
 });
 
-test('package section requires a small theory batch and discriminator', (t) => {
+test('package section requires a concrete option set and discriminator', (t) => {
   const section = renderTheoryLoopPackageSection({
     problem: 'operation workflow priority wait',
     artifact: 'artifact.json',
-    discriminator: 'npm run work:scenario-route -- artifact.json',
+    success: 'fresh route migrates or passes',
+    ...CONTEXT,
     inspect: ['src/rebalancer/priority-recovery.js'],
-    theories: [
-      'waiter never observes priority recovery',
-      'event publication is missing',
-      'diagnostics classify the wrong edge',
-    ],
+    theories: THEORY_OPTIONS,
   });
 
-  t.match(section, /Cheap discriminator: `npm run work:scenario-route -- artifact.json`/u);
-  t.match(section, /1\. waiter never observes priority recovery/u);
-  t.match(section, /3\. diagnostics classify the wrong edge/u);
+  t.match(section, /smallest falsifier = `npm run work:scenario-route -- artifact.json`/u);
+  t.match(section, /Theory option set: first option is the promoted path/u);
+  t.match(section, /1\. H1 priority waiter misses admission/u);
+  t.match(section, /3\. H3 workflow owner is wrong/u);
+  t.match(section, /Promotion rule: this package may change code only for the promoted option/u);
   t.throws(
     () => renderTheoryLoopPackageSection({
-      problem: 'too many',
-      discriminator: 'npm test',
-      theories: ['one', 'two', 'three', 'four'],
+      problem: 'too few',
+      artifact: 'artifact.json',
+      success: 'fresh route moves',
+      ...CONTEXT,
+      theories: ['one'],
     }),
-    /require 1-3 --theory values/u,
+    /require 2-4 --theory values/u,
+  );
+  t.throws(
+    () => renderTheoryLoopPackageSection({
+      problem: 'bare options',
+      artifact: 'artifact.json',
+      success: 'fresh route moves',
+      ...CONTEXT,
+      theories: ['one', 'two'],
+    }),
+    /must include mechanism, intervention, discriminator, promotion, rejection fields/u,
   );
   t.end();
 });
@@ -73,7 +116,7 @@ test('sprint queue links point at packages from the sprint directory', (t) => {
   const updated = appendSprintQueueItem(sprint, {
     packagePath: PACKAGE_PATH,
     title: 'Priority Recovery Theory Loop',
-    purpose: 'Test a compact theory batch.',
+    purpose: 'Test a concrete option set.',
     firstRunReason: 'Fresh evidence selected a priority wait.',
   });
 
@@ -91,7 +134,8 @@ test('package scaffolder args select causal-escalation proof and scopes', (t) =>
     boundary: 'workflow_progress',
     dominantReason: 'priority_recovery_event_driven_wait',
     problem: 'rolling restart priority wait',
-    discriminator: 'npm run work:scenario-route -- artifact.json',
+    artifact: 'artifact.json',
+    discriminator: DISCRIMINATOR,
     validation: 'node --test test/rebalancer/priority-recovery.test.js',
     inspect: ['src/rebalancer/priority-recovery.js'],
     writeScope: ['test/rebalancer/priority-recovery.test.js'],
@@ -104,6 +148,19 @@ test('package scaffolder args select causal-escalation proof and scopes', (t) =>
   t.match(joined, /regression: node --test test\/rebalancer\/priority-recovery\.test\.js/u);
   t.match(joined, /--candidate-runtime-file\nsrc\/rebalancer\/priority-recovery\.js/u);
   t.match(joined, /--write-scope\ntest\/rebalancer\/priority-recovery\.test\.js/u);
+  t.throws(
+    () => buildPackageNewArgs({
+      title: 'Priority Recovery Theory Loop',
+      slug: 'priority-recovery-theory-loop',
+      owner: 'operation_workflow_owner',
+      boundary: 'workflow_progress',
+      dominantReason: 'priority_recovery_event_driven_wait',
+      problem: 'rolling restart priority wait',
+      artifact: 'none',
+      discriminator: DISCRIMINATOR,
+    }),
+    /requires a concrete representative artifact/u,
+  );
   t.end();
 });
 
@@ -182,24 +239,47 @@ test('dry-run cli prints package creation command without writing files', async 
     'priority-recovery-theory-loop',
     '--problem',
     'rolling restart priority wait',
+    '--artifact',
+    'artifact.json',
+    '--success',
+    'fresh route migrates or passes',
     '--owner',
     'operation_workflow_owner',
     '--boundary',
     'workflow_progress',
     '--dominant-reason',
     'priority_recovery_event_driven_wait',
+    '--mechanism',
+    'admission_gap',
+    '--stable-fact',
+    'priority waiter remains pending',
+    '--changed-fact',
+    'retry cadence moved but progress did not',
+    '--rejected-alternative',
+    'observation_gap is rejected because wait evidence is visible',
+    '--current-action',
+    'workflow retries while recovery remains pending',
+    '--missing-edge',
+    'priority recovery must be admitted into workflow progress',
     '--theory',
-    'event waiter missed the signal',
+    THEORY_OPTIONS[0],
     '--theory',
-    'diagnostics classified an old edge',
+    THEORY_OPTIONS[1],
     '--discriminator',
-    'npm run work:scenario-route -- artifact.json',
+    DISCRIMINATOR,
+    '--expected-movement',
+    'pending priority wait clears or owner boundary migrates',
+    '--negative-result',
+    'stop for owner-boundary migration',
+    '--escalation',
+    'do not open another local patch on unchanged priority wait evidence',
   ]);
 
   t.match(output, /Would create work\/packages\/todo-\d{8}-priority-recovery-theory-loop\.md/u);
   t.match(output, /node scripts\/work-package-new\.js --status todo/u);
   t.match(output, /"Priority Recovery Theory Loop"/u);
   t.match(output, /## Theory Loop/u);
+  t.match(output, /Theory option set: first option is the promoted path/u);
 });
 
 test('record dry-run maps theory evidence into one ledger-ready line', async (t) => {

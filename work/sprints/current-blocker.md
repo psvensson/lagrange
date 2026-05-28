@@ -4,252 +4,312 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: No active work package. Start a new package when implementation resumes.
+Theory under test: The first blocking edge is owner-reconcile admission: write-deferred active-gate owner recovery must create reconcile progress before snapshot coverage can advance.
 
-Causal question: none
+Causal question: Write-deferred owner recovery must be admitted, enqueued, or woken so pending recovery creates observable reconcile progress.
 
-Implementation slice: Create or activate one focused package for the next executable concern.
+Implementation slice: Make write-deferred active-gate owner recovery admit, enqueue, or wake observable reconcile progress before the active-gate snapshot coverage retry repeats.
 
 Implementation files:
 
-1. None recorded
+1. `test/distributed/harness/cluster-control-snapshot-recovery.js`
+2. `test/distributed/harness/cluster-segment-7-class-5.js`
+3. `test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-selected-source-test-cases.js`
+4. `test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-fixtures.js`
+5. `test/distributed/harness/__tests__/cluster-active-gate-load-selected-timeout-owner-recovery.test.js`
+6. `scripts/work-tracker.js`
+7. `scripts/work-theory-loop.js`
+8. `test/scripts/work-theory-loop.test.js`
+9. `scripts/list-commands.js`
+10. `test/distributed/harness/cluster-segment-7-class-4.js`
+11. `test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js`
+12. `test/distributed/harness/cluster-segment-7-class-4-publication-coverage.js`
+13. `test/distributed/scenarios/table-distribution-helpers-segment-3.js`
 
-Expected implementation delta: unknown
+Expected implementation delta: After implementation, the representative route should clear owner_reconcile_pending, move snapshot coverage beyond 1/5, migrate to a new owner boundary, or pass rolling-restart.
 
-Falsifying probe: unknown
+Falsifying probe: npm test -- test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-selected-source-test-cases.js
 
-Stop rule: unknown
+Stop rule: open/select autonomous architecture experiment or owner-boundary migration if the same invariant blocker repeats
 
-Sprint: `none`
+Sprint: `work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md`
 
-Package: `none`
+Package: `work/packages/done-20260528-rolling-restart-owner-reconcile-admission-runtime.md`
 
-Workflow lane: `none`
+Workflow lane: `runtime-owner-boundary`
 
-Scenario: `none`
+Scenario: `rolling-restart`
 
-Artifact: `none`
+Artifact: `test-output/reports/rolling-restart-active-gate-owner-reconcile-retry-20260528T040351Z.report.json`
 
 Playback: `none`
 
 ## Boundary
 
-Owner: `none`
+Owner: `startup_active_gate_owner`
 
-Boundary: `none`
+Boundary: `snapshot_coverage_owner_reconcile_admission_contract`
 
-Dominant reason: `none`
+Dominant reason: `active_gate_timed_out`
 
-Current state: No active work package. Start a new package when implementation resumes.
+Current state: The latest rolling-restart artifact remains on active_gate_snapshot_coverage with owner_reconcile_pending, write_deferred, enqueued=false, pendingRecoveryCount=1, pendingReconcileCount=0, and snapshotCoverageNodeCount=1/5 after retry cadence moved attempts from 1/8 to 2/8.
 
 ## Next Action
 
-Create or activate one focused package for the next executable concern.
+Make write-deferred active-gate owner recovery admit, enqueue, or wake observable reconcile progress before the active-gate snapshot coverage retry repeats.
 
 ## Proof Ladder
 
-1. None recorded
+1. `falsifier: focused contract fixture for owner_reconcile_admission transition from write_deferred/enqueued=false to reconcile wake or enqueue progress: npm test -- test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-selected-source-test-cases.js`
+2. `regression: affected consumer proof for active_gate_snapshot_coverage contract remains blocked until owner recovery progress is observable: npm test -- test/distributed/harness/__tests__/cluster-active-gate-load-selected-timeout-owner-recovery.test.js`
+3. `supporting: generated current-blocker omits absent optional classification scaffolding: npm run work:validate -- --entry work/packages/done-20260528-rolling-restart-owner-reconcile-admission-runtime.md`
+4. `supporting: theory-loop generator enforces concrete option-set promotion format: npm test -- test/scripts/work-theory-loop.test.js`
+5. `supporting: command index reflects theory-loop option-set workflow: npm run work:help`
+6. `supporting: representative routing evidence for the contract transition after runtime proof: bash -lc 'RUN_ID=$(date -u +%Y%m%dT%H%M%SZ); REPORT=test-output/reports/rolling-restart-owner-reconcile-admission-${RUN_ID}.report.json; timeout 1800s node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output "$REPORT" --fast-local --verbose; npm run work:package:route-after-rerun -- --artifact "$REPORT" --package work/packages/done-20260528-rolling-restart-owner-reconcile-admission-runtime.md'`
 
 ## Model Fit
 
-Package class: `unknown`
+Package class: `runtime-owner-boundary`
 
-Intended minimum model: `unknown`
+Intended minimum model: `gpt-5.3-codex`
 
-Scope shape: `unknown`
+Scope shape: `bounded-owner-runtime/current-frontier`
 
-Output profile: `unknown`
+Output profile: `high`
 
 Escalation triggers:
 
-1. None recorded
+1. `proof selects selected-source selection before owner recovery progresses`
+2. `implementation requires table bootstrap, admin API, transport, generic timeout, or readiness ownership changes`
+3. `representative rerun stays same-frontier with owner_reconcile_pending, write_deferred, enqueued=false, pendingReconcileCount=0, and coverage 1/5`
 
 ## Theory Ledger References
 
-1. None recorded
+1. `theory-20260526-rolling-restart-selected-snapshot-source-staleness`
+2. `theory-20260526-rolling-restart-selected-view-best-view-evidence-gap`
+3. `theory-20260526-rolling-restart-active-gate-evidence-capture-gap`
+4. `theory-20260522-snapshot-watch-handoff-contract`
 
 ## Representative Residual
 
-Status: `unknown`
+Status: `same-frontier`
 
-Scenario: `unknown`
+Scenario: `rolling-restart`
 
-Artifact: `unknown`
+Artifact: `test-output/reports/rolling-restart-active-gate-owner-reconcile-retry-20260528T040351Z.report.json`
 
-Frontier: `unknown`
+Frontier: `active_gate_snapshot_coverage`
 
-Owner: `unknown`
+Owner: `startup_active_gate_owner`
 
-Boundary: `unknown`
+Boundary: `snapshot_coverage`
 
-Dominant reason: `unknown`
+Dominant reason: `active_gate_timed_out`
 
-Next action: `unknown`
+Next action: `Implement the owner-reconcile admission/enqueue/wake transition inside startup_active_gate_owner.`
 
 ## Causal Governance
 
-Causal hypothesis: `unknown`
+Causal hypothesis: `The first blocking edge is owner-reconcile admission: write-deferred active-gate owner recovery must create reconcile progress before snapshot coverage can advance.`
 
-Stop-condition check: `unknown`
+Stop-condition check: `npm run analyze:causal-model -- test-output/reports/rolling-restart-active-gate-owner-reconcile-retry-20260528T040351Z.report.json`
 
-Expected causal-model change: `unknown`
+Expected causal-model change: `After implementation, the representative route should clear owner_reconcile_pending, move snapshot coverage beyond 1/5, migrate to a new owner boundary, or pass rolling-restart.`
 
-Representative outcome: `unknown`
+Representative outcome: `pending-before-rerun`
 
-Causal debt: `unknown`
+Causal debt: `Fresh evidence reports activeGate attempts=2/8, selectedSnapshotTimeoutMs=100, selectedSnapshotObservationRetryAfterMs=100, owner_reconcile_pending, write_deferred, enqueued=false, pendingRecoveryCount=1, pendingReconcileCount=0, alternativeSnapshotWitnessAvailable=false, and snapshotCoverageNodeCount=1/5.`
 
-Cross-boundary review: `unknown`
+Cross-boundary review: `Do not edit table bootstrap, transport, admin API, generic timeout budgets, selected-source selection, startup readiness ownership, or promotion gates unless route evidence migrates the owner boundary.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `unknown`
+Reference scenario/probe: `rolling-restart owner-reconcile admission runtime proof`
 
 Phase chain:
 
-1. None recorded
+1. `retry cadence moved active-gate attempts from 1/8 to 2/8`
+2. `mechanism-card classified the remaining blocker as transition_gap with scheduling_gap candidate`
+3. `this package implements the owner-reconcile admission/enqueue/wake transition`
 
-Current first frontier: `unknown`
+Current first frontier: `active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage_owner_reconcile_admission_contract / active_gate_timed_out`
 
 Known downstream blockers:
 
-1. None recorded
+1. `startup readiness inherits active-gate snapshot coverage failure`
+2. `benchmark table bootstrap remains downstream while snapshot coverage is incomplete`
+3. `selected snapshot source timeout remains downstream until owner recovery progresses`
 
-Missing causal edge: `unknown`
+Missing causal edge: `Write-deferred owner recovery must be admitted, enqueued, or woken so pending recovery creates observable reconcile progress.`
 
-Missing causal edge probe: `unknown`
+Missing causal edge probe: `npm test -- test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-selected-source-test-cases.js`
 
-Bounded progress proof: `unknown`
+Bounded progress proof: `Focused proof must show reconcile admission, wake, retry, or enqueue progress for write_deferred owner recovery while active-gate remains blocked until progress is observable.`
 
-Bounded progress proof artifact: `unknown`
+Bounded progress proof artifact: `test-output/reports/rolling-restart-active-gate-owner-reconcile-retry-20260528T040351Z.report.json`
 
-Expected observable transition: `unknown`
+Expected observable transition: `owner_reconcile_pending clears, pendingReconcileCount becomes positive, snapshotCoverageNodeCount moves beyond 1/5, the owner boundary migrates, or rolling-restart passes.`
 
-Max progress bound: `unknown`
+Max progress bound: `one runtime-owner-boundary package and one representative rerun before architecture escalation`
 
-Same-frontier fallback: `unknown`
+Same-frontier fallback: `open/select autonomous architecture experiment or owner-boundary migration if the same invariant blocker repeats`
 
-Expected next frontier: `unknown`
+Expected next frontier: `representative-green, owner-reconcile movement, snapshot coverage movement, or owner-boundary migration`
 
-Result classification: `unknown`
+Result classification: `pending-before-probe`
 
-Stop condition: `unknown`
+Stop condition: `continue-local-fix`
 
 Recent frontier history:
 
-1. None recorded
+1. `done-20260528-rolling-restart-active-gate-snapshot-coverage-retry-cadence-runtime.md / startup_active_gate_owner / snapshot_coverage_retry_cadence_contract / reduced`
+2. `done-20260528-rolling-restart-active-gate-snapshot-coverage-owner-reconcile-architecture.md / startup_active_gate_owner / snapshot_coverage / migrated`
+3. `superseded-20260528-rolling-restart-active-gate-owner-reconcile-retry-runtime.md / startup_active_gate_owner / snapshot_coverage_owner_reconcile_retry_contract / superseded`
+4. `done-20260528-theory-loop-active-gate-calibration-proof.md / workflow_tooling_owner / theory_loop_active_gate_calibration / reduced`
 
-Oscillation check: `unknown`
+Oscillation check: `The sprint starts at the missing mechanism selected by current evidence instead of reopening witness selection, timeout-only, or downstream readiness packages.`
 
-Handoff invariant: `unknown`
+Handoff invariant: `producer publication and priority recovery are satisfied; consumer active-gate snapshot coverage remains deferred until owner recovery admission creates observable reconcile progress.`
 
 ## Observable Prediction
 
-Metric: `unknown`
+Metric: `owner-reconcile admission and snapshot coverage movement`
 
-Predicted: `unknown`
+Predicted: `Focused proof creates owner-reconcile admission/enqueue/wake progress, and the representative rerun clears owner_reconcile_pending, moves pendingReconcileCount above 0, moves snapshotCoverageNodeCount beyond 1/5, migrates owner boundary, or passes rolling-restart.`
 
-Observed: `unknown`
+Observed: `pending-before-observation`
 
-Accuracy: `unknown`
+Accuracy: `pending-before-observation`
 
-Evidence: `unknown`
+Evidence: `test-output/reports/rolling-restart-active-gate-owner-reconcile-retry-20260528T040351Z.report.json`
 
-Metric delta: `unknown`
+Metric delta: `0`
 
 ## Experiment Outcome
 
-Distinguished hypothesis: `unknown`
+Distinguished hypothesis: `H1`
 
-Decision: `unknown`
+Decision: `open-runtime-owner-boundary`
 
-Next owner: `unknown`
+Next owner: `startup_active_gate_owner`
 
-Next boundary: `unknown`
+Next boundary: `snapshot_coverage_owner_reconcile_admission_contract`
 
-Evidence: `unknown`
+Evidence: `test-output/reports/rolling-restart-active-gate-owner-reconcile-retry-20260528T040351Z.report.json`
 
 ## Rerun Decision
 
-Source artifact: `unknown`
+Source artifact: `test-output/reports/rolling-restart-active-gate-owner-reconcile-retry-20260528T040351Z.report.json`
 
-Route owner: `unknown`
+Route owner: `startup_active_gate_owner`
 
-Route boundary: `unknown`
+Route boundary: `snapshot_coverage_owner_reconcile_admission_contract`
 
-Route dominant reason: `unknown`
+Route dominant reason: `active_gate_timed_out`
 
-Route causal outcome: `unknown`
+Route causal outcome: `continue_local_fix`
 
-Stop mode: `unknown`
+Stop mode: `classified_local_blocker`
 
-Next lane: `unknown`
+Next lane: `runtime-owner-boundary`
 
-Expected delta: `unknown`
+Expected delta: `Representative rerun should clear owner_reconcile_pending, move pendingReconcileCount above 0, move snapshotCoverageNodeCount beyond 1/5, migrate owner boundary, or pass rolling-restart.`
 
 Required refresh commands:
 
-1. None recorded
-
-## Classification Efficiency
-
-Default mode: `unknown`
-
-Separate package reason: `unknown`
-
-Artifact budget: `unknown`
-
-Proof command budget: `unknown`
-
-Commands:
-
-1. None recorded
-
-Decision record: `unknown`
-
-Successor action: `unknown`
-
-Runtime promotion rule: `unknown`
+1. `bash -lc 'RUN_ID=$(date -u +%Y%m%dT%H%M%SZ); REPORT=test-output/reports/rolling-restart-owner-reconcile-admission-${RUN_ID}.report.json; timeout 1800s node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output "$REPORT" --fast-local --verbose; npm run work:package:route-after-rerun -- --artifact "$REPORT" --package work/packages/done-20260528-rolling-restart-owner-reconcile-admission-runtime.md'`
+2. `update Sprint Strategy Brief and Current Edge Card from the route result`
+3. `npm run work:repair`
+4. `npm run work:validate -- --entry work/packages/done-20260528-rolling-restart-owner-reconcile-admission-runtime.md`
+5. `npm run work:validate -- --pre-impl work/packages/done-20260528-rolling-restart-owner-reconcile-admission-runtime.md`
 
 ## Architecture Decision Gate
 
-Status: `unknown`
+Status: `selected`
 
-Trigger: `unknown`
+Trigger: `frontier-oscillation`
 
 Trigger evidence:
 
-1. None recorded
+1. `artifact comparison kept owner_reconcile_pending, write_deferred, enqueued=false, and coverage 1/5 invariant`
+2. `active-gate attempts moved from 1/8 to 2/8 without owner recovery admission movement`
+3. `topology handoff reports pendingRecoveryCount=1 and pendingReconcileCount=0`
+4. `mechanism card classifies the failure as transition_gap with scheduling_gap candidate`
 
 Choices:
 
-1. None recorded
+1. `owner-reconcile-admission-contract` route=`continue-local-proof` - Implement owner-owned admission, enqueue, or wake progress for write-deferred active-gate owner recovery.
+2. `owner-boundary-migration` route=`owner-boundary-migration` - Migrate only if fresh route evidence names a non-active-gate first frontier or proves startup_active_gate_owner lacks authority for admission.
 
-Selected choice: `unknown`
+Selected choice: `owner-reconcile-admission-contract`
 
-Gate next action: unknown
+Gate next action: Execute the selected local proof route; rerun canonical evidence before opening another architecture gate.
 
 ## Scope
 
 Write scope:
 
-1. None recorded
+1. `test/distributed/harness/cluster-control-snapshot-recovery.js`
+2. `test/distributed/harness/cluster-segment-7-class-5.js`
+3. `test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-selected-source-test-cases.js`
+4. `test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-fixtures.js`
+5. `test/distributed/harness/__tests__/cluster-active-gate-load-selected-timeout-owner-recovery.test.js`
+6. `scripts/work-tracker.js`
+7. `scripts/work-theory-loop.js`
+8. `test/scripts/work-theory-loop.test.js`
+9. `scripts/list-commands.js`
+10. `work/README.md`
+11. `work/RULES.md`
+12. `work/templates/sprint-strategy-brief.md`
+13. `work/packages/done-20260528-rolling-restart-owner-reconcile-admission-runtime.md`
+14. `work/packages/superseded-20260527-rolling-restart-active-gate-snapshot-coverage-post-stale-cache-route.md`
+15. `work/packages/superseded-20260528-rolling-restart-active-gate-owner-reconcile-no-progress-architecture.md`
+16. `work/packages/superseded-20260528-rolling-restart-active-gate-owner-reconcile-retry-runtime.md`
+17. `work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md`
+18. `work/sprints/superseded-2026-q2-rolling-restart-active-gate-theory-loop-resume.md`
+19. `work/sprints/current-blocker.md`
+20. `work/sprints/current-blocker.json`
 
 Handoff files:
 
-1. None recorded
+1. `test-output/reports/rolling-restart-active-gate-snapshot-coverage-retry-cadence-20260528T033446Z.report.json`
+2. `test-output/reports/rolling-restart-active-gate-owner-reconcile-retry-20260528T040351Z.report.json`
+3. `work/packages/done-20260528-theory-loop-active-gate-calibration-proof.md`
 
 Generated files:
 
-1. `work/sprints/current-blocker.json`
-2. `work/sprints/current-blocker.md`
+1. `work/sprints/current-blocker.md`
+2. `work/sprints/current-blocker.json`
 
 Candidate runtime files:
 
-1. None recorded
+1. `test/distributed/harness/cluster-segment-7-class-4.js`
+2. `test/distributed/harness/cluster-segment-7-class-4-active-probe-projections.js`
+3. `test/distributed/harness/cluster-segment-7-class-4-publication-coverage.js`
+4. `test/distributed/scenarios/table-distribution-helpers-segment-3.js`
 
 Commit scope:
 
-1. None recorded
+1. `test/distributed/harness/cluster-control-snapshot-recovery.js`
+2. `test/distributed/harness/cluster-segment-7-class-5.js`
+3. `test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-selected-source-test-cases.js`
+4. `test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-fixtures.js`
+5. `test/distributed/harness/__tests__/cluster-active-gate-load-selected-timeout-owner-recovery.test.js`
+6. `scripts/work-tracker.js`
+7. `scripts/work-theory-loop.js`
+8. `test/scripts/work-theory-loop.test.js`
+9. `scripts/list-commands.js`
+10. `work/README.md`
+11. `work/RULES.md`
+12. `work/templates/sprint-strategy-brief.md`
+13. `work/packages/done-20260528-rolling-restart-owner-reconcile-admission-runtime.md`
+14. `work/packages/superseded-20260527-rolling-restart-active-gate-snapshot-coverage-post-stale-cache-route.md`
+15. `work/packages/superseded-20260528-rolling-restart-active-gate-owner-reconcile-no-progress-architecture.md`
+16. `work/packages/superseded-20260528-rolling-restart-active-gate-owner-reconcile-retry-runtime.md`
+17. `work/sprints/active-2026-q2-rolling-restart-mechanism-first-recovery.md`
+18. `work/sprints/superseded-2026-q2-rolling-restart-active-gate-theory-loop-resume.md`
+19. `work/sprints/current-blocker.md`
+20. `work/sprints/current-blocker.json`
 
 Legacy touched files:
 

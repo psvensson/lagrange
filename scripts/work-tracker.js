@@ -8372,7 +8372,7 @@ export function buildCurrentBlockerPayload(
     observablePrediction: metadata[OBSERVABLE_PREDICTION_FIELD] || {},
     experimentOutcome: metadata[EXPERIMENT_OUTCOME_FIELD] || {},
     rerunDecision: metadata[RERUN_DECISION_FIELD] || {},
-    classificationEfficiency: metadata[CLASSIFICATION_EFFICIENCY_FIELD] || {},
+    classificationEfficiency: metadata[CLASSIFICATION_EFFICIENCY_FIELD],
     architectureDecisionGate: buildArchitectureDecisionGatePayload(
       metadata,
       activePackageFile,
@@ -8684,6 +8684,41 @@ function validateLegacyCurrentNextActionSection(content, filePath) {
 
 export function renderCurrentBlockerMarkdown(payload) {
   const theoryFocus = currentBlockerTheoryFocus(payload);
+  const classificationEfficiency = isObjectRecord(
+    payload.classificationEfficiency,
+  ) ? payload.classificationEfficiency : null;
+  const classificationEfficiencyLines = classificationEfficiency ? [
+    '## Classification Efficiency',
+    '',
+    'Default mode: ' +
+      `\`${classificationEfficiency.defaultMode || DEFAULT_UNKNOWN}\``,
+    '',
+    'Separate package reason: ' +
+      `\`${classificationEfficiency.separatePackageReason ||
+        DEFAULT_UNKNOWN}\``,
+    '',
+    'Artifact budget: ' +
+      `\`${classificationEfficiency.artifactBudget || DEFAULT_UNKNOWN}\``,
+    '',
+    'Proof command budget: ' +
+      `\`${classificationEfficiency.proofCommandBudget ||
+        DEFAULT_UNKNOWN}\``,
+    '',
+    'Commands:',
+    '',
+    formatMarkdownList(classificationEfficiency.commands || []),
+    '',
+    'Decision record: ' +
+      `\`${classificationEfficiency.decisionRecord || DEFAULT_UNKNOWN}\``,
+    '',
+    'Successor action: ' +
+      `\`${classificationEfficiency.successorAction || DEFAULT_UNKNOWN}\``,
+    '',
+    'Runtime promotion rule: ' +
+      `\`${classificationEfficiency.runtimePromotionRule ||
+        DEFAULT_UNKNOWN}\``,
+    '',
+  ] : [];
   return [
     GENERATED_NOTE,
     '',
@@ -8913,39 +8948,7 @@ export function renderCurrentBlockerMarkdown(payload) {
       payload.rerunDecision?.requiredRefreshCommands || [],
     ),
     '',
-    '## Classification Efficiency',
-    '',
-    'Default mode: ' +
-      `\`${payload.classificationEfficiency?.defaultMode || DEFAULT_UNKNOWN}\``,
-    '',
-    'Separate package reason: ' +
-      `\`${payload.classificationEfficiency?.separatePackageReason ||
-        DEFAULT_UNKNOWN}\``,
-    '',
-    'Artifact budget: ' +
-      `\`${payload.classificationEfficiency?.artifactBudget ||
-        DEFAULT_UNKNOWN}\``,
-    '',
-    'Proof command budget: ' +
-      `\`${payload.classificationEfficiency?.proofCommandBudget ||
-        DEFAULT_UNKNOWN}\``,
-    '',
-    'Commands:',
-    '',
-    formatMarkdownList(payload.classificationEfficiency?.commands || []),
-    '',
-    'Decision record: ' +
-      `\`${payload.classificationEfficiency?.decisionRecord ||
-        DEFAULT_UNKNOWN}\``,
-    '',
-    'Successor action: ' +
-      `\`${payload.classificationEfficiency?.successorAction ||
-        DEFAULT_UNKNOWN}\``,
-    '',
-    'Runtime promotion rule: ' +
-      `\`${payload.classificationEfficiency?.runtimePromotionRule ||
-        DEFAULT_UNKNOWN}\``,
-    '',
+    ...classificationEfficiencyLines,
     '## Architecture Decision Gate',
     '',
     `Status: \`${payload.architectureDecisionGate?.status || DEFAULT_UNKNOWN}\``,
