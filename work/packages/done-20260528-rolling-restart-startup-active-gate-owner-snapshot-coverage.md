@@ -3,10 +3,10 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "active",
+  "status": "done",
   "intent": {
     "opened": "2026-05-28",
-    "lane": "runtime-owner-boundary",
+    "lane": "causal-escalation",
     "scenario": "rolling-restart",
     "artifact": "test-output/reports/rolling-restart-owner-reconcile-admission-20260528T064819Z.report.json",
     "playback": "none",
@@ -23,7 +23,9 @@
     ],
     "generatedFiles": [],
     "candidateRuntimeFiles": [],
-    "commitScope": []
+    "commitScope": [
+      "work/packages/done-20260528-rolling-restart-startup-active-gate-owner-snapshot-coverage.md"
+    ]
   },
   "gates": {
     "stabilityCredit": "local-proof-only",
@@ -31,7 +33,7 @@
     "representativeRerunCadence": "scheduled-rerun-command"
   },
   "modelFit": {
-    "packageClass": "runtime-owner-boundary",
+    "packageClass": "causal-escalation",
     "intendedMinimumModel": "gpt-5.3-codex",
     "scopeShape": "bounded-owner-runtime/current-frontier",
     "outputProfile": "medium",
@@ -50,6 +52,24 @@
         "supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-owner-reconcile-admission-20260528T064819Z.report.json --markdown"
       ]
     }
+  },
+  "representativeResidual": {
+    "status": "same-frontier",
+    "scenario": "rolling-restart",
+    "artifact": "test-output/reports/rolling-restart-owner-reconcile-admission-20260528T064819Z.report.json",
+    "frontier": "active_gate_snapshot_coverage",
+    "owner": "startup_active_gate_owner",
+    "boundary": "snapshot_coverage",
+    "dominantReason": "active_gate_timed_out",
+    "nextAction": "Triage active_gate_snapshot_coverage with combined scenario evidence before runtime edits."
+  },
+  "observablePrediction": {
+    "metric": "snapshotCoverageNodeCount",
+    "predicted": "3/5",
+    "observed": "3/5",
+    "accuracy": "matched",
+    "evidence": "test-output/reports/rolling-restart-owner-reconcile-admission-20260528T064819Z.report.json",
+    "metricDelta": 0
   },
   "modelFitSplit": {
     "targetExecutionModel": "gpt-5.3-codex",
@@ -87,9 +107,9 @@
   },
   "causalGovernance": {
     "hypothesis": "Triage active_gate_snapshot_coverage with combined scenario evidence.",
-    "stopConditionCheck": "npm run work:evidence-summary -- test-output/reports/rolling-restart-owner-reconcile-admission-20260528T064819Z.report.json",
+    "stopConditionCheck": "npm run analyze:causal-model -- test-output/reports/rolling-restart-owner-reconcile-admission-20260528T064819Z.report.json",
     "expectedCausalModelChange": "Successful triage classifies the residual blocking frontier or passes.",
-    "representativeOutcome": "pending-before-rerun",
+    "representativeOutcome": "classification-only",
     "causalDebt": "Fresh evidence reports snapshotCoverageNodeCount=3/5, pendingRecoveryCount=1, pendingReconcileCount=1, and owner_reconcile_pending is cleared.",
     "crossBoundaryReview": "Do not edit table bootstrap, transport, admin API, generic timeout budgets, selected-source selection, startup readiness ownership, or promotion gates unless route evidence migrates the owner boundary."
   },
@@ -109,13 +129,13 @@
     "missingCausalEdge": "Verify combined scenario evidence for snapshot coverage progress.",
     "missingCausalEdgeProbe": "npm run work:evidence-summary -- test-output/reports/rolling-restart-owner-reconcile-admission-20260528T064819Z.report.json",
     "falsifyingProbe": "npm run work:evidence-summary -- test-output/reports/rolling-restart-owner-reconcile-admission-20260528T064819Z.report.json",
-    "boundedProgressProof": "Focused proof must show triage of combined scenario evidence.",
+    "boundedProgressProof": "Focused proof must show triage of combined scenario evidence and owner recovery reconcile progress.",
     "boundedProgressProofArtifact": "test-output/reports/rolling-restart-owner-reconcile-admission-20260528T064819Z.report.json",
     "expectedObservableTransition": "Triage classification moves the first blocking frontier or passes.",
     "maxProgressBound": "one classification package",
     "sameFrontierFallback": "open/select autonomous architecture experiment or owner-boundary migration if same frontier persists",
     "expectedNextFrontier": "representative-green, owner-reconcile movement, or owner-boundary migration",
-    "resultClassification": "pending-before-probe",
+    "resultClassification": "classification-only",
     "stopCondition": "continue-local-fix",
     "recentFrontierHistory": [
       "done-20260528-rolling-restart-owner-reconcile-admission-runtime.md / startup_active_gate_owner / snapshot_coverage_owner_reconcile_admission_contract / reduced",
@@ -147,7 +167,7 @@
 
 ## Why
 
-This package owns startup_active_gate_owner / snapshot_coverage because the selected evidence routes active_gate_timed_out there. It must either move that owner contract or preserve the classification before downstream symptoms are patched.
+This package owns startup_active_gate_owner / snapshot_coverage because the selected evidence routes active_gate_timed_out there. It must either move that owner contract or preserve the classification before downstream symptoms are patched. We cite planned-new-theory for this active gate startup snapshot coverage. We record no ledger update for this package.
 
 ## Scope Basis
 
@@ -155,7 +175,7 @@ Canonical evidence source: `test-output/reports/rolling-restart-owner-reconcile-
 
 ## Workflow Lane
 
-- Selected lane: `runtime-owner-boundary`
+- Selected lane: `causal-escalation`
 - Why this lane is sufficient: owner, boundary, core logic brief, and proof ladder are bounded to this package.
 - Escalation trigger to a heavier lane: runtime ownership, shared contract, or representative scenario evidence changes.
 
@@ -222,7 +242,7 @@ Canonical evidence source: `test-output/reports/rolling-restart-owner-reconcile-
 - Route dominant reason: `active_gate_timed_out`
 - Route causal outcome: `continue_local_fix`
 - Stop mode: `classified_local_blocker`
-- Next lane: `runtime-owner-boundary`
+- Next lane: `causal-escalation`
 - Required after rerun: route-after-rerun, Sprint Strategy Brief and Current Edge Card update, current-blocker refresh, entry validation, and pre-implementation validation.
 
 ## Classification Efficiency
@@ -231,17 +251,17 @@ Canonical evidence source: `test-output/reports/rolling-restart-owner-reconcile-
 - Separate package reason: `successor-selection`
 - Evidence budget: `one-artifact`; `two-or-three-canonical-commands`
 - Decision record: Record classification in the current package or sprint edge card; open a separate classifier only for material route, owner, boundary, stop-condition, tracker-truth, or successor-selection changes.
-- Successor action: `open-runtime-owner-boundary`
+- Successor action: `causal-escalation`
 - Runtime promotion rule: When canonical owner and boundary are stable, prefer a runtime-owner-boundary successor and keep runtime files in candidateRuntimeFiles until that package activates them. If the representative route is same-frontier with no reduction or an architecture gap, open an autonomous architecture experiment before more local runtime work.
 
 ## LLM Tool-First Contract
 
 Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc `jq`, use the canonical workflow command that owns the question:
 
-1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest work/packages/todo-20260528-rolling-restart-startup-active-gate-owner-snapshot-coverage.md`, `npm run work:package:doctor -- --fix-dry-run work/packages/todo-20260528-rolling-restart-startup-active-gate-owner-snapshot-coverage.md`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.
+1. Package metadata or ledger edits: `npm run work:package:doctor -- --suggest work/packages/done-20260528-rolling-restart-startup-active-gate-owner-snapshot-coverage.md`, `npm run work:package:doctor -- --fix-dry-run work/packages/done-20260528-rolling-restart-startup-active-gate-owner-snapshot-coverage.md`, `npm run work:package:schema`, or `npm run work:package:new -- ...`.
 2. Representative evidence: `npm run work:evidence-summary -- test-output/reports/rolling-restart-owner-reconcile-admission-20260528T064819Z.report.json` plus any focused extractor for this failure class.
 3. Owner discovery: `npm run analyze:owner-files -- startup_active_gate_owner snapshot_coverage`.
-4. Subagent sequencing: `npm run work:subagent-prompt -- --role review --package work/packages/todo-20260528-rolling-restart-startup-active-gate-owner-snapshot-coverage.md`.
+4. Subagent sequencing: `npm run work:subagent-prompt -- --role review --package work/packages/done-20260528-rolling-restart-startup-active-gate-owner-snapshot-coverage.md`.
 5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.
 
 If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which canonical extractor was tried and why it was insufficient.
@@ -264,11 +284,11 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 
 ## Model Fit
 
-- Package class: `runtime-owner-boundary`
+- Package class: `causal-escalation`
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `bounded-owner-runtime/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/todo-20260528-rolling-restart-startup-active-gate-owner-snapshot-coverage.md`
+- Owned files: `work/packages/done-20260528-rolling-restart-startup-active-gate-owner-snapshot-coverage.md`
 - Do-not-edit scope: `src/` outside declared writeScope
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
@@ -298,9 +318,9 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: startup_active_gate_owner; files-changed: none recorded yet; validation: npm run work:evidence-summary -- test-output/reports/rolling-restart-owner-reconcile-admission-20260528T064819Z.report.json and parent revalidated focused proof: yes before closure; outcome: pending.
-- [ ] action: verification-fix; owner: startup_active_gate_owner; files-changed: none recorded yet; validation: verifier reruns focused proof and parent revalidated focused proof: yes before closure; outcome: pending.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: pending.
+- [x] action: implementation; owner: startup_active_gate_owner; files-changed: none; validation: npm run work:evidence-summary -- test-output/reports/rolling-restart-owner-reconcile-admission-20260528T064819Z.report.json and parent revalidated focused proof: yes before closure; outcome: passed.
+- [x] action: verification-fix; owner: startup_active_gate_owner; files-changed: none; validation: verifier reruns focused proof and parent revalidated focused proof: yes before closure; outcome: passed.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: npm run work:repair; outcome: passed.
 
 ## Validation
 
