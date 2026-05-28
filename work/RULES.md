@@ -45,7 +45,8 @@ Validators execute in distinct phases to ensure the integrity of the codebase an
 
 To guarantee stability, implementation changes must compile and pass structured verification:
 
-*   **Focused Verification**: Every package must specify a proof ladder containing role-tagged commands: exactly one `falsifier` command (whose failure proves the implementation theory wrong), exactly one `regression` command (which fails if existing behavior is broken), and optional `supporting` commands. Maintenance lanes may use a `regression`-only ladder. Prefer compact ladders of 3-5 commands for readability, but command count is not enforced.
+*   **Focused Verification**: Runtime, scenario, experiment, proof, and other implementation packages specify a proof ladder containing role-tagged commands: exactly one `falsifier` command (whose failure proves the implementation theory wrong), exactly one `regression` command (which fails if existing behavior is broken), and optional `supporting` commands. Prefer compact ladders of 3-5 commands for readability, but command count is not enforced.
+*   **Lane Exceptions**: Maintenance lanes may use a `regression`-only ladder. Classification-only fast-path packages may use two or three canonical evidence commands while runtime, test, script, and report paths stay out of `writeScope` and `commitScope`. Compact probe packages validated with `--probe` may omit the closure evidence ladder when they stay within the probe lane contract.
 *   **Evidence Collection**: Sprints owning active classification or diagnostics packages must record representative residuals and link to specific run output artifacts.
 *   **Local vs. Representative Proof**: A package remains in diagnostic state until it is backed by a fresh representative rerun or canonical route-after-rerun result.
 
@@ -96,7 +97,7 @@ Allowed outcomes:
 ## Mechanism Taxonomy and Card Contract
 <a name="mechanism-taxonomy-and-card-contract"></a>
 
-To prevent repeated local patches on unchanged evidence, all non-trivial scenario, runtime, experiment, proof, or workflow-tooling packages must classify their failure pathway using this domain-neutral mechanism taxonomy:
+To prevent repeated local patches on unchanged evidence, all non-trivial scenario, runtime, experiment, proof, or workflow-tooling packages that test or change a failure mechanism must classify their failure pathway using this domain-neutral mechanism taxonomy:
 
 1. `observation_gap`: evidence is missing, stale, or misleading.
 2. `selection_gap`: the system chooses the wrong source, candidate, route, owner, or witness.
@@ -109,7 +110,7 @@ To prevent repeated local patches on unchanged evidence, all non-trivial scenari
 9. `ownership_gap`: no single owner has authority for the decision.
 10. `downstream_symptom`: visible failure inherits from an upstream blocker.
 
-Before implementation, the package must expose a mechanism card containing:
+Before implementation, packages in that scope must expose a mechanism card containing:
 *   **Failure mechanism**: classified taxonomy term.
 *   **Stable facts**: invariants and evidence that remain unchanged.
 *   **Changed facts**: inputs, metrics, or states that moved.
@@ -121,6 +122,11 @@ Before implementation, the package must expose a mechanism card containing:
 *   **Expected movement**: observable metrics or transitions.
 *   **Negative result means**: failure interpretation.
 *   **Escalation rule**: what to do if expected movement fails to occur.
+
+Purely mechanical maintenance packages that only edit docs, templates, schema
+text, generated steering, or package metadata and do not test or change a
+failure mechanism may record `not-needed: mechanical maintenance, no failure
+mechanism` or omit the card when validation does not require it.
 
 ---
 
@@ -236,8 +242,8 @@ Package closure is atomic — the following steps move as a unit.
 2. `npm run work:repair` — refresh `current-blocker.{json,md}` and the active sprint file references.
 3. Run the automated close command:
    `npm run work:close work/packages/active-<slug>.md`
-   This command automatically runs closure validation, renames the file to `done-`, flips the status, updates active sprint file references, renumbers the package queue, and stages exactly the `commitScope` files and tracker-generated handoff files.
-4. Commit and push the staged changes. The commit MUST NOT include "unrelated dirty entries" reported by `work:context`.
+   This command automatically runs closure validation, renames the file to `done-`, flips the status, updates active sprint file references, renumbers the package queue, refreshes current-blocker state, stages exactly the `commitScope` files and tracker-generated handoff files, and creates the focused local close commit. The local commit MUST NOT include "unrelated dirty entries" reported by `work:context`.
+4. Push the focused close commit with `npm run work:sprint:push -- <git-push-args>` before starting the next package. If push is blocked by remote, credential, or policy state, record the unpushed commit SHA and reason in the package or sprint handoff; do not invent pushed proof.
 
 ---
 

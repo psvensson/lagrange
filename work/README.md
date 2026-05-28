@@ -47,8 +47,11 @@ Use one simple path for executable work:
    broad sequence changes; otherwise create a direct work package.
 4. Work the package until done.
 5. Run `npm run work:close <package>` to validate, rename, refresh handoff,
-   and stage the focused package slice.
-6. When `npm run work:sprint:remaining` reports zero packages left, run
+   stage the focused package slice, and create the focused local close commit.
+6. Push the focused close commit with `npm run work:sprint:push --
+   <git-push-args>` before starting the next package.
+7. When `npm run work:sprint:remaining` reports zero packages left after the
+   push, run
    `npm run work:sprint:advance -- --dry-run` and then `--write` to close the
    sprint.
 
@@ -180,8 +183,9 @@ Use the tracker utility for current sprint/package mechanics:
    for implementation evidence.
 22. `npm run work:close work/packages/active-...md` is the package closure
     transaction. It validates closure, renames the package to `done-*`, updates
-    sprint references, refreshes tracker handoff, and stages exactly the
-    package commit scope plus generated handoff files.
+    sprint references, refreshes tracker handoff, stages exactly the package
+    commit scope plus generated handoff files, and creates the focused local
+    close commit. Push that commit with `npm run work:sprint:push -- <args>`.
     `npm run work:package:close -- --write ...` is a lower-level legacy move
     helper and should not be the default LLM closure path.
 23. `npm run work:package:migrate -- --write work/packages/active-...md`
@@ -548,8 +552,9 @@ invention.
 
 ## Commit And Push Ledger
 
-Packages closed under the current tracker workflow must prove the focused
-package slice was committed and pushed. The package file must include:
+Packages closed under the current tracker workflow must identify the focused
+package slice commit and the remote branch it must be pushed to. The package
+file must include:
 
 1. `Focused package commit: <sha>`
 2. `Pushed to: <remote>/<branch>`
@@ -562,6 +567,13 @@ contains only package-owned files plus package-status or allowed sprint handoff
 updates. Historical closed packages without truthful commit/push proof are not
 backfilled by invention; if they are reopened, migrated, or closed again, the
 proof is required.
+
+`npm run work:close` creates the local close commit and populates the focused
+commit SHA and push target when the ledger section is present. The actual push
+is the next required step and should use `npm run work:sprint:push --
+<git-push-args>`. If push is blocked by remote, credential, or policy state,
+record the unpushed commit SHA and reason in the package or sprint handoff; do
+not invent pushed proof.
 
 ## Triage Rule
 
@@ -598,6 +610,11 @@ Keep the filename state model intentionally small:
 5. `superseded-YYYYMMDD-slug.md`
 
 Use rename, not copy, when state changes.
+Package metadata status mirrors the package filename and uses the same
+executable states: `todo`, `active`, `done`, or `superseded`. There is no
+`failed-*` package filename state; aborted or displaced work stays active with
+an explicit blocker, moves back to `todo-*`, or becomes `superseded-*` with a
+successor link.
 
 Examples:
 
@@ -614,91 +631,69 @@ handoff tools, not as an independent source of truth.
 
 ## Package Rules
 
-Every active package should start with a machine-readable metadata comment:
+Create packages with `npm run work:package:new -- --write ...` whenever
+possible. That command owns the current metadata shape and validates the package
+before writing it. Every active package should start with a machine-readable
+`work-package-v2` metadata comment shaped like this minimal example:
 
 ```md
 <!-- work-package
 {
-  "schema": "work-package-v1",
+  "schema": "work-package-v2",
   "status": "active",
-  "opened": "YYYY-MM-DD",
-  "scenario": "scenario-or-none",
-  "artifact": "path/to/latest.report.json",
-  "playback": "path/to/playback-or-none",
-  "owner": "canonical owner",
-  "boundary": "current boundary",
-  "dominantReason": "current dominant reason",
-  "currentState": "one-line current state",
-  "nextAction": "next proof or implementation action",
-  "proof": [
-    "Focused owner test",
-    "Representative scenario rerun"
-  ],
-  "writeScope": [
-    "src/example.js",
-    "test/example.test.js"
-  ],
-  "handoffFiles": [
-    "work/packages/done-predecessor.md"
-  ],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": [
-    "src/example.js",
-    "test/example.test.js",
-    "work/packages/active-YYYYMMDD-package.md"
-  ],
+  "intent": {
+    "opened": "YYYY-MM-DD",
+    "lane": "lightweight-maintenance",
+    "scenario": "none",
+    "artifact": "none",
+    "playback": "none",
+    "owner": "canonical_owner",
+    "boundary": "focused_boundary",
+    "dominantReason": "current_dominant_reason",
+    "currentState": "one-line current state",
+    "nextAction": "next proof or implementation action"
+  },
+  "scope": {
+    "writeScope": [
+      "path/to/file"
+    ],
+    "handoffFiles": [],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": [],
+    "commitScope": [
+      "path/to/file",
+      "work/packages/active-YYYYMMDD-package.md"
+    ]
+  },
+  "gates": {
+    "stabilityCredit": "local-proof-only",
+    "whyHighestLeverageNow": "why this package is the right next action"
+  },
   "modelFit": {
     "packageClass": "bounded-implementation",
     "intendedMinimumModel": "gpt-5.3-codex-spark",
     "scopeShape": "leaf-slice",
+    "outputProfile": "medium",
     "escalationTriggers": [
       "owned files expand beyond this package"
     ]
   },
-  "representativeResidual": {
-    "status": "red|green|unknown",
-    "scenario": "representative scenario",
-    "artifact": "path/to/latest.report.json",
-    "frontier": "first failing frontier or none",
-    "owner": "representative owner",
-    "boundary": "representative boundary",
-    "dominantReason": "representative dominant reason",
-    "nextAction": "next representative action"
-  },
-  "causalGovernance": {
-    "hypothesis": "predicted causal edge change",
-    "stopConditionCheck": "npm --silent run analyze:causal-model -- path/to/latest.report.json",
-    "expectedCausalModelChange": "edge disappears, reduces, migrates, or contradicts the hypothesis",
-    "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "residual causal debt tracked outside local closure",
-    "crossBoundaryReview": "due/not-due/required-before-next-runtime-package"
-  },
-  "scenarioCausalClosure": {
-    "referenceScenarioOrProbe": "named scenario or focused blocker probe",
-    "phaseChain": [
-      "phase one",
-      "phase two"
-    ],
-    "currentFirstFrontier": "current owner / boundary / reason",
-    "knownDownstreamBlockers": [
-      "blocked downstream owner or phase"
-    ],
-    "missingCausalEdge": "unproven handoff, wake, retry, or visibility edge",
-    "missingCausalEdgeProbe": "npm test -- path/to/focused-probe.test.js",
-    "boundedProgressProof": "focused proof of wake/retry/timeout/reconcile/drain progress",
-    "boundedProgressProofArtifact": "path/to/focused-probe.test.js",
-    "expectedObservableTransition": "before state -> after state or named classification",
-    "maxProgressBound": "maximum retry/timer/dispatch bound before fallback",
-    "sameFrontierFallback": "named same-frontier action if the probe does not move",
-    "expectedNextFrontier": "expected next owner boundary after this package",
-    "resultClassification": "pending-before-probe",
-    "stopCondition": "continue-local-fix"
-  },
-  "predecessor": "work/packages/done-predecessor.md"
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": {
+      "commands": [
+        "regression: focused command"
+      ]
+    }
+  }
 }
 -->
 ```
+
+Use `npm run work:package:schema` for the full status, lane, outcome, and
+evidence enums. Scenario, runtime, experiment, and causal packages add the
+lane-required metadata described below; do not copy stale examples from old
+packages.
 
 The header exists to make handoff and automation reliable. The prose package
 must keep these scope fields distinct:
@@ -1006,14 +1001,16 @@ static guardrail in the same work cycle when the boundary contract is durable.
 
 ## Package Commit And Push
 
-A completed package slice is not closed until its package-owned changes are in
-a focused git commit and that commit has been pushed.
+A completed package slice is not ready for the next package until its
+package-owned changes are in a focused local close commit and that commit has
+been pushed.
 
 The canonical package section is `## Commit And Push Ledger`. The legacy
 heading `## Closure Commit Proof` is accepted only as a compatibility alias;
 new and migrated packages should use the canonical heading. Open `todo` and
-`active` packages may keep pending ledger values, but `done` and `superseded`
-packages must carry real values when they are closed under the current policy.
+`active` packages may keep pending ledger values. `done` and `superseded`
+packages must carry a real focused commit SHA and push target when closed under
+the current policy, and the push must happen before the next package starts.
 Historical closed packages opened before 2026-05-14 and missing the section are
 grandfathered by validation; if they are reopened, migrated, or closed again,
 the canonical ledger becomes mandatory and historical proof must not be
@@ -1023,17 +1020,18 @@ Required workflow:
 
 1. Finish validation, static guardrails, residual closure, and required
    verifier-fixer proof first.
-2. Rename or migrate the work package with the tracker command.
-3. Review the dirty worktree and separate unrelated changes.
-4. Commit only the package-owned files, package-status updates, and sprint
-   handoff updates for the slice.
-5. Push the current branch before starting the next package slice. For sprint
+2. Review the dirty worktree and separate unrelated changes.
+3. Run `npm run work:close <package>` to rename or migrate the package, refresh
+   handoff files, stage only package-owned scope, and create the focused local
+   close commit.
+4. Push the current branch before starting the next package slice. For sprint
    pushes, use `npm run work:sprint:push -- <git-push-args>` instead of raw
    `git push`; the wrapper runs `npm run work:sprint:remaining` after a
    successful push so the remaining package queue is visible.
-6. If push is blocked by remote or credential state, record the unpushed commit
-   SHA and reason in the package or sprint handoff.
-7. If unrelated dirty changes cannot be safely separated from package-owned
+5. If push is blocked by remote, credential, or policy state, record the
+   unpushed commit SHA and reason in the package or sprint handoff; do not
+   invent pushed proof.
+6. If unrelated dirty changes cannot be safely separated from package-owned
    files, stop and ask for human direction before committing.
 
 ## Sprint Use

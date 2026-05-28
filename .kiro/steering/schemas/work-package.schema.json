@@ -58,7 +58,7 @@
     },
     "status": {
       "type": "string",
-      "enum": ["active", "done", "todo", "superseded", "failed"]
+      "enum": ["active", "done", "todo", "superseded"]
     },
     "intent": {
       "type": "object",

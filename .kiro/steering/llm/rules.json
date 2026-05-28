@@ -99,12 +99,12 @@
     }
   ],
   "stats": {
-    "candidateCount": 323,
-    "dedupedRuleCount": 316,
-    "exportedRuleCount": 316,
+    "candidateCount": 326,
+    "dedupedRuleCount": 319,
+    "exportedRuleCount": 319,
     "aliasRuleCount": 11,
-    "masterRuleCount": 305,
-    "estimatedAllRulesTokens": 12399
+    "masterRuleCount": 308,
+    "estimatedAllRulesTokens": 12537
   },
   "rules": [
     {
@@ -1633,7 +1633,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 68,
+          "line": 78,
           "section": "Workflow — Packages & Closure > Package Status And Closure"
         }
       ]
@@ -2535,7 +2535,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 49,
+          "line": 52,
           "section": "Workflow — Packages & Closure > Package Status And Closure"
         },
         {
@@ -2555,7 +2555,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 56,
+          "line": 65,
           "section": "Workflow — Packages & Closure > Package Status And Closure"
         }
       ]
@@ -2572,7 +2572,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 76,
+          "line": 86,
           "section": "Workflow — Packages & Closure > Package Status And Closure"
         }
       ]
@@ -2589,7 +2589,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 124,
+          "line": 134,
           "section": "Workflow — Packages & Closure > Residual Closure Inventory"
         }
       ]
@@ -2606,7 +2606,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 157,
+          "line": 167,
           "section": "Workflow — Packages & Closure > Roadmap, Release, And Work-Tracker Truth"
         }
       ]
@@ -3330,7 +3330,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 60,
+          "line": 69,
           "section": "Workflow — Packages & Closure > Package Status And Closure"
         }
       ]
@@ -3347,7 +3347,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 64,
+          "line": 74,
           "section": "Workflow — Packages & Closure > Package Status And Closure"
         }
       ]
@@ -3987,7 +3987,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/lifecycle.md",
-          "line": 119,
+          "line": 124,
           "section": "Workflow — Lanes & Lifecycle > Lifecycle Progress Grammar"
         }
       ]
@@ -3997,7 +3997,7 @@
       "domain": "governance",
       "strength": "must",
       "tags": [],
-      "rule": "Every completed work-package slice MUST end in a focused commit and push before the next slice starts.",
+      "rule": "Every completed work-package slice MUST end in a focused local close commit and push before the next slice starts.",
       "score": 193,
       "sources": [
         {
@@ -4012,18 +4012,33 @@
       "domain": "governance",
       "strength": "must",
       "tags": [],
-      "rule": "Stop for human direction when package-owned and unrelated changes cannot be separated safely, when no push target exists, or when credentials/policy prevent the required push.",
+      "rule": "The required push remains the next step and should use npm run work:sprint:push -- <git-push-args>.",
       "score": 193,
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 52,
+          "line": 55,
           "section": "Workflow — Packages & Closure > Package Status And Closure"
         }
       ]
     },
     {
       "id": "GOV-0058",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [],
+      "rule": "Stop for human direction when package-owned and unrelated changes cannot be separated safely, when no push target exists, or when credentials/policy prevent the required push.",
+      "score": 193,
+      "sources": [
+        {
+          "file": "workflow-guidelines/packages.md",
+          "line": 61,
+          "section": "Workflow — Packages & Closure > Package Status And Closure"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0059",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4040,7 +4055,7 @@
       ]
     },
     {
-      "id": "GOV-0059",
+      "id": "GOV-0060",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4055,7 +4070,7 @@
       ]
     },
     {
-      "id": "GOV-0060",
+      "id": "GOV-0061",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4070,7 +4085,7 @@
       ]
     },
     {
-      "id": "GOV-0061",
+      "id": "GOV-0062",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4085,7 +4100,7 @@
       ]
     },
     {
-      "id": "GOV-0062",
+      "id": "GOV-0063",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4100,7 +4115,7 @@
       ]
     },
     {
-      "id": "GOV-0063",
+      "id": "GOV-0064",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4117,7 +4132,7 @@
       ]
     },
     {
-      "id": "GOV-0064",
+      "id": "GOV-0065",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4132,7 +4147,7 @@
       ]
     },
     {
-      "id": "GOV-0065",
+      "id": "GOV-0066",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4147,7 +4162,7 @@
       ]
     },
     {
-      "id": "GOV-0066",
+      "id": "GOV-0067",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4179,7 +4194,7 @@
       ]
     },
     {
-      "id": "GOV-0067",
+      "id": "GOV-0068",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4196,7 +4211,7 @@
       ]
     },
     {
-      "id": "GOV-0068",
+      "id": "GOV-0069",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4302,7 +4317,7 @@
       ]
     },
     {
-      "id": "GOV-0069",
+      "id": "GOV-0070",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -4321,7 +4336,7 @@
       ]
     },
     {
-      "id": "GOV-0070",
+      "id": "GOV-0071",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4540,7 +4555,7 @@
       ]
     },
     {
-      "id": "GOV-0071",
+      "id": "GOV-0072",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4555,7 +4570,7 @@
       ]
     },
     {
-      "id": "GOV-0072",
+      "id": "GOV-0073",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4570,7 +4585,7 @@
       ]
     },
     {
-      "id": "GOV-0073",
+      "id": "GOV-0074",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4585,7 +4600,7 @@
       ]
     },
     {
-      "id": "GOV-0074",
+      "id": "GOV-0075",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4603,7 +4618,7 @@
       ]
     },
     {
-      "id": "GOV-0075",
+      "id": "GOV-0076",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4752,7 +4767,7 @@
       ]
     },
     {
-      "id": "GOV-0076",
+      "id": "GOV-0077",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4767,7 +4782,7 @@
       ]
     },
     {
-      "id": "GOV-0077",
+      "id": "GOV-0078",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4857,7 +4872,7 @@
       ]
     },
     {
-      "id": "GOV-0078",
+      "id": "GOV-0079",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4869,13 +4884,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/lifecycle.md",
-          "line": 119,
+          "line": 124,
           "section": "Workflow — Lanes & Lifecycle > Lifecycle Progress Grammar"
         }
       ]
     },
     {
-      "id": "GOV-0079",
+      "id": "GOV-0080",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4892,7 +4907,7 @@
       ]
     },
     {
-      "id": "GOV-0080",
+      "id": "GOV-0081",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4909,7 +4924,7 @@
       ]
     },
     {
-      "id": "GOV-0081",
+      "id": "GOV-0082",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4973,7 +4988,7 @@
       ]
     },
     {
-      "id": "GOV-0082",
+      "id": "GOV-0083",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5022,7 +5037,7 @@
       ]
     },
     {
-      "id": "GOV-0083",
+      "id": "GOV-0084",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5039,7 +5054,7 @@
       ]
     },
     {
-      "id": "GOV-0084",
+      "id": "GOV-0085",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5056,7 +5071,7 @@
       ]
     },
     {
-      "id": "GOV-0085",
+      "id": "GOV-0086",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5086,7 +5101,7 @@
       ]
     },
     {
-      "id": "GOV-0086",
+      "id": "GOV-0087",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5118,7 +5133,7 @@
       ]
     },
     {
-      "id": "GOV-0087",
+      "id": "GOV-0088",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5135,7 +5150,7 @@
       ]
     },
     {
-      "id": "GOV-0088",
+      "id": "GOV-0089",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5150,7 +5165,22 @@
       ]
     },
     {
-      "id": "GOV-0089",
+      "id": "GOV-0090",
+      "domain": "governance",
+      "strength": "may",
+      "tags": [],
+      "rule": "work:close may populate the focused commit SHA and remote branch target before the push has happened.",
+      "score": 145,
+      "sources": [
+        {
+          "file": "workflow-guidelines/packages.md",
+          "line": 55,
+          "section": "Workflow — Packages & Closure > Package Status And Closure"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0091",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5161,13 +5191,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 120,
+          "line": 130,
           "section": "Workflow — Packages & Closure > Residual Closure Inventory"
         }
       ]
     },
     {
-      "id": "GOV-0090",
+      "id": "GOV-0092",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5182,7 +5212,7 @@
       ]
     },
     {
-      "id": "GOV-0091",
+      "id": "GOV-0093",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5199,7 +5229,7 @@
       ]
     },
     {
-      "id": "GOV-0092",
+      "id": "GOV-0094",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5214,7 +5244,7 @@
       ]
     },
     {
-      "id": "GOV-0093",
+      "id": "GOV-0095",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5231,7 +5261,7 @@
       ]
     },
     {
-      "id": "GOV-0094",
+      "id": "GOV-0096",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5249,7 +5279,7 @@
       ]
     },
     {
-      "id": "GOV-0095",
+      "id": "GOV-0097",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5279,7 +5309,7 @@
       ]
     },
     {
-      "id": "GOV-0096",
+      "id": "GOV-0098",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5296,7 +5326,7 @@
       ]
     },
     {
-      "id": "GOV-0097",
+      "id": "GOV-0099",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5313,7 +5343,24 @@
       ]
     },
     {
-      "id": "GOV-0098",
+      "id": "GOV-0100",
+      "domain": "governance",
+      "strength": "may",
+      "tags": [
+        "testing"
+      ],
+      "rule": "Use a Mechanism Card only when the maintenance package tests or changes a failure mechanism. Purely mechanical docs, template, schema-text, generated steering, or package-metadata cleanup may record not-needed: mechanical maintenance, no failure mechanism or omit the card when validation does not require it.",
+      "score": 131,
+      "sources": [
+        {
+          "file": "workflow-guidelines/lifecycle.md",
+          "line": 81,
+          "section": "Workflow — Lanes & Lifecycle > Lane Requirements > Lightweight Maintenance Lane"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0101",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5332,7 +5379,7 @@
       ]
     },
     {
-      "id": "GOV-0099",
+      "id": "GOV-0102",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5349,7 +5396,7 @@
       ]
     },
     {
-      "id": "GOV-0100",
+      "id": "GOV-0103",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5366,5 +5413,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-05-27T18:52:05.490Z"
+  "generatedAt": "2026-05-28T08:36:33.028Z"
 }

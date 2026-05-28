@@ -78,6 +78,11 @@ Required:
 4. Run `git diff --check`.
 5. Use a package only when work-tracker truth or package templates require a
    durable execution record.
+6. Use a Mechanism Card only when the maintenance package tests or changes a
+   failure mechanism. Purely mechanical docs, template, schema-text, generated
+   steering, or package-metadata cleanup may record
+   `not-needed: mechanical maintenance, no failure mechanism` or omit the card
+   when validation does not require it.
 
 May omit:
 

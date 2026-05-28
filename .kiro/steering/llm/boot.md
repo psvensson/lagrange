@@ -17,9 +17,9 @@ When sources appear to disagree at execution time, follow this three-level order
 
 1. **User and developer instructions, and safety limits.** This includes the requested task, the prohibited-actions list, and any explicit user override.
 2. **`work/RULES.md` together with `npm run work:context`.** `work/RULES.md` is the canon for lanes, validation phases, proof, scope, and worktree safety. `work:context` names the active blocker, owner boundary, primary domain pack, and active constraints for the current task. These two together define what the current task is and what the rules of engagement are.
-3. **Domain packs under `.kiro/steering/llm/*.md`.** Apply only the rules whose tags match the selected lane and whose scope intersects the touched owner boundary. Each rule carries a `(see file:line)` citation; follow that citation when more detail is needed.
+3. **Domain packs under `.kiro/steering/llm/*.md`.** Apply only the rules whose tags match the selected lane and whose scope intersects the touched owner boundary. Each rule carries a `(see file:line)` citation; follow that citation only for supporting detail behind the pack rule.
 
-The source-vs-pack distinction is a generator concern, not an execution-time concern. If a pack rule looks wrong, the answer is to fix the source and regenerate (`npm run steering:llm:pack`), not to selectively prefer the source at runtime. Packs are the canonical execution-time surface.
+The source-vs-pack distinction is a generator concern, not an execution-time override path. If cited source detail shows the pack is wrong or stale, fix the source and regenerate (`npm run steering:llm:pack`), not selectively prefer source text at runtime. Packs are the canonical LLM execution surface below `work/RULES.md`.
 
 ## Lane Vocabulary
 
@@ -107,8 +107,8 @@ Every lane that closes a package ends with these four steps in order. They are t
 
 1. Fill structured `execution.*` metadata or checked `## Execution Evidence` with replayable proof.
 2. `npm run work:repair` — refresh generated current-blocker and sprint handoff files before closure.
-3. `npm run work:close <package>` — runs closure validation, renames `active-*` to `done-*`, flips status, rewrites sprint refs, renumbers the sprint queue, and stages only commit-scope plus tracker-generated handoff files.
-4. Focused commit and push. If `npm run work:sprint:remaining` reports zero packages left after the push, use `npm run work:sprint:advance -- --dry-run` and then `--write` to close the sprint in a separate focused transaction.
+3. `npm run work:close <package>` — runs closure validation, renames `active-*` or `todo-*` to `done-*`, flips status, rewrites sprint refs, renumbers the sprint queue, refreshes current-blocker state, stages only commit-scope plus tracker-generated handoff files, and creates the focused local close commit.
+4. Push the focused close commit with `npm run work:sprint:push -- <git-push-args>` before starting the next package. If `npm run work:sprint:remaining` reports zero packages left after the push, use `npm run work:sprint:advance -- --dry-run` and then `--write` to close the sprint in a separate focused transaction.
 
 ## Conflict Rule and Escape Hatch
 

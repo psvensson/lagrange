@@ -32,8 +32,11 @@ Required patterns:
    `work/sprints/archived/` only as a separate explicit archival-maintenance
    slice.
 
-Every completed work-package slice MUST end in a focused commit and push before
-the next slice starts.
+Every completed work-package slice MUST end in a focused local close commit and
+push before the next slice starts. The default closure path is `npm run
+work:close <package>`, which runs closure validation, moves the package to
+`done-*`, refreshes tracker handoff, stages only package-owned scope, and
+creates the focused local close commit.
 
 For sprint package pushes, use `npm run work:sprint:push -- <git-push-args>`
 instead of raw `git push`. The wrapper runs `git push` and then prints
@@ -49,6 +52,12 @@ Commit-and-push ledger for current packages:
 Do not invent historical proof. If an older package is reopened, migrated, or
 closed again, current proof rules apply.
 
+`work:close` may populate the focused commit SHA and remote branch target before
+the push has happened. The required push remains the next step and should use
+`npm run work:sprint:push -- <git-push-args>`. If push is blocked by remote,
+credential, or policy state, record the unpushed commit SHA and reason in the
+package or sprint handoff instead of inventing pushed proof.
+
 Stop for human direction when package-owned and unrelated changes cannot be
 separated safely, when no push target exists, or when credentials/policy prevent
 the required push.
@@ -59,15 +68,16 @@ For scenario and causal-escalation packages, closure order is:
 1. Decide the result classification from canonical evidence.
 2. If the same owner, boundary, and required action remain selected, keep the
    same package active and update its Current Edge Card instead of closing it.
-3. If closure is valid, rename the package, update metadata, and add the Commit
-   And Push Ledger.
+3. If closure is valid, run `npm run work:close <package>` to rename the
+   package, update metadata, refresh handoff, stage package-owned files, and
+   create the focused local close commit with Commit And Push Ledger data.
 4. Create or activate the successor only when canonical evidence changed
    owner, boundary, required action, or the work is intentionally finished.
 5. Regenerate `work/sprints/current-blocker.*` after the successor is active,
    or explicitly record that no active package remains.
 6. Run validation before committing so `current-blocker` never points at a
    missing `active-...` package.
-7. Commit and push the focused slice.
+7. Push the focused close commit before the next slice starts.
 
 `done-...` packages without commit/push proof, missing active successors, or a
 `current-blocker` pointing to a non-existent package are closure defects, not
