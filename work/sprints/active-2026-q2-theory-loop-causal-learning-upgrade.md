@@ -22,20 +22,20 @@ Upgrade the theory loop from an artifact-routing package queue into a general ca
 ```text
 Representative artifact: none
 Visible first frontier: unknown
-Active package: work/packages/done-20260528-theory-loop-artifact-compare-invariants.md
+Active package: work/packages/done-20260528-theory-loop-validator-templates-and-gates.md
 Active package owner: workflow_tooling_owner
-Active package boundary: artifact_compare_invariant_extractor
+Active package boundary: mechanism_card_validator_gate
 Selected cause: workflow_improvement
-Required action: Add a work:artifact-compare command that reports stable facts, changed facts, invariant blockers, and plausible mechanism movement between two artifacts.
+Required action: Wire mechanism-card, expected-movement, and negative-learning fields into templates, schema help, and validator checks.
 Representative status: unknown
 Causal outcome: unknown
 Architecture gate: not-required / unknown
 Expected delta: unknown
-Current state: Agents compare representative reruns by hand, so invariant blockers and presentation-only churn are easy to miss.
-Allowed edits: package.json, scripts/list-commands.js, scripts/work-artifact-compare.js, test/scripts/work-artifact-compare.test.js
+Current state: Mechanism cards can be produced by tools, but package readiness still does not require them for non-trivial theory-loop work.
+Allowed edits: .kiro/steering/schemas/work-package.schema.json, scripts/work-package-schema.js, scripts/work-tracker.js, work/templates/lightweight-maintenance-package.md, work/templates/runtime-owner-package.md, work/templates/scenario-closure-package.md, test/scripts/work-tracker-mechanism-card-gate.test.js
 Candidate runtime files: unknown
-Forbidden edits: the command mutates work state, the comparison requires hard-coded rolling-restart field paths, canonical evidence tools cannot provide enough normalized fields
-Required latest proof: regression: npm test -- test/scripts/work-artifact-compare.test.js, supporting: npm run work:artifact-compare -- test-output/reports/rolling-restart-active-gate-snapshot-coverage-retry-cadence-20260528T033446Z.report.json test-output/reports/rolling-restart-active-gate-owner-reconcile-retry-20260528T040351Z.report.json, supporting: npm run work:validate -- --entry work/packages/todo-20260528-theory-loop-artifact-compare-invariants.md, supporting: npm run work:validate -- --pre-impl work/packages/todo-20260528-theory-loop-artifact-compare-invariants.md, supporting: git diff --check -- package.json scripts/list-commands.js scripts/work-artifact-compare.js test/scripts/work-artifact-compare.test.js
+Forbidden edits: validator changes reject historical closed packages, schema changes require migration of active packages, mechanism-card enforcement cannot distinguish trivial docs-only packages from theory-loop packages
+Required latest proof: regression: npm test -- test/scripts/work-tracker-mechanism-card-gate.test.js, supporting: npm run work:package:schema, supporting: npm run work:validate -- --entry work/packages/todo-20260528-theory-loop-validator-templates-and-gates.md, supporting: npm run work:validate -- --pre-impl work/packages/todo-20260528-theory-loop-validator-templates-and-gates.md, supporting: git diff --check -- .kiro/steering/schemas/work-package.schema.json scripts/work-package-schema.js scripts/work-tracker.js work/templates/lightweight-maintenance-package.md work/templates/runtime-owner-package.md work/templates/scenario-closure-package.md test/scripts/work-tracker-mechanism-card-gate.test.js
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -104,7 +104,7 @@ Expected action bias: define or execute an owner-recovery retry/enqueue transiti
    - Lane: `lightweight-maintenance`
    - Purpose: Add `npm run work:artifact-compare -- old-artifact.json new-artifact.json` to list stable facts, changed facts, invariant blockers, and plausible mechanism movement.
    - First-run reason: Same-frontier loops need an automatic distinction between real movement and presentation-only churn.
-4. [Theory Loop Validator Templates And Gates](../packages/todo-20260528-theory-loop-validator-templates-and-gates.md)
+4. [Theory Loop Validator Templates And Gates](../packages/done-20260528-theory-loop-validator-templates-and-gates.md)
    - Lane: `lightweight-maintenance`
    - Purpose: Wire mechanism cards, expected movement, and negative-learning requirements into package templates, schema help, and validators.
    - First-run reason: The contract should become part of package readiness, not an optional prose habit.
