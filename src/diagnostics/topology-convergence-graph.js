@@ -19,6 +19,8 @@ import {
   ABSENT_VALUE,
   REASON_SEPARATOR,
   OWNER_WITNESS_FIELD,
+  TYPE_OBJECT,
+  TYPE_STRING,
   glossaryEntries,
   cloneDecisionTableRows,
 } from './topology-convergence-constants.js';
@@ -65,6 +67,12 @@ import {
   replayTopologyConvergenceFixture,
 } from './topology-convergence-replay.js';
 
+import {
+  PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION,
+  selectPublicationActiveGateHandoffContract as
+    selectControlPlanePublicationActiveGateHandoffContract,
+} from '../control-plane/publication-active-gate-handoff-contract.js';
+
 const NODE_DEFINITIONS = Object.freeze([
   Object.freeze({
     id: NODE_ID.PUBLICATION_CONVERGENCE,
@@ -99,6 +107,17 @@ const RUNTIME_PROMOTION_GUARD_REASON =
   'active_gate_runtime_promotion_requires_non_repeated_contract';
 const OWNER_DIAGNOSTICS = 'diagnostics_owner';
 const BOUNDARY_CAUSAL_ANALYSIS_FRAMEWORK = 'causal_analysis_framework';
+const PUBLICATION_ACTIVE_GATE_HANDOFF_SOURCE_FIELD = Object.freeze({
+  ACTIVE_GATE: 'activeGate',
+  NEXT_ACTION: 'nextAction',
+  PENDING_RECOVERY_COUNT: 'pendingRecoveryCount',
+  PENDING_RECOVERY_NODE_IDS: 'pendingRecoveryNodeIds',
+  PENDING_RECONCILE_COUNT: 'pendingReconcileCount',
+  PENDING_RECONCILE_NODE_IDS: 'pendingReconcileNodeIds',
+  PROGRESS: 'progress',
+  PUBLICATION_CONVERGENCE: 'publicationConvergence',
+  RUNTIME_PROMOTION_ALLOWED: 'runtimePromotionAllowed',
+});
 
 export function buildTopologyConvergenceGraph(input = {}) {
   const normalized = normalizeTopologyConvergenceInput(input);
@@ -289,11 +308,16 @@ function buildPriorityRecoveryEdge(normalized) {
 function buildActiveGateSnapshotEdge(normalized) {
   const progress = normalized.progress;
   const publicationActiveGateHandoff = normalized.publicationActiveGateHandoff;
+  const selectedPublicationActiveGateHandoff =
+    selectActiveGateSnapshotPublicationHandoffContract(
+      progress,
+      publicationActiveGateHandoff,
+    );
   const reasons = createTopologyConvergenceReasonList();
   const state = resolveActiveGateSnapshotState(
     normalized.activeGate,
     progress,
-    publicationActiveGateHandoff,
+    selectedPublicationActiveGateHandoff,
     reasons,
   );
 
@@ -361,10 +385,13 @@ function buildActiveGateSnapshotEdge(normalized) {
         progress.selectedSnapshotRepairDeferred,
       ),
       ...buildPublicationActiveGateHandoffSource(
-        publicationActiveGateHandoff,
+        selectedPublicationActiveGateHandoff,
         progress,
       ),
-      ...buildOwnerRecoveryQueueSource(progress, publicationActiveGateHandoff),
+      ...buildOwnerRecoveryQueueSource(
+        progress,
+        selectedPublicationActiveGateHandoff,
+      ),
       ...buildActiveGateOwnerCohortSource(progress),
       ...buildTopologyOperatorWitnessDiagnosticSource(
         progress.topologyOperatorWitness,
@@ -375,6 +402,7 @@ function buildActiveGateSnapshotEdge(normalized) {
         state,
         reasons,
         progressContract,
+        publicationActiveGateHandoff: selectedPublicationActiveGateHandoff,
       }),
       progressContract,
     },
@@ -389,12 +417,92 @@ function buildActiveGateSnapshotEdge(normalized) {
   });
 }
 
+function selectActiveGateSnapshotPublicationHandoffContract(
+  progress,
+  publicationActiveGateHandoff,
+) {
+  if (
+    hasPublicationActiveGateHandoffSourceContract(
+      publicationActiveGateHandoff,
+    )
+  ) {
+    return publicationActiveGateHandoff;
+  }
+  const progressHandoff =
+    selectControlPlanePublicationActiveGateHandoffContract({
+      [PUBLICATION_ACTIVE_GATE_HANDOFF_SOURCE_FIELD
+        .PUBLICATION_CONVERGENCE]: {
+        [PUBLICATION_ACTIVE_GATE_HANDOFF_SOURCE_FIELD.ACTIVE_GATE]: {
+          [PUBLICATION_ACTIVE_GATE_HANDOFF_SOURCE_FIELD.PROGRESS]: progress,
+        },
+      },
+    });
+  return hasPublicationActiveGateHandoffSourceContract(progressHandoff) ?
+    progressHandoff :
+    publicationActiveGateHandoff;
+}
+
+function hasPublicationActiveGateHandoffSourceContract(value = null) {
+  if (!value || typeof value !== TYPE_OBJECT || Array.isArray(value)) {
+    return false;
+  }
+  const pendingRecoveryCount = Number(
+    value[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_SOURCE_FIELD.PENDING_RECOVERY_COUNT
+    ],
+  );
+  const pendingReconcileCount = Number(
+    value[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_SOURCE_FIELD.PENDING_RECONCILE_COUNT
+    ],
+  );
+  return value[
+    PUBLICATION_ACTIVE_GATE_HANDOFF_SOURCE_FIELD.NEXT_ACTION
+  ] === PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.WAIT_OWNER_RECOVERY ||
+    value[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_SOURCE_FIELD.NEXT_ACTION
+    ] === PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+      .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION ||
+    value[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_SOURCE_FIELD.RUNTIME_PROMOTION_ALLOWED
+    ] === true ||
+    pendingRecoveryCount > SOURCE_ORDER_BASE ||
+    pendingReconcileCount > SOURCE_ORDER_BASE ||
+    hasPublicationActiveGateHandoffNodeDebt(
+      value,
+      PUBLICATION_ACTIVE_GATE_HANDOFF_SOURCE_FIELD
+        .PENDING_RECOVERY_NODE_IDS,
+    ) ||
+    hasPublicationActiveGateHandoffNodeDebt(
+      value,
+      PUBLICATION_ACTIVE_GATE_HANDOFF_SOURCE_FIELD
+        .PENDING_RECONCILE_NODE_IDS,
+    );
+}
+
+function hasPublicationActiveGateHandoffNodeDebt(value, fieldName) {
+  const nodeIds = value[fieldName];
+  if (Array.isArray(nodeIds)) {
+    return nodeIds.length > SOURCE_ORDER_BASE;
+  }
+  return typeof nodeIds === TYPE_STRING &&
+    nodeIds.trim().length > SOURCE_ORDER_BASE;
+}
+
 function buildActiveGateRuntimePromotionGuard({
   state,
   reasons,
   progressContract,
+  publicationActiveGateHandoff,
 }) {
   if (state === EDGE_STATE.SATISFIED) {
+    return {};
+  }
+  if (
+    hasPublicationActiveGateHandoffSourceContract(
+      publicationActiveGateHandoff,
+    )
+  ) {
     return {};
   }
   const reasonSet = new Set(reasons);

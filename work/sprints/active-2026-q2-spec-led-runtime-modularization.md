@@ -64,23 +64,23 @@ priority-recovery or active-gate frontier.
 ## Current Edge Card
 
 ```text
-Representative artifact: none
-Visible first frontier: unknown
-Active package: work/packages/done-20260529-system-theory-checkpoint-due-recognition.md
-Active package owner: workflow_tooling_owner
-Active package boundary: system_theory_checkpoint_gate
-Selected cause: rederive_checkpoint_not_recognized
-Required action: Close this workflow-tooling package, then resume the non-halting sprint from the selected architecture-continuation route.
-Representative status: unknown
-Causal outcome: unknown
-Architecture gate: not-required / unknown
-Expected delta: unknown
-Current state: check-due now reports 0 closed packages since the latest closed systemTheory rederive checkpoint instead of 13 same-day closures from the sprint date stamp.
-Allowed edits: work/packages/done-20260529-system-theory-checkpoint-due-recognition.md, scripts/work-system-theory-rederive.js, test/scripts/work-system-theory-rederive.test.js, work/RULES.md, work/sprints/active-2026-q2-spec-led-runtime-modularization.md
-Candidate runtime files: unknown
-Forbidden edits: the check-due gate would stop enforcing periodic rederive checkpoints, the change requires runtime source files, the fix changes representative scenario routing
-Required latest proof: regression: npm test -- test/scripts/work-system-theory-rederive.test.js, regression: npm run work:system-theory:rederive -- --check-due --sprint work/sprints/active-2026-q2-spec-led-runtime-modularization.md, supporting: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12, supporting: git diff --check -- scripts/work-system-theory-rederive.js test/scripts/work-system-theory-rederive.test.js work/RULES.md work/sprints/active-2026-q2-spec-led-runtime-modularization.md work/sprints/current-blocker.json work/sprints/current-blocker.md work/packages/done-20260529-system-theory-checkpoint-due-recognition.md
-Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
+Representative artifact: test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json
+Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending
+Active package: work/packages/done-20260529-rolling-restart-active-gate-handoff-protocol-route.md
+Active package owner: startup_active_gate_owner
+Active package boundary: snapshot_coverage
+Selected cause: snapshot_coverage_incomplete
+Required action: Implement the selected architecture route by turning selected-snapshot deferred retry evidence into a publication active-gate owner handoff contract and letting topology diagnostics recognize that source contract.
+Representative status: reduced
+Causal outcome: continue_local_fix
+Architecture gate: watching / unknown
+Expected delta: Topology convergence exposes publicationActiveGateHandoff fields for selected-snapshot deferred retry and no longer emits requires_non_repeated_source_contract when the owner handoff contract is present.
+Current state: Package opened with declared owner, boundary, scope, proof, and stop rule.
+Allowed edits: work/packages/done-20260529-rolling-restart-active-gate-handoff-protocol-route.md, work/sprints/active-2026-q2-spec-led-runtime-modularization.md, src/diagnostics/topology-convergence-graph.js, test/diagnostics/topology-convergence-active-gate-handoff-route.test.js
+Candidate runtime files: src/control-plane/publication-active-gate-handoff-contract-selection.js, src/control-plane/membership-publication-active-gate-reconcile.js, src/admin/admin-control-snapshot-publication-handoff.js
+Forbidden edits: Selected-snapshot deferred retry must be represented as an owner handoff protocol before diagnostics may treat it as a repeated local retry with no source contract.
+Required latest proof: falsifier: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --explain active_gate_snapshot_coverage, regression: npm test -- test/diagnostics/topology-convergence-active-gate-handoff-route.test.js, supporting: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12
+Allowed stop modes: success-condition-met only; representative-green, owner-boundary-migration, architecture-gap, same-frontier, classification-only, needs-rerun, pending, and unknown are package outcomes unless they exactly match the original sprint success condition
 ```
 
 ## Joint Coupled-Invariant Probe
@@ -141,6 +141,14 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Purpose: Keep the periodic rederive gate enforced while making it recognize the latest closed same-day system-theory checkpoint.
    - First-run reason: After the checkpoint rederive closed, `work:system-theory:rederive -- --check-due --sprint work/sprints/active-2026-q2-spec-led-runtime-modularization.md` still reports 13 same-day closed packages and would force another immediate checkpoint instead of the selected architecture continuation.
    - Decision: `work:system-theory:rederive -- --check-due --sprint work/sprints/active-2026-q2-spec-led-runtime-modularization.md` now reports 0 closed packages since the latest closed systemTheory rederive checkpoint; the gate remains enforced for packages closed after that checkpoint.
+12. [Rolling Restart Active Gate Handoff Protocol Route](../packages/done-20260529-rolling-restart-active-gate-handoff-protocol-route.md)
+   - Lane: `causal-escalation`
+   - Purpose: Implement the R13 protocol-layer route by converting selected-snapshot deferred retry evidence into a publication active-gate owner handoff contract and making topology diagnostics recognize the non-repeated source contract.
+   - First-run reason: `work:frontier-history` reports `architectureRouteState: implement-pending` for startup_active_gate_owner / snapshot_coverage, so the only valid redirect is the architecture-route implementation carrying `theoryLoop.architectureRoute`.
+13. [Rolling Restart Active Gate Owner Handoff Write Deferred Reentry](../packages/todo-20260529-rolling-restart-active-gate-owner-handoff-write-deferred-reentry.md)
+   - Lane: `experiment`
+   - Purpose: Preserve the reduced owner_reconcile_pending route after the protocol package closes, then promote the concrete source package selected by the remaining write_deferred owner handoff evidence.
+   - First-run reason: The protocol route proof removed the runtime-promotion guard and exposed publicationActiveGateHandoff wait_owner_recovery pending recovery evidence; the remaining local witness is membershipPublicationHandoffOutcomeState=write_deferred with one pending owner recovery write.
 
 ## Sprint Proof Ladder
 
