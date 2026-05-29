@@ -428,3 +428,17 @@ Each entry must include these labels:
 - Supersedes: none
 - Superseded by: none
 - Next implication: Close this package as architecture-gap analysis and open the autonomous architecture experiment/fresh route selected by route-after-rerun; do not edit runtime source from this artifact until a non-repeated contract, real migration, implementable architecture route, or representative-green proof exists.
+
+## theory-20260529-rolling-restart-active-gate-handoff-selection-architecture-experiment
+
+- Status: supported
+- Scenario/gate: rolling-restart / active_gate_snapshot_coverage
+- Owner/boundary: startup_active_gate_owner / snapshot_coverage
+- Hypothesis: The active-gate handoff contract selection path is not a non-repeated source transition for the fresh active_gate_timed_out artifact: it converts selected_snapshot_source_timeout plus repair_deferred retry into pending recovery / wait_owner_recovery and keeps runtime promotion denied, so source promotion remains blocked from this artifact.
+- Probe: `npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12`
+- Artifact/result: test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json - frontier-history loopHealth=exhausted with same-mechanism-repeat and pair-alternation-post-rederive; scenario-route runtimePromotionGuard.state=blocked with historyCount=12 and zero priority residuals; evidence-summary keeps active_gate_snapshot_coverage first with active_gate_timed_out, selected_snapshot_source_timeout, snapshot_repair_deferred, and publicationActiveGateHandoffRuntimePromotionAllowed=false; source review shows publication-active-gate-handoff-contract-selection.js maps deferred retry to pendingRecovery/wait_owner_recovery rather than a new owner transition.
+- Representative movement: architecture-gap
+- Linked packages: `work/packages/active-20260529-rolling-restart-active-gate-handoff-contract-selection-architecture-experiment.md`
+- Supersedes: none
+- Superseded by: none
+- Next implication: Close the handoff selection architecture experiment as architecture-gap continuation; do not edit runtime source from this artifact unless a future proof names a non-repeated transition, owner migration, protocol/model/topology route, or representative-green result.
