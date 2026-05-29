@@ -382,11 +382,10 @@ Canonical evidence source:
 
 ## Commit And Push Ledger
 
-1. Focused package commit: 95421880308fa9504acfa6e18e322c07b0b90970
+1. Focused package commit: 7fbe69292d61b800323d72e1b59c647adf50e778
 2. Push target: origin/codex/pending-ack-eligibility-filter
 3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
-4. Pushed: no
-
+4. Pushed: yes 2026-05-29T09:06:21.762Z
 ## Validation
 
 1. `npm test -- test/diagnostics/stop-condition-decision.test.js`
