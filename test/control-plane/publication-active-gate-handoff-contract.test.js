@@ -88,6 +88,7 @@ const TEST_SELECTED_SNAPSHOT_OBSERVATION_CONTRACT_STATE_DEFERRED =
   'deferred';
 const TEST_SELECTED_SNAPSHOT_OBSERVATION_NEXT_ACTION_RETRY = 'retry';
 const TEST_SELECTED_SNAPSHOT_OBSERVATION_RETRY_AFTER_MS = 100;
+const TEST_CONTROL_PLANE_OWNER_RECOVERY_RETRY_AFTER_MS = 1000;
 const TEST_JOINED_PENDING_RECONCILE_NODE_IDS = [
   TEST_NODE_2,
   TEST_NODE_3,
@@ -386,7 +387,7 @@ test('publication active-gate selector maps deferred selected snapshot timeout t
     );
   });
 
-test('publication active-gate handoff preserves selected timeout retry contract',
+test('publication active-gate handoff floors selected timeout owner recovery retry',
   async (t) => {
     const diagnostics = {
       publicationConvergence: {
@@ -437,23 +438,29 @@ test('publication active-gate handoff preserves selected timeout retry contract'
       nextAction:
         PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.WAIT_OWNER_RECOVERY,
       pendingRecoveryNodeIds: [TEST_NODE_5],
-      retryAfterMs: TEST_SELECTED_SNAPSHOT_OBSERVATION_RETRY_AFTER_MS,
+      retryAfterMs: TEST_CONTROL_PLANE_OWNER_RECOVERY_RETRY_AFTER_MS,
     });
     t.equal(
-      target.handoffContract.retryAfterMs,
+      diagnostics.publicationConvergence.activeGate.progress
+        .selectedSnapshotObservationRetryAfterMs,
       TEST_SELECTED_SNAPSHOT_OBSERVATION_RETRY_AFTER_MS,
-      'membership handoff target should preserve selected timeout retry timing',
+      'selected snapshot observation should stay diagnostic retry input',
+    );
+    t.equal(
+      target.handoffContract.retryAfterMs,
+      TEST_CONTROL_PLANE_OWNER_RECOVERY_RETRY_AFTER_MS,
+      'membership handoff target should preserve owner recovery retry floor',
     );
     t.match(envelope, {
-      retryAfterMs: TEST_SELECTED_SNAPSHOT_OBSERVATION_RETRY_AFTER_MS,
+      retryAfterMs: TEST_CONTROL_PLANE_OWNER_RECOVERY_RETRY_AFTER_MS,
       evidence: {
-        retryAfterMs: TEST_SELECTED_SNAPSHOT_OBSERVATION_RETRY_AFTER_MS,
+        retryAfterMs: TEST_CONTROL_PLANE_OWNER_RECOVERY_RETRY_AFTER_MS,
         crossOwnerHandoffContract: {
           producerOwnerOutcome: {
-            retryAfterMs: TEST_SELECTED_SNAPSHOT_OBSERVATION_RETRY_AFTER_MS,
+            retryAfterMs: TEST_CONTROL_PLANE_OWNER_RECOVERY_RETRY_AFTER_MS,
           },
           retryDeferBehavior: {
-            retryAfterMs: TEST_SELECTED_SNAPSHOT_OBSERVATION_RETRY_AFTER_MS,
+            retryAfterMs: TEST_CONTROL_PLANE_OWNER_RECOVERY_RETRY_AFTER_MS,
             ownerRecoveryWaitRequired: true,
           },
         },

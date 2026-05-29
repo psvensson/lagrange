@@ -60,6 +60,7 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_RETRY_AFTER_MS_FIELD = Object.freeze({
   SELECTED_SNAPSHOT_OBSERVATION_RETRY_AFTER_MS:
     'selectedSnapshotObservationRetryAfterMs',
 });
+const PUBLICATION_ACTIVE_GATE_OWNER_RECOVERY_RETRY_AFTER_MS = NUM.THOUSAND;
 
 function normalizePublicationActiveGateHandoffRetryAfterMs(value) {
   return Number.isFinite(value) && value > NUM.ZERO ?
@@ -135,6 +136,21 @@ function resolvePublicationActiveGateHandoffRetryAfterMs(...sources) {
   return NUM.ZERO;
 }
 
+function resolvePublicationActiveGateOwnerRecoveryRetryAfterMs(
+  value,
+  retryAfterMs,
+) {
+  const normalizedRetryAfterMs =
+    normalizePublicationActiveGateHandoffRetryAfterMs(retryAfterMs);
+  if (!hasPublicationActiveGateOwnerRecoveryWaitSignal(value)) {
+    return normalizedRetryAfterMs;
+  }
+  return Math.max(
+    normalizedRetryAfterMs,
+    PUBLICATION_ACTIVE_GATE_OWNER_RECOVERY_RETRY_AFTER_MS,
+  );
+}
+
 function applyPublicationActiveGateHandoffRetryAfterMs(value, retryAfterMs) {
   if (
     !isPublicationActiveGateHandoffRecord(value) ||
@@ -176,9 +192,9 @@ function selectPublicationActiveGateHandoffCandidateWithRetry(
   candidate = null,
   value = null,
 ) {
-  const retryAfterMs = resolvePublicationActiveGateHandoffRetryAfterMs(
+  const retryAfterMs = resolvePublicationActiveGateOwnerRecoveryRetryAfterMs(
     candidate,
-    value,
+    resolvePublicationActiveGateHandoffRetryAfterMs(candidate, value),
   );
   return applyPublicationActiveGateHandoffRetryAfterMs(candidate, retryAfterMs);
 }
@@ -242,7 +258,7 @@ function buildPublicationActiveGateHandoffContract(options = {}) {
   const runtimePromotionAllowed =
     decision.runtimePromotionAllowed === true &&
     activeGateCatchupFence.promotionAllowed === true;
-  const retryAfterMs =
+  const selectedRetryAfterMs =
     resolvePublicationActiveGateHandoffRetryAfterMs(options);
   const promotionDeniedByFence =
     decision.runtimePromotionAllowed === true &&
@@ -257,6 +273,13 @@ function buildPublicationActiveGateHandoffContract(options = {}) {
   const contractNextAction = promotionDeniedByFence ?
     PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.OBSERVE_OWNER_HANDOFF :
     decision.nextAction;
+  const retryAfterMs = resolvePublicationActiveGateOwnerRecoveryRetryAfterMs(
+    {
+      nextAction: contractNextAction,
+      pendingRecoveryNodeIds,
+    },
+    selectedRetryAfterMs,
+  );
   const crossOwnerHandoffContract =
     applyPublicationActiveGateCrossOwnerRetryAfterMs(
       buildPublicationActiveGateCrossOwnerHandoffContract({
@@ -360,10 +383,13 @@ function buildPublicationActiveGateOwnerOutcomeEnvelope(value = null) {
   const producerOutcome = buildPublicationActiveGateOwnerOutcomeContract(
     normalizedContract,
   );
-  const retryAfterMs = resolvePublicationActiveGateHandoffRetryAfterMs(
+  const retryAfterMs = resolvePublicationActiveGateOwnerRecoveryRetryAfterMs(
     normalizedContract,
-    handoffContract,
-    value,
+    resolvePublicationActiveGateHandoffRetryAfterMs(
+      normalizedContract,
+      handoffContract,
+      value,
+    ),
   );
   return buildOwnerOutcomeEnvelope({
     owner: producerOutcome.owner,
