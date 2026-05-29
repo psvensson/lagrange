@@ -318,7 +318,7 @@ const FIELD_LABELS = Object.freeze({
   WORKFLOW_LANE: 'Workflow lane',
   RECOMMENDED_LANE: 'Recommended lane',
   STOP_CONDITION_CHECK: 'Stop-condition check',
-  STOP_RULE: 'Stop rule',
+  STOP_RULE: 'Redirect rule',
   SUBAGENT_ROLE: 'Next required subagent role',
   SUBAGENT_STATUS: 'Subagent sequencing status',
   THEORY_UNDER_TEST: 'Theory under test',
@@ -1860,7 +1860,7 @@ function buildActiveConstraintLines(currentBlocker = {}, packageContent = EMPTY_
     `Primary steering pack: ${primarySteeringPackLabel(currentBlocker)}`,
     `Do-not-edit scope: ${doNotEditScope.join(', ') || DEFAULT_UNKNOWN}`,
     `Proof ladder: ${normalizeStringList(currentBlocker.proof).join('; ') || DEFAULT_UNKNOWN}`,
-    `Kill rule: ${theoryFocus.stopRule}`,
+    `Redirect rule: ${theoryFocus.stopRule}`,
     ...buildRelevantSteeringRules(currentBlocker, packageContent)
       .map((rule) => `Steering rule: ${rule}`),
   ];

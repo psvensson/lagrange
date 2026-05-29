@@ -879,9 +879,11 @@ function buildDecisionExperimentGateLines(lane, flags, proof, metadata) {
       'count, frontier, migration, or representative-green condition must move.',
     `- Representative rerun: \`${representativeRerun}\``,
     '- Kill rule: If fresh representative evidence returns the same frontier ' +
-      'and dominant reason with no concrete metric reduction, stop for ' +
-      'an autonomous architecture experiment instead of opening another local ' +
-      'patch; use human escalation only for contradictory or blocked evidence.',
+      'and dominant reason with no concrete metric reduction, redirect to an ' +
+      'autonomous architecture/causal experiment or successor package instead ' +
+      'of opening another local patch — never a bare stop. Terminate the loop ' +
+      'only for a closed Termination Condition; a human-only block maps to ' +
+      'blocked-frozen-decision/blocked-external-dependency.',
   ];
 }
 

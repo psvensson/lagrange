@@ -573,7 +573,7 @@ test('work context advertises triage commands before raw artifact reads',
       'Proof ladder: Focused proof',
     ));
     t.ok(rendered.includes(
-      'Kill rule: keep operation_workflow_owner / workflow_progress as first frontier',
+      'Redirect rule: keep operation_workflow_owner / workflow_progress as first frontier',
     ));
     t.ok(rendered.includes(
       'Steering rule: CORE-02 Work one bounded concern',

@@ -21,7 +21,17 @@
   "writeScope": [
     "src/diagnostics/topology-convergence-graph.js",
     "src/diagnostics/stop-condition-decision.js",
-    "test/diagnostics/stop-condition-decision.test.js"
+    "test/diagnostics/stop-condition-decision.test.js",
+    ".kiro/steering/workflow-guidelines/closure.md",
+    "scripts/work-package-new.js",
+    "scripts/work-tracker.js",
+    "work/RULES.md",
+    "work/templates/sprint-strategy-brief.md",
+    "scripts/work-context.js",
+    "test/scripts/work-context.test.js",
+    ".kiro/steering/llm/governance.md",
+    ".kiro/steering/llm/rules.json",
+    "test/scripts/work-tracker-theory-loop-continuation.test.js"
   ],
   "handoffFiles": [
     "test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json"
@@ -42,7 +52,17 @@
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",
     "src/diagnostics/stop-condition-decision.js",
-    "test/diagnostics/stop-condition-decision.test.js"
+    "test/diagnostics/stop-condition-decision.test.js",
+    ".kiro/steering/workflow-guidelines/closure.md",
+    "scripts/work-package-new.js",
+    "scripts/work-tracker.js",
+    "work/RULES.md",
+    "work/templates/sprint-strategy-brief.md",
+    "scripts/work-context.js",
+    "test/scripts/work-context.test.js",
+    ".kiro/steering/llm/governance.md",
+    ".kiro/steering/llm/rules.json",
+    "test/scripts/work-tracker-theory-loop-continuation.test.js"
   ],
   "touchedFiles": [],
   "theoryLedgerRefs": [
@@ -183,7 +203,7 @@
       "Migrate only when canonical evidence names a different deciding owner and boundary."
     ],
     "architectureGapTriggers": [
-      "Stop as architecture-gap if no non-repeated source contract is selected."
+      "Redirect to a bounded architecture-gap experiment if no non-repeated source contract is selected."
     ],
     "wholeSystemInvariant": "Correcting route classification cannot by itself reopen a saturated runtime patch loop."
   },
@@ -194,7 +214,7 @@
     "sourceTestContract": "src/diagnostics/topology-convergence-graph.js may encode the diagnostics-owned promotion guard only if proof cannot name a non-repeated active-gate source contract.",
     "falsifier": "npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12",
     "representativeExpectedMovement": "runtime promotion remains blocked, a non-repeated source contract is named, or owner boundary migrates.",
-    "killRule": "if proof names a concrete non-repeated active-gate owner source contract, supersede this guard and open that source package; stop or escalate on unchanged same-frontier, no-reduction, or architecture-gap evidence",
+    "killRule": "if proof names a concrete non-repeated active-gate owner source contract, supersede this guard and open that source package; on unchanged same-frontier, no-reduction, or architecture-gap evidence redirect immediately to a bounded architecture/causal experiment or fresh route evidence and keep executing autonomously. The loop terminates only for a closed Termination Condition (success-condition-met, blocked-frozen-decision, blocked-external-dependency).",
     "theoryFitScore": {
       "evidenceFit": "medium - successor starts from corrected route plus architecture-gap history.",
       "ownerBoundaryFit": "high - diagnostics owns route and promotion guard selection.",

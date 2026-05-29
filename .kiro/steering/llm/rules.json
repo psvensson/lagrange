@@ -104,7 +104,7 @@
     "exportedRuleCount": 327,
     "aliasRuleCount": 11,
     "masterRuleCount": 316,
-    "estimatedAllRulesTokens": 12997
+    "estimatedAllRulesTokens": 13061
   },
   "rules": [
     {
@@ -1648,7 +1648,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 264,
+          "line": 267,
           "section": "Workflow — Decision & Closure Gates > Classification-Only Fast Path"
         }
       ]
@@ -1665,7 +1665,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 415,
+          "line": 418,
           "section": "Workflow — Decision & Closure Gates > Sprint Architecture Decision Gate"
         }
       ]
@@ -1680,7 +1680,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 491,
+          "line": 494,
           "section": "Workflow — Decision & Closure Gates > Scenario Failure Migration"
         }
       ]
@@ -1697,7 +1697,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 533,
+          "line": 536,
           "section": "Workflow — Decision & Closure Gates > Frontier Oscillation Escalation"
         }
       ]
@@ -2737,7 +2737,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 297,
+          "line": 300,
           "section": "Workflow — Decision & Closure Gates > Classification Efficiency Contract"
         }
       ]
@@ -3460,7 +3460,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 344,
+          "line": 347,
           "section": "Workflow — Decision & Closure Gates > Sprint Architecture Decision Gate"
         }
       ]
@@ -3477,7 +3477,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 367,
+          "line": 370,
           "section": "Workflow — Decision & Closure Gates > Sprint Architecture Decision Gate"
         }
       ]
@@ -3492,7 +3492,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 406,
+          "line": 409,
           "section": "Workflow — Decision & Closure Gates > Sprint Architecture Decision Gate"
         }
       ]
@@ -3509,7 +3509,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 488,
+          "line": 491,
           "section": "Workflow — Decision & Closure Gates > Scenario Failure Migration"
         }
       ]
@@ -3721,7 +3721,7 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "Stop or escalate rule: the concrete condition that opens/selects an autonomous architecture experiment, causal escalation, or a human-only escalation for blocked/contradictory evidence instead of another local runtime patch. In theory-loop terms (see work/RULES.md#non-halting-continuation-invariant-r12), an architecture experiment or causal escalation is a redirect(next-action) — an autonomous continuation, never a halt. Only a human-only block maps to terminate(blocked-frozen-decision | blocked-external-dependency).",
+      "rule": "Redirect rule (legacy name Stop or escalate rule, still accepted): the next autonomous action a non-terminal outcome triggers — open/select an autonomous architecture experiment, causal escalation, or successor package instead of another local runtime patch. In theory-loop terms (see work/RULES.md#non-halting-continuation-invariant-r12), an architecture experiment or causal escalation is a redirect(next-action) — an autonomous continuation, never a halt. It must never instruct the agent to end the turn, await a human, or pause work; for a running theory-loop sprint the validator rejects a non-actionable or halt-framed redirect rule (theory-loop-redirect-rule-not-actionable). Only a human-only block maps to terminate(blocked-frozen-decision | blocked-external-dependency).",
       "score": 197,
       "sources": [
         {
@@ -3741,7 +3741,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 267,
+          "line": 270,
           "section": "Workflow — Decision & Closure Gates > Classification-Only Fast Path"
         }
       ]
@@ -3983,7 +3983,7 @@
         },
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 304,
+          "line": 307,
           "section": "Workflow — Decision & Closure Gates > Decision Experiment Gate"
         }
       ]
@@ -4282,7 +4282,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 443,
+          "line": 446,
           "section": "Workflow — Decision & Closure Gates > Scenario Causal Closure Ledger"
         }
       ]
@@ -4299,7 +4299,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 494,
+          "line": 497,
           "section": "Workflow — Decision & Closure Gates > Scenario Failure Migration"
         }
       ]
@@ -4718,7 +4718,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 386,
+          "line": 389,
           "section": "Workflow — Decision & Closure Gates > Sprint Architecture Decision Gate"
         }
       ]
@@ -4736,7 +4736,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 390,
+          "line": 393,
           "section": "Workflow — Decision & Closure Gates > Sprint Architecture Decision Gate"
         }
       ]
@@ -4753,7 +4753,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 484,
+          "line": 487,
           "section": "Workflow — Decision & Closure Gates > Scenario Failure Migration"
         }
       ]
@@ -5059,7 +5059,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 552,
+          "line": 555,
           "section": "Workflow — Decision & Closure Gates > Frontier Oscillation Escalation"
         }
       ]
@@ -5379,7 +5379,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 334,
+          "line": 337,
           "section": "Workflow — Decision & Closure Gates > Sprint Architecture Decision Gate"
         }
       ]
@@ -5397,7 +5397,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 537,
+          "line": 540,
           "section": "Workflow — Decision & Closure Gates > Frontier Oscillation Escalation"
         }
       ]
@@ -5412,7 +5412,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 552,
+          "line": 555,
           "section": "Workflow — Decision & Closure Gates > Frontier Oscillation Escalation"
         }
       ]
@@ -5531,11 +5531,11 @@
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 443,
+          "line": 446,
           "section": "Workflow — Decision & Closure Gates > Scenario Causal Closure Ledger"
         }
       ]
     }
   ],
-  "generatedAt": "2026-05-29T08:20:14.914Z"
+  "generatedAt": "2026-05-29T09:25:33.006Z"
 }

@@ -20,7 +20,13 @@ priority-recovery or active-gate frontier.
 - Expected green path: close the architecture-gap analysis as a learning package, then continue only with fresh representative evidence or a follow-on architecture experiment that names a non-repeated owner contract, protocol/model/topology route, or real owner-boundary migration.
 - Wrong direction signals: closing this sprint on architecture-gap or migration, widening timeouts, weakening admission/readiness, hiding diagnostics, reopening rebalancer handoff while priority-recovery witnesses are zero, or opening another generic startup_active_gate_owner / snapshot_coverage patch after the rederive selected architecture work.
 - Next best package: fresh route evidence or a bounded architecture experiment; no local startup_active_gate_owner / snapshot_coverage source package is promoted from the current artifact.
-- Stop or escalate rule: same-frontier/no-reduction after the rederive selects architecture work before another local runtime package; it does not close the sprint.
+- Redirect rule: on same-frontier / no-reduction evidence after the rederive, immediately open a bounded architecture/causal experiment that names a non-repeated owner contract — or run fresh representative route evidence — instead of another local runtime package. This is a redirect, not a stop: the agent keeps executing the next autonomous action and never hands control back; the loop continues until the Evidence Anchor success condition is met. Terminate only for a closed Termination Condition recorded in `## Theory Loop Termination`.
+
+## Theory Loop Termination
+
+- Loop status: running
+- Termination reason: none
+- Next autonomous action: per the Redirect rule above; the Evidence Anchor success condition (local rolling-restart harness exits 0 with no active priority-recovery or active-gate frontier) is not yet met, so the loop must not stop.
 
 ## Theory Loop Sprint
 
@@ -69,7 +75,7 @@ Causal outcome: pending-before-rerun
 Architecture gate: watching / unknown
 Expected delta: Select fresh representative evidence, a non-repeated owner-owned transition, an owner-boundary migration, or a diagnostics-owned architecture guard before any active-gate runtime source promotion.
 Current state: The diagnostics stop-condition fix reroutes the post-architecture-gap artifact from readiness migration to classified local blocker, but prior architecture-gap evidence still blocks another unchanged active-gate runtime patch.
-Allowed edits: src/diagnostics/topology-convergence-graph.js, src/diagnostics/stop-condition-decision.js, test/diagnostics/stop-condition-decision.test.js
+Allowed edits: src/diagnostics/topology-convergence-graph.js, src/diagnostics/stop-condition-decision.js, test/diagnostics/stop-condition-decision.test.js, .kiro/steering/workflow-guidelines/closure.md, scripts/work-package-new.js, scripts/work-tracker.js, work/RULES.md, work/templates/sprint-strategy-brief.md, scripts/work-context.js, test/scripts/work-context.test.js, .kiro/steering/llm/governance.md, .kiro/steering/llm/rules.json, test/scripts/work-tracker-theory-loop-continuation.test.js
 Candidate runtime files: src/admin/admin-control-snapshot-repair-diagnostics.js, src/bootstrap/bootstrap-api-control-plane-methods.js, src/control-plane/membership-publication-active-gate-reconcile.js, src/control-plane/publication-active-gate-handoff-contract-selection.js
 Forbidden edits: Downstream readiness and active-gate runtime files stay frozen until the guard or a non-repeated contract is selected.
 Required latest proof: falsifier: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12, regression: npm run work:scenario-route -- test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason snapshot_coverage_incomplete --explain active_gate_snapshot_coverage, supporting: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json --explain active_gate_snapshot_coverage

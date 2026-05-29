@@ -227,13 +227,16 @@ Required fields:
    owner, chasing a downstream consumer, or widening scope to hide the blocker.
 7. `Next best package`: the next package to continue or activate after the
    current package closes.
-8. `Stop or escalate rule`: the concrete condition that opens/selects an
-   autonomous architecture experiment, causal escalation, or a human-only
-   escalation for blocked/contradictory evidence instead of another local
-   runtime patch. In theory-loop terms (see
+8. `Redirect rule` (legacy name `Stop or escalate rule`, still accepted): the
+   next autonomous action a non-terminal outcome triggers — open/select an
+   autonomous architecture experiment, causal escalation, or successor package
+   instead of another local runtime patch. In theory-loop terms (see
    [`work/RULES.md#non-halting-continuation-invariant-r12`](../../../work/RULES.md#non-halting-continuation-invariant-r12)),
    an architecture experiment or causal escalation is a `redirect(next-action)`
-   — an autonomous continuation, never a halt. Only a human-only block maps to
+   — an autonomous continuation, never a halt. It must never instruct the agent
+   to end the turn, await a human, or pause work; for a running theory-loop
+   sprint the validator rejects a non-actionable or halt-framed redirect rule
+   (`theory-loop-redirect-rule-not-actionable`). Only a human-only block maps to
    `terminate(blocked-frozen-decision | blocked-external-dependency)`.
 
 Update the brief when selected owner or boundary changes, fresh evidence

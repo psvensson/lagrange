@@ -378,8 +378,13 @@ const SPRINT_STRATEGY_BRIEF_EXPECTED_GREEN_PATH_LABEL = 'Expected green path';
 const SPRINT_STRATEGY_BRIEF_WRONG_DIRECTION_SIGNALS_LABEL =
   'Wrong direction signals';
 const SPRINT_STRATEGY_BRIEF_NEXT_BEST_PACKAGE_LABEL = 'Next best package';
+const SPRINT_STRATEGY_BRIEF_REDIRECT_RULE_LABEL = 'Redirect rule';
 const SPRINT_STRATEGY_BRIEF_STOP_OR_ESCALATE_RULE_LABEL =
   'Stop or escalate rule';
+const SPRINT_STRATEGY_BRIEF_REDIRECT_RULE_LABELS = Object.freeze([
+  SPRINT_STRATEGY_BRIEF_REDIRECT_RULE_LABEL,
+  SPRINT_STRATEGY_BRIEF_STOP_OR_ESCALATE_RULE_LABEL,
+]);
 const SPRINT_STRATEGY_BRIEF_FIELDS = Object.freeze([
   SPRINT_STRATEGY_BRIEF_GOAL_STATE_LABEL,
   SPRINT_STRATEGY_BRIEF_CURRENT_CAUSAL_THESIS_LABEL,
@@ -388,8 +393,14 @@ const SPRINT_STRATEGY_BRIEF_FIELDS = Object.freeze([
   SPRINT_STRATEGY_BRIEF_EXPECTED_GREEN_PATH_LABEL,
   SPRINT_STRATEGY_BRIEF_WRONG_DIRECTION_SIGNALS_LABEL,
   SPRINT_STRATEGY_BRIEF_NEXT_BEST_PACKAGE_LABEL,
-  SPRINT_STRATEGY_BRIEF_STOP_OR_ESCALATE_RULE_LABEL,
 ]);
+// A theory-loop redirect rule must name a next autonomous action; these tokens
+// are the redirect verbs/nouns that prove the rule continues the loop.
+const THEORY_LOOP_REDIRECT_ACTION_PATTERN =
+  /\b(?:redirect|continue|open|run|rerun|re-run|rederive|re-derive|experiment|migrate|select|escalat|architecture|causal|successor|next\s+package|promote|probe)\b/iu;
+// Bare-halt phrasing that ends the loop without a closed termination reason.
+const THEORY_LOOP_BARE_HALT_PATTERN =
+  /\b(?:end\s+the\s+turn|await\s+(?:human|user|confirmation|acknowledg)|wait\s+for\s+(?:the\s+)?(?:human|user|approval|confirmation)|pause\s+(?:execution|the\s+loop|work)|stop\s+work(?:ing)?|halt\s+(?:the\s+)?loop|hand\s+back\s+to\s+the\s+(?:human|user))\b/iu;
 const THEORY_LOOP_SUCCESS_EVIDENCE_HEADING =
   '## Theory Loop Success Evidence';
 const THEORY_LOOP_EVIDENCE_ANCHOR_HEADING = '## Evidence Anchor';
@@ -421,6 +432,14 @@ const THEORY_LOOP_TERMINATION_BLOCKED_FROZEN = 'blocked-frozen-decision';
 const THEORY_LOOP_TERMINATION_BLOCKED_REASONS = new Set([
   'blocked-frozen-decision',
   'blocked-external-dependency',
+]);
+const THEORY_LOOP_TERMINATION_REASON_NONE_VALUES = new Set([
+  'none',
+  'n/a',
+  'na',
+  '-',
+  'not-applicable',
+  'not applicable',
 ]);
 const THEORY_LOOP_PACKAGE_RESULT_VALUES = Object.freeze([
   'fixed',
@@ -2986,8 +3005,9 @@ export function validateDecisionExperimentGate(
   ) {
     errors.push(
       `${filePath}: Decision Experiment Gate ` +
-      `${DECISION_EXPERIMENT_KILL_RULE_LABEL} must stop or escalate on ` +
-      'unchanged same-frontier/no-reduction evidence.',
+      `${DECISION_EXPERIMENT_KILL_RULE_LABEL} must redirect (open an ` +
+      'architecture/causal experiment or successor) or terminate on ' +
+      'unchanged same-frontier/no-reduction evidence — never a bare stop.',
     );
   }
   return errors;
@@ -3029,7 +3049,34 @@ export function validateSprintStrategyBrief(content, filePath, options = {}) {
       ),
     );
   }
+  errors.push(...validateSprintStrategyBriefRedirectRule(filePath, section));
   return errors;
+}
+
+function findSprintStrategyBriefRedirectRule(section) {
+  for (const label of SPRINT_STRATEGY_BRIEF_REDIRECT_RULE_LABELS) {
+    const value = findSprintStrategyBriefField(section, label);
+    if (value !== null) {
+      return value;
+    }
+  }
+  return null;
+}
+
+function validateSprintStrategyBriefRedirectRule(filePath, section) {
+  const value = findSprintStrategyBriefRedirectRule(section);
+  if (value === null) {
+    return [
+      `${filePath}: Sprint Strategy Brief is missing ` +
+      `${SPRINT_STRATEGY_BRIEF_REDIRECT_RULE_LABEL} (legacy ` +
+      `"${SPRINT_STRATEGY_BRIEF_STOP_OR_ESCALATE_RULE_LABEL}" accepted).`,
+    ];
+  }
+  return validateSprintStrategyBriefField(
+    filePath,
+    SPRINT_STRATEGY_BRIEF_REDIRECT_RULE_LABEL,
+    value,
+  );
 }
 
 function isTheoryLoopSprint(content, filePath = EMPTY_TEXT) {
@@ -3252,7 +3299,8 @@ export function validateTheoryLoopContinuation(
     ) :
     null;
   const declaresStop = loopStatus === THEORY_LOOP_LOOP_STATUS_TERMINATED ||
-    reason.length > NUM_ZERO;
+    (reason.length > NUM_ZERO &&
+      !THEORY_LOOP_TERMINATION_REASON_NONE_VALUES.has(reason));
   const errors = [];
 
   if (declaresStop) {
@@ -3308,6 +3356,47 @@ export function validateTheoryLoopContinuation(
     }
   }
 
+  if (status === STATUS_ACTIVE && !declaresStop) {
+    errors.push(...validateRunningTheoryLoopRedirectRule(content, filePath));
+  }
+
+  return errors;
+}
+
+// While a theory loop is running (no recorded termination), its Sprint
+// Strategy Brief redirect rule must keep the loop moving: it must name a
+// concrete next autonomous action and must not instruct the agent to halt
+// (end the turn, await a human, pause work). This is what prevents an agent
+// from reading the brief and stopping on a non-terminal outcome.
+function validateRunningTheoryLoopRedirectRule(content, filePath) {
+  const section = extractSprintStrategyBriefSection(content);
+  if (!section) {
+    return [];
+  }
+  const redirectRule = findSprintStrategyBriefRedirectRule(section);
+  if (redirectRule === null || redirectRule.length === NUM_ZERO) {
+    return [];
+  }
+  const errors = [];
+  if (THEORY_LOOP_BARE_HALT_PATTERN.test(redirectRule)) {
+    errors.push(
+      `${filePath}: ${SPRINT_STRATEGY_BRIEF_REDIRECT_RULE_LABEL} of a running ` +
+      'theory-loop sprint must not instruct the loop to halt (end the turn, ' +
+      'await a human, pause work); stop only for a closed Termination ' +
+      'Condition recorded in ' +
+      `${THEORY_LOOP_TERMINATION_HEADING}. ` +
+      '[theory-loop-redirect-rule-not-actionable]',
+    );
+  }
+  if (!THEORY_LOOP_REDIRECT_ACTION_PATTERN.test(redirectRule)) {
+    errors.push(
+      `${filePath}: ${SPRINT_STRATEGY_BRIEF_REDIRECT_RULE_LABEL} of a running ` +
+      'theory-loop sprint must name the next autonomous action (e.g. open a ' +
+      'successor package, run fresh route evidence, rederive, or open an ' +
+      'architecture/causal experiment) on a non-terminal outcome, never a ' +
+      'bare stop. [theory-loop-redirect-rule-not-actionable]',
+    );
+  }
   return errors;
 }
 
@@ -6349,8 +6438,9 @@ function validateSliceTheory(filePath, sliceTheory) {
   ) {
     errors.push(
       `${filePath}: ${SLICE_THEORY_FIELD}.${SLICE_THEORY_KILL_RULE_FIELD} ` +
-      'must stop or escalate on unchanged evidence, same-frontier evidence, ' +
-      'no-reduction evidence, or architecture-gap evidence.',
+      'must redirect (open an architecture/causal experiment or successor) or ' +
+      'terminate on unchanged, same-frontier, no-reduction, or ' +
+      'architecture-gap evidence — never a bare stop.',
     );
   }
   return errors;
@@ -10505,7 +10595,7 @@ function buildDoctorSuggestion(error) {
     return 'Add a Sprint Strategy Brief near the top of the active sprint: ' +
       'goal state, current causal thesis, competing hypotheses, confidence ' +
       'and evidence, expected green path, wrong-direction signals, next best ' +
-      'package, and stop or escalate rule.';
+      'package, and redirect rule.';
   }
   if (/Commit And Push Ledger is required/iu.test(error)) {
     return 'After validation and package closure, commit only package-owned ' +
@@ -11383,7 +11473,7 @@ export function renderCurrentBlockerMarkdown(payload) {
     '',
     `Falsifying probe: ${theoryFocus.falsifyingProbe}`,
     '',
-    `Stop rule: ${theoryFocus.stopRule}`,
+    `Redirect rule: ${theoryFocus.stopRule}`,
     '',
     `Sprint: \`${payload.sprint}\``,
     '',

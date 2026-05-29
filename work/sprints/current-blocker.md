@@ -15,16 +15,21 @@ Implementation files:
 1. `src/diagnostics/topology-convergence-graph.js`
 2. `src/diagnostics/stop-condition-decision.js`
 3. `test/diagnostics/stop-condition-decision.test.js`
-4. `src/admin/admin-control-snapshot-repair-diagnostics.js`
-5. `src/bootstrap/bootstrap-api-control-plane-methods.js`
-6. `src/control-plane/membership-publication-active-gate-reconcile.js`
-7. `src/control-plane/publication-active-gate-handoff-contract-selection.js`
+4. `scripts/work-package-new.js`
+5. `scripts/work-tracker.js`
+6. `scripts/work-context.js`
+7. `test/scripts/work-context.test.js`
+8. `test/scripts/work-tracker-theory-loop-continuation.test.js`
+9. `src/admin/admin-control-snapshot-repair-diagnostics.js`
+10. `src/bootstrap/bootstrap-api-control-plane-methods.js`
+11. `src/control-plane/membership-publication-active-gate-reconcile.js`
+12. `src/control-plane/publication-active-gate-handoff-contract-selection.js`
 
 Expected implementation delta: runtime promotion remains blocked, a non-repeated source contract is named, or owner boundary migrates.
 
 Falsifying probe: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12
 
-Stop rule: if proof names a concrete non-repeated active-gate owner source contract, supersede this guard and open that source package; stop or escalate on unchanged same-frontier, no-reduction, or architecture-gap evidence
+Stop rule: if proof names a concrete non-repeated active-gate owner source contract, supersede this guard and open that source package; on unchanged same-frontier, no-reduction, or architecture-gap evidence redirect immediately to a bounded architecture/causal experiment or fresh route evidence and keep executing autonomously. The loop terminates only for a closed Termination Condition (success-condition-met, blocked-frozen-decision, blocked-external-dependency).
 
 Sprint: `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
 
@@ -125,7 +130,7 @@ Ownership migration triggers:
 
 Architecture-gap triggers:
 
-1. `Stop as architecture-gap if no non-repeated source contract is selected.`
+1. `Redirect to a bounded architecture-gap experiment if no non-repeated source contract is selected.`
 
 Whole-system invariant: Correcting route classification cannot by itself reopen a saturated runtime patch loop.
 
@@ -143,7 +148,7 @@ Falsifier: npm run work:frontier-history -- --owner startup_active_gate_owner --
 
 Representative expected movement: runtime promotion remains blocked, a non-repeated source contract is named, or owner boundary migrates.
 
-Kill rule: if proof names a concrete non-repeated active-gate owner source contract, supersede this guard and open that source package; stop or escalate on unchanged same-frontier, no-reduction, or architecture-gap evidence
+Kill rule: if proof names a concrete non-repeated active-gate owner source contract, supersede this guard and open that source package; on unchanged same-frontier, no-reduction, or architecture-gap evidence redirect immediately to a bounded architecture/causal experiment or fresh route evidence and keep executing autonomously. The loop terminates only for a closed Termination Condition (success-condition-met, blocked-frozen-decision, blocked-external-dependency).
 
 Theory-fit score:
 
@@ -325,6 +330,16 @@ Write scope:
 1. `src/diagnostics/topology-convergence-graph.js`
 2. `src/diagnostics/stop-condition-decision.js`
 3. `test/diagnostics/stop-condition-decision.test.js`
+4. `.kiro/steering/workflow-guidelines/closure.md`
+5. `scripts/work-package-new.js`
+6. `scripts/work-tracker.js`
+7. `work/RULES.md`
+8. `work/templates/sprint-strategy-brief.md`
+9. `scripts/work-context.js`
+10. `test/scripts/work-context.test.js`
+11. `.kiro/steering/llm/governance.md`
+12. `.kiro/steering/llm/rules.json`
+13. `test/scripts/work-tracker-theory-loop-continuation.test.js`
 
 Handoff files:
 
@@ -350,6 +365,16 @@ Commit scope:
 4. `work/sprints/current-blocker.md`
 5. `src/diagnostics/stop-condition-decision.js`
 6. `test/diagnostics/stop-condition-decision.test.js`
+7. `.kiro/steering/workflow-guidelines/closure.md`
+8. `scripts/work-package-new.js`
+9. `scripts/work-tracker.js`
+10. `work/RULES.md`
+11. `work/templates/sprint-strategy-brief.md`
+12. `scripts/work-context.js`
+13. `test/scripts/work-context.test.js`
+14. `.kiro/steering/llm/governance.md`
+15. `.kiro/steering/llm/rules.json`
+16. `test/scripts/work-tracker-theory-loop-continuation.test.js`
 
 Legacy touched files:
 

@@ -1,8 +1,26 @@
 import {test} from '../../src/test-helpers/tap.js';
-import {validateTheoryLoopContinuation} from '../../scripts/work-tracker.js';
+import {
+  validateTheoryLoopContinuation,
+  validateSprintStrategyBrief,
+} from '../../scripts/work-tracker.js';
 
 const SPRINT_PATH = 'work/sprints/active-theory-loop.md';
 const DONE_SPRINT_PATH = 'work/sprints/done-theory-loop.md';
+
+function strategyBrief(redirectLine) {
+  return [
+    '## Sprint Strategy Brief',
+    '',
+    '- Goal state: rolling-restart harness exits 0 with representative green.',
+    '- Current causal thesis: active-gate snapshot coverage saturates.',
+    '- Competing hypotheses: H1 scheduling, H2 coupled invariant, H3 readiness.',
+    '- Confidence and evidence: high; frontier-history reports contract_gap.',
+    '- Expected green path: rederive then bounded architecture experiment.',
+    '- Wrong direction signals: closing on architecture-gap or migration.',
+    '- Next best package: fresh route evidence or architecture experiment.',
+    redirectLine,
+  ];
+}
 
 function theoryLoopSprint(extraSections = []) {
   return [
@@ -160,6 +178,77 @@ test('a done theory-loop sprint terminating as success-condition-met passes', (t
   ]));
   t.same(
     validateTheoryLoopContinuation(sprint, DONE_SPRINT_PATH, {status: 'done'}),
+    [],
+  );
+  t.end();
+});
+
+test('strategy brief redirect rule accepts the legacy stop-or-escalate label', (t) => {
+  const content = strategyBrief(
+    '- Stop or escalate rule: on same-frontier unchanged evidence redirect to ' +
+      'a bounded architecture experiment and open the successor package.',
+  ).join('\n');
+  t.same(validateSprintStrategyBrief(content, SPRINT_PATH), []);
+  t.end();
+});
+
+test('strategy brief redirect rule accepts the new redirect-rule label', (t) => {
+  const content = strategyBrief(
+    '- Redirect rule: on same-frontier unchanged evidence redirect to a ' +
+      'bounded architecture experiment and open the successor package.',
+  ).join('\n');
+  t.same(validateSprintStrategyBrief(content, SPRINT_PATH), []);
+  t.end();
+});
+
+test('running theory-loop sprint with a bare-halt redirect rule is rejected', (t) => {
+  const sprint = theoryLoopSprint(strategyBrief(
+    '- Redirect rule: on unchanged evidence end the turn and await human ' +
+      'confirmation before proceeding.',
+  ));
+  const errors = validateTheoryLoopContinuation(sprint, SPRINT_PATH, {
+    status: 'active',
+  });
+  t.match(errors.join('\n'), /theory-loop-redirect-rule-not-actionable/u);
+  t.end();
+});
+
+test('running theory-loop sprint with a non-actionable redirect rule is rejected', (t) => {
+  const sprint = theoryLoopSprint(strategyBrief(
+    '- Redirect rule: reflect on the evidence and reconsider the situation.',
+  ));
+  const errors = validateTheoryLoopContinuation(sprint, SPRINT_PATH, {
+    status: 'active',
+  });
+  t.match(errors.join('\n'), /theory-loop-redirect-rule-not-actionable/u);
+  t.end();
+});
+
+test('running theory-loop sprint with an actionable redirect rule passes', (t) => {
+  const sprint = theoryLoopSprint(strategyBrief(
+    '- Redirect rule: on same-frontier unchanged evidence open a bounded ' +
+      'architecture experiment and run fresh route evidence.',
+  ));
+  t.same(
+    validateTheoryLoopContinuation(sprint, SPRINT_PATH, {status: 'active'}),
+    [],
+  );
+  t.end();
+});
+
+test('a running loop reporting termination reason none is not treated as a stop', (t) => {
+  const sprint = theoryLoopSprint([
+    ...terminationSection([
+      '- Loop status: running',
+      '- Termination reason: none',
+    ]),
+    ...strategyBrief(
+      '- Redirect rule: on unchanged evidence open the successor package and ' +
+        'run fresh route evidence.',
+    ),
+  ]);
+  t.same(
+    validateTheoryLoopContinuation(sprint, SPRINT_PATH, {status: 'active'}),
     [],
   );
   t.end();

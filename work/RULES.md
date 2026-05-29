@@ -504,8 +504,25 @@ handoff applies), add a `## Theory Loop Termination` section with:
 closed-enum reason with concrete evidence, that `blocked-frozen-decision`
 carries a human override reference, and that a `done` theory-loop sprint never
 terminates on a blocked reason (a blocked stop is a handoff that keeps the
-sprint open). Static validation cannot observe an agent that simply ends its
-turn; that case is governed by this invariant as doctrine plus the
+sprint open).
+
+**Redirect rule (the field the agent reads).** The Sprint Strategy Brief field
+that used to be called `Stop or escalate rule` is renamed **`Redirect rule`**
+(the legacy label is still accepted). It must name the *next autonomous action*
+a non-terminal outcome triggers — open a successor package, run fresh route
+evidence, rederive, or open an architecture/causal experiment — and it must
+never instruct the agent to end the turn, await a human, or pause work. For a
+*running* theory-loop sprint, `validateTheoryLoopContinuation` rejects a
+`Redirect rule` that contains bare-halt phrasing or that fails to name a
+redirect action (`theory-loop-redirect-rule-not-actionable`). The same
+redirect-not-stop framing applies to the Decision Experiment `Kill rule` and
+the Systemic Insight Gate redirect rule: a kill rule may `redirect` to an
+architecture/causal experiment or `terminate` on a closed reason, but never
+license a bare stop on a non-terminal outcome.
+
+Static validation cannot observe an agent that simply ends its turn after
+reading well-formed steering; that residual case is governed by this invariant
+as doctrine, the `Redirect rule` always naming the next action, and the
 `continuationRequired` self-report surfaced through `npm run work:context`.
 
 ---

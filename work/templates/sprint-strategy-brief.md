@@ -16,7 +16,7 @@ package can tell whether it is still following the right strategic path.
 - Expected green path: record the expected package sequence from current residual to success.
 - Wrong direction signals: record evidence that the sprint is following the wrong path.
 - Next best package: record the next package to continue or activate after the current package closes.
-- Stop or escalate rule: record the condition that opens or selects an autonomous architecture experiment, causal escalation, or human-only escalation for blocked or contradictory evidence.
+- Redirect rule: record the next autonomous action to take on each non-terminal outcome — open an architecture/causal experiment, run fresh route evidence, rederive, or activate a successor package. This is a `redirect`, never a stop; the loop halts only for a closed Termination Condition (`success-condition-met`, `blocked-frozen-decision`, `blocked-external-dependency`) recorded in `## Theory Loop Termination`. (Legacy field name "Stop or escalate rule" is still accepted.)
 
 ## Theory Loop Generative Brief
 
@@ -80,7 +80,7 @@ shape of failure.
 9. Negative proof: record proof that the change does not reintroduce old debt, reinterpret downstream symptoms, or depend on stale diagnostics.
 10. Representative checkpoint: record the fresh route or rerun required before another local patch on the same unchanged artifact.
 11. Expected mechanism movement: record how the mechanism classification or boundary is expected to move or migrate after this change.
-12. Stop rule: record the condition that opens or selects an autonomous architecture experiment instead of another local patch; human escalation is only for blocked or contradictory evidence.
+12. Redirect rule: record the next autonomous action that a non-terminal outcome triggers — open or select an autonomous architecture/causal experiment or successor instead of another local patch. This is a redirect, never an end-of-turn; terminate only for a closed Termination Condition (human-only block maps to `blocked-frozen-decision`/`blocked-external-dependency`).
 
 ## Joint Coupled-Invariant Probe
 
