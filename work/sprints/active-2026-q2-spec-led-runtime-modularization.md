@@ -14,20 +14,20 @@ priority-recovery or active-gate frontier.
 ## Sprint Strategy Brief
 
 - Goal state: `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --fast-local --verbose` exits 0, and canonical evidence shows representative green.
-- Current causal thesis: the fresh representative route still selects `active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / snapshot_coverage_incomplete`, priority-recovery residuals are zero, and architecture-gap analysis selected `architecture-gap-stop` because the only concrete progress signal is the repeated deferred retry contract.
+- Current causal thesis: the fresh representative route still selects `active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out`, priority-recovery residuals are zero, and the selected-snapshot timeout architecture-gap analysis closed as a learning stop because the current artifact exposes only repeated deferred retry evidence.
 - Competing hypotheses: H1 selected snapshot timeout/deferred repair is still local bounded-progress debt; H2 the active-gate/rebalancer pair is a coupled invariant needing architecture work; H3 the visible active-gate frontier is downstream startup readiness lag; H4 the artifact is stale or instrumentation-only. H1 is blocked from source promotion on this artifact because it repeats the saturated contract-gap path.
 - Confidence and evidence: high for architecture-gap-stop on this artifact; `work:frontier-history` reports same-mechanism-repeat `contract_gap`, `work:scenario-route` still selects startup_active_gate_owner / snapshot_coverage, topology-convergence names only the repeated deferred retry contract, and the joint coupled-invariant probe residual count remains 0.
-- Expected green path: close the architecture-gap analysis as a learning package, then continue only with fresh representative evidence or a follow-on architecture experiment that names a non-repeated owner contract, protocol/model/topology route, or real owner-boundary migration.
+- Expected green path: run the fresh representative green gate, then either close on representative-green evidence or route exactly one fresh successor from the new artifact.
 - Wrong direction signals: closing this sprint on architecture-gap or migration, widening timeouts, weakening admission/readiness, hiding diagnostics, reopening rebalancer handoff while priority-recovery witnesses are zero, or opening another generic startup_active_gate_owner / snapshot_coverage patch after the rederive selected architecture work.
-- Next best package: fresh route evidence or a bounded architecture experiment; no local startup_active_gate_owner / snapshot_coverage source package is promoted from the current artifact.
+- Next best package: `work/packages/done-20260529-rolling-restart-fresh-representative-green-gate.md`; no local startup_active_gate_owner / snapshot_coverage source package is promoted from the closed architecture-gap artifact.
 - Redirect rule: on same-frontier / no-reduction evidence after the rederive, immediately open a bounded architecture/causal experiment that names a non-repeated owner contract — or run fresh representative route evidence — instead of another local runtime package. This is a redirect, not a stop: the agent keeps executing the next autonomous action and never hands control back; the loop continues until the Evidence Anchor success condition is met. Terminate only for a closed Termination Condition recorded in `## Theory Loop Termination`.
-- Architecture-route forcing (R13): once an architecture-gap analysis has closed and `work:frontier-history` reports `architectureRouteState: implement-pending` for the pair, the ONLY valid redirect on that pair is the runtime implementation of the selected route. The next package must change `src/` and declare `theoryLoop.architectureRoute` (`selectedLayer` ∈ {protocol, scheduling, ownership, observation, topology, model}, `coupledInvariant`, and the `architecture-gap` `ledgerRef`). Opening another architecture-gap analysis or system-theory rederive on that pair is not a valid redirect and is rejected at `--pre-impl`; re-analysis resumes only after the route is implemented and produces fresh representative evidence.
+- Architecture-route forcing (R13): the earlier active-gate protocol route has been implemented and `work:frontier-history` now reports `architectureRouteState: implemented`; this release-gate package is therefore evidence-only. Any future runtime package on the active-gate pair must still satisfy the current compositional gates and carry the required architecture-route marker when those gates demand it.
 
 ## Theory Loop Termination
 
 - Loop status: running
 - Termination reason: none
-- Next autonomous action: `architectureRouteState` is `implement-pending` for the active gate / snapshot-coverage pair after the closed architecture-gap analysis — so the next autonomous action is to implement the selected architecture route in `src/` under a package carrying `theoryLoop.architectureRoute`, not another analysis or rederive. The Evidence Anchor success condition (local rolling-restart harness exits 0 with no active priority-recovery or active-gate frontier) is not yet met, so the loop must not stop.
+- Next autonomous action: run the active fresh representative green-gate package, then route the resulting artifact. The Evidence Anchor success condition (local rolling-restart harness exits 0 with no active priority-recovery or active-gate frontier) is not yet met, so the loop must not stop.
 
 ## Theory Loop Sprint
 
@@ -65,22 +65,22 @@ priority-recovery or active-gate frontier.
 
 ```text
 Representative artifact: test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json
-Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out
-Active package: work/packages/active-20260529-rolling-restart-active-gate-selected-snapshot-timeout-causal-escalation.md
-Active package owner: startup_active_gate_owner
-Active package boundary: snapshot_coverage
-Selected cause: active_gate_timed_out
-Required action: Escalate the selected snapshot timeout/repair retry route, then select and implement a non-repeated owner-owned source transition, autonomous architecture experiment, owner-boundary migration, representative-green path, or architecture-gap stop.
-Representative status: active-theory-loop
-Causal outcome: continue_local_fix
+Visible first frontier: release_gate_owner / rolling_restart_fully_green_gate / representative_green_required
+Active package: work/packages/active-20260529-rolling-restart-classified-backpressure-rerun-gate.md
+Active package owner: release_gate_owner
+Active package boundary: rolling_restart_fully_green_gate
+Selected cause: representative_green_required
+Required action: Run a causal-escalation representative rerun to determine whether classified priority-recovery backpressure drains to green, migrates, or selects a concrete successor before any runtime source package.
+Representative status: reduced
+Causal outcome: accept_classified_backpressure
 Architecture gate: watching / unknown
-Expected delta: Causal escalation selects a non-repeated selected snapshot timeout/repair transition, architecture experiment, owner-boundary migration, representative-green path, or architecture-gap stop before another local runtime patch.
-Current state: Fresh representative evidence after owner-reconcile handoff enqueue has membershipPublicationHandoffOutcomeEnqueued=true but still routes active_gate_snapshot_coverage to active_gate_timed_out with selected_snapshot_source_timeout and snapshot_repair_deferred; frontier oscillation blocks another adjacent runtime-owner-boundary package without causal escalation.
-Allowed edits: src/admin/admin-control-snapshot-repair-diagnostics.js, test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js
-Candidate runtime files: src/control-plane/publication-active-gate-handoff-contract-selection.js, src/control-plane/publication-active-gate-handoff-contract-decision.js, src/control-plane/publication-active-gate-handoff-contract-evidence.js
-Forbidden edits: After owner-reconcile enqueue is true, selected snapshot timeout/repair evidence must become a non-repeated source transition, architecture experiment, migration, representative-green path, or architecture-gap stop.
-Required latest proof: falsifier: npm run work:system-theory:rederive -- --owner startup_active_gate_owner --boundary snapshot_coverage, regression: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12, supporting: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --explain active_gate_snapshot_coverage, supporting: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage, supporting: npm run work:evidence-summary -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json
-Allowed stop modes: success-condition-met only; representative-green, owner-boundary-migration, architecture-gap, same-frontier, classification-only, needs-rerun, pending, and unknown are package outcomes unless they exactly match the original sprint success condition
+Expected delta: Fresh representative evidence either reaches green, drains priority-recovery backpressure, migrates to a concrete successor, or proves unchanged same-frontier/no-reduction.
+Current state: The fresh representative rerun reduced the active-gate shape to active=5/5 and snapshotCoverage=3/5, then routed first frontier to priority_recovery_partition_progress with causal outcome accept_classified_backpressure and seven recovering_in_flight priority-recovery witnesses.
+Allowed edits: work/packages/active-20260529-rolling-restart-classified-backpressure-rerun-gate.md, work/sprints/active-2026-q2-spec-led-runtime-modularization.md
+Candidate runtime files: src/rebalancer/operation-workflow-owner.js, src/rebalancer/operation-workflow-owner-constants.js, src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js, src/control-plane/priority-recovery-snapshot-stage-8.js
+Forbidden edits: Do not promote operation_workflow_owner, startup_active_gate_owner, or another runtime boundary unless fresh canonical route evidence names the owner boundary and the successor package records the handoff.
+Required latest proof: falsifier: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --fast-local --verbose # release-gate contract transition, regression: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner release_gate_owner --boundary rolling_restart_fully_green_gate --dominant-reason representative_green_required # release-gate outcome state transition, supporting: npm run work:evidence-summary -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json, supporting: npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json
+Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
 ## Joint Coupled-Invariant Probe
