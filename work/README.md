@@ -684,8 +684,15 @@ handoff tools, not as an independent source of truth.
 
 Create packages with `npm run work:package:new -- --write ...` whenever
 possible. That command owns the current metadata shape and validates the package
-before writing it. Every active package should start with a machine-readable
-`work-package-v2` metadata comment shaped like this minimal example:
+before writing it. It emits a lane-appropriate body: light lanes get a minimal
+package; heavy lanes additionally carry mechanism, theory, representative-delta,
+and rerun sections. Do not hand-copy validator-unenforced steering doctrine
+(tool-first, workflow acceleration, drift-ledger checklists, shared-boundary
+contracts, residual inventories) into packages — that guidance is the
+always-loaded contract and the closure validator rejects it on active packages
+(see RULES.md §Package Economy). Every active package should start with a
+machine-readable `work-package-v2` metadata comment shaped like this minimal
+example:
 
 ```md
 <!-- work-package

@@ -323,21 +323,17 @@ test('package scaffolder pre-fills Model Fit from schema defaults', async (t) =>
   t.match(content, /Model ledger advisory: `hold`/u);
   t.match(content, /## Core Logic Brief/u);
   t.match(content, /Status: `not-needed`/u);
-  t.match(content, /## LLM Tool-First Contract/u);
-  t.match(content, /## Workflow Acceleration Contract/u);
-  t.match(content, /## Expected Representative Delta/u);
-  t.match(content, /## Rerun Decision Gate/u);
-  t.match(content, /## Classification Efficiency/u);
+  t.notMatch(content, /## LLM Tool-First Contract/u);
+  t.notMatch(content, /## Workflow Acceleration Contract/u);
+  t.notMatch(content, /## Expected Representative Delta/u);
+  t.notMatch(content, /## Rerun Decision Gate/u);
+  t.notMatch(content, /## Classification Efficiency/u);
   t.match(content, /## Execution Evidence/u);
   t.match(content, /action: implementation/u);
   t.match(content, /files-changed:/u);
   t.match(content, /outcome:/u);
   t.match(content, /parent revalidated focused proof: yes/u);
   t.match(content, /Agent identity is optional provenance/u);
-  t.match(content, /work:advance -- --check/u);
-  t.match(content, /work:scenario-route/u);
-  t.match(content, /work:evidence-summary/u);
-  t.match(content, /ad hoc `jq`/u);
 });
 
 test('package scaffolder emits nested work-package-v2 metadata', async (t) => {

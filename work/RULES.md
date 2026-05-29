@@ -478,6 +478,32 @@ All runtime code must strictly adhere to the following rules:
 
 ---
 
+## Package Economy
+<a name="package-economy"></a>
+
+Packages are sized to their lane and never restate doctrine that already lives
+in steering or in structured metadata.
+
+1. **Single source of truth.** Structured JSON metadata in the package header is
+   canonical. Prose sections MUST NOT restate values already carried by
+   `execution.*`, `mechanismCard`, `modelFit`, or `rerunDecision`. Prefer
+   structured metadata; let prose carry only what has no structured field.
+2. **No copied steering doctrine.** Do not paste tool-first, workflow
+   acceleration, drift-ledger checklists, shared-boundary contracts, or residual
+   closure inventories into packages. That guidance is the always-loaded
+   contract (`.kiro/steering/llm/core.md`, this file) and is not
+   validator-enforced per package; copying it is pure red tape.
+3. **Right-size by lane.** Light lanes (`read-review-doc-only`,
+   `mechanical-maintenance`, `lightweight-maintenance`, `test-only-proof`,
+   `diagnostic-classification`) get a minimal body: Why, Scope, Core Logic Brief
+   (status `not-needed` is valid), Execution Evidence, Validation. Heavy lanes
+   (`single-file-runtime`, `runtime-owner-boundary`, `scenario-release-gate`,
+   `causal-escalation`) additionally carry mechanism, theory, representative
+   delta, and rerun sections. `npm run work:package:new` emits the
+   lane-appropriate body; do not re-add removed boilerplate by hand.
+
+---
+
 ## Closure Evidence Grammar
 <a name="closure-evidence-grammar"></a>
 

@@ -1430,6 +1430,46 @@ function buildClassificationOnlyFastPathLines(isClassificationOnly) {
   ];
 }
 
+function representativeDeltaRequired(lane, metadata) {
+  return coreLogicBriefRequiredForLane(lane) ||
+    Boolean(metadata[RERUN_DECISION_FIELD]);
+}
+
+function buildRepresentativeDeltaAndRerunLines(lane, metadata) {
+  if (!representativeDeltaRequired(lane, metadata)) {
+    return [];
+  }
+  const rerun = metadata[RERUN_DECISION_FIELD] || {};
+  return [
+    '## Expected Representative Delta',
+    EMPTY_TEXT,
+    `- Baseline artifact: \`${metadata.artifact}\``,
+    `- Expected delta: ${rerun[RERUN_DECISION_EXPECTED_DELTA_FIELD] ||
+      DEFAULT_RERUN_EXPECTED_DELTA}`,
+    '- Local proof class: focused owner or diagnostic proof only; it is not representative-green proof.',
+    '- Representative proof class: fresh representative rerun or canonical route-after-rerun result.',
+    '- Stop if unchanged: same-frontier with no concrete metric or shape reduction opens/selects an autonomous architecture experiment instead of another local patch; human escalation is only for contradictory or blocked evidence.',
+    EMPTY_TEXT,
+    '## Rerun Decision Gate',
+    EMPTY_TEXT,
+    `- Source artifact: \`${rerun[RERUN_DECISION_SOURCE_ARTIFACT_FIELD] ||
+      metadata.artifact}\``,
+    `- Route owner: \`${rerun[RERUN_DECISION_ROUTE_OWNER_FIELD] ||
+      metadata.owner}\``,
+    `- Route boundary: \`${rerun[RERUN_DECISION_ROUTE_BOUNDARY_FIELD] ||
+      metadata.boundary}\``,
+    `- Route dominant reason: \`${rerun[RERUN_DECISION_ROUTE_DOMINANT_REASON_FIELD] ||
+      metadata.dominantReason}\``,
+    `- Route causal outcome: \`${rerun[RERUN_DECISION_CAUSAL_OUTCOME_FIELD] ||
+      'pending-before-rerun'}\``,
+    `- Stop mode: \`${rerun[RERUN_DECISION_STOP_MODE_FIELD] ||
+      'pending-before-rerun'}\``,
+    `- Next lane: \`${rerun[RERUN_DECISION_NEXT_LANE_FIELD] || lane}\``,
+    '- Required after rerun: route-after-rerun, Sprint Strategy Brief and Current Edge Card update, current-blocker refresh, entry validation, and pre-implementation validation.',
+    EMPTY_TEXT,
+  ];
+}
+
 function buildRerunRefreshCommands(metadata) {
   const artifact = normalizeText(metadata.artifact);
   return [
@@ -1996,87 +2036,7 @@ async function buildPackageContent(flags = {}) {
     ...buildObservablePredictionLines(metadata),
     EMPTY_TEXT,
     ...buildClassificationOnlyFastPathLines(isClassificationOnly),
-    '## Expected Representative Delta',
-    EMPTY_TEXT,
-    `- Baseline artifact: \`${metadata.artifact}\``,
-    `- Expected delta: ${metadata[RERUN_DECISION_FIELD]?.[
-      RERUN_DECISION_EXPECTED_DELTA_FIELD
-    ] || DEFAULT_RERUN_EXPECTED_DELTA}`,
-    '- Local proof class: focused owner or diagnostic proof only; it is not representative-green proof.',
-    '- Representative proof class: fresh representative rerun or canonical route-after-rerun result.',
-    '- Stop if unchanged: same-frontier with no concrete metric or shape reduction opens/selects an autonomous architecture experiment instead of another local patch; human escalation is only for contradictory or blocked evidence.',
-    EMPTY_TEXT,
-    '## Rerun Decision Gate',
-    EMPTY_TEXT,
-    `- Source artifact: \`${metadata[RERUN_DECISION_FIELD]?.[
-      RERUN_DECISION_SOURCE_ARTIFACT_FIELD
-    ] || metadata.artifact}\``,
-    `- Route owner: \`${metadata[RERUN_DECISION_FIELD]?.[
-      RERUN_DECISION_ROUTE_OWNER_FIELD
-    ] || metadata.owner}\``,
-    `- Route boundary: \`${metadata[RERUN_DECISION_FIELD]?.[
-      RERUN_DECISION_ROUTE_BOUNDARY_FIELD
-    ] || metadata.boundary}\``,
-    `- Route dominant reason: \`${metadata[RERUN_DECISION_FIELD]?.[
-      RERUN_DECISION_ROUTE_DOMINANT_REASON_FIELD
-    ] || metadata.dominantReason}\``,
-    `- Route causal outcome: \`${metadata[RERUN_DECISION_FIELD]?.[
-      RERUN_DECISION_CAUSAL_OUTCOME_FIELD
-    ] || 'pending-before-rerun'}\``,
-    `- Stop mode: \`${metadata[RERUN_DECISION_FIELD]?.[
-      RERUN_DECISION_STOP_MODE_FIELD
-    ] || 'pending-before-rerun'}\``,
-    `- Next lane: \`${metadata[RERUN_DECISION_FIELD]?.[
-      RERUN_DECISION_NEXT_LANE_FIELD
-    ] || lane}\``,
-    '- Required after rerun: route-after-rerun, Sprint Strategy Brief and Current Edge Card update, current-blocker refresh, entry validation, and pre-implementation validation.',
-    EMPTY_TEXT,
-    '## Classification Efficiency',
-    EMPTY_TEXT,
-    `- Default mode: \`${metadata[CLASSIFICATION_EFFICIENCY_FIELD]?.[
-      CLASSIFICATION_EFFICIENCY_DEFAULT_MODE_FIELD
-    ] || CLASSIFICATION_DEFAULT_MODE_INLINE_GATE}\``,
-    `- Separate package reason: \`${metadata[CLASSIFICATION_EFFICIENCY_FIELD]?.[
-      CLASSIFICATION_EFFICIENCY_SEPARATE_PACKAGE_REASON_FIELD
-    ] || 'not-needed-inline-gate'}\``,
-    `- Evidence budget: \`${metadata[CLASSIFICATION_EFFICIENCY_FIELD]?.[
-      CLASSIFICATION_EFFICIENCY_ARTIFACT_BUDGET_FIELD
-    ] || CLASSIFICATION_DEFAULT_ARTIFACT_BUDGET}\`; ` +
-      `\`${metadata[CLASSIFICATION_EFFICIENCY_FIELD]?.[
-        CLASSIFICATION_EFFICIENCY_PROOF_COMMAND_BUDGET_FIELD
-      ] || CLASSIFICATION_DEFAULT_PROOF_BUDGET}\``,
-    `- Decision record: ${metadata[CLASSIFICATION_EFFICIENCY_FIELD]?.[
-      CLASSIFICATION_EFFICIENCY_DECISION_RECORD_FIELD
-    ] || 'Keep classification inside the package unless route truth changes.'}`,
-    `- Successor action: \`${metadata[CLASSIFICATION_EFFICIENCY_FIELD]?.[
-      CLASSIFICATION_EFFICIENCY_SUCCESSOR_ACTION_FIELD
-    ] || 'update-current-package'}\``,
-    `- Runtime promotion rule: ${metadata[CLASSIFICATION_EFFICIENCY_FIELD]?.[
-      CLASSIFICATION_EFFICIENCY_RUNTIME_PROMOTION_RULE_FIELD
-    ] || 'Stable owner/boundary routes move to runtime-owner-boundary work.'}`,
-    EMPTY_TEXT,
-    '## LLM Tool-First Contract',
-    EMPTY_TEXT,
-    'Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc `jq`, use the canonical workflow command that owns the question:',
-    EMPTY_TEXT,
-    `1. Package metadata or ledger edits: \`npm run work:package:doctor -- --suggest ${packagePath}\`, \`npm run work:package:doctor -- --fix-dry-run ${packagePath}\`, \`npm run work:package:schema\`, or \`npm run work:package:new -- ...\`.`,
-    `2. Representative evidence: \`${artifactExtractorCommand(artifact)}\` plus any focused extractor for this failure class.`,
-    `3. Owner discovery: \`${ownerDiscoveryCommand(owner, boundary)}\`.`,
-    `4. Subagent sequencing: \`npm run work:subagent-prompt -- --role review --package ${packagePath}\`.`,
-    '5. Large-file cleanup: `npm run work:oversized-next -- --markdown`.',
-    EMPTY_TEXT,
-    'If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which canonical extractor was tried and why it was insufficient.',
-    EMPTY_TEXT,
-    '## Workflow Acceleration Contract',
-    EMPTY_TEXT,
-    '1. Use `npm run work:advance -- --check` before adding more package prose; it combines doctor, subagent-next, and entry/pre-implementation validation.',
-    `2. Keep the durable proof ladder to 3-5 commands by default: prefer \`npm run work:scenario-route -- ${artifact}\` for representative routing, one focused test or extractor, and validation. Add static guardrails only when implementation files changed.`,
-    isTheoryLoopPackage ?
-      '3. In a theory-loop package, package/sprint/tracker/ledger-only work is not a closure shape; keep classification evidence in the sprint, run representative evidence, and create or activate the next `src/` successor package instead of closing as classification-only.' :
-      '3. If this package only changes package, sprint, tracker, or ledger files, the next pass must run representative evidence, close as classification-only, open a concrete bug package, or open/select an autonomous architecture experiment. Human gates are only for blocked/contradictory evidence.',
-    '4. Once an architecture gate has a selected route, do not open another gate unless fresh canonical evidence contradicts the selected route.',
-    '5. For bounded experiments, move quickly inside the inherited owner boundary, but do not merge without the stated focused proof and canonical evidence movement.',
-    EMPTY_TEXT,
+    ...buildRepresentativeDeltaAndRerunLines(lane, metadata),
     '## In Scope',
     EMPTY_TEXT,
     markdownList(ownedFiles, 'Focused package-owned edit.'),

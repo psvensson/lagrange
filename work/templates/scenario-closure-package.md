@@ -139,28 +139,6 @@ frontier.
 - Proof mapping:
 - Wrong-slice trigger:
 
-## LLM Tool-First Contract
-
-Before raw JSON, raw logs, broad file search, oversized segment files, or ad hoc
-`jq`, use the canonical workflow command that owns the question:
-
-1. Package metadata or ledger edits:
-   `npm run work:package:doctor -- --suggest <package>`,
-   `npm run work:package:doctor -- --fix-dry-run <package>`,
-   `npm run work:package:schema`, or `npm run work:package:new -- ...`.
-2. Representative evidence:
-   `npm run work:evidence-summary -- <artifact>` plus any focused extractor
-   for this failure class.
-3. Owner discovery:
-   `npm run analyze:owner-files -- <owner> [boundary]`.
-4. Subagent sequencing:
-   `npm run work:subagent-prompt -- --role <role> --package <package>`.
-5. Large-file cleanup:
-   `npm run work:oversized-next -- --markdown`.
-
-If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which
-canonical extractor was tried and why it was insufficient.
-
 ## Classification-Only Fast Path
 
 Use when focused proof classifies the current edge and no runtime, test, script,
@@ -175,23 +153,6 @@ or report edit is justified.
   scope is promoted
 - Reuse of the same unchanged artifact: close and rerun evidence, or escalate
   if owner/boundary, package class, or stop condition did not change
-
-## Classification Efficiency
-
-- Default mode: `inline-gate-default`
-- Separate package reason:
-- Artifact budget: `one-artifact`
-- Proof command budget: `two-or-three-canonical-commands`
-- Commands:
-  1. Representative evidence or route command
-  2. Focused extractor/probe
-  3. Validation or causal-model proof
-- Decision record:
-- Successor action:
-- Runtime promotion rule: stable owner/boundary local-fix routes open a
-  `runtime-owner-boundary` successor; do not open another classifier from the
-  same unchanged artifact. Same-frontier/no-reduction routes open an
-  autonomous architecture experiment before more local runtime work.
 
 ## Expected Representative Delta
 
@@ -238,18 +199,6 @@ may fix in-scope problems directly, then reruns focused proof.
 
 - [ ] implementation: status: validated; evidence: <focused proof commands and results>; parent revalidated focused proof: yes; next: verification.
 - [ ] verification-fix: status: validated; evidence: <verification/fix commands and results>; changed files: <paths or none>; parent revalidated focused proof: yes; next: closure or successor action.
-
-## Static Drift Ledger
-
-Preflight:
-
-- [ ] Relevant owner-boundary guardrails selected and recorded.
-- [ ] Inherited write-scope debt classified.
-
-Closure:
-
-- [ ] Same guardrails rerun.
-- [ ] No relevant guardrail count increased.
 
 ## Causal Governance
 

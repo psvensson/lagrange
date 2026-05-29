@@ -7211,6 +7211,44 @@ export function validatePackageClassWriteScopeFit(
   return errors;
 }
 
+// Package Economy: new active packages must not re-introduce steering doctrine
+// that already lives in .kiro/steering/llm/core.md and work/RULES.md. These
+// sections are validator-unenforced boilerplate; copying them is pure red tape
+// (RULES.md §package-economy). Scoped to the active package at entry/pre-impl so
+// in-flight todo packages and the 700+ legacy done packages stay valid.
+const REDUNDANT_BOILERPLATE_HEADINGS = Object.freeze([
+  '## LLM Tool-First Contract',
+  '## Workflow Acceleration Contract',
+  '## Shared Boundary Contract',
+  '## Static Drift Ledger',
+  '## Residual Closure Inventory',
+]);
+
+export function validatePackageEconomy(content, filePath, options = {}) {
+  const errors = [];
+  if (typeof content !== 'string') return errors;
+  const phase = options.phase || VALIDATION_PHASE_PRE_IMPL;
+  if (
+    phase !== VALIDATION_PHASE_ENTRY &&
+    phase !== VALIDATION_PHASE_PRE_IMPL
+  ) {
+    return errors;
+  }
+  if (options.status !== STATUS_ACTIVE) return errors;
+  const offending = REDUNDANT_BOILERPLATE_HEADINGS.filter(
+    (heading) => extractMarkdownLevelTwoSection(content, heading) !== null,
+  );
+  if (offending.length > 0) {
+    errors.push(
+      `${filePath}: redundant-steering-boilerplate — remove ` +
+      `${offending.map((h) => h.replace(/^##\s+/u, '')).join(', ')}; this ` +
+      'doctrine already lives in .kiro/steering/llm/core.md and work/RULES.md ' +
+      'and is not validator-enforced per package (RULES.md §package-economy).',
+    );
+  }
+  return errors;
+}
+
 export function validateSprintJointCoupledInvariantProbe(
   sprintContent,
   sprintPath,
@@ -8920,6 +8958,10 @@ function runPackageValidationsSync(filePath, content, fileStatus, metadata, opti
     packageDir: options.packageDir,
   }));
   errors.push(...validatePackageClassWriteScopeFit(metadata, relativePath, {
+    phase,
+    status: fileStatus,
+  }));
+  errors.push(...validatePackageEconomy(content, relativePath, {
     phase,
     status: fileStatus,
   }));
