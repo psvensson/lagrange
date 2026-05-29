@@ -344,3 +344,17 @@ Each entry must include these labels:
 - Supersedes: none
 - Superseded by: none
 - Next implication: The rederive may close with `theoryLoop.outcome: theory-confirmed`, but same-frontier/no-reduction on active_gate_snapshot_coverage still blocks another local startup_active_gate_owner / snapshot_coverage patch; select architecture-gap analysis before further source promotion.
+
+## theory-20260529-rolling-restart-active-gate-snapshot-coverage-architecture-gap-stop
+
+- Status: stale
+- Scenario/gate: rolling-restart / active_gate_snapshot_coverage
+- Owner/boundary: startup_active_gate_owner / snapshot_coverage
+- Hypothesis: The selected-snapshot timeout plus deferred repair evidence on the fresh rolling-restart artifact cannot promote another local active-gate source package because it names only the repeated deferred retry contract; without a non-repeated owner transition, protocol/model/topology route, representative-green result, or real owner migration, runtime source promotion must stay blocked.
+- Probe: `npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12`
+- Artifact/result: `test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json` - frontier-history reported same-mechanism-repeat `contract_gap`, scenario-route kept `active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / snapshot_coverage_incomplete`, topology-convergence exposed `selected_snapshot_source_timeout` plus `snapshot_repair_deferred` as a deferred retry contract, causal-model kept `topology:active_gate_snapshot_coverage` as the first critical path, and priority-recovery residuals remained zero.
+- Representative movement: architecture-gap-stop
+- Linked packages: `work/packages/active-20260529-rolling-restart-active-gate-snapshot-coverage-architecture-gap-analysis.md`
+- Supersedes: none
+- Superseded by: none
+- Next implication: Do not open another local startup_active_gate_owner / snapshot_coverage runtime package from this artifact. Continue only from fresh representative evidence or a follow-on architecture experiment that names a non-repeated owner-owned transition, protocol/model/topology route, or real owner-boundary migration.
