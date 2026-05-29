@@ -164,7 +164,7 @@
   "ruleAliases": [
     {
       "note": "no ordinal/segment/grab-bag source filenames",
-      "canonical": {"file": "system-guidelines.md", "line": 168},
+      "canonical": {"file": "system-guidelines.md", "line": 178},
       "aliases": [
         {"file": "code-style.md", "line": 66},
         {"file": "code-style.md", "line": 62}
@@ -172,7 +172,7 @@
     },
     {
       "note": "null/undefined must not encode runtime/domain state",
-      "canonical": {"file": "system-guidelines.md", "line": 162},
+      "canonical": {"file": "system-guidelines.md", "line": 172},
       "aliases": [
         {"file": "code-style.md", "line": 79}
       ]

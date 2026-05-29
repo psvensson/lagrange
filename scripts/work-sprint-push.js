@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 import {spawnSync} from 'node:child_process';
+import {readFileSync, writeFileSync, readdirSync, statSync} from 'node:fs';
+import {join} from 'node:path';
 import process from 'node:process';
 
 const COMMAND_GIT = 'git';
@@ -13,6 +15,8 @@ const PROCESS_ARG_USER_START = 2;
 const STDIO_INHERIT = 'inherit';
 const SCRIPT_FILE_NAME = 'work-sprint-push.js';
 const PROCESS_ARG_SCRIPT_INDEX = 1;
+const PACKAGES_DIR = 'work/packages';
+const PUSHED_BOOLEAN_PATTERN = /^(\s*(?:\d+\.\s*)?)Pushed:\s*no\s*$/imu;
 
 function statusFromResult(result) {
   if (typeof result.status === 'number') {
@@ -25,6 +29,36 @@ function runCommand(command, args, runner) {
   return runner(command, args, {stdio: STDIO_INHERIT});
 }
 
+// After a successful push, flip every package ledger that still says
+// `Pushed: no` to `Pushed: yes <ISO-timestamp>`. Additive: ledgers that
+// never declared the `Pushed:` boolean (legacy / pre-F7) are untouched.
+function flipPushedBoolean(now = new Date()) {
+  let entries;
+  try {
+    entries = readdirSync(PACKAGES_DIR);
+  } catch {
+    return;
+  }
+  const timestamp = now.toISOString();
+  for (const name of entries) {
+    if (!name.endsWith('.md')) continue;
+    const fullPath = join(PACKAGES_DIR, name);
+    let stat;
+    try { stat = statSync(fullPath); } catch { continue; }
+    if (!stat.isFile()) continue;
+    let content;
+    try { content = readFileSync(fullPath, 'utf8'); } catch { continue; }
+    if (!PUSHED_BOOLEAN_PATTERN.test(content)) continue;
+    const updated = content.replace(
+      PUSHED_BOOLEAN_PATTERN,
+      `$1Pushed: yes ${timestamp}`,
+    );
+    if (updated !== content) {
+      try { writeFileSync(fullPath, updated); } catch { /* best-effort */ }
+    }
+  }
+}
+
 function runSprintPush(args = [], runner = spawnSync) {
   const pushResult = runCommand(
     COMMAND_GIT,
@@ -35,6 +69,7 @@ function runSprintPush(args = [], runner = spawnSync) {
   if (pushStatus !== EXIT_SUCCESS) {
     return pushStatus;
   }
+  flipPushedBoolean();
   const remainingResult = runCommand(
     COMMAND_NODE,
     [SCRIPT_SPRINT_REMAINING],
@@ -54,4 +89,5 @@ if (isDirectRun()) {
 
 export {
   runSprintPush,
+  flipPushedBoolean,
 };

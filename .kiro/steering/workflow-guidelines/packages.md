@@ -46,8 +46,9 @@ package queue is visible before the next slice starts.
 Commit-and-push ledger for current packages:
 
 1. `Focused package commit: <sha>`
-2. `Pushed to: <remote>/<branch>`
+2. `Push target: <remote>/<branch>` (legacy alias `Pushed to:` accepted)
 3. `Commit contains only package-owned files/package-status/allowed sprint handoff: yes`
+4. `Pushed: no` (flipped to `yes <ISO-timestamp>` by `npm run work:sprint:push` after the push succeeds; optional for pre-F7 packages)
 
 Do not invent historical proof. If an older package is reopened, migrated, or
 closed again, current proof rules apply.

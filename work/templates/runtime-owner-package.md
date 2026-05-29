@@ -218,5 +218,6 @@ may fix in-scope problems directly, then reruns focused proof.
 ## Commit And Push Ledger
 
 - Focused package commit: `<sha>`
-- Pushed to: `<remote>/<branch>`
+- Push target: `<remote>/<branch>`
 - Commit contains only package-owned files/package-status/allowed sprint handoff: `<yes>`
+- Pushed: `<no>`

@@ -99,12 +99,12 @@
     }
   ],
   "stats": {
-    "candidateCount": 332,
-    "dedupedRuleCount": 325,
-    "exportedRuleCount": 325,
+    "candidateCount": 333,
+    "dedupedRuleCount": 326,
+    "exportedRuleCount": 326,
     "aliasRuleCount": 11,
-    "masterRuleCount": 314,
-    "estimatedAllRulesTokens": 12835
+    "masterRuleCount": 315,
+    "estimatedAllRulesTokens": 12864
   },
   "rules": [
     {
@@ -119,7 +119,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 59,
+          "line": 69,
           "section": "System Guidelines — Mandatory Implementation Contract > Process Weight Gate"
         }
       ]
@@ -134,7 +134,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 85,
+          "line": 95,
           "section": "System Guidelines — Mandatory Implementation Contract > 1. Work Starts From One Bounded Package"
         }
       ]
@@ -149,7 +149,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 89,
+          "line": 99,
           "section": "System Guidelines — Mandatory Implementation Contract > 1. Work Starts From One Bounded Package"
         }
       ]
@@ -166,7 +166,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 108,
+          "line": 118,
           "section": "System Guidelines — Mandatory Implementation Contract > 2. One Semantic Owner Per Concern"
         }
       ]
@@ -183,13 +183,9 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 110,
+          "line": 120,
           "section": "System Guidelines — Mandatory Implementation Contract > 2. One Semantic Owner Per Concern"
         }
-      ],
-      "aliases": [
-        "ARCH-0023",
-        "ARCH-0025"
       ]
     },
     {
@@ -204,7 +200,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 134,
+          "line": 144,
           "section": "System Guidelines — Mandatory Implementation Contract > 3. One Path Per Semantic Decision"
         }
       ]
@@ -219,7 +215,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 162,
+          "line": 172,
           "section": "System Guidelines — Mandatory Implementation Contract > 4. Scalars, State, And Naming Have Owners"
         }
       ],
@@ -237,7 +233,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 165,
+          "line": 175,
           "section": "System Guidelines — Mandatory Implementation Contract > 4. Scalars, State, And Naming Have Owners"
         }
       ]
@@ -252,7 +248,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 168,
+          "line": 178,
           "section": "System Guidelines — Mandatory Implementation Contract > 4. Scalars, State, And Naming Have Owners"
         }
       ],
@@ -273,10 +269,11 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 206,
+          "line": 216,
           "section": "System Guidelines — Mandatory Implementation Contract > 6. Tables, Cache, And Metadata Follow One Authority Chain"
         }
-      ]
+      ],
+      "canonical_of": "ARCH-0041"
     },
     {
       "id": "ARCH-0011",
@@ -291,7 +288,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 213,
+          "line": 223,
           "section": "System Guidelines — Mandatory Implementation Contract > 6. Tables, Cache, And Metadata Follow One Authority Chain"
         }
       ]
@@ -308,7 +305,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 231,
+          "line": 241,
           "section": "System Guidelines — Mandatory Implementation Contract > 7. Phase Code Must Hand Off To Runtime Owners"
         },
         {
@@ -330,7 +327,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 238,
+          "line": 248,
           "section": "System Guidelines — Mandatory Implementation Contract > 7. Phase Code Must Hand Off To Runtime Owners"
         }
       ]
@@ -347,7 +344,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 256,
+          "line": 266,
           "section": "System Guidelines — Mandatory Implementation Contract > 8. Control-Plane Work Uses Shared Primitives"
         }
       ]
@@ -364,7 +361,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 261,
+          "line": 271,
           "section": "System Guidelines — Mandatory Implementation Contract > 8. Control-Plane Work Uses Shared Primitives"
         }
       ]
@@ -379,7 +376,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 274,
+          "line": 284,
           "section": "System Guidelines — Mandatory Implementation Contract > 9. Load May Slow The System, Not Break It"
         }
       ]
@@ -394,7 +391,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 275,
+          "line": 285,
           "section": "System Guidelines — Mandatory Implementation Contract > 9. Load May Slow The System, Not Break It"
         }
       ]
@@ -411,7 +408,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 279,
+          "line": 289,
           "section": "System Guidelines — Mandatory Implementation Contract > 9. Load May Slow The System, Not Break It"
         }
       ]
@@ -426,7 +423,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 280,
+          "line": 290,
           "section": "System Guidelines — Mandatory Implementation Contract > 9. Load May Slow The System, Not Break It"
         }
       ]
@@ -441,7 +438,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 296,
+          "line": 306,
           "section": "System Guidelines — Mandatory Implementation Contract > 10. Communication Has One Replicated Data Path"
         }
       ]
@@ -459,7 +456,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 321,
+          "line": 331,
           "section": "System Guidelines — Mandatory Implementation Contract > 12. User-Facing Model Stays Small"
         }
       ]
@@ -474,7 +471,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 189,
+          "line": 199,
           "section": "System Guidelines — Mandatory Implementation Contract > 5. Shared Runtime Contracts Have One Shape"
         }
       ]
@@ -489,11 +486,10 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 216,
+          "line": 226,
           "section": "System Guidelines — Mandatory Implementation Contract > 6. Tables, Cache, And Metadata Follow One Authority Chain"
         }
-      ],
-      "canonical_of": "ARCH-0005"
+      ]
     },
     {
       "id": "ARCH-0024",
@@ -507,7 +503,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 222,
+          "line": 232,
           "section": "System Guidelines — Mandatory Implementation Contract > 7. Phase Code Must Hand Off To Runtime Owners"
         }
       ]
@@ -528,7 +524,7 @@
           "section": "Runtime Contracts Detail > Owner And Path Detail"
         }
       ],
-      "canonical_of": "ARCH-0005"
+      "canonical_of": "ARCH-0041"
     },
     {
       "id": "ARCH-0026",
@@ -610,7 +606,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 56,
+          "line": 66,
           "section": "System Guidelines — Mandatory Implementation Contract > Process Weight Gate"
         }
       ]
@@ -627,7 +623,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 208,
+          "line": 218,
           "section": "System Guidelines — Mandatory Implementation Contract > 6. Tables, Cache, And Metadata Follow One Authority Chain"
         }
       ]
@@ -646,7 +642,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 228,
+          "line": 238,
           "section": "System Guidelines — Mandatory Implementation Contract > 7. Phase Code Must Hand Off To Runtime Owners"
         }
       ]
@@ -663,7 +659,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 337,
+          "line": 347,
           "section": "System Guidelines — Mandatory Implementation Contract > 13. Closure Requires Proof, Review, And Truth Repair"
         }
       ]
@@ -680,7 +676,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 338,
+          "line": 348,
           "section": "System Guidelines — Mandatory Implementation Contract > 13. Closure Requires Proof, Review, And Truth Repair"
         }
       ]
@@ -697,7 +693,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 340,
+          "line": 350,
           "section": "System Guidelines — Mandatory Implementation Contract > 13. Closure Requires Proof, Review, And Truth Repair"
         }
       ]
@@ -714,7 +710,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 343,
+          "line": 353,
           "section": "System Guidelines — Mandatory Implementation Contract > 13. Closure Requires Proof, Review, And Truth Repair"
         }
       ]
@@ -729,7 +725,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 351,
+          "line": 361,
           "section": "System Guidelines — Mandatory Implementation Contract > 13. Closure Requires Proof, Review, And Truth Repair"
         }
       ]
@@ -1206,7 +1202,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 75,
+          "line": 85,
           "section": "System Guidelines — Mandatory Implementation Contract > 1. Work Starts From One Bounded Package"
         }
       ]
@@ -1225,9 +1221,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 100,
+          "line": 110,
           "section": "System Guidelines — Mandatory Implementation Contract > 2. One Semantic Owner Per Concern"
         }
+      ],
+      "aliases": [
+        "ARCH-0010",
+        "ARCH-0025"
       ]
     },
     {
@@ -1240,7 +1240,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 128,
+          "line": 138,
           "section": "System Guidelines — Mandatory Implementation Contract > 3. One Path Per Semantic Decision"
         }
       ]
@@ -1258,7 +1258,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 216,
+          "line": 226,
           "section": "System Guidelines — Mandatory Implementation Contract > 6. Tables, Cache, And Metadata Follow One Authority Chain"
         }
       ]
@@ -1273,7 +1273,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 269,
+          "line": 279,
           "section": "System Guidelines — Mandatory Implementation Contract > 9. Load May Slow The System, Not Break It"
         }
       ]
@@ -1288,7 +1288,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 304,
+          "line": 314,
           "section": "System Guidelines — Mandatory Implementation Contract > 11. Mutations Are Idempotent"
         },
         {
@@ -1616,7 +1616,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 78,
+          "line": 79,
           "section": "Workflow — Packages & Closure > Package Status And Closure"
         }
       ]
@@ -1631,7 +1631,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 227,
+          "line": 244,
           "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
@@ -2402,7 +2402,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 345,
+          "line": 355,
           "section": "System Guidelines — Mandatory Implementation Contract > 13. Closure Requires Proof, Review, And Truth Repair"
         }
       ]
@@ -2552,7 +2552,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 52,
+          "line": 53,
           "section": "Workflow — Packages & Closure > Package Status And Closure"
         },
         {
@@ -2572,7 +2572,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 65,
+          "line": 66,
           "section": "Workflow — Packages & Closure > Package Status And Closure"
         }
       ]
@@ -2589,7 +2589,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 86,
+          "line": 87,
           "section": "Workflow — Packages & Closure > Package Status And Closure"
         }
       ]
@@ -2606,7 +2606,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 134,
+          "line": 135,
           "section": "Workflow — Packages & Closure > Residual Closure Inventory"
         }
       ]
@@ -2623,7 +2623,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 167,
+          "line": 168,
           "section": "Workflow — Packages & Closure > Roadmap, Release, And Work-Tracker Truth"
         }
       ]
@@ -2638,8 +2638,8 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 25,
-          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
+          "line": 42,
+          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents > packageClass → freshness-review mode matrix"
         }
       ]
     },
@@ -2653,8 +2653,8 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 54,
-          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
+          "line": 71,
+          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents > packageClass → freshness-review mode matrix"
         }
       ]
     },
@@ -2668,7 +2668,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 187,
+          "line": 204,
           "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
         }
       ]
@@ -2685,7 +2685,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 213,
+          "line": 230,
           "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
@@ -2752,7 +2752,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 260,
+          "line": 277,
           "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
@@ -3279,7 +3279,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 325,
+          "line": 335,
           "section": "System Guidelines — Mandatory Implementation Contract > 12. User-Facing Model Stays Small"
         }
       ]
@@ -3377,7 +3377,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 69,
+          "line": 70,
           "section": "Workflow — Packages & Closure > Package Status And Closure"
         }
       ]
@@ -3394,7 +3394,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 74,
+          "line": 75,
           "section": "Workflow — Packages & Closure > Package Status And Closure"
         }
       ]
@@ -3743,7 +3743,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 290,
+          "line": 300,
           "section": "System Guidelines — Mandatory Implementation Contract > 10. Communication Has One Replicated Data Path"
         }
       ]
@@ -4096,7 +4096,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 55,
+          "line": 56,
           "section": "Workflow — Packages & Closure > Package Status And Closure"
         }
       ]
@@ -4111,7 +4111,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 61,
+          "line": 62,
           "section": "Workflow — Packages & Closure > Package Status And Closure"
         }
       ]
@@ -4138,13 +4138,13 @@
       "domain": "governance",
       "strength": "must",
       "tags": [],
-      "rule": "They are not a third required closure role.",
+      "rule": "The required freshness-review mode is driven by modelFit.packageClass (with lane as a legacy fallback).",
       "score": 193,
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 61,
-          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
+          "line": 27,
+          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents > packageClass → freshness-review mode matrix"
         }
       ]
     },
@@ -4153,13 +4153,13 @@
       "domain": "governance",
       "strength": "must",
       "tags": [],
-      "rule": "Review may cite runtime/static proof as required later; implementation, verification-fix, and parent revalidation run it.",
+      "rule": "They are not a third required closure role.",
       "score": 193,
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 84,
-          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
+          "line": 78,
+          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents > packageClass → freshness-review mode matrix"
         }
       ]
     },
@@ -4168,13 +4168,13 @@
       "domain": "governance",
       "strength": "must",
       "tags": [],
-      "rule": "interrupted and partial-unvalidated attempts must be followed by a checked superseded/discarded/revalidated line before closure.",
+      "rule": "Review may cite runtime/static proof as required later; implementation, verification-fix, and parent revalidation run it.",
       "score": 193,
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 98,
-          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
+          "line": 101,
+          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents > packageClass → freshness-review mode matrix"
         }
       ]
     },
@@ -4183,18 +4183,33 @@
       "domain": "governance",
       "strength": "must",
       "tags": [],
-      "rule": "Scenario-driven packages and active sprint snapshots must include a compact Current Edge Card that an LLM can keep in working memory without rereading the full package history.",
+      "rule": "interrupted and partial-unvalidated attempts must be followed by a checked superseded/discarded/revalidated line before closure.",
       "score": 193,
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 198,
-          "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
+          "line": 115,
+          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents > packageClass → freshness-review mode matrix"
         }
       ]
     },
     {
       "id": "GOV-0069",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [],
+      "rule": "Scenario-driven packages and active sprint snapshots must include a compact Current Edge Card that an LLM can keep in working memory without rereading the full package history.",
+      "score": 193,
+      "sources": [
+        {
+          "file": "workflow-guidelines/subagents.md",
+          "line": 215,
+          "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0070",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4209,7 +4224,7 @@
       ]
     },
     {
-      "id": "GOV-0070",
+      "id": "GOV-0071",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4241,7 +4256,7 @@
       ]
     },
     {
-      "id": "GOV-0071",
+      "id": "GOV-0072",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4258,7 +4273,7 @@
       ]
     },
     {
-      "id": "GOV-0072",
+      "id": "GOV-0073",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4275,7 +4290,7 @@
       ]
     },
     {
-      "id": "GOV-0073",
+      "id": "GOV-0074",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4286,13 +4301,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 257,
+          "line": 274,
           "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
     },
     {
-      "id": "GOV-0074",
+      "id": "GOV-0075",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4301,7 +4316,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 260,
+          "line": 277,
           "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
@@ -4318,7 +4333,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 113,
+          "line": 123,
           "section": "System Guidelines — Mandatory Implementation Contract > 2. One Semantic Owner Per Concern"
         },
         {
@@ -4340,7 +4355,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 140,
+          "line": 150,
           "section": "System Guidelines — Mandatory Implementation Contract > 3. One Path Per Semantic Decision"
         }
       ]
@@ -4358,7 +4373,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 211,
+          "line": 221,
           "section": "System Guidelines — Mandatory Implementation Contract > 6. Tables, Cache, And Metadata Follow One Authority Chain"
         }
       ]
@@ -4375,7 +4390,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 233,
+          "line": 243,
           "section": "System Guidelines — Mandatory Implementation Contract > 7. Phase Code Must Hand Off To Runtime Owners"
         }
       ]
@@ -4390,13 +4405,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 323,
+          "line": 333,
           "section": "System Guidelines — Mandatory Implementation Contract > 12. User-Facing Model Stays Small"
         }
       ]
     },
     {
-      "id": "GOV-0075",
+      "id": "GOV-0076",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4405,13 +4420,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 25,
-          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
+          "line": 42,
+          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents > packageClass → freshness-review mode matrix"
         }
       ]
     },
     {
-      "id": "GOV-0076",
+      "id": "GOV-0077",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -4424,13 +4439,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 84,
-          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
+          "line": 101,
+          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents > packageClass → freshness-review mode matrix"
         }
       ]
     },
     {
-      "id": "GOV-0077",
+      "id": "GOV-0078",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4439,8 +4454,8 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 107,
-          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
+          "line": 124,
+          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents > packageClass → freshness-review mode matrix"
         }
       ]
     },
@@ -4643,13 +4658,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 222,
+          "line": 232,
           "section": "System Guidelines — Mandatory Implementation Contract > 7. Phase Code Must Hand Off To Runtime Owners"
         }
       ]
     },
     {
-      "id": "GOV-0078",
+      "id": "GOV-0079",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4664,7 +4679,7 @@
       ]
     },
     {
-      "id": "GOV-0079",
+      "id": "GOV-0080",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4673,13 +4688,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 147,
+          "line": 164,
           "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
         }
       ]
     },
     {
-      "id": "GOV-0080",
+      "id": "GOV-0081",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4694,7 +4709,7 @@
       ]
     },
     {
-      "id": "GOV-0081",
+      "id": "GOV-0082",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4712,7 +4727,7 @@
       ]
     },
     {
-      "id": "GOV-0082",
+      "id": "GOV-0083",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4861,7 +4876,7 @@
       ]
     },
     {
-      "id": "GOV-0083",
+      "id": "GOV-0084",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4876,7 +4891,7 @@
       ]
     },
     {
-      "id": "GOV-0084",
+      "id": "GOV-0085",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4966,7 +4981,7 @@
       ]
     },
     {
-      "id": "GOV-0085",
+      "id": "GOV-0086",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4984,7 +4999,7 @@
       ]
     },
     {
-      "id": "GOV-0086",
+      "id": "GOV-0087",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4995,13 +5010,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 61,
-          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
+          "line": 78,
+          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents > packageClass → freshness-review mode matrix"
         }
       ]
     },
     {
-      "id": "GOV-0087",
+      "id": "GOV-0088",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -5012,13 +5027,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 118,
+          "line": 135,
           "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
         }
       ]
     },
     {
-      "id": "GOV-0088",
+      "id": "GOV-0089",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -5082,7 +5097,7 @@
       ]
     },
     {
-      "id": "GOV-0089",
+      "id": "GOV-0090",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5131,7 +5146,7 @@
       ]
     },
     {
-      "id": "GOV-0090",
+      "id": "GOV-0091",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5148,7 +5163,7 @@
       ]
     },
     {
-      "id": "GOV-0091",
+      "id": "GOV-0092",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5159,13 +5174,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 167,
+          "line": 184,
           "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
         }
       ]
     },
     {
-      "id": "GOV-0092",
+      "id": "GOV-0093",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5174,7 +5189,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 230,
+          "line": 247,
           "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
@@ -5195,7 +5210,7 @@
       ]
     },
     {
-      "id": "GOV-0093",
+      "id": "GOV-0094",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5227,7 +5242,7 @@
       ]
     },
     {
-      "id": "GOV-0094",
+      "id": "GOV-0095",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5244,7 +5259,7 @@
       ]
     },
     {
-      "id": "GOV-0095",
+      "id": "GOV-0096",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5259,7 +5274,7 @@
       ]
     },
     {
-      "id": "GOV-0096",
+      "id": "GOV-0097",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5268,13 +5283,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 55,
+          "line": 56,
           "section": "Workflow — Packages & Closure > Package Status And Closure"
         }
       ]
     },
     {
-      "id": "GOV-0097",
+      "id": "GOV-0098",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5285,13 +5300,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 130,
+          "line": 131,
           "section": "Workflow — Packages & Closure > Residual Closure Inventory"
         }
       ]
     },
     {
-      "id": "GOV-0098",
+      "id": "GOV-0099",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5300,13 +5315,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 25,
-          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
+          "line": 42,
+          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents > packageClass → freshness-review mode matrix"
         }
       ]
     },
     {
-      "id": "GOV-0099",
+      "id": "GOV-0100",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5317,13 +5332,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 25,
-          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
+          "line": 42,
+          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents > packageClass → freshness-review mode matrix"
         }
       ]
     },
     {
-      "id": "GOV-0100",
+      "id": "GOV-0101",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5332,13 +5347,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 98,
-          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
+          "line": 115,
+          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents > packageClass → freshness-review mode matrix"
         }
       ]
     },
     {
-      "id": "GOV-0101",
+      "id": "GOV-0102",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5355,7 +5370,7 @@
       ]
     },
     {
-      "id": "GOV-0102",
+      "id": "GOV-0103",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5373,7 +5388,7 @@
       ]
     },
     {
-      "id": "GOV-0103",
+      "id": "GOV-0104",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5403,7 +5418,7 @@
       ]
     },
     {
-      "id": "GOV-0104",
+      "id": "GOV-0105",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5420,7 +5435,7 @@
       ]
     },
     {
-      "id": "GOV-0105",
+      "id": "GOV-0106",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5437,7 +5452,7 @@
       ]
     },
     {
-      "id": "GOV-0106",
+      "id": "GOV-0107",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5454,7 +5469,7 @@
       ]
     },
     {
-      "id": "GOV-0107",
+      "id": "GOV-0108",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5467,13 +5482,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 155,
+          "line": 172,
           "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
         }
       ]
     },
     {
-      "id": "GOV-0108",
+      "id": "GOV-0109",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5484,13 +5499,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 162,
+          "line": 179,
           "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
         }
       ]
     },
     {
-      "id": "GOV-0109",
+      "id": "GOV-0110",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5507,5 +5522,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-05-28T15:20:01.478Z"
+  "generatedAt": "2026-05-29T06:30:44.185Z"
 }

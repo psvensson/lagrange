@@ -532,6 +532,15 @@
         },
         "jointFalsifierCommand": {
           "type": "string"
+        },
+        "gateMarker": {
+          "type": "string",
+          "enum": [
+            "same-mechanism-repeat",
+            "compositional-pair-alternation",
+            "pair-alternation-post-rederive",
+            "emergent-class-present"
+          ]
         }
       },
       "additionalProperties": false,

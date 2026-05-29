@@ -15,6 +15,20 @@ last_reviewed: 2026-05-23
 
 Preserve the highest-level owner boundary, choose the lightest process that proves the boundary was not weakened, and do not locally patch symptoms when the owner contract is porous.
 
+## Vocabulary (lane vs packageClass vs gateMarker)
+
+Three orthogonal axes are commonly collapsed into "lane" in conversation. Validators treat them as distinct:
+
+* **lane** (`intent.lane`) — execution lane; controls proof-ladder shape, freshness-review mode, validator gates. See Lane Definitions in [`work/RULES.md`](../../../work/RULES.md#vocabulary).
+* **packageClass** (`modelFit.packageClass`) — artifact kind; drives R1–R10 exemptions (rederive / arch-gap classes), model-fit checks, write-scope shape.
+* **gateMarker** (`theoryLoop.gateMarker`, optional) — which compositional-signal pattern this package satisfies (`same-mechanism-repeat`, `compositional-pair-alternation`, `pair-alternation-post-rederive`, `emergent-class-present`).
+
+When R1–R10 doctrine says "the rederive class" or "the architecture-gap class" it means the packageClass axis, not the execution lane. Full table and canonical token list: [`work/RULES.md#vocabulary`](../../../work/RULES.md#vocabulary).
+
+## Source Authority Precedence
+
+Compact packs under [`.kiro/steering/llm/`](.) are the runtime surface. Source steering under [`.kiro/steering/`](../) is consulted only to (a) chase cited detail behind a compact-pack rule, or (b) repair pack drift — in which case fix the source and regenerate via `npm run steering:llm:pack`. Source steering is **not** an independent runtime override path. Neither surface weakens [`work/RULES.md`](../../../work/RULES.md).
+
 ## 30-Second Must-Not Checklist
 
 Use this list at cold start before any non-trivial work. Anchors point into [`work/RULES.md`](../../../work/RULES.md).

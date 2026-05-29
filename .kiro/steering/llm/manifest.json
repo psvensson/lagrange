@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-05-28T15:20:01.479Z",
+  "generatedAt": "2026-05-29T06:30:44.187Z",
   "packs": [
     {
       "name": "core",
       "title": "Core Steering Pack",
       "description": "Always-load compact rules for ownership, safety, scope, and quality baseline.",
       "ruleCount": 20,
-      "estimatedTokens": 2112,
+      "estimatedTokens": 2472,
       "domains": [
         "architecture",
         "testing",
@@ -20,7 +20,7 @@
       "title": "Architecture Steering Pack",
       "description": "Load for bootstrap/join/rebalance/control-plane/runtime ownership and lifecycle work.",
       "ruleCount": 40,
-      "estimatedTokens": 1336,
+      "estimatedTokens": 1322,
       "domains": [
         "architecture"
       ],

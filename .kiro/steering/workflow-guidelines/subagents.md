@@ -22,6 +22,23 @@ closure roles are `implementation` and, when the package changes code, tests,
 scripts, runtime contracts, tracker truth, or generated handoff state,
 `verification-fix`.
 
+### packageClass → freshness-review mode matrix
+
+The required freshness-review mode is driven by `modelFit.packageClass` (with
+lane as a legacy fallback). See the Vocabulary section of
+[`work/RULES.md`](../../../work/RULES.md#vocabulary) for the three-axis split
+(lane / packageClass / gateMarker).
+
+| packageClass (or lane fallback) | Mode | What "review" means |
+| --- | --- | --- |
+| `system-theory-rederive` (and aliases) | **strict** | real `freshness-review` sub-agent required before implementation; parent-session/local labels do not satisfy. |
+| `architecture-gap-analysis` (and `architecture-gap*`) | **strict** | same as rederive. |
+| `representative-frontier-closure` on `runtime-owner-boundary` / `scenario-release-gate` / `causal-escalation` lane | **strict** | same as rederive. |
+| `classification-only`, `documentation-only`, `lightweight-maintenance`, `probe-only` (and `read-doc` / `mechanical-maintenance` / `lightweight-maintenance` lanes) | **lite** | parent-executed review acceptable; record the same five fields inline in the package ledger. |
+
+Cross-reference: `work/README.md` execution-roles section repeats this matrix
+to keep parent-session decisions and validator behaviour aligned.
+
 A real sub-agent may perform `implementation` or `verification-fix`, but real
 sub-agent identity is optional provenance for those closure roles. The parent
 session may perform those roles directly when that is the lightest valid path.

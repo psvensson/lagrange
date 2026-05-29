@@ -329,7 +329,13 @@ const CURRENT_BLOCKER_THEORY_SECTION_HEADING =
 const CURRENT_BLOCKER_IMPLEMENTATION_SCOPE_PATTERN =
   /^(?:src|test|scripts|reports|test-output)\//u;
 const COMMIT_LEDGER_COMMIT_LABEL = 'Focused package commit';
+const COMMIT_LEDGER_PUSH_TARGET_LABEL = 'Push target';
+// Legacy alias: pre-F7 packages wrote `Pushed to: <remote>/<branch>` before
+// the push actually happened. The field is now `Push target` (intent) plus
+// an optional `Pushed: yes|no` line populated by `work:sprint:push` after
+// the push succeeds. Validators accept either label for the URL value.
 const COMMIT_LEDGER_PUSHED_LABEL = 'Pushed to';
+const COMMIT_LEDGER_PUSHED_BOOLEAN_LABEL = 'Pushed';
 const COMMIT_LEDGER_FOCUSED_SLICE_LABEL =
   'Commit contains only package-owned files/package-status/allowed sprint handoff';
 const MODEL_FIT_PACKAGE_CLASS_LABEL = 'Package class';
@@ -2252,6 +2258,16 @@ function findCommitLedgerField(ledger, label) {
   return match ? normalizeLedgerFieldValue(match[NUM_ONE]) : null;
 }
 
+// Push target is the post-F7 canonical label; pre-F7 packages used
+// `Pushed to`. Read prefers the new label, falls back to the legacy one
+// so existing closed packages keep validating.
+function findCommitLedgerPushTarget(ledger) {
+  return (
+    findCommitLedgerField(ledger, COMMIT_LEDGER_PUSH_TARGET_LABEL) ||
+    findCommitLedgerField(ledger, COMMIT_LEDGER_PUSHED_LABEL)
+  );
+}
+
 function isPendingCommitLedgerValue(value) {
   return value === null ||
     MODEL_FIT_EMPTY_VALUE_PATTERN.test(value) ||
@@ -2263,7 +2279,7 @@ function isPendingCommitLedgerValue(value) {
 function isPendingCommitAndPushLedger(ledger) {
   return [
     findCommitLedgerField(ledger, COMMIT_LEDGER_COMMIT_LABEL),
-    findCommitLedgerField(ledger, COMMIT_LEDGER_PUSHED_LABEL),
+    findCommitLedgerPushTarget(ledger),
     findCommitLedgerField(ledger, COMMIT_LEDGER_FOCUSED_SLICE_LABEL),
   ].some(isPendingCommitLedgerValue);
 }
@@ -2330,12 +2346,21 @@ export function validateCommitAndPushLedger(content, filePath, options = {}) {
     return [];
   }
   const focusedCommit = findCommitLedgerField(ledger, COMMIT_LEDGER_COMMIT_LABEL);
-  const pushedTo = findCommitLedgerField(ledger, COMMIT_LEDGER_PUSHED_LABEL);
+  const pushedTo = findCommitLedgerPushTarget(ledger);
   const focusedSlice = findCommitLedgerField(
     ledger,
     COMMIT_LEDGER_FOCUSED_SLICE_LABEL,
   );
-  return [
+  const pushedBoolean = findCommitLedgerField(
+    ledger,
+    COMMIT_LEDGER_PUSHED_BOOLEAN_LABEL,
+  );
+  const pushTargetLabelInUse = ledger.includes(
+    `${COMMIT_LEDGER_PUSH_TARGET_LABEL}:`,
+  ) ?
+    COMMIT_LEDGER_PUSH_TARGET_LABEL :
+    COMMIT_LEDGER_PUSHED_LABEL;
+  const errors = [
     ...validateCommitLedgerFieldValue(
       filePath,
       COMMIT_LEDGER_COMMIT_LABEL,
@@ -2346,7 +2371,7 @@ export function validateCommitAndPushLedger(content, filePath, options = {}) {
     ),
     ...validateCommitLedgerFieldValue(
       filePath,
-      COMMIT_LEDGER_PUSHED_LABEL,
+      pushTargetLabelInUse,
       pushedTo,
       (value) => REMOTE_BRANCH_PATTERN.test(value) ?
         null :
@@ -2361,6 +2386,20 @@ export function validateCommitAndPushLedger(content, filePath, options = {}) {
         'must be yes',
     ),
   ];
+  // Optional `Pushed: yes|no` line. Additive: legacy ledgers without it
+  // continue to validate. When present, must be `yes` (optionally followed
+  // by an ISO timestamp populated by `work:sprint:push`) or `no`.
+  if (pushedBoolean !== null) {
+    const v = pushedBoolean.toLowerCase();
+    const ok = v === 'no' || v === 'yes' || /^yes\s+\S/u.test(v);
+    if (!ok) {
+      errors.push(
+        `${filePath}: Commit And Push Ledger ${COMMIT_LEDGER_PUSHED_BOOLEAN_LABEL} ` +
+        'must be yes or no.',
+      );
+    }
+  }
+  return errors;
 }
 
 function findModelFitField(section, label) {
@@ -6225,9 +6264,22 @@ const COMPOSITIONAL_GATE_REVISION_LANE_VALUES = new Set([
   'system-theory-revision',
   'theory-rederive',
 ]);
+// F0 — canonical packageClass tokens for the rederive class. Detection
+// prefers modelFit.packageClass; lane / kind / slug are legacy fallbacks.
+const COMPOSITIONAL_GATE_REVISION_PACKAGE_CLASS_VALUES = new Set([
+  'system-theory-rederive',
+  'system-theory-revision',
+  'theory-rederive',
+  'whole-system-theory',
+]);
 
-function metadataIsSystemTheoryRevision(metadata, filePath) {
+export function metadataIsSystemTheoryRevision(metadata, filePath) {
   if (!metadata || typeof metadata !== 'object') return false;
+  const packageClass = normalizeLedgerText(metadata.modelFit?.packageClass);
+  if (
+    packageClass &&
+    COMPOSITIONAL_GATE_REVISION_PACKAGE_CLASS_VALUES.has(packageClass)
+  ) return true;
   const lane = normalizeLedgerText(metadata.lane);
   if (lane && COMPOSITIONAL_GATE_REVISION_LANE_VALUES.has(lane)) return true;
   const kind = normalizeLedgerText(metadata.packageKind || metadata.kind);
@@ -6325,6 +6377,8 @@ const ARCHITECTURE_GAP_LANE_VALUES = new Set([
   'causal-escalation',
 ]);
 const ARCHITECTURE_GAP_SLUG_PATTERN = /architecture[-_]gap/iu;
+// F0 — canonical packageClass tokens for the architecture-gap class.
+const ARCHITECTURE_GAP_PACKAGE_CLASS_PATTERN = /^architecture-gap(?:[-\s]|$)/iu;
 const JOINT_FALSIFIER_TAG_PATTERN = /#\s*coupled[-_]invariant\b/iu;
 const SPRINT_JOINT_PROBE_HEADING = '## Joint Coupled-Invariant Probe';
 const SPRINT_JOINT_PROBE_LABEL_COMMAND = 'Command';
@@ -6347,9 +6401,13 @@ const LOOP_EXHAUSTION_NON_CONFIRMED_OUTCOMES = new Set([
   'migrated',
 ]);
 
-function metadataIsArchitectureGapAnalysis(metadata, filePath) {
+export function metadataIsArchitectureGapAnalysis(metadata, filePath) {
   if (!metadata || typeof metadata !== 'object') return false;
   if (metadata.architectureGapAnalysis === true) return true;
+  const packageClass = normalizeLedgerText(metadata.modelFit?.packageClass);
+  if (packageClass && ARCHITECTURE_GAP_PACKAGE_CLASS_PATTERN.test(packageClass)) {
+    return true;
+  }
   const lane = normalizeLedgerText(metadata.lane);
   const slug = String(filePath || '').toLowerCase();
   if (ARCHITECTURE_GAP_SLUG_PATTERN.test(slug)) {
@@ -7091,6 +7149,63 @@ export function validateAlternatingPairActiveLimit(
       `${filePath}: alternating-pair-active-limit-exceeded — at most one ` +
       `active package permitted per alternating pair; ${others.map((p) => p.fileName).join(', ')} ` +
       `already covers the pair {${[...pairKeys].join(' | ')}}.`,
+    );
+  }
+  return errors;
+}
+
+// R11. packageClass write-scope fit.
+// - Rederive and architecture-gap classes must NOT list src/ in writeScope
+//   (error: rederive-writescope-contains-src).
+// - representative-frontier-closure packages on the runtime-owner-boundary
+//   lane SHOULD list at least one src/ path in writeScope
+//   (warning: runtime-writescope-no-src) — honours the Real Package Rule.
+// Detection prefers modelFit.packageClass; lane/slug remain legacy fallbacks
+// via metadataIsSystemTheoryRevision / metadataIsArchitectureGapAnalysis.
+export function validatePackageClassWriteScopeFit(
+  metadata,
+  filePath,
+  options = {},
+) {
+  const errors = [];
+  if (!metadata || typeof metadata !== 'object') return errors;
+  const phase = options.phase || VALIDATION_PHASE_PRE_IMPL;
+  if (phase !== VALIDATION_PHASE_PRE_IMPL) return errors;
+  const status = options.status || normalizeLedgerText(metadata.status);
+  if (status !== STATUS_ACTIVE && status !== STATUS_TODO) return errors;
+
+  const writeScope = []
+    .concat(metadata.writeScope || [])
+    .concat(metadata?.scope?.writeScope || [])
+    .map((p) => normalizeLedgerText(p))
+    .filter(Boolean);
+  const srcEntries = writeScope.filter((p) => isSourceWritePath(p));
+
+  const isRederive = metadataIsSystemTheoryRevision(metadata, filePath);
+  const isArchGap = metadataIsArchitectureGapAnalysis(metadata, filePath);
+  if ((isRederive || isArchGap) && srcEntries.length > 0) {
+    const klass = isRederive ? 'system-theory-rederive' : 'architecture-gap-analysis';
+    errors.push(
+      `${filePath}: rederive-writescope-contains-src — ${klass} package class ` +
+      'must not list src/ paths in writeScope; move runtime targets to ' +
+      `candidateRuntimeFiles. Offending entries: ${srcEntries.join(', ')}.`,
+    );
+    return errors;
+  }
+
+  // Warning path for representative-frontier-closure on runtime-owner-boundary.
+  if (isRederive || isArchGap) return errors;
+  const packageClass = normalizeLedgerText(metadata?.modelFit?.packageClass);
+  const lane = normalizeLedgerText(metadata.lane);
+  if (
+    lane === LANE_RUNTIME_OWNER_BOUNDARY &&
+    packageClass === 'representative-frontier-closure' &&
+    srcEntries.length === 0
+  ) {
+    errors.push(
+      `${filePath}: runtime-writescope-no-src — representative-frontier-closure ` +
+      'on runtime-owner-boundary lane must list at least one src/ path in ' +
+      'writeScope (Real Package Rule).',
     );
   }
   return errors;
@@ -8803,6 +8918,10 @@ function runPackageValidationsSync(filePath, content, fileStatus, metadata, opti
     phase,
     status: fileStatus,
     packageDir: options.packageDir,
+  }));
+  errors.push(...validatePackageClassWriteScopeFit(metadata, relativePath, {
+    phase,
+    status: fileStatus,
   }));
   errors.push(...validateRederiveCoupledInvariants(metadata, relativePath, {
     phase,
@@ -11872,8 +11991,9 @@ function autoPopulateCommitLedgerInMarkdown(content) {
     heading,
     '',
     `1. ${COMMIT_LEDGER_COMMIT_LABEL}: ${commit}`,
-    `2. ${COMMIT_LEDGER_PUSHED_LABEL}: ${branch}`,
+    `2. ${COMMIT_LEDGER_PUSH_TARGET_LABEL}: ${branch}`,
     `3. ${COMMIT_LEDGER_FOCUSED_SLICE_LABEL}: yes`,
+    `4. ${COMMIT_LEDGER_PUSHED_BOOLEAN_LABEL}: no`,
     ''
   ].join(NEWLINE);
   const headingPattern = new RegExp(

@@ -15,10 +15,20 @@ last_reviewed: 2026-05-23
 
 ## Document Role
 
-This file is the canonical source contract for generated and hand-written code
-in this repository. LLM sessions keep it active by loading the compact packs
-named in `AGENTS.md`; source steering is consulted directly for conflicts,
-citations, or detailed policy.
+This file is one of the canonical *source* steering documents that the LLM
+compact packs under `.kiro/steering/llm/` are generated from. It is **not** an
+independent runtime override surface.
+
+Steering precedence (mirrors `AGENTS.md` and `.kiro/steering/llm/boot.md`):
+
+1. The compact packs under `.kiro/steering/llm/` are the runtime execution
+   surface for LLM sessions.
+2. Source steering files in this directory are consulted only to (a) chase
+   cited detail behind a compact-pack rule, or (b) repair pack drift and
+   regenerate the packs via `npm run steering:llm:pack`.
+3. If a divergence exists between a compact pack and its source steering,
+   fix the source, regenerate the packs, and re-validate. Do **not** treat
+   the source as a parallel runtime contract that overrides the pack.
 
 Use this file for:
 
@@ -43,9 +53,9 @@ Use focused steering files for detail:
   older links only
 - [`../../work/README.md`](../../work/README.md): local work-tracker procedure
 
-These rules are non-negotiable. When this file and a detailed policy both
-apply, satisfy both; the detailed file explains proof and procedure, but does
-not weaken this contract.
+These rules are non-negotiable. The compact packs derived from this file
+carry the same authority during a session; the detailed source files explain
+proof and procedure but do not weaken this contract.
 
 The system is called lagrange.
 

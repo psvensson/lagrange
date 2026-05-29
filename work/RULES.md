@@ -29,6 +29,30 @@ When the lane is not obvious, use
 
 ---
 
+## Vocabulary — lane, packageClass, gateMarker
+<a name="vocabulary"></a>
+
+Three orthogonal axes describe a package. They are often collapsed into
+"lane" in informal speech, but the validators treat them as distinct.
+
+| Axis | Field | What it controls | Examples |
+| --- | --- | --- | --- |
+| **lane** | `intent.lane` (top-level `lane` shim) | Execution lane: proof-ladder shape, freshness-review mode, validator gates. Enum: see Lane Definitions above. | `causal-escalation`, `runtime-owner-boundary`, `lightweight-maintenance` |
+| **packageClass** | `modelFit.packageClass` | What kind of artifact the package produces. Drives R1–R10 exemptions, model-fit checks, and write-scope shape. | `system-theory-rederive`, `architecture-gap-analysis`, `representative-frontier-closure`, `classification-only`, `documentation-only`, `lightweight-maintenance`, `probe-only` |
+| **gateMarker** | `theoryLoop.gateMarker` (optional) | Which compositional-signal pattern this package is satisfying. Enum: `same-mechanism-repeat`, `compositional-pair-alternation`, `pair-alternation-post-rederive`, `emergent-class-present`. | `pair-alternation-post-rederive` for a rederive opened after a prior rederive on the same pair |
+
+The validators detect rederive and architecture-gap classes primarily via
+`modelFit.packageClass` (canonical tokens: `system-theory-rederive`,
+`system-theory-revision`, `theory-rederive`, `whole-system-theory`,
+`architecture-gap*`). Lane, slug regex, and the boolean shims
+`systemTheoryRevision`/`architectureGapAnalysis` remain as legacy
+fallbacks but should not be relied on for new packages.
+
+When R1–R10 doctrine says "the rederive class" or "the architecture-gap
+class" it always means the packageClass axis, not the execution lane.
+
+---
+
 ## Validator Phases
 <a name="validator-phases"></a>
 
@@ -45,7 +69,7 @@ Validators execute in distinct phases to ensure the integrity of the codebase an
 
 To guarantee stability, implementation changes must compile and pass structured verification:
 
-*   **Focused Verification**: Runtime, scenario, experiment, proof, and other implementation packages specify a proof ladder containing role-tagged commands: exactly one `falsifier` command (whose failure proves the implementation theory wrong), exactly one `regression` command (which fails if existing behavior is broken), and optional `supporting` commands. Prefer compact ladders of 3-5 commands for readability, but command count is not enforced.
+*   **Focused Verification**: Runtime, scenario, experiment, proof, and other implementation packages specify a proof ladder containing role-tagged commands: exactly one `falsifier` command (whose failure proves the implementation theory wrong), exactly one `regression` command (which fails if existing behavior is broken), and optional `supporting` commands. Prefer compact ladders of 3-5 commands for readability, but command count is not enforced. **Exception (Phase 4 coupled invariants):** packages of `packageClass` `system-theory-rederive` or any `architecture-gap*` class MAY add one additional `falsifier` command tagged with the trailing comment `# coupled-invariant` (the joint coupled-invariant probe required by R3). Equivalently, the joint command may be carried in the `theoryLoop.jointFalsifierCommand` field. Joint falsifiers tagged this way do not count toward the "exactly one `falsifier`" cardinality rule; the runtime falsifier is still required.
 *   **Freshness Review Gate**: Strict workflow packages (`runtime-owner-boundary`, `scenario-release-gate`, `causal-escalation`, or any package declaring `freshness: "strict"` / `gates.freshness: "strict"`) MUST start each package execution with a new real `freshness-review` subagent before implementation. The freshness reviewer independently checks current-blocker, package metadata, route evidence, owner, boundary, proof ladder, and write scope from repository state only. Implementation may start only after checked `## Execution Evidence` records `action: freshness-review`, a real `Agent <name> (<agent-id>)`, `decision: fresh`, and terminal validation. This role is per-package; freshness evidence from a predecessor or prior sprint package never carries forward.
 *   **Lane Exceptions**: Maintenance lanes may use a `regression`-only ladder. Classification-only fast-path packages may use two or three canonical evidence commands while runtime, test, script, and report paths stay out of `writeScope` and `commitScope`. Compact probe packages validated with `--probe` may omit the closure evidence ladder when they stay within the probe lane contract.
 *   **Evidence Collection**: Sprints owning active classification or diagnostics packages must record representative residuals and link to specific run output artifacts.
@@ -191,6 +215,25 @@ slice theory can execute one declared `src/` source/test contract, change that
 source code, and verify the theory. If system theory cannot select a source
 slice, do not open a theory-loop work package.
 
+**Exception (rederive and architecture-gap classes).** Two packageClasses
+are explicitly permitted as theory-loop work packages without `src/` edits,
+because their durable artifact is structural rather than runtime:
+
+* `system-theory-rederive` (and its aliases: `system-theory-revision`,
+  `theory-rederive`, `whole-system-theory`): writes only sprint markdown
+  and `work/theory-ledger.md`; produces a coupled-invariant revision
+  enforced by R2/R3/R6.
+* `architecture-gap-analysis` (and any `architecture-gap*` class):
+  writes only sprint markdown, `work/theory-ledger.md`, and optionally
+  architecture-doc files; produces an architecture-gap ledger entry
+  enforced by R5/R7.
+
+These two classes MUST still produce one durable structural artifact
+(R6: sprint `## Joint Coupled-Invariant Probe` delta, a new
+`work/theory-ledger.md` entry, or a `work/RULES.md` taxonomy
+modification). Documentary-only packages on either class are rejected.
+No other packageClass is exempt from the source-change requirement.
+
 ---
 
 ## Theory Loop Sprint Shape
@@ -235,6 +278,11 @@ sections:
    discrimination; do not promote it to a work package. A successor package may
    be linked only after the source change and proof have produced fresh
    evidence; successor creation is never the package's implementation payload.
+   **Exception:** the rederive (`system-theory-rederive` and aliases) and
+   architecture-gap (`architecture-gap*`) packageClasses are the only
+   theory-loop work packages permitted without `src/` edits; see the
+   exception block under [Two-Level Theory Contract](#two-level-theory-contract)
+   for the required structural artifact (R6) and writeScope shape.
 7. `Promotion Rule`: only the option selected by fresh evidence or a
    discriminator becomes one executable package with explicit owner, boundary,
    write scope, proof, and stop rule.
@@ -261,8 +309,10 @@ packages and sprints without the relevant fields/signals are exempt.
   `alternating-pair-concurrent-runtime`). When the package being activated is
   on a boundary belonging to a detected alternating pair, no other
   source-touching package on either pair boundary may be `active`/`todo`
-  simultaneously. System-theory-rederive and architecture-gap-analysis lanes
-  are exempt as the *self* (they may run while runtime packages are blocked).
+  simultaneously. The `system-theory-rederive` and `architecture-gap-analysis`
+  *package classes* are exempt as the *self* (they may run while runtime
+  packages are blocked). Detection is `modelFit.packageClass` first; lane
+  and slug regex are legacy fallbacks.
 * **R2. Coupled Invariants on Rederive** — `validateRederiveCoupledInvariants`
   (`rederive-coupled-invariants-missing`). A `system-theory-rederive` package
   triggered by a pair-alternation/emergent signal must declare
@@ -295,7 +345,7 @@ packages and sprints without the relevant fields/signals are exempt.
   inconclusive | migrated`) is required at closure for theory-loop packages.
   When the last three closed packages on the alternating pair all carry a
   non-confirmed outcome, the next runtime package on the pair is rejected;
-  only an architecture-gap-analysis lane package, plus a fresh
+  only an `architecture-gap-analysis` *package-class* package, plus a fresh
   `theory-YYYYMMDD-…-architecture-gap` ledger entry, can unblock the pair.
 * **R6. Modeltheory-Exemption Tightening (Structural Artifact)** —
   `validateRederiveStructuralArtifact`
@@ -307,7 +357,7 @@ packages and sprints without the relevant fields/signals are exempt.
 * **R7. Repeat-Rederive Escalator** — `detectCompositionalSignals` emits the
   `pair-alternation-post-rederive` pattern when alternation recurs after a
   closed rederive on the pair. `validateCompositionalAutoPromoteGate` then
-  permits only `architecture-gap-analysis` lane packages on the pair
+  permits only `architecture-gap-analysis` *package-class* packages on the pair
   (`pair-alternation-post-rederive-requires-architecture-gap`).
 * **R8. Sprint-Level Coupled-Invariant Probe Section** —
   `validateSprintJointCoupledInvariantProbe`
@@ -329,6 +379,13 @@ packages and sprints without the relevant fields/signals are exempt.
   (`healthy|rederive-in-progress|exhausted`). Visible in both the JSON and
   text output of `npm run work:frontier-history` and surfaced through
   `npm run work:context`.
+* **R11. packageClass Write-Scope Fit** — `validatePackageClassWriteScopeFit`
+  (`rederive-writescope-contains-src`, `runtime-writescope-no-src`).
+  Rederive and architecture-gap classes MUST NOT list `src/` paths in
+  `writeScope`; runtime targets belong in `candidateRuntimeFiles`.
+  `representative-frontier-closure` packages on `runtime-owner-boundary`
+  MUST list at least one `src/` path in `writeScope` (Real Package Rule).
+  Wired into the pre-impl orchestrator alongside R1–R9.
 
 ### Compositional Auto-Promote Rule
 
@@ -347,9 +404,12 @@ When a compositional signal fires, the `--pre-impl` validator
 (`validateCompositionalAutoPromoteGate` in `scripts/work-tracker.js`) refuses
 to promote another local slice on the same owner/boundary unless the next
 package is a `systemTheory` revision. A package counts as a revision when
-its `lane` is `system-theory-rederive` (or `system-theory-revision` /
-`theory-rederive`), or its metadata sets `systemTheoryRevision: true`, or
-its slug contains `system-theory-rederive` / `system-theory-revision` /
+its `modelFit.packageClass` is one of `system-theory-rederive`,
+`system-theory-revision`, `theory-rederive`, or `whole-system-theory`
+(detected primarily via packageClass); legacy fallbacks include
+`lane: system-theory-rederive` (and the same aliases), the metadata
+boolean `systemTheoryRevision: true`, and slugs containing
+`system-theory-rederive` / `system-theory-revision` /
 `system-theory-rev` / `whole-system-theory`. The blocker error is
 `compositional-gate-blocked` and references the saturated mechanism. The
 companion command `npm run work:system-theory:rederive -- --owner <owner>
@@ -363,11 +423,12 @@ line. The gating command
 `npm run work:system-theory:rederive -- --check-due --sprint <active-sprint.md>`
 counts `done-*` packages whose date prefix is ≥ that stamp; when the count
 meets or exceeds `--threshold` (default 5), the command exits non-zero and
-the next package activation MUST be a systemTheory revision package (slug
-containing `system-theory-rederive` or package metadata
-`lane: system-theory-rederive`). Sprints without `systemTheoryRederivedAt`
-have the gate inactive (the command exits zero with `gate inactive`), so this
-is fully additive for legacy sprints.
+the next package activation MUST be a systemTheory revision package
+(detected via `modelFit.packageClass` of `system-theory-rederive` or an
+alias, with `lane: system-theory-rederive` and slug match as legacy
+fallbacks). Sprints without `systemTheoryRederivedAt` have the gate
+inactive (the command exits zero with `gate inactive`), so this is fully
+additive for legacy sprints.
 
 Closure discipline is stricter: a theory loop sprint continues indefinitely
 until the original `Evidence Anchor` success condition is met. It must not

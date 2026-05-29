@@ -531,6 +531,22 @@ planning, and stop-rule setup may happen before `--pre-impl`; implementation
 code changes must wait until `npm run work:validate -- --pre-impl <package>`
 passes. Closure remains strict.
 
+**packageClass → freshness-review mode matrix.** Which packages require a
+real `freshness-review` sub-agent (vs parent-executed review) is driven by
+`modelFit.packageClass`, with lane as a legacy fallback:
+
+| packageClass (or lane fallback) | Mode | Required pre-impl review |
+| --- | --- | --- |
+| `system-theory-rederive` (and aliases) | strict | real `freshness-review` sub-agent. |
+| `architecture-gap-analysis` (`architecture-gap*`) | strict | real `freshness-review` sub-agent. |
+| `representative-frontier-closure` on runtime/scenario/causal lane | strict | real `freshness-review` sub-agent. |
+| `classification-only`, `documentation-only`, `lightweight-maintenance`, `probe-only` (and `read-doc` / `*-maintenance` lanes) | lite | parent-executed review acceptable; record the five freshness fields inline in the package ledger. |
+
+The matrix is canonical in
+[`.kiro/steering/workflow-guidelines/subagents.md`](../.kiro/steering/workflow-guidelines/subagents.md);
+the runtime surface in [`.kiro/steering/llm/boot.md`](../.kiro/steering/llm/boot.md)
+links here.
+
 The preferred package proof for new packages is structured execution metadata:
 
 1. `execution.implementation.parentRevalidatedFocusedProof: true`
@@ -590,8 +606,9 @@ package slice commit and the remote branch it must be pushed to. The package
 file must include:
 
 1. `Focused package commit: <sha>`
-2. `Pushed to: <remote>/<branch>`
+2. `Push target: <remote>/<branch>` (legacy alias `Pushed to:` accepted)
 3. `Commit contains only package-owned files/package-status/allowed sprint handoff: yes`
+4. `Pushed: no` (flipped to `yes <ISO-timestamp>` by `npm run work:sprint:push` after a successful push; optional for pre-F7 packages)
 
 `npm run work:validate` rejects closed metadata-bearing packages marked by the
 tracker as requiring this proof when the ledger is missing, leaves
@@ -602,11 +619,12 @@ backfilled by invention; if they are reopened, migrated, or closed again, the
 proof is required.
 
 `npm run work:close` creates the local close commit and populates the focused
-commit SHA and push target when the ledger section is present. The actual push
-is the next required step and should use `npm run work:sprint:push --
-<git-push-args>`. If push is blocked by remote, credential, or policy state,
-record the unpushed commit SHA and reason in the package or sprint handoff; do
-not invent pushed proof.
+commit SHA, `Push target`, and `Pushed: no` when the ledger section is
+present. The actual push is the next required step and should use
+`npm run work:sprint:push -- <git-push-args>`; on success it flips
+`Pushed: no` → `Pushed: yes <ISO-timestamp>`. If push is blocked by remote,
+credential, or policy state, record the unpushed commit SHA and reason in the
+package or sprint handoff; do not invent pushed proof.
 
 ## Triage Rule
 
@@ -740,6 +758,26 @@ must keep these scope fields distinct:
 5. `commitScope`: files allowed in the focused package commit. When omitted,
    tooling falls back to `writeScope` for new packages and to legacy
    `touchedFiles` for older packages.
+
+`writeScope` and `candidateRuntimeFiles` MUST NOT overlap. `writeScope` is
+what this iteration will modify; `candidateRuntimeFiles` is the proposal
+surface for the *next* package. Promote candidates into `writeScope` only
+after the focused owner-file proof named below.
+
+**packageClass write-scope fit (R11).** The validator
+`validatePackageClassWriteScopeFit` (`scripts/work-tracker.js`,
+errors `rederive-writescope-contains-src` and
+`runtime-writescope-no-src`) enforces:
+
+* packages whose `modelFit.packageClass` is `system-theory-rederive` (or
+  alias) or any `architecture-gap*` class MUST NOT list any `src/` path in
+  `writeScope` (those classes write sprint markdown, `work/theory-ledger.md`,
+  and optionally architecture docs; their runtime targets belong in
+  `candidateRuntimeFiles`); and
+* packages on the `runtime-owner-boundary` lane whose
+  `modelFit.packageClass` is `representative-frontier-closure` (the default
+  runtime class) MUST list at least one `src/` path in `writeScope` — a
+  warning is emitted otherwise so the Real Package Rule is honoured.
 
 `touchedFiles` is legacy metadata. New packages should use the explicit scope
 fields so read lists, write ownership, generated outputs, runtime candidates,
