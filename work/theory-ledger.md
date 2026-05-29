@@ -320,7 +320,7 @@ Each entry must include these labels:
 
 ## theory-20260528-rolling-restart-active-gate-snapshot-coverage-source-contract
 
-- Status: supported
+- Status: avoided
 - Scenario/gate: rolling-restart / active_gate_snapshot_coverage
 - Owner/boundary: startup_active_gate_owner / snapshot_coverage
 - Hypothesis: Proactively bypassing or draining the write queue for critical active-gate snapshot operations stabilizes the active gate snapshot coverage under rolling-restart.
@@ -331,3 +331,16 @@ Each entry must include these labels:
 - Supersedes: none
 - Superseded by: none
 - Next implication: Verify that bypassing logs table write queue resolves active_gate_timed_out frontier.
+## theory-20260529-rolling-restart-active-gate-priority-recovery-coupled-invariants
+
+- Status: active
+- Scenario/gate: rolling-restart / active_gate_snapshot_coverage + priority_recovery_partition_progress
+- Owner/boundary: startup_active_gate_owner / snapshot_coverage  ⇄  operation_workflow_owner / rebalancer_handoff
+- Hypothesis: The two frontiers form a coupled-invariant pair: closing one without coupled evidence on the other re-routes the representative back to the partner. A single joint falsifier must reduce residual count on both boundaries simultaneously, or the loop is architecturally caused and must escalate via architecture-gap-analysis.
+- Probe: `npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --explain snapshot_coverage`
+- Artifact/result: test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json — residual count 6 across the pair, trend unknown until first follow-up run.
+- Representative movement: pair-alternation
+- Linked packages: `work/packages/active-20260529-rolling-restart-active-gate-snapshot-coverage-system-theory-rederive.md`, `work/packages/superseded-20260529-rolling-restart-priority-recovery-rebalancer-handoff-event-wait-residual.md`
+- Supersedes: none
+- Superseded by: none
+- Next implication: Two consecutive flat or increasing residual readings on the joint probe escalate the pair to architecture-gap-analysis; a single decreasing reading on both boundaries permits the rederive to close with `theoryLoop.outcome: theory-confirmed`.

@@ -416,7 +416,24 @@
           "minItems": 1,
           "items": { "type": "string" }
         },
-        "wholeSystemInvariant": { "type": "string" }
+        "wholeSystemInvariant": { "type": "string" },
+        "wholeSystemInvariants": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["invariant"],
+            "properties": {
+              "invariant": { "type": "string" },
+              "coupledWith": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "couplingNote": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
+        }
       },
       "additionalProperties": false
     },
@@ -469,13 +486,6 @@
     },
     "theoryLoop": {
       "type": "object",
-      "required": [
-        "enforcement",
-        "promotedTheory",
-        "sprintGoalDelta",
-        "sourceChangeRequired",
-        "successorRequired"
-      ],
       "properties": {
         "enforcement": {
           "type": "string",
@@ -510,9 +520,31 @@
         "successorRequired": {
           "type": "boolean",
           "enum": [true]
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "theory-confirmed",
+            "theory-falsified",
+            "inconclusive",
+            "migrated"
+          ]
+        },
+        "jointFalsifierCommand": {
+          "type": "string"
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "if": { "required": ["enforcement"] },
+      "then": {
+        "required": [
+          "enforcement",
+          "promotedTheory",
+          "sprintGoalDelta",
+          "sourceChangeRequired",
+          "successorRequired"
+        ]
+      }
     }
   }
 }

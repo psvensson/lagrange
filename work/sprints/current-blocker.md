@@ -4,157 +4,182 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: H1 is selected unless falsifier: node --test test/distributed/harness/__tests__/table-distribution-helpers-bootstrap-primary-rotation.test.js proves a different owner boundary or architecture gap.
+Theory under test: System-theory revision is selected because work:system-theory:rederive reports same-mechanism-repeat contract_gap saturation.
 
-Causal question: rolling-restart currently routes readiness_probe_timeout to startup_readiness_owner / startup_support_evidence; the package must explain the whole phase chain before selecting the executable slice.
+Causal question: Frontier history on startup_active_gate_owner / snapshot_coverage shows repeated contract_gap saturation; revise the whole-system active-gate theory before another local snapshot coverage patch.
 
-Implementation slice: Implementation may edit only declared source files src/bootstrap/bootstrap-api-control-plane-methods.js after the falsifier keeps the package inside the selected owner boundary.
+Implementation slice: Do not edit src/ in this package; revise active sprint system theory and then open the next executable source package selected by that theory.
 
 Implementation files:
 
-1. `src/bootstrap/bootstrap-api-control-plane-methods.js`
-2. `test/distributed/scenarios/table-distribution-helpers-segment-3.js`
-3. `test/distributed/harness/__tests__/table-distribution-helpers-bootstrap-primary-rotation.test.js`
+1. `scripts/work-frontier-history.js`
+2. `scripts/work-package-schema.js`
+3. `scripts/work-tracker.js`
+4. `src/admin/admin-control-snapshot-repair-diagnostics.js`
+5. `src/bootstrap/bootstrap-api-control-plane-methods.js`
+6. `src/control-plane/membership-publication-active-gate-reconcile.js`
+7. `src/control-plane/publication-active-gate-handoff-contract-selection.js`
+8. `src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js`
+9. `test/control-plane/publication-active-gate-handoff-contract.test.js`
+10. `test/distributed/harness/__tests__/table-distribution-helpers-bootstrap-primary-rotation.test.js`
+11. `test/distributed/scenarios/table-distribution-helpers-segment-3.js`
+12. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js`
+13. `test/rebalancer/priority-recovery-snapshot-handoff-timeout-reentry-test-cases.js`
+14. `test/scripts/work-frontier-history-loop-metrics.test.js`
+15. `test/scripts/work-tracker-alternating-pair-mutex.test.js`
+16. `test/scripts/work-tracker-loop-evolution-guardrails.test.js`
+17. `test/scripts/work-tracker-rederive-guardrails.test.js`
+18. `src/admin/admin-control-snapshot-repair-diagnostics.js`
 
-Expected implementation delta: selected route moves to a concrete transition, owner-boundary migration, or architecture-gap stop.
+Expected implementation delta: revision selects a concrete source package, architecture stop, owner-boundary migration, or representative-green path.
 
-Falsifying probe: falsifier: node --test test/distributed/harness/__tests__/table-distribution-helpers-bootstrap-primary-rotation.test.js
+Falsifying probe: supporting: npm run work:system-theory:rederive -- --owner startup_active_gate_owner --boundary snapshot_coverage
 
-Stop rule: Stop on unchanged same-frontier, no-reduction, or architecture-gap evidence instead of widening the package.
+Stop rule: Stop or escalate on unchanged same-frontier, no-reduction, or architecture-gap evidence instead of promoting another local active-gate source slice before the systemTheory revision is recorded.
 
 Sprint: `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
 
-Package: `work/packages/active-20260528-rolling-restart-benchmark-table-bootstrap-sql-unavailable-repair.md`
+Package: `work/packages/active-20260529-rolling-restart-active-gate-snapshot-coverage-system-theory-rederive.md`
 
 Workflow lane: `causal-escalation`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-owner-recovery-source-reentry.report.json`
+Artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json`
 
 Playback: `none`
 
 ## Boundary
 
-Owner: `startup_readiness_owner`
+Owner: `startup_active_gate_owner`
 
-Boundary: `startup_support_evidence`
+Boundary: `snapshot_coverage`
 
-Dominant reason: `readiness_probe_timeout`
+Dominant reason: `snapshot_coverage_incomplete`
 
-Current state: Promoted theory-loop package for fresh rolling-restart representative evidence that terminates with benchmark_events SQL query engine unavailable and authoritativeRepairAttempted=false after the owner-recovery source theory did not move snapshot coverage.
+Current state: Fresh representative evidence has zero priority recovery residuals and selects active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage, but compositional history blocks another local active-gate slice.
 
 ## Next Action
 
-Run the promoted discriminator, inspect source/log evidence, and record option learning before any successor package is created.
+Rederive the startup_active_gate_owner / snapshot_coverage whole-system theory before promoting another local snapshot coverage mechanism.
 
 ## Proof Ladder
 
-1. `falsifier: node --test test/distributed/harness/__tests__/table-distribution-helpers-bootstrap-primary-rotation.test.js`
-2. `regression: node --test test/distributed/harness/__tests__/table-distribution-helpers-bootstrap-primary-rotation.test.js`
-3. `supporting: npm run work:frontier-history -- --owner startup_readiness_owner --boundary startup_support_evidence --limit 12`
+1. `falsifier: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --explain snapshot_coverage # coupled-invariant startup_active_gate_owner/snapshot_coverage + operation_workflow_owner/rebalancer_handoff`
+2. `falsifier: npm run work:system-theory:rederive -- --owner startup_active_gate_owner --boundary snapshot_coverage`
+3. `regression: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason snapshot_coverage_incomplete --explain active_gate_snapshot_coverage`
+4. `supporting: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --explain active_gate_snapshot_coverage`
+5. `supporting: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason snapshot_coverage_incomplete --explain active_gate_snapshot_coverage`
 
 ## Model Fit
 
-Package class: `runtime-owner-boundary`
+Package class: `system-theory-rederive`
 
 Intended minimum model: `gpt-5.3-codex`
 
-Scope shape: `bounded-owner-runtime/current-frontier`
+Scope shape: `whole-system-theory/current-frontier`
 
 Output profile: `medium`
 
 Escalation triggers:
 
-1. `owned files expand beyond this package`
-2. `a frozen decision must be reopened`
+1. `runtime source edits are required before theory revision`
+2. `representative scenario evidence changes`
 
 ## System Theory
 
-Problem statement: rolling-restart currently routes readiness_probe_timeout to startup_readiness_owner / startup_support_evidence; the package must explain the whole phase chain before selecting the executable slice.
+Problem statement: Frontier history on startup_active_gate_owner / snapshot_coverage shows repeated contract_gap saturation; revise the whole-system active-gate theory before another local snapshot coverage patch.
 
 Phase chain:
 
-1. `Representative evidence comes from test-output/reports/rolling-restart-spec-led-runtime-modularization-owner-recovery-source-reentry.report.json.`
-2. `readiness_probe_timeout is the current selected symptom.`
-3. `startup_readiness_owner / startup_support_evidence is the declared decision boundary for this package.`
+1. `Fresh representative evidence comes from test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json.`
+2. `priority_recovery_partition_progress is satisfied with zero residual witnesses.`
+3. `active_gate_snapshot_coverage is the selected first frontier with selected_snapshot_source_timeout and snapshot_repair_deferred.`
+4. `startup_readiness_owner / startup_support_evidence remains downstream until active-gate snapshot coverage is rederived.`
 
 Owner-boundary map:
 
-1. `startup_readiness_owner / startup_support_evidence: selected package owner and boundary.`
-2. `Downstream owners remain frozen until the falsifier selects migration.`
+1. `startup_active_gate_owner / snapshot_coverage: selected owner boundary for active_gate_snapshot_coverage.`
+2. `startup_readiness_owner / startup_support_evidence: downstream support evidence boundary after snapshot coverage improves.`
+3. `operation_workflow_owner / rebalancer_handoff: predecessor boundary, now satisfied for priority recovery.`
 
 Stable facts:
 
-1. `Scenario remains rolling-restart.`
-2. `Package lane remains causal-escalation.`
-3. `Declared owner boundary remains startup_readiness_owner / startup_support_evidence.`
+1. `Representative route selects startup_active_gate_owner / snapshot_coverage.`
+2. `Priority recovery residual count is zero.`
+3. `work:system-theory:rederive reports same-mechanism-repeat contract_gap saturation.`
 
 Changed facts:
 
-1. `This package was opened from test-output/reports/rolling-restart-spec-led-runtime-modularization-owner-recovery-source-reentry.report.json.`
-2. `The active action is Run the promoted discriminator, inspect source/log evidence, and record option learning before any successor package is created..`
+1. `The predecessor priority-recovery source package migrated the first frontier back to active_gate_snapshot_coverage.`
+2. `The active-gate owner boundary now requires system-theory revision before another local source slice.`
 
 Competing theories:
 
-1. `H1 startup_readiness_owner / startup_support_evidence owns the missing transition for readiness_probe_timeout.`
-2. `H2 the same symptom is inherited from a different owner boundary or architecture gap.`
+1. `H1 active_gate_snapshot_coverage still owns a local bounded retry/progress transition.`
+2. `H2 repeated selected-source timeout plus repair_deferred is a protocol or model contract gap that local source patches cannot resolve.`
+3. `H3 the visible active-gate symptom is downstream readiness lag and needs owner-boundary migration.`
 
 Eliminated theories:
 
-1. `No eliminated theory is durable until the package proof records a contrary artifact or command result.`
+1. `Do not open another local contract_gap source package before the systemTheory revision records a new invariant.`
 
 Downstream symptoms:
 
-1. `Downstream symptoms stay frozen until H1 selects a concrete transition or H2 selects migration.`
+1. `benchmark_events bootstrap visibility timeout remains downstream while active_gate_snapshot_coverage is selected.`
+2. `startup readiness support evidence is the next expected frontier after snapshot coverage improves.`
 
 Transition table:
 
-1. Input `readiness_probe_timeout` owner `startup_readiness_owner / startup_support_evidence`; missing `selected evidence must become a named owner-owned transition, migration, or stop.`; expected `focused proof selects the transition, migrates ownership, or records architecture-gap evidence.`; falsifier `falsifier: node --test test/distributed/harness/__tests__/table-distribution-helpers-bootstrap-primary-rotation.test.js`; migration trigger `the falsifier names a different owner boundary or proves this boundary cannot own the transition.`
+1. Input `snapshot_coverage_incomplete` owner `startup_active_gate_owner / snapshot_coverage`; missing `system theory must decide whether deferred repair retry remains a local source transition or an architecture-level contract change.`; expected `rederived theory records a new invariant and selects the next executable source package or architecture stop.`; falsifier `npm run work:system-theory:rederive -- --owner startup_active_gate_owner --boundary snapshot_coverage`; migration trigger `route evidence selects a different owner boundary or proves snapshot_coverage cannot own the transition.`
 
 Ownership migration triggers:
 
-1. `Migrate only when focused evidence names the alternate deciding owner and boundary.`
+1. `Migrate only when fresh route evidence selects startup_readiness_owner / startup_support_evidence or another concrete owner boundary.`
+2. `Do not infer migration from benchmark_events visibility alone while active_gate_snapshot_coverage is the first frontier.`
 
 Architecture-gap triggers:
 
-1. `Stop as architecture-gap when focused evidence cannot select an owner-owned transition or migration.`
+1. `same-mechanism-repeat contract_gap on startup_active_gate_owner / snapshot_coverage`
+2. `local selected-source timeout repair packages repeat without representative green`
 
-Whole-system invariant: Runtime edits are allowed only after the system theory selects one owner-owned transition or migration route.
+Whole-system invariant: selected_snapshot_source_timeout plus snapshot_repair_deferred must be represented as a bounded progress contract, owner-boundary migration, or architecture-gap before another local startup_active_gate_owner / snapshot_coverage source package.
 
 ## Slice Theory
 
-System theory reference: work/packages/todo-20260528-rolling-restart-benchmark-table-bootstrap-sql-unavailable-repair.md systemTheory
+System theory reference: work/packages/active-20260529-rolling-restart-active-gate-snapshot-coverage-system-theory-rederive.md systemTheory
 
-Selected system theory: H1 is selected unless falsifier: node --test test/distributed/harness/__tests__/table-distribution-helpers-bootstrap-primary-rotation.test.js proves a different owner boundary or architecture gap.
+Selected system theory: System-theory revision is selected because work:system-theory:rederive reports same-mechanism-repeat contract_gap saturation.
 
-Selected mechanism: contract_gap with ownership_gap as the first alternate
+Selected mechanism: contract_gap system_theory_rederive
 
-Source/test contract: Implementation may edit only declared source files src/bootstrap/bootstrap-api-control-plane-methods.js after the falsifier keeps the package inside the selected owner boundary.
+Source/test contract: Do not edit src/ in this package; revise active sprint system theory and then open the next executable source package selected by that theory.
 
-Falsifier: falsifier: node --test test/distributed/harness/__tests__/table-distribution-helpers-bootstrap-primary-rotation.test.js
+Falsifier: supporting: npm run work:system-theory:rederive -- --owner startup_active_gate_owner --boundary snapshot_coverage
 
-Representative expected movement: selected route moves to a concrete transition, owner-boundary migration, or architecture-gap stop.
+Representative expected movement: revision selects a concrete source package, architecture stop, owner-boundary migration, or representative-green path.
 
-Kill rule: Stop on unchanged same-frontier, no-reduction, or architecture-gap evidence instead of widening the package.
+Kill rule: Stop or escalate on unchanged same-frontier, no-reduction, or architecture-gap evidence instead of promoting another local active-gate source slice before the systemTheory revision is recorded.
 
 Theory-fit score:
 
-1. `evidenceFit`: medium - generated from declared package evidence before proof execution.
-2. `ownerBoundaryFit`: medium - owner boundary is declared as startup_readiness_owner / startup_support_evidence.
-3. `falsifiability`: high - falsifier is falsifier: node --test test/distributed/harness/__tests__/table-distribution-helpers-bootstrap-primary-rotation.test.js.
-4. `representativeMovement`: medium - expected movement is route selection, migration, or architecture-gap stop.
-5. `downstreamRiskContainment`: high - downstream symptoms remain frozen until owner selection is proven.
+1. `evidenceFit`: high - canonical rederive command reports same-mechanism-repeat contract_gap saturation.
+2. `ownerBoundaryFit`: high - current representative route selects startup_active_gate_owner / snapshot_coverage.
+3. `falsifiability`: medium - proof is a governance/rederive gate rather than a runtime falsifier.
+4. `representativeMovement`: medium - revision must select the next executable path before another rerun.
+5. `downstreamRiskContainment`: high - source edits remain frozen until theory revision.
 
 Wrong-slice triggers:
 
-1. `proof selects a different owner boundary`
-2. `proof requires runtime files outside writeScope`
-3. `proof cannot select a concrete transition or migration`
+1. `representative evidence moves away from startup_active_gate_owner / snapshot_coverage`
+2. `system rederive reports no compositional signal`
+3. `runtime source edits become required before theory revision`
 
 ## Theory Ledger References
 
-1. `theory-20260528-rolling-restart-active-gate-snapshot-coverage-source-contract`
+1. `theory-20260526-rolling-restart-active-gate-evidence-capture-gap`
+2. `theory-20260528-rolling-restart-active-gate-snapshot-coverage-source-contract`
+3. `theory-20260529-rolling-restart-active-gate-priority-recovery-coupled-invariants`
 
 ## Representative Residual
 
@@ -162,66 +187,65 @@ Status: `active-theory-loop`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-owner-recovery-source-reentry.report.json`
+Artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json`
 
-Frontier: `readiness_probe_timeout / startup_readiness_owner / startup_support_evidence`
+Frontier: `active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage`
 
-Owner: `startup_readiness_owner`
+Owner: `startup_active_gate_owner`
 
-Boundary: `startup_support_evidence`
+Boundary: `snapshot_coverage`
 
-Dominant reason: `readiness_probe_timeout`
+Dominant reason: `snapshot_coverage_incomplete`
 
-Next action: `Run the promoted discriminator, inspect source/log evidence, and record option learning before any successor package is created.`
+Next action: `Rederive active-gate snapshot coverage system theory before another local source patch.`
 
 ## Causal Governance
 
-Causal hypothesis: `Load-mode active-gate snapshot coverage terminalizes after selected snapshot timeout even though owner recovery is queued and priority-recovery witnesses are zero, because the owner-recovery path does not re-enter reconcile or bounded coverage progress.`
+Causal hypothesis: `active_gate_snapshot_coverage remains red because repeated local snapshot coverage contract-gap patches are saturated and require a whole-system theory revision before source promotion.`
 
 Stop-condition check: `npm run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json`
 
-Expected causal-model change: `Focused proof selects a bounded owner-recovery re-entry/reconcile transition, migrates to diagnostics signal-conflict ownership, records architecture-gap, or moves representative attempts, coverage, owner boundary, or green.`
+Expected causal-model change: `System-theory rederive records a revised invariant and selects the next executable source package, architecture-gap, owner-boundary migration, or representative-green path.`
 
 Representative outcome: `pending-before-rerun`
 
-Causal debt: `Fresh representative evidence has zero priority-recovery residual witnesses but active-gate progress still reports one pending owner-recovery node, write_deferred/enqueued handoff, selected_snapshot_source_timeout, and snapshotCoverageNodeCount=1/5.`
+Causal debt: `Fresh artifact has zero priority recovery residual witnesses and selects active_gate_snapshot_coverage with selected_snapshot_source_timeout and snapshot_repair_deferred.`
 
-Cross-boundary review: `Do not reopen rebalancer handoff, generic active-gate timeout budgets, readiness, table bootstrap, or transport unless the focused discriminator selects that owner boundary.`
+Cross-boundary review: `Do not patch benchmark visibility, startup readiness, or another active-gate local source slice until this systemTheoryRevision is recorded.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `rolling-restart active-gate owner-recovery reentry`
+Reference scenario/probe: `rolling-restart active-gate snapshot coverage system theory rederive`
 
 Phase chain:
 
-1. `operation_workflow_owner / rebalancer_handoff focused proof passed`
-2. `fresh representative rerun removed priority_recovery_partition_progress as first frontier`
-3. `priority-recovery residual witnesses are zero`
-4. `active-gate snapshot coverage remains blocked with owner_reconcile_pending and selected_snapshot_source_timeout`
+1. `priority_recovery_partition_progress is satisfied with zero residual witnesses`
+2. `fresh representative rerun stayed red at active_gate_snapshot_coverage`
+3. `topology evidence selects startup_active_gate_owner / snapshot_coverage with selected_snapshot_source_timeout and snapshot_repair_deferred`
+4. `work:system-theory:rederive reports same-mechanism-repeat contract_gap saturation`
 
-Current first frontier: `active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage_owner_recovery_reentry / active_gate_timed_out`
+Current first frontier: `active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / snapshot_coverage_incomplete`
 
 Known downstream blockers:
 
-1. `startup readiness inherits active-gate no-progress`
-2. `benchmark table visibility remains downstream while active-gate snapshot coverage is incomplete`
-3. `scenario triage reports priority_recovery_zero_witness_conflict while owner recovery remains pending`
+1. `startup readiness support evidence remains downstream`
+2. `benchmark_events bootstrap visibility remains downstream`
 
-Missing causal edge: `Load-mode selected-timeout owner recovery needs a bounded re-entry, reconcile, coverage-progress, migration, or diagnostic-conflict transition when priority-recovery witnesses are zero.`
+Missing causal edge: `selected_snapshot_source_timeout plus snapshot_repair_deferred must become a revised system invariant, owner migration, architecture-gap, or selected source transition.`
 
-Missing causal edge probe: `npm test -- test/distributed/harness/__tests__/cluster-active-gate-load-selected-timeout-owner-recovery.test.js`
+Missing causal edge probe: `npm run work:system-theory:rederive -- --owner startup_active_gate_owner --boundary snapshot_coverage`
 
-Bounded progress proof: `Focused proof must show selected-timeout owner recovery can re-enter reconcile or coverage progress, or select diagnostics/architecture migration before runtime edits.`
+Bounded progress proof: `Rederive system theory before source promotion so selected_snapshot_source_timeout plus snapshot_repair_deferred can become a concrete retry, reconcile, timer, wake, or bounded progress mechanism.`
 
-Bounded progress proof artifact: `test/distributed/harness/__tests__/cluster-active-gate-load-selected-timeout-owner-recovery.test.js`
+Bounded progress proof artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json`
 
-Expected observable transition: `Focused proof selects a concrete source transition; representative rerun moves active-gate attempts, snapshot coverage, owner boundary, or passes.`
+Expected observable transition: `system theory revision records the saturated contract-gap pattern and selects the next executable package or architecture route.`
 
-Max progress bound: `one selected owner-recovery reentry source package before representative rerun and route recording`
+Max progress bound: `one system-theory rederive before another local active-gate source package`
 
-Same-frontier fallback: `Same-frontier active_gate_snapshot_coverage with no attempt, coverage, or owner-boundary movement opens architecture rederive instead of another local patch.`
+Same-frontier fallback: `Same-frontier/no-reduction after rederive selects architecture work instead of another local active-gate patch.`
 
-Expected next frontier: `representative-green, active-gate progress movement, diagnostics signal-conflict migration, or architecture-gap`
+Expected next frontier: `system-theory revision, architecture-gap, owner-boundary migration, selected source package, or representative-green`
 
 Result classification: `pending-before-probe`
 
@@ -229,23 +253,24 @@ Stop condition: `continue-local-fix`
 
 Recent frontier history:
 
-1. None recorded
+1. `done active-gate source packages repeatedly selected contract_gap style mechanisms`
+2. `priority recovery cleared and returned the first frontier to active_gate_snapshot_coverage`
 
-Oscillation check: `unknown`
+Oscillation check: `Compositional auto-promote blocks another local active-gate source slice until system theory is revised.`
 
-Handoff invariant: `unknown`
+Handoff invariant: `Priority recovery remains satisfied while active-gate snapshot coverage owns the first frontier.`
 
 ## Observable Prediction
 
-Metric: `rolling-restart / startup_readiness_owner / startup_support_evidence / representative route`
+Metric: `unknown`
 
-Predicted: `Run the promoted discriminator, inspect source/log evidence, and record option learning before any successor package is created.`
+Predicted: `unknown`
 
-Observed: `pending-before-observation`
+Observed: `unknown`
 
-Accuracy: `pending-before-observation`
+Accuracy: `unknown`
 
-Evidence: `pending-before-representative-rerun`
+Evidence: `unknown`
 
 Metric delta: `unknown`
 
@@ -263,62 +288,87 @@ Evidence: `unknown`
 
 ## Rerun Decision
 
-Source artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-owner-recovery-source-reentry.report.json`
+Source artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json`
 
-Route owner: `startup_readiness_owner`
+Route owner: `startup_active_gate_owner`
 
-Route boundary: `startup_support_evidence`
+Route boundary: `snapshot_coverage`
 
-Route dominant reason: `readiness_probe_timeout`
+Route dominant reason: `snapshot_coverage_incomplete`
 
-Route causal outcome: `pending-before-rerun`
+Route causal outcome: `migrate_owner_boundary`
 
-Stop mode: `pending-before-rerun`
+Stop mode: `owner_boundary_migration`
 
 Next lane: `causal-escalation`
 
-Expected delta: `Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.`
+Expected delta: `Record the saturated active-gate contract-gap pattern, revise whole-system invariants and transition table, then select the next executable source package or architecture stop.`
 
 Required refresh commands:
 
-1. `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-spec-led-runtime-modularization-owner-recovery-source-reentry.report.json --owner startup_readiness_owner --boundary startup_support_evidence --dominant-reason readiness_probe_timeout`
-2. `update Sprint Strategy Brief and Current Edge Card from the route result`
-3. `npm run work:repair`
-4. `npm run work:validate -- --entry`
-5. `npm run work:validate -- --pre-impl`
+1. `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason snapshot_coverage_incomplete`
+2. `update Sprint Strategy Brief from the route result`
+3. `update Current Edge Card from the route result`
+4. `npm run work:system-theory:rederive -- --owner startup_active_gate_owner --boundary snapshot_coverage`
+5. `npm run work:repair`
+6. `npm run work:validate -- --entry`
+7. `npm run work:validate -- --pre-impl`
 
 ## Architecture Decision Gate
 
-Status: `selected`
+Status: `watching`
 
 Trigger: `frontier-oscillation`
 
 Trigger evidence:
 
-1. `priority-recovery residual witnesses are zero in the fresh representative artifact`
-2. `scenario-triage flags priority_recovery_zero_witness_conflict while owner recovery remains pending`
-3. `frontier-history rejects another generic startup_active_gate_owner / snapshot_coverage runtime package`
+1. `frontier returned to a recently closed related boundary`
+2. `work/packages/done-20260529-rolling-restart-active-gate-snapshot-repair-deferred-retry.md / startup_active_gate_owner / snapshot_coverage / reduced`
+3. `work/packages/done-20260529-rolling-restart-priority-recovery-rebalancer-handoff-retry-scheduled.md / operation_workflow_owner / rebalancer_handoff / migrated`
+4. `work/packages/done-20260529-rolling-restart-active-gate-snapshot-coverage-selected-source-timeout-retry.md / startup_active_gate_owner / snapshot_coverage / migrated`
 
 Choices:
 
-1. `owner-recovery-reentry-discriminator` route=`continue-local-proof` - Promote the selected-timeout owner-recovery re-entry source proof.
-2. `diagnostics-signal-conflict` route=`architecture-package` - Migrate to diagnostics_owner / scenario_triage_signal_conflict if the focused proof cannot choose source work from contradictory evidence.
+1. `continue-local-proof` route=`continue-local-proof` - Continue with a bounded local proof if the missing edge stays inside this owner boundary.
+2. `migrate-owner-boundary` route=`owner-boundary-migration` - Migrate the active package to the owner boundary named by the first frontier evidence.
+3. `open-architecture-package` route=`architecture-package` - Open a bounded autonomous architecture experiment for the missing owner contract.
+4. `human-escalation` route=`human-escalation` - Escalate to a human only when evidence is contradictory, policy-blocked, credential-blocked, or unavailable.
 
-Selected choice: `owner-recovery-reentry-discriminator`
+Selected choice: `unknown`
 
-Gate next action: Execute the selected local proof route; rerun canonical evidence before opening another architecture gate.
+Gate next action: Watch for repeated frontier oscillation; open an autonomous architecture experiment if another local proof returns here unchanged.
 
 ## Scope
 
 Write scope:
 
-1. `src/bootstrap/bootstrap-api-control-plane-methods.js`
-2. `test/distributed/scenarios/table-distribution-helpers-segment-3.js`
-3. `test/distributed/harness/__tests__/table-distribution-helpers-bootstrap-primary-rotation.test.js`
+1. `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
+2. `work/theory-ledger.md`
+3. `.kiro/steering/schemas/work-package.schema.json`
+4. `scripts/work-frontier-history.js`
+5. `scripts/work-package-schema.js`
+6. `scripts/work-tracker.js`
+7. `src/admin/admin-control-snapshot-repair-diagnostics.js`
+8. `src/bootstrap/bootstrap-api-control-plane-methods.js`
+9. `src/control-plane/membership-publication-active-gate-reconcile.js`
+10. `src/control-plane/publication-active-gate-handoff-contract-selection.js`
+11. `src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js`
+12. `test/control-plane/publication-active-gate-handoff-contract.test.js`
+13. `test/distributed/harness/__tests__/table-distribution-helpers-bootstrap-primary-rotation.test.js`
+14. `test/distributed/scenarios/table-distribution-helpers-segment-3.js`
+15. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js`
+16. `test/rebalancer/priority-recovery-snapshot-handoff-timeout-reentry-test-cases.js`
+17. `work/RULES.md`
+18. `work/templates/runtime-owner-package.md`
+19. `work/templates/sprint-strategy-brief.md`
+20. `test/scripts/work-frontier-history-loop-metrics.test.js`
+21. `test/scripts/work-tracker-alternating-pair-mutex.test.js`
+22. `test/scripts/work-tracker-loop-evolution-guardrails.test.js`
+23. `test/scripts/work-tracker-rederive-guardrails.test.js`
 
 Handoff files:
 
-1. None recorded
+1. `test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json`
 
 Generated files:
 
@@ -326,13 +376,34 @@ Generated files:
 
 Candidate runtime files:
 
-1. None recorded
+1. `src/admin/admin-control-snapshot-repair-diagnostics.js`
 
 Commit scope:
 
-1. `src/bootstrap/bootstrap-api-control-plane-methods.js`
-2. `test/distributed/scenarios/table-distribution-helpers-segment-3.js`
-3. `test/distributed/harness/__tests__/table-distribution-helpers-bootstrap-primary-rotation.test.js`
+1. `work/packages/active-20260529-rolling-restart-active-gate-snapshot-coverage-system-theory-rederive.md`
+2. `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
+3. `work/theory-ledger.md`
+4. `.kiro/steering/schemas/work-package.schema.json`
+5. `scripts/work-frontier-history.js`
+6. `scripts/work-package-schema.js`
+7. `scripts/work-tracker.js`
+8. `src/admin/admin-control-snapshot-repair-diagnostics.js`
+9. `src/bootstrap/bootstrap-api-control-plane-methods.js`
+10. `src/control-plane/membership-publication-active-gate-reconcile.js`
+11. `src/control-plane/publication-active-gate-handoff-contract-selection.js`
+12. `src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js`
+13. `test/control-plane/publication-active-gate-handoff-contract.test.js`
+14. `test/distributed/harness/__tests__/table-distribution-helpers-bootstrap-primary-rotation.test.js`
+15. `test/distributed/scenarios/table-distribution-helpers-segment-3.js`
+16. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js`
+17. `test/rebalancer/priority-recovery-snapshot-handoff-timeout-reentry-test-cases.js`
+18. `work/RULES.md`
+19. `work/templates/runtime-owner-package.md`
+20. `work/templates/sprint-strategy-brief.md`
+21. `test/scripts/work-frontier-history-loop-metrics.test.js`
+22. `test/scripts/work-tracker-alternating-pair-mutex.test.js`
+23. `test/scripts/work-tracker-loop-evolution-guardrails.test.js`
+24. `test/scripts/work-tracker-rederive-guardrails.test.js`
 
 Legacy touched files:
 

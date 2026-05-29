@@ -48,6 +48,10 @@
     "theoryLedgerRefs": [
       "theory-YYYYMMDD-short-slug"
     ],
+    "theoryLoop": {
+      "outcome": "inconclusive",
+      "jointFalsifierCommand": ""
+    },
     "proof": [
       "falsifier: focused owner-path test",
       "regression: affected consumer proof",

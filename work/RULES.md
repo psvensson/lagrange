@@ -248,6 +248,88 @@ do not create speculative successor packages. A successor package is created
 only after the active package produces fresh route evidence or a discriminator
 selects a different option.
 
+### Theory-Loop Phase 4 Guardrails (R1–R10)
+
+Once a theory-loop sprint has fired a `compositional-pair-alternation` signal
+(or `pair-alternation-post-rederive` after a documentary rederive), the
+following ten rules apply and are enforced by `npm run work:validate` at the
+`--pre-impl` and `--closure` phases. The validators are additive: legacy
+packages and sprints without the relevant fields/signals are exempt.
+
+* **R1. Alternating-Pair Mutex** — `validateAlternatingPairMutex`
+  (`alternating-pair-rederive-in-progress`,
+  `alternating-pair-concurrent-runtime`). When the package being activated is
+  on a boundary belonging to a detected alternating pair, no other
+  source-touching package on either pair boundary may be `active`/`todo`
+  simultaneously. System-theory-rederive and architecture-gap-analysis lanes
+  are exempt as the *self* (they may run while runtime packages are blocked).
+* **R2. Coupled Invariants on Rederive** — `validateRederiveCoupledInvariants`
+  (`rederive-coupled-invariants-missing`). A `system-theory-rederive` package
+  triggered by a pair-alternation/emergent signal must declare
+  `systemTheory.wholeSystemInvariants` as a list with ≥2 entries, at least
+  one entry with non-empty `coupledWith`, and the two pair boundary names
+  must appear in the `invariant`/`couplingNote` text.
+* **R3. Joint Falsifier on Rederive** — `validateRederiveJointFalsifier`
+  (`rederive-joint-falsifier-missing`,
+  `rederive-joint-falsifier-not-replayable`,
+  `rederive-joint-falsifier-boundaries-missing`,
+  `sprint-joint-coupled-invariant-probe-missing`). The rederive package must
+  declare a joint falsifier — either a proof `falsifier:` command tagged
+  `# coupled-invariant`, or the field
+  `theoryLoop.jointFalsifierCommand`. The command must be a single replayable
+  command (no `&&`/`||`/`;`) and must mention both pair boundary names. The
+  active sprint must record the same command in its `## Joint
+  Coupled-Invariant Probe` section.
+* **R4. Sticky Theory Ledger** — `validateStickyTheoryLedger`
+  (`sticky-theory-ledger-empty`, `sticky-theory-ledger-missing-rederive-ref`).
+  When the same owner/boundary has appeared in the last three closed
+  packages, the new package must populate
+  `metadata.execution.theoryLedgerRefs` with at least one real ledger entry
+  slug; if a rederive closed on that boundary within 14 days produced a
+  ledger slug, that slug must be among the refs.
+* **R5. Outcome-Based Loop Kill-Rule** — `validateLoopExhaustionEscalation`
+  (`loop-exhausted-architecture-gap-required`,
+  `loop-exhausted-missing-architecture-ledger-entry`,
+  `theory-loop-outcome-missing` at closure). A new
+  `theoryLoop.outcome` enum (`theory-confirmed | theory-falsified |
+  inconclusive | migrated`) is required at closure for theory-loop packages.
+  When the last three closed packages on the alternating pair all carry a
+  non-confirmed outcome, the next runtime package on the pair is rejected;
+  only an architecture-gap-analysis lane package, plus a fresh
+  `theory-YYYYMMDD-…-architecture-gap` ledger entry, can unblock the pair.
+* **R6. Modeltheory-Exemption Tightening (Structural Artifact)** —
+  `validateRederiveStructuralArtifact`
+  (`rederive-no-structural-artifact`). A rederive package that uses the
+  `modelTheory` write-scope exemption must still produce one durable
+  structural artifact: a sprint `## Joint Coupled-Invariant Probe` delta,
+  a new `work/theory-ledger.md` entry, or a `work/RULES.md` taxonomy
+  modification. Documentary-only rederive packages are rejected.
+* **R7. Repeat-Rederive Escalator** — `detectCompositionalSignals` emits the
+  `pair-alternation-post-rederive` pattern when alternation recurs after a
+  closed rederive on the pair. `validateCompositionalAutoPromoteGate` then
+  permits only `architecture-gap-analysis` lane packages on the pair
+  (`pair-alternation-post-rederive-requires-architecture-gap`).
+* **R8. Sprint-Level Coupled-Invariant Probe Section** —
+  `validateSprintJointCoupledInvariantProbe`
+  (`sprint-joint-probe-section-missing`, `sprint-joint-probe-residual-stuck`).
+  Once a sprint has `systemTheoryRederivedAt`, its markdown must contain a
+  `## Joint Coupled-Invariant Probe` section with the labelled bullets
+  `Command:`, `Last run:`, `Last residual count:`, `Residual trend:`
+  (`decreasing|flat|increasing|unknown`), `Boundaries covered:`. Two
+  consecutive `flat`/`increasing` readings block the next runtime package on
+  the pair until the residual decreases or an architecture-gap is recorded.
+* **R9. Active-Package Pair Limit** — `validateAlternatingPairActiveLimit`
+  (`alternating-pair-active-limit-exceeded`). At most one
+  source-touching active/todo package per alternating pair, regardless of
+  lane. Pre-impl-time complement of R1.
+* **R10. Frontier-History Self-Report** — `computeLoopMetrics` in
+  `scripts/work-frontier-history.js` surfaces `loopMetrics`:
+  `lastRederiveDateOnPair`, `closuresSinceLastRederive`,
+  `pairAlternationCyclesSinceRederive`, and `loopHealth`
+  (`healthy|rederive-in-progress|exhausted`). Visible in both the JSON and
+  text output of `npm run work:frontier-history` and surfaced through
+  `npm run work:context`.
+
 ### Compositional Auto-Promote Rule
 
 The frontier-history tool (`npm run work:frontier-history`) emits a

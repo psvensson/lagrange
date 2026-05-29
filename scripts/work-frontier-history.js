@@ -189,6 +189,7 @@ function filterAndSummarizeHistory(parsedPackages, ownerFilter, boundaryFilter, 
     title: pkg.title,
     status: pkg.status,
     opened: pkg.opened,
+    lane: pkg.lane,
     owner: pkg.owner,
     boundary: pkg.boundary,
     artifact: pkg.artifact,
@@ -213,6 +214,17 @@ const COMPOSITIONAL_PAIRS = Object.freeze([
   ['concurrency_gap', 'budget_gap'],
 ]);
 const COMPOSITIONAL_MIN_REPEAT = 3;
+const REDERIVE_REVISION_SLUG_PATTERNS = Object.freeze([
+  /system-theory-rederive/iu,
+  /system-theory-revision/iu,
+  /system-theory-rev\b/iu,
+  /whole-system-theory/iu,
+]);
+const REDERIVE_LANE_VALUES = new Set([
+  'system-theory-rederive',
+  'system-theory-revision',
+  'theory-rederive',
+]);
 const MECHANISM_TAXONOMY_PATTERN =
   /\b(?:observation_gap|selection_gap|admission_gap|transition_gap|scheduling_gap|budget_gap|concurrency_gap|contract_gap|ownership_gap|downstream_symptom|coupled_invariants|emergent_oscillation|protocol_mismatch|feedback_amplification)\b/iu;
 
@@ -220,6 +232,14 @@ function extractMechanismTerm(value) {
   if (!value || typeof value !== 'string') return null;
   const match = value.match(MECHANISM_TAXONOMY_PATTERN);
   return match ? match[0].toLowerCase() : null;
+}
+
+function packageIsRederive(item) {
+  if (!item) return false;
+  const lane = String(item.lane || '').toLowerCase();
+  if (REDERIVE_LANE_VALUES.has(lane)) return true;
+  const slug = String(item.package || item.fileName || '').toLowerCase();
+  return REDERIVE_REVISION_SLUG_PATTERNS.some((re) => re.test(slug));
 }
 
 function detectCompositionalSignals(history) {
@@ -280,6 +300,68 @@ function detectCompositionalSignals(history) {
     }
   }
 
+  // Pattern 4 (R7): pair-alternation-post-rederive — alternation persists
+  // AFTER the most recent closed rederive on this owner/boundary window.
+  // history is filtered by owner+boundary already; locate the last rederive
+  // index in oldest-first order, then check whether the alternation window
+  // sits at or after that index.
+  const lastRederiveOrderedIndex = (() => {
+    let lastIndex = -1;
+    for (let i = 0; i < ordered.length; i++) {
+      if (packageIsRederive(ordered[i])) lastIndex = i;
+    }
+    return lastIndex;
+  })();
+  if (lastRederiveOrderedIndex >= 0) {
+    const mechanismsAfter = ordered
+      .slice(lastRederiveOrderedIndex + 1)
+      .map((item) => extractMechanismTerm(item.failureMechanism))
+      .filter(Boolean);
+    for (const [a, b] of COMPOSITIONAL_PAIRS) {
+      let fired = false;
+      for (let i = 0; i + COMPOSITIONAL_MIN_REPEAT <= mechanismsAfter.length; i++) {
+        const window = mechanismsAfter.slice(i, i + COMPOSITIONAL_MIN_REPEAT);
+        const hasA = window.includes(a);
+        const hasB = window.includes(b);
+        const onlyAB = window.every((m) => m === a || m === b);
+        if (hasA && hasB && onlyAB) {
+          fired = true;
+          break;
+        }
+      }
+      // Also detect same-mechanism-repeat after rederive — equally bad.
+      let repeatAfter = null;
+      for (let i = 0; i + COMPOSITIONAL_MIN_REPEAT <= mechanismsAfter.length; i++) {
+        const window = mechanismsAfter.slice(i, i + COMPOSITIONAL_MIN_REPEAT);
+        if (window.every((m) => m === window[0]) && window[0]) {
+          repeatAfter = window[0];
+          break;
+        }
+      }
+      if (fired) {
+        signals.push({
+          pattern: 'pair-alternation-post-rederive',
+          mechanism: `${a}+${b}`,
+          recommendation: 'escalate-to-architecture-gap',
+          reason: `Mechanisms ${a} and ${b} continue to alternate after the ` +
+            'most recent system-theory-rederive on this owner/boundary; the ' +
+            'rederive did not change the loop trajectory and architecture-gap ' +
+            'escalation is now required.',
+        });
+      } else if (repeatAfter && [a, b].includes(repeatAfter)) {
+        signals.push({
+          pattern: 'pair-alternation-post-rederive',
+          mechanism: `${repeatAfter}-repeat`,
+          recommendation: 'escalate-to-architecture-gap',
+          reason: `Mechanism ${repeatAfter} continues to repeat after the most ` +
+            'recent system-theory-rederive on this owner/boundary; the rederive ' +
+            'did not move the loop and architecture-gap escalation is now ' +
+            'required.',
+        });
+      }
+    }
+  }
+
   // De-duplicate by pattern+mechanism
   const dedup = new Map();
   for (const sig of signals) {
@@ -287,6 +369,89 @@ function detectCompositionalSignals(history) {
     if (!dedup.has(key)) dedup.set(key, sig);
   }
   return Array.from(dedup.values());
+}
+
+function findAlternatingPairBoundaries(parsedPackages, owner, boundary, limit = 24) {
+  // Walks the recent N packages globally (no owner/boundary filter) and finds
+  // the second boundary whose mechanism participates in a compositional pair
+  // with the given owner/boundary's mechanism. Returns up to two boundary
+  // descriptors {owner, boundary} sorted by recency.
+  const sorted = [...parsedPackages]
+    .filter(Boolean)
+    .sort((a, b) => packageSortKey(b).localeCompare(packageSortKey(a)));
+  const window = sorted.slice(0, limit);
+  const ourSet = new Set();
+  const otherSet = new Map();
+  for (const pkg of window) {
+    const mech = extractMechanismTerm(pkg.failureMechanism);
+    if (!mech) continue;
+    const key = `${pkg.owner}::${pkg.boundary}`;
+    if (
+      pkg.owner.toLowerCase().includes((owner || '').toLowerCase()) &&
+      pkg.boundary.toLowerCase().includes((boundary || '').toLowerCase())
+    ) {
+      ourSet.add(mech);
+      continue;
+    }
+    for (const [a, b] of COMPOSITIONAL_PAIRS) {
+      if (mech !== a && mech !== b) continue;
+      // Pair candidate; record once
+      if (!otherSet.has(key)) {
+        otherSet.set(key, {owner: pkg.owner, boundary: pkg.boundary, mechanism: mech});
+      }
+    }
+  }
+  // Only emit pairs whose mechanism partners ours via COMPOSITIONAL_PAIRS.
+  const ourMechs = Array.from(ourSet);
+  const result = [];
+  for (const candidate of otherSet.values()) {
+    const partnersOurs = ourMechs.some((om) =>
+      COMPOSITIONAL_PAIRS.some(([a, b]) =>
+        (om === a && candidate.mechanism === b) ||
+        (om === b && candidate.mechanism === a) ||
+        (om === a && candidate.mechanism === a) ||
+        (om === b && candidate.mechanism === b),
+      ),
+    );
+    if (partnersOurs) result.push(candidate);
+  }
+  return result.slice(0, 2);
+}
+
+function computeLoopMetrics(history) {
+  // history is newest-first.
+  const lastRederive = history.find((item) => packageIsRederive(item));
+  const closuresSinceLastRederive = (() => {
+    if (!lastRederive) return history.length;
+    let count = 0;
+    for (const item of history) {
+      if (item === lastRederive) break;
+      if (item.status === 'done') count += 1;
+    }
+    return count;
+  })();
+  const signals = detectCompositionalSignals(history);
+  const postRederive = signals.some((s) =>
+    s.pattern === 'pair-alternation-post-rederive',
+  );
+  const rederiveActive = history.some((item) =>
+    item.status === 'active' && packageIsRederive(item),
+  );
+  let loopHealth = 'healthy';
+  if (postRederive) loopHealth = 'exhausted';
+  else if (rederiveActive) loopHealth = 'rederive-in-progress';
+  else if (signals.length > 0) loopHealth = 'compositional-signal-active';
+  return {
+    lastRederiveDateOnPair: lastRederive
+      ? (lastRederive.opened || lastRederive.dateStr || 'unknown')
+      : 'none',
+    lastRederivePackage: lastRederive ? lastRederive.package : 'none',
+    closuresSinceLastRederive,
+    pairAlternationCyclesSinceRederive: signals.filter((s) =>
+      s.pattern === 'pair-alternation-post-rederive',
+    ).length,
+    loopHealth,
+  };
 }
 
 function renderTextHistory(history, owner, boundary) {
@@ -331,6 +496,14 @@ function renderTextHistory(history, owner, boundary) {
         lines.push(`      reason: ${sig.reason}`);
       }
     }
+    const metrics = computeLoopMetrics(history);
+    lines.push('');
+    lines.push('LOOP METRICS:');
+    lines.push(`  - lastRederiveDateOnPair: ${metrics.lastRederiveDateOnPair}`);
+    lines.push(`  - lastRederivePackage: ${metrics.lastRederivePackage}`);
+    lines.push(`  - closuresSinceLastRederive: ${metrics.closuresSinceLastRederive}`);
+    lines.push(`  - pairAlternationCyclesSinceRederive: ${metrics.pairAlternationCyclesSinceRederive}`);
+    lines.push(`  - loopHealth: ${metrics.loopHealth}`);
   }
 
   return lines.join('\n');
@@ -371,6 +544,7 @@ function main(argv) {
       JSON.stringify({
         history,
         compositionalSignals: detectCompositionalSignals(history),
+        loopMetrics: computeLoopMetrics(history),
       }, null, 2) :
       renderTextHistory(history, parsedArgs.owner, parsedArgs.boundary);
 
@@ -391,6 +565,10 @@ export {
   filterAndSummarizeHistory,
   renderTextHistory,
   detectCompositionalSignals,
+  findAlternatingPairBoundaries,
+  computeLoopMetrics,
+  packageIsRederive,
+  extractMechanismTerm,
   EMERGENT_MECHANISM_TERMS,
   COMPOSITIONAL_PAIRS,
 };

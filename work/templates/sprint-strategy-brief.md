@@ -81,3 +81,16 @@ shape of failure.
 10. Representative checkpoint: record the fresh route or rerun required before another local patch on the same unchanged artifact.
 11. Expected mechanism movement: record how the mechanism classification or boundary is expected to move or migrate after this change.
 12. Stop rule: record the condition that opens or selects an autonomous architecture experiment instead of another local patch; human escalation is only for blocked or contradictory evidence.
+
+## Joint Coupled-Invariant Probe
+
+Required once the sprint has been the target of a `system-theory-rederive`
+package (i.e. once `systemTheoryRederivedAt` is set). Records the single
+replayable falsifier that simultaneously stresses both boundaries of the
+alternating pair, plus the residual trend.
+
+- Command: <single replayable command, no `&&`/`||`/`;`>
+- Last run: <ISO date>
+- Last residual count: <integer>
+- Residual trend: <decreasing | flat | increasing | unknown>
+- Boundaries covered: <owner_a / boundary_x, owner_b / boundary_y>

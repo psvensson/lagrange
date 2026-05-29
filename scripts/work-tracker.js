@@ -141,6 +141,10 @@ import {
   THEORY_LOOP_SOURCE_CHANGE_REQUIRED_FIELD,
   THEORY_LOOP_SUCCESSOR_PACKAGE_FIELD,
   THEORY_LOOP_SUCCESSOR_REQUIRED_FIELD,
+  THEORY_LOOP_OUTCOME_FIELD,
+  THEORY_LOOP_OUTCOME_VALUES,
+  THEORY_LOOP_JOINT_FALSIFIER_COMMAND_FIELD,
+  THEORY_LOOP_ALTERNATING_PAIR_BOUNDARIES_FIELD,
   THEORY_LEDGER_REFS_FIELD,
   SUBAGENT_ATTEMPT_STATUSES,
   SUBAGENT_OPTIONAL_LANES,
@@ -178,6 +182,11 @@ import {
   parsePackageFile as parseFrontierHistoryPackageFile,
   filterAndSummarizeHistory as filterFrontierHistory,
   detectCompositionalSignals,
+  findAlternatingPairBoundaries,
+  computeLoopMetrics,
+  packageIsRederive,
+  extractMechanismTerm,
+  COMPOSITIONAL_PAIRS,
 } from './work-frontier-history.js';
 
 let globalKindOption = null;
@@ -6261,12 +6270,32 @@ export function validateCompositionalAutoPromoteGate(
   const owner = normalizeLedgerText(metadata.owner);
   const boundary = normalizeLedgerText(metadata.boundary);
   if (!owner || !boundary) return errors;
-  if (metadataIsSystemTheoryRevision(metadata, filePath)) return errors;
+  const isRevision = metadataIsSystemTheoryRevision(metadata, filePath);
+  const isArchitectureGap = metadataIsArchitectureGapAnalysis(metadata, filePath);
   const packageDir = options.packageDir
     ? path.resolve(options.packageDir)
     : path.resolve(process.cwd(), COMPOSITIONAL_GATE_PACKAGE_DIR);
   const {signals} = loadCompositionalSignalsFromFrontier(packageDir, owner, boundary);
   if (signals.length === 0) return errors;
+  // R7 specialisation: pair-alternation-post-rederive REQUIRES architecture-gap;
+  // even a fresh rederive cannot pass this gate.
+  const postRederive = signals.find(
+    (s) => s.pattern === 'pair-alternation-post-rederive',
+  );
+  if (postRederive && !isArchitectureGap) {
+    errors.push(
+      `${filePath}: pair-alternation-post-rederive-requires-architecture-gap — ` +
+      `${postRederive.mechanism} continued to alternate after the most recent ` +
+      `system-theory-rederive on owner=${owner} boundary=${boundary}. ` +
+      'Another rederive is not permitted; open an architecture-gap-analysis ' +
+      `package (lane: causal-escalation with slug containing 'architecture-gap', ` +
+      `or set metadata.architectureGapAnalysis: true) before any further runtime ` +
+      'or rederive package on this pair.',
+    );
+    return errors;
+  }
+  if (isRevision) return errors;
+  if (isArchitectureGap) return errors;
   const summary = signals
     .map((s) => `${s.pattern}:${s.mechanism}`)
     .join(', ');
@@ -6280,6 +6309,866 @@ export function validateCompositionalAutoPromoteGate(
     '`npm run work:system-theory:rederive -- --owner ' + owner +
     ' --boundary ' + boundary + '` for guidance.',
   );
+  return errors;
+}
+
+// ---------------------------------------------------------------------------
+// Theory-Loop Phase 4: R1 / R2 / R3 / R4 / R5 / R6 / R8 / R9 validators.
+// These build on the compositional-signal substrate above and are wired into
+// the pre-impl orchestrator alongside validateCompositionalAutoPromoteGate.
+// All validators are additive: legacy sprints/packages without the relevant
+// fields/signals are exempt (validator no-ops).
+// ---------------------------------------------------------------------------
+
+const ARCHITECTURE_GAP_LANE_VALUES = new Set([
+  'architecture-gap-analysis',
+  'causal-escalation',
+]);
+const ARCHITECTURE_GAP_SLUG_PATTERN = /architecture[-_]gap/iu;
+const JOINT_FALSIFIER_TAG_PATTERN = /#\s*coupled[-_]invariant\b/iu;
+const SPRINT_JOINT_PROBE_HEADING = '## Joint Coupled-Invariant Probe';
+const SPRINT_JOINT_PROBE_LABEL_COMMAND = 'Command';
+const SPRINT_JOINT_PROBE_LABEL_LAST_RUN = 'Last run';
+const SPRINT_JOINT_PROBE_LABEL_RESIDUAL_COUNT = 'Last residual count';
+const SPRINT_JOINT_PROBE_LABEL_RESIDUAL_TREND = 'Residual trend';
+const SPRINT_JOINT_PROBE_LABEL_BOUNDARIES = 'Boundaries covered';
+const SPRINT_JOINT_PROBE_TREND_VALUES = new Set([
+  'decreasing',
+  'flat',
+  'increasing',
+  'unknown',
+]);
+const STICKY_LEDGER_RECENT_PACKAGE_WINDOW = 3;
+const STICKY_LEDGER_REDERIVE_AGE_DAYS = 14;
+const LOOP_EXHAUSTION_LOOKBACK = 3;
+const LOOP_EXHAUSTION_NON_CONFIRMED_OUTCOMES = new Set([
+  'inconclusive',
+  'theory-falsified',
+  'migrated',
+]);
+
+function metadataIsArchitectureGapAnalysis(metadata, filePath) {
+  if (!metadata || typeof metadata !== 'object') return false;
+  if (metadata.architectureGapAnalysis === true) return true;
+  const lane = normalizeLedgerText(metadata.lane);
+  const slug = String(filePath || '').toLowerCase();
+  if (ARCHITECTURE_GAP_SLUG_PATTERN.test(slug)) {
+    return ARCHITECTURE_GAP_LANE_VALUES.has(lane) ||
+      lane === 'architecture-gap-analysis' ||
+      lane === 'causal-escalation';
+  }
+  return lane === 'architecture-gap-analysis';
+}
+
+function listPackagesInDir(packageDir) {
+  let entries;
+  try {
+    entries = fsSync.readdirSync(packageDir);
+  } catch (_e) {
+    return [];
+  }
+  return entries
+    .filter((f) => f.endsWith('.md') &&
+      (f.startsWith('active-') || f.startsWith('todo-') ||
+       f.startsWith('done-') || f.startsWith('superseded-')))
+    .map((f) => parseFrontierHistoryPackageFile(path.join(packageDir, f)))
+    .filter(Boolean);
+}
+
+function getAlternatingPairBoundariesForGate(packageDir, owner, boundary) {
+  const parsed = listPackagesInDir(packageDir);
+  return findAlternatingPairBoundaries(parsed, owner, boundary, 24);
+}
+
+function detectAlternatingPairActive(packageDir, owner, boundary, minClosures = 3) {
+  // Returns the partner boundaries when (a) ≥1 partner exists by mechanism-
+  // pair membership, AND (b) the total number of closed packages spanning
+  // {self, partners} within the recent window is at least minClosures.
+  const parsed = listPackagesInDir(packageDir);
+  const partners = findAlternatingPairBoundaries(parsed, owner, boundary, 24);
+  if (partners.length === 0) return [];
+  const targetKeys = new Set([
+    `${owner}::${boundary}`,
+    ...partners.map((p) => `${p.owner}::${p.boundary}`),
+  ]);
+  const closedOnPair = parsed
+    .filter((pkg) => pkg.status === 'done')
+    .filter((pkg) => targetKeys.has(`${pkg.owner}::${pkg.boundary}`));
+  if (closedOnPair.length < minClosures) return [];
+  return partners;
+}
+
+function readPackageMetadata(filePath) {
+  let content;
+  try {
+    content = fsSync.readFileSync(filePath, ENCODING_UTF8);
+  } catch (_e) {
+    return null;
+  }
+  const m = content.match(/<!--\s*work-package\s*\n([\s\S]*?)\n\s*-->/i);
+  if (!m) return null;
+  try {
+    return JSON.parse(m[1].trim());
+  } catch (_e) {
+    return null;
+  }
+}
+
+function isSourceTouchingPackage(meta) {
+  if (!meta) return false;
+  const lane = normalizeLedgerText(meta.lane || meta?.intent?.lane);
+  if (
+    lane === 'system-theory-rederive' ||
+    lane === 'system-theory-revision' ||
+    lane === 'theory-rederive'
+  ) return false;
+  if (meta.systemTheoryRevision === true) return false;
+  const writeScope = []
+    .concat(meta.writeScope || [])
+    .concat(meta?.scope?.writeScope || []);
+  return writeScope.some((p) => isSourceWritePath(normalizeLedgerText(p)));
+}
+
+export function validateAlternatingPairMutex(
+  metadata,
+  filePath,
+  options = {},
+) {
+  const errors = [];
+  if (!metadata || typeof metadata !== 'object') return errors;
+  const phase = options.phase || VALIDATION_PHASE_PRE_IMPL;
+  const status = options.status || normalizeLedgerText(metadata.status);
+  if (phase !== VALIDATION_PHASE_PRE_IMPL) return errors;
+  if (status !== STATUS_ACTIVE && status !== STATUS_TODO) return errors;
+  const owner = normalizeLedgerText(metadata.owner);
+  const boundary = normalizeLedgerText(metadata.boundary);
+  if (!owner || !boundary) return errors;
+  // Exempt: this package itself is a rederive package — rederive is the
+  // permitted way to break the mutex. (Mutex applies to runtime/scenario
+  // packages that intend to write src/.)
+  const selfIsRederive = metadataIsSystemTheoryRevision(metadata, filePath);
+  const selfIsArchGap = metadataIsArchitectureGapAnalysis(metadata, filePath);
+  const selfIsSourceTouching = (() => {
+    const writeScope = []
+      .concat(metadata.writeScope || [])
+      .concat(metadata?.scope?.writeScope || []);
+    return writeScope.some((p) => isSourceWritePath(normalizeLedgerText(p)));
+  })();
+  if (selfIsRederive || selfIsArchGap) return errors;
+  if (!selfIsSourceTouching) return errors;
+  const packageDir = options.packageDir
+    ? path.resolve(options.packageDir)
+    : path.resolve(process.cwd(), COMPOSITIONAL_GATE_PACKAGE_DIR);
+  const pairBoundaries = detectAlternatingPairActive(packageDir, owner, boundary);
+  if (pairBoundaries.length === 0) return errors;
+  const selfFileName = path.basename(String(filePath || '')).toLowerCase();
+  const otherActivePackagesOnPair = listPackagesInDir(packageDir)
+    .filter((pkg) => pkg.status === STATUS_ACTIVE || pkg.status === STATUS_TODO)
+    .filter((pkg) => pkg.fileName.toLowerCase() !== selfFileName)
+    .filter((pkg) => {
+      const sameOurs =
+        pkg.owner === owner && pkg.boundary === boundary;
+      const samePair = pairBoundaries.some(
+        (p) => p.owner === pkg.owner && p.boundary === pkg.boundary,
+      );
+      return sameOurs || samePair;
+    });
+  if (otherActivePackagesOnPair.length === 0) return errors;
+  const rederiveActive = otherActivePackagesOnPair.find((p) => {
+    const meta = readPackageMetadata(path.join(packageDir, p.fileName));
+    return metadataIsSystemTheoryRevision(meta, p.fileName);
+  });
+  if (rederiveActive) {
+    errors.push(
+      `${filePath}: alternating-pair-rederive-in-progress — a system-theory-` +
+      `rederive package (${rederiveActive.fileName}) is open on the same ` +
+      `alternating pair as owner=${owner} boundary=${boundary}. Per ` +
+      'work/RULES.md "Alternating-Pair Mutex", runtime/scenario work on the ' +
+      'pair must wait for the rederive to close (or be superseded) before ' +
+      'activating. Mark this package superseded or block its activation until ' +
+      `${rederiveActive.fileName} is done.`,
+    );
+    return errors;
+  }
+  const conflict = otherActivePackagesOnPair[0];
+  errors.push(
+    `${filePath}: alternating-pair-concurrent-runtime — another runtime ` +
+    `package (${conflict.fileName}) is active on the same alternating pair ` +
+    `(${conflict.owner}/${conflict.boundary}) as this package (${owner}/` +
+    `${boundary}). Per work/RULES.md "Alternating-Pair Mutex", only one ` +
+    'runtime/scenario package may be active per alternating pair; supersede ' +
+    'or close one before activating the other.',
+  );
+  return errors;
+}
+
+function rederiveSignalRequiringCoupling(signals) {
+  return signals.find((s) =>
+    s.pattern === 'compositional-pair-alternation' ||
+    s.pattern === 'pair-alternation-post-rederive' ||
+    s.pattern === 'emergent-class-present',
+  );
+}
+
+export function validateRederiveCoupledInvariants(
+  metadata,
+  filePath,
+  options = {},
+) {
+  const errors = [];
+  if (!metadata || typeof metadata !== 'object') return errors;
+  const phase = options.phase || VALIDATION_PHASE_PRE_IMPL;
+  const status = options.status || normalizeLedgerText(metadata.status);
+  if (
+    phase !== VALIDATION_PHASE_PRE_IMPL &&
+    phase !== VALIDATION_PHASE_CLOSURE
+  ) return errors;
+  if (
+    status !== STATUS_ACTIVE &&
+    status !== STATUS_TODO &&
+    status !== STATUS_DONE
+  ) return errors;
+  if (!metadataIsSystemTheoryRevision(metadata, filePath)) return errors;
+  const owner = normalizeLedgerText(metadata.owner);
+  const boundary = normalizeLedgerText(metadata.boundary);
+  if (!owner || !boundary) return errors;
+  const packageDir = options.packageDir
+    ? path.resolve(options.packageDir)
+    : path.resolve(process.cwd(), COMPOSITIONAL_GATE_PACKAGE_DIR);
+  const {signals} = loadCompositionalSignalsFromFrontier(packageDir, owner, boundary);
+  const localTrigger = rederiveSignalRequiringCoupling(signals);
+  const pairBoundaries = detectAlternatingPairActive(packageDir, owner, boundary);
+  const trigger = localTrigger || (pairBoundaries.length > 0
+    ? {pattern: 'compositional-pair-alternation', mechanism: 'cross-boundary'}
+    : null);
+  if (!trigger && options.requireUnconditionally !== true) return errors;
+  const systemTheory = metadata.systemTheory;
+  if (!isObjectRecord(systemTheory)) {
+    errors.push(
+      `${filePath}: rederive-coupled-invariants-missing — system-theory-` +
+      'rederive package must declare metadata.systemTheory with the list-form ' +
+      'wholeSystemInvariants block.',
+    );
+    return errors;
+  }
+  const list = systemTheory.wholeSystemInvariants;
+  if (!Array.isArray(list) || list.length < 2) {
+    errors.push(
+      `${filePath}: rederive-coupled-invariants-missing — ` +
+      'systemTheory.wholeSystemInvariants must be a list with at least 2 ' +
+      `entries when triggered by ${trigger.pattern}. ` +
+      'Single-invariant systemTheory cannot represent a coupled pair.',
+    );
+    return errors;
+  }
+  const anyCoupling = list.some((entry) =>
+    isObjectRecord(entry) &&
+    Array.isArray(entry.coupledWith) &&
+    entry.coupledWith.length > 0,
+  );
+  if (!anyCoupling) {
+    errors.push(
+      `${filePath}: rederive-coupled-invariants-missing — at least one ` +
+      'wholeSystemInvariants entry must declare a non-empty coupledWith list.',
+    );
+  }
+  // When the trigger involves cross-boundary alternation, require both pair
+  // boundary names to appear in at least one invariant entry's invariant text
+  // or couplingNote.
+  if (
+    trigger.pattern === 'compositional-pair-alternation' ||
+    trigger.pattern === 'pair-alternation-post-rederive'
+  ) {
+    const selfToken = String(boundary).toLowerCase();
+    const partnerTokens = pairBoundaries
+      .map((p) => String(p.boundary).toLowerCase())
+      .filter(Boolean);
+    const corpus = list
+      .map((entry) =>
+        isObjectRecord(entry)
+          ? `${entry.invariant || ''} ${entry.couplingNote || ''}`
+          : '',
+      )
+      .join(' ')
+      .toLowerCase();
+    const selfMentioned = selfToken && corpus.includes(selfToken);
+    const partnerMentioned = partnerTokens.some((t) => corpus.includes(t));
+    if (!selfMentioned || (partnerTokens.length > 0 && !partnerMentioned)) {
+      const missing = [];
+      if (!selfMentioned) missing.push(selfToken);
+      if (partnerTokens.length > 0 && !partnerMentioned) {
+        missing.push(`at least one of {${partnerTokens.join(', ')}}`);
+      }
+      errors.push(
+        `${filePath}: rederive-coupled-invariants-missing — ` +
+        'wholeSystemInvariants entries must cite the self boundary and at ' +
+        `least one alternating-pair partner boundary in 'invariant' or 'couplingNote'. Missing: ${missing.join('; ')}.`,
+      );
+    }
+  }
+  return errors;
+}
+
+function findSprintFileFromMetadata(metadata) {
+  const candidates = []
+    .concat(metadata?.scope?.commitScope || [])
+    .concat(metadata.commitScope || [])
+    .concat(metadata?.scope?.writeScope || [])
+    .concat(metadata.writeScope || []);
+  for (const candidate of candidates.map(normalizeLedgerText)) {
+    if (/^work\/sprints\/(?:active|todo)-.+\.md$/u.test(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+function extractSprintJointProbeSection(sprintContent) {
+  if (!sprintContent) return null;
+  const lines = sprintContent.split('\n');
+  let inSection = false;
+  const body = [];
+  for (const line of lines) {
+    if (/^##\s/u.test(line)) {
+      if (inSection) break;
+      if (/^##\s+Joint Coupled-Invariant Probe\s*$/u.test(line)) {
+        inSection = true;
+        continue;
+      }
+    }
+    if (inSection) body.push(line);
+  }
+  if (!inSection) return null;
+  const fields = {};
+  for (const line of body) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('-') && !trimmed.startsWith('*')) continue;
+    const colon = trimmed.indexOf(':');
+    if (colon < 0) continue;
+    const key = trimmed.slice(1, colon).trim();
+    const value = trimmed.slice(colon + 1).trim();
+    fields[key] = value;
+  }
+  return fields;
+}
+
+export function validateRederiveJointFalsifier(
+  metadata,
+  filePath,
+  options = {},
+) {
+  const errors = [];
+  if (!metadata || typeof metadata !== 'object') return errors;
+  const phase = options.phase || VALIDATION_PHASE_PRE_IMPL;
+  if (
+    phase !== VALIDATION_PHASE_PRE_IMPL &&
+    phase !== VALIDATION_PHASE_CLOSURE
+  ) return errors;
+  if (!metadataIsSystemTheoryRevision(metadata, filePath)) return errors;
+  const owner = normalizeLedgerText(metadata.owner);
+  const boundary = normalizeLedgerText(metadata.boundary);
+  if (!owner || !boundary) return errors;
+  const packageDir = options.packageDir
+    ? path.resolve(options.packageDir)
+    : path.resolve(process.cwd(), COMPOSITIONAL_GATE_PACKAGE_DIR);
+  const {signals} = loadCompositionalSignalsFromFrontier(packageDir, owner, boundary);
+  const localTrigger = signals.find((s) =>
+    s.pattern === 'compositional-pair-alternation' ||
+    s.pattern === 'pair-alternation-post-rederive' ||
+    s.pattern === 'emergent-class-present',
+  );
+  const pairBoundaries = detectAlternatingPairActive(packageDir, owner, boundary);
+  const trigger = localTrigger || (pairBoundaries.length > 0
+    ? {pattern: 'compositional-pair-alternation'}
+    : null);
+  if (!trigger && options.requireUnconditionally !== true) return errors;
+  const theoryLoop = metadata[THEORY_LOOP_FIELD] || {};
+  const taggedFalsifier = (metadata.proof || [])
+    .map(parseProofCommand)
+    .filter(Boolean)
+    .find((c) => c.role === 'falsifier' && JOINT_FALSIFIER_TAG_PATTERN.test(c.command));
+  const jointFromField = normalizeLedgerText(
+    theoryLoop[THEORY_LOOP_JOINT_FALSIFIER_COMMAND_FIELD],
+  );
+  const jointCommand = taggedFalsifier
+    ? taggedFalsifier.command.replace(/#\s*coupled[-_]invariant\b.*$/iu, '').trim()
+    : jointFromField;
+  if (!jointCommand) {
+    errors.push(
+      `${filePath}: rederive-joint-falsifier-missing — rederive package must ` +
+      'declare a joint coupled-invariant falsifier, either as a proof falsifier ' +
+      'command tagged with `# coupled-invariant`, or as ' +
+      `theoryLoop.${THEORY_LOOP_JOINT_FALSIFIER_COMMAND_FIELD}.`,
+    );
+    return errors;
+  }
+  if (/\s&&\s|\s\|\|\s|\s;\s/u.test(jointCommand)) {
+    errors.push(
+      `${filePath}: rederive-joint-falsifier-not-replayable — joint falsifier ` +
+      'must be a single replayable command; chaining via &&, ||, or ; is not ' +
+      'allowed.',
+    );
+  }
+  // The command must mention the self boundary and at least one partner.
+  const partnerBoundaries = pairBoundaries.map((p) => p.boundary).filter(Boolean);
+  const tokenizedCommand = jointCommand.toLowerCase();
+  const mentions = (b) => {
+    const snake = String(b).toLowerCase();
+    const kebab = snake.replace(/_/g, '-');
+    return tokenizedCommand.includes(snake) || tokenizedCommand.includes(kebab);
+  };
+  const selfMentioned = mentions(boundary);
+  const partnerMentioned = partnerBoundaries.length === 0
+    ? true
+    : partnerBoundaries.some(mentions);
+  if (!selfMentioned || !partnerMentioned) {
+    const missing = [];
+    if (!selfMentioned) missing.push(String(boundary));
+    if (!partnerMentioned) {
+      missing.push(`at least one of {${partnerBoundaries.join(', ')}}`);
+    }
+    errors.push(
+      `${filePath}: rederive-joint-falsifier-boundaries-missing — joint ` +
+      'falsifier command must mention the self boundary and at least one ' +
+      `alternating-pair partner boundary (missing: ${missing.join('; ')}).`,
+    );
+  }
+  // The same command must appear in the active sprint's
+  // ## Joint Coupled-Invariant Probe section.
+  const sprintPath = findSprintFileFromMetadata(metadata);
+  if (sprintPath) {
+    const sprintAbs = path.resolve(process.cwd(), sprintPath);
+    let sprintContent = '';
+    try {
+      sprintContent = fsSync.readFileSync(sprintAbs, ENCODING_UTF8);
+    } catch (_e) {
+      sprintContent = '';
+    }
+    const probe = extractSprintJointProbeSection(sprintContent);
+    if (!probe || !probe[SPRINT_JOINT_PROBE_LABEL_COMMAND]) {
+      errors.push(
+        `${filePath}: sprint-joint-coupled-invariant-probe-missing — active ` +
+        `sprint (${sprintPath}) must include a "${SPRINT_JOINT_PROBE_HEADING}" ` +
+        'section with at least a `Command:` line that matches the package ' +
+        'joint falsifier.',
+      );
+    } else if (!probe[SPRINT_JOINT_PROBE_LABEL_COMMAND].includes(jointCommand)) {
+      errors.push(
+        `${filePath}: sprint-joint-coupled-invariant-probe-missing — sprint ` +
+        `${SPRINT_JOINT_PROBE_HEADING} Command does not include the rederive ` +
+        'package joint falsifier command verbatim.',
+      );
+    }
+  }
+  return errors;
+}
+
+function countConsecutiveBoundaryHistory(history, owner, boundary) {
+  let count = 0;
+  for (const item of history) {
+    if (item.status !== 'done') continue;
+    if (item.owner === owner && item.boundary === boundary) count += 1;
+    else break;
+  }
+  return count;
+}
+
+function readLedgerSlugs(ledgerPath) {
+  try {
+    const raw = fsSync.readFileSync(ledgerPath, ENCODING_UTF8);
+    const slugs = new Set();
+    const re = /^###?\s*`?(theory-\d{8}-[a-z0-9][a-z0-9-]*)`?/gmu;
+    let m;
+    while ((m = re.exec(raw))) slugs.add(m[1]);
+    return slugs;
+  } catch (_e) {
+    return new Set();
+  }
+}
+
+function findRecentRederiveLedgerSlug(packageDir, owner, boundary, ledgerSlugs) {
+  const parsed = listPackagesInDir(packageDir)
+    .filter((pkg) => pkg.status === 'done')
+    .filter((pkg) => pkg.owner === owner && pkg.boundary === boundary)
+    .filter((pkg) => packageIsRederive(pkg));
+  const cutoffMs =
+    Date.now() - STICKY_LEDGER_REDERIVE_AGE_DAYS * 24 * 60 * 60 * 1000;
+  for (const pkg of parsed) {
+    const dateMatch = String(pkg.opened || pkg.dateStr || '')
+      .match(/(\d{4})-?(\d{2})-?(\d{2})/u);
+    if (!dateMatch) continue;
+    const ms = Date.parse(`${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`);
+    if (Number.isNaN(ms) || ms < cutoffMs) continue;
+    const meta = readPackageMetadata(path.join(packageDir, pkg.fileName));
+    const refs = []
+      .concat(meta?.theoryLedgerRefs || [])
+      .concat(meta?.execution?.theoryLedgerRefs || []);
+    for (const ref of refs.map(normalizeLedgerText)) {
+      if (ledgerSlugs.has(ref)) return ref;
+    }
+  }
+  return null;
+}
+
+export function validateStickyTheoryLedger(
+  metadata,
+  filePath,
+  options = {},
+) {
+  const errors = [];
+  if (!metadata || typeof metadata !== 'object') return errors;
+  const phase = options.phase || VALIDATION_PHASE_PRE_IMPL;
+  const status = options.status || normalizeLedgerText(metadata.status);
+  if (phase !== VALIDATION_PHASE_PRE_IMPL) return errors;
+  if (status !== STATUS_ACTIVE && status !== STATUS_TODO) return errors;
+  // Skip: rederive, architecture-gap, lightweight maintenance, and
+  // non-source-touching (classification-only / documentary) packages.
+  if (metadataIsSystemTheoryRevision(metadata, filePath)) return errors;
+  if (metadataIsArchitectureGapAnalysis(metadata, filePath)) return errors;
+  if (!isSourceTouchingPackage(metadata)) return errors;
+  const lane = normalizeLedgerText(metadata.lane);
+  if (
+    lane === 'lightweight-maintenance' ||
+    lane === 'mechanical-maintenance' ||
+    lane === 'read-review-doc-only' ||
+    lane === 'read-doc'
+  ) return errors;
+  const owner = normalizeLedgerText(metadata.owner);
+  const boundary = normalizeLedgerText(metadata.boundary);
+  if (!owner || !boundary) return errors;
+  const packageDir = options.packageDir
+    ? path.resolve(options.packageDir)
+    : path.resolve(process.cwd(), COMPOSITIONAL_GATE_PACKAGE_DIR);
+  const history = filterFrontierHistory(
+    listPackagesInDir(packageDir),
+    owner,
+    boundary,
+    STICKY_LEDGER_RECENT_PACKAGE_WINDOW + 2,
+  );
+  const consecutive = countConsecutiveBoundaryHistory(history, owner, boundary);
+  if (consecutive < STICKY_LEDGER_RECENT_PACKAGE_WINDOW) return errors;
+  const refs = []
+    .concat(metadata?.theoryLedgerRefs || [])
+    .concat(metadata?.execution?.theoryLedgerRefs || []);
+  const ledgerPath = options.ledgerPath
+    ? path.resolve(options.ledgerPath)
+    : path.resolve(process.cwd(), DEFAULT_THEORY_LEDGER_PATH);
+  const ledgerSlugs = readLedgerSlugs(ledgerPath);
+  const realRefs = refs
+    .map(normalizeLedgerText)
+    .filter((ref) => ledgerSlugs.has(ref));
+  if (realRefs.length === 0) {
+    errors.push(
+      `${filePath}: sticky-theory-ledger-empty — owner=${owner} ` +
+      `boundary=${boundary} has ≥${STICKY_LEDGER_RECENT_PACKAGE_WINDOW} ` +
+      'consecutive closed packages; metadata.theoryLedgerRefs (or ' +
+      'execution.theoryLedgerRefs) must include at least one real theory ' +
+      `entry from ${path.relative(process.cwd(), ledgerPath) || DEFAULT_THEORY_LEDGER_PATH}.`,
+    );
+    return errors;
+  }
+  const recentRederiveSlug = findRecentRederiveLedgerSlug(
+    packageDir, owner, boundary, ledgerSlugs,
+  );
+  if (recentRederiveSlug && !realRefs.includes(recentRederiveSlug)) {
+    errors.push(
+      `${filePath}: sticky-theory-ledger-missing-rederive-ref — the most ` +
+      `recent rederive on owner=${owner} boundary=${boundary} produced ` +
+      `ledger entry ${recentRederiveSlug}; this package must carry it ` +
+      'forward in theoryLedgerRefs.',
+    );
+  }
+  return errors;
+}
+
+function packageOutcome(meta) {
+  return normalizeLedgerText(
+    meta?.[THEORY_LOOP_FIELD]?.[THEORY_LOOP_OUTCOME_FIELD],
+  ).toLowerCase();
+}
+
+function isLoopExhausted(packageDir, owner, boundary) {
+  const pairBoundaries = getAlternatingPairBoundariesForGate(
+    packageDir, owner, boundary,
+  );
+  const relevant = new Set([
+    `${owner}::${boundary}`,
+    ...pairBoundaries.map((p) => `${p.owner}::${p.boundary}`),
+  ]);
+  const parsed = listPackagesInDir(packageDir)
+    .filter((pkg) => pkg.status === 'done')
+    .filter((pkg) => relevant.has(`${pkg.owner}::${pkg.boundary}`))
+    .sort((a, b) => String(b.opened || '').localeCompare(String(a.opened || '')));
+  const recent = parsed.slice(0, LOOP_EXHAUSTION_LOOKBACK);
+  if (recent.length < LOOP_EXHAUSTION_LOOKBACK) return false;
+  const outcomes = recent.map((pkg) => {
+    const meta = readPackageMetadata(path.join(packageDir, pkg.fileName));
+    return packageOutcome(meta);
+  });
+  if (outcomes.some((o) => o === 'theory-confirmed')) return false;
+  return outcomes.every((o) =>
+    LOOP_EXHAUSTION_NON_CONFIRMED_OUTCOMES.has(o),
+  );
+}
+
+export function validateLoopExhaustionEscalation(
+  metadata,
+  filePath,
+  options = {},
+) {
+  const errors = [];
+  if (!metadata || typeof metadata !== 'object') return errors;
+  const phase = options.phase || VALIDATION_PHASE_PRE_IMPL;
+  const status = options.status || normalizeLedgerText(metadata.status);
+  if (
+    phase !== VALIDATION_PHASE_PRE_IMPL &&
+    phase !== VALIDATION_PHASE_CLOSURE
+  ) return errors;
+  if (status !== STATUS_ACTIVE && status !== STATUS_TODO && status !== STATUS_DONE) return errors;
+  const owner = normalizeLedgerText(metadata.owner);
+  const boundary = normalizeLedgerText(metadata.boundary);
+  if (!owner || !boundary) return errors;
+  // Closure-phase: enforce that theory-loop packages set outcome.
+  if (phase === VALIDATION_PHASE_CLOSURE || status === STATUS_DONE) {
+    if (metadataIsTheoryLoopPackageLite(metadata)) {
+      const outcome = packageOutcome(metadata);
+      if (!outcome) {
+        errors.push(
+          `${filePath}: theory-loop-outcome-missing — closure must set ` +
+          `theoryLoop.${THEORY_LOOP_OUTCOME_FIELD} to one of ${THEORY_LOOP_OUTCOME_VALUES.join(', ')}.`,
+        );
+      } else if (!THEORY_LOOP_OUTCOME_VALUES.includes(outcome)) {
+        errors.push(
+          `${filePath}: theory-loop-outcome-invalid — theoryLoop.` +
+          `${THEORY_LOOP_OUTCOME_FIELD}=${outcome} is not one of ` +
+          `${THEORY_LOOP_OUTCOME_VALUES.join(', ')}.`,
+        );
+      }
+    }
+  }
+  // Pre-impl: block runtime/scenario packages when loop is exhausted.
+  if (phase !== VALIDATION_PHASE_PRE_IMPL) return errors;
+  if (metadataIsArchitectureGapAnalysis(metadata, filePath)) return errors;
+  if (metadataIsSystemTheoryRevision(metadata, filePath)) {
+    // Rederive after loop exhaustion is exactly what R7 forbids; this
+    // validator complements but doesn't duplicate R7. Skip here.
+    return errors;
+  }
+  const packageDir = options.packageDir
+    ? path.resolve(options.packageDir)
+    : path.resolve(process.cwd(), COMPOSITIONAL_GATE_PACKAGE_DIR);
+  if (!isLoopExhausted(packageDir, owner, boundary)) return errors;
+  errors.push(
+    `${filePath}: loop-exhausted-architecture-gap-required — the last ` +
+    `${LOOP_EXHAUSTION_LOOKBACK} closed packages on the alternating pair ` +
+    `including ${owner}/${boundary} all closed with outcome in ` +
+    `{${[...LOOP_EXHAUSTION_NON_CONFIRMED_OUTCOMES].join(', ')}} and none ` +
+    'achieved theory-confirmed. Only an architecture-gap-analysis package ' +
+    '(lane: causal-escalation with slug containing "architecture-gap", or ' +
+    'metadata.architectureGapAnalysis: true) may be opened on this pair ' +
+    'until a coupled invariant is confirmed.',
+  );
+  const ledgerPath = options.ledgerPath
+    ? path.resolve(options.ledgerPath)
+    : path.resolve(process.cwd(), DEFAULT_THEORY_LEDGER_PATH);
+  const ledgerSlugs = readLedgerSlugs(ledgerPath);
+  const hasArchGap = [...ledgerSlugs].some((slug) =>
+    /architecture-gap/iu.test(slug),
+  );
+  if (!hasArchGap) {
+    errors.push(
+      `${filePath}: loop-exhausted-missing-architecture-ledger-entry — ` +
+      `${path.relative(process.cwd(), ledgerPath) || DEFAULT_THEORY_LEDGER_PATH} ` +
+      'must gain a `theory-YYYYMMDD-...-architecture-gap` entry before any ' +
+      'further runtime package is authorised on this pair.',
+    );
+  }
+  return errors;
+}
+
+function metadataIsTheoryLoopPackageLite(metadata) {
+  const theoryLoop = metadata?.[THEORY_LOOP_FIELD];
+  return isObjectRecord(theoryLoop) && (
+    normalizeLedgerText(theoryLoop[THEORY_LOOP_ENFORCEMENT_FIELD]) ===
+      THEORY_LOOP_ENFORCEMENT_SOURCE_PACKAGE ||
+    theoryLoop[THEORY_LOOP_SOURCE_CHANGE_REQUIRED_FIELD] === true
+  );
+}
+
+export function validateRederiveStructuralArtifact(
+  metadata,
+  filePath,
+  options = {},
+) {
+  const errors = [];
+  if (!metadata || typeof metadata !== 'object') return errors;
+  const phase = options.phase || VALIDATION_PHASE_PRE_IMPL;
+  if (
+    phase !== VALIDATION_PHASE_PRE_IMPL &&
+    phase !== VALIDATION_PHASE_CLOSURE
+  ) return errors;
+  if (!metadataIsSystemTheoryRevision(metadata, filePath)) return errors;
+  const writeScope = []
+    .concat(metadata.writeScope || [])
+    .concat(metadata?.scope?.writeScope || [])
+    .map(normalizeLedgerText);
+  const commitScope = []
+    .concat(metadata.commitScope || [])
+    .concat(metadata?.scope?.commitScope || [])
+    .map(normalizeLedgerText);
+  const combined = new Set([...writeScope, ...commitScope]);
+  // Strip the package's own file from the comparison.
+  const selfFile = String(filePath || '').toLowerCase();
+  const isSelf = (p) => p.toLowerCase() === selfFile ||
+    p.toLowerCase().endsWith(path.basename(selfFile));
+  const nonSelf = [...combined].filter((p) => p && !isSelf(p));
+  // A rederive package must touch at least one structural artifact:
+  //   (a) work/sprints/...md  (sprint joint-probe section update),
+  //   (b) work/theory-ledger.md (new ledger entry),
+  //   (c) work/RULES.md (taxonomy / doctrine extension), OR
+  //   (d) a src/ source file (no exemption claimed).
+  const hasSprint = nonSelf.some((p) => /^work\/sprints\/.+\.md$/u.test(p));
+  const hasLedger = nonSelf.some((p) => p === 'work/theory-ledger.md');
+  const hasRules = nonSelf.some((p) => p === 'work/RULES.md');
+  const hasSource = nonSelf.some(isSourceWritePath);
+  if (!hasSprint && !hasLedger && !hasRules && !hasSource) {
+    errors.push(
+      `${filePath}: rederive-no-structural-artifact — rederive package ` +
+      'writeScope/commitScope must include at least one of: a sprint markdown ' +
+      'file under work/sprints/ (joint-probe section delta), ' +
+      'work/theory-ledger.md (new theory entry), work/RULES.md (doctrine/' +
+      'taxonomy extension), or a src/ file. Documentary-only rederive ' +
+      'packages are rejected.',
+    );
+  }
+  return errors;
+}
+
+export function validateAlternatingPairActiveLimit(
+  metadata,
+  filePath,
+  options = {},
+) {
+  const errors = [];
+  if (!metadata || typeof metadata !== 'object') return errors;
+  const phase = options.phase || VALIDATION_PHASE_PRE_IMPL;
+  const status = options.status || normalizeLedgerText(metadata.status);
+  if (phase !== VALIDATION_PHASE_PRE_IMPL) return errors;
+  if (status !== STATUS_ACTIVE && status !== STATUS_TODO) return errors;
+  const owner = normalizeLedgerText(metadata.owner);
+  const boundary = normalizeLedgerText(metadata.boundary);
+  if (!owner || !boundary) return errors;
+  // Rederive and architecture-gap-analysis packages are exempt as self — they
+  // are the lane explicitly permitted to run while the pair is contended.
+  if (
+    metadataIsSystemTheoryRevision(metadata, filePath) ||
+    metadataIsArchitectureGapAnalysis(metadata, filePath)
+  ) return errors;
+  const packageDir = options.packageDir
+    ? path.resolve(options.packageDir)
+    : path.resolve(process.cwd(), COMPOSITIONAL_GATE_PACKAGE_DIR);
+  const pairBoundaries = detectAlternatingPairActive(packageDir, owner, boundary);
+  if (pairBoundaries.length === 0) return errors;
+  const pairKeys = new Set([
+    `${owner}::${boundary}`,
+    ...pairBoundaries.map((p) => `${p.owner}::${p.boundary}`),
+  ]);
+  const selfFileName = path.basename(String(filePath || '')).toLowerCase();
+  const others = listPackagesInDir(packageDir)
+    .filter((pkg) => pkg.status === 'active')
+    .filter((pkg) => pkg.fileName.toLowerCase() !== selfFileName)
+    .filter((pkg) => pairKeys.has(`${pkg.owner}::${pkg.boundary}`))
+    .filter((pkg) => {
+      // Only source-touching, non-rederive, non-arch-gap competitors count.
+      const m = readPackageMetadata(path.join(packageDir, pkg.fileName));
+      if (!m) return false;
+      if (metadataIsSystemTheoryRevision(m, pkg.fileName)) return false;
+      if (metadataIsArchitectureGapAnalysis(m, pkg.fileName)) return false;
+      return isSourceTouchingPackage(m);
+    });
+  if (others.length >= 1) {
+    errors.push(
+      `${filePath}: alternating-pair-active-limit-exceeded — at most one ` +
+      `active package permitted per alternating pair; ${others.map((p) => p.fileName).join(', ')} ` +
+      `already covers the pair {${[...pairKeys].join(' | ')}}.`,
+    );
+  }
+  return errors;
+}
+
+export function validateSprintJointCoupledInvariantProbe(
+  sprintContent,
+  sprintPath,
+  options = {},
+) {
+  const errors = [];
+  if (typeof sprintContent !== 'string') return errors;
+  // Sprint must have been the target of a rederive (systemTheoryRederivedAt set).
+  if (!/^systemTheoryRederivedAt:\s*\d{4}-\d{2}-\d{2}/mu.test(sprintContent)) {
+    return errors;
+  }
+  const probe = extractSprintJointProbeSection(sprintContent);
+  if (!probe) {
+    errors.push(
+      `${sprintPath}: sprint-joint-probe-section-missing — sprint has ` +
+      'systemTheoryRederivedAt but no "## Joint Coupled-Invariant Probe" ' +
+      'section. Add the section with Command, Last run, Last residual count, ' +
+      'Residual trend, and Boundaries covered.',
+    );
+    return errors;
+  }
+  const required = [
+    SPRINT_JOINT_PROBE_LABEL_COMMAND,
+    SPRINT_JOINT_PROBE_LABEL_LAST_RUN,
+    SPRINT_JOINT_PROBE_LABEL_RESIDUAL_COUNT,
+    SPRINT_JOINT_PROBE_LABEL_RESIDUAL_TREND,
+    SPRINT_JOINT_PROBE_LABEL_BOUNDARIES,
+  ];
+  for (const label of required) {
+    if (!probe[label] || probe[label].length === 0) {
+      errors.push(
+        `${sprintPath}: sprint-joint-probe-section-missing — Joint ` +
+        `Coupled-Invariant Probe missing label \`${label}:\`.`,
+      );
+    }
+  }
+  const trend = String(probe[SPRINT_JOINT_PROBE_LABEL_RESIDUAL_TREND] || '')
+    .toLowerCase()
+    .trim();
+  if (trend && !SPRINT_JOINT_PROBE_TREND_VALUES.has(trend)) {
+    errors.push(
+      `${sprintPath}: sprint-joint-probe-section-missing — Residual trend ` +
+      `must be one of ${[...SPRINT_JOINT_PROBE_TREND_VALUES].join(', ')}, got "${trend}".`,
+    );
+  }
+  // History-based stuck check (R8 extended): if the most recent two trends
+  // recorded on the active sprint were both flat or increasing, the next
+  // runtime package on the pair must be blocked. Detect via optional
+  // ## Joint Probe History section (lines beginning with `- YYYY-MM-DD:
+  // count=N trend=...`). Block via a side-channel error key so the orchestrator
+  // can surface it; absence of history is fine.
+  const historyRe = /^## Joint Probe History\s*\n([\s\S]*?)(?=\n##\s|$)/mu;
+  const historyMatch = sprintContent.match(historyRe);
+  if (historyMatch) {
+    const trends = [];
+    for (const line of historyMatch[1].split('\n')) {
+      const m = line.match(/trend\s*=\s*([a-z]+)/iu);
+      if (m) trends.push(m[1].toLowerCase());
+    }
+    const recent = trends.slice(-2);
+    if (
+      recent.length === 2 &&
+      recent.every((t) => t === 'flat' || t === 'increasing') &&
+      options.activatingPackage === true
+    ) {
+      errors.push(
+        `${sprintPath}: sprint-joint-probe-residual-stuck — last two ` +
+        `joint-probe trends were [${recent.join(', ')}]; no new runtime ` +
+        'package may activate on the alternating pair until trend becomes ' +
+        'decreasing or an architecture-gap-analysis package is recorded.',
+      );
+    }
+  }
   return errors;
 }
 
@@ -7905,6 +8794,42 @@ function runPackageValidationsSync(filePath, content, fileStatus, metadata, opti
     status: fileStatus,
     packageDir: options.packageDir,
   }));
+  errors.push(...validateAlternatingPairMutex(metadata, relativePath, {
+    phase,
+    status: fileStatus,
+    packageDir: options.packageDir,
+  }));
+  errors.push(...validateAlternatingPairActiveLimit(metadata, relativePath, {
+    phase,
+    status: fileStatus,
+    packageDir: options.packageDir,
+  }));
+  errors.push(...validateRederiveCoupledInvariants(metadata, relativePath, {
+    phase,
+    status: fileStatus,
+    packageDir: options.packageDir,
+  }));
+  errors.push(...validateRederiveJointFalsifier(metadata, relativePath, {
+    phase,
+    status: fileStatus,
+    packageDir: options.packageDir,
+  }));
+  errors.push(...validateRederiveStructuralArtifact(metadata, relativePath, {
+    phase,
+    status: fileStatus,
+  }));
+  errors.push(...validateStickyTheoryLedger(metadata, relativePath, {
+    phase,
+    status: fileStatus,
+    packageDir: options.packageDir,
+    ledgerPath: options.ledgerPath,
+  }));
+  errors.push(...validateLoopExhaustionEscalation(metadata, relativePath, {
+    phase,
+    status: fileStatus,
+    packageDir: options.packageDir,
+    ledgerPath: options.ledgerPath,
+  }));
   errors.push(...validateTheoryLoopPackageContract(
     content,
     metadata,
@@ -8043,6 +8968,9 @@ async function validateSprintFile(filePath) {
     [LEDGER_VALIDATION_REQUIRES_LEDGER]: fileStatus === STATUS_ACTIVE,
   }));
   errors.push(...validateTheoryLoopSprintClosure(content, relativePath, {
+    status: fileStatus,
+  }));
+  errors.push(...validateSprintJointCoupledInvariantProbe(content, relativePath, {
     status: fileStatus,
   }));
   if (fileStatus === STATUS_ACTIVE) {

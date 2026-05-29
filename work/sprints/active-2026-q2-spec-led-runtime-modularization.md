@@ -57,24 +57,32 @@ priority-recovery or active-gate frontier.
 ## Current Edge Card
 
 ```text
-Representative artifact: test-output/reports/rolling-restart-spec-led-runtime-modularization-owner-recovery-source-reentry.report.json
-Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage_owner_recovery_reentry / active_gate_timed_out
-Active package: work/packages/active-20260528-rolling-restart-benchmark-table-bootstrap-sql-unavailable-repair.md
-Active package owner: startup_readiness_owner
-Active package boundary: startup_support_evidence
-Selected cause: readiness_probe_timeout
-Required action: Run the promoted discriminator, inspect source/log evidence, and record option learning before any successor package is created.
+Representative artifact: test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json
+Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / snapshot_coverage_incomplete
+Active package: work/packages/active-20260529-rolling-restart-active-gate-snapshot-coverage-system-theory-rederive.md
+Active package owner: startup_active_gate_owner
+Active package boundary: snapshot_coverage
+Selected cause: snapshot_coverage_incomplete
+Required action: Rederive the startup_active_gate_owner / snapshot_coverage whole-system theory before promoting another local snapshot coverage mechanism.
 Representative status: active-theory-loop
-Causal outcome: pending-before-rerun
-Architecture gate: selected / owner-recovery-reentry-discriminator
-Expected delta: Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.
-Current state: Promoted theory-loop package for fresh rolling-restart representative evidence that terminates with benchmark_events SQL query engine unavailable and authoritativeRepairAttempted=false after the owner-recovery source theory did not move snapshot coverage.
-Allowed edits: src/bootstrap/bootstrap-api-control-plane-methods.js, test/distributed/scenarios/table-distribution-helpers-segment-3.js, test/distributed/harness/__tests__/table-distribution-helpers-bootstrap-primary-rotation.test.js
-Candidate runtime files: unknown
-Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
-Required latest proof: falsifier: node --test test/distributed/harness/__tests__/table-distribution-helpers-bootstrap-primary-rotation.test.js, regression: node --test test/distributed/harness/__tests__/table-distribution-helpers-bootstrap-primary-rotation.test.js, supporting: npm run work:frontier-history -- --owner startup_readiness_owner --boundary startup_support_evidence --limit 12
+Causal outcome: migrate_owner_boundary
+Architecture gate: watching / unknown
+Expected delta: Record the saturated active-gate contract-gap pattern, revise whole-system invariants and transition table, then select the next executable source package or architecture stop.
+Current state: Fresh representative evidence has zero priority recovery residuals and selects active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage, but compositional history blocks another local active-gate slice.
+Allowed edits: work/sprints/active-2026-q2-spec-led-runtime-modularization.md, work/theory-ledger.md, .kiro/steering/schemas/work-package.schema.json, scripts/work-frontier-history.js, scripts/work-package-schema.js, scripts/work-tracker.js, src/admin/admin-control-snapshot-repair-diagnostics.js, src/bootstrap/bootstrap-api-control-plane-methods.js, src/control-plane/membership-publication-active-gate-reconcile.js, src/control-plane/publication-active-gate-handoff-contract-selection.js, src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js, test/control-plane/publication-active-gate-handoff-contract.test.js, test/distributed/harness/__tests__/table-distribution-helpers-bootstrap-primary-rotation.test.js, test/distributed/scenarios/table-distribution-helpers-segment-3.js, test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js, test/rebalancer/priority-recovery-snapshot-handoff-timeout-reentry-test-cases.js, work/RULES.md, work/templates/runtime-owner-package.md, work/templates/sprint-strategy-brief.md, test/scripts/work-frontier-history-loop-metrics.test.js, test/scripts/work-tracker-alternating-pair-mutex.test.js, test/scripts/work-tracker-loop-evolution-guardrails.test.js, test/scripts/work-tracker-rederive-guardrails.test.js
+Candidate runtime files: src/admin/admin-control-snapshot-repair-diagnostics.js
+Forbidden edits: Priority recovery remains satisfied while active-gate snapshot coverage owns the first frontier.
+Required latest proof: falsifier: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --explain snapshot_coverage # coupled-invariant startup_active_gate_owner/snapshot_coverage + operation_workflow_owner/rebalancer_handoff, falsifier: npm run work:system-theory:rederive -- --owner startup_active_gate_owner --boundary snapshot_coverage, regression: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason snapshot_coverage_incomplete --explain active_gate_snapshot_coverage, supporting: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --explain active_gate_snapshot_coverage, supporting: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason snapshot_coverage_incomplete --explain active_gate_snapshot_coverage
 Allowed stop modes: success-condition-met only; representative-green, owner-boundary-migration, architecture-gap, same-frontier, classification-only, needs-rerun, pending, and unknown are package outcomes unless they exactly match the original sprint success condition
 ```
+
+## Joint Coupled-Invariant Probe
+
+- Command: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --explain snapshot_coverage
+- Last run: 2026-05-29
+- Last residual count: 6
+- Residual trend: unknown
+- Boundaries covered: startup_active_gate_owner / snapshot_coverage, operation_workflow_owner / rebalancer_handoff
 
 ## Package Queue
 
@@ -86,10 +94,14 @@ Allowed stop modes: success-condition-met only; representative-green, owner-boun
    - Lane: `causal-escalation`
    - Purpose: Execute the load-mode selected-timeout owner-recovery re-entry discriminator selected after priority-recovery witnesses dropped to zero.
    - First-run reason: Fresh route migrated away from rebalancer handoff but rolling-restart stayed red at active-gate snapshot coverage with `priority_recovery_zero_witness_conflict`.
-3. [Rolling Restart Benchmark Table Bootstrap Sql Unavailable Repair](../packages/active-20260528-rolling-restart-benchmark-table-bootstrap-sql-unavailable-repair.md)
+3. [Rolling Restart Benchmark Table Bootstrap Sql Unavailable Repair](../packages/done-20260528-rolling-restart-benchmark-table-bootstrap-sql-unavailable-repair.md)
    - Lane: `causal-escalation`
    - Purpose: Execute the SQL-unavailable benchmark table bootstrap source theory selected after the owner-recovery representative rerun stayed red and reported `authoritativeRepairAttempted=false`.
    - First-run reason: Fresh route kept active-gate snapshot coverage unchanged while the terminal scenario error exposed single-candidate SQL query engine unavailable with no authoritative repair.
+4. [Rolling Restart Priority Recovery Retry Deferred Handoff](../packages/done-20260528-rolling-restart-priority-recovery-retry-deferred-handoff.md)
+   - Lane: `causal-escalation`
+   - Purpose: Execute the fresh retry_deferred priority-recovery handoff recurrence selected after the table-bootstrap repair moved its representative metric.
+   - First-run reason: Fresh route now selects `priority_recovery_partition_progress` with three `recovering_in_flight` retry_deferred dispatch-pending witnesses under `operation_workflow_owner / rebalancer_handoff`.
 
 ## Sprint Proof Ladder
 
