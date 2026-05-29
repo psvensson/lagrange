@@ -5,6 +5,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
+import {lintTheoryLoopRedirectRuleText} from './work-tracker.js';
 
 const ENCODING_UTF8 = 'utf8';
 const EMPTY = '';
@@ -27,6 +28,8 @@ const COMMAND_START = 'start';
 const COMMAND_NEXT = 'next';
 const COMMAND_RECORD = 'record';
 const COMMAND_FIX = 'fix';
+const COMMAND_LINT_REDIRECT = 'lint-redirect';
+const FLAG_REDIRECT = 'redirect';
 const FLAG_WRITE = 'write';
 const FLAG_SPRINT = 'sprint';
 const FLAG_PACKAGE = 'package';
@@ -125,6 +128,7 @@ const HELP_TEXT = [
   '  node scripts/work-theory-loop.js next --title <title> --slug <slug> --problem <text> --artifact <path> --success <text> --owner <owner> --boundary <boundary> --dominant-reason <reason> --mechanism <term> --stable-fact <text> --changed-fact <text> --rejected-alternative <text> --current-action <text> --missing-edge <text> --discriminator <command> --expected-movement <text> --negative-result <text> --escalation <text> --theory <structured-option> --theory <structured-option> [--theory <structured-option>] [--theory <structured-option>] --write-scope <src-file> [--write-scope <src-file>] [--move <move>] [--write]',
   '  node scripts/work-theory-loop.js record --theory <id-or-label> --result <result> --evidence <text> [--package <path>] [--ledger-status <status>] [--write]',
   '  node scripts/work-theory-loop.js fix --theory <id-or-label> --evidence <text> --files <paths> --validation <command> [--package <path>] [--write]',
+  '  node scripts/work-theory-loop.js lint-redirect --redirect <text>',
   '',
   'Structured option fields: mechanism:, intervention:, modification:, discriminator:, promotion:, rejection:',
   'Results: fixed, avoided, supported, falsified, migrated, representative-green, architecture-gap, needs-rerun',
@@ -847,7 +851,25 @@ export async function runCli(args = process.argv.slice(NUM_TWO)) {
   if (command === COMMAND_FIX) {
     return runFix(flags);
   }
+  if (command === COMMAND_LINT_REDIRECT) {
+    return runLintRedirect(flags);
+  }
   throw new Error(`Unknown command "${command || '<empty>'}".${NEWLINE}${HELP_TEXT}`);
+}
+
+// Dry-run a candidate redirect-rule string against the running-theory-loop
+// continuation checks so an author can confirm the text keeps the loop moving
+// before writing it into a sprint or package. Exits non-zero on any finding.
+function runLintRedirect(flags) {
+  const redirect = firstFlag(flags, FLAG_REDIRECT);
+  if (!redirect) {
+    throw new Error(`lint-redirect requires --${FLAG_REDIRECT} <text>.`);
+  }
+  const findings = lintTheoryLoopRedirectRuleText(redirect);
+  if (findings.length === NUM_ZERO) {
+    return 'OK: redirect rule names a next autonomous action and never halts the loop.';
+  }
+  throw new Error(findings.join(NEWLINE));
 }
 
 function isDirectRun() {

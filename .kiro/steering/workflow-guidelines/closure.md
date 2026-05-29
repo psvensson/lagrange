@@ -155,7 +155,7 @@ expected evidence, focused falsifier, and migration trigger.
 4. Source/test contract.
 5. Focused falsifier.
 6. Representative expected movement.
-7. Kill rule.
+7. Redirect rule (legacy name Kill rule, still accepted).
 8. Theory-fit score.
 9. Wrong-slice triggers.
 

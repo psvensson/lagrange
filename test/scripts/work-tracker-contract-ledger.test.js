@@ -248,7 +248,7 @@ describe('work tracker decision experiment gate validation', () => {
     assert.match(errors.join('\n'), /Pre-edit focused probe must name a focused command/u);
     assert.match(errors.join('\n'), /Success metrics/u);
     assert.match(errors.join('\n'), /Representative rerun must name a focused command/u);
-    assert.match(errors.join('\n'), /Kill rule/u);
+    assert.match(errors.join('\n'), /Redirect rule/u);
   });
 
   it('accepts missing Decision Experiment Gate section when architectureDecisionGate is present in metadata with choices', () => {

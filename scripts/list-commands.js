@@ -167,6 +167,18 @@ const COMMAND_GROUPS = Object.freeze([
         description: 'Run one focused TAP test file.',
       }),
       Object.freeze({
+        command: 'npm run work:test',
+        description: 'Run the work-tooling test slice (test/scripts/*.test.js) serially and stream output.',
+      }),
+      Object.freeze({
+        command: 'npm run work:test:regression -- [--update]',
+        description: 'Run the work-tooling slice and fail only on failures not in work/test-baseline.json; --update rewrites the baseline from a clean tree.',
+      }),
+      Object.freeze({
+        command: 'npm run work:theory-loop -- lint-redirect --redirect "<text>"',
+        description: 'Dry-run a candidate redirect-rule string against the running-theory-loop continuation checks before writing it into a sprint or package.',
+      }),
+      Object.freeze({
         command: 'npm run test:metrics:scoped -- <files...>',
         description: 'Run scoped cyclomatic and cognitive complexity ratchets.',
       }),

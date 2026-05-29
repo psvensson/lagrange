@@ -139,6 +139,8 @@
     "work:scenario-route": "node scripts/work-scenario-route.js",
     "work:scenario-triage": "node scripts/work-scenario-triage.js",
     "work:validate": "node scripts/work-tracker.js validate",
+    "work:test": "node scripts/work-test-regression.js --run-only",
+    "work:test:regression": "node scripts/work-test-regression.js",
     "work:close": "node scripts/work-close.js",
     "work:audit:ceremony": "node scripts/work-audit-ceremony.js",
     "work:audit:siblings": "node scripts/work-audit-siblings.js",

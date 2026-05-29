@@ -472,7 +472,7 @@ test('review subagent prompt allows metadata-only fixes inline',
   t.match(content, /autonomous architecture experiment/u);
   t.match(content, /Pre-edit focused probe: `node --test test\/rebalancer\/workflow-progress\.test\.js`/u);
   t.match(content, /Representative rerun: `npm run work:package:route-after-rerun/u);
-  t.match(content, /Kill rule/u);
+  t.match(content, /Redirect rule/u);
   t.match(content, /Proof mapping: Implementation and tests must prove/u);
   t.match(content, /Wrong-slice trigger: Stop or split/u);
   t.notMatch(content, /Status: `not-needed`/u);

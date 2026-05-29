@@ -316,7 +316,7 @@ function twoLevelTheoryLines(metadata = {}) {
     `Source/test contract: ${normalizeText(sliceTheory?.sourceTestContract) || 'unknown'}`,
     `Falsifier: ${normalizeText(sliceTheory?.falsifier) || 'unknown'}`,
     `Representative movement: ${normalizeText(sliceTheory?.representativeExpectedMovement) || 'unknown'}`,
-    `Kill rule: ${normalizeText(sliceTheory?.killRule) || 'unknown'}`,
+    `Redirect rule: ${normalizeText(sliceTheory?.killRule) || 'unknown'}`,
     EMPTY_TEXT,
     'Theory-fit score:',
     theoryFitScore(sliceTheory?.theoryFitScore),

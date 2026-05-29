@@ -67,6 +67,20 @@ async function main() {
     process.exit(1);
   }
 
+  // 1b. Guard against stale compiled steering packs. steering:check regenerates
+  // the packs and fails if the working tree still differs, so a close can never
+  // ship doctrine edits without the matching .kiro/steering/llm regeneration.
+  console.log('Checking steering pack freshness...');
+  try {
+    execSync('npm run --silent steering:check', { stdio: 'inherit' });
+  } catch (error) {
+    console.error(
+      'Steering packs are stale. Run `npm run steering:llm:pack`, review the ' +
+      'diff, and re-run work:close.',
+    );
+    process.exit(1);
+  }
+
   // 2. Read package metadata to get commitScope and other details
   const openMarker = '<!-- work-package';
   const closeMarker = '-->';

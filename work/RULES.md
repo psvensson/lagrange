@@ -515,10 +515,11 @@ never instruct the agent to end the turn, await a human, or pause work. For a
 *running* theory-loop sprint, `validateTheoryLoopContinuation` rejects a
 `Redirect rule` that contains bare-halt phrasing or that fails to name a
 redirect action (`theory-loop-redirect-rule-not-actionable`). The same
-redirect-not-stop framing applies to the Decision Experiment `Kill rule` and
-the Systemic Insight Gate redirect rule: a kill rule may `redirect` to an
-architecture/causal experiment or `terminate` on a closed reason, but never
-license a bare stop on a non-terminal outcome.
+redirect-not-stop framing applies to the Decision Experiment `Redirect rule`
+(legacy name `Kill rule`, still accepted) and the Systemic Insight Gate
+redirect rule: a redirect rule may `redirect` to an architecture/causal
+experiment or `terminate` on a closed reason, but never license a bare stop on
+a non-terminal outcome.
 
 Static validation cannot observe an agent that simply ends its turn after
 reading well-formed steering; that residual case is governed by this invariant
@@ -627,8 +628,21 @@ Package closure is atomic — the following steps move as a unit.
 2. `npm run work:repair` — refresh `current-blocker.{json,md}` and the active sprint file references.
 3. Run the automated close command:
    `npm run work:close work/packages/active-<slug>.md`
-   This command automatically runs closure validation, renames the file to `done-`, flips the status, updates active sprint file references, renumbers the package queue, refreshes current-blocker state, stages exactly the `commitScope` files and tracker-generated handoff files, and creates the focused local close commit. The local commit MUST NOT include "unrelated dirty entries" reported by `work:context`.
+   This command automatically runs closure validation, **regenerates and verifies the compiled steering packs (`steering:check`) so a close cannot ship stale `.kiro/steering/llm` packs**, renames the file to `done-`, flips the status, updates active sprint file references, renumbers the package queue, refreshes current-blocker state, stages exactly the `commitScope` files and tracker-generated handoff files, and creates the focused local close commit. The local commit MUST NOT include "unrelated dirty entries" reported by `work:context`.
 4. Push the focused close commit with `npm run work:sprint:push -- <git-push-args>` before starting the next package. If push is blocked by remote, credential, or policy state, record the unpushed commit SHA and reason in the package or sprint handoff; do not invent pushed proof.
+
+---
+
+## Workflow Efficiency Tooling
+<a name="workflow-efficiency-tooling"></a>
+
+Use these helpers instead of ad-hoc shell loops; they keep proof fast and
+non-flaky:
+
+*   **`npm run work:test`** — run the work-tooling test slice (`test/scripts/*.test.js`) serially and stream output. Use it for fast iteration on tracker/steering changes.
+*   **`npm run work:test:regression`** — run the same slice and fail **only** on failures that are not recorded in `work/test-baseline.json`. This replaces the manual "stash, run, compare, pop" dance when proving a change adds zero new test failures. Regenerate the baseline from a clean tree with `npm run work:test:regression -- --update`. The slice runs with `--test-concurrency=1` so the failing set is deterministic.
+*   **`npm run work:theory-loop -- lint-redirect --redirect "<text>"`** — dry-run a candidate redirect-rule string against the running-theory-loop continuation checks (bare-halt phrasing and missing redirect action) before writing it into a sprint or package. Exits non-zero with the `theory-loop-redirect-rule-not-actionable` findings.
+*   **`npm run steering:check`** — regenerate the compiled packs and fail if `.kiro/steering/llm` still differs; `work:close` runs this automatically as a closure guard.
 
 ---
 

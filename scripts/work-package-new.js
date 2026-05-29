@@ -182,6 +182,7 @@ const FLAG_OBSERVED_TRANSITION = 'observed-transition';
 const FLAG_INHERITS = 'inherits';
 const FLAG_TIMEBOX = 'timebox';
 const FLAG_MERGE_REQUIREMENT = 'merge-requirement';
+const FLAG_REDIRECT_RULE = 'redirect-rule';
 const FLAG_KILL_RULE = 'kill-rule';
 const FLAG_VALIDATION_TIER = 'validation-tier';
 const FLAG_SPLIT_CANDIDATE = 'split-candidate';
@@ -878,7 +879,7 @@ function buildDecisionExperimentGateLines(lane, flags, proof, metadata) {
     `- Success metrics: ${expectedDelta}; at least one concrete metric, ` +
       'count, frontier, migration, or representative-green condition must move.',
     `- Representative rerun: \`${representativeRerun}\``,
-    '- Kill rule: If fresh representative evidence returns the same frontier ' +
+    '- Redirect rule: If fresh representative evidence returns the same frontier ' +
       'and dominant reason with no concrete metric reduction, redirect to an ' +
       'autonomous architecture/causal experiment or successor package instead ' +
       'of opening another local patch — never a bare stop. Terminate the loop ' +
@@ -910,6 +911,7 @@ function shouldBuildBoundedExperimentMetadata(lane, flags = {}) {
       FLAG_INHERITS,
       FLAG_TIMEBOX,
       FLAG_MERGE_REQUIREMENT,
+      FLAG_REDIRECT_RULE,
       FLAG_KILL_RULE,
       FLAG_VALIDATION_TIER,
     ].some((flagName) => normalizeText(flags[flagName]).length > NUM_ZERO);
@@ -937,6 +939,7 @@ function buildBoundedExperimentMetadata(lane, flags = {}) {
       normalizeText(flags[FLAG_MERGE_REQUIREMENT]) ||
       DEFAULT_EXPERIMENT_MERGE_REQUIREMENT,
     [BOUNDED_EXPERIMENT_KILL_RULE_FIELD]:
+      normalizeText(flags[FLAG_REDIRECT_RULE]) ||
       normalizeText(flags[FLAG_KILL_RULE]) || DEFAULT_EXPERIMENT_KILL_RULE,
   };
 }
@@ -1021,7 +1024,7 @@ function buildBoundedExperimentLines(metadata = {}) {
     `- Timebox: \`${experiment[BOUNDED_EXPERIMENT_TIMEBOX_FIELD]}\``,
     `- Validation tier: \`${metadata[VALIDATION_TIER_FIELD] || DEFAULT_EXPERIMENT_VALIDATION_TIER}\``,
     `- Merge requirement: ${experiment[BOUNDED_EXPERIMENT_MERGE_REQUIREMENT_FIELD]}`,
-    `- Kill rule: ${experiment[BOUNDED_EXPERIMENT_KILL_RULE_FIELD]}`,
+    `- Redirect rule: ${experiment[BOUNDED_EXPERIMENT_KILL_RULE_FIELD]}`,
     '- Subagent sequencing is optional while the experiment stays information-first and avoids runtime contract changes.',
     '- The executor owns the implementation pass; a separate verifier-fixer is required before closure when runtime behavior, tests, scripts, or tracker truth changed.',
   ];
@@ -1382,7 +1385,7 @@ function buildTwoLevelTheoryLines(metadata = {}) {
     `- Source/test contract: ${sliceTheory[SLICE_THEORY_SOURCE_TEST_CONTRACT_FIELD]}`,
     `- Falsifier: \`${sliceTheory[SLICE_THEORY_FALSIFIER_FIELD]}\``,
     `- Representative expected movement: ${sliceTheory[SLICE_THEORY_REPRESENTATIVE_MOVEMENT_FIELD]}`,
-    `- Kill rule: ${sliceTheory[SLICE_THEORY_KILL_RULE_FIELD]}`,
+    `- Redirect rule: ${sliceTheory[SLICE_THEORY_KILL_RULE_FIELD]}`,
     '- Theory-fit score:',
     markdownList([
       `Evidence fit: ${score[THEORY_FIT_SCORE_EVIDENCE_FIT_FIELD]}`,

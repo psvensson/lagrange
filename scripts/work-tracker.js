@@ -814,6 +814,11 @@ const DECISION_EXPERIMENT_SUCCESS_METRICS_LABEL = 'Success metrics';
 const DECISION_EXPERIMENT_REPRESENTATIVE_RERUN_LABEL =
   'Representative rerun';
 const DECISION_EXPERIMENT_KILL_RULE_LABEL = 'Kill rule';
+const DECISION_EXPERIMENT_REDIRECT_RULE_LABEL = 'Redirect rule';
+const DECISION_EXPERIMENT_REDIRECT_RULE_LABELS = Object.freeze([
+  DECISION_EXPERIMENT_REDIRECT_RULE_LABEL,
+  DECISION_EXPERIMENT_KILL_RULE_LABEL,
+]);
 const DECISION_EXPERIMENT_FIELDS = Object.freeze([
   DECISION_EXPERIMENT_DECISION_QUESTION_LABEL,
   DECISION_EXPERIMENT_ARCHITECTURE_REVIEW_LABEL,
@@ -821,7 +826,6 @@ const DECISION_EXPERIMENT_FIELDS = Object.freeze([
   DECISION_EXPERIMENT_PRE_EDIT_PROBE_LABEL,
   DECISION_EXPERIMENT_SUCCESS_METRICS_LABEL,
   DECISION_EXPERIMENT_REPRESENTATIVE_RERUN_LABEL,
-  DECISION_EXPERIMENT_KILL_RULE_LABEL,
 ]);
 const DECISION_EXPERIMENT_ARCHITECTURE_REVIEW_PATTERN =
   /\b(?:architecture|owner|boundary|contract|human|route)\b/iu;
@@ -2995,17 +2999,41 @@ export function validateDecisionExperimentGate(
       'metric reduction, migration, representative green, count, or frontier move.',
     );
   }
-  const killRule = findDecisionExperimentGateField(
-    section,
-    DECISION_EXPERIMENT_KILL_RULE_LABEL,
+  errors.push(...validateDecisionExperimentRedirectRule(filePath, section));
+  return errors;
+}
+
+function findDecisionExperimentRedirectRule(section) {
+  for (const label of DECISION_EXPERIMENT_REDIRECT_RULE_LABELS) {
+    const value = findDecisionExperimentGateField(section, label);
+    if (value !== null) {
+      return value;
+    }
+  }
+  return null;
+}
+
+function validateDecisionExperimentRedirectRule(filePath, section) {
+  const redirectRule = findDecisionExperimentRedirectRule(section);
+  if (redirectRule === null) {
+    return [
+      `${filePath}: Decision Experiment Gate is missing ` +
+      `${DECISION_EXPERIMENT_REDIRECT_RULE_LABEL} (legacy ` +
+      `"${DECISION_EXPERIMENT_KILL_RULE_LABEL}" accepted).`,
+    ];
+  }
+  const errors = validateDecisionExperimentGateField(
+    filePath,
+    DECISION_EXPERIMENT_REDIRECT_RULE_LABEL,
+    redirectRule,
   );
   if (
-    killRule !== null &&
-    !DECISION_EXPERIMENT_KILL_RULE_PATTERN.test(killRule)
+    redirectRule.length > NUM_ZERO &&
+    !DECISION_EXPERIMENT_KILL_RULE_PATTERN.test(redirectRule)
   ) {
     errors.push(
       `${filePath}: Decision Experiment Gate ` +
-      `${DECISION_EXPERIMENT_KILL_RULE_LABEL} must redirect (open an ` +
+      `${DECISION_EXPERIMENT_REDIRECT_RULE_LABEL} must redirect (open an ` +
       'architecture/causal experiment or successor) or terminate on ' +
       'unchanged same-frontier/no-reduction evidence — never a bare stop.',
     );
@@ -3377,24 +3405,47 @@ function validateRunningTheoryLoopRedirectRule(content, filePath) {
   if (redirectRule === null || redirectRule.length === NUM_ZERO) {
     return [];
   }
+  return lintTheoryLoopRedirectRuleText(
+    redirectRule,
+    filePath,
+    SPRINT_STRATEGY_BRIEF_REDIRECT_RULE_LABEL,
+  );
+}
+
+// Pure linter for a single redirect-rule string. A redirect rule that keeps a
+// running theory loop moving must not contain a bare-halt phrase (end the
+// turn, await a human, pause work) and must name a next autonomous action.
+// Exported so the work:theory-loop CLI can dry-run candidate text before it is
+// written into a sprint or package.
+export function lintTheoryLoopRedirectRuleText(
+  redirectRule,
+  filePath = EMPTY_TEXT,
+  label = SPRINT_STRATEGY_BRIEF_REDIRECT_RULE_LABEL,
+) {
+  if (typeof redirectRule !== 'string') {
+    return [];
+  }
+  const candidate = redirectRule.trim();
+  if (candidate.length === NUM_ZERO) {
+    return [];
+  }
+  const prefix = filePath ? `${filePath}: ` : EMPTY_TEXT;
   const errors = [];
-  if (THEORY_LOOP_BARE_HALT_PATTERN.test(redirectRule)) {
+  if (THEORY_LOOP_BARE_HALT_PATTERN.test(candidate)) {
     errors.push(
-      `${filePath}: ${SPRINT_STRATEGY_BRIEF_REDIRECT_RULE_LABEL} of a running ` +
-      'theory-loop sprint must not instruct the loop to halt (end the turn, ' +
-      'await a human, pause work); stop only for a closed Termination ' +
-      'Condition recorded in ' +
-      `${THEORY_LOOP_TERMINATION_HEADING}. ` +
+      `${prefix}${label} of a running theory-loop sprint must not instruct ` +
+      'the loop to halt (end the turn, await a human, pause work); stop only ' +
+      `for a closed Termination Condition recorded in ${THEORY_LOOP_TERMINATION_HEADING}. ` +
       '[theory-loop-redirect-rule-not-actionable]',
     );
   }
-  if (!THEORY_LOOP_REDIRECT_ACTION_PATTERN.test(redirectRule)) {
+  if (!THEORY_LOOP_REDIRECT_ACTION_PATTERN.test(candidate)) {
     errors.push(
-      `${filePath}: ${SPRINT_STRATEGY_BRIEF_REDIRECT_RULE_LABEL} of a running ` +
-      'theory-loop sprint must name the next autonomous action (e.g. open a ' +
-      'successor package, run fresh route evidence, rederive, or open an ' +
-      'architecture/causal experiment) on a non-terminal outcome, never a ' +
-      'bare stop. [theory-loop-redirect-rule-not-actionable]',
+      `${prefix}${label} of a running theory-loop sprint must name the next ` +
+      'autonomous action (e.g. open a successor package, run fresh route ' +
+      'evidence, rederive, or open an architecture/causal experiment) on a ' +
+      'non-terminal outcome, never a bare stop. ' +
+      '[theory-loop-redirect-rule-not-actionable]',
     );
   }
   return errors;
@@ -11588,7 +11639,7 @@ export function renderCurrentBlockerMarkdown(payload) {
     'Representative expected movement: ' +
       `${payload.sliceTheory?.representativeExpectedMovement || DEFAULT_UNKNOWN}`,
     '',
-    'Kill rule: ' +
+    'Redirect rule: ' +
       `${payload.sliceTheory?.killRule || DEFAULT_UNKNOWN}`,
     '',
     'Theory-fit score:',
