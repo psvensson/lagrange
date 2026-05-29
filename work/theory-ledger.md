@@ -456,3 +456,17 @@ Each entry must include these labels:
 - Supersedes: theory-20260529-rolling-restart-active-gate-handoff-selection-architecture-experiment
 - Superseded by: none
 - Next implication: Close the pending-write architecture experiment as architecture-gap continuation. Runtime promotion remains blocked until future fresh representative evidence or focused proof names a non-repeated source contract, real owner migration, implementable protocol/model/topology route, fresh representative movement, or representative-green result.
+
+## theory-20260529-rolling-restart-active-gate-owner-reconcile-handoff-scheduling-architecture-gap
+
+- Status: supported
+- Scenario/gate: rolling-restart / active_gate_snapshot_coverage
+- Owner/boundary: startup_active_gate_owner / snapshot_coverage
+- Hypothesis: owner_reconcile_pending with write_deferred, enqueued=false, and retryAfterMs=0 is an architecture-route discriminator: runtime source promotion must resume only through a bounded owner wake scheduling route.
+- Probe: `npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending --explain active_gate_snapshot_coverage`
+- Artifact/result: test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json - scenario-route reports runtimePromotionGuard.state=blocked with pair-alternation-post-rederive and zero priority residuals; topology exposes membershipPublicationHandoffOutcomeState=write_deferred, enqueued=false, retryAfterMs=0, selectedControlPlaneOwnerQueuePendingWrites=1, and progressContract.retryAfterMs=1000.
+- Representative movement: architecture-gap
+- Linked packages: `work/packages/active-20260529-rolling-restart-active-gate-owner-reconcile-handoff-retry.md`
+- Supersedes: none
+- Superseded by: none
+- Next implication: Open the scheduling architecture-route implementation with theoryLoop.architectureRoute before any further startup_active_gate_owner / snapshot_coverage source work.
