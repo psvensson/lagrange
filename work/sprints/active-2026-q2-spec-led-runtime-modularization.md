@@ -19,7 +19,7 @@ priority-recovery or active-gate frontier.
 - Confidence and evidence: high that the next autonomous action is system-theory rederive; the fresh harness report is red after 834.4s, `work:evidence-summary` and `work:scenario-route` select active_gate_snapshot_coverage with owner_reconcile_pending, `analyze:priority-recovery-residuals` reports 0 witnesses, and `work:system-theory:rederive --check-due` reports 5 closed packages since the latest rederive checkpoint.
 - Expected green path: run the post-rerun system-theory rederive, then either promote a non-repeated source contract, migrate owner boundary, record architecture continuation, or rerun representative evidence until the Evidence Anchor is met.
 - Wrong direction signals: closing this sprint on architecture-gap or migration, widening timeouts, weakening admission/readiness, hiding diagnostics, reopening rebalancer handoff while priority-recovery witnesses are zero, or opening another generic startup_active_gate_owner / snapshot_coverage patch after the rederive selected architecture work.
-- Next best package: `work/packages/active-20260529-rolling-restart-active-gate-post-rerun-system-theory-rederive.md`; no local startup_active_gate_owner / snapshot_coverage source package is promoted until that rederive selects a non-repeated source route or migration.
+- Next best package: `work/packages/done-20260529-rolling-restart-active-gate-post-rerun-system-theory-rederive.md`; no local startup_active_gate_owner / snapshot_coverage source package is promoted until that rederive selects a non-repeated source route or migration.
 - Redirect rule: on same-frontier / no-reduction evidence after the rederive, immediately open a bounded architecture/causal experiment that names a non-repeated owner contract — or run fresh representative route evidence — instead of another local runtime package. This is a redirect, not a stop: the agent keeps executing the next autonomous action and never hands control back; the loop continues until the Evidence Anchor success condition is met. Terminate only for a closed Termination Condition recorded in `## Theory Loop Termination`.
 - Architecture-route forcing (R13): the earlier active-gate protocol route has been implemented and `work:frontier-history` now reports `architectureRouteState: implemented`; this release-gate package is therefore evidence-only. Any future runtime package on the active-gate pair must still satisfy the current compositional gates and carry the required architecture-route marker when those gates demand it.
 
@@ -66,17 +66,17 @@ priority-recovery or active-gate frontier.
 ```text
 Representative artifact: test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json
 Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending
-Active package: work/packages/active-20260529-rolling-restart-active-gate-post-rerun-system-theory-rederive.md
+Active package: work/packages/done-20260529-rolling-restart-active-gate-post-rerun-system-theory-rederive.md
 Active package owner: startup_active_gate_owner
 Active package boundary: snapshot_coverage
 Selected cause: owner_reconcile_pending
 Required action: Run the system-theory rederive checkpoint before any runtime source promotion, then record whether proof names a non-repeated source contract, owner-boundary migration, architecture continuation, or representative-green path.
-Representative status: same-frontier
+Representative status: architecture-gap
 Causal outcome: continue_local_fix
 Architecture gate: selected / architecture-continuation
-Expected delta: System-theory rederive records whether the fresh owner_reconcile same-frontier/no-reduction evidence permits a non-repeated contract, owner migration, architecture continuation, or another fresh representative discriminator.
+Expected delta: System-theory rederive confirmed same-mechanism-repeat contract_gap and selected architecture continuation; runtime source promotion remains blocked.
 Current state: The post-architecture-gap representative rerun stayed red on active_gate_snapshot_coverage with owner_reconcile_pending, snapshot coverage 1/5, selected_snapshot_source_timeout, snapshot_repair_deferred, one pending owner queue write, and zero priority-recovery residuals.
-Allowed edits: work/packages/active-20260529-rolling-restart-active-gate-post-rerun-system-theory-rederive.md, work/sprints/active-2026-q2-spec-led-runtime-modularization.md, work/theory-ledger.md
+Allowed edits: work/packages/done-20260529-rolling-restart-active-gate-post-rerun-system-theory-rederive.md, work/sprints/active-2026-q2-spec-led-runtime-modularization.md, work/theory-ledger.md
 Candidate runtime files: src/control-plane/membership-publication-active-gate-reconcile.js, src/control-plane/publication-active-gate-handoff-contract-selection.js, src/control-plane/publication-active-gate-handoff-contract-decision.js, src/control-plane/publication-active-gate-handoff-contract-evidence.js, src/control-plane/snapshot-service.js, src/control-plane/owner-queue.js
 Forbidden edits: Runtime promotion stays blocked until current proof names a non-repeated source route.
 Required latest proof: falsifier: npm run work:system-theory:rederive -- --owner startup_active_gate_owner --boundary snapshot_coverage --sprint work/sprints/active-2026-q2-spec-led-runtime-modularization.md --write, regression: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending --explain active_gate_snapshot_coverage, supporting: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12, supporting: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --explain active_gate_snapshot_coverage, supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --markdown
@@ -157,7 +157,7 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Lane: `runtime-owner-boundary`
    - Purpose: Implement the bounded active-gate timeout retry contract now that owner-recovery wait reentry is enqueued.
    - First-run reason: Fresh representative evidence after the owner-recovery reentry drain reports membershipPublicationHandoffOutcomeEnqueued=true, zero priority-recovery residuals, and a remaining active_gate_timed_out frontier under startup_active_gate_owner / snapshot_coverage.
-16. [Rolling Restart Active Gate Post Rerun System Theory Rederive](../packages/active-20260529-rolling-restart-active-gate-post-rerun-system-theory-rederive.md)
+16. [Rolling Restart Active Gate Post Rerun System Theory Rederive](../packages/done-20260529-rolling-restart-active-gate-post-rerun-system-theory-rederive.md)
    - Lane: `causal-escalation`
    - Purpose: Rederive active-gate system theory after the post-architecture-gap representative rerun stayed same-frontier/no-reduction.
    - First-run reason: Fresh representative evidence selects active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending with zero priority-recovery residuals, and `work:system-theory:rederive --check-due` requires a checkpoint before another runtime slice activates.

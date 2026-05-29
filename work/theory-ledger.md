@@ -372,3 +372,17 @@ Each entry must include these labels:
 - Supersedes: theory-20260529-rolling-restart-active-gate-snapshot-coverage-architecture-gap-stop
 - Superseded by: none
 - Next implication: Close the checkpoint rederive as architecture-gap continuation. Runtime promotion remains blocked until future fresh representative evidence or focused proof names a non-repeated owner-owned transition, protocol/model/topology route, representative-green result, or real owner-boundary migration.
+
+## theory-20260529-rolling-restart-active-gate-post-rerun-system-theory-rederive
+
+- Status: supported
+- Scenario/gate: rolling-restart / active_gate_snapshot_coverage
+- Owner/boundary: startup_active_gate_owner / snapshot_coverage
+- Hypothesis: Post-architecture-gap same-frontier owner_reconcile_pending evidence confirms active-gate contract-gap saturation; runtime promotion remains blocked until fresh representative evidence or focused proof names a non-repeated source contract, owner-boundary migration, protocol/model/topology route, or representative-green.
+- Probe: `npm run work:system-theory:rederive -- --owner startup_active_gate_owner --boundary snapshot_coverage --sprint work/sprints/active-2026-q2-spec-led-runtime-modularization.md --write`
+- Artifact/result: test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json - system-theory rederive reports same-mechanism-repeat contract_gap; scenario-route keeps active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending; topology-convergence exposes snapshot coverage 1/5, selected_snapshot_source_timeout, snapshot_repair_deferred, and one pending owner queue write; priority-recovery residual witnesses remain 0.
+- Representative movement: architecture-gap
+- Linked packages: `work/packages/active-20260529-rolling-restart-active-gate-post-rerun-system-theory-rederive.md`
+- Supersedes: none
+- Superseded by: none
+- Next implication: Close the post-rerun rederive as architecture continuation unless proof later names a non-repeated source contract, owner-boundary migration, protocol/model/topology route, or representative-green result.
