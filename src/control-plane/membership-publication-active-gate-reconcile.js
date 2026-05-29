@@ -1,7 +1,4 @@
-import {
-  NUM,
-  TYPEOF,
-} from '../constants/index.js';
+import {NUM, TYPEOF} from '../constants/index.js';
 import {
   CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME,
   CONTROL_PLANE_FAILURE_REASON,
@@ -15,12 +12,7 @@ import {
   hasPublicationActiveGateOwnerReconcileSignal,
   resolvePublicationActiveGateMembershipPublicationTarget,
 } from './publication-active-gate-handoff-contract.js';
-import {
-  MEMBERSHIP_PUBLICATION_KIND,
-  MEMBERSHIP_PUBLICATION_STATUS,
-  normalizeNodeIdList,
-  normalizePositiveInteger,
-} from './membership-publication-coordinator-stage-1.js';
+import {MEMBERSHIP_PUBLICATION_KIND, MEMBERSHIP_PUBLICATION_STATUS, normalizeNodeIdList, normalizePositiveInteger} from './membership-publication-coordinator-stage-1.js';
 import {
   buildMembershipPublicationRow,
   buildPublicationReadOptions,
@@ -58,8 +50,7 @@ const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME = Object.freeze({
   TARGET_BLOCKED: 'target_blocked',
   WRITE_DEFERRED: 'write_deferred',
 });
-const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_WRITE_DEFERRED_FRAGMENTS =
-  Object.freeze(['readback']);
+const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_WRITE_DEFERRED_FRAGMENTS = Object.freeze(['readback']);
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_FIELD = Object.freeze({
   DISABLE_NESTED_PRIORITY_RECOVERY_PLANNING: 'disableNestedPriorityRecoveryPlanning',
   PUBLICATION_ROW: 'publicationRow',
@@ -529,7 +520,9 @@ function isActiveGateMembershipPublicationOwnerRecoveryWaitTarget(
     target.pendingRecoveryCount > NUM.ZERO;
 }
 async function drainActiveGateMembershipPublicationSnapshotQueue() {
-  return (await SnapshotService.drainQueueForSnapshot()) > NUM.ZERO;
+  const queuePressureDetected = SnapshotService.isQueuePressureDetected();
+  const drainedCount = await SnapshotService.drainQueueForSnapshot();
+  return queuePressureDetected === true || drainedCount > NUM.ZERO;
 }
 async function readActiveGateMembershipPublicationVisibleRow(
   coordinator,
@@ -800,9 +793,4 @@ async function reconcileActiveGateMembershipPublication(
     );
   }
 }
-export {ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME};
-export {ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD};
-export {readActiveGateMembershipPublicationVisibleRow};
-export {readActiveGateMembershipPublicationVisibleReconcileRow};
-export {reconcileActiveGateMembershipPublication};
-export {shouldRouteActiveGateMembershipPublicationReconcile};
+export {ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME, ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD, readActiveGateMembershipPublicationVisibleRow, readActiveGateMembershipPublicationVisibleReconcileRow, reconcileActiveGateMembershipPublication, shouldRouteActiveGateMembershipPublicationReconcile};

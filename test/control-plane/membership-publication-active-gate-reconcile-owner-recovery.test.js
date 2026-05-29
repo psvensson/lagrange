@@ -20,6 +20,30 @@ const OWNER_RECOVERY_EXPECTED_NODE_IDS = Object.freeze([
   ...OWNER_RECOVERY_PUBLISHED_NODE_IDS,
   ...OWNER_RECOVERY_PENDING_NODE_IDS,
 ]);
+const OWNER_RECOVERY_EMPTY_DRAIN_COUNT = 0;
+
+function buildOwnerRecoveryWaitHandoff() {
+  return {
+    schemaVersion: OWNER_RECOVERY_SCHEMA_VERSION,
+    publicationEpoch: OWNER_RECOVERY_PUBLICATION_EPOCH,
+    expectedNodeIds: [...OWNER_RECOVERY_EXPECTED_NODE_IDS],
+    publishedActiveNodeIds: [...OWNER_RECOVERY_PUBLISHED_NODE_IDS],
+    pendingRecoveryNodeIds: [...OWNER_RECOVERY_PENDING_NODE_IDS],
+    pendingRecoveryCount: OWNER_RECOVERY_PENDING_NODE_IDS.length,
+    runtimePromotionAllowed: OWNER_RECOVERY_RUNTIME_PROMOTION_ALLOWED,
+    state: OWNER_RECOVERY_PENDING_STATE,
+    reasonCode: OWNER_RECOVERY_PENDING_REASON,
+    nextAction: OWNER_RECOVERY_WAIT_ACTION,
+  };
+}
+
+function buildOwnerRecoveryCoordinator() {
+  return {
+    buildOwnerKey() {
+      return OWNER_RECOVERY_LOCAL_NODE_ID;
+    },
+  };
+}
 
 test('active-gate owner recovery wait reports drained snapshot reentry',
   async (t) => {
@@ -28,23 +52,8 @@ test('active-gate owner recovery wait reports drained snapshot reentry',
       async () => OWNER_RECOVERY_DRAINED_QUEUE_COUNT;
     try {
       const publicationOutcome = await reconcileActiveGateMembershipPublication(
-        {
-          buildOwnerKey() {
-            return OWNER_RECOVERY_LOCAL_NODE_ID;
-          },
-        },
-        {
-          schemaVersion: OWNER_RECOVERY_SCHEMA_VERSION,
-          publicationEpoch: OWNER_RECOVERY_PUBLICATION_EPOCH,
-          expectedNodeIds: [...OWNER_RECOVERY_EXPECTED_NODE_IDS],
-          publishedActiveNodeIds: [...OWNER_RECOVERY_PUBLISHED_NODE_IDS],
-          pendingRecoveryNodeIds: [...OWNER_RECOVERY_PENDING_NODE_IDS],
-          pendingRecoveryCount: OWNER_RECOVERY_PENDING_NODE_IDS.length,
-          runtimePromotionAllowed: OWNER_RECOVERY_RUNTIME_PROMOTION_ALLOWED,
-          state: OWNER_RECOVERY_PENDING_STATE,
-          reasonCode: OWNER_RECOVERY_PENDING_REASON,
-          nextAction: OWNER_RECOVERY_WAIT_ACTION,
-        },
+        buildOwnerRecoveryCoordinator(),
+        buildOwnerRecoveryWaitHandoff(),
       );
 
       t.match(
@@ -61,5 +70,37 @@ test('active-gate owner recovery wait reports drained snapshot reentry',
       );
     } finally {
       SnapshotService.drainQueueForSnapshot = originalDrainQueueForSnapshot;
+    }
+  });
+
+test('active-gate owner recovery wait reports queue pressure reentry',
+  async (t) => {
+    const originalDrainQueueForSnapshot = SnapshotService.drainQueueForSnapshot;
+    const originalIsQueuePressureDetected =
+      SnapshotService.isQueuePressureDetected;
+    SnapshotService.isQueuePressureDetected = () => true;
+    SnapshotService.drainQueueForSnapshot =
+      async () => OWNER_RECOVERY_EMPTY_DRAIN_COUNT;
+    try {
+      const publicationOutcome = await reconcileActiveGateMembershipPublication(
+        buildOwnerRecoveryCoordinator(),
+        buildOwnerRecoveryWaitHandoff(),
+      );
+
+      t.match(
+        publicationOutcome,
+        {
+          state: OWNER_RECOVERY_TARGET_BLOCKED,
+          enqueued: true,
+          target: {
+            pendingRecoveryNodeIds: [...OWNER_RECOVERY_PENDING_NODE_IDS],
+          },
+        },
+        'owner-recovery wait should expose queue pressure reset as bounded reentry',
+      );
+    } finally {
+      SnapshotService.drainQueueForSnapshot = originalDrainQueueForSnapshot;
+      SnapshotService.isQueuePressureDetected =
+        originalIsQueuePressureDetected;
     }
   });

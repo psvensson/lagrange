@@ -65,22 +65,22 @@ priority-recovery or active-gate frontier.
 
 ```text
 Representative artifact: test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json
-Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending
-Active package: work/packages/done-20260529-rolling-restart-active-gate-owner-handoff-write-deferred-reentry.md
+Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out
+Active package: work/packages/done-20260529-rolling-restart-active-gate-owner-recovery-reentry-drain.md
 Active package owner: startup_active_gate_owner
 Active package boundary: snapshot_coverage
 Selected cause: owner_reconcile_pending
-Required action: Activate after the protocol-route package closes, then select the bounded source package for the remaining owner handoff write_deferred evidence.
+Required action: Implement the bounded owner-recovery wait reentry/drain as the selected protocol-layer architecture route for membershipPublicationHandoffOutcome write_deferred evidence.
 Representative status: reduced
 Causal outcome: continue_local_fix
 Architecture gate: watching / unknown
-Expected delta: Selected runtime successor implements the bounded owner-recovery wait reentry/drain source package, then proves whether membershipPublicationHandoffOutcome write_deferred can drain/enqueue the selected owner-recovery wait, reduce pending owner recovery or owner queue evidence, migrate owner boundary, or record architecture-gap.
-Current state: Focused topology evidence now promotes selected-snapshot deferred retry into publicationActiveGateHandoff wait_owner_recovery pending recovery evidence; membershipPublicationHandoffOutcomeState remains write_deferred with one pending owner recovery write.
-Allowed edits: work/packages/done-20260529-rolling-restart-active-gate-owner-handoff-write-deferred-reentry.md, work/packages/todo-20260529-rolling-restart-active-gate-owner-recovery-reentry-drain.md, work/sprints/active-2026-q2-spec-led-runtime-modularization.md
-Candidate runtime files: src/admin/admin-control-snapshot-publication-handoff.js, src/control-plane/membership-publication-active-gate-reconcile.js, src/control-plane/publication-active-gate-handoff-contract-selection.js, src/control-plane/publication-active-gate-handoff-contract.js
-Forbidden edits: Owner handoff write_deferred evidence must select a reentry, drain, reconcile, migration, representative-green, or architecture-gap decision before downstream readiness work.
-Required latest proof: falsifier: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending --explain active_gate_snapshot_coverage, regression: npm run work:advance -- --check, supporting: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --explain active_gate_snapshot_coverage, supporting: npm run work:advance -- --check
-Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
+Expected delta: active_gate_timed_out moves to bounded retry progress, reduced snapshot timeout evidence, migration, representative-green, or architecture-gap after one source package.
+Current state: Freshness review rejected the package as a plain runtime-owner-boundary slice; this package now implements the selected R13 protocol architecture route for the remaining owner-recovery write_deferred evidence.
+Allowed edits: src/control-plane/membership-publication-active-gate-reconcile.js, test/control-plane/membership-publication-active-gate-reconcile-owner-recovery.test.js
+Candidate runtime files: src/admin/admin-control-snapshot-class-part-6.js, src/admin/admin-control-snapshot-publication-handoff.js, src/control-plane/publication-active-gate-handoff-contract-selection.js, src/control-plane/publication-active-gate-handoff-contract.js, src/control-plane/snapshot-service.js, src/control-plane/owner-queue.js
+Forbidden edits: wait_owner_recovery membership-publication evidence must reenter through the owner handoff protocol and report drain/enqueue progress before diagnostics may classify the owner boundary as reduced.
+Required latest proof: falsifier: npm test -- test/control-plane/membership-publication-active-gate-reconcile-owner-recovery.test.js # focused contract fixture, regression: npm test -- test/control-plane/membership-publication-active-gate-reconcile-owner-recovery.test.js test/control-plane/publication-active-gate-handoff-contract.test.js # affected consumer proof, supporting: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --explain active_gate_snapshot_coverage, supporting: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending --explain active_gate_snapshot_coverage, supporting: npm run work:evidence-summary -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json
+Allowed stop modes: success-condition-met only; representative-green, owner-boundary-migration, architecture-gap, same-frontier, classification-only, needs-rerun, pending, and unknown are package outcomes unless they exactly match the original sprint success condition
 ```
 
 ## Joint Coupled-Invariant Probe
@@ -149,10 +149,14 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Lane: `experiment`
    - Purpose: Preserve the reduced owner_reconcile_pending route after the protocol package closes, then promote the concrete source package selected by the remaining write_deferred owner handoff evidence.
    - First-run reason: The protocol route proof removed the runtime-promotion guard and exposed publicationActiveGateHandoff wait_owner_recovery pending recovery evidence; the remaining local witness is membershipPublicationHandoffOutcomeState=write_deferred with one pending owner recovery write.
-14. [Rolling Restart Active Gate Owner Recovery Reentry Drain](../packages/todo-20260529-rolling-restart-active-gate-owner-recovery-reentry-drain.md)
-   - Lane: `runtime-owner-boundary`
+14. [Rolling Restart Active Gate Owner Recovery Reentry Drain](../packages/done-20260529-rolling-restart-active-gate-owner-recovery-reentry-drain.md)
+   - Lane: `causal-escalation`
    - Purpose: Implement the bounded owner-recovery wait reentry/drain source package for membershipPublicationHandoffOutcome write_deferred evidence.
    - First-run reason: The route-selection package kept startup_active_gate_owner / snapshot_coverage on owner_reconcile_pending and selected src/control-plane/membership-publication-active-gate-reconcile.js plus its focused owner-recovery test as the concrete source owner.
+15. [Rolling Restart Active Gate Timeout Retry Contract](../packages/todo-20260529-rolling-restart-active-gate-timeout-retry-contract.md)
+   - Lane: `runtime-owner-boundary`
+   - Purpose: Implement the bounded active-gate timeout retry contract now that owner-recovery wait reentry is enqueued.
+   - First-run reason: Fresh representative evidence after the owner-recovery reentry drain reports membershipPublicationHandoffOutcomeEnqueued=true, zero priority-recovery residuals, and a remaining active_gate_timed_out frontier under startup_active_gate_owner / snapshot_coverage.
 
 ## Sprint Proof Ladder
 
