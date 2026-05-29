@@ -65,21 +65,21 @@ priority-recovery or active-gate frontier.
 
 ```text
 Representative artifact: test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json
-Visible first frontier: release_gate_owner / rolling_restart_fully_green_gate / representative_green_required
-Active package: work/packages/active-20260529-rolling-restart-classified-backpressure-rerun-gate.md
-Active package owner: release_gate_owner
-Active package boundary: rolling_restart_fully_green_gate
-Selected cause: representative_green_required
-Required action: Run a causal-escalation representative rerun to determine whether classified priority-recovery backpressure drains to green, migrates, or selects a concrete successor before any runtime source package.
-Representative status: reduced
-Causal outcome: accept_classified_backpressure
-Architecture gate: watching / unknown
-Expected delta: Fresh representative evidence either reaches green, drains priority-recovery backpressure, migrates to a concrete successor, or proves unchanged same-frontier/no-reduction.
-Current state: The fresh representative rerun reduced the active-gate shape to active=5/5 and snapshotCoverage=3/5, then routed first frontier to priority_recovery_partition_progress with causal outcome accept_classified_backpressure and seven recovering_in_flight priority-recovery witnesses.
-Allowed edits: work/packages/active-20260529-rolling-restart-classified-backpressure-rerun-gate.md, work/sprints/active-2026-q2-spec-led-runtime-modularization.md
-Candidate runtime files: src/rebalancer/operation-workflow-owner.js, src/rebalancer/operation-workflow-owner-constants.js, src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js, src/control-plane/priority-recovery-snapshot-stage-8.js
-Forbidden edits: Do not promote operation_workflow_owner, startup_active_gate_owner, or another runtime boundary unless fresh canonical route evidence names the owner boundary and the successor package records the handoff.
-Required latest proof: falsifier: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --fast-local --verbose # release-gate contract transition, regression: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner release_gate_owner --boundary rolling_restart_fully_green_gate --dominant-reason representative_green_required # release-gate outcome state transition, supporting: npm run work:evidence-summary -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json, supporting: npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json
+Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending
+Active package: work/packages/active-20260529-rolling-restart-active-gate-owner-reconcile-pending-architecture-gap-analysis.md
+Active package owner: startup_active_gate_owner
+Active package boundary: snapshot_coverage
+Selected cause: owner_reconcile_pending
+Required action: Run architecture-gap analysis for owner_reconcile_pending and select a non-repeated owner-owned transition, protocol/model/topology route, owner-boundary migration, or explicit architecture-gap stop before any further runtime source package.
+Representative status: architecture-gap
+Causal outcome: continue_local_fix
+Architecture gate: required / unknown
+Expected delta: Architecture-gap analysis selects a protocol, model, topology, owner-boundary migration, representative-green route, or explicit architecture-gap stop for owner_reconcile_pending with membershipPublicationHandoffOutcomeEnqueued=false.
+Current state: Fresh causal-escalation evidence drained priority recovery to zero witnesses but returned to active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage with owner_reconcile_pending, membershipPublicationHandoffOutcomeEnqueued=false, one pending owner queue write, and a previously implemented owner-recovery route.
+Allowed edits: work/packages/active-20260529-rolling-restart-active-gate-owner-reconcile-pending-architecture-gap-analysis.md, work/sprints/active-2026-q2-spec-led-runtime-modularization.md, work/theory-ledger.md
+Candidate runtime files: src/control-plane/membership-publication-active-gate-reconcile.js, src/control-plane/publication-active-gate-handoff-contract-selection.js, src/control-plane/publication-active-gate-handoff-contract-decision.js, src/control-plane/publication-active-gate-handoff-contract-evidence.js, src/control-plane/snapshot-service.js, src/control-plane/owner-queue.js
+Forbidden edits: Priority recovery remains satisfied while active-gate snapshot coverage owns the first frontier; owner-reconcile evidence must not be patched again without an architecture decision.
+Required latest proof: falsifier: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12, regression: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending --explain active_gate_snapshot_coverage, supporting: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --explain active_gate_snapshot_coverage, supporting: npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json, supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --markdown
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 

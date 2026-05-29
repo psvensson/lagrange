@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "active",
+  "status": "done",
   "intent": {
     "opened": "2026-05-29",
     "lane": "causal-escalation",
@@ -13,13 +13,16 @@
     "owner": "release_gate_owner",
     "boundary": "rolling_restart_fully_green_gate",
     "dominantReason": "representative_green_required",
-    "currentState": "The fresh representative rerun reduced the active-gate shape to active=5/5 and snapshotCoverage=3/5, then routed first frontier to priority_recovery_partition_progress with causal outcome accept_classified_backpressure and seven recovering_in_flight priority-recovery witnesses.",
-    "nextAction": "Run a causal-escalation representative rerun to determine whether classified priority-recovery backpressure drains to green, migrates, or selects a concrete successor before any runtime source package.",
-    "predecessor": "work/packages/done-20260529-rolling-restart-fresh-representative-green-gate.md"
+    "currentState": "The classified-backpressure representative rerun stayed red but drained priority-recovery residuals to zero and routed the first frontier back to active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage with owner_reconcile_pending.",
+    "nextAction": "Close this rerun gate and continue with the active architecture-gap successor for owner_reconcile_pending before any runtime source package.",
+    "predecessor": "work/packages/done-20260529-rolling-restart-fresh-representative-green-gate.md",
+    "closed": "2026-05-29",
+    "successor": "work/packages/active-20260529-rolling-restart-active-gate-owner-reconcile-pending-architecture-gap-analysis.md"
   },
   "scope": {
     "writeScope": [
       "work/packages/active-20260529-rolling-restart-classified-backpressure-rerun-gate.md",
+      "work/packages/done-20260529-rolling-restart-fresh-representative-green-gate.md",
       "work/sprints/active-2026-q2-spec-led-runtime-modularization.md"
     ],
     "handoffFiles": [
@@ -37,6 +40,7 @@
     ],
     "commitScope": [
       "work/packages/active-20260529-rolling-restart-classified-backpressure-rerun-gate.md",
+      "work/packages/done-20260529-rolling-restart-fresh-representative-green-gate.md",
       "work/sprints/active-2026-q2-spec-led-runtime-modularization.md",
       "work/sprints/current-blocker.json",
       "work/sprints/current-blocker.md"
@@ -74,6 +78,7 @@
     }
   },
   "validationTier": "release-gate",
+  "theoryLedger": "no ledger update: this rerun gate records the fresh representative reduction from classified priority-recovery backpressure to active-gate owner_reconcile_pending and hands off to the architecture-gap successor without adding durable theory.",
   "mechanismCard": {
     "failureMechanism": "scheduling_gap with observation_gap as the release-gate alternate",
     "stableFacts": "rolling-restart is still the sprint success condition and the current fresh route reports accept_classified_backpressure.",
@@ -118,8 +123,8 @@
     "hypothesis": "The priority-recovery event-driven wait is currently classified backpressure; a fresh rerun should either drain it or produce a more concrete successor route.",
     "stopConditionCheck": "Run the representative scenario, canonical route, evidence summary, and `npm run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json` before closure.",
     "expectedCausalModelChange": "The result is representative-green, a drained priority-recovery route, migrated owner/boundary, or one selected concrete successor.",
-    "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "Fresh evidence reports priority_recovery_partition_progress first with seven recovering_in_flight witnesses split across workflow_progress and rebalancer_handoff, while causal-model accepts classified backpressure.",
+    "representativeOutcome": "reduced",
+    "causalDebt": "Fresh evidence reports active_gate_snapshot_coverage first with owner_reconcile_pending, selected_snapshot_source_timeout, snapshot_repair_deferred, snapshot coverage 1/5, one pending owner queue write, membershipPublicationHandoffOutcomeEnqueued=false, and zero priority-recovery residuals.",
     "crossBoundaryReview": "This package performs no runtime source edits; source changes require a successor selected by fresh route evidence."
   },
   "scenarioCausalClosure": {
@@ -157,9 +162,17 @@
   "observablePrediction": {
     "metric": "rolling-restart exit status, route outcome, priorityRecoveryWitnesses, active=5/5, snapshotCoverage=5/5",
     "predicted": "fresh rerun either passes cleanly, drains priority-recovery witnesses, or selects exactly one successor route.",
-    "observed": "pending-before-observation",
-    "accuracy": "pending-before-observation",
+    "observed": "fresh rerun stayed red and routed to active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending; priority-recovery residual witnesses were zero, topology-convergence reported snapshotCoverage=1/5 with one pending owner queue write and membershipPublicationHandoffOutcomeEnqueued=false, and frontier-history required architecture-gap analysis before another runtime source package.",
+    "accuracy": "partial",
     "evidence": "test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json"
+  },
+  "closureSummary": {
+    "resultClassification": "reduced",
+    "predictionAccuracy": "partial",
+    "observedMovement": "The fresh rerun drained classified priority-recovery backpressure but remained red at active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage with owner_reconcile_pending.",
+    "successorReason": "Frontier-history reports pair-alternation-post-rederive on startup_active_gate_owner / snapshot_coverage, so runtime source promotion is blocked until the architecture-gap successor selects a non-repeated route, migration, or stop.",
+    "nextOwnerBoundary": "startup_active_gate_owner / snapshot_coverage architecture-gap analysis",
+    "evidenceArtifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json"
   },
   "boundedExperiment": {
     "hypothesis": "Classified priority-recovery backpressure may drain on the next representative attempt; if it does not, the frontier oscillation must select a concrete source, architecture, or handoff successor before another local runtime patch.",
@@ -260,7 +273,8 @@
       "fresh evidence is unavailable",
       "canonical route output is contradictory"
     ]
-  }
+  },
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -421,9 +435,9 @@ Preferred closure evidence for new packages. One executor owns implementation
 end to end; one separate verifier-fixer validates the last package work and may
 fix in-scope problems directly.
 
-- [ ] action: freshness-review; owner: Agent <name> (<agent-id>); files-changed: none; validation: npm run work:context; npm run work:validate -- --entry work/packages/active-20260529-rolling-restart-classified-backpressure-rerun-gate.md; npm run work:package:doctor -- --suggest work/packages/active-20260529-rolling-restart-classified-backpressure-rerun-gate.md; decision: fresh; outcome: pending.
-- [ ] action: implementation; owner: release_gate_owner; files-changed: none recorded yet; validation: fresh representative rerun plus canonical route and evidence summary, parent revalidated focused proof: yes before closure; outcome: pending.
-- [ ] action: verification-fix; owner: release_gate_owner; files-changed: none recorded yet; validation: verifier reruns focused proof and parent revalidated focused proof: yes before closure; outcome: pending.
+- [x] action: freshness-review; owner: Agent Ohm (019e74db-6cf1-73f3-9f33-5e02d2a9a35c); files-changed: none; validation: npm run work:context passed and current blocker points at work/packages/active-20260529-rolling-restart-classified-backpressure-rerun-gate.md; npm run work:validate -- --entry work/packages/active-20260529-rolling-restart-classified-backpressure-rerun-gate.md passed; npm run work:package:doctor -- --suggest work/packages/active-20260529-rolling-restart-classified-backpressure-rerun-gate.md failed only for expected pre-implementation evidence gaps; npm run work:evidence-summary -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json passed and still routes to priority_recovery_partition_progress with causal outcome accept_classified_backpressure; decision: fresh; outcome: validated.
+- [x] action: implementation; owner: release_gate_owner; files-changed: work/packages/active-20260529-rolling-restart-classified-backpressure-rerun-gate.md, work/packages/active-20260529-rolling-restart-active-gate-owner-reconcile-pending-architecture-gap-analysis.md; validation: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --fast-local --verbose failed red after 738.8s as expected; npm run work:evidence-summary -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json passed and selected active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage with owner_reconcile_pending; npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner release_gate_owner --boundary rolling_restart_fully_green_gate --dominant-reason representative_green_required passed and showed priority-recovery residuals 0; npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending --explain active_gate_snapshot_coverage passed; npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json passed with causal outcome continue_local_fix and first critical path topology:active_gate_snapshot_coverage; npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --markdown passed with 0 witnesses; npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --explain active_gate_snapshot_coverage passed and exposed snapshotCoverage=1/5, selectedControlPlaneOwnerQueuePendingWrites=1, pendingRecoveryCount=1, membershipPublicationHandoffOutcomeEnqueued=false; npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12 passed and required architecture-gap analysis before another runtime package; npm run work:validate -- --entry work/packages/active-20260529-rolling-restart-active-gate-owner-reconcile-pending-architecture-gap-analysis.md passed; parent revalidated focused proof: yes; outcome: validated - architecture-gap successor selected.
+- [x] action: verification-fix; owner: Agent McClintock (019e74f3-5897-7d42-aee7-508cffc70cf5); files-changed: none by verifier; validation: npm run work:validate -- --entry work/packages/active-20260529-rolling-restart-classified-backpressure-rerun-gate.md passed; npm run work:validate -- --pre-impl work/packages/active-20260529-rolling-restart-classified-backpressure-rerun-gate.md passed; npm run work:validate -- --entry work/packages/active-20260529-rolling-restart-active-gate-owner-reconcile-pending-architecture-gap-analysis.md passed; npm run work:evidence-summary -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json passed; npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending --explain active_gate_snapshot_coverage passed; npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12 passed; git diff --check -- work/packages/active-20260529-rolling-restart-classified-backpressure-rerun-gate.md work/packages/active-20260529-rolling-restart-active-gate-owner-reconcile-pending-architecture-gap-analysis.md passed; parent revalidated focused proof: yes; outcome: validated - architecture-gap successor remains selected.
 
 ## Validation
 
@@ -431,3 +445,10 @@ fix in-scope problems directly.
 2. `npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner release_gate_owner --boundary rolling_restart_fully_green_gate --dominant-reason representative_green_required`
 3. `npm run work:evidence-summary -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json`
 4. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json`
+
+## Commit And Push Ledger
+
+1. Focused package commit: d8cd622043faefbf1ef27bfa311ad95ca44e7c01
+2. Push target: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
+4. Pushed: no

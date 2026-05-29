@@ -4,28 +4,30 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: The release gate owns a causal-escalation discriminator because the predecessor closure makes another plain release-gate rerun an oscillation risk.
+Theory under test: H4 is selected unless proof names a non-repeated startup_active_gate_owner contract, owner-boundary migration, protocol/model/topology route, or representative-green path.
 
-Causal question: rolling-restart is non-green after a reduced fresh run that causal-model classifies as priority-recovery backpressure.
+Causal question: Rolling-restart remains red at active_gate_snapshot_coverage after classified priority-recovery backpressure drained to zero residual witnesses and route evidence selected owner_reconcile_pending on startup_active_gate_owner / snapshot_coverage.
 
-Implementation slice: No src/ source contract is selected in this release-gate package; source contracts remain candidate-only until fresh route evidence promotes a successor.
+Implementation slice: No src/ source files are in writeScope for this architecture-gap package. The executable contract is the canonical evidence ladder plus a sprint/theory-ledger architecture decision.
 
 Implementation files:
 
-1. `src/rebalancer/operation-workflow-owner.js`
-2. `src/rebalancer/operation-workflow-owner-constants.js`
-3. `src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js`
-4. `src/control-plane/priority-recovery-snapshot-stage-8.js`
+1. `src/control-plane/membership-publication-active-gate-reconcile.js`
+2. `src/control-plane/publication-active-gate-handoff-contract-selection.js`
+3. `src/control-plane/publication-active-gate-handoff-contract-decision.js`
+4. `src/control-plane/publication-active-gate-handoff-contract-evidence.js`
+5. `src/control-plane/snapshot-service.js`
+6. `src/control-plane/owner-queue.js`
 
-Expected implementation delta: representative-green, reduced priority-recovery witnesses, owner-boundary migration, or one selected successor
+Expected implementation delta: selected architecture decision, owner-boundary migration, non-repeated successor route, architecture-gap ledger entry, or representative-green evidence
 
-Falsifying probe: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --fast-local --verbose # release-gate contract transition
+Falsifying probe: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12
 
-Redirect rule: unchanged same-frontier/no-reduction evidence opens a concrete successor or architecture/causal experiment.
+Redirect rule: Stop on unchanged same-frontier/no-reduction by recording architecture-gap rather than widening to another local source patch.
 
 Sprint: `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
 
-Package: `work/packages/active-20260529-rolling-restart-classified-backpressure-rerun-gate.md`
+Package: `work/packages/active-20260529-rolling-restart-active-gate-owner-reconcile-pending-architecture-gap-analysis.md`
 
 Workflow lane: `causal-escalation`
 
@@ -37,225 +39,234 @@ Playback: `none`
 
 ## Boundary
 
-Owner: `release_gate_owner`
+Owner: `startup_active_gate_owner`
 
-Boundary: `rolling_restart_fully_green_gate`
+Boundary: `snapshot_coverage`
 
-Dominant reason: `representative_green_required`
+Dominant reason: `owner_reconcile_pending`
 
-Current state: The fresh representative rerun reduced the active-gate shape to active=5/5 and snapshotCoverage=3/5, then routed first frontier to priority_recovery_partition_progress with causal outcome accept_classified_backpressure and seven recovering_in_flight priority-recovery witnesses.
+Current state: Fresh causal-escalation evidence drained priority recovery to zero witnesses but returned to active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage with owner_reconcile_pending, membershipPublicationHandoffOutcomeEnqueued=false, one pending owner queue write, and a previously implemented owner-recovery route.
 
 ## Next Action
 
-Run a causal-escalation representative rerun to determine whether classified priority-recovery backpressure drains to green, migrates, or selects a concrete successor before any runtime source package.
+Run architecture-gap analysis for owner_reconcile_pending and select a non-repeated owner-owned transition, protocol/model/topology route, owner-boundary migration, or explicit architecture-gap stop before any further runtime source package.
 
 ## Proof Ladder
 
-1. `falsifier: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --fast-local --verbose # release-gate contract transition`
-2. `regression: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner release_gate_owner --boundary rolling_restart_fully_green_gate --dominant-reason representative_green_required # release-gate outcome state transition`
-3. `supporting: npm run work:evidence-summary -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json`
+1. `falsifier: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12`
+2. `regression: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending --explain active_gate_snapshot_coverage`
+3. `supporting: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --explain active_gate_snapshot_coverage`
 4. `supporting: npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json`
+5. `supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --markdown`
 
 ## Model Fit
 
-Package class: `causal-escalation`
+Package class: `architecture-gap-analysis`
 
 Intended minimum model: `gpt-5.3-codex`
 
-Scope shape: `scenario-causal-escalation/classified-backpressure`
+Scope shape: `scenario-causal-escalation/architecture-gap`
 
 Output profile: `medium`
 
 Escalation triggers:
 
-1. `fresh evidence selects a concrete runtime owner boundary`
-2. `priority recovery remains first with no metric movement`
-3. `representative evidence is unavailable or contradictory`
+1. `proof selects a non-repeated runtime owner contract`
+2. `proof selects owner-boundary migration`
+3. `evidence contradicts the repeated active-gate contract-gap classification`
 
 ## System Theory
 
-Problem statement: rolling-restart is non-green after a reduced fresh run that causal-model classifies as priority-recovery backpressure.
+Problem statement: Rolling-restart remains red at active_gate_snapshot_coverage after classified priority-recovery backpressure drained to zero residual witnesses and route evidence selected owner_reconcile_pending on startup_active_gate_owner / snapshot_coverage.
 
 Phase chain:
 
-1. `fresh release-gate rerun reached active=5/5 and snapshotCoverage=3/5`
-2. `priority_recovery_partition_progress became the first frontier`
-3. `causal-model returned accept_classified_backpressure`
-4. `this package reruns representative evidence once before source promotion`
+1. `Representative evidence comes from test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json.`
+2. `Priority-recovery residual witnesses are zero after the classified-backpressure rerun.`
+3. `active_gate_snapshot_coverage is the selected first frontier with owner_reconcile_pending, selected_snapshot_source_timeout, and snapshot_repair_deferred.`
+4. `Frontier history reports pair-alternation-post-rederive and blocks another local runtime source package until architecture analysis records a route.`
 
 Owner-boundary map:
 
-1. `release_gate_owner / rolling_restart_fully_green_gate: owns the sprint success decision.`
-2. `operation_workflow_owner / workflow_progress: candidate if priority recovery remains first.`
-3. `startup_active_gate_owner / snapshot_coverage: next-expected after priority recovery closes.`
+1. `startup_active_gate_owner / snapshot_coverage: selected first frontier and architecture decision boundary.`
+2. `operation_workflow_owner / rebalancer_handoff: coupled predecessor boundary now carrying zero priority residuals.`
+3. `startup_readiness_owner / startup_support_evidence: downstream until active-gate snapshot coverage moves.`
 
 Stable facts:
 
-1. `Scenario remains rolling-restart.`
-2. `The sprint success condition is representative green.`
-3. `Runtime source edits are out of scope for this package.`
+1. `Representative route selects startup_active_gate_owner / snapshot_coverage.`
+2. `Priority recovery residual count is zero.`
+3. `The artifact shows owner_reconcile_pending with membershipPublicationHandoffOutcomeEnqueued=false.`
 
 Changed facts:
 
-1. `The latest report moved from active-gate-first to priority-recovery-first.`
-2. `Causal-model classified the priority-recovery route as accepted backpressure.`
+1. `The predecessor rerun drained classified priority-recovery backpressure.`
+2. `owner_reconcile_pending reappeared after an earlier owner-recovery runtime route.`
 
 Competing theories:
 
-1. `H1 classified backpressure drains on rerun.`
-2. `H2 operation_workflow_owner / workflow_progress remains first and needs a concrete successor.`
-3. `H3 the route migrates back to active-gate or another owner boundary.`
+1. `H1 owner_reconcile_pending exposes a non-repeated startup_active_gate_owner transition.`
+2. `H2 owner_reconcile_pending is the same saturated active-gate contract loop.`
+3. `H3 the deciding owner boundary should migrate.`
+4. `H4 no owner-owned transition is selectable from this artifact, so architecture-gap is the correct stop.`
 
 Eliminated theories:
 
-1. `The closed active-gate architecture-gap artifact alone can authorize another active-gate source package.`
+1. `Priority recovery remains the first frontier is eliminated by zero residual witnesses.`
+2. `Another generic local active-gate source patch is eliminated by pair-alternation-post-rederive.`
 
 Downstream symptoms:
 
-1. `startup readiness and active-gate snapshot coverage stay downstream until priority recovery closes`
+1. `startup readiness support evidence remains downstream`
+2. `benchmark SQL/bootstrap visibility remains downstream`
 
 Transition table:
 
-1. Input `representative_green_required after accept_classified_backpressure` owner `release_gate_owner / rolling_restart_fully_green_gate`; missing `fresh rerun must either drain backpressure, pass green, or route one successor.`; expected `scenario exit status, scenario-route, evidence-summary, and causal-model output.`; falsifier `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --fast-local --verbose`; migration trigger `fresh route names a concrete owner/boundary or architecture successor.`
+1. Input `active_gate_snapshot_coverage / owner_reconcile_pending` owner `startup_active_gate_owner / snapshot_coverage`; missing `Select a non-repeated owner contract, protocol/model/topology route, owner migration, representative-green path, or architecture-gap stop.`; expected `frontier-history, scenario-route, and topology evidence either name a non-repeated route or confirm source promotion stays blocked.`; falsifier `npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12`; migration trigger `scenario-route names a different deciding owner boundary or topology evidence shows owner_reconcile_pending cannot be owned locally.`
+2. Input `priority recovery residual count` owner `operation_workflow_owner / rebalancer_handoff`; missing `none for this package; residual count must remain zero while active-gate analysis proceeds.`; expected `priority-recovery residual analysis remains at zero witnesses.`; falsifier `npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --markdown`; migration trigger `priority recovery residuals reappear as first frontier.`
 
 Ownership migration triggers:
 
-1. `Migrate only when the fresh canonical route names the alternate deciding owner and boundary.`
+1. `Migrate only when focused evidence names the alternate deciding owner and boundary.`
+2. `Do not migrate to startup readiness while active-gate snapshot coverage remains the selected first frontier.`
 
 Architecture-gap triggers:
 
-1. `Select architecture/non-runtime successor when fresh evidence repeats same-frontier with no metric reduction.`
+1. `Record architecture-gap when proof cannot name a non-repeated owner-owned transition or migration.`
+2. `Record architecture-gap when owner_reconcile_pending remains a deferred handoff contract with no owner-owned terminal progress transition.`
 
-Whole-system invariant: The sprint remains active until the original rolling-restart representative-green success condition is met.
+Whole-system invariant: Runtime edits remain blocked until architecture analysis selects one owner-owned transition, migration route, representative-green path, or architecture gap.
 
 ## Slice Theory
 
-System theory reference: work/packages/active-20260529-rolling-restart-classified-backpressure-rerun-gate.md systemTheory
+System theory reference: work/packages/active-20260529-rolling-restart-active-gate-owner-reconcile-pending-architecture-gap-analysis.md systemTheory
 
-Selected system theory: The release gate owns a causal-escalation discriminator because the predecessor closure makes another plain release-gate rerun an oscillation risk.
+Selected system theory: H4 is selected unless proof names a non-repeated startup_active_gate_owner contract, owner-boundary migration, protocol/model/topology route, or representative-green path.
 
-Selected mechanism: scheduling_gap with observation_gap as the release-gate alternate
+Selected mechanism: contract_gap with ownership_gap and protocol_mismatch as alternates
 
-Source/test contract: No src/ source contract is selected in this release-gate package; source contracts remain candidate-only until fresh route evidence promotes a successor.
+Source/test contract: No src/ source files are in writeScope for this architecture-gap package. The executable contract is the canonical evidence ladder plus a sprint/theory-ledger architecture decision.
 
-Falsifier: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --fast-local --verbose # release-gate contract transition
+Falsifier: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12
 
-Representative expected movement: representative-green, reduced priority-recovery witnesses, owner-boundary migration, or one selected successor
+Representative expected movement: selected architecture decision, owner-boundary migration, non-repeated successor route, architecture-gap ledger entry, or representative-green evidence
 
-Redirect rule: unchanged same-frontier/no-reduction evidence opens a concrete successor or architecture/causal experiment.
+Redirect rule: Stop on unchanged same-frontier/no-reduction by recording architecture-gap rather than widening to another local source patch.
 
 Theory-fit score:
 
-1. `evidenceFit`: high - the package reruns the representative artifact directly.
-2. `ownerBoundaryFit`: high - release_gate_owner owns sprint success.
-3. `falsifiability`: high - the distributed harness command is the falsifier.
-4. `representativeMovement`: high - the result must be green, reduced, migrated, or route a successor.
-5. `downstreamRiskContainment`: high - runtime files remain candidate-only.
+1. `evidenceFit`: high - fresh route, residual analysis, and topology evidence agree on active-gate first frontier with priority recovery zero.
+2. `ownerBoundaryFit`: high - the selected first frontier names startup_active_gate_owner / snapshot_coverage, while the pair guard blocks local source promotion.
+3. `falsifiability`: high - frontier-history, scenario-route, topology convergence, and priority residual analysis can contradict the architecture-gap selection.
+4. `representativeMovement`: medium - this package records route selection, migration, architecture-gap, or representative-green evidence rather than source movement.
+5. `downstreamRiskContainment`: high - downstream startup readiness and benchmark symptoms stay frozen.
 
 Wrong-slice triggers:
 
-1. `fresh evidence selects a concrete source owner`
-2. `fresh evidence is unavailable`
-3. `canonical route output is contradictory`
+1. `proof selects a concrete runtime contract that is not a repeated local contract_gap`
+2. `proof selects a different owner boundary`
+3. `priority recovery residuals reappear as the first frontier`
+4. `proof needs runtime files in writeScope`
 
 ## Theory Ledger References
 
-1. `theory-20260527-rolling-restart-priority-recovery-workflow-progress`
-2. `theory-20260529-rolling-restart-active-gate-snapshot-coverage-architecture-gap-stop`
+1. `theory-20260529-rolling-restart-active-gate-snapshot-coverage-architecture-gap-stop`
+2. `theory-20260529-rolling-restart-active-gate-priority-recovery-coupled-invariants`
+3. `theory-20260527-rolling-restart-priority-recovery-workflow-progress`
 
 ## Representative Residual
 
-Status: `reduced`
+Status: `architecture-gap`
 
 Scenario: `rolling-restart`
 
 Artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json`
 
-Frontier: `priority_recovery_partition_progress / operation_workflow_owner / workflow_progress`
+Frontier: `active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage`
 
-Owner: `release_gate_owner`
+Owner: `startup_active_gate_owner`
 
-Boundary: `rolling_restart_fully_green_gate`
+Boundary: `snapshot_coverage`
 
-Dominant reason: `representative_green_required`
+Dominant reason: `owner_reconcile_pending`
 
-Next action: `Rerun representative evidence after classified backpressure.`
+Next action: `Select the architecture route or stop before another local active-gate source package.`
 
 ## Causal Governance
 
-Causal hypothesis: `The priority-recovery event-driven wait is currently classified backpressure; a fresh rerun should either drain it or produce a more concrete successor route.`
+Causal hypothesis: `owner_reconcile_pending reappeared after classified priority-recovery backpressure drained and after the owner-recovery runtime route was implemented; further local runtime source work is blocked until architecture analysis selects a non-repeated route, migration, or stop.`
 
-Stop-condition check: `Run the representative scenario, canonical route, evidence summary, and `npm run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json` before closure.`
+Stop-condition check: `Run `npm run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json` plus frontier-history, scenario-route, topology-convergence, and priority-recovery residuals against the fresh rolling-restart artifact before closure.`
 
-Expected causal-model change: `The result is representative-green, a drained priority-recovery route, migrated owner/boundary, or one selected concrete successor.`
+Expected causal-model change: `The package records whether owner_reconcile_pending with membershipPublicationHandoffOutcomeEnqueued=false implies a non-repeated source route, owner-boundary migration, protocol/model/topology route, representative green, or architecture-gap stop.`
 
-Representative outcome: `pending-before-rerun`
+Representative outcome: `architecture-gap`
 
-Causal debt: `Fresh evidence reports priority_recovery_partition_progress first with seven recovering_in_flight witnesses split across workflow_progress and rebalancer_handoff, while causal-model accepts classified backpressure.`
+Causal debt: `Fresh artifact reports active_gate_snapshot_coverage first with owner_reconcile_pending, selected_snapshot_source_timeout, snapshot_repair_deferred, snapshot coverage 1/5, pendingRecoveryCount=1, selectedControlPlaneOwnerQueuePendingWrites=1, membershipPublicationHandoffOutcomeEnqueued=false, and zero priority-recovery residuals.`
 
-Cross-boundary review: `This package performs no runtime source edits; source changes require a successor selected by fresh route evidence.`
+Cross-boundary review: `Do not patch startup readiness, priority recovery, benchmark visibility, or active-gate runtime source files until this package records the architecture decision.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `rolling-restart classified backpressure rerun gate`
+Reference scenario/probe: `rolling-restart active-gate owner-reconcile-pending architecture-gap analysis`
 
 Phase chain:
 
-1. `fresh representative green gate moved active nodes to 5/5 and snapshot coverage to 3/5`
-2. `canonical route selected priority_recovery_partition_progress under operation_workflow_owner / workflow_progress`
-3. `causal-model classified the route as accepted backpressure`
-4. `one more fresh representative rerun decides whether backpressure drains or selects source work`
+1. `classified priority-recovery backpressure drained to zero witnesses on the fresh rerun`
+2. `fresh representative evidence returned the first frontier to active_gate_snapshot_coverage`
+3. `topology-convergence exposes owner_reconcile_pending with membershipPublicationHandoffOutcomeEnqueued=false and one pending owner queue write`
+4. `frontier-history reports pair-alternation-post-rederive and blocks another local runtime package on this pair`
 
-Current first frontier: `release_gate_owner / rolling_restart_fully_green_gate / representative_green_required`
+Current first frontier: `active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending`
 
 Known downstream blockers:
 
-1. `operation_workflow_owner / workflow_progress priority recovery is first if backpressure persists`
-2. `startup_active_gate_owner / snapshot_coverage remains next-expected after priority recovery closes`
+1. `startup readiness support evidence remains downstream`
+2. `benchmark_events bootstrap visibility remains downstream`
 
-Missing causal edge: `Whether classified priority-recovery backpressure drains under another fresh representative run.`
+Missing causal edge: `owner_reconcile_pending with membershipPublicationHandoffOutcomeEnqueued=false must be classified as a non-repeated owner contract, protocol/model/topology route, owner migration, or architecture gap.`
 
-Missing causal edge probe: `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --fast-local --verbose`
+Missing causal edge probe: `npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12`
 
-Bounded progress proof: `The representative rerun must pass green or produce one canonical first-frontier route with a bounded progress, retry, reconcile, drain, dispatch, delivery, timer, timeout, wake, or advance mechanism named by fresh evidence.`
+Bounded progress proof: `Architecture analysis must decide whether owner_reconcile_pending implies a concrete retry, reconcile, timer, wake, drain, dispatch, delivery, or bounded progress mechanism; otherwise it records architecture-gap evidence before runtime source promotion.`
 
 Bounded progress proof artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json`
 
-Expected observable transition: `rolling-restart exits 0, priority-recovery witness count drops, owner boundary migrates, or one concrete successor is selected.`
+Expected observable transition: `The package records an architecture decision that replaces repeated local active-gate patching with a selected route or architecture-gap ledger entry.`
 
-Max progress bound: `one representative rerun and canonical route decision`
+Max progress bound: `one architecture-gap-analysis package before another source package on the active-gate pair`
 
-Same-frontier fallback: `If fresh evidence repeats priority_recovery_event_driven_wait with no metric reduction, open a concrete successor or architecture/causal experiment rather than another evidence-only package.`
+Same-frontier fallback: `If proof cannot name one non-repeated owner-owned transition or migration, close as architecture-gap and keep runtime source promotion blocked.`
 
-Expected next frontier: `representative-green, reduced priority-recovery backpressure, migrated owner/boundary, or concrete successor`
+Expected next frontier: `non-repeated owner contract, protocol/model/topology route, owner-boundary migration, representative-green, or architecture-gap`
 
-Result classification: `pending-before-probe`
+Result classification: `architecture-gap`
 
-Stop condition: `continue-local-fix`
+Stop condition: `architecture-gap-stop`
 
 Recent frontier history:
 
-1. `work/packages/done-20260529-rolling-restart-fresh-representative-green-gate.md / release_gate_owner / rolling_restart_fully_green_gate / reduced`
+1. `work/packages/done-20260529-rolling-restart-active-gate-timeout-retry-contract.md / startup_active_gate_owner / snapshot_coverage / reduced`
 2. `work/packages/done-20260529-rolling-restart-priority-recovery-rebalancer-handoff-retry-scheduled.md / operation_workflow_owner / rebalancer_handoff / migrated`
-3. `work/packages/done-20260529-rolling-restart-causal-stop-dominant-frontier-selection.md / diagnostics_owner / causal_analysis_framework / reduced`
+3. `work/packages/done-20260529-rolling-restart-fresh-representative-green-gate.md / release_gate_owner / rolling_restart_fully_green_gate / reduced`
 
-Oscillation check: `The predecessor closure makes another plain release-gate rerun on the same release_gate_owner / rolling_restart_fully_green_gate boundary a frontier-oscillation risk; this causal-escalation package must prove movement or select a concrete successor.`
+Oscillation check: `Pair alternation after rederive blocks another startup_active_gate_owner / snapshot_coverage runtime slice until this architecture-gap package selects a non-repeated route or stop.`
 
-Handoff invariant: `Do not promote operation_workflow_owner, startup_active_gate_owner, or another runtime boundary unless fresh canonical route evidence names the owner boundary and the successor package records the handoff.`
+Handoff invariant: `Priority recovery remains satisfied while active-gate snapshot coverage owns the first frontier; owner-reconcile evidence must not be patched again without an architecture decision.`
 
 ## Observable Prediction
 
-Metric: `rolling-restart exit status, route outcome, priorityRecoveryWitnesses, active=5/5, snapshotCoverage=5/5`
+Metric: `rolling-restart active-gate owner-reconcile architecture decision`
 
-Predicted: `fresh rerun either passes cleanly, drains priority-recovery witnesses, or selects exactly one successor route.`
+Predicted: `frontier-history will keep this pair under pair-alternation-post-rederive; topology-convergence and scenario-route will require architecture-gap analysis before runtime edits resume.`
 
-Observed: `pending-before-observation`
+Observed: `pending-before-analysis`
 
 Accuracy: `pending-before-observation`
 
 Evidence: `test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json`
 
-Metric delta: `unknown`
+Metric delta: `0`
 
 ## Experiment Outcome
 
@@ -273,58 +284,59 @@ Evidence: `unknown`
 
 Source artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json`
 
-Route owner: `release_gate_owner`
+Route owner: `startup_active_gate_owner`
 
-Route boundary: `rolling_restart_fully_green_gate`
+Route boundary: `snapshot_coverage`
 
-Route dominant reason: `representative_green_required`
+Route dominant reason: `owner_reconcile_pending`
 
-Route causal outcome: `accept_classified_backpressure`
+Route causal outcome: `continue_local_fix`
 
-Stop mode: `classified_backpressure`
+Stop mode: `classified_local_blocker`
 
 Next lane: `causal-escalation`
 
-Expected delta: `Fresh representative evidence either reaches green, drains priority-recovery backpressure, migrates to a concrete successor, or proves unchanged same-frontier/no-reduction.`
+Expected delta: `Architecture-gap analysis selects a protocol, model, topology, owner-boundary migration, representative-green route, or explicit architecture-gap stop for owner_reconcile_pending with membershipPublicationHandoffOutcomeEnqueued=false.`
 
 Required refresh commands:
 
-1. `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner release_gate_owner --boundary rolling_restart_fully_green_gate --dominant-reason representative_green_required`
-2. `update Sprint Strategy Brief and Current Edge Card from the route result`
-3. `npm run work:current-blocker -- --write`
-4. `npm run work:validate -- --entry work/packages/active-20260529-rolling-restart-classified-backpressure-rerun-gate.md`
-5. `npm run work:validate -- --pre-impl work/packages/active-20260529-rolling-restart-classified-backpressure-rerun-gate.md`
+1. `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending`
+2. `update Sprint Strategy Brief from the architecture decision`
+3. `update Current Edge Card from the architecture decision`
+4. `refresh current-blocker with npm run work:current-blocker -- --write`
+5. `npm run work:repair`
+6. `npm run work:validate -- --entry work/packages/active-20260529-rolling-restart-active-gate-owner-reconcile-pending-architecture-gap-analysis.md`
+7. `npm run work:validate -- --pre-impl work/packages/active-20260529-rolling-restart-active-gate-owner-reconcile-pending-architecture-gap-analysis.md`
 
 ## Architecture Decision Gate
 
-Status: `watching`
+Status: `required`
 
 Trigger: `frontier-oscillation`
 
 Trigger evidence:
 
-1. `frontier returned to a recently closed related boundary`
-2. `work/packages/done-20260529-rolling-restart-fresh-representative-green-gate.md / release_gate_owner / rolling_restart_fully_green_gate / reduced`
-3. `work/packages/done-20260529-rolling-restart-priority-recovery-rebalancer-handoff-retry-scheduled.md / operation_workflow_owner / rebalancer_handoff / migrated`
-4. `work/packages/done-20260529-rolling-restart-causal-stop-dominant-frontier-selection.md / diagnostics_owner / causal_analysis_framework / reduced`
+1. `frontier-history reports same-mechanism-repeat contract_gap on startup_active_gate_owner / snapshot_coverage`
+2. `fresh report returns owner_reconcile_pending with membershipPublicationHandoffOutcomeEnqueued=false after prior owner-recovery implementation`
+3. `priority-recovery residuals are zero, so operation_workflow_owner is not the first frontier`
 
 Choices:
 
-1. `continue-local-proof` route=`continue-local-proof` - Continue with a bounded local proof if the missing edge stays inside this owner boundary.
-2. `migrate-owner-boundary` route=`owner-boundary-migration` - Migrate the active package to the owner boundary named by the first frontier evidence.
-3. `open-architecture-package` route=`architecture-package` - Open a bounded autonomous architecture experiment for the missing owner contract.
-4. `human-escalation` route=`human-escalation` - Escalate to a human only when evidence is contradictory, policy-blocked, credential-blocked, or unavailable.
+1. `non-repeated-owner-contract` route=`continue-local-proof` - Promote a successor only if proof names a concrete owner-owned transition that is not another local owner_reconcile_pending contract repeat.
+2. `owner-boundary-migration` route=`owner-boundary-migration` - Migrate only if canonical route evidence names a different deciding owner and boundary.
+3. `architecture-gap` route=`architecture-package` - Record architecture-gap if proof cannot select a non-repeated owner contract, protocol/model/topology route, or migration.
 
 Selected choice: `unknown`
 
-Gate next action: Watch for repeated frontier oscillation; open an autonomous architecture experiment if another local proof returns here unchanged.
+Gate next action: Run the architecture-gap proof ladder and record the selected route before any runtime source package.
 
 ## Scope
 
 Write scope:
 
-1. `work/packages/active-20260529-rolling-restart-classified-backpressure-rerun-gate.md`
+1. `work/packages/active-20260529-rolling-restart-active-gate-owner-reconcile-pending-architecture-gap-analysis.md`
 2. `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
+3. `work/theory-ledger.md`
 
 Handoff files:
 
@@ -337,17 +349,20 @@ Generated files:
 
 Candidate runtime files:
 
-1. `src/rebalancer/operation-workflow-owner.js`
-2. `src/rebalancer/operation-workflow-owner-constants.js`
-3. `src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js`
-4. `src/control-plane/priority-recovery-snapshot-stage-8.js`
+1. `src/control-plane/membership-publication-active-gate-reconcile.js`
+2. `src/control-plane/publication-active-gate-handoff-contract-selection.js`
+3. `src/control-plane/publication-active-gate-handoff-contract-decision.js`
+4. `src/control-plane/publication-active-gate-handoff-contract-evidence.js`
+5. `src/control-plane/snapshot-service.js`
+6. `src/control-plane/owner-queue.js`
 
 Commit scope:
 
-1. `work/packages/active-20260529-rolling-restart-classified-backpressure-rerun-gate.md`
+1. `work/packages/active-20260529-rolling-restart-active-gate-owner-reconcile-pending-architecture-gap-analysis.md`
 2. `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
-3. `work/sprints/current-blocker.json`
-4. `work/sprints/current-blocker.md`
+3. `work/theory-ledger.md`
+4. `work/sprints/current-blocker.json`
+5. `work/sprints/current-blocker.md`
 
 Legacy touched files:
 
