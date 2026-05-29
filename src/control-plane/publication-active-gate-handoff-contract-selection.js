@@ -3,22 +3,168 @@ import {
   PUBLICATION_ACTIVE_GATE_HANDOFF_ABSENT_RECORD,
   PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST,
   PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD,
+  PUBLICATION_ACTIVE_GATE_HANDOFF_JOINED_LIST_SEPARATORS,
   PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION,
+  PUBLICATION_ACTIVE_GATE_HANDOFF_REASON,
   PUBLICATION_ACTIVE_GATE_HANDOFF_SCHEMA_VERSION,
   PUBLICATION_ACTIVE_GATE_HANDOFF_STATE,
   PUBLICATION_ACTIVE_GATE_HANDOFF_STATE_RANK,
   PUBLICATION_ACTIVE_GATE_HANDOFF_TARGET_STATE,
   PUBLICATION_ACTIVE_GATE_HANDOFF_UNKNOWN_EPOCH,
+  SELECTED_SNAPSHOT_SOURCE_TIMEOUT_OBSERVATION_REASON,
 } from './publication-active-gate-handoff-contract-constants.js';
 import {
   isPublicationActiveGateHandoffRecord,
   normalizePublicationActiveGateHandoffDebtCount,
   normalizePublicationActiveGateHandoffNodeIdList,
+  normalizePublicationActiveGateHandoffText,
   resolvePublicationActiveGateHandoffPublicationEpoch,
 } from './publication-active-gate-handoff-contract-helpers.js';
 import {
   collectPublicationActiveGateHandoffTargetEvidenceNodeIds,
 } from './publication-active-gate-handoff-contract-evidence.js';
+
+const SELECTED_SNAPSHOT_TIMEOUT_PROGRESS_FIELD = Object.freeze({
+  SELECTED_NODE_ID: 'selectedNodeId',
+  SELECTED_SNAPSHOT_NODE_ID: 'selectedSnapshotNodeId',
+  SELECTED_SNAPSHOT_OBSERVATION_CONTRACT_STATE:
+    'selectedSnapshotObservationContractState',
+  SELECTED_SNAPSHOT_OBSERVATION_MODE:
+    'selectedSnapshotObservationMode',
+  SELECTED_SNAPSHOT_OBSERVATION_NEXT_ACTION:
+    'selectedSnapshotObservationNextAction',
+  SELECTED_SNAPSHOT_OBSERVATION_REASON_CODES:
+    'selectedSnapshotObservationReasonCodes',
+  SELECTED_SNAPSHOT_OBSERVATION_STATE:
+    'selectedSnapshotObservationState',
+  SELECTED_SNAPSHOT_SOURCE_CAUSE: 'selectedSnapshotSourceCause',
+});
+
+const ACTIVE_GATE_OWNER_COHORT_PROGRESS_FIELD = Object.freeze({
+  MISSING_PUBLISHED_NODE_IDS: 'activeGateOwnerCohortMissingPublishedNodeIds',
+  PENDING_RECOVERY_NODE_IDS: 'activeGateOwnerCohortPendingRecoveryNodeIds',
+  PENDING_RECONCILE_NODE_IDS: 'activeGateOwnerCohortPendingReconcileNodeIds',
+});
+
+const SELECTED_SNAPSHOT_TIMEOUT_SOURCE_CAUSE = Object.freeze({
+  TIMEOUT: 'selected_snapshot_source_timeout',
+});
+
+const SELECTED_SNAPSHOT_TIMEOUT_OBSERVATION_MODE = Object.freeze({
+  REPAIR_DEFERRED: 'repair_deferred',
+});
+
+const SELECTED_SNAPSHOT_TIMEOUT_OBSERVATION_STATE = Object.freeze({
+  DEFERRED: 'deferred',
+  DEFERRED_REFRESH: 'deferred_refresh',
+});
+
+const SELECTED_SNAPSHOT_TIMEOUT_OBSERVATION_NEXT_ACTION = Object.freeze({
+  RETRY: 'retry',
+});
+
+function coercePublicationActiveGateHandoffTextValues(value) {
+  if (Array.isArray(value)) {
+    return value;
+  }
+  const normalizedValue = normalizePublicationActiveGateHandoffText(value);
+  if (normalizedValue.length === NUM.ZERO) {
+    return PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST;
+  }
+  return PUBLICATION_ACTIVE_GATE_HANDOFF_JOINED_LIST_SEPARATORS.reduce(
+    (fragments, separator) =>
+      fragments.flatMap((fragment) => fragment.split(separator)),
+    [normalizedValue],
+  );
+}
+
+function normalizePublicationActiveGateHandoffTextList(value) {
+  return Object.freeze(
+    [
+      ...new Set(
+        coercePublicationActiveGateHandoffTextValues(value)
+          .map((candidate) =>
+            normalizePublicationActiveGateHandoffText(candidate),
+          )
+          .filter((candidate) => candidate.length > NUM.ZERO),
+      ),
+    ].sort((left, right) => left.localeCompare(right)),
+  );
+}
+
+function hasSelectedSnapshotTimeoutReason(progress) {
+  const observationReasonCodes =
+    normalizePublicationActiveGateHandoffTextList(
+      progress[
+        SELECTED_SNAPSHOT_TIMEOUT_PROGRESS_FIELD
+          .SELECTED_SNAPSHOT_OBSERVATION_REASON_CODES
+      ],
+    );
+  const sourceCause = normalizePublicationActiveGateHandoffText(
+    progress[
+      SELECTED_SNAPSHOT_TIMEOUT_PROGRESS_FIELD.SELECTED_SNAPSHOT_SOURCE_CAUSE
+    ],
+  );
+  return observationReasonCodes.includes(
+    SELECTED_SNAPSHOT_SOURCE_TIMEOUT_OBSERVATION_REASON,
+  ) ||
+    sourceCause === SELECTED_SNAPSHOT_TIMEOUT_SOURCE_CAUSE.TIMEOUT;
+}
+
+function hasSelectedSnapshotDeferredRetryObservation(progress) {
+  const observationContractState = normalizePublicationActiveGateHandoffText(
+    progress[
+      SELECTED_SNAPSHOT_TIMEOUT_PROGRESS_FIELD
+        .SELECTED_SNAPSHOT_OBSERVATION_CONTRACT_STATE
+    ],
+  );
+  const observationMode = normalizePublicationActiveGateHandoffText(
+    progress[
+      SELECTED_SNAPSHOT_TIMEOUT_PROGRESS_FIELD
+        .SELECTED_SNAPSHOT_OBSERVATION_MODE
+    ],
+  );
+  const observationNextAction = normalizePublicationActiveGateHandoffText(
+    progress[
+      SELECTED_SNAPSHOT_TIMEOUT_PROGRESS_FIELD
+        .SELECTED_SNAPSHOT_OBSERVATION_NEXT_ACTION
+    ],
+  );
+  const observationState = normalizePublicationActiveGateHandoffText(
+    progress[
+      SELECTED_SNAPSHOT_TIMEOUT_PROGRESS_FIELD
+        .SELECTED_SNAPSHOT_OBSERVATION_STATE
+    ],
+  );
+  const hasDeferredObservation =
+    observationContractState ===
+      SELECTED_SNAPSHOT_TIMEOUT_OBSERVATION_STATE.DEFERRED ||
+    observationMode ===
+      SELECTED_SNAPSHOT_TIMEOUT_OBSERVATION_MODE.REPAIR_DEFERRED ||
+    observationState ===
+      SELECTED_SNAPSHOT_TIMEOUT_OBSERVATION_STATE.DEFERRED_REFRESH;
+  return hasDeferredObservation &&
+    observationNextAction ===
+      SELECTED_SNAPSHOT_TIMEOUT_OBSERVATION_NEXT_ACTION.RETRY;
+}
+
+function resolveSelectedSnapshotTimeoutPendingRecoveryNodeIds(
+  progress = null,
+) {
+  if (
+    !isPublicationActiveGateHandoffRecord(progress) ||
+    !hasSelectedSnapshotTimeoutReason(progress) ||
+    !hasSelectedSnapshotDeferredRetryObservation(progress)
+  ) {
+    return PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST;
+  }
+  return normalizePublicationActiveGateHandoffNodeIdList([
+    progress[
+      SELECTED_SNAPSHOT_TIMEOUT_PROGRESS_FIELD.SELECTED_SNAPSHOT_NODE_ID
+    ],
+    progress[SELECTED_SNAPSHOT_TIMEOUT_PROGRESS_FIELD.SELECTED_NODE_ID],
+  ]);
+}
 
 function hasFlattenedPublicationActiveGateHandoffSignal(value = null) {
   if (!isPublicationActiveGateHandoffRecord(value)) {
@@ -47,7 +193,9 @@ function hasFlattenedPublicationActiveGateHandoffSignal(value = null) {
         PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
           .PUBLICATION_ACTIVE_GATE_HANDOFF_PENDING_RECOVERY_NODE_IDS
       ],
-    ).length > NUM.ZERO;
+    ).length > NUM.ZERO ||
+    resolveSelectedSnapshotTimeoutPendingRecoveryNodeIds(value).length >
+      NUM.ZERO;
 }
 
 function selectFirstPublicationActiveGateHandoffNodeIdList(
@@ -129,13 +277,22 @@ function buildPublicationActiveGateHandoffContractFromProgress(
       progress[
         PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
           .SELECTED_PUBLISHED_ACTIVE_NODE_IDS
+      ] ??
+      publicationConvergence[
+        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLISHED_ACTIVE_NODE_IDS
       ],
     );
   const selectedMissingPublishedNodeIds =
-    normalizePublicationActiveGateHandoffNodeIdList(
+    selectFirstPublicationActiveGateHandoffNodeIdList(
       progress[
         PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
           .SELECTED_MISSING_PUBLISHED_NODE_IDS
+      ],
+      progress[
+        ACTIVE_GATE_OWNER_COHORT_PROGRESS_FIELD.MISSING_PUBLISHED_NODE_IDS
+      ],
+      publicationConvergence[
+        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.MISSING_PUBLISHED_NODE_IDS
       ],
     );
   const expectedNodeIds =
@@ -148,6 +305,10 @@ function buildPublicationActiveGateHandoffContractFromProgress(
       value,
       PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.ACTIVE_GATE_OWNER_COHORT,
     );
+  const selectedSnapshotTimeoutPendingRecoveryNodeIds =
+    resolveSelectedSnapshotTimeoutPendingRecoveryNodeIds(progress);
+  const hasSelectedSnapshotTimeoutPendingRecovery =
+    selectedSnapshotTimeoutPendingRecoveryNodeIds.length > NUM.ZERO;
   const pendingRecoveryNodeIds =
     selectFirstPublicationActiveGateHandoffNodeIdList(
       progress[
@@ -157,12 +318,22 @@ function buildPublicationActiveGateHandoffContractFromProgress(
       progressContextHandoff?.[
         PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_RECOVERY_NODE_IDS
       ],
+      progress[
+        ACTIVE_GATE_OWNER_COHORT_PROGRESS_FIELD.PENDING_RECOVERY_NODE_IDS
+      ],
+      selectedSnapshotTimeoutPendingRecoveryNodeIds,
     );
   const pendingReconcileNodeIds =
-    normalizePublicationActiveGateHandoffNodeIdList(
+    selectFirstPublicationActiveGateHandoffNodeIdList(
       progress[
         PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
           .PUBLICATION_ACTIVE_GATE_HANDOFF_PENDING_RECONCILE_NODE_IDS
+      ],
+      progress[
+        ACTIVE_GATE_OWNER_COHORT_PROGRESS_FIELD.PENDING_RECONCILE_NODE_IDS
+      ],
+      progressContextHandoff?.[
+        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_RECONCILE_NODE_IDS
       ],
     );
   return Object.freeze({
@@ -171,17 +342,26 @@ function buildPublicationActiveGateHandoffContractFromProgress(
       progress[
         PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
           .PUBLICATION_ACTIVE_GATE_HANDOFF_STATE
-      ],
+      ] ??
+      (hasSelectedSnapshotTimeoutPendingRecovery ?
+        PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING :
+        undefined),
     reasonCode:
       progress[
         PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
           .PUBLICATION_ACTIVE_GATE_HANDOFF_REASON_CODE
-      ],
+      ] ??
+      (hasSelectedSnapshotTimeoutPendingRecovery ?
+        PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING :
+        undefined),
     nextAction:
       progress[
         PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
           .PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
-      ],
+      ] ??
+      (hasSelectedSnapshotTimeoutPendingRecovery ?
+        PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.WAIT_OWNER_RECOVERY :
+        undefined),
     runtimePromotionAllowed:
       progress[
         PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD

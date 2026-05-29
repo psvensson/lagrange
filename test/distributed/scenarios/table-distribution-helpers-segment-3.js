@@ -287,9 +287,24 @@ function shouldDeferTableBootstrapRepairForUnavailableCreate(options = {}) {
   if (!isTableBootstrapCandidateUnavailableError(options.lastCreateError)) {
     return false;
   }
-  return (
-    options?.bootstrapVisibilitySnapshot?.state ===
+  if (
+    options?.bootstrapVisibilitySnapshot?.state !==
     TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE
+  ) {
+    return false;
+  }
+  const createQueryNodeCount = Array.isArray(options.createQueryNodes) ?
+    options.createQueryNodes.length :
+    ZERO;
+  if (createQueryNodeCount <= ONE) {
+    return false;
+  }
+  if (Number.isFinite(options.deadlineAtMs) &&
+      Date.now() < options.deadlineAtMs) {
+    return true;
+  }
+  return (
+    shouldExtendTableBootstrapForUnavailableCreate(options)
   );
 }
 
@@ -1080,6 +1095,9 @@ async function ensureBenchmarkPartitioningTable(seedNode, options = {}) {
       !shouldDeferTableBootstrapRepairForUnavailableCreate({
         lastCreateError: lastCreateErrorObject,
         bootstrapVisibilitySnapshot,
+        createQueryNodes,
+        deadlineAtMs: deadline,
+        unavailableGraceDeadlineAtMs: unavailableGraceDeadline,
       }) &&
       (!shouldDeferAuthoritativeRepair(createVisibilitySummary) ||
         shouldForceAuthoritativeRepairAfterTimedOutCreate({

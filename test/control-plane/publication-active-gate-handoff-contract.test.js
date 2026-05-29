@@ -77,6 +77,15 @@ const TEST_CROSS_OWNER_HANDOFF_CONTRACT_FIELD =
 const TEST_ACTIVE_GATE_OWNER = 'active_gate_owner';
 const TEST_ACTIVE_GATE_PROMOTION_BOUNDARY = 'active_gate_promotion_gate';
 const TEST_SELECTED_SNAPSHOT_TIMEOUT_REASON = 'selected_timeout';
+const TEST_SELECTED_SNAPSHOT_SOURCE_TIMEOUT_REASON =
+  'selected_snapshot_source_timeout';
+const TEST_SELECTED_SNAPSHOT_OBSERVATION_MODE_REPAIR_DEFERRED =
+  'repair_deferred';
+const TEST_SELECTED_SNAPSHOT_OBSERVATION_STATE_DEFERRED_REFRESH =
+  'deferred_refresh';
+const TEST_SELECTED_SNAPSHOT_OBSERVATION_CONTRACT_STATE_DEFERRED =
+  'deferred';
+const TEST_SELECTED_SNAPSHOT_OBSERVATION_NEXT_ACTION_RETRY = 'retry';
 const TEST_JOINED_PENDING_RECONCILE_NODE_IDS = [
   TEST_NODE_2,
   TEST_NODE_3,
@@ -291,6 +300,88 @@ test('publication active-gate handoff waits on selected-timeout snapshot owner e
         ownerReconcileRequired: false,
       },
     });
+  });
+
+test('publication active-gate selector maps deferred selected snapshot timeout to owner recovery wait',
+  async (t) => {
+    const selected = selectPublicationActiveGateHandoffContract({
+      publicationConvergence: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        status: TEST_PUBLICATION_STATUS_PUBLISHED,
+        publishedActiveNodeIds: [TEST_NODE_1],
+        activeGate: {
+          progress: {
+            selectedPublishedActiveNodeIds: [TEST_NODE_1],
+            selectedMissingPublishedNodeIds: [
+              TEST_NODE_2,
+              TEST_NODE_3,
+              TEST_NODE_4,
+              TEST_NODE_5,
+            ],
+            selectedSnapshotNodeId: TEST_NODE_5,
+            selectedSnapshotSourceCause:
+              TEST_SELECTED_SNAPSHOT_SOURCE_TIMEOUT_REASON,
+            selectedSnapshotObservationMode:
+              TEST_SELECTED_SNAPSHOT_OBSERVATION_MODE_REPAIR_DEFERRED,
+            selectedSnapshotObservationState:
+              TEST_SELECTED_SNAPSHOT_OBSERVATION_STATE_DEFERRED_REFRESH,
+            selectedSnapshotObservationContractState:
+              TEST_SELECTED_SNAPSHOT_OBSERVATION_CONTRACT_STATE_DEFERRED,
+            selectedSnapshotObservationNextAction:
+              TEST_SELECTED_SNAPSHOT_OBSERVATION_NEXT_ACTION_RETRY,
+            selectedSnapshotObservationReasonCodes:
+              TEST_SELECTED_SNAPSHOT_TIMEOUT_REASON,
+          },
+        },
+      },
+    });
+    const target = resolvePublicationActiveGateMembershipPublicationTarget({
+      publicationConvergence: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        publishedActiveNodeIds: [TEST_NODE_1],
+      },
+      publicationActiveGateHandoff: selected,
+    });
+
+    t.match(
+      selected,
+      {
+        expectedNodeIds: [...TEST_SELECTED_HANDOFF_EXPECTED_NODE_IDS],
+        publishedActiveNodeIds: [TEST_NODE_1],
+        missingPublishedNodeIds: [
+          TEST_NODE_2,
+          TEST_NODE_3,
+          TEST_NODE_4,
+          TEST_NODE_5,
+        ],
+        pendingRecoveryNodeIds: [TEST_NODE_5],
+        pendingReconcileNodeIds: [],
+        state: PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,
+        reasonCode:
+          PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING,
+        nextAction:
+          PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.WAIT_OWNER_RECOVERY,
+        runtimePromotionAllowed: false,
+      },
+      'deferred selected snapshot timeout should become owner recovery wait',
+    );
+    t.equal(
+      target.reconcileRequired,
+      false,
+      'selected snapshot owner recovery should not schedule membership publication reconcile',
+    );
+    t.same(
+      target.pendingRecoveryNodeIds,
+      [TEST_NODE_5],
+      'selected snapshot timeout owner debt should stay visible on the target',
+    );
+    t.equal(
+      hasPublicationActiveGateOwnerReconcileSignal({
+        publicationActiveGateHandoff: selected,
+      }),
+      true,
+      'selected snapshot timeout should still wake the owner handoff path',
+    );
   });
 
 test('publication active-gate handoff emits reconcile contract for unpublished publication pending',
@@ -602,6 +693,97 @@ test('publication active-gate selector accepts flattened active-gate progress ha
       target.pendingReconcileNodeIds,
       [TEST_NODE_2],
       'flattened active-gate progress should preserve the selected pending reconcile node',
+    );
+  });
+
+test('publication active-gate selector maps flattened owner reconcile cohort',
+  async (t) => {
+    const selectedHandoff = selectPublicationActiveGateHandoffContract({
+      publicationConvergence: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
+        publishedActiveNodeIds: [TEST_NODE_1],
+        activeGate: {
+          progress: {
+            publicationActiveGateHandoffState:
+              PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,
+            publicationActiveGateHandoffReasonCode:
+              PUBLICATION_ACTIVE_GATE_HANDOFF_REASON
+                .OWNER_RECONCILE_PENDING,
+            publicationActiveGateHandoffNextAction:
+              PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+                .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+            publicationActiveGateHandoffRuntimePromotionAllowed:
+              TEST_RUNTIME_PROMOTION_DENIED,
+            publicationActiveGateHandoffPendingReconcileNodeIds: [
+              TEST_NODE_2,
+            ],
+            publicationActiveGateHandoffPendingReconcileCount:
+              TEST_PENDING_ACK_COUNT,
+            activeGateOwnerCohortState:
+              PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,
+            activeGateOwnerCohortReasonCode:
+              PUBLICATION_ACTIVE_GATE_HANDOFF_REASON
+                .OWNER_RECONCILE_PENDING,
+            activeGateOwnerCohortMissingPublishedNodeIds: [
+              TEST_NODE_2,
+            ],
+            activeGateOwnerCohortMissingPublishedCount:
+              TEST_PENDING_ACK_COUNT,
+            activeGateOwnerCohortPendingRecoveryNodeIds:
+              TEST_EMPTY_NODE_IDS,
+            activeGateOwnerCohortPendingRecoveryCount:
+              TEST_PUBLICATION_ACK_CLOSED_COUNT,
+            activeGateOwnerCohortPendingReconcileNodeIds: [
+              TEST_NODE_2,
+            ],
+            activeGateOwnerCohortPendingReconcileCount:
+              TEST_PENDING_ACK_COUNT,
+          },
+        },
+      },
+    });
+    const target =
+      resolvePublicationActiveGateMembershipPublicationTarget({
+        publicationActiveGateHandoff: selectedHandoff,
+        publicationConvergence: {
+          publicationEpoch: TEST_PUBLICATION_EPOCH,
+          publishedActiveNodeIds: [TEST_NODE_1],
+        },
+      });
+
+    t.match(
+      selectedHandoff,
+      {
+        expectedNodeIds: [TEST_NODE_1, TEST_NODE_2],
+        publishedActiveNodeIds: [TEST_NODE_1],
+        missingPublishedNodeIds: [TEST_NODE_2],
+        pendingRecoveryNodeIds: [...TEST_EMPTY_NODE_IDS],
+        pendingReconcileNodeIds: [TEST_NODE_2],
+        state: PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,
+        reasonCode:
+          PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING,
+        nextAction:
+          PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+            .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+        runtimePromotionAllowed: TEST_RUNTIME_PROMOTION_DENIED,
+      },
+      'flattened owner cohort evidence should project the missing active node',
+    );
+    t.equal(
+      target.reconcileRequired,
+      true,
+      'flattened owner cohort evidence should schedule membership publication reconcile',
+    );
+    t.same(
+      target.publishedActiveNodeIds,
+      [TEST_NODE_1, TEST_NODE_2],
+      'flattened owner cohort target should publish the pending active node',
+    );
+    t.same(
+      target.handoffContract.activeGateCatchupFence.targetNodeIds,
+      [TEST_NODE_1, TEST_NODE_2],
+      'catch-up fence should retain the full owner reconcile cohort',
     );
   });
 

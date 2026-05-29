@@ -521,6 +521,16 @@ function resolveActiveGateMembershipPublicationDeferredReasonCode(
     handoffReasonCode :
     null;
 }
+function isActiveGateMembershipPublicationOwnerRecoveryWaitTarget(
+  target = null,
+) {
+  return target?.handoffContract?.nextAction ===
+    PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.WAIT_OWNER_RECOVERY &&
+    target.pendingRecoveryCount > NUM.ZERO;
+}
+async function drainActiveGateMembershipPublicationSnapshotQueue() {
+  return (await SnapshotService.drainQueueForSnapshot()) > NUM.ZERO;
+}
 async function readActiveGateMembershipPublicationVisibleRow(
   coordinator,
   publicationRow,
@@ -596,15 +606,10 @@ async function reconcileActiveGateMembershipPublication(
     publicationActiveGateHandoff,
   );
   if (target.reconcileRequired !== true) {
-    let drainedSnapshotQueue = false;
-    if (
-      target.handoffContract?.nextAction ===
-        PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.WAIT_OWNER_RECOVERY &&
-      target.handoffContract.pendingRecoveryCount > NUM.ZERO
-    ) {
-      drainedSnapshotQueue =
-        (await SnapshotService.drainQueueForSnapshot()) > NUM.ZERO;
-    }
+    const drainedSnapshotQueue =
+      isActiveGateMembershipPublicationOwnerRecoveryWaitTarget(target) ?
+        await drainActiveGateMembershipPublicationSnapshotQueue() :
+        false;
     return buildActiveGateMembershipPublicationReconcileOutcome(
       target.handoffContract ?
         ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME.TARGET_BLOCKED :
@@ -615,7 +620,8 @@ async function reconcileActiveGateMembershipPublication(
       },
     );
   }
-  await SnapshotService.drainQueueForSnapshot();
+  const drainedSnapshotQueue =
+    await drainActiveGateMembershipPublicationSnapshotQueue();
   const context = buildActiveGateMembershipPublicationReconcileContext({
     publicationActiveGateHandoff,
     target,
@@ -652,6 +658,7 @@ async function reconcileActiveGateMembershipPublication(
             {
               publicationRow: visibleRow,
               target,
+              enqueued: drainedSnapshotQueue,
               controlPlaneConvergence: buildControlPlaneConvergenceOutcome({
                 pressureOutcome:
                   CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_ADMITTED,
@@ -705,6 +712,7 @@ async function reconcileActiveGateMembershipPublication(
           CONTROL_PLANE_CRITICAL_CONVERGENCE_OPERATION.OWNER_RECOVERY_WAKE,
       });
     const enqueued =
+      drainedSnapshotQueue ||
       isActiveGateMembershipPublicationHandoffRetryAccepted(
         rawEnqueueOutcome,
         controlPlaneConvergence,
@@ -765,6 +773,7 @@ async function reconcileActiveGateMembershipPublication(
           CONTROL_PLANE_CRITICAL_CONVERGENCE_OPERATION.ACTIVE_GATE_HANDOFF,
         );
     const enqueued =
+      drainedSnapshotQueue ||
       isActiveGateMembershipPublicationHandoffRetryAccepted(
         rawEnqueueOutcome,
         controlPlaneConvergence,

@@ -2,14 +2,14 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
   const {
     NUM, OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES, OPERATION_WORKFLOW_OWNER, PRIORITY_RECOVERY_ACTUATION_STATE, PRIORITY_RECOVERY_BLOCKING_BOUNDARY, PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION, PRIORITY_RECOVERY_OPERATION_OWNER_EFFECT_EXECUTION, PRIORITY_RECOVERY_WAIT_MODE, PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE, TEST_ADVANCE_EFFECT_CAPTURED_AT_REENTRY_TEST_NAME, TEST_ASSERT_ACTIVE_HANDOFF_RETRY_BOUNDED,
     TEST_ASSERT_ACTIVE_HANDOFF_RETRY_NO_INLINE_WAKE, TEST_ASSERT_ACTIVE_HANDOFF_RETRY_TIMER_PRESERVED, TEST_ASSERT_ADVANCE_EFFECT_CAPTURED_AT_TARGET, TEST_ASSERT_ADVANCE_EFFECT_CAPTURED_AT_TIMER, TEST_ASSERT_ADVANCE_EFFECT_CAPTURED_AT_WAKE, TEST_ASSERT_COUNT_ONLY_HANDOFF_NO_DUPLICATE_WAKE, TEST_ASSERT_COUNT_ONLY_HANDOFF_TIMERS_PRESERVED, TEST_ASSERT_COUNT_ONLY_HANDOFF_UNIQUE_RETRIES, TEST_ASSERT_OWNER_LANE_HELD_DEFERS_REENTRY, TEST_ASSERT_OWNER_LANE_HELD_NO_INLINE_WAKE, TEST_ASSERT_OWNER_LANE_HELD_RETRY_WAKES,
-    TEST_ASSERT_REPRESENTATIVE_HANDOFF_NO_DUPLICATE_WAKE, TEST_ASSERT_REPRESENTATIVE_HANDOFF_RETRY_BOUNDED, TEST_ASSERT_REPRESENTATIVE_HANDOFF_TIMER_PRESERVED, TEST_ASSERT_RETRY_SCHEDULED_REENTRY_TARGET, TEST_ASSERT_RETRY_SCHEDULED_REENTRY_TIMER, TEST_ASSERT_RETRY_SCHEDULED_REENTRY_WAKES, TEST_ASSERT_SNAPSHOT_REENTRY_ADVANCE_ACTION, TEST_ASSERT_SNAPSHOT_REENTRY_ARMS_RETRY,
+    TEST_ASSERT_REPRESENTATIVE_HANDOFF_NO_DUPLICATE_WAKE, TEST_ASSERT_REPRESENTATIVE_HANDOFF_RETRY_BOUNDED, TEST_ASSERT_REPRESENTATIVE_HANDOFF_TIMER_PRESERVED, TEST_ASSERT_RETRY_DEFERRED_HANDOFF_NO_INLINE_WAKE, TEST_ASSERT_RETRY_DEFERRED_HANDOFF_SHAPE, TEST_ASSERT_RETRY_DEFERRED_HANDOFF_TIMERS, TEST_ASSERT_RETRY_SCHEDULED_REENTRY_TARGET, TEST_ASSERT_RETRY_SCHEDULED_REENTRY_TIMER, TEST_ASSERT_RETRY_SCHEDULED_REENTRY_WAKES, TEST_ASSERT_SNAPSHOT_REENTRY_ADVANCE_ACTION, TEST_ASSERT_SNAPSHOT_REENTRY_ARMS_RETRY,
     TEST_ASSERT_SNAPSHOT_REENTRY_NOT_TRANSITION_DEFERRED, TEST_ASSERT_SNAPSHOT_REENTRY_PRESERVES_PENDING, TEST_ASSERT_SNAPSHOT_REENTRY_TARGET, TEST_ASSERT_SNAPSHOT_REENTRY_WAKES_REMOTE_OWNER, TEST_AUTHORITATIVE_ONLY_OPERATION_ID, TEST_AUTHORITATIVE_ONLY_PARTITION_ID, TEST_AUTHORITATIVE_ONLY_REPLICA_ID, TEST_CAPTURED_AT_MS,
-    TEST_DELIVERY_STATUS_INITIATED, TEST_EMPTY_LIST, TEST_EMPTY_VALUE, TEST_ENTITY_TYPE_PARTITION, TEST_EXPECTED_SENDING_REENTRY_ACTUATION_STATE, TEST_LOCAL_OWNER_PARTITION_ID, TEST_LOCAL_OWNER_REPLICA_ID, TEST_MICROTASK_DELAY_MS,
-    TEST_MIN_REPLICA_COUNT, TEST_OBSERVER_NODE_ID, TEST_OPERATION_CREATED_AT_MS, TEST_OPERATION_ID, TEST_OPERATION_TYPE_REPLACE, TEST_PARTITION_ID, TEST_PUBLICATION_COUNT_ONLY_PUBLICATION_OPERATION_ID, TEST_PUBLICATION_COUNT_ONLY_REPLICA_OPERATION_ID,
+    TEST_DELIVERY_STATUS_INITIATED, TEST_EMPTY_LIST, TEST_EMPTY_VALUE, TEST_ENTITY_TYPE_PARTITION, TEST_EXPECTED_SENDING_REENTRY_ACTUATION_STATE, TEST_HANDOFF_MESSAGE_NOT_ACKNOWLEDGED, TEST_LOCAL_OWNER_PARTITION_ID, TEST_LOCAL_OWNER_REPLICA_ID, TEST_MICROTASK_DELAY_MS,
+    TEST_MIN_REPLICA_COUNT, TEST_OBSERVER_NODE_ID, TEST_OPERATION_CREATED_AT_MS, TEST_OPERATION_ID, TEST_OPERATION_TYPE_REPLACE, TEST_PARTITION_ID, TEST_PROGRESS_CONTRACT_STATE_PENDING, TEST_PUBLICATION_COUNT_ONLY_PUBLICATION_OPERATION_ID, TEST_PUBLICATION_COUNT_ONLY_REPLICA_OPERATION_ID,
     TEST_PUBLICATION_COUNT_ONLY_SQL_PARTICIPANT_OPERATION_ID, TEST_PUBLICATION_COUNT_ONLY_SQL_TRANSACTION_OPERATION_ID, TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT, TEST_QUERY_SERVICES_FRAGMENT, TEST_REPLICA_DISPATCH_TARGET, TEST_REPLICA_HANDLER_DISPATCH_TARGET, TEST_REPLICA_ID, TEST_REPLICA_OPERATIONS_TABLE,
-    TEST_REPRESENTATIVE_PUBLICATION_OPERATION_ID, TEST_RETRYABLE_HANDOFF_ERROR, TEST_RETRY_AFTER_MS, TEST_RETRY_SCHEDULED_REENTRY_TEST_NAME, TEST_SNAPSHOT_REENTRY_TEST_NAME, TEST_SOURCE_NODE_ID, TEST_SQL_TRANSACTIONS_PARTITION_ID, TEST_SQL_TRANSACTIONS_REPLICA_ID,
+    TEST_READY_DISTINCT_NODE_COUNT, TEST_READY_ELIGIBLE_NODE_COUNT, TEST_REPRESENTATIVE_PUBLICATION_OPERATION_ID, TEST_REQUIRED_DISTINCT_NODE_COUNT, TEST_RETRY_DEFERRED_HANDOFF_TEST_NAME, TEST_RETRY_DEFERRED_STATUS, TEST_RETRYABLE_HANDOFF_ERROR, TEST_RETRY_AFTER_MS, TEST_RETRY_SCHEDULED_REENTRY_TEST_NAME, TEST_SNAPSHOT_REENTRY_TEST_NAME, TEST_SOURCE_NODE_ID, TEST_SPREAD_GAP, TEST_SQL_TRANSACTIONS_PARTITION_ID, TEST_SQL_TRANSACTIONS_REPLICA_ID,
     TEST_SQL_TRANSACTION_PARTICIPANTS_PARTITION_ID, TEST_SQL_TRANSACTION_PARTICIPANTS_REPLICA_ID, TEST_STATUS_CREATING, TEST_STATUS_PENDING, TEST_STEP_CREATING, TEST_STEP_PENDING, TEST_STEP_TIMEOUT_MS, TEST_TARGET_NODE_ID,
-    TEST_TIMEOUT_OVERRUN_MS, TEST_UNDEFINED_VALUE, WORKFLOW_STEP, buildDispatchPendingReentryPlanningSnapshot, buildTransactionCoordinator, createCoordinator,
+    TEST_TIMEOUT_OVERRUN_MS, TEST_UNDEFINED_VALUE, WORKFLOW_STEP, buildDispatchPendingReentryPlanningSnapshot, buildPendingOperationRow, buildTransactionCoordinator, createCoordinator,
   } = dependencies;
 
 const TEST_CACHE_VISIBLE_PRIORITY_SCAN_TEST_NAME =
@@ -1291,6 +1291,204 @@ async (t) => {
         .size,
       uniqueOperations.length,
       TEST_ASSERT_COUNT_ONLY_HANDOFF_TIMERS_PRESERVED,
+    );
+  } finally {
+    Date.now = originalDateNow;
+    await coordinator.shutdown();
+  }
+});
+
+registerCase(TEST_RETRY_DEFERRED_HANDOFF_TEST_NAME,
+async (t) => {
+  const deliveries = [];
+  const deferredTimers = [];
+  const witnessOperationRows = Object.freeze([
+    ['3158736f-68aa-499b-a49e-129a8d14d6ed',
+      TEST_LOCAL_OWNER_PARTITION_ID, TEST_LOCAL_OWNER_REPLICA_ID],
+    ['54d4b90f-c738-4428-8747-d8c757464329',
+      TEST_AUTHORITATIVE_ONLY_PARTITION_ID, TEST_AUTHORITATIVE_ONLY_REPLICA_ID],
+    ['1062b470-3ae7-428f-b0c5-f0eade6230d8',
+      TEST_SQL_TRANSACTION_PARTICIPANTS_PARTITION_ID,
+      TEST_SQL_TRANSACTION_PARTICIPANTS_REPLICA_ID],
+  ].map(([operationId, partitionId, replicaId]) => Object.freeze({
+    ...buildPendingOperationRow({operationId, partitionId, replicaId,
+      nowMs: TEST_OPERATION_CREATED_AT_MS}),
+    status: TEST_RETRY_DEFERRED_STATUS,
+  })));
+  const sqlQueryEngine = {
+    async executeQuery(sql, params = []) {
+      const normalizedSql = String(sql);
+      if (normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT)) {
+        return {
+          success: true,
+          rows: witnessOperationRows.map((row) => ({...row})),
+          affectedRows: witnessOperationRows.length,
+        };
+      }
+      if (normalizedSql.includes(TEST_QUERY_SERVICES_FRAGMENT)) {
+        return {
+          success: true,
+          rows: [],
+          affectedRows: NUM.ZERO,
+        };
+      }
+      return {
+        success: true,
+        rows: [],
+        affectedRows: NUM.ZERO,
+      };
+    },
+  };
+  const planningSnapshot = {
+    ...buildDispatchPendingReentryPlanningSnapshot(),
+    priorityPartitionSummary: {
+      blockedPartitions: witnessOperationRows.map((operation) => ({
+        partitionId: operation.partition_id,
+        spreadGap: TEST_SPREAD_GAP,
+        readyDistinctNodeCount: TEST_READY_DISTINCT_NODE_COUNT,
+        requiredDistinctNodeCount: TEST_REQUIRED_DISTINCT_NODE_COUNT,
+      })),
+      readyEligibleNodeCount: TEST_READY_ELIGIBLE_NODE_COUNT,
+    },
+  };
+  const coordinator = createCoordinator({
+    nodeId: TEST_OBSERVER_NODE_ID,
+    sqlQueryEngine,
+    transactionCoordinator: buildTransactionCoordinator(),
+    systemTableCache: {get() { return TEST_EMPTY_VALUE; },
+      getAll() { return []; }, filter() { return []; }},
+    cdcIntegrationService: {async waitForCacheUpdate() {}},
+    controlPlaneReadinessService: {
+      getPriorityRecoveryPlanningSnapshotBestEffort() {
+        return planningSnapshot;
+      },
+      getNodeReadinessSync(nodeId) {
+        return {
+          nodeId,
+          dimensions: {
+            controlPlaneRecoveryEligible: true,
+            repairEligible: true,
+            serveEligible: true,
+          },
+        };
+      },
+    },
+    messageRouter: {
+      async deliver(target, payload, options) {
+        deliveries.push({target, payload, options});
+        return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
+      },
+    },
+    tablePolicyService: {async getPolicyForPartition() {
+      return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+    }},
+    setTimeoutFn(fn, delayMs) {
+      const handle = {fn, delayMs};
+      deferredTimers.push(handle);
+      return handle;
+    },
+    clearTimeoutFn() {},
+    enableTimeouts: false,
+  });
+  const originalDateNow = Date.now;
+  Date.now = () => TEST_CAPTURED_AT_MS;
+
+  try {
+    coordinator.initialize();
+    const operations = witnessOperationRows.map((row) =>
+      coordinator.repository.rowToOperation(row),
+    );
+    coordinator.workflowOwner.repository
+      .getOperationsByEntityAuthoritativeObservation = async () => {
+        return Object.freeze({
+          state: TEST_AUTHORITATIVE_OBSERVATION_STATE_PRESENT,
+          operationCount: operations.length,
+          operations: Object.freeze(operations),
+          deferredOutcome: null,
+          retryAfterMs: null,
+        });
+      };
+    for (const operation of operations) {
+      t.equal(
+        coordinator.workflowOwner.deferCoordinatorCreatedRemoteHandoffRetry(
+          operation,
+          {
+            deferRetry: true,
+            retryAfterMs: NUM.THOUSAND,
+            error: TEST_HANDOFF_MESSAGE_NOT_ACKNOWLEDGED,
+          },
+        ),
+        true,
+        TEST_ASSERT_RETRY_DEFERRED_HANDOFF_TIMERS,
+      );
+    }
+    const snapshots = [];
+    for (const operation of operations) {
+      snapshots.push(await coordinator.workflowOwner
+        .getPriorityRecoveryDecisionSnapshotForPartitionOperations(
+          operation.partitionId, TEST_EMPTY_LIST));
+    }
+    t.same(
+      snapshots.map((snapshot) => [
+        snapshot?.partitionId,
+        snapshot?.conditions?.latestOperationWorkflowStep,
+        snapshot?.conditions?.latestOperationStatus,
+        snapshot?.progress?.waitMode,
+        snapshot?.progress?.blockingBoundary,
+        snapshot?.progress?.contractState,
+      ]),
+      operations.map((operation) => [
+        operation.partitionId,
+        WORKFLOW_STEP.PENDING,
+        TEST_RETRY_DEFERRED_STATUS,
+        PRIORITY_RECOVERY_WAIT_MODE.RETRY_SCHEDULED,
+        PRIORITY_RECOVERY_BLOCKING_BOUNDARY.REBALANCER_HANDOFF,
+        TEST_PROGRESS_CONTRACT_STATE_PENDING,
+      ]),
+      TEST_ASSERT_RETRY_DEFERRED_HANDOFF_SHAPE,
+    );
+    t.equal(
+      deliveries.length,
+      NUM.ZERO,
+      TEST_ASSERT_RETRY_DEFERRED_HANDOFF_NO_INLINE_WAKE,
+    );
+    t.equal(
+      deferredTimers.length,
+      operations.length,
+      TEST_ASSERT_RETRY_DEFERRED_HANDOFF_TIMERS,
+    );
+    t.equal(
+      coordinator.workflowOwner.createdOperationHandoffRetryTimerByOperationId
+        .size,
+      operations.length,
+      TEST_ASSERT_RETRY_DEFERRED_HANDOFF_TIMERS,
+    );
+    await new Promise((resolve) => setTimeout(resolve, TEST_MICROTASK_DELAY_MS));
+    t.same(
+      coordinator.workflowOwner.operationProgressStore.listOperationProgressRecords()
+        .map((record) => record.operationId).sort(),
+      operations.map((operation) => operation.operationId).sort(),
+      TEST_ASSERT_RETRY_DEFERRED_HANDOFF_SHAPE,
+    );
+    const firstRecords =
+      coordinator.workflowOwner.operationProgressStore.listOperationProgressRecords();
+    const firstEvents =
+      coordinator.workflowOwner.operationProgressStore.listOperationProgressEvents();
+    for (const operation of operations) {
+      await coordinator.workflowOwner
+        .getPriorityRecoveryDecisionSnapshotForPartitionOperations(
+          operation.partitionId, TEST_EMPTY_LIST);
+    }
+    await new Promise((resolve) => setTimeout(resolve, TEST_MICROTASK_DELAY_MS));
+    t.same(
+      coordinator.workflowOwner.operationProgressStore.listOperationProgressRecords(),
+      firstRecords,
+      TEST_ASSERT_RETRY_DEFERRED_HANDOFF_SHAPE,
+    );
+    t.same(
+      coordinator.workflowOwner.operationProgressStore.listOperationProgressEvents(),
+      firstEvents,
+      TEST_ASSERT_RETRY_DEFERRED_HANDOFF_SHAPE,
     );
   } finally {
     Date.now = originalDateNow;

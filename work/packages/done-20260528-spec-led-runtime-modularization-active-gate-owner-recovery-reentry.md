@@ -16,7 +16,7 @@
     "currentState": "Fresh representative rerun after the rebalancer handoff proof removed priority-recovery residual witnesses, but active-gate snapshot coverage remains blocked by selected-timeout owner recovery in load mode.",
     "nextAction": "Run the promoted load-mode owner-recovery re-entry discriminator, then repair or migrate before another generic snapshot-coverage patch.",
     "predecessor": "work/packages/done-20260528-spec-led-runtime-modularization-priority-recovery-rebalancer-handoff.md",
-    "successor": "work/packages/active-20260528-rolling-restart-benchmark-table-bootstrap-sql-unavailable-repair.md",
+    "successor": "work/packages/done-20260528-rolling-restart-benchmark-table-bootstrap-sql-unavailable-repair.md",
     "closed": "2026-05-28"
   },
   "scope": {
@@ -29,7 +29,7 @@
       "scripts/work-package-schema.js",
       "src/rebalancer/operation-workflow-owner-ports.js",
       "test/rebalancer/priority-recovery-snapshot-handoff-timeout-reentry-test-cases.js",
-      "work/packages/active-20260528-rolling-restart-benchmark-table-bootstrap-sql-unavailable-repair.md",
+      "work/packages/done-20260528-rolling-restart-benchmark-table-bootstrap-sql-unavailable-repair.md",
       "work/packages/done-20260528-spec-led-runtime-modularization-priority-recovery-rebalancer-handoff.md"
     ],
     "handoffFiles": [
@@ -58,7 +58,7 @@
       "scripts/work-package-schema.js",
       "src/rebalancer/operation-workflow-owner-ports.js",
       "test/rebalancer/priority-recovery-snapshot-handoff-timeout-reentry-test-cases.js",
-      "work/packages/active-20260528-rolling-restart-benchmark-table-bootstrap-sql-unavailable-repair.md",
+      "work/packages/done-20260528-rolling-restart-benchmark-table-bootstrap-sql-unavailable-repair.md",
       "work/packages/done-20260528-spec-led-runtime-modularization-priority-recovery-rebalancer-handoff.md"
     ]
   },
@@ -104,7 +104,7 @@
     "sourceChangeRequired": true,
     "successorRequired": true,
     "result": "migrated",
-    "successorPackage": "work/packages/active-20260528-rolling-restart-benchmark-table-bootstrap-sql-unavailable-repair.md"
+    "successorPackage": "work/packages/done-20260528-rolling-restart-benchmark-table-bootstrap-sql-unavailable-repair.md"
   },
   "representativeResidual": {
     "status": "migrated",

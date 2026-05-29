@@ -6,6 +6,13 @@ import {
 import {
   PRIORITY_RECOVERY_OPERATION_OWNER_EFFECT_EXECUTION,
 } from '../control-plane/priority-recovery-operation-owner-observation.js';
+import {
+  OPERATION_LIFECYCLE_STATE,
+  OPERATION_PROGRESS_RETRY_STATE,
+} from './operation-lifecycle.js';
+import {
+  OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_MODE,
+} from './operation-workflow-owner-ports.js';
 
 const {
   NUM,
@@ -51,6 +58,7 @@ const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_ACTION = Object.freeze({
   SKIP: 'skip',
   ARM_NOW: 'arm_now',
   RETRY_AFTER_OWNER_LANE: 'retry_after_owner_lane',
+  RECORD_REMOTE_RETRY_PROGRESS: 'record_remote_retry_progress',
 });
 
 const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_ACTION_BY_STATE =
@@ -64,6 +72,11 @@ const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_ACTION_BY_STATE =
         .OWNER_LANE_RETRY_REQUIRED,
       PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_ACTION
         .RETRY_AFTER_OWNER_LANE,
+    ],
+    [
+      PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_STATE.REMOTE_RETRY_ACTIVE,
+      PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_ACTION
+        .RECORD_REMOTE_RETRY_PROGRESS,
     ],
   ]));
 
@@ -464,7 +477,58 @@ function applyPriorityRecoveryDispatchPendingReentryAction(
       TRANSITION_RETRY_DELAY_MS,
     );
   }
+  if (
+    action ===
+    PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_ACTION
+      .RECORD_REMOTE_RETRY_PROGRESS
+  ) {
+    const operationId = operation?.operationId || null;
+    if (
+      !operationId ||
+      hasPriorityRecoveryDispatchPendingRemoteRetryProgress(
+        owner,
+        operation,
+      )
+    ) {
+      return false;
+    }
+    owner._remoteRetryProgressLocks =
+      owner._remoteRetryProgressLocks || new Set();
+    if (owner._remoteRetryProgressLocks.has(operationId)) {
+      return false;
+    }
+    owner._remoteRetryProgressLocks.add(operationId);
+    owner.runOperationWorkflowOwnerAdapter(
+      operation,
+      {mode: OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_MODE.OWNER_RECONCILE},
+    ).catch((error) => {
+      owner.handleDeferredCoordinatorCreatedRemoteHandoffRetryFailure(
+        operation,
+        error,
+      );
+    }).finally(() => {
+      owner._remoteRetryProgressLocks.delete(operationId);
+    });
+    return false;
+  }
   return false;
+}
+
+function hasPriorityRecoveryDispatchPendingRemoteRetryProgress(
+  owner,
+  operation,
+) {
+  const operationId = operation?.operationId || null;
+  const records =
+    owner.operationProgressStore?.listOperationProgressRecords?.() || [];
+  const progress = records.find((record) =>
+    record.operationId === operationId,
+  );
+  return (
+    progress?.state === OPERATION_LIFECYCLE_STATE.RETRY_PENDING &&
+    progress?.retryState === OPERATION_PROGRESS_RETRY_STATE.RETRY_REQUESTED &&
+    owner.hasActiveCreatedOperationHandoffRetry(operationId) === true
+  );
 }
 
 async function applyPriorityRecoveryDispatchPendingOwnerProgress(
@@ -710,6 +774,18 @@ function schedulePriorityRecoveryDispatchPendingReentry(
       options,
     );
   }
+  if (
+    immediateAction ===
+    PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_ACTION
+      .RECORD_REMOTE_RETRY_PROGRESS
+  ) {
+    return owner.applyPriorityRecoveryDispatchPendingReentryAction(
+      operation,
+      immediateAction,
+      snapshot,
+      options,
+    );
+  }
   const operationId = operation.operationId;
   owner._reentryLocks = owner._reentryLocks || new Set();
   if (owner._reentryLocks.has(operationId)) {
@@ -806,6 +882,7 @@ export {
   buildPriorityRecoveryDispatchPendingDrainEvidence,
   buildPriorityRecoveryDispatchPendingReentryEvidence,
   buildPriorityRecoveryDispatchPendingDrainSnapshot,
+  hasPriorityRecoveryDispatchPendingRemoteRetryProgress,
   reconcilePriorityRecoveryDispatchPendingDrain,
   resolvePriorityRecoveryDispatchPendingReentryAction,
   resolvePriorityRecoveryDispatchPendingReentryState,

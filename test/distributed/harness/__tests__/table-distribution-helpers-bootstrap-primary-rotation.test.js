@@ -576,6 +576,184 @@ test('benchmark table bootstrap applies authoritative repair after a ' +
   assert.match(String(ensured.createTimeoutError || ''), /timed out/i);
 });
 
+test('benchmark table bootstrap applies authoritative repair after a ' +
+  'single-node SQL-unavailable create', async () => {
+  const createCalls = [];
+  let repairCount = 0;
+  const originalDateNow = Date.now;
+  let fakeNow = 0;
+  Date.now = () => fakeNow;
+  const seedNode = {
+    id: 'seed-1',
+    async queryWithTimeout(sql, _params, options = {}) {
+      if (sql.includes('CREATE TABLE IF NOT EXISTS')) {
+        createCalls.push({
+          nodeId: 'seed-1',
+          timeoutMs: options.timeoutMs,
+        });
+        fakeNow = TEST_EXHAUSTED_CREATE_TIMEOUT_MS;
+        throw new Error(
+          'Admin API query failed for node seed-1 on lane control: ' +
+          'SQL query engine not available',
+        );
+      }
+      if (sql.includes('control_snapshot_local(true)')) {
+        repairCount += 1;
+        return {rows: [{scope: 'local'}]};
+      }
+      if (sql.includes(TABLES_SQL_FRAGMENT)) {
+        return {
+          rows: repairCount > 0 ?
+            [{table_id: 'tbl-benchmark-events-sql-unavailable-repaired'}] :
+            [],
+        };
+      }
+      if (sql.includes(PARTITIONS_SQL_FRAGMENT)) {
+        return {
+          rows: repairCount > 0 ?
+            [buildVisiblePartitionRow(
+              'tbl-benchmark-events-sql-unavailable-repaired-p1',
+            )] :
+            [],
+        };
+      }
+      if (sql.includes(SERVICES_SQL_FRAGMENT)) {
+        return {
+          rows: repairCount > 0 ?
+            [buildActiveLeaderServiceRow(
+              'tbl-benchmark-events-sql-unavailable-repaired-p1',
+            )] :
+            [],
+        };
+      }
+      return {rows: []};
+    },
+  };
+
+  try {
+    const ensured = await ensureBenchmarkPartitioningTable(seedNode, {
+      tableName: 'benchmark_events',
+      requiredBootstrapVisibilityState:
+        TABLE_BOOTSTRAP_VISIBILITY_STATE.PARTITIONS_VISIBLE,
+      queryNodes: [seedNode],
+    });
+
+    assert.equal(repairCount, 1);
+    assert.equal(createCalls.length, 1);
+    assert.equal(ensured.tableId,
+      'tbl-benchmark-events-sql-unavailable-repaired');
+    assert.equal(ensured.tableBootstrapVisibilityState,
+      TABLE_BOOTSTRAP_VISIBILITY_STATE.PARTITIONS_VISIBLE);
+    assert.equal(ensured.tableVisibilityRepairApplied, true);
+  } finally {
+    Date.now = originalDateNow;
+    fakeNow = 0;
+  }
+});
+
+test('benchmark table bootstrap applies authoritative repair after ' +
+  'SQL-unavailable create candidates exhaust grace', async () => {
+  const createCalls = [];
+  let repairCount = 0;
+  let repairApplied = false;
+  const originalDateNow = Date.now;
+  let fakeNow = 0;
+  Date.now = () => fakeNow;
+  const seedNode = {
+    id: 'seed-1',
+    async queryWithTimeout(sql, _params, options = {}) {
+      if (sql.includes('CREATE TABLE IF NOT EXISTS')) {
+        createCalls.push({
+          nodeId: 'seed-1',
+          timeoutMs: options.timeoutMs,
+        });
+        fakeNow += TEST_MULTI_NODE_CREATE_TIMEOUT_MS;
+        throw new Error(
+          'Admin API query failed for node seed-1 on lane control: ' +
+          'SQL query engine not available',
+        );
+      }
+      if (sql.includes('control_snapshot_local(true)')) {
+        repairCount += 1;
+        repairApplied = true;
+        return {rows: [{scope: 'local'}]};
+      }
+      if (sql.includes(TABLES_SQL_FRAGMENT)) {
+        return {
+          rows: repairApplied ?
+            [{table_id: 'tbl-benchmark-events-sql-grace-repaired'}] :
+            [],
+        };
+      }
+      if (sql.includes(PARTITIONS_SQL_FRAGMENT)) {
+        return {
+          rows: repairApplied ?
+            [buildVisiblePartitionRow(
+              'tbl-benchmark-events-sql-grace-repaired-p1',
+            )] :
+            [],
+        };
+      }
+      if (sql.includes(SERVICES_SQL_FRAGMENT)) {
+        return {
+          rows: repairApplied ?
+            [buildActiveLeaderServiceRow(
+              'tbl-benchmark-events-sql-grace-repaired-p1',
+            )] :
+            [],
+        };
+      }
+      return {rows: []};
+    },
+  };
+  const unavailableAlternateNode = {
+    id: 'node-2',
+    async queryWithTimeout(sql, _params, options = {}) {
+      if (sql.includes('CREATE TABLE IF NOT EXISTS')) {
+        createCalls.push({
+          nodeId: 'node-2',
+          timeoutMs: options.timeoutMs,
+        });
+        fakeNow += TEST_PARTITION_BOOTSTRAP_TIMEOUT_MS -
+          TEST_MULTI_NODE_CREATE_TIMEOUT_MS;
+        throw new Error(
+          'Admin API query failed for node node-2 on lane control: ' +
+          'SQL query engine not available',
+        );
+      }
+      if (sql.includes(TABLES_SQL_FRAGMENT)) {
+        return {rows: []};
+      }
+      return {rows: []};
+    },
+  };
+
+  try {
+    const ensured = await ensureBenchmarkPartitioningTable(seedNode, {
+      tableName: 'benchmark_events',
+      requiredBootstrapVisibilityState:
+        TABLE_BOOTSTRAP_VISIBILITY_STATE.PARTITIONS_VISIBLE,
+      queryNodes: [unavailableAlternateNode],
+    });
+
+    assert.equal(repairCount, 1);
+    assert.equal(ensured.tableId,
+      'tbl-benchmark-events-sql-grace-repaired');
+    assert.equal(ensured.tableBootstrapVisibilityState,
+      TABLE_BOOTSTRAP_VISIBILITY_STATE.PARTITIONS_VISIBLE);
+    assert.equal(ensured.tableVisibilityRepairApplied, true);
+    assert.deepEqual(createCalls.map((call) => call.nodeId), [
+      'seed-1',
+      'node-2',
+      'node-2',
+      'node-2',
+    ]);
+  } finally {
+    Date.now = originalDateNow;
+    fakeNow = 0;
+  }
+});
+
 test('benchmark table bootstrap repairs and observes visibility when a ' +
   'selected create timeout exhausts the bootstrap deadline', async () => {
   let seedRepairCount = 0;

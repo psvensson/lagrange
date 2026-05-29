@@ -36,6 +36,7 @@ const BOOTSTRAP_CONTROL_PLANE_MUTATION_PROFILE =
   buildControlPlaneWorkloadProfile(
     CONTROL_PLANE_WORKLOAD_CLASS.BOOTSTRAP_CONTROL_PLANE_MUTATION,
   );
+const BOOTSTRAP_SQL_ENGINE_UNAVAILABLE_RETRY_AFTER_MS = NUM.THOUSAND;
 
 const bootstrapApiControlPlaneMethods = {
   /**
@@ -139,7 +140,7 @@ const bootstrapApiControlPlaneMethods = {
       this.getControlPlaneSystemTableGateway();
     if (!controlPlaneSystemTableGateway ||
         typeof controlPlaneSystemTableGateway.executeQuery !== TYPEOF.FUNCTION) {
-      throw new Error(BOOTSTRAP_API_ERROR.SQL_ENGINE_UNAVAILABLE);
+      throw this.buildBootstrapSqlEngineUnavailableError();
     }
     return controlPlaneSystemTableGateway.executeQuery(sql, params, {
       owner: BOOTSTRAP_API_SUBSYSTEM,
@@ -172,7 +173,7 @@ const bootstrapApiControlPlaneMethods = {
       this.getControlPlaneSystemTableGateway();
     if (!controlPlaneSystemTableGateway ||
         typeof controlPlaneSystemTableGateway.submitMutation !== TYPEOF.FUNCTION) {
-      throw new Error(BOOTSTRAP_API_ERROR.SQL_ENGINE_UNAVAILABLE);
+      throw this.buildBootstrapSqlEngineUnavailableError();
     }
     const result = await controlPlaneSystemTableGateway.submitMutation(mutation, {
       owner: BOOTSTRAP_API_SUBSYSTEM,
@@ -206,6 +207,23 @@ const bootstrapApiControlPlaneMethods = {
    */
   getControlPlaneSystemTableGateway() {
     return this.controlPlaneSystemTableGateway;
+  },
+
+  /**
+   * Build the typed retry surface for missing bootstrap SQL ownership.
+   * @return {Error}
+   * @private
+   */
+  buildBootstrapSqlEngineUnavailableError() {
+    const error = new Error(BOOTSTRAP_API_ERROR.SQL_ENGINE_UNAVAILABLE);
+    const retryAfterMs = Number.isFinite(this.bootstrapAdmissionRetryAfterMs) ?
+      Math.max(NUM.ZERO, Math.floor(this.bootstrapAdmissionRetryAfterMs)) :
+      BOOTSTRAP_SQL_ENGINE_UNAVAILABLE_RETRY_AFTER_MS;
+    error.statusCode = HTTP_STATUS.SERVICE_UNAVAILABLE;
+    error.code = BOOTSTRAP_PIPELINE_ERROR_CODE.SQL_ENGINE_UNAVAILABLE;
+    error.errorCode = BOOTSTRAP_PIPELINE_ERROR_CODE.SQL_ENGINE_UNAVAILABLE;
+    error.retryAfterMs = retryAfterMs;
+    return error;
   },
 
   /**

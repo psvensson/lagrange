@@ -74,6 +74,11 @@ const CONTROL_SNAPSHOT_REPAIR_CONNECTION_CLOSED_PREFIX =
 const CONTROL_SNAPSHOT_REPAIR_CONNECTION_CLOSED_SUFFIX = ' closed';
 const CONTROL_SNAPSHOT_REPAIR_WEBSOCKET_MATCH_LOWER = 'websocket';
 const CONTROL_SNAPSHOT_REPAIR_CLOSED_MATCH_LOWER = 'closed';
+const CONTROL_SNAPSHOT_REPAIR_CLOSED_MESSAGE_FRAGMENTS = Object.freeze([
+  'connection closed',
+  'transport closed',
+  'connection closed before response',
+]);
 const CONTROL_SNAPSHOT_REPAIR_FAILURE_PARTICIPANT_ERROR_FIELD = 'error';
 const CONTROL_SNAPSHOT_REPAIR_FAILURE_PARTICIPANT_MESSAGE_FIELD = 'message';
 const CONTROL_SNAPSHOT_REPAIR_FAILURE_PARTICIPANT_FAILED_TABLE_FIELD =
@@ -90,6 +95,7 @@ const CONTROL_SNAPSHOT_REPAIR_EVALUATION_FIELD = Object.freeze({
 });
 const CONTROL_SNAPSHOT_REPAIR_DEFERRED_MIN_NODE_COVERAGE = NUM.THREE;
 const CONTROL_SNAPSHOT_REPAIR_QUERY_TIMEOUT_DIVISOR = NUM.TWO;
+const CONTROL_SNAPSHOT_ORDINARY_REPAIR_QUERY_TIMEOUT_MIN_MS = NUM.HUNDRED;
 function normalizeControlSnapshotNodeIdList(values = []) {
   return [...new Set(
     (Array.isArray(values) ? values : ADMIN_CACHE_DUMP.EMPTY)
@@ -271,9 +277,9 @@ function hasWebSocketClosedRepairCause(repair = null) {
     return (
       (lowerMessage.includes(CONTROL_SNAPSHOT_REPAIR_WEBSOCKET_MATCH_LOWER) &&
        lowerMessage.includes(CONTROL_SNAPSHOT_REPAIR_CLOSED_MATCH_LOWER)) ||
-      lowerMessage.includes('connection closed') ||
-      lowerMessage.includes('transport closed') ||
-      lowerMessage.includes('connection closed before response')
+      CONTROL_SNAPSHOT_REPAIR_CLOSED_MESSAGE_FRAGMENTS.some((fragment) =>
+        lowerMessage.includes(fragment),
+      )
     );
   });
 }
@@ -298,12 +304,24 @@ function resolveAuthoritativeRepairQueryTimeoutMs(options = {}) {
   ) {
     return options.queryTimeoutMs;
   }
-  return Math.max(
+  const reservedRepairTimeoutMs = Math.max(
     NUM.ONE,
     Math.floor(
       queryTimeoutMs / CONTROL_SNAPSHOT_REPAIR_QUERY_TIMEOUT_DIVISOR,
     ),
   );
+  if (options.forceAuthoritativeRepair === true) {
+    return reservedRepairTimeoutMs;
+  }
+  const boundedRepairTimeoutMs = Math.max(
+    CONTROL_SNAPSHOT_ORDINARY_REPAIR_QUERY_TIMEOUT_MIN_MS,
+    reservedRepairTimeoutMs,
+  );
+  const callerResponseReserveMs = Math.max(
+    NUM.ONE,
+    Math.floor(queryTimeoutMs - NUM.ONE),
+  );
+  return Math.min(callerResponseReserveMs, boundedRepairTimeoutMs);
 }
 function buildRepairFailureLocalSnapshotOptions(options = {}) {
   return {
