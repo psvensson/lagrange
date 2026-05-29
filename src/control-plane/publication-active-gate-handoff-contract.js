@@ -1,3 +1,4 @@
+import {NUM} from '../constants/index.js';
 import {
   buildOwnerOutcomeEnvelope,
 } from './owner-outcome-contract.js';
@@ -51,6 +52,136 @@ import {
   selectPublicationActiveGateHandoffProgressContextRecord,
   selectPublicationActiveGateProgressRecord,
 } from './publication-active-gate-handoff-contract-selection.js';
+
+const PUBLICATION_ACTIVE_GATE_HANDOFF_RETRY_AFTER_MS_FIELD = Object.freeze({
+  PUBLICATION_ACTIVE_GATE_HANDOFF_RETRY_AFTER_MS:
+    'publicationActiveGateHandoffRetryAfterMs',
+  RETRY_AFTER_MS: 'retryAfterMs',
+  SELECTED_SNAPSHOT_OBSERVATION_RETRY_AFTER_MS:
+    'selectedSnapshotObservationRetryAfterMs',
+});
+
+function normalizePublicationActiveGateHandoffRetryAfterMs(value) {
+  return Number.isFinite(value) && value > NUM.ZERO ?
+    Math.floor(value) :
+    NUM.ZERO;
+}
+
+function selectPublicationActiveGateHandoffRetryAfterMsFromRecord(
+  record = null,
+) {
+  if (!isPublicationActiveGateHandoffRecord(record)) {
+    return NUM.ZERO;
+  }
+  for (const fieldName of Object.values(
+    PUBLICATION_ACTIVE_GATE_HANDOFF_RETRY_AFTER_MS_FIELD,
+  )) {
+    const retryAfterMs =
+      normalizePublicationActiveGateHandoffRetryAfterMs(record[fieldName]);
+    if (retryAfterMs > NUM.ZERO) {
+      return retryAfterMs;
+    }
+  }
+  return NUM.ZERO;
+}
+
+function collectPublicationActiveGateHandoffRetrySourceRecords(value = null) {
+  if (!isPublicationActiveGateHandoffRecord(value)) {
+    return PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST;
+  }
+  const publicationConvergence =
+    value[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLICATION_CONVERGENCE];
+  const activeGate = value[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.ACTIVE_GATE];
+  const publicationActiveGate =
+    publicationConvergence?.[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.ACTIVE_GATE
+    ];
+  return Object.freeze([
+    value,
+    value[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLICATION_ACTIVE_GATE_HANDOFF
+    ],
+    publicationConvergence,
+    publicationConvergence?.[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLICATION_ACTIVE_GATE_HANDOFF
+    ],
+    value[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.ACTIVE_GATE_PROGRESS],
+    value[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.ACTIVE_GATE_BEST_PROGRESS],
+    activeGate,
+    activeGate?.[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PROGRESS],
+    publicationConvergence?.[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.ACTIVE_GATE_PROGRESS
+    ],
+    publicationConvergence?.[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.ACTIVE_GATE_BEST_PROGRESS
+    ],
+    publicationActiveGate,
+    publicationActiveGate?.[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PROGRESS],
+  ].filter(isPublicationActiveGateHandoffRecord));
+}
+
+function resolvePublicationActiveGateHandoffRetryAfterMs(...sources) {
+  for (const source of sources) {
+    for (const record of collectPublicationActiveGateHandoffRetrySourceRecords(
+      source,
+    )) {
+      const retryAfterMs =
+        selectPublicationActiveGateHandoffRetryAfterMsFromRecord(record);
+      if (retryAfterMs > NUM.ZERO) {
+        return retryAfterMs;
+      }
+    }
+  }
+  return NUM.ZERO;
+}
+
+function applyPublicationActiveGateHandoffRetryAfterMs(value, retryAfterMs) {
+  if (
+    !isPublicationActiveGateHandoffRecord(value) ||
+    retryAfterMs <= NUM.ZERO
+  ) {
+    return value;
+  }
+  return Object.freeze({
+    ...value,
+    [PUBLICATION_ACTIVE_GATE_HANDOFF_RETRY_AFTER_MS_FIELD.RETRY_AFTER_MS]:
+      retryAfterMs,
+  });
+}
+
+function applyPublicationActiveGateCrossOwnerRetryAfterMs(
+  contract,
+  retryAfterMs,
+) {
+  if (
+    !isPublicationActiveGateHandoffRecord(contract) ||
+    retryAfterMs <= NUM.ZERO
+  ) {
+    return contract;
+  }
+  return Object.freeze({
+    ...contract,
+    producerOwnerOutcome: Object.freeze({
+      ...contract.producerOwnerOutcome,
+      retryAfterMs,
+    }),
+    retryDeferBehavior: Object.freeze({
+      ...contract.retryDeferBehavior,
+      retryAfterMs,
+    }),
+  });
+}
+
+function selectPublicationActiveGateHandoffCandidateWithRetry(
+  candidate = null,
+  value = null,
+) {
+  const retryAfterMs = resolvePublicationActiveGateHandoffRetryAfterMs(
+    candidate,
+    value,
+  );
+  return applyPublicationActiveGateHandoffRetryAfterMs(candidate, retryAfterMs);
+}
 
 function buildPublicationActiveGateHandoffContract(options = {}) {
   const expectedNodeIds =
@@ -111,6 +242,8 @@ function buildPublicationActiveGateHandoffContract(options = {}) {
   const runtimePromotionAllowed =
     decision.runtimePromotionAllowed === true &&
     activeGateCatchupFence.promotionAllowed === true;
+  const retryAfterMs =
+    resolvePublicationActiveGateHandoffRetryAfterMs(options);
   const promotionDeniedByFence =
     decision.runtimePromotionAllowed === true &&
     runtimePromotionAllowed !== true;
@@ -125,20 +258,23 @@ function buildPublicationActiveGateHandoffContract(options = {}) {
     PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.OBSERVE_OWNER_HANDOFF :
     decision.nextAction;
   const crossOwnerHandoffContract =
-    buildPublicationActiveGateCrossOwnerHandoffContract({
-      publicationEpoch,
-      state: contractState,
-      reasonCode: contractReasonCode,
-      nextAction: contractNextAction,
-      runtimePromotionAllowed,
-      expectedNodeIds,
-      pendingRecoveryNodeIds,
-      pendingReconcileNodeIds,
-      publishedActiveNodeIds,
-      reconcileRequirement,
-      activeGateCatchupFence,
-      operationWorkflowHandoff,
-    });
+    applyPublicationActiveGateCrossOwnerRetryAfterMs(
+      buildPublicationActiveGateCrossOwnerHandoffContract({
+        publicationEpoch,
+        state: contractState,
+        reasonCode: contractReasonCode,
+        nextAction: contractNextAction,
+        runtimePromotionAllowed,
+        expectedNodeIds,
+        pendingRecoveryNodeIds,
+        pendingReconcileNodeIds,
+        publishedActiveNodeIds,
+        reconcileRequirement,
+        activeGateCatchupFence,
+        operationWorkflowHandoff,
+      }),
+      retryAfterMs,
+    );
   return Object.freeze({
     schemaVersion: PUBLICATION_ACTIVE_GATE_HANDOFF_SCHEMA_VERSION,
     publicationEpoch,
@@ -154,6 +290,7 @@ function buildPublicationActiveGateHandoffContract(options = {}) {
     pendingReconcileCount: pendingReconcileNodeIds.length,
     activeGateCatchupFence,
     runtimePromotionAllowed,
+    retryAfterMs,
     state: contractState,
     reasonCode: contractReasonCode,
     nextAction: contractNextAction,
@@ -200,6 +337,7 @@ function normalizePublicationActiveGateHandoffContract(value) {
     expectedNodeIds: value[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.EXPECTED_NODE_IDS],
     pendingRecoveryNodeIds: value.pendingRecoveryNodeIds,
     pendingReconcileNodeIds: value.pendingReconcileNodeIds,
+    retryAfterMs: value.retryAfterMs,
     snapshotCoverage: activeGateCatchupFence?.snapshotCoverage,
     activeNodeViews: {
       [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.EFFECTIVE_ACTIVE_NODE_IDS]:
@@ -222,6 +360,11 @@ function buildPublicationActiveGateOwnerOutcomeEnvelope(value = null) {
   const producerOutcome = buildPublicationActiveGateOwnerOutcomeContract(
     normalizedContract,
   );
+  const retryAfterMs = resolvePublicationActiveGateHandoffRetryAfterMs(
+    normalizedContract,
+    handoffContract,
+    value,
+  );
   return buildOwnerOutcomeEnvelope({
     owner: producerOutcome.owner,
     boundary: producerOutcome.boundary,
@@ -231,7 +374,7 @@ function buildPublicationActiveGateOwnerOutcomeEnvelope(value = null) {
     nextAction: producerOutcome.nextAction,
     freshness: producerOutcome.freshness,
     revision: producerOutcome.revision,
-    retryAfterMs: producerOutcome.retryAfterMs,
+    retryAfterMs,
     terminal: producerOutcome.terminal,
     evidence: {
       publicationEpoch: normalizedContract?.publicationEpoch,
@@ -239,6 +382,7 @@ function buildPublicationActiveGateOwnerOutcomeEnvelope(value = null) {
       pendingReconcileNodeIds: normalizedContract?.pendingReconcileNodeIds,
       pendingRecoveryNodeIds: normalizedContract?.pendingRecoveryNodeIds,
       activeGateCatchupFence: normalizedContract?.activeGateCatchupFence,
+      retryAfterMs,
       crossOwnerHandoffContract:
         normalizedContract?.[
           PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.CROSS_OWNER_HANDOFF_CONTRACT
@@ -286,6 +430,7 @@ function projectPublicationActiveGateHandoffToOwnerCohort(
     pendingReconcileCount: contract.pendingReconcileCount,
     activeGateCatchupFence: contract.activeGateCatchupFence,
     runtimePromotionAllowed: contract.runtimePromotionAllowed,
+    retryAfterMs: contract.retryAfterMs,
     nextAction: contract.nextAction,
     activeGateBudget,
     ...(contract.operationWorkflowHandoff ?
@@ -320,23 +465,34 @@ function selectPublicationActiveGateHandoffContract(value = null) {
       directHandoff,
     )
   ) {
-    return selectMostAdvancedPublicationActiveGateHandoffCandidate([
+    const selected = selectMostAdvancedPublicationActiveGateHandoffCandidate([
       progressHandoffContract,
       directHandoff,
     ]);
+    return selectPublicationActiveGateHandoffCandidateWithRetry(
+      selected,
+      value,
+    );
   }
   if (
     isPublicationActiveGateHandoffRecord(
       nestedHandoff,
     )
   ) {
-    return selectMostAdvancedPublicationActiveGateHandoffCandidate([
+    const selected = selectMostAdvancedPublicationActiveGateHandoffCandidate([
       progressHandoffContract,
       nestedHandoff,
     ]);
+    return selectPublicationActiveGateHandoffCandidateWithRetry(
+      selected,
+      value,
+    );
   }
   if (progressHandoffContract) {
-    return progressHandoffContract;
+    return selectPublicationActiveGateHandoffCandidateWithRetry(
+      progressHandoffContract,
+      value,
+    );
   }
   if (
     isPublicationActiveGateHandoffRecord(
@@ -351,7 +507,7 @@ function selectPublicationActiveGateHandoffContract(value = null) {
       ) ?
         value[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLICATION_CONVERGENCE] :
         {};
-    return Object.freeze({
+    const selected = Object.freeze({
       ...publicationConvergence,
       ...activeGateOwnerCohort,
       [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLICATION_CONVERGENCE]:
@@ -373,8 +529,12 @@ function selectPublicationActiveGateHandoffContract(value = null) {
           PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLISHED_ACTIVE_NODE_IDS
         ],
     });
+    return selectPublicationActiveGateHandoffCandidateWithRetry(
+      selected,
+      value,
+    );
   }
-  return value;
+  return selectPublicationActiveGateHandoffCandidateWithRetry(value, value);
 }
 
 function resolvePublicationActiveGateMembershipPublicationTarget(value = null) {
@@ -417,12 +577,12 @@ function hasPublicationActiveGateOwnerReconcileSignal(value = null) {
         selectedHandoffContract[
           PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_RECONCILE_COUNT
         ],
-      ) > Number(0) ||
+      ) > NUM.ZERO ||
       normalizePublicationActiveGateHandoffNodeIdList(
         selectedHandoffContract[
           PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_RECONCILE_NODE_IDS
         ],
-      ).length > Number(0)
+      ).length > NUM.ZERO
     )
   ) {
     return true;
@@ -437,8 +597,8 @@ function hasPublicationActiveGateOwnerReconcileSignal(value = null) {
     PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
       .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION ||
     hasPublicationActiveGateOwnerRecoveryWaitSignal(handoffContract) ||
-    handoffContract.pendingReconcileCount > Number(0) ||
-    handoffContract.pendingReconcileNodeIds.length > Number(0);
+    handoffContract.pendingReconcileCount > NUM.ZERO ||
+    handoffContract.pendingReconcileNodeIds.length > NUM.ZERO;
 }
 
 export {

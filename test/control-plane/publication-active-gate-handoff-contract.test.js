@@ -16,6 +16,7 @@ import {
   PUBLICATION_OPERATION_WORKFLOW_HANDOFF_REASON,
   PUBLICATION_OPERATION_WORKFLOW_HANDOFF_STATE,
   buildPublicationActiveGateHandoffContract,
+  buildPublicationActiveGateOwnerOutcomeEnvelope,
   hasPublicationActiveGateOwnerReconcileSignal,
   projectPublicationActiveGateHandoffToOwnerCohort,
   resolvePublicationActiveGateMembershipPublicationTarget,
@@ -86,6 +87,7 @@ const TEST_SELECTED_SNAPSHOT_OBSERVATION_STATE_DEFERRED_REFRESH =
 const TEST_SELECTED_SNAPSHOT_OBSERVATION_CONTRACT_STATE_DEFERRED =
   'deferred';
 const TEST_SELECTED_SNAPSHOT_OBSERVATION_NEXT_ACTION_RETRY = 'retry';
+const TEST_SELECTED_SNAPSHOT_OBSERVATION_RETRY_AFTER_MS = 100;
 const TEST_JOINED_PENDING_RECONCILE_NODE_IDS = [
   TEST_NODE_2,
   TEST_NODE_3,
@@ -382,6 +384,81 @@ test('publication active-gate selector maps deferred selected snapshot timeout t
       true,
       'selected snapshot timeout should still wake the owner handoff path',
     );
+  });
+
+test('publication active-gate handoff preserves selected timeout retry contract',
+  async (t) => {
+    const diagnostics = {
+      publicationConvergence: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        status: TEST_PUBLICATION_STATUS_PUBLISHED,
+        publishedActiveNodeIds: [TEST_NODE_1],
+        activeGate: {
+          progress: {
+            selectedPublishedActiveNodeIds: [TEST_NODE_1],
+            selectedMissingPublishedNodeIds: [
+              TEST_NODE_2,
+              TEST_NODE_3,
+              TEST_NODE_4,
+              TEST_NODE_5,
+            ],
+            selectedSnapshotNodeId: TEST_NODE_5,
+            selectedSnapshotSourceCause:
+              TEST_SELECTED_SNAPSHOT_SOURCE_TIMEOUT_REASON,
+            selectedSnapshotObservationMode:
+              TEST_SELECTED_SNAPSHOT_OBSERVATION_MODE_REPAIR_DEFERRED,
+            selectedSnapshotObservationState:
+              TEST_SELECTED_SNAPSHOT_OBSERVATION_STATE_DEFERRED_REFRESH,
+            selectedSnapshotObservationContractState:
+              TEST_SELECTED_SNAPSHOT_OBSERVATION_CONTRACT_STATE_DEFERRED,
+            selectedSnapshotObservationNextAction:
+              TEST_SELECTED_SNAPSHOT_OBSERVATION_NEXT_ACTION_RETRY,
+            selectedSnapshotObservationReasonCodes:
+              TEST_SELECTED_SNAPSHOT_TIMEOUT_REASON,
+            selectedSnapshotObservationRetryAfterMs:
+              TEST_SELECTED_SNAPSHOT_OBSERVATION_RETRY_AFTER_MS,
+          },
+        },
+      },
+    };
+    const selected = selectPublicationActiveGateHandoffContract(diagnostics);
+    const envelope = buildPublicationActiveGateOwnerOutcomeEnvelope(
+      diagnostics,
+    );
+    const target = resolvePublicationActiveGateMembershipPublicationTarget({
+      publicationActiveGateHandoff: selected,
+      publicationConvergence: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        publishedActiveNodeIds: [TEST_NODE_1],
+      },
+    });
+
+    t.match(selected, {
+      nextAction:
+        PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.WAIT_OWNER_RECOVERY,
+      pendingRecoveryNodeIds: [TEST_NODE_5],
+      retryAfterMs: TEST_SELECTED_SNAPSHOT_OBSERVATION_RETRY_AFTER_MS,
+    });
+    t.equal(
+      target.handoffContract.retryAfterMs,
+      TEST_SELECTED_SNAPSHOT_OBSERVATION_RETRY_AFTER_MS,
+      'membership handoff target should preserve selected timeout retry timing',
+    );
+    t.match(envelope, {
+      retryAfterMs: TEST_SELECTED_SNAPSHOT_OBSERVATION_RETRY_AFTER_MS,
+      evidence: {
+        retryAfterMs: TEST_SELECTED_SNAPSHOT_OBSERVATION_RETRY_AFTER_MS,
+        crossOwnerHandoffContract: {
+          producerOwnerOutcome: {
+            retryAfterMs: TEST_SELECTED_SNAPSHOT_OBSERVATION_RETRY_AFTER_MS,
+          },
+          retryDeferBehavior: {
+            retryAfterMs: TEST_SELECTED_SNAPSHOT_OBSERVATION_RETRY_AFTER_MS,
+            ownerRecoveryWaitRequired: true,
+          },
+        },
+      },
+    });
   });
 
 test('publication active-gate handoff emits reconcile contract for unpublished publication pending',

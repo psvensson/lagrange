@@ -65,21 +65,21 @@ priority-recovery or active-gate frontier.
 
 ```text
 Representative artifact: test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json
-Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out
-Active package: work/packages/done-20260529-rolling-restart-active-gate-owner-recovery-reentry-drain.md
+Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending
+Active package: work/packages/active-20260529-rolling-restart-active-gate-owner-reconcile-pending-control-plane-handoff.md
 Active package owner: startup_active_gate_owner
 Active package boundary: snapshot_coverage
 Selected cause: owner_reconcile_pending
-Required action: Implement the bounded owner-recovery wait reentry/drain as the selected protocol-layer architecture route for membershipPublicationHandoffOutcome write_deferred evidence.
-Representative status: reduced
+Required action: Implement the bounded control-plane active-gate owner-reconcile handoff/enqueue transition for membershipPublicationHandoffOutcomeEnqueued=false evidence.
+Representative status: active-theory-loop
 Causal outcome: continue_local_fix
 Architecture gate: watching / unknown
-Expected delta: active_gate_timed_out moves to bounded retry progress, reduced snapshot timeout evidence, migration, representative-green, or architecture-gap after one source package.
-Current state: Freshness review rejected the package as a plain runtime-owner-boundary slice; this package now implements the selected R13 protocol architecture route for the remaining owner-recovery write_deferred evidence.
+Expected delta: membershipPublicationHandoffOutcomeEnqueued becomes true or owner_reconcile_pending reduces, snapshot coverage improves, owner boundary migrates, representative turns green, or architecture-gap is recorded after one source package.
+Current state: Fresh representative evidence after the timeout retry contract removed active_gate_timed_out as the dominant reason but still routes active_gate_snapshot_coverage to startup_active_gate_owner / snapshot_coverage with owner_reconcile_pending; failureBundle.controlPlane.activeGateSnapshotCoverage reports membershipPublicationHandoffOutcomeEnqueued=false, selectedControlPlaneOwnerQueuePendingWrites=1, pendingRecoveryCount=1, and progressContract.nextAction=retry.
 Allowed edits: src/control-plane/membership-publication-active-gate-reconcile.js, test/control-plane/membership-publication-active-gate-reconcile-owner-recovery.test.js
-Candidate runtime files: src/admin/admin-control-snapshot-class-part-6.js, src/admin/admin-control-snapshot-publication-handoff.js, src/control-plane/publication-active-gate-handoff-contract-selection.js, src/control-plane/publication-active-gate-handoff-contract.js, src/control-plane/snapshot-service.js, src/control-plane/owner-queue.js
-Forbidden edits: wait_owner_recovery membership-publication evidence must reenter through the owner handoff protocol and report drain/enqueue progress before diagnostics may classify the owner boundary as reduced.
-Required latest proof: falsifier: npm test -- test/control-plane/membership-publication-active-gate-reconcile-owner-recovery.test.js # focused contract fixture, regression: npm test -- test/control-plane/membership-publication-active-gate-reconcile-owner-recovery.test.js test/control-plane/publication-active-gate-handoff-contract.test.js # affected consumer proof, supporting: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --explain active_gate_snapshot_coverage, supporting: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending --explain active_gate_snapshot_coverage, supporting: npm run work:evidence-summary -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json
+Candidate runtime files: unknown
+Forbidden edits: After active_gate_timed_out reduces, control-plane active-gate owner-reconcile handoff evidence must expose bounded enqueue, drain, retry, migration, or architecture-gap before downstream owners are patched.
+Required latest proof: falsifier: npm test -- test/control-plane/membership-publication-active-gate-reconcile-owner-recovery.test.js # focused control-plane handoff enqueue fixture, regression: npm test -- test/control-plane/membership-publication-active-gate-reconcile-owner-recovery.test.js test/control-plane/publication-active-gate-handoff-contract.test.js # affected handoff consumer proof, supporting: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --explain active_gate_snapshot_coverage, supporting: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending --explain active_gate_snapshot_coverage, supporting: npm run work:evidence-summary -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json
 Allowed stop modes: success-condition-met only; representative-green, owner-boundary-migration, architecture-gap, same-frontier, classification-only, needs-rerun, pending, and unknown are package outcomes unless they exactly match the original sprint success condition
 ```
 
@@ -153,7 +153,7 @@ Allowed stop modes: success-condition-met only; representative-green, owner-boun
    - Lane: `causal-escalation`
    - Purpose: Implement the bounded owner-recovery wait reentry/drain source package for membershipPublicationHandoffOutcome write_deferred evidence.
    - First-run reason: The route-selection package kept startup_active_gate_owner / snapshot_coverage on owner_reconcile_pending and selected src/control-plane/membership-publication-active-gate-reconcile.js plus its focused owner-recovery test as the concrete source owner.
-15. [Rolling Restart Active Gate Timeout Retry Contract](../packages/todo-20260529-rolling-restart-active-gate-timeout-retry-contract.md)
+15. [Rolling Restart Active Gate Timeout Retry Contract](../packages/done-20260529-rolling-restart-active-gate-timeout-retry-contract.md)
    - Lane: `runtime-owner-boundary`
    - Purpose: Implement the bounded active-gate timeout retry contract now that owner-recovery wait reentry is enqueued.
    - First-run reason: Fresh representative evidence after the owner-recovery reentry drain reports membershipPublicationHandoffOutcomeEnqueued=true, zero priority-recovery residuals, and a remaining active_gate_timed_out frontier under startup_active_gate_owner / snapshot_coverage.
