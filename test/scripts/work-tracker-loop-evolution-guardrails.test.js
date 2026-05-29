@@ -62,6 +62,7 @@ tap.test('sticky theory ledger (R4)', async (t) => {
     const errors = validateStickyTheoryLedger(
       {status: 'active', owner: 'owner_a', boundary: 'boundary_x',
        lane: 'runtime-owner-boundary',
+       writeScope: ['src/foo.js'],
        theoryLedgerRefs: ['theory-20260520-foo']},
       'work/packages/active-new.md',
       {phase: 'pre-impl', packageDir: dir, ledgerPath},
