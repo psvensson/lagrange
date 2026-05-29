@@ -45,6 +45,8 @@ const FIXTURE_PATH =
   'test/scripts/__fixtures__/topology-convergence/active-gate-snapshot-partial-residual.fixture.json';
 const ACTIVE_GATE_SATURATION_ARTIFACT_PATH =
   'test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json';
+const ACTIVE_GATE_HANDOFF_FIXTURE_PATH =
+  'test/scripts/__fixtures__/topology-convergence/publication-active-gate-reduced-handoff.fixture.json';
 const SATURATED_PACKAGE_ROOT = path.join(TEMP_ROOT, 'saturated-packages');
 const OWNER_STARTUP_ACTIVE_GATE = 'startup_active_gate_owner';
 const BOUNDARY_SNAPSHOT_COVERAGE = 'snapshot_coverage';
@@ -1131,6 +1133,45 @@ test('scenario route blocks runtime promotion for saturated active-gate history'
       summary.runtimePromotionGuard.signals.includes('same-mechanism-repeat'),
     );
     t.match(summary.suggestedPackageCommand, /--lane experiment/u);
+    t.match(
+      summary.suggestedPackageCommand,
+      /--successor-action open-architecture-experiment/u,
+    );
+    t.ok(summary.suggestedProof.some((command) =>
+      command.includes('work:frontier-history')));
+  });
+
+test('scenario route blocks runtime promotion when handoff denies promotion',
+  async (t) => {
+    await writeSaturatedActiveGateHistory();
+    const summary = await buildScenarioRouteSummary({
+      artifactPath: ACTIVE_GATE_HANDOFF_FIXTURE_PATH,
+      owner: OWNER_STARTUP_ACTIVE_GATE,
+      boundary: BOUNDARY_SNAPSHOT_COVERAGE,
+      dominantReason: 'owner_reconcile_pending',
+      explain: 'active_gate_snapshot_coverage',
+      packageDir: SATURATED_PACKAGE_ROOT,
+    });
+
+    t.equal(summary.runtimePromotionGuard.state, 'blocked');
+    t.equal(
+      summary.runtimePromotionGuard.reason,
+      'saturated_history_requires_non_repeated_source_contract',
+    );
+    t.equal(summary.runtimePromotionGuard.owner, 'diagnostics_owner');
+    t.equal(
+      summary.runtimePromotionGuard.boundary,
+      'causal_analysis_framework',
+    );
+    t.equal(summary.runtimePromotionGuard.historyCount, 3);
+    t.ok(
+      summary.runtimePromotionGuard.signals.includes('same-mechanism-repeat'),
+    );
+    t.match(summary.suggestedPackageCommand, /--lane experiment/u);
+    t.notMatch(
+      summary.suggestedPackageCommand,
+      /--lane runtime-owner-boundary/u,
+    );
     t.match(
       summary.suggestedPackageCommand,
       /--successor-action open-architecture-experiment/u,

@@ -110,6 +110,12 @@ function normalizeReasons(reasons) {
   return Array.isArray(reasons) ? reasons : [];
 }
 
+function valueOrAbsent(value) {
+  return value === undefined || value === null || value === EMPTY_TEXT ?
+    ABSENT_VALUE :
+    value;
+}
+
 function summarizeTopology(graph) {
   const witness = selectTopologyConvergenceDominantWitness(graph);
   return {
@@ -132,6 +138,9 @@ function summarizeTopology(graph) {
         witness.source?.runtimePromotionGuardOwner || ABSENT_VALUE,
       runtimePromotionGuardBoundary:
         witness.source?.runtimePromotionGuardBoundary || ABSENT_VALUE,
+      publicationActiveGateHandoffRuntimePromotionAllowed: valueOrAbsent(
+        witness.source?.publicationActiveGateHandoffRuntimePromotionAllowed,
+      ),
     },
     nextExpectedFrontier: graph.nextExpectedFrontier || ABSENT_VALUE,
   };

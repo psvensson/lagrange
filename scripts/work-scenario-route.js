@@ -333,7 +333,22 @@ async function readFrontierHistory({
 function topologyRequiresNonRepeatedSourceContract(representativeEvidence = {}) {
   const witness = representativeEvidence.topology?.dominantWitness || {};
   return witness.runtimePromotionGuard ===
-    RUNTIME_PROMOTION_GUARD_REQUIRES_NON_REPEATED_CONTRACT;
+    RUNTIME_PROMOTION_GUARD_REQUIRES_NON_REPEATED_CONTRACT ||
+    activeGateHandoffDeniesRuntimePromotion(witness);
+}
+
+function isExplicitFalse(value) {
+  return value === false ||
+    String(value).trim().toLowerCase() === 'false';
+}
+
+function activeGateHandoffDeniesRuntimePromotion(witness = {}) {
+  return isExplicitFalse(
+    witness.publicationActiveGateHandoffRuntimePromotionAllowed,
+  ) ||
+    isExplicitFalse(
+      witness.source?.publicationActiveGateHandoffRuntimePromotionAllowed,
+    );
 }
 
 function historyHasArchitectureGap(history = []) {
