@@ -400,3 +400,17 @@ Each entry must include these labels:
 - Supersedes: theory-20260529-rolling-restart-active-gate-post-rerun-system-theory-rederive
 - Superseded by: none
 - Next implication: Runtime promotion remains blocked from this artifact. Because architecture-gap is non-terminal for the sprint, redirect to fresh representative route evidence unless future proof names a non-repeated owner-owned transition, owner-boundary migration, protocol/model/topology route, fresh representative movement, or representative-green result.
+
+## theory-20260529-rolling-restart-release-gate-system-theory-rederive
+
+- Status: supported
+- Scenario/gate: rolling-restart / rolling_restart_fully_green_gate
+- Owner/boundary: release_gate_owner / rolling_restart_fully_green_gate
+- Hypothesis: Release-gate same-mechanism-repeat observation_gap means rerun packages are redirects, not terminal fixes; the sprint must record a system-theory revision before another release-gate route package can activate.
+- Probe: `npm run work:system-theory:rederive -- --owner release_gate_owner --boundary rolling_restart_fully_green_gate --sprint work/sprints/active-2026-q2-spec-led-runtime-modularization.md --write`
+- Artifact/result: test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json - release-gate rederive reports same-mechanism-repeat observation_gap; scenario-route keeps representative evidence on active_gate_snapshot_coverage with runtimePromotionGuard.state=blocked, loopHealth=rederive-in-progress, and priority-recovery residuals 0; frontier-history reports closuresSinceLastRederive=0 and continuationRequired=true.
+- Representative movement: architecture-gap
+- Linked packages: `work/packages/active-20260529-rolling-restart-release-gate-system-theory-rederive.md`
+- Supersedes: none
+- Superseded by: none
+- Next implication: Close the release-gate system-theory rederive as a non-terminal architecture continuation; redirect to the next valid successor, with runtime source promotion still blocked until fresh evidence or an architecture-route implementation selects it.
