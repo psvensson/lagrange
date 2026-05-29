@@ -14,12 +14,12 @@ priority-recovery or active-gate frontier.
 ## Sprint Strategy Brief
 
 - Goal state: `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --fast-local --verbose` exits 0, and canonical evidence shows representative green.
-- Current causal thesis: the fresh post-rederive representative rerun stayed red on `active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out`; priority-recovery residuals are zero, topology shows snapshot coverage 1/5 with selected_snapshot_source_timeout plus snapshot_repair_deferred, active-gate timeout budget is exhausted, and scenario-route blocks runtime promotion through `runtimePromotionGuard.state=blocked`.
+- Current causal thesis: the fresh post-handoff-selection representative rerun stayed red on `active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending`; priority-recovery residuals are zero, topology shows snapshot coverage 1/5 with selected_snapshot_source_timeout plus snapshot_repair_deferred, publication handoff `wait_owner_recovery`, `membershipPublicationHandoffOutcomeEnqueued=false`, and one selected owner pending write, while scenario-route blocks runtime promotion through `runtimePromotionGuard.state=blocked`.
 - Competing hypotheses: H1 a non-repeated active-gate source contract is now discoverable; H2 the active-gate/rebalancer pair remains a coupled invariant needing architecture continuation; H3 the visible active-gate frontier is downstream startup readiness lag; H4 the artifact is stale or instrumentation-only. H1 is blocked until the system-theory rederive names a concrete non-repeated source contract.
-- Confidence and evidence: high that the active handoff-selection architecture experiment is non-terminal; source-context proof shows selected_snapshot_source_timeout plus repair_deferred retry already maps to pending recovery / wait_owner_recovery with runtime promotion denied, `work:scenario-route` keeps `runtimePromotionGuard.state=blocked`, `work:frontier-history` reports exhausted loop health with same-mechanism-repeat plus pair-alternation-post-rederive, and priority-recovery residual witnesses remain zero.
-- Expected green path: close the handoff-selection architecture experiment as architecture-gap continuation, then continue only through fresh representative evidence or proof that names a non-repeated source contract, real owner migration, implementable protocol/model/topology route, fresh representative rerun route, or representative-green proof until the Evidence Anchor is met.
+- Confidence and evidence: high that the active pending-write architecture experiment is non-terminal; source-context proof shows membership-publication active-gate reconcile already exposes bounded drain, owner wake enqueue, and queue-pressure reentry, `work:scenario-route` keeps `runtimePromotionGuard.state=blocked`, `work:frontier-history` reports exhausted loop health with same-mechanism-repeat plus pair-alternation-post-rederive, and priority-recovery residual witnesses remain zero.
+- Expected green path: close the pending-write architecture experiment as architecture-gap continuation, then continue only through fresh representative evidence or proof that names a non-repeated source contract, real owner migration, implementable protocol/model/topology route, fresh representative rerun route, or representative-green proof until the Evidence Anchor is met.
 - Wrong direction signals: closing this sprint on architecture-gap or migration, widening timeouts, weakening admission/readiness, hiding diagnostics, reopening rebalancer handoff while priority-recovery witnesses are zero, or opening another generic startup_active_gate_owner / snapshot_coverage patch after the rederive selected architecture work.
-- Next best package: `work/packages/done-20260529-rolling-restart-active-gate-handoff-contract-selection-architecture-experiment.md`; it records that the candidate handoff-selection source context only expresses the existing wait_owner_recovery/deferred-repair mechanism and does not reopen runtime promotion.
+- Next best package: `work/packages/done-20260529-rolling-restart-active-gate-owner-pending-write-reentry.md`; it records that the candidate pending-write source context already expresses bounded owner-recovery reentry and does not reopen runtime promotion from this artifact.
 - Redirect rule: on same-frontier / no-reduction evidence after the rederive, immediately open a bounded architecture/causal experiment that names a non-repeated owner contract — or run fresh representative route evidence — instead of another local runtime package. This is a redirect, not a stop: the agent keeps executing the next autonomous action and never hands control back; the loop continues until the Evidence Anchor success condition is met. Terminate only for a closed Termination Condition recorded in `## Theory Loop Termination`.
 - Architecture-route forcing (R13): the earlier active-gate protocol route has been implemented and `work:frontier-history` now reports `architectureRouteState: implemented`; this release-gate package is therefore evidence-only. Any future runtime package on the active-gate pair must still satisfy the current compositional gates and carry the required architecture-route marker when those gates demand it.
 
@@ -27,7 +27,7 @@ priority-recovery or active-gate frontier.
 
 - Loop status: running
 - Termination reason: none
-- Next autonomous action: close the active handoff-selection architecture experiment as architecture-gap continuation, then continue through fresh representative evidence or a future proof that names a non-repeated successor or representative-green result. The Evidence Anchor success condition (local rolling-restart harness exits 0 with no active priority-recovery or active-gate frontier) is not yet met, so the loop must not stop.
+- Next autonomous action: close the active pending-write architecture experiment as architecture-gap continuation, then continue through fresh representative evidence or a future proof that names a non-repeated successor or representative-green result. The Evidence Anchor success condition (local rolling-restart harness exits 0 with no active priority-recovery or active-gate frontier) is not yet met, so the loop must not stop.
 
 ## Theory Loop Sprint
 
@@ -65,21 +65,21 @@ priority-recovery or active-gate frontier.
 
 ```text
 Representative artifact: test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json
-Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out
-Active package: work/packages/done-20260529-rolling-restart-active-gate-handoff-contract-selection-architecture-experiment.md
+Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending
+Active package: work/packages/done-20260529-rolling-restart-active-gate-owner-pending-write-reentry.md
 Active package owner: startup_active_gate_owner
 Active package boundary: snapshot_coverage
-Selected cause: active_gate_timed_out
-Required action: Close as architecture-gap continuation; runtime promotion remains blocked unless a future proof names a non-repeated source contract, owner migration, protocol/model/topology route, fresh representative route, or representative-green result.
+Selected cause: owner_reconcile_pending
+Required action: Close the pending-write architecture experiment as architecture-gap continuation; keep runtime files candidate-only because proof did not name a non-repeated source contract.
 Representative status: architecture-gap
 Causal outcome: continue_local_fix
 Architecture gate: selected / keep-runtime-promotion-blocked
-Expected delta: The experiment recorded that handoff contract selection already maps the observed timeout/deferred repair evidence to pending recovery / wait_owner_recovery and therefore does not name a non-repeated source transition.
-Current state: The handoff contract selection architecture experiment found that selected_snapshot_source_timeout plus repair_deferred retry already maps to pending recovery / wait_owner_recovery with runtime promotion denied.
-Allowed edits: work/packages/done-20260529-rolling-restart-active-gate-handoff-contract-selection-architecture-experiment.md, work/sprints/active-2026-q2-spec-led-runtime-modularization.md, work/theory-ledger.md
-Candidate runtime files: src/control-plane/publication-active-gate-handoff-contract-selection.js, src/control-plane/publication-active-gate-handoff-contract-decision.js, src/control-plane/publication-active-gate-handoff-contract-evidence.js, src/control-plane/publication-active-gate-handoff-contract.js, src/control-plane/membership-publication-active-gate-reconcile.js
-Forbidden edits: Runtime promotion must stay blocked unless handoff contract selection names a non-repeated owner-owned transition.
-Required latest proof: falsifier: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12, regression: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage, supporting: npm run work:evidence-summary -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json
+Expected delta: Architecture proof either names a non-repeated pending-write reentry contract, owner-boundary migration, protocol/model/topology route, fresh representative movement, representative-green, or preserves runtime-promotion blockage.
+Current state: Focused proof found the candidate pending-write source context already exposes drain, owner wake enqueue, and queue-pressure reentry, while representative evidence still selects owner_reconcile_pending with enqueued=false, selectedControlPlaneOwnerQueuePendingWrites=1, historyCount=12, and zero priority residual witnesses.
+Allowed edits: work/packages/done-20260529-rolling-restart-active-gate-owner-pending-write-reentry.md, work/sprints/active-2026-q2-spec-led-runtime-modularization.md, work/theory-ledger.md
+Candidate runtime files: src/control-plane/membership-publication-active-gate-reconcile.js, test/control-plane/membership-publication-active-gate-reconcile-owner-recovery.test.js
+Forbidden edits: write_deferred owner handoff evidence must enqueue or drain the selected owner-recovery pending write before downstream readiness work may own the failure.
+Required latest proof: falsifier: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12, regression: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending --explain active_gate_snapshot_coverage, supporting: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --explain active_gate_snapshot_coverage, supporting: npm test -- test/control-plane/membership-publication-active-gate-reconcile-owner-recovery.test.js
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -177,6 +177,11 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Lane: `causal-escalation`
    - Purpose: Run the architecture-gap class discriminator selected by fresh post-rederive active_gate_timed_out evidence before any further active-gate runtime source promotion.
    - First-run reason: Fresh representative evidence after the release-gate rederive stayed red on active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out, scenario-route reports runtimePromotionGuard.state=blocked, and priority-recovery residual witnesses remain zero.
+21. [Rolling Restart Active Gate Owner Pending Write Reentry](../packages/done-20260529-rolling-restart-active-gate-owner-pending-write-reentry.md)
+   - Lane: `causal-escalation`
+   - Purpose: Run the autonomous architecture experiment for the fresh owner_reconcile_pending pending-write evidence while runtime files remain candidate-only.
+   - First-run reason: Fresh representative evidence after the handoff-selection architecture experiment stayed red on active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending, with membershipPublicationHandoffOutcomeEnqueued=false, selectedControlPlaneOwnerQueuePendingWrites=1, and zero priority-recovery residual witnesses; the two-shot same-frontier validator rejected another runtime-owner-boundary package on this pair.
+   - Decision: Focused proof found the candidate source already covers drained snapshot reentry, accepted owner wake enqueue, and queue-pressure reentry; route evidence still blocks runtime promotion with historyCount=12 and zero priority-recovery residual witnesses, so this package closes as architecture-gap continuation.
 
 ## Sprint Proof Ladder
 

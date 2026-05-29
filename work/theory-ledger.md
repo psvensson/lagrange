@@ -442,3 +442,17 @@ Each entry must include these labels:
 - Supersedes: none
 - Superseded by: none
 - Next implication: Close the handoff selection architecture experiment as architecture-gap continuation; do not edit runtime source from this artifact unless a future proof names a non-repeated transition, owner migration, protocol/model/topology route, or representative-green result.
+
+## theory-20260529-rolling-restart-active-gate-owner-pending-write-reentry-architecture-experiment
+
+- Status: supported
+- Scenario/gate: rolling-restart / active_gate_snapshot_coverage
+- Owner/boundary: startup_active_gate_owner / snapshot_coverage
+- Hypothesis: The fresh owner_reconcile_pending pending-write shape is architecture-level saturation unless proof names a non-repeated membership-publication reentry contract.
+- Probe: `npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12`
+- Artifact/result: `test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json` - focused source-context proof found `membership-publication-active-gate-reconcile.js` already covers drained snapshot reentry, accepted owner wake enqueue, and queue-pressure reentry; the focused owner-recovery test passed; scenario-route still reports `runtimePromotionGuard.state=blocked` with `saturated_history_requires_non_repeated_source_contract`, `historyCount=12`, same-mechanism-repeat plus pair-alternation-post-rederive, and zero priority-recovery residual witnesses; topology still reports `membershipPublicationHandoffOutcomeEnqueued=false` with one selected owner pending write.
+- Representative movement: architecture-gap
+- Linked packages: `work/packages/active-20260529-rolling-restart-active-gate-owner-pending-write-reentry.md`
+- Supersedes: theory-20260529-rolling-restart-active-gate-handoff-selection-architecture-experiment
+- Superseded by: none
+- Next implication: Close the pending-write architecture experiment as architecture-gap continuation. Runtime promotion remains blocked until future fresh representative evidence or focused proof names a non-repeated source contract, real owner migration, implementable protocol/model/topology route, fresh representative movement, or representative-green result.
