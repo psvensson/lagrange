@@ -414,3 +414,17 @@ Each entry must include these labels:
 - Supersedes: none
 - Superseded by: none
 - Next implication: Close the release-gate system-theory rederive as a non-terminal architecture continuation; redirect to the next valid successor, with runtime source promotion still blocked until fresh evidence or an architecture-route implementation selects it.
+
+## theory-20260529-rolling-restart-active-gate-timeout-post-rerun-architecture-gap
+
+- Status: supported
+- Scenario/gate: rolling-restart / active_gate_snapshot_coverage
+- Owner/boundary: startup_active_gate_owner / snapshot_coverage
+- Hypothesis: Post-release-gate representative evidence repeats active_gate_timed_out on the saturated active-gate pair; because runtimePromotionGuard is blocked and frontier-history reports same-mechanism-repeat plus pair-alternation-post-rederive, no runtime source work may promote from this artifact unless a future proof names a non-repeated source contract, real owner migration, implementable protocol/model/topology route, or representative-green.
+- Probe: `npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12`
+- Artifact/result: test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json - focused proof keeps active_gate_snapshot_coverage first with active_gate_timed_out, snapshot coverage 1/5, selected_snapshot_source_timeout, snapshot_repair_deferred, zero priority-recovery residual witnesses, runtimePromotionGuard.state=blocked, historyCount=12, loopHealth=exhausted, and route-after-rerun selects open-architecture-experiment.
+- Representative movement: architecture-gap
+- Linked packages: `work/packages/active-20260529-rolling-restart-active-gate-timeout-post-rerun-architecture-gap-analysis.md`
+- Supersedes: none
+- Superseded by: none
+- Next implication: Close this package as architecture-gap analysis and open the autonomous architecture experiment/fresh route selected by route-after-rerun; do not edit runtime source from this artifact until a non-repeated contract, real migration, implementable architecture route, or representative-green proof exists.
