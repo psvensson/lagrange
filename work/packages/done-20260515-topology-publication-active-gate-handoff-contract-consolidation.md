@@ -39,7 +39,7 @@
   "writeScope": [
     "work/packages/done-20260515-topology-publication-active-gate-handoff-contract-consolidation.md",
     "work/packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md",
-    "work/packages/todo-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md",
+    "work/packages/superseded-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md",
     "work/packages/done-20260515-topology-publication-active-gate-handoff-oscillation.md",
     "work/sprints/done-2026-q2-topology-convergence-complexity-reduction.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
@@ -64,7 +64,7 @@
     "test/distributed/harness/__tests__/active-gate-closure-classification.test.js"
   ],
   "handoffFiles": [
-    "work/packages/todo-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md",
+    "work/packages/superseded-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md",
     "work/packages/done-20260515-topology-publication-active-gate-handoff-oscillation.md"
   ],
   "generatedFiles": [
@@ -96,7 +96,7 @@
   "commitScope": [
     "work/packages/done-20260515-topology-publication-active-gate-handoff-contract-consolidation.md",
     "work/packages/active-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md",
-    "work/packages/todo-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md",
+    "work/packages/superseded-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md",
     "work/packages/done-20260515-topology-publication-active-gate-handoff-oscillation.md",
     "work/sprints/done-2026-q2-topology-convergence-complexity-reduction.md",
     "work/sprints/active-2026-q2-topology-convergence-residual-closure.md",
@@ -181,12 +181,12 @@
       "work/packages/done-20260515-topology-publication-convergence-after-active-gate-migration.md / topology_publication_owner / publication_convergence / migrated",
       "work/packages/done-20260515-topology-active-gate-snapshot-coverage-after-publication-owner-stream-fix.md / startup_active_gate_owner / snapshot_coverage / migrated",
       "work/packages/done-20260515-topology-publication-active-gate-handoff-oscillation.md / topology_publication_owner / publication_convergence / migrated",
-      "work/packages/todo-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md / startup_active_gate_owner / snapshot_coverage / same-frontier when sprint stopped"
+      "work/packages/superseded-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md / startup_active_gate_owner / snapshot_coverage / same-frontier when sprint stopped"
     ],
     "oscillationCheck": "The new sprint intentionally stops tactical oscillation and owns the cross-boundary handoff contract as the simplification surface.",
     "handoffInvariant": "Active-gate admission stays strict until the canonical contract shows durable publication truth, active projection, selected snapshot coverage, and expected cohort are compatible."
   },
-  "predecessor": "work/packages/todo-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md",
+  "predecessor": "work/packages/superseded-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md",
   "closed": "2026-05-15",
   "commitAndPushLedgerRequired": true
 }

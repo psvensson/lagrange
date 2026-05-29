@@ -42,9 +42,8 @@ const STOP_CONDITION_RULES = Object.freeze([
   Object.freeze({
     condition: STOP_CONDITION.OWNER_BOUNDARY_MIGRATION,
     reasons: Object.freeze([REASON_STARTUP_READINESS_BOUNDARY]),
-    matches: (snapshot) => snapshot.failureClasses.includes(
-      FAILURE_CLASS.STARTUP_READINESS_BLOCKED,
-    ),
+    matches: (snapshot) =>
+      snapshot.dominantFailureClass === FAILURE_CLASS.STARTUP_READINESS_BLOCKED,
   }),
   Object.freeze({
     condition: STOP_CONDITION.CLASSIFIED_BACKPRESSURE,
@@ -100,6 +99,7 @@ function buildConditionEvidence(invariantReview, taxonomy) {
   const snapshot = {
     failedInvariantCount: failedInvariants.length,
     unknownInvariantCount: unknownInvariants.length,
+    dominantFailureClass: taxonomy.dominantFailureClass,
     failureClasses: taxonomy.classes.map((entry) => entry.failureClass),
   };
   return Object.fromEntries(STOP_DECISION_TABLE.map((row) => [

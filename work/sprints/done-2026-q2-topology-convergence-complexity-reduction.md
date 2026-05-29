@@ -42,7 +42,7 @@ Reason:
 
 Stopped package retained as dormant context:
 
-1. [Topology Active Gate Snapshot Coverage After Publication Handoff](../packages/todo-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md)
+1. [Topology Active Gate Snapshot Coverage After Publication Handoff](../packages/superseded-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md)
 
 ## Scope Basis
 

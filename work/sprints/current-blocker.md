@@ -4,229 +4,254 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: No active work package. Start a new package when implementation resumes.
+Theory under test: H1 diagnostics needs a guard that keeps saturated runtime promotion blocked.
 
-Causal question: none
+Causal question: After diagnostics route correction, rolling-restart still routes active_gate_snapshot_coverage to startup_active_gate_owner / snapshot_coverage, but prior architecture-gap history blocks another unchanged runtime patch.
 
-Implementation slice: Create or activate one focused package for the next executable concern.
+Implementation slice: src/diagnostics/topology-convergence-graph.js may encode the diagnostics-owned promotion guard only if proof cannot name a non-repeated active-gate source contract.
 
 Implementation files:
 
-1. None recorded
+1. `src/diagnostics/topology-convergence-graph.js`
+2. `src/diagnostics/stop-condition-decision.js`
+3. `test/diagnostics/stop-condition-decision.test.js`
+4. `src/admin/admin-control-snapshot-repair-diagnostics.js`
+5. `src/bootstrap/bootstrap-api-control-plane-methods.js`
+6. `src/control-plane/membership-publication-active-gate-reconcile.js`
+7. `src/control-plane/publication-active-gate-handoff-contract-selection.js`
 
-Expected implementation delta: unknown
+Expected implementation delta: runtime promotion remains blocked, a non-repeated source contract is named, or owner boundary migrates.
 
-Falsifying probe: unknown
+Falsifying probe: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12
 
-Stop rule: unknown
+Stop rule: if proof names a concrete non-repeated active-gate owner source contract, supersede this guard and open that source package; stop or escalate on unchanged same-frontier, no-reduction, or architecture-gap evidence
 
 Sprint: `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
 
-Package: `none`
+Package: `work/packages/active-20260529-rolling-restart-active-gate-saturation-route-guard.md`
 
-Workflow lane: `none`
+Workflow lane: `experiment`
 
-Scenario: `none`
+Scenario: `rolling-restart`
 
-Artifact: `none`
+Artifact: `test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json`
 
 Playback: `none`
 
 ## Boundary
 
-Owner: `none`
+Owner: `diagnostics_owner`
 
-Boundary: `none`
+Boundary: `causal_analysis_framework`
 
-Dominant reason: `none`
+Dominant reason: `active_gate_saturated_after_diagnostics_route`
 
-Current state: No active work package. Start a new package when implementation resumes.
+Current state: The diagnostics stop-condition fix reroutes the post-architecture-gap artifact from readiness migration to classified local blocker, but prior architecture-gap evidence still blocks another unchanged active-gate runtime patch.
 
 ## Next Action
 
-Create or activate one focused package for the next executable concern.
+Test whether the corrected local-blocker route needs a diagnostics-owned architecture guard before any active-gate runtime source promotion.
 
 ## Proof Ladder
 
-1. None recorded
+1. `falsifier: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12`
+2. `regression: npm run work:scenario-route -- test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason snapshot_coverage_incomplete --explain active_gate_snapshot_coverage`
+3. `supporting: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json --explain active_gate_snapshot_coverage`
 
 ## Model Fit
 
-Package class: `unknown`
+Package class: `experiment`
 
-Intended minimum model: `unknown`
+Intended minimum model: `gpt-5.3-codex-spark`
 
-Scope shape: `unknown`
+Scope shape: `bounded-diagnostics-model-probe/source-owned`
 
-Output profile: `unknown`
+Output profile: `medium`
 
 Escalation triggers:
 
-1. None recorded
+1. `proof names a concrete non-repeated active-gate owner source contract`
+2. `proof selects owner-boundary migration`
+3. `proof requires runtime files before the guard decision`
 
 ## System Theory
 
-Problem statement: unknown
+Problem statement: After diagnostics route correction, rolling-restart still routes active_gate_snapshot_coverage to startup_active_gate_owner / snapshot_coverage, but prior architecture-gap history blocks another unchanged runtime patch.
 
 Phase chain:
 
-1. None recorded
+1. `The predecessor fixes stop-condition selection.`
+2. `The latest artifact still exposes active_gate_snapshot_coverage as local blocker.`
+3. `Architecture-gap history says local active-gate source promotion is saturated.`
+4. `A diagnostics source guard must decide whether source promotion stays blocked or a non-repeated contract is selected.`
 
 Owner-boundary map:
 
-1. None recorded
+1. `diagnostics_owner / causal_analysis_framework: owns the promotion guard decision.`
+2. `startup_active_gate_owner / snapshot_coverage: runtime frontier, candidate-only until the guard selects a non-repeated contract.`
 
 Stable facts:
 
-1. None recorded
+1. `Scenario remains rolling-restart.`
+2. `Priority recovery residuals are zero.`
+3. `Startup readiness is downstream.`
 
 Changed facts:
 
-1. None recorded
+1. `Stop-condition decision no longer migrates to readiness on downstream class membership.`
+2. `The corrected route exposes the saturated active-gate local blocker again.`
 
 Competing theories:
 
-1. None recorded
+1. `H1 diagnostics needs a guard that keeps saturated runtime promotion blocked.`
+2. `H2 proof names a concrete non-repeated active-gate owner source contract.`
 
 Eliminated theories:
 
-1. None recorded
+1. `Startup readiness is not first frontier in the predecessor proof.`
+2. `Priority recovery source work has zero residual witnesses.`
 
 Downstream symptoms:
 
-1. None recorded
+1. `startup readiness retryable support evidence`
 
 Transition table:
 
-1. None recorded
+1. Input `corrected local active_gate_snapshot_coverage plus saturated history` owner `diagnostics_owner / causal_analysis_framework`; missing `guard runtime promotion or name a non-repeated source contract`; expected `frontier-history and scenario-route select guard, migration, or non-repeated source contract`; falsifier `npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12`; migration trigger `canonical evidence names a different deciding owner and boundary`
 
 Ownership migration triggers:
 
-1. None recorded
+1. `Migrate only when canonical evidence names a different deciding owner and boundary.`
 
 Architecture-gap triggers:
 
-1. None recorded
+1. `Stop as architecture-gap if no non-repeated source contract is selected.`
 
-Whole-system invariant: unknown
+Whole-system invariant: Correcting route classification cannot by itself reopen a saturated runtime patch loop.
 
 ## Slice Theory
 
-System theory reference: unknown
+System theory reference: work/packages/active-20260529-rolling-restart-active-gate-saturation-route-guard.md systemTheory
 
-Selected system theory: unknown
+Selected system theory: H1 diagnostics needs a guard that keeps saturated runtime promotion blocked.
 
-Selected mechanism: unknown
+Selected mechanism: model_gap with contract_gap as alternate
 
-Source/test contract: unknown
+Source/test contract: src/diagnostics/topology-convergence-graph.js may encode the diagnostics-owned promotion guard only if proof cannot name a non-repeated active-gate source contract.
 
-Falsifier: unknown
+Falsifier: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12
 
-Representative expected movement: unknown
+Representative expected movement: runtime promotion remains blocked, a non-repeated source contract is named, or owner boundary migrates.
 
-Kill rule: unknown
+Kill rule: if proof names a concrete non-repeated active-gate owner source contract, supersede this guard and open that source package; stop or escalate on unchanged same-frontier, no-reduction, or architecture-gap evidence
 
 Theory-fit score:
 
-1. `evidenceFit`: unknown
-2. `ownerBoundaryFit`: unknown
-3. `falsifiability`: unknown
-4. `representativeMovement`: unknown
-5. `downstreamRiskContainment`: unknown
+1. `evidenceFit`: medium - successor starts from corrected route plus architecture-gap history.
+2. `ownerBoundaryFit`: high - diagnostics owns route and promotion guard selection.
+3. `falsifiability`: high - frontier-history can falsify the saturation premise.
+4. `representativeMovement`: medium - guard prevents repeated patches but does not make rolling-restart green.
+5. `downstreamRiskContainment`: high - runtime files remain candidates only.
 
 Wrong-slice triggers:
 
-1. None recorded
+1. `proof names a non-repeated active-gate source contract`
+2. `proof selects owner-boundary migration`
+3. `proof requires runtime edits before the diagnostics guard decision`
 
 ## Theory Ledger References
 
-1. None recorded
+1. `theory-20260529-rolling-restart-active-gate-snapshot-coverage-architecture-gap-stop`
 
 ## Representative Residual
 
-Status: `unknown`
+Status: `pending-before-probe`
 
-Scenario: `unknown`
+Scenario: `rolling-restart`
 
-Artifact: `unknown`
+Artifact: `test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json`
 
-Frontier: `unknown`
+Frontier: `active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage after diagnostics route correction`
 
-Owner: `unknown`
+Owner: `diagnostics_owner`
 
-Boundary: `unknown`
+Boundary: `causal_analysis_framework`
 
-Dominant reason: `unknown`
+Dominant reason: `active_gate_saturated_after_diagnostics_route`
 
-Next action: `unknown`
+Next action: `Decide whether diagnostics should guard active-gate runtime promotion until fresh evidence or a non-repeated source contract exists.`
 
 ## Causal Governance
 
-Causal hypothesis: `unknown`
+Causal hypothesis: `The route correction is supported, but active-gate source promotion remains blocked by saturated architecture-gap history unless diagnostics records a non-repeated route or guard.`
 
-Stop-condition check: `unknown`
+Stop-condition check: `npm run analyze:causal-model -- test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json; npm run work:scenario-route -- test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason snapshot_coverage_incomplete --explain active_gate_snapshot_coverage`
 
-Expected causal-model change: `unknown`
+Expected causal-model change: `The package should either preserve runtime promotion as blocked or name a concrete non-repeated owner source contract.`
 
-Representative outcome: `unknown`
+Representative outcome: `pending-before-rerun`
 
-Causal debt: `unknown`
+Causal debt: `Rolling-restart remains red at active_gate_snapshot_coverage with selected_snapshot_source_timeout and snapshot_repair_deferred.`
 
-Cross-boundary review: `unknown`
+Cross-boundary review: `Do not edit active-gate runtime files unless the falsifier names a non-repeated owner source contract.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `unknown`
+Reference scenario/probe: `rolling-restart active-gate saturation route guard`
 
 Phase chain:
 
-1. None recorded
+1. `diagnostics stop-condition selection now respects the dominant active-gate failure class`
+2. `the corrected route still leaves active_gate_snapshot_coverage as the local blocker`
+3. `prior architecture-gap evidence blocks another unchanged active-gate runtime source patch`
+4. `diagnostics must decide whether to guard runtime promotion or name a non-repeated source contract`
 
-Current first frontier: `unknown`
+Current first frontier: `diagnostics_owner / causal_analysis_framework over active_gate_snapshot_coverage promotion guard`
 
 Known downstream blockers:
 
-1. None recorded
+1. `startup_readiness_owner remains downstream`
+2. `active-gate runtime files remain candidates only`
 
-Missing causal edge: `unknown`
+Missing causal edge: `diagnostics route model must distinguish corrected local blocker from permission to reopen saturated runtime patching.`
 
-Missing causal edge probe: `unknown`
+Missing causal edge probe: `npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12`
 
-Bounded progress proof: `unknown`
+Bounded progress proof: `Focused proof should either keep runtime promotion blocked or name one non-repeated wake, retry, timeout, reconcile, drain, dispatch, delivery, timer, advance, or bounded progress source contract.`
 
-Bounded progress proof artifact: `unknown`
+Bounded progress proof artifact: `test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json`
 
-Expected observable transition: `unknown`
+Expected observable transition: `No active-gate runtime source package opens from the unchanged artifact unless a non-repeated route is named.`
 
-Max progress bound: `unknown`
+Max progress bound: `one diagnostics source package before runtime promotion`
 
-Same-frontier fallback: `unknown`
+Same-frontier fallback: `Keep runtime promotion blocked and record architecture guard evidence.`
 
-Expected next frontier: `unknown`
+Expected next frontier: `diagnostics guard, non-repeated source contract, owner-boundary migration, fresh representative evidence, or representative-green`
 
-Result classification: `unknown`
+Result classification: `pending-before-probe`
 
-Stop condition: `unknown`
+Stop condition: `continue-local-fix`
 
 Recent frontier history:
 
 1. None recorded
 
-Oscillation check: `unknown`
+Oscillation check: `This package is explicitly about preventing repeated local runtime patching after a diagnostics route correction.`
 
-Handoff invariant: `unknown`
+Handoff invariant: `Downstream readiness and active-gate runtime files stay frozen until the guard or a non-repeated contract is selected.`
 
 ## Observable Prediction
 
-Metric: `unknown`
+Metric: `rolling-restart post-diagnostics active-gate promotion route`
 
-Predicted: `unknown`
+Predicted: `frontier-history and corrected scenario-route will keep active_gate_snapshot_coverage local while prior architecture-gap evidence keeps runtime promotion blocked until a non-repeated contract is named.`
 
-Observed: `unknown`
+Observed: `pending-before-observation`
 
-Accuracy: `unknown`
+Accuracy: `pending-before-observation`
 
-Evidence: `unknown`
+Evidence: `pending-before-observation`
 
 Metric delta: `unknown`
 
@@ -244,73 +269,66 @@ Evidence: `unknown`
 
 ## Rerun Decision
 
-Source artifact: `unknown`
+Source artifact: `test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json`
 
-Route owner: `unknown`
+Route owner: `diagnostics_owner`
 
-Route boundary: `unknown`
+Route boundary: `causal_analysis_framework`
 
-Route dominant reason: `unknown`
+Route dominant reason: `active_gate_saturated_after_diagnostics_route`
 
-Route causal outcome: `unknown`
+Route causal outcome: `pending-before-rerun`
 
-Stop mode: `unknown`
+Stop mode: `pending-before-rerun`
 
-Next lane: `unknown`
+Next lane: `experiment`
 
-Expected delta: `unknown`
+Expected delta: `Select fresh representative evidence, a non-repeated owner-owned transition, an owner-boundary migration, or a diagnostics-owned architecture guard before any active-gate runtime source promotion.`
 
 Required refresh commands:
 
-1. None recorded
-
-## Classification Efficiency
-
-Default mode: `unknown`
-
-Separate package reason: `unknown`
-
-Artifact budget: `unknown`
-
-Proof command budget: `unknown`
-
-Commands:
-
-1. None recorded
-
-Decision record: `unknown`
-
-Successor action: `unknown`
-
-Runtime promotion rule: `unknown`
+1. `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json --successor work/packages/active-20260529-rolling-restart-active-gate-saturation-route-guard.md`
+2. `update Sprint Strategy Brief from the route result`
+3. `update Current Edge Card from the route result`
+4. `refresh current-blocker with npm run work:repair`
+5. `npm run work:validate -- --entry work/packages/active-20260529-rolling-restart-active-gate-saturation-route-guard.md`
+6. `npm run work:validate -- --pre-impl work/packages/active-20260529-rolling-restart-active-gate-saturation-route-guard.md`
 
 ## Architecture Decision Gate
 
-Status: `unknown`
+Status: `watching`
 
-Trigger: `unknown`
+Trigger: `frontier-oscillation`
 
 Trigger evidence:
 
-1. None recorded
+1. `frontier returned to a recently closed related boundary`
+2. `work/packages/done-20260529-rolling-restart-causal-stop-dominant-frontier-selection.md / diagnostics_owner / causal_analysis_framework / reduced`
+3. `work/packages/done-20260529-rolling-restart-priority-recovery-rebalancer-handoff-retry-scheduled.md / operation_workflow_owner / rebalancer_handoff / migrated`
+4. `work/packages/done-20260529-rolling-restart-active-gate-snapshot-repair-deferred-retry.md / startup_active_gate_owner / snapshot_coverage / reduced`
 
 Choices:
 
-1. None recorded
+1. `continue-local-proof` route=`continue-local-proof` - Continue with a bounded local proof if the missing edge stays inside this owner boundary.
+2. `migrate-owner-boundary` route=`owner-boundary-migration` - Migrate the active package to the owner boundary named by the first frontier evidence.
+3. `open-architecture-package` route=`architecture-package` - Open a bounded autonomous architecture experiment for the missing owner contract.
+4. `human-escalation` route=`human-escalation` - Escalate to a human only when evidence is contradictory, policy-blocked, credential-blocked, or unavailable.
 
 Selected choice: `unknown`
 
-Gate next action: unknown
+Gate next action: Watch for repeated frontier oscillation; open an autonomous architecture experiment if another local proof returns here unchanged.
 
 ## Scope
 
 Write scope:
 
-1. None recorded
+1. `src/diagnostics/topology-convergence-graph.js`
+2. `src/diagnostics/stop-condition-decision.js`
+3. `test/diagnostics/stop-condition-decision.test.js`
 
 Handoff files:
 
-1. None recorded
+1. `test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json`
 
 Generated files:
 
@@ -319,11 +337,19 @@ Generated files:
 
 Candidate runtime files:
 
-1. None recorded
+1. `src/admin/admin-control-snapshot-repair-diagnostics.js`
+2. `src/bootstrap/bootstrap-api-control-plane-methods.js`
+3. `src/control-plane/membership-publication-active-gate-reconcile.js`
+4. `src/control-plane/publication-active-gate-handoff-contract-selection.js`
 
 Commit scope:
 
-1. None recorded
+1. `src/diagnostics/topology-convergence-graph.js`
+2. `work/packages/active-20260529-rolling-restart-active-gate-saturation-route-guard.md`
+3. `work/sprints/current-blocker.json`
+4. `work/sprints/current-blocker.md`
+5. `src/diagnostics/stop-condition-decision.js`
+6. `test/diagnostics/stop-condition-decision.test.js`
 
 Legacy touched files:
 

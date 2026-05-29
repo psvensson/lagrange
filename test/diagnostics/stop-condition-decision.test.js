@@ -29,9 +29,14 @@ const ACTIVE_GATE_STATE_STALLED = 'stalled';
 const PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
 const PUBLICATION_PROTOCOL_STEADY_PUBLISHED = 'steady_published';
 const READINESS_CLASS_SNAPSHOT_TIMEOUT = 'snapshot_timeout';
+const READINESS_CLASS_DEPENDENCY_UNAVAILABLE = 'dependency_unavailable';
 const READINESS_RECOVERABILITY_RECOVERABLE = 'recoverable';
 const READINESS_SOURCE_SELECTED_SNAPSHOT_ERROR = 'selectedSnapshotError';
+const READINESS_SOURCE_STARTUP_SUPPORT = 'startup_support';
 const READINESS_CAUSE_SNAPSHOT_TIMEOUT = 'snapshot_timeout';
+const READINESS_CAUSE_DEPENDENCY_UNAVAILABLE = 'dependency_unavailable';
+const READINESS_NODE_REASON_DEPENDENCY_UNAVAILABLE =
+  'dependency_unavailable=cluster_membership';
 const SNAPSHOT_COVERAGE_COUNT = 0;
 const EXPECTED_NODE_COUNT = 5;
 const SELECTED_SNAPSHOT_SOURCE_NODE_ID =
@@ -126,6 +131,25 @@ function buildSelectedSnapshotTimeoutReport() {
   };
 }
 
+function buildActiveGateDominantWithReadinessBlockerReport() {
+  const report = buildSelectedSnapshotTimeoutReport();
+  const scenario = report.scenarios[0];
+  scenario.readinessFailure = {
+    classCode: READINESS_CLASS_DEPENDENCY_UNAVAILABLE,
+    recoverability: READINESS_RECOVERABILITY_RECOVERABLE,
+    source: READINESS_SOURCE_STARTUP_SUPPORT,
+    cause: READINESS_CAUSE_DEPENDENCY_UNAVAILABLE,
+  };
+  scenario.readiness = {
+    nodeReasonsByNodeId: {
+      [SELECTED_SNAPSHOT_SOURCE_NODE_ID]: [
+        READINESS_NODE_REASON_DEPENDENCY_UNAVAILABLE,
+      ],
+    },
+  };
+  return report;
+}
+
 function assertNoNullOrUndefined(value) {
   assert.notEqual(value, NULL_VALUE);
   assert.notEqual(value, UNDEFINED_VALUE);
@@ -201,6 +225,32 @@ describe('StopConditionDecision', () => {
       ),
     );
     assert.equal(failureClasses.includes(FAILURE_CLASS.STARTUP_READINESS_BLOCKED), false);
+    assertNoNullOrUndefined(artifact);
+  });
+
+  it('keeps active-gate dominant evidence local when readiness blockers are downstream', () => {
+    const artifact = buildCausalAnalysis(buildActiveGateDominantWithReadinessBlockerReport());
+    const failureClasses = artifact.failureTaxonomy.classes.map((entry) => entry.failureClass);
+
+    assert.equal(artifact.stopDecision.outcome, STOP_OUTCOME.CONTINUE_LOCAL_FIX);
+    assert.equal(artifact.stopDecision.condition, STOP_CONDITION.CLASSIFIED_LOCAL_BLOCKER);
+    assert.deepEqual(artifact.stopDecision.reasons, [
+      LOCAL_RUNTIME_OWNER_BLOCKER_REASON,
+    ]);
+    assert.equal(
+      artifact.failureTaxonomy.dominantFailureClass,
+      FAILURE_CLASS.ACTIVE_GATE_SNAPSHOT_COVERAGE_INCOMPLETE,
+    );
+    assert.equal(
+      artifact.stopDecision.dominantFailureClass,
+      FAILURE_CLASS.ACTIVE_GATE_SNAPSHOT_COVERAGE_INCOMPLETE,
+    );
+    assert.ok(
+      failureClasses.includes(
+        FAILURE_CLASS.ACTIVE_GATE_SNAPSHOT_COVERAGE_INCOMPLETE,
+      ),
+    );
+    assert.ok(failureClasses.includes(FAILURE_CLASS.STARTUP_READINESS_BLOCKED));
     assertNoNullOrUndefined(artifact);
   });
 

@@ -19,7 +19,7 @@ Reason:
 
 Stopped active package retained as dormant context:
 
-1. [Topology Active Gate Snapshot Coverage After Publication Handoff](../packages/todo-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md)
+1. [Topology Active Gate Snapshot Coverage After Publication Handoff](../packages/superseded-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md)
 
 Original successor baseline:
 `done-2026-q2-topology-convergence-ship-shape.md`.
@@ -559,7 +559,7 @@ Final closure requires fresh evidence proving all of the following:
       `active_gate_snapshot_coverage` under
       `startup_active_gate_owner / snapshot_coverage` as first frontier.
 
-22. [Topology Active Gate Snapshot Coverage After Publication Handoff](../packages/todo-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md)
+22. [Topology Active Gate Snapshot Coverage After Publication Handoff](../packages/superseded-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md)
     - Lane: `causal-escalation`
     - Owner boundary: `startup_active_gate_owner / snapshot_coverage`
     - Purpose: own the active-gate selected snapshot timeout and
@@ -643,7 +643,7 @@ reaches cluster active. Canonical extraction still selects
 `snapshot_coverage_incomplete` and `snapshot_repair_deferred`.
 
 Continue
-[Topology Active Gate Snapshot Coverage After Publication Handoff](../packages/todo-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md).
+[Topology Active Gate Snapshot Coverage After Publication Handoff](../packages/superseded-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md).
 
 - Artifact: `test-output/reports/rolling-restart-after-forced-snapshot-local-fallback-20260515-codex.report.json`
 - First frontier: `active_gate_snapshot_coverage`

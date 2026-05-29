@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
+  "status": "superseded",
   "intent": {
     "opened": "2026-05-15",
     "lane": "causal-escalation",
@@ -15,12 +15,17 @@
     "dominantReason": "active_gate_timed_out",
     "currentState": "Publication catch-up is now reachable from repair-deferred active-gate snapshots with owner_reconcile_pending evidence, but fresh representative evidence remains same-frontier red: all five nodes are active by status, selected snapshot coverage is 2/5, producer publication remains PUBLISHED with pendingAck=0, publishedActive=1/5, and missingPublished=4, and activeGateOwnerCohort still reports two pending reconcile node IDs. The selected snapshot exposes repair_deferred/deferred_refresh/deferred/deferred/retry with retryAfterMs=14976 and reason codes cache_stale_watermark, discovery_node_coverage_gap, and stale_replica_operations_in_flight. Canonical priority recovery extraction now names a subordinate operation_workflow_owner / workflow_progress witness on control_plane_publications-p1 with actuationState=persisted_not_dispatched and nextRequiredAction=advance_existing_operation.",
     "nextAction": "Do not relax active-gate admission. Use the same artifact to split or promote the subordinate operation_workflow_owner / workflow_progress residual if the active-gate publication catch-up remains same-frontier after this slice; otherwise continue the active-gate owner path only with owner-file proof.",
-    "predecessor": "work/packages/done-20260515-topology-publication-active-gate-handoff-oscillation.md"
+    "predecessor": "work/packages/done-20260515-topology-publication-active-gate-handoff-oscillation.md",
+    "closed": "2026-05-29"
   },
   "scope": {
     "writeScope": [
       "work/packages/todo-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md",
+      "work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md",
+      "work/packages/done-20260515-topology-publication-active-gate-handoff-contract-consolidation.md",
       "work/packages/done-20260515-topology-publication-active-gate-handoff-oscillation.md",
+      "work/packages/done-20260518-startup-active-gate-snapshot-coverage-after-publication-handoff-classification.md",
+      "work/sprints/done-2026-q2-topology-convergence-complexity-reduction.md",
       "work/sprints/done-2026-q2-topology-convergence-residual-closure.md",
       "work/tracks/topology-convergence.md",
       "work/model-ledger.jsonl",
@@ -66,7 +71,11 @@
     ],
     "commitScope": [
       "work/packages/todo-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md",
+      "work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md",
+      "work/packages/done-20260515-topology-publication-active-gate-handoff-contract-consolidation.md",
       "work/packages/done-20260515-topology-publication-active-gate-handoff-oscillation.md",
+      "work/packages/done-20260518-startup-active-gate-snapshot-coverage-after-publication-handoff-classification.md",
+      "work/sprints/done-2026-q2-topology-convergence-complexity-reduction.md",
       "work/sprints/done-2026-q2-topology-convergence-residual-closure.md",
       "work/tracks/topology-convergence.md",
       "work/sprints/current-blocker.md",
@@ -181,7 +190,8 @@
     ],
     "oscillationCheck": "The cross-boundary publication handoff package closed stale publication_pending reentry. This successor must not reopen publication unless canonical extraction promotes publication_ack_convergence as first frontier again.",
     "handoffInvariant": "The track related-work constraint now applies: active-gate admission must stay strict while the owner-reconcile catch-up edge remains pending."
-  }
+  },
+  "commitAndPushLedgerRequired": true
 }
 -->
 

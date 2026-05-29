@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
+  "status": "superseded",
   "intent": {
     "opened": "2026-05-28",
     "lane": "runtime-owner-boundary",
@@ -14,7 +14,8 @@
     "boundary": "snapshot_coverage",
     "dominantReason": "active_gate_timed_out",
     "currentState": "Package opened with declared owner, boundary, scope, proof, and stop rule.",
-    "nextAction": "Triage active_gate_timed_out and implement snapshot_coverage in control plane"
+    "nextAction": "Triage active_gate_timed_out and implement snapshot_coverage in control plane",
+    "closed": "2026-05-29"
   },
   "scope": {
     "writeScope": [
@@ -195,7 +196,8 @@
       "proof requires runtime files outside writeScope",
       "proof cannot select a concrete transition or migration"
     ]
-  }
+  },
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -410,13 +412,12 @@ If a fallback to raw JSON, raw logs, or ad hoc `jq` is needed, record which cano
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [ ] action: implementation; owner: startup_active_gate_owner; files-changed: none recorded yet; validation: npm run work:evidence-summary -- test-output/reports/rolling-restart-active-gate-owner-reconcile-pending-recovery-contract-20260528T130000Z.report.json and parent revalidated focused proof: yes before closure; outcome: pending.
-- [ ] action: verification-fix; owner: startup_active_gate_owner; files-changed: none recorded yet; validation: verifier reruns focused proof and parent revalidated focused proof: yes before closure; outcome: pending.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: pending.
+- [x] action: implementation; owner: startup_active_gate_owner; files-changed: none; validation: superseded before implementation by newer 2026-05-29 diagnostics package after latest canonical evidence selected `snapshot_coverage_incomplete` and exposed stop-condition owner-boundary misclassification; parent revalidated focused proof: yes; outcome: superseded.
+- [x] action: verification-fix; owner: startup_active_gate_owner; files-changed: none; validation: superseded before verification because the old runtime scope would repeat a same-frontier local active-gate patch blocked by current frontier-history evidence; parent revalidated focused proof: yes; outcome: superseded.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: none; validation: stale package superseded to release the alternating-pair mutex for `work/packages/done-20260529-rolling-restart-causal-stop-dominant-frontier-selection.md`; outcome: superseded.
 
 ## Validation
 
 1. npm run work:evidence-summary -- test-output/reports/rolling-restart-active-gate-owner-reconcile-pending-recovery-contract-20260528T130000Z.report.json
 2. npm run work:scenario-triage -- test-output/reports/rolling-restart-active-gate-owner-reconcile-pending-recovery-contract-20260528T130000Z.report.json --markdown
 3. npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-active-gate-owner-reconcile-pending-recovery-contract-20260528T130000Z.report.json --markdown
-

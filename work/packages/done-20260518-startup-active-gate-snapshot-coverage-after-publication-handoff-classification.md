@@ -29,7 +29,7 @@
   "handoffFiles": [
     "work/packages/done-20260518-rolling-restart-topology-publication-owner-publication-conve.md",
     "work/packages/done-20260518-priority-recovery-rebalancer-handoff-after-publication-count-only-classification.md",
-    "work/packages/todo-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md",
+    "work/packages/superseded-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md",
     "test-output/reports/rolling-restart-after-publication-count-only-unknown-20260518T074802Z.report.json"
   ],
   "generatedFiles": [

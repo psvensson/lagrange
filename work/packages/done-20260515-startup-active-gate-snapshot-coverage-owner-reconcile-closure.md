@@ -76,7 +76,7 @@
   ],
   "handoffFiles": [
     "work/packages/done-20260515-topology-publication-active-gate-handoff-contract-consolidation.md",
-    "work/packages/todo-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md"
+    "work/packages/superseded-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md"
   ],
   "generatedFiles": [
     "work/sprints/current-blocker.md",
@@ -200,7 +200,7 @@
     "stopCondition": "migrate-owner-boundary",
     "recentFrontierHistory": [
       "work/packages/done-20260515-topology-publication-active-gate-handoff-contract-consolidation.md / topology_publication_owner / publication_active_gate_handoff_contract / reduced",
-      "work/packages/todo-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md / startup_active_gate_owner / snapshot_coverage / dormant stopped-sprint context",
+      "work/packages/superseded-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md / startup_active_gate_owner / snapshot_coverage / dormant stopped-sprint context",
       "work/packages/done-20260515-topology-publication-active-gate-handoff-oscillation.md / topology_publication_owner / publication_convergence / migrated"
     ],
     "oscillationCheck": "The prior oscillation boundary was reduced by the canonical handoff contract. This package owns the current active-gate snapshot coverage gate and must not duplicate handoff truth.",

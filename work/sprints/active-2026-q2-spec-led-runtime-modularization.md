@@ -57,23 +57,23 @@ priority-recovery or active-gate frontier.
 ## Current Edge Card
 
 ```text
-Representative artifact: test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json
-Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / snapshot_coverage_incomplete
-Active package: work/packages/done-20260529-rolling-restart-active-gate-snapshot-coverage-architecture-gap-analysis.md
-Active package owner: startup_active_gate_owner
-Active package boundary: snapshot_coverage
-Selected cause: snapshot_coverage_incomplete
-Required action: Analyze the startup_active_gate_owner / snapshot_coverage coupled invariant and select a protocol, model, topology, owner-boundary migration, or architecture-gap route before another local active-gate source patch.
-Representative status: architecture-gap
-Causal outcome: architecture-gap-analysis
-Architecture gate: selected / architecture-gap
-Expected delta: Architecture-gap analysis selects a protocol, model, topology, owner-boundary migration, or representative-green route before another local active-gate source patch.
-Current state: Fresh representative evidence has zero priority recovery residuals and selects active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage. The completed system-theory rederive confirmed same-mechanism-repeat contract_gap saturation, so another local active-gate source patch is blocked.
-Allowed edits: work/packages/done-20260529-rolling-restart-active-gate-snapshot-coverage-architecture-gap-analysis.md, work/sprints/active-2026-q2-spec-led-runtime-modularization.md, work/theory-ledger.md
+Representative artifact: test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json
+Visible first frontier: diagnostics_owner / causal_analysis_framework over active_gate_snapshot_coverage promotion guard
+Active package: work/packages/active-20260529-rolling-restart-active-gate-saturation-route-guard.md
+Active package owner: diagnostics_owner
+Active package boundary: causal_analysis_framework
+Selected cause: active_gate_saturated_after_diagnostics_route
+Required action: Test whether the corrected local-blocker route needs a diagnostics-owned architecture guard before any active-gate runtime source promotion.
+Representative status: pending-before-probe
+Causal outcome: pending-before-rerun
+Architecture gate: watching / unknown
+Expected delta: Select fresh representative evidence, a non-repeated owner-owned transition, an owner-boundary migration, or a diagnostics-owned architecture guard before any active-gate runtime source promotion.
+Current state: The diagnostics stop-condition fix reroutes the post-architecture-gap artifact from readiness migration to classified local blocker, but prior architecture-gap evidence still blocks another unchanged active-gate runtime patch.
+Allowed edits: src/diagnostics/topology-convergence-graph.js, src/diagnostics/stop-condition-decision.js, test/diagnostics/stop-condition-decision.test.js
 Candidate runtime files: src/admin/admin-control-snapshot-repair-diagnostics.js, src/bootstrap/bootstrap-api-control-plane-methods.js, src/control-plane/membership-publication-active-gate-reconcile.js, src/control-plane/publication-active-gate-handoff-contract-selection.js
-Forbidden edits: Priority recovery remains satisfied while active-gate snapshot coverage owns the first frontier.
-Required latest proof: falsifier: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12, regression: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason snapshot_coverage_incomplete --explain active_gate_snapshot_coverage, supporting: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --explain active_gate_snapshot_coverage
-Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
+Forbidden edits: Downstream readiness and active-gate runtime files stay frozen until the guard or a non-repeated contract is selected.
+Required latest proof: falsifier: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12, regression: npm run work:scenario-route -- test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason snapshot_coverage_incomplete --explain active_gate_snapshot_coverage, supporting: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json --explain active_gate_snapshot_coverage
+Allowed stop modes: success-condition-met only; representative-green, owner-boundary-migration, architecture-gap, same-frontier, classification-only, needs-rerun, pending, and unknown are package outcomes unless they exactly match the original sprint success condition
 ```
 
 ## Joint Coupled-Invariant Probe
@@ -107,6 +107,10 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Purpose: Record the architecture-gap-stop decision for the startup_active_gate_owner / snapshot_coverage coupled invariant before another local active-gate source package.
    - First-run reason: The completed system-theory rederive confirmed same-mechanism-repeat `contract_gap` saturation while fresh route evidence still selects active_gate_snapshot_coverage with priority-recovery residuals at zero.
    - Decision: Focused proof selected architecture-gap-stop; the only concrete progress signal is the repeated selected-snapshot deferred retry contract, and the causal-model readiness migration is downstream of the active-gate first critical path.
+6. [Rolling Restart Active Gate Saturation Route Guard](../packages/active-20260529-rolling-restart-active-gate-saturation-route-guard.md)
+   - Lane: `experiment`
+   - Purpose: Test whether the corrected local-blocker route needs a diagnostics-owned architecture guard before any active-gate runtime source promotion.
+   - First-run reason: The stop-condition route bug is fixed, but prior architecture-gap evidence still blocks reopening an unchanged active-gate runtime patch from the same artifact.
 
 ## Sprint Proof Ladder
 
