@@ -334,8 +334,7 @@ Canonical evidence source:
 1. Focused package commit: 90bad8f662693aa1dcba4eb0ba080e7be504eab5
 2. Push target: origin/codex/pending-ack-eligibility-filter
 3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
-4. Pushed: no
-
+4. Pushed: yes 2026-05-29T10:14:59.323Z
 ## Validation
 
 1. `npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12`
