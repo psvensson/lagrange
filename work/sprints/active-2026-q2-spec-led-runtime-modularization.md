@@ -65,7 +65,7 @@ priority-recovery or active-gate frontier.
 ```text
 Representative artifact: test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json
 Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage
-Active package: work/packages/active-20260529-rolling-restart-active-gate-saturation-checkpoint-system-theory-rederive.md
+Active package: work/packages/done-20260529-rolling-restart-active-gate-saturation-checkpoint-system-theory-rederive.md
 Active package owner: startup_active_gate_owner
 Active package boundary: snapshot_coverage
 Selected cause: snapshot_coverage_incomplete
@@ -75,7 +75,7 @@ Causal outcome: continue_local_fix
 Architecture gate: selected / architecture-continuation
 Expected delta: The checkpoint rederive reconfirmed architecture-gap continuation; runtime source promotion remains blocked.
 Current state: Checkpoint proof reconfirmed active_gate_snapshot_coverage with zero priority-recovery residuals and runtimePromotionGuard.state=blocked.
-Allowed edits: work/packages/active-20260529-rolling-restart-active-gate-saturation-checkpoint-system-theory-rederive.md, work/sprints/active-2026-q2-spec-led-runtime-modularization.md, work/theory-ledger.md
+Allowed edits: work/packages/done-20260529-rolling-restart-active-gate-saturation-checkpoint-system-theory-rederive.md, work/sprints/active-2026-q2-spec-led-runtime-modularization.md, work/theory-ledger.md
 Candidate runtime files: src/admin/admin-control-snapshot-repair-diagnostics.js, src/bootstrap/bootstrap-api-control-plane-methods.js, src/control-plane/membership-publication-active-gate-reconcile.js, src/control-plane/publication-active-gate-handoff-contract-selection.js
 Forbidden edits: Runtime promotion stays blocked until current proof names a non-repeated source route.
 Required latest proof: falsifier: npm run work:system-theory:rederive -- --owner startup_active_gate_owner --boundary snapshot_coverage, regression: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason snapshot_coverage_incomplete --explain active_gate_snapshot_coverage, supporting: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12, supporting: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --explain active_gate_snapshot_coverage
@@ -130,7 +130,7 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Purpose: Run the architecture-gap class discriminator selected after the fresh rederive kept active-gate runtime promotion blocked.
    - First-run reason: The theory-loop sprint cannot close on architecture-gap, runtime promotion remains blocked, and scenario-route suggests an autonomous architecture experiment before any source package resumes.
    - Decision: Fresh representative rerun stayed red with the same active_gate_snapshot_coverage first frontier, zero priority-recovery residuals, and blocked runtime-promotion guard; no non-repeated runtime successor is selected.
-10. [Rolling Restart Active Gate Saturation Checkpoint System Theory Rederive](../packages/active-20260529-rolling-restart-active-gate-saturation-checkpoint-system-theory-rederive.md)
+10. [Rolling Restart Active Gate Saturation Checkpoint System Theory Rederive](../packages/done-20260529-rolling-restart-active-gate-saturation-checkpoint-system-theory-rederive.md)
    - Lane: `causal-escalation`
    - Purpose: Record the checkpoint system-theory rederive required before another runtime or architecture successor can activate.
    - First-run reason: The non-halting sprint still lacks representative-green success evidence, and `work:system-theory:rederive -- --check-due --sprint work/sprints/active-2026-q2-spec-led-runtime-modularization.md` reports 12 closed packages since the sprint rederive stamp.
