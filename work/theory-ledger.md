@@ -96,7 +96,7 @@ Each entry must include these labels:
 
 ## theory-20260522-snapshot-watch-handoff-contract
 
-- Status: stale
+- Status: supported
 - Scenario/gate: node-failure-rebalance / active_gate_snapshot_coverage
 - Owner/boundary: startup_active_gate_owner / snapshot_coverage
 - Hypothesis: WebSocket-closed selected snapshot source evidence with admin_ws reachability and an alternative witness remains blocked because startup_active_gate_owner / snapshot_coverage does not emit a typed snapshot/watch owner handoff contract.
@@ -352,9 +352,9 @@ Each entry must include these labels:
 - Owner/boundary: startup_active_gate_owner / snapshot_coverage
 - Hypothesis: The selected-snapshot timeout plus deferred repair evidence on the fresh rolling-restart artifact cannot promote another local active-gate source package because it names only the repeated deferred retry contract; without a non-repeated owner transition, protocol/model/topology route, representative-green result, or real owner migration, runtime source promotion must stay blocked.
 - Probe: `npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12`
-- Artifact/result: `test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json` - frontier-history reported same-mechanism-repeat `contract_gap`, scenario-route kept `active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / snapshot_coverage_incomplete`, topology-convergence exposed `selected_snapshot_source_timeout` plus `snapshot_repair_deferred` as a deferred retry contract, causal-model kept `topology:active_gate_snapshot_coverage` as the first critical path, and priority-recovery residuals remained zero.
+- Artifact/result: `test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json` - frontier-history still reports same-mechanism-repeat `contract_gap`, scenario-route emits `runtimePromotionGuard.state=blocked`, topology-convergence exposes only `selected_snapshot_source_timeout` plus `snapshot_repair_deferred`, causal-model keeps `topology:active_gate_snapshot_coverage` as the first critical path, and priority-recovery residuals remain zero.
 - Representative movement: architecture-gap-stop
-- Linked packages: `work/packages/active-20260529-rolling-restart-active-gate-snapshot-coverage-architecture-gap-analysis.md`
+- Linked packages: `work/packages/done-20260529-rolling-restart-active-gate-snapshot-coverage-architecture-gap-analysis.md`, `work/packages/active-20260529-rolling-restart-active-gate-saturation-architecture-gap-analysis.md`
 - Supersedes: none
 - Superseded by: none
-- Next implication: Do not open another local startup_active_gate_owner / snapshot_coverage runtime package from this artifact. Continue only from fresh representative evidence or a follow-on architecture experiment that names a non-repeated owner-owned transition, protocol/model/topology route, or real owner-boundary migration.
+- Next implication: Do not open another local startup_active_gate_owner / snapshot_coverage runtime package from this artifact. Runtime promotion remains blocked until fresh representative evidence or focused proof names a non-repeated owner-owned transition, protocol/model/topology route, representative-green result, or real owner-boundary migration.
