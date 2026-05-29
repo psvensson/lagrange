@@ -394,11 +394,10 @@ Corrected route evidence blocks runtime promotion for the repeated active-gate o
 
 ## Commit And Push Ledger
 
-1. Focused package commit: 1b3a2c8801c6751367bf673de53a58e1dc2fe965
+1. Focused package commit: 928bca063b9bf15156b6a86b508509ac72d6d1e7
 2. Push target: origin/codex/pending-ack-eligibility-filter
 3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
-4. Pushed: no
-
+4. Pushed: yes 2026-05-29T20:06:04.479Z
 ## Validation
 
 1. `npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --explain snapshot_coverage`
