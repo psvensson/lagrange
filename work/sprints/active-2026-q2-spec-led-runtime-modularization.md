@@ -63,22 +63,22 @@ priority-recovery or active-gate frontier.
 ## Current Edge Card
 
 ```text
-Representative artifact: test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json
-Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage
-Active package: work/packages/done-20260529-rolling-restart-active-gate-saturation-checkpoint-system-theory-rederive.md
-Active package owner: startup_active_gate_owner
-Active package boundary: snapshot_coverage
-Selected cause: snapshot_coverage_incomplete
-Required action: Close this checkpoint rederive as architecture-gap continuation; no runtime source package is selected from the current artifact.
-Representative status: architecture-gap
-Causal outcome: continue_local_fix
-Architecture gate: selected / architecture-continuation
-Expected delta: The checkpoint rederive reconfirmed architecture-gap continuation; runtime source promotion remains blocked.
-Current state: Checkpoint proof reconfirmed active_gate_snapshot_coverage with zero priority-recovery residuals and runtimePromotionGuard.state=blocked.
-Allowed edits: work/packages/done-20260529-rolling-restart-active-gate-saturation-checkpoint-system-theory-rederive.md, work/sprints/active-2026-q2-spec-led-runtime-modularization.md, work/theory-ledger.md
-Candidate runtime files: src/admin/admin-control-snapshot-repair-diagnostics.js, src/bootstrap/bootstrap-api-control-plane-methods.js, src/control-plane/membership-publication-active-gate-reconcile.js, src/control-plane/publication-active-gate-handoff-contract-selection.js
-Forbidden edits: Runtime promotion stays blocked until current proof names a non-repeated source route.
-Required latest proof: falsifier: npm run work:system-theory:rederive -- --owner startup_active_gate_owner --boundary snapshot_coverage, regression: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason snapshot_coverage_incomplete --explain active_gate_snapshot_coverage, supporting: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12, supporting: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --explain active_gate_snapshot_coverage
+Representative artifact: none
+Visible first frontier: unknown
+Active package: work/packages/active-20260529-system-theory-checkpoint-due-recognition.md
+Active package owner: workflow_tooling_owner
+Active package boundary: system_theory_checkpoint_gate
+Selected cause: rederive_checkpoint_not_recognized
+Required action: Close this workflow-tooling package, then resume the non-halting sprint from the selected architecture-continuation route.
+Representative status: unknown
+Causal outcome: unknown
+Architecture gate: not-required / unknown
+Expected delta: unknown
+Current state: check-due now reports 0 closed packages since the latest closed systemTheory rederive checkpoint instead of 13 same-day closures from the sprint date stamp.
+Allowed edits: work/packages/active-20260529-system-theory-checkpoint-due-recognition.md, scripts/work-system-theory-rederive.js, test/scripts/work-system-theory-rederive.test.js, work/RULES.md, work/sprints/active-2026-q2-spec-led-runtime-modularization.md
+Candidate runtime files: unknown
+Forbidden edits: the check-due gate would stop enforcing periodic rederive checkpoints, the change requires runtime source files, the fix changes representative scenario routing
+Required latest proof: regression: npm test -- test/scripts/work-system-theory-rederive.test.js, regression: npm run work:system-theory:rederive -- --check-due --sprint work/sprints/active-2026-q2-spec-led-runtime-modularization.md, supporting: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12, supporting: git diff --check -- scripts/work-system-theory-rederive.js test/scripts/work-system-theory-rederive.test.js work/RULES.md work/sprints/active-2026-q2-spec-led-runtime-modularization.md work/sprints/current-blocker.json work/sprints/current-blocker.md work/packages/active-20260529-system-theory-checkpoint-due-recognition.md
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -135,6 +135,11 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Purpose: Record the checkpoint system-theory rederive required before another runtime or architecture successor can activate.
    - First-run reason: The non-halting sprint still lacks representative-green success evidence, and `work:system-theory:rederive -- --check-due --sprint work/sprints/active-2026-q2-spec-led-runtime-modularization.md` reports 12 closed packages since the sprint rederive stamp.
    - Decision: Checkpoint proof reconfirmed same-mechanism contract_gap saturation, active_gate_snapshot_coverage first frontier, zero priority-recovery residuals, and blocked runtime promotion; no non-repeated source contract or owner-boundary migration is selected.
+11. [System Theory Checkpoint Due Recognition](../packages/active-20260529-system-theory-checkpoint-due-recognition.md)
+   - Lane: `lightweight-maintenance`
+   - Purpose: Keep the periodic rederive gate enforced while making it recognize the latest closed same-day system-theory checkpoint.
+   - First-run reason: After the checkpoint rederive closed, `work:system-theory:rederive -- --check-due --sprint work/sprints/active-2026-q2-spec-led-runtime-modularization.md` still reports 13 same-day closed packages and would force another immediate checkpoint instead of the selected architecture continuation.
+   - Decision: `work:system-theory:rederive -- --check-due --sprint work/sprints/active-2026-q2-spec-led-runtime-modularization.md` now reports 0 closed packages since the latest closed systemTheory rederive checkpoint; the gate remains enforced for packages closed after that checkpoint.
 
 ## Sprint Proof Ladder
 

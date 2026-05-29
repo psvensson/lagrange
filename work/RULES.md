@@ -432,9 +432,11 @@ scaffold and stamps `systemTheoryRederivedAt` on the active sprint.
 Active sprints record `systemTheoryRederivedAt` (ISO date) on a single header
 line. The gating command
 `npm run work:system-theory:rederive -- --check-due --sprint <active-sprint.md>`
-counts `done-*` packages whose date prefix is ≥ that stamp; when the count
-meets or exceeds `--threshold` (default 5), the command exits non-zero and
-the next package activation MUST be a systemTheory revision package
+first counts sprint-linked `done-*` packages after the latest closed
+systemTheory rederive checkpoint when the sprint queue exposes one; otherwise
+it falls back to counting `done-*` packages whose date prefix is ≥ that stamp.
+When the count meets or exceeds `--threshold` (default 5), the command exits
+non-zero and the next package activation MUST be a systemTheory revision package
 (detected via `modelFit.packageClass` of `system-theory-rederive` or an
 alias, with `lane: system-theory-rederive` and slug match as legacy
 fallbacks). Sprints without `systemTheoryRederivedAt` have the gate

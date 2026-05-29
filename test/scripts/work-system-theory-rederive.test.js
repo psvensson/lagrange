@@ -13,6 +13,10 @@ import {
   stampSprint,
   readSprintRederivedAt,
   countClosedPackagesSince,
+  readSprintPackageQueue,
+  latestSprintRederiveCheckpoint,
+  countClosedSprintPackagesAfter,
+  checkRederivationDue,
 } from '../../scripts/work-system-theory-rederive.js';
 
 function fakeHistoryItem(mechanism) {
@@ -31,6 +35,28 @@ function fakeHistoryItem(mechanism) {
     predictionAccuracy: 'unknown',
     nextOwnerBoundary: 'unknown',
   };
+}
+
+function writePackage(dir, fileName, metadata = {}) {
+  const defaults = {
+    schema: 'work-package-v2',
+    status: fileName.split('-')[0] || 'done',
+    intent: {
+      opened: '2026-05-29',
+      lane: 'lightweight-maintenance',
+      owner: 'workflow_tooling_owner',
+      boundary: 'system_theory_checkpoint_gate',
+    },
+  };
+  const merged = {
+    ...defaults,
+    ...metadata,
+    intent: {...defaults.intent, ...(metadata.intent || {})},
+  };
+  fs.writeFileSync(
+    path.join(dir, fileName),
+    `# ${fileName}\n\n<!-- work-package\n${JSON.stringify(merged, null, 2)}\n-->\n`,
+  );
 }
 
 tap.test('work-system-theory-rederive unit tests', async (t) => {
@@ -148,6 +174,94 @@ tap.test('work-system-theory-rederive unit tests', async (t) => {
     t.equal(countClosedPackagesSince(tmp, '2026-05-28'), 2);
     t.equal(countClosedPackagesSince(tmp, '2026-05-20'), 3);
     t.equal(countClosedPackagesSince(tmp, '2026-06-01'), 0);
+    fs.rmSync(tmp, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('check-due counts sprint closures after latest rederive checkpoint', (t) => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'checkpoint-count-'));
+    const sprintPath = path.join(tmp, 'active-test.md');
+    writePackage(tmp, 'done-20260529-before.md');
+    writePackage(tmp, 'done-20260529-system-theory-rederive.md', {
+      intent: {lane: 'causal-escalation'},
+      modelFit: {packageClass: 'system-theory-rederive'},
+    });
+    writePackage(tmp, 'done-20260529-after.md');
+    writePackage(tmp, 'active-20260529-current.md', {
+      status: 'active',
+    });
+    fs.writeFileSync(sprintPath, [
+      '# Sprint',
+      'systemTheoryRederivedAt: 2026-05-29',
+      '',
+      '1. [Before](../packages/done-20260529-before.md)',
+      '2. [Rederive](../packages/done-20260529-system-theory-rederive.md)',
+      '3. [After](../packages/done-20260529-after.md)',
+      '4. [Current](../packages/active-20260529-current.md)',
+      '',
+    ].join('\n'));
+
+    t.same(readSprintPackageQueue(sprintPath), [
+      'done-20260529-before.md',
+      'done-20260529-system-theory-rederive.md',
+      'done-20260529-after.md',
+      'active-20260529-current.md',
+    ]);
+    const checkpoint = latestSprintRederiveCheckpoint(
+      tmp,
+      sprintPath,
+      '2026-05-29',
+    );
+    t.equal(checkpoint.fileName, 'done-20260529-system-theory-rederive.md');
+    t.equal(countClosedSprintPackagesAfter(tmp, sprintPath, checkpoint.index), 1);
+    t.same(
+      checkRederivationDue({
+        packageDir: tmp,
+        sprintPath,
+        isoDate: '2026-05-29',
+        threshold: 2,
+      }),
+      {
+        mode: 'latest-sprint-rederive',
+        closedPackagesSince: 1,
+        checkpointPackage: 'done-20260529-system-theory-rederive.md',
+        checkpointDate: '20260529',
+        threshold: 2,
+        rederivationDue: false,
+      },
+    );
+    fs.rmSync(tmp, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('check-due falls back to date-prefix count without sprint rederive', (t) => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'checkpoint-fallback-'));
+    const sprintPath = path.join(tmp, 'active-test.md');
+    writePackage(tmp, 'done-20260528-old.md');
+    writePackage(tmp, 'done-20260529-current.md');
+    fs.writeFileSync(sprintPath, [
+      '# Sprint',
+      'systemTheoryRederivedAt: 2026-05-28',
+      '',
+      '1. [Current](../packages/done-20260529-current.md)',
+      '',
+    ].join('\n'));
+    t.same(
+      checkRederivationDue({
+        packageDir: tmp,
+        sprintPath,
+        isoDate: '2026-05-28',
+        threshold: 2,
+      }),
+      {
+        mode: 'date-prefix',
+        closedPackagesSince: 2,
+        checkpointPackage: null,
+        checkpointDate: '2026-05-28',
+        threshold: 2,
+        rederivationDue: true,
+      },
+    );
     fs.rmSync(tmp, {recursive: true, force: true});
     t.end();
   });

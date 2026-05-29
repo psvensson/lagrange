@@ -9,6 +9,7 @@ import {
   parsePackageFile,
   filterAndSummarizeHistory,
   detectCompositionalSignals,
+  packageIsRederive,
 } from './work-frontier-history.js';
 
 const ENCODING_UTF8 = 'utf8';
@@ -24,8 +25,9 @@ const HELP_TEXT = [
   'structured systemTheory revision recommendation. When --write is supplied alongside',
   '--sprint, stamps a new `systemTheoryRederivedAt` date on the active sprint header.',
   '',
-  'Mode 2 (gate): with --check-due, counts done-* packages dated >= the sprint',
-  '`systemTheoryRederivedAt` stamp and exits non-zero when count >= --threshold (default 5).',
+  'Mode 2 (gate): with --check-due, counts sprint-linked done packages after',
+  'the latest closed rederive checkpoint when available; otherwise falls back',
+  'to done-* packages dated >= the sprint `systemTheoryRederivedAt` stamp.',
   '',
   'Options:',
   '  --owner <name>          Owner key to filter history (required for analysis).',
@@ -82,6 +84,97 @@ function countClosedPackagesSince(packageDir, isoDate) {
     const m = f.match(/^done-(\d{8})-/);
     return m && m[1] >= sinceKey;
   }).length;
+}
+
+function packageDateKey(fileName) {
+  const match = String(fileName || '').match(/^done-(\d{8})-/u);
+  return match ? match[1] : '';
+}
+
+function readSprintPackageQueue(sprintPath) {
+  if (!sprintPath || !fs.existsSync(sprintPath)) return [];
+  const content = fs.readFileSync(sprintPath, ENCODING_UTF8);
+  const packageLinks = [];
+  const seen = new Set();
+  const linkPattern =
+    /\]\((?:\.\.\/)?packages\/([^)\s#]+?\.md)(?:#[^)]*)?\)/giu;
+  let match;
+  while ((match = linkPattern.exec(content)) !== null) {
+    const fileName = path.basename(match[1]);
+    if (!/^(?:done|active|todo|superseded)-.+\.md$/u.test(fileName)) {
+      continue;
+    }
+    if (seen.has(fileName)) continue;
+    seen.add(fileName);
+    packageLinks.push(fileName);
+  }
+  return packageLinks;
+}
+
+function parseQueuePackage(packageDir, fileName) {
+  const packagePath = path.join(path.resolve(packageDir), fileName);
+  const parsed = fs.existsSync(packagePath) ? parsePackageFile(packagePath) : null;
+  return parsed || {
+    fileName,
+    package: fileName,
+    status: fileName.split('-')[0] || 'unknown',
+    lane: 'unknown',
+  };
+}
+
+function latestSprintRederiveCheckpoint(packageDir, sprintPath, isoDate) {
+  const sinceKey = isoDate ? isoDate.replace(/-/g, '') : '';
+  const queue = readSprintPackageQueue(sprintPath);
+  let checkpoint = null;
+  for (let index = 0; index < queue.length; index++) {
+    const fileName = queue[index];
+    if (!fileName.startsWith('done-')) continue;
+    const dateKey = packageDateKey(fileName);
+    if (sinceKey && dateKey && dateKey < sinceKey) continue;
+    const parsed = parseQueuePackage(packageDir, fileName);
+    if (parsed.status !== 'done') continue;
+    if (!packageIsRederive({...parsed, package: fileName, fileName})) continue;
+    checkpoint = {fileName, index, dateKey: dateKey || 'unknown'};
+  }
+  return checkpoint;
+}
+
+function countClosedSprintPackagesAfter(packageDir, sprintPath, checkpointIndex) {
+  const queue = readSprintPackageQueue(sprintPath);
+  if (checkpointIndex < 0 || checkpointIndex >= queue.length) return null;
+  return queue.slice(checkpointIndex + 1).filter((fileName) => {
+    if (!fileName.startsWith('done-')) return false;
+    const parsed = parseQueuePackage(packageDir, fileName);
+    return parsed.status === 'done';
+  }).length;
+}
+
+function checkRederivationDue({packageDir, sprintPath, isoDate, threshold}) {
+  const checkpoint = latestSprintRederiveCheckpoint(packageDir, sprintPath, isoDate);
+  if (checkpoint) {
+    const count = countClosedSprintPackagesAfter(
+      packageDir,
+      sprintPath,
+      checkpoint.index,
+    );
+    return {
+      mode: 'latest-sprint-rederive',
+      closedPackagesSince: count,
+      checkpointPackage: checkpoint.fileName,
+      checkpointDate: checkpoint.dateKey,
+      threshold,
+      rederivationDue: count >= threshold,
+    };
+  }
+  const count = countClosedPackagesSince(packageDir, isoDate);
+  return {
+    mode: 'date-prefix',
+    closedPackagesSince: count,
+    checkpointPackage: null,
+    checkpointDate: isoDate,
+    threshold,
+    rederivationDue: count >= threshold,
+  };
 }
 
 function buildRecommendation({owner, boundary, signals, history}) {
@@ -188,18 +281,31 @@ function main(argv) {
           : `Sprint ${opts.sprint}: no systemTheoryRederivedAt; gate inactive.\n`);
         return EXIT_SUCCESS;
       }
-      const count = countClosedPackagesSince(opts.packageDir, stamp);
-      const due = count >= opts.threshold;
+      const dueState = checkRederivationDue({
+        packageDir: opts.packageDir,
+        sprintPath: path.resolve(opts.sprint),
+        isoDate: stamp,
+        threshold: opts.threshold,
+      });
+      const count = dueState.closedPackagesSince;
+      const due = dueState.rederivationDue;
+      const checkpointDescription = dueState.checkpointPackage
+        ? `latest systemTheory rederive ${dueState.checkpointPackage}`
+        : stamp;
       const msg = {
         sprint: opts.sprint,
         systemTheoryRederivedAt: stamp,
+        checkpointMode: dueState.mode,
+        checkpointPackage: dueState.checkpointPackage,
         closedPackagesSince: count,
         threshold: opts.threshold,
         rederivationDue: due,
         reason: due
-          ? `${count} closed packages since ${stamp} (threshold ${opts.threshold}); ` +
+          ? `${count} closed packages since ${checkpointDescription} ` +
+            `(threshold ${opts.threshold}); ` +
             'open a systemTheory revision package before activating the next slice.'
-          : `${count} closed packages since ${stamp} (under threshold ${opts.threshold}).`,
+          : `${count} closed packages since ${checkpointDescription} ` +
+            `(under threshold ${opts.threshold}).`,
       };
       process.stdout.write(opts.json
         ? `${JSON.stringify(msg, null, 2)}\n`
@@ -312,4 +418,8 @@ export {
   renderText,
   readSprintRederivedAt,
   countClosedPackagesSince,
+  readSprintPackageQueue,
+  latestSprintRederiveCheckpoint,
+  countClosedSprintPackagesAfter,
+  checkRederivationDue,
 };
