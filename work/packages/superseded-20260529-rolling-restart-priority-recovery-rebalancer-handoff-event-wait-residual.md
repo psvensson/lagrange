@@ -4,7 +4,7 @@
 {
   "schema": "work-package-v2",
   "status": "superseded",
-  "supersededBy": "work/packages/active-20260529-rolling-restart-active-gate-snapshot-coverage-system-theory-rederive.md",
+  "supersededBy": "work/packages/done-20260529-rolling-restart-active-gate-snapshot-coverage-system-theory-rederive.md",
   "supersededReason": "Alternating-Pair Mutex (R1): startup_active_gate_owner/snapshot_coverage and operation_workflow_owner/rebalancer_handoff form an alternating pair, and the rederive package must close before any runtime slice on the pair may activate.",
   "intent": {
     "opened": "2026-05-29",
@@ -18,7 +18,7 @@
     "currentState": "Fresh representative evidence migrated from active_gate_snapshot_coverage back to priority_recovery_partition_progress with one recovering_in_flight replica_operations-p1 residual under operation_workflow_owner / rebalancer_handoff.",
     "nextAction": "Prove bounded progress for the remaining replica_operations-p1 recovering_in_flight priority-recovery residual.",
     "predecessor": "work/packages/done-20260529-rolling-restart-active-gate-snapshot-coverage-selected-source-timeout-retry.md",
-    "successor": "work/packages/active-20260529-rolling-restart-active-gate-snapshot-coverage-system-theory-rederive.md"
+    "successor": "work/packages/done-20260529-rolling-restart-active-gate-snapshot-coverage-system-theory-rederive.md"
   },
   "scope": {
     "writeScope": [
@@ -35,7 +35,7 @@
     "commitScope": [
       "src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js",
       "work/packages/active-20260529-rolling-restart-priority-recovery-rebalancer-handoff-event-wait-residual.md",
-      "work/packages/active-20260529-rolling-restart-active-gate-snapshot-coverage-system-theory-rederive.md",
+      "work/packages/done-20260529-rolling-restart-active-gate-snapshot-coverage-system-theory-rederive.md",
       "work/packages/done-20260529-rolling-restart-active-gate-snapshot-coverage-selected-source-timeout-retry.md"
     ]
   },
@@ -72,7 +72,7 @@
     "sourceChangeRequired": true,
     "successorRequired": true,
     "result": "migrated",
-    "successorPackage": "work/packages/active-20260529-rolling-restart-active-gate-snapshot-coverage-system-theory-rederive.md"
+    "successorPackage": "work/packages/done-20260529-rolling-restart-active-gate-snapshot-coverage-system-theory-rederive.md"
   },
   "theoryLedger": "planned-new-theory; no ledger update: result is recorded in this package closure and the fresh representative artifact cleared priority recovery to zero residuals, then migrated the first frontier back to startup_active_gate_owner / snapshot_coverage.",
   "representativeResidual": {
