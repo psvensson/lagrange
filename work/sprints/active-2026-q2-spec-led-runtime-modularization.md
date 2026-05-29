@@ -65,7 +65,7 @@ priority-recovery or active-gate frontier.
 ```text
 Representative artifact: test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json
 Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage
-Active package: work/packages/active-20260529-rolling-restart-active-gate-saturation-architecture-gap-analysis.md
+Active package: work/packages/done-20260529-rolling-restart-active-gate-saturation-architecture-gap-analysis.md
 Active package owner: startup_active_gate_owner
 Active package boundary: snapshot_coverage
 Selected cause: snapshot_coverage_incomplete
@@ -75,7 +75,7 @@ Causal outcome: architecture-gap-analysis
 Architecture gate: selected / architecture-package
 Expected delta: Record architecture-gap and keep runtime promotion blocked unless fresh representative evidence or focused proof names a non-repeated source contract or owner-boundary migration.
 Current state: Scenario-route now records runtimePromotionGuard.state=blocked for active_gate_snapshot_coverage because topology evidence requires a non-repeated source contract and frontier history is saturated.
-Allowed edits: work/packages/active-20260529-rolling-restart-active-gate-saturation-architecture-gap-analysis.md, work/packages/todo-20260529-rolling-restart-active-gate-saturation-architecture-gap-analysis.md, work/sprints/active-2026-q2-spec-led-runtime-modularization.md, work/theory-ledger.md
+Allowed edits: work/packages/done-20260529-rolling-restart-active-gate-saturation-architecture-gap-analysis.md, work/packages/todo-20260529-rolling-restart-active-gate-saturation-architecture-gap-analysis.md, work/sprints/active-2026-q2-spec-led-runtime-modularization.md, work/theory-ledger.md
 Candidate runtime files: src/admin/admin-control-snapshot-repair-diagnostics.js, src/bootstrap/bootstrap-api-control-plane-methods.js, src/control-plane/membership-publication-active-gate-reconcile.js, src/control-plane/publication-active-gate-handoff-contract-selection.js
 Forbidden edits: Route guard blocks runtime-owner-boundary promotion until architecture-gap proof names a concrete source route.
 Required latest proof: falsifier: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12, regression: npm run work:scenario-route -- test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason snapshot_coverage_incomplete --explain active_gate_snapshot_coverage, supporting: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json --explain active_gate_snapshot_coverage
@@ -117,7 +117,7 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Lane: `experiment`
    - Purpose: Test whether the corrected local-blocker route needs a diagnostics-owned architecture guard before any active-gate runtime source promotion.
    - First-run reason: The stop-condition route bug is fixed, but prior architecture-gap evidence still blocks reopening an unchanged active-gate runtime patch from the same artifact.
-7. [Rolling Restart Active Gate Saturation Architecture Gap Analysis](../packages/active-20260529-rolling-restart-active-gate-saturation-architecture-gap-analysis.md)
+7. [Rolling Restart Active Gate Saturation Architecture Gap Analysis](../packages/done-20260529-rolling-restart-active-gate-saturation-architecture-gap-analysis.md)
    - Lane: `causal-escalation`
    - Purpose: Run the architecture-gap analysis selected by the diagnostics guard before any active-gate runtime source promotion.
    - First-run reason: Scenario-route now reports `runtimePromotionGuard.state=blocked` and frontier-history still reports same-mechanism-repeat contract_gap for startup_active_gate_owner / snapshot_coverage.

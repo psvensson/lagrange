@@ -126,7 +126,7 @@
     "successorRequired": true,
     "result": "supported",
     "outcome": "theory-confirmed",
-    "successorPackage": "work/packages/todo-20260529-rolling-restart-active-gate-saturation-architecture-gap-analysis.md"
+    "successorPackage": "work/packages/done-20260529-rolling-restart-active-gate-saturation-architecture-gap-analysis.md"
   },
   "boundedExperiment": {
     "hypothesis": "After the stop-decision fix, unchanged same-mechanism active-gate evidence needs a diagnostics-owned architecture guard rather than another active-gate runtime source patch.",
@@ -241,12 +241,12 @@
     "nextLane": "experiment",
     "expectedDelta": "Select fresh representative evidence, a non-repeated owner-owned transition, an owner-boundary migration, or a diagnostics-owned architecture guard before any active-gate runtime source promotion.",
     "requiredRefreshCommands": [
-      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json --successor work/packages/todo-20260529-rolling-restart-active-gate-saturation-architecture-gap-analysis.md",
+      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json --successor work/packages/done-20260529-rolling-restart-active-gate-saturation-architecture-gap-analysis.md",
       "update Sprint Strategy Brief from the route result",
       "update Current Edge Card from the route result",
       "refresh current-blocker with npm run work:repair",
-      "npm run work:validate -- --entry work/packages/todo-20260529-rolling-restart-active-gate-saturation-architecture-gap-analysis.md",
-      "npm run work:validate -- --pre-impl work/packages/todo-20260529-rolling-restart-active-gate-saturation-architecture-gap-analysis.md"
+      "npm run work:validate -- --entry work/packages/done-20260529-rolling-restart-active-gate-saturation-architecture-gap-analysis.md",
+      "npm run work:validate -- --pre-impl work/packages/done-20260529-rolling-restart-active-gate-saturation-architecture-gap-analysis.md"
     ]
   },
   "systemTheory": {
