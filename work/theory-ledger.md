@@ -347,14 +347,14 @@ Each entry must include these labels:
 
 ## theory-20260529-rolling-restart-active-gate-snapshot-coverage-architecture-gap-stop
 
-- Status: stale
+- Status: supported
 - Scenario/gate: rolling-restart / active_gate_snapshot_coverage
 - Owner/boundary: startup_active_gate_owner / snapshot_coverage
 - Hypothesis: The selected-snapshot timeout plus deferred repair evidence on the fresh rolling-restart artifact cannot promote another local active-gate source package because it names only the repeated deferred retry contract; without a non-repeated owner transition, protocol/model/topology route, representative-green result, or real owner migration, runtime source promotion must stay blocked.
 - Probe: `npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12`
-- Artifact/result: `test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json` - frontier-history still reports same-mechanism-repeat `contract_gap`, scenario-route emits `runtimePromotionGuard.state=blocked`, topology-convergence exposes only `selected_snapshot_source_timeout` plus `snapshot_repair_deferred`, causal-model keeps `topology:active_gate_snapshot_coverage` as the first critical path, and priority-recovery residuals remain zero.
+- Artifact/result: `test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json` - fresh representative rerun still reports same-mechanism-repeat `contract_gap`; `work:system-theory:rederive` requires a system-theory revision; scenario-route emits `runtimePromotionGuard.state=blocked`; topology-convergence exposes only `selected_snapshot_source_timeout` plus `snapshot_repair_deferred`; causal-model keeps `topology:active_gate_snapshot_coverage` as the first critical path; priority-recovery residuals remain zero.
 - Representative movement: architecture-gap-stop
-- Linked packages: `work/packages/done-20260529-rolling-restart-active-gate-snapshot-coverage-architecture-gap-analysis.md`, `work/packages/active-20260529-rolling-restart-active-gate-saturation-architecture-gap-analysis.md`
+- Linked packages: `work/packages/done-20260529-rolling-restart-active-gate-snapshot-coverage-architecture-gap-analysis.md`, `work/packages/done-20260529-rolling-restart-active-gate-saturation-architecture-gap-analysis.md`, `work/packages/active-20260529-rolling-restart-active-gate-saturation-fresh-system-theory-rederive.md`
 - Supersedes: none
 - Superseded by: none
 - Next implication: Do not open another local startup_active_gate_owner / snapshot_coverage runtime package from this artifact. Runtime promotion remains blocked until fresh representative evidence or focused proof names a non-repeated owner-owned transition, protocol/model/topology route, representative-green result, or real owner-boundary migration.
