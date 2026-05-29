@@ -65,7 +65,7 @@ priority-recovery or active-gate frontier.
 ```text
 Representative artifact: test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json
 Visible first frontier: diagnostics_owner / causal_analysis_framework over active_gate_snapshot_coverage promotion guard
-Active package: work/packages/active-20260529-rolling-restart-active-gate-saturation-route-guard.md
+Active package: work/packages/done-20260529-rolling-restart-active-gate-saturation-route-guard.md
 Active package owner: diagnostics_owner
 Active package boundary: causal_analysis_framework
 Selected cause: active_gate_saturated_after_diagnostics_route
@@ -113,7 +113,7 @@ Allowed stop modes: success-condition-met only; representative-green, owner-boun
    - Purpose: Record the architecture-gap-stop decision for the startup_active_gate_owner / snapshot_coverage coupled invariant before another local active-gate source package.
    - First-run reason: The completed system-theory rederive confirmed same-mechanism-repeat `contract_gap` saturation while fresh route evidence still selects active_gate_snapshot_coverage with priority-recovery residuals at zero.
    - Decision: Focused proof selected architecture-gap-stop; the only concrete progress signal is the repeated selected-snapshot deferred retry contract, and the causal-model readiness migration is downstream of the active-gate first critical path.
-6. [Rolling Restart Active Gate Saturation Route Guard](../packages/active-20260529-rolling-restart-active-gate-saturation-route-guard.md)
+6. [Rolling Restart Active Gate Saturation Route Guard](../packages/done-20260529-rolling-restart-active-gate-saturation-route-guard.md)
    - Lane: `experiment`
    - Purpose: Test whether the corrected local-blocker route needs a diagnostics-owned architecture guard before any active-gate runtime source promotion.
    - First-run reason: The stop-condition route bug is fixed, but prior architecture-gap evidence still blocks reopening an unchanged active-gate runtime patch from the same artifact.

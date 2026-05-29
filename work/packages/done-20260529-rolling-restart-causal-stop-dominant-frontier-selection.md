@@ -37,7 +37,7 @@
       "src/diagnostics/stop-condition-decision.js",
       "test/diagnostics/stop-condition-decision.test.js",
       "work/packages/active-20260529-rolling-restart-causal-stop-dominant-frontier-selection.md",
-      "work/packages/active-20260529-rolling-restart-active-gate-saturation-route-guard.md",
+      "work/packages/done-20260529-rolling-restart-active-gate-saturation-route-guard.md",
       "work/packages/superseded-20260515-topology-active-gate-snapshot-coverage-after-publication-handoff.md",
       "work/packages/superseded-20260528-rolling-restart-startup-active-gate-owner-snapshot-coverage.md",
       "work/packages/done-20260515-startup-active-gate-snapshot-coverage-owner-reconcile-closure.md",
@@ -101,7 +101,7 @@
     "successorRequired": true,
     "result": "supported",
     "outcome": "theory-confirmed",
-    "successorPackage": "work/packages/active-20260529-rolling-restart-active-gate-saturation-route-guard.md"
+    "successorPackage": "work/packages/done-20260529-rolling-restart-active-gate-saturation-route-guard.md"
   },
   "boundedExperiment": {
     "hypothesis": "Stop-condition selection is over-promoting downstream startup readiness migration when active_gate_snapshot_coverage is still the dominant first frontier.",
@@ -207,7 +207,7 @@
     "nextLane": "experiment",
     "expectedDelta": "Corrected route selects local blocker; successor tests a diagnostics route guard before active-gate runtime promotion.",
     "requiredRefreshCommands": [
-      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json --successor work/packages/active-20260529-rolling-restart-active-gate-saturation-route-guard.md",
+      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json --successor work/packages/done-20260529-rolling-restart-active-gate-saturation-route-guard.md",
       "update Sprint Strategy Brief and Current Edge Card from the route result",
       "refresh current-blocker with npm run work:repair",
       "npm run work:validate -- --entry work/packages/active-20260529-rolling-restart-causal-stop-dominant-frontier-selection.md",
