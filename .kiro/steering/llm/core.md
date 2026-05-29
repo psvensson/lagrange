@@ -46,6 +46,7 @@ Use this list at cold start before any non-trivial work. Anchors point into [`wo
 11. **Do not let callers reproduce owner logic locally**; owners decide and caches observe. (§coding-constraints)
 12. **Do not weaken guardrails, scripts, allowlists, or scan scope** to make proof pass. (§proof-requirements)
 13. **Do not close a package** without closure validation, focused commit, push, and ledger proof. (§proof-requirements)
+14. **Do not halt a theory loop** — never end the turn, await human acknowledgement, or close the sprint on a non-terminal outcome. Stop only for a closed Termination Condition (`success-condition-met`, `blocked-frozen-decision`, `blocked-external-dependency`); everything else obliges an autonomous `redirect`. (§non-halting-continuation-invariant-r12)
 
 ## Canonical Guardrail Command Map
 
@@ -100,3 +101,4 @@ Full canon: [`work/RULES.md`](../../../work/RULES.md). Anchors below are inline 
 5. **Owner boundaries** — Identify semantic owner boundaries, reduce duplicate paths, do not locally patch symptoms.
 6. **Sub-agents** — Strict workflow packages start with a new real `freshness-review` sub-agent before implementation; executor and verifier-fixer roles then maximize useful work per assignment. Record roles in structured execution metadata or `## Execution Evidence`.
 7. **Atomicity** — Package closure is atomic: repair, closure validation, renaming, status, sprint references, focused staging, and the local close commit move together through `npm run work:close <package>`; push follows immediately with `npm run work:sprint:push -- <git-push-args>`. Prefer structured execution metadata; prose evidence remains accepted when it satisfies [`work/RULES.md#closure-evidence-grammar`](../../../work/RULES.md#closure-evidence-grammar).
+8. **Non-halting theory loop** — A theory-loop sprint is a non-halting process: every non-terminal outcome (same-frontier, classification-only, needs-rerun, migrated, architecture-gap, owner-boundary-migration, route-selection, loop-exhausted) is a `redirect(next-action)`, not a stop. Stop (`terminate(reason)`) only for the closed set `success-condition-met | blocked-frozen-decision | blocked-external-dependency`; only `success-condition-met` closes the sprint `done`, the two blocked reasons are open handoffs requiring a recorded `## Theory Loop Termination` section. `work:context` exposes `continuationRequired: true` as a standing obligation to redirect. Enforced by `validateTheoryLoopContinuation` (R12). (§non-halting-continuation-invariant-r12)

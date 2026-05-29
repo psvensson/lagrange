@@ -441,6 +441,14 @@ function computeLoopMetrics(history) {
   if (postRederive) loopHealth = 'exhausted';
   else if (rederiveActive) loopHealth = 'rederive-in-progress';
   else if (signals.length > 0) loopHealth = 'compositional-signal-active';
+  // continuationRequired is the non-halting self-report: any non-healthy loop
+  // state is non-terminal and obliges an autonomous redirect (next option,
+  // successor package, rederive, or architecture-gap experiment). It must never
+  // be read as a stopping point. The only legitimate stops are the closed
+  // termination set (success-condition-met, blocked-frozen-decision,
+  // blocked-external-dependency); none of those are inferable from history
+  // alone, so a true stop is always recorded explicitly on the sprint.
+  const continuationRequired = loopHealth !== 'healthy';
   return {
     lastRederiveDateOnPair: lastRederive
       ? (lastRederive.opened || lastRederive.dateStr || 'unknown')
@@ -451,6 +459,7 @@ function computeLoopMetrics(history) {
       s.pattern === 'pair-alternation-post-rederive',
     ).length,
     loopHealth,
+    continuationRequired,
   };
 }
 
@@ -504,6 +513,14 @@ function renderTextHistory(history, owner, boundary) {
     lines.push(`  - closuresSinceLastRederive: ${metrics.closuresSinceLastRederive}`);
     lines.push(`  - pairAlternationCyclesSinceRederive: ${metrics.pairAlternationCyclesSinceRederive}`);
     lines.push(`  - loopHealth: ${metrics.loopHealth}`);
+    lines.push(`  - continuationRequired: ${metrics.continuationRequired}`);
+    if (metrics.continuationRequired) {
+      lines.push(
+        '      note: loop is in a non-terminal state; redirect to the next ' +
+        'option/successor/rederive/arch-gap. Do not stop unless a closed ' +
+        'termination reason is recorded.',
+      );
+    }
   }
 
   return lines.join('\n');

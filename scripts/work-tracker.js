@@ -404,6 +404,24 @@ const THEORY_LOOP_CONTINUATION_STOPPED_LABEL = 'Continuation stopped because';
 const THEORY_LOOP_SUCCESS_RESULT_VALUE = 'success-condition-met';
 const THEORY_LOOP_FORBIDDEN_SUCCESS_CONDITION_PATTERN =
   /\b(?:architecture[-\s]+gap|architecture[-\s]+stop|owner[-\s]+boundary[-\s]+migration|same[-\s]+frontier|classification[-\s]+only|needs[-\s]+rerun|route[-\s]+selection|human[-\s]+escalation)\b/iu;
+const THEORY_LOOP_TERMINATION_HEADING = '## Theory Loop Termination';
+const THEORY_LOOP_TERMINATION_LOOP_STATUS_LABEL = 'Loop status';
+const THEORY_LOOP_TERMINATION_REASON_LABEL = 'Termination reason';
+const THEORY_LOOP_TERMINATION_EVIDENCE_LABEL = 'Evidence';
+const THEORY_LOOP_TERMINATION_HUMAN_OVERRIDE_LABEL = 'Human override ref';
+const THEORY_LOOP_LOOP_STATUS_RUNNING = 'running';
+const THEORY_LOOP_LOOP_STATUS_TERMINATED = 'terminated';
+const THEORY_LOOP_TERMINATION_REASON_SUCCESS = 'success-condition-met';
+const THEORY_LOOP_TERMINATION_REASONS = new Set([
+  THEORY_LOOP_TERMINATION_REASON_SUCCESS,
+  'blocked-frozen-decision',
+  'blocked-external-dependency',
+]);
+const THEORY_LOOP_TERMINATION_BLOCKED_FROZEN = 'blocked-frozen-decision';
+const THEORY_LOOP_TERMINATION_BLOCKED_REASONS = new Set([
+  'blocked-frozen-decision',
+  'blocked-external-dependency',
+]);
 const THEORY_LOOP_PACKAGE_RESULT_VALUES = Object.freeze([
   'fixed',
   'avoided',
@@ -1125,6 +1143,13 @@ function extractTheoryLoopSuccessEvidenceSection(content) {
   return extractMarkdownLevelTwoSection(
     content,
     THEORY_LOOP_SUCCESS_EVIDENCE_HEADING,
+  );
+}
+
+function extractTheoryLoopTerminationSection(content) {
+  return extractMarkdownLevelTwoSection(
+    content,
+    THEORY_LOOP_TERMINATION_HEADING,
   );
 }
 
@@ -3168,6 +3193,121 @@ export function validateTheoryLoopSprintClosure(
       'same-frontier, classification-only, needs-rerun, pending, unknown, or not-met results cannot close a theory-loop sprint.',
     );
   }
+  return errors;
+}
+
+function isConcreteTerminationFieldValue(value) {
+  return value !== null &&
+    value.length > NUM_ZERO &&
+    !MODEL_FIT_EMPTY_VALUE_PATTERN.test(value) &&
+    !LEDGER_TEMPLATE_PLACEHOLDER_PATTERN.test(value) &&
+    !value.includes(LEDGER_PENDING_BEFORE_IMPLEMENTATION_MARKER);
+}
+
+// R12 — Non-Halting Continuation Invariant.
+// A theory-loop sprint may only stop active execution for one of the closed
+// termination reasons: success-condition-met, blocked-frozen-decision, or
+// blocked-external-dependency. Every other outcome (same-frontier,
+// classification-only, needs-rerun, migrated, architecture-gap,
+// route-selection, loop-exhausted, residual-flat) is non-terminal and
+// obliges an autonomous redirect, never a stop. A recorded stop lives in a
+// `## Theory Loop Termination` section; when present it must carry a valid
+// closed-enum reason plus evidence (and, for blocked-frozen-decision, a human
+// override reference). The validator is additive: legacy sprints without the
+// section are exempt, but a `done` theory-loop sprint may only terminate as
+// success-condition-met — a blocked stop is a handoff, never a closure.
+export function validateTheoryLoopContinuation(
+  content,
+  filePath,
+  options = {},
+) {
+  const status = options.status || EMPTY_TEXT;
+  if (!isTheoryLoopSprint(content, filePath)) {
+    return [];
+  }
+  const section = extractTheoryLoopTerminationSection(content);
+  const loopStatus = section ?
+    normalizeLedgerText(findTheoryLoopSuccessEvidenceField(
+      section,
+      THEORY_LOOP_TERMINATION_LOOP_STATUS_LABEL,
+    )).toLowerCase() :
+    EMPTY_TEXT;
+  const reasonValue = section ?
+    findTheoryLoopSuccessEvidenceField(
+      section,
+      THEORY_LOOP_TERMINATION_REASON_LABEL,
+    ) :
+    null;
+  const reason = normalizeLedgerText(reasonValue).toLowerCase();
+  const evidence = section ?
+    findTheoryLoopSuccessEvidenceField(
+      section,
+      THEORY_LOOP_TERMINATION_EVIDENCE_LABEL,
+    ) :
+    null;
+  const humanOverride = section ?
+    findTheoryLoopSuccessEvidenceField(
+      section,
+      THEORY_LOOP_TERMINATION_HUMAN_OVERRIDE_LABEL,
+    ) :
+    null;
+  const declaresStop = loopStatus === THEORY_LOOP_LOOP_STATUS_TERMINATED ||
+    reason.length > NUM_ZERO;
+  const errors = [];
+
+  if (declaresStop) {
+    if (!THEORY_LOOP_TERMINATION_REASONS.has(reason)) {
+      errors.push(
+        `${filePath}: ${THEORY_LOOP_TERMINATION_HEADING} ` +
+        `${THEORY_LOOP_TERMINATION_REASON_LABEL} must be one of ` +
+        'success-condition-met, blocked-frozen-decision, ' +
+        'blocked-external-dependency; every other outcome is non-terminal ' +
+        'and requires an autonomous redirect, not a stop. ' +
+        '[theory-loop-termination-reason-invalid]',
+      );
+    }
+    if (!isConcreteTerminationFieldValue(evidence)) {
+      errors.push(
+        `${filePath}: ${THEORY_LOOP_TERMINATION_HEADING} requires a concrete ` +
+        `${THEORY_LOOP_TERMINATION_EVIDENCE_LABEL} citation for a recorded ` +
+        'stop. [theory-loop-termination-reason-invalid]',
+      );
+    }
+    if (
+      reason === THEORY_LOOP_TERMINATION_BLOCKED_FROZEN &&
+      !isConcreteTerminationFieldValue(humanOverride)
+    ) {
+      errors.push(
+        `${filePath}: ${THEORY_LOOP_TERMINATION_HEADING} with ` +
+        `${THEORY_LOOP_TERMINATION_REASON_LABEL} blocked-frozen-decision ` +
+        `requires a concrete ${THEORY_LOOP_TERMINATION_HUMAN_OVERRIDE_LABEL}. ` +
+        '[theory-loop-termination-reason-invalid]',
+      );
+    }
+  }
+
+  if (status === STATUS_DONE) {
+    if (
+      reason.length > NUM_ZERO &&
+      THEORY_LOOP_TERMINATION_BLOCKED_REASONS.has(reason)
+    ) {
+      errors.push(
+        `${filePath}: theory-loop sprint marked done has ` +
+        `${THEORY_LOOP_TERMINATION_REASON_LABEL} "${reason}"; only ` +
+        'success-condition-met closes a theory loop. A blocked termination is ' +
+        'a handoff and must keep the sprint open. ' +
+        '[theory-loop-blocked-cannot-be-done]',
+      );
+    }
+    if (section && loopStatus === THEORY_LOOP_LOOP_STATUS_RUNNING) {
+      errors.push(
+        `${filePath}: theory-loop sprint marked done declares ` +
+        `${THEORY_LOOP_TERMINATION_LOOP_STATUS_LABEL} running; a running loop ` +
+        'must not be closed. [theory-loop-halted-without-termination]',
+      );
+    }
+  }
+
   return errors;
 }
 
@@ -9129,6 +9269,9 @@ async function validateSprintFile(filePath) {
     [LEDGER_VALIDATION_REQUIRES_LEDGER]: fileStatus === STATUS_ACTIVE,
   }));
   errors.push(...validateTheoryLoopSprintClosure(content, relativePath, {
+    status: fileStatus,
+  }));
+  errors.push(...validateTheoryLoopContinuation(content, relativePath, {
     status: fileStatus,
   }));
   errors.push(...validateSprintJointCoupledInvariantProbe(content, relativePath, {

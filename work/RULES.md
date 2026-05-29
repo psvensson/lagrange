@@ -375,9 +375,10 @@ packages and sprints without the relevant fields/signals are exempt.
 * **R10. Frontier-History Self-Report** — `computeLoopMetrics` in
   `scripts/work-frontier-history.js` surfaces `loopMetrics`:
   `lastRederiveDateOnPair`, `closuresSinceLastRederive`,
-  `pairAlternationCyclesSinceRederive`, and `loopHealth`
-  (`healthy|rederive-in-progress|exhausted`). Visible in both the JSON and
-  text output of `npm run work:frontier-history` and surfaced through
+  `pairAlternationCyclesSinceRederive`, `loopHealth`
+  (`healthy|rederive-in-progress|exhausted`), and `continuationRequired`
+  (`true` whenever `loopHealth` is non-`healthy`; see R12). Visible in both the
+  JSON and text output of `npm run work:frontier-history` and surfaced through
   `npm run work:context`.
 * **R11. packageClass Write-Scope Fit** — `validatePackageClassWriteScopeFit`
   (`rederive-writescope-contains-src`, `runtime-writescope-no-src`).
@@ -386,6 +387,16 @@ packages and sprints without the relevant fields/signals are exempt.
   `representative-frontier-closure` packages on `runtime-owner-boundary`
   MUST list at least one `src/` path in `writeScope` (Real Package Rule).
   Wired into the pre-impl orchestrator alongside R1–R9.
+* **R12. Non-Halting Continuation Invariant** —
+  `validateTheoryLoopContinuation`
+  (`theory-loop-halted-without-termination`,
+  `theory-loop-termination-reason-invalid`,
+  `theory-loop-blocked-cannot-be-done`). A theory-loop sprint may only stop
+  active execution for a reason in the closed **Termination Conditions** set;
+  every other outcome is non-terminal and obliges an autonomous redirect (see
+  the *Non-Halting Continuation Invariant* section below). Enforced at the
+  `--pre-impl` and `--closure` phases; additive for legacy sprints that lack a
+  `## Theory Loop Termination` section.
 
 ### Compositional Auto-Promote Rule
 
@@ -442,6 +453,60 @@ or artifact, `Result: success-condition-met`, and the concrete reason
 continuation stops. Two-level theory may navigate through migrations,
 architecture gaps, and rejected theories as package learning, but those are not
 sprint success metrics by themselves.
+
+### Non-Halting Continuation Invariant (R12)
+
+A theory loop is a *non-halting* process. Once started, it must keep producing
+autonomous next actions until one of a small, closed set of termination
+conditions is met. It is never correct to silently stop, end the turn awaiting
+human acknowledgement, or close the sprint on a non-terminal outcome.
+
+**Termination Conditions (closed set).** Active execution of a theory-loop
+sprint may stop only for one of exactly these reasons:
+
+* `success-condition-met` — the original `Evidence Anchor` success condition is
+  satisfied by fresh representative evidence. This is the only reason that
+  closes the sprint as `done`.
+* `blocked-frozen-decision` — a frozen-decision / safety Level-1 human gate
+  applies (the single legitimate human halt; see `core.md`). Requires a
+  recorded human override reference. The sprint stays open (handoff), not
+  `done`.
+* `blocked-external-dependency` — progress is impossible until an external
+  dependency outside the repository resolves (e.g. an upstream release, an
+  unavailable credential). The sprint stays open (handoff), not `done`.
+
+**Stop Semantics — `terminate` vs `redirect`.** Reclassify every "stop",
+"escalate", or "halt" instruction in steering as one of two acts:
+
+* `terminate(reason)` — permitted only when `reason` is in the Termination
+  Conditions set above.
+* `redirect(next-action)` — the default for *all* other situations. A
+  non-terminal outcome (same-frontier, classification-only, needs-rerun,
+  migrated, architecture-gap, owner-boundary-migration, route-selection,
+  loop-exhausted, residual-flat, compositional-signal-active) MUST be followed
+  immediately by the next autonomous action: the next theory option, a
+  successor package, a `system-theory-rederive`, an `architecture-gap-analysis`
+  experiment, or a re-run — never an end-of-turn or a request for confirmation.
+  The frontier-history self-report exposes `continuationRequired: true`
+  whenever `loopHealth` is non-`healthy`; treat it as a standing obligation to
+  `redirect`, not as a stopping point.
+
+**Recording a stop.** When a sprint legitimately terminates (or a blocked
+handoff applies), add a `## Theory Loop Termination` section with:
+
+* `Loop status:` — `running` or `terminated`.
+* `Termination reason:` — one value from the closed set above.
+* `Evidence:` — a concrete command, artifact, or override citation proving the
+  reason holds.
+* `Human override ref:` — required only for `blocked-frozen-decision`.
+
+`validateTheoryLoopContinuation` enforces that any recorded stop uses a
+closed-enum reason with concrete evidence, that `blocked-frozen-decision`
+carries a human override reference, and that a `done` theory-loop sprint never
+terminates on a blocked reason (a blocked stop is a handoff that keeps the
+sprint open). Static validation cannot observe an agent that simply ends its
+turn; that case is governed by this invariant as doctrine plus the
+`continuationRequired` self-report surfaced through `npm run work:context`.
 
 ---
 
