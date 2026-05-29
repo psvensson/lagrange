@@ -64,21 +64,21 @@ priority-recovery or active-gate frontier.
 
 ```text
 Representative artifact: test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json
-Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage
-Active package: work/packages/done-20260529-rolling-restart-active-gate-saturation-fresh-system-theory-rederive.md
+Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / snapshot_coverage_incomplete
+Active package: work/packages/active-20260529-rolling-restart-active-gate-saturation-architecture-gap-experiment.md
 Active package owner: startup_active_gate_owner
 Active package boundary: snapshot_coverage
 Selected cause: snapshot_coverage_incomplete
-Required action: Rederive the startup_active_gate_owner / snapshot_coverage whole-system theory from the fresh representative artifact before any runtime source promotion.
+Required action: Close this architecture-gap experiment as architecture-gap continuation; no runtime source package is selected from the fresh artifact.
 Representative status: architecture-gap
 Causal outcome: continue_local_fix
 Architecture gate: selected / architecture-package
-Expected delta: System-theory rederive records whether the fresh guarded active-gate frontier permits a non-repeated contract, owner migration, architecture-gap, or another fresh rerun.
-Current state: Fresh representative evidence still selects active_gate_snapshot_coverage with runtimePromotionGuard.state=blocked after the saturation architecture-gap package closed.
-Allowed edits: work/packages/done-20260529-rolling-restart-active-gate-saturation-fresh-system-theory-rederive.md, work/sprints/active-2026-q2-spec-led-runtime-modularization.md, work/theory-ledger.md
+Expected delta: Fresh representative rerun and focused proof reconfirmed architecture-gap continuation; runtime source promotion remains blocked.
+Current state: Fresh representative rerun stayed red at active_gate_snapshot_coverage with runtimePromotionGuard.state=blocked after the architecture-gap experiment.
+Allowed edits: work/packages/active-20260529-rolling-restart-active-gate-saturation-architecture-gap-experiment.md, work/sprints/active-2026-q2-spec-led-runtime-modularization.md, work/theory-ledger.md
 Candidate runtime files: src/admin/admin-control-snapshot-repair-diagnostics.js, src/bootstrap/bootstrap-api-control-plane-methods.js, src/control-plane/membership-publication-active-gate-reconcile.js, src/control-plane/publication-active-gate-handoff-contract-selection.js
-Forbidden edits: Runtime promotion stays blocked until system theory names a non-repeated source route.
-Required latest proof: falsifier: npm run work:system-theory:rederive -- --owner startup_active_gate_owner --boundary snapshot_coverage, regression: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason snapshot_coverage_incomplete --explain active_gate_snapshot_coverage, supporting: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --explain active_gate_snapshot_coverage, supporting: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12
+Forbidden edits: operation_workflow_owner / rebalancer_handoff residuals must remain zero before active-gate source promotion can resume.
+Required latest proof: falsifier: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --explain snapshot_coverage # coupled-invariant, falsifier: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12, regression: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason snapshot_coverage_incomplete --explain active_gate_snapshot_coverage, supporting: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --explain active_gate_snapshot_coverage, supporting: npm run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -125,6 +125,11 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Lane: `causal-escalation`
    - Purpose: Record the fresh system-theory rederive required after representative evidence returned to the guarded active-gate frontier.
    - First-run reason: Fresh rolling-restart evidence still selects active_gate_snapshot_coverage with runtimePromotionGuard.state=blocked, and work:system-theory:rederive reports same-mechanism-repeat contract_gap saturation.
+9. [Rolling Restart Active Gate Saturation Architecture Gap Experiment](../packages/active-20260529-rolling-restart-active-gate-saturation-architecture-gap-experiment.md)
+   - Lane: `causal-escalation`
+   - Purpose: Run the architecture-gap class discriminator selected after the fresh rederive kept active-gate runtime promotion blocked.
+   - First-run reason: The theory-loop sprint cannot close on architecture-gap, runtime promotion remains blocked, and scenario-route suggests an autonomous architecture experiment before any source package resumes.
+   - Decision: Fresh representative rerun stayed red with the same active_gate_snapshot_coverage first frontier, zero priority-recovery residuals, and blocked runtime-promotion guard; no non-repeated runtime successor is selected.
 
 ## Sprint Proof Ladder
 
