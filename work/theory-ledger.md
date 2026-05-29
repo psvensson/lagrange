@@ -386,3 +386,17 @@ Each entry must include these labels:
 - Supersedes: none
 - Superseded by: none
 - Next implication: Close the post-rerun rederive as architecture continuation unless proof later names a non-repeated source contract, owner-boundary migration, protocol/model/topology route, or representative-green result.
+
+## theory-20260529-rolling-restart-active-gate-owner-reconcile-pending-architecture-gap
+
+- Status: supported
+- Scenario/gate: rolling-restart / active_gate_snapshot_coverage
+- Owner/boundary: startup_active_gate_owner / snapshot_coverage
+- Hypothesis: Corrected runtime-promotion guard evidence makes owner_reconcile_pending an architecture discriminator rather than permission for another repeated active-gate runtime patch.
+- Probe: `npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending --explain active_gate_snapshot_coverage`
+- Artifact/result: `test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json` - scenario-route reports `runtimePromotionGuard.state=blocked` with reason `saturated_history_requires_non_repeated_source_contract`; frontier-history reports exhausted loop health with same-mechanism-repeat and pair-alternation-post-rederive; topology-convergence exposes publicationActiveGateHandoffRuntimePromotionAllowed=false, selected_snapshot_source_timeout, snapshot_repair_deferred, and one pending owner queue write; priority-recovery residual witnesses remain 0; causal-model keeps topology:active_gate_snapshot_coverage as the first critical path.
+- Representative movement: architecture-gap
+- Linked packages: `work/packages/active-20260529-rolling-restart-active-gate-owner-reconcile-pending-post-guard-architecture-gap-analysis.md`
+- Supersedes: theory-20260529-rolling-restart-active-gate-post-rerun-system-theory-rederive
+- Superseded by: none
+- Next implication: Runtime promotion remains blocked from this artifact. Because architecture-gap is non-terminal for the sprint, redirect to fresh representative route evidence unless future proof names a non-repeated owner-owned transition, owner-boundary migration, protocol/model/topology route, fresh representative movement, or representative-green result.

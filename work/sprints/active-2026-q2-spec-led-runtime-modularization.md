@@ -14,12 +14,12 @@ priority-recovery or active-gate frontier.
 ## Sprint Strategy Brief
 
 - Goal state: `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --fast-local --verbose` exits 0, and canonical evidence shows representative green.
-- Current causal thesis: the post-architecture-gap representative rerun stayed red on `active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending`; priority-recovery residuals are zero, topology shows snapshot coverage 1/5 with selected_snapshot_source_timeout plus snapshot_repair_deferred, and the system-theory checkpoint gate is due before another runtime slice can activate.
+- Current causal thesis: the post-architecture-gap representative rerun stayed red on `active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending`; priority-recovery residuals are zero, topology shows snapshot coverage 1/5 with selected_snapshot_source_timeout plus snapshot_repair_deferred, and corrected scenario-route proof now blocks runtime promotion through `runtimePromotionGuard.state=blocked`.
 - Competing hypotheses: H1 a non-repeated active-gate source contract is now discoverable; H2 the active-gate/rebalancer pair remains a coupled invariant needing architecture continuation; H3 the visible active-gate frontier is downstream startup readiness lag; H4 the artifact is stale or instrumentation-only. H1 is blocked until the system-theory rederive names a concrete non-repeated source contract.
-- Confidence and evidence: high that the next autonomous action is system-theory rederive; the fresh harness report is red after 834.4s, `work:evidence-summary` and `work:scenario-route` select active_gate_snapshot_coverage with owner_reconcile_pending, `analyze:priority-recovery-residuals` reports 0 witnesses, and `work:system-theory:rederive --check-due` reports 5 closed packages since the latest rederive checkpoint.
-- Expected green path: run the post-rerun system-theory rederive, then either promote a non-repeated source contract, migrate owner boundary, record architecture continuation, or rerun representative evidence until the Evidence Anchor is met.
+- Confidence and evidence: high that the next autonomous action is architecture-gap analysis; corrected `work:scenario-route` selects active_gate_snapshot_coverage with owner_reconcile_pending, reports `runtimePromotionGuard.state=blocked`, `work:frontier-history` reports same-mechanism-repeat contract_gap saturation, and priority-recovery residual witnesses remain zero.
+- Expected green path: run the owner_reconcile_pending architecture-gap analysis, then either promote a non-repeated source contract, migrate owner boundary, implement a selected protocol/model/topology route, record architecture continuation, or rerun representative evidence until the Evidence Anchor is met.
 - Wrong direction signals: closing this sprint on architecture-gap or migration, widening timeouts, weakening admission/readiness, hiding diagnostics, reopening rebalancer handoff while priority-recovery witnesses are zero, or opening another generic startup_active_gate_owner / snapshot_coverage patch after the rederive selected architecture work.
-- Next best package: `work/packages/done-20260529-rolling-restart-active-gate-runtime-promotion-guard-reconcile.md`; fresh topology evidence carries `publicationActiveGateHandoffRuntimePromotionAllowed=false` while scenario-route still reports runtime promotion allowed, so diagnostics must reconcile the guard before any repeated active-gate runtime source package can activate.
+- Next best package: `work/packages/done-20260529-rolling-restart-active-gate-owner-reconcile-pending-post-guard-architecture-gap-analysis.md`; corrected runtime-promotion guard proof blocks repeated active-gate source promotion, so the loop must run the selected architecture-gap analysis before any runtime package can activate.
 - Redirect rule: on same-frontier / no-reduction evidence after the rederive, immediately open a bounded architecture/causal experiment that names a non-repeated owner contract — or run fresh representative route evidence — instead of another local runtime package. This is a redirect, not a stop: the agent keeps executing the next autonomous action and never hands control back; the loop continues until the Evidence Anchor success condition is met. Terminate only for a closed Termination Condition recorded in `## Theory Loop Termination`.
 - Architecture-route forcing (R13): the earlier active-gate protocol route has been implemented and `work:frontier-history` now reports `architectureRouteState: implemented`; this release-gate package is therefore evidence-only. Any future runtime package on the active-gate pair must still satisfy the current compositional gates and carry the required architecture-route marker when those gates demand it.
 
@@ -27,7 +27,7 @@ priority-recovery or active-gate frontier.
 
 - Loop status: running
 - Termination reason: none
-- Next autonomous action: run the active post-rerun system-theory rederive package, then route the selected continuation. The Evidence Anchor success condition (local rolling-restart harness exits 0 with no active priority-recovery or active-gate frontier) is not yet met, so the loop must not stop.
+- Next autonomous action: run the active owner_reconcile_pending architecture-gap analysis package, then route the selected continuation. The Evidence Anchor success condition (local rolling-restart harness exits 0 with no active priority-recovery or active-gate frontier) is not yet met, so the loop must not stop.
 
 ## Theory Loop Sprint
 
@@ -66,20 +66,20 @@ priority-recovery or active-gate frontier.
 ```text
 Representative artifact: test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json
 Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending
-Active package: work/packages/done-20260529-rolling-restart-active-gate-runtime-promotion-guard-reconcile.md
-Active package owner: diagnostics_owner
-Active package boundary: causal_analysis_framework
-Selected cause: runtime_promotion_guard_conflict
-Required action: Close this diagnostics guard package, then open the autonomous architecture experiment selected by corrected runtime-promotion guard proof.
+Active package: work/packages/done-20260529-rolling-restart-active-gate-owner-reconcile-pending-post-guard-architecture-gap-analysis.md
+Active package owner: startup_active_gate_owner
+Active package boundary: snapshot_coverage
+Selected cause: owner_reconcile_pending
+Required action: Close as architecture-gap continuation, then redirect to fresh representative route evidence because no non-repeated source contract, owner-boundary migration, protocol/model/topology route, or representative-green result was selected.
 Representative status: architecture-gap
 Causal outcome: continue_local_fix
-Architecture gate: selected / diagnostics-guard-reconcile
-Expected delta: Classify whether handoff runtime-promotion denial blocks repeated active-gate runtime source promotion and selects an autonomous architecture experiment, non-repeated source contract, owner-boundary migration, fresh evidence rerun, or representative green.
-Current state: Scenario-route now preserves publicationActiveGateHandoffRuntimePromotionAllowed=false through representative evidence summary and blocks runtime promotion when the active-gate frontier history is saturated.
-Allowed edits: scripts/work-scenario-route.js, scripts/summarize-representative-evidence.js, test/scripts/work-llm-usability-tools.test.js, work/packages/done-20260529-rolling-restart-active-gate-runtime-promotion-guard-reconcile.md, work/sprints/active-2026-q2-spec-led-runtime-modularization.md
-Candidate runtime files: src/diagnostics/topology-convergence-graph.js, src/diagnostics/topology-convergence-edge-resolvers.js, src/control-plane/membership-publication-active-gate-reconcile.js
-Forbidden edits: Active-gate runtime files remain candidates only until diagnostics route evidence names a non-repeated runtime contract.
-Required latest proof: falsifier: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending --explain active_gate_snapshot_coverage, regression: node --test test/scripts/work-llm-usability-tools.test.js test/diagnostics/topology-convergence-active-gate-handoff-route.test.js, supporting: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --explain active_gate_snapshot_coverage, supporting: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12, supporting: npm run work:system-theory:rederive -- --check-due --sprint work/sprints/active-2026-q2-spec-led-runtime-modularization.md, supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --markdown
+Architecture gate: selected / architecture-gap-analysis
+Expected delta: Architecture proof confirmed corrected runtime-promotion guard evidence blocks repeated active-gate source promotion and selected architecture-gap continuation plus fresh representative route evidence.
+Current state: Corrected scenario-route evidence keeps active_gate_snapshot_coverage on startup_active_gate_owner / snapshot_coverage with owner_reconcile_pending and runtimePromotionGuard.state=blocked after saturated same-mechanism history.
+Allowed edits: work/packages/done-20260529-rolling-restart-active-gate-owner-reconcile-pending-post-guard-architecture-gap-analysis.md, work/sprints/active-2026-q2-spec-led-runtime-modularization.md, work/theory-ledger.md
+Candidate runtime files: src/control-plane/membership-publication-active-gate-reconcile.js, src/control-plane/publication-active-gate-handoff-contract-selection.js, src/control-plane/publication-active-gate-handoff-contract-decision.js, src/control-plane/publication-active-gate-handoff-contract-evidence.js, src/control-plane/snapshot-service.js, src/control-plane/owner-queue.js
+Forbidden edits: Runtime promotion must stay blocked while topology evidence denies active-gate handoff runtime promotion and paired priority-recovery residuals remain zero.
+Required latest proof: falsifier: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --explain snapshot_coverage # coupled-invariant, falsifier: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12, regression: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending --explain active_gate_snapshot_coverage, supporting: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --explain active_gate_snapshot_coverage, supporting: npm run work:system-theory:rederive -- --check-due --sprint work/sprints/active-2026-q2-spec-led-runtime-modularization.md, supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --markdown, supporting: npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json, supporting: npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending --explain active_gate_snapshot_coverage
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -165,6 +165,10 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Lane: `experiment`
    - Purpose: Reconcile scenario-route runtime promotion guard semantics with topology handoff denial before any repeated active-gate runtime source package can activate.
    - First-run reason: The checkpoint gate is no longer due, but current topology records publicationActiveGateHandoffRuntimePromotionAllowed=false while scenario-route still reports runtimePromotionGuard.state=allowed for the same active-gate frontier.
+18. [Rolling Restart Active Gate Owner Reconcile Pending Post Guard Architecture Gap Analysis](../packages/done-20260529-rolling-restart-active-gate-owner-reconcile-pending-post-guard-architecture-gap-analysis.md)
+   - Lane: `causal-escalation`
+   - Purpose: Run the architecture-gap class discriminator selected by corrected runtime-promotion guard evidence before any active-gate runtime source promotion.
+   - First-run reason: Scenario-route now reports `runtimePromotionGuard.state=blocked` for owner_reconcile_pending and frontier-history still reports same-mechanism-repeat contract_gap for startup_active_gate_owner / snapshot_coverage.
 
 ## Sprint Proof Ladder
 
