@@ -208,7 +208,7 @@ Each entry must include these labels:
 
 ## theory-20260526-rolling-restart-selected-view-best-view-evidence-gap
 
-- Status: needs-rerun
+- Status: supported
 - Scenario/gate: rolling-restart / active_gate_snapshot_coverage
 - Owner/boundary: startup_active_gate_owner / viewpoint_selection
 - Hypothesis: Selected-node publication/readiness evidence lags a fresher best or quorum control-plane view, but the current artifact does not preserve enough per-node probe detail to prove the better view.
@@ -354,7 +354,21 @@ Each entry must include these labels:
 - Probe: `npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12`
 - Artifact/result: `test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json` - fresh architecture-experiment representative rerun failed in 706.1s and still reports same-mechanism-repeat `contract_gap`; scenario-route emits `runtimePromotionGuard.state=blocked`; topology-convergence exposes only `selected_snapshot_source_timeout` plus `snapshot_repair_deferred`; causal-model keeps `topology:active_gate_snapshot_coverage` as the first critical path; priority-recovery residuals remain zero; terminal `benchmark_events` SQL visibility remains downstream.
 - Representative movement: architecture-gap-stop
-- Linked packages: `work/packages/done-20260529-rolling-restart-active-gate-snapshot-coverage-architecture-gap-analysis.md`, `work/packages/done-20260529-rolling-restart-active-gate-saturation-architecture-gap-analysis.md`, `work/packages/done-20260529-rolling-restart-active-gate-saturation-fresh-system-theory-rederive.md`, `work/packages/active-20260529-rolling-restart-active-gate-saturation-architecture-gap-experiment.md`
+- Linked packages: `work/packages/done-20260529-rolling-restart-active-gate-snapshot-coverage-architecture-gap-analysis.md`, `work/packages/done-20260529-rolling-restart-active-gate-saturation-architecture-gap-analysis.md`, `work/packages/done-20260529-rolling-restart-active-gate-saturation-fresh-system-theory-rederive.md`, `work/packages/done-20260529-rolling-restart-active-gate-saturation-architecture-gap-experiment.md`
 - Supersedes: none
 - Superseded by: none
 - Next implication: Do not open another local startup_active_gate_owner / snapshot_coverage runtime package from this artifact. Runtime promotion remains blocked until fresh representative evidence or focused proof names a non-repeated owner-owned transition, protocol/model/topology route, representative-green result, or real owner-boundary migration.
+
+## theory-20260529-rolling-restart-active-gate-snapshot-coverage-checkpoint-rederive
+
+- Status: supported
+- Scenario/gate: rolling-restart / active_gate_snapshot_coverage
+- Owner/boundary: startup_active_gate_owner / snapshot_coverage
+- Hypothesis: After the architecture-gap experiment closes without representative-green success, the same active-gate contract-gap route must be rederived at the sprint checkpoint before any runtime or architecture successor activates.
+- Probe: `npm run work:system-theory:rederive -- --owner startup_active_gate_owner --boundary snapshot_coverage`
+- Artifact/result: `test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json` - checkpoint proof still selects active_gate_snapshot_coverage with zero priority-recovery residual witnesses and blocked runtime promotion; `work:system-theory:rederive` reports same-mechanism-repeat `contract_gap`; topology-convergence exposes selected_snapshot_source_timeout plus snapshot_repair_deferred; causal-model keeps topology:active_gate_snapshot_coverage first; the date-only check-due command still reports 12 same-day closed packages, so this package records the checkpoint result without changing workflow tooling.
+- Representative movement: architecture-gap
+- Linked packages: `work/packages/active-20260529-rolling-restart-active-gate-saturation-checkpoint-system-theory-rederive.md`
+- Supersedes: theory-20260529-rolling-restart-active-gate-snapshot-coverage-architecture-gap-stop
+- Superseded by: none
+- Next implication: Close the checkpoint rederive as architecture-gap continuation. Runtime promotion remains blocked until future fresh representative evidence or focused proof names a non-repeated owner-owned transition, protocol/model/topology route, representative-green result, or real owner-boundary migration.
