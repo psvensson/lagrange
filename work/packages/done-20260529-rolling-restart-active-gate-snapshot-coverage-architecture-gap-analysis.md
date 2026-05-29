@@ -499,7 +499,7 @@ Preferred closure evidence for new packages. A real freshness-review subagent is
 
 ## Commit And Push Ledger
 
-1. Focused package commit: 396e42d25719f0241c0ae6e1b44b2097412503e8
+1. Focused package commit: da49a3c17ce79268d2c495c2bef2c9888d1c8923
 2. Push target: origin/codex/pending-ack-eligibility-filter
 3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
-4. Pushed: no
+4. Pushed: yes 2026-05-29T07:39:19.921Z
