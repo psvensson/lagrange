@@ -20,16 +20,20 @@ Implementation files:
 6. `scripts/work-context.js`
 7. `test/scripts/work-context.test.js`
 8. `test/scripts/work-tracker-theory-loop-continuation.test.js`
-9. `src/admin/admin-control-snapshot-repair-diagnostics.js`
-10. `src/bootstrap/bootstrap-api-control-plane-methods.js`
-11. `src/control-plane/membership-publication-active-gate-reconcile.js`
-12. `src/control-plane/publication-active-gate-handoff-contract-selection.js`
+9. `scripts/summarize-representative-evidence.js`
+10. `scripts/work-scenario-route.js`
+11. `test/diagnostics/topology-convergence-graph.test.js`
+12. `test/scripts/work-llm-usability-tools.test.js`
+13. `src/admin/admin-control-snapshot-repair-diagnostics.js`
+14. `src/bootstrap/bootstrap-api-control-plane-methods.js`
+15. `src/control-plane/membership-publication-active-gate-reconcile.js`
+16. `src/control-plane/publication-active-gate-handoff-contract-selection.js`
 
 Expected implementation delta: runtime promotion remains blocked, a non-repeated source contract is named, or owner boundary migrates.
 
 Falsifying probe: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12
 
-Stop rule: if proof names a concrete non-repeated active-gate owner source contract, supersede this guard and open that source package; on unchanged same-frontier, no-reduction, or architecture-gap evidence redirect immediately to a bounded architecture/causal experiment or fresh route evidence and keep executing autonomously. The loop terminates only for a closed Termination Condition (success-condition-met, blocked-frozen-decision, blocked-external-dependency).
+Redirect rule: if proof names a concrete non-repeated active-gate owner source contract, supersede this guard and open that source package; on unchanged same-frontier, no-reduction, or architecture-gap evidence redirect immediately to a bounded architecture/causal experiment or fresh route evidence and keep executing autonomously. The loop terminates only for a closed Termination Condition (success-condition-met, blocked-frozen-decision, blocked-external-dependency).
 
 Sprint: `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
 
@@ -170,7 +174,7 @@ Wrong-slice triggers:
 
 ## Representative Residual
 
-Status: `pending-before-probe`
+Status: `reduced`
 
 Scenario: `rolling-restart`
 
@@ -184,7 +188,7 @@ Boundary: `causal_analysis_framework`
 
 Dominant reason: `active_gate_saturated_after_diagnostics_route`
 
-Next action: `Decide whether diagnostics should guard active-gate runtime promotion until fresh evidence or a non-repeated source contract exists.`
+Next action: `Runtime promotion is guarded; continue with the architecture-gap analysis successor before any active-gate runtime source package.`
 
 ## Causal Governance
 
@@ -194,7 +198,7 @@ Stop-condition check: `npm run analyze:causal-model -- test-output/reports/rolli
 
 Expected causal-model change: `The package should either preserve runtime promotion as blocked or name a concrete non-repeated owner source contract.`
 
-Representative outcome: `pending-before-rerun`
+Representative outcome: `reduced`
 
 Causal debt: `Rolling-restart remains red at active_gate_snapshot_coverage with selected_snapshot_source_timeout and snapshot_repair_deferred.`
 
@@ -234,9 +238,9 @@ Same-frontier fallback: `Keep runtime promotion blocked and record architecture 
 
 Expected next frontier: `diagnostics guard, non-repeated source contract, owner-boundary migration, fresh representative evidence, or representative-green`
 
-Result classification: `pending-before-probe`
+Result classification: `reduced`
 
-Stop condition: `continue-local-fix`
+Stop condition: `architecture-gap-stop`
 
 Recent frontier history:
 
@@ -252,25 +256,25 @@ Metric: `rolling-restart post-diagnostics active-gate promotion route`
 
 Predicted: `frontier-history and corrected scenario-route will keep active_gate_snapshot_coverage local while prior architecture-gap evidence keeps runtime promotion blocked until a non-repeated contract is named.`
 
-Observed: `pending-before-observation`
+Observed: `scenario-route kept the local active_gate_snapshot_coverage route but emitted runtimePromotionGuard.state=blocked and suggested experiment/open-architecture-experiment instead of runtime-owner-boundary.`
 
-Accuracy: `pending-before-observation`
+Accuracy: `matched`
 
-Evidence: `pending-before-observation`
+Evidence: `npm run work:scenario-route -- test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason snapshot_coverage_incomplete --explain active_gate_snapshot_coverage`
 
 Metric delta: `unknown`
 
 ## Experiment Outcome
 
-Distinguished hypothesis: `unknown`
+Distinguished hypothesis: `H1`
 
-Decision: `unknown`
+Decision: `open-architecture-experiment`
 
-Next owner: `unknown`
+Next owner: `startup_active_gate_owner`
 
-Next boundary: `unknown`
+Next boundary: `snapshot_coverage`
 
-Evidence: `unknown`
+Evidence: `npm run work:scenario-route -- test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason snapshot_coverage_incomplete --explain active_gate_snapshot_coverage`
 
 ## Rerun Decision
 
@@ -282,9 +286,9 @@ Route boundary: `causal_analysis_framework`
 
 Route dominant reason: `active_gate_saturated_after_diagnostics_route`
 
-Route causal outcome: `pending-before-rerun`
+Route causal outcome: `continue_local_fix`
 
-Stop mode: `pending-before-rerun`
+Stop mode: `classified_local_blocker`
 
 Next lane: `experiment`
 
@@ -292,25 +296,25 @@ Expected delta: `Select fresh representative evidence, a non-repeated owner-owne
 
 Required refresh commands:
 
-1. `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json --successor work/packages/active-20260529-rolling-restart-active-gate-saturation-route-guard.md`
+1. `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json --successor work/packages/todo-20260529-rolling-restart-active-gate-saturation-architecture-gap-analysis.md`
 2. `update Sprint Strategy Brief from the route result`
 3. `update Current Edge Card from the route result`
 4. `refresh current-blocker with npm run work:repair`
-5. `npm run work:validate -- --entry work/packages/active-20260529-rolling-restart-active-gate-saturation-route-guard.md`
-6. `npm run work:validate -- --pre-impl work/packages/active-20260529-rolling-restart-active-gate-saturation-route-guard.md`
+5. `npm run work:validate -- --entry work/packages/todo-20260529-rolling-restart-active-gate-saturation-architecture-gap-analysis.md`
+6. `npm run work:validate -- --pre-impl work/packages/todo-20260529-rolling-restart-active-gate-saturation-architecture-gap-analysis.md`
 
 ## Architecture Decision Gate
 
-Status: `watching`
+Status: `selected`
 
-Trigger: `frontier-oscillation`
+Trigger: `architecture-gap`
 
 Trigger evidence:
 
-1. `frontier returned to a recently closed related boundary`
-2. `work/packages/done-20260529-rolling-restart-causal-stop-dominant-frontier-selection.md / diagnostics_owner / causal_analysis_framework / reduced`
-3. `work/packages/done-20260529-rolling-restart-priority-recovery-rebalancer-handoff-retry-scheduled.md / operation_workflow_owner / rebalancer_handoff / migrated`
-4. `work/packages/done-20260529-rolling-restart-active-gate-snapshot-repair-deferred-retry.md / startup_active_gate_owner / snapshot_coverage / reduced`
+1. `scenario result classification: reduced`
+2. `scenario stop condition: architecture-gap-stop`
+3. `diagnostics route model must distinguish corrected local blocker from permission to reopen saturated runtime patching.`
+4. `npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12`
 
 Choices:
 
@@ -319,9 +323,9 @@ Choices:
 3. `open-architecture-package` route=`architecture-package` - Open a bounded autonomous architecture experiment for the missing owner contract.
 4. `human-escalation` route=`human-escalation` - Escalate to a human only when evidence is contradictory, policy-blocked, credential-blocked, or unavailable.
 
-Selected choice: `unknown`
+Selected choice: `open-architecture-package`
 
-Gate next action: Watch for repeated frontier oscillation; open an autonomous architecture experiment if another local proof returns here unchanged.
+Gate next action: Open the autonomous architecture experiment package before runtime implementation resumes.
 
 ## Scope
 
@@ -340,6 +344,10 @@ Write scope:
 11. `.kiro/steering/llm/governance.md`
 12. `.kiro/steering/llm/rules.json`
 13. `test/scripts/work-tracker-theory-loop-continuation.test.js`
+14. `scripts/summarize-representative-evidence.js`
+15. `scripts/work-scenario-route.js`
+16. `test/diagnostics/topology-convergence-graph.test.js`
+17. `test/scripts/work-llm-usability-tools.test.js`
 
 Handoff files:
 
@@ -375,6 +383,10 @@ Commit scope:
 14. `.kiro/steering/llm/governance.md`
 15. `.kiro/steering/llm/rules.json`
 16. `test/scripts/work-tracker-theory-loop-continuation.test.js`
+17. `scripts/summarize-representative-evidence.js`
+18. `scripts/work-scenario-route.js`
+19. `test/diagnostics/topology-convergence-graph.test.js`
+20. `test/scripts/work-llm-usability-tools.test.js`
 
 Legacy touched files:
 

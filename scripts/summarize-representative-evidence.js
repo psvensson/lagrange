@@ -40,6 +40,19 @@ const OUTPUT_SCHEMA_VERSION = 'representative-evidence-summary-v1';
 const OUTPUT_FORMAT_JSON = 'json';
 const OUTPUT_FORMAT_MARKDOWN = 'markdown';
 const MARKDOWN_TITLE = '# Representative Evidence Summary';
+const MARKDOWN_LABEL_SOURCE_ARTIFACT = 'Source artifact';
+const MARKDOWN_LABEL_SCENARIO = 'Scenario';
+const MARKDOWN_LABEL_TOPOLOGY_FRONTIER_EDGE = 'Topology frontier edge';
+const MARKDOWN_LABEL_TOPOLOGY_OWNER = 'Topology owner';
+const MARKDOWN_LABEL_TOPOLOGY_BOUNDARY = 'Topology boundary';
+const MARKDOWN_LABEL_DOMINANT_REASON = 'Dominant reason';
+const MARKDOWN_LABEL_EVIDENCE_PATH = 'Evidence path';
+const MARKDOWN_LABEL_CAUSAL_OUTCOME = 'Causal outcome';
+const MARKDOWN_LABEL_DOMINANT_FAILURE_CLASS = 'Dominant failure class';
+const MARKDOWN_LABEL_STOP_CONDITION = 'Stop condition';
+const MARKDOWN_LABEL_FIRST_CRITICAL_PATH_NODE = 'First critical path node';
+const MARKDOWN_HEADER_CRITICAL_PATH_PREVIEW = '## Critical Path Preview';
+const MARKDOWN_ABSENT_LIST_ITEM = '- `absent`';
 const HELP_TEXT = [
   'Usage: node scripts/summarize-representative-evidence.js <artifact.json> [--json|--markdown]',
   '',
@@ -111,6 +124,14 @@ function summarizeTopology(graph) {
       dominantReason: witness.dominantReason || ABSENT_VALUE,
       evidencePath: witness.evidencePath || ABSENT_VALUE,
       reasons: normalizeReasons(witness.reasons),
+      runtimePromotionGuard:
+        witness.source?.runtimePromotionGuard || ABSENT_VALUE,
+      runtimePromotionGuardReason:
+        witness.source?.runtimePromotionGuardReason || ABSENT_VALUE,
+      runtimePromotionGuardOwner:
+        witness.source?.runtimePromotionGuardOwner || ABSENT_VALUE,
+      runtimePromotionGuardBoundary:
+        witness.source?.runtimePromotionGuardBoundary || ABSENT_VALUE,
     },
     nextExpectedFrontier: graph.nextExpectedFrontier || ABSENT_VALUE,
   };
@@ -172,23 +193,32 @@ function renderMarkdown(summary) {
   return [
     MARKDOWN_TITLE,
     EMPTY_TEXT,
-    markdownLine('Source artifact', summary.sourceArtifact),
-    markdownLine('Scenario', summary.scenario),
-    markdownLine('Topology frontier edge', summary.topology.firstFrontierEdgeId),
-    markdownLine('Topology owner', witness.owner),
-    markdownLine('Topology boundary', witness.boundary),
-    markdownLine('Dominant reason', witness.dominantReason),
-    markdownLine('Evidence path', witness.evidencePath),
-    markdownLine('Causal outcome', summary.causal.outcome),
-    markdownLine('Dominant failure class', summary.causal.dominantFailureClass),
-    markdownLine('Stop condition', summary.causal.stopCondition),
-    markdownLine('First critical path node', summary.causal.firstCriticalPathNodeId),
+    markdownLine(MARKDOWN_LABEL_SOURCE_ARTIFACT, summary.sourceArtifact),
+    markdownLine(MARKDOWN_LABEL_SCENARIO, summary.scenario),
+    markdownLine(
+      MARKDOWN_LABEL_TOPOLOGY_FRONTIER_EDGE,
+      summary.topology.firstFrontierEdgeId,
+    ),
+    markdownLine(MARKDOWN_LABEL_TOPOLOGY_OWNER, witness.owner),
+    markdownLine(MARKDOWN_LABEL_TOPOLOGY_BOUNDARY, witness.boundary),
+    markdownLine(MARKDOWN_LABEL_DOMINANT_REASON, witness.dominantReason),
+    markdownLine(MARKDOWN_LABEL_EVIDENCE_PATH, witness.evidencePath),
+    markdownLine(MARKDOWN_LABEL_CAUSAL_OUTCOME, summary.causal.outcome),
+    markdownLine(
+      MARKDOWN_LABEL_DOMINANT_FAILURE_CLASS,
+      summary.causal.dominantFailureClass,
+    ),
+    markdownLine(MARKDOWN_LABEL_STOP_CONDITION, summary.causal.stopCondition),
+    markdownLine(
+      MARKDOWN_LABEL_FIRST_CRITICAL_PATH_NODE,
+      summary.causal.firstCriticalPathNodeId,
+    ),
     EMPTY_TEXT,
-    '## Critical Path Preview',
+    MARKDOWN_HEADER_CRITICAL_PATH_PREVIEW,
     EMPTY_TEXT,
     ...(criticalPath.length > NUM_ZERO ? criticalPath.map((node) =>
       `- \`${node.nodeId}\` owner=\`${node.owner}\` boundary=\`${node.boundary}\` state=\`${node.state}\``,
-    ) : ['- `absent`']),
+    ) : [MARKDOWN_ABSENT_LIST_ITEM]),
   ].join(STDOUT_NEWLINE);
 }
 

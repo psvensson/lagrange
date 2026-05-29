@@ -31,7 +31,11 @@
       "test/scripts/work-context.test.js",
       ".kiro/steering/llm/governance.md",
       ".kiro/steering/llm/rules.json",
-      "test/scripts/work-tracker-theory-loop-continuation.test.js"
+      "test/scripts/work-tracker-theory-loop-continuation.test.js",
+      "scripts/summarize-representative-evidence.js",
+      "scripts/work-scenario-route.js",
+      "test/diagnostics/topology-convergence-graph.test.js",
+      "test/scripts/work-llm-usability-tools.test.js"
     ],
     "handoffFiles": [
       "test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json"
@@ -62,7 +66,11 @@
       "test/scripts/work-context.test.js",
       ".kiro/steering/llm/governance.md",
       ".kiro/steering/llm/rules.json",
-      "test/scripts/work-tracker-theory-loop-continuation.test.js"
+      "test/scripts/work-tracker-theory-loop-continuation.test.js",
+      "scripts/summarize-representative-evidence.js",
+      "scripts/work-scenario-route.js",
+      "test/diagnostics/topology-convergence-graph.test.js",
+      "test/scripts/work-llm-usability-tools.test.js"
     ]
   },
   "gates": {
@@ -85,6 +93,20 @@
     "theoryLedgerRefs": [
       "theory-20260529-rolling-restart-active-gate-snapshot-coverage-architecture-gap-stop"
     ],
+    "theoryLedger": "no-ledger-update",
+    "implementation": {
+      "parentRevalidatedFocusedProof": true,
+      "filesChanged": [
+        "src/diagnostics/topology-convergence-graph.js",
+        "scripts/summarize-representative-evidence.js",
+        "scripts/work-scenario-route.js",
+        "test/diagnostics/topology-convergence-graph.test.js",
+        "test/scripts/work-llm-usability-tools.test.js"
+      ]
+    },
+    "verificationFix": {
+      "parentRevalidatedFocusedProof": true
+    },
     "proof": {
       "commands": [
         "falsifier: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12",
@@ -98,7 +120,10 @@
     "promotedTheory": "Corrected local-blocker routes should keep saturated active-gate runtime promotion blocked unless evidence names a non-repeated owner source contract.",
     "sprintGoalDelta": "Prevent the theory loop from reopening an unchanged active-gate runtime patch after diagnostics route correction.",
     "sourceChangeRequired": true,
-    "successorRequired": true
+    "successorRequired": true,
+    "result": "supported",
+    "outcome": "theory-confirmed",
+    "successorPackage": "work/packages/todo-20260529-rolling-restart-active-gate-saturation-architecture-gap-analysis.md"
   },
   "boundedExperiment": {
     "hypothesis": "After the stop-decision fix, unchanged same-mechanism active-gate evidence needs a diagnostics-owned architecture guard rather than another active-gate runtime source patch.",
@@ -111,20 +136,20 @@
   },
   "validationTier": "single-owner",
   "representativeResidual": {
-    "status": "pending-before-probe",
+    "status": "reduced",
     "scenario": "rolling-restart",
     "artifact": "test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json",
     "frontier": "active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage after diagnostics route correction",
     "owner": "diagnostics_owner",
     "boundary": "causal_analysis_framework",
     "dominantReason": "active_gate_saturated_after_diagnostics_route",
-    "nextAction": "Decide whether diagnostics should guard active-gate runtime promotion until fresh evidence or a non-repeated source contract exists."
+    "nextAction": "Runtime promotion is guarded; continue with the architecture-gap analysis successor before any active-gate runtime source package."
   },
   "causalGovernance": {
     "hypothesis": "The route correction is supported, but active-gate source promotion remains blocked by saturated architecture-gap history unless diagnostics records a non-repeated route or guard.",
     "stopConditionCheck": "npm run analyze:causal-model -- test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json; npm run work:scenario-route -- test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason snapshot_coverage_incomplete --explain active_gate_snapshot_coverage",
     "expectedCausalModelChange": "The package should either preserve runtime promotion as blocked or name a concrete non-repeated owner source contract.",
-    "representativeOutcome": "pending-before-rerun",
+    "representativeOutcome": "reduced",
     "causalDebt": "Rolling-restart remains red at active_gate_snapshot_coverage with selected_snapshot_source_timeout and snapshot_repair_deferred.",
     "crossBoundaryReview": "Do not edit active-gate runtime files unless the falsifier names a non-repeated owner source contract."
   },
@@ -149,8 +174,8 @@
     "maxProgressBound": "one diagnostics source package before runtime promotion",
     "sameFrontierFallback": "Keep runtime promotion blocked and record architecture guard evidence.",
     "expectedNextFrontier": "diagnostics guard, non-repeated source contract, owner-boundary migration, fresh representative evidence, or representative-green",
-    "resultClassification": "pending-before-probe",
-    "stopCondition": "continue-local-fix",
+    "resultClassification": "reduced",
+    "stopCondition": "architecture-gap-stop",
     "oscillationCheck": "This package is explicitly about preventing repeated local runtime patching after a diagnostics route correction.",
     "handoffInvariant": "Downstream readiness and active-gate runtime files stay frozen until the guard or a non-repeated contract is selected."
   },
@@ -167,29 +192,58 @@
     "negativeResultMeans": "Supersede this guard and open the named source package.",
     "escalationRule": "Migrate only if canonical evidence names a different deciding owner and boundary."
   },
+  "architectureDecisionGate": {
+    "status": "selected",
+    "trigger": "architecture-gap",
+    "triggerEvidence": [
+      "scenario-route reports runtimePromotionGuard.state=blocked",
+      "frontier-history reports same-mechanism-repeat contract_gap for startup_active_gate_owner / snapshot_coverage"
+    ],
+    "choices": [
+      {
+        "id": "local-proof",
+        "summary": "Open active-gate runtime work only if proof names a non-repeated owner source contract.",
+        "route": "continue-local-proof",
+        "proof": [
+          "npm run work:scenario-route -- test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason snapshot_coverage_incomplete --explain active_gate_snapshot_coverage"
+        ]
+      },
+      {
+        "id": "architecture-package",
+        "summary": "Open the architecture-gap-analysis successor and keep runtime promotion blocked.",
+        "route": "architecture-package",
+        "proof": [
+          "npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12",
+          "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json --explain active_gate_snapshot_coverage"
+        ]
+      }
+    ],
+    "selectedChoice": "architecture-package",
+    "nextAction": "Close this diagnostics guard and continue in the architecture-gap-analysis successor."
+  },
   "observablePrediction": {
     "metric": "rolling-restart post-diagnostics active-gate promotion route",
     "predicted": "frontier-history and corrected scenario-route will keep active_gate_snapshot_coverage local while prior architecture-gap evidence keeps runtime promotion blocked until a non-repeated contract is named.",
-    "observed": "pending-before-observation",
-    "accuracy": "pending-before-observation",
-    "evidence": "pending-before-observation"
+    "observed": "scenario-route kept the local active_gate_snapshot_coverage route but emitted runtimePromotionGuard.state=blocked and suggested experiment/open-architecture-experiment instead of runtime-owner-boundary.",
+    "accuracy": "partial",
+    "evidence": "npm run work:scenario-route -- test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason snapshot_coverage_incomplete --explain active_gate_snapshot_coverage"
   },
   "rerunDecision": {
     "sourceArtifact": "test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json",
     "routeOwner": "diagnostics_owner",
     "routeBoundary": "causal_analysis_framework",
     "routeDominantReason": "active_gate_saturated_after_diagnostics_route",
-    "routeCausalOutcome": "pending-before-rerun",
-    "stopMode": "pending-before-rerun",
+    "routeCausalOutcome": "continue_local_fix",
+    "stopMode": "classified_local_blocker",
     "nextLane": "experiment",
     "expectedDelta": "Select fresh representative evidence, a non-repeated owner-owned transition, an owner-boundary migration, or a diagnostics-owned architecture guard before any active-gate runtime source promotion.",
     "requiredRefreshCommands": [
-      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json --successor work/packages/active-20260529-rolling-restart-active-gate-saturation-route-guard.md",
+      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json --successor work/packages/todo-20260529-rolling-restart-active-gate-saturation-architecture-gap-analysis.md",
       "update Sprint Strategy Brief from the route result",
       "update Current Edge Card from the route result",
       "refresh current-blocker with npm run work:repair",
-      "npm run work:validate -- --entry work/packages/active-20260529-rolling-restart-active-gate-saturation-route-guard.md",
-      "npm run work:validate -- --pre-impl work/packages/active-20260529-rolling-restart-active-gate-saturation-route-guard.md"
+      "npm run work:validate -- --entry work/packages/todo-20260529-rolling-restart-active-gate-saturation-architecture-gap-analysis.md",
+      "npm run work:validate -- --pre-impl work/packages/todo-20260529-rolling-restart-active-gate-saturation-architecture-gap-analysis.md"
     ]
   },
   "systemTheory": {
@@ -262,7 +316,40 @@
       "proof selects owner-boundary migration",
       "proof requires runtime edits before the diagnostics guard decision"
     ]
-  }
+  },
+  "experimentOutcome": {
+    "distinguishedHypothesis": "H1",
+    "decision": "open-architecture-experiment",
+    "nextOwner": "startup_active_gate_owner",
+    "nextBoundary": "snapshot_coverage",
+    "evidence": "npm run work:scenario-route -- test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason snapshot_coverage_incomplete --explain active_gate_snapshot_coverage"
+  },
+  "closureSummary": {
+    "resultClassification": "reduced",
+    "predictionAccuracy": "matched",
+    "observedMovement": "Focused diagnostics proof passed: topology-convergence now records requires_non_repeated_source_contract for retry/deferred active-gate snapshot coverage, and scenario-route keeps the local active-gate route while blocking runtime promotion with runtimePromotionGuard.state=blocked.",
+    "successorReason": "Frontier-history still reports same-mechanism contract_gap saturation, so the successor is an architecture-gap-analysis package rather than another active-gate runtime-owner-boundary package.",
+    "nextOwnerBoundary": "startup_active_gate_owner / snapshot_coverage architecture-gap-analysis",
+    "evidenceArtifact": "test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json"
+  },
+  "theoryLedger": "no-ledger-update",
+  "implementation": {
+    "parentRevalidatedFocusedProof": true,
+    "filesChanged": [
+      "src/diagnostics/topology-convergence-graph.js",
+      "scripts/summarize-representative-evidence.js",
+      "scripts/work-scenario-route.js",
+      "test/diagnostics/topology-convergence-graph.test.js",
+      "test/scripts/work-llm-usability-tools.test.js"
+    ]
+  },
+  "verificationFix": {
+    "parentRevalidatedFocusedProof": true
+  },
+  "repair": {
+    "validationCommand": "npm run work:repair"
+  },
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -286,9 +373,9 @@ Canonical evidence source:
 
 ## Execution Evidence
 
-- [ ] action: implementation; owner: diagnostics_owner; files-changed: none recorded yet; validation: `npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12`; outcome: pending.
-- [ ] action: verification-fix; owner: diagnostics_owner; files-changed: none recorded yet; validation: rerun focused proof and scenario-route; outcome: pending.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: pending.
+- [x] action: implementation; owner: diagnostics_owner; files-changed: src/diagnostics/topology-convergence-graph.js,scripts/summarize-representative-evidence.js,scripts/work-scenario-route.js,test/diagnostics/topology-convergence-graph.test.js,test/scripts/work-llm-usability-tools.test.js; validation: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12; npm run work:scenario-route -- test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason snapshot_coverage_incomplete --explain active_gate_snapshot_coverage; npm run analyze:topology-convergence -- test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json --explain active_gate_snapshot_coverage; parent revalidated focused proof: yes; outcome: validated - implemented a diagnostics runtime-promotion guard: active-gate retry/deferred snapshot coverage now records requires_non_repeated_source_contract, and scenario-route blocks saturated same-mechanism history from opening another runtime-owner-boundary package.
+- [x] action: verification-fix; owner: diagnostics_owner; files-changed: src/diagnostics/topology-convergence-graph.js,scripts/summarize-representative-evidence.js,scripts/work-scenario-route.js,test/diagnostics/topology-convergence-graph.test.js,test/scripts/work-llm-usability-tools.test.js; validation: node --test test/diagnostics/topology-convergence-graph.test.js; node --test test/scripts/work-llm-usability-tools.test.js; node scripts/check-guideline-literals.js src/diagnostics/topology-convergence-graph.js scripts/work-scenario-route.js scripts/summarize-representative-evidence.js test/diagnostics/topology-convergence-graph.test.js test/scripts/work-llm-usability-tools.test.js; node scripts/check-guideline-decision-boundaries.js src/diagnostics/topology-convergence-graph.js scripts/work-scenario-route.js scripts/summarize-representative-evidence.js test/diagnostics/topology-convergence-graph.test.js test/scripts/work-llm-usability-tools.test.js; node scripts/check-runtime-grammar-contracts.js src/diagnostics/topology-convergence-graph.js scripts/work-scenario-route.js scripts/summarize-representative-evidence.js test/diagnostics/topology-convergence-graph.test.js test/scripts/work-llm-usability-tools.test.js; git diff --check; parent revalidated focused proof: yes; outcome: validated - focused graph and route tests passed; literals, decision-boundaries, runtime grammar, and whitespace guardrails passed after refactoring the guard to a state-selection model.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json,work/sprints/current-blocker.md,work/sprints/active-2026-q2-spec-led-runtime-modularization.md,work/packages/active-20260529-rolling-restart-active-gate-saturation-route-guard.md; validation: npm run work:repair; parent revalidated focused proof: yes; outcome: validated.
 
 ## Validation
 

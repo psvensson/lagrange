@@ -101,6 +101,12 @@ const SNAPSHOT_COVERAGE_INCOMPLETE_REASON = 'snapshot_coverage_incomplete';
 const SNAPSHOT_REPAIR_DEFERRED_REASON = 'snapshot_repair_deferred';
 const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_REASON =
   'selected_snapshot_source_timeout';
+const RUNTIME_PROMOTION_GUARD_REQUIRES_NON_REPEATED_CONTRACT =
+  'requires_non_repeated_source_contract';
+const RUNTIME_PROMOTION_GUARD_REASON =
+  'active_gate_runtime_promotion_requires_non_repeated_contract';
+const OWNER_DIAGNOSTICS = 'diagnostics_owner';
+const BOUNDARY_CAUSAL_ANALYSIS_FRAMEWORK = 'causal_analysis_framework';
 const FORCED_REPAIR_SNAPSHOT_TIMEOUT_REASON =
   'forced_repair_snapshot_timeout';
 const AUTHORITATIVE_CONTROL_SNAPSHOT_QUERY_TIMEOUT_REASON =
@@ -466,6 +472,19 @@ describe('TopologyConvergenceGraph', () => {
     assert.equal(contract.nextAction, 'retry');
     assert.equal(contract.retryAfterMs, 500);
     assert.equal(contract.wakeSource, 'active-gate');
+    assert.equal(
+      snapshotEdge.source.runtimePromotionGuard,
+      RUNTIME_PROMOTION_GUARD_REQUIRES_NON_REPEATED_CONTRACT,
+    );
+    assert.equal(
+      snapshotEdge.source.runtimePromotionGuardReason,
+      RUNTIME_PROMOTION_GUARD_REASON,
+    );
+    assert.equal(snapshotEdge.source.runtimePromotionGuardOwner, OWNER_DIAGNOSTICS);
+    assert.equal(
+      snapshotEdge.source.runtimePromotionGuardBoundary,
+      BOUNDARY_CAUSAL_ANALYSIS_FRAMEWORK,
+    );
   });
 
   it('normalizes active-gate no-progress readiness evidence as inherited support evidence', () => {

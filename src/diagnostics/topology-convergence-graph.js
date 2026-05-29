@@ -93,6 +93,13 @@ const NODE_DEFINITIONS = Object.freeze([
   }),
 ]);
 
+const RUNTIME_PROMOTION_GUARD_REQUIRES_NON_REPEATED_CONTRACT =
+  'requires_non_repeated_source_contract';
+const RUNTIME_PROMOTION_GUARD_REASON =
+  'active_gate_runtime_promotion_requires_non_repeated_contract';
+const OWNER_DIAGNOSTICS = 'diagnostics_owner';
+const BOUNDARY_CAUSAL_ANALYSIS_FRAMEWORK = 'causal_analysis_framework';
+
 export function buildTopologyConvergenceGraph(input = {}) {
   const normalized = normalizeTopologyConvergenceInput(input);
   const edgeSnapshots = [
@@ -364,6 +371,11 @@ function buildActiveGateSnapshotEdge(normalized) {
       ),
       readinessDelayCause: textOrUnknown(progress.readinessDelay?.cause),
       blockers: joinValues(arrayOrEmpty(progress.blockers)),
+      ...buildActiveGateRuntimePromotionGuard({
+        state,
+        reasons,
+        progressContract,
+      }),
       progressContract,
     },
     progressContract,
@@ -375,6 +387,40 @@ function buildActiveGateSnapshotEdge(normalized) {
     ],
     projectionHint: PROJECTION_HINT.SNAPSHOT_COVERAGE,
   });
+}
+
+function buildActiveGateRuntimePromotionGuard({
+  state,
+  reasons,
+  progressContract,
+}) {
+  if (state === EDGE_STATE.SATISFIED) {
+    return {};
+  }
+  const reasonSet = new Set(reasons);
+  const hasIncompleteCoverage = reasonSet.has(
+    REASON.SNAPSHOT_COVERAGE_INCOMPLETE,
+  );
+  const hasRepeatedRetryShape =
+    reasonSet.has(REASON.SELECTED_SNAPSHOT_SOURCE_TIMEOUT) ||
+    reasonSet.has(REASON.SNAPSHOT_REPAIR_DEFERRED);
+  const retriesWithoutDependency =
+    progressContract.nextAction === 'retry' &&
+    progressContract.blockingDependency === 'none';
+  if (
+    hasIncompleteCoverage !== true ||
+    hasRepeatedRetryShape !== true ||
+    retriesWithoutDependency !== true
+  ) {
+    return {};
+  }
+  return {
+    runtimePromotionGuard:
+      RUNTIME_PROMOTION_GUARD_REQUIRES_NON_REPEATED_CONTRACT,
+    runtimePromotionGuardReason: RUNTIME_PROMOTION_GUARD_REASON,
+    runtimePromotionGuardOwner: OWNER_DIAGNOSTICS,
+    runtimePromotionGuardBoundary: BOUNDARY_CAUSAL_ANALYSIS_FRAMEWORK,
+  };
 }
 
 function buildReadinessEdge(normalized) {

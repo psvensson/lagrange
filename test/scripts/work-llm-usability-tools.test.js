@@ -43,6 +43,11 @@ const TEST_TITLE = 'LLM Usability Test Package';
 const TEST_SLUG = 'llm-usability-test';
 const FIXTURE_PATH =
   'test/scripts/__fixtures__/topology-convergence/active-gate-snapshot-partial-residual.fixture.json';
+const ACTIVE_GATE_SATURATION_ARTIFACT_PATH =
+  'test-output/reports/rolling-restart-post-architecture-gap-stop-20260529T0740Z.report.json';
+const SATURATED_PACKAGE_ROOT = path.join(TEMP_ROOT, 'saturated-packages');
+const OWNER_STARTUP_ACTIVE_GATE = 'startup_active_gate_owner';
+const BOUNDARY_SNAPSHOT_COVERAGE = 'snapshot_coverage';
 
 function parseRawPackageMetadata(content) {
   const match = /<!-- work-package\n([\s\S]*?)\n-->/u.exec(content);
@@ -68,6 +73,57 @@ async function writeTempPackage() {
   });
   await fs.writeFile(TEMP_PACKAGE_PATH, `${content}\n`, 'utf8');
   return content;
+}
+
+async function writeSaturatedActiveGateHistory() {
+  await fs.rm(SATURATED_PACKAGE_ROOT, {recursive: true, force: true});
+  await fs.mkdir(SATURATED_PACKAGE_ROOT, {recursive: true});
+  const packages = [
+    ['done-20260527-active-gate-contract-gap-a.md', '2026-05-27'],
+    ['done-20260528-active-gate-contract-gap-b.md', '2026-05-28'],
+    ['done-20260529-active-gate-contract-gap-c.md', '2026-05-29'],
+  ];
+  for (const [fileName, opened] of packages) {
+    const metadata = {
+      schema: 'work-package-v2',
+      status: 'done',
+      intent: {
+        opened,
+        lane: 'runtime-owner-boundary',
+        scenario: 'rolling-restart',
+        artifact: ACTIVE_GATE_SATURATION_ARTIFACT_PATH,
+        owner: OWNER_STARTUP_ACTIVE_GATE,
+        boundary: BOUNDARY_SNAPSHOT_COVERAGE,
+        dominantReason: 'snapshot_coverage_incomplete',
+        currentState: 'active-gate snapshot coverage stayed local',
+        nextAction: 'classify the repeated frontier',
+      },
+      mechanismCard: {
+        failureMechanism: 'contract_gap',
+        expectedMovement: 'same frontier',
+      },
+      closureSummary: {
+        resultClassification: 'architecture-gap',
+        predictionAccuracy: 'partial',
+        observedMovement: 'same frontier',
+        successorReason: 'no non-repeated source contract was named',
+        nextOwnerBoundary: 'architecture-gap / no-local-runtime-successor',
+      },
+    };
+    const content = [
+      '# Saturated Active Gate Fixture',
+      '',
+      '<!-- work-package',
+      JSON.stringify(metadata, null, 2),
+      '-->',
+      '',
+      '## Mechanism Card',
+      '',
+      '- Failure mechanism: contract_gap',
+      '- Expected movement: same frontier',
+    ].join('\n');
+    await fs.writeFile(path.join(SATURATED_PACKAGE_ROOT, fileName), content);
+  }
 }
 
 test('shared package schema lists validator enums for LLM scaffolding', (t) => {
@@ -1047,6 +1103,40 @@ test('scenario route combines routing, owner files, and capped proof',
       'npm run work:advance -- --check',
     ]);
     t.match(summary.suggestedPackageCommand, /diagnostic-classification/u);
+  });
+
+test('scenario route blocks runtime promotion for saturated active-gate history',
+  async (t) => {
+    await writeSaturatedActiveGateHistory();
+    const summary = await buildScenarioRouteSummary({
+      artifactPath: ACTIVE_GATE_SATURATION_ARTIFACT_PATH,
+      owner: OWNER_STARTUP_ACTIVE_GATE,
+      boundary: BOUNDARY_SNAPSHOT_COVERAGE,
+      dominantReason: 'snapshot_coverage_incomplete',
+      explain: 'active_gate_snapshot_coverage',
+      packageDir: SATURATED_PACKAGE_ROOT,
+    });
+
+    t.equal(summary.runtimePromotionGuard.state, 'blocked');
+    t.equal(
+      summary.runtimePromotionGuard.reason,
+      'saturated_history_requires_non_repeated_source_contract',
+    );
+    t.equal(summary.runtimePromotionGuard.owner, 'diagnostics_owner');
+    t.equal(
+      summary.runtimePromotionGuard.boundary,
+      'causal_analysis_framework',
+    );
+    t.ok(
+      summary.runtimePromotionGuard.signals.includes('same-mechanism-repeat'),
+    );
+    t.match(summary.suggestedPackageCommand, /--lane experiment/u);
+    t.match(
+      summary.suggestedPackageCommand,
+      /--successor-action open-architecture-experiment/u,
+    );
+    t.ok(summary.suggestedProof.some((command) =>
+      command.includes('work:frontier-history')));
   });
 
 test('route-after-rerun prints the migration transaction without writing',
