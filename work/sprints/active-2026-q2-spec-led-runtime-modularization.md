@@ -66,17 +66,17 @@ priority-recovery or active-gate frontier.
 ```text
 Representative artifact: test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json
 Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending
-Active package: work/packages/active-20260529-rolling-restart-active-gate-owner-reconcile-pending-architecture-gap-analysis.md
+Active package: work/packages/done-20260529-rolling-restart-active-gate-owner-reconcile-pending-architecture-gap-analysis.md
 Active package owner: startup_active_gate_owner
 Active package boundary: snapshot_coverage
 Selected cause: owner_reconcile_pending
 Required action: Run architecture-gap analysis for owner_reconcile_pending and select a non-repeated owner-owned transition, protocol/model/topology route, owner-boundary migration, or explicit architecture-gap stop before any further runtime source package.
 Representative status: architecture-gap
 Causal outcome: continue_local_fix
-Architecture gate: required / unknown
+Architecture gate: selected / architecture-gap
 Expected delta: Architecture-gap analysis selects a protocol, model, topology, owner-boundary migration, representative-green route, or explicit architecture-gap stop for owner_reconcile_pending with membershipPublicationHandoffOutcomeEnqueued=false.
 Current state: Fresh causal-escalation evidence drained priority recovery to zero witnesses but returned to active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage with owner_reconcile_pending, membershipPublicationHandoffOutcomeEnqueued=false, one pending owner queue write, and a previously implemented owner-recovery route.
-Allowed edits: work/packages/active-20260529-rolling-restart-active-gate-owner-reconcile-pending-architecture-gap-analysis.md, work/sprints/active-2026-q2-spec-led-runtime-modularization.md, work/theory-ledger.md
+Allowed edits: work/packages/done-20260529-rolling-restart-active-gate-owner-reconcile-pending-architecture-gap-analysis.md, work/sprints/active-2026-q2-spec-led-runtime-modularization.md, work/theory-ledger.md, src/admin/admin-control-snapshot-repair-diagnostics.js, test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js
 Candidate runtime files: src/control-plane/membership-publication-active-gate-reconcile.js, src/control-plane/publication-active-gate-handoff-contract-selection.js, src/control-plane/publication-active-gate-handoff-contract-decision.js, src/control-plane/publication-active-gate-handoff-contract-evidence.js, src/control-plane/snapshot-service.js, src/control-plane/owner-queue.js
 Forbidden edits: Priority recovery remains satisfied while active-gate snapshot coverage owns the first frontier; owner-reconcile evidence must not be patched again without an architecture decision.
 Required latest proof: falsifier: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12, regression: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending --explain active_gate_snapshot_coverage, supporting: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --explain active_gate_snapshot_coverage, supporting: npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json, supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --markdown
