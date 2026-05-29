@@ -370,8 +370,7 @@ runtime-promotion guard blocks another local runtime source package.
 1. Focused package commit: 5854dd0890c714ea76b5dc13d7272cb5347798aa
 2. Push target: origin/codex/pending-ack-eligibility-filter
 3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
-4. Pushed: no
-
+4. Pushed: yes 2026-05-29T10:45:34.708Z
 ## Validation
 
 1. `npm run work:system-theory:rederive -- --owner startup_active_gate_owner --boundary snapshot_coverage`
