@@ -388,7 +388,7 @@ not permission to reopen a repeated active-gate runtime patch.
 
 ## Commit And Push Ledger
 
-1. Focused package commit: a37c0d60135c4e66de41ffadb0addd6b70e2688d
+1. Focused package commit: e7001fdba1ef924c87fb5d5dd5ab3872f0e053f9
 2. Push target: origin/codex/pending-ack-eligibility-filter
 3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
-4. Pushed: no
+4. Pushed: yes 2026-05-29T19:43:18.574Z
