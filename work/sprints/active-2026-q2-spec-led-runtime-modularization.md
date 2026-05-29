@@ -65,21 +65,21 @@ priority-recovery or active-gate frontier.
 
 ```text
 Representative artifact: test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json
-Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending
-Active package: work/packages/active-20260529-rolling-restart-active-gate-owner-reconcile-pending-control-plane-handoff.md
+Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out
+Active package: work/packages/active-20260529-rolling-restart-active-gate-selected-snapshot-timeout-causal-escalation.md
 Active package owner: startup_active_gate_owner
 Active package boundary: snapshot_coverage
-Selected cause: owner_reconcile_pending
-Required action: Implement the bounded control-plane active-gate owner-reconcile handoff/enqueue transition for membershipPublicationHandoffOutcomeEnqueued=false evidence.
+Selected cause: active_gate_timed_out
+Required action: Escalate the selected snapshot timeout/repair retry route, then select and implement a non-repeated owner-owned source transition, autonomous architecture experiment, owner-boundary migration, representative-green path, or architecture-gap stop.
 Representative status: active-theory-loop
 Causal outcome: continue_local_fix
 Architecture gate: watching / unknown
-Expected delta: membershipPublicationHandoffOutcomeEnqueued becomes true or owner_reconcile_pending reduces, snapshot coverage improves, owner boundary migrates, representative turns green, or architecture-gap is recorded after one source package.
-Current state: Fresh representative evidence after the timeout retry contract removed active_gate_timed_out as the dominant reason but still routes active_gate_snapshot_coverage to startup_active_gate_owner / snapshot_coverage with owner_reconcile_pending; failureBundle.controlPlane.activeGateSnapshotCoverage reports membershipPublicationHandoffOutcomeEnqueued=false, selectedControlPlaneOwnerQueuePendingWrites=1, pendingRecoveryCount=1, and progressContract.nextAction=retry.
-Allowed edits: src/control-plane/membership-publication-active-gate-reconcile.js, test/control-plane/membership-publication-active-gate-reconcile-owner-recovery.test.js
-Candidate runtime files: unknown
-Forbidden edits: After active_gate_timed_out reduces, control-plane active-gate owner-reconcile handoff evidence must expose bounded enqueue, drain, retry, migration, or architecture-gap before downstream owners are patched.
-Required latest proof: falsifier: npm test -- test/control-plane/membership-publication-active-gate-reconcile-owner-recovery.test.js # focused control-plane handoff enqueue fixture, regression: npm test -- test/control-plane/membership-publication-active-gate-reconcile-owner-recovery.test.js test/control-plane/publication-active-gate-handoff-contract.test.js # affected handoff consumer proof, supporting: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --explain active_gate_snapshot_coverage, supporting: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending --explain active_gate_snapshot_coverage, supporting: npm run work:evidence-summary -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json
+Expected delta: Causal escalation selects a non-repeated selected snapshot timeout/repair transition, architecture experiment, owner-boundary migration, representative-green path, or architecture-gap stop before another local runtime patch.
+Current state: Fresh representative evidence after owner-reconcile handoff enqueue has membershipPublicationHandoffOutcomeEnqueued=true but still routes active_gate_snapshot_coverage to active_gate_timed_out with selected_snapshot_source_timeout and snapshot_repair_deferred; frontier oscillation blocks another adjacent runtime-owner-boundary package without causal escalation.
+Allowed edits: src/admin/admin-control-snapshot-repair-diagnostics.js, test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js
+Candidate runtime files: src/control-plane/publication-active-gate-handoff-contract-selection.js, src/control-plane/publication-active-gate-handoff-contract-decision.js, src/control-plane/publication-active-gate-handoff-contract-evidence.js
+Forbidden edits: After owner-reconcile enqueue is true, selected snapshot timeout/repair evidence must become a non-repeated source transition, architecture experiment, migration, representative-green path, or architecture-gap stop.
+Required latest proof: falsifier: npm run work:system-theory:rederive -- --owner startup_active_gate_owner --boundary snapshot_coverage, regression: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12, supporting: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --explain active_gate_snapshot_coverage, supporting: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage, supporting: npm run work:evidence-summary -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json
 Allowed stop modes: success-condition-met only; representative-green, owner-boundary-migration, architecture-gap, same-frontier, classification-only, needs-rerun, pending, and unknown are package outcomes unless they exactly match the original sprint success condition
 ```
 

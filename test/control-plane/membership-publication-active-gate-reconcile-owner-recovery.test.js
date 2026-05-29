@@ -12,6 +12,9 @@ const OWNER_RECOVERY_PENDING_REASON = 'owner_reconcile_pending';
 const OWNER_RECOVERY_WAIT_ACTION = 'wait_owner_recovery';
 const OWNER_RECOVERY_TARGET_BLOCKED = 'target_blocked';
 const OWNER_RECOVERY_DRAINED_QUEUE_COUNT = 1;
+const OWNER_RECOVERY_ENQUEUED_COUNT = 1;
+const OWNER_RECOVERY_RECONCILE_REASON =
+  'active_gate_handoff_owner_reconcile';
 const OWNER_RECOVERY_RUNTIME_PROMOTION_ALLOWED = false;
 const OWNER_RECOVERY_RECONCILE_REQUIRED = false;
 const OWNER_RECOVERY_PUBLISHED_NODE_IDS = Object.freeze(['node-1']);
@@ -45,6 +48,18 @@ function buildOwnerRecoveryCoordinator() {
   };
 }
 
+function buildOwnerRecoveryEnqueueCoordinator(enqueueCalls) {
+  return {
+    buildOwnerKey() {
+      return OWNER_RECOVERY_LOCAL_NODE_ID;
+    },
+    enqueueClusterMembershipReconcile(reason, context) {
+      enqueueCalls.push({reason, context});
+      return true;
+    },
+  };
+}
+
 test('active-gate owner recovery wait reports drained snapshot reentry',
   async (t) => {
     const originalDrainQueueForSnapshot = SnapshotService.drainQueueForSnapshot;
@@ -70,6 +85,56 @@ test('active-gate owner recovery wait reports drained snapshot reentry',
       );
     } finally {
       SnapshotService.drainQueueForSnapshot = originalDrainQueueForSnapshot;
+    }
+  });
+
+test('active-gate owner recovery wait enqueues owner wake reentry',
+  async (t) => {
+    const enqueueCalls = [];
+    const originalDrainQueueForSnapshot = SnapshotService.drainQueueForSnapshot;
+    const originalIsQueuePressureDetected =
+      SnapshotService.isQueuePressureDetected;
+    SnapshotService.isQueuePressureDetected = () => false;
+    SnapshotService.drainQueueForSnapshot =
+      async () => OWNER_RECOVERY_EMPTY_DRAIN_COUNT;
+    try {
+      const publicationOutcome = await reconcileActiveGateMembershipPublication(
+        buildOwnerRecoveryEnqueueCoordinator(enqueueCalls),
+        buildOwnerRecoveryWaitHandoff(),
+      );
+
+      t.match(
+        publicationOutcome,
+        {
+          state: OWNER_RECOVERY_TARGET_BLOCKED,
+          enqueued: true,
+          target: {
+            pendingRecoveryNodeIds: [...OWNER_RECOVERY_PENDING_NODE_IDS],
+          },
+        },
+        'owner-recovery wait should expose accepted owner wake as bounded reentry',
+      );
+      t.equal(
+        enqueueCalls.length,
+        OWNER_RECOVERY_ENQUEUED_COUNT,
+        'owner-recovery wait should enqueue one owner wake',
+      );
+      t.match(
+        enqueueCalls[0],
+        {
+          reason: OWNER_RECOVERY_RECONCILE_REASON,
+          context: {
+            publicationActiveGateHandoff: {
+              nextAction: OWNER_RECOVERY_WAIT_ACTION,
+            },
+          },
+        },
+        'owner wake should carry the active-gate handoff context',
+      );
+    } finally {
+      SnapshotService.drainQueueForSnapshot = originalDrainQueueForSnapshot;
+      SnapshotService.isQueuePressureDetected =
+        originalIsQueuePressureDetected;
     }
   });
 

@@ -16,7 +16,7 @@
     "currentState": "Fresh representative rerun after owner-recovery reentry drain has membershipPublicationHandoffOutcomeEnqueued true, zero priority-recovery residuals, active gate timed out with snapshot coverage 1/5, and selected snapshot retry/deferred refresh evidence remains.",
     "nextAction": "Implement the bounded active-gate timeout retry contract now that owner-recovery wait reentry is enqueued.",
     "closed": "2026-05-29",
-    "successor": "work/packages/active-20260529-rolling-restart-active-gate-owner-reconcile-pending-control-plane-handoff.md"
+    "successor": "work/packages/done-20260529-rolling-restart-active-gate-owner-reconcile-pending-control-plane-handoff.md"
   },
   "scope": {
     "writeScope": [
@@ -34,7 +34,7 @@
       "work/sprints/current-blocker.json",
       "work/sprints/current-blocker.md",
       "work/packages/active-20260529-rolling-restart-active-gate-timeout-retry-contract.md",
-      "work/packages/active-20260529-rolling-restart-active-gate-owner-reconcile-pending-control-plane-handoff.md"
+      "work/packages/done-20260529-rolling-restart-active-gate-owner-reconcile-pending-control-plane-handoff.md"
     ]
   },
   "gates": {
@@ -76,7 +76,7 @@
     "successorRequired": true,
     "result": "supported",
     "outcome": "theory-confirmed",
-    "successorPackage": "work/packages/active-20260529-rolling-restart-active-gate-owner-reconcile-pending-control-plane-handoff.md",
+    "successorPackage": "work/packages/done-20260529-rolling-restart-active-gate-owner-reconcile-pending-control-plane-handoff.md",
     "architectureRoute": {
       "selectedLayer": "protocol",
       "ledgerRef": "theory-20260529-rolling-restart-active-gate-snapshot-coverage-architecture-gap-stop",
@@ -476,4 +476,4 @@ Agent identity is optional provenance. Use the compact five-field shape for new 
 1. Focused package commit: e830a95602cf685c79dd1134e29b478ecebf5ab8
 2. Push target: origin/codex/pending-ack-eligibility-filter
 3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
-4. Pushed: no
+4. Pushed: yes 2026-05-29T15:29:09.649Z

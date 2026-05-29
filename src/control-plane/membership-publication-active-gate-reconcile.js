@@ -28,19 +28,14 @@ import {
 } from './membership-publication-control-plane-convergence.js';
 import {SnapshotService} from './snapshot-service.js';
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_SCHEMA_VERSION = 1;
-const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_REASON =
-  'active_gate_handoff_owner_reconcile';
-const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_READ_PROFILE =
-  'diagnostics';
-const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_VISIBLE_WRITE_ATTEMPTS =
-  NUM.TWO;
+const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_REASON = 'active_gate_handoff_owner_reconcile';
+const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_READ_PROFILE = 'diagnostics';
+const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_VISIBLE_WRITE_ATTEMPTS = NUM.TWO;
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_TEXT = '';
-const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_ALLOW_EMPTY_PRELOADED_ROWS =
-  true;
+const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_ALLOW_EMPTY_PRELOADED_ROWS = true;
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_DEFERRED_SKIP_WRITE_READBACK = true;
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_SKIP_CACHE_WAIT = true;
-const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_ROWS =
-  Object.freeze([]);
+const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_ROWS = Object.freeze([]);
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_ABSENT_ROW = null;
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_OUTCOME = Object.freeze({});
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME = Object.freeze({
@@ -599,17 +594,22 @@ async function reconcileActiveGateMembershipPublication(
     publicationActiveGateHandoff,
   );
   if (target.reconcileRequired !== true) {
-    const drainedSnapshotQueue =
-      isActiveGateMembershipPublicationOwnerRecoveryWaitTarget(target) ?
-        await drainActiveGateMembershipPublicationSnapshotQueue() :
-        false;
+    const ownerRecoveryWait = isActiveGateMembershipPublicationOwnerRecoveryWaitTarget(target);
+    const drainedSnapshotQueue = ownerRecoveryWait ? await drainActiveGateMembershipPublicationSnapshotQueue() : false;
+    const rawEnqueueOutcome = ownerRecoveryWait && drainedSnapshotQueue !== true &&
+      typeof coordinator?.enqueueClusterMembershipReconcile === TYPEOF.FUNCTION ?
+      coordinator.enqueueClusterMembershipReconcile(
+        ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_REASON,
+        {[ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.PUBLICATION_ACTIVE_GATE_HANDOFF]: publicationActiveGateHandoff},
+      ) :
+      drainedSnapshotQueue;
     return buildActiveGateMembershipPublicationReconcileOutcome(
       target.handoffContract ?
         ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME.TARGET_BLOCKED :
         ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME.NO_CHANGE,
       {
         target,
-        enqueued: drainedSnapshotQueue,
+        enqueued: isActiveGateMembershipPublicationHandoffRetryAccepted(rawEnqueueOutcome, coordinator?.lastControlPlaneConvergenceQueueOutcome),
       },
     );
   }
