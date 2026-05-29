@@ -157,6 +157,11 @@ function parsePackageFile(filePath) {
       resultClassification: closureSummary.resultClassification || 'unknown',
       predictionAccuracy: closureSummary.predictionAccuracy || 'unknown',
       nextOwnerBoundary: closureSummary.nextOwnerBoundary || 'unknown',
+      architectureGap: packageMetadataIsArchitectureGap(metadata, fileName),
+      architectureRoute: Boolean(
+        metadata?.theoryLoop?.architectureRoute ||
+        metadata?.architectureRoute,
+      ),
     };
     parsed.sortKey = packageSortKey(parsed);
     return parsed;
@@ -199,6 +204,8 @@ function filterAndSummarizeHistory(parsedPackages, ownerFilter, boundaryFilter, 
     resultClassification: pkg.resultClassification,
     predictionAccuracy: pkg.predictionAccuracy,
     nextOwnerBoundary: pkg.nextOwnerBoundary,
+    architectureGap: pkg.architectureGap === true,
+    architectureRoute: pkg.architectureRoute === true,
   }));
 }
 
@@ -240,6 +247,36 @@ function packageIsRederive(item) {
   if (REDERIVE_LANE_VALUES.has(lane)) return true;
   const slug = String(item.package || item.fileName || '').toLowerCase();
   return REDERIVE_REVISION_SLUG_PATTERNS.some((re) => re.test(slug));
+}
+
+const ARCHITECTURE_GAP_HISTORY_SLUG_PATTERN = /architecture[-_]gap/iu;
+
+// Metadata-aware detector used while parsing a package file (full metadata
+// available). Mirrors metadataIsArchitectureGapAnalysis in work-tracker.js.
+function packageMetadataIsArchitectureGap(metadata, fileName) {
+  if (!metadata || typeof metadata !== 'object') return false;
+  if (metadata.architectureGapAnalysis === true) return true;
+  const packageClass = String(metadata.modelFit?.packageClass || '')
+    .trim().toLowerCase();
+  if (packageClass && /^architecture-gap(?:[-\s]|$)/iu.test(packageClass)) {
+    return true;
+  }
+  const lane = String(metadata.intent?.lane || metadata.lane || '')
+    .trim().toLowerCase();
+  const slug = String(fileName || '').toLowerCase();
+  if (ARCHITECTURE_GAP_HISTORY_SLUG_PATTERN.test(slug)) {
+    return lane === 'architecture-gap-analysis' || lane === 'causal-escalation';
+  }
+  return lane === 'architecture-gap-analysis';
+}
+
+// History-item detector (summarised item; relies on the architectureGap flag
+// captured at parse time, with a slug fallback for legacy entries).
+function packageIsArchitectureGap(item) {
+  if (!item) return false;
+  if (item.architectureGap === true) return true;
+  const slug = String(item.package || item.fileName || '').toLowerCase();
+  return ARCHITECTURE_GAP_HISTORY_SLUG_PATTERN.test(slug);
 }
 
 function detectCompositionalSignals(history) {
@@ -449,6 +486,21 @@ function computeLoopMetrics(history) {
   // blocked-external-dependency); none of those are inferable from history
   // alone, so a true stop is always recorded explicitly on the sprint.
   const continuationRequired = loopHealth !== 'healthy';
+  // R13 self-report: detect whether the loop is waiting for the runtime
+  // implementation of an already-selected architecture route. history is
+  // newest-first. Find the most recent CLOSED architecture-gap analysis; if a
+  // route implementation (architectureRoute marker) closed at/after it, the
+  // route is implemented, otherwise the loop is implement-pending.
+  const architectureRouteState = (() => {
+    const closed = history.filter((item) => item.status === 'done');
+    const gapIndex = closed.findIndex((item) => packageIsArchitectureGap(item));
+    if (gapIndex === -1) return 'none';
+    const gap = closed[gapIndex];
+    // Newer-or-equal closures are those before gapIndex (newest-first order).
+    const since = closed.slice(0, gapIndex);
+    const implemented = since.some((item) => item.architectureRoute === true);
+    return implemented ? 'implemented' : 'implement-pending';
+  })();
   return {
     lastRederiveDateOnPair: lastRederive
       ? (lastRederive.opened || lastRederive.dateStr || 'unknown')
@@ -460,6 +512,7 @@ function computeLoopMetrics(history) {
     ).length,
     loopHealth,
     continuationRequired,
+    architectureRouteState,
   };
 }
 
@@ -514,11 +567,25 @@ function renderTextHistory(history, owner, boundary) {
     lines.push(`  - pairAlternationCyclesSinceRederive: ${metrics.pairAlternationCyclesSinceRederive}`);
     lines.push(`  - loopHealth: ${metrics.loopHealth}`);
     lines.push(`  - continuationRequired: ${metrics.continuationRequired}`);
+    lines.push(`  - architectureRouteState: ${metrics.architectureRouteState}`);
+    if (metrics.architectureRouteState === 'implement-pending') {
+      lines.push(
+        '      note: an architecture-gap analysis already SELECTED a route on ' +
+        'this pair. The only valid next package is the runtime implementation ' +
+        'of that route (declare theoryLoop.architectureRoute with selectedLayer, ' +
+        'coupledInvariant, and the architecture-gap ledgerRef). Another rederive ' +
+        'or architecture-gap analysis on this pair is NOT a valid redirect.',
+      );
+    }
     if (metrics.continuationRequired) {
       lines.push(
-        '      note: loop is in a non-terminal state; redirect to the next ' +
-        'option/successor/rederive/arch-gap. Do not stop unless a closed ' +
-        'termination reason is recorded.',
+        metrics.architectureRouteState === 'implement-pending'
+          ? '      note: loop is non-terminal AND a route is already selected; ' +
+            'redirect specifically to the architecture-route implementation ' +
+            'above. Do not stop unless a closed termination reason is recorded.'
+          : '      note: loop is in a non-terminal state; redirect to the next ' +
+            'option/successor/rederive/arch-gap. Do not stop unless a closed ' +
+            'termination reason is recorded.',
       );
     }
   }

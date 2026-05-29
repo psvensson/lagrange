@@ -234,6 +234,14 @@ These two classes MUST still produce one durable structural artifact
 modification). Documentary-only packages on either class are rejected.
 No other packageClass is exempt from the source-change requirement.
 
+After an `architecture-gap-analysis` closes and selects a route, the loop must
+return to runtime work: the next package on the pair is an **architecture-route
+implementation** (R13) — a normal source-changing theory-loop package that
+additionally carries `theoryLoop.architectureRoute` (`selectedLayer`,
+`coupledInvariant`, `ledgerRef`). That marker is *not* a write-scope exemption;
+the implementation still changes `src/`. It is the sanctioned exit from the
+analysis gates (R5/R7), and re-running analysis on the pair instead is rejected.
+
 ---
 
 ## Theory Loop Sprint Shape
@@ -346,7 +354,10 @@ packages and sprints without the relevant fields/signals are exempt.
   When the last three closed packages on the alternating pair all carry a
   non-confirmed outcome, the next runtime package on the pair is rejected;
   only an `architecture-gap-analysis` *package-class* package, plus a fresh
-  `theory-YYYYMMDD-…-architecture-gap` ledger entry, can unblock the pair.
+  `theory-YYYYMMDD-…-architecture-gap` ledger entry, can unblock the pair — or,
+  once that analysis has closed and selected a route, a valid **architecture-
+  route implementation** package (R13), which R5 lets through as the sanctioned
+  runtime exit.
 * **R6. Modeltheory-Exemption Tightening (Structural Artifact)** —
   `validateRederiveStructuralArtifact`
   (`rederive-no-structural-artifact`). A rederive package that uses the
@@ -358,7 +369,9 @@ packages and sprints without the relevant fields/signals are exempt.
   `pair-alternation-post-rederive` pattern when alternation recurs after a
   closed rederive on the pair. `validateCompositionalAutoPromoteGate` then
   permits only `architecture-gap-analysis` *package-class* packages on the pair
-  (`pair-alternation-post-rederive-requires-architecture-gap`).
+  (`pair-alternation-post-rederive-requires-architecture-gap`) — except a valid
+  R13 architecture-route implementation package, which is the sanctioned runtime
+  exit once the gap analysis has selected a route.
 * **R8. Sprint-Level Coupled-Invariant Probe Section** —
   `validateSprintJointCoupledInvariantProbe`
   (`sprint-joint-probe-section-missing`, `sprint-joint-probe-residual-stuck`).
@@ -397,6 +410,41 @@ packages and sprints without the relevant fields/signals are exempt.
   the *Non-Halting Continuation Invariant* section below). Enforced at the
   `--pre-impl` and `--closure` phases; additive for legacy sprints that lack a
   `## Theory Loop Termination` section.
+* **R13. Architecture-Route Implementation Forcing** —
+  `validateArchitectureRouteImplementation`
+  (`architecture-route-implementation-required`,
+  `architecture-route-marker-required`, `architecture-route-layer-missing`,
+  `architecture-route-layer-invalid`,
+  `architecture-route-coupled-invariant-missing`,
+  `architecture-route-ledger-ref-missing`,
+  `architecture-route-ledger-ref-not-architecture-gap`,
+  `architecture-route-ledger-ref-unknown`, `architecture-route-no-src`). This is
+  the **exit ramp** that R5/R7 previously lacked: once an
+  `architecture-gap-analysis` package *closes* on a pair, the loop has already
+  selected a concrete architecture route (a layer change). The pair enters
+  `implement-pending` state, and the only legal next package on that pair is the
+  **runtime implementation** of that route. Mechanics:
+  * A package declares it is that sanctioned implementation by carrying
+    `theoryLoop.architectureRoute` with `selectedLayer` (one of `{protocol,
+    scheduling, ownership, observation, topology, model}`), `coupledInvariant`
+    (the invariant the analysis proved cannot be moved by a single-mechanism
+    local patch), and `ledgerRef` (the real `theory-YYYYMMDD-…-architecture-gap`
+    slug). The package MUST also write at least one `src/` path (Real Package
+    Rule). A well-formed marker is the sanctioned move *through* the R5
+    exhaustion gate and the R7 post-rederive gate — without it those gates have
+    no exit because every closed analysis/rederive keeps the last-three outcomes
+    non-confirmed.
+  * In `implement-pending` state, opening **another** `architecture-gap-analysis`
+    or `system-theory-rederive` on the same pair is rejected
+    (`architecture-route-implementation-required`): the route was already
+    chosen; re-analysis is not a valid redirect. A runtime package without the
+    marker is rejected (`architecture-route-marker-required`); a malformed marker
+    is rejected with the specific `architecture-route-*` errors above.
+  * State is reported by `npm run work:frontier-history` as
+    `loopMetrics.architectureRouteState` (`none | implement-pending |
+    implemented`). Enforced at `--pre-impl`; additive — pairs with no closed
+    architecture-gap analysis (`state: none`) and legacy packages are exempt
+    no-ops.
 
 ### Compositional Auto-Promote Rule
 
@@ -491,7 +539,12 @@ sprint may stop only for one of exactly these reasons:
   experiment, or a re-run — never an end-of-turn or a request for confirmation.
   The frontier-history self-report exposes `continuationRequired: true`
   whenever `loopHealth` is non-`healthy`; treat it as a standing obligation to
-  `redirect`, not as a stopping point.
+  `redirect`, not as a stopping point. **One exception narrows the menu:** when
+  `loopMetrics.architectureRouteState` is `implement-pending` (an
+  `architecture-gap-analysis` already closed and selected a route on the pair),
+  the only valid redirect on that pair is the **architecture-route
+  implementation** (R13). Opening another rederive or architecture-gap analysis
+  on the pair is not a valid redirect and is rejected at `--pre-impl`.
 
 **Recording a stop.** When a sprint legitimately terminates (or a blocked
 handoff applies), add a `## Theory Loop Termination` section with:

@@ -530,6 +530,7 @@ describe('work tracker package doctor', () => {
     const report = buildPackageDoctorLines(
       WORK_TRACKER_ACTIVE_DOCTOR_FILE,
       scenarioDoctorContent,
+      {packageDir: path.join(process.cwd(), 'work', 'packages', '__hermetic_none__')},
     );
     const rendered = report.lines.join('\n');
 

@@ -533,6 +533,33 @@
         "jointFalsifierCommand": {
           "type": "string"
         },
+        "architectureRoute": {
+          "type": "object",
+          "required": ["selectedLayer", "ledgerRef", "coupledInvariant"],
+          "properties": {
+            "selectedLayer": {
+              "type": "string",
+              "enum": [
+                "protocol",
+                "scheduling",
+                "ownership",
+                "observation",
+                "topology",
+                "model"
+              ]
+            },
+            "ledgerRef": {
+              "type": "string"
+            },
+            "coupledInvariant": {
+              "type": "string"
+            },
+            "gapAnalysisRef": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
         "gateMarker": {
           "type": "string",
           "enum": [

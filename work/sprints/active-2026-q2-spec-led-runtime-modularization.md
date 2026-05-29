@@ -21,12 +21,13 @@ priority-recovery or active-gate frontier.
 - Wrong direction signals: closing this sprint on architecture-gap or migration, widening timeouts, weakening admission/readiness, hiding diagnostics, reopening rebalancer handoff while priority-recovery witnesses are zero, or opening another generic startup_active_gate_owner / snapshot_coverage patch after the rederive selected architecture work.
 - Next best package: fresh route evidence or a bounded architecture experiment; no local startup_active_gate_owner / snapshot_coverage source package is promoted from the current artifact.
 - Redirect rule: on same-frontier / no-reduction evidence after the rederive, immediately open a bounded architecture/causal experiment that names a non-repeated owner contract — or run fresh representative route evidence — instead of another local runtime package. This is a redirect, not a stop: the agent keeps executing the next autonomous action and never hands control back; the loop continues until the Evidence Anchor success condition is met. Terminate only for a closed Termination Condition recorded in `## Theory Loop Termination`.
+- Architecture-route forcing (R13): once an architecture-gap analysis has closed and `work:frontier-history` reports `architectureRouteState: implement-pending` for the pair, the ONLY valid redirect on that pair is the runtime implementation of the selected route. The next package must change `src/` and declare `theoryLoop.architectureRoute` (`selectedLayer` ∈ {protocol, scheduling, ownership, observation, topology, model}, `coupledInvariant`, and the `architecture-gap` `ledgerRef`). Opening another architecture-gap analysis or system-theory rederive on that pair is not a valid redirect and is rejected at `--pre-impl`; re-analysis resumes only after the route is implemented and produces fresh representative evidence.
 
 ## Theory Loop Termination
 
 - Loop status: running
 - Termination reason: none
-- Next autonomous action: per the Redirect rule above; the Evidence Anchor success condition (local rolling-restart harness exits 0 with no active priority-recovery or active-gate frontier) is not yet met, so the loop must not stop.
+- Next autonomous action: `architectureRouteState` is `implement-pending` for the active gate / snapshot-coverage pair after the closed architecture-gap analysis — so the next autonomous action is to implement the selected architecture route in `src/` under a package carrying `theoryLoop.architectureRoute`, not another analysis or rederive. The Evidence Anchor success condition (local rolling-restart harness exits 0 with no active priority-recovery or active-gate frontier) is not yet met, so the loop must not stop.
 
 ## Theory Loop Sprint
 

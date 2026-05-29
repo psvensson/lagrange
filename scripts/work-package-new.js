@@ -184,6 +184,11 @@ const FLAG_TIMEBOX = 'timebox';
 const FLAG_MERGE_REQUIREMENT = 'merge-requirement';
 const FLAG_REDIRECT_RULE = 'redirect-rule';
 const FLAG_KILL_RULE = 'kill-rule';
+const FLAG_ARCHITECTURE_ROUTE_LAYER = 'architecture-route-layer';
+const FLAG_ARCHITECTURE_ROUTE_LEDGER_REF = 'architecture-route-ledger-ref';
+const FLAG_ARCHITECTURE_ROUTE_COUPLED_INVARIANT =
+  'architecture-route-coupled-invariant';
+const FLAG_ARCHITECTURE_ROUTE_GAP_REF = 'architecture-route-gap-ref';
 const FLAG_VALIDATION_TIER = 'validation-tier';
 const FLAG_SPLIT_CANDIDATE = 'split-candidate';
 const FLAG_THEORY_LOOP = 'theory-loop';
@@ -298,6 +303,13 @@ const HELP_TEXT = [
   '  --timebox <duration>  Bounded experiment timebox, default 24h.',
   '  --merge-requirement <text>  Proof required before merging an experiment.',
   '  --kill-rule <text>  Condition that discards or escalates an experiment.',
+  '  --architecture-route-layer <protocol|scheduling|ownership|observation|topology|model>',
+  '      Marks a theory-loop package as the runtime implementation of an',
+  '      architecture route selected by a closed architecture-gap analysis.',
+  '  --architecture-route-ledger-ref <theory-YYYYMMDD-...-architecture-gap>',
+  '      Ledger slug of the architecture-gap analysis that selected the route.',
+  '  --architecture-route-coupled-invariant <text>  Coupled invariant being changed.',
+  '  --architecture-route-gap-ref <path>  Optional closed gap-analysis package path.',
   '  --validation-tier <file-local|single-owner|cross-owner|release-gate>',
   '  --split-candidate <text>  Candidate child package for lower-model execution.',
   '',
@@ -1406,12 +1418,21 @@ function buildTheoryLoopPackageContractLines(metadata = {}) {
   }
   const sourceWrites = (metadata[SCOPE_FIELD_WRITE_SCOPE] || [])
     .filter(isSourceWritePath);
+  const route = theoryLoop.architectureRoute;
+  const routeLines = route
+    ? [
+        `- Architecture route (selected layer): \`${route.selectedLayer}\``,
+        `- Architecture route ledger ref: ${route.ledgerRef || '(missing)'}`,
+        `- Architecture route coupled invariant: ${route.coupledInvariant || '(missing)'}`,
+      ]
+    : [];
   return [
     '## Theory Loop Package Contract',
     EMPTY_TEXT,
     `- Enforcement: \`${theoryLoop[THEORY_LOOP_ENFORCEMENT_FIELD]}\``,
     `- Promoted theory: ${theoryLoop[THEORY_LOOP_PROMOTED_THEORY_FIELD]}`,
     `- Sprint-goal delta: ${theoryLoop[THEORY_LOOP_SPRINT_GOAL_DELTA_FIELD]}`,
+    ...routeLines,
     `- Required source write: ${markdownInlineCodeList(sourceWrites, '`src/` path required before implementation')}`,
     '- Package size rule: this package must test one promoted theory by changing declared `src/` source code, running falsifier and regression proof, and recording the theory result before closure.',
     '- Forbidden stop shape: classification-only, evidence-only, route-only, source/log inspection-only, package-only, and successor-creation-only outcomes stay in the sprint and must not become work packages.',
@@ -1879,6 +1900,21 @@ async function buildPackageContent(flags = {}) {
       [THEORY_LOOP_SOURCE_CHANGE_REQUIRED_FIELD]: true,
       [THEORY_LOOP_SUCCESSOR_REQUIRED_FIELD]: true,
     };
+    const architectureRouteLayer = normalizeText(
+      flags[FLAG_ARCHITECTURE_ROUTE_LAYER],
+    );
+    if (architectureRouteLayer) {
+      metadata[THEORY_LOOP_FIELD].architectureRoute = {
+        selectedLayer: architectureRouteLayer,
+        ledgerRef: normalizeText(flags[FLAG_ARCHITECTURE_ROUTE_LEDGER_REF]),
+        coupledInvariant: normalizeText(
+          flags[FLAG_ARCHITECTURE_ROUTE_COUPLED_INVARIANT],
+        ),
+        ...(normalizeText(flags[FLAG_ARCHITECTURE_ROUTE_GAP_REF])
+          ? {gapAnalysisRef: normalizeText(flags[FLAG_ARCHITECTURE_ROUTE_GAP_REF])}
+          : {}),
+      };
+    }
     metadata.representativeResidual = {
       status: 'active-theory-loop',
       scenario: metadata.scenario,

@@ -6605,11 +6605,18 @@ export function validateCompositionalAutoPromoteGate(
   if (!owner || !boundary) return errors;
   const isRevision = metadataIsSystemTheoryRevision(metadata, filePath);
   const isArchitectureGap = metadataIsArchitectureGapAnalysis(metadata, filePath);
+  const hasArchRoute = metadataHasValidArchitectureRoute(metadata, filePath, {
+    ledgerPath: options.ledgerPath,
+  });
   const packageDir = options.packageDir
     ? path.resolve(options.packageDir)
     : path.resolve(process.cwd(), COMPOSITIONAL_GATE_PACKAGE_DIR);
   const {signals} = loadCompositionalSignalsFromFrontier(packageDir, owner, boundary);
   if (signals.length === 0) return errors;
+  // R13 exit ramp: a well-formed architecture-route implementation is the
+  // sanctioned runtime move out of the compositional/post-rederive gates once
+  // an architecture-gap analysis has selected the route.
+  if (hasArchRoute) return errors;
   // R7 specialisation: pair-alternation-post-rederive REQUIRES architecture-gap;
   // even a fresh rederive cannot pass this gate.
   const postRederive = signals.find(
@@ -6681,6 +6688,33 @@ const LOOP_EXHAUSTION_NON_CONFIRMED_OUTCOMES = new Set([
   'theory-falsified',
   'migrated',
 ]);
+
+// R13 — Architecture-Route Implementation Forcing.
+// Once an architecture-gap-analysis package closes on a pair, the loop selected
+// a concrete architecture route (a layer change). The very next executable move
+// must be the *runtime implementation* of that route, not another analysis or
+// rederive. A package declares it is that sanctioned implementation by carrying
+// `theoryLoop.architectureRoute`, which ties the runtime change to the closed
+// gap analysis via a real architecture-gap ledger slug and a named layer.
+const THEORY_LOOP_ARCHITECTURE_ROUTE_FIELD = 'architectureRoute';
+const ARCHITECTURE_ROUTE_SELECTED_LAYER_FIELD = 'selectedLayer';
+const ARCHITECTURE_ROUTE_LEDGER_REF_FIELD = 'ledgerRef';
+const ARCHITECTURE_ROUTE_COUPLED_INVARIANT_FIELD = 'coupledInvariant';
+const ARCHITECTURE_ROUTE_GAP_ANALYSIS_REF_FIELD = 'gapAnalysisRef';
+// Drawn from the Theory Option Set layer vocabulary {protocol, scheduling,
+// ownership, observation, topology, model}. A route is a layer change, so the
+// implementation must name exactly one of these layers.
+const ARCHITECTURE_ROUTE_LAYER_VALUES = new Set([
+  'protocol',
+  'scheduling',
+  'ownership',
+  'observation',
+  'topology',
+  'model',
+]);
+const ARCHITECTURE_ROUTE_STATE_NONE = 'none';
+const ARCHITECTURE_ROUTE_STATE_IMPLEMENT_PENDING = 'implement-pending';
+const ARCHITECTURE_ROUTE_STATE_IMPLEMENTED = 'implemented';
 
 export function metadataIsArchitectureGapAnalysis(metadata, filePath) {
   if (!metadata || typeof metadata !== 'object') return false;
@@ -7250,6 +7284,221 @@ function isLoopExhausted(packageDir, owner, boundary) {
   );
 }
 
+// Returns the theoryLoop.architectureRoute record (or null). Accepts either the
+// nested theoryLoop block or a top-level mirror for legacy/lite metadata.
+function getArchitectureRoute(metadata) {
+  const fromTheoryLoop =
+    metadata?.[THEORY_LOOP_FIELD]?.[THEORY_LOOP_ARCHITECTURE_ROUTE_FIELD];
+  if (isObjectRecord(fromTheoryLoop)) return fromTheoryLoop;
+  const topLevel = metadata?.[THEORY_LOOP_ARCHITECTURE_ROUTE_FIELD];
+  if (isObjectRecord(topLevel)) return topLevel;
+  return null;
+}
+
+// Validates the shape of a declared architecture-route marker. Returns an array
+// of error strings (empty when the marker is a well-formed, sanctioned runtime
+// implementation of a previously-selected architecture route). A marker is only
+// honoured when it names a real layer, cites a concrete coupled invariant,
+// references an existing `architecture-gap` ledger slug, and the package writes
+// at least one src/ path (Real Package Rule).
+function validateArchitectureRouteMarkerShape(metadata, filePath, options = {}) {
+  const errors = [];
+  const route = getArchitectureRoute(metadata);
+  if (!route) return errors;
+  const layer = normalizeLedgerText(
+    route[ARCHITECTURE_ROUTE_SELECTED_LAYER_FIELD],
+  ).toLowerCase();
+  if (!layer) {
+    errors.push(
+      `${filePath}: architecture-route-layer-missing — ` +
+      `theoryLoop.${THEORY_LOOP_ARCHITECTURE_ROUTE_FIELD}.` +
+      `${ARCHITECTURE_ROUTE_SELECTED_LAYER_FIELD} is required and must be one ` +
+      `of {${[...ARCHITECTURE_ROUTE_LAYER_VALUES].join(', ')}}.`,
+    );
+  } else if (!ARCHITECTURE_ROUTE_LAYER_VALUES.has(layer)) {
+    errors.push(
+      `${filePath}: architecture-route-layer-invalid — ` +
+      `${ARCHITECTURE_ROUTE_SELECTED_LAYER_FIELD}=${layer} is not one of ` +
+      `{${[...ARCHITECTURE_ROUTE_LAYER_VALUES].join(', ')}}.`,
+    );
+  }
+  const coupledInvariant = normalizeLedgerText(
+    route[ARCHITECTURE_ROUTE_COUPLED_INVARIANT_FIELD],
+  );
+  if (!coupledInvariant) {
+    errors.push(
+      `${filePath}: architecture-route-coupled-invariant-missing — ` +
+      `${ARCHITECTURE_ROUTE_COUPLED_INVARIANT_FIELD} must name the coupled ` +
+      'invariant this route changes (the analysis already proved a single-' +
+      'mechanism local patch cannot move the blocker).',
+    );
+  }
+  const ledgerRef = normalizeLedgerText(
+    route[ARCHITECTURE_ROUTE_LEDGER_REF_FIELD],
+  );
+  if (!ledgerRef) {
+    errors.push(
+      `${filePath}: architecture-route-ledger-ref-missing — ` +
+      `${ARCHITECTURE_ROUTE_LEDGER_REF_FIELD} must cite the ` +
+      '`theory-YYYYMMDD-...-architecture-gap` ledger slug produced by the ' +
+      'closed architecture-gap analysis that selected this route.',
+    );
+  } else {
+    if (!/architecture-gap/iu.test(ledgerRef)) {
+      errors.push(
+        `${filePath}: architecture-route-ledger-ref-not-architecture-gap — ` +
+        `${ARCHITECTURE_ROUTE_LEDGER_REF_FIELD}=${ledgerRef} must reference an ` +
+        '`architecture-gap` ledger entry.',
+      );
+    }
+    const ledgerPath = options.ledgerPath
+      ? path.resolve(options.ledgerPath)
+      : path.resolve(process.cwd(), DEFAULT_THEORY_LEDGER_PATH);
+    const ledgerSlugs = readLedgerSlugs(ledgerPath);
+    if (ledgerSlugs.size > 0 && !ledgerSlugs.has(ledgerRef)) {
+      errors.push(
+        `${filePath}: architecture-route-ledger-ref-unknown — ` +
+        `${ARCHITECTURE_ROUTE_LEDGER_REF_FIELD}=${ledgerRef} does not match any ` +
+        `entry in ${path.relative(process.cwd(), ledgerPath) || DEFAULT_THEORY_LEDGER_PATH}.`,
+      );
+    }
+  }
+  const writeScope = []
+    .concat(metadata.writeScope || [])
+    .concat(metadata?.scope?.writeScope || [])
+    .map((p) => normalizeLedgerText(p))
+    .filter(Boolean);
+  if (!writeScope.some((p) => isSourceWritePath(p))) {
+    errors.push(
+      `${filePath}: architecture-route-no-src — an architecture-route ` +
+      'implementation package must list at least one src/ path in writeScope; ' +
+      'the route is a runtime layer change, not another analysis.',
+    );
+  }
+  return errors;
+}
+
+// Boolean wrapper: true only when a well-formed architecture-route marker is
+// present. Used by R5/R7 as the sanctioned exit ramp out of the analysis gates.
+function metadataHasValidArchitectureRoute(metadata, filePath, options = {}) {
+  if (!getArchitectureRoute(metadata)) return false;
+  return validateArchitectureRouteMarkerShape(metadata, filePath, options)
+    .length === 0;
+}
+
+// Determines, for the alternating pair containing owner/boundary, whether the
+// loop is waiting for the runtime implementation of an already-selected
+// architecture route. Returns one of:
+//   - 'none'              no closed architecture-gap analysis on the pair.
+//   - 'implement-pending' a gap analysis closed and no architecture-route
+//                         implementation has closed on the pair since.
+//   - 'implemented'       a route implementation closed after the gap analysis.
+function computeArchitectureRouteState(packageDir, owner, boundary) {
+  const empty = {state: ARCHITECTURE_ROUTE_STATE_NONE, gapPackage: null};
+  if (!owner || !boundary) return empty;
+  const pairBoundaries = getAlternatingPairBoundariesForGate(
+    packageDir, owner, boundary,
+  );
+  const relevant = new Set([
+    `${owner}::${boundary}`,
+    ...pairBoundaries.map((p) => `${p.owner}::${p.boundary}`),
+  ]);
+  const closedOnPair = listPackagesInDir(packageDir)
+    .filter((pkg) => pkg.status === 'done')
+    .filter((pkg) => relevant.has(`${pkg.owner}::${pkg.boundary}`))
+    .sort((a, b) =>
+      String(b.opened || '').localeCompare(String(a.opened || '')));
+  let latestGap = null;
+  for (const pkg of closedOnPair) {
+    const meta = readPackageMetadata(path.join(packageDir, pkg.fileName));
+    if (meta && metadataIsArchitectureGapAnalysis(meta, pkg.fileName)) {
+      latestGap = pkg;
+      break;
+    }
+  }
+  if (!latestGap) return empty;
+  // Has a route implementation (valid marker) closed at or after the gap?
+  const implemented = closedOnPair.some((pkg) => {
+    if (String(pkg.opened || '') < String(latestGap.opened || '')) return false;
+    if (pkg.fileName === latestGap.fileName) return false;
+    const meta = readPackageMetadata(path.join(packageDir, pkg.fileName));
+    return meta && getArchitectureRoute(meta) !== null;
+  });
+  return {
+    state: implemented
+      ? ARCHITECTURE_ROUTE_STATE_IMPLEMENTED
+      : ARCHITECTURE_ROUTE_STATE_IMPLEMENT_PENDING,
+    gapPackage: latestGap.fileName,
+    gapOpened: latestGap.opened,
+  };
+}
+
+// R13. Architecture-Route Implementation Forcing.
+// When a pair is in 'implement-pending' state (an architecture-gap analysis has
+// closed and selected a route, but no runtime implementation of that route has
+// closed since), the ONLY legal next package on that pair is the architecture-
+// route implementation. This closes the analysis-ping-pong loop: re-running a
+// rederive or another architecture-gap analysis is rejected, and a runtime
+// package must carry a valid theoryLoop.architectureRoute marker. Complements
+// the R5/R7 exit ramp, which lets exactly this implementation package through
+// the exhaustion/post-rederive gates. Additive: pairs with no closed gap
+// analysis (state 'none') and legacy packages are exempt no-ops.
+export function validateArchitectureRouteImplementation(
+  metadata,
+  filePath,
+  options = {},
+) {
+  const errors = [];
+  if (!metadata || typeof metadata !== 'object') return errors;
+  const phase = options.phase || VALIDATION_PHASE_PRE_IMPL;
+  if (phase !== VALIDATION_PHASE_PRE_IMPL) return errors;
+  const status = options.status || normalizeLedgerText(metadata.status);
+  if (status !== STATUS_ACTIVE && status !== STATUS_TODO) return errors;
+  const owner = normalizeLedgerText(metadata.owner);
+  const boundary = normalizeLedgerText(metadata.boundary);
+  if (!owner || !boundary) return errors;
+  const packageDir = options.packageDir
+    ? path.resolve(options.packageDir)
+    : path.resolve(process.cwd(), COMPOSITIONAL_GATE_PACKAGE_DIR);
+  const {state, gapPackage} = computeArchitectureRouteState(
+    packageDir, owner, boundary,
+  );
+  if (state !== ARCHITECTURE_ROUTE_STATE_IMPLEMENT_PENDING) return errors;
+  const isAnalysis =
+    metadataIsArchitectureGapAnalysis(metadata, filePath) ||
+    metadataIsSystemTheoryRevision(metadata, filePath);
+  if (isAnalysis) {
+    errors.push(
+      `${filePath}: architecture-route-implementation-required — the ` +
+      `architecture-gap analysis ${gapPackage || '(closed)'} already selected ` +
+      `a route on owner=${owner} boundary=${boundary}. The next package on ` +
+      'this pair MUST implement that route in src/ (declare ' +
+      `theoryLoop.${THEORY_LOOP_ARCHITECTURE_ROUTE_FIELD} with selectedLayer, ` +
+      'coupledInvariant, and the architecture-gap ledgerRef). Another ' +
+      'architecture-gap analysis or system-theory rederive on this pair is ' +
+      'not permitted until the selected route is implemented and produces ' +
+      'fresh representative evidence.',
+    );
+    return errors;
+  }
+  const route = getArchitectureRoute(metadata);
+  if (!route) {
+    errors.push(
+      `${filePath}: architecture-route-marker-required — owner=${owner} ` +
+      `boundary=${boundary} is in architecture-route implement-pending state ` +
+      `after ${gapPackage || 'a closed gap analysis'}. A runtime package on ` +
+      `this pair must declare theoryLoop.${THEORY_LOOP_ARCHITECTURE_ROUTE_FIELD} ` +
+      'so the change is bound to the selected route rather than being another ' +
+      'unguided local slice.',
+    );
+    return errors;
+  }
+  errors.push(...validateArchitectureRouteMarkerShape(metadata, filePath, {
+    ledgerPath: options.ledgerPath,
+  }));
+  return errors;
+}
+
 export function validateLoopExhaustionEscalation(
   metadata,
   filePath,
@@ -7293,6 +7542,13 @@ export function validateLoopExhaustionEscalation(
     // validator complements but doesn't duplicate R7. Skip here.
     return errors;
   }
+  // R13 exit ramp: a well-formed architecture-route implementation is the
+  // sanctioned runtime resolution of an exhausted loop. Without this, the
+  // exhaustion gate has no exit — every closed analysis/rederive keeps the
+  // last-three-outcomes non-confirmed, so runtime work could never resume.
+  if (metadataHasValidArchitectureRoute(metadata, filePath, {
+    ledgerPath: options.ledgerPath,
+  })) return errors;
   const packageDir = options.packageDir
     ? path.resolve(options.packageDir)
     : path.resolve(process.cwd(), COMPOSITIONAL_GATE_PACKAGE_DIR);
@@ -9272,6 +9528,12 @@ function runPackageValidationsSync(filePath, content, fileStatus, metadata, opti
     packageDir: options.packageDir,
     ledgerPath: options.ledgerPath,
   }));
+  errors.push(...validateArchitectureRouteImplementation(metadata, relativePath, {
+    phase,
+    status: fileStatus,
+    packageDir: options.packageDir,
+    ledgerPath: options.ledgerPath,
+  }));
   errors.push(...validateTheoryLoopPackageContract(
     content,
     metadata,
@@ -10757,6 +11019,8 @@ export function buildPackageDoctorLines(filePath, content, options = {}) {
     phase,
     theoryLedgerContext: options.theoryLedgerContext,
     packageHistoryEntries: options.packageHistoryEntries,
+    packageDir: options.packageDir,
+    ledgerPath: options.ledgerPath,
   }));
 
   if (fileStatus === STATUS_ACTIVE && metadata && metadata.predecessor) {
