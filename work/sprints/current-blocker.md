@@ -4,229 +4,268 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: No active work package. Start a new package when implementation resumes.
+Theory under test: H3 is selected unless proof names a non-repeated source contract, owner-boundary migration, stale-artifact route, or representative-green result.
 
-Causal question: none
+Causal question: Fresh representative evidence still selects startup_active_gate_owner / snapshot_coverage after the owner_reconcile architecture-gap stop, and `work:system-theory:rederive --check-due` now requires a rederive checkpoint before another slice activates.
 
-Implementation slice: Create or activate one focused package for the next executable concern.
+Implementation slice: No runtime source files are in writeScope. The executable contract is the rederive proof plus sprint/theory-ledger update.
 
 Implementation files:
 
-1. None recorded
+1. `src/control-plane/membership-publication-active-gate-reconcile.js`
+2. `src/control-plane/publication-active-gate-handoff-contract-selection.js`
+3. `src/control-plane/publication-active-gate-handoff-contract-decision.js`
+4. `src/control-plane/publication-active-gate-handoff-contract-evidence.js`
+5. `src/control-plane/snapshot-service.js`
+6. `src/control-plane/owner-queue.js`
 
-Expected implementation delta: unknown
+Expected implementation delta: system-theory revision, architecture continuation, owner-boundary migration, non-repeated source contract, stale-artifact route, or representative-green
 
-Falsifying probe: unknown
+Falsifying probe: npm run work:system-theory:rederive -- --owner startup_active_gate_owner --boundary snapshot_coverage --sprint work/sprints/active-2026-q2-spec-led-runtime-modularization.md --write
 
-Redirect rule: unknown
+Redirect rule: If proof names a non-repeated source contract or owner-boundary migration, redirect to that successor; otherwise record architecture continuation and keep runtime promotion blocked.
 
 Sprint: `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
 
-Package: `none`
+Package: `work/packages/active-20260529-rolling-restart-active-gate-post-rerun-system-theory-rederive.md`
 
-Workflow lane: `none`
+Workflow lane: `causal-escalation`
 
-Scenario: `none`
+Scenario: `rolling-restart`
 
-Artifact: `none`
+Artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json`
 
 Playback: `none`
 
 ## Boundary
 
-Owner: `none`
+Owner: `startup_active_gate_owner`
 
-Boundary: `none`
+Boundary: `snapshot_coverage`
 
-Dominant reason: `none`
+Dominant reason: `owner_reconcile_pending`
 
-Current state: No active work package. Start a new package when implementation resumes.
+Current state: The post-architecture-gap representative rerun stayed red on active_gate_snapshot_coverage with owner_reconcile_pending, snapshot coverage 1/5, selected_snapshot_source_timeout, snapshot_repair_deferred, one pending owner queue write, and zero priority-recovery residuals.
 
 ## Next Action
 
-Create or activate one focused package for the next executable concern.
+Run the system-theory rederive checkpoint before any runtime source promotion, then record whether proof names a non-repeated source contract, owner-boundary migration, architecture continuation, or representative-green path.
 
 ## Proof Ladder
 
-1. None recorded
+1. `falsifier: npm run work:system-theory:rederive -- --owner startup_active_gate_owner --boundary snapshot_coverage --sprint work/sprints/active-2026-q2-spec-led-runtime-modularization.md --write`
+2. `regression: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending --explain active_gate_snapshot_coverage`
+3. `supporting: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12`
+4. `supporting: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --explain active_gate_snapshot_coverage`
+5. `supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --markdown`
 
 ## Model Fit
 
-Package class: `unknown`
+Package class: `system-theory-rederive`
 
-Intended minimum model: `unknown`
+Intended minimum model: `gpt-5.3-codex`
 
-Scope shape: `unknown`
+Scope shape: `whole-system-theory/post-rerun-checkpoint`
 
-Output profile: `unknown`
+Output profile: `medium`
 
 Escalation triggers:
 
-1. None recorded
+1. `proof names a concrete non-repeated runtime source contract`
+2. `proof selects a real owner-boundary migration`
+3. `proof requires runtime files in writeScope`
 
 ## System Theory
 
-Problem statement: unknown
+Problem statement: Fresh representative evidence still selects startup_active_gate_owner / snapshot_coverage after the owner_reconcile architecture-gap stop, and `work:system-theory:rederive --check-due` now requires a rederive checkpoint before another slice activates.
 
 Phase chain:
 
-1. None recorded
+1. `owner_reconcile_pending architecture-gap analysis closed without a non-repeated source route`
+2. `post-architecture-gap representative rerun stayed red`
+3. `canonical evidence selected active_gate_snapshot_coverage with owner_reconcile_pending and zero priority-recovery residuals`
+4. `system-theory check-due reports 5 closed packages since the latest systemTheory rederive checkpoint`
 
 Owner-boundary map:
 
-1. None recorded
+1. `startup_active_gate_owner / snapshot_coverage: selected first frontier and rederive owner.`
+2. `diagnostics_owner / causal_analysis_framework: owns causal route and runtime-promotion guard interpretation.`
+3. `operation_workflow_owner / rebalancer_handoff: paired boundary whose residual witness count remains zero.`
+4. `startup_readiness_owner / startup_support_evidence: downstream while active-gate snapshot coverage remains first.`
 
 Stable facts:
 
-1. None recorded
+1. `Scenario remains rolling-restart.`
+2. `The sprint success condition remains representative green.`
+3. `Priority-recovery residual witnesses are zero.`
+4. `active_gate_snapshot_coverage remains first frontier.`
 
 Changed facts:
 
-1. None recorded
+1. `Fresh rerun after architecture-gap evidence still selected owner_reconcile_pending.`
+2. `The check-due gate now requires a system-theory rederive checkpoint.`
+3. `The terminal benchmark_events SQL visibility error remains downstream of active-gate coverage.`
 
 Competing theories:
 
-1. None recorded
+1. `H1 a non-repeated startup_active_gate_owner source contract is now discoverable.`
+2. `H2 the deciding owner boundary should migrate.`
+3. `H3 no non-repeated transition is selectable, so architecture continuation remains the correct route.`
+4. `H4 the artifact is stale or instrumentation-only and should force fresh representative evidence.`
 
 Eliminated theories:
 
-1. None recorded
+1. `Closing the sprint on architecture-gap is eliminated by the Evidence Anchor success condition.`
+2. `Opening operation_workflow_owner / rebalancer_handoff is eliminated while residual witnesses remain zero.`
+3. `Opening another generic active-gate runtime patch is eliminated until the rederive names a non-repeated source contract.`
 
 Downstream symptoms:
 
-1. None recorded
+1. `startup readiness support evidence`
+2. `benchmark_events bootstrap SQL visibility`
 
 Transition table:
 
-1. None recorded
+1. Input `post-rerun active_gate_snapshot_coverage / owner_reconcile_pending` owner `startup_active_gate_owner / snapshot_coverage`; missing `non-repeated source contract, owner-boundary migration, architecture continuation, or representative-green`; expected `system-theory rederive, scenario-route, frontier-history, topology-convergence, and priority residual extraction agree on the selected route`; falsifier `npm run work:system-theory:rederive -- --owner startup_active_gate_owner --boundary snapshot_coverage --sprint work/sprints/active-2026-q2-spec-led-runtime-modularization.md --write`; migration trigger `canonical proof names a different deciding owner boundary with nonzero residual evidence`
 
 Ownership migration triggers:
 
-1. None recorded
+1. `Migrate only when scenario-route or residual extraction names another deciding owner boundary.`
+2. `Do not migrate to startup readiness while active_gate_snapshot_coverage remains the first frontier.`
 
 Architecture-gap triggers:
 
-1. None recorded
+1. `Record architecture continuation when proof names no non-repeated owner-owned transition.`
+2. `Keep source promotion blocked while evidence repeats owner_reconcile_pending without metric movement.`
 
-Whole-system invariant: unknown
+Whole-system invariant: Same-frontier/no-reduction active-gate evidence after the architecture-gap stop must revise system theory before runtime source promotion.
 
 ## Slice Theory
 
-System theory reference: unknown
+System theory reference: work/packages/active-20260529-rolling-restart-active-gate-post-rerun-system-theory-rederive.md systemTheory
 
-Selected system theory: unknown
+Selected system theory: H3 is selected unless proof names a non-repeated source contract, owner-boundary migration, stale-artifact route, or representative-green result.
 
-Selected mechanism: unknown
+Selected mechanism: contract_gap saturation with ownership_gap/protocol_mismatch alternates
 
-Source/test contract: unknown
+Source/test contract: No runtime source files are in writeScope. The executable contract is the rederive proof plus sprint/theory-ledger update.
 
-Falsifier: unknown
+Falsifier: npm run work:system-theory:rederive -- --owner startup_active_gate_owner --boundary snapshot_coverage --sprint work/sprints/active-2026-q2-spec-led-runtime-modularization.md --write
 
-Representative expected movement: unknown
+Representative expected movement: system-theory revision, architecture continuation, owner-boundary migration, non-repeated source contract, stale-artifact route, or representative-green
 
-Redirect rule: unknown
+Redirect rule: If proof names a non-repeated source contract or owner-boundary migration, redirect to that successor; otherwise record architecture continuation and keep runtime promotion blocked.
 
 Theory-fit score:
 
-1. `evidenceFit`: unknown
-2. `ownerBoundaryFit`: unknown
-3. `falsifiability`: unknown
-4. `representativeMovement`: unknown
-5. `downstreamRiskContainment`: unknown
+1. `evidenceFit`: high - fresh route, topology, frontier-history, and check-due all select a theory checkpoint before source work.
+2. `ownerBoundaryFit`: high - startup_active_gate_owner / snapshot_coverage remains the selected first frontier.
+3. `falsifiability`: high - system-theory rederive and scenario-route can contradict the guarded route.
+4. `representativeMovement`: medium - the package records structural movement rather than runtime behavior.
+5. `downstreamRiskContainment`: high - runtime and readiness files stay frozen.
 
 Wrong-slice triggers:
 
-1. None recorded
+1. `proof selects a concrete non-repeated runtime source contract`
+2. `proof selects a different owner boundary`
+3. `proof requires runtime files in writeScope`
+4. `fresh representative evidence changes the first frontier`
 
 ## Theory Ledger References
 
-1. None recorded
+1. `theory-20260529-rolling-restart-active-gate-snapshot-coverage-architecture-gap-stop`
+2. `theory-20260529-rolling-restart-active-gate-snapshot-coverage-checkpoint-rederive`
 
 ## Representative Residual
 
-Status: `unknown`
+Status: `same-frontier`
 
-Scenario: `unknown`
+Scenario: `rolling-restart`
 
-Artifact: `unknown`
+Artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json`
 
-Frontier: `unknown`
+Frontier: `active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage`
 
-Owner: `unknown`
+Owner: `startup_active_gate_owner`
 
-Boundary: `unknown`
+Boundary: `snapshot_coverage`
 
-Dominant reason: `unknown`
+Dominant reason: `owner_reconcile_pending`
 
-Next action: `unknown`
+Next action: `Run the system-theory rederive checkpoint; do not promote runtime source work until proof names a non-repeated route or migration.`
 
 ## Causal Governance
 
-Causal hypothesis: `unknown`
+Causal hypothesis: `The fresh representative rerun repeated the active-gate contract-gap saturation; the system theory must be rederived before another local runtime package can open.`
 
-Stop-condition check: `unknown`
+Stop-condition check: `Run `npm run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json`, `npm run work:system-theory:rederive -- --owner startup_active_gate_owner --boundary snapshot_coverage --sprint work/sprints/active-2026-q2-spec-led-runtime-modularization.md --write`, scenario-route, frontier-history, topology-convergence, and priority-recovery residual extraction before closure.`
 
-Expected causal-model change: `unknown`
+Expected causal-model change: `The package records a refreshed invariant and selects architecture continuation, owner-boundary migration, a non-repeated source contract, or representative-green.`
 
-Representative outcome: `unknown`
+Representative outcome: `pending-before-rerun`
 
-Causal debt: `unknown`
+Causal debt: `Rolling-restart remains red at active_gate_snapshot_coverage with owner_reconcile_pending, selected_snapshot_source_timeout, snapshot_repair_deferred, snapshot coverage 1/5, one pending owner queue write, and zero priority-recovery residuals.`
 
-Cross-boundary review: `unknown`
+Cross-boundary review: `Runtime files are candidate-only; this package writes sprint/theory state and package evidence unless proof selects a successor.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `unknown`
+Reference scenario/probe: `rolling-restart active-gate post-rerun system-theory rederive`
 
 Phase chain:
 
-1. None recorded
+1. `post-architecture-gap representative rerun stayed red`
+2. `route evidence stayed active-gate`
+3. `priority-recovery residuals stayed zero`
+4. `system-theory checkpoint is due`
 
-Current first frontier: `unknown`
+Current first frontier: `active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending`
 
 Known downstream blockers:
 
-1. None recorded
+1. `startup_readiness_owner remains downstream`
+2. `benchmark_events SQL visibility remains downstream`
 
-Missing causal edge: `unknown`
+Missing causal edge: `post-rerun system-theory route for repeated active-gate owner_reconcile evidence`
 
-Missing causal edge probe: `unknown`
+Missing causal edge probe: `npm run work:system-theory:rederive -- --owner startup_active_gate_owner --boundary snapshot_coverage --sprint work/sprints/active-2026-q2-spec-led-runtime-modularization.md --write`
 
-Bounded progress proof: `unknown`
+Bounded progress proof: `rederive plus scenario-route must decide whether any non-repeated retry, timer, timeout, reconcile, drain, dispatch, delivery, advance, source contract, migration, architecture continuation, stale-artifact route, or representative-green is selected`
 
-Bounded progress proof artifact: `unknown`
+Bounded progress proof artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json`
 
-Expected observable transition: `unknown`
+Expected observable transition: `system-theory rederive records the current same-frontier evidence and selects the next valid route`
 
-Max progress bound: `unknown`
+Max progress bound: `one system-theory rederive before another runtime successor package`
 
-Same-frontier fallback: `unknown`
+Same-frontier fallback: `architecture continuation and runtime promotion blocked`
 
-Expected next frontier: `unknown`
+Expected next frontier: `architecture continuation, future fresh representative evidence, non-repeated source contract, owner-boundary migration, or representative-green`
 
-Result classification: `unknown`
+Result classification: `pending-before-probe`
 
-Stop condition: `unknown`
+Stop condition: `continue-local-fix`
 
 Recent frontier history:
 
-1. None recorded
+1. `startup_active_gate_owner / snapshot_coverage / same-mechanism-repeat contract_gap saturation`
+2. `work:system-theory:rederive --check-due reports 5 closed packages since the latest systemTheory rederive checkpoint`
 
-Oscillation check: `unknown`
+Oscillation check: `The checkpoint follows a post-architecture-gap rerun and must not reopen a generic local runtime patch.`
 
-Handoff invariant: `unknown`
+Handoff invariant: `Runtime promotion stays blocked until current proof names a non-repeated source route.`
 
 ## Observable Prediction
 
-Metric: `unknown`
+Metric: `post-rerun active-gate system-theory route`
 
-Predicted: `unknown`
+Predicted: `The rederive will require a revision and keep runtime promotion blocked unless a non-repeated source contract, owner migration, stale-artifact route, or representative-green result is named.`
 
-Observed: `unknown`
+Observed: `pending-before-observation`
 
-Accuracy: `unknown`
+Accuracy: `pending-before-observation`
 
-Evidence: `unknown`
+Evidence: `test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json`
 
 Metric delta: `unknown`
 
@@ -244,73 +283,65 @@ Evidence: `unknown`
 
 ## Rerun Decision
 
-Source artifact: `unknown`
+Source artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json`
 
-Route owner: `unknown`
+Route owner: `startup_active_gate_owner`
 
-Route boundary: `unknown`
+Route boundary: `snapshot_coverage`
 
-Route dominant reason: `unknown`
+Route dominant reason: `owner_reconcile_pending`
 
-Route causal outcome: `unknown`
+Route causal outcome: `continue_local_fix`
 
-Stop mode: `unknown`
+Stop mode: `classified_local_blocker`
 
-Next lane: `unknown`
+Next lane: `causal-escalation`
 
-Expected delta: `unknown`
+Expected delta: `System-theory rederive records whether the fresh owner_reconcile same-frontier/no-reduction evidence permits a non-repeated contract, owner migration, architecture continuation, or another fresh representative discriminator.`
 
 Required refresh commands:
 
-1. None recorded
-
-## Classification Efficiency
-
-Default mode: `unknown`
-
-Separate package reason: `unknown`
-
-Artifact budget: `unknown`
-
-Proof command budget: `unknown`
-
-Commands:
-
-1. None recorded
-
-Decision record: `unknown`
-
-Successor action: `unknown`
-
-Runtime promotion rule: `unknown`
+1. `npm run work:system-theory:rederive -- --owner startup_active_gate_owner --boundary snapshot_coverage --sprint work/sprints/active-2026-q2-spec-led-runtime-modularization.md --write`
+2. `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending --explain active_gate_snapshot_coverage`
+3. `update Sprint Strategy Brief from the rederive result`
+4. `update Current Edge Card from the rederive result`
+5. `npm run work:repair`
+6. `npm run work:validate -- --entry work/packages/active-20260529-rolling-restart-active-gate-post-rerun-system-theory-rederive.md`
+7. `npm run work:validate -- --pre-impl work/packages/active-20260529-rolling-restart-active-gate-post-rerun-system-theory-rederive.md`
 
 ## Architecture Decision Gate
 
-Status: `unknown`
+Status: `selected`
 
-Trigger: `unknown`
+Trigger: `frontier-oscillation`
 
 Trigger evidence:
 
-1. None recorded
+1. `fresh rerun selected active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending`
+2. `priority-recovery residual witnesses are zero`
+3. `snapshot coverage remains 1/5 with selected_snapshot_source_timeout and snapshot_repair_deferred`
+4. `work:system-theory:rederive --check-due reports 5 closed packages since the latest systemTheory rederive checkpoint`
 
 Choices:
 
-1. None recorded
+1. `non-repeated-source-contract` route=`continue-local-proof` - Open runtime work only if the rederive names a concrete source contract outside the repeated owner_reconcile shape.
+2. `architecture-continuation` route=`architecture-package` - Record system-theory movement and keep runtime promotion blocked if no non-repeated contract appears.
 
-Selected choice: `unknown`
+Selected choice: `architecture-continuation`
 
-Gate next action: unknown
+Gate next action: Open the autonomous architecture experiment package before runtime implementation resumes.
 
 ## Scope
 
 Write scope:
 
-1. None recorded
+1. `work/packages/active-20260529-rolling-restart-active-gate-post-rerun-system-theory-rederive.md`
+2. `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
+3. `work/theory-ledger.md`
 
 Handoff files:
 
-1. None recorded
+1. `test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json`
 
 Generated files:
 
@@ -319,11 +350,20 @@ Generated files:
 
 Candidate runtime files:
 
-1. None recorded
+1. `src/control-plane/membership-publication-active-gate-reconcile.js`
+2. `src/control-plane/publication-active-gate-handoff-contract-selection.js`
+3. `src/control-plane/publication-active-gate-handoff-contract-decision.js`
+4. `src/control-plane/publication-active-gate-handoff-contract-evidence.js`
+5. `src/control-plane/snapshot-service.js`
+6. `src/control-plane/owner-queue.js`
 
 Commit scope:
 
-1. None recorded
+1. `work/packages/active-20260529-rolling-restart-active-gate-post-rerun-system-theory-rederive.md`
+2. `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
+3. `work/theory-ledger.md`
+4. `work/sprints/current-blocker.json`
+5. `work/sprints/current-blocker.md`
 
 Legacy touched files:
 
