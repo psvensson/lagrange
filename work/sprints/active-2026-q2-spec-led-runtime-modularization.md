@@ -65,23 +65,23 @@ priority-recovery or active-gate frontier.
 ## Current Edge Card
 
 ```text
-Representative artifact: none
-Visible first frontier: unknown
-Active package: none
-Active package owner: none
-Active package boundary: none
-Selected cause: none
-Required action: none
-Representative status: unknown
-Causal outcome: unknown
-Architecture gate: not-required / unknown
-Expected delta: unknown
-Current state: No active work package. Start a new package when implementation resumes.
-Allowed edits: none
+Representative artifact: test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json
+Visible first frontier: startup_readiness_owner / startup_support_evidence / sql_query_engine_unavailable
+Active package: work/packages/done-20260530-rolling-restart-startup-readiness-sql-query-engine-available-check.md
+Active package owner: startup_readiness_owner
+Active package boundary: startup_support_evidence
+Selected cause: sql_query_engine_unavailable
+Required action: Implement check for active SQL query engines in candidate nodes before querying them
+Representative status: active-theory-loop
+Causal outcome: pending-before-rerun
+Architecture gate: watching / unknown
+Expected delta: Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.
+Current state: Package opened with declared owner, boundary, scope, proof, and stop rule.
+Allowed edits: src/bootstrap/owners/bootstrap-readiness-owner.js, test/distributed/scenarios/table-distribution-helpers-segment-3.js
 Candidate runtime files: unknown
-Forbidden edits: none
-Required latest proof: none
-Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
+Forbidden edits: Harness helper safety and SQL engine unavailable checking must not weaken any cluster state check or active gate convergence invariant.
+Required latest proof: falsifier: npx tap test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js, regression: npm run work:scenario-route -- test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json --owner startup_readiness_owner --boundary startup_support_evidence
+Allowed stop modes: success-condition-met only; representative-green, owner-boundary-migration, architecture-gap, same-frontier, classification-only, needs-rerun, pending, and unknown are package outcomes unless they exactly match the original sprint success condition
 ```
 
 ## Joint Coupled-Invariant Probe
@@ -215,6 +215,14 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Lane: `lightweight-maintenance`
    - Purpose: Prevent repair from adopting unrelated dirty implementation files into classifier package scope.
    - First-run reason: Repair autocompletion can read dirty git status and incorrectly add runtime/test/script/report files to a classifier package scope.
+30. [Rolling Restart Startup Readiness SQL Query Engine Available Check](../packages/done-20260530-rolling-restart-startup-readiness-sql-query-engine-available-check.md)
+   - Lane: `causal-escalation`
+   - Purpose: Implement check for active SQL query engines in candidate nodes before querying them.
+   - First-run reason: Scenario rerun regressed with joining node throwing SQL query engine not available while control plane is ready.
+31. [Rolling Restart Priority Recovery Rebalancer Handoff Scheduling Retry](../packages/todo-20260530-rolling-restart-priority-recovery-rebalancer-handoff-scheduling-retry.md)
+   - Lane: `causal-escalation`
+   - Purpose: Implement the rebalancer handoff retry scheduling wake convergence.
+   - First-run reason: The active package closed successfully, and we must proceed to the next blocker in the priority recovery rebalancer handoff path.
 
 ## Sprint Proof Ladder
 

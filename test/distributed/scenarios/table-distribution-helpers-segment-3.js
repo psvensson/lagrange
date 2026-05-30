@@ -884,13 +884,34 @@ async function ensureBenchmarkPartitioningTable(seedNode, options = {}) {
     const visibilitySweepOnly = postRepairVisibilitySweepPending;
     postRepairVisibilitySweepPending = false;
     if (!visibilitySweepOnly) {
-      const createPrimaryNode =
-        createQueryNodes[createPrimaryNodeIndex] || seedNode;
-      const remainingCreateQueryNodes = createQueryNodes.filter(
-        (_node, index) => {
-          return index !== createPrimaryNodeIndex;
-        },
-      );
+      const createPrimaryNode = createQueryNodes[createPrimaryNodeIndex] || seedNode;
+      const visQueryNode = (shouldUseUnattemptedTableBootstrapVisibilityNodes({
+        baseOptions: options,
+        lastCreateError: lastCreateErrorObject,
+        createQueryNodes,
+        createPrimaryNodeIndex,
+        bootstrapVisibilitySnapshot,
+      }) ? (createQueryNodes.slice(createPrimaryNodeIndex + ONE)[ZERO] || seedNode) : seedNode);
+      let sqlUnavailable = false;
+      for (const node of [createPrimaryNode, visQueryNode]) {
+        if (node && typeof node.probeBootstrapReadiness === 'function') {
+          const readiness = await node.probeBootstrapReadiness().catch(() => null);
+          if (readiness?.reasons?.some(r => r.includes('SQL_ENGINE_UNAVAILABLE') || r.includes('SQL query engine not available'))) {
+            sqlUnavailable = true;
+            break;
+          }
+        }
+      }
+      if (sqlUnavailable) {
+        if (Date.now() < deadline) {
+          if (createQueryNodes.length > ONE) {
+            createPrimaryNodeIndex = (createPrimaryNodeIndex + ONE) % createQueryNodes.length;
+          }
+          await sleep(100);
+          continue;
+        }
+      }
+      const remainingCreateQueryNodes = createQueryNodes.filter((_, idx) => idx !== createPrimaryNodeIndex);
       if (
         shouldAttemptTableBootstrapCreate({
           deadlineAtMs: deadline,
