@@ -3,7 +3,8 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
+  "status": "superseded",
+  "supersededReason": "Alternating-Pair Mutex (R1): superseded by active-20260530-rolling-restart-active-gate-bounded-reentry-model-route-implementation.",
   "intent": {
     "opened": "2026-05-29",
     "lane": "experiment",

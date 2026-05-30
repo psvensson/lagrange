@@ -443,4 +443,4 @@ Out of scope:
 1. Focused package commit: dd3f9c3716ed48a9cb528ef7da8367cbb276619d
 2. Push target: origin/codex/pending-ack-eligibility-filter
 3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
-4. Pushed: no
+4. Pushed: yes 2026-05-30T10:22:34.858Z

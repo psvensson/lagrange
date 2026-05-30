@@ -317,4 +317,4 @@ Canonical evidence source: `test-output/reports/rolling-restart-spec-led-runtime
 1. Focused package commit: 2e27649618716874c2c5e967902a27047cb9bedc
 2. Push target: origin/codex/pending-ack-eligibility-filter
 3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
-4. Pushed: no
+4. Pushed: yes 2026-05-30T10:22:34.858Z

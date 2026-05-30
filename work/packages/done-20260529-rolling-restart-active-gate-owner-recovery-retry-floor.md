@@ -494,8 +494,7 @@ Agent identity is optional provenance. Use the compact five-field shape for new 
 1. Focused package commit: 62389efe8055107e4b0aadc29235c54102f57010
 2. Push target: origin/codex/pending-ack-eligibility-filter
 3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
-4. Pushed: no
-
+4. Pushed: yes 2026-05-30T10:22:34.858Z
 ## Validation
 
 1. falsifier: npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js

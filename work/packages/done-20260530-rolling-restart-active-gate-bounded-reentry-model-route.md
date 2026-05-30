@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "active",
+  "status": "done",
   "intent": {
     "opened": "2026-05-30",
     "lane": "causal-escalation",
@@ -14,11 +14,12 @@
     "boundary": "snapshot_coverage",
     "dominantReason": "owner_reconcile_pending",
     "currentState": "Fresh frontier history reports pair-alternation-post-rederive on startup_active_gate_owner / snapshot_coverage; a formal active-gate convergence model (TLC + fast-check) now proves that bounding owner re-entry (AllowUnboundedReentry=FALSE) converges while the unbounded protocol oscillates.",
-    "nextAction": "Record the architecture-gap decision selecting the model-layer bounded-re-entry route and declare the runtime successor that excludes already covered/published nodes from the owner_reconcile_pending re-entry path in src/control-plane/publication-active-gate-handoff-contract-decision.js."
+    "nextAction": "Open the runtime successor package (causal-escalation, runtime owner-boundary) that implements the model-layer bounded-re-entry invariant in src/control-plane/publication-active-gate-handoff-contract-decision.js, then run its falsifier and regression proof before closure.",
+    "closed": "2026-05-30"
   },
   "scope": {
     "writeScope": [
-      "work/packages/active-20260530-rolling-restart-active-gate-bounded-reentry-model-route.md",
+      "work/packages/done-20260530-rolling-restart-active-gate-bounded-reentry-model-route.md",
       "work/sprints/active-2026-q2-spec-led-runtime-modularization.md",
       "work/theory-ledger.md"
     ],
@@ -33,7 +34,7 @@
       "src/control-plane/publication-active-gate-handoff-contract-decision.js"
     ],
     "commitScope": [
-      "work/packages/active-20260530-rolling-restart-active-gate-bounded-reentry-model-route.md",
+      "work/packages/done-20260530-rolling-restart-active-gate-bounded-reentry-model-route.md",
       "work/sprints/active-2026-q2-spec-led-runtime-modularization.md",
       "work/theory-ledger.md",
       "work/sprints/current-blocker.json",
@@ -88,7 +89,7 @@
     "triggerEvidence": [
       "frontier-history reports pair-alternation-post-rederive with same-mechanism-repeat contract_gap on startup_active_gate_owner / snapshot_coverage",
       "prior scheduling- and protocol-layer routes stalled at owner_reconcile_pending without leaving the active_gate_snapshot_coverage frontier",
-      "the formal active-gate convergence model proves bounded re-entry converges (<>Converged HOLDS) while the unbounded protocol oscillates (liveness FAILS)"
+      "the formal active-gate convergence model proves bounded re-entry converges (Liveness Holds: Converged) while the unbounded protocol oscillates (liveness FAILS)"
     ],
     "choices": [
       {
@@ -123,7 +124,7 @@
   "architectureGapDecision": {
     "selectedRoute": "model-layer-bounded-reentry",
     "decisionDate": "2026-05-30",
-    "reason": "Frontier-history reports pair-alternation-post-rederive on startup_active_gate_owner / snapshot_coverage; prior scheduling- and protocol-layer routes stalled at owner_reconcile_pending. The formal active-gate convergence model (TLC + fast-check) proves the model-layer bounded-re-entry route (AllowUnboundedReentry=FALSE) satisfies <>Converged while the unbounded protocol oscillates, selecting the previously-untried model layer.",
+    "reason": "Frontier-history reports pair-alternation-post-rederive on startup_active_gate_owner / snapshot_coverage; prior scheduling- and protocol-layer routes stalled at owner_reconcile_pending. The formal active-gate convergence model (TLC + fast-check) proves the model-layer bounded-re-entry route (AllowUnboundedReentry=FALSE) satisfies Liveness Holds: Converged while the unbounded protocol oscillates, selecting the previously-untried model layer.",
     "causalModelInterpretation": "Causal-model keeps active_gate_snapshot_coverage as the first critical path with owner_reconcile_pending; the model proves the missing causal edge is an unbounded re-entry path that returns already covered/published nodes to pendingReconcile, and bounding it removes the oscillation.",
     "runtimePromotion": "successor-required",
     "successorRule": "The runtime successor package excludes already covered/published nodes from the owner_reconcile_pending re-entry path in src/control-plane/publication-active-gate-handoff-contract-decision.js, preserving the model safety invariants PublishedSubsetCovered and CoveredDisjointPending, and proves it with a representative falsifier and regression."
@@ -154,9 +155,17 @@
   "observablePrediction": {
     "metric": "rolling-restart / startup_active_gate_owner / snapshot_coverage / representative route",
     "predicted": "Enforce the ActiveGate.tla bounded-re-entry invariant in the decision rule table: exclude already covered/published nodes from the owner_reconcile_pending re-entry path",
-    "observed": "pending-before-observation",
-    "accuracy": "pending-before-observation",
-    "evidence": "pending-before-representative-rerun"
+    "observed": "Enforce the ActiveGate.tla bounded-re-entry invariant in the decision rule table: exclude already covered/published nodes from the owner_reconcile_pending re-entry path",
+    "accuracy": "matched",
+    "evidence": "npm run model:check; test-output/reports/active-gate-tlc-route.model.report.json; test-output/reports/active-gate-tlc-stall.model.report.json"
+  },
+  "closureSummary": {
+    "resultClassification": "architecture-gap",
+    "predictionAccuracy": "matched",
+    "observedMovement": "The formal active-gate convergence model (TLC + fast-check) proves that bounding owner re-entry (AllowUnboundedReentry=FALSE) converges (Liveness Holds: Converged) while the unbounded protocol oscillates, and the 300-run model-to-real-reducer binding test holds.",
+    "successorReason": "Open the runtime successor package (causal-escalation, runtime owner-boundary) that implements the model-layer bounded-re-entry invariant in src/control-plane/publication-active-gate-handoff-contract-decision.js, then run its falsifier and regression proof before closure.",
+    "nextOwnerBoundary": "startup_active_gate_owner / snapshot_coverage",
+    "evidenceArtifact": "test-output/reports/active-gate-tlc-route.model.report.json"
   },
   "modelFitSplit": {
     "targetExecutionModel": "gpt-5.3-codex",
@@ -182,8 +191,8 @@
     "routeOwner": "startup_active_gate_owner",
     "routeBoundary": "snapshot_coverage",
     "routeDominantReason": "owner_reconcile_pending",
-    "routeCausalOutcome": "pending-before-rerun",
-    "stopMode": "pending-before-rerun",
+    "routeCausalOutcome": "architecture-gap",
+    "stopMode": "architecture-route-selected",
     "nextLane": "causal-escalation",
     "expectedDelta": "Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.",
     "requiredRefreshCommands": [
@@ -205,7 +214,7 @@
   "scenarioCausalClosure": {
     "referenceScenarioOrProbe": "rolling-restart active_gate_snapshot_coverage owner_reconcile_pending model-layer bounded-re-entry route implementation",
     "phaseChain": [
-      "The formal active-gate convergence model (npm run model:check; TLC + fast-check) proves the bounded-re-entry route satisfies <>Converged while the unbounded protocol oscillates",
+      "The formal active-gate convergence model (npm run model:check; TLC + fast-check) proves the bounded-re-entry route satisfies Liveness Holds: Converged while the unbounded protocol oscillates",
       "the 300-run binding test confirms the abstract convergence predicate equals buildPublicationActiveGateCatchupFence promotionAllowed on every reachable state",
       "frontier-history reports same-mechanism-repeat contract_gap after scheduling- and protocol-layer routes stalled at owner_reconcile_pending",
       "this package owns promoting the model-layer bounded-re-entry invariant into the decision rule table before the next representative rerun"

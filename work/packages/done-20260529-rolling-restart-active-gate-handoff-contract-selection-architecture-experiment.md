@@ -371,4 +371,4 @@ expresses the existing deferred owner-recovery wait.
 1. Focused package commit: 9e5302ce4f0799e44eb6581a607870bb113c1125
 2. Push target: origin/codex/pending-ack-eligibility-filter
 3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
-4. Pushed: no
+4. Pushed: yes 2026-05-30T10:22:34.858Z

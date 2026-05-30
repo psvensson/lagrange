@@ -361,8 +361,7 @@ This package tested the post-wake architecture gap without editing runtime files
 1. Focused package commit: f1268e226e4c19b9168c0a9788afa7300aad7a3f
 2. Push target: origin/codex/pending-ack-eligibility-filter
 3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
-4. Pushed: no
-
+4. Pushed: yes 2026-05-30T10:22:34.858Z
 ## Validation
 
 1. falsifier: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12
