@@ -1,7 +1,7 @@
 # Spec-Led Runtime Modularization Rolling Restart Green Theory Loop Sprint
 
 Status: active. Opened on May 28, 2026.
-systemTheoryRederivedAt: 2026-05-29
+systemTheoryRederivedAt: 2026-05-30
 
 ## Goal
 
@@ -67,20 +67,20 @@ priority-recovery or active-gate frontier.
 ```text
 Representative artifact: test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json
 Visible first frontier: release_gate_owner / rolling_restart_fully_green_gate / representative_green_required
-Active package: work/packages/active-20260530-rolling-restart-active-gate-fresh-representative-route-gate.md
+Active package: work/packages/done-20260530-rolling-restart-release-gate-observation-gap-system-theory-rederive.md
 Active package owner: release_gate_owner
 Active package boundary: rolling_restart_fully_green_gate
 Selected cause: representative_green_required
-Required action: Run fresh rolling-restart representative evidence, route the resulting artifact, and select the next sprint action from the fresh route instead of opening another local active-gate patch from the closed architecture-gap artifact.
-Representative status: pending-before-rerun
-Causal outcome: pending-before-rerun
-Architecture gate: watching / unknown
-Expected delta: Fresh representative evidence either satisfies the rolling-restart green condition, migrates owner/boundary, reduces the active-gate timeout shape, or preserves architecture-gap blocking and selects a bounded successor.
-Current state: The owner wake delivery architecture experiment closed as architecture-gap continuation; runtime source promotion on startup_active_gate_owner / snapshot_coverage remains blocked until fresh representative evidence changes the route or names a non-repeated successor.
-Allowed edits: work/packages/active-20260530-rolling-restart-active-gate-fresh-representative-route-gate.md, work/sprints/active-2026-q2-spec-led-runtime-modularization.md
-Candidate runtime files: src/control-plane/membership-publication-active-gate-reconcile.js, src/control-plane/membership-publication-control-plane-convergence.js, src/control-plane/membership-publication-coordinator-class-stage-3.js, src/admin/admin-control-snapshot-publication-handoff.js, src/admin/admin-control-snapshot-query-result-helper.js
-Forbidden edits: Fresh representative evidence must route one owner boundary before source promotion resumes.
-Required latest proof: falsifier: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --fast-local --verbose # release-gate contract transition, regression: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner release_gate_owner --boundary rolling_restart_fully_green_gate --dominant-reason representative_green_required # release-gate outcome state transition, supporting: npm run work:evidence-summary -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json, supporting: npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json
+Required action: Rederive release-gate system theory, record the saturated observation-gap invariant, then redirect to the next valid representative route, owner-boundary migration, architecture continuation, source contract, or representative-green result.
+Representative status: needs-rerun-after-rederive
+Causal outcome: pending-before-rederive
+Architecture gate: selected / system-theory-rederive
+Expected delta: System-theory rederive records release-gate observation-gap saturation and selects fresh representative route evidence, owner-boundary migration, architecture continuation, source contract, or representative-green as the next move.
+Current state: The fresh representative route gate is blocked before implementation by same-mechanism-repeat observation_gap on release_gate_owner / rolling_restart_fully_green_gate; no local rerun or runtime slice can promote until a system-theory revision is recorded.
+Allowed edits: work/packages/done-20260530-rolling-restart-release-gate-observation-gap-system-theory-rederive.md, work/sprints/active-2026-q2-spec-led-runtime-modularization.md, work/theory-ledger.md, scripts/work-close.js, scripts/work-package-schema.js, scripts/work-tracker.js, test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js, work/RULES.md, scripts/work-residual-count.js, test/scripts/work-metric-progress-layer-rotation.test.js, test/scripts/work-residual-count.test.js, .gitignore, scripts/summarize-representative-evidence.js, models/, scripts/model-active-gate.js, scripts/model-tlc.js, test/model/
+Candidate runtime files: src/control-plane/membership-publication-active-gate-reconcile.js, src/control-plane/membership-publication-control-plane-convergence.js, src/control-plane/membership-publication-coordinator-class-stage-3.js, src/admin/admin-control-snapshot-publication-handoff.js, src/admin/admin-control-snapshot-query-result-helper.js, src/admin/admin-control-snapshot-repair-diagnostics.js
+Forbidden edits: The release gate may request fresh evidence, but it must not become a repeated local route slice without a refreshed whole-system invariant.
+Required latest proof: falsifier: npm run work:system-theory:rederive -- --owner release_gate_owner --boundary rolling_restart_fully_green_gate --sprint work/sprints/active-2026-q2-spec-led-runtime-modularization.md --write, regression: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner release_gate_owner --boundary rolling_restart_fully_green_gate --dominant-reason representative_green_required, supporting: npm run work:frontier-history -- --owner release_gate_owner --boundary rolling_restart_fully_green_gate --limit 12, supporting: npm run work:evidence-summary -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json, supporting: npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
