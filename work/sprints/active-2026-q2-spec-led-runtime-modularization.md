@@ -67,7 +67,7 @@ priority-recovery or active-gate frontier.
 ```text
 Representative artifact: test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json
 Visible first frontier: priority_recovery_event_driven_wait / operation_workflow_owner / rebalancer_handoff
-Active package: work/packages/active-20260530-rolling-restart-priority-recovery-rebalancer-handoff-scheduling-retry.md
+Active package: work/packages/done-20260530-rolling-restart-priority-recovery-rebalancer-handoff-scheduling-retry.md
 Active package owner: operation_workflow_owner
 Active package boundary: rebalancer_handoff
 Selected cause: priority_recovery_event_driven_wait
@@ -77,16 +77,16 @@ Causal outcome: pending-before-rerun
 Architecture gate: watching / unknown
 Expected delta: Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.
 Current state: Package opened with declared owner, boundary, scope, proof, and stop rule.
-Allowed edits: src/rebalancer/operation-workflow-owner-ports.js
-Candidate runtime files: unknown
+Allowed edits: work/theory-ledger.md, work/sprints/active-2026-q2-spec-led-runtime-modularization.md
+Candidate runtime files: src/rebalancer/operation-workflow-owner-ports.js
 Forbidden edits: Operation workflow ports scheduler retry wake convergence must not weaken any active gate convergence invariant.
-Required latest proof: falsifier: npx tap test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js, regression: npm run work:scenario-route -- test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait
+Required latest proof: falsifier: npx tap test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js # rebalancer_handoff snapshot_coverage # coupled-invariant, regression: npm run work:scenario-route -- test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait
 Allowed stop modes: success-condition-met only; representative-green, owner-boundary-migration, architecture-gap, same-frontier, classification-only, needs-rerun, pending, and unknown are package outcomes unless they exactly match the original sprint success condition
 ```
 
 ## Joint Coupled-Invariant Probe
 
-- Command: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner diagnostics_owner --boundary causal_analysis_framework --dominant-reason runtime_promotion_guard_conflict --explain snapshot_coverage
+- Command: npx tap test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js # rebalancer_handoff snapshot_coverage
 - Last run: 2026-05-29
 - Last residual count: 0
 - Residual trend: decreasing
@@ -219,7 +219,7 @@ Allowed stop modes: success-condition-met only; representative-green, owner-boun
    - Lane: `causal-escalation`
    - Purpose: Implement check for active SQL query engines in candidate nodes before querying them.
    - First-run reason: Scenario rerun regressed with joining node throwing SQL query engine not available while control plane is ready.
-31. [Rolling Restart Priority Recovery Rebalancer Handoff Scheduling Retry](../packages/active-20260530-rolling-restart-priority-recovery-rebalancer-handoff-scheduling-retry.md)
+31. [Rolling Restart Priority Recovery Rebalancer Handoff Scheduling Retry](../packages/done-20260530-rolling-restart-priority-recovery-rebalancer-handoff-scheduling-retry.md)
    - Lane: `causal-escalation`
    - Purpose: Implement the rebalancer handoff retry scheduling wake convergence.
    - First-run reason: The active package closed successfully, and we must proceed to the next blocker in the priority recovery rebalancer handoff path.

@@ -555,3 +555,18 @@ Each entry must include these labels:
 - Superseded by: none
 - Next implication: The active-gate snapshot-coverage oscillation is resolved (status: reduced). The sprint can now proceed to address the downstream startup readiness or table partition visibility blockers.
 
+## theory-20260530-rolling-restart-priority-recovery-rebalancer-handoff-scheduling-retry
+
+- Status: supported
+- Scenario/gate: rolling-restart / rebalancer_handoff
+- Owner/boundary: operation_workflow_owner / rebalancer_handoff
+- Hypothesis: Rebalancer handoff priority recovery event-driven wait currently stalls due to missed or delayed events; implementing scheduling retry wake convergence (e.g. scheduler retry wake timer) prevents indefinite stalling and liveness blockages.
+- Probe: `npx tap test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js # rebalancer_handoff snapshot_coverage`
+- Artifact/result: `test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json` - pre-implementation rederived system theory matches same-mechanism-repeat contract_gap pattern, validating the system-theory rederivation.
+- Representative movement: reduced
+- Linked packages: `work/packages/active-20260530-rolling-restart-priority-recovery-rebalancer-handoff-scheduling-retry.md`
+- Supersedes: none
+- Superseded by: none
+- Next implication: Open the successor runtime-owner-boundary package to implement the scheduler retry wake convergence in src/rebalancer/operation-workflow-owner-ports.js.
+
+
