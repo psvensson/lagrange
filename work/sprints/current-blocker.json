@@ -2,38 +2,251 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-spec-led-runtime-modularization.md",
-  "package": "none",
-  "status": "none",
-  "lane": "none",
-  "scenario": "none",
-  "artifact": "none",
+  "package": "work/packages/active-20260530-rolling-restart-active-gate-bounded-reentry-model-route.md",
+  "status": "active",
+  "lane": "causal-escalation",
+  "scenario": "rolling-restart",
+  "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json",
   "playback": "none",
-  "owner": "none",
-  "boundary": "none",
-  "dominantReason": "none",
-  "currentState": "No active work package. Start a new package when implementation resumes.",
-  "nextAction": "Create or activate one focused package for the next executable concern.",
-  "proof": [],
-  "writeScope": [],
-  "handoffFiles": [],
+  "owner": "startup_active_gate_owner",
+  "boundary": "snapshot_coverage",
+  "dominantReason": "owner_reconcile_pending",
+  "currentState": "Fresh frontier history reports pair-alternation-post-rederive on startup_active_gate_owner / snapshot_coverage; a formal active-gate convergence model (TLC + fast-check) now proves that bounding owner re-entry (AllowUnboundedReentry=FALSE) converges while the unbounded protocol oscillates.",
+  "nextAction": "Record the architecture-gap decision selecting the model-layer bounded-re-entry route and declare the runtime successor that excludes already covered/published nodes from the owner_reconcile_pending re-entry path in src/control-plane/publication-active-gate-handoff-contract-decision.js.",
+  "proof": [
+    "falsifier: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12",
+    "regression: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending --explain active_gate_snapshot_coverage",
+    "supporting: npm run model:check"
+  ],
+  "writeScope": [
+    "work/packages/active-20260530-rolling-restart-active-gate-bounded-reentry-model-route.md",
+    "work/sprints/active-2026-q2-spec-led-runtime-modularization.md",
+    "work/theory-ledger.md"
+  ],
+  "handoffFiles": [
+    "test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json"
+  ],
   "generatedFiles": [
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
   ],
-  "candidateRuntimeFiles": [],
-  "commitScope": [],
+  "candidateRuntimeFiles": [
+    "src/control-plane/publication-active-gate-handoff-contract-decision.js"
+  ],
+  "commitScope": [
+    "work/packages/active-20260530-rolling-restart-active-gate-bounded-reentry-model-route.md",
+    "work/sprints/active-2026-q2-spec-led-runtime-modularization.md",
+    "work/theory-ledger.md",
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md"
+  ],
   "touchedFiles": [],
-  "modelFit": {},
-  "representativeResidual": {},
-  "causalGovernance": {},
-  "scenarioCausalClosure": {},
-  "observablePrediction": {},
+  "theoryLedgerRefs": [
+    "theory-20260530-active-gate-bounded-reentry-model"
+  ],
+  "modelFit": {
+    "packageClass": "architecture-gap-analysis",
+    "intendedMinimumModel": "gpt-5.3-codex",
+    "scopeShape": "scenario-causal-escalation/architecture-gap",
+    "outputProfile": "medium",
+    "ambiguityScore": 1,
+    "escalationTriggers": [
+      "owned files expand beyond this package",
+      "a frozen decision must be reopened"
+    ]
+  },
+  "representativeResidual": {
+    "status": "architecture-gap",
+    "scenario": "rolling-restart",
+    "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json",
+    "frontier": "owner_reconcile_pending / startup_active_gate_owner / snapshot_coverage",
+    "owner": "startup_active_gate_owner",
+    "boundary": "snapshot_coverage",
+    "dominantReason": "owner_reconcile_pending",
+    "nextAction": "Enforce the ActiveGate.tla bounded-re-entry invariant in the decision rule table: exclude already covered/published nodes from the owner_reconcile_pending re-entry path"
+  },
+  "theoryLoop": {
+    "gateMarker": "pair-alternation-post-rederive",
+    "jointFalsifierCommand": "npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12",
+    "result": "architecture-gap",
+    "outcome": "theory-confirmed",
+    "architectureRoute": {
+      "selectedLayer": "model",
+      "ledgerRef": "theory-20260530-active-gate-bounded-reentry-model",
+      "coupledInvariant": "active-gate snapshot coverage vs owner re-entry (a covered/published node must not return to pendingReconcile)"
+    }
+  },
+  "causalGovernance": {
+    "hypothesis": "Bounding owner re-entry so a covered or published node is not returned to pendingReconcile (the ActiveGate.tla route with AllowUnboundedReentry=FALSE) turns the active-gate owner_reconcile_pending oscillation into snapshot-coverage convergence inside the publication active-gate handoff decision contract.",
+    "stopConditionCheck": "Run npm run model:check (convergence proof), the focused decision-contract proof, npm run work:test:regression, npm run analyze:causal-model on the fresh representative report, and post-rerun route checks before closure.",
+    "expectedCausalModelChange": "The decision rule table stops emitting owner_reconcile_pending for nodes already covered or published, so the representative rerun reduces the unbounded re-entry shape and the dominant reason moves off owner_reconcile_pending.",
+    "representativeOutcome": "architecture-gap",
+    "causalDebt": "Fresh representative evidence is still red at active_gate_snapshot_coverage with owner_reconcile_pending and zero priority-recovery residual witnesses; this architecture-gap package selects the route and does not itself rerun the representative harness.",
+    "crossBoundaryReview": "Do not patch active-gate runtime source, startup readiness, priority recovery, or unrelated runtime files in this package; the runtime successor implements the selected route in src/control-plane/publication-active-gate-handoff-contract-decision.js."
+  },
+  "scenarioCausalClosure": {
+    "referenceScenarioOrProbe": "rolling-restart active_gate_snapshot_coverage owner_reconcile_pending model-layer bounded-re-entry route implementation",
+    "phaseChain": [
+      "The formal active-gate convergence model (npm run model:check; TLC + fast-check) proves the bounded-re-entry route satisfies <>Converged while the unbounded protocol oscillates",
+      "the 300-run binding test confirms the abstract convergence predicate equals buildPublicationActiveGateCatchupFence promotionAllowed on every reachable state",
+      "frontier-history reports same-mechanism-repeat contract_gap after scheduling- and protocol-layer routes stalled at owner_reconcile_pending",
+      "this package owns promoting the model-layer bounded-re-entry invariant into the decision rule table before the next representative rerun"
+    ],
+    "currentFirstFrontier": "active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending",
+    "knownDownstreamBlockers": [
+      "startup_readiness_owner / startup_support_evidence remains downstream of active-gate snapshot coverage",
+      "release_gate_owner / rolling_restart_fully_green_gate remains downstream until snapshot coverage converges"
+    ],
+    "missingCausalEdge": "owner_reconcile_pending re-entry has no bound preventing an already covered or published node from being returned to pendingReconcile.",
+    "missingCausalEdgeProbe": "npm run model:check",
+    "falsifyingProbe": "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json --fast-local --verbose",
+    "boundedProgressProof": "Focused proof must show the decision rule table no longer emits owner_reconcile_pending re-entry for an already covered or published node, so the bounded re-entry reconcile path advances snapshot coverage instead of looping, while preserving affected active-gate handoff outcomes.",
+    "boundedProgressProofArtifact": "test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json",
+    "expectedObservableTransition": "owner_reconcile_pending stops being the active_gate_snapshot_coverage dominant reason and snapshot coverage advances toward quorum in fresh representative routing.",
+    "maxProgressBound": "one model-layer route implementation package before representative rerun routing",
+    "sameFrontierFallback": "If the route implementation later returns same-frontier with no reduction, rotate the architecture-route layer or migrate the owner boundary instead of widening this package.",
+    "expectedNextFrontier": "active-gate snapshot coverage reduction, owner-boundary migration, representative-green, or architecture-gap continuation",
+    "resultClassification": "architecture-gap",
+    "stopCondition": "architecture-gap-stop",
+    "recentFrontierHistory": [
+      "work/packages/done-20260529-rolling-restart-active-gate-owner-reconcile-wake-scheduling-route.md / startup_active_gate_owner / snapshot_coverage / reduced",
+      "work/packages/done-20260529-rolling-restart-active-gate-owner-reconcile-handoff-retry.md / startup_active_gate_owner / snapshot_coverage / architecture-gap",
+      "work/packages/done-20260529-rolling-restart-active-gate-timeout-after-wake-architecture-gap.md / startup_active_gate_owner / snapshot_coverage / same-frontier"
+    ],
+    "oscillationCheck": "Prior scheduling- and protocol-layer routes stalled at owner_reconcile_pending with same-mechanism-repeat contract_gap; this package rotates to the previously-untried model layer selected by the formal convergence proof rather than repeating a stalled layer.",
+    "handoffInvariant": "Active-gate admission stays strict while runtimePromotionAllowed=false; the publication active-gate handoff decision contract remains the sole owner of reconcile and re-entry truth, and bounding re-entry must not relax any safety invariant the model checks (PublishedSubsetCovered, CoveredDisjointPending)."
+  },
+  "observablePrediction": {
+    "metric": "rolling-restart / startup_active_gate_owner / snapshot_coverage / representative route",
+    "predicted": "Enforce the ActiveGate.tla bounded-re-entry invariant in the decision rule table: exclude already covered/published nodes from the owner_reconcile_pending re-entry path",
+    "observed": "pending-before-observation",
+    "accuracy": "pending-before-observation",
+    "evidence": "pending-before-representative-rerun"
+  },
   "experimentOutcome": {},
-  "rerunDecision": {},
-  "classificationEfficiency": {},
-  "systemTheory": {},
-  "sliceTheory": {},
-  "architectureDecisionGate": {},
-  "predecessor": null,
-  "theoryLedgerRefs": []
+  "rerunDecision": {
+    "sourceArtifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json",
+    "routeOwner": "startup_active_gate_owner",
+    "routeBoundary": "snapshot_coverage",
+    "routeDominantReason": "owner_reconcile_pending",
+    "routeCausalOutcome": "pending-before-rerun",
+    "stopMode": "pending-before-rerun",
+    "nextLane": "causal-escalation",
+    "expectedDelta": "Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.",
+    "requiredRefreshCommands": [
+      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending",
+      "update Sprint Strategy Brief and Current Edge Card from the route result",
+      "npm run work:repair",
+      "npm run work:validate -- --entry",
+      "npm run work:validate -- --pre-impl"
+    ]
+  },
+  "systemTheory": {
+    "problemStatement": "rolling-restart currently routes owner_reconcile_pending to startup_active_gate_owner / snapshot_coverage; the package must explain the whole phase chain before selecting the executable slice.",
+    "phaseChain": [
+      "Representative evidence comes from test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json.",
+      "owner_reconcile_pending is the current selected symptom.",
+      "startup_active_gate_owner / snapshot_coverage is the declared decision boundary for this package."
+    ],
+    "ownerBoundaryMap": [
+      "startup_active_gate_owner / snapshot_coverage: selected package owner and boundary.",
+      "Downstream owners remain frozen until the falsifier selects migration."
+    ],
+    "stableFacts": [
+      "Scenario remains rolling-restart.",
+      "Package lane remains causal-escalation.",
+      "Declared owner boundary remains startup_active_gate_owner / snapshot_coverage."
+    ],
+    "changedFacts": [
+      "This package was opened from test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json.",
+      "The active action is Enforce the ActiveGate.tla bounded-re-entry invariant in the decision rule table: exclude already covered/published nodes from the owner_reconcile_pending re-entry path."
+    ],
+    "competingTheories": [
+      "H1 startup_active_gate_owner / snapshot_coverage owns the missing transition for owner_reconcile_pending.",
+      "H2 the same symptom is inherited from a different owner boundary or architecture gap."
+    ],
+    "eliminatedTheories": [
+      "No eliminated theory is durable until the package proof records a contrary artifact or command result."
+    ],
+    "downstreamSymptoms": [
+      "Downstream symptoms stay frozen until H1 selects a concrete transition or H2 selects migration."
+    ],
+    "transitionTable": [
+      {
+        "inputSignal": "owner_reconcile_pending",
+        "owner": "startup_active_gate_owner / snapshot_coverage",
+        "missingTransition": "selected evidence must become a named owner-owned transition, migration, or stop.",
+        "expectedEvidence": "focused proof selects the transition, migrates ownership, or records architecture-gap evidence.",
+        "falsifier": "falsifier: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json --fast-local --verbose",
+        "migrationTrigger": "the falsifier names a different owner boundary or proves this boundary cannot own the transition."
+      }
+    ],
+    "ownershipMigrationTriggers": [
+      "Migrate only when focused evidence names the alternate deciding owner and boundary."
+    ],
+    "architectureGapTriggers": [
+      "Stop as architecture-gap when focused evidence cannot select an owner-owned transition or migration."
+    ],
+    "wholeSystemInvariant": "Runtime edits are allowed only after the system theory selects one owner-owned transition or migration route."
+  },
+  "sliceTheory": {
+    "systemTheoryRef": "work/packages/todo-20260530-rolling-restart-active-gate-bounded-reentry-model-route.md systemTheory",
+    "selectedSystemTheory": "H1 is selected unless falsifier: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json --fast-local --verbose proves a different owner boundary or architecture gap.",
+    "selectedMechanism": "contract_gap with ownership_gap as the first alternate",
+    "sourceTestContract": "Implementation may edit only declared source files src/control-plane/publication-active-gate-handoff-contract-decision.js after the falsifier keeps the package inside the selected owner boundary.",
+    "falsifier": "falsifier: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json --fast-local --verbose",
+    "representativeExpectedMovement": "selected route moves to a concrete transition, owner-boundary migration, or architecture-gap stop.",
+    "killRule": "Stop on unchanged same-frontier, no-reduction, or architecture-gap evidence instead of widening the package.",
+    "theoryFitScore": {
+      "evidenceFit": "medium - generated from declared package evidence before proof execution.",
+      "ownerBoundaryFit": "medium - owner boundary is declared as startup_active_gate_owner / snapshot_coverage.",
+      "falsifiability": "high - falsifier is falsifier: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json --fast-local --verbose.",
+      "representativeMovement": "medium - expected movement is route selection, migration, or architecture-gap stop.",
+      "downstreamRiskContainment": "high - downstream symptoms remain frozen until owner selection is proven."
+    },
+    "wrongSliceTriggers": [
+      "proof selects a different owner boundary",
+      "proof requires runtime files outside writeScope",
+      "proof cannot select a concrete transition or migration"
+    ]
+  },
+  "architectureDecisionGate": {
+    "status": "selected",
+    "trigger": "frontier-oscillation",
+    "triggerEvidence": [
+      "frontier-history reports pair-alternation-post-rederive with same-mechanism-repeat contract_gap on startup_active_gate_owner / snapshot_coverage",
+      "prior scheduling- and protocol-layer routes stalled at owner_reconcile_pending without leaving the active_gate_snapshot_coverage frontier",
+      "the formal active-gate convergence model proves bounded re-entry converges (<>Converged HOLDS) while the unbounded protocol oscillates (liveness FAILS)"
+    ],
+    "choices": [
+      {
+        "id": "open-architecture-package",
+        "summary": "Select the model-layer bounded-re-entry route proven by ActiveGate.tla and promote a runtime successor that excludes already covered/published nodes from the owner_reconcile_pending re-entry path in src/control-plane/publication-active-gate-handoff-contract-decision.js.",
+        "route": "architecture-package",
+        "proof": [
+          "npm run model:check",
+          "npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending --explain active_gate_snapshot_coverage"
+        ]
+      },
+      {
+        "id": "migrate-owner-boundary",
+        "summary": "Migrate the deciding owner boundary only if canonical route evidence names a different owner and boundary; rejected because scenario-route keeps startup_active_gate_owner / snapshot_coverage as the deciding owner.",
+        "route": "owner-boundary-migration",
+        "proof": [
+          "npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending --explain active_gate_snapshot_coverage"
+        ]
+      },
+      {
+        "id": "continue-local-proof",
+        "summary": "Continue repeating a local active-gate owner_reconcile_pending patch; rejected by the pair-alternation-post-rederive guard which blocks another same-layer local source package on this pair.",
+        "route": "continue-local-proof",
+        "proof": [
+          "npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12"
+        ]
+      }
+    ],
+    "selectedChoice": "open-architecture-package",
+    "nextAction": "Open the autonomous architecture experiment package before runtime implementation resumes."
+  },
+  "predecessor": null
 }

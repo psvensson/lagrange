@@ -513,3 +513,16 @@ Each entry must include these labels:
 - Superseded by: none
 - Next implication: Close the release-gate system-theory rederive as a non-terminal architecture continuation; redirect to the next valid successor, with runtime source promotion still blocked until fresh evidence or an architecture-route implementation selects it.
 
+## theory-20260530-active-gate-bounded-reentry-model
+
+- Status: active
+- Scenario/gate: none / none
+- Owner/boundary: unknown / unknown
+- Hypothesis: Bounding owner re-entry so a covered/published node is not returned to pendingReconcile (ActiveGate.tla route, AllowUnboundedReentry=FALSE) restores active-gate snapshot-coverage convergence, which the unbounded protocol provably starves.
+- Probe: `npm run model:check then fresh rolling-restart representative rerun`
+- Artifact/result: Both checkers confirm bounded route converges, unbounded oscillates; 300-run model<->real-reducer binding holds. Evidence: test-output/reports/active-gate-tlc-route.model.report.json and test-output/reports/active-gate-tlc-stall.model.report.json
+- Representative movement: none
+- Linked packages: `work/packages/active-20260530-rolling-restart-active-gate-bounded-reentry-model-route.md`
+- Supersedes: none
+- Superseded by: none
+- Next implication: Promote the model-layer route into src/control-plane/publication-active-gate-handoff-contract-decision.js, then rerun representative evidence.
