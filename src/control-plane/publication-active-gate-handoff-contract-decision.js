@@ -35,9 +35,21 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_DECISION_RULES = Object.freeze([
       PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
         .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
     runtimePromotionAllowed: false,
-    matches: (evidence) =>
-      evidence.reconcileRequirement ===
-      PUBLICATION_ACTIVE_GATE_HANDOFF_RECONCILE_REQUIREMENT.REQUIRED,
+    matches: (evidence) => {
+      if (
+        evidence.reconcileRequirement !==
+        PUBLICATION_ACTIVE_GATE_HANDOFF_RECONCILE_REQUIREMENT.REQUIRED
+      ) {
+        return false;
+      }
+      if (evidence.pendingReconcileNodeIds.length === NUM.ZERO) {
+        return true;
+      }
+      const publishedSet = new Set(evidence.publishedActiveNodeIds || []);
+      const activePendingReconcileNodeIds = (evidence.pendingReconcileNodeIds || [])
+        .filter((nodeId) => !publishedSet.has(nodeId));
+      return activePendingReconcileNodeIds.length > NUM.ZERO;
+    },
   }),
   Object.freeze({
     state: PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.UNAVAILABLE,
@@ -57,8 +69,12 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_DECISION_RULES = Object.freeze([
       PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
         .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
     runtimePromotionAllowed: false,
-    matches: (evidence) =>
-      evidence.pendingReconcileNodeIds.length > NUM.ZERO,
+    matches: (evidence) => {
+      const publishedSet = new Set(evidence.publishedActiveNodeIds || []);
+      const activePendingReconcileNodeIds = (evidence.pendingReconcileNodeIds || [])
+        .filter((nodeId) => !publishedSet.has(nodeId));
+      return activePendingReconcileNodeIds.length > NUM.ZERO;
+    },
   }),
   Object.freeze({
     state: PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,

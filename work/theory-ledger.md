@@ -513,16 +513,30 @@ Each entry must include these labels:
 - Superseded by: none
 - Next implication: Close the release-gate system-theory rederive as a non-terminal architecture continuation; redirect to the next valid successor, with runtime source promotion still blocked until fresh evidence or an architecture-route implementation selects it.
 
-## theory-20260530-active-gate-bounded-reentry-model
+## theory-20260530-active-gate-bounded-reentry-model-architecture-gap
 
-- Status: active
-- Scenario/gate: none / none
-- Owner/boundary: unknown / unknown
+- Status: superseded
+- Scenario/gate: rolling-restart / active_gate_snapshot_coverage
+- Owner/boundary: startup_active_gate_owner / snapshot_coverage
 - Hypothesis: Bounding owner re-entry so a covered/published node is not returned to pendingReconcile (ActiveGate.tla route, AllowUnboundedReentry=FALSE) restores active-gate snapshot-coverage convergence, which the unbounded protocol provably starves.
 - Probe: `npm run model:check then fresh rolling-restart representative rerun`
-- Artifact/result: Both checkers confirm bounded route converges, unbounded oscillates; 300-run model<->real-reducer binding holds. Evidence: test-output/reports/active-gate-tlc-route.model.report.json and test-output/reports/active-gate-tlc-stall.model.report.json
-- Representative movement: none
-- Linked packages: `work/packages/active-20260530-rolling-restart-active-gate-bounded-reentry-model-route.md`
+- Artifact/result: Both checkers confirm bounded route converges, unbounded oscillates; 300-run model-to-real-reducer binding holds. Evidence: test-output/reports/active-gate-tlc-route.model.report.json and test-output/reports/active-gate-tlc-stall.model.report.json
+- Representative movement: architecture-gap
+- Linked packages: `work/packages/done-20260530-rolling-restart-active-gate-bounded-reentry-model-route.md`
 - Supersedes: none
+- Superseded by: theory-20260530-active-gate-bounded-reentry-model-implementation
+- Next implication: Open the runtime successor package (causal-escalation, runtime owner-boundary) that implements the model-layer bounded-re-entry invariant in src/control-plane/publication-active-gate-handoff-contract-decision.js, then run its falsifier and regression proof before closure.
+
+## theory-20260530-active-gate-bounded-reentry-model-implementation
+
+- Status: supported
+- Scenario/gate: rolling-restart / active_gate_snapshot_coverage
+- Owner/boundary: startup_active_gate_owner / snapshot_coverage
+- Hypothesis: Implementing the model-layer bounded-re-entry invariant (AllowUnboundedReentry=FALSE) in the decision rule table (src/control-plane/publication-active-gate-handoff-contract-decision.js) to exclude already covered or published nodes from owner_reconcile_pending resolves the active-gate handoff oscillation model.
+- Probe: `npm run model:check && npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js`
+- Artifact/result: `test-output/reports/active-gate-tlc-route.model.report.json` - TLC confirms route converges; local test suite reports 100% success on 20 tests.
+- Representative movement: architecture-gap
+- Linked packages: `work/packages/active-20260530-rolling-restart-active-gate-bounded-reentry-model-route-implementation.md`
+- Supersedes: theory-20260530-active-gate-bounded-reentry-model-architecture-gap
 - Superseded by: none
-- Next implication: Promote the model-layer route into src/control-plane/publication-active-gate-handoff-contract-decision.js, then rerun representative evidence.
+- Next implication: Run a fresh representative scenario rerun to generate fresh representative routing evidence and verify if the active-gate snapshot-coverage oscillation is eliminated from rolling-restart.
