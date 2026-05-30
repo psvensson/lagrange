@@ -17,7 +17,7 @@
     "nextAction": "Close as architecture-gap continuation and open the bounded owner wake delivery architecture experiment before any further runtime source promotion.",
     "predecessor": "work/packages/done-20260529-rolling-restart-active-gate-owner-reconcile-wake-scheduling-route.md",
     "closed": "2026-05-30",
-    "successor": "work/packages/active-20260529-rolling-restart-active-gate-owner-wake-delivery-architecture-experiment.md"
+    "successor": "work/packages/done-20260529-rolling-restart-active-gate-owner-wake-delivery-architecture-experiment.md"
   },
   "scope": {
     "writeScope": [
@@ -44,7 +44,7 @@
     ],
     "commitScope": [
       "work/packages/active-20260529-rolling-restart-active-gate-timeout-after-wake-architecture-gap.md",
-      "work/packages/active-20260529-rolling-restart-active-gate-owner-wake-delivery-architecture-experiment.md",
+      "work/packages/done-20260529-rolling-restart-active-gate-owner-wake-delivery-architecture-experiment.md",
       "work/packages/done-20260529-rolling-restart-active-gate-owner-reconcile-wake-scheduling-route.md",
       "work/sprints/active-2026-q2-spec-led-runtime-modularization.md",
       "work/theory-ledger.md",
@@ -324,7 +324,7 @@ This package analyzes the fresh post-wake `active_gate_timed_out` frontier witho
 ## Execution Evidence
 
 - [x] action: freshness-review; owner: startup_active_gate_owner; agent: Agent Herschel (019e7633-25ad-7df2-952c-e452d71d0c03); files-changed: none; validation: Herschel ran `npm run work:context`, `npm run work:validate -- --entry work/packages/active-20260529-rolling-restart-active-gate-timeout-after-wake-architecture-gap.md`, frontier-history, scenario-route, topology-convergence, evidence-summary, causal-model, priority-recovery residuals, and `git status --short`; decision: `fresh`; outcome: `validated`.
-- [x] action: implementation; owner: startup_active_gate_owner; files-changed: work/packages/active-20260529-rolling-restart-active-gate-timeout-after-wake-architecture-gap.md, work/packages/active-20260529-rolling-restart-active-gate-owner-wake-delivery-architecture-experiment.md, work/theory-ledger.md, work/sprints/active-2026-q2-spec-led-runtime-modularization.md; validation: `npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12`, `npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage`, topology-convergence, causal-model, evidence-summary, priority-recovery residuals, route-after-rerun, and parent revalidated focused proof: yes; resultClassification: `architecture-gap`; outcome: `validated`.
+- [x] action: implementation; owner: startup_active_gate_owner; files-changed: work/packages/active-20260529-rolling-restart-active-gate-timeout-after-wake-architecture-gap.md, work/packages/done-20260529-rolling-restart-active-gate-owner-wake-delivery-architecture-experiment.md, work/theory-ledger.md, work/sprints/active-2026-q2-spec-led-runtime-modularization.md; validation: `npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12`, `npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage`, topology-convergence, causal-model, evidence-summary, priority-recovery residuals, route-after-rerun, and parent revalidated focused proof: yes; resultClassification: `architecture-gap`; outcome: `validated`.
 - [x] action: verification-fix; owner: startup_active_gate_owner; agent: Agent James (019e763a-5328-72d2-94d0-17abd4f03469); files-changed: none; validation: `npm run work:context`, `npm run work:validate -- --entry work/packages/active-20260529-rolling-restart-active-gate-timeout-after-wake-architecture-gap.md`, `npm run work:validate -- --pre-impl work/packages/active-20260529-rolling-restart-active-gate-timeout-after-wake-architecture-gap.md`, scenario-route, topology-convergence, frontier-history, route-after-rerun, `git diff --check`, and parent revalidated focused proof: yes; outcome: `validated`.
 - [x] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:current-blocker`; outcome: `validated`.
 
@@ -333,8 +333,7 @@ This package analyzes the fresh post-wake `active_gate_timed_out` frontier witho
 1. Focused package commit: 4d33861a2a84f92a0cf2672605567a3c844179ad
 2. Push target: origin/codex/pending-ack-eligibility-filter
 3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
-4. Pushed: no
-
+4. Pushed: yes 2026-05-30T00:21:12.050Z
 ## Validation
 
 1. falsifier: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12

@@ -484,3 +484,17 @@ Each entry must include these labels:
 - Supersedes: theory-20260529-rolling-restart-active-gate-owner-reconcile-handoff-scheduling-architecture-gap
 - Superseded by: none
 - Next implication: Close the timeout-after-wake analysis as architecture-gap continuation and open the owner wake delivery architecture experiment; do not edit runtime source from this artifact until a future proof names a non-repeated owner-owned transition, owner-boundary migration, protocol/model/topology route, fresh representative movement, or representative-green result.
+
+## theory-20260530-rolling-restart-active-gate-owner-wake-delivery-architecture-gap
+
+- Status: supported
+- Scenario/gate: rolling-restart / active_gate_snapshot_coverage
+- Owner/boundary: startup_active_gate_owner / snapshot_coverage
+- Hypothesis: Owner wake delivery/observation after enqueue is not a new source route in the current artifact because owner_recovery_wake and controlPlaneConvergence are already named and propagated, while active_gate_timed_out still owns the first active-gate snapshot-coverage frontier with runtimePromotionGuard blocked.
+- Probe: `rg -n "owner_recovery_wake|controlPlaneConvergence|retryAfterMs" src/control-plane/membership-publication-active-gate-reconcile.js src/control-plane/membership-publication-control-plane-convergence.js src/control-plane/membership-publication-coordinator-class-stage-3.js src/admin/admin-control-snapshot-publication-handoff.js`
+- Artifact/result: `test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json` - frontier-history and scenario-route keep active_gate_snapshot_coverage on startup_active_gate_owner / snapshot_coverage with active_gate_timed_out, runtimePromotionGuard.state=blocked, historyCount=12, loopHealth=exhausted, snapshot coverage 1/5, selected_snapshot_source_timeout after 100ms, snapshot_repair_deferred, membershipPublicationHandoffOutcomeEnqueued=true, membershipPublicationHandoffOutcomeRetryAfterMs=100, and zero priority-recovery residual witnesses. Source-context proof shows OWNER_RECOVERY_WAKE is defined in membership-publication convergence, active-gate reconcile builds and returns owner recovery wake convergence with retryAfterMs, and admin snapshot handoff/query surfaces expose controlPlaneConvergence and retry metadata.
+- Representative movement: architecture-gap
+- Linked packages: `work/packages/done-20260529-rolling-restart-active-gate-owner-wake-delivery-architecture-experiment.md`
+- Supersedes: theory-20260529-rolling-restart-active-gate-timeout-after-wake-architecture-gap
+- Superseded by: none
+- Next implication: Close the owner wake delivery architecture experiment as architecture-gap continuation. Runtime source promotion remains blocked until fresh representative evidence or focused proof names a non-repeated owner-owned transition, owner-boundary migration, protocol/model/topology route, or representative-green result; the next autonomous action is a fresh representative route gate.

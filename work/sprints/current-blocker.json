@@ -2,28 +2,26 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-spec-led-runtime-modularization.md",
-  "package": "work/packages/active-20260529-rolling-restart-active-gate-owner-wake-delivery-architecture-experiment.md",
+  "package": "work/packages/active-20260530-rolling-restart-active-gate-fresh-representative-route-gate.md",
   "status": "active",
   "lane": "causal-escalation",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json",
   "playback": "none",
-  "owner": "startup_active_gate_owner",
-  "boundary": "snapshot_coverage",
-  "dominantReason": "active_gate_timed_out",
-  "currentState": "Route-after-rerun selected open-architecture-experiment after bounded owner wake scheduling left membershipPublicationHandoffOutcomeEnqueued=true and retryAfterMs=100 but active_gate_timed_out still owns the first active-gate snapshot-coverage frontier.",
-  "nextAction": "Run a bounded owner wake delivery architecture experiment to decide whether the post-wake timeout names a non-repeated delivery, observation, protocol/model/topology route, migration, representative-green path, or architecture-gap continuation.",
+  "owner": "release_gate_owner",
+  "boundary": "rolling_restart_fully_green_gate",
+  "dominantReason": "representative_green_required",
+  "currentState": "The owner wake delivery architecture experiment closed as architecture-gap continuation; runtime source promotion on startup_active_gate_owner / snapshot_coverage remains blocked until fresh representative evidence changes the route or names a non-repeated successor.",
+  "nextAction": "Run fresh rolling-restart representative evidence, route the resulting artifact, and select the next sprint action from the fresh route instead of opening another local active-gate patch from the closed architecture-gap artifact.",
   "proof": [
-    "falsifier: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12",
-    "regression: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage",
-    "supporting: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --explain active_gate_snapshot_coverage",
-    "supporting: npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json",
-    "supporting: rg -n \"owner_recovery_wake|controlPlaneConvergence|retryAfterMs\" src/control-plane/membership-publication-active-gate-reconcile.js src/control-plane/membership-publication-control-plane-convergence.js src/control-plane/membership-publication-coordinator-class-stage-3.js src/admin/admin-control-snapshot-publication-handoff.js"
+    "falsifier: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --fast-local --verbose # release-gate contract transition",
+    "regression: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner release_gate_owner --boundary rolling_restart_fully_green_gate --dominant-reason representative_green_required # release-gate outcome state transition",
+    "supporting: npm run work:evidence-summary -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json",
+    "supporting: npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json"
   ],
   "writeScope": [
-    "work/packages/active-20260529-rolling-restart-active-gate-owner-wake-delivery-architecture-experiment.md",
-    "work/sprints/active-2026-q2-spec-led-runtime-modularization.md",
-    "work/theory-ledger.md"
+    "work/packages/active-20260530-rolling-restart-active-gate-fresh-representative-route-gate.md",
+    "work/sprints/active-2026-q2-spec-led-runtime-modularization.md"
   ],
   "handoffFiles": [
     "test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json"
@@ -40,90 +38,79 @@
     "src/admin/admin-control-snapshot-query-result-helper.js"
   ],
   "commitScope": [
-    "work/packages/active-20260529-rolling-restart-active-gate-owner-wake-delivery-architecture-experiment.md",
+    "work/packages/active-20260530-rolling-restart-active-gate-fresh-representative-route-gate.md",
     "work/sprints/active-2026-q2-spec-led-runtime-modularization.md",
-    "work/theory-ledger.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
   ],
   "touchedFiles": [],
   "theoryLedgerRefs": [
-    "theory-20260529-rolling-restart-active-gate-timeout-after-wake-architecture-gap",
-    "theory-20260529-rolling-restart-active-gate-owner-reconcile-handoff-scheduling-architecture-gap",
-    "theory-20260529-rolling-restart-active-gate-timeout-post-rerun-architecture-gap",
-    "theory-20260529-rolling-restart-active-gate-snapshot-coverage-architecture-gap-stop"
+    "theory-20260530-rolling-restart-active-gate-owner-wake-delivery-architecture-gap"
   ],
   "modelFit": {
-    "packageClass": "architecture-gap-analysis",
+    "packageClass": "scenario-release-gate",
     "intendedMinimumModel": "gpt-5.3-codex",
-    "scopeShape": "scenario-causal-escalation/architecture-experiment",
+    "scopeShape": "release-gate/current-frontier",
     "outputProfile": "medium",
     "ambiguityScore": 2,
     "escalationTriggers": [
-      "proof names a concrete non-repeated owner wake delivery source contract",
-      "proof selects a real owner-boundary migration",
-      "proof selects a protocol, model, or topology route that can be implemented in src",
-      "fresh representative evidence changes owner, boundary, or dominant reason"
+      "fresh evidence selects a runtime owner boundary",
+      "fresh evidence repeats active_gate_snapshot_coverage with no metric reduction",
+      "representative evidence is unavailable or contradictory"
     ]
   },
   "representativeResidual": {
-    "status": "architecture-gap-pending",
+    "status": "pending-before-rerun",
     "scenario": "rolling-restart",
     "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json",
-    "frontier": "active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out",
-    "owner": "startup_active_gate_owner",
-    "boundary": "snapshot_coverage",
-    "dominantReason": "active_gate_timed_out",
-    "nextAction": "Runtime source promotion remains blocked until this experiment names a non-repeated owner wake delivery contract, migration, protocol/model/topology route, representative-green path, or architecture-gap continuation."
+    "frontier": "release_gate_owner / rolling_restart_fully_green_gate / representative_green_required",
+    "owner": "release_gate_owner",
+    "boundary": "rolling_restart_fully_green_gate",
+    "dominantReason": "representative_green_required",
+    "nextAction": "Run fresh rolling-restart representative evidence and route the resulting artifact."
   },
-  "theoryLoop": {
-    "gateMarker": "pair-alternation-post-rederive",
-    "jointFalsifierCommand": "npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage"
-  },
+  "theoryLoop": {},
   "causalGovernance": {
-    "hypothesis": "The post-wake active_gate_timed_out evidence persists because owner wake enqueue is not enough unless delivery or observation becomes a named owner contract consumed by active-gate snapshot coverage.",
-    "stopConditionCheck": "Run frontier-history, scenario-route, topology convergence, `npm run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json`, and focused source-context scan for owner_recovery_wake/controlPlaneConvergence before selecting any runtime successor.",
-    "expectedCausalModelChange": "Proof should either name a concrete non-repeated owner wake delivery/observation source contract, owner-boundary migration, protocol/model/topology route, representative-green path, or record architecture-gap continuation.",
+    "hypothesis": "The sprint can only progress by rerunning the representative green gate from the current workspace state; the closed architecture-gap artifact cannot authorize another local active-gate source package.",
+    "stopConditionCheck": "Run the representative scenario, canonical route, evidence summary, and `npm run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json` before closure.",
+    "expectedCausalModelChange": "The result is representative-green, a fresh owner/boundary migration, a concrete reduction, or a fresh architecture/non-runtime successor decision while the sprint remains active.",
     "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "Rolling-restart remains red at active_gate_snapshot_coverage with active_gate_timed_out, selected_snapshot_source_timeout, snapshot_repair_deferred, snapshot coverage 1/5, membershipPublicationHandoffOutcomeEnqueued=true, membershipPublicationHandoffOutcomeRetryAfterMs=100, exhausted active-gate budget, and zero priority-recovery residual witnesses.",
-    "crossBoundaryReview": "Runtime source files stay candidate-only; this package must not edit src/ while runtimePromotionGuard remains blocked."
+    "causalDebt": "Rolling-restart remains red in the current artifact at active_gate_snapshot_coverage with active_gate_timed_out, snapshot coverage 1/5, and runtimePromotionGuard blocked.",
+    "crossBoundaryReview": "This package performs no runtime source edits; source changes require a successor selected by fresh route evidence."
   },
   "scenarioCausalClosure": {
-    "referenceScenarioOrProbe": "rolling-restart active-gate owner wake delivery architecture experiment",
+    "referenceScenarioOrProbe": "rolling-restart fresh representative route gate",
     "phaseChain": [
-      "bounded owner wake scheduling source proof closed",
-      "fresh representative rerun moved owner_reconcile_pending into bounded wake evidence",
-      "active_gate_timed_out returned as the dominant active-gate snapshot-coverage reason",
-      "route-after-rerun selected open-architecture-experiment with runtimePromotionGuard blocked"
+      "owner wake delivery architecture experiment closed as architecture-gap continuation",
+      "the sprint cannot close on architecture-gap",
+      "fresh representative evidence is required before any next source package is selected"
     ],
     "recentFrontierHistory": [
-      "timeout retry contract reduced active_gate_timed_out once",
-      "owner-reconcile wake scheduling route reduced enqueued=false to enqueued=true",
-      "timeout after wake architecture-gap analysis found no non-repeated route",
-      "frontier-history still reports exhausted same-mechanism-repeat on startup_active_gate_owner / snapshot_coverage"
+      "bounded owner wake scheduling moved handoff enqueue to true",
+      "post-wake active_gate_timed_out remained first with runtimePromotionGuard blocked",
+      "owner wake delivery proof found convergence evidence already propagated",
+      "fresh release-gate evidence is now required"
     ],
-    "oscillationCheck": "Runtime promotion remains blocked while the same owner/boundary repeats active_gate_timed_out after wake scheduling; this package is valid only as a bounded architecture experiment with runtime files candidate-only.",
-    "handoffInvariant": "Owner wake evidence must be delivered or observed through a named owner contract before active-gate snapshot coverage may promote runtime readiness.",
-    "currentFirstFrontier": "active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out",
+    "oscillationCheck": "Do not open another local active-gate runtime package from the closed architecture-gap artifact.",
+    "handoffInvariant": "Fresh representative evidence must route one owner boundary before source promotion resumes.",
+    "currentFirstFrontier": "release_gate_owner / rolling_restart_fully_green_gate / representative_green_required",
     "knownDownstreamBlockers": [
-      "startup_readiness_owner / startup_support_evidence remains downstream",
-      "benchmark_events SQL visibility remains downstream",
-      "operation_workflow_owner / rebalancer_handoff has zero priority-recovery witnesses"
+      "unknown until fresh rerun routes the first frontier"
     ],
-    "missingCausalEdge": "non-repeated owner wake delivery/observation contract, owner-boundary migration, protocol/model/topology route, fresh representative rerun route, or representative-green proof after owner wake enqueue.",
-    "missingCausalEdgeProbe": "rg -n \"owner_recovery_wake|controlPlaneConvergence|retryAfterMs\" src/control-plane/membership-publication-active-gate-reconcile.js src/control-plane/membership-publication-control-plane-convergence.js src/control-plane/membership-publication-coordinator-class-stage-3.js src/admin/admin-control-snapshot-publication-handoff.js",
-    "boundedProgressProof": "Focused architecture proof must decide whether enqueued owner wake evidence is delivered and observed by the active-gate snapshot coverage owner, or only records architecture-gap continuation.",
+    "missingCausalEdge": "Whether the current workspace is representative-green or still routes to an owner/boundary successor.",
+    "missingCausalEdgeProbe": "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --fast-local --verbose",
+    "boundedProgressProof": "The representative rerun must pass green or produce one canonical first-frontier route for successor selection with a bounded progress, retry, timeout, reconcile, drain, dispatch, delivery, timer, or advance mechanism named by fresh evidence.",
     "boundedProgressProofArtifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json",
-    "expectedObservableTransition": "The package records a non-repeated owner wake delivery route, migration, representative-green path, or architecture-gap continuation before any source promotion resumes.",
-    "maxProgressBound": "one architecture experiment before source promotion, fresh representative rerun, or another structural redirect",
-    "sameFrontierFallback": "architecture-gap continuation and route-after-rerun",
-    "expectedNextFrontier": "fresh representative evidence, non-repeated source contract, owner-boundary migration, protocol/model/topology route, representative-green, or architecture-gap continuation",
+    "expectedObservableTransition": "rolling-restart exits 0 with representative-green evidence, or route-after-rerun selects one bounded successor from the fresh artifact.",
+    "maxProgressBound": "one representative rerun and canonical route decision",
+    "sameFrontierFallback": "If fresh evidence returns the same active-gate frontier with no metric reduction, select a bounded architecture/causal experiment rather than another local active-gate runtime patch.",
+    "expectedNextFrontier": "representative-green, migrated owner/boundary, reduced current frontier, or architecture/non-runtime successor",
     "resultClassification": "pending-before-probe",
     "stopCondition": "continue-local-fix"
   },
   "observablePrediction": {
-    "metric": "rolling-restart / startup_active_gate_owner / snapshot_coverage / owner wake delivery route",
-    "predicted": "Focused proof either names a non-repeated owner wake delivery/observation route after enqueue or records architecture-gap continuation.",
+    "metric": "rolling-restart exit status, representative route outcome, active=5/5, snapshotCoverage=5/5, missingPublished=0, priorityRecoveryWitnesses=0",
+    "predicted": "fresh rerun either passes cleanly or routes to exactly one first-frontier successor without closing the sprint on architecture-gap.",
     "observed": "pending-before-observation",
     "accuracy": "pending-before-observation",
     "evidence": "pending-before-observation"
@@ -131,124 +118,164 @@
   "experimentOutcome": {},
   "rerunDecision": {
     "sourceArtifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json",
-    "routeOwner": "startup_active_gate_owner",
-    "routeBoundary": "snapshot_coverage",
-    "routeDominantReason": "active_gate_timed_out",
-    "routeCausalOutcome": "continue_local_fix",
-    "stopMode": "classified_local_blocker",
-    "nextLane": "experiment",
-    "expectedDelta": "Architecture experiment must decide whether owner wake delivery/observation after enqueue names a non-repeated source contract, migration, protocol/model/topology route, representative-green path, or architecture-gap continuation.",
+    "routeOwner": "release_gate_owner",
+    "routeBoundary": "rolling_restart_fully_green_gate",
+    "routeDominantReason": "representative_green_required",
+    "routeCausalOutcome": "pending-before-rerun",
+    "stopMode": "pending-before-rerun",
+    "nextLane": "scenario-release-gate",
+    "expectedDelta": "Fresh representative evidence either satisfies the rolling-restart green condition, migrates owner/boundary, reduces the active-gate timeout shape, or preserves architecture-gap blocking and selects a bounded successor.",
     "requiredRefreshCommands": [
-      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage",
-      "update Sprint Strategy Brief and Current Edge Card from the selected architecture experiment",
-      "npm run work:repair",
-      "npm run work:validate -- --entry work/packages/active-20260529-rolling-restart-active-gate-owner-wake-delivery-architecture-experiment.md",
-      "npm run work:validate -- --pre-impl work/packages/active-20260529-rolling-restart-active-gate-owner-wake-delivery-architecture-experiment.md"
+      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner release_gate_owner --boundary rolling_restart_fully_green_gate --dominant-reason representative_green_required",
+      "update Sprint Strategy Brief and Current Edge Card from the route result",
+      "npm run work:current-blocker -- --write",
+      "npm run work:validate -- --entry work/packages/active-20260530-rolling-restart-active-gate-fresh-representative-route-gate.md",
+      "npm run work:validate -- --pre-impl work/packages/active-20260530-rolling-restart-active-gate-fresh-representative-route-gate.md"
     ]
   },
   "systemTheory": {
-    "problemStatement": "rolling-restart currently routes active_gate_timed_out to startup_active_gate_owner / snapshot_coverage after bounded owner wake scheduling; the experiment must decide whether wake delivery/observation is a non-repeated route.",
+    "problemStatement": "rolling-restart is still non-green and the sprint cannot continue from the closed active-gate architecture-gap artifact without fresh representative evidence.",
     "phaseChain": [
-      "Owner wake scheduling local proof passed.",
-      "Fresh representative rerun stayed red at active_gate_snapshot_coverage.",
-      "membershipPublicationHandoffOutcomeEnqueued is true but active_gate_timed_out is dominant.",
-      "startup_active_gate_owner / snapshot_coverage remains the selected decision boundary."
+      "owner wake scheduling local proof passed",
+      "fresh representative evidence returned to active_gate_timed_out",
+      "owner wake delivery architecture proof closed without a non-repeated source route",
+      "release-gate evidence must decide the next fresh owner boundary"
     ],
     "ownerBoundaryMap": [
-      "startup_active_gate_owner / snapshot_coverage: selected package owner and boundary.",
-      "startup_readiness_owner / startup_support_evidence remains downstream until active-gate coverage moves.",
-      "operation_workflow_owner / rebalancer_handoff has zero priority-recovery residual witnesses."
+      "release_gate_owner / rolling_restart_fully_green_gate: owns the sprint success decision.",
+      "startup_active_gate_owner / snapshot_coverage: candidate only until fresh evidence reselects it and passes compositional gates.",
+      "operation_workflow_owner / rebalancer_handoff: downstream unless priority recovery witnesses reappear."
     ],
     "stableFacts": [
       "Scenario remains rolling-restart.",
-      "Representative artifact remains test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json.",
-      "Runtime promotion is blocked by saturated same-pair history until a non-repeated route is named."
+      "The sprint success condition is representative green, not architecture-gap.",
+      "Runtime source promotion remains blocked from the closed active-gate architecture-gap artifact."
     ],
     "changedFacts": [
-      "membershipPublicationHandoffOutcomeEnqueued is true.",
-      "membershipPublicationHandoffOutcomeRetryAfterMs is 100.",
-      "active_gate_timed_out remains dominant after wake scheduling."
+      "The owner wake delivery architecture-gap analysis has closed.",
+      "The active package now owns fresh representative evidence rather than runtime source modification."
     ],
     "competingTheories": [
-      "H1 owner wake delivery/observation is the non-repeated startup_active_gate_owner transition.",
-      "H2 the repeated timeout evidence is an architecture-gap continuation with no valid adjacent source promotion.",
-      "H3 a downstream owner owns the visible benchmark_events or readiness symptom after active-gate coverage moves."
+      "H1 the current workspace is representative-green.",
+      "H2 fresh evidence still selects active-gate snapshot coverage.",
+      "H3 fresh evidence migrates to a different owner boundary.",
+      "H4 evidence is unavailable or contradictory and must not select runtime work."
     ],
     "eliminatedTheories": [
-      "owner_reconcile_pending unbounded wake scheduling is no longer the dominant representative blocker after the source package."
+      "The closed architecture-gap artifact alone can authorize another local active-gate source patch."
     ],
     "downstreamSymptoms": [
-      "benchmark_events visibility timeout remains downstream while active-gate snapshot coverage is incomplete.",
-      "startup readiness support remains downstream while active-gate coverage is incomplete."
+      "startup readiness and benchmark visibility stay downstream until fresh route evidence promotes them"
     ],
     "transitionTable": [
       {
-        "inputSignal": "membershipPublicationHandoffOutcomeEnqueued=true with active_gate_timed_out",
-        "owner": "startup_active_gate_owner / snapshot_coverage",
-        "missingTransition": "select a non-repeated owner wake delivery/observation contract, migration, representative-green, or architecture-gap continuation.",
-        "expectedEvidence": "focused architecture proof selects the transition, migration, representative-green path, or architecture-gap continuation.",
-        "falsifier": "falsifier: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12",
-        "migrationTrigger": "the falsifier names a different owner boundary or proves this boundary cannot own the transition."
+        "inputSignal": "representative_green_required",
+        "owner": "release_gate_owner / rolling_restart_fully_green_gate",
+        "missingTransition": "fresh representative run must either pass green or route one first frontier.",
+        "expectedEvidence": "scenario exit status, scenario-route, evidence-summary, and causal-model output.",
+        "falsifier": "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --fast-local --verbose",
+        "migrationTrigger": "fresh route names a different owner/boundary or a valid architecture successor."
       }
     ],
     "ownershipMigrationTriggers": [
-      "Migrate only when focused evidence names the alternate deciding owner and boundary."
+      "Migrate only when the fresh canonical route names the alternate deciding owner and boundary."
     ],
     "architectureGapTriggers": [
-      "Stop as architecture-gap when focused evidence cannot select a non-repeated owner-owned transition, migration, protocol/model/topology route, or representative-green path."
+      "Select architecture/non-runtime successor when fresh evidence repeats active-gate same-frontier with no concrete metric reduction."
     ],
-    "wholeSystemInvariant": "Runtime edits remain blocked until this experiment selects one owner-owned transition, migration, or architecture route."
+    "wholeSystemInvariant": "The sprint remains active until the original rolling-restart representative-green success condition is met.",
+    "wholeSystemInvariants": [
+      {
+        "invariant": "The sprint remains active until the original rolling-restart representative-green success condition is met.",
+        "coupledWith": [
+          "source promotion remains blocked until fresh route evidence names one owner boundary"
+        ],
+        "couplingNote": "A red representative rerun can only redirect to one selected successor; it cannot close the sprint."
+      }
+    ]
   },
   "sliceTheory": {
-    "systemTheoryRef": "work/packages/active-20260529-rolling-restart-active-gate-owner-wake-delivery-architecture-experiment.md systemTheory",
-    "selectedSystemTheory": "H1 is tested unless focused proof names architecture-gap continuation, migration, protocol/model/topology route, or representative-green path.",
-    "selectedMechanism": "contract_gap with observation_gap and scheduling_gap as alternates",
-    "sourceTestContract": "Runtime source files stay candidate-only; no src write is allowed in this architecture-gap experiment package.",
-    "falsifier": "falsifier: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12",
-    "representativeExpectedMovement": "selected route moves to a concrete transition, owner-boundary migration, representative-green path, or architecture-gap continuation.",
-    "killRule": "Stop on unchanged same-frontier with no non-repeated route by recording architecture-gap continuation instead of widening source scope.",
+    "systemTheoryRef": "work/packages/active-20260530-rolling-restart-active-gate-fresh-representative-route-gate.md systemTheory",
+    "selectedSystemTheory": "The release gate owns the next discriminator because no runtime source package is valid from the closed active-gate architecture-gap artifact.",
+    "selectedMechanism": "observation_gap with contract_gap as the active-gate alternate",
+    "sourceTestContract": "No src/ source contract is selected in this release-gate package; source contracts remain candidate-only until fresh route evidence promotes a successor.",
+    "falsifier": "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --fast-local --verbose # release-gate contract transition",
+    "representativeExpectedMovement": "representative-green, owner-boundary migration, concrete metric reduction, or one selected architecture/non-runtime successor",
+    "killRule": "Do not open a local active-gate runtime patch from unchanged same-frontier/no-reduction evidence.",
     "theoryFitScore": {
-      "evidenceFit": "high - fresh representative evidence names active_gate_timed_out after bounded wake scheduling.",
-      "ownerBoundaryFit": "medium - owner boundary remains startup_active_gate_owner / snapshot_coverage but runtime promotion is guarded.",
-      "falsifiability": "high - frontier-history, route evidence, and source-context scan can prove whether a non-repeated route exists.",
-      "representativeMovement": "medium - success is route selection, migration, representative-green, or architecture-gap continuation.",
-      "downstreamRiskContainment": "high - downstream symptoms remain frozen until owner selection is proven."
+      "evidenceFit": "high - the package runs the representative artifact directly.",
+      "ownerBoundaryFit": "high - release_gate_owner owns sprint success.",
+      "falsifiability": "high - the distributed harness command is the falsifier.",
+      "representativeMovement": "high - the result must be green or route a fresh successor.",
+      "downstreamRiskContainment": "high - runtime files remain candidate-only."
     },
     "wrongSliceTriggers": [
-      "proof selects a different owner boundary",
-      "proof requires runtime files outside candidateRuntimeFiles",
-      "proof selects a concrete source route that needs a new runtime package"
+      "fresh evidence selects a concrete source owner",
+      "fresh evidence is unavailable",
+      "canonical route output is contradictory"
     ]
   },
   "architectureDecisionGate": {
     "status": "watching",
     "trigger": "frontier-oscillation",
     "triggerEvidence": [
-      "route-after-rerun selected open-architecture-experiment",
-      "frontier-history reports exhausted same-mechanism-repeat on startup_active_gate_owner / snapshot_coverage",
-      "scenario-route reports runtimePromotionGuard.state=blocked for active_gate_timed_out",
-      "topology-convergence reports membershipPublicationHandoffOutcomeEnqueued=true with retryAfterMs=100 while snapshot coverage remains 1/5"
+      "frontier returned to a recently closed related boundary",
+      "work/packages/done-20260529-rolling-restart-post-architecture-gap-fresh-representative-green-gate.md / release_gate_owner / rolling_restart_fully_green_gate / same-frontier",
+      "work/packages/done-20260529-rolling-restart-active-gate-owner-reconcile-wake-scheduling-route.md / startup_active_gate_owner / snapshot_coverage / reduced",
+      "work/packages/done-20260529-rolling-restart-priority-recovery-rebalancer-handoff-retry-scheduled.md / operation_workflow_owner / rebalancer_handoff / migrated"
     ],
     "choices": [
       {
-        "id": "owner-wake-delivery",
-        "summary": "Promote runtime work only if proof names the source owner that delivers or observes owner_recovery_wake.",
+        "id": "continue-local-proof",
+        "summary": "Continue with a bounded local proof if the missing edge stays inside this owner boundary.",
         "route": "continue-local-proof",
         "proof": [
-          "rg -n \"owner_recovery_wake|controlPlaneConvergence|retryAfterMs\" src/control-plane/membership-publication-active-gate-reconcile.js src/control-plane/membership-publication-control-plane-convergence.js src/control-plane/membership-publication-coordinator-class-stage-3.js src/admin/admin-control-snapshot-publication-handoff.js"
+          "falsifier: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --fast-local --verbose # release-gate contract transition",
+          "regression: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner release_gate_owner --boundary rolling_restart_fully_green_gate --dominant-reason representative_green_required # release-gate outcome state transition",
+          "supporting: npm run work:evidence-summary -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json",
+          "supporting: npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json",
+          "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --fast-local --verbose"
         ]
       },
       {
-        "id": "architecture-gap-continuation",
-        "summary": "Record architecture-gap continuation if the evidence names only repeated timeout/deferred repair after wake enqueue.",
+        "id": "migrate-owner-boundary",
+        "summary": "Migrate the active package to the owner boundary named by the first frontier evidence.",
+        "route": "owner-boundary-migration",
+        "proof": [
+          "falsifier: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --fast-local --verbose # release-gate contract transition",
+          "regression: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner release_gate_owner --boundary rolling_restart_fully_green_gate --dominant-reason representative_green_required # release-gate outcome state transition",
+          "supporting: npm run work:evidence-summary -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json",
+          "supporting: npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json",
+          "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --fast-local --verbose"
+        ]
+      },
+      {
+        "id": "open-architecture-package",
+        "summary": "Open a bounded autonomous architecture experiment for the missing owner contract.",
         "route": "architecture-package",
         "proof": [
-          "npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage"
+          "falsifier: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --fast-local --verbose # release-gate contract transition",
+          "regression: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner release_gate_owner --boundary rolling_restart_fully_green_gate --dominant-reason representative_green_required # release-gate outcome state transition",
+          "supporting: npm run work:evidence-summary -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json",
+          "supporting: npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json",
+          "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --fast-local --verbose"
+        ]
+      },
+      {
+        "id": "human-escalation",
+        "summary": "Escalate to a human only when evidence is contradictory, policy-blocked, credential-blocked, or unavailable.",
+        "route": "human-escalation",
+        "proof": [
+          "falsifier: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --fast-local --verbose # release-gate contract transition",
+          "regression: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner release_gate_owner --boundary rolling_restart_fully_green_gate --dominant-reason representative_green_required # release-gate outcome state transition",
+          "supporting: npm run work:evidence-summary -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json",
+          "supporting: npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json",
+          "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --fast-local --verbose"
         ]
       }
     ],
-    "selectedChoice": "unknown",
-    "nextAction": "Watch whether focused proof selects owner wake delivery/observation as a non-repeated source contract or closes as architecture-gap continuation."
+    "selectedChoice": null,
+    "nextAction": "Watch for repeated frontier oscillation; open an autonomous architecture experiment if another local proof returns here unchanged."
   },
-  "predecessor": "work/packages/done-20260529-rolling-restart-active-gate-timeout-after-wake-architecture-gap.md"
+  "predecessor": "work/packages/done-20260529-rolling-restart-active-gate-owner-wake-delivery-architecture-experiment.md"
 }
