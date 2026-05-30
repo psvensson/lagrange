@@ -1,41 +1,37 @@
-# Rolling Restart Startup Readiness SQL Query Engine Available Check
+# Rolling Restart Priority Recovery Rebalancer Handoff Scheduling Retry
 
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "done",
+  "status": "active",
   "intent": {
     "opened": "2026-05-30",
     "lane": "causal-escalation",
     "scenario": "rolling-restart",
     "artifact": "test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json",
     "playback": "none",
-    "owner": "startup_readiness_owner",
-    "boundary": "startup_support_evidence",
-    "dominantReason": "sql_query_engine_unavailable",
+    "owner": "operation_workflow_owner",
+    "boundary": "rebalancer_handoff",
+    "dominantReason": "priority_recovery_event_driven_wait",
     "currentState": "Package opened with declared owner, boundary, scope, proof, and stop rule.",
-    "nextAction": "Implement check for active SQL query engines in candidate nodes before querying them",
-    "closed": "2026-05-30"
+    "nextAction": "Implement the rebalancer handoff retry scheduling wake convergence"
   },
   "scope": {
     "writeScope": [
-      "src/bootstrap/owners/bootstrap-readiness-owner.js",
-      "test/distributed/scenarios/table-distribution-helpers-segment-3.js"
+      "src/rebalancer/operation-workflow-owner-ports.js"
     ],
     "handoffFiles": [],
     "generatedFiles": [],
     "candidateRuntimeFiles": [],
     "commitScope": [
-      "src/bootstrap/owners/bootstrap-readiness-owner.js",
-      "test/distributed/scenarios/table-distribution-helpers-segment-3.js",
+      "src/rebalancer/operation-workflow-owner-ports.js",
       "work/sprints/active-2026-q2-spec-led-runtime-modularization.md",
-      "work/packages/active-20260530-rolling-restart-startup-readiness-sql-query-engine-available-check.md"
+      "work/packages/active-20260530-rolling-restart-priority-recovery-rebalancer-handoff-scheduling-retry.md"
     ]
   },
   "gates": {
     "stabilityCredit": "local-proof-only",
-    "whyHighestLeverageNow": "This package advances the active sprint goal with focused proof.",
-    "representativeRerunCadence": "scheduled-rerun-command"
+    "whyHighestLeverageNow": "This package advances the active sprint goal with focused proof."
   },
   "modelFit": {
     "packageClass": "runtime-owner-boundary",
@@ -49,68 +45,54 @@
     ]
   },
   "execution": {
-    "theoryLedgerRefs": [
-      "theory-20260530-active-gate-bounded-reentry-representative-rerun"
-    ],
+    "theoryLedgerRefs": [],
     "proof": {
       "commands": [
         "falsifier: npx tap test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js",
-        "regression: npm run work:scenario-route -- test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json --owner startup_readiness_owner --boundary startup_support_evidence"
+        "regression: npm run work:scenario-route -- test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait"
       ]
     }
   },
   "theoryLoop": {
     "enforcement": "source-code-package-required",
-    "promotedTheory": "Implement check for active SQL query engines in candidate nodes before querying them",
-    "sprintGoalDelta": "Implement check for active SQL query engines in candidate nodes before querying them",
+    "promotedTheory": "Implement the rebalancer handoff retry scheduling wake convergence",
+    "sprintGoalDelta": "Implement the rebalancer handoff retry scheduling wake convergence",
     "sourceChangeRequired": true,
-    "successorRequired": true,
-    "outcome": "theory-confirmed",
-    "result": "supported",
-    "successorPackage": "work/packages/todo-20260530-rolling-restart-priority-recovery-rebalancer-handoff-scheduling-retry.md"
-  },
-  "closureSummary": {
-    "resultClassification": "reduced",
-    "predictionAccuracy": "matched",
-    "observedMovement": "Moved past the active-gate snapshot coverage frontier; representative scenario transitioned to priority recovery event wait backpressure.",
-    "successorReason": "The sprint success condition is still not met, so the successor package targets the next rebalancer handoff scheduler blocker.",
-    "nextOwnerBoundary": "operation_workflow_owner / rebalancer_handoff",
-    "evidenceArtifact": "test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json"
+    "successorRequired": true
   },
   "representativeResidual": {
     "status": "active-theory-loop",
     "scenario": "rolling-restart",
     "artifact": "test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json",
-    "frontier": "sql_query_engine_unavailable / startup_readiness_owner / startup_support_evidence",
-    "owner": "startup_readiness_owner",
-    "boundary": "startup_support_evidence",
-    "dominantReason": "sql_query_engine_unavailable",
-    "nextAction": "Implement check for active SQL query engines in candidate nodes before querying them",
-    "residualCount": 1
+    "frontier": "priority_recovery_event_driven_wait / operation_workflow_owner / rebalancer_handoff",
+    "owner": "operation_workflow_owner",
+    "boundary": "rebalancer_handoff",
+    "dominantReason": "priority_recovery_event_driven_wait",
+    "nextAction": "Implement the rebalancer handoff retry scheduling wake convergence"
   },
   "mechanismCard": {
     "failureMechanism": "contract_gap with ownership_gap as the first alternate",
-    "stableFacts": "Representative artifact test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json selects startup_readiness_owner / startup_support_evidence.",
+    "stableFacts": "Representative artifact test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json selects operation_workflow_owner / rebalancer_handoff.",
     "changedFacts": "This theory-loop package promotes one source-code theory for implementation.",
     "rejectedAlternatives": "Classification-only, evidence-only, and downstream symptom packages are not valid package work in a theory-loop sprint.",
-    "ownerWhoDecides": "startup_readiness_owner",
+    "ownerWhoDecides": "operation_workflow_owner",
     "currentAction": "Package opened with declared owner, boundary, scope, proof, and stop rule.",
-    "missingTransitionOrObservation": "Implement check for active SQL query engines in candidate nodes before querying them",
+    "missingTransitionOrObservation": "Implement the rebalancer handoff retry scheduling wake convergence",
     "smallestFalsifyingProbe": "falsifier: npx tap test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js",
     "expectedMovement": "The source change must move representative evidence toward success, migration, or architecture-gap stop.",
     "negativeResultMeans": "Record the theory result and create the next successor package instead of closing the sprint.",
     "escalationRule": "Same-frontier or needs-rerun evidence keeps the theory-loop sprint active."
   },
   "observablePrediction": {
-    "metric": "rolling-restart / startup_readiness_owner / startup_support_evidence / representative route",
-    "predicted": "Implement check for active SQL query engines in candidate nodes before querying them",
-    "observed": "Implement check for active SQL query engines in candidate nodes before querying them",
-    "accuracy": "matched",
-    "evidence": "test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json"
+    "metric": "rolling-restart / operation_workflow_owner / rebalancer_handoff / representative route",
+    "predicted": "Implement the rebalancer handoff retry scheduling wake convergence",
+    "observed": "pending-before-observation",
+    "accuracy": "pending-before-observation",
+    "evidence": "pending-before-representative-rerun"
   },
   "modelFitSplit": {
     "targetExecutionModel": "gpt-5.3-codex",
-    "allowedDecisionDepth": "single owner-boundary execution after higher-model route selection",
+    "allowedDecisionDepth": "planning and route selection; split executable children before implementation",
     "safeToExecuteWhen": [
       "owner, boundary, write scope, do-not-edit scope, proof, and kill rule stay as declared",
       "the executor does not need to choose architecture, migrate ownership, or reinterpret representative evidence",
@@ -122,23 +104,22 @@
       "the implementation needs to decide system behavior instead of executing a named local mechanism"
     ],
     "childPackageCandidates": [
-      "Split mechanical cleanup into mechanical-maintenance / gpt-5.3-codex-spark.",
-      "Split focused tests or fixtures into test-only-proof / gpt-5.3-codex-spark.",
-      "Split one same-owner hypothesis into bounded-experiment / gpt-5.3-codex-spark.",
-      "Keep cross-file owner runtime integration in this package unless it contracts to one runtime file."
+      "Use this package for route selection, owner/boundary decisions, and stop rules.",
+      "Create Spark-safe mechanical or test-only children once execution is unambiguous.",
+      "Create a gpt-5.4 single-file-runtime child only after the runtime owner file is selected."
     ]
   },
   "rerunDecision": {
     "sourceArtifact": "test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json",
-    "routeOwner": "startup_readiness_owner",
-    "routeBoundary": "startup_support_evidence",
-    "routeDominantReason": "sql_query_engine_unavailable",
+    "routeOwner": "operation_workflow_owner",
+    "routeBoundary": "rebalancer_handoff",
+    "routeDominantReason": "priority_recovery_event_driven_wait",
     "routeCausalOutcome": "pending-before-rerun",
     "stopMode": "pending-before-rerun",
     "nextLane": "causal-escalation",
     "expectedDelta": "Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.",
     "requiredRefreshCommands": [
-      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json --owner startup_readiness_owner --boundary startup_support_evidence --dominant-reason sql_query_engine_unavailable",
+      "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait",
       "update Sprint Strategy Brief and Current Edge Card from the route result",
       "npm run work:repair",
       "npm run work:validate -- --entry",
@@ -146,64 +127,63 @@
     ]
   },
   "causalGovernance": {
-    "hypothesis": "Checking if joining nodes have active SQL query engines ready before table bootstrap queries prevents stalling benchmark_events table partitions visible checks and prevents table repairs from being indefinitely deferred.",
-    "stopConditionCheck": "Run the focused TAP unit test cluster-active-gate-startup-readiness-admin-availability.test.js, verify table-distribution-helpers-segment-3.js tests pass, and run npm run analyze:causal-model on the fresh representative report.",
-    "expectedCausalModelChange": "The table partition visibility check handles SQL engine unavailability gracefully by waiting/retrying instead of throwing hard error and stalling the loop.",
+    "hypothesis": "Implementing the rebalancer handoff retry scheduling wake convergence avoids stalling rebalancer progress in priority_recovery_event_driven_wait.",
+    "stopConditionCheck": "Run the focused TAP unit test cluster-active-gate-startup-readiness-admin-availability.test.js and the regression command. npm run analyze:causal-model",
+    "expectedCausalModelChange": "The scheduler wakes retry attempts gracefully instead of event-driven wait stalling.",
     "representativeOutcome": "reduced",
     "causalDebt": "Fresh representative evidence is needed after implementation.",
-    "crossBoundaryReview": "Do not patch production active-gate or other bootstrap logic outside the check inside table-distribution-helpers-segment-3.js."
+    "crossBoundaryReview": "Do not patch other control plane or rebalancer logic outside src/rebalancer/operation-workflow-owner-ports.js."
   },
   "scenarioCausalClosure": {
-    "referenceScenarioOrProbe": "rolling-restart startup readiness sql query engine available check",
+    "referenceScenarioOrProbe": "rolling-restart priority recovery rebalancer handoff retry scheduling wake convergence",
     "phaseChain": [
-      "joining nodes are reachable over HTTP but lack SQL engine initialization during NodeJoiningService.join() sequence",
-      "harness helper ensureBenchmarkPartitioningTable attempts table creation and partition queries on candidate nodes before query engine is ready",
-      "queries throw SQL query engine not available, which defers repairs and loops indefinitely",
-      "this package implements queryability checks in the scenario helper to allow graceful retry/recovery"
+      "Representative evidence comes from test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json.",
+      "priority_recovery_event_driven_wait is the current selected symptom.",
+      "operation_workflow_owner / rebalancer_handoff is the declared decision boundary for this package."
     ],
-    "currentFirstFrontier": "startup_readiness_owner / startup_support_evidence / sql_query_engine_unavailable",
+    "currentFirstFrontier": "priority_recovery_event_driven_wait / operation_workflow_owner / rebalancer_handoff",
     "knownDownstreamBlockers": [
       "release_gate_owner / rolling_restart_fully_green_gate remains downstream until harness scenario passes green"
     ],
-    "missingCausalEdge": "ensureBenchmarkPartitioningTable has no check to skip or wait for candidate nodes whose SQL query engine is not yet available.",
-    "missingCausalEdgeProbe": "npx tap test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js",
-    "falsifyingProbe": "npx tap test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js",
-    "boundedProgressProof": "Focused proof must show ensureBenchmarkPartitioningTable gracefully retries (using a retry and wait mechanism) or uses ready query nodes when joining candidates report SQL engine unavailable.",
+    "missingCausalEdge": "rebalancer handoff has no scheduler retry wake convergence.",
+    "missingCausalEdgeProbe": "regression: npm run work:scenario-route -- test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait",
+    "falsifyingProbe": "falsifier: npx tap test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js",
+    "boundedProgressProof": "Focused proof must show operation-workflow-owner-ports scheduler retry wake converges priority recovery progress.",
     "boundedProgressProofArtifact": "test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json",
-    "expectedObservableTransition": "sql_query_engine_unavailable stops blocking table partitions visibility and the harness scenario completes.",
-    "maxProgressBound": "one startup readiness SQL query check package before fresh representative rerun",
+    "expectedObservableTransition": "priority_recovery_event_driven_wait stops blocking rebalancer handoff and scenario proceeds.",
+    "maxProgressBound": "one rebalancer handoff scheduler retry package before fresh representative rerun",
     "sameFrontierFallback": "If the change still stalls, escalate to causal analysis instead of widening this package.",
     "expectedNextFrontier": "representative-green or successor residual package",
-    "resultClassification": "reduced",
-    "stopCondition": "continue-local-fix",
     "recentFrontierHistory": [
-      "work/packages/done-20260530-rolling-restart-active-gate-bounded-reentry-representative-rerun.md / startup_active_gate_owner / snapshot_coverage / reduced"
+      "work/packages/done-20260530-rolling-restart-startup-readiness-sql-query-engine-available-check.md / startup_readiness_owner / startup_support_evidence / reduced"
     ],
-    "oscillationCheck": "The prior active-gate oscillation is resolved by the bounded re-entry model route; this is a downstream startup readiness blocker.",
-    "handoffInvariant": "Harness helper safety and SQL engine unavailable checking must not weaken any cluster state check or active gate convergence invariant."
+    "oscillationCheck": "The prior startup readiness SQL engine check moved the frontier here.",
+    "handoffInvariant": "Operation workflow ports scheduler retry wake convergence must not weaken any active gate convergence invariant.",
+    "resultClassification": "pending-before-probe",
+    "stopCondition": "continue-local-fix"
   },
   "systemTheory": {
-    "problemStatement": "rolling-restart currently routes sql_query_engine_unavailable to startup_readiness_owner / startup_support_evidence; the package must explain the whole phase chain before selecting the executable slice.",
+    "problemStatement": "rolling-restart currently routes priority_recovery_event_driven_wait to operation_workflow_owner / rebalancer_handoff; the package must explain the whole phase chain before selecting the executable slice.",
     "phaseChain": [
       "Representative evidence comes from test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json.",
-      "sql_query_engine_unavailable is the current selected symptom.",
-      "startup_readiness_owner / startup_support_evidence is the declared decision boundary for this package."
+      "priority_recovery_event_driven_wait is the current selected symptom.",
+      "operation_workflow_owner / rebalancer_handoff is the declared decision boundary for this package."
     ],
     "ownerBoundaryMap": [
-      "startup_readiness_owner / startup_support_evidence: selected package owner and boundary.",
+      "operation_workflow_owner / rebalancer_handoff: selected package owner and boundary.",
       "Downstream owners remain frozen until the falsifier selects migration."
     ],
     "stableFacts": [
       "Scenario remains rolling-restart.",
       "Package lane remains causal-escalation.",
-      "Declared owner boundary remains startup_readiness_owner / startup_support_evidence."
+      "Declared owner boundary remains operation_workflow_owner / rebalancer_handoff."
     ],
     "changedFacts": [
       "This package was opened from test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json.",
-      "The active action is Implement check for active SQL query engines in candidate nodes before querying them."
+      "The active action is Implement the rebalancer handoff retry scheduling wake convergence."
     ],
     "competingTheories": [
-      "H1 startup_readiness_owner / startup_support_evidence owns the missing transition for sql_query_engine_unavailable.",
+      "H1 operation_workflow_owner / rebalancer_handoff owns the missing transition for priority_recovery_event_driven_wait.",
       "H2 the same symptom is inherited from a different owner boundary or architecture gap."
     ],
     "eliminatedTheories": [
@@ -214,8 +194,8 @@
     ],
     "transitionTable": [
       {
-        "inputSignal": "sql_query_engine_unavailable",
-        "owner": "startup_readiness_owner / startup_support_evidence",
+        "inputSignal": "priority_recovery_event_driven_wait",
+        "owner": "operation_workflow_owner / rebalancer_handoff",
         "missingTransition": "selected evidence must become a named owner-owned transition, migration, or stop.",
         "expectedEvidence": "focused proof selects the transition, migrates ownership, or records architecture-gap evidence.",
         "falsifier": "falsifier: npx tap test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js",
@@ -231,16 +211,16 @@
     "wholeSystemInvariant": "Runtime edits are allowed only after the system theory selects one owner-owned transition or migration route."
   },
   "sliceTheory": {
-    "systemTheoryRef": "work/packages/todo-20260530-rolling-restart-startup-readiness-sql-query-engine-available-check.md systemTheory",
+    "systemTheoryRef": "work/packages/todo-20260530-rolling-restart-priority-recovery-rebalancer-handoff-scheduling-retry.md systemTheory",
     "selectedSystemTheory": "H1 is selected unless falsifier: npx tap test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js proves a different owner boundary or architecture gap.",
     "selectedMechanism": "contract_gap with ownership_gap as the first alternate",
-    "sourceTestContract": "Implementation may edit only declared source files src/bootstrap/owners/bootstrap-readiness-owner.js after the falsifier keeps the package inside the selected owner boundary.",
+    "sourceTestContract": "Implementation may edit only declared source files src/rebalancer/operation-workflow-owner-ports.js after the falsifier keeps the package inside the selected owner boundary.",
     "falsifier": "falsifier: npx tap test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js",
     "representativeExpectedMovement": "selected route moves to a concrete transition, owner-boundary migration, or architecture-gap stop.",
     "killRule": "Stop on unchanged same-frontier, no-reduction, or architecture-gap evidence instead of widening the package.",
     "theoryFitScore": {
       "evidenceFit": "medium - generated from declared package evidence before proof execution.",
-      "ownerBoundaryFit": "medium - owner boundary is declared as startup_readiness_owner / startup_support_evidence.",
+      "ownerBoundaryFit": "medium - owner boundary is declared as operation_workflow_owner / rebalancer_handoff.",
       "falsifiability": "high - falsifier is falsifier: npx tap test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js.",
       "representativeMovement": "medium - expected movement is route selection, migration, or architecture-gap stop.",
       "downstreamRiskContainment": "high - downstream symptoms remain frozen until owner selection is proven."
@@ -250,14 +230,13 @@
       "proof requires runtime files outside writeScope",
       "proof cannot select a concrete transition or migration"
     ]
-  },
-  "commitAndPushLedgerRequired": true
+  }
 }
 -->
 
 ## Why
 
-This package owns startup_readiness_owner / startup_support_evidence because the selected evidence routes sql_query_engine_unavailable there. It must either move that owner contract or preserve the classification before downstream symptoms are patched.
+This package owns operation_workflow_owner / rebalancer_handoff because the selected evidence routes priority_recovery_event_driven_wait there. It must either move that owner contract or preserve the classification before downstream symptoms are patched.
 
 ## Scope Basis
 
@@ -271,63 +250,63 @@ Canonical evidence source: `test-output/reports/rolling-restart-active-gate-boun
 
 ## Core Logic Brief
 
-- Canonical outcome: startup_readiness_owner / startup_support_evidence emits Implement check for active SQL query engines in candidate nodes before querying them for sql_query_engine_unavailable.
-- Inputs/signals: test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json; falsifier: npx tap test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js; regression: npm run work:scenario-route -- test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json --owner startup_readiness_owner --boundary startup_support_evidence.
-- State model or invariant: The startup_readiness_owner / startup_support_evidence decision table in the Causal Decision Contract maps sql_query_engine_unavailable and route evidence to one emitted outcome: Implement check for active SQL query engines in candidate nodes before querying them.
+- Canonical outcome: operation_workflow_owner / rebalancer_handoff emits Implement the rebalancer handoff retry scheduling wake convergence for priority_recovery_event_driven_wait.
+- Inputs/signals: test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json; falsifier: npx tap test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js; regression: npm run work:scenario-route -- test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait.
+- State model or invariant: The operation_workflow_owner / rebalancer_handoff decision table in the Causal Decision Contract maps priority_recovery_event_driven_wait and route evidence to one emitted outcome: Implement the rebalancer handoff retry scheduling wake convergence.
 - Non-goals and forbidden interpretations: Do not reinterpret downstream evidence, widen forbidden boundaries, or patch symptoms outside this package. Forbidden scope: none beyond lane and package scope.
-- Proof mapping: Implementation and tests must prove the startup_readiness_owner / startup_support_evidence invariant before representative or closure proof is accepted.
+- Proof mapping: Implementation and tests must prove the operation_workflow_owner / rebalancer_handoff invariant before representative or closure proof is accepted.
 - Wrong-slice trigger: Stop or split if the canonical outcome changes owner, boundary, required action, or needs files outside the declared scope.
 
 ## Causal Decision Contract
 
 | Signal | Normalized value | Owner interpretation | Emitted outcome | Expected delta | Disproof probe |
 | --- | --- | --- | --- | --- | --- |
-| route owner/boundary | startup_readiness_owner / startup_support_evidence / sql_query_engine_unavailable | startup_readiness_owner owns this decision before downstream consumers reinterpret it | Implement check for active SQL query engines in candidate nodes before querying them | Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion. | falsifier: npx tap test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js |
+| route owner/boundary | operation_workflow_owner / rebalancer_handoff / priority_recovery_event_driven_wait | operation_workflow_owner owns this decision before downstream consumers reinterpret it | Implement the rebalancer handoff retry scheduling wake convergence | Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion. | falsifier: npx tap test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js |
 | scope boundary | lane and package scope only | proof that needs do-not-edit scope means this package is the wrong slice | stop, split, or migrate owner boundary | no widened runtime scope inside this package | npm run work:advance -- --check |
 
-- Anti-symptom rationale: This package changes or classifies startup_readiness_owner / startup_support_evidence directly; it does not patch downstream symptoms or widen do-not-edit scope.
+- Anti-symptom rationale: This package changes or classifies operation_workflow_owner / rebalancer_handoff directly; it does not patch downstream symptoms or widen do-not-edit scope.
 - Falsifying focused probe: `falsifier: npx tap test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js`
-- Competing explanations: At minimum compare sql_query_engine_unavailable against downstream symptom lag, stale instrumentation, and wrong-owner routing before implementation.
+- Competing explanations: At minimum compare priority_recovery_event_driven_wait against downstream symptom lag, stale instrumentation, and wrong-owner routing before implementation.
 - Systemic interaction scan: Check producer, consumer, admission/gating, retry/lifecycle, and evidence-generation effects before assigning the next owner slice.
 - Ping-pong stop rule: Do not bounce between adjacent owners on the same unchanged artifact; require fresh representative evidence, a concrete metric reduction, owner/boundary migration proof, or an autonomous architecture experiment before another local patch.
 - Oscillation guard: If fresh representative evidence returns the same frontier or another symptom-shaped result, the next package must show concrete reduction, migration, green, or select/open an autonomous architecture experiment before another local patch.
 
 ## Decision Experiment Gate
 
-- Decision question: Does startup_readiness_owner / startup_support_evidence still own sql_query_engine_unavailable, and what exact producer, consumer, or contract fact must move before implementation is justified?
+- Decision question: Does operation_workflow_owner / rebalancer_handoff still own priority_recovery_event_driven_wait, and what exact producer, consumer, or contract fact must move before implementation is justified?
 - Architecture review: Before runtime edits, confirm whether this is still a local owner-boundary route, an owner-boundary migration, an autonomous architecture experiment, or a human-only route caused by contradictory or blocked evidence.
-- Competing hypotheses: sql_query_engine_unavailable is real owner debt; the visible symptom is downstream lag; instrumentation or stale evidence is misleading; a different owner boundary owns the next move.
+- Competing hypotheses: priority_recovery_event_driven_wait is real owner debt; the visible symptom is downstream lag; instrumentation or stale evidence is misleading; a different owner boundary owns the next move.
 - Pre-edit focused probe: `falsifier: npx tap test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js`
 - Success metrics: Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.; at least one concrete metric, count, frontier, migration, or representative-green condition must move.
-- Representative rerun: `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json --owner startup_readiness_owner --boundary startup_support_evidence --dominant-reason sql_query_engine_unavailable`
+- Representative rerun: `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait`
 - Redirect rule: If fresh representative evidence returns the same frontier and dominant reason with no concrete metric reduction, redirect to an autonomous architecture/causal experiment or successor package instead of opening another local patch — never a bare stop. Terminate the loop only for a closed Termination Condition; a human-only block maps to blocked-frozen-decision/blocked-external-dependency.
 
 ## System Theory
 
-- Problem statement: rolling-restart currently routes sql_query_engine_unavailable to startup_readiness_owner / startup_support_evidence; the package must explain the whole phase chain before selecting the executable slice.
+- Problem statement: rolling-restart currently routes priority_recovery_event_driven_wait to operation_workflow_owner / rebalancer_handoff; the package must explain the whole phase chain before selecting the executable slice.
 - Phase chain:
 1. Representative evidence comes from test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json.
-2. sql_query_engine_unavailable is the current selected symptom.
-3. startup_readiness_owner / startup_support_evidence is the declared decision boundary for this package.
+2. priority_recovery_event_driven_wait is the current selected symptom.
+3. operation_workflow_owner / rebalancer_handoff is the declared decision boundary for this package.
 - Owner-boundary map:
-1. startup_readiness_owner / startup_support_evidence: selected package owner and boundary.
+1. operation_workflow_owner / rebalancer_handoff: selected package owner and boundary.
 2. Downstream owners remain frozen until the falsifier selects migration.
 - Stable facts:
 1. Scenario remains rolling-restart.
 2. Package lane remains causal-escalation.
-3. Declared owner boundary remains startup_readiness_owner / startup_support_evidence.
+3. Declared owner boundary remains operation_workflow_owner / rebalancer_handoff.
 - Changed facts:
 1. This package was opened from test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json.
-2. The active action is Implement check for active SQL query engines in candidate nodes before querying them.
+2. The active action is Implement the rebalancer handoff retry scheduling wake convergence.
 - Competing theories:
-1. H1 startup_readiness_owner / startup_support_evidence owns the missing transition for sql_query_engine_unavailable.
+1. H1 operation_workflow_owner / rebalancer_handoff owns the missing transition for priority_recovery_event_driven_wait.
 2. H2 the same symptom is inherited from a different owner boundary or architecture gap.
 - Eliminated theories:
 1. No eliminated theory is durable until the package proof records a contrary artifact or command result.
 - Downstream symptoms:
 1. Downstream symptoms stay frozen until H1 selects a concrete transition or H2 selects migration.
 - Transition table:
-1. Input `sql_query_engine_unavailable`; owner `startup_readiness_owner / startup_support_evidence`; missing `selected evidence must become a named owner-owned transition, migration, or stop.`; expected `focused proof selects the transition, migrates ownership, or records architecture-gap evidence.`; falsifier `falsifier: npx tap test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js`; migration trigger `the falsifier names a different owner boundary or proves this boundary cannot own the transition.`.
+1. Input `priority_recovery_event_driven_wait`; owner `operation_workflow_owner / rebalancer_handoff`; missing `selected evidence must become a named owner-owned transition, migration, or stop.`; expected `focused proof selects the transition, migrates ownership, or records architecture-gap evidence.`; falsifier `falsifier: npx tap test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js`; migration trigger `the falsifier names a different owner boundary or proves this boundary cannot own the transition.`.
 - Ownership migration triggers:
 1. Migrate only when focused evidence names the alternate deciding owner and boundary.
 - Architecture-gap triggers:
@@ -336,16 +315,16 @@ Canonical evidence source: `test-output/reports/rolling-restart-active-gate-boun
 
 ## Slice Theory
 
-- System theory reference: work/packages/todo-20260530-rolling-restart-startup-readiness-sql-query-engine-available-check.md systemTheory
+- System theory reference: work/packages/todo-20260530-rolling-restart-priority-recovery-rebalancer-handoff-scheduling-retry.md systemTheory
 - Selected system theory: H1 is selected unless falsifier: npx tap test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js proves a different owner boundary or architecture gap.
 - Selected mechanism: contract_gap with ownership_gap as the first alternate
-- Source/test contract: Implementation may edit only declared source files src/bootstrap/owners/bootstrap-readiness-owner.js after the falsifier keeps the package inside the selected owner boundary.
+- Source/test contract: Implementation may edit only declared source files src/rebalancer/operation-workflow-owner-ports.js after the falsifier keeps the package inside the selected owner boundary.
 - Falsifier: `falsifier: npx tap test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js`
 - Representative expected movement: selected route moves to a concrete transition, owner-boundary migration, or architecture-gap stop.
 - Redirect rule: Stop on unchanged same-frontier, no-reduction, or architecture-gap evidence instead of widening the package.
 - Theory-fit score:
 1. Evidence fit: medium - generated from declared package evidence before proof execution.
-2. Owner-boundary fit: medium - owner boundary is declared as startup_readiness_owner / startup_support_evidence.
+2. Owner-boundary fit: medium - owner boundary is declared as operation_workflow_owner / rebalancer_handoff.
 3. Falsifiability: high - falsifier is falsifier: npx tap test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js.
 4. Representative movement: medium - expected movement is route selection, migration, or architecture-gap stop.
 5. Downstream risk containment: high - downstream symptoms remain frozen until owner selection is proven.
@@ -357,9 +336,9 @@ Canonical evidence source: `test-output/reports/rolling-restart-active-gate-boun
 ## Theory Loop Package Contract
 
 - Enforcement: `source-code-package-required`
-- Promoted theory: Implement check for active SQL query engines in candidate nodes before querying them
-- Sprint-goal delta: Implement check for active SQL query engines in candidate nodes before querying them
-- Required source write: `src/bootstrap/owners/bootstrap-readiness-owner.js`
+- Promoted theory: Implement the rebalancer handoff retry scheduling wake convergence
+- Sprint-goal delta: Implement the rebalancer handoff retry scheduling wake convergence
+- Required source write: `src/rebalancer/operation-workflow-owner-ports.js`
 - Package size rule: this package must test one promoted theory by changing declared `src/` source code, running falsifier and regression proof, and recording the theory result before closure.
 - Forbidden stop shape: classification-only, evidence-only, route-only, source/log inspection-only, package-only, and successor-creation-only outcomes stay in the sprint and must not become work packages.
 
@@ -367,8 +346,8 @@ Canonical evidence source: `test-output/reports/rolling-restart-active-gate-boun
 
 ## Observable Prediction
 
-- Metric: rolling-restart / startup_readiness_owner / startup_support_evidence / representative route
-- Predicted: Implement check for active SQL query engines in candidate nodes before querying them
+- Metric: rolling-restart / operation_workflow_owner / rebalancer_handoff / representative route
+- Predicted: Implement the rebalancer handoff retry scheduling wake convergence
 - Observed: pending-before-observation
 - Accuracy: pending-before-observation
 - Evidence: pending-before-representative-rerun
@@ -385,9 +364,9 @@ Canonical evidence source: `test-output/reports/rolling-restart-active-gate-boun
 ## Rerun Decision Gate
 
 - Source artifact: `test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json`
-- Route owner: `startup_readiness_owner`
-- Route boundary: `startup_support_evidence`
-- Route dominant reason: `sql_query_engine_unavailable`
+- Route owner: `operation_workflow_owner`
+- Route boundary: `rebalancer_handoff`
+- Route dominant reason: `priority_recovery_event_driven_wait`
 - Route causal outcome: `pending-before-rerun`
 - Stop mode: `pending-before-rerun`
 - Next lane: `causal-escalation`
@@ -395,8 +374,7 @@ Canonical evidence source: `test-output/reports/rolling-restart-active-gate-boun
 
 ## In Scope
 
-1. src/bootstrap/owners/bootstrap-readiness-owner.js
-2. test/distributed/scenarios/table-distribution-helpers-segment-3.js
+1. src/rebalancer/operation-workflow-owner-ports.js
 
 ## Out Of Scope
 
@@ -408,17 +386,17 @@ Canonical evidence source: `test-output/reports/rolling-restart-active-gate-boun
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `bounded-owner-runtime/current-frontier`
 - Output profile: `medium`
-- Owned files: `src/bootstrap/owners/bootstrap-readiness-owner.js`, `test/distributed/scenarios/table-distribution-helpers-segment-3.js`
+- Owned files: `src/rebalancer/operation-workflow-owner-ports.js`
 - Do-not-edit scope: `src/` outside declared writeScope
 - Frozen decisions: package scope and lane stay bounded unless explicitly escalated.
 - Escalation triggers: owned files expand beyond this package, runtime ownership changes, or representative scenario evidence changes.
-- Focused proof: `falsifier: npx tap test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js`, `regression: npm run work:scenario-route -- test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json --owner startup_readiness_owner --boundary startup_support_evidence`
+- Focused proof: `falsifier: npx tap test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js`, `regression: npm run work:scenario-route -- test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait`
 - Model ledger advisory: `escalate`
 
 ## Model-Fit Split
 
 - Target executor: `gpt-5.3-codex`
-- Allowed decision depth: single owner-boundary execution after higher-model route selection
+- Allowed decision depth: planning and route selection; split executable children before implementation
 - Safe to execute when:
 1. owner, boundary, write scope, do-not-edit scope, proof, and kill rule stay as declared
 2. the executor does not need to choose architecture, migrate ownership, or reinterpret representative evidence
@@ -428,31 +406,22 @@ Canonical evidence source: `test-output/reports/rolling-restart-active-gate-boun
 2. proof requires do-not-edit scope, cross-owner reasoning, or architecture route selection
 3. the implementation needs to decide system behavior instead of executing a named local mechanism
 - Candidate lower-model child packages:
-1. Split mechanical cleanup into mechanical-maintenance / gpt-5.3-codex-spark.
-2. Split focused tests or fixtures into test-only-proof / gpt-5.3-codex-spark.
-3. Split one same-owner hypothesis into bounded-experiment / gpt-5.3-codex-spark.
-4. Keep cross-file owner runtime integration in this package unless it contracts to one runtime file.
+1. Use this package for route selection, owner/boundary decisions, and stop rules.
+2. Create Spark-safe mechanical or test-only children once execution is unambiguous.
+3. Create a gpt-5.4 single-file-runtime child only after the runtime owner file is selected.
 
 ## Execution Evidence
-
-theory-ledger: not-needed
 
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 Agent identity is optional provenance. Use the compact five-field shape for new evidence lines.
 
-- [x] action: freshness-review; owner: Agent Antigravity (8fa75e5b-4c28-48b9-a2a4-569d67568ff1); files-changed: none; validation: npm run work:context; npm run work:package:doctor -- --suggest work/packages/active-20260530-rolling-restart-startup-readiness-sql-query-engine-available-check.md; npm run work:validate -- --entry work/packages/active-20260530-rolling-restart-startup-readiness-sql-query-engine-available-check.md; decision: fresh; outcome: validated.
-- [x] action: implementation; owner: local; files-changed: src/bootstrap/owners/bootstrap-readiness-owner.js, test/distributed/scenarios/table-distribution-helpers-segment-3.js; validation: npx tap test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js; parent revalidated focused proof: yes; outcome: validated.
-- [x] action: verification-fix; owner: local; files-changed: none; validation: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json --fast-local --verbose; parent revalidated focused proof: yes; outcome: validated.
-- [x] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: validated.
+- [ ] action: freshness-review; owner: Agent <name> (<agent-id>); files-changed: none; validation: npm run work:context; npm run work:package:doctor -- --suggest work/packages/todo-20260530-rolling-restart-priority-recovery-rebalancer-handoff-scheduling-retry.md; npm run work:validate -- --entry work/packages/todo-20260530-rolling-restart-priority-recovery-rebalancer-handoff-scheduling-retry.md; decision: fresh; outcome: pending.
+- [ ] action: implementation; owner: operation_workflow_owner; files-changed: none recorded yet; validation: falsifier: npx tap test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js and parent revalidated focused proof: yes before closure; outcome: pending.
+- [ ] action: verification-fix; owner: operation_workflow_owner; files-changed: none recorded yet; validation: verifier reruns focused proof and parent revalidated focused proof: yes before closure; outcome: pending.
+- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: pending.
 
 ## Validation
 
 1. falsifier: npx tap test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js
-2. regression: npm run work:scenario-route -- test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json --owner startup_readiness_owner --boundary startup_support_evidence
+2. regression: npm run work:scenario-route -- test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait
 
-## Commit And Push Ledger
-
-1. Focused package commit: ef2230aba534878c1ba8672317c2e78353c85d89
-2. Push target: origin/codex/pending-ack-eligibility-filter
-3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
-4. Pushed: yes 2026-05-30T11:02:35.124Z
