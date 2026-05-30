@@ -11,6 +11,10 @@ const OWNER_RECOVERY_PENDING_STATE = 'pending';
 const OWNER_RECOVERY_PENDING_REASON = 'owner_reconcile_pending';
 const OWNER_RECOVERY_WAIT_ACTION = 'wait_owner_recovery';
 const OWNER_RECOVERY_TARGET_BLOCKED = 'target_blocked';
+const OWNER_RECOVERY_WAKE_OPERATION = 'owner_recovery_wake';
+const OWNER_RECOVERY_CONVERGENCE_CLASS = 'critical_convergence';
+const OWNER_RECOVERY_CRITICAL_DEFERRED = 'critical_deferred';
+const OWNER_RECOVERY_RETRY_AFTER_MS = 1000;
 const OWNER_RECOVERY_DRAINED_QUEUE_COUNT = 1;
 const OWNER_RECOVERY_ENQUEUED_COUNT = 1;
 const OWNER_RECOVERY_RECONCILE_REASON =
@@ -36,6 +40,7 @@ function buildOwnerRecoveryWaitHandoff() {
     runtimePromotionAllowed: OWNER_RECOVERY_RUNTIME_PROMOTION_ALLOWED,
     state: OWNER_RECOVERY_PENDING_STATE,
     reasonCode: OWNER_RECOVERY_PENDING_REASON,
+    retryAfterMs: OWNER_RECOVERY_RETRY_AFTER_MS,
     nextAction: OWNER_RECOVERY_WAIT_ACTION,
   };
 }
@@ -162,6 +167,50 @@ test('active-gate owner recovery wait reports queue pressure reentry',
           },
         },
         'owner-recovery wait should expose queue pressure reset as bounded reentry',
+      );
+    } finally {
+      SnapshotService.drainQueueForSnapshot = originalDrainQueueForSnapshot;
+      SnapshotService.isQueuePressureDetected =
+        originalIsQueuePressureDetected;
+    }
+  });
+
+test('active-gate owner recovery wait exposes bounded wake schedule',
+  async (t) => {
+    const originalDrainQueueForSnapshot = SnapshotService.drainQueueForSnapshot;
+    const originalIsQueuePressureDetected =
+      SnapshotService.isQueuePressureDetected;
+    SnapshotService.isQueuePressureDetected = () => false;
+    SnapshotService.drainQueueForSnapshot =
+      async () => OWNER_RECOVERY_EMPTY_DRAIN_COUNT;
+    try {
+      const publicationOutcome = await reconcileActiveGateMembershipPublication(
+        buildOwnerRecoveryCoordinator(),
+        buildOwnerRecoveryWaitHandoff(),
+      );
+
+      t.match(
+        publicationOutcome,
+        {
+          state: OWNER_RECOVERY_TARGET_BLOCKED,
+          enqueued: false,
+          reasonCode: OWNER_RECOVERY_PENDING_REASON,
+          retryAfterMs: OWNER_RECOVERY_RETRY_AFTER_MS,
+          controlPlaneConvergenceClass: OWNER_RECOVERY_CONVERGENCE_CLASS,
+          controlPlanePressureOutcome: OWNER_RECOVERY_CRITICAL_DEFERRED,
+          controlPlaneConvergence: {
+            convergenceClass: OWNER_RECOVERY_CONVERGENCE_CLASS,
+            pressureOutcome: OWNER_RECOVERY_CRITICAL_DEFERRED,
+            ownerKey: OWNER_RECOVERY_LOCAL_NODE_ID,
+            operation: OWNER_RECOVERY_WAKE_OPERATION,
+            retryAfterMs: OWNER_RECOVERY_RETRY_AFTER_MS,
+            reasonCode: OWNER_RECOVERY_PENDING_REASON,
+          },
+          target: {
+            pendingRecoveryNodeIds: [...OWNER_RECOVERY_PENDING_NODE_IDS],
+          },
+        },
+        'owner-recovery wait without immediate reentry should expose bounded wake scheduling',
       );
     } finally {
       SnapshotService.drainQueueForSnapshot = originalDrainQueueForSnapshot;

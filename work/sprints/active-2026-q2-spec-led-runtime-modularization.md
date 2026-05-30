@@ -65,21 +65,21 @@ priority-recovery or active-gate frontier.
 
 ```text
 Representative artifact: test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json
-Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending
-Active package: work/packages/done-20260529-rolling-restart-active-gate-owner-reconcile-handoff-retry.md
+Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / active_gate_timed_out
+Active package: work/packages/active-20260529-rolling-restart-active-gate-timeout-after-wake-architecture-gap.md
 Active package owner: startup_active_gate_owner
 Active package boundary: snapshot_coverage
-Selected cause: owner_reconcile_pending
-Required action: Close this package as architecture-gap analysis and open the selected scheduling architecture-route implementation for owner_reconcile_pending.
-Representative status: architecture-gap
+Selected cause: active_gate_timed_out
+Required action: Analyze the fresh active_gate_timed_out post-wake route and select a non-repeated architecture route, migration, representative-green path, or architecture-gap continuation.
+Representative status: architecture-gap-pending
 Causal outcome: continue_local_fix
-Architecture gate: selected / scheduling-owner-wake-route
-Expected delta: Architecture-gap analysis selects a scheduling architecture-route implementation for owner_reconcile_pending before source work resumes.
-Current state: Fresh rolling-restart evidence moved active_gate_timed_out to owner_reconcile_pending; membershipPublicationHandoffOutcome is write_deferred with enqueued=false and retryAfterMs=0 while active-gate progress retryAfterMs is 1000.
-Allowed edits: unknown
-Candidate runtime files: src/control-plane/membership-publication-active-gate-reconcile.js, src/control-plane/publication-active-gate-handoff-contract.js, src/control-plane/membership-publication-control-plane-convergence.js
-Forbidden edits: analysis selects a concrete architecture route, owner boundary migration is selected, representative evidence changes owner, boundary, or dominant reason
-Required latest proof: falsifier: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending --explain active_gate_snapshot_coverage, regression: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12, supporting: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --explain active_gate_snapshot_coverage, supporting: npm run work:evidence-summary -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json
+Architecture gate: watching / unknown
+Expected delta: Architecture proof must decide whether the fresh active_gate_timed_out route after bounded wake scheduling names a non-repeated source contract, owner migration, protocol/model/topology route, representative-green path, or architecture-gap continuation.
+Current state: Fresh representative rerun after the owner wake scheduling route moved owner_reconcile_pending to bounded wake evidence but returned active_gate_timed_out as the dominant active-gate snapshot-coverage reason.
+Allowed edits: work/packages/active-20260529-rolling-restart-active-gate-timeout-after-wake-architecture-gap.md, work/sprints/active-2026-q2-spec-led-runtime-modularization.md, work/theory-ledger.md
+Candidate runtime files: src/admin/admin-control-snapshot-repair-diagnostics.js, src/control-plane/publication-active-gate-handoff-contract-selection.js, src/control-plane/publication-active-gate-handoff-contract-decision.js, src/control-plane/publication-active-gate-handoff-contract-evidence.js, src/control-plane/publication-active-gate-handoff-contract.js, src/control-plane/membership-publication-active-gate-reconcile.js, src/control-plane/membership-publication-control-plane-convergence.js
+Forbidden edits: proof names a concrete non-repeated active-gate source contract, proof selects a real owner-boundary migration, proof selects a protocol, model, or topology route that can be implemented in src, fresh representative evidence changes owner, boundary, or dominant reason
+Required latest proof: falsifier: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12, regression: npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage, supporting: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --explain active_gate_snapshot_coverage, supporting: npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json, supporting: npm run work:evidence-summary -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json, supporting: npm run analyze:priority-recovery-residuals -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --markdown
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -190,10 +190,14 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Lane: `causal-escalation`
    - Purpose: Close the fresh owner_reconcile_pending route as architecture-gap analysis and select the next non-repeated scheduling route.
    - First-run reason: Fresh representative evidence now routes active_gate_snapshot_coverage to owner_reconcile_pending with membershipPublicationHandoffOutcomeState=write_deferred, enqueued=false, retryAfterMs=0, progressContract.retryAfterMs=1000, and zero priority-recovery residuals.
-24. [Rolling Restart Active Gate Owner Reconcile Wake Scheduling Route](../packages/todo-20260529-rolling-restart-active-gate-owner-reconcile-wake-scheduling-route.md)
+24. [Rolling Restart Active Gate Owner Reconcile Wake Scheduling Route](../packages/done-20260529-rolling-restart-active-gate-owner-reconcile-wake-scheduling-route.md)
    - Lane: `runtime-owner-boundary`
    - Purpose: Implement the architecture-route scheduling layer selected by owner_reconcile_pending architecture-gap analysis.
    - First-run reason: Architecture-gap analysis selected bounded owner wake scheduling as the non-repeated route for membershipPublicationHandoffOutcomeState=write_deferred with enqueued=false and retryAfterMs=0.
+25. [Rolling Restart Active Gate Timeout After Wake Architecture Gap](../packages/active-20260529-rolling-restart-active-gate-timeout-after-wake-architecture-gap.md)
+   - Lane: `causal-escalation`
+   - Purpose: Analyze the fresh active_gate_timed_out post-wake route before any further startup_active_gate_owner / snapshot_coverage runtime source promotion.
+   - First-run reason: Fresh representative rerun moved owner_reconcile_pending to bounded wake evidence but returned active_gate_snapshot_coverage to active_gate_timed_out with runtimePromotionGuard blocked.
 
 ## Sprint Proof Ladder
 

@@ -507,6 +507,68 @@ function resolveActiveGateMembershipPublicationDeferredReasonCode(
     handoffReasonCode :
     null;
 }
+function resolveActiveGateMembershipPublicationOwnerRecoveryOwnerKey(
+  coordinator,
+  target,
+) {
+  if (typeof coordinator?.buildOwnerKey === TYPEOF.FUNCTION) {
+    const ownerKey = coordinator.buildOwnerKey();
+    if (typeof ownerKey === TYPEOF.STRING && ownerKey.length > NUM.ZERO) {
+      return ownerKey;
+    }
+  }
+  const pendingRecoveryNodeIds = normalizeNodeIdList(
+    target?.pendingRecoveryNodeIds,
+  );
+  return pendingRecoveryNodeIds[NUM.ZERO] ||
+    ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_TEXT;
+}
+function resolveActiveGateMembershipPublicationOwnerRecoveryPressureOutcome(
+  queueOutcome,
+  enqueued,
+) {
+  const pressureOutcome = queueOutcome?.pressureOutcome;
+  return typeof pressureOutcome === TYPEOF.STRING &&
+    pressureOutcome.length > NUM.ZERO ?
+    pressureOutcome :
+    (
+      enqueued === true ?
+        CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_ADMITTED :
+        CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_DEFERRED
+    );
+}
+function buildActiveGateMembershipPublicationOwnerRecoveryWakeConvergence(
+  coordinator,
+  target,
+  enqueued,
+) {
+  const queueOutcome =
+    coordinator?.lastControlPlaneConvergenceQueueOutcome || null;
+  return buildControlPlaneConvergenceOutcome({
+    pressureOutcome:
+      resolveActiveGateMembershipPublicationOwnerRecoveryPressureOutcome(
+        queueOutcome,
+        enqueued,
+      ),
+    ownerKey:
+      resolveActiveGateMembershipPublicationOwnerRecoveryOwnerKey(
+        coordinator,
+        target,
+      ),
+    operation:
+      CONTROL_PLANE_CRITICAL_CONVERGENCE_OPERATION.OWNER_RECOVERY_WAKE,
+    queueOutcome: queueOutcome?.queueOutcome,
+    reasonCode:
+      resolveActiveGateMembershipPublicationDeferredReasonCode(
+        target,
+        queueOutcome,
+      ),
+    retryAfterMs: normalizeControlPlaneConvergenceRetryAfterMs(
+      queueOutcome?.retryAfterMs ?? target?.handoffContract?.retryAfterMs,
+    ),
+    pressureReason: queueOutcome?.pressureReason,
+  });
+}
 function isActiveGateMembershipPublicationOwnerRecoveryWaitTarget(
   target = null,
 ) {
@@ -594,22 +656,49 @@ async function reconcileActiveGateMembershipPublication(
     publicationActiveGateHandoff,
   );
   if (target.reconcileRequired !== true) {
-    const ownerRecoveryWait = isActiveGateMembershipPublicationOwnerRecoveryWaitTarget(target);
-    const drainedSnapshotQueue = ownerRecoveryWait ? await drainActiveGateMembershipPublicationSnapshotQueue() : false;
-    const rawEnqueueOutcome = ownerRecoveryWait && drainedSnapshotQueue !== true &&
-      typeof coordinator?.enqueueClusterMembershipReconcile === TYPEOF.FUNCTION ?
-      coordinator.enqueueClusterMembershipReconcile(
-        ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_REASON,
-        {[ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.PUBLICATION_ACTIVE_GATE_HANDOFF]: publicationActiveGateHandoff},
+    const ownerRecoveryWait =
+      isActiveGateMembershipPublicationOwnerRecoveryWaitTarget(target);
+    const drainedSnapshotQueue = ownerRecoveryWait ?
+      await drainActiveGateMembershipPublicationSnapshotQueue() :
+      false;
+    const rawEnqueueOutcome =
+      ownerRecoveryWait && drainedSnapshotQueue !== true &&
+      typeof coordinator?.enqueueClusterMembershipReconcile ===
+        TYPEOF.FUNCTION ?
+        coordinator.enqueueClusterMembershipReconcile(
+          ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_REASON,
+          {
+            [ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
+              .PUBLICATION_ACTIVE_GATE_HANDOFF]: publicationActiveGateHandoff,
+          },
+        ) :
+        drainedSnapshotQueue;
+    const enqueued =
+      isActiveGateMembershipPublicationHandoffRetryAccepted(
+        rawEnqueueOutcome,
+        coordinator?.lastControlPlaneConvergenceQueueOutcome,
+      );
+    const controlPlaneConvergence = ownerRecoveryWait ?
+      buildActiveGateMembershipPublicationOwnerRecoveryWakeConvergence(
+        coordinator,
+        target,
+        enqueued,
       ) :
-      drainedSnapshotQueue;
+      null;
     return buildActiveGateMembershipPublicationReconcileOutcome(
       target.handoffContract ?
         ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME.TARGET_BLOCKED :
         ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME.NO_CHANGE,
       {
         target,
-        enqueued: isActiveGateMembershipPublicationHandoffRetryAccepted(rawEnqueueOutcome, coordinator?.lastControlPlaneConvergenceQueueOutcome),
+        enqueued,
+        reasonCode:
+          resolveActiveGateMembershipPublicationDeferredReasonCode(
+            target,
+            controlPlaneConvergence,
+          ),
+        retryAfterMs: controlPlaneConvergence?.retryAfterMs,
+        controlPlaneConvergence,
       },
     );
   }
