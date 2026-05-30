@@ -30,7 +30,7 @@
     "commitScope": [
       "src/control-plane/membership-publication-active-gate-reconcile.js",
       "test/control-plane/membership-publication-active-gate-reconcile-owner-recovery.test.js",
-      "work/packages/active-20260529-rolling-restart-active-gate-timeout-after-wake-architecture-gap.md",
+      "work/packages/done-20260529-rolling-restart-active-gate-timeout-after-wake-architecture-gap.md",
       "work/sprints/active-2026-q2-spec-led-runtime-modularization.md",
       "work/sprints/current-blocker.json",
       "work/sprints/current-blocker.md"
@@ -81,7 +81,7 @@
     },
     "result": "fixed",
     "outcome": "theory-confirmed",
-    "successorPackage": "work/packages/active-20260529-rolling-restart-active-gate-timeout-after-wake-architecture-gap.md"
+    "successorPackage": "work/packages/done-20260529-rolling-restart-active-gate-timeout-after-wake-architecture-gap.md"
   },
   "theoryLedger": "no ledger update: this package implements the selected scheduling architecture-route ledger ref and records the source proof result, representative reduction, and active successor package in closureSummary.",
   "representativeResidual": {
@@ -471,4 +471,4 @@ Agent identity is optional provenance. Use the compact five-field shape for new 
 1. Focused package commit: 385f90b424510e4e58a1b239585eeeba61f19851
 2. Push target: origin/codex/pending-ack-eligibility-filter
 3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
-4. Pushed: no
+4. Pushed: yes 2026-05-30T00:05:03.088Z

@@ -470,3 +470,17 @@ Each entry must include these labels:
 - Supersedes: none
 - Superseded by: none
 - Next implication: Open the scheduling architecture-route implementation with theoryLoop.architectureRoute before any further startup_active_gate_owner / snapshot_coverage source work.
+
+## theory-20260529-rolling-restart-active-gate-timeout-after-wake-architecture-gap
+
+- Status: supported
+- Scenario/gate: rolling-restart / active_gate_snapshot_coverage
+- Owner/boundary: startup_active_gate_owner / snapshot_coverage
+- Hypothesis: After the bounded owner wake scheduling route, active_gate_timed_out with membershipPublicationHandoffOutcomeEnqueued=true and retryAfterMs=100 is still repeated architecture-level evidence; runtime source promotion remains blocked unless proof names a non-repeated owner wake delivery/observation contract, owner migration, protocol/model/topology route, fresh representative movement, or representative-green result.
+- Probe: `npm run work:scenario-route -- test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason active_gate_timed_out --explain active_gate_snapshot_coverage`
+- Artifact/result: `test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json` - scenario-route reports `runtimePromotionGuard.state=blocked` with reason `saturated_history_requires_non_repeated_source_contract`; frontier-history reports `loopHealth=exhausted` with same-mechanism-repeat and pair-alternation-post-rederive; topology-convergence exposes activeGateState=timed_out, snapshot coverage 1/5, selected_snapshot_source_timeout, snapshot_repair_deferred, membershipPublicationHandoffOutcomeEnqueued=true, membershipPublicationHandoffOutcomeRetryAfterMs=100, and zero priority-recovery residual witnesses.
+- Representative movement: architecture-gap
+- Linked packages: `work/packages/active-20260529-rolling-restart-active-gate-timeout-after-wake-architecture-gap.md`
+- Supersedes: theory-20260529-rolling-restart-active-gate-owner-reconcile-handoff-scheduling-architecture-gap
+- Superseded by: none
+- Next implication: Close the timeout-after-wake analysis as architecture-gap continuation and open the owner wake delivery architecture experiment; do not edit runtime source from this artifact until a future proof names a non-repeated owner-owned transition, owner-boundary migration, protocol/model/topology route, fresh representative movement, or representative-green result.
