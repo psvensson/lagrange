@@ -64,6 +64,54 @@ Validators execute in distinct phases to ensure the integrity of the codebase an
 
 ---
 
+## Ready-To-Go Package Runbook
+<a name="ready-to-go-package-runbook"></a>
+
+This is the canonical step order for opening a package another worker can start. It encodes the forcing functions in the exact sequence they fire, so you do not discover them one rejection at a time.
+
+### Step 0 — Read the frontier before choosing a package class
+
+Run `npm run work:context` and `npm run work:frontier-history -- --owner <owner> --boundary <boundary> --limit 12`. The frontier history decides what package class is even *legal* on this pair:
+
+* **`loopHealth: healthy` / no alternation** → a normal runtime/scenario package is allowed.
+* **`pair-alternation-post-rederive` (often `loopHealth: exhausted`)** → runtime and `system-theory-rederive` packages on this pair are **blocked at `--pre-impl`**. You MUST open an **architecture-gap-analysis** package first (it selects a non-repeated route or records an architecture-gap stop). This is the single most common cause of "the validator rejected my package": the class was illegal for the frontier, not the metadata.
+
+The escape hatches the `--pre-impl` rejection names are: open an architecture-gap-analysis package, **or** an autonomous architecture experiment. The `--architecture-route-layer` marker alone does **not** exempt a runtime package on a saturated pair.
+
+### Step 1 — Architecture-gap-analysis package shape (when Step 0 demands it)
+
+An architecture-gap-analysis package is **analysis-only — it writes no `src/`**. Required shape (a missing piece is a separate `--pre-impl` rejection each time, so set them all up front):
+
+* `modelFit.packageClass`: `architecture-gap-analysis` (or set top-level `architectureGapAnalysis: true`). Either flag flips the package off the source-required theory-loop path.
+* `scope.writeScope` / `commitScope`: **no `src/` file** — only this package, the sprint, and `work/theory-ledger.md`. Put candidate runtime files in `candidateRuntimeFiles`.
+* The Markdown body must use a `## Architecture Gap Decision` heading and must **not** contain `## Theory Loop` or `## Theory Loop Package Contract` headings — either of those re-triggers the source-required validator that demands `src/` in scope.
+* `theoryLoop` (if present) must **omit** `enforcement: source-code-package-required` / `sourceChangeRequired` / `successorRequired`; instead carry `gateMarker`, `jointFalsifierCommand`, `result`, `outcome`.
+* `architectureDecisionGate`: `status: selected`, `trigger: frontier-oscillation`, non-empty concrete `triggerEvidence`, ≥1 concrete `choices[]` (each with `id`, `route` ∈ {`continue-local-proof`, `owner-boundary-migration`, `architecture-package`, `human-escalation`}, `summary`, `proof[]`), and `selectedChoice` matching a choice `id`.
+* `architectureGapDecision`: `selectedRoute`, `decisionDate`, `reason`, `runtimePromotion`, `successorRule`.
+* `scenarioCausalClosure`: causal-escalation also requires `recentFrontierHistory` (non-empty array), `oscillationCheck`, `handoffInvariant`, and `stopCondition` ∈ {`continue-local-fix`, `bounded-non-frontier`, `migrate-owner-boundary`, `classification-only-stop`, `architecture-gap-stop`, `representative-green`, `human-escalation`} (use `architecture-gap-stop`). `resultClassification` ∈ {`pending-before-probe`, `representative-green`, `reduced`, `same-frontier`, `migrated`, `classification-only`, `architecture-gap`, `contradictory`}.
+* `execution.theoryLedgerRefs`: at least one real entry from `work/theory-ledger.md` (required once the pair has ≥3 consecutive closed packages — the sticky-theory-ledger rule).
+* Proof ladder for analysis packages is `falsifier:`/`regression:`/`supporting:` analysis commands (e.g. `work:frontier-history`, `work:scenario-route`, `model:check`) — **not** a `src/` falsifier.
+
+### Step 2 — `work:package:new` quirks
+
+* `--lane` takes the **legacy alias** (`test-only-proof`, `runtime-owner-boundary`, `causal-escalation`), not the canonical lane name.
+* The command prints a preview by default; `--write` actually writes and is **atomic** — it validates first and refuses to write a partial/invalid file.
+* Concrete `representativeResidual` requires `--scenario` and `--artifact`.
+* The scaffolder does **not** generate `causalGovernance` or `scenarioCausalClosure`; add those blocks by hand.
+
+### Step 3 — Activate, then validate in the right order
+
+1. Link the package in the sprint `## Package Queue` with its `todo-` filename, then `npm run work:sprint:queue --activate <slug>` (renames `todo-* → active-*`, refreshes current-blocker). Activation needs `causalGovernance` + `scenarioCausalClosure` present.
+2. `npm run work:validate -- --entry`.
+3. `npm run work:repair` whenever the validator reports a **stale current-blocker snapshot** (it lags package metadata edits), then re-run `--entry`.
+4. `npm run work:validate -- --pre-impl`.
+
+### Step 4 — Freshness review from a real subagent
+
+`--pre-impl` requires the `## Execution Evidence` `freshness-review` item to record a **real** `Agent <name> (<agent-id>)` (UUID `8-4-4-4-12`) from a **fresh subagent** with `decision: fresh` and a terminal outcome (`validated`/`passed`/`green`). A parent-written placeholder (or names like `current-session`/`parent codex`) is rejected. Spawn the verifier subagent to perform the freshness review and write its own identity, then re-run `--entry` and `--pre-impl`.
+
+---
+
 ## Proof Requirements
 <a name="proof-requirements"></a>
 
