@@ -65,23 +65,23 @@ priority-recovery or active-gate frontier.
 ## Current Edge Card
 
 ```text
-Representative artifact: test-output/reports/rolling-restart-spec-led-runtime-modularization-theory-loop-green.report.json
+Representative artifact: test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json
 Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending
-Active package: work/packages/done-20260530-rolling-restart-active-gate-bounded-reentry-model-route-implementation.md
+Active package: work/packages/done-20260530-rolling-restart-active-gate-bounded-reentry-representative-rerun.md
 Active package owner: startup_active_gate_owner
 Active package boundary: snapshot_coverage
 Selected cause: owner_reconcile_pending
-Required action: Implement the ActiveGate.tla bounded-re-entry invariant in the decision rule table: exclude already covered/published nodes from the owner_reconcile_pending re-entry path in src/control-plane/publication-active-gate-handoff-contract-decision.js
-Representative status: active-theory-loop
-Causal outcome: pending-before-rerun
-Architecture gate: selected / continue-local-proof
-Expected delta: Classify whether fresh representative evidence is green, reduced, migrated, same-frontier, architecture-gap, contradictory, or needs an autonomous architecture experiment before runtime promotion.
-Current state: Package opened with declared owner, boundary, scope, proof, and stop rule.
-Allowed edits: src/control-plane/publication-active-gate-handoff-contract-decision.js
+Required action: Run a representative scenario rerun and perform causal explain/scenario route checks.
+Representative status: reduced
+Causal outcome: reduced
+Architecture gate: watching / unknown
+Expected delta: The representative rerun will demonstrate that active-gate snapshot-coverage moves off owner_reconcile_pending toward convergence.
+Current state: The model-layer bounded-re-entry invariant is implemented in the decision rule table. We must run a representative scenario rerun to generate fresh distributed evidence and confirm that the active-gate snapshot-coverage oscillation is resolved.
+Allowed edits: work/packages/done-20260530-rolling-restart-active-gate-bounded-reentry-representative-rerun.md, work/sprints/active-2026-q2-spec-led-runtime-modularization.md
 Candidate runtime files: unknown
-Forbidden edits: Active-gate admission stays strict while runtimePromotionAllowed=false; the publication active-gate handoff decision contract remains the sole owner of reconcile and re-entry truth, and bounding re-entry must not relax any safety invariant the model checks (PublishedSubsetCovered, CoveredDisjointPending).
-Required latest proof: falsifier: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json --fast-local --verbose, regression: npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js, fixture: npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js, consumer: npm test -- test/control-plane/membership-publication-coordinator-main-stage-2.js, supporting: npm run model:check
-Allowed stop modes: success-condition-met only; representative-green, owner-boundary-migration, architecture-gap, same-frontier, classification-only, needs-rerun, pending, and unknown are package outcomes unless they exactly match the original sprint success condition
+Forbidden edits: Verification must not edit runtime files.
+Required latest proof: falsifier: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json --fast-local --verbose, regression: npm run work:scenario-route -- test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json --owner startup_active_gate_owner --boundary snapshot_coverage, supporting: npm run work:evidence-summary -- test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json
+Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
 ## Joint Coupled-Invariant Probe
@@ -207,7 +207,7 @@ Allowed stop modes: success-condition-met only; representative-green, owner-boun
    - Lane: `runtime-owner-boundary`
    - Purpose: Implement the model-layer bounded-re-entry invariant in the decision rule table (exclude already covered/published nodes from the owner_reconcile_pending re-entry path) in src/control-plane/publication-active-gate-handoff-contract-decision.js.
    - First-run reason: The architecture-gap package selected the model-layer route as the non-repeated route to resolve owner_reconcile_pending liveness oscillation, and this package implements the selected route in the active-gate handoff contract.
-28. [Rolling Restart Active Gate Bounded Reentry Representative Rerun](../packages/todo-20260530-rolling-restart-active-gate-bounded-reentry-representative-rerun.md)
+28. [Rolling Restart Active Gate Bounded Reentry Representative Rerun](../packages/done-20260530-rolling-restart-active-gate-bounded-reentry-representative-rerun.md)
    - Lane: `causal-escalation`
    - Purpose: Run the representative scenario rerun to generate fresh distributed evidence after the model-layer bounded-re-entry implementation, verifying if active-gate snapshot coverage converges.
    - First-run reason: The model route implementation package has successfully completed, and we must rerun the representative scenario to gather fresh evidence.

@@ -538,5 +538,20 @@ Each entry must include these labels:
 - Representative movement: architecture-gap
 - Linked packages: `work/packages/active-20260530-rolling-restart-active-gate-bounded-reentry-model-route-implementation.md`
 - Supersedes: theory-20260530-active-gate-bounded-reentry-model-architecture-gap
-- Superseded by: none
+- Superseded by: theory-20260530-active-gate-bounded-reentry-representative-rerun
 - Next implication: Run a fresh representative scenario rerun to generate fresh representative routing evidence and verify if the active-gate snapshot-coverage oscillation is eliminated from rolling-restart.
+
+## theory-20260530-active-gate-bounded-reentry-representative-rerun
+
+- Status: supported
+- Scenario/gate: rolling-restart / active_gate_snapshot_coverage
+- Owner/boundary: startup_active_gate_owner / snapshot_coverage
+- Hypothesis: Verifying the representative scenario rerun following implementation of the model-layer bounded-reentry invariant (AllowUnboundedReentry=FALSE) confirms that active-gate snapshot-coverage moves off owner_reconcile_pending toward convergence.
+- Probe: `npm run work:scenario-route -- test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json --owner startup_active_gate_owner --boundary snapshot_coverage`
+- Artifact/result: `test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json` - representative rerun confirms active-gate snapshot-coverage oscillation is resolved; the scenario progresses past the active-gate snapshot-coverage phase to a downstream table partition visibility timeout.
+- Representative movement: reduced
+- Linked packages: `work/packages/active-20260530-rolling-restart-active-gate-bounded-reentry-representative-rerun.md`
+- Supersedes: theory-20260530-active-gate-bounded-reentry-model-implementation
+- Superseded by: none
+- Next implication: The active-gate snapshot-coverage oscillation is resolved (status: reduced). The sprint can now proceed to address the downstream startup readiness or table partition visibility blockers.
+

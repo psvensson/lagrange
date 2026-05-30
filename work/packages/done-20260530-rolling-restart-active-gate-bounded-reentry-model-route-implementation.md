@@ -73,7 +73,7 @@
     "successorRequired": true,
     "outcome": "theory-confirmed",
     "result": "architecture-gap",
-    "successorPackage": "work/packages/todo-20260530-rolling-restart-active-gate-bounded-reentry-representative-rerun.md",
+    "successorPackage": "work/packages/active-20260530-rolling-restart-active-gate-bounded-reentry-representative-rerun.md",
     "architectureRoute": {
       "selectedLayer": "model",
       "ledgerRef": "theory-20260530-active-gate-bounded-reentry-model-architecture-gap",
