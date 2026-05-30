@@ -711,6 +711,7 @@ const REPRESENTATIVE_RESIDUAL_FIELDS = Object.freeze([
   'scenario',
   'artifact',
   'frontier',
+  'residualCount',
   'owner',
   'boundary',
   'dominantReason',

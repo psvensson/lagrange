@@ -2,6 +2,58 @@ import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
 import {normalizeMetadata} from './work-package-schema.js';
+import {computeResidualCountFromArtifact} from './work-residual-count.js';
+import {runSprintPush} from './work-sprint-push.js';
+
+// R14 ceremony fold. Before closing, bind representativeResidual.residualCount to
+// the real evidence artifact when the package names an artifact but left the
+// count unrecorded. This keeps the artifact -> residualCount -> metricDelta chain
+// of trust intact so the R14 consistency gate validates against measured data.
+// Additive and best-effort: never throws; a missing/unreadable artifact or an
+// already-present residualCount leaves the package untouched.
+function autofillResidualCount(packagePath, relativePackagePath) {
+  let content;
+  try {
+    content = fs.readFileSync(packagePath, 'utf8');
+  } catch {
+    return;
+  }
+  const openMarker = '<!-- work-package';
+  const closeMarker = '-->';
+  const openIndex = content.indexOf(openMarker);
+  const closeIndex = content.indexOf(closeMarker, openIndex);
+  if (openIndex === -1 || closeIndex === -1) return;
+  const jsonText = content.slice(openIndex + openMarker.length, closeIndex).trim();
+  let parsed;
+  try {
+    parsed = JSON.parse(jsonText);
+  } catch {
+    return;
+  }
+  const residual = parsed?.representativeResidual;
+  if (!residual || typeof residual !== 'object') return;
+  const existing = residual.residualCount;
+  if (existing !== undefined && existing !== null && existing !== '') return;
+  const artifact = typeof residual.artifact === 'string' ? residual.artifact : '';
+  if (!artifact) return;
+  const count = computeResidualCountFromArtifact(artifact);
+  if (!Number.isInteger(count) || count < 0) return;
+  residual.residualCount = count;
+  const nextJson = JSON.stringify(parsed, null, 2);
+  const nextContent =
+    content.slice(0, openIndex + openMarker.length) +
+    `\n${nextJson}\n` +
+    content.slice(closeIndex);
+  try {
+    fs.writeFileSync(packagePath, nextContent, 'utf8');
+    console.log(
+      `Bound representativeResidual.residualCount=${count} from artifact ` +
+      `${artifact} in ${relativePackagePath}.`,
+    );
+  } catch {
+    // best-effort
+  }
+}
 
 function renumberSprintQueue(fileContent) {
   const lines = fileContent.split('\n');
@@ -33,6 +85,7 @@ function renumberSprintQueue(fileContent) {
 async function main() {
   const args = process.argv.slice(2);
   const dryRun = args.includes('--dry-run');
+  const push = args.includes('--push');
   const packageArg = args.find((arg) => !arg.startsWith('--'));
 
   if (!packageArg) {
@@ -57,6 +110,11 @@ async function main() {
     );
     process.exit(1);
   }
+
+  // R14. Bind the residual count to the evidence artifact before any validation
+  // runs, so the closure-phase metricDelta/residual consistency gate sees the
+  // measured number rather than an unrecorded field.
+  autofillResidualCount(packagePath, relativePackagePath);
 
   // 1. Run active package validation before the tracker validates the done target.
   console.log('Running active package closure preflight...');
@@ -108,10 +166,14 @@ async function main() {
   if (dryRun) {
     console.log('\n[DRY RUN] Would execute:');
     console.log(`- Rename ${relativePackagePath} -> ${relativeTargetPath}`);
+    console.log('- Bind representativeResidual.residualCount from the evidence artifact (R14)');
     console.log('- Update status to "done" in metadata');
     console.log('- Rewrite all references to the package in the workspace');
     console.log('- Renumber the sprint queue if required');
     console.log('- Stage only commitScope files plus sprint and blocker files');
+    if (push) {
+      console.log('- Push the close commit and flip package ledgers to Pushed: yes (--push)');
+    }
     return;
   }
 
@@ -214,8 +276,26 @@ async function main() {
   }
 
   console.log('\nPackage successfully closed!');
+
+  if (push) {
+    console.log('\nPushing close commit to remote (--push)...');
+    const pushStatus = runSprintPush([]);
+    if (pushStatus !== 0) {
+      console.error(
+        'Push failed. The close commit is local; run ' +
+        '`npm run work:sprint:push` once the remote is reachable.',
+      );
+      process.exit(pushStatus);
+    }
+    console.log('Push complete; package ledgers flipped to Pushed: yes.');
+    console.log('\nNext step:');
+    console.log('  - Verify/advance the next package:   npm run work:advance -- --check');
+    return;
+  }
+
   console.log('\nNext steps:');
   console.log('  1. Push the close commit to remote:   npm run work:sprint:push');
+  console.log('     (or re-run work:close with --push to fold push into close)');
   console.log('  2. Verify/advance the next package:   npm run work:advance -- --check');
 }
 

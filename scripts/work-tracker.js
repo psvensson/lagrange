@@ -4007,6 +4007,20 @@ export function validateRepresentativeResidualContract(
     );
   }
 
+  const residualCountRaw =
+    representativeResidual[REPRESENTATIVE_RESIDUAL_COUNT_FIELD];
+  if (residualCountRaw !== undefined && residualCountRaw !== null &&
+    residualCountRaw !== '') {
+    const residualCountValue = Number(residualCountRaw);
+    if (!Number.isInteger(residualCountValue) || residualCountValue < 0) {
+      errors.push(
+        `${filePath}: representativeResidual.residualCount must be a ` +
+        'non-negative integer (the artifact-derived frontier count R14 ' +
+        'binds metricDelta to).',
+      );
+    }
+  }
+
   return errors;
 }
 
@@ -6716,6 +6730,20 @@ const ARCHITECTURE_ROUTE_STATE_NONE = 'none';
 const ARCHITECTURE_ROUTE_STATE_IMPLEMENT_PENDING = 'implement-pending';
 const ARCHITECTURE_ROUTE_STATE_IMPLEMENTED = 'implemented';
 
+// R14. Metric-progress + layer-rotation forcing. R13 forces the loop to
+// implement a selected route, but an implemented route that does not move the
+// representative metric must not be followed by yet another same-layer route on
+// the same boundary — that is the higher-level oscillation observed after R13
+// (six consecutive `protocol` routes on one handoff surface with metricDelta=0).
+// When the most recent ROUTE_ROTATION_WINDOW closed routes on a pair all share
+// the candidate's layer AND all moved the metric by <= 0, the next route on that
+// pair must rotate to a different layer, migrate the owner-boundary, or record a
+// stop. metricDelta is read from observablePrediction.metricDelta; the residual
+// count it derives from is bound to the representative artifact (see
+// representativeResidual.residualCount and computeResidualCountFromArtifact).
+const ROUTE_ROTATION_WINDOW = 2;
+const REPRESENTATIVE_RESIDUAL_COUNT_FIELD = 'residualCount';
+
 export function metadataIsArchitectureGapAnalysis(metadata, filePath) {
   if (!metadata || typeof metadata !== 'object') return false;
   if (metadata.architectureGapAnalysis === true) return true;
@@ -7496,6 +7524,166 @@ export function validateArchitectureRouteImplementation(
   errors.push(...validateArchitectureRouteMarkerShape(metadata, filePath, {
     ledgerPath: options.ledgerPath,
   }));
+  return errors;
+}
+
+// Reads observablePrediction.metricDelta as a finite number, or null when it is
+// absent or not a recorded number. metricDelta is "representative metric points
+// moved" and is non-negative by contract, so <= 0 means "no measured progress".
+function readPackageMetricDelta(metadata) {
+  const prediction = metadata?.[OBSERVABLE_PREDICTION_FIELD];
+  if (!isObjectRecord(prediction)) return null;
+  const raw = prediction[OBSERVABLE_PREDICTION_METRIC_DELTA_FIELD];
+  if (raw === null || raw === undefined || raw === '') return null;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : null;
+}
+
+// Reads representativeResidual.residualCount as a non-negative integer, or null.
+// This is the artifact-bound frontier count the metricDelta derives from.
+function readPackageResidualCount(metadata) {
+  const residual = metadata?.[REPRESENTATIVE_RESIDUAL_METADATA_FIELD];
+  if (!isObjectRecord(residual)) return null;
+  const raw = residual[REPRESENTATIVE_RESIDUAL_COUNT_FIELD];
+  if (raw === null || raw === undefined || raw === '') return null;
+  const value = Number(raw);
+  return Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+// Returns the closed architecture-route packages on the alternating pair that
+// contains owner/boundary, newest-first, each annotated with its selected layer,
+// recorded metricDelta, and residualCount. Reuses the same pair-scoping helpers
+// as R13's computeArchitectureRouteState.
+function getRouteChainForPair(packageDir, owner, boundary) {
+  if (!owner || !boundary) return [];
+  const pairBoundaries = getAlternatingPairBoundariesForGate(
+    packageDir, owner, boundary,
+  );
+  const relevant = new Set([
+    `${owner}::${boundary}`,
+    ...pairBoundaries.map((p) => `${p.owner}::${p.boundary}`),
+  ]);
+  return listPackagesInDir(packageDir)
+    .filter((pkg) => pkg.status === 'done')
+    .filter((pkg) => relevant.has(`${pkg.owner}::${pkg.boundary}`))
+    .map((pkg) => ({
+      pkg,
+      meta: readPackageMetadata(path.join(packageDir, pkg.fileName)),
+    }))
+    .filter((entry) => entry.meta && getArchitectureRoute(entry.meta))
+    .map((entry) => {
+      const route = getArchitectureRoute(entry.meta);
+      return {
+        fileName: entry.pkg.fileName,
+        opened: entry.pkg.opened,
+        selectedLayer: normalizeLedgerText(
+          route[ARCHITECTURE_ROUTE_SELECTED_LAYER_FIELD],
+        ).toLowerCase(),
+        metricDelta: readPackageMetricDelta(entry.meta),
+        residualCount: readPackageResidualCount(entry.meta),
+      };
+    })
+    .sort((a, b) => String(b.opened || '').localeCompare(String(a.opened || '')));
+}
+
+// R14. Metric-progress + layer-rotation forcing.
+// Blocks a new architecture-route candidate whose selectedLayer matches the last
+// ROUTE_ROTATION_WINDOW closed routes on the pair when ALL of those routes
+// recorded metricDelta <= 0. The route must then rotate to a different layer,
+// migrate the owner-boundary, or record a stop. Additive: fires only for route
+// candidates (a valid architectureRoute marker) once enough measured zero-delta
+// same-layer history exists; routes with unmeasured (null) metricDelta and the
+// first window of routes on a fresh layer are exempt.
+export function validateMetricProgressLayerRotation(
+  metadata,
+  filePath,
+  options = {},
+) {
+  const errors = [];
+  if (!metadata || typeof metadata !== 'object') return errors;
+  const phase = options.phase || VALIDATION_PHASE_PRE_IMPL;
+  if (phase !== VALIDATION_PHASE_PRE_IMPL) return errors;
+  const status = options.status || normalizeLedgerText(metadata.status);
+  if (status !== STATUS_ACTIVE && status !== STATUS_TODO) return errors;
+  const route = getArchitectureRoute(metadata);
+  if (!route) return errors;
+  const candidateLayer = normalizeLedgerText(
+    route[ARCHITECTURE_ROUTE_SELECTED_LAYER_FIELD],
+  ).toLowerCase();
+  if (!candidateLayer) return errors;
+  const owner = normalizeLedgerText(metadata.owner);
+  const boundary = normalizeLedgerText(metadata.boundary);
+  if (!owner || !boundary) return errors;
+  const packageDir = options.packageDir
+    ? path.resolve(options.packageDir)
+    : path.resolve(process.cwd(), COMPOSITIONAL_GATE_PACKAGE_DIR);
+  const chain = getRouteChainForPair(packageDir, owner, boundary);
+  const window = chain.slice(0, ROUTE_ROTATION_WINDOW);
+  if (window.length < ROUTE_ROTATION_WINDOW) return errors;
+  const allZeroSameLayer = window.every(
+    (r) => r.metricDelta !== null &&
+      r.metricDelta <= 0 &&
+      r.selectedLayer === candidateLayer,
+  );
+  if (!allZeroSameLayer) return errors;
+  const otherLayers = [...ARCHITECTURE_ROUTE_LAYER_VALUES].filter(
+    (l) => l !== candidateLayer,
+  );
+  errors.push(
+    `${filePath}: metric-progress-layer-rotation-required — the last ` +
+    `${ROUTE_ROTATION_WINDOW} closed ${candidateLayer} routes on owner=${owner} ` +
+    `boundary=${boundary} (${window.map((r) => r.fileName).join(', ')}) each moved ` +
+    'the representative metric by <= 0. Another ' +
+    `${candidateLayer} route is not permitted: rotate to a different ` +
+    `selectedLayer (one of {${otherLayers.join(', ')}}), migrate the owner-` +
+    'boundary, or record a Termination/architecture-gap stop. Repeating the ' +
+    'same non-moving layer is the higher-level oscillation R14 forbids.',
+  );
+  return errors;
+}
+
+// R14 (consistency half). Binds the self-reported metricDelta to the recorded,
+// artifact-derived residual count chain so progress cannot be fabricated. At
+// closure, when a route records both observablePrediction.metricDelta and
+// representativeResidual.residualCount, and its predecessor route on the pair
+// also recorded a residualCount, require
+//   metricDelta === max(0, predecessorResidualCount - thisResidualCount).
+// Additive: skips when either residualCount or the predecessor's is absent.
+export function validateMetricDeltaResidualConsistency(
+  metadata,
+  filePath,
+  options = {},
+) {
+  const errors = [];
+  if (!metadata || typeof metadata !== 'object') return errors;
+  const phase = options.phase || VALIDATION_PHASE_PRE_IMPL;
+  if (phase !== VALIDATION_PHASE_CLOSURE) return errors;
+  const route = getArchitectureRoute(metadata);
+  if (!route) return errors;
+  const metricDelta = readPackageMetricDelta(metadata);
+  const residualCount = readPackageResidualCount(metadata);
+  if (metricDelta === null || residualCount === null) return errors;
+  const owner = normalizeLedgerText(metadata.owner);
+  const boundary = normalizeLedgerText(metadata.boundary);
+  if (!owner || !boundary) return errors;
+  const packageDir = options.packageDir
+    ? path.resolve(options.packageDir)
+    : path.resolve(process.cwd(), COMPOSITIONAL_GATE_PACKAGE_DIR);
+  const thisFile = path.basename(String(filePath || ''));
+  const predecessor = getRouteChainForPair(packageDir, owner, boundary)
+    .find((r) => r.fileName !== thisFile && r.residualCount !== null);
+  if (!predecessor) return errors;
+  const expected = Math.max(0, predecessor.residualCount - residualCount);
+  if (metricDelta !== expected) {
+    errors.push(
+      `${filePath}: metric-delta-residual-inconsistent — ` +
+      `observablePrediction.metricDelta=${metricDelta} does not match the ` +
+      `artifact-bound residual movement (predecessor ${predecessor.fileName} ` +
+      `residualCount=${predecessor.residualCount} - this residualCount=` +
+      `${residualCount} = ${expected}). Record the metricDelta that the ` +
+      'representative residual actually moved, not a hand-picked value.',
+    );
+  }
   return errors;
 }
 
@@ -9533,6 +9721,16 @@ function runPackageValidationsSync(filePath, content, fileStatus, metadata, opti
     status: fileStatus,
     packageDir: options.packageDir,
     ledgerPath: options.ledgerPath,
+  }));
+  errors.push(...validateMetricProgressLayerRotation(metadata, relativePath, {
+    phase,
+    status: fileStatus,
+    packageDir: options.packageDir,
+  }));
+  errors.push(...validateMetricDeltaResidualConsistency(metadata, relativePath, {
+    phase,
+    status: fileStatus,
+    packageDir: options.packageDir,
   }));
   errors.push(...validateTheoryLoopPackageContract(
     content,

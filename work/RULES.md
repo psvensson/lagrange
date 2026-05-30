@@ -446,6 +446,45 @@ packages and sprints without the relevant fields/signals are exempt.
     architecture-gap analysis (`state: none`) and legacy packages are exempt
     no-ops.
 
+* **R14. Metric-Progress Layer-Rotation Forcing** —
+  `validateMetricProgressLayerRotation`
+  (`metric-progress-layer-rotation-required`) at `--pre-impl`, and
+  `validateMetricDeltaResidualConsistency`
+  (`metric-delta-residual-inconsistent`) at `--closure`. R13 broke the
+  *analysis↔implementation* deadlock but a higher-level oscillation remained:
+  the loop could keep selecting the **same `selectedLayer`** on the same pair
+  while the representative metric never moved (49 closures recorded
+  `observablePrediction.metricDelta` ≤ 0 yet still closed). R14 makes a
+  non-moving layer a non-valid redirect. Mechanics:
+  * **Rotation gate (pre-impl).** When the last `ROUTE_ROTATION_WINDOW` (2)
+    closed architecture-route packages on the pair *all* recorded a measured
+    `metricDelta <= 0` **and** share the candidate's `selectedLayer`, another
+    same-layer route is rejected. The package MUST instead rotate to a
+    different `selectedLayer` (one of the other `{protocol, scheduling,
+    ownership, observation, topology, model}` layers), migrate the
+    owner-boundary, or record a Termination/architecture-gap stop. Repeating a
+    layer that has twice failed to move the metric is the oscillation R14
+    forbids. Additive: an *unmeasured* `metricDelta` (`null`) does **not**
+    count as no-progress, and fewer than two measured zero-delta same-layer
+    routes never blocks — so first attempts on a fresh layer and legacy
+    packages are exempt no-ops.
+  * **Consistency gate (closure).** `metricDelta` is self-reported, so R14 binds
+    it to the real evidence. The representative residual count
+    (`representativeResidual.residualCount`) is the topology-convergence frontier
+    length, auto-filled from the artifact at `work:close` (chain of trust:
+    artifact → `residualCount` → `metricDelta`). When a closing route records
+    both `metricDelta` and `residualCount`, and its predecessor route on the
+    pair also recorded a `residualCount`, closure requires
+    `metricDelta === max(0, predecessorResidualCount − thisResidualCount)`.
+    A hand-picked `metricDelta` that does not match the measured residual
+    movement is rejected. Additive: skips whenever either `residualCount` is
+    absent (legacy routes lack the field and are never blocked).
+  * **Ceremony fold.** `npm run work:close -- <pkg> --push` folds the close
+    commit, push, and per-package `Pushed:` ledger flip into one atomic step
+    (default no-flag behaviour unchanged), and the close auto-binds
+    `residualCount` from the artifact so the consistency gate validates against
+    measured data with no extra package or commit.
+
 ### Compositional Auto-Promote Rule
 
 The frontier-history tool (`npm run work:frontier-history`) emits a
@@ -545,6 +584,12 @@ sprint may stop only for one of exactly these reasons:
   the only valid redirect on that pair is the **architecture-route
   implementation** (R13). Opening another rederive or architecture-gap analysis
   on the pair is not a valid redirect and is rejected at `--pre-impl`.
+  **A second narrowing (R14):** when the last two closed routes on the pair
+  share a `selectedLayer` and both moved the representative metric by `<= 0`,
+  re-selecting that same layer is **not** a valid redirect — the redirect must
+  rotate to a different `selectedLayer`, migrate the owner-boundary, or
+  `terminate` on a Termination Condition. A non-moving layer repeated is the
+  higher-level oscillation; it never counts as autonomous progress.
 
 **Recording a stop.** When a sprint legitimately terminates (or a blocked
 handoff applies), add a `## Theory Loop Termination` section with:
