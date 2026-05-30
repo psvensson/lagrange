@@ -3828,6 +3828,39 @@ export function metadataAllowsRepairDirtyScopeAutocomplete(metadata = {}) {
   return !metadataHasPureClassificationIntent(metadata);
 }
 
+export function metadataShouldIgnoreDirtyFileInRepair(file, metadata = {}) {
+  const normalized = normalizeLedgerText(file);
+  if (normalized.startsWith('work/packages/')) return true;
+  if (normalized.startsWith('work/sprints/')) return true;
+  if (normalized === 'work/model-ledger.jsonl') return true;
+  if (normalized === 'work/theory-ledger.md') return true;
+  if (normalized === 'package.json' || normalized === 'package-lock.json') return true;
+
+  const lane = metadataLane(metadata);
+  if (lane === 'mechanical-maintenance' && isSourceWritePath(normalized)) {
+    return true;
+  }
+  if (lane === 'test-only-proof' && !isTestOnlyProofWritePath(normalized)) {
+    return true;
+  }
+  if (lane === 'read-review-doc-only') {
+    return true;
+  }
+
+  const isClassificationConcern =
+    metadataHasPureClassificationIntent(metadata) ||
+    metadata.dominantReason === 'pure_classification_scope_guard' ||
+    lane === 'lightweight-maintenance';
+
+  if (isClassificationConcern) {
+    if (normalized.startsWith('src/') || normalized.startsWith('test/')) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function isMaterialOscillationResult(metadata) {
   const result = scenarioClosureResult(metadata);
   return result.length === NUM_ZERO ||
@@ -12493,24 +12526,7 @@ async function repairCommand() {
               return file;
             })
             .filter(Boolean)
-            .filter(file => {
-              if (file.startsWith('work/packages/')) return false;
-              if (file.startsWith('work/sprints/')) return false;
-              if (file === 'work/model-ledger.jsonl') return false;
-              if (file === 'work/theory-ledger.md') return false;
-              if (file === 'package.json' || file === 'package-lock.json') return false;
-
-              if (metadata.lane === 'mechanical-maintenance' && isSourceWritePath(file)) {
-                return false;
-              }
-              if (metadata.lane === 'test-only-proof' && !isTestOnlyProofWritePath(file)) {
-                return false;
-              }
-              if (metadata.lane === 'read-review-doc-only') {
-                return false;
-              }
-              return true;
-            });
+            .filter(file => !metadataShouldIgnoreDirtyFileInRepair(file, metadata));
         } catch (err) {
           // ignore
         }

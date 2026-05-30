@@ -65,22 +65,22 @@ priority-recovery or active-gate frontier.
 ## Current Edge Card
 
 ```text
-Representative artifact: test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json
-Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending
-Active package: work/packages/done-20260530-rolling-restart-active-gate-bounded-reentry-representative-rerun.md
-Active package owner: startup_active_gate_owner
-Active package boundary: snapshot_coverage
-Selected cause: owner_reconcile_pending
-Required action: Run a representative scenario rerun and perform causal explain/scenario route checks.
-Representative status: reduced
-Causal outcome: reduced
-Architecture gate: watching / unknown
-Expected delta: The representative rerun will demonstrate that active-gate snapshot-coverage moves off owner_reconcile_pending toward convergence.
-Current state: The model-layer bounded-re-entry invariant is implemented in the decision rule table. We must run a representative scenario rerun to generate fresh distributed evidence and confirm that the active-gate snapshot-coverage oscillation is resolved.
-Allowed edits: work/packages/done-20260530-rolling-restart-active-gate-bounded-reentry-representative-rerun.md, work/sprints/active-2026-q2-spec-led-runtime-modularization.md
+Representative artifact: none
+Visible first frontier: unknown
+Active package: none
+Active package owner: none
+Active package boundary: none
+Selected cause: none
+Required action: none
+Representative status: unknown
+Causal outcome: unknown
+Architecture gate: not-required / unknown
+Expected delta: unknown
+Current state: No active work package. Start a new package when implementation resumes.
+Allowed edits: none
 Candidate runtime files: unknown
-Forbidden edits: Verification must not edit runtime files.
-Required latest proof: falsifier: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json --fast-local --verbose, regression: npm run work:scenario-route -- test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json --owner startup_active_gate_owner --boundary snapshot_coverage, supporting: npm run work:evidence-summary -- test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json
+Forbidden edits: none
+Required latest proof: none
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -211,7 +211,10 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Lane: `causal-escalation`
    - Purpose: Run the representative scenario rerun to generate fresh distributed evidence after the model-layer bounded-re-entry implementation, verifying if active-gate snapshot coverage converges.
    - First-run reason: The model route implementation package has successfully completed, and we must rerun the representative scenario to gather fresh evidence.
-
+29. [Workflow Classification Scope Guard](../packages/done-20260527-workflow-classification-scope-guard.md)
+   - Lane: `lightweight-maintenance`
+   - Purpose: Prevent repair from adopting unrelated dirty implementation files into classifier package scope.
+   - First-run reason: Repair autocompletion can read dirty git status and incorrectly add runtime/test/script/report files to a classifier package scope.
 
 ## Sprint Proof Ladder
 

@@ -329,20 +329,39 @@ describe('work tracker package doctor', () => {
   });
 
   it('allows classification-only fast path without subagent ledger', () => {
+    const metadata = {
+      ...CLASSIFICATION_ONLY_FAST_PATH_METADATA,
+      lane: LANE_DIAGNOSTIC_CLASSIFICATION,
+    };
     const content = [
       '# Classification Only Package',
       '',
       '<!-- work-package',
-      JSON.stringify(CLASSIFICATION_ONLY_FAST_PATH_METADATA, null, 2),
+      JSON.stringify(metadata, null, 2),
       '-->',
       '',
       CORE_LOGIC_BRIEF_VALID_CONTENT.split('\n').slice(2).join('\n'),
       CAUSAL_DECISION_CONTRACT_VALID_CONTENT.split('\n').slice(2).join('\n'),
       MODEL_FIT_VALID_SPARK_SAFE_CONTENT.split('\n').slice(2).join('\n'),
+      '',
+      '## Mechanism Card',
+      '',
+      '- Failure Mechanism: none',
+      '- Stable Facts: none',
+      '- Changed Facts: none',
+      '- Rejected Alternatives: none',
+      '- Owner who decides: none',
+      '- Current Action: none',
+      '- Missing Transition Or Observation: none',
+      '- Smallest falsifying probe: none',
+      '- Expected movement: none',
+      '- Negative result means: none',
+      '- Escalation rule: none',
     ].join('\n');
     const report = buildPackageDoctorLines(
       WORK_TRACKER_LEDGER_TEST_FILE,
       content,
+      {packageDir: path.join(process.cwd(), 'work', 'packages', '__hermetic_none__')}
     );
     const rendered = report.lines.join('\n');
 
@@ -474,8 +493,22 @@ describe('work tracker package doctor', () => {
 
   it('treats legacy subagent ledger sections as advisory once execution evidence exists',
     () => {
+      const doctorMetadata = JSON.parse(
+        WORK_TRACKER_DOCTOR_CONTENT.match(/<!-- work-package\s*([\s\S]*?)\s*-->/)[1]
+      );
+      doctorMetadata.closureSummary = {
+        resultClassification: 'representative-green',
+        predictionAccuracy: 'matched',
+        observedMovement: 'reduced',
+        successorReason: 'no-successor',
+        nextOwnerBoundary: 'package_doctor / complete',
+        evidenceArtifact: 'test-output/reports/package-doctor.report.json'
+      };
       const content = [
-        WORK_TRACKER_DOCTOR_CONTENT,
+        '# Test Package',
+        '<!-- work-package',
+        JSON.stringify(doctorMetadata, null, 2),
+        '-->',
         '',
         WORK_TRACKER_EXECUTION_EVIDENCE_VERIFIED_CONTENT
           .split('\n')
