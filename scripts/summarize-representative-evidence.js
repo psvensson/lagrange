@@ -36,6 +36,8 @@ const FILE_REPORT_SUFFIX = '.report.json';
 const PROPERTY_FAILURE_BUNDLE = 'failureBundle';
 const PROPERTY_PUBLICATION_CONVERGENCE = 'publicationConvergence';
 const PROPERTY_SUMMARY = 'summary';
+const PROPERTY_MODEL_REPORT = 'modelReport';
+const MODEL_REPORT_SCHEMA_VERSION = 'active-gate-model-report-v1';
 const OUTPUT_SCHEMA_VERSION = 'representative-evidence-summary-v1';
 const OUTPUT_FORMAT_JSON = 'json';
 const OUTPUT_FORMAT_MARKDOWN = 'markdown';
@@ -173,7 +175,80 @@ function summarizeCausal(analysis) {
   };
 }
 
+function isModelReportArtifact(artifact) {
+  return Boolean(
+    artifact &&
+    (artifact[PROPERTY_MODEL_REPORT] === true ||
+      artifact.schemaVersion === MODEL_REPORT_SCHEMA_VERSION),
+  );
+}
+
+// Phase C - render a formal-model report (fast-check or TLC) into the same
+// summary contract used for representative runtime evidence so the theory-loop
+// handoff treats both checkers uniformly. The model's converged/residual feed
+// the topology frontier; a dedicated modelReport block preserves liveness.
+function summarizeModelReport(artifact) {
+  const frontierCount = Number.isInteger(artifact.frontierCount) ?
+    artifact.frontierCount :
+    (artifact.converged ? NUM_ZERO : NUM_ONE);
+  const residual = Number.isInteger(artifact.residual) ?
+    artifact.residual :
+    frontierCount;
+  const owner = artifact.owner || ABSENT_VALUE;
+  const boundary = artifact.boundary || ABSENT_VALUE;
+  const frontierEdgeId = artifact.converged ?
+    ABSENT_VALUE :
+    `${owner}/${boundary}`;
+  const dominantReason = artifact.converged ?
+    'model-converged' :
+    `model-${artifact.mode || 'stall'}-residual`;
+  return {
+    schemaVersion: OUTPUT_SCHEMA_VERSION,
+    sourceArtifact: artifact.sourceArtifact || ABSENT_VALUE,
+    scenario: artifact.scenario || ABSENT_VALUE,
+    topology: {
+      scenario: artifact.scenario || ABSENT_VALUE,
+      firstFrontierEdgeId: frontierEdgeId,
+      frontierCount,
+      dominantWitness: {
+        edgeId: frontierEdgeId,
+        owner,
+        boundary,
+        frontierState: artifact.converged ? 'converged' : 'frontier',
+        dominantReason,
+        evidencePath: ABSENT_VALUE,
+        reasons: [],
+        runtimePromotionGuard: ABSENT_VALUE,
+        runtimePromotionGuardReason: ABSENT_VALUE,
+        runtimePromotionGuardOwner: ABSENT_VALUE,
+        runtimePromotionGuardBoundary: ABSENT_VALUE,
+        publicationActiveGateHandoffRuntimePromotionAllowed: valueOrAbsent(
+          artifact.promotionAllowed,
+        ),
+      },
+      nextExpectedFrontier: ABSENT_VALUE,
+    },
+    causal: summarizeCausal({}),
+    modelReport: {
+      source: artifact.source || ABSENT_VALUE,
+      mode: artifact.mode || ABSENT_VALUE,
+      converged: Boolean(artifact.converged),
+      residual,
+      frontierCount,
+      livenessHolds: Boolean(artifact.livenessHolds),
+      expectConverged: valueOrAbsent(artifact.expectConverged),
+      expectationMet: valueOrAbsent(artifact.expectationMet),
+    },
+  };
+}
+
 function buildRepresentativeEvidenceSummary(artifactPath, artifact) {
+  if (isModelReportArtifact(artifact)) {
+    return {
+      ...summarizeModelReport(artifact),
+      sourceArtifact: artifactPath,
+    };
+  }
   const enrichedArtifact = enrichArtifactWithSidecarsSync(
     artifactPath,
     artifact,

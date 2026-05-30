@@ -1,0 +1,40 @@
+{
+  "schemaVersion": "active-gate-model-manifest-v1",
+  "protocol": "active-gate-snapshot-coverage-convergence",
+  "description": "Shared single source of truth for the abstract state machine of the rolling-restart active-gate / snapshot-coverage convergence protocol with owner handoff. Both the fast-check executable model (test/model/active-gate) and the TLA+ specification (models/active-gate/ActiveGate.tla) MUST mirror exactly these state variables and actions. The Phase D drift lint (test/model/active-gate/manifest-drift.test.js) fails if any surface diverges.",
+  "stateVariables": [
+    "covered",
+    "published",
+    "fresh",
+    "pending"
+  ],
+  "actions": [
+    "ReconcileOwner",
+    "DeferReentry",
+    "AdvanceSnapshotCoverage",
+    "PublishNode",
+    "StaleEvent",
+    "RefreshSnapshot"
+  ],
+  "progressActions": [
+    "ReconcileOwner",
+    "AdvanceSnapshotCoverage",
+    "PublishNode",
+    "RefreshSnapshot"
+  ],
+  "regressionActions": [
+    "DeferReentry",
+    "StaleEvent"
+  ],
+  "convergence": "published == Nodes AND fresh == TRUE AND Cardinality(covered) >= Quorum (Quorum = floor(|Nodes|/2)+1)",
+  "safetyInvariants": [
+    "PublishedSubsetCovered",
+    "CoveredDisjointPending"
+  ],
+  "liveness": "EventuallyConverged",
+  "realReducerOracle": {
+    "module": "src/control-plane/publication-active-gate-handoff-contract-fence.js",
+    "function": "buildPublicationActiveGateCatchupFence",
+    "binding": "For every reachable abstract state, the abstract convergence predicate MUST equal buildPublicationActiveGateCatchupFence(options).promotionAllowed, where options = { expectedNodeIds: Nodes, publishedActiveNodeIds: published, snapshotCoverage: { nodeIds: covered, fresh } }."
+  }
+}

@@ -22,3 +22,10 @@ test-output/
 # Beads / Dolt files (added by bd init)
 .dolt/
 .beads-credential-key
+
+# Vendored TLA+ model checker (auto-fetched by scripts/model-tlc.js)
+tools/tla2tools.jar
+
+# TLC liveness counterexample trace artifacts
+models/**/*_TTrace_*.tla
+models/**/*_TTrace_*.bin

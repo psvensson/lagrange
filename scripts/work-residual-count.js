@@ -37,6 +37,16 @@ export function computeResidualCountFromArtifact(artifactPath) {
 // pre-summarized artifact that already exposes a frontier array or frontierCount.
 export function residualCountFromArtifactObject(artifact) {
   if (!artifact || typeof artifact !== 'object') return null;
+  if (artifact.modelReport === true ||
+      artifact.schemaVersion === 'active-gate-model-report-v1') {
+    if (Number.isInteger(artifact.frontierCount) && artifact.frontierCount >= 0) {
+      return artifact.frontierCount;
+    }
+    if (Number.isInteger(artifact.residual) && artifact.residual >= 0) {
+      return artifact.residual;
+    }
+    return artifact.converged === true ? 0 : null;
+  }
   if (Array.isArray(artifact.frontier)) return artifact.frontier.length;
   const summaryCount = artifact.summary?.frontierCount ??
     artifact.topology?.frontierCount;
