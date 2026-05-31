@@ -8035,22 +8035,40 @@ export function validateRepresentativeProgressCircuitBreaker(
 // ---------------------------------------------------------------------------
 const OWNER_DOSSIER_RECENT_WINDOW = 5;
 
+function contractOwnerBoundaryScore(contract, owner, boundary) {
+  const recordOwner = normalizeLedgerText(contract.owner);
+  const recordBoundary = normalizeLedgerText(contract.boundary);
+  if (recordOwner === owner && recordBoundary === boundary) {
+    return NUM_FOUR;
+  }
+  const owners = Array.isArray(contract.owners) ? contract.owners : [];
+  const ownerMatch = owners.some(
+    (entry) => isObjectRecord(entry) &&
+      normalizeLedgerText(entry.owner) === owner &&
+      normalizeLedgerText(entry.boundary) === boundary,
+  );
+  if (!ownerMatch) {
+    return NUM_ZERO;
+  }
+  return owners.length === NUM_ONE ? NUM_THREE : NUM_TWO;
+}
+
 function findContractRecordForPair(contractDir, owner, boundary) {
   const dir = contractDir ?
     path.resolve(contractDir) :
     path.resolve(process.cwd(), CONTRACT_RECORDS_DIR);
   let files;
   try {
-    files = fsSync.readdirSync(dir);
+    files = fsSync.readdirSync(dir).sort();
   } catch (_e) {
     return null;
   }
+  let bestRecord = null;
+  let bestScore = NUM_ZERO;
   for (const fileName of files) {
     if (!fileName.endsWith('.md')) continue;
     const contract = readSystemContractBlock(path.join(dir, fileName));
     if (!isObjectRecord(contract)) continue;
-    const recordOwner = normalizeLedgerText(contract.owner);
-    const recordBoundary = normalizeLedgerText(contract.boundary);
     const routes = Array.isArray(contract.modelProvenRoutes) ?
       contract.modelProvenRoutes :
       [];
@@ -8059,11 +8077,16 @@ function findContractRecordForPair(contractDir, owner, boundary) {
         normalizeLedgerText(r.owner) === owner &&
         normalizeLedgerText(r.boundary) === boundary,
     );
-    if ((recordOwner === owner && recordBoundary === boundary) || routeMatch) {
-      return {file: path.join(CONTRACT_RECORDS_DIR, fileName), contract};
+    const score = Math.max(
+      contractOwnerBoundaryScore(contract, owner, boundary),
+      routeMatch ? NUM_ONE : NUM_ZERO,
+    );
+    if (score > bestScore) {
+      bestRecord = {file: path.join(CONTRACT_RECORDS_DIR, fileName), contract};
+      bestScore = score;
     }
   }
-  return null;
+  return bestRecord;
 }
 
 export function buildOwnerDossier(owner, boundary, options = {}) {

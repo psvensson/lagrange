@@ -78,54 +78,54 @@ current-blocker files, sprint state, package queues, or theory-ledger decisions.
 
 - Goal state: representative rolling-restart evidence exits green with no active
   residual at priority-recovery, active-gate, or publication handoff frontiers.
-- Current causal thesis: model contracts are green and fresh representative
-  evidence after the observation-route source change still selects
-  `active_gate_snapshot_coverage` under `startup_active_gate_owner /
-  snapshot_coverage` with `owner_reconcile_pending`; the source-route shape is
-  visible as `wait_owner_recovery` with one pending recovery node and zero pending
-  reconcile nodes, but runtime promotion is blocked by saturated same-frontier
-  history until a non-repeated route is selected.
-- Competing hypotheses: H1 a new non-repeated active-gate source contract exists
-  for `selected_snapshot_source_timeout` plus `snapshot_repair_deferred`; H2 the
-  same evidence is an architecture-gap stop; H3 ownership migrates to startup
-  readiness after active-gate coverage improves; H4 the evidence becomes
+- Current causal thesis: the priority-recovery representative rerun kept the first
+  frontier at `priority_recovery_partition_progress` under
+  `operation_workflow_owner / rebalancer_handoff`, but reduced the residual from
+  8 witnesses to 2. Active-gate remains visible only as a downstream deferred edge
+  with a bounded retry progress contract.
+- Competing hypotheses: H1 priority recovery drains on one more fresh
+  representative rerun; H2 priority recovery repeats with no reduction and must
+  redirect to a concrete runtime/tooling successor or architecture analysis; H3
+  ownership migrates after priority recovery clears; H4 evidence becomes
   unavailable or contradictory.
 - Confidence and evidence: high — the active-gate model route is liveness-proven
   (`test-output/reports/active-gate-tlc-route.model.report.json`,
   `livenessHolds: true`) and the selected observation route is recorded in
   `architecture/contracts/active-gate-convergence.md`.
-- Expected green path: select one non-repeated successor route from the fresh
-  same-frontier evidence, then open only the selected runtime, migration,
-  representative-green, or architecture-gap package.
+- Expected green path: rederive the rebalancer-handoff route from the reduced
+  priority-recovery artifact, then open only the selected concrete successor:
+  runtime transition, architecture/model repair, evidence regeneration, owner
+  migration, or accepted bounded-backpressure continuation.
 - Wrong direction signals: editing runtime before the discriminator selects the
   route, widening scope beyond the declared owner/boundary, or treating
   classification-only output as sprint success.
 - Next best package:
-  `work/packages/todo-20260531-rolling-restart-active-gate-observation-route-same-frontier-architecture-experiment.md`
-- Redirect rule: if the rerun is red, run canonical route/evidence tools and open
-  the selected successor; do not stop the theory loop on non-terminal
-  classification, same-frontier, migration, or architecture-gap evidence.
+  `work/packages/done-20260530-rolling-restart-priority-recovery-rebalancer-handoff-contract-gap-system-theory-rederive.md`
+- Redirect rule: if the rederive cannot select one route, open the
+  architecture-gap or contract/model repair successor; do not stop the theory
+  loop on non-terminal classification, same-frontier, migration, or
+  architecture-gap evidence.
 
 ## Current Edge Card
 
 ```text
-Representative artifact: test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json
-Visible first frontier: active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending
-Active package: none
-Active package owner: representative_evidence_owner
-Active package boundary: rolling_restart_rerun
-Selected cause: post_observation_route_rerun
-Required action: Close the rerun as same-frontier and queue the same-frontier architecture experiment before any runtime source write.
-Representative status: same-frontier
-Causal outcome: continue_local_fix
-Architecture gate: watching / unknown
-Expected delta: Fresh representative evidence stayed same-frontier but exposed the source-route shape; open the selected architecture experiment to choose a non-repeated route before runtime promotion.
-Current state: Fresh representative rolling-restart evidence after the observation-route source implementation stayed same-frontier at active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending.
-Allowed edits: work/packages/done-20260531-rolling-restart-active-gate-observation-route-rerun-gate.md, work/packages/todo-20260531-rolling-restart-active-gate-observation-route-same-frontier-architecture-experiment.md, work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md, work/theory-ledger.md
-Candidate runtime files: unknown
-Forbidden edits: Verification must not edit runtime files.
-Required latest proof: falsifier: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json --fast-local --verbose, regression: npm run work:scenario-route -- test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending --explain active_gate_snapshot_coverage, supporting: npm run work:evidence-summary -- test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json
-Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
+Representative artifact: test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json
+Visible first frontier: priority_recovery_partition_progress / operation_workflow_owner / rebalancer_handoff / priority_recovery_event_driven_wait
+Active package: work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-owner-wake-route.md
+Active package owner: operation_workflow_owner
+Active package boundary: rebalancer_handoff
+Selected cause: priority_recovery_event_driven_wait
+Required action: Implement the selected scheduling-layer architecture route so accepted priority-recovery backpressure re-enters owner progress through a bounded wake path before another representative rerun.
+Representative status: active-theory-loop
+Causal outcome: accept_classified_backpressure
+Architecture gate: selected / non-repeated-runtime-transition
+Expected delta: Focused owner wake route proof adds a bounded progress path for accepted priority-recovery backpressure before representative rerun.
+Current state: Owner-dossier now resolves the durable rebalancer handoff System Contract Record, and frontier-history reports operation_workflow_owner / rebalancer_handoff is in architecture-route implement-pending state.
+Allowed edits: work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-owner-wake-route.md, src/rebalancer/operation-workflow-owner-ports.js, test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js, work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md, work/theory-ledger.md, scripts/work-tracker.js, test/scripts/work-owner-dossier.test.js
+Candidate runtime files: architecture/contracts/rolling-restart-rebalancer-handoff.md, docs/specs/decision-tables/rebalancer-handoff-priority-recovery.json
+Forbidden edits: operation_workflow_owner / rebalancer_handoff owns accepted priority-recovery backpressure progress until focused proof names migration.
+Required latest proof: falsifier: npm test -- test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js, regression: npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress, supporting: npm run work:owner-dossier -- --owner operation_workflow_owner --boundary rebalancer_handoff --json
+Allowed stop modes: success-condition-met only; representative-green, owner-boundary-migration, architecture-gap, same-frontier, classification-only, needs-rerun, pending, and unknown are package outcomes unless they exactly match the original sprint success condition
 ```
 
 ## Package Queue
@@ -140,10 +140,58 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Fresh representative rolling-restart rerun after the observation-layer
      source route, then canonical route classification before any further
      runtime package.
-3. `todo` -
-   [Rolling Restart Active Gate Observation Route Same Frontier Architecture Experiment](work/packages/todo-20260531-rolling-restart-active-gate-observation-route-same-frontier-architecture-experiment.md)
+3. `superseded` -
+   [Rolling Restart Active Gate Observation Route Same Frontier Architecture Experiment](work/packages/superseded-20260531-rolling-restart-active-gate-observation-route-same-frontier-architecture-experiment.md)
    - Same-frontier architecture discriminator after the fresh rerun stayed at
-     active_gate_snapshot_coverage with runtimePromotionGuard blocked.
+     active_gate_snapshot_coverage with runtimePromotionGuard blocked. Superseded
+     after pre-implementation validation selected the model-proven route instead
+     of another analysis package.
+4. `superseded` -
+   [Rolling Restart Active Gate Owner Recovery Retry Schedule](work/packages/superseded-20260531-rolling-restart-active-gate-owner-recovery-retry-schedule.md)
+   - Candidate source package for the model-proven observation route. Superseded
+     because pre-implementation validation blocked another local active-gate
+     slice and fresh representative evidence migrated to priority recovery.
+5. `done` -
+   [Rolling Restart Active Gate Post Architecture Gap Rerun Gate](work/packages/done-20260531-rolling-restart-active-gate-post-architecture-gap-rerun-gate.md)
+   - Fresh representative rerun selected because the source successor is blocked
+     before implementation by the representative-progress circuit breaker.
+     Closed as migrated to priority recovery rebalancer handoff.
+6. `done` -
+   [Rolling Restart Priority Recovery Backpressure Rerun Gate](work/packages/done-20260531-rolling-restart-priority-recovery-backpressure-rerun-gate.md)
+   - Fresh representative rerun after priority recovery was classified as
+     retryable backpressure with zero failed invariants. Closed as reduced:
+     witnesses dropped from 8 to 2 while the same priority-recovery frontier
+     remained first.
+7. `superseded` -
+   [Rolling Restart Priority Recovery Backpressure Drain Rerun Gate](work/packages/superseded-20260531-rolling-restart-priority-recovery-backpressure-drain-rerun-gate.md)
+   - Superseded before implementation because pre-implementation validation
+     blocked another representative drain rerun under the progress circuit
+     breaker.
+8. `done` -
+   [Rolling Restart Priority Recovery Rebalancer Handoff System Theory Rederive](work/packages/done-20260530-rolling-restart-priority-recovery-rebalancer-handoff-contract-gap-system-theory-rederive.md)
+   - System-theory rederive selected when the drain rerun is blocked by the
+     representative progress circuit breaker and rebalancer handoff frontier
+     history reports same-mechanism-repeat contract_gap.
+9. `done` -
+   [Rolling Restart Priority Recovery Rebalancer Handoff Contract Gap Architecture Experiment](work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-contract-gap-architecture-experiment.md)
+   - Architecture-gap successor selected workflow_tooling_owner /
+     owner_dossier_contract_binding after proof found no non-repeated runtime
+     transition and owner-dossier could not bind the valid rebalancer handoff
+     System Contract Record.
+10. `done` -
+   [Owner Dossier Contract Owners Binding Repair](work/packages/done-20260531-owner-dossier-contract-owners-binding-repair.md)
+   - Workflow-tooling repair bound owner-dossier contract lookup to validated
+     `owners[]` entries and now resolves the dedicated rebalancer handoff
+     System Contract Record.
+11. `active` -
+   [Rolling Restart Priority Recovery Rebalancer Handoff Owner Wake Route](work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-owner-wake-route.md)
+   - Runtime architecture-route implementation for the selected scheduling-layer
+     owner wake/progress path before another representative rerun.
+12. `todo` -
+   [Rolling Restart Priority Recovery Rebalancer Handoff Owner Wake Rerun Gate](work/packages/todo-20260531-rolling-restart-priority-recovery-rebalancer-handoff-owner-wake-rerun-gate.md)
+   - Fresh representative rolling-restart rerun after the focused owner wake
+     proof, then canonical route classification before any further source
+     package.
 
 ## Sprint Proof Ladder
 
@@ -157,7 +205,7 @@ Before closing this sprint, record the following evidence:
 
 ## Joint Coupled-Invariant Probe
 
-- Command: npm run work:scenario-route -- test-output/reports/rolling-restart-contract-first-green-rerun.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending --explain active_gate_snapshot_coverage
+- Command: npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress # rebalancer_handoff snapshot_coverage # coupled-invariant
 - Last run: 2026-05-31
 - Last residual count: 1
 - Residual trend: decreasing

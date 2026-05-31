@@ -57,6 +57,8 @@ const OPERATION_WORKFLOW_OWNER_PORT_PROGRESS_CONTRACT = Object.freeze({
   EVENT_WAKE_SOURCE: 'operation_lifecycle_event',
   REMOTE_HANDOFF_RETRY_WAKE_SOURCE: 'rebalancer_handoff_retry',
   RETRY_WAKE_SOURCE: 'rebalancer_timer',
+  EVENT_OWNER_REENTRY_STATE: 'event_owner_reentry_observed',
+  BOUNDED_OWNER_REENTRY_STATE: 'bounded_owner_reentry_scheduled',
   TERMINAL_STATE: 'satisfied',
   EVIDENCE_PATH:
     'test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json',
@@ -717,20 +719,33 @@ async function reconcileOperationWorkflowStaleProgress(
   return owner.reconcileOperationLifecycle(operation, context);
 }
 
+function isOperationWorkflowOwnerPortRemoteHandoffRetryProgress(progress) {
+  return progress?.waitMode === PRIORITY_RECOVERY_WAIT_MODE.RETRY_SCHEDULED &&
+    progress?.blockingBoundary ===
+      PRIORITY_RECOVERY_BLOCKING_BOUNDARY.REBALANCER_HANDOFF;
+}
+
 function resolveOperationWorkflowOwnerPortProgressContractWakeSource(
   progress,
 ) {
-  if (progress?.waitMode !== PRIORITY_RECOVERY_WAIT_MODE.RETRY_SCHEDULED) {
-    return OPERATION_WORKFLOW_OWNER_PORT_PROGRESS_CONTRACT.EVENT_WAKE_SOURCE;
-  }
-  if (
-    progress?.blockingBoundary ===
-      PRIORITY_RECOVERY_BLOCKING_BOUNDARY.REBALANCER_HANDOFF
-  ) {
+  if (isOperationWorkflowOwnerPortRemoteHandoffRetryProgress(progress)) {
     return OPERATION_WORKFLOW_OWNER_PORT_PROGRESS_CONTRACT
       .REMOTE_HANDOFF_RETRY_WAKE_SOURCE;
   }
+  if (progress?.waitMode !== PRIORITY_RECOVERY_WAIT_MODE.RETRY_SCHEDULED) {
+    return OPERATION_WORKFLOW_OWNER_PORT_PROGRESS_CONTRACT.EVENT_WAKE_SOURCE;
+  }
   return OPERATION_WORKFLOW_OWNER_PORT_PROGRESS_CONTRACT.RETRY_WAKE_SOURCE;
+}
+
+function resolveOperationWorkflowOwnerPortProgressContractOwnerReentry(
+  progress,
+) {
+  return isOperationWorkflowOwnerPortRemoteHandoffRetryProgress(progress) ?
+    OPERATION_WORKFLOW_OWNER_PORT_PROGRESS_CONTRACT
+      .BOUNDED_OWNER_REENTRY_STATE :
+    OPERATION_WORKFLOW_OWNER_PORT_PROGRESS_CONTRACT
+      .EVENT_OWNER_REENTRY_STATE;
 }
 
 function resolveOperationWorkflowOwnerPortProgressContractRetryAfterMs(
@@ -769,6 +784,8 @@ function buildOperationWorkflowOwnerPortProgressContract(result) {
       progress.nextAction || progress.nextRequiredAction,
       OPERATION_WORKFLOW_OWNER_PORT_PROGRESS_CONTRACT.DEFAULT_STATE,
     ),
+    ownerReentryState:
+      resolveOperationWorkflowOwnerPortProgressContractOwnerReentry(progress),
     wakeSource:
       resolveOperationWorkflowOwnerPortProgressContractWakeSource(progress),
     retryAfterMs:

@@ -627,5 +627,110 @@ Each entry must include these labels:
 - Representative movement: same-frontier
 - Linked packages: `work/packages/active-20260531-rolling-restart-active-gate-observation-route-rerun-gate.md`, `work/packages/todo-20260531-rolling-restart-active-gate-observation-route-same-frontier-architecture-experiment.md`
 - Supersedes: theory-20260531-rolling-restart-active-gate-observation-route-implementation
-- Superseded by: none
+- Superseded by: theory-20260531-rolling-restart-active-gate-observation-route-architecture-gap
 - Next implication: Open the same-frontier architecture experiment to select a non-repeated source contract, owner-boundary migration, representative-green path, or architecture-gap stop before any runtime source write.
+
+## theory-20260531-rolling-restart-active-gate-observation-route-architecture-gap
+
+- Status: supported
+- Scenario/gate: rolling-restart / active_gate_snapshot_coverage
+- Owner/boundary: startup_active_gate_owner / snapshot_coverage
+- Hypothesis: The post-observation-route `wait_owner_recovery` evidence is visible but not a non-repeated source route; with `runtimePromotionGuard.state=blocked`, runtime source promotion remains blocked unless fresh proof names a rotated architecture route, owner-boundary migration, representative movement, or representative-green.
+- Probe: `npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12`
+- Artifact/result: `test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json` - frontier-history reports `loopHealth=exhausted` with `same-mechanism-repeat` and `pair-alternation-post-rederive`; scenario-route keeps `active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending` with `runtimePromotionGuard.state=blocked`; topology-convergence exposes `wait_owner_recovery`, one pending recovery node, zero pending reconcile nodes, `selected_snapshot_source_timeout`, and `snapshot_repair_deferred`; source review found no named non-repeated post-wait active-gate successor.
+- Representative movement: architecture-gap
+- Linked packages: `work/packages/active-20260531-rolling-restart-active-gate-observation-route-same-frontier-architecture-experiment.md`
+- Supersedes: theory-20260531-rolling-restart-active-gate-observation-route-same-frontier-rerun
+- Superseded by: theory-20260531-rolling-restart-active-gate-post-architecture-gap-rerun
+- Next implication: Do not open another local startup_active_gate_owner / snapshot_coverage runtime patch from this artifact. Continue only through fresh representative movement, owner-boundary migration, a rotated architecture route, or representative-green proof.
+
+## theory-20260531-rolling-restart-active-gate-post-architecture-gap-rerun
+
+- Status: supported
+- Scenario/gate: rolling-restart / priority_recovery_partition_progress
+- Owner/boundary: operation_workflow_owner / rebalancer_handoff
+- Hypothesis: Fresh representative evidence after the active-gate architecture-gap selector is the valid discriminator; it should either move active-gate out of first frontier, migrate ownership, go green, or select a non-runtime successor before another active-gate source package.
+- Probe: `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-active-gate-post-architecture-gap-rerun.report.json --fast-local --verbose`
+- Artifact/result: `test-output/reports/rolling-restart-active-gate-post-architecture-gap-rerun.report.json` - representative rerun failed, but first frontier migrated to `priority_recovery_partition_progress / operation_workflow_owner / rebalancer_handoff / priority_recovery_event_driven_wait`; causal model reports `accept_classified_backpressure`, `classified_backpressure`, `topology:priority_recovery_partition_progress`, zero failed invariants, and priority recovery residuals report 8 recovering-in-flight witnesses in one owner-boundary group.
+- Representative movement: migrated
+- Linked packages: `work/packages/active-20260531-rolling-restart-active-gate-post-architecture-gap-rerun-gate.md`
+- Supersedes: theory-20260531-rolling-restart-active-gate-observation-route-architecture-gap
+- Superseded by: theory-20260531-rolling-restart-priority-recovery-backpressure-reduced-rerun
+- Next implication: Continue through `operation_workflow_owner / rebalancer_handoff` priority recovery backpressure evidence; do not open another local `startup_active_gate_owner / snapshot_coverage` runtime patch from the previous same-frontier artifact.
+
+## theory-20260531-rolling-restart-priority-recovery-backpressure-reduced-rerun
+
+- Status: supported
+- Scenario/gate: rolling-restart / priority_recovery_partition_progress
+- Owner/boundary: operation_workflow_owner / rebalancer_handoff
+- Hypothesis: Classified priority-recovery backpressure is making bounded progress and can continue draining on fresh representative evidence without source edits.
+- Probe: `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json --fast-local --verbose`
+- Artifact/result: `test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json` - representative rerun failed at the downstream benchmark_events partition visibility timeout, but the first frontier remained `priority_recovery_partition_progress / operation_workflow_owner / rebalancer_handoff / priority_recovery_event_driven_wait` and priority-recovery residual witnesses reduced from 8 to 2. Causal model reports `accept_classified_backpressure`, `classified_backpressure`, `topology:priority_recovery_partition_progress`, zero failed invariants, and zero exhausted budgets.
+- Representative movement: reduced
+- Linked packages: `work/packages/active-20260531-rolling-restart-priority-recovery-backpressure-rerun-gate.md`
+- Supersedes: theory-20260531-rolling-restart-active-gate-post-architecture-gap-rerun
+- Superseded by: theory-20260531-rolling-restart-priority-recovery-rebalancer-handoff-contract-gap-rederive
+- Next implication: Continue with a fresh priority-recovery drain rerun gate before runtime source promotion. If the next representative artifact repeats priority recovery with no further reduction, redirect to a concrete runtime/tooling successor or architecture/causal successor instead of another local source patch.
+
+## theory-20260531-rolling-restart-priority-recovery-rebalancer-handoff-contract-gap-rederive
+
+- Status: supported
+- Scenario/gate: rolling-restart / priority_recovery_partition_progress
+- Owner/boundary: operation_workflow_owner / rebalancer_handoff
+- Hypothesis: The reduced priority-recovery accepted-backpressure residual is no longer a valid direct runtime or representative-rerun continuation; same-mechanism-repeat contract_gap requires a rederived route and architecture-gap successor before another local slice.
+- Probe: `npm run work:system-theory:rederive -- --owner operation_workflow_owner --boundary rebalancer_handoff --limit 12 --sprint work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md --write`
+- Artifact/result: `test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json` - system-theory rederive reported `rederivationRequired=true` with `same-mechanism-repeat contract_gap` and stamped the sprint. Frontier history reported `loopHealth=rederive-in-progress`, `continuationRequired=true`, and `architectureRouteState=none`; scenario-route and causal-model kept `accept_classified_backpressure` / `classified_backpressure` with 2 priority-recovery witnesses, zero failed invariants, and zero exhausted budgets.
+- Representative movement: architecture-gap
+- Linked packages: `work/packages/active-20260530-rolling-restart-priority-recovery-rebalancer-handoff-contract-gap-system-theory-rederive.md`, `work/packages/todo-20260531-rolling-restart-priority-recovery-rebalancer-handoff-contract-gap-architecture-experiment.md`
+- Supersedes: theory-20260531-rolling-restart-priority-recovery-backpressure-reduced-rerun
+- Superseded by: theory-20260531-rolling-restart-owner-dossier-contract-binding-repair-route
+- Next implication: Close the rederive as architecture-gap continuation and open the architecture-gap analysis successor. Do not run another representative drain rerun or operation-workflow source package until the successor selects a non-repeated runtime transition, owner-boundary migration, evidence regeneration, model/contract repair, representative-green path, or architecture-gap stop.
+
+## theory-20260531-rolling-restart-owner-dossier-contract-binding-repair-route
+
+- Status: supported
+- Scenario/gate: rolling-restart / priority_recovery_partition_progress
+- Owner/boundary: workflow_tooling_owner / owner_dossier_contract_binding
+- Hypothesis: The architecture-gap proof cannot select a non-repeated
+  operation-workflow source transition while owner-dossier under-classifies the
+  durable rebalancer handoff System Contract Record; the lightest legal route is
+  a workflow-tooling repair that binds records declared through `owners[]`.
+- Probe: `npm run work:frontier-history -- --owner operation_workflow_owner --boundary rebalancer_handoff --limit 12`, `npm run work:owner-dossier -- --owner operation_workflow_owner --boundary rebalancer_handoff --json`, and `npm run work:contract:check -- architecture/contracts/rolling-restart-rebalancer-handoff.md`
+- Artifact/result: `test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json` - frontier-history kept `same-mechanism-repeat contract_gap` with no non-repeated runtime transition; owner-dossier returned `contractRecord: null`; contract-check passed and the durable contract records `operation_workflow_owner / rebalancer_handoff` in `owners[]`, proving a workflow-tooling lookup drift rather than a runtime source route.
+- Representative movement: migrated
+- Linked packages: `work/packages/active-20260531-rolling-restart-priority-recovery-rebalancer-handoff-contract-gap-architecture-experiment.md`, `work/packages/todo-20260531-owner-dossier-contract-owners-binding-repair.md`
+- Supersedes: theory-20260531-rolling-restart-priority-recovery-rebalancer-handoff-contract-gap-rederive
+- Superseded by: theory-20260531-rolling-restart-priority-recovery-rebalancer-handoff-owner-wake-architecture-gap
+- Next implication: Activate the workflow_tooling_owner / owner_dossier_contract_binding repair package. Do not open operation-workflow runtime source or another representative drain rerun until `work:owner-dossier` resolves `architecture/contracts/rolling-restart-rebalancer-handoff.md` for `operation_workflow_owner / rebalancer_handoff`.
+
+## theory-20260531-rolling-restart-priority-recovery-rebalancer-handoff-owner-wake-architecture-gap
+
+- Status: supported
+- Scenario/gate: rolling-restart / priority_recovery_partition_progress
+- Owner/boundary: operation_workflow_owner / rebalancer_handoff
+- Hypothesis: After owner-dossier resolves the dedicated rebalancer handoff
+  contract, the next legal route is the selected scheduling-layer
+  architecture-route implementation that binds priority recovery accepted
+  backpressure to an owner wake/progress path rather than another analysis or
+  representative drain rerun.
+- Probe: `npm run work:frontier-history -- --owner operation_workflow_owner --boundary rebalancer_handoff --limit 12`, `npm run work:loop-health -- --owner operation_workflow_owner --boundary rebalancer_handoff`, and `npm run work:owner-dossier -- --owner operation_workflow_owner --boundary rebalancer_handoff --json`
+- Artifact/result: `test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json` - frontier-history reports `architectureRouteState=implement-pending` after the architecture-gap selector, loop-health says the next legal move is the architecture-route implementation package for the selected layer, and owner-dossier now resolves `architecture/contracts/rolling-restart-rebalancer-handoff.md` for `operation_workflow_owner / rebalancer_handoff`.
+- Representative movement: architecture-gap
+- Linked packages: `work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-contract-gap-architecture-experiment.md`, `work/packages/done-20260531-owner-dossier-contract-owners-binding-repair.md`, `work/packages/todo-20260531-rolling-restart-priority-recovery-rebalancer-handoff-owner-wake-route.md`
+- Supersedes: theory-20260531-rolling-restart-owner-dossier-contract-binding-repair-route
+- Superseded by: theory-20260531-rolling-restart-priority-recovery-rebalancer-handoff-owner-wake-implementation
+- Next implication: Open the runtime-owner-boundary architecture-route implementation with `theoryLoop.architectureRoute.selectedLayer=scheduling`, cite this ledger ref, and keep representative rerun work blocked until the focused owner wake proof passes.
+
+## theory-20260531-rolling-restart-priority-recovery-rebalancer-handoff-owner-wake-implementation
+
+- Status: supported
+- Scenario/gate: rolling-restart / priority_recovery_partition_progress
+- Owner/boundary: operation_workflow_owner / rebalancer_handoff
+- Hypothesis: Binding retry-scheduled rebalancer handoff progress to an explicit bounded owner re-entry contract state proves the selected scheduling-layer owner wake route locally and permits the next representative rerun gate.
+- Probe: `npm test -- test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`, `npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress`, `npm run work:owner-dossier -- --owner operation_workflow_owner --boundary rebalancer_handoff --json`, and `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json`
+- Artifact/result: Focused proof passed with 247/247 assertions after adding `ownerReentryState: bounded_owner_reentry_scheduled` for retry-scheduled `rebalancer_handoff` progress. Scenario-route still classifies the existing artifact as `accept_classified_backpressure` with two priority-recovery witnesses, and owner-dossier resolves `architecture/contracts/rolling-restart-rebalancer-handoff.md`.
+- Representative movement: classification-only
+- Linked packages: `work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-owner-wake-route.md`, `work/packages/todo-20260531-rolling-restart-priority-recovery-rebalancer-handoff-owner-wake-rerun-gate.md`
+- Supersedes: theory-20260531-rolling-restart-priority-recovery-rebalancer-handoff-owner-wake-architecture-gap
+- Superseded by: none
+- Next implication: Activate the representative rerun gate and do not open another runtime source package until fresh post-route evidence reduces, clears, migrates, repeats with no reduction, or records architecture-gap continuation.

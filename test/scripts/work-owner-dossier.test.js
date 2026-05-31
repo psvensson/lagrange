@@ -71,6 +71,37 @@ tap.test('owner-dossier aggregation (R18)', async (t) => {
     t.end();
   });
 
+  t.test('locates contract records declared through owners array', (t) => {
+    const {root, packageDir, contractDir} = setup();
+    fs.writeFileSync(
+      path.join(contractDir, 'coupled.md'),
+      `# c\n\n<!-- system-contract\n${JSON.stringify({
+        schema: 'system-contract-v1',
+        owners: [
+          {owner: 'owner_a', boundary: 'boundary_x'},
+          {owner: 'owner_b', boundary: 'boundary_y'},
+        ],
+      }, null, 2)}\n-->\n`,
+    );
+    fs.writeFileSync(
+      path.join(contractDir, 'owners-array.md'),
+      `# c\n\n<!-- system-contract\n${JSON.stringify({
+        schema: 'system-contract-v1',
+        owners: [
+          {owner: 'owner_b', boundary: 'boundary_y'},
+        ],
+      }, null, 2)}\n-->\n`,
+    );
+    const dossier = buildOwnerDossier('owner_b', 'boundary_y', {
+      packageDir, contractDir,
+      registryPath: path.join(contractDir, 'no-registry.json'),
+    });
+    t.equal(dossier.contractRecord, 'architecture/contracts/owners-array.md',
+      'single-owner contract record preferred from owners array');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
   t.test('reports stalled status with no model coverage', (t) => {
     const {root, packageDir} = setup();
     const emptyContracts = fs.mkdtempSync(path.join(os.tmpdir(), 'oc-empty-'));
