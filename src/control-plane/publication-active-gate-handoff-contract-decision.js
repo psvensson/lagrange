@@ -26,6 +26,12 @@ import {
   normalizePublicationActiveGateHandoffNodeIdList,
 } from './publication-active-gate-handoff-contract-helpers.js';
 
+function collectPublicationActiveGateActivePendingReconcileNodeIds(evidence) {
+  const publishedSet = new Set(evidence.publishedActiveNodeIds || []);
+  return (evidence.pendingReconcileNodeIds || [])
+    .filter((nodeId) => !publishedSet.has(nodeId));
+}
+
 const PUBLICATION_ACTIVE_GATE_HANDOFF_DECISION_RULES = Object.freeze([
   Object.freeze({
     state: PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,
@@ -42,12 +48,17 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_DECISION_RULES = Object.freeze([
       ) {
         return false;
       }
-      if (evidence.pendingReconcileNodeIds.length === NUM.ZERO) {
+      const activePendingReconcileNodeIds =
+        collectPublicationActiveGateActivePendingReconcileNodeIds(evidence);
+      if (
+        activePendingReconcileNodeIds.length === NUM.ZERO &&
+        evidence.pendingRecoveryNodeIds.length > NUM.ZERO
+      ) {
+        return false;
+      }
+      if (activePendingReconcileNodeIds.length === NUM.ZERO) {
         return true;
       }
-      const publishedSet = new Set(evidence.publishedActiveNodeIds || []);
-      const activePendingReconcileNodeIds = (evidence.pendingReconcileNodeIds || [])
-        .filter((nodeId) => !publishedSet.has(nodeId));
       return activePendingReconcileNodeIds.length > NUM.ZERO;
     },
   }),
@@ -69,12 +80,9 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_DECISION_RULES = Object.freeze([
       PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
         .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
     runtimePromotionAllowed: false,
-    matches: (evidence) => {
-      const publishedSet = new Set(evidence.publishedActiveNodeIds || []);
-      const activePendingReconcileNodeIds = (evidence.pendingReconcileNodeIds || [])
-        .filter((nodeId) => !publishedSet.has(nodeId));
-      return activePendingReconcileNodeIds.length > NUM.ZERO;
-    },
+    matches: (evidence) =>
+      collectPublicationActiveGateActivePendingReconcileNodeIds(evidence)
+        .length > NUM.ZERO,
   }),
   Object.freeze({
     state: PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,

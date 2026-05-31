@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "active",
+  "status": "done",
   "intent": {
     "opened": "2026-05-31",
     "lane": "causal-escalation",
@@ -14,13 +14,16 @@
     "boundary": "snapshot_coverage",
     "dominantReason": "owner_reconcile_pending",
     "currentState": "Resumed under the rolling-restart-active-gate-resolution sprint. Frontier history reports startup_active_gate_owner / snapshot_coverage is in architecture-route implement-pending state after the selected architecture-gap route; this package is the bounded observation-layer implementation, not another unguided local slice.",
-    "nextAction": "Implement the selected observation-layer architecture route so selected snapshot observation retry produces owner-owned snapshot coverage progress."
+    "nextAction": "Implement the selected observation-layer architecture route so selected snapshot observation retry produces owner-owned snapshot coverage progress.",
+    "closed": "2026-05-31"
   },
   "scope": {
     "writeScope": [
       "work/packages/active-20260531-rolling-restart-active-gate-observation-route.md",
+      "work/packages/todo-20260531-rolling-restart-active-gate-observation-route-rerun-gate.md",
       "src/control-plane/publication-active-gate-handoff-contract-decision.js",
       "work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md",
+      "work/sprints/done-2026-q2-rolling-restart-contract-first-green-theory-loop.md",
       "work/theory-ledger.md"
     ],
     "handoffFiles": [
@@ -37,8 +40,10 @@
     ],
     "commitScope": [
       "work/packages/active-20260531-rolling-restart-active-gate-observation-route.md",
+      "work/packages/todo-20260531-rolling-restart-active-gate-observation-route-rerun-gate.md",
       "src/control-plane/publication-active-gate-handoff-contract-decision.js",
       "work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md",
+      "work/sprints/done-2026-q2-rolling-restart-contract-first-green-theory-loop.md",
       "work/theory-ledger.md",
       "work/sprints/current-blocker.json",
       "work/sprints/current-blocker.md"
@@ -64,7 +69,8 @@
   "execution": {
     "theoryLedgerRefs": [
       "theory-20260529-rolling-restart-active-gate-snapshot-coverage-architecture-gap-stop",
-      "theory-20260531-rolling-restart-contract-first-green-fresh-rerun"
+      "theory-20260531-rolling-restart-contract-first-green-fresh-rerun",
+      "theory-20260531-rolling-restart-active-gate-observation-route-implementation"
     ],
     "proof": {
       "commands": [
@@ -82,6 +88,9 @@
     "sprintGoalDelta": "Selected snapshot observation retry produces owner-owned snapshot coverage progress instead of returning to saturated owner_reconcile_pending.",
     "sourceChangeRequired": true,
     "successorRequired": true,
+    "outcome": "theory-confirmed",
+    "result": "needs-rerun",
+    "successorPackage": "work/packages/todo-20260531-rolling-restart-active-gate-observation-route-rerun-gate.md",
     "architectureRoute": {
       "selectedLayer": "observation",
       "ledgerRef": "theory-20260529-rolling-restart-active-gate-snapshot-coverage-architecture-gap-stop",
@@ -116,9 +125,17 @@
   "observablePrediction": {
     "metric": "rolling-restart / startup_active_gate_owner / snapshot_coverage / observation route",
     "predicted": "Focused contract proof exposes an owner-owned observation transition for selected snapshot retry before representative rerun.",
-    "observed": "pending-before-observation",
-    "accuracy": "pending-before-observation",
-    "evidence": "pending-before-representative-rerun"
+    "observed": "Focused proof and the discriminator probe select wait_owner_recovery when selected snapshot recovery is the only live debt, instead of scheduling membership publication reconcile from a reconcile-required snapshot.",
+    "accuracy": "partial",
+    "evidence": "npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js; npm test -- test/control-plane/membership-publication-active-gate-reconcile-owner-recovery.test.js; node --input-type=module selected snapshot recovery-only discriminator probe"
+  },
+  "closureSummary": {
+    "resultClassification": "reduced",
+    "predictionAccuracy": "partial",
+    "observedMovement": "Focused proof and the discriminator probe selected wait_owner_recovery when selected snapshot recovery is the only live debt, instead of scheduling membership publication reconcile from a reconcile-required snapshot.",
+    "successorReason": "Local source proof is validated but representative rolling-restart evidence has not been rerun after the observation-route implementation.",
+    "nextOwnerBoundary": "startup_active_gate_owner / snapshot_coverage representative rerun",
+    "evidenceArtifact": "test-output/reports/rolling-restart-contract-first-green-rerun.report.json"
   },
   "modelFitSplit": {
     "targetExecutionModel": "gpt-5.3-codex",
@@ -161,7 +178,7 @@
     "hypothesis": "The selected observation-layer architecture route can convert selected_snapshot_source_timeout plus repair_deferred evidence into owner-owned snapshot coverage progress without re-entering saturated owner_reconcile_pending.",
     "stopConditionCheck": "Run `npm run analyze:causal-model -- test-output/reports/rolling-restart-contract-first-green-rerun.report.json` plus the focused handoff contract falsifier, owner-recovery regression, frontier-history, and scenario-route before closure.",
     "expectedCausalModelChange": "Focused proof records whether the observation route creates a non-repeated owner-owned transition; representative evidence must later reduce active_gate_snapshot_coverage, migrate, go green, or record architecture-gap.",
-    "representativeOutcome": "pending-before-rerun",
+    "representativeOutcome": "reduced",
     "causalDebt": "Fresh representative evidence is red at active_gate_snapshot_coverage with priority-recovery residual witnesses at zero, selected_snapshot_source_timeout, snapshot_repair_deferred, and owner_reconcile_pending.",
     "crossBoundaryReview": "Primary runtime write scope is src/control-plane/publication-active-gate-handoff-contract-decision.js; adjacent handoff, selection, and reconcile files remain candidate consumers unless proof requires escalation."
   },
@@ -312,7 +329,8 @@
       "proof cannot select a concrete transition or migration"
     ]
   },
-  "systemContractRef": "architecture/contracts/active-gate-convergence.md#active-gate-convergence"
+  "systemContractRef": "architecture/contracts/active-gate-convergence.md#active-gate-convergence",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -438,9 +456,9 @@ Canonical evidence source: `test-output/reports/rolling-restart-contract-first-g
 
 - Metric: rolling-restart active-gate observation route
 - Predicted: focused proof selects a concrete owner-owned observation transition for selected snapshot retry.
-- Observed: pending-before-observation
-- Accuracy: pending-before-observation
-- Evidence: pending-before-representative-rerun
+- Observed: focused proof and the discriminator probe select `wait_owner_recovery` when selected snapshot recovery is the only live debt, instead of scheduling membership publication reconcile from a reconcile-required snapshot.
+- Accuracy: partial
+- Evidence: `npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js`; `npm test -- test/control-plane/membership-publication-active-gate-reconcile-owner-recovery.test.js`; `node --input-type=module` selected snapshot recovery-only discriminator probe
 - Closure compares predicted vs observed before the package can close.
 
 ## Expected Representative Delta
@@ -467,9 +485,10 @@ Canonical evidence source: `test-output/reports/rolling-restart-contract-first-g
 1. work/packages/active-20260531-rolling-restart-active-gate-observation-route.md
 2. src/control-plane/publication-active-gate-handoff-contract-decision.js
 3. work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md
-4. work/theory-ledger.md
-5. work/sprints/current-blocker.json
-6. work/sprints/current-blocker.md
+4. work/sprints/done-2026-q2-rolling-restart-contract-first-green-theory-loop.md
+5. work/theory-ledger.md
+6. work/sprints/current-blocker.json
+7. work/sprints/current-blocker.md
 
 ## Out Of Scope
 
@@ -482,7 +501,7 @@ Canonical evidence source: `test-output/reports/rolling-restart-contract-first-g
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `architecture-route-runtime/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260531-rolling-restart-active-gate-observation-route.md`, `src/control-plane/publication-active-gate-handoff-contract-decision.js`, `work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md`, `work/theory-ledger.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`
+- Owned files: `work/packages/active-20260531-rolling-restart-active-gate-observation-route.md`, `work/packages/todo-20260531-rolling-restart-active-gate-observation-route-rerun-gate.md`, `src/control-plane/publication-active-gate-handoff-contract-decision.js`, `work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md`, `work/sprints/done-2026-q2-rolling-restart-contract-first-green-theory-loop.md`, `work/theory-ledger.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`
 - Candidate runtime files: `src/control-plane/publication-active-gate-handoff-contract-decision.js`, `src/control-plane/publication-active-gate-handoff-contract.js`, `src/control-plane/publication-active-gate-handoff-contract-selection.js`, `src/control-plane/membership-publication-active-gate-reconcile.js`
 - Do-not-edit scope: `src/` outside declared write scope.
 - Frozen decisions: source promotion is limited to the selected observation route.
@@ -507,9 +526,9 @@ Canonical evidence source: `test-output/reports/rolling-restart-contract-first-g
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 
 - [x] action: freshness-review; owner: Agent Avicenna (019e7d86-ec83-7020-8d06-c24c08a4756d); files-changed: none; validation: npm run work:context passed; npm run work:package:doctor -- --suggest work/packages/active-20260531-rolling-restart-active-gate-observation-route.md failed only on expected missing checked evidence before this ledger update; npm run work:validate -- --entry work/packages/active-20260531-rolling-restart-active-gate-observation-route.md passed; npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12 passed with architectureRouteState=implement-pending; npm run work:scenario-route -- test-output/reports/rolling-restart-contract-first-green-rerun.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending --explain active_gate_snapshot_coverage passed; decision: fresh; outcome: validated.
-- [ ] action: implementation; owner: startup_active_gate_owner; files-changed: none recorded yet; validation: focused handoff contract proof, owner-recovery regression, frontier-history, scenario-route, and causal-model proof before closure; outcome: pending.
-- [ ] action: verification-fix; owner: startup_active_gate_owner; files-changed: none recorded yet; validation: verifier reruns focused proof before closure; outcome: pending.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: pending.
+- [x] action: implementation; owner: startup_active_gate_owner; files-changed: src/control-plane/publication-active-gate-handoff-contract-decision.js, work/packages/active-20260531-rolling-restart-active-gate-observation-route.md; validation: npm run work:validate -- --entry work/packages/active-20260531-rolling-restart-active-gate-observation-route.md passed; npm run work:validate -- --pre-impl work/packages/active-20260531-rolling-restart-active-gate-observation-route.md passed; npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js passed; npm test -- test/control-plane/membership-publication-active-gate-reconcile-owner-recovery.test.js passed; npm run audit:runtime-grammar:file -- src/control-plane/publication-active-gate-handoff-contract-decision.js passed; node --input-type=module selected snapshot recovery-only discriminator probe passed with nextAction=wait_owner_recovery and no pendingReconcileNodeIds; npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12 passed with architectureRouteState=implement-pending; npm run work:scenario-route -- test-output/reports/rolling-restart-contract-first-green-rerun.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending --explain active_gate_snapshot_coverage passed; npm run analyze:causal-model -- test-output/reports/rolling-restart-contract-first-green-rerun.report.json passed; parent revalidated focused proof: yes; outcome: validated - selected snapshot recovery-only evidence now reaches wait_owner_recovery instead of membership publication reconcile.
+- [x] action: verification-fix; owner: startup_active_gate_owner; files-changed: work/packages/active-20260531-rolling-restart-active-gate-observation-route.md; validation: git diff --check -- src/control-plane/publication-active-gate-handoff-contract-decision.js work/packages/active-20260531-rolling-restart-active-gate-observation-route.md passed; npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js passed; npm test -- test/control-plane/membership-publication-active-gate-reconcile-owner-recovery.test.js passed; parent revalidated focused proof: yes; decision: source diff stays inside declared write scope and matches the observation-route intent; source fix applied: no; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: npm run work:repair passed; outcome: repaired.
 
 ## Validation
 
@@ -521,7 +540,7 @@ Preferred closure evidence for new packages. One executor owns implementation en
 
 ## Commit And Push Ledger
 
-- Focused package commit: `pending`
-- Push target: `origin/codex/pending-ack-eligibility-filter`
-- Commit contains only package-owned files/package-status/allowed sprint handoff: `pending`
-- Pushed: `no`
+1. Focused package commit: b9d572ce14599273d27327e9275000038c9544c2
+2. Push target: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
+4. Pushed: yes 2026-05-31T11:35:42.382Z

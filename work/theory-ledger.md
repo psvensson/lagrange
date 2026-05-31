@@ -599,5 +599,19 @@ Each entry must include these labels:
 - Representative movement: reduced
 - Linked packages: `work/packages/active-20260531-rolling-restart-fresh-representative-rerun-gate.md`, `work/packages/todo-20260531-rolling-restart-active-gate-observation-route.md`
 - Supersedes: theory-20260531-rolling-restart-contract-first-green-loop
-- Superseded by: none
+- Superseded by: theory-20260531-rolling-restart-active-gate-observation-route-implementation
 - Next implication: Continue with the startup_active_gate_owner / snapshot_coverage observation-layer architecture-route successor before any unguided runtime source promotion; representative green remains required to close the sprint.
+
+## theory-20260531-rolling-restart-active-gate-observation-route-implementation
+
+- Status: supported
+- Scenario/gate: rolling-restart / active_gate_snapshot_coverage
+- Owner/boundary: startup_active_gate_owner / snapshot_coverage
+- Hypothesis: Implementing the selected observation-layer route in `src/control-plane/publication-active-gate-handoff-contract-decision.js` prevents selected snapshot recovery-only evidence from re-entering membership publication reconcile and instead preserves owner recovery observation as `wait_owner_recovery`.
+- Probe: `npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js`, `npm test -- test/control-plane/membership-publication-active-gate-reconcile-owner-recovery.test.js`, and the selected snapshot recovery-only discriminator probe.
+- Artifact/result: `work/packages/active-20260531-rolling-restart-active-gate-observation-route.md` - focused proof passed; the discriminator probe returned `nextAction=wait_owner_recovery`, `pendingRecoveryNodeIds=["selected-node"]`, and `pendingReconcileNodeIds=[]` for selected snapshot recovery-only evidence.
+- Representative movement: needs-rerun
+- Linked packages: `work/packages/active-20260531-rolling-restart-active-gate-observation-route.md`, `work/packages/todo-20260531-rolling-restart-active-gate-observation-route-rerun-gate.md`
+- Supersedes: theory-20260531-rolling-restart-contract-first-green-fresh-rerun
+- Superseded by: none
+- Next implication: Run fresh representative rolling-restart evidence at `test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json`, route the result, and continue only from representative-green, reduction, migration, architecture-gap, or the selected successor.
