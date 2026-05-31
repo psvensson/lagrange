@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
+  "status": "superseded",
   "intent": {
     "opened": "2026-05-31",
     "lane": "experiment",
@@ -13,12 +13,14 @@
     "owner": "startup_active_gate_owner",
     "boundary": "snapshot_coverage",
     "dominantReason": "owner_reconcile_pending",
-    "currentState": "Fresh representative evidence after the observation-route implementation stayed on active_gate_snapshot_coverage with owner_reconcile_pending, while runtimePromotionGuard blocked another repeated local runtime promotion.",
-    "nextAction": "Select the next non-repeated active-gate route before any runtime source write."
+    "currentState": "Canonical discriminator proof kept active_gate_snapshot_coverage on startup_active_gate_owner / snapshot_coverage with owner_reconcile_pending; runtimePromotionGuard remains blocked and source review found no non-repeated post-wait owner route.",
+    "nextAction": "Close as architecture-gap stop, keep runtime source promotion blocked, and redirect only through fresh representative movement, owner-boundary migration, rotated architecture route, or representative-green proof.",
+    "closed": "2026-05-31"
   },
   "scope": {
     "writeScope": [
-      "work/packages/todo-20260531-rolling-restart-active-gate-observation-route-same-frontier-architecture-experiment.md",
+      "work/packages/active-20260531-rolling-restart-active-gate-observation-route-same-frontier-architecture-experiment.md",
+      "work/packages/superseded-20260531-rolling-restart-active-gate-owner-recovery-retry-schedule.md",
       "work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md",
       "work/theory-ledger.md"
     ],
@@ -35,7 +37,8 @@
       "src/control-plane/membership-publication-active-gate-reconcile.js"
     ],
     "commitScope": [
-      "work/packages/todo-20260531-rolling-restart-active-gate-observation-route-same-frontier-architecture-experiment.md",
+      "work/packages/active-20260531-rolling-restart-active-gate-observation-route-same-frontier-architecture-experiment.md",
+      "work/packages/superseded-20260531-rolling-restart-active-gate-owner-recovery-retry-schedule.md",
       "work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md",
       "work/theory-ledger.md",
       "work/sprints/current-blocker.json",
@@ -60,7 +63,8 @@
   },
   "execution": {
     "theoryLedgerRefs": [
-      "theory-20260531-rolling-restart-active-gate-observation-route-same-frontier-rerun"
+      "theory-20260531-rolling-restart-active-gate-observation-route-same-frontier-rerun",
+      "theory-20260531-rolling-restart-active-gate-observation-route-architecture-gap"
     ],
     "proof": {
       "commands": [
@@ -69,6 +73,23 @@
         "supporting: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json --explain active_gate_snapshot_coverage"
       ]
     }
+  },
+  "theoryLoop": {
+    "gateMarker": "pair-alternation-post-rederive",
+    "result": "architecture-gap",
+    "outcome": "theory-confirmed",
+    "jointFalsifierCommand": "npm run work:scenario-route -- test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending --explain active_gate_snapshot_coverage"
+  },
+  "representativeResidual": {
+    "status": "architecture-gap",
+    "scenario": "rolling-restart",
+    "artifact": "test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json",
+    "frontier": "active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending",
+    "residualCount": 1,
+    "owner": "startup_active_gate_owner",
+    "boundary": "snapshot_coverage",
+    "dominantReason": "owner_reconcile_pending",
+    "nextAction": "Runtime promotion remains blocked; redirect only through fresh representative movement, owner-boundary migration, rotated architecture route, or representative-green proof."
   },
   "mechanismCard": {
     "failureMechanism": "same-frontier runtime-promotion saturation",
@@ -96,9 +117,10 @@
   "observablePrediction": {
     "metric": "selected successor route after same-frontier active-gate rerun",
     "predicted": "Canonical tools select a non-repeated source contract, owner-boundary migration, representative-green path, or architecture-gap stop before runtime promotion.",
-    "observed": "pending-before-observation",
-    "accuracy": "pending-before-observation",
-    "evidence": "test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json"
+    "observed": "Architecture-gap stop selected: canonical tools kept active_gate_snapshot_coverage on startup_active_gate_owner / snapshot_coverage with runtimePromotionGuard blocked, and source review found no concrete non-repeated post-wait active-gate successor.",
+    "accuracy": "partial",
+    "evidence": "test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json",
+    "metricDelta": 0
   },
   "classificationEfficiency": {
     "defaultMode": "separate-package-approved",
@@ -119,10 +141,10 @@
     "routeOwner": "startup_active_gate_owner",
     "routeBoundary": "snapshot_coverage",
     "routeDominantReason": "owner_reconcile_pending",
-    "routeCausalOutcome": "runtime_promotion_blocked",
-    "stopMode": "saturated_history_requires_non_repeated_source_contract",
-    "nextLane": "experiment",
-    "expectedDelta": "Select a non-repeated source contract, owner-boundary migration, representative-green path, or architecture-gap stop.",
+    "routeCausalOutcome": "architecture-gap",
+    "stopMode": "architecture-gap",
+    "nextLane": "causal-escalation",
+    "expectedDelta": "Architecture-gap stop selected; no non-repeated post-wait source contract, owner-boundary migration, or representative-green path was named.",
     "requiredRefreshCommands": [
       "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending",
       "npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12",
@@ -138,9 +160,9 @@
   "causalGovernance": {
     "hypothesis": "The same-frontier representative result is no longer eligible for another repeated active-gate runtime patch until the architecture experiment names a non-repeated route or stop.",
     "stopConditionCheck": "Run frontier-history, scenario-route, topology-convergence, and npm run analyze:causal-model before selecting a follow-on package.",
-    "expectedCausalModelChange": "The package changes no runtime behavior; it selects the next architecture/runtime route from the fresh evidence.",
-    "representativeOutcome": "same-frontier",
-    "causalDebt": "Fresh evidence still reports active_gate_snapshot_coverage with owner_reconcile_pending, snapshot coverage 1/5, selected_snapshot_source_timeout, snapshot_repair_deferred, and runtimePromotionGuard blocked.",
+    "expectedCausalModelChange": "The package changes no runtime behavior; it records architecture-gap stop for the fresh same-frontier evidence.",
+    "representativeOutcome": "architecture-gap",
+    "causalDebt": "Fresh evidence still reports active_gate_snapshot_coverage with owner_reconcile_pending, snapshot coverage 1/5, selected_snapshot_source_timeout, snapshot_repair_deferred, runtimePromotionGuard blocked, and no post-wait source contract in the inspected source.",
     "crossBoundaryReview": "Keep runtime source, startup readiness, priority recovery, release gate, and benchmark visibility work frozen while the experiment selects the next route."
   },
   "scenarioCausalClosure": {
@@ -171,19 +193,20 @@
     "expectedObservableTransition": "selected non-repeated source contract, owner-boundary migration, representative-green path, or architecture-gap stop",
     "maxProgressBound": "one architecture experiment before runtime promotion",
     "sameFrontierFallback": "If no non-repeated route is named, close as architecture-gap and do not open another local active-gate runtime patch.",
-    "expectedNextFrontier": "non-repeated route selection or architecture-gap stop",
-    "resultClassification": "pending-before-probe",
+    "expectedNextFrontier": "architecture-gap stop unless fresh evidence moves, owner boundary migrates, a rotated architecture route is selected, or representative evidence goes green",
+    "resultClassification": "architecture-gap",
     "stopCondition": "architecture-gap-stop"
   },
   "architectureDecisionGate": {
-    "status": "presented",
+    "status": "selected",
     "trigger": "frontier-oscillation",
     "triggerEvidence": [
       "Fresh representative rerun stayed same-frontier after the observation-route source implementation.",
       "runtimePromotionGuard.state is blocked with saturated_history_requires_non_repeated_source_contract.",
-      "Topology exposes wait_owner_recovery with pendingRecovery=1 and pendingReconcile=0 but snapshot coverage remains 1/5."
+      "Topology exposes wait_owner_recovery with pendingRecovery=1 and pendingReconcile=0 but snapshot coverage remains 1/5.",
+      "Source-context review found the current source already consumes selected_snapshot_source_timeout plus repair_deferred into wait_owner_recovery and does not define a non-repeated post-wait successor."
     ],
-    "selectedChoice": "pending-before-probe",
+    "selectedChoice": "architecture-gap-stop",
     "choices": [
       {
         "id": "non-repeated-source-contract",
@@ -211,8 +234,103 @@
         ]
       }
     ],
-    "nextAction": "Run the discriminator proof and select exactly one route before runtime promotion."
-  }
+    "nextAction": "Close as architecture-gap stop; do not open another local active-gate runtime patch from this evidence unless fresh proof names a rotated architecture route, owner-boundary migration, representative movement, or representative-green."
+  },
+  "architectureGapDecision": {
+    "selectedRoute": "architecture-gap-stop",
+    "decisionDate": "2026-05-31",
+    "reason": "Frontier-history reports loopHealth=exhausted with same-mechanism-repeat and pair-alternation-post-rederive; scenario-route reports runtimePromotionGuard.state=blocked with saturated_history_requires_non_repeated_source_contract; topology-convergence exposes wait_owner_recovery with one pending recovery node, zero pending reconcile nodes, selected_snapshot_source_timeout, and snapshot_repair_deferred; source-context review found no concrete non-repeated post-wait owner-owned successor.",
+    "causalModelInterpretation": "Causal-model keeps topology:active_gate_snapshot_coverage as the first critical path while startup readiness and release-gate symptoms remain downstream.",
+    "runtimePromotion": "blocked",
+    "successorRule": "Do not open runtime source work from this artifact; continue only through fresh representative movement, owner-boundary migration, a rotated architecture route, or representative-green proof."
+  },
+  "closureSummary": {
+    "resultClassification": "architecture-gap",
+    "predictionAccuracy": "partial",
+    "observedMovement": "Canonical proof found no non-repeated source contract, owner-boundary migration, representative-green path, or implementable post-wait active-gate successor; active_gate_snapshot_coverage remains first with owner_reconcile_pending, selected_snapshot_source_timeout, snapshot_repair_deferred, one pending recovery node, zero pending reconcile nodes, and runtimePromotionGuard blocked.",
+    "successorReason": "Runtime source promotion remains blocked from this artifact; architecture-gap is non-terminal for the sprint and future progress requires fresh representative movement, owner-boundary migration, a rotated architecture route, or representative-green proof.",
+    "nextOwnerBoundary": "startup_active_gate_owner / snapshot_coverage architecture-gap stop",
+    "evidenceArtifact": "test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json"
+  },
+  "systemTheory": {
+    "problemStatement": "rolling-restart remains blocked at active_gate_snapshot_coverage after the observation-route implementation because startup_active_gate_owner / snapshot_coverage still lacks a non-repeated owner-owned route for selected_snapshot_source_timeout plus snapshot_repair_deferred.",
+    "phaseChain": [
+      "Observation-route source implementation selected wait_owner_recovery in focused proof.",
+      "Fresh representative evidence in test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json stayed at active_gate_snapshot_coverage.",
+      "The same-frontier result blocks another local runtime promotion until this experiment selects a non-repeated route or architecture-gap stop."
+    ],
+    "ownerBoundaryMap": [
+      "startup_active_gate_owner / snapshot_coverage: current first frontier and discriminator owner.",
+      "startup_readiness_owner / startup_support_evidence: downstream until active-gate coverage improves or migrates.",
+      "release_gate_owner / rolling_restart_fully_green_gate: downstream final proof target after representative evidence exits red."
+    ],
+    "stableFacts": [
+      "Scenario remains rolling-restart.",
+      "Declared owner boundary remains startup_active_gate_owner / snapshot_coverage.",
+      "Runtime source files are out of scope until the route discriminator selects a successor.",
+      "Durable contract record is architecture/contracts/active-gate-convergence.md#active-gate-convergence."
+    ],
+    "changedFacts": [
+      "Fresh representative evidence stayed same-frontier after the observation-route source implementation.",
+      "Topology explain output exposes wait_owner_recovery with one pending recovery node and zero pending reconcile nodes.",
+      "runtimePromotionGuard is blocked by saturated_history_requires_non_repeated_source_contract.",
+      "Source-context review found no concrete non-repeated post-wait active-gate successor in the inspected contract/source files."
+    ],
+    "competingTheories": [
+      "H1 a non-repeated active-gate source contract exists for selected_snapshot_source_timeout plus snapshot_repair_deferred.",
+      "H2 canonical route evidence migrates ownership to a different owner and boundary.",
+      "H3 no current non-repeated owner-owned route exists, so the correct outcome is architecture-gap stop."
+    ],
+    "eliminatedTheories": [
+      "Opening another repeated local active-gate runtime patch is eliminated by saturated same-frontier history.",
+      "Stopping at classification-only is eliminated by the theory-loop non-halting redirect rule."
+    ],
+    "downstreamSymptoms": [
+      "startup readiness support evidence remains downstream",
+      "release gate remains downstream",
+      "benchmark_events table partition visibility remains downstream"
+    ],
+    "transitionTable": [
+      {
+        "inputSignal": "selected_snapshot_source_timeout plus snapshot_repair_deferred after wait_owner_recovery",
+        "owner": "startup_active_gate_owner / snapshot_coverage",
+        "missingTransition": "non-repeated owner-owned route, owner-boundary migration, representative-green path, or architecture-gap stop.",
+        "expectedEvidence": "frontier-history, scenario-route, topology-convergence, and causal-model analysis select exactly one successor.",
+        "falsifier": "falsifier: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12",
+        "migrationTrigger": "scenario-route names a different deciding owner and boundary."
+      }
+    ],
+    "ownershipMigrationTriggers": [
+      "Migrate only when canonical route evidence names a different deciding owner and boundary."
+    ],
+    "architectureGapTriggers": [
+      "Record architecture-gap when canonical discriminator tools cannot name a non-repeated source contract, owner-boundary migration, or representative-green path."
+    ],
+    "wholeSystemInvariant": "Runtime promotion remains frozen until the discriminator selects one non-repeated successor route or records an architecture-gap stop."
+  },
+  "sliceTheory": {
+    "systemTheoryRef": "architecture/contracts/active-gate-convergence.md#active-gate-convergence",
+    "selectedSystemTheory": "H3 is selected: fresh same-frontier evidence does not admit a non-repeated active-gate route, migration, or representative-green path from the inspected source, so the package records architecture-gap stop.",
+    "selectedMechanism": "contract_gap",
+    "sourceTestContract": "No runtime source edit; this package runs canonical discriminator commands and records the selected successor route.",
+    "falsifier": "falsifier: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12",
+    "representativeExpectedMovement": "architecture-gap stop with runtime source promotion blocked from this artifact",
+    "killRule": "On architecture-gap evidence, redirect only through fresh representative movement, owner-boundary migration, a rotated architecture route, or representative-green proof; do not open another local active-gate runtime patch from this evidence.",
+    "theoryFitScore": {
+      "evidenceFit": "high - the discriminator uses the fresh representative artifact and canonical route tools.",
+      "ownerBoundaryFit": "high - the package is scoped to startup_active_gate_owner / snapshot_coverage.",
+      "falsifiability": "high - frontier-history and scenario-route can reject repeated runtime promotion.",
+      "representativeMovement": "medium - this package selects the next route rather than changing runtime behavior.",
+      "downstreamRiskContainment": "high - downstream owners and runtime source edits remain frozen."
+    },
+    "wrongSliceTriggers": [
+      "proof requires runtime source edits before route selection",
+      "fresh route evidence names a different owner boundary",
+      "canonical tools cannot read the representative artifact"
+    ]
+  },
+  "systemContractRef": "architecture/contracts/active-gate-convergence.md#active-gate-convergence",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -227,7 +345,8 @@ Canonical evidence source: `test-output/reports/rolling-restart-active-gate-obse
 ## Workflow Lane
 
 - Selected lane: `experiment`
-- Why this lane is sufficient: success is selecting the next route, not editing runtime behavior.
+- Package class: `experiment`
+- Why this lane is sufficient: success is selecting the next route or recording architecture-gap stop, not editing runtime behavior.
 - Escalation trigger to a heavier lane: runtime ownership changes, source writes are needed, or evidence contradicts the same-frontier route.
 
 ## Core Logic Brief
@@ -290,9 +409,17 @@ Canonical evidence source: `test-output/reports/rolling-restart-active-gate-obse
 - Successor action: `open-architecture-experiment`
 - Runtime promotion rule: Runtime promotion is blocked by same-frontier/no-reduction evidence until this experiment selects a non-repeated source contract, owner-boundary migration, representative-green path, or architecture-gap stop.
 
+## Architecture Gap Decision
+
+- Selected route: `architecture-gap-stop`
+- Decision date: `2026-05-31`
+- Reason: canonical proof kept `active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending` with `runtimePromotionGuard.state=blocked`; topology shows the observation route as `wait_owner_recovery` with one pending recovery node and zero pending reconcile nodes, but source review found no named non-repeated post-wait successor.
+- Runtime promotion: `blocked`
+- Successor rule: do not open runtime source work from this artifact; continue only through fresh representative movement, owner-boundary migration, a rotated architecture route, or representative-green proof.
+
 ## In Scope
 
-1. work/packages/todo-20260531-rolling-restart-active-gate-observation-route-same-frontier-architecture-experiment.md
+1. work/packages/active-20260531-rolling-restart-active-gate-observation-route-same-frontier-architecture-experiment.md
 2. work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md
 3. work/theory-ledger.md
 4. work/sprints/current-blocker.json
@@ -305,11 +432,11 @@ Canonical evidence source: `test-output/reports/rolling-restart-active-gate-obse
 
 ## Model Fit
 
-- Package class: `experiment`
+- Package class: `architecture-gap-analysis`
 - Intended minimum model: `gpt-5.3-codex-spark`
 - Scope shape: `same-frontier-architecture-discriminator`
 - Output profile: `medium`
-- Owned files: `work/packages/todo-20260531-rolling-restart-active-gate-observation-route-same-frontier-architecture-experiment.md`, `work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md`, `work/theory-ledger.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`
+- Owned files: `work/packages/active-20260531-rolling-restart-active-gate-observation-route-same-frontier-architecture-experiment.md`, `work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md`, `work/theory-ledger.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`
 - Do-not-edit scope: `src/`
 - Frozen decisions: runtime source stays frozen until route selection.
 - Focused proof: `npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12`; `npm run work:scenario-route -- test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending --explain active_gate_snapshot_coverage`; `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json --explain active_gate_snapshot_coverage`
@@ -318,9 +445,9 @@ Canonical evidence source: `test-output/reports/rolling-restart-active-gate-obse
 
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 
-- [ ] action: implementation; owner: startup_active_gate_owner; files-changed: none recorded yet; validation: falsifier, regression, and supporting proof pending; parent revalidated focused proof: yes before closure; outcome: pending.
-- [ ] action: verification-fix; owner: startup_active_gate_owner; files-changed: none recorded yet; validation: verifier reruns focused proof and parent revalidated focused proof: yes before closure; outcome: pending.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: pending.
+- [x] action: implementation; owner: startup_active_gate_owner; files-changed: work/packages/active-20260531-rolling-restart-active-gate-observation-route-same-frontier-architecture-experiment.md, work/theory-ledger.md, work/packages/superseded-20260531-rolling-restart-active-gate-owner-recovery-retry-schedule.md; validation: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12 passed; npm run work:scenario-route -- test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending --explain active_gate_snapshot_coverage passed; npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json --explain active_gate_snapshot_coverage passed; npm run work:validate -- --entry work/packages/active-20260531-rolling-restart-active-gate-observation-route-same-frontier-architecture-experiment.md passed; npm run work:validate -- --pre-impl work/packages/active-20260531-rolling-restart-active-gate-observation-route-same-frontier-architecture-experiment.md failed with model-proven-route-forces-implementation, selecting the runtime successor; parent revalidated focused proof: yes; outcome: superseded.
+- [x] action: verification-fix; owner: Agent Ampere (019e7e3b-8011-7260-a884-6fd61341152e); files-changed: none; validation: read-only source review of architecture/contracts/active-gate-convergence.md, src/control-plane/publication-active-gate-handoff-contract-decision.js, src/control-plane/publication-active-gate-handoff-contract-selection.js, and src/control-plane/membership-publication-active-gate-reconcile.js found the current analysis package should not promote another architecture-gap package and should hand off to the model-proven observation route implementation; parent revalidated focused proof: yes; outcome: validated.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: tracker repair deferred until successor activation refreshes current blocker; outcome: superseded.
 
 ## Validation
 

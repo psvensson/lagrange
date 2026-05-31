@@ -28,7 +28,7 @@
     "commitScope": [
       "src/rebalancer/operation-workflow-owner-ports.js",
       "work/packages/active-20260530-rolling-restart-priority-recovery-rebalancer-handoff-rerun-backpressure-residual.md",
-      "work/packages/active-20260530-rolling-restart-priority-recovery-rebalancer-handoff-contract-gap-system-theory-rederive.md",
+      "work/packages/done-20260530-rolling-restart-priority-recovery-rebalancer-handoff-contract-gap-system-theory-rederive.md",
       "work/packages/todo-20260530-rolling-restart-priority-recovery-rebalancer-handoff-contract-gap-system-theory-rederive.md",
       "work/packages/done-20260530-rolling-restart-priority-recovery-rebalancer-handoff-scheduling-retry.md"
     ]

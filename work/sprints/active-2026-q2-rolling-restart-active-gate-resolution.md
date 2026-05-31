@@ -110,21 +110,21 @@ current-blocker files, sprint state, package queues, or theory-ledger decisions.
 
 ```text
 Representative artifact: test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json
-Visible first frontier: representative_evidence_owner / rolling_restart_rerun / representative_progress_circuit_breaker blocks another post-owner-wake rerun until the model route is recorded
-Active package: work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-owner-wake-rerun-gate.md
-Active package owner: representative_evidence_owner
-Active package boundary: rolling_restart_rerun
-Selected cause: priority_recovery_owner_wake_rerun
-Required action: Build and validate a model-layer representative rerun progress route before any further representative evidence rerun or source package.
+Visible first frontier: priority_recovery_partition_progress / operation_workflow_owner / rebalancer_handoff / priority_recovery_event_driven_wait
+Active package: work/packages/active-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-system-theory-rederive.md
+Active package owner: operation_workflow_owner
+Active package boundary: rebalancer_handoff
+Selected cause: priority_recovery_event_driven_wait
+Required action: Rederive operation_workflow_owner / rebalancer_handoff system theory after the representative rerun model route and select the next legal successor without editing runtime source.
 Representative status: architecture-gap
-Causal outcome: architecture-gap
-Architecture gate: selected / model-layer-representative-progress-route
-Expected delta: Model proof records that a non-shrinking residual-count window blocks another representative rerun and requires a non-rerun successor.
-Current state: The predecessor focused owner wake proof passed, but pre-implementation validation blocks another representative_evidence_owner / rolling_restart_rerun evidence slice because the last three residual-bearing representative packages did not shrink the artifact-bound residual window.
-Allowed edits: work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-owner-wake-rerun-gate.md, docs/specs/representative-rerun-progress-model.json, work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-owner-wake-route.md, work/packages/todo-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-system-theory-rederive.md, work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md, work/theory-ledger.md
-Candidate runtime files: unknown
-Forbidden edits: Runtime source and representative rerun execution stay frozen until the model route is proven.
-Required latest proof: falsifier: node -e "const fs=require('fs'); const m=JSON.parse(fs.readFileSync('docs/specs/representative-rerun-progress-model.json','utf8')); if (!m.transitions.some((t)=>t.on==='window_non_shrinking' && t.next==='blocked_model_route')) throw new Error('missing non-shrinking window block'); if (!m.properties.some((p)=>p.id==='non_shrinking_window_blocks_rerun')) throw new Error('missing model property');", regression: npm run work:owner-dossier -- --owner representative_evidence_owner --boundary rolling_restart_rerun --json, supporting: npm run work:frontier-history -- --owner representative_evidence_owner --boundary rolling_restart_rerun --limit 12
+Causal outcome: accept_classified_backpressure
+Architecture gate: selected / post-model-architecture-gap-successor
+Expected delta: System-theory rederive selects the next legal successor before runtime promotion or representative rerun.
+Current state: The owner wake route is locally proven, and the representative rerun model route blocks another rolling_restart_rerun evidence slice while the stale artifact still classifies operation_workflow_owner / rebalancer_handoff as the first frontier.
+Allowed edits: work/packages/active-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-system-theory-rederive.md, work/packages/todo-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-architecture-gap-experiment.md, work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md, work/theory-ledger.md
+Candidate runtime files: src/rebalancer/operation-workflow-owner-ports.js, architecture/contracts/rolling-restart-rebalancer-handoff.md, docs/specs/decision-tables/rebalancer-handoff-priority-recovery.json
+Forbidden edits: Runtime source files are candidate-only and must not be edited by this package.
+Required latest proof: falsifier: npm run work:system-theory:rederive -- --owner operation_workflow_owner --boundary rebalancer_handoff --limit 12 --sprint work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md --write, regression: npm run work:frontier-history -- --owner operation_workflow_owner --boundary rebalancer_handoff --limit 12, supporting: npm run work:loop-health -- --owner operation_workflow_owner --boundary rebalancer_handoff, supporting: npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress, supporting: npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json, supporting: npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -192,7 +192,7 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Model-layer route for the representative-progress circuit breaker after
      the focused owner wake proof blocks another direct rerun.
 13. `todo` -
-   [Rolling Restart Priority Recovery Rebalancer Handoff Post Model System Theory Rederive](work/packages/todo-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-system-theory-rederive.md)
+   [Rolling Restart Priority Recovery Rebalancer Handoff Post Model System Theory Rederive](work/packages/active-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-system-theory-rederive.md)
    - Rederive operation_workflow_owner / rebalancer_handoff after the
      model-blocked representative rerun route.
 

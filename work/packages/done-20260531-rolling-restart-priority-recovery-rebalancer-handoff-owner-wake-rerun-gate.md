@@ -400,4 +400,4 @@ non-shrinking residual window cannot run another evidence slice yet.
 1. Focused package commit: 6fb7c707e2b4db928fc9007fe9ede21efa53436b
 2. Push target: origin/codex/pending-ack-eligibility-filter
 3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
-4. Pushed: no
+4. Pushed: yes 2026-05-31T16:37:58.829Z

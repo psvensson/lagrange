@@ -4,51 +4,56 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: No active work package. Start a new package when implementation resumes.
+Theory under test: The stale priority-recovery frontier requires operation_workflow_owner / rebalancer_handoff system-theory rederive after the representative rerun model route.
 
-Causal question: none
+Causal question: rolling-restart still exposes priority_recovery_partition_progress at operation_workflow_owner / rebalancer_handoff after the local owner wake proof, and the representative rerun pair is model-blocked.
 
-Implementation slice: Create or activate one focused package for the next executable concern.
+Implementation slice: No runtime source files are writable in this package. Runtime binding and focused tests stay in candidateRuntimeFiles until rederive selects a concrete successor package.
 
 Implementation files:
 
-1. None recorded
+1. `src/rebalancer/operation-workflow-owner-ports.js`
 
-Expected implementation delta: unknown
+Expected implementation delta: route selection to concrete runtime successor, architecture-gap successor, evidence regeneration, owner migration, or accepted bounded-backpressure continuation
 
-Falsifying probe: unknown
+Falsifying probe: falsifier: npm run work:system-theory:rederive -- --owner operation_workflow_owner --boundary rebalancer_handoff --limit 12 --sprint work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md --write
 
-Redirect rule: unknown
+Redirect rule: If proof cannot select one route, redirect to architecture-gap or contract/model repair instead of widening this package, running another representative rerun, or editing runtime source.
 
 Sprint: `work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md`
 
-Package: `none`
+Package: `work/packages/active-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-system-theory-rederive.md`
 
-Workflow lane: `none`
+Workflow lane: `causal-escalation`
 
-Scenario: `none`
+Scenario: `rolling-restart`
 
-Artifact: `none`
+Artifact: `test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json`
 
 Playback: `none`
 
 ## Boundary
 
-Owner: `none`
+Owner: `operation_workflow_owner`
 
-Boundary: `none`
+Boundary: `rebalancer_handoff`
 
-Dominant reason: `none`
+Dominant reason: `priority_recovery_event_driven_wait`
 
-Current state: No active work package. Start a new package when implementation resumes.
+Current state: The owner wake route is locally proven, and the representative rerun model route blocks another rolling_restart_rerun evidence slice while the stale artifact still classifies operation_workflow_owner / rebalancer_handoff as the first frontier.
 
 ## Next Action
 
-Create or activate one focused package for the next executable concern.
+Rederive operation_workflow_owner / rebalancer_handoff system theory after the representative rerun model route and select the next legal successor without editing runtime source.
 
 ## Proof Ladder
 
-1. None recorded
+1. `falsifier: npm run work:system-theory:rederive -- --owner operation_workflow_owner --boundary rebalancer_handoff --limit 12 --sprint work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md --write`
+2. `regression: npm run work:frontier-history -- --owner operation_workflow_owner --boundary rebalancer_handoff --limit 12`
+3. `supporting: npm run work:loop-health -- --owner operation_workflow_owner --boundary rebalancer_handoff`
+4. `supporting: npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress`
+5. `supporting: npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json`
+6. `supporting: npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait`
 
 ## Parallel Diagnostics
 
@@ -70,181 +75,214 @@ Trigger: unknown
 
 ## Model Fit
 
-Package class: `unknown`
+Package class: `system-theory-rederive`
 
-Intended minimum model: `unknown`
+Intended minimum model: `gpt-5.3-codex`
 
-Scope shape: `unknown`
+Scope shape: `whole-system-theory/post-model-rebalancer-handoff`
 
-Output profile: `unknown`
+Output profile: `medium`
 
 Escalation triggers:
 
-1. None recorded
+1. `proof selects a runtime source transition`
+2. `proof selects owner-boundary migration`
+3. `proof cannot distinguish bounded backpressure from missing handoff progress`
 
 ## System Theory
 
-Problem statement: unknown
+Problem statement: rolling-restart still exposes priority_recovery_partition_progress at operation_workflow_owner / rebalancer_handoff after the local owner wake proof, and the representative rerun pair is model-blocked.
 
 Phase chain:
 
-1. None recorded
+1. `Priority recovery reduced from 8 to 2 witnesses.`
+2. `operation_workflow_owner / rebalancer_handoff owner wake route passed focused proof.`
+3. `representative_evidence_owner / rolling_restart_rerun cannot rerun from the non-shrinking residual window.`
+4. `System-theory route selection must happen before runtime source promotion or another representative rerun.`
 
 Owner-boundary map:
 
-1. None recorded
+1. `operation_workflow_owner / rebalancer_handoff: owns the stale first frontier and route rederive.`
+2. `representative_evidence_owner / rolling_restart_rerun: blocked from another rerun until a legal successor exits the model route.`
+3. `startup_active_gate_owner / snapshot_coverage: downstream until priority recovery drains or migrates.`
+4. `release_gate_owner / rolling_restart_fully_green_gate: downstream until representative evidence exits red.`
 
 Stable facts:
 
-1. None recorded
+1. `Scenario remains rolling-restart.`
+2. `Current artifact is test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json.`
+3. `Runtime source files are not in writeScope.`
 
 Changed facts:
 
-1. None recorded
+1. `The owner wake local proof passed.`
+2. `The representative rerun model route blocks another direct rerun.`
+3. `The next legal move is route rederivation.`
 
 Competing theories:
 
-1. None recorded
+1. `H1 accepted bounded backpressure is valid and should wait for a legal future evidence window.`
+2. `H2 operation_workflow_owner / rebalancer_handoff still lacks a concrete wake, retry, reconcile, or advance transition.`
+3. `H3 the residual is stale or under-classified and evidence regeneration belongs to workflow tooling.`
+4. `H4 downstream snapshot_coverage or release-gate symptoms must remain frozen while priority recovery remains first.`
 
 Eliminated theories:
 
-1. None recorded
+1. `Running another representative rerun is eliminated by the model route.`
+2. `Editing operation-workflow runtime source in this package is eliminated by system-theory-rederive scope.`
+3. `Re-promoting startup_active_gate_owner / snapshot_coverage is eliminated while priority recovery remains first.`
 
 Downstream symptoms:
 
-1. None recorded
+1. `startup_active_gate_owner / snapshot_coverage`
+2. `release_gate_owner / rolling_restart_fully_green_gate`
+3. `startup_readiness_owner / startup_support_evidence`
 
 Transition table:
 
-1. None recorded
+1. Input `priority_recovery_event_driven_wait after owner wake proof and model-blocked representative rerun` owner `operation_workflow_owner / rebalancer_handoff`; missing `route selection between accepted bounded backpressure, handoff progress, stale evidence regeneration, architecture gap, or owner migration`; expected `system-theory rederive plus frontier-history and scenario-route select one next route`; falsifier `falsifier: npm run work:system-theory:rederive -- --owner operation_workflow_owner --boundary rebalancer_handoff --limit 12 --sprint work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md --write`; migration trigger `canonical proof names a different owner boundary or non-runtime repair route`
 
 Ownership migration triggers:
 
-1. None recorded
+1. `Migrate to workflow_tooling_owner only if evidence is stale, contradictory, or under-classified.`
+2. `Migrate to startup_active_gate_owner only if proof shows priority recovery is accepted or cleared and snapshot_coverage is first again.`
+3. `Stay at operation_workflow_owner only if proof names a concrete handoff wake, retry, reconcile, or advance transition.`
 
 Architecture-gap triggers:
 
-1. None recorded
+1. `Open architecture-gap analysis if rederive repeats same-mechanism contract_gap without a concrete successor.`
+2. `Open contract/model repair if decision tables or contracts cannot represent accepted bounded backpressure.`
+3. `Regenerate representative evidence only after route proof removes the current circuit-breaker condition.`
 
-Whole-system invariant: unknown
+Whole-system invariant: operation_workflow_owner / rebalancer_handoff cannot promote runtime source work or another rerun from reduced classified backpressure until the coupled route is rederived.
 
 ## Slice Theory
 
-System theory reference: unknown
+System theory reference: work/packages/active-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-system-theory-rederive.md systemTheory
 
-Selected system theory: unknown
+Selected system theory: The stale priority-recovery frontier requires operation_workflow_owner / rebalancer_handoff system-theory rederive after the representative rerun model route.
 
-Selected mechanism: unknown
+Selected mechanism: contract_gap with bounded_backpressure, stale_evidence, and owner_migration as alternates
 
-Source/test contract: unknown
+Source/test contract: No runtime source files are writable in this package. Runtime binding and focused tests stay in candidateRuntimeFiles until rederive selects a concrete successor package.
 
-Falsifier: unknown
+Falsifier: falsifier: npm run work:system-theory:rederive -- --owner operation_workflow_owner --boundary rebalancer_handoff --limit 12 --sprint work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md --write
 
-Representative expected movement: unknown
+Representative expected movement: route selection to concrete runtime successor, architecture-gap successor, evidence regeneration, owner migration, or accepted bounded-backpressure continuation
 
-Redirect rule: unknown
+Redirect rule: If proof cannot select one route, redirect to architecture-gap or contract/model repair instead of widening this package, running another representative rerun, or editing runtime source.
 
 Theory-fit score:
 
-1. `evidenceFit`: unknown
-2. `ownerBoundaryFit`: unknown
-3. `falsifiability`: unknown
-4. `representativeMovement`: unknown
-5. `downstreamRiskContainment`: unknown
+1. `evidenceFit`: high - current artifact and frontier history identify the stale priority-recovery owner boundary.
+2. `ownerBoundaryFit`: high - operation_workflow_owner / rebalancer_handoff owns the stale first frontier.
+3. `falsifiability`: high - system-theory rederive, frontier-history, and scenario-route can reject runtime promotion or rerun continuation.
+4. `representativeMovement`: medium - this package selects route movement; representative green requires a later valid successor.
+5. `downstreamRiskContainment`: high - runtime source and downstream owners stay frozen.
 
 Wrong-slice triggers:
 
-1. None recorded
+1. `proof requires direct src/ edits`
+2. `proof selects a different owner boundary`
+3. `proof cannot select a route and must open architecture-gap analysis`
 
 ## Theory Ledger References
 
-1. None recorded
+1. `theory-20260531-rolling-restart-representative-rerun-progress-model-route`
+2. `theory-20260531-rolling-restart-priority-recovery-rebalancer-handoff-owner-wake-implementation`
+3. `theory-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-rederive-architecture-gap`
 
 ## Representative Residual
 
-Status: `unknown`
+Status: `architecture-gap`
 
-Scenario: `unknown`
+Scenario: `rolling-restart`
 
-Artifact: `unknown`
+Artifact: `test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json`
 
-Frontier: `unknown`
+Frontier: `priority_recovery_partition_progress / operation_workflow_owner / rebalancer_handoff`
 
-Owner: `unknown`
+Owner: `operation_workflow_owner`
 
-Boundary: `unknown`
+Boundary: `rebalancer_handoff`
 
-Dominant reason: `unknown`
+Dominant reason: `priority_recovery_event_driven_wait`
 
-Next action: `unknown`
+Next action: `Open the post-model architecture-gap experiment before any source write or representative rerun.`
 
 ## Causal Governance
 
-Causal hypothesis: `unknown`
+Causal hypothesis: `Reduced classified priority-recovery backpressure requires operation_workflow_owner / rebalancer_handoff route rederivation after the representative rerun model route blocks another evidence slice.`
 
-Stop-condition check: `unknown`
+Stop-condition check: `Run system-theory rederive, frontier-history, loop-health, scenario-route, npm run analyze:causal-model -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json, and current-blocker repair before selecting any implementation successor.`
 
-Expected causal-model change: `unknown`
+Expected causal-model change: `The package records architecture-gap continuation: no concrete runtime successor, evidence regeneration, owner migration, or representative rerun is safe until the architecture-gap successor selects a non-repeated route.`
 
-Representative outcome: `unknown`
+Representative outcome: `architecture-gap`
 
-Causal debt: `unknown`
+Causal debt: `Representative rolling-restart remains red with 2 priority-recovery witnesses; runtime files are candidate-only and the next package must choose a non-repeated architecture route.`
 
-Cross-boundary review: `unknown`
+Cross-boundary review: `Startup active gate, startup readiness, release gate, benchmark evidence, and runtime source edits remain frozen during this rederive.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `unknown`
+Reference scenario/probe: `rolling-restart priority recovery rebalancer handoff post-model system-theory rederive`
 
 Phase chain:
 
-1. None recorded
+1. `Priority recovery backpressure rerun reduced witnesses from 8 to 2.`
+2. `The owner wake route focused proof passed locally.`
+3. `The representative rerun progress model blocks another evidence rerun from the non-shrinking representative residual window.`
+4. `operation_workflow_owner / rebalancer_handoff frontier history reports compositional-signal-active and architectureRouteState implemented.`
 
-Current first frontier: `unknown`
+Current first frontier: `priority_recovery_partition_progress / operation_workflow_owner / rebalancer_handoff / priority_recovery_event_driven_wait`
 
 Known downstream blockers:
 
-1. None recorded
+1. `representative_evidence_owner / rolling_restart_rerun is blocked from another local rerun until the model route exits through a legal successor`
+2. `startup_active_gate_owner / snapshot_coverage remains downstream until priority recovery drains or migrates`
+3. `release_gate_owner / rolling_restart_fully_green_gate remains downstream until representative evidence exits red`
 
-Missing causal edge: `unknown`
+Missing causal edge: `Route selection between bounded backpressure, missing rebalancer handoff progress, architecture gap, evidence regeneration, or owner migration.`
 
-Missing causal edge probe: `unknown`
+Missing causal edge probe: `npm run work:system-theory:rederive -- --owner operation_workflow_owner --boundary rebalancer_handoff --limit 12 --sprint work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md --write`
 
-Bounded progress proof: `unknown`
+Bounded progress proof: `Proof must select a successor route that names a concrete wake, retry, reconcile, advance, timer, drain, dispatch, delivery, bounded progress mechanism, architecture-gap successor, or evidence-regeneration route while keeping runtime source out of writeScope.`
 
-Bounded progress proof artifact: `unknown`
+Bounded progress proof artifact: `test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json`
 
-Expected observable transition: `unknown`
+Expected observable transition: `system-theory route selection to architecture-gap successor before runtime source promotion or representative rerun`
 
-Max progress bound: `unknown`
+Max progress bound: `one system-theory rederive before a concrete successor package`
 
-Same-frontier fallback: `unknown`
+Same-frontier fallback: `A same-mechanism rederive with no selected route redirects to architecture-gap or contract/model repair.`
 
-Expected next frontier: `unknown`
+Expected next frontier: `operation_workflow_owner / rebalancer_handoff post-model architecture-gap successor`
 
-Result classification: `unknown`
+Result classification: `architecture-gap`
 
-Stop condition: `unknown`
+Stop condition: `architecture-gap-stop`
 
 Recent frontier history:
 
-1. None recorded
+1. `done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-owner-wake-route.md / operation_workflow_owner / rebalancer_handoff / focused route proof passed`
+2. `done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-owner-wake-rerun-gate.md / representative_evidence_owner / rolling_restart_rerun / model route blocks rerun`
 
-Oscillation check: `unknown`
+Oscillation check: `This successor rederives the runtime owner boundary after the model route, not another representative rerun or runtime source patch.`
 
-Handoff invariant: `unknown`
+Handoff invariant: `Runtime source files are candidate-only and must not be edited by this package.`
 
 ## Observable Prediction
 
-Metric: `unknown`
+Metric: `operation_workflow_owner / rebalancer_handoff post-model route`
 
-Predicted: `unknown`
+Predicted: `The rederive proof selects one explicit successor route and keeps runtime source files candidate-only.`
 
-Observed: `unknown`
+Observed: `System-theory rederive reported rederivationRequired=true with same-mechanism-repeat contract_gap; frontier-history reported loopHealth=rederive-in-progress and continuationRequired=true; scenario-route and causal-model kept the artifact at accept_classified_backpressure with two priority-recovery witnesses, zero failed invariants, and zero exhausted budgets.`
 
-Accuracy: `unknown`
+Accuracy: `partial`
 
-Evidence: `unknown`
+Evidence: `test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json`
 
 Metric delta: `unknown`
 
@@ -262,73 +300,70 @@ Evidence: `unknown`
 
 ## Rerun Decision
 
-Source artifact: `unknown`
+Source artifact: `test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json`
 
-Route owner: `unknown`
+Route owner: `operation_workflow_owner`
 
-Route boundary: `unknown`
+Route boundary: `rebalancer_handoff`
 
-Route dominant reason: `unknown`
+Route dominant reason: `priority_recovery_event_driven_wait`
 
-Route causal outcome: `unknown`
+Route causal outcome: `accept_classified_backpressure`
 
-Stop mode: `unknown`
+Stop mode: `classified_backpressure`
 
-Next lane: `unknown`
+Next lane: `causal-escalation`
 
-Expected delta: `unknown`
+Expected delta: `System-theory rederive selects the next legal successor before runtime promotion or representative rerun.`
 
 Required refresh commands:
 
-1. None recorded
-
-## Classification Efficiency
-
-Default mode: `unknown`
-
-Separate package reason: `unknown`
-
-Artifact budget: `unknown`
-
-Proof command budget: `unknown`
-
-Commands:
-
-1. None recorded
-
-Decision record: `unknown`
-
-Successor action: `unknown`
-
-Runtime promotion rule: `unknown`
+1. `npm run work:system-theory:rederive -- --owner operation_workflow_owner --boundary rebalancer_handoff --limit 12 --sprint work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md --write`
+2. `npm run work:frontier-history -- --owner operation_workflow_owner --boundary rebalancer_handoff --limit 12`
+3. `npm run work:loop-health -- --owner operation_workflow_owner --boundary rebalancer_handoff`
+4. `npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress`
+5. `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json`
+6. `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait`
+7. `open work/packages/todo-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-architecture-gap-experiment.md`
+8. `update Sprint Strategy Brief and Current Edge Card from the route result`
+9. `refresh current-blocker with npm run work:repair`
+10. `npm run work:repair`
+11. `npm run work:validate -- --entry`
+12. `npm run work:validate -- --pre-impl`
 
 ## Architecture Decision Gate
 
-Status: `unknown`
+Status: `selected`
 
-Trigger: `unknown`
+Trigger: `frontier-oscillation`
 
 Trigger evidence:
 
-1. None recorded
+1. `system-theory rederive reported same-mechanism-repeat contract_gap on operation_workflow_owner / rebalancer_handoff`
+2. `scenario-route kept the current artifact at accept_classified_backpressure with two priority-recovery witnesses`
+3. `representative rerun model route blocks another rolling_restart_rerun evidence slice`
+4. `no concrete runtime source transition, owner-boundary migration, evidence regeneration, or representative-green path was selected`
 
 Choices:
 
-1. None recorded
+1. `post-model-architecture-gap-successor` route=`architecture-package` - Open architecture-gap analysis because the post-model rederive selected no non-repeated implementation, migration, evidence-regeneration, or representative-rerun route.
 
-Selected choice: `unknown`
+Selected choice: `post-model-architecture-gap-successor`
 
-Gate next action: unknown
+Gate next action: Open the autonomous architecture experiment package before runtime implementation resumes.
 
 ## Scope
 
 Write scope:
 
-1. None recorded
+1. `work/packages/active-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-system-theory-rederive.md`
+2. `work/packages/todo-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-architecture-gap-experiment.md`
+3. `work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md`
+4. `work/theory-ledger.md`
 
 Handoff files:
 
-1. None recorded
+1. `test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json`
 
 Generated files:
 
@@ -337,11 +372,18 @@ Generated files:
 
 Candidate runtime files:
 
-1. None recorded
+1. `src/rebalancer/operation-workflow-owner-ports.js`
+2. `architecture/contracts/rolling-restart-rebalancer-handoff.md`
+3. `docs/specs/decision-tables/rebalancer-handoff-priority-recovery.json`
 
 Commit scope:
 
-1. None recorded
+1. `work/packages/active-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-system-theory-rederive.md`
+2. `work/packages/todo-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-architecture-gap-experiment.md`
+3. `work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md`
+4. `work/theory-ledger.md`
+5. `work/sprints/current-blocker.json`
+6. `work/sprints/current-blocker.md`
 
 Legacy touched files:
 

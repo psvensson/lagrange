@@ -748,3 +748,17 @@ Each entry must include these labels:
 - Supersedes: theory-20260531-rolling-restart-priority-recovery-rebalancer-handoff-owner-wake-implementation
 - Superseded by: none
 - Next implication: Close the model route as non-terminal architecture-gap learning and activate the post-model operation_workflow_owner / rebalancer_handoff system-theory rederive; do not run another representative rerun from the non-shrinking residual window.
+
+## theory-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-rederive-architecture-gap
+
+- Status: supported
+- Scenario/gate: rolling-restart priority recovery post-model rebalancer handoff rederive
+- Owner/boundary: operation_workflow_owner / rebalancer_handoff
+- Hypothesis: The post-model system-theory rederive cannot authorize runtime source promotion or another representative rerun while same-mechanism-repeat contract_gap persists.
+- Probe: `npm run work:system-theory:rederive -- --owner operation_workflow_owner --boundary rebalancer_handoff --limit 12 --sprint work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md --write`
+- Artifact/result: Evidence test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json: rederiveRequired=true with same-mechanism-repeat contract_gap; scenario route remains accept_classified_backpressure with 2 priority-recovery witnesses; no concrete runtime transition, migration, evidence regeneration, or representative rerun route selected
+- Representative movement: architecture-gap continuation; runtime source and representative rerun remain blocked
+- Linked packages: `work/packages/active-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-system-theory-rederive.md`
+- Supersedes: none
+- Superseded by: none
+- Next implication: Open the post-model architecture-gap experiment to select a non-repeated protocol, scheduling, model, evidence, owner-migration, or architecture-stop route.
