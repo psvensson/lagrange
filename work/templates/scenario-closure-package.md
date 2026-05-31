@@ -3,9 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "active",
   "intent": {
-    "opened": "YYYY-MM-DD",
     "lane": "scenario-release-gate",
     "scenario": "scenario-name",
     "artifact": "path/to/latest.report.json",
@@ -290,7 +288,6 @@ may fix in-scope problems directly, then reruns focused proof.
 
 ## Commit And Push Ledger
 
-- Focused package commit: `<sha>`
 - Push target: `<remote>/<branch>`
 - Commit contains only package-owned files/package-status/allowed sprint handoff: `<yes>`
 - Pushed: `<no>`

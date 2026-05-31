@@ -1,8 +1,12 @@
 #!/usr/bin/env node
 
 import fs from 'node:fs/promises';
-import path from 'node:path';
 import { execSync } from 'node:child_process';
+import {THEORY_LEDGER_REFS_FIELD} from './work-package-schema.js';
+import {
+  parsePackageMetadata,
+  replacePackageMetadata,
+} from './work-tracker.js';
 
 async function routePackage(packagePath, successor) {
   console.log(`Routing package ${packagePath} to successor ${successor}...`);
@@ -12,16 +16,20 @@ async function routePackage(packagePath, successor) {
 async function attachTrack(packagePath, trackName) {
   console.log(`Attaching track ${trackName} to package ${packagePath}...`);
   const content = await fs.readFile(packagePath, 'utf8');
-  
-  // Add track to metadata JSON if not present
-  let updated = content;
-  const match = content.match(/"theoryLedgerRefs":\s*\[([^\]]*)\]/u);
-  if (match) {
-    const existing = match[1].trim();
-    const newRefs = existing ? `${existing}, "${trackName}"` : `"${trackName}"`;
-    updated = content.replace(/"theoryLedgerRefs":\s*\[[^\]]*\]/u, `"theoryLedgerRefs": [${newRefs}]`);
+  const metadata = parsePackageMetadata(content, packagePath);
+  if (!metadata) {
+    throw new Error(`work-package metadata not found in ${packagePath}`);
   }
-
+  const refs = new Set(Array.isArray(metadata[THEORY_LEDGER_REFS_FIELD]) ?
+    metadata[THEORY_LEDGER_REFS_FIELD] :
+    []);
+  refs.add(trackName);
+  metadata[THEORY_LEDGER_REFS_FIELD] = [...refs];
+  metadata.execution = {
+    ...(metadata.execution || {}),
+    [THEORY_LEDGER_REFS_FIELD]: metadata[THEORY_LEDGER_REFS_FIELD],
+  };
+  const updated = replacePackageMetadata(content, metadata);
   await fs.writeFile(packagePath, updated, 'utf8');
   console.log(`Successfully attached ${trackName} to ${packagePath}!`);
 }

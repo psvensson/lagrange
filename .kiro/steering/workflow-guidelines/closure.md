@@ -253,8 +253,8 @@ does not own runtime, test, script, or report write scope.
 
 Fast-path rules:
 
-1. Keep `writeScope` and `commitScope` to package, sprint, tracker, ledger, or
-   documentation handoff files.
+1. Keep `writeScope` and derived commit scope to package, sprint, tracker,
+   ledger, or documentation handoff files.
 2. Put possible runtime, test, script, and report files in
    `candidateRuntimeFiles` only.
 3. Use two or three canonical proof commands: representative evidence, one

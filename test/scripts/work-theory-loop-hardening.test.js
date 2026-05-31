@@ -403,7 +403,7 @@ test('theory-loop package scaffolder enforces src scope and emits marker metadat
   t.equal(metadata.observablePrediction.evidence, 'pending-before-representative-rerun');
   t.match(content, /## Theory Loop Package Contract/u);
   t.match(content, /## Observable Prediction/u);
-  t.match(content, /package\/sprint\/tracker\/ledger-only work is not a closure shape/u);
+  t.match(content, /Forbidden stop shape: .*package-only/u);
   t.notMatch(content, /close as classification-only/u);
   t.match(content, /Required source write: `src\/control-plane\/snapshot-service\.js`/u);
 });

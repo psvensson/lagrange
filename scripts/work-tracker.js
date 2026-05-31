@@ -131,6 +131,8 @@ import {
   SCENARIO_CAUSAL_CLOSURE_VALID_STOP_CONDITIONS,
   SCOPE_FIELD_CANDIDATE_RUNTIME_FILES,
   SCOPE_FIELD_COMMIT_SCOPE,
+  SCOPE_FIELD_COMMIT_SCOPE_EXCLUDE,
+  SCOPE_FIELD_COMMIT_SCOPE_EXTRA,
   SCOPE_FIELD_GENERATED_FILES,
   SCOPE_FIELD_HANDOFF_FILES,
   SCOPE_FIELD_WRITE_SCOPE,
@@ -332,7 +334,6 @@ const CURRENT_BLOCKER_THEORY_SECTION_HEADING =
   '## Theory And Implementation Focus';
 const CURRENT_BLOCKER_IMPLEMENTATION_SCOPE_PATTERN =
   /^(?:src|test|scripts|reports|test-output)\//u;
-const COMMIT_LEDGER_COMMIT_LABEL = 'Focused package commit';
 const COMMIT_LEDGER_PUSH_TARGET_LABEL = 'Push target';
 // Legacy alias: pre-F7 packages wrote `Pushed to: <remote>/<branch>` before
 // the push actually happened. The field is now `Push target` (intent) plus
@@ -928,7 +929,6 @@ const SUBAGENT_PARENT_REVALIDATION_PATTERN =
 const NON_REAL_IDENTITY_PATTERN =
   /\b(?:current-session|current session|parent\s+codex|manual\s+(?:parent\s+)?codex|local\s+session|session\s+identity|agent\s+codex(?:\s+(?:review|fix|implementation))?|codex\s+(?:review|fix|implementation)(?:\s+(?:agent|subagent|session))?)\b/iu;
 const FILE_PATH_TOKEN_PATTERN = /\S*\/\S+/gu;
-const COMMIT_SHA_PATTERN = /^[0-9a-f]{7,40}$/iu;
 const REMOTE_BRANCH_PATTERN = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._/-]+$/u;
 const LEDGER_YES_VALUE = 'yes';
 const NEWLINE = '\n';
@@ -2331,7 +2331,6 @@ function isPendingCommitLedgerValue(value) {
 
 function isPendingCommitAndPushLedger(ledger) {
   return [
-    findCommitLedgerField(ledger, COMMIT_LEDGER_COMMIT_LABEL),
     findCommitLedgerPushTarget(ledger),
     findCommitLedgerField(ledger, COMMIT_LEDGER_FOCUSED_SLICE_LABEL),
   ].some(isPendingCommitLedgerValue);
@@ -2398,7 +2397,6 @@ export function validateCommitAndPushLedger(content, filePath, options = {}) {
   ) {
     return [];
   }
-  const focusedCommit = findCommitLedgerField(ledger, COMMIT_LEDGER_COMMIT_LABEL);
   const pushedTo = findCommitLedgerPushTarget(ledger);
   const focusedSlice = findCommitLedgerField(
     ledger,
@@ -2414,14 +2412,6 @@ export function validateCommitAndPushLedger(content, filePath, options = {}) {
     COMMIT_LEDGER_PUSH_TARGET_LABEL :
     COMMIT_LEDGER_PUSHED_LABEL;
   const errors = [
-    ...validateCommitLedgerFieldValue(
-      filePath,
-      COMMIT_LEDGER_COMMIT_LABEL,
-      focusedCommit,
-      (value) => COMMIT_SHA_PATTERN.test(value) ?
-        null :
-        'must be a git commit SHA',
-    ),
     ...validateCommitLedgerFieldValue(
       filePath,
       pushTargetLabelInUse,
@@ -6454,15 +6444,6 @@ function validateModelTheory(filePath, modelTheory) {
       'or docs/specs/.',
     );
   }
-  if (
-    typeof artifact === 'string' &&
-    /^(?:test|scripts|docs\/specs)\//u.test(artifact) &&
-    !fsSync.existsSync(path.resolve(artifact))
-  ) {
-    errors.push(
-      `${filePath}: ${artifactPath} does not exist: ${artifact}.`,
-    );
-  }
   errors.push(...validateTwoLevelConcreteArray(
     filePath,
     MODEL_THEORY_FIELD,
@@ -8782,9 +8763,11 @@ export function replacePackageMetadata(content, metadata) {
 
   let metadataToSave = metadata;
   if (metadata && metadata.schema === 'work-package-v2') {
+    const shouldPersistStatus = metadata.__declaredStatus !== undefined;
+    const shouldPersistOpened = metadata.__declaredOpened !== undefined;
     metadataToSave = {
       schema: 'work-package-v2',
-      status: metadata.status,
+      ...(shouldPersistStatus ? {status: metadata.status} : {}),
       intent: { ...(metadata.intent || {}) },
       scope: { ...(metadata.scope || {}) },
       gates: { ...(metadata.gates || {}) },
@@ -8794,7 +8777,7 @@ export function replacePackageMetadata(content, metadata) {
 
     const v2Keys = {
       intent: ['opened', 'closed', 'lane', 'scenario', 'artifact', 'playback', 'owner', 'boundary', 'currentState', 'nextAction', 'dominantReason', 'discoveryRef', 'epicRef', 'predecessor', 'successor'],
-      scope: ['writeScope', 'handoffFiles', 'generatedFiles', 'candidateRuntimeFiles', 'commitScope'],
+      scope: ['writeScope', 'handoffFiles', 'generatedFiles', 'candidateRuntimeFiles', 'commitScope', 'commitScopeExtra', 'commitScopeExclude'],
       gates: ['whyHighestLeverageNow', 'stabilityCredit', 'representativeRerunCadence', 'codeQualityAdmission', 'companionGatesFile'],
       modelFit: ['packageClass', 'intendedMinimumModel', 'scopeShape', 'outputProfile', 'escalationTriggers', 'ambiguityScore'],
       execution: ['evidence', 'theoryLedgerRefs']
@@ -8825,6 +8808,10 @@ export function replacePackageMetadata(content, metadata) {
           metadataToSave[section][k] = metadata[k];
         }
       }
+    }
+
+    if (!shouldPersistOpened) {
+      delete metadataToSave.intent.opened;
     }
 
     if (isObjectRecord(metadata.codeQualityAdmission)) {
@@ -8979,9 +8966,61 @@ function validateBoundedExperimentMetadataShape(filePath, metadata) {
 }
 
 function metadataScopeList(metadata, fieldName) {
+  if (fieldName === SCOPE_FIELD_COMMIT_SCOPE) {
+    return deriveMetadataCommitScope(metadata);
+  }
+  return metadataRawScopeList(metadata, fieldName);
+}
+
+function metadataRawScopeList(metadata, fieldName) {
   return Array.isArray(metadata?.[fieldName]) ?
     metadata[fieldName].map(normalizeLedgerText).filter(Boolean) :
     [];
+}
+
+function uniqueScopePaths(paths = []) {
+  const seen = new Set();
+  const uniquePaths = [];
+  for (const filePath of paths) {
+    const normalizedPath = normalizeLedgerText(filePath).replace(/\\/gu, '/');
+    if (!normalizedPath || seen.has(normalizedPath)) {
+      continue;
+    }
+    seen.add(normalizedPath);
+    uniquePaths.push(normalizedPath);
+  }
+  return uniquePaths;
+}
+
+function rejectCommitScopeExcludedPaths(paths = [], metadata = {}) {
+  const excluded = new Set(metadataRawScopeList(
+    metadata,
+    SCOPE_FIELD_COMMIT_SCOPE_EXCLUDE,
+  ).map((filePath) => filePath.replace(/\\/gu, '/')));
+  return paths.filter((filePath) => !excluded.has(filePath));
+}
+
+function deriveMetadataCommitScope(metadata, options = {}) {
+  const packagePath = options.packagePath ?
+    normalizeRelativePath(options.packagePath) :
+    '';
+  const explicitCommitScope = metadataRawScopeList(
+    metadata,
+    SCOPE_FIELD_COMMIT_SCOPE,
+  );
+  const derivedCommitScope = [
+    ...metadataRawScopeList(metadata, SCOPE_FIELD_WRITE_SCOPE),
+    ...metadataRawScopeList(metadata, SCOPE_FIELD_GENERATED_FILES),
+    ...metadataRawScopeList(metadata, SCOPE_FIELD_COMMIT_SCOPE_EXTRA),
+    ...(packagePath ? [packagePath] : []),
+  ];
+  return rejectCommitScopeExcludedPaths(
+    uniqueScopePaths([
+      ...explicitCommitScope,
+      ...derivedCommitScope,
+    ]),
+    metadata,
+  );
 }
 
 function isSourceWritePath(filePath) {
@@ -9326,9 +9365,10 @@ export function validatePackageMetadataShape(filePath, fileStatus, metadata) {
         'work-package-v1 is accepted only for historical closed packages.',
     );
   }
-  if (metadata.status !== fileStatus) {
+  const declaredStatus = metadata.__declaredStatus;
+  if (declaredStatus !== undefined && declaredStatus !== fileStatus) {
     errors.push(
-      `${filePath}: metadata status ${metadata.status} does not match ` +
+      `${filePath}: metadata status ${declaredStatus} does not match ` +
       `filename status ${fileStatus}.`,
     );
   }
@@ -9350,10 +9390,27 @@ export function validatePackageMetadataShape(filePath, fileStatus, metadata) {
     SCOPE_FIELD_GENERATED_FILES,
     SCOPE_FIELD_CANDIDATE_RUNTIME_FILES,
     SCOPE_FIELD_COMMIT_SCOPE,
+    SCOPE_FIELD_COMMIT_SCOPE_EXTRA,
+    SCOPE_FIELD_COMMIT_SCOPE_EXCLUDE,
     THEORY_LEDGER_REFS_FIELD,
   ]) {
     if (metadata[scopeField] !== undefined && !Array.isArray(metadata[scopeField])) {
       errors.push(`${filePath}: metadata ${scopeField} must be an array.`);
+    }
+  }
+  if (fileStatus === STATUS_ACTIVE || fileStatus === STATUS_TODO) {
+    for (const scopeField of [
+      SCOPE_FIELD_GENERATED_FILES,
+      SCOPE_FIELD_COMMIT_SCOPE,
+      SCOPE_FIELD_COMMIT_SCOPE_EXTRA,
+    ]) {
+      if (metadataRawScopeList(metadata, scopeField).includes(CURRENT_BLOCKER_MARKDOWN_PATH)) {
+        errors.push(
+          `${filePath}: metadata ${scopeField} must not include ` +
+          `${CURRENT_BLOCKER_MARKDOWN_PATH}; current-blocker markdown is ` +
+          'rendered on demand, and current-blocker.json is the canonical generated file.',
+        );
+      }
     }
   }
   if (Array.isArray(metadata[THEORY_LEDGER_REFS_FIELD])) {
@@ -12068,6 +12125,10 @@ function currentBlockerCanonicalGeneratedScope(paths = []) {
     .filter((filePath) => filePath !== CURRENT_BLOCKER_MARKDOWN_PATH);
 }
 
+function currentBlockerCanonicalScope(paths = []) {
+  return currentBlockerCanonicalGeneratedScope(paths);
+}
+
 function metadataScopeArray(metadata, fieldName, fallbackFieldName = null) {
   const values = metadataArray(metadata, fieldName);
   if (values.length > NUM_ZERO) {
@@ -12083,25 +12144,23 @@ export function buildCurrentBlockerPayload(
   options = {},
 ) {
   const legacyTouchedFiles = metadataArray(metadata, 'touchedFiles');
-  const writeScope = metadataScopeArray(
+  const writeScope = currentBlockerCanonicalScope(metadataScopeArray(
     metadata,
     SCOPE_FIELD_WRITE_SCOPE,
     'touchedFiles',
+  ));
+  const handoffFiles = currentBlockerCanonicalScope(
+    metadataArray(metadata, SCOPE_FIELD_HANDOFF_FILES),
   );
-  const handoffFiles = metadataArray(metadata, SCOPE_FIELD_HANDOFF_FILES);
   const generatedFiles = currentBlockerCanonicalGeneratedScope(
     metadataArray(metadata, SCOPE_FIELD_GENERATED_FILES),
   );
-  const candidateRuntimeFiles = metadataArray(
-    metadata,
-    SCOPE_FIELD_CANDIDATE_RUNTIME_FILES,
+  const candidateRuntimeFiles = currentBlockerCanonicalScope(
+    metadataArray(metadata, SCOPE_FIELD_CANDIDATE_RUNTIME_FILES),
   );
-  const metadataCommitScope = currentBlockerCanonicalGeneratedScope(
-    metadataArray(metadata, SCOPE_FIELD_COMMIT_SCOPE),
+  const commitScope = currentBlockerCanonicalScope(
+    deriveMetadataCommitScope(metadata, {packagePath: activePackageFile}),
   );
-  const commitScope = metadataCommitScope.length > NUM_ZERO ?
-    metadataCommitScope :
-    writeScope;
   return {
     schema: 'current-blocker-v1',
     generatedBy: 'scripts/work-tracker.js',
@@ -12137,6 +12196,7 @@ export function buildCurrentBlockerPayload(
     observablePrediction: metadata[OBSERVABLE_PREDICTION_FIELD] || {},
     experimentOutcome: metadata[EXPERIMENT_OUTCOME_FIELD] || {},
     rerunDecision: metadata[RERUN_DECISION_FIELD] || {},
+    result: metadata.result || {},
     classificationEfficiency: metadata[CLASSIFICATION_EFFICIENCY_FIELD],
     parallelDiagnostics: metadata.parallelDiagnostics || {},
     systemTheory: metadata[SYSTEM_THEORY_FIELD] || {},
@@ -12182,6 +12242,7 @@ function buildNoActiveCurrentBlockerPayload(activeSprintFile = null) {
     observablePrediction: {},
     experimentOutcome: {},
     rerunDecision: {},
+    result: {},
     classificationEfficiency: {},
     systemTheory: {},
     sliceTheory: {},
@@ -12447,6 +12508,46 @@ function currentEdgeCardExpectedFields(payload) {
       label: CURRENT_EDGE_CARD_LABEL_REQUIRED_ACTION,
       reportField: CURRENT_EDGE_CARD_FIELD_NEXT_ACTION,
       value: payload.nextAction,
+    },
+    {
+      label: 'Representative status',
+      reportField: 'representativeStatus',
+      value: payload.representativeResidual?.status,
+    },
+    {
+      label: 'Causal outcome',
+      reportField: 'causalOutcome',
+      value: currentEdgeCardCausalOutcome(payload),
+    },
+    {
+      label: 'Expected delta',
+      reportField: 'expectedDelta',
+      value: currentEdgeCardExpectedDelta(payload),
+    },
+    {
+      label: 'Current state',
+      reportField: 'currentState',
+      value: payload.currentState,
+    },
+    {
+      label: 'Allowed edits',
+      reportField: 'writeScope',
+      value: formatCurrentEdgeCardList(payload.writeScope),
+    },
+    {
+      label: 'Candidate runtime files',
+      reportField: 'candidateRuntimeFiles',
+      value: formatCurrentEdgeCardList(payload.candidateRuntimeFiles),
+    },
+    {
+      label: 'Forbidden edits',
+      reportField: 'forbiddenEdits',
+      value: currentEdgeCardForbiddenEdits(payload),
+    },
+    {
+      label: 'Required latest proof',
+      reportField: 'proof',
+      value: formatCurrentEdgeCardList(payload.proof),
     },
   ].filter(({value}) =>
     formatCurrentEdgeCardValue(value) !== DEFAULT_UNKNOWN);
@@ -13039,19 +13140,30 @@ async function repairCommand() {
         modified = true;
       }
 
-      // Initialize missing scope arrays
+      // Initialize required scope arrays. commitScope is derived from these
+      // fields plus commitScopeExtra/commitScopeExclude and no longer needs
+      // to be copied into every package.
       for (const scopeField of [
         SCOPE_FIELD_WRITE_SCOPE,
         SCOPE_FIELD_HANDOFF_FILES,
         SCOPE_FIELD_GENERATED_FILES,
         SCOPE_FIELD_CANDIDATE_RUNTIME_FILES,
-        SCOPE_FIELD_COMMIT_SCOPE,
         THEORY_LEDGER_REFS_FIELD,
       ]) {
         if (metadata[scopeField] === undefined) {
           metadata[scopeField] = [];
           modified = true;
         } else if (!Array.isArray(metadata[scopeField])) {
+          metadata[scopeField] = [metadata[scopeField]];
+          modified = true;
+        }
+      }
+      for (const scopeField of [
+        SCOPE_FIELD_COMMIT_SCOPE,
+        SCOPE_FIELD_COMMIT_SCOPE_EXTRA,
+        SCOPE_FIELD_COMMIT_SCOPE_EXCLUDE,
+      ]) {
+        if (metadata[scopeField] !== undefined && !Array.isArray(metadata[scopeField])) {
           metadata[scopeField] = [metadata[scopeField]];
           modified = true;
         }
@@ -13108,16 +13220,22 @@ async function repairCommand() {
         }
       }
 
-      // Autocomplete commitScope
-      const targetCommitScope = [
-        ...metadata.writeScope,
-        ...metadata.generatedFiles,
-        relativePackagePath,
-      ];
-      const uniqueCommitScope = [...new Set([...metadata.commitScope, ...targetCommitScope])];
-      if (uniqueCommitScope.length !== metadata.commitScope.length || !uniqueCommitScope.every((v, i) => v === metadata.commitScope[i])) {
-        metadata.commitScope = uniqueCommitScope;
-        modified = true;
+      for (const scopeField of [
+        SCOPE_FIELD_GENERATED_FILES,
+        SCOPE_FIELD_COMMIT_SCOPE,
+        SCOPE_FIELD_COMMIT_SCOPE_EXTRA,
+      ]) {
+        if (!Array.isArray(metadata[scopeField])) {
+          continue;
+        }
+        const canonicalScope = currentBlockerCanonicalScope(metadata[scopeField]);
+        if (
+          canonicalScope.length !== metadata[scopeField].length ||
+          !canonicalScope.every((value, index) => value === metadata[scopeField][index])
+        ) {
+          metadata[scopeField] = canonicalScope;
+          modified = true;
+        }
       }
 
       if (modified) {
@@ -13193,7 +13311,9 @@ export async function validateReferenceRewriteScope(
     normalizeRelativePath(targetPath),
     ...normalizeScopePaths(metadata?.writeScope || []),
     ...normalizeScopePaths(metadata?.generatedFiles || []),
-    ...normalizeScopePaths(metadata?.commitScope || []),
+    ...normalizeScopePaths(deriveMetadataCommitScope(metadata, {
+      packagePath: targetPath,
+    })),
   ]);
   try {
     const activeSprintFile = await findActiveSprintFile();
@@ -13350,7 +13470,7 @@ function autoPopulateCommitLedgerInMarkdown(content) {
   if (!ledger) {
     return content;
   }
-  const {commit, branch} = resolveGitInfo();
+  const {branch} = resolveGitInfo();
   const heading = COMMIT_AND_PUSH_LEDGER_HEADINGS.find(h => content.includes(h));
   if (!heading) {
     return content;
@@ -13358,10 +13478,9 @@ function autoPopulateCommitLedgerInMarkdown(content) {
   const reconstructedLedger = [
     heading,
     '',
-    `1. ${COMMIT_LEDGER_COMMIT_LABEL}: ${commit}`,
-    `2. ${COMMIT_LEDGER_PUSH_TARGET_LABEL}: ${branch}`,
-    `3. ${COMMIT_LEDGER_FOCUSED_SLICE_LABEL}: yes`,
-    `4. ${COMMIT_LEDGER_PUSHED_BOOLEAN_LABEL}: no`,
+    `1. ${COMMIT_LEDGER_PUSH_TARGET_LABEL}: ${branch}`,
+    `2. ${COMMIT_LEDGER_FOCUSED_SLICE_LABEL}: yes`,
+    `3. ${COMMIT_LEDGER_PUSHED_BOOLEAN_LABEL}: no`,
     ''
   ].join(NEWLINE);
   const headingPattern = new RegExp(

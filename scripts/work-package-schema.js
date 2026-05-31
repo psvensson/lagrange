@@ -65,6 +65,52 @@ const OUTPUT_PROFILE_HIGH = 'high';
 const OUTPUT_PROFILE_EXTRA_HIGH = 'extra-high';
 const WORK_PACKAGE_METADATA_SCHEMA = 'work-package-v2';
 const WORK_PACKAGE_METADATA_SCHEMA_V1 = 'work-package-v1';
+const PACKAGE_STATUS_FROM_PATH_PATTERN =
+  /(?:^|\/)(active|done|superseded|todo)-(\d{4})(\d{2})(\d{2})-[^/]+\.md$/u;
+
+function deriveLifecycleFromPath(filePath) {
+  const normalizedPath = typeof filePath === 'string' ?
+    filePath.replaceAll('\\', '/') :
+    EMPTY_TEXT;
+  const match = PACKAGE_STATUS_FROM_PATH_PATTERN.exec(normalizedPath);
+  if (!match) {
+    return {opened: EMPTY_TEXT, status: EMPTY_TEXT};
+  }
+  return {
+    status: match[1],
+    opened: `${match[2]}-${match[3]}-${match[4]}`,
+  };
+}
+
+function defineDerivedLifecycleMetadata(shim, metadata, filePath) {
+  const lifecycle = deriveLifecycleFromPath(filePath);
+  const declaredStatus = metadata.status;
+  const declaredOpened = metadata.intent?.opened ?? metadata.opened;
+  Object.defineProperties(shim, {
+    __declaredOpened: {
+      value: declaredOpened,
+      enumerable: false,
+    },
+    __declaredStatus: {
+      value: declaredStatus,
+      enumerable: false,
+    },
+    __filenameOpened: {
+      value: lifecycle.opened,
+      enumerable: false,
+    },
+    __filenameStatus: {
+      value: lifecycle.status,
+      enumerable: false,
+    },
+  });
+  if (shim.status === undefined && lifecycle.status) {
+    shim.status = lifecycle.status;
+  }
+  if (shim.opened === undefined && lifecycle.opened) {
+    shim.opened = lifecycle.opened;
+  }
+}
 
 function normalizeMetadata(metadata, filePath) {
   if (!metadata) return metadata;
@@ -129,13 +175,51 @@ function normalizeMetadata(metadata, filePath) {
           }
         }
       } catch {
-        return shim;
+        // Companion gates are optional overlay data; local package metadata
+        // remains valid and lifecycle-derived fields still apply.
       }
+    }
+
+    defineDerivedLifecycleMetadata(shim, metadata, filePath);
+
+    const baseRoute = {
+      scenario: shim.scenario,
+      artifact: shim.artifact,
+      owner: shim.owner,
+      boundary: shim.boundary,
+      dominantReason: shim.dominantReason,
+    };
+    if (metadata.representativeResidual) {
+      shim.representativeResidual = {
+        ...baseRoute,
+        ...metadata.representativeResidual,
+      };
+    }
+    if (metadata.rerunDecision) {
+      shim.rerunDecision = {
+        sourceArtifact: baseRoute.artifact,
+        routeOwner: baseRoute.owner,
+        routeBoundary: baseRoute.boundary,
+        routeDominantReason: baseRoute.dominantReason,
+        ...metadata.rerunDecision,
+      };
+    }
+    const canonicalClassification =
+      metadata.result?.classification ||
+      metadata.closureSummary?.resultClassification ||
+      metadata.scenarioCausalClosure?.resultClassification ||
+      metadata.causalGovernance?.representativeOutcome ||
+      metadata.representativeResidual?.status ||
+      metadata.theoryLoop?.result;
+    if (canonicalClassification && !shim.result) {
+      shim.result = {classification: canonicalClassification};
     }
 
     return shim;
   }
-  return metadata;
+  const shim = {...metadata};
+  defineDerivedLifecycleMetadata(shim, metadata, filePath);
+  return shim;
 }
 
 const CAUSAL_GOVERNANCE_PENDING_OUTCOME = 'pending-before-rerun';
@@ -144,6 +228,8 @@ const SCOPE_FIELD_HANDOFF_FILES = 'handoffFiles';
 const SCOPE_FIELD_GENERATED_FILES = 'generatedFiles';
 const SCOPE_FIELD_CANDIDATE_RUNTIME_FILES = 'candidateRuntimeFiles';
 const SCOPE_FIELD_COMMIT_SCOPE = 'commitScope';
+const SCOPE_FIELD_COMMIT_SCOPE_EXTRA = 'commitScopeExtra';
+const SCOPE_FIELD_COMMIT_SCOPE_EXCLUDE = 'commitScopeExclude';
 const THEORY_LEDGER_REFS_FIELD = 'theoryLedgerRefs';
 const OWNER_BOUNDARY_MIGRATION_PROOF_FIELD = 'ownerBoundaryMigrationProof';
 const OWNER_BOUNDARY_MIGRATION_PROOF_FROM_OWNER_FIELD = 'fromOwner';
@@ -724,6 +810,8 @@ const WORK_PACKAGE_SCOPE_FIELDS = Object.freeze([
   SCOPE_FIELD_GENERATED_FILES,
   SCOPE_FIELD_CANDIDATE_RUNTIME_FILES,
   SCOPE_FIELD_COMMIT_SCOPE,
+  SCOPE_FIELD_COMMIT_SCOPE_EXTRA,
+  SCOPE_FIELD_COMMIT_SCOPE_EXCLUDE,
 ]);
 const REPRESENTATIVE_RESIDUAL_FIELD = 'representativeResidual';
 const REPRESENTATIVE_RESIDUAL_FIELDS = Object.freeze([
@@ -1458,6 +1546,8 @@ export {
   REPRESENTATIVE_RESIDUAL_FIELDS,
   SCOPE_FIELD_CANDIDATE_RUNTIME_FILES,
   SCOPE_FIELD_COMMIT_SCOPE,
+  SCOPE_FIELD_COMMIT_SCOPE_EXCLUDE,
+  SCOPE_FIELD_COMMIT_SCOPE_EXTRA,
   SCOPE_FIELD_GENERATED_FILES,
   SCOPE_FIELD_HANDOFF_FILES,
   SCOPE_FIELD_WRITE_SCOPE,

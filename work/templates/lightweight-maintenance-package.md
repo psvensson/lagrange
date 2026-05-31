@@ -3,9 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
   "intent": {
-    "opened": "YYYY-MM-DD",
     "lane": "lightweight-maintenance",
     "scenario": "none",
     "artifact": "none",
@@ -22,11 +20,7 @@
     ],
     "handoffFiles": [],
     "generatedFiles": [],
-    "candidateRuntimeFiles": [],
-    "commitScope": [
-      "path/to/file",
-      "work/packages/done-YYYYMMDD-slug.md"
-    ]
+    "candidateRuntimeFiles": []
   },
   "gates": {
     "stabilityCredit": "local-proof-only",

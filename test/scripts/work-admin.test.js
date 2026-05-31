@@ -10,7 +10,35 @@ test('work-admin CLI intents', async () => {
   const packageContent = `<!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "active",
+  "intent": {
+    "lane": "lightweight-maintenance",
+    "scenario": "none",
+    "artifact": "none",
+    "playback": "none",
+    "owner": "workflow_tooling_owner",
+    "boundary": "admin_test",
+    "dominantReason": "test",
+    "currentState": "testing admin attachment",
+    "nextAction": "attach track"
+  },
+  "scope": {
+    "writeScope": [],
+    "handoffFiles": [],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": []
+  },
+  "gates": {
+    "stabilityCredit": "local-proof-only",
+    "whyHighestLeverageNow": "test"
+  },
+  "modelFit": {
+    "packageClass": "bounded-implementation",
+    "intendedMinimumModel": "gpt-5.3-codex-spark",
+    "scopeShape": "leaf-slice",
+    "outputProfile": "medium",
+    "ambiguityScore": 1,
+    "escalationTriggers": ["test"]
+  },
   "execution": {
     "theoryLedgerRefs": []
   }

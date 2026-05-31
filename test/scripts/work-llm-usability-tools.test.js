@@ -375,7 +375,9 @@ test('package scaffolder pre-fills Model Fit from schema defaults', async (t) =>
   t.match(content, /"schema": "work-package-v2"/u);
   t.match(content, /"lane": "lightweight-maintenance"/u);
   t.match(content, /"writeScope": \[/u);
-  t.match(content, /"commitScope": \[/u);
+  t.notMatch(content, /"status": "todo"/u);
+  t.notMatch(content, /"opened": /u);
+  t.notMatch(content, /"commitScope": \[/u);
   t.match(content, /"modelFitSplit": \{/u);
   t.match(content, /"outputProfile": "medium"/u);
   t.match(content, /Intended minimum model: `gpt-5\.3-codex-spark`/u);

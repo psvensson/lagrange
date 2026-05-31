@@ -422,6 +422,7 @@ describe('work tracker scenario causal closure validation', () => {
       assert.deepEqual(payload.commitScope, [
         'scripts/work-tracker.js',
         'work/sprints/current-blocker.json',
+        'work/packages/active-test-package.md',
       ]);
       assert.deepEqual(payload.theoryLedgerRefs, [TEST_THEORY_LEDGER_REF]);
       assert.equal(payload.representativeResidual.status, 'red');

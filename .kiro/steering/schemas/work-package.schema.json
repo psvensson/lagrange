@@ -45,7 +45,6 @@
   },
   "required": [
     "schema",
-    "status",
     "intent",
     "scope",
     "gates",
@@ -60,10 +59,18 @@
       "type": "string",
       "enum": ["active", "done", "todo", "superseded"]
     },
+    "result": {
+      "type": "object",
+      "properties": {
+        "classification": { "type": "string" },
+        "evidence": { "type": "string" },
+        "notes": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
     "intent": {
       "type": "object",
       "required": [
-        "opened",
         "lane",
         "scenario",
         "owner",
@@ -143,8 +150,7 @@
         "writeScope",
         "handoffFiles",
         "generatedFiles",
-        "candidateRuntimeFiles",
-        "commitScope"
+        "candidateRuntimeFiles"
       ],
       "properties": {
         "writeScope": {
@@ -164,6 +170,14 @@
           "items": { "type": "string" }
         },
         "commitScope": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "commitScopeExtra": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "commitScopeExclude": {
           "type": "array",
           "items": { "type": "string" }
         }

@@ -1,10 +1,16 @@
 import fs from 'fs';
 import path from 'path';
-import { execSync } from 'child_process';
-import {normalizeMetadata} from './work-package-schema.js';
+import { execFileSync, execSync } from 'child_process';
+import {
+  SCOPE_FIELD_COMMIT_SCOPE,
+  SCOPE_FIELD_COMMIT_SCOPE_EXCLUDE,
+  SCOPE_FIELD_COMMIT_SCOPE_EXTRA,
+  SCOPE_FIELD_GENERATED_FILES,
+  SCOPE_FIELD_WRITE_SCOPE,
+  normalizeMetadata,
+} from './work-package-schema.js';
 import {computeResidualCountFromArtifact} from './work-residual-count.js';
 import {runSprintPush} from './work-sprint-push.js';
-import {hardenCommitLedgerContent} from './work-commit-ledger-harden.js';
 
 // R14 ceremony fold. Before closing, bind representativeResidual.residualCount to
 // the real evidence artifact when the package names an artifact but left the
@@ -83,6 +89,82 @@ function renumberSprintQueue(fileContent) {
   return lines.join('\n');
 }
 
+function normalizeRelativeFile(filePath) {
+  return path.normalize(filePath).split(path.sep).join('/');
+}
+
+function metadataScope(metadata, fieldName) {
+  return Array.isArray(metadata?.[fieldName]) ?
+    metadata[fieldName].map((value) => String(value || '').trim()).filter(Boolean) :
+    [];
+}
+
+function uniquePaths(paths) {
+  const seen = new Set();
+  const unique = [];
+  for (const filePath of paths) {
+    const normalized = normalizeRelativeFile(filePath);
+    if (!normalized || normalized === 'work/sprints/current-blocker.md' || seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    unique.push(normalized);
+  }
+  return unique;
+}
+
+function deriveCloseCommitScope(metadata, {
+  activeName,
+  doneName,
+  relativePackagePath,
+  relativeTargetPath,
+}) {
+  const excluded = new Set(metadataScope(
+    metadata,
+    SCOPE_FIELD_COMMIT_SCOPE_EXCLUDE,
+  ).map(normalizeRelativeFile));
+  const baseScope = uniquePaths([
+    ...metadataScope(metadata, SCOPE_FIELD_COMMIT_SCOPE),
+    ...metadataScope(metadata, SCOPE_FIELD_WRITE_SCOPE),
+    ...metadataScope(metadata, SCOPE_FIELD_GENERATED_FILES),
+    ...metadataScope(metadata, SCOPE_FIELD_COMMIT_SCOPE_EXTRA),
+    relativePackagePath,
+    relativeTargetPath,
+  ]);
+  return uniquePaths([
+    ...baseScope.map((filePath) => filePath.replace(activeName, doneName)),
+    relativePackagePath,
+    relativeTargetPath,
+  ]).filter((filePath) => !excluded.has(filePath));
+}
+
+function pathIsTracked(filePath) {
+  try {
+    execFileSync('git', ['ls-files', '--error-unmatch', filePath], {
+      stdio: 'ignore',
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function currentSteeringPackDiff() {
+  return execSync('git diff -- .kiro/steering/llm', {encoding: 'utf8'});
+}
+
+function checkSteeringPackFreshness() {
+  const beforeDiff = currentSteeringPackDiff();
+  execSync('npm run --silent steering:llm:pack', { stdio: 'inherit' });
+  const afterDiff = currentSteeringPackDiff();
+  if (beforeDiff !== afterDiff) {
+    throw new Error(
+      'Steering packs were stale and changed during regeneration. Review the ' +
+      'diff and re-run work:close.',
+    );
+  }
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const dryRun = args.includes('--dry-run');
@@ -148,7 +230,7 @@ async function main() {
     console.log('- Update status to "done" in metadata');
     console.log('- Rewrite all references to the package in the workspace');
     console.log('- Renumber the sprint queue if required');
-    console.log('- Stage only commitScope files plus sprint and current-blocker.json');
+    console.log('- Stage derived commit scope files plus sprint and current-blocker.json');
     if (push) {
       console.log('- Push the close commit and flip package ledgers to Pushed: yes (--push)');
     }
@@ -169,11 +251,12 @@ async function main() {
   // ship doctrine edits without the matching .kiro/steering/llm regeneration.
   console.log('Checking steering pack freshness...');
   try {
-    execSync('npm run --silent steering:check', { stdio: 'inherit' });
+    checkSteeringPackFreshness();
   } catch (error) {
     console.error(
-      'Steering packs are stale. Run `npm run steering:llm:pack`, review the ' +
-      'diff, and re-run work:close.',
+      error.message ||
+        'Steering packs are stale. Run `npm run steering:llm:pack`, review the ' +
+          'diff, and re-run work:close.',
     );
     process.exit(1);
   }
@@ -211,14 +294,18 @@ async function main() {
     console.error('Failed to refresh current blocker:', error.message);
   }
 
-  // 6. Gather files to stage
-  const commitScope = metadata.commitScope || [];
+  // 6. Gather files to stage from derived commit scope.
+  const commitScope = deriveCloseCommitScope(metadata, {
+    activeName,
+    doneName,
+    relativePackagePath,
+    relativeTargetPath,
+  });
   const filesToStage = new Set();
 
   for (const file of commitScope) {
-    const resolvedFile = file.replace(activeName, doneName);
-    if (fs.existsSync(resolvedFile)) {
-      filesToStage.add(resolvedFile);
+    if (fs.existsSync(file) || pathIsTracked(file)) {
+      filesToStage.add(file);
     }
   }
 
@@ -233,49 +320,17 @@ async function main() {
   if (fs.existsSync(activeSprintPath)) filesToStage.add(activeSprintPath);
 
   console.log('\nStaging files...');
-  // Reset existing staged files first
-  try {
-    execSync('git reset', { stdio: 'ignore' });
-  } catch (err) {
-    // ignore
-  }
 
   for (const file of filesToStage) {
     console.log(`  git add ${file}`);
-    execSync(`git add "${file}"`);
+    execFileSync('git', ['add', '-A', '--', file]);
   }
 
-  // 7. Auto-commit and update commit ledger if applicable
+  // 7. Auto-commit the closure
   console.log('\nCreating focused close commit...');
   try {
-    const parentCommitSha = execSync('git rev-parse HEAD', {encoding: 'utf8'}).trim();
     const commitMsg = `close: ${metadata.intent?.title || doneName}`;
     execSync(`git commit -m "${commitMsg}"`, { stdio: 'inherit' });
-    
-    // Now we are on the new commit. Get its SHA.
-    const newCommitSha = execSync('git rev-parse HEAD', {encoding: 'utf8'}).trim();
-
-    // Harden the Commit And Push Ledger so the recorded SHA is the actual close
-    // commit, regardless of whether the line held a placeholder, a stale SHA, or
-    // the pre-commit parent SHA. This removes any need to read and re-enter the
-    // hash by hand.
-    if (fs.existsSync(relativeTargetPath)) {
-      const originalContent = fs.readFileSync(relativeTargetPath, 'utf8');
-      const hardenedContent = hardenCommitLedgerContent(
-        originalContent,
-        newCommitSha,
-        parentCommitSha,
-      );
-      if (hardenedContent !== originalContent) {
-        console.log(`Hardening commit ledger in ${relativeTargetPath} -> ${newCommitSha}`);
-        fs.writeFileSync(relativeTargetPath, hardenedContent, 'utf8');
-
-        // Re-stage the package file and amend the commit
-        execSync(`git add "${relativeTargetPath}"`);
-        execSync('git commit --amend --no-edit', { stdio: 'inherit' });
-        console.log('Commit ledger successfully hardened!');
-      }
-    }
   } catch (err) {
     console.error('Failed to create close commit:', err.message);
     process.exit(1);

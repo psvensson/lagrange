@@ -10,9 +10,8 @@ function ledger({label = 'Push target', branch = 'origin/main', pushedLine = ''}
   return [
     '## Commit And Push Ledger',
     '',
-    '1. Focused package commit: 0123456789abcdef0123456789abcdef01234567',
-    `2. ${label}: ${branch}`,
-    '3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes',
+    `1. ${label}: ${branch}`,
+    '2. Commit contains only package-owned files/package-status/allowed sprint handoff: yes',
     pushedLine,
     '',
   ].filter((l) => l !== '').join('\n');

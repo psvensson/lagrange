@@ -31,6 +31,7 @@ const CURRENT_BLOCKER_PATH = 'work/sprints/current-blocker.json';
 const VALUE_NOT_PROVIDED = 'not-provided';
 const VALUE_NONE = 'none';
 const MESSAGE_PACKAGE_MIGRATION_FAILED = 'package migration failed';
+const MESSAGE_TRANSACTION_STEP_FAILED = 'route-after-rerun transaction step failed';
 const MESSAGE_WRITE_REQUIRES_SUCCESSOR =
   '--write requires --successor <active-successor>.';
 const MARKDOWN_HEADER_ROUTE_AFTER_RERUN = '# Route After Rerun';
@@ -93,26 +94,46 @@ async function currentPackagePath() {
 }
 
 function runTrackerMigrate(packagePath, successorPath) {
+  return runCommand(process.execPath, [
+    'scripts/work-tracker.js',
+    'migrate',
+    '--write',
+    '--transaction',
+    packagePath,
+    successorPath,
+  ], MESSAGE_PACKAGE_MIGRATION_FAILED);
+}
+
+function runCommand(command, args, failureMessage) {
   const result = spawnSync(
-    process.execPath,
-    [
-      'scripts/work-tracker.js',
-      'migrate',
-      '--write',
-      '--transaction',
-      packagePath,
-      successorPath,
-    ],
+    command,
+    args,
     {encoding: 'utf8'},
   );
   if (result.status !== EXIT_SUCCESS) {
     throw new Error(
       normalizeText(result.stderr) ||
       normalizeText(result.stdout) ||
-      MESSAGE_PACKAGE_MIGRATION_FAILED,
+      failureMessage,
     );
   }
   return normalizeText(result.stdout);
+}
+
+function runPostMigrationRefresh() {
+  return [
+    runCommand('npm', ['run', 'work:repair'], MESSAGE_TRANSACTION_STEP_FAILED),
+    runCommand(
+      'npm',
+      ['run', 'work:validate', '--', '--entry'],
+      MESSAGE_TRANSACTION_STEP_FAILED,
+    ),
+    runCommand(
+      'npm',
+      ['run', 'work:validate', '--', '--pre-impl'],
+      MESSAGE_TRANSACTION_STEP_FAILED,
+    ),
+  ].filter(Boolean).join(NEWLINE);
 }
 
 async function buildRouteAfterRerunLines(options = {}) {
@@ -158,7 +179,14 @@ async function buildRouteAfterRerunLines(options = {}) {
     throw new Error(MESSAGE_WRITE_REQUIRES_SUCCESSOR);
   }
   const migrationOutput = runTrackerMigrate(packagePath, options.successorPath);
-  lines.push(EMPTY_TEXT, MARKDOWN_HEADER_TRANSACTION, EMPTY_TEXT, migrationOutput);
+  const refreshOutput = runPostMigrationRefresh();
+  lines.push(
+    EMPTY_TEXT,
+    MARKDOWN_HEADER_TRANSACTION,
+    EMPTY_TEXT,
+    migrationOutput,
+    refreshOutput,
+  );
   return lines;
 }
 

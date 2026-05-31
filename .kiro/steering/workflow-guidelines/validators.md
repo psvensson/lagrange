@@ -55,13 +55,14 @@ Required `rerunDecision` fields:
 6. `stopMode`
 7. `nextLane`
 8. `expectedDelta`
-9. `requiredRefreshCommands`
+9. `requiredRefreshCommands` (legacy alias; `execution.proof.commands` is the
+   canonical command list)
 
-`requiredRefreshCommands` must cite route-after-rerun, Sprint Strategy Brief
-update, Current Edge Card update, current-blocker regeneration, and
-pre-implementation validation. Closure or migration is not complete while the
-active package, sprint brief, Current Edge Card, and generated
-`current-blocker.json` disagree.
+`execution.proof.commands` must cite the focused proof commands. Legacy
+`requiredRefreshCommands` is accepted when present, but `route-after-rerun
+--write`, repair, and validation own the refresh transaction. Closure or
+migration is not complete while the active package, sprint brief, Current Edge
+Card, and generated `current-blocker.json` disagree.
 
 Packages must state the expected representative delta before implementation:
 what metric, owner, boundary, dominant reason, or route is expected to change.
@@ -73,4 +74,3 @@ If the rerun is same-frontier with no concrete metric or shape reduction, stop
 local patching and open/select an autonomous architecture experiment before
 another implementation package. Human escalation is an exception for
 contradictory, policy-blocked, credential-blocked, or unavailable evidence.
-

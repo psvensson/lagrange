@@ -2,6 +2,8 @@
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import {normalizeMetadata} from './work-package-schema.js';
+import {buildSprintRemainingSummary} from './work-sprint-remaining.js';
 
 const PACKAGES_DIR = 'work/packages';
 const SPRINTS_DIR = 'work/sprints';
@@ -39,7 +41,7 @@ async function parsePackageInfo(packagePath) {
   const match = content.match(/<!-- work-package\s*([\s\S]*?)\s*-->/u);
   if (match) {
     try {
-      const metadata = JSON.parse(match[1]);
+      const metadata = normalizeMetadata(JSON.parse(match[1]), packagePath);
       return {
         path: packagePath,
         title: metadata.intent?.title || path.basename(packagePath, '.md'),
@@ -67,9 +69,12 @@ async function getSummary(options = {}) {
 
   let packagesLeft = 0;
   if (activeSprint) {
-    const sprintContent = await fs.readFile(activeSprint, 'utf8');
-    const todoMatches = sprintContent.match(/todo-[A-Za-z0-9._-]+\.md/gu) || [];
-    packagesLeft = todoMatches.length;
+    try {
+      const remaining = await buildSprintRemainingSummary({sprintPath: activeSprint});
+      packagesLeft = remaining.counts.left;
+    } catch {
+      packagesLeft = activePackage ? 1 : 0;
+    }
   }
 
   let nextCommandHint = 'npm run work:package:new';

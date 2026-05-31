@@ -111,23 +111,23 @@ current-blocker files, sprint state, package queues, or theory-ledger decisions.
 ## Current Edge Card
 
 ```text
-Representative artifact: test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json
-Visible first frontier: priority_recovery_partition_progress / operation_workflow_owner / rebalancer_handoff / priority_recovery_event_driven_wait
-Active package: work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-blocked-rerun-route-state.md
-Active package owner: operation_workflow_owner
-Active package boundary: rebalancer_handoff
-Selected cause: priority_recovery_event_driven_wait
-Required action: Emit the blocked_model_route representative rerun discriminator from the rebalancer handoff progress contract so the repaired decision table has a runtime-owned route signal.
-Representative status: active-theory-loop
-Causal outcome: pending-before-rerun
-Architecture gate: watching / unknown
-Expected delta: Runtime progress contract emits blocked_model_route for the rebalancer handoff retry path; representative evidence remains unchanged until a later legal rerun.
-Current state: The decision table and contract distinguish eligible representative rerun from blocked_model_route, but runtime progress evidence does not yet emit the representative rerun route discriminator.
-Allowed edits: src/rebalancer/operation-workflow-owner-ports.js, test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js, architecture/contracts/rolling-restart-rebalancer-handoff.md, work/packages/todo-20260531-rolling-restart-priority-recovery-rebalancer-handoff-blocked-route-rerun-gate.md, work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-blocked-rerun-route-state.md, work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md, work/theory-ledger.md
-Candidate runtime files: src/rebalancer/operation-workflow-owner-ports.js
-Forbidden edits: Accepted backpressure under blocked_model_route cannot authorize rerun_representative_evidence.
-Required latest proof: falsifier: npm test -- test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js # focused contract fixture, regression: npm test -- test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js # affected consumer proof, regression: npm run model:decision-tables, supporting: npm run work:contract:check -- architecture/contracts/rolling-restart-rebalancer-handoff.md, supporting: npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress, supporting: npm run work:evidence-summary -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json, supporting: npm run audit:runtime-grammar:file -- src/rebalancer/operation-workflow-owner-ports.js
-Allowed stop modes: success-condition-met only; representative-green, owner-boundary-migration, architecture-gap, same-frontier, classification-only, needs-rerun, pending, and unknown are package outcomes unless they exactly match the original sprint success condition
+Representative artifact: none
+Visible first frontier: unknown
+Active package: work/packages/active-20260531-workflow-admin-metadata-derivation.md
+Active package owner: workflow_tooling_owner
+Active package boundary: package_lifecycle_metadata
+Selected cause: workflow_admin_overhead
+Required action: Derive package lifecycle, scope, route, result, and sprint handoff views from package metadata so agents stop maintaining duplicate admin state.
+Representative status: unknown
+Causal outcome: unknown
+Architecture gate: not-required / unknown
+Expected delta: unknown
+Current state: Package opened with declared owner, boundary, scope, proof, and stop rule.
+Allowed edits: work/packages/active-20260531-workflow-admin-metadata-derivation.md, scripts/work-tracker.js, scripts/work-close.js, scripts/work-context.js, scripts/work-package-new.js, scripts/work-package-route-after-rerun.js, scripts/work-package-schema.js, scripts/work-summary.js, scripts/work-sprint-remaining.js, scripts/work-sprint-queue.js, scripts/work-admin.js, scripts/work-package-evidence.js, work/templates/lightweight-maintenance-package.md, work/templates/single-file-maintenance-package.md, work/templates/doc-only-package.md, work/templates/runtime-owner-package.md, work/templates/scenario-closure-package.md, work/README.md, work/RULES.md, .kiro/steering/workflow-guidelines/packages.md, .kiro/steering/workflow-guidelines/closure.md, .kiro/steering/workflow-guidelines/subagents.md, .kiro/steering/workflow-guidelines/validators.md, .kiro/steering/schemas/work-package.schema.json, .kiro/steering/llm/core.md, .kiro/steering/llm/boot.md, .kiro/steering/llm/governance.md, .kiro/steering/llm/rules.json, .kiro/steering/llm/manifest.json, test/scripts/work-tracker-current-blocker.test.js, test/scripts/work-admin.test.js, test/scripts/work-close.test.js, test/scripts/work-package-evidence.test.js, test/scripts/work-package-new.test.js, test/scripts/work-context.test.js, test/scripts/work-llm-usability-tools.test.js, test/scripts/work-summary.test.js, test/scripts/work-tracker-current-blocker-ledger.test.js, test/scripts/work-theory-loop-hardening.test.js
+Candidate runtime files: unknown
+Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
+Required latest proof: regression: npm run work:test, regression: npm run work:test:regression, regression: npm run work:validate -- --entry
+Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
 ## Package Queue
@@ -214,6 +214,11 @@ Allowed stop modes: success-condition-met only; representative-green, owner-boun
    [Rolling Restart Priority Recovery Rebalancer Handoff Blocked Route Rerun Gate](work/packages/todo-20260531-rolling-restart-priority-recovery-rebalancer-handoff-blocked-route-rerun-gate.md)
    - Fresh representative rolling-restart rerun after the runtime progress
      contract emits `blocked_model_route` for rebalancer handoff retry progress.
+18. `todo` -
+   [Workflow Admin Metadata Derivation](work/packages/active-20260531-workflow-admin-metadata-derivation.md)
+   - Workflow-tooling maintenance to derive package lifecycle, scope, route,
+     result, and sprint handoff views from package metadata instead of
+     hand-maintained mirror state.
 
 ## Sprint Proof Ladder
 

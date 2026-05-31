@@ -74,7 +74,7 @@ describe('work tracker commit and push ledger validation', () => {
     );
 
     assert.deepEqual(openErrors, []);
-    assert.match(closedErrors.join('\n'), /must be a git commit SHA/u);
+    assert.match(closedErrors.join('\n'), /must be <remote>\/<branch>/u);
   });
 
   it('reports placeholders in commit and push proof fields', () => {
@@ -85,7 +85,6 @@ describe('work tracker commit and push ledger validation', () => {
     );
 
     assert.match(errors.join('\n'), /placeholder/u);
-    assert.match(errors.join('\n'), /must be a git commit SHA/u);
     assert.match(errors.join('\n'), /must be <remote>\/<branch>/u);
     assert.match(errors.join('\n'), /must be yes/u);
   });

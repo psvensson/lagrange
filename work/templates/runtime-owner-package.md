@@ -3,9 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "active",
   "intent": {
-    "opened": "YYYY-MM-DD",
     "lane": "runtime-owner-boundary",
     "scenario": "scenario-or-none",
     "artifact": "path/to/artifact-or-none",
@@ -23,12 +21,7 @@
     ],
     "handoffFiles": [],
     "generatedFiles": [],
-    "candidateRuntimeFiles": [],
-    "commitScope": [
-      "src/example.js",
-      "test/example.test.js",
-      "work/packages/active-YYYYMMDD-package.md"
-    ]
+    "candidateRuntimeFiles": []
   },
   "gates": {
     "stabilityCredit": "local-proof-only",
@@ -193,7 +186,6 @@ may fix in-scope problems directly, then reruns focused proof.
 
 ## Commit And Push Ledger
 
-- Focused package commit: `<sha>`
 - Push target: `<remote>/<branch>`
 - Commit contains only package-owned files/package-status/allowed sprint handoff: `<yes>`
 - Pushed: `<no>`

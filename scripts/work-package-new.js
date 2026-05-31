@@ -73,6 +73,8 @@ import {
   OWNER_BOUNDARY_MIGRATION_PROOF_FIELD,
   SCOPE_FIELD_CANDIDATE_RUNTIME_FILES,
   SCOPE_FIELD_COMMIT_SCOPE,
+  SCOPE_FIELD_COMMIT_SCOPE_EXCLUDE,
+  SCOPE_FIELD_COMMIT_SCOPE_EXTRA,
   SCOPE_FIELD_GENERATED_FILES,
   SCOPE_FIELD_HANDOFF_FILES,
   SCOPE_FIELD_WRITE_SCOPE,
@@ -1921,9 +1923,10 @@ function toWorkPackageV2Metadata(metadata) {
     SCOPE_FIELD_GENERATED_FILES,
     SCOPE_FIELD_CANDIDATE_RUNTIME_FILES,
     SCOPE_FIELD_COMMIT_SCOPE,
+    SCOPE_FIELD_COMMIT_SCOPE_EXTRA,
+    SCOPE_FIELD_COMMIT_SCOPE_EXCLUDE,
   ]);
   const intent = {
-    opened: metadata.opened,
     lane: metadata.lane,
     scenario: metadata.scenario,
     artifact: metadata.artifact,
@@ -1949,7 +1952,6 @@ function toWorkPackageV2Metadata(metadata) {
 
   const packageMetadata = {
     schema: WORK_PACKAGE_METADATA_SCHEMA,
-    status: metadata.status,
     intent,
     scope: {
       [SCOPE_FIELD_WRITE_SCOPE]: metadata[SCOPE_FIELD_WRITE_SCOPE] || [],
@@ -1957,7 +1959,6 @@ function toWorkPackageV2Metadata(metadata) {
       [SCOPE_FIELD_GENERATED_FILES]: metadata[SCOPE_FIELD_GENERATED_FILES] || [],
       [SCOPE_FIELD_CANDIDATE_RUNTIME_FILES]:
         metadata[SCOPE_FIELD_CANDIDATE_RUNTIME_FILES] || [],
-      [SCOPE_FIELD_COMMIT_SCOPE]: metadata[SCOPE_FIELD_COMMIT_SCOPE] || [],
     },
     gates: {
       stabilityCredit: metadata.stabilityCredit || 'local-proof-only',
@@ -1974,6 +1975,16 @@ function toWorkPackageV2Metadata(metadata) {
     modelFit: metadata.modelFit,
     execution,
   };
+  for (const optionalScopeField of [
+    SCOPE_FIELD_COMMIT_SCOPE,
+    SCOPE_FIELD_COMMIT_SCOPE_EXTRA,
+    SCOPE_FIELD_COMMIT_SCOPE_EXCLUDE,
+  ]) {
+    if (Array.isArray(metadata[optionalScopeField]) &&
+      metadata[optionalScopeField].length > NUM_ZERO) {
+      packageMetadata.scope[optionalScopeField] = metadata[optionalScopeField];
+    }
+  }
 
   for (const [key, value] of Object.entries(metadata)) {
     if (!nestedFieldKeys.has(key)) {
@@ -2025,13 +2036,14 @@ async function buildPackageContent(flags = {}) {
   const handoffFiles = flags[FLAG_HANDOFF_FILE] || [];
   const generatedFiles = flags[FLAG_GENERATED_FILE] || [];
   const candidateRuntimeFiles = flags[FLAG_CANDIDATE_RUNTIME_FILE] || [];
-  const commitScope = flags[FLAG_COMMIT_SCOPE] || [
+  const commitScope = flags[FLAG_COMMIT_SCOPE] || [];
+  const effectiveCommitScope = commitScope.length > NUM_ZERO ? commitScope : [
     ...writeScope,
     ...generatedFiles,
   ];
   if (isTheoryLoopPackage) {
     validateTheoryLoopPackageFlags({
-      commitScope,
+      commitScope: effectiveCommitScope,
       isClassificationOnly,
       lane,
       proof,
@@ -2066,7 +2078,7 @@ async function buildPackageContent(flags = {}) {
     [SCOPE_FIELD_HANDOFF_FILES]: handoffFiles,
     [SCOPE_FIELD_GENERATED_FILES]: generatedFiles,
     [SCOPE_FIELD_CANDIDATE_RUNTIME_FILES]: candidateRuntimeFiles,
-    [SCOPE_FIELD_COMMIT_SCOPE]: commitScope,
+    ...(commitScope.length > NUM_ZERO ? {[SCOPE_FIELD_COMMIT_SCOPE]: commitScope} : {}),
     modelFit: {
       packageClass:
         normalizeText(flags[FLAG_PACKAGE_CLASS]) ||

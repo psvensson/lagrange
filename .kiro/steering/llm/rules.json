@@ -99,12 +99,12 @@
     }
   ],
   "stats": {
-    "candidateCount": 335,
-    "dedupedRuleCount": 328,
-    "exportedRuleCount": 328,
+    "candidateCount": 337,
+    "dedupedRuleCount": 330,
+    "exportedRuleCount": 330,
     "aliasRuleCount": 11,
-    "masterRuleCount": 317,
-    "estimatedAllRulesTokens": 13092
+    "masterRuleCount": 319,
+    "estimatedAllRulesTokens": 13164
   },
   "rules": [
     {
@@ -1611,12 +1611,12 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "Run validation before committing so current-blocker never points at a missing active-... package.",
+      "rule": "Regenerate work/sprints/current-blocker.json after the successor is active, or explicitly record that no active package remains. Render current-blocker Markdown on demand; do not commit a parallel mirror.",
       "score": 221,
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 79,
+          "line": 78,
           "section": "Workflow — Packages & Closure > Package Status And Closure"
         }
       ]
@@ -1626,18 +1626,33 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "If the fixture/probe is missing, create the fixture/probe or stop as evidence-incomplete. Do not patch runtime from a representative red run alone.",
+      "rule": "Run validation before committing so current-blocker never points at a missing active-... package.",
       "score": 221,
       "sources": [
         {
-          "file": "workflow-guidelines/subagents.md",
-          "line": 247,
-          "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
+          "file": "workflow-guidelines/packages.md",
+          "line": 81,
+          "section": "Workflow — Packages & Closure > Package Status And Closure"
         }
       ]
     },
     {
       "id": "GOV-0010",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "If the fixture/probe is missing, create the fixture/probe or stop as evidence-incomplete. Do not patch runtime from a representative red run alone.",
+      "score": 221,
+      "sources": [
+        {
+          "file": "workflow-guidelines/subagents.md",
+          "line": 248,
+          "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0011",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -1654,7 +1669,7 @@
       ]
     },
     {
-      "id": "GOV-0011",
+      "id": "GOV-0012",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -1671,7 +1686,7 @@
       ]
     },
     {
-      "id": "GOV-0012",
+      "id": "GOV-0013",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -1686,7 +1701,7 @@
       ]
     },
     {
-      "id": "GOV-0013",
+      "id": "GOV-0014",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2323,7 +2338,7 @@
       ]
     },
     {
-      "id": "GOV-0014",
+      "id": "GOV-0015",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2338,7 +2353,7 @@
       ]
     },
     {
-      "id": "GOV-0015",
+      "id": "GOV-0016",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2424,7 +2439,7 @@
           "section": "Testing — Harness & Execution > Test Duration Hard Limit"
         }
       ],
-      "canonical_of": "GOV-0028"
+      "canonical_of": "GOV-0029"
     },
     {
       "id": "TEST-0043",
@@ -2494,7 +2509,7 @@
       ]
     },
     {
-      "id": "GOV-0016",
+      "id": "GOV-0017",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2511,7 +2526,7 @@
       ]
     },
     {
-      "id": "GOV-0017",
+      "id": "GOV-0018",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2526,7 +2541,7 @@
       ]
     },
     {
-      "id": "GOV-0018",
+      "id": "GOV-0019",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2543,7 +2558,7 @@
       ]
     },
     {
-      "id": "GOV-0019",
+      "id": "GOV-0020",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2552,7 +2567,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 53,
+          "line": 54,
           "section": "Workflow — Packages & Closure > Package Status And Closure"
         },
         {
@@ -2563,7 +2578,7 @@
       ]
     },
     {
-      "id": "GOV-0020",
+      "id": "GOV-0021",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2572,13 +2587,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 66,
+          "line": 67,
           "section": "Workflow — Packages & Closure > Package Status And Closure"
         }
       ]
     },
     {
-      "id": "GOV-0021",
+      "id": "GOV-0022",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2589,25 +2604,8 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 87,
+          "line": 89,
           "section": "Workflow — Packages & Closure > Package Status And Closure"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0022",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [
-        "governance"
-      ],
-      "rule": "Do not start a second active package on the same architectural boundary while the first has unresolved in-scope residuals.",
-      "score": 211,
-      "sources": [
-        {
-          "file": "workflow-guidelines/packages.md",
-          "line": 135,
-          "section": "Workflow — Packages & Closure > Residual Closure Inventory"
         }
       ]
     },
@@ -2618,18 +2616,35 @@
       "tags": [
         "governance"
       ],
-      "rule": "Representative evidence must not be reclassified as roadmap truth when it belongs to the release, track, sprint, or package layer.",
+      "rule": "Do not start a second active package on the same architectural boundary while the first has unresolved in-scope residuals.",
       "score": 211,
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 168,
-          "section": "Workflow — Packages & Closure > Roadmap, Release, And Work-Tracker Truth"
+          "line": 137,
+          "section": "Workflow — Packages & Closure > Residual Closure Inventory"
         }
       ]
     },
     {
       "id": "GOV-0024",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [
+        "governance"
+      ],
+      "rule": "Representative evidence must not be reclassified as roadmap truth when it belongs to the release, track, sprint, or package layer.",
+      "score": 211,
+      "sources": [
+        {
+          "file": "workflow-guidelines/packages.md",
+          "line": 170,
+          "section": "Workflow — Packages & Closure > Roadmap, Release, And Work-Tracker Truth"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0025",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2644,7 +2659,7 @@
       ]
     },
     {
-      "id": "GOV-0025",
+      "id": "GOV-0026",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2659,7 +2674,7 @@
       ]
     },
     {
-      "id": "GOV-0026",
+      "id": "GOV-0027",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2668,13 +2683,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 207,
+          "line": 208,
           "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
         }
       ]
     },
     {
-      "id": "GOV-0027",
+      "id": "GOV-0028",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2685,13 +2700,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 233,
+          "line": 234,
           "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
     },
     {
-      "id": "GOV-0028",
+      "id": "GOV-0029",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2709,7 +2724,7 @@
       ]
     },
     {
-      "id": "GOV-0029",
+      "id": "GOV-0030",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2728,7 +2743,7 @@
       ]
     },
     {
-      "id": "GOV-0030",
+      "id": "GOV-0031",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2743,7 +2758,7 @@
       ]
     },
     {
-      "id": "GOV-0031",
+      "id": "GOV-0032",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2752,7 +2767,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 280,
+          "line": 281,
           "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
@@ -2823,7 +2838,7 @@
       ]
     },
     {
-      "id": "GOV-0032",
+      "id": "GOV-0033",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2840,7 +2855,7 @@
       ]
     },
     {
-      "id": "GOV-0033",
+      "id": "GOV-0034",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -2855,7 +2870,7 @@
       ]
     },
     {
-      "id": "GOV-0034",
+      "id": "GOV-0035",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2872,7 +2887,7 @@
       ]
     },
     {
-      "id": "GOV-0035",
+      "id": "GOV-0036",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2890,7 +2905,7 @@
       ]
     },
     {
-      "id": "GOV-0036",
+      "id": "GOV-0037",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2907,7 +2922,7 @@
       ]
     },
     {
-      "id": "GOV-0037",
+      "id": "GOV-0038",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3285,7 +3300,7 @@
       ]
     },
     {
-      "id": "GOV-0038",
+      "id": "GOV-0039",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3302,7 +3317,7 @@
       ]
     },
     {
-      "id": "GOV-0039",
+      "id": "GOV-0040",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3319,7 +3334,7 @@
       ]
     },
     {
-      "id": "GOV-0040",
+      "id": "GOV-0041",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3334,7 +3349,7 @@
       ]
     },
     {
-      "id": "GOV-0041",
+      "id": "GOV-0042",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3351,7 +3366,7 @@
       ]
     },
     {
-      "id": "GOV-0042",
+      "id": "GOV-0043",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3366,7 +3381,7 @@
       ]
     },
     {
-      "id": "GOV-0043",
+      "id": "GOV-0044",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3377,13 +3392,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 70,
+          "line": 71,
           "section": "Workflow — Packages & Closure > Package Status And Closure"
         }
       ]
     },
     {
-      "id": "GOV-0044",
+      "id": "GOV-0045",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3394,8 +3409,23 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 75,
+          "line": 76,
           "section": "Workflow — Packages & Closure > Package Status And Closure"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0046",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [],
+      "rule": "requiredRefreshCommands (legacy alias; execution.proof.commands is the canonical command list)",
+      "score": 203,
+      "sources": [
+        {
+          "file": "workflow-guidelines/validators.md",
+          "line": 58,
+          "section": "Workflow — Validators & Drift > Post-Rerun Decision Gate"
         }
       ]
     },
@@ -3432,7 +3462,7 @@
       ]
     },
     {
-      "id": "GOV-0045",
+      "id": "GOV-0047",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3449,7 +3479,7 @@
       ]
     },
     {
-      "id": "GOV-0046",
+      "id": "GOV-0048",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3466,7 +3496,7 @@
       ]
     },
     {
-      "id": "GOV-0047",
+      "id": "GOV-0049",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3483,7 +3513,7 @@
       ]
     },
     {
-      "id": "GOV-0048",
+      "id": "GOV-0050",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3498,7 +3528,7 @@
       ]
     },
     {
-      "id": "GOV-0049",
+      "id": "GOV-0051",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3666,7 +3696,7 @@
       ]
     },
     {
-      "id": "GOV-0050",
+      "id": "GOV-0052",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3681,7 +3711,7 @@
       ]
     },
     {
-      "id": "GOV-0051",
+      "id": "GOV-0053",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3699,7 +3729,7 @@
       ]
     },
     {
-      "id": "GOV-0052",
+      "id": "GOV-0054",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3717,7 +3747,7 @@
       ]
     },
     {
-      "id": "GOV-0053",
+      "id": "GOV-0055",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3732,7 +3762,7 @@
       ]
     },
     {
-      "id": "GOV-0054",
+      "id": "GOV-0056",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3967,7 +3997,7 @@
       ]
     },
     {
-      "id": "GOV-0055",
+      "id": "GOV-0057",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3989,7 +4019,7 @@
       ]
     },
     {
-      "id": "GOV-0056",
+      "id": "GOV-0058",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4006,7 +4036,7 @@
       ]
     },
     {
-      "id": "GOV-0057",
+      "id": "GOV-0059",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4021,7 +4051,7 @@
       ]
     },
     {
-      "id": "GOV-0058",
+      "id": "GOV-0060",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4038,7 +4068,7 @@
       ]
     },
     {
-      "id": "GOV-0059",
+      "id": "GOV-0061",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4053,7 +4083,7 @@
       ]
     },
     {
-      "id": "GOV-0060",
+      "id": "GOV-0062",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4070,7 +4100,7 @@
       ]
     },
     {
-      "id": "GOV-0061",
+      "id": "GOV-0063",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4087,7 +4117,7 @@
       ]
     },
     {
-      "id": "GOV-0062",
+      "id": "GOV-0064",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4102,7 +4132,7 @@
       ]
     },
     {
-      "id": "GOV-0063",
+      "id": "GOV-0065",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4111,13 +4141,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 56,
+          "line": 57,
           "section": "Workflow — Packages & Closure > Package Status And Closure"
         }
       ]
     },
     {
-      "id": "GOV-0064",
+      "id": "GOV-0066",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4126,13 +4156,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 62,
+          "line": 63,
           "section": "Workflow — Packages & Closure > Package Status And Closure"
         }
       ]
     },
     {
-      "id": "GOV-0065",
+      "id": "GOV-0067",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4149,7 +4179,7 @@
       ]
     },
     {
-      "id": "GOV-0066",
+      "id": "GOV-0068",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4164,7 +4194,7 @@
       ]
     },
     {
-      "id": "GOV-0067",
+      "id": "GOV-0069",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4179,7 +4209,7 @@
       ]
     },
     {
-      "id": "GOV-0068",
+      "id": "GOV-0070",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4194,7 +4224,7 @@
       ]
     },
     {
-      "id": "GOV-0069",
+      "id": "GOV-0071",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4209,7 +4239,7 @@
       ]
     },
     {
-      "id": "GOV-0070",
+      "id": "GOV-0072",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4218,28 +4248,28 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 218,
+          "line": 219,
           "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
     },
     {
-      "id": "GOV-0071",
+      "id": "GOV-0073",
       "domain": "governance",
       "strength": "must",
       "tags": [],
-      "rule": "requiredRefreshCommands must cite route-after-rerun, Sprint Strategy Brief update, Current Edge Card update, current-blocker regeneration, and pre-implementation validation.",
+      "rule": "execution.proof.commands must cite the focused proof commands.",
       "score": 193,
       "sources": [
         {
           "file": "workflow-guidelines/validators.md",
-          "line": 60,
+          "line": 61,
           "section": "Workflow — Validators & Drift > Post-Rerun Decision Gate"
         }
       ]
     },
     {
-      "id": "GOV-0072",
+      "id": "GOV-0074",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4250,7 +4280,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/validators.md",
-          "line": 66,
+          "line": 67,
           "section": "Workflow — Validators & Drift > Post-Rerun Decision Gate"
         }
       ]
@@ -4271,7 +4301,7 @@
       ]
     },
     {
-      "id": "GOV-0073",
+      "id": "GOV-0075",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4288,7 +4318,7 @@
       ]
     },
     {
-      "id": "GOV-0074",
+      "id": "GOV-0076",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4305,7 +4335,7 @@
       ]
     },
     {
-      "id": "GOV-0075",
+      "id": "GOV-0077",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4316,13 +4346,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 277,
+          "line": 278,
           "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
     },
     {
-      "id": "GOV-0076",
+      "id": "GOV-0078",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4331,7 +4361,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 280,
+          "line": 281,
           "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
@@ -4426,7 +4456,7 @@
       ]
     },
     {
-      "id": "GOV-0077",
+      "id": "GOV-0079",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4441,7 +4471,7 @@
       ]
     },
     {
-      "id": "GOV-0078",
+      "id": "GOV-0080",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -4460,7 +4490,7 @@
       ]
     },
     {
-      "id": "GOV-0079",
+      "id": "GOV-0081",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4679,7 +4709,7 @@
       ]
     },
     {
-      "id": "GOV-0080",
+      "id": "GOV-0082",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4694,7 +4724,7 @@
       ]
     },
     {
-      "id": "GOV-0081",
+      "id": "GOV-0083",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4709,7 +4739,7 @@
       ]
     },
     {
-      "id": "GOV-0082",
+      "id": "GOV-0084",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4724,7 +4754,7 @@
       ]
     },
     {
-      "id": "GOV-0083",
+      "id": "GOV-0085",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4742,7 +4772,7 @@
       ]
     },
     {
-      "id": "GOV-0084",
+      "id": "GOV-0086",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4891,7 +4921,7 @@
       ]
     },
     {
-      "id": "GOV-0085",
+      "id": "GOV-0087",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4906,7 +4936,7 @@
       ]
     },
     {
-      "id": "GOV-0086",
+      "id": "GOV-0088",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4996,7 +5026,7 @@
       ]
     },
     {
-      "id": "GOV-0087",
+      "id": "GOV-0089",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -5014,7 +5044,7 @@
       ]
     },
     {
-      "id": "GOV-0088",
+      "id": "GOV-0090",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -5031,7 +5061,7 @@
       ]
     },
     {
-      "id": "GOV-0089",
+      "id": "GOV-0091",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -5048,7 +5078,7 @@
       ]
     },
     {
-      "id": "GOV-0090",
+      "id": "GOV-0092",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -5112,7 +5142,7 @@
       ]
     },
     {
-      "id": "GOV-0091",
+      "id": "GOV-0093",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5161,7 +5191,7 @@
       ]
     },
     {
-      "id": "GOV-0092",
+      "id": "GOV-0094",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5178,7 +5208,7 @@
       ]
     },
     {
-      "id": "GOV-0093",
+      "id": "GOV-0095",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5189,13 +5219,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 187,
+          "line": 188,
           "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
         }
       ]
     },
     {
-      "id": "GOV-0094",
+      "id": "GOV-0096",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5204,7 +5234,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 250,
+          "line": 251,
           "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
@@ -5225,7 +5255,7 @@
       ]
     },
     {
-      "id": "GOV-0095",
+      "id": "GOV-0097",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5257,7 +5287,7 @@
       ]
     },
     {
-      "id": "GOV-0096",
+      "id": "GOV-0098",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5274,7 +5304,7 @@
       ]
     },
     {
-      "id": "GOV-0097",
+      "id": "GOV-0099",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5289,7 +5319,7 @@
       ]
     },
     {
-      "id": "GOV-0098",
+      "id": "GOV-0100",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5298,13 +5328,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 56,
+          "line": 57,
           "section": "Workflow — Packages & Closure > Package Status And Closure"
         }
       ]
     },
     {
-      "id": "GOV-0099",
+      "id": "GOV-0101",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5315,13 +5345,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/packages.md",
-          "line": 131,
+          "line": 133,
           "section": "Workflow — Packages & Closure > Residual Closure Inventory"
         }
       ]
     },
     {
-      "id": "GOV-0100",
+      "id": "GOV-0102",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5336,7 +5366,7 @@
       ]
     },
     {
-      "id": "GOV-0101",
+      "id": "GOV-0103",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5351,7 +5381,7 @@
       ]
     },
     {
-      "id": "GOV-0102",
+      "id": "GOV-0104",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5368,7 +5398,7 @@
       ]
     },
     {
-      "id": "GOV-0103",
+      "id": "GOV-0105",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5383,7 +5413,7 @@
       ]
     },
     {
-      "id": "GOV-0104",
+      "id": "GOV-0106",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5400,7 +5430,7 @@
       ]
     },
     {
-      "id": "GOV-0105",
+      "id": "GOV-0107",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5418,7 +5448,7 @@
       ]
     },
     {
-      "id": "GOV-0106",
+      "id": "GOV-0108",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5448,7 +5478,7 @@
       ]
     },
     {
-      "id": "GOV-0107",
+      "id": "GOV-0109",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5465,7 +5495,7 @@
       ]
     },
     {
-      "id": "GOV-0108",
+      "id": "GOV-0110",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5482,7 +5512,7 @@
       ]
     },
     {
-      "id": "GOV-0109",
+      "id": "GOV-0111",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5499,7 +5529,7 @@
       ]
     },
     {
-      "id": "GOV-0110",
+      "id": "GOV-0112",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5518,13 +5548,13 @@
       ]
     },
     {
-      "id": "GOV-0111",
+      "id": "GOV-0113",
       "domain": "governance",
       "strength": "may",
       "tags": [
         "governance"
       ],
-      "rule": "Use explicit metadata scope fields for new packages: writeScope for files the package may edit, handoffFiles for read-only context, generatedFiles for deterministic outputs, candidateRuntimeFiles for files gated by a focused probe, and commitScope for focused commit containment. touchedFiles is legacy compatibility only.",
+      "rule": "Use explicit metadata scope fields for new packages: writeScope for files the package may edit, handoffFiles for read-only context, generatedFiles for deterministic outputs, candidateRuntimeFiles for files gated by a focused probe, commitScopeExtra for rare additions to the derived focused commit, and commitScopeExclude for explicit removals. commitScope and touchedFiles are legacy compatibility only.",
       "score": 131,
       "sources": [
         {
@@ -5535,7 +5565,7 @@
       ]
     },
     {
-      "id": "GOV-0112",
+      "id": "GOV-0114",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5552,5 +5582,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-05-31T17:23:33.703Z"
+  "generatedAt": "2026-05-31T19:17:33.265Z"
 }

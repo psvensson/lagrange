@@ -180,10 +180,11 @@ Required workflow:
    extraction order, but it is not a waiver for newly created or edited
    oversize.
 10. Use explicit metadata scope fields for new packages: `writeScope` for files
-   the package may edit, `handoffFiles` for read-only context,
-   `generatedFiles` for deterministic outputs, `candidateRuntimeFiles` for
-   files gated by a focused probe, and `commitScope` for focused commit
-   containment. `touchedFiles` is legacy compatibility only.
+    the package may edit, `handoffFiles` for read-only context,
+    `generatedFiles` for deterministic outputs, `candidateRuntimeFiles` for
+   files gated by a focused probe, `commitScopeExtra` for rare additions to
+   the derived focused commit, and `commitScopeExclude` for explicit removals.
+   `commitScope` and `touchedFiles` are legacy compatibility only.
 11. Use validation phases deliberately: `npm run work:validate -- --entry` for
     package shape, `--pre-impl` when review/fix proof is complete and
     implementation may still be pending, and `--closure` before close/commit.

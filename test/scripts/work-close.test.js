@@ -13,9 +13,7 @@ function mockPackageContent() {
     '<!-- work-package',
     JSON.stringify({
       schema: 'work-package-v2',
-      status: 'active',
       intent: {
-        opened: '2026-05-26',
         lane: 'lightweight-maintenance',
         scenario: 'none',
         artifact: 'none',
@@ -31,7 +29,6 @@ function mockPackageContent() {
         handoffFiles: [],
         generatedFiles: [],
         candidateRuntimeFiles: [],
-        commitScope: [],
       },
       gates: {
         stabilityCredit: 'local-proof-only',

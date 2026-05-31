@@ -35,7 +35,8 @@ Required patterns:
 Every completed work-package slice MUST end in a focused local close commit and
 push before the next slice starts. The default closure path is `npm run
 work:close <package>`, which runs closure validation, moves the package to
-`done-*`, refreshes tracker handoff, stages only package-owned scope, and
+`done-*`, derives lifecycle metadata from the filename, refreshes tracker
+handoff, stages only package-owned scope, and
 creates the focused local close commit.
 
 For sprint package pushes, use `npm run work:sprint:push -- <git-push-args>`
@@ -45,10 +46,9 @@ package queue is visible before the next slice starts.
 
 Commit-and-push ledger for current packages:
 
-1. `Focused package commit: <sha>`
-2. `Push target: <remote>/<branch>` (legacy alias `Pushed to:` accepted)
-3. `Commit contains only package-owned files/package-status/allowed sprint handoff: yes`
-4. `Pushed: no` (flipped to `yes <ISO-timestamp>` by `npm run work:sprint:push` after the push succeeds; optional for pre-F7 packages)
+1. `Push target: <remote>/<branch>` (legacy alias `Pushed to:` accepted)
+2. `Commit contains only package-owned files/package-status/allowed sprint handoff: yes`
+3. `Pushed: no` (flipped to `yes <ISO-timestamp>` by `npm run work:sprint:push` after the push succeeds; optional for pre-F7 packages)
 
 Do not invent historical proof. If an older package is reopened, migrated, or
 closed again, current proof rules apply.
@@ -74,8 +74,9 @@ For scenario and causal-escalation packages, closure order is:
    create the focused local close commit with Commit And Push Ledger data.
 4. Create or activate the successor only when canonical evidence changed
    owner, boundary, required action, or the work is intentionally finished.
-5. Regenerate `work/sprints/current-blocker.*` after the successor is active,
-   or explicitly record that no active package remains.
+5. Regenerate `work/sprints/current-blocker.json` after the successor is
+   active, or explicitly record that no active package remains. Render
+   current-blocker Markdown on demand; do not commit a parallel mirror.
 6. Run validation before committing so `current-blocker` never points at a
    missing `active-...` package.
 7. Push the focused close commit before the next slice starts.

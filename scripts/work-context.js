@@ -629,50 +629,13 @@ async function buildCurrentBlockerFromPackage(packagePath) {
   const content = await readTextFile(packagePath);
   const metadata = parsePackageMetadata(content, packagePath);
   const packageHistoryEntries = await collectPackageHistoryEntries();
-  const architectureDecisionGate = metadataObject(
-    metadata,
-    METADATA_FIELD_ARCHITECTURE_DECISION_GATE,
-  );
   return {
-    currentBlocker: {
-      sprint: DEFAULT_UNKNOWN,
-      package: packagePath,
-      status: metadataText(metadata, METADATA_FIELD_STATUS),
-      lane: metadataText(metadata, METADATA_FIELD_LANE),
-      scenario: metadataText(metadata, METADATA_FIELD_SCENARIO),
-      artifact: metadataText(metadata, METADATA_FIELD_ARTIFACT),
-      playback: metadataText(metadata, METADATA_FIELD_PLAYBACK),
-      owner: metadataText(metadata, METADATA_FIELD_OWNER),
-      boundary: metadataText(metadata, METADATA_FIELD_BOUNDARY),
-      dominantReason: metadataText(metadata, METADATA_FIELD_DOMINANT_REASON),
-      currentState: metadataText(metadata, METADATA_FIELD_CURRENT_STATE),
-      nextAction: metadataText(metadata, METADATA_FIELD_NEXT_ACTION),
-      proof: metadataList(metadata, METADATA_FIELD_PROOF),
-      touchedFiles: metadataList(metadata, METADATA_FIELD_TOUCHED_FILES),
-      writeScope: metadataList(metadata, METADATA_FIELD_WRITE_SCOPE),
-      handoffFiles: metadataList(metadata, METADATA_FIELD_HANDOFF_FILES),
-      generatedFiles: metadataList(metadata, METADATA_FIELD_GENERATED_FILES),
-      candidateRuntimeFiles:
-        metadataList(metadata, METADATA_FIELD_CANDIDATE_RUNTIME_FILES),
-      commitScope: metadataList(metadata, METADATA_FIELD_COMMIT_SCOPE),
-      theoryLedgerRefs: metadataList(metadata, METADATA_FIELD_THEORY_LEDGER_REFS),
-      modelFit: metadataModelFit(metadata),
-      representativeResidual: metadataObject(
-        metadata,
-        METADATA_FIELD_REPRESENTATIVE_RESIDUAL,
-      ),
-      causalGovernance: metadataCausalGovernance(metadata),
-      scenarioCausalClosure: metadataScenarioCausalClosure(metadata),
-      architectureDecisionGate:
-        Object.keys(architectureDecisionGate).length > NUM_ZERO ?
-          architectureDecisionGate :
-          buildArchitectureDecisionGatePayload(
-            metadata,
-            packagePath,
-            {packageHistoryEntries},
-          ),
-      predecessor: metadataText(metadata, METADATA_FIELD_PREDECESSOR),
-    },
+    currentBlocker: buildCurrentBlockerPayload(
+      DEFAULT_UNKNOWN,
+      packagePath,
+      metadata,
+      {packageHistoryEntries},
+    ),
     packageContent: content,
   };
 }

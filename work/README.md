@@ -609,10 +609,9 @@ Packages closed under the current tracker workflow must identify the focused
 package slice commit and the remote branch it must be pushed to. The package
 file must include:
 
-1. `Focused package commit: <sha>`
-2. `Push target: <remote>/<branch>` (legacy alias `Pushed to:` accepted)
-3. `Commit contains only package-owned files/package-status/allowed sprint handoff: yes`
-4. `Pushed: no` (flipped to `yes <ISO-timestamp>` by `npm run work:sprint:push` after a successful push; optional for pre-F7 packages)
+1. `Push target: <remote>/<branch>` (legacy alias `Pushed to:` accepted)
+2. `Commit contains only package-owned files/package-status/allowed sprint handoff: yes`
+3. `Pushed: no` (flipped to `yes <ISO-timestamp>` by `npm run work:sprint:push` after a successful push; optional for pre-F7 packages)
 
 `npm run work:validate` rejects closed metadata-bearing packages marked by the
 tracker as requiring this proof when the ledger is missing, leaves
@@ -665,8 +664,8 @@ Keep the filename state model intentionally small:
 5. `superseded-YYYYMMDD-slug.md`
 
 Use rename, not copy, when state changes.
-Package metadata status mirrors the package filename and uses the same
-executable states: `todo`, `active`, `done`, or `superseded`. There is no
+Tooling derives package status and opened date from the filename and uses the
+same executable states: `todo`, `active`, `done`, or `superseded`. There is no
 `failed-*` package filename state; aborted or displaced work stays active with
 an explicit blocker, moves back to `todo-*`, or becomes `superseded-*` with a
 successor link.
@@ -680,9 +679,9 @@ Examples:
 - `superseded-20260409-control-plane-simplification.md`
 
 Do not create parallel status systems in both directory names and filenames.
-The filename is the status. Metadata and generated current-blocker status fields
-are mirrors that must match the filename; they are present for validators and
-handoff tools, not as an independent source of truth.
+The filename is the status and date source. Legacy metadata status/opened
+fields may exist, but validators treat them as mirrors that must match the
+filename; new packages should omit them.
 
 ## Package Rules
 
@@ -702,9 +701,7 @@ example:
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "active",
   "intent": {
-    "opened": "YYYY-MM-DD",
     "lane": "lightweight-maintenance",
     "scenario": "none",
     "artifact": "none",
@@ -721,11 +718,7 @@ example:
     ],
     "handoffFiles": [],
     "generatedFiles": [],
-    "candidateRuntimeFiles": [],
-    "commitScope": [
-      "path/to/file",
-      "work/packages/active-YYYYMMDD-package.md"
-    ]
+    "candidateRuntimeFiles": []
   },
   "gates": {
     "stabilityCredit": "local-proof-only",
@@ -766,9 +759,14 @@ must keep these scope fields distinct:
    deterministic generators.
 4. `candidateRuntimeFiles`: possible runtime/test files that require a focused
    probe before they become write scope.
-5. `commitScope`: files allowed in the focused package commit. When omitted,
-   tooling falls back to `writeScope` for new packages and to legacy
-   `touchedFiles` for older packages.
+5. `commitScopeExtra`: optional files to add to the derived focused commit when
+   they are not in `writeScope`, `generatedFiles`, or the package rename.
+6. `commitScopeExclude`: optional files to remove from the derived focused
+   commit.
+
+Focused commit scope is derived from `writeScope`, `generatedFiles`,
+`commitScopeExtra`, and the package file lifecycle path. Legacy `commitScope`
+is still read when present, but new packages should not copy it.
 
 `writeScope` and `candidateRuntimeFiles` MUST NOT overlap. `writeScope` is
 what this iteration will modify; `candidateRuntimeFiles` is the proposal
@@ -1319,8 +1317,9 @@ Prefer:
 1. One idea file per idea.
 2. One work package per executable concern.
 3. One filename status, with metadata and generated status fields treated only
-   as validated mirrors.
+   as derived mirrors.
 4. One sprint file only when grouping adds real value.
+5. One canonical current-blocker JSON, with Markdown rendered on demand.
 
 Avoid:
 
@@ -1329,6 +1328,7 @@ Avoid:
    authority.
 3. Large umbrella packages spanning unrelated concerns.
 4. Sprint docs that contain detailed execution steps better owned by packages.
+5. Committed `current-blocker.md` mirrors or hand-maintained commit scopes.
 
 ## Size Ratchet
 

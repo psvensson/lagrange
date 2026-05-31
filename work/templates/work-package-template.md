@@ -94,7 +94,6 @@ Out of scope:
 
 ## Commit And Push Ledger
 
-- Focused package commit: `<sha>`
 - Push target: `<remote>/<branch>`
 - Commit contains only package-owned files/package-status/allowed sprint handoff: `<yes>`
 - Pushed: `<no>`

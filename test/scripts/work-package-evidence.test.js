@@ -34,6 +34,19 @@ test('work-package-evidence CLI flow', async () => {
     assert.match(updatedContent, /outcome: validated/u);
     assert.match(updatedContent, /files-changed: scripts\/work-close\.js/u);
     assert.match(updatedContent, /\[x\] action: implementation/u);
+    assert.doesNotMatch(
+      updatedContent,
+      /action: implementation;.*parent revalidated focused proof: yes/u,
+    );
+
+    execSync('node scripts/work-package-evidence.js --action verification-fix --owner verifier_owner --outcome validated --files none --validation "npm test" --parent-revalidated --package ' + TEMP_PACKAGE_FILE, { stdio: 'pipe' });
+
+    updatedContent = await fs.readFile(TEMP_PACKAGE_FILE, 'utf8');
+    assert.match(updatedContent, /action: verification-fix; owner: verifier_owner/u);
+    assert.match(
+      updatedContent,
+      /action: verification-fix;.*parent revalidated focused proof: yes/u,
+    );
 
     // 2. Run work-package-ledger to mark no-ledger
     execSync('node scripts/work-package-ledger.js --no-ledger --package ' + TEMP_PACKAGE_FILE, { stdio: 'pipe' });
