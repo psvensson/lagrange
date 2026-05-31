@@ -4,51 +4,58 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: No active work package. Start a new package when implementation resumes.
+Theory under test: H1 is selected unless the focused handoff contract falsifier proves a different owner boundary or architecture gap.
 
-Causal question: none
+Causal question: rolling-restart currently routes owner_reconcile_pending to startup_active_gate_owner / snapshot_coverage after priority recovery residuals reached zero; the package must implement the selected observation-layer architecture route before another representative rerun.
 
-Implementation slice: Create or activate one focused package for the next executable concern.
+Implementation slice: Implementation may edit only src/control-plane/publication-active-gate-handoff-contract-decision.js for the selected observation-layer architecture route.
 
 Implementation files:
 
-1. None recorded
+1. `src/control-plane/publication-active-gate-handoff-contract-decision.js`
+2. `src/control-plane/publication-active-gate-handoff-contract.js`
+3. `src/control-plane/publication-active-gate-handoff-contract-selection.js`
+4. `src/control-plane/membership-publication-active-gate-reconcile.js`
 
-Expected implementation delta: unknown
+Expected implementation delta: selected route records a concrete observation transition, owner-boundary migration, or architecture-gap stop.
 
-Falsifying probe: unknown
+Falsifying probe: falsifier: npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js
 
-Redirect rule: unknown
+Redirect rule: Stop on unchanged same-frontier, no-reduction, or architecture-gap evidence instead of widening the package.
 
 Sprint: `work/sprints/active-2026-q2-rolling-restart-contract-first-green-theory-loop.md`
 
-Package: `none`
+Package: `work/packages/active-20260531-rolling-restart-active-gate-observation-route.md`
 
-Workflow lane: `none`
+Workflow lane: `causal-escalation`
 
-Scenario: `none`
+Scenario: `rolling-restart`
 
-Artifact: `none`
+Artifact: `test-output/reports/rolling-restart-contract-first-green-rerun.report.json`
 
 Playback: `none`
 
 ## Boundary
 
-Owner: `none`
+Owner: `startup_active_gate_owner`
 
-Boundary: `none`
+Boundary: `snapshot_coverage`
 
-Dominant reason: `none`
+Dominant reason: `owner_reconcile_pending`
 
-Current state: No active work package. Start a new package when implementation resumes.
+Current state: Frontier history reports startup_active_gate_owner / snapshot_coverage is in architecture-route implement-pending state after the selected architecture-gap route; this package is the bounded observation-layer implementation, not another unguided local slice.
 
 ## Next Action
 
-Create or activate one focused package for the next executable concern.
+Implement the selected observation-layer architecture route so selected snapshot observation retry produces owner-owned snapshot coverage progress.
 
 ## Proof Ladder
 
-1. None recorded
+1. `falsifier: npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js`
+2. `regression: npm test -- test/control-plane/membership-publication-active-gate-reconcile-owner-recovery.test.js`
+3. `supporting: npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12`
+4. `supporting: npm run work:scenario-route -- test-output/reports/rolling-restart-contract-first-green-rerun.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending --explain active_gate_snapshot_coverage`
+5. `supporting: npm run analyze:causal-model -- test-output/reports/rolling-restart-contract-first-green-rerun.report.json`
 
 ## Parallel Diagnostics
 
@@ -70,181 +77,206 @@ Trigger: unknown
 
 ## Model Fit
 
-Package class: `unknown`
+Package class: `representative-frontier-closure`
 
-Intended minimum model: `unknown`
+Intended minimum model: `gpt-5.3-codex`
 
-Scope shape: `unknown`
+Scope shape: `architecture-route-runtime/current-frontier`
 
-Output profile: `unknown`
+Output profile: `medium`
 
 Escalation triggers:
 
-1. None recorded
+1. `owned files expand beyond this package`
+2. `proof selects owner-boundary migration`
+3. `evidence contradicts the selected architecture route`
 
 ## System Theory
 
-Problem statement: unknown
+Problem statement: rolling-restart currently routes owner_reconcile_pending to startup_active_gate_owner / snapshot_coverage after priority recovery residuals reached zero; the package must implement the selected observation-layer architecture route before another representative rerun.
 
 Phase chain:
 
-1. None recorded
+1. `Representative evidence comes from test-output/reports/rolling-restart-contract-first-green-rerun.report.json.`
+2. `owner_reconcile_pending is the current selected symptom.`
+3. `startup_active_gate_owner / snapshot_coverage is the declared decision boundary for this route implementation.`
+4. `frontier-history reports architectureRouteState=implement-pending.`
 
 Owner-boundary map:
 
-1. None recorded
+1. `startup_active_gate_owner / snapshot_coverage: selected first frontier and blocked local source-patch boundary.`
+2. `startup_readiness_owner / startup_support_evidence: downstream until active-gate snapshot coverage moves.`
+3. `release_gate_owner / rolling_restart_fully_green_gate: downstream proof target after representative evidence exits red.`
 
 Stable facts:
 
-1. None recorded
+1. `Scenario remains rolling-restart.`
+2. `Package lane is causal-escalation.`
+3. `Declared owner boundary remains startup_active_gate_owner / snapshot_coverage.`
+4. `Durable contract record is architecture/contracts/active-gate-convergence.md#active-gate-convergence.`
+5. `Priority-recovery residual witnesses are zero in the fresh route explanation.`
 
 Changed facts:
 
-1. None recorded
+1. `This package was opened from test-output/reports/rolling-restart-contract-first-green-rerun.report.json.`
+2. `The active action is the selected observation-layer source implementation before representative rerun.`
 
 Competing theories:
 
-1. None recorded
+1. `H1 startup_active_gate_owner / snapshot_coverage has a non-repeated observation transition in the handoff decision contract.`
+2. `H2 the same symptom requires owner-boundary migration or a separate architecture package.`
+3. `H3 no current owner-owned transition is selectable, so the correct result is architecture-gap.`
 
 Eliminated theories:
 
-1. None recorded
+1. `Another analysis-only architecture-gap package is eliminated by implement-pending route history.`
+2. `Priority recovery remains the first frontier is eliminated by zero residual witnesses.`
 
 Downstream symptoms:
 
-1. None recorded
+1. `startup readiness support evidence remains downstream`
+2. `benchmark table partition visibility remains downstream`
 
 Transition table:
 
-1. None recorded
+1. Input `owner_reconcile_pending` owner `startup_active_gate_owner / snapshot_coverage`; missing `selected snapshot retry evidence must become a named owner-owned observation transition, migration, or stop.`; expected `focused proof selects the transition, migrates ownership, or records architecture-gap evidence.`; falsifier `npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js`; migration trigger `focused proof names a different deciding owner boundary or proves this boundary cannot own the transition.`
 
 Ownership migration triggers:
 
-1. None recorded
+1. `Migrate only when focused evidence names the alternate deciding owner and boundary.`
 
 Architecture-gap triggers:
 
-1. None recorded
+1. `Stop as architecture-gap when focused evidence cannot select an owner-owned transition or migration.`
 
-Whole-system invariant: unknown
+Whole-system invariant: Runtime edits are allowed only for the selected architecture route and must stay within the declared owner-owned transition or migration proof.
 
 ## Slice Theory
 
-System theory reference: unknown
+System theory reference: architecture/contracts/active-gate-convergence.md#active-gate-convergence
 
-Selected system theory: unknown
+Selected system theory: H1 is selected unless the focused handoff contract falsifier proves a different owner boundary or architecture gap.
 
-Selected mechanism: unknown
+Selected mechanism: contract_gap with ownership_gap as the first alternate
 
-Source/test contract: unknown
+Source/test contract: Implementation may edit only src/control-plane/publication-active-gate-handoff-contract-decision.js for the selected observation-layer architecture route.
 
-Falsifier: unknown
+Falsifier: falsifier: npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js
 
-Representative expected movement: unknown
+Representative expected movement: selected route records a concrete observation transition, owner-boundary migration, or architecture-gap stop.
 
-Redirect rule: unknown
+Redirect rule: Stop on unchanged same-frontier, no-reduction, or architecture-gap evidence instead of widening the package.
 
 Theory-fit score:
 
-1. `evidenceFit`: unknown
-2. `ownerBoundaryFit`: unknown
-3. `falsifiability`: unknown
-4. `representativeMovement`: unknown
-5. `downstreamRiskContainment`: unknown
+1. `evidenceFit`: medium - generated from declared package evidence before proof execution.
+2. `ownerBoundaryFit`: medium - owner boundary is declared as startup_active_gate_owner / snapshot_coverage.
+3. `falsifiability`: high - falsifier is npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js.
+4. `representativeMovement`: medium - expected movement is route selection, migration, or architecture-gap stop.
+5. `downstreamRiskContainment`: high - downstream symptoms remain frozen until owner selection is proven.
 
 Wrong-slice triggers:
 
-1. None recorded
+1. `proof selects a different owner boundary`
+2. `proof requires runtime files outside writeScope`
+3. `proof cannot select a concrete transition or migration`
 
 ## Theory Ledger References
 
-1. None recorded
+1. `theory-20260529-rolling-restart-active-gate-snapshot-coverage-architecture-gap-stop`
+2. `theory-20260531-rolling-restart-contract-first-green-fresh-rerun`
 
 ## Representative Residual
 
-Status: `unknown`
+Status: `active-theory-loop`
 
-Scenario: `unknown`
+Scenario: `rolling-restart`
 
-Artifact: `unknown`
+Artifact: `test-output/reports/rolling-restart-contract-first-green-rerun.report.json`
 
-Frontier: `unknown`
+Frontier: `owner_reconcile_pending / startup_active_gate_owner / snapshot_coverage`
 
-Owner: `unknown`
+Owner: `startup_active_gate_owner`
 
-Boundary: `unknown`
+Boundary: `snapshot_coverage`
 
-Dominant reason: `unknown`
+Dominant reason: `owner_reconcile_pending`
 
-Next action: `unknown`
+Next action: `Implement the selected observation-layer architecture route before another representative rerun.`
 
 ## Causal Governance
 
-Causal hypothesis: `unknown`
+Causal hypothesis: `The selected observation-layer architecture route can convert selected_snapshot_source_timeout plus repair_deferred evidence into owner-owned snapshot coverage progress without re-entering saturated owner_reconcile_pending.`
 
-Stop-condition check: `unknown`
+Stop-condition check: `Run `npm run analyze:causal-model -- test-output/reports/rolling-restart-contract-first-green-rerun.report.json` plus the focused handoff contract falsifier, owner-recovery regression, frontier-history, and scenario-route before closure.`
 
-Expected causal-model change: `unknown`
+Expected causal-model change: `Focused proof records whether the observation route creates a non-repeated owner-owned transition; representative evidence must later reduce active_gate_snapshot_coverage, migrate, go green, or record architecture-gap.`
 
-Representative outcome: `unknown`
+Representative outcome: `pending-before-rerun`
 
-Causal debt: `unknown`
+Causal debt: `Fresh representative evidence is red at active_gate_snapshot_coverage with priority-recovery residual witnesses at zero, selected_snapshot_source_timeout, snapshot_repair_deferred, and owner_reconcile_pending.`
 
-Cross-boundary review: `unknown`
+Cross-boundary review: `Primary runtime write scope is src/control-plane/publication-active-gate-handoff-contract-decision.js; adjacent handoff, selection, and reconcile files remain candidate consumers unless proof requires escalation.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `unknown`
+Reference scenario/probe: `rolling-restart active-gate observation architecture-route implementation`
 
 Phase chain:
 
-1. None recorded
+1. `release-gate system-theory rederive completed`
+2. `fresh representative rerun drained priority-recovery residual witnesses to zero`
+3. `fresh route selected active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending`
+4. `frontier-history reports architectureRouteState=implement-pending, so the selected observation route must be implemented in src before another architecture gate`
 
-Current first frontier: `unknown`
+Current first frontier: `active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending`
 
 Known downstream blockers:
 
-1. None recorded
+1. `startup_readiness_owner / startup_support_evidence remains downstream until active-gate snapshot coverage improves`
+2. `benchmark_events table partition visibility remains downstream of startup/readiness convergence`
 
-Missing causal edge: `unknown`
+Missing causal edge: `Observation-layer transition from selected_snapshot_source_timeout plus repair_deferred evidence to owner-owned coverage progress.`
 
-Missing causal edge probe: `unknown`
+Missing causal edge probe: `npm test -- test/control-plane/publication-active-gate-handoff-contract.test.js`
 
-Bounded progress proof: `unknown`
+Bounded progress proof: `Focused contract proof must show a bounded observation/progress outcome for selected snapshot retry evidence while preserving owner-recovery handoff behavior.`
 
-Bounded progress proof artifact: `unknown`
+Bounded progress proof artifact: `test-output/reports/rolling-restart-contract-first-green-rerun.report.json`
 
-Expected observable transition: `unknown`
+Expected observable transition: `Focused proof selects a concrete owner-owned observation transition; later representative evidence reduces active_gate_snapshot_coverage, migrates, goes green, or records architecture-gap.`
 
-Max progress bound: `unknown`
+Max progress bound: `one observation-layer source route plus focused owner proof before representative rerun`
 
-Same-frontier fallback: `unknown`
+Same-frontier fallback: `If proof cannot name one non-repeated owner-owned observation transition or migration, record architecture-gap and do not widen runtime scope.`
 
-Expected next frontier: `unknown`
+Expected next frontier: `reduced active-gate frontier, owner-boundary migration, representative-green, or architecture-gap stop`
 
-Result classification: `unknown`
+Result classification: `pending-before-probe`
 
-Stop condition: `unknown`
+Stop condition: `continue-local-fix`
 
 Recent frontier history:
 
-1. None recorded
+1. `done-20260531-rolling-restart-fresh-representative-rerun-gate.md / release_gate_owner / rolling_restart_fully_green_gate / reduced`
+2. `done-20260530-rolling-restart-active-gate-bounded-reentry-representative-rerun.md / startup_active_gate_owner / snapshot_coverage / reduced`
+3. `done-20260530-rolling-restart-active-gate-bounded-reentry-model-route.md / startup_active_gate_owner / snapshot_coverage / architecture-gap`
 
-Oscillation check: `unknown`
+Oscillation check: `This is not another same-frontier symptom patch because it declares theoryLoop.architectureRoute selectedLayer=observation, cites the architecture-gap ledger ref, and writes the bounded runtime route required by implement-pending state.`
 
-Handoff invariant: `unknown`
+Handoff invariant: `Selected snapshot observation retry must create owner-owned snapshot coverage progress before downstream readiness or release-gate logic reinterprets the active-gate state.`
 
 ## Observable Prediction
 
-Metric: `unknown`
+Metric: `rolling-restart / startup_active_gate_owner / snapshot_coverage / observation route`
 
-Predicted: `unknown`
+Predicted: `Focused contract proof exposes an owner-owned observation transition for selected snapshot retry before representative rerun.`
 
-Observed: `unknown`
+Observed: `pending-before-observation`
 
-Accuracy: `unknown`
+Accuracy: `pending-before-observation`
 
-Evidence: `unknown`
+Evidence: `pending-before-representative-rerun`
 
 Metric delta: `unknown`
 
@@ -262,73 +294,64 @@ Evidence: `unknown`
 
 ## Rerun Decision
 
-Source artifact: `unknown`
+Source artifact: `test-output/reports/rolling-restart-contract-first-green-rerun.report.json`
 
-Route owner: `unknown`
+Route owner: `startup_active_gate_owner`
 
-Route boundary: `unknown`
+Route boundary: `snapshot_coverage`
 
-Route dominant reason: `unknown`
+Route dominant reason: `owner_reconcile_pending`
 
-Route causal outcome: `unknown`
+Route causal outcome: `continue_local_fix`
 
-Stop mode: `unknown`
+Stop mode: `classified_local_blocker`
 
-Next lane: `unknown`
+Next lane: `causal-escalation`
 
-Expected delta: `unknown`
+Expected delta: `The selected observation-layer architecture route is implemented locally, then fresh representative evidence must reduce active_gate_snapshot_coverage, migrate, go green, or record architecture-gap.`
 
 Required refresh commands:
 
-1. None recorded
-
-## Classification Efficiency
-
-Default mode: `unknown`
-
-Separate package reason: `unknown`
-
-Artifact budget: `unknown`
-
-Proof command budget: `unknown`
-
-Commands:
-
-1. None recorded
-
-Decision record: `unknown`
-
-Successor action: `unknown`
-
-Runtime promotion rule: `unknown`
+1. `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-contract-first-green-rerun.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending`
+2. `update Sprint Strategy Brief and Current Edge Card from the route result`
+3. `npm run work:repair`
+4. `npm run work:validate -- --entry`
+5. `npm run work:validate -- --pre-impl`
 
 ## Architecture Decision Gate
 
-Status: `unknown`
+Status: `selected`
 
-Trigger: `unknown`
+Trigger: `frontier-oscillation`
 
 Trigger evidence:
 
-1. None recorded
+1. `fresh representative route selected active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending`
+2. `priority-recovery residual witnesses are zero, so the active-gate pair is the current first frontier`
+3. `frontier-history reports architectureRouteState=implement-pending and requires the runtime implementation of the selected route`
 
 Choices:
 
-1. None recorded
+1. `continue-local-proof` route=`continue-local-proof` - Execute the selected observation-layer source route in the publication active-gate handoff decision contract.
+2. `migrate-owner-boundary` route=`owner-boundary-migration` - Migrate only if canonical route evidence names a different deciding owner and boundary for the selected active-gate evidence.
+3. `open-architecture-package` route=`architecture-package` - Record architecture-gap only if the focused source proof cannot select a non-repeated observation transition, owner migration, or representative-green route.
 
-Selected choice: `unknown`
+Selected choice: `continue-local-proof`
 
-Gate next action: unknown
+Gate next action: Execute the selected local proof route; rerun canonical evidence before opening another architecture gate.
 
 ## Scope
 
 Write scope:
 
-1. None recorded
+1. `work/packages/active-20260531-rolling-restart-active-gate-observation-route.md`
+2. `src/control-plane/publication-active-gate-handoff-contract-decision.js`
+3. `work/sprints/active-2026-q2-rolling-restart-contract-first-green-theory-loop.md`
+4. `work/theory-ledger.md`
 
 Handoff files:
 
-1. None recorded
+1. `test-output/reports/rolling-restart-contract-first-green-rerun.report.json`
 
 Generated files:
 
@@ -337,11 +360,18 @@ Generated files:
 
 Candidate runtime files:
 
-1. None recorded
+1. `src/control-plane/publication-active-gate-handoff-contract.js`
+2. `src/control-plane/publication-active-gate-handoff-contract-selection.js`
+3. `src/control-plane/membership-publication-active-gate-reconcile.js`
 
 Commit scope:
 
-1. None recorded
+1. `work/packages/active-20260531-rolling-restart-active-gate-observation-route.md`
+2. `src/control-plane/publication-active-gate-handoff-contract-decision.js`
+3. `work/sprints/active-2026-q2-rolling-restart-contract-first-green-theory-loop.md`
+4. `work/theory-ledger.md`
+5. `work/sprints/current-blocker.json`
+6. `work/sprints/current-blocker.md`
 
 Legacy touched files:
 
