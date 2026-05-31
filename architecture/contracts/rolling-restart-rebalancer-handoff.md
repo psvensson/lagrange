@@ -91,7 +91,7 @@
   "packageRefs": [
     "work/packages/done-20260530-rolling-restart-priority-recovery-rebalancer-handoff-scheduling-retry.md",
     "work/packages/superseded-20260530-rolling-restart-priority-recovery-rebalancer-handoff-rerun-backpressure-residual.md",
-    "work/packages/active-20260531-rolling-restart-priority-recovery-rebalancer-handoff-decision-table-circuit-breaker-repair.md"
+    "work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-decision-table-circuit-breaker-repair.md"
   ],
   "theoryLedgerRefs": [
     "theory-20260530-rolling-restart-priority-recovery-rebalancer-handoff-scheduling-retry-architecture-gap",

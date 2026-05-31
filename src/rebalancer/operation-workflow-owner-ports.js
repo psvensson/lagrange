@@ -59,6 +59,8 @@ const OPERATION_WORKFLOW_OWNER_PORT_PROGRESS_CONTRACT = Object.freeze({
   RETRY_WAKE_SOURCE: 'rebalancer_timer',
   EVENT_OWNER_REENTRY_STATE: 'event_owner_reentry_observed',
   BOUNDED_OWNER_REENTRY_STATE: 'bounded_owner_reentry_scheduled',
+  REPRESENTATIVE_RERUN_ELIGIBLE: 'eligible',
+  REPRESENTATIVE_RERUN_BLOCKED_MODEL_ROUTE: 'blocked_model_route',
   TERMINAL_STATE: 'satisfied',
   EVIDENCE_PATH:
     'test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json',
@@ -748,6 +750,14 @@ function resolveOperationWorkflowOwnerPortProgressContractOwnerReentry(
       .EVENT_OWNER_REENTRY_STATE;
 }
 
+function resolveOperationWorkflowOwnerPortRepresentativeRerunRoute(progress) {
+  return isOperationWorkflowOwnerPortRemoteHandoffRetryProgress(progress) ?
+    OPERATION_WORKFLOW_OWNER_PORT_PROGRESS_CONTRACT
+      .REPRESENTATIVE_RERUN_BLOCKED_MODEL_ROUTE :
+    OPERATION_WORKFLOW_OWNER_PORT_PROGRESS_CONTRACT
+      .REPRESENTATIVE_RERUN_ELIGIBLE;
+}
+
 function resolveOperationWorkflowOwnerPortProgressContractRetryAfterMs(
   progress,
 ) {
@@ -788,6 +798,8 @@ function buildOperationWorkflowOwnerPortProgressContract(result) {
       resolveOperationWorkflowOwnerPortProgressContractOwnerReentry(progress),
     wakeSource:
       resolveOperationWorkflowOwnerPortProgressContractWakeSource(progress),
+    representativeRerunRoute:
+      resolveOperationWorkflowOwnerPortRepresentativeRerunRoute(progress),
     retryAfterMs:
       resolveOperationWorkflowOwnerPortProgressContractRetryAfterMs(progress),
     terminalState:

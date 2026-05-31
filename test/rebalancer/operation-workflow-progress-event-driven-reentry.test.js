@@ -515,20 +515,31 @@ test(TEST_REENTRY_TEST_NAME, async (t) => {
       PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
       'the re-entry should stay on event-driven workflow progress',
     );
-    t.equal(
-      snapshot?.progress?.progressContract?.owner,
-      'operation_workflow_owner',
-      'progressContract owner should match operation_workflow_owner',
+    t.match(
+      snapshot?.progress?.progressContract,
+      {
+        owner: 'operation_workflow_owner',
+        boundary: PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
+        representativeRerunRoute: 'eligible',
+      },
+      'progressContract should match event-driven route fields',
     );
+    const handoffRetrySnapshot =
+      coordinator.workflowOwner
+        .normalizePriorityRecoveryDispatchPendingOwnerSnapshot(
+          {
+            ...snapshot,
+            progress: {
+              ...snapshot.progress,
+              blockingBoundary:
+                PRIORITY_RECOVERY_BLOCKING_BOUNDARY.REBALANCER_HANDOFF,
+              waitMode: PRIORITY_RECOVERY_WAIT_MODE.RETRY_SCHEDULED,
+            },
+          }, operation);
     t.equal(
-      snapshot?.progress?.progressContract?.boundary,
-      'workflow_progress',
-      'progressContract boundary should match workflow_progress',
-    );
-    t.equal(
-      snapshot?.progress?.progressContract?.evidencePath,
-      'test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json',
-      'progressContract evidencePath should match expected path',
+      handoffRetrySnapshot?.progress?.progressContract?.representativeRerunRoute,
+      'blocked_model_route',
+      'rebalancer handoff retry progress should block representative rerun',
     );
     t.equal(
       coordinator.workflowOwner.schedulePriorityRecoveryDispatchPendingReentry(

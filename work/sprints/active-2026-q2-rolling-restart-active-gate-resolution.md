@@ -113,21 +113,21 @@ current-blocker files, sprint state, package queues, or theory-ledger decisions.
 ```text
 Representative artifact: test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json
 Visible first frontier: priority_recovery_partition_progress / operation_workflow_owner / rebalancer_handoff / priority_recovery_event_driven_wait
-Active package: work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-decision-table-circuit-breaker-repair.md
+Active package: work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-blocked-rerun-route-state.md
 Active package owner: operation_workflow_owner
 Active package boundary: rebalancer_handoff
 Selected cause: priority_recovery_event_driven_wait
-Required action: Run verifier-fixer proof, repair tracker snapshots, validate closure, then close and push the repaired model/contract route.
-Representative status: architecture-gap
-Causal outcome: accept_classified_backpressure
-Architecture gate: selected / blocked-rerun-route-repair
-Expected delta: Decision-table and contract route represent accepted classified backpressure under blocked representative rerun without runtime source or direct rerun promotion.
-Current state: The decision table and contract now distinguish accepted classified backpressure under blocked_model_route from rerun-eligible backpressure; the scenario artifact remains accepted backpressure with two priority-recovery witnesses.
-Allowed edits: work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-decision-table-circuit-breaker-repair.md, architecture/contracts/rolling-restart-rebalancer-handoff.md, docs/specs/decision-tables/rebalancer-handoff-priority-recovery.json, work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md, work/theory-ledger.md
+Required action: Emit the blocked_model_route representative rerun discriminator from the rebalancer handoff progress contract so the repaired decision table has a runtime-owned route signal.
+Representative status: active-theory-loop
+Causal outcome: pending-before-rerun
+Architecture gate: watching / unknown
+Expected delta: Runtime progress contract emits blocked_model_route for the rebalancer handoff retry path; representative evidence remains unchanged until a later legal rerun.
+Current state: The decision table and contract distinguish eligible representative rerun from blocked_model_route, but runtime progress evidence does not yet emit the representative rerun route discriminator.
+Allowed edits: src/rebalancer/operation-workflow-owner-ports.js, test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js, architecture/contracts/rolling-restart-rebalancer-handoff.md, work/packages/todo-20260531-rolling-restart-priority-recovery-rebalancer-handoff-blocked-route-rerun-gate.md, work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-blocked-rerun-route-state.md, work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md, work/theory-ledger.md
 Candidate runtime files: src/rebalancer/operation-workflow-owner-ports.js
-Forbidden edits: Accepted backpressure cannot authorize another representative rerun when the representative-progress model has already blocked that rerun.
-Required latest proof: falsifier: npm run model:decision-tables, regression: npm run work:contract:check -- architecture/contracts/rolling-restart-rebalancer-handoff.md, supporting: npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress, supporting: npm run work:owner-dossier -- --owner operation_workflow_owner --boundary rebalancer_handoff --json, supporting: npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json
-Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
+Forbidden edits: Accepted backpressure under blocked_model_route cannot authorize rerun_representative_evidence.
+Required latest proof: falsifier: npm test -- test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js # focused contract fixture, regression: npm test -- test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js # affected consumer proof, regression: npm run model:decision-tables, supporting: npm run work:contract:check -- architecture/contracts/rolling-restart-rebalancer-handoff.md, supporting: npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress, supporting: npm run work:evidence-summary -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json, supporting: npm run audit:runtime-grammar:file -- src/rebalancer/operation-workflow-owner-ports.js
+Allowed stop modes: success-condition-met only; representative-green, owner-boundary-migration, architecture-gap, same-frontier, classification-only, needs-rerun, pending, and unknown are package outcomes unless they exactly match the original sprint success condition
 ```
 
 ## Package Queue
@@ -201,10 +201,19 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    [Rolling Restart Priority Recovery Rebalancer Handoff Post Model Architecture Gap Experiment](work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-architecture-gap-experiment.md)
    - Architecture-gap successor selected by the post-model rederive before
      runtime source promotion or another representative rerun.
-15. `active` -
+15. `done` -
    [Rolling Restart Priority Recovery Rebalancer Handoff Decision Table Circuit Breaker Repair](work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-decision-table-circuit-breaker-repair.md)
    - Model/contract repair successor for accepted backpressure under the
      blocked representative-rerun circuit breaker.
+16. `active` -
+   [Rolling Restart Priority Recovery Rebalancer Handoff Blocked Rerun Route State](work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-blocked-rerun-route-state.md)
+   - Runtime architecture-route implementation that emits the
+     `blocked_model_route` discriminator from the rebalancer handoff progress
+     contract for the repaired decision-table route.
+17. `todo` -
+   [Rolling Restart Priority Recovery Rebalancer Handoff Blocked Route Rerun Gate](work/packages/todo-20260531-rolling-restart-priority-recovery-rebalancer-handoff-blocked-route-rerun-gate.md)
+   - Fresh representative rolling-restart rerun after the runtime progress
+     contract emits `blocked_model_route` for rebalancer handoff retry progress.
 
 ## Sprint Proof Ladder
 
