@@ -113,7 +113,7 @@ current-blocker files, sprint state, package queues, or theory-ledger decisions.
 ```text
 Representative artifact: none
 Visible first frontier: unknown
-Active package: work/packages/active-20260531-workflow-admin-metadata-derivation.md
+Active package: work/packages/done-20260531-workflow-admin-metadata-derivation.md
 Active package owner: workflow_tooling_owner
 Active package boundary: package_lifecycle_metadata
 Selected cause: workflow_admin_overhead
@@ -123,7 +123,7 @@ Causal outcome: unknown
 Architecture gate: not-required / unknown
 Expected delta: unknown
 Current state: Package opened with declared owner, boundary, scope, proof, and stop rule.
-Allowed edits: work/packages/active-20260531-workflow-admin-metadata-derivation.md, scripts/work-tracker.js, scripts/work-close.js, scripts/work-context.js, scripts/work-package-new.js, scripts/work-package-route-after-rerun.js, scripts/work-package-schema.js, scripts/work-summary.js, scripts/work-sprint-remaining.js, scripts/work-sprint-queue.js, scripts/work-admin.js, scripts/work-package-evidence.js, work/templates/lightweight-maintenance-package.md, work/templates/single-file-maintenance-package.md, work/templates/doc-only-package.md, work/templates/runtime-owner-package.md, work/templates/scenario-closure-package.md, work/README.md, work/RULES.md, .kiro/steering/workflow-guidelines/packages.md, .kiro/steering/workflow-guidelines/closure.md, .kiro/steering/workflow-guidelines/subagents.md, .kiro/steering/workflow-guidelines/validators.md, .kiro/steering/schemas/work-package.schema.json, .kiro/steering/llm/core.md, .kiro/steering/llm/boot.md, .kiro/steering/llm/governance.md, .kiro/steering/llm/rules.json, .kiro/steering/llm/manifest.json, test/scripts/work-tracker-current-blocker.test.js, test/scripts/work-admin.test.js, test/scripts/work-close.test.js, test/scripts/work-package-evidence.test.js, test/scripts/work-package-new.test.js, test/scripts/work-context.test.js, test/scripts/work-llm-usability-tools.test.js, test/scripts/work-summary.test.js, test/scripts/work-tracker-current-blocker-ledger.test.js, test/scripts/work-theory-loop-hardening.test.js
+Allowed edits: work/packages/done-20260531-workflow-admin-metadata-derivation.md, scripts/work-tracker.js, scripts/work-close.js, scripts/work-context.js, scripts/work-package-new.js, scripts/work-package-route-after-rerun.js, scripts/work-package-schema.js, scripts/work-summary.js, scripts/work-sprint-remaining.js, scripts/work-sprint-queue.js, scripts/work-admin.js, scripts/work-package-evidence.js, work/templates/lightweight-maintenance-package.md, work/templates/single-file-maintenance-package.md, work/templates/doc-only-package.md, work/templates/runtime-owner-package.md, work/templates/scenario-closure-package.md, work/README.md, work/RULES.md, .kiro/steering/workflow-guidelines/packages.md, .kiro/steering/workflow-guidelines/closure.md, .kiro/steering/workflow-guidelines/subagents.md, .kiro/steering/workflow-guidelines/validators.md, .kiro/steering/schemas/work-package.schema.json, .kiro/steering/llm/core.md, .kiro/steering/llm/boot.md, .kiro/steering/llm/governance.md, .kiro/steering/llm/rules.json, .kiro/steering/llm/manifest.json, test/scripts/work-tracker-current-blocker.test.js, test/scripts/work-admin.test.js, test/scripts/work-close.test.js, test/scripts/work-package-evidence.test.js, test/scripts/work-package-new.test.js, test/scripts/work-context.test.js, test/scripts/work-llm-usability-tools.test.js, test/scripts/work-summary.test.js, test/scripts/work-tracker-current-blocker-ledger.test.js, test/scripts/work-theory-loop-hardening.test.js
 Candidate runtime files: unknown
 Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
 Required latest proof: regression: npm run work:test, regression: npm run work:test:regression, regression: npm run work:validate -- --entry
@@ -215,7 +215,7 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Fresh representative rolling-restart rerun after the runtime progress
      contract emits `blocked_model_route` for rebalancer handoff retry progress.
 18. `todo` -
-   [Workflow Admin Metadata Derivation](work/packages/active-20260531-workflow-admin-metadata-derivation.md)
+   [Workflow Admin Metadata Derivation](work/packages/done-20260531-workflow-admin-metadata-derivation.md)
    - Workflow-tooling maintenance to derive package lifecycle, scope, route,
      result, and sprint handoff views from package metadata instead of
      hand-maintained mirror state.

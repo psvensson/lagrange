@@ -12,7 +12,8 @@
     "boundary": "package_lifecycle_metadata",
     "dominantReason": "workflow_admin_overhead",
     "currentState": "Package opened with declared owner, boundary, scope, proof, and stop rule.",
-    "nextAction": "Derive package lifecycle, scope, route, result, and sprint handoff views from package metadata so agents stop maintaining duplicate admin state."
+    "nextAction": "Derive package lifecycle, scope, route, result, and sprint handoff views from package metadata so agents stop maintaining duplicate admin state.",
+    "closed": "2026-05-31"
   },
   "scope": {
     "writeScope": [
@@ -137,7 +138,34 @@
       "Prefer test-only-proof for tests that do not change runtime behavior.",
       "Prefer bounded-experiment for one same-owner hypothesis with inherited context."
     ]
-  }
+  },
+  "theoryLedger": "no-ledger-update",
+  "implementation": {
+    "parentRevalidatedFocusedProof": true,
+    "filesChanged": [
+      "scripts/work-tracker.js",
+      "scripts/work-close.js",
+      "scripts/work-context.js",
+      "scripts/work-package-new.js",
+      "scripts/work-package-route-after-rerun.js",
+      "scripts/work-package-schema.js",
+      "scripts/work-summary.js",
+      "scripts/work-admin.js",
+      "scripts/work-package-evidence.js",
+      "work/templates",
+      "work/README.md",
+      "work/RULES.md",
+      ".kiro/steering",
+      "test/scripts"
+    ]
+  },
+  "verificationFix": {
+    "parentRevalidatedFocusedProof": true
+  },
+  "result": {
+    "classification": "reduced"
+  },
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -257,3 +285,9 @@ Agent identity is optional provenance. Use the compact five-field shape for new 
 1. regression: npm run work:test
 2. regression: npm run work:test:regression
 3. regression: npm run work:validate -- --entry
+
+## Commit And Push Ledger
+
+1. Push target: origin/codex/pending-ack-eligibility-filter
+2. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
+3. Pushed: no
