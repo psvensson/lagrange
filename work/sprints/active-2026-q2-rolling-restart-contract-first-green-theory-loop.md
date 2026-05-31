@@ -79,9 +79,9 @@ before any runtime successor opens:
 
 Coordinator commands:
 
-- `npm run work:agent:plan -- --package work/packages/active-20260531-rolling-restart-fresh-representative-rerun-gate.md`
-- `npm run work:agent:collect -- --package work/packages/active-20260531-rolling-restart-fresh-representative-rerun-gate.md`
-- `npm run work:agent:validate -- --package work/packages/active-20260531-rolling-restart-fresh-representative-rerun-gate.md`
+- `npm run work:agent:plan -- --package work/packages/done-20260531-rolling-restart-fresh-representative-rerun-gate.md`
+- `npm run work:agent:collect -- --package work/packages/done-20260531-rolling-restart-fresh-representative-rerun-gate.md`
+- `npm run work:agent:validate -- --package work/packages/done-20260531-rolling-restart-fresh-representative-rerun-gate.md`
 
 ## Sprint Strategy Brief
 
@@ -118,7 +118,7 @@ Coordinator commands:
 ```text
 Representative artifact: test-output/reports/rolling-restart-contract-first-green-rerun.report.json
 Visible first frontier: release_gate_owner / rolling_restart_fully_green_gate routed to active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending
-Active package: work/packages/active-20260531-rolling-restart-fresh-representative-rerun-gate.md
+Active package: work/packages/done-20260531-rolling-restart-fresh-representative-rerun-gate.md
 Active package owner: release_gate_owner
 Active package boundary: rolling_restart_fully_green_gate
 Selected cause: accepted_classified_backpressure_rerun
@@ -128,7 +128,7 @@ Causal outcome: continue_local_fix
 Architecture gate: selected / observation-route successor
 Expected delta: System-theory rederive recorded release-gate observation-gap saturation; fresh representative evidence drained priority-recovery residuals to zero and selected active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage, while runtime promotion remains guarded by saturated history until a non-repeated architecture route is implemented.
 Current state: Fresh representative evidence is red at active_gate_snapshot_coverage with owner_reconcile_pending, selected_snapshot_source_timeout, snapshot_repair_deferred, and snapshot coverage 1/5.
-Allowed edits: work/packages/active-20260531-rolling-restart-fresh-representative-rerun-gate.md, work/packages/todo-20260531-rolling-restart-active-gate-observation-route.md, work/agent-reports/active-20260531-rolling-restart-fresh-representative-rerun-gate/evidence-scout.md, work/agent-reports/active-20260531-rolling-restart-fresh-representative-rerun-gate/model-contract-scout.md, work/agent-reports/active-20260531-rolling-restart-fresh-representative-rerun-gate/source-map-scout.md, work/sprints/active-2026-q2-rolling-restart-contract-first-green-theory-loop.md, work/sprints/current-blocker.json, work/sprints/current-blocker.md, work/theory-ledger.md, .kiro/steering/schemas/work-package.schema.json, package.json, scripts/list-commands.js, scripts/work-agent-cards.js, scripts/work-agent-plan.js, scripts/work-agent-validate.js, scripts/work-agent-collect.js, scripts/work-context.js, scripts/work-package-schema.js, scripts/work-tracker.js, test/scripts/work-agent-cards.test.js, work/RULES.md, work/agent-reports/README.md, work/templates/agent-route-card.md, work/templates/agent-verifier-card.md, work/templates/runtime-owner-package.md, work/templates/scenario-closure-package.md
+Allowed edits: work/packages/done-20260531-rolling-restart-fresh-representative-rerun-gate.md, work/packages/todo-20260531-rolling-restart-active-gate-observation-route.md, work/agent-reports/active-20260531-rolling-restart-fresh-representative-rerun-gate/evidence-scout.md, work/agent-reports/active-20260531-rolling-restart-fresh-representative-rerun-gate/model-contract-scout.md, work/agent-reports/active-20260531-rolling-restart-fresh-representative-rerun-gate/source-map-scout.md, work/sprints/active-2026-q2-rolling-restart-contract-first-green-theory-loop.md, work/sprints/current-blocker.json, work/sprints/current-blocker.md, work/theory-ledger.md, .kiro/steering/schemas/work-package.schema.json, package.json, scripts/list-commands.js, scripts/work-agent-cards.js, scripts/work-agent-plan.js, scripts/work-agent-validate.js, scripts/work-agent-collect.js, scripts/work-context.js, scripts/work-package-schema.js, scripts/work-tracker.js, test/scripts/work-agent-cards.test.js, work/RULES.md, work/agent-reports/README.md, work/templates/agent-route-card.md, work/templates/agent-verifier-card.md, work/templates/runtime-owner-package.md, work/templates/scenario-closure-package.md
 Candidate runtime files: src/rebalancer/operation-workflow-owner-ports.js, src/control-plane/publication-active-gate-handoff-contract-decision.js
 Forbidden edits: Fresh representative evidence must either close rolling-restart green or name a single successor without reinterpreting stale release-gate artifacts as runtime authorization.
 Required latest proof: falsifier: npm run work:system-theory:rederive -- --owner release_gate_owner --boundary rolling_restart_fully_green_gate --sprint work/sprints/active-2026-q2-rolling-restart-contract-first-green-theory-loop.md --write, supporting: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-contract-first-green-rerun.report.json --fast-local --verbose, regression: npm run work:scenario-route -- test-output/reports/rolling-restart-contract-first-green-rerun.report.json --owner release_gate_owner --boundary rolling_restart_fully_green_gate --dominant-reason accepted_classified_backpressure_rerun --explain active_gate_snapshot_coverage, supporting: npm run work:evidence-summary -- test-output/reports/rolling-restart-contract-first-green-rerun.report.json
@@ -144,7 +144,7 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
      route is fresh representative evidence before runtime source work.
 
 2. `active` -
-   `work/packages/active-20260531-rolling-restart-fresh-representative-rerun-gate.md`
+   `work/packages/done-20260531-rolling-restart-fresh-representative-rerun-gate.md`
    - Rederived the release gate and ran fresh representative evidence. The
      artifact is red but reduced priority-recovery residuals to zero and routes
      to active_gate_snapshot_coverage / startup_active_gate_owner /
@@ -175,7 +175,7 @@ Before closing this sprint, record the following evidence:
 - Evidence artifact:
   `test-output/reports/rolling-restart-contract-first-green-rerun.report.json`
 - Closure package:
-  `work/packages/active-20260531-rolling-restart-fresh-representative-rerun-gate.md`
+  `work/packages/done-20260531-rolling-restart-fresh-representative-rerun-gate.md`
 
 ## Joint Coupled-Invariant Probe
 

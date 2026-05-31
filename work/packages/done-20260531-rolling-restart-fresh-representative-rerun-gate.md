@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "active",
+  "status": "done",
   "intent": {
     "opened": "2026-05-31",
     "lane": "causal-escalation",
@@ -15,7 +15,8 @@
     "dominantReason": "accepted_classified_backpressure_rerun",
     "currentState": "The predecessor selected accepted classified backpressure, but release-gate history is saturated on observation_gap, so a system-theory revision must be recorded before the fresh representative rerun executes.",
     "nextAction": "Rederive the release-gate system theory, run fresh rolling-restart representative evidence, route the resulting artifact, and select representative-green closure or one fresh successor.",
-    "predecessor": "work/packages/done-20260531-rolling-restart-contract-first-route-discriminator.md"
+    "predecessor": "work/packages/done-20260531-rolling-restart-contract-first-route-discriminator.md",
+    "closed": "2026-05-31"
   },
   "scope": {
     "writeScope": [
@@ -361,7 +362,8 @@
       "npm run analyze:owner-explain -- test-output/reports/rolling-restart-contract-first-green-rerun.report.json active_gate_snapshot_coverage",
       "npm run work:agent:collect -- --package work/packages/active-20260531-rolling-restart-fresh-representative-rerun-gate.md"
     ]
-  }
+  },
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -423,7 +425,7 @@
 
 ## Commit And Push Ledger
 
-- Focused package commit: `<sha>`
-- Push target: `<remote>/<branch>`
-- Commit contains only package-owned files/package-status/allowed sprint handoff: `<yes>`
-- Pushed: `<no>`
+1. Focused package commit: bccd1261e4c531e92921fd31fe7c3e08e2454c6a
+2. Push target: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
+4. Pushed: no
