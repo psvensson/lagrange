@@ -1,6 +1,6 @@
 const ZERO = 0;
 const ONE = 1;
-const DEFAULT_POLL_INTERVAL_MS = 1000;
+const DEFAULT_POLL_INTERVAL_MS = 250;
 
 function normalizePositiveInteger(value, fallback = ZERO) {
   return Number.isFinite(value) && value > ZERO ?
