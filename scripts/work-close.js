@@ -4,6 +4,7 @@ import { execSync } from 'child_process';
 import {normalizeMetadata} from './work-package-schema.js';
 import {computeResidualCountFromArtifact} from './work-residual-count.js';
 import {runSprintPush} from './work-sprint-push.js';
+import {hardenCommitLedgerContent} from './work-commit-ledger-harden.js';
 
 // R14 ceremony fold. Before closing, bind representativeResidual.residualCount to
 // the real evidence artifact when the package names an artifact but left the
@@ -253,15 +254,22 @@ async function main() {
     
     // Now we are on the new commit. Get its SHA.
     const newCommitSha = execSync('git rev-parse HEAD', {encoding: 'utf8'}).trim();
-    
-    // Replace parent commit SHA with new commit SHA in the done package file
+
+    // Harden the Commit And Push Ledger so the recorded SHA is the actual close
+    // commit, regardless of whether the line held a placeholder, a stale SHA, or
+    // the pre-commit parent SHA. This removes any need to read and re-enter the
+    // hash by hand.
     if (fs.existsSync(relativeTargetPath)) {
-      let fileContent = fs.readFileSync(relativeTargetPath, 'utf8');
-      if (fileContent.includes(parentCommitSha)) {
-        console.log(`Updating commit ledger in ${relativeTargetPath} with actual commit SHA: ${newCommitSha}`);
-        fileContent = fileContent.replace(new RegExp(parentCommitSha, 'g'), newCommitSha);
-        fs.writeFileSync(relativeTargetPath, fileContent, 'utf8');
-        
+      const originalContent = fs.readFileSync(relativeTargetPath, 'utf8');
+      const hardenedContent = hardenCommitLedgerContent(
+        originalContent,
+        newCommitSha,
+        parentCommitSha,
+      );
+      if (hardenedContent !== originalContent) {
+        console.log(`Hardening commit ledger in ${relativeTargetPath} -> ${newCommitSha}`);
+        fs.writeFileSync(relativeTargetPath, hardenedContent, 'utf8');
+
         // Re-stage the package file and amend the commit
         execSync(`git add "${relativeTargetPath}"`);
         execSync('git commit --amend --no-edit', { stdio: 'inherit' });
