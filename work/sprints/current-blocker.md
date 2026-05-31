@@ -23,7 +23,7 @@ Falsifying probe: falsifier: npm test -- test/control-plane/publication-active-g
 
 Redirect rule: Stop on unchanged same-frontier, no-reduction, or architecture-gap evidence instead of widening the package.
 
-Sprint: `work/sprints/active-2026-q2-rolling-restart-contract-first-green-theory-loop.md`
+Sprint: `work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md`
 
 Package: `work/packages/active-20260531-rolling-restart-active-gate-observation-route.md`
 
@@ -43,7 +43,7 @@ Boundary: `snapshot_coverage`
 
 Dominant reason: `owner_reconcile_pending`
 
-Current state: Frontier history reports startup_active_gate_owner / snapshot_coverage is in architecture-route implement-pending state after the selected architecture-gap route; this package is the bounded observation-layer implementation, not another unguided local slice.
+Current state: Resumed under the rolling-restart-active-gate-resolution sprint. Frontier history reports startup_active_gate_owner / snapshot_coverage is in architecture-route implement-pending state after the selected architecture-gap route; this package is the bounded observation-layer implementation, not another unguided local slice.
 
 ## Next Action
 
@@ -346,7 +346,7 @@ Write scope:
 
 1. `work/packages/active-20260531-rolling-restart-active-gate-observation-route.md`
 2. `src/control-plane/publication-active-gate-handoff-contract-decision.js`
-3. `work/sprints/active-2026-q2-rolling-restart-contract-first-green-theory-loop.md`
+3. `work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md`
 4. `work/theory-ledger.md`
 
 Handoff files:
@@ -368,7 +368,7 @@ Commit scope:
 
 1. `work/packages/active-20260531-rolling-restart-active-gate-observation-route.md`
 2. `src/control-plane/publication-active-gate-handoff-contract-decision.js`
-3. `work/sprints/active-2026-q2-rolling-restart-contract-first-green-theory-loop.md`
+3. `work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md`
 4. `work/theory-ledger.md`
 5. `work/sprints/current-blocker.json`
 6. `work/sprints/current-blocker.md`

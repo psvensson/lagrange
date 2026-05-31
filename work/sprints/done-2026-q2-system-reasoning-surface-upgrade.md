@@ -1,6 +1,6 @@
 # System Reasoning-Surface Upgrade Sprint
 
-Status: queued. Created on May 31, 2026.
+Status: done. Created on May 31, 2026. Activated on May 31, 2026 by explicit operator decision, after the `rolling-restart-contract-first-green-theory-loop` sprint was advanced to done and its unfinished observation-route package was parked as superseded (see `work/packages/superseded-20260531-rolling-restart-active-gate-observation-route.md`).
 
 This is a **meta / workflow-framework** sprint, kept distinct from the in-flight
 `active-2026-q2-rolling-restart-contract-first-green-theory-loop` runtime sprint
@@ -53,12 +53,19 @@ control guardrails to them.
 - Expected green path: registry first (R6), then systemTheory home (R2), then
   proof forcing (R15/R1), model-coverage (R16/R4), circuit breaker (R17/R5), and
   the owner-dossier read model (R18/R3); docs and template last.
-- Wrong-direction signals: a new validator that fires on legacy packages with no
+- Wrong direction signals: a new validator that fires on legacy packages with no
   proven route / no registry entry (all new gates are additive no-ops without the
   new artifacts), or a contract-record change that breaks `work:contract:check`.
+- Next best package: none in this sprint — the reasoning surface is delivered.
+  Follow-on runtime work to apply it (drive the rolling-restart active-gate pair
+  to representative-green) lives on the separate
+  `active-2026-q2-rolling-restart-active-gate-resolution` sprint.
+- Redirect rule: if a recommendation needs runtime behaviour change, stop and
+  split it into a runtime/scenario package on the rolling-restart-resolution
+  sprint; this sprint owns workflow-framework reasoning surface only.
 - Stop or escalate rule: if a recommendation needs runtime behaviour change,
-  stop and split it into a runtime/scenario package on the rolling-restart sprint;
-  this sprint owns workflow-framework reasoning surface only.
+  stop and split it into a runtime/scenario package on the rolling-restart
+  resolution sprint; this sprint owns workflow-framework reasoning surface only.
 
 ## Recommendations Implemented
 
@@ -111,8 +118,9 @@ relevant runtime pair.
 
 ## Activation Note
 
-Do **not** activate this sprint over the in-flight rolling-restart package. The
-reasoning-surface upgrade is already merged-ready and additive (every new gate is
-a no-op until the new artifacts exist), so it does not need to preempt runtime
-work. Activate (`npm run work:sprint:queue --activate <slug>`) only if a future
-package extends this surface and the rolling-restart sprint has closed.
+Activated on 2026-05-31 by explicit operator decision once the rolling-restart
+sprint closed. This sprint owns no runtime owner/boundary frontier and its
+deliverables (R1–R6) are already merged; it is the current sprint of record for
+follow-up work on the reasoning surface. Any package that extends this surface
+should be queued here via `npm run work:sprint:queue --activate <slug>`. Runtime
+work on a frontier still belongs on a runtime sprint, not here (CORE-02).

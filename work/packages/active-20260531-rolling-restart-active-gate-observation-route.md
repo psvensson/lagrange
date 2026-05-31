@@ -13,14 +13,14 @@
     "owner": "startup_active_gate_owner",
     "boundary": "snapshot_coverage",
     "dominantReason": "owner_reconcile_pending",
-    "currentState": "Frontier history reports startup_active_gate_owner / snapshot_coverage is in architecture-route implement-pending state after the selected architecture-gap route; this package is the bounded observation-layer implementation, not another unguided local slice.",
+    "currentState": "Resumed under the rolling-restart-active-gate-resolution sprint. Frontier history reports startup_active_gate_owner / snapshot_coverage is in architecture-route implement-pending state after the selected architecture-gap route; this package is the bounded observation-layer implementation, not another unguided local slice.",
     "nextAction": "Implement the selected observation-layer architecture route so selected snapshot observation retry produces owner-owned snapshot coverage progress."
   },
   "scope": {
     "writeScope": [
       "work/packages/active-20260531-rolling-restart-active-gate-observation-route.md",
       "src/control-plane/publication-active-gate-handoff-contract-decision.js",
-      "work/sprints/active-2026-q2-rolling-restart-contract-first-green-theory-loop.md",
+      "work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md",
       "work/theory-ledger.md"
     ],
     "handoffFiles": [
@@ -38,7 +38,7 @@
     "commitScope": [
       "work/packages/active-20260531-rolling-restart-active-gate-observation-route.md",
       "src/control-plane/publication-active-gate-handoff-contract-decision.js",
-      "work/sprints/active-2026-q2-rolling-restart-contract-first-green-theory-loop.md",
+      "work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md",
       "work/theory-ledger.md",
       "work/sprints/current-blocker.json",
       "work/sprints/current-blocker.md"
@@ -466,7 +466,7 @@ Canonical evidence source: `test-output/reports/rolling-restart-contract-first-g
 
 1. work/packages/active-20260531-rolling-restart-active-gate-observation-route.md
 2. src/control-plane/publication-active-gate-handoff-contract-decision.js
-3. work/sprints/active-2026-q2-rolling-restart-contract-first-green-theory-loop.md
+3. work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md
 4. work/theory-ledger.md
 5. work/sprints/current-blocker.json
 6. work/sprints/current-blocker.md
@@ -482,7 +482,7 @@ Canonical evidence source: `test-output/reports/rolling-restart-contract-first-g
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `architecture-route-runtime/current-frontier`
 - Output profile: `medium`
-- Owned files: `work/packages/active-20260531-rolling-restart-active-gate-observation-route.md`, `src/control-plane/publication-active-gate-handoff-contract-decision.js`, `work/sprints/active-2026-q2-rolling-restart-contract-first-green-theory-loop.md`, `work/theory-ledger.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`
+- Owned files: `work/packages/active-20260531-rolling-restart-active-gate-observation-route.md`, `src/control-plane/publication-active-gate-handoff-contract-decision.js`, `work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md`, `work/theory-ledger.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`
 - Candidate runtime files: `src/control-plane/publication-active-gate-handoff-contract-decision.js`, `src/control-plane/publication-active-gate-handoff-contract.js`, `src/control-plane/publication-active-gate-handoff-contract-selection.js`, `src/control-plane/membership-publication-active-gate-reconcile.js`
 - Do-not-edit scope: `src/` outside declared write scope.
 - Frozen decisions: source promotion is limited to the selected observation route.
