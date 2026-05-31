@@ -788,5 +788,19 @@ Each entry must include these labels:
 - Representative movement: needs-rerun; local proof reduced route ambiguity but did not refresh representative evidence
 - Linked packages: `work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-contract-gap-architecture-experiment.md`, `work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-owner-wake-route.md`, `work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-system-theory-rederive.md`, `work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-architecture-gap-experiment.md`, `work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-decision-table-circuit-breaker-repair.md`, `work/packages/active-20260531-rolling-restart-priority-recovery-rebalancer-handoff-blocked-rerun-route-state.md`, `work/packages/todo-20260531-rolling-restart-priority-recovery-rebalancer-handoff-blocked-route-rerun-gate.md`
 - Supersedes: theory-20260531-rolling-restart-priority-recovery-rebalancer-handoff-decision-table-circuit-breaker-repair
-- Superseded by: none
+- Superseded by: theory-20260531-rolling-restart-representative-rerun-progress-model-coverage-binding
 - Next implication: Run the linked representative rerun gate so fresh rolling-restart evidence consumes the blocked_model_route discriminator before any downstream owner or additional runtime work.
+
+## theory-20260531-rolling-restart-representative-rerun-progress-model-coverage-binding
+
+- Status: supported
+- Scenario/gate: rolling-restart / representative_progress_circuit_breaker
+- Owner/boundary: representative_evidence_owner / rolling_restart_rerun
+- Hypothesis: The post-blocked-route representative rerun gate cannot run another direct evidence slice because the non-shrinking residual window has no owner-dossier-visible model coverage, even though docs/specs/representative-rerun-progress-model.json exists.
+- Probe: `npm run work:owner-dossier -- --owner representative_evidence_owner --boundary rolling_restart_rerun --json`, `npm run work:frontier-history -- --owner representative_evidence_owner --boundary rolling_restart_rerun --limit 12`, `npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json --owner representative_evidence_owner --boundary rolling_restart_rerun --dominant-reason priority_recovery_blocked_route_rerun --explain priority_recovery_partition_progress`, and `npm run analyze:causal-model -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json`
+- Artifact/result: Architecture-gap analysis selected model coverage binding as the next non-rerun successor. Owner-dossier reports `contractRecord=null`, `invariants=[]`, and `modelStatus=none` for `representative_evidence_owner / rolling_restart_rerun`, while the existing model artifact records `window_non_shrinking -> blocked_model_route`.
+- Representative movement: architecture-gap; direct rerun remains blocked
+- Linked packages: `work/packages/active-20260531-rolling-restart-priority-recovery-rebalancer-handoff-blocked-route-rerun-gate.md`, `work/packages/todo-20260531-representative-rerun-progress-model-coverage-binding.md`
+- Supersedes: theory-20260531-rolling-restart-priority-recovery-rebalancer-handoff-blocked-rerun-route-state
+- Superseded by: none
+- Next implication: Activate the model coverage binding package, create `architecture/contracts/rolling-restart-representative-rerun-progress.md`, update `architecture/contracts/invariants.json`, and require owner-dossier to report modelStatus=proven before another representative rerun or runtime promotion.

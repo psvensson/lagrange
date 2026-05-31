@@ -102,7 +102,7 @@ current-blocker files, sprint state, package queues, or theory-ledger decisions.
   route, widening scope beyond the declared owner/boundary, or treating
   classification-only output as sprint success.
 - Next best package:
-  `work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-decision-table-circuit-breaker-repair.md`
+  `work/packages/todo-20260531-representative-rerun-progress-model-coverage-binding.md`
 - Redirect rule: if the rederive cannot select one route, open the
   architecture-gap or contract/model repair successor; do not stop the theory
   loop on non-terminal classification, same-frontier, migration, or
@@ -111,22 +111,22 @@ current-blocker files, sprint state, package queues, or theory-ledger decisions.
 ## Current Edge Card
 
 ```text
-Representative artifact: none
-Visible first frontier: unknown
-Active package: work/packages/done-20260531-workflow-admin-metadata-derivation.md
-Active package owner: workflow_tooling_owner
-Active package boundary: package_lifecycle_metadata
-Selected cause: workflow_admin_overhead
-Required action: Derive package lifecycle, scope, route, result, and sprint handoff views from package metadata so agents stop maintaining duplicate admin state.
-Representative status: unknown
-Causal outcome: unknown
-Architecture gate: not-required / unknown
-Expected delta: unknown
-Current state: Package opened with declared owner, boundary, scope, proof, and stop rule.
-Allowed edits: work/packages/done-20260531-workflow-admin-metadata-derivation.md, scripts/work-tracker.js, scripts/work-close.js, scripts/work-context.js, scripts/work-package-new.js, scripts/work-package-route-after-rerun.js, scripts/work-package-schema.js, scripts/work-summary.js, scripts/work-sprint-remaining.js, scripts/work-sprint-queue.js, scripts/work-admin.js, scripts/work-package-evidence.js, work/templates/lightweight-maintenance-package.md, work/templates/single-file-maintenance-package.md, work/templates/doc-only-package.md, work/templates/runtime-owner-package.md, work/templates/scenario-closure-package.md, work/README.md, work/RULES.md, .kiro/steering/workflow-guidelines/packages.md, .kiro/steering/workflow-guidelines/closure.md, .kiro/steering/workflow-guidelines/subagents.md, .kiro/steering/workflow-guidelines/validators.md, .kiro/steering/schemas/work-package.schema.json, .kiro/steering/llm/core.md, .kiro/steering/llm/boot.md, .kiro/steering/llm/governance.md, .kiro/steering/llm/rules.json, .kiro/steering/llm/manifest.json, test/scripts/work-tracker-current-blocker.test.js, test/scripts/work-admin.test.js, test/scripts/work-close.test.js, test/scripts/work-package-evidence.test.js, test/scripts/work-package-new.test.js, test/scripts/work-context.test.js, test/scripts/work-llm-usability-tools.test.js, test/scripts/work-summary.test.js, test/scripts/work-tracker-current-blocker-ledger.test.js, test/scripts/work-theory-loop-hardening.test.js
+Representative artifact: test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json
+Visible first frontier: representative_evidence_owner / rolling_restart_rerun model coverage binding pending
+Active package: work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-blocked-route-rerun-gate.md
+Active package owner: representative_evidence_owner
+Active package boundary: rolling_restart_rerun
+Selected cause: priority_recovery_blocked_route_rerun
+Required action: Run architecture-gap analysis for representative_evidence_owner / rolling_restart_rerun and select a non-rerun successor before any further runtime or downstream owner work.
+Representative status: architecture-gap
+Causal outcome: architecture-gap
+Architecture gate: selected / bind-representative-rerun-progress-model-coverage
+Expected delta: The next package binds docs/specs/representative-rerun-progress-model.json into owner-dossier-visible contract or invariant coverage before any representative rerun.
+Current state: The runtime progress contract now exposes representativeRerunRoute=blocked_model_route, but the representative rerun pair is blocked by the representative-progress circuit breaker before another fresh rerun.
+Allowed edits: work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-blocked-route-rerun-gate.md, work/packages/todo-20260531-representative-rerun-progress-model-coverage-binding.md, work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md, work/theory-ledger.md
 Candidate runtime files: unknown
-Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
-Required latest proof: regression: npm run work:test, regression: npm run work:test:regression, regression: npm run work:validate -- --entry
+Forbidden edits: Accepted backpressure under blocked_model_route cannot authorize rerun_representative_evidence.
+Required latest proof: falsifier: npm run work:frontier-history -- --owner representative_evidence_owner --boundary rolling_restart_rerun --limit 12, regression: npm run work:loop-health -- --owner representative_evidence_owner --boundary rolling_restart_rerun, supporting: npm run work:owner-dossier -- --owner representative_evidence_owner --boundary rolling_restart_rerun --json, supporting: npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json --owner representative_evidence_owner --boundary rolling_restart_rerun --dominant-reason priority_recovery_blocked_route_rerun --explain priority_recovery_partition_progress, supporting: npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -205,20 +205,26 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    [Rolling Restart Priority Recovery Rebalancer Handoff Decision Table Circuit Breaker Repair](work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-decision-table-circuit-breaker-repair.md)
    - Model/contract repair successor for accepted backpressure under the
      blocked representative-rerun circuit breaker.
-16. `active` -
+16. `done` -
    [Rolling Restart Priority Recovery Rebalancer Handoff Blocked Rerun Route State](work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-blocked-rerun-route-state.md)
    - Runtime architecture-route implementation that emits the
      `blocked_model_route` discriminator from the rebalancer handoff progress
      contract for the repaired decision-table route.
-17. `todo` -
-   [Rolling Restart Priority Recovery Rebalancer Handoff Blocked Route Rerun Gate](work/packages/todo-20260531-rolling-restart-priority-recovery-rebalancer-handoff-blocked-route-rerun-gate.md)
-   - Fresh representative rolling-restart rerun after the runtime progress
-     contract emits `blocked_model_route` for rebalancer handoff retry progress.
-18. `todo` -
+17. `active` -
+   [Rolling Restart Priority Recovery Rebalancer Handoff Blocked Route Rerun Gate](work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-blocked-route-rerun-gate.md)
+   - Architecture-gap analysis after the runtime progress contract emits
+     `blocked_model_route`; direct rerun is blocked by the representative
+     progress circuit breaker and selects model coverage binding.
+18. `done` -
    [Workflow Admin Metadata Derivation](work/packages/done-20260531-workflow-admin-metadata-derivation.md)
    - Workflow-tooling maintenance to derive package lifecycle, scope, route,
      result, and sprint handoff views from package metadata instead of
      hand-maintained mirror state.
+19. `todo` -
+   [Representative Rerun Progress Model Coverage Binding](work/packages/todo-20260531-representative-rerun-progress-model-coverage-binding.md)
+   - Bind the existing representative rerun progress model into a System
+     Contract Record and invariant registry entries so owner-dossier reports
+     proven coverage before another representative rerun is considered.
 
 ## Sprint Proof Ladder
 
