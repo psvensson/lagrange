@@ -1003,6 +1003,7 @@ class Cluster1 {
         undefined;
     return waitForConvergence(nodes, {
       ignoreStaleInFlightReplicaOperations: true,
+      noProgressTimeoutMs: TIMEOUTS.CONVERGENCE_NO_PROGRESS,
       ...(snapshotTimeoutMs !== undefined ? {snapshotTimeoutMs} : {}),
       ...(options || {}),
     });

@@ -95,7 +95,12 @@ import {
   PLAYBACK_EVENT_TYPE,
   NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
   NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
+  TIMEOUTS,
 } from '../constants.js';
+import {
+  buildControlSnapshotRecord,
+  buildPartitionReplicaRow,
+} from './assertions-test-helpers.js';
 
 const CONTAINER_ALREADY_STOPPED_ERROR_MESSAGE =
   '(HTTP code 304) container already stopped -  ';
@@ -1429,3 +1434,61 @@ test(
     );
   },
 );
+
+function buildStuckConvergenceNode(id) {
+  const rows = [
+    buildPartitionReplicaRow('p1', 'a', 'leader'),
+    buildPartitionReplicaRow('p1', 'b', 'follower'),
+    buildPartitionReplicaRow('p1', 'c', 'follower'),
+  ];
+  return {
+    id,
+    isReachable: async () => true,
+    getControlSnapshot: async () => ({
+      rows: [buildControlSnapshotRecord({
+        nodeId: id,
+        partitionIds: ['p1'],
+        servicesRows: rows,
+        operationRows: [{operation_id: 'op-1', status: 'creating'}],
+      })],
+    }),
+  };
+}
+
+test('Unit: cluster.waitForConvergence defaults to a fail-fast no-progress window',
+  async () => {
+    assert.strictEqual(TIMEOUTS.CONVERGENCE_NO_PROGRESS, 30000);
+  });
+
+test('Unit: cluster.waitForConvergence aborts early on a stalled cluster',
+  async () => {
+    const cluster = createCluster({
+      size: 1,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+    });
+    cluster._nodes.set('node-a', buildStuckConvergenceNode('node-a'));
+
+    const settleTimeoutMs = 5000;
+    const startedAt = Date.now();
+    try {
+      await cluster.waitForConvergence({
+        settleTimeoutMs,
+        quietWindowMs: 0,
+        maxSustainedOverTargetMs: 100,
+        sampleIntervalMs: 10,
+        targetVoterCount: 3,
+        noProgressTimeoutMs: 40,
+        noProgressGraceMs: 0,
+      });
+      assert.fail('Expected a stalled no-progress abort');
+    } catch (err) {
+      assert.ok(
+        Date.now() - startedAt < settleTimeoutMs,
+        'should abort well before the settle budget elapses',
+      );
+      assert.ok(err.diagnostics, 'should include diagnostics');
+      assert.strictEqual(err.diagnostics.reason, 'stalled');
+      assert.match(err.message, /Convergence stalled/);
+    }
+  });

@@ -35,6 +35,11 @@ const CONSISTENCY_CONVERGENCE_POST_SPLIT_TIMEOUT_MS = 60000;
 const CONSISTENCY_CONVERGENCE_POLL_INTERVAL_MS = 250;
 const CONSISTENCY_CONVERGENCE_FORCE_REPAIR_AFTER_MS = 10000;
 const ACTIVE_WAIT_FORCE_REPAIR_AFTER_MS = 10000;
+// Default fail-fast window for cluster.waitForConvergence: abort when no
+// convergence-relevant progress is observed for this long while still
+// unconverged, instead of burning the full (often multi-minute) settle budget.
+// Overridable per call; the raw waitForConvergence stays disabled by default.
+const CONVERGENCE_NO_PROGRESS_TIMEOUT_MS = 30000;
 
 const TIMEOUTS = Object.freeze({
   NODE_STARTUP: NODE_STARTUP_TIMEOUT_MS,
@@ -50,6 +55,7 @@ const TIMEOUTS = Object.freeze({
     CONSISTENCY_CONVERGENCE_FORCE_REPAIR_AFTER_MS,
   ACTIVE_WAIT_FORCE_REPAIR_AFTER:
     ACTIVE_WAIT_FORCE_REPAIR_AFTER_MS,
+  CONVERGENCE_NO_PROGRESS: CONVERGENCE_NO_PROGRESS_TIMEOUT_MS,
 });
 
 // --- Docker Label Constants ---
