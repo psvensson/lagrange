@@ -550,3 +550,78 @@ test('waitForConvergence — escalates to forceRepair snapshots after threshold'
     Number.isInteger(calls[0].timeoutMs) && calls[0].timeoutMs > 0,
   );
 });
+
+test('waitForConvergence — fails fast when no progress is observed before settle budget',
+  async () => {
+    const partitionId = 'p1';
+    const stableRows = [
+      buildPartitionReplicaRow(partitionId, 'a', 'leader'),
+      buildPartitionReplicaRow(partitionId, 'b', 'follower'),
+      buildPartitionReplicaRow(partitionId, 'c', 'follower'),
+    ];
+    const node = buildSequencedConvergenceNode({
+      id: 'mock-no-progress-stall-node',
+      partitionIds: [partitionId],
+      snapshots: [stableRows],
+      operationSnapshots: [[{operation_id: 'op-1', status: 'creating'}]],
+    });
+
+    const settleTimeoutMs = 5000;
+    const startedAt = Date.now();
+    try {
+      await waitForConvergence([node], {
+        settleTimeoutMs,
+        quietWindowMs: 0,
+        maxSustainedOverTargetMs: 100,
+        sampleIntervalMs: 10,
+        targetVoterCount: 3,
+        noProgressTimeoutMs: 40,
+        noProgressGraceMs: 0,
+      });
+      assert.fail('Expected a stalled no-progress abort');
+    } catch (err) {
+      const elapsedMs = Date.now() - startedAt;
+      assert.ok(
+        elapsedMs < settleTimeoutMs,
+        'should abort well before the settle budget elapses',
+      );
+      assert.ok(err.diagnostics, 'should include diagnostics');
+      assert.strictEqual(err.diagnostics.reason, 'stalled');
+      assert.strictEqual(err.diagnostics.stalled, true);
+      assert.strictEqual(err.diagnostics.noProgressTimeoutMs, 40);
+      assert.match(err.message, /Convergence stalled/);
+      assert.strictEqual(err.diagnostics.inFlightReplicaOperationCount, 1);
+    }
+  });
+
+test('waitForConvergence — without noProgressTimeoutMs a stuck cluster runs to the settle budget',
+  async () => {
+    const partitionId = 'p1';
+    const stableRows = [
+      buildPartitionReplicaRow(partitionId, 'a', 'leader'),
+      buildPartitionReplicaRow(partitionId, 'b', 'follower'),
+      buildPartitionReplicaRow(partitionId, 'c', 'follower'),
+    ];
+    const node = buildSequencedConvergenceNode({
+      id: 'mock-no-progress-default-node',
+      partitionIds: [partitionId],
+      snapshots: [stableRows],
+      operationSnapshots: [[{operation_id: 'op-1', status: 'creating'}]],
+    });
+
+    try {
+      await waitForConvergence([node], {
+        settleTimeoutMs: 80,
+        quietWindowMs: 0,
+        maxSustainedOverTargetMs: 100,
+        sampleIntervalMs: 10,
+        targetVoterCount: 3,
+      });
+      assert.fail('Expected a convergence timeout');
+    } catch (err) {
+      assert.ok(err.diagnostics, 'should include diagnostics');
+      assert.strictEqual(err.diagnostics.reason, 'timeout');
+      assert.strictEqual(err.diagnostics.stalled, false);
+      assert.match(err.message, /Convergence timeout/);
+    }
+  });

@@ -34,6 +34,10 @@ const POST_RESTART_RECOVERY_MIN_STABLE_WINDOW_MS = 15000;
 const POST_RESTART_CONTROL_PLANE_MAX_IN_FLIGHT_COUNT = ZERO;
 const POST_RESTART_CRITICAL_SYSTEM_SPREAD_REQUIRED = true;
 const POST_RESTART_CONTROL_PLANE_QUIESCENCE_NO_PROGRESS_TIMEOUT_MS = 30000;
+// Fail fast when waitForConvergence observes no convergence-relevant progress
+// for this long, rather than burning the full per-node settle budget (which can
+// be several minutes). Matches the control-plane quiescence no-progress window.
+const CONVERGENCE_NO_PROGRESS_TIMEOUT_MS = 30000;
 const POST_RESTART_LOAD_READINESS_NO_PROGRESS_MAX_ATTEMPTS = 5;
 const ROLLING_RESTART_REQUIRE_ADMIN_READY = true;
 const MIN_BENCHMARK_READY_LOAD_NODES = 2;
@@ -356,6 +360,7 @@ function buildConvergenceOptions(perNodeConvergenceTimeoutMs) {
       perNodeConvergenceTimeoutMs,
     ),
     ignoreStaleInFlightReplicaOperations: true,
+    noProgressTimeoutMs: CONVERGENCE_NO_PROGRESS_TIMEOUT_MS,
   };
 }
 

@@ -524,6 +524,17 @@ async function waitForConvergence(nodes, options = {}) {
   const forceRepairAfterMs = Number.isFinite(options.forceRepairAfterMs) ?
     options.forceRepairAfterMs :
     TIMEOUTS.ACTIVE_WAIT_FORCE_REPAIR_AFTER;
+  // Optional fail-fast: abort early when no convergence-relevant progress is
+  // observed for this many ms while still unconverged, instead of burning the
+  // full settle budget. Disabled (null) by default, preserving prior behavior.
+  const noProgressTimeoutMs = Number.isFinite(options.noProgressTimeoutMs) &&
+    options.noProgressTimeoutMs > 0 ?
+    Math.floor(options.noProgressTimeoutMs) :
+    null;
+  const noProgressGraceMs = Number.isFinite(options.noProgressGraceMs) &&
+    options.noProgressGraceMs >= 0 ?
+    Math.floor(options.noProgressGraceMs) :
+    Math.max(forceRepairAfterMs, quietWindowMs);
 
   const overTargetState = new Map();
   const previousLeaders = new Map();
@@ -555,6 +566,9 @@ async function waitForConvergence(nodes, options = {}) {
   const deadline = startMs + settleTimeoutMs;
   const forceRepairThreshold = startMs + Math.max(0, forceRepairAfterMs);
   let forceRepairAttempted = false;
+  let lastProgressToken = null;
+  let lastProgressAtMs = startMs;
+  let stalledOut = false;
 
   while (Date.now() <= deadline) {
     const now = Date.now();
@@ -725,10 +739,34 @@ async function waitForConvergence(nodes, options = {}) {
       }
     }
 
+    if (noProgressTimeoutMs !== null) {
+      const progressToken = JSON.stringify({
+        leaderChanges,
+        voterCounts: [...latestCounts.entries()].sort(),
+        leaders: [...latestLeaders.entries()].sort(),
+        effectiveInFlightReplicaOperationCount,
+        hasBlockingOverTarget,
+        hasInFlightReplicaOperations,
+        cdcProjectionVisibleSatisfied,
+        expectedPartitionIds: [...latestExpectedPartitionIds].sort(),
+        snapshotRevision: latestSnapshotRevision,
+      });
+      if (progressToken !== lastProgressToken) {
+        lastProgressToken = progressToken;
+        lastProgressAtMs = now;
+      } else if (
+        now - startMs >= noProgressGraceMs &&
+        now - lastProgressAtMs >= noProgressTimeoutMs
+      ) {
+        stalledOut = true;
+        break;
+      }
+    }
+
     await new Promise((r) => setTimeout(r, sampleIntervalMs));
   }
 
-  // Timeout — build diagnostic details.
+  // Failure (timeout or stalled no-progress) — build diagnostic details.
   finalizeOverTargetState(overTargetState, Date.now());
   const maxOT = Math.max(
     0,
@@ -793,10 +831,21 @@ async function waitForConvergence(nodes, options = {}) {
     operationHistoryError,
   );
 
-  const msg =
+  const failureReason = stalledOut ? 'stalled' : 'timeout';
+  const elapsedAtFailureMs = Date.now() - startMs;
+  const headline = stalledOut ?
+    'Convergence stalled after ' +
+      elapsedAtFailureMs +
+      'ms with no progress for >=' +
+      noProgressTimeoutMs +
+      'ms (settle budget ' +
+      settleTimeoutMs +
+      'ms). ' :
     'Convergence timeout after ' +
-    settleTimeoutMs +
-    'ms. ' +
+      settleTimeoutMs +
+      'ms. ';
+  const msg =
+    headline +
     'Leader changes: ' +
     leaderChanges +
     '. ' +
@@ -877,6 +926,9 @@ async function waitForConvergence(nodes, options = {}) {
     postRebalanceClosure,
     elapsedMs: Date.now() - startMs,
     controlPlaneDiagnostics: latestControlPlaneDiagnostics,
+    reason: failureReason,
+    stalled: stalledOut,
+    noProgressTimeoutMs,
   };
   throw err;
 }
