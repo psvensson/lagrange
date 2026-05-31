@@ -376,7 +376,7 @@ representative-progress model blocks that rerun.
 
 ## Commit And Push Ledger
 
-1. Focused package commit: ef1aca6b43403621625f20b9961c09ea10811531
+1. Focused package commit: 2c5ab7474cfe8e0c2b75699e84b53b04851d52fa
 2. Push target: origin/codex/pending-ack-eligibility-filter
 3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
-4. Pushed: no
+4. Pushed: yes 2026-05-31T18:23:17.295Z
