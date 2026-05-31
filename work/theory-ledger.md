@@ -758,7 +758,21 @@ Each entry must include these labels:
 - Probe: `npm run work:system-theory:rederive -- --owner operation_workflow_owner --boundary rebalancer_handoff --limit 12 --sprint work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md --write`
 - Artifact/result: Evidence test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json: rederiveRequired=true with same-mechanism-repeat contract_gap; scenario route remains accept_classified_backpressure with 2 priority-recovery witnesses; no concrete runtime transition, migration, evidence regeneration, or representative rerun route selected
 - Representative movement: architecture-gap continuation; runtime source and representative rerun remain blocked
-- Linked packages: `work/packages/active-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-system-theory-rederive.md`
+- Linked packages: `work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-system-theory-rederive.md`, `work/packages/active-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-architecture-gap-experiment.md`, `work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-architecture-gap-experiment.md`
 - Supersedes: none
+- Superseded by: theory-20260531-rolling-restart-priority-recovery-rebalancer-handoff-decision-table-circuit-breaker-repair
+- Next implication: The post-model architecture-gap experiment selected model/contract route repair because accepted backpressure still maps to representative rerun while the representative-progress model blocks rerun.
+
+## theory-20260531-rolling-restart-priority-recovery-rebalancer-handoff-decision-table-circuit-breaker-repair
+
+- Status: active
+- Scenario/gate: rolling-restart / priority_recovery_partition_progress
+- Owner/boundary: operation_workflow_owner / rebalancer_handoff
+- Hypothesis: Accepted classified backpressure plus a model-blocked representative rerun exposes a model/contract route gap: the rebalancer handoff decision table still emits `rerun_representative_evidence` even though the representative-progress circuit breaker blocks another rerun.
+- Probe: `npm run work:frontier-history -- --owner operation_workflow_owner --boundary rebalancer_handoff --limit 12`, `npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress`, `npm run work:owner-dossier -- --owner operation_workflow_owner --boundary rebalancer_handoff --json`, `npm run work:contract:check -- architecture/contracts/rolling-restart-rebalancer-handoff.md`, and `npm run model:decision-tables`
+- Artifact/result: Architecture-gap proof selected model/contract repair. Scenario-route and causal-model still report `accept_classified_backpressure` with two priority-recovery witnesses and zero failed invariants; owner-dossier binds `architecture/contracts/rolling-restart-rebalancer-handoff.md`; contract and decision-table checks pass structurally, but the route table does not represent the blocked representative-rerun state.
+- Representative movement: architecture-gap
+- Linked packages: `work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-contract-gap-architecture-experiment.md`, `work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-owner-wake-route.md`, `work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-system-theory-rederive.md`, `work/packages/active-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-architecture-gap-experiment.md`, `work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-architecture-gap-experiment.md`, `work/packages/todo-20260531-rolling-restart-priority-recovery-rebalancer-handoff-decision-table-circuit-breaker-repair.md`
+- Supersedes: theory-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-rederive-architecture-gap
 - Superseded by: none
-- Next implication: Open the post-model architecture-gap experiment to select a non-repeated protocol, scheduling, model, evidence, owner-migration, or architecture-stop route.
+- Next implication: Activate the decision-table/contract repair package before runtime source promotion or representative rerun.

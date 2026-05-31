@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
+  "status": "done",
   "intent": {
     "opened": "2026-05-31",
     "lane": "causal-escalation",
@@ -15,11 +15,13 @@
     "dominantReason": "priority_recovery_event_driven_wait",
     "currentState": "The post-model system-theory rederive repeated same-mechanism contract_gap; representative evidence still accepts classified backpressure with two priority-recovery witnesses and no concrete runtime, migration, evidence-regeneration, or rerun route selected.",
     "nextAction": "Run an autonomous architecture-gap experiment and select a non-repeated protocol, scheduling, model, evidence-regeneration, owner-migration, or architecture-stop route before runtime source promotion or representative rerun.",
-    "predecessor": "work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-system-theory-rederive.md"
+    "predecessor": "work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-system-theory-rederive.md",
+    "closed": "2026-05-31"
   },
   "scope": {
     "writeScope": [
-      "work/packages/todo-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-architecture-gap-experiment.md",
+      "work/packages/active-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-architecture-gap-experiment.md",
+      "work/packages/todo-20260531-rolling-restart-priority-recovery-rebalancer-handoff-decision-table-circuit-breaker-repair.md",
       "work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md",
       "work/theory-ledger.md"
     ],
@@ -37,6 +39,8 @@
     ],
     "commitScope": [
       "work/packages/todo-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-architecture-gap-experiment.md",
+      "work/packages/active-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-architecture-gap-experiment.md",
+      "work/packages/todo-20260531-rolling-restart-priority-recovery-rebalancer-handoff-decision-table-circuit-breaker-repair.md",
       "work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md",
       "work/theory-ledger.md",
       "work/sprints/current-blocker.json",
@@ -63,7 +67,8 @@
   },
   "execution": {
     "theoryLedgerRefs": [
-      "theory-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-rederive-architecture-gap"
+      "theory-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-rederive-architecture-gap",
+      "theory-20260531-rolling-restart-priority-recovery-rebalancer-handoff-decision-table-circuit-breaker-repair"
     ],
     "proof": {
       "commands": [
@@ -72,7 +77,9 @@
         "supporting: npm run work:loop-health -- --owner operation_workflow_owner --boundary rebalancer_handoff",
         "supporting: npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json",
         "supporting: npm run work:owner-dossier -- --owner operation_workflow_owner --boundary rebalancer_handoff --json",
-        "supporting: npm run work:contract:check -- architecture/contracts/rolling-restart-rebalancer-handoff.md"
+        "supporting: npm run work:contract:check -- architecture/contracts/rolling-restart-rebalancer-handoff.md",
+        "supporting: npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait",
+        "supporting: npm run model:decision-tables"
       ]
     }
   },
@@ -81,8 +88,9 @@
   "theoryLoop": {
     "gateMarker": "same-mechanism-repeat",
     "result": "architecture-gap",
-    "outcome": "inconclusive",
+    "outcome": "theory-confirmed",
     "successorRequired": true,
+    "successorPackage": "work/packages/todo-20260531-rolling-restart-priority-recovery-rebalancer-handoff-decision-table-circuit-breaker-repair.md",
     "jointFalsifierCommand": "npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress # rebalancer_handoff snapshot_coverage # coupled-invariant"
   },
   "representativeResidual": {
@@ -93,7 +101,7 @@
     "owner": "operation_workflow_owner",
     "boundary": "rebalancer_handoff",
     "dominantReason": "priority_recovery_event_driven_wait",
-    "nextAction": "Select a non-repeated architecture route before runtime source promotion or representative rerun.",
+    "nextAction": "Open model/contract route repair before runtime source promotion or representative rerun.",
     "residualCount": 1,
     "witnessCount": 2
   },
@@ -103,8 +111,8 @@
     "changedFacts": "The post-model system-theory rederive repeated same-mechanism contract_gap and selected no runtime source transition, owner-boundary migration, evidence regeneration, or representative-rerun route.",
     "rejectedAlternatives": "Do not run another representative rerun and do not edit operation-workflow runtime source until this experiment names a non-repeated route.",
     "ownerWhoDecides": "operation_workflow_owner",
-    "currentAction": "Run the architecture-gap proof ladder and select one successor or architecture stop.",
-    "missingTransitionOrObservation": "The system must identify whether the remaining accepted backpressure is a protocol, scheduling, model, evidence, owner-boundary, or terminal architecture gap.",
+    "currentAction": "Open the decision-table/contract route repair successor.",
+    "missingTransitionOrObservation": "The decision table must represent accepted classified backpressure when the representative-progress model blocks another rerun.",
     "smallestFalsifyingProbe": "falsifier: npm run work:frontier-history -- --owner operation_workflow_owner --boundary rebalancer_handoff --limit 12",
     "expectedMovement": "Proof selects exactly one non-repeated successor route or records architecture-gap continuation.",
     "negativeResultMeans": "Runtime source promotion and representative rerun remain blocked from this artifact.",
@@ -113,8 +121,8 @@
   "observablePrediction": {
     "metric": "operation_workflow_owner / rebalancer_handoff post-model architecture decision",
     "predicted": "Proof names a non-repeated route or keeps runtime and representative promotion blocked as architecture-gap continuation.",
-    "observed": "pending-before-probe",
-    "accuracy": "pending-before-observation",
+    "observed": "Proof selected model/contract repair: frontier-history kept same-mechanism contract_gap active, scenario-route and causal-model kept accept_classified_backpressure with two witnesses and zero failed invariants, owner-dossier bound the contract with no proven route, contract check passed, and the decision table still maps accepted backpressure to rerun_representative_evidence while the representative-progress model blocks rerun.",
+    "accuracy": "partial",
     "evidence": "test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json"
   },
   "boundedExperiment": {
@@ -125,6 +133,13 @@
     "timebox": "24h",
     "mergeRequirement": "frontier-history, scenario-route, loop-health, causal-model, owner-dossier, contract check, sprint/current-blocker refresh, and one selected successor or stop route",
     "killRule": "Do not open runtime source work or representative rerun unless this experiment names a non-repeated route; otherwise close as architecture-gap continuation."
+  },
+  "experimentOutcome": {
+    "distinguishedHypothesis": "H3",
+    "decision": "open-architecture-contract",
+    "nextOwner": "operation_workflow_owner",
+    "nextBoundary": "rebalancer_handoff",
+    "evidence": "`npm run work:owner-dossier -- --owner operation_workflow_owner --boundary rebalancer_handoff --json`, `npm run work:contract:check -- architecture/contracts/rolling-restart-rebalancer-handoff.md`, and `test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json`."
   },
   "rerunDecision": {
     "sourceArtifact": "test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json",
@@ -147,8 +162,8 @@
       "update Current Edge Card from the architecture decision",
       "refresh current-blocker with npm run work:repair",
       "npm run work:repair",
-      "npm run work:validate -- --entry work/packages/todo-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-architecture-gap-experiment.md",
-      "npm run work:validate -- --pre-impl work/packages/todo-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-architecture-gap-experiment.md"
+      "npm run work:validate -- --entry work/packages/active-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-architecture-gap-experiment.md",
+      "npm run work:validate -- --pre-impl work/packages/active-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-architecture-gap-experiment.md"
     ]
   },
   "causalGovernance": {
@@ -193,7 +208,7 @@
     "stopCondition": "architecture-gap-stop"
   },
   "architectureDecisionGate": {
-    "status": "watching",
+    "status": "selected",
     "trigger": "frontier-oscillation",
     "triggerEvidence": [
       "post-model system-theory rederive reports same-mechanism-repeat contract_gap",
@@ -201,8 +216,8 @@
       "representative rerun remains blocked by the model route",
       "runtime source promotion has no selected concrete wake, retry, reconcile, advance, or migration transition"
     ],
-    "selectedChoice": "post-model-architecture-gap-analysis",
-    "nextAction": "Run the architecture-gap proof ladder and select a non-repeated route.",
+    "selectedChoice": "model-or-contract-repair",
+    "nextAction": "Open the decision-table/contract route repair successor before runtime source promotion or representative rerun.",
     "choices": [
       {
         "id": "non-repeated-runtime-transition",
@@ -261,7 +276,7 @@
     ],
     "changedFacts": [
       "Post-model system-theory rederive is recorded.",
-      "The next package is architecture-gap analysis rather than runtime source or representative rerun."
+      "The architecture-gap proof selected model/contract route repair rather than runtime source or representative rerun."
     ],
     "competingTheories": [
       "H1 accepted bounded backpressure is valid and should wait for a legal future evidence window.",
@@ -296,13 +311,13 @@
     ],
     "architectureGapTriggers": [
       "Close as architecture-gap continuation if proof still cannot select one non-repeated route.",
-      "Open contract/model repair if decision tables or contracts cannot represent accepted bounded backpressure.",
+      "Open contract/model repair if decision tables or contracts cannot represent accepted bounded backpressure under the blocked representative-rerun model route.",
       "Regenerate representative evidence only after route proof removes the current circuit-breaker condition."
     ],
     "wholeSystemInvariant": "Runtime source work and another representative rerun remain blocked until this architecture-gap analysis selects one route or stop."
   },
   "sliceTheory": {
-    "systemTheoryRef": "work/packages/todo-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-architecture-gap-experiment.md systemTheory",
+    "systemTheoryRef": "work/packages/active-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-architecture-gap-experiment.md systemTheory",
     "selectedSystemTheory": "The post-model priority-recovery frontier requires architecture-gap route selection after a same-mechanism rederive.",
     "selectedMechanism": "contract_gap with bounded_backpressure, stale_evidence, model_repair, architecture_stop, and owner_migration as alternates",
     "sourceTestContract": "No runtime source files are writable in this package. Runtime binding and focused tests stay in candidateRuntimeFiles until the experiment selects a concrete successor package.",
@@ -323,13 +338,14 @@
     ]
   },
   "closureSummary": {
-    "resultClassification": "pending-before-probe",
-    "predictionAccuracy": "pending-before-observation",
-    "observedMovement": "pending closure",
-    "successorReason": "pending closure",
-    "nextOwnerBoundary": "pending closure",
+    "resultClassification": "architecture-gap",
+    "predictionAccuracy": "partial",
+    "observedMovement": "model/contract route gap selected; no runtime, owner migration, evidence regeneration, or direct representative-rerun route selected",
+    "successorReason": "decision table maps accepted backpressure to rerun_representative_evidence while the representative-progress model blocks rerun",
+    "nextOwnerBoundary": "operation_workflow_owner / rebalancer_handoff decision-table contract repair",
     "evidenceArtifact": "test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json"
-  }
+  },
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -380,10 +396,10 @@ another source or representative-evidence package.
 
 ## Execution Evidence
 
-- [ ] action: freshness-review; owner: Agent <name> (<agent-id>); files-changed: none; validation: npm run work:context; npm run work:package:doctor -- --suggest work/packages/todo-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-architecture-gap-experiment.md; npm run work:validate -- --entry work/packages/todo-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-architecture-gap-experiment.md; decision: fresh; outcome: pending.
-- [ ] action: implementation; owner: operation_workflow_owner; files-changed: none recorded yet; validation: architecture-gap proof ladder and parent revalidated focused proof: yes before closure; outcome: pending.
-- [ ] action: verification-fix; owner: operation_workflow_owner; files-changed: none recorded yet; validation: verifier reruns focused proof and parent revalidated focused proof: yes before closure; outcome: pending.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: pending.
+- [x] action: freshness-review; owner: parent-session lite architecture-gap-analysis; files-changed: none; validation: `npm run work:context` passed; `npm run work:package:doctor -- --suggest work/packages/active-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-architecture-gap-experiment.md` passed; `npm run work:validate -- --entry work/packages/active-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-architecture-gap-experiment.md` passed; `npm run work:validate -- --pre-impl work/packages/active-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-architecture-gap-experiment.md` passed; decision: fresh; outcome: validated.
+- [x] action: implementation; owner: operation_workflow_owner; files-changed: work/packages/active-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-architecture-gap-experiment.md, work/packages/todo-20260531-rolling-restart-priority-recovery-rebalancer-handoff-decision-table-circuit-breaker-repair.md, work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md, work/theory-ledger.md; validation: `npm run work:frontier-history -- --owner operation_workflow_owner --boundary rebalancer_handoff --limit 12` passed with compositional-signal-active same-mechanism-repeat contract_gap, continuationRequired=true, architectureRouteState=implemented, and closuresSinceLastRederive=0; `npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress` passed with causalOutcome=accept_classified_backpressure and priorityRecoveryResiduals.witnessCount=2; `npm run work:loop-health -- --owner operation_workflow_owner --boundary rebalancer_handoff` passed with ping-pong risk medium and same-mechanism-repeat contract_gap; `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json` passed with outcome=accept_classified_backpressure, failedInvariantCount=0, exhaustedBudgetCount=0, and workflow_step_timeout bounded_progress; `npm run work:owner-dossier -- --owner operation_workflow_owner --boundary rebalancer_handoff --json` passed with contractRecord=architecture/contracts/rolling-restart-rebalancer-handoff.md and provenRoutes=[]; `npm run work:contract:check -- architecture/contracts/rolling-restart-rebalancer-handoff.md` passed; `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait` passed and kept successor write blocked without an explicit successor; `npm run model:decision-tables` passed structurally; parent revalidated focused proof: yes; outcome: validated - selected model/contract route repair because accepted backpressure still emits rerun_representative_evidence while the representative-progress model blocks another rerun.
+- [x] action: verification-fix; owner: operation_workflow_owner; files-changed: work/packages/active-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-architecture-gap-experiment.md; validation: `npm run work:context` passed; `npm run work:package:doctor -- --suggest work/packages/active-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-architecture-gap-experiment.md` passed; `npm run work:validate -- --entry work/packages/active-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-architecture-gap-experiment.md` passed; `npm run work:validate -- --pre-impl work/packages/active-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-architecture-gap-experiment.md` passed; `npm run work:validate -- --entry work/packages/todo-20260531-rolling-restart-priority-recovery-rebalancer-handoff-decision-table-circuit-breaker-repair.md` passed; `npm run work:frontier-history -- --owner operation_workflow_owner --boundary rebalancer_handoff --limit 12` passed with same-mechanism-repeat contract_gap, continuationRequired=true, and architectureRouteState=implemented; `npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress` passed with causalOutcome=accept_classified_backpressure and witnessCount=2; `npm run work:loop-health -- --owner operation_workflow_owner --boundary rebalancer_handoff` passed with compositional-signal-active and same-mechanism-repeat contract_gap; `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json` passed with outcome=accept_classified_backpressure, failedInvariantCount=0, and exhaustedBudgetCount=0; `npm run work:owner-dossier -- --owner operation_workflow_owner --boundary rebalancer_handoff --json` passed with contractRecord=architecture/contracts/rolling-restart-rebalancer-handoff.md and provenRoutes=[]; `npm run work:contract:check -- architecture/contracts/rolling-restart-rebalancer-handoff.md` passed; `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait` passed and still requires explicit successor before `--write`; `npm run model:decision-tables` passed; `npm run work:validate -- --closure work/packages/active-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-architecture-gap-experiment.md` initially failed on observablePrediction matched/predicted-observed mismatch, then passed after correcting prediction accuracy to partial; parent revalidated focused proof: yes before closure; outcome: validated - fixed observablePrediction accuracy and confirmed selected model/contract route repair remains closure-ready with valid successor package entry.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json; validation: `npm run work:repair` passed and refreshed current-blocker; outcome: validated.
 
 ## Validation
 
@@ -393,3 +409,12 @@ another source or representative-evidence package.
 4. supporting: npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json
 5. supporting: npm run work:owner-dossier -- --owner operation_workflow_owner --boundary rebalancer_handoff --json
 6. supporting: npm run work:contract:check -- architecture/contracts/rolling-restart-rebalancer-handoff.md
+7. supporting: npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait
+8. supporting: npm run model:decision-tables
+
+## Commit And Push Ledger
+
+1. Focused package commit: d8449603539ea8b5fb59dd88c40b9bced3b169ef
+2. Push target: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
+4. Pushed: no
