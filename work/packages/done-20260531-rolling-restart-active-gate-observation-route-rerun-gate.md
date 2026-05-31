@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
+  "status": "done",
   "intent": {
     "opened": "2026-05-31",
     "lane": "causal-escalation",
@@ -13,17 +13,21 @@
     "owner": "representative_evidence_owner",
     "boundary": "rolling_restart_rerun",
     "dominantReason": "post_observation_route_rerun",
-    "currentState": "The observation-layer active-gate source route has local focused proof; fresh representative rolling-restart evidence is required before another runtime package or sprint closure.",
-    "nextAction": "Run fresh rolling-restart representative evidence after the observation-route source implementation and route the result."
+    "currentState": "Fresh representative rolling-restart evidence after the observation-route source implementation stayed same-frontier at active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending.",
+    "nextAction": "Close the rerun as same-frontier and queue the same-frontier architecture experiment before any runtime source write.",
+    "closed": "2026-05-31",
+    "successor": "work/packages/todo-20260531-rolling-restart-active-gate-observation-route-same-frontier-architecture-experiment.md"
   },
   "scope": {
     "writeScope": [
-      "work/packages/todo-20260531-rolling-restart-active-gate-observation-route-rerun-gate.md",
+      "work/packages/active-20260531-rolling-restart-active-gate-observation-route-rerun-gate.md",
+      "work/packages/todo-20260531-rolling-restart-active-gate-observation-route-same-frontier-architecture-experiment.md",
       "work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md",
       "work/theory-ledger.md"
     ],
     "handoffFiles": [
-      "test-output/reports/rolling-restart-contract-first-green-rerun.report.json"
+      "test-output/reports/rolling-restart-contract-first-green-rerun.report.json",
+      "test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json"
     ],
     "generatedFiles": [
       "work/sprints/current-blocker.json",
@@ -31,7 +35,8 @@
     ],
     "candidateRuntimeFiles": [],
     "commitScope": [
-      "work/packages/todo-20260531-rolling-restart-active-gate-observation-route-rerun-gate.md",
+      "work/packages/active-20260531-rolling-restart-active-gate-observation-route-rerun-gate.md",
+      "work/packages/todo-20260531-rolling-restart-active-gate-observation-route-same-frontier-architecture-experiment.md",
       "work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md",
       "work/theory-ledger.md",
       "work/sprints/current-blocker.json",
@@ -57,7 +62,8 @@
   },
   "execution": {
     "theoryLedgerRefs": [
-      "theory-20260531-rolling-restart-active-gate-observation-route-implementation"
+      "theory-20260531-rolling-restart-active-gate-observation-route-implementation",
+      "theory-20260531-rolling-restart-active-gate-observation-route-same-frontier-rerun"
     ],
     "proof": {
       "commands": [
@@ -68,34 +74,34 @@
     }
   },
   "representativeResidual": {
-    "status": "active-theory-loop",
+    "status": "same-frontier",
     "scenario": "rolling-restart",
     "artifact": "test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json",
-    "frontier": "post_observation_route_rerun / representative_evidence_owner / rolling_restart_rerun",
-    "owner": "representative_evidence_owner",
-    "boundary": "rolling_restart_rerun",
-    "dominantReason": "post_observation_route_rerun",
-    "nextAction": "Run fresh representative evidence and route the result.",
+    "frontier": "active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending",
+    "owner": "startup_active_gate_owner",
+    "boundary": "snapshot_coverage",
+    "dominantReason": "owner_reconcile_pending",
+    "nextAction": "Open the same-frontier architecture experiment before any runtime source write.",
     "residualCount": 1
   },
   "mechanismCard": {
     "failureMechanism": "representative rerun verification",
     "stableFacts": "The source route implementation is limited to src/control-plane/publication-active-gate-handoff-contract-decision.js and focused proof selects wait_owner_recovery for selected snapshot recovery-only evidence.",
-    "changedFacts": "Fresh representative evidence has not been generated after the observation-layer route implementation.",
+    "changedFacts": "Fresh representative evidence was generated and stayed same-frontier. Topology now shows publicationActiveGateHandoffNextAction wait_owner_recovery with one pending recovery node and zero pending reconcile nodes, but snapshot coverage remains 1/5 with selected_snapshot_source_timeout plus snapshot_repair_deferred.",
     "rejectedAlternatives": "Do not edit runtime files in this rerun package; runtime follow-up requires fresh route evidence.",
     "ownerWhoDecides": "representative_evidence_owner",
-    "currentAction": "Run the rolling-restart representative scenario and route the result.",
-    "missingTransitionOrObservation": "Fresh representative evidence must show whether active_gate_snapshot_coverage reduces, migrates, goes green, remains same-frontier, or records architecture-gap.",
+    "currentAction": "Record the same-frontier rerun and open the selected architecture experiment successor.",
+    "missingTransitionOrObservation": "A non-repeated owner-owned route out of selected_snapshot_source_timeout plus snapshot_repair_deferred after wait_owner_recovery.",
     "smallestFalsifyingProbe": "falsifier: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json --fast-local --verbose",
-    "expectedMovement": "Fresh representative evidence moves off owner_reconcile_pending, reduces active_gate_snapshot_coverage, migrates ownership, reaches representative-green, or records architecture-gap.",
-    "negativeResultMeans": "Record the routed result and open the selected successor instead of widening this verification package.",
-    "escalationRule": "Same-frontier or needs-rerun evidence keeps the theory-loop sprint active."
+    "expectedMovement": "Fresh evidence either moves off owner_reconcile_pending, reduces active_gate_snapshot_coverage, migrates ownership, reaches representative-green, or opens the selected architecture experiment.",
+    "negativeResultMeans": "Same-frontier/no-reduction evidence opens the same-frontier architecture experiment and keeps runtime source frozen.",
+    "escalationRule": "Same-frontier evidence with runtimePromotionGuard blocked requires a non-repeated source contract, owner-boundary migration, representative-green path, or architecture-gap stop before another runtime package."
   },
   "observablePrediction": {
     "metric": "rolling-restart / startup_active_gate_owner / snapshot_coverage / representative route after observation-route implementation",
     "predicted": "Fresh representative evidence reflects the local route by reducing or moving active_gate_snapshot_coverage away from saturated owner_reconcile_pending, or it gives a canonical architecture-gap or migration result.",
-    "observed": "pending-before-rerun",
-    "accuracy": "pending-before-observation",
+    "observed": "Fresh representative evidence stayed same-frontier at active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending. The source route is visible as wait_owner_recovery with pendingRecovery=1 and pendingReconcile=0, but no representative reduction occurred.",
+    "accuracy": "partial",
     "evidence": "test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json"
   },
   "rerunDecision": {
@@ -103,12 +109,13 @@
     "routeOwner": "startup_active_gate_owner",
     "routeBoundary": "snapshot_coverage",
     "routeDominantReason": "owner_reconcile_pending",
-    "routeCausalOutcome": "pending-before-rerun",
-    "stopMode": "pending-before-rerun",
-    "nextLane": "causal-escalation",
-    "expectedDelta": "Fresh representative evidence reduces active_gate_snapshot_coverage, migrates owner/boundary, reaches representative-green, records architecture-gap, or supplies the next canonical successor route.",
+    "routeCausalOutcome": "continue_local_fix",
+    "stopMode": "classified_local_blocker",
+    "nextLane": "experiment",
+    "expectedDelta": "Fresh representative evidence stayed same-frontier but exposed the source-route shape; open the selected architecture experiment to choose a non-repeated route before runtime promotion.",
     "requiredRefreshCommands": [
       "npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending",
+      "npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12",
       "update Sprint Strategy Brief and Current Edge Card from the route result",
       "npm run work:repair",
       "npm run work:validate -- --entry",
@@ -119,8 +126,8 @@
     "hypothesis": "The observation-layer route implementation changes representative active-gate behavior enough for fresh rolling-restart evidence to reduce, migrate, go green, or record architecture-gap.",
     "stopConditionCheck": "Run the representative rerun command, npm run work:scenario-route, npm run work:evidence-summary, and npm run analyze:causal-model before closure.",
     "expectedCausalModelChange": "Fresh evidence should no longer rely on the pre-change owner_reconcile_pending routing shape without a canonical reduction, migration, green, or architecture-gap explanation.",
-    "representativeOutcome": "pending-before-rerun",
-    "causalDebt": "Fresh representative evidence is pending after the local observation-route implementation.",
+    "representativeOutcome": "same-frontier",
+    "causalDebt": "Fresh representative evidence still routes to active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending, with snapshot coverage 1/5, selected_snapshot_source_timeout, snapshot_repair_deferred, zero priority-recovery residual witnesses, and runtimePromotionGuard blocked.",
     "crossBoundaryReview": "No runtime files are in writeScope; do not patch startup readiness, priority recovery, release gate, or active-gate source in this rerun package."
   },
   "scenarioCausalClosure": {
@@ -128,7 +135,8 @@
     "phaseChain": [
       "observation-layer source route implemented in publication active-gate decision contract",
       "focused proof selects wait_owner_recovery for selected snapshot recovery-only evidence",
-      "fresh representative rolling-restart evidence is required before selecting the next runtime route"
+      "fresh representative rolling-restart evidence stayed same-frontier after the source-route implementation",
+      "route-after-rerun selected an architecture experiment before runtime promotion"
     ],
     "currentFirstFrontier": "active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending",
     "knownDownstreamBlockers": [
@@ -140,7 +148,7 @@
     ],
     "oscillationCheck": "This package is a fresh-evidence gate after a selected source route, not another same-artifact local patch.",
     "handoffInvariant": "Verification must not edit runtime files.",
-    "missingCausalEdge": "Fresh representative evidence after the local source route.",
+    "missingCausalEdge": "A non-repeated owner-owned route out of selected_snapshot_source_timeout plus snapshot_repair_deferred after wait_owner_recovery.",
     "missingCausalEdgeProbe": "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json --fast-local --verbose",
     "falsifyingProbe": "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json --fast-local --verbose",
     "boundedProgressProof": "Representative rerun must produce routeable evidence that shows bounded progress retry/observation movement or a canonical successor result.",
@@ -148,9 +156,25 @@
     "expectedObservableTransition": "active_gate_snapshot_coverage reduces, migrates, reaches representative-green, records architecture-gap, or routes to the next valid successor.",
     "maxProgressBound": "one representative rerun before route classification",
     "sameFrontierFallback": "If fresh evidence returns the same frontier with no concrete reduction, open the selected architecture/causal successor instead of editing runtime source here.",
-    "expectedNextFrontier": "reduced active-gate frontier, owner-boundary migration, representative-green, or architecture-gap stop",
-    "resultClassification": "pending-before-probe",
+    "expectedNextFrontier": "same-frontier architecture experiment selects a non-repeated route or architecture-gap stop",
+    "resultClassification": "same-frontier",
     "stopCondition": "continue-local-fix"
+  },
+  "closureSummary": {
+    "resultClassification": "same-frontier",
+    "predictionAccuracy": "partial",
+    "observedMovement": "Fresh representative rerun remained at active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending. The local route shape is visible as wait_owner_recovery with pendingRecovery=1 and pendingReconcile=0, but representative snapshot coverage stayed 1/5 and runtimePromotionGuard blocked repeated local promotion.",
+    "successorReason": "Open architecture experiment because same-frontier/no-reduction evidence plus saturated history requires a non-repeated source contract, owner-boundary migration, representative-green path, or architecture-gap stop before runtime source work.",
+    "nextOwnerBoundary": "startup_active_gate_owner / snapshot_coverage architecture experiment",
+    "evidenceArtifact": "test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json"
+  },
+  "ownerBoundaryMigrationProof": {
+    "fromOwner": "startup_active_gate_owner",
+    "fromBoundary": "snapshot_coverage",
+    "toOwner": "representative_evidence_owner",
+    "toBoundary": "rolling_restart_rerun",
+    "reason": "This support-role package is owned by representative evidence generation while the current observed frontier remains startup_active_gate_owner / snapshot_coverage.",
+    "evidence": "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json --fast-local --verbose"
   },
   "systemTheory": {
     "problemStatement": "rolling-restart requires fresh evidence after the observation-layer active-gate source route before the sprint can select another runtime or closure path.",
@@ -171,7 +195,7 @@
     ],
     "changedFacts": [
       "Observation-route source implementation is locally validated.",
-      "Fresh representative evidence is pending."
+      "Fresh representative evidence stayed same-frontier after the observation-route implementation."
     ],
     "competingTheories": [
       "H1 the source route reduces or moves active_gate_snapshot_coverage.",
@@ -199,7 +223,7 @@
       "Migrate only when fresh route evidence names the alternate deciding owner and boundary."
     ],
     "architectureGapTriggers": [
-      "Record architecture-gap when fresh evidence remains same-frontier without concrete reduction."
+      "Record architecture-gap when fresh evidence remains same-frontier without concrete reduction and no non-repeated successor route can be named."
     ],
     "wholeSystemInvariant": "The rerun package verifies evidence only and does not reinterpret downstream runtime behavior."
   },
@@ -223,7 +247,8 @@
       "fresh route names a different owner boundary",
       "representative evidence cannot be produced"
     ]
-  }
+  },
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -263,7 +288,7 @@ Fresh target artifact: `test-output/reports/rolling-restart-active-gate-observat
 - Competing explanations: source route reduced the frontier, ownership migrated, architecture-gap remains, or the artifact is contradictory.
 - Systemic interaction scan: compare route, evidence summary, causal model, and frontier history before choosing a successor.
 - Ping-pong stop rule: same-frontier evidence without reduction opens the selected architecture/causal successor instead of editing runtime here.
-- Oscillation guard: no runtime edits are allowed in this rerun package.
+- Oscillation guard: this is not another same-frontier symptom patch because it produces fresh representative evidence after the closed observation-route source implementation, and no runtime edits are allowed in this rerun package.
 
 ## Decision Experiment Gate
 
@@ -289,18 +314,19 @@ Fresh target artifact: `test-output/reports/rolling-restart-active-gate-observat
 - Route owner: `startup_active_gate_owner`
 - Route boundary: `snapshot_coverage`
 - Route dominant reason: `owner_reconcile_pending`
-- Route causal outcome: `pending-before-rerun`
-- Stop mode: `pending-before-rerun`
-- Next lane: `causal-escalation`
+- Route causal outcome: `continue_local_fix`
+- Stop mode: `classified_local_blocker`
+- Next lane: `experiment`
 - Required after rerun: route-after-rerun, Sprint Strategy Brief and Current Edge Card update, current-blocker refresh, entry validation, and pre-implementation validation.
 
 ## In Scope
 
-1. work/packages/todo-20260531-rolling-restart-active-gate-observation-route-rerun-gate.md
-2. work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md
-3. work/theory-ledger.md
-4. work/sprints/current-blocker.json
-5. work/sprints/current-blocker.md
+1. work/packages/active-20260531-rolling-restart-active-gate-observation-route-rerun-gate.md
+2. work/packages/todo-20260531-rolling-restart-active-gate-observation-route-same-frontier-architecture-experiment.md
+3. work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md
+4. work/theory-ledger.md
+5. work/sprints/current-blocker.json
+6. work/sprints/current-blocker.md
 
 ## Out Of Scope
 
@@ -313,7 +339,7 @@ Fresh target artifact: `test-output/reports/rolling-restart-active-gate-observat
 - Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `representative-rerun`
 - Output profile: `medium`
-- Owned files: `work/packages/todo-20260531-rolling-restart-active-gate-observation-route-rerun-gate.md`, `work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md`, `work/theory-ledger.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`
+- Owned files: `work/packages/active-20260531-rolling-restart-active-gate-observation-route-rerun-gate.md`, `work/packages/todo-20260531-rolling-restart-active-gate-observation-route-same-frontier-architecture-experiment.md`, `work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md`, `work/theory-ledger.md`, `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`
 - Do-not-edit scope: `src/`
 - Frozen decisions: no runtime edit in this package.
 - Focused proof: `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json --fast-local --verbose`; `npm run work:scenario-route -- test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending --explain active_gate_snapshot_coverage`; `npm run work:evidence-summary -- test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json`
@@ -322,10 +348,17 @@ Fresh target artifact: `test-output/reports/rolling-restart-active-gate-observat
 
 Preferred closure evidence for new packages. One executor owns implementation end to end; one separate verifier-fixer validates the last package work and may fix in-scope problems directly.
 
-- [ ] action: freshness-review; owner: Agent <name> (<agent-id>); files-changed: none; validation: npm run work:context; npm run work:package:doctor -- --suggest work/packages/todo-20260531-rolling-restart-active-gate-observation-route-rerun-gate.md; npm run work:validate -- --entry work/packages/todo-20260531-rolling-restart-active-gate-observation-route-rerun-gate.md; decision: fresh; outcome: pending.
-- [ ] action: implementation; owner: startup_active_gate_owner; files-changed: work/packages/todo-20260531-rolling-restart-active-gate-observation-route-rerun-gate.md, work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md, work/theory-ledger.md; validation: representative rerun and route proof pending; parent revalidated focused proof: yes before closure; outcome: pending.
-- [ ] action: verification-fix; owner: startup_active_gate_owner; files-changed: none recorded yet; validation: verifier reruns representative proof and parent revalidated focused proof: yes before closure; outcome: pending.
-- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: pending.
+- [x] action: freshness-review; owner: Agent FreshnessReview (019e7dd4-e153-7fa1-878d-37bf66d8d052); files-changed: work/packages/active-20260531-rolling-restart-active-gate-observation-route-rerun-gate.md; validation: npm run work:context passed; npm run work:package:doctor -- --suggest work/packages/active-20260531-rolling-restart-active-gate-observation-route-rerun-gate.md reported only missing freshness-review / future implementation evidence; npm run work:validate -- --entry work/packages/active-20260531-rolling-restart-active-gate-observation-route-rerun-gate.md passed; decision: fresh; outcome: validated.
+- [x] action: implementation; owner: startup_active_gate_owner; files-changed: work/packages/active-20260531-rolling-restart-active-gate-observation-route-rerun-gate.md, work/packages/todo-20260531-rolling-restart-active-gate-observation-route-same-frontier-architecture-experiment.md, work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md, work/theory-ledger.md; validation: representative rerun wrote `test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json` and failed at downstream benchmark_events visibility after routing same-frontier; npm run work:scenario-route -- test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending --explain active_gate_snapshot_coverage passed; npm run work:evidence-summary -- test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json passed; npm run analyze:causal-model -- test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json passed; npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json --explain active_gate_snapshot_coverage passed; npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12 passed; npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending passed; parent revalidated focused proof: yes before closure; outcome: validated - same-frontier rerun opened architecture experiment successor.
+- [x] action: verification-fix; owner: Agent VerifierFixer (019e7de9-eb68-7da3-8618-812ac4bbc447); files-changed: work/packages/active-20260531-rolling-restart-active-gate-observation-route-rerun-gate.md; validation: npm run work:validate -- --entry work/packages/active-20260531-rolling-restart-active-gate-observation-route-rerun-gate.md passed; npm run work:validate -- --entry work/packages/todo-20260531-rolling-restart-active-gate-observation-route-same-frontier-architecture-experiment.md passed; npm run work:validate -- --pre-impl work/packages/active-20260531-rolling-restart-active-gate-observation-route-rerun-gate.md passed; git diff --check -- scoped package files passed; npm run work:validate -- --closure work/packages/active-20260531-rolling-restart-active-gate-observation-route-rerun-gate.md initially failed only because this verification-fix item was pending and then required this item to record parent proof; parent revalidated focused proof: yes; distributed harness not rerun per verifier scope; outcome: validated - metadata supports same-frontier closure with queued architecture experiment successor.
+- [x] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair` passed; outcome: validated.
+
+## Commit And Push Ledger
+
+1. Focused package commit: a02fe0d1db3b1d5104ed49a059f08ef58abbac39
+2. Push target: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
+4. Pushed: no
 
 ## Validation
 

@@ -613,5 +613,19 @@ Each entry must include these labels:
 - Representative movement: needs-rerun
 - Linked packages: `work/packages/active-20260531-rolling-restart-active-gate-observation-route.md`, `work/packages/todo-20260531-rolling-restart-active-gate-observation-route-rerun-gate.md`
 - Supersedes: theory-20260531-rolling-restart-contract-first-green-fresh-rerun
-- Superseded by: none
+- Superseded by: theory-20260531-rolling-restart-active-gate-observation-route-same-frontier-rerun
 - Next implication: Run fresh representative rolling-restart evidence at `test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json`, route the result, and continue only from representative-green, reduction, migration, architecture-gap, or the selected successor.
+
+## theory-20260531-rolling-restart-active-gate-observation-route-same-frontier-rerun
+
+- Status: supported
+- Scenario/gate: rolling-restart / active_gate_snapshot_coverage
+- Owner/boundary: startup_active_gate_owner / snapshot_coverage
+- Hypothesis: Fresh representative evidence after the observation-route implementation either moves active-gate snapshot coverage or proves that the route is visible but insufficient, requiring a non-repeated successor route before runtime promotion.
+- Probe: `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json --fast-local --verbose`, `npm run work:scenario-route -- test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json --owner startup_active_gate_owner --boundary snapshot_coverage --dominant-reason owner_reconcile_pending --explain active_gate_snapshot_coverage`, `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json --explain active_gate_snapshot_coverage`
+- Artifact/result: `test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json` - representative evidence stayed same-frontier at `active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending`; topology exposes the local route as `wait_owner_recovery` with one pending recovery node and zero pending reconcile nodes, but snapshot coverage remains 1/5 with `selected_snapshot_source_timeout` plus `snapshot_repair_deferred`; priority-recovery residual witnesses are 0; `runtimePromotionGuard.state=blocked` with `saturated_history_requires_non_repeated_source_contract`.
+- Representative movement: same-frontier
+- Linked packages: `work/packages/active-20260531-rolling-restart-active-gate-observation-route-rerun-gate.md`, `work/packages/todo-20260531-rolling-restart-active-gate-observation-route-same-frontier-architecture-experiment.md`
+- Supersedes: theory-20260531-rolling-restart-active-gate-observation-route-implementation
+- Superseded by: none
+- Next implication: Open the same-frontier architecture experiment to select a non-repeated source contract, owner-boundary migration, representative-green path, or architecture-gap stop before any runtime source write.
