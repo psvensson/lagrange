@@ -414,7 +414,7 @@ another source or representative-evidence package.
 
 ## Commit And Push Ledger
 
-1. Focused package commit: d8449603539ea8b5fb59dd88c40b9bced3b169ef
+1. Focused package commit: fbfc6776c75a65b9b1676783040b12826f8e16ee
 2. Push target: origin/codex/pending-ack-eligibility-filter
 3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
-4. Pushed: no
+4. Pushed: yes 2026-05-31T18:06:54.578Z
