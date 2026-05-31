@@ -15,12 +15,14 @@ last_reviewed: 2026-05-23
 ## Execution Roles And Optional Sub-Agents
 
 Package execution and closure are role-based. Strict workflow packages
-(`runtime-owner-boundary`, `scenario-release-gate`, `causal-escalation`, and
-any package with `freshness: "strict"` or `gates.freshness: "strict"`) require
-a new real `freshness-review` sub-agent before implementation. The required
-closure roles are `implementation` and, when the package changes code, tests,
-scripts, runtime contracts, tracker truth, or generated handoff state,
-`verification-fix`.
+(`runtime-owner-boundary`, `scenario-release-gate`, `causal-escalation`,
+strict-lane packages with `src/` write/commit scope, and any package with
+`freshness: "strict"` or `gates.freshness: "strict"`) require a new real
+`freshness-review` sub-agent before implementation. No-runtime-write analysis
+packages may use parent-executed lite freshness unless they opt into strict
+freshness. The required closure roles are `implementation` and, when the
+package changes code, tests, scripts, runtime contracts, tracker truth, or
+generated handoff state, `verification-fix`.
 
 ### packageClass → freshness-review mode matrix
 
@@ -31,8 +33,9 @@ lane as a legacy fallback). See the Vocabulary section of
 
 | packageClass (or lane fallback) | Mode | What "review" means |
 | --- | --- | --- |
-| `system-theory-rederive` (and aliases) | **strict** | real `freshness-review` sub-agent required before implementation; parent-session/local labels do not satisfy. |
-| `architecture-gap-analysis` (and `architecture-gap*`) | **strict** | same as rederive. |
+| `system-theory-rederive` (and aliases) with no `src/` write/commit scope | **lite** | parent-executed review acceptable; record the same five fields inline in the package ledger. |
+| `architecture-gap-analysis` (and `architecture-gap*`) with no `src/` write/commit scope | **lite** | same as rederive. |
+| Any package declaring `freshness: "strict"` / `gates.freshness: "strict"` or carrying `src/` write/commit scope on a strict lane | **strict** | real `freshness-review` sub-agent required before implementation; parent-session/local labels do not satisfy. |
 | `representative-frontier-closure` on `runtime-owner-boundary` / `scenario-release-gate` / `causal-escalation` lane | **strict** | same as rederive. |
 | `classification-only`, `documentation-only`, `lightweight-maintenance`, `probe-only` (and `read-doc` / `mechanical-maintenance` / `lightweight-maintenance` lanes) | **lite** | parent-executed review acceptable; record the same five fields inline in the package ledger. |
 

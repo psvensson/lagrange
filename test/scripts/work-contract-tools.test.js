@@ -20,6 +20,11 @@ const STATECHART_FILES = [
   'docs/specs/statecharts/package-lifecycle.json',
 ].map((filePath) => path.resolve(filePath));
 
+function parsePackageMetadata(content) {
+  const match = content.match(/<!--\s*work-package\s*\n([\s\S]*?)\n\s*-->/u);
+  return JSON.parse(match[1]);
+}
+
 tap.test('system contract records validate against real bindings', (t) => {
   const result = validateSystemContracts(CONTRACT_FILES);
   t.same(result.errors, []);
@@ -81,3 +86,36 @@ tap.test('package generator binds system contract and modelTheory metadata', asy
     '"executableArtifact": "docs/specs/decision-tables/rebalancer-handoff-priority-recovery.json"',
   );
 });
+
+tap.test('package generator references contract-owned system theory without duplicating it',
+  async (t) => {
+    const content = await buildPackageContent({
+      'title': 'Generated Contract-Owned Theory Package',
+      'slug': 'generated-contract-owned-theory-package',
+      'lane': 'causal-escalation',
+      'owner': 'startup_active_gate_owner',
+      'boundary': 'snapshot_coverage',
+      'dominant-reason': 'active_gate_timed_out',
+      'next-action': 'verify generated contract-owned theory binding',
+      'write-scope': [
+        'src/rebalancer/startup-active-gate-owner-ports.js',
+      ],
+      'proof': [
+        'falsifier: npm run work:contract:check',
+        'regression: npm run model:statecharts',
+      ],
+      'system-contract-ref':
+        'architecture/contracts/active-gate-convergence.md#active-gate-convergence',
+    });
+    const metadata = parsePackageMetadata(content);
+
+    t.notOk(metadata.systemTheory);
+    t.ok(metadata.sliceTheory);
+    t.equal(
+      metadata.sliceTheory.systemTheoryRef,
+      'architecture/contracts/active-gate-convergence.md#active-gate-convergence',
+    );
+    t.match(content, '## System Contract Binding');
+    t.notMatch(content, '## System Theory');
+    t.match(content, '## Slice Theory');
+  });

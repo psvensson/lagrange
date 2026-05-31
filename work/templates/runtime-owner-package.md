@@ -67,7 +67,6 @@
     "coordinatorOnlyWrites": [
       "work/packages/",
       "work/sprints/current-blocker.json",
-      "work/sprints/current-blocker.md",
       "work/theory-ledger.md"
     ],
     "routeDecisionRequired": false,

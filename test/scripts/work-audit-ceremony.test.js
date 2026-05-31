@@ -5,6 +5,7 @@ import path from 'node:path';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   buildCeremonyAudit,
+  isDurableWorkPath,
   isPureCeremonyPackage,
   parseArgs,
   renderCeremonyAudit,
@@ -72,7 +73,19 @@ async function writePackage(root, fileName, metadataValue) {
   );
 }
 
-test('pure ceremony predicate ignores runtime and theory-ledger packages', (t) => {
+test('durable work paths identify implementation, tooling, architecture, and specs',
+  (t) => {
+    t.equal(isDurableWorkPath('src/runtime.js'), true);
+    t.equal(isDurableWorkPath('test/scripts/work-audit.test.js'), true);
+    t.equal(isDurableWorkPath('scripts/work-audit-ceremony.js'), true);
+    t.equal(isDurableWorkPath('architecture/contracts/package-lifecycle.md'), true);
+    t.equal(isDurableWorkPath('docs/specs/statecharts/package-lifecycle.json'), true);
+    t.equal(isDurableWorkPath('work/RULES.md'), false);
+    t.end();
+  });
+
+test('pure ceremony predicate ignores durable-work and theory-ledger packages',
+  (t) => {
   t.equal(isPureCeremonyPackage(metadata({
     owner: 'workflow',
     lane: 'lightweight-maintenance',
@@ -86,11 +99,16 @@ test('pure ceremony predicate ignores runtime and theory-ledger packages', (t) =
   t.equal(isPureCeremonyPackage(metadata({
     owner: 'workflow',
     lane: 'lightweight-maintenance',
+    writeScope: ['scripts/work-audit-ceremony.js'],
+  })), false);
+  t.equal(isPureCeremonyPackage(metadata({
+    owner: 'workflow',
+    lane: 'lightweight-maintenance',
     writeScope: ['work/RULES.md'],
     refs: ['theory-20260525-test'],
   })), false);
-  t.end();
-});
+    t.end();
+  });
 
 test('ceremony audit summarizes packages by owner and lane', async (t) => {
   const root = await makeTempRoot(t);
@@ -107,13 +125,18 @@ test('ceremony audit summarizes packages by owner and lane', async (t) => {
   await writePackage(root, 'done-20260525-workflow-b.md', metadata({
     owner: 'workflow_tooling_owner',
     lane: 'lightweight-maintenance',
+    writeScope: ['work/README.md'],
+  }));
+  await writePackage(root, 'done-20260525-tooling.md', metadata({
+    owner: 'workflow_tooling_owner',
+    lane: 'lightweight-maintenance',
     writeScope: ['scripts/work-audit-ceremony.js'],
   }));
 
   const audit = await buildCeremonyAudit({root, sinceDate: '2026-05-25'});
   const rendered = renderCeremonyAudit(audit, {summary: true});
 
-  t.equal(audit.scanned, 3);
+  t.equal(audit.scanned, 4);
   t.equal(audit.packages.length, 2);
   t.match(rendered, 'Pure-ceremony packages: 2');
   t.match(rendered, 'lightweight-maintenance: 2');

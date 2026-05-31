@@ -357,7 +357,6 @@ const GIT_GROUP_EMPTY_MESSAGES = Object.freeze({
 });
 const TRACKER_GENERATED_PATHS = Object.freeze([
   path.join('work', 'sprints', 'current-blocker.json'),
-  path.join('work', 'sprints', 'current-blocker.md'),
 ]);
 const SHELL_SAFE_PATTERN = /^[A-Za-z0-9_./:@%+=,-]+$/u;
 const SINGLE_QUOTE = '\'';

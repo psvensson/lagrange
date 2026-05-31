@@ -57,6 +57,32 @@ describe('work tracker subagent sequencing ledger validation', () => {
       metadataRequiresFreshnessReview({lane: LANE_CAUSAL_ESCALATION}),
       true,
     );
+    assert.equal(
+      metadataRequiresFreshnessReview({
+        lane: LANE_CAUSAL_ESCALATION,
+        writeScope: ['work/theory-ledger.md'],
+        commitScope: ['work/theory-ledger.md'],
+        modelFit: {packageClass: 'system-theory-rederive'},
+      }),
+      false,
+    );
+    assert.equal(
+      metadataRequiresFreshnessReview({
+        lane: LANE_CAUSAL_ESCALATION,
+        writeScope: ['work/theory-ledger.md'],
+        modelFit: {packageClass: 'system-theory-rederive'},
+        gates: {freshness: 'strict'},
+      }),
+      true,
+    );
+    assert.equal(
+      metadataRequiresFreshnessReview({
+        lane: LANE_CAUSAL_ESCALATION,
+        writeScope: ['src/runtime.js'],
+        modelFit: {packageClass: 'system-theory-rederive'},
+      }),
+      true,
+    );
   });
 
   it('uses classification-only fast path only without implementation writes', () => {

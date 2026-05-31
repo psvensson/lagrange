@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import fs from 'node:fs/promises';
+import fsSync from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
@@ -1279,15 +1280,52 @@ function hasGeneratedRepeatedFrontierSignal(metadata = {}) {
     ].map(normalizeText).join(' '));
 }
 
+function readSystemContractBlock(systemContractRef) {
+  const contractPath = normalizeText(systemContractRef).split('#')[NUM_ZERO];
+  if (!/^architecture\/contracts\/.+\.md$/u.test(contractPath)) {
+    return null;
+  }
+  const resolvedPath = path.resolve(contractPath);
+  if (!fsSync.existsSync(resolvedPath)) {
+    return null;
+  }
+  const content = fsSync.readFileSync(resolvedPath, ENCODING_UTF8);
+  const match = content.match(/<!--\s*system-contract\s*\n([\s\S]*?)\n\s*-->/iu);
+  if (!match) {
+    return null;
+  }
+  try {
+    return JSON.parse(match[NUM_ONE].trim());
+  } catch {
+    return null;
+  }
+}
+
+function systemContractRefRecordsSystemTheory(systemContractRef) {
+  const contract = readSystemContractBlock(systemContractRef);
+  return Boolean(
+    contract &&
+    typeof contract === 'object' &&
+    !Array.isArray(contract) &&
+    contract.systemTheory &&
+    typeof contract.systemTheory === 'object' &&
+    !Array.isArray(contract.systemTheory),
+  );
+}
+
 function buildTwoLevelTheoryMetadata(
   lane,
   metadata = {},
   proof = [],
   packagePath = 'work/packages/package.md',
+  options = {},
 ) {
   if (!twoLevelTheoryRequiredForGeneratedPackage(lane, metadata)) {
     return null;
   }
+  const systemContractRef = normalizeText(options.systemContractRef);
+  const externalSystemTheory =
+    systemContractRefRecordsSystemTheory(systemContractRef);
   const owner = normalizeText(metadata.owner) || 'unassigned-owner';
   const boundary = normalizeText(metadata.boundary) || 'unassigned-boundary';
   const dominantReason =
@@ -1302,64 +1340,72 @@ function buildTwoLevelTheoryMetadata(
   const sourceWriteContract = sourceWriteScope.length > NUM_ZERO ?
     `Implementation may edit only declared source files ${sourceWriteScope.join(', ')} after the falsifier keeps the package inside the selected owner boundary.` :
     'Implementation may edit only declared src/ source files after the falsifier keeps the package inside the selected owner boundary.';
+  const systemTheory = {
+    [SYSTEM_THEORY_PROBLEM_STATEMENT_FIELD]:
+      `${scenario} currently routes ${dominantReason} to ${ownerBoundary}; ` +
+      'the package must explain the whole phase chain before selecting the executable slice.',
+    [SYSTEM_THEORY_PHASE_CHAIN_FIELD]: [
+      `Representative evidence comes from ${artifact}.`,
+      `${dominantReason} is the current selected symptom.`,
+      `${ownerBoundary} is the declared decision boundary for this package.`,
+    ],
+    [SYSTEM_THEORY_OWNER_BOUNDARY_MAP_FIELD]: [
+      `${ownerBoundary}: selected package owner and boundary.`,
+      'Downstream owners remain frozen until the falsifier selects migration.',
+    ],
+    [SYSTEM_THEORY_STABLE_FACTS_FIELD]: [
+      `Scenario remains ${scenario}.`,
+      `Package lane remains ${lane}.`,
+      `Declared owner boundary remains ${ownerBoundary}.`,
+    ],
+    [SYSTEM_THEORY_CHANGED_FACTS_FIELD]: [
+      `This package was opened from ${artifact}.`,
+      `The active action is ${normalizeText(metadata.nextAction) || 'run the declared falsifier before implementation'}.`,
+    ],
+    [SYSTEM_THEORY_COMPETING_THEORIES_FIELD]: [
+      `H1 ${ownerBoundary} owns the missing transition for ${dominantReason}.`,
+      `H2 the same symptom is inherited from a different owner boundary or architecture gap.`,
+    ],
+    [SYSTEM_THEORY_ELIMINATED_THEORIES_FIELD]: [
+      'No eliminated theory is durable until the package proof records a contrary artifact or command result.',
+    ],
+    [SYSTEM_THEORY_DOWNSTREAM_SYMPTOMS_FIELD]: [
+      'Downstream symptoms stay frozen until H1 selects a concrete transition or H2 selects migration.',
+    ],
+    [SYSTEM_THEORY_TRANSITION_TABLE_FIELD]: [
+      {
+        [SYSTEM_THEORY_TRANSITION_INPUT_SIGNAL_FIELD]: dominantReason,
+        [SYSTEM_THEORY_TRANSITION_OWNER_FIELD]: ownerBoundary,
+        [SYSTEM_THEORY_TRANSITION_MISSING_TRANSITION_FIELD]:
+          'selected evidence must become a named owner-owned transition, migration, or stop.',
+        [SYSTEM_THEORY_TRANSITION_EXPECTED_EVIDENCE_FIELD]:
+          'focused proof selects the transition, migrates ownership, or records architecture-gap evidence.',
+        [SYSTEM_THEORY_TRANSITION_FALSIFIER_FIELD]: falsifier,
+        [SYSTEM_THEORY_TRANSITION_MIGRATION_TRIGGER_FIELD]:
+          'the falsifier names a different owner boundary or proves this boundary cannot own the transition.',
+      },
+    ],
+    [SYSTEM_THEORY_OWNERSHIP_MIGRATION_TRIGGERS_FIELD]: [
+      'Migrate only when focused evidence names the alternate deciding owner and boundary.',
+    ],
+    [SYSTEM_THEORY_ARCHITECTURE_GAP_TRIGGERS_FIELD]: [
+      'Stop as architecture-gap when focused evidence cannot select an owner-owned transition or migration.',
+    ],
+    [SYSTEM_THEORY_WHOLE_SYSTEM_INVARIANT_FIELD]:
+      'Runtime edits are allowed only after the system theory selects one owner-owned transition or migration route.',
+  };
+  if (systemContractRef.length > NUM_ZERO && !externalSystemTheory) {
+    systemTheory[SYSTEM_THEORY_STABLE_FACTS_FIELD].push(
+      `Durable contract record is ${systemContractRef}.`,
+    );
+  }
   return {
-    [SYSTEM_THEORY_FIELD]: {
-      [SYSTEM_THEORY_PROBLEM_STATEMENT_FIELD]:
-        `${scenario} currently routes ${dominantReason} to ${ownerBoundary}; ` +
-        'the package must explain the whole phase chain before selecting the executable slice.',
-      [SYSTEM_THEORY_PHASE_CHAIN_FIELD]: [
-        `Representative evidence comes from ${artifact}.`,
-        `${dominantReason} is the current selected symptom.`,
-        `${ownerBoundary} is the declared decision boundary for this package.`,
-      ],
-      [SYSTEM_THEORY_OWNER_BOUNDARY_MAP_FIELD]: [
-        `${ownerBoundary}: selected package owner and boundary.`,
-        'Downstream owners remain frozen until the falsifier selects migration.',
-      ],
-      [SYSTEM_THEORY_STABLE_FACTS_FIELD]: [
-        `Scenario remains ${scenario}.`,
-        `Package lane remains ${lane}.`,
-        `Declared owner boundary remains ${ownerBoundary}.`,
-      ],
-      [SYSTEM_THEORY_CHANGED_FACTS_FIELD]: [
-        `This package was opened from ${artifact}.`,
-        `The active action is ${normalizeText(metadata.nextAction) || 'run the declared falsifier before implementation'}.`,
-      ],
-      [SYSTEM_THEORY_COMPETING_THEORIES_FIELD]: [
-        `H1 ${ownerBoundary} owns the missing transition for ${dominantReason}.`,
-        `H2 the same symptom is inherited from a different owner boundary or architecture gap.`,
-      ],
-      [SYSTEM_THEORY_ELIMINATED_THEORIES_FIELD]: [
-        'No eliminated theory is durable until the package proof records a contrary artifact or command result.',
-      ],
-      [SYSTEM_THEORY_DOWNSTREAM_SYMPTOMS_FIELD]: [
-        'Downstream symptoms stay frozen until H1 selects a concrete transition or H2 selects migration.',
-      ],
-      [SYSTEM_THEORY_TRANSITION_TABLE_FIELD]: [
-        {
-          [SYSTEM_THEORY_TRANSITION_INPUT_SIGNAL_FIELD]: dominantReason,
-          [SYSTEM_THEORY_TRANSITION_OWNER_FIELD]: ownerBoundary,
-          [SYSTEM_THEORY_TRANSITION_MISSING_TRANSITION_FIELD]:
-            'selected evidence must become a named owner-owned transition, migration, or stop.',
-          [SYSTEM_THEORY_TRANSITION_EXPECTED_EVIDENCE_FIELD]:
-            'focused proof selects the transition, migrates ownership, or records architecture-gap evidence.',
-          [SYSTEM_THEORY_TRANSITION_FALSIFIER_FIELD]: falsifier,
-          [SYSTEM_THEORY_TRANSITION_MIGRATION_TRIGGER_FIELD]:
-            'the falsifier names a different owner boundary or proves this boundary cannot own the transition.',
-        },
-      ],
-      [SYSTEM_THEORY_OWNERSHIP_MIGRATION_TRIGGERS_FIELD]: [
-        'Migrate only when focused evidence names the alternate deciding owner and boundary.',
-      ],
-      [SYSTEM_THEORY_ARCHITECTURE_GAP_TRIGGERS_FIELD]: [
-        'Stop as architecture-gap when focused evidence cannot select an owner-owned transition or migration.',
-      ],
-      [SYSTEM_THEORY_WHOLE_SYSTEM_INVARIANT_FIELD]:
-        'Runtime edits are allowed only after the system theory selects one owner-owned transition or migration route.',
-    },
+    ...(externalSystemTheory ? {} : {[SYSTEM_THEORY_FIELD]: systemTheory}),
     [SLICE_THEORY_FIELD]: {
       [SLICE_THEORY_SYSTEM_REF_FIELD]:
-        `${packagePath} ${SYSTEM_THEORY_FIELD}`,
+        externalSystemTheory ?
+          systemContractRef :
+          `${packagePath} ${SYSTEM_THEORY_FIELD}`,
       [SLICE_THEORY_SELECTED_THEORY_FIELD]:
         `H1 is selected unless ${falsifier} proves a different owner boundary or architecture gap.`,
       [SLICE_THEORY_SELECTED_MECHANISM_FIELD]:
@@ -1481,56 +1527,64 @@ function formatTransitionRows(rows = []) {
 function buildTwoLevelTheoryLines(metadata = {}) {
   const systemTheory = metadata[SYSTEM_THEORY_FIELD];
   const sliceTheory = metadata[SLICE_THEORY_FIELD];
-  if (!systemTheory || !sliceTheory) {
+  if (!systemTheory && !sliceTheory) {
     return [];
   }
-  const score = sliceTheory[SLICE_THEORY_THEORY_FIT_SCORE_FIELD] || {};
-  return [
-    '## System Theory',
-    EMPTY_TEXT,
-    `- Problem statement: ${systemTheory[SYSTEM_THEORY_PROBLEM_STATEMENT_FIELD]}`,
-    '- Phase chain:',
-    markdownList(systemTheory[SYSTEM_THEORY_PHASE_CHAIN_FIELD], 'Phase chain is recorded in metadata.'),
-    '- Owner-boundary map:',
-    markdownList(systemTheory[SYSTEM_THEORY_OWNER_BOUNDARY_MAP_FIELD], 'Owner-boundary map is recorded in metadata.'),
-    '- Stable facts:',
-    markdownList(systemTheory[SYSTEM_THEORY_STABLE_FACTS_FIELD], 'Stable facts are recorded in metadata.'),
-    '- Changed facts:',
-    markdownList(systemTheory[SYSTEM_THEORY_CHANGED_FACTS_FIELD], 'Changed facts are recorded in metadata.'),
-    '- Competing theories:',
-    markdownList(systemTheory[SYSTEM_THEORY_COMPETING_THEORIES_FIELD], 'Competing theories are recorded in metadata.'),
-    '- Eliminated theories:',
-    markdownList(systemTheory[SYSTEM_THEORY_ELIMINATED_THEORIES_FIELD], 'Eliminated theories are recorded in metadata.'),
-    '- Downstream symptoms:',
-    markdownList(systemTheory[SYSTEM_THEORY_DOWNSTREAM_SYMPTOMS_FIELD], 'Downstream symptoms are recorded in metadata.'),
-    '- Transition table:',
-    formatTransitionRows(systemTheory[SYSTEM_THEORY_TRANSITION_TABLE_FIELD]),
-    '- Ownership migration triggers:',
-    markdownList(systemTheory[SYSTEM_THEORY_OWNERSHIP_MIGRATION_TRIGGERS_FIELD], 'Migration triggers are recorded in metadata.'),
-    '- Architecture-gap triggers:',
-    markdownList(systemTheory[SYSTEM_THEORY_ARCHITECTURE_GAP_TRIGGERS_FIELD], 'Architecture-gap triggers are recorded in metadata.'),
-    `- Whole-system invariant: ${systemTheory[SYSTEM_THEORY_WHOLE_SYSTEM_INVARIANT_FIELD]}`,
-    EMPTY_TEXT,
-    '## Slice Theory',
-    EMPTY_TEXT,
-    `- System theory reference: ${sliceTheory[SLICE_THEORY_SYSTEM_REF_FIELD]}`,
-    `- Selected system theory: ${sliceTheory[SLICE_THEORY_SELECTED_THEORY_FIELD]}`,
-    `- Selected mechanism: ${sliceTheory[SLICE_THEORY_SELECTED_MECHANISM_FIELD]}`,
-    `- Source/test contract: ${sliceTheory[SLICE_THEORY_SOURCE_TEST_CONTRACT_FIELD]}`,
-    `- Falsifier: \`${sliceTheory[SLICE_THEORY_FALSIFIER_FIELD]}\``,
-    `- Representative expected movement: ${sliceTheory[SLICE_THEORY_REPRESENTATIVE_MOVEMENT_FIELD]}`,
-    `- Redirect rule: ${sliceTheory[SLICE_THEORY_KILL_RULE_FIELD]}`,
-    '- Theory-fit score:',
-    markdownList([
-      `Evidence fit: ${score[THEORY_FIT_SCORE_EVIDENCE_FIT_FIELD]}`,
-      `Owner-boundary fit: ${score[THEORY_FIT_SCORE_OWNER_BOUNDARY_FIT_FIELD]}`,
-      `Falsifiability: ${score[THEORY_FIT_SCORE_FALSIFIABILITY_FIELD]}`,
-      `Representative movement: ${score[THEORY_FIT_SCORE_REPRESENTATIVE_MOVEMENT_FIELD]}`,
-      `Downstream risk containment: ${score[THEORY_FIT_SCORE_DOWNSTREAM_RISK_FIELD]}`,
-    ], 'Theory-fit score is recorded in metadata.'),
-    '- Wrong-slice triggers:',
-    markdownList(sliceTheory[SLICE_THEORY_WRONG_SLICE_TRIGGERS_FIELD], 'Wrong-slice triggers are recorded in metadata.'),
-  ];
+  const lines = [];
+  if (systemTheory) {
+    lines.push(
+      '## System Theory',
+      EMPTY_TEXT,
+      `- Problem statement: ${systemTheory[SYSTEM_THEORY_PROBLEM_STATEMENT_FIELD]}`,
+      '- Phase chain:',
+      markdownList(systemTheory[SYSTEM_THEORY_PHASE_CHAIN_FIELD], 'Phase chain is recorded in metadata.'),
+      '- Owner-boundary map:',
+      markdownList(systemTheory[SYSTEM_THEORY_OWNER_BOUNDARY_MAP_FIELD], 'Owner-boundary map is recorded in metadata.'),
+      '- Stable facts:',
+      markdownList(systemTheory[SYSTEM_THEORY_STABLE_FACTS_FIELD], 'Stable facts are recorded in metadata.'),
+      '- Changed facts:',
+      markdownList(systemTheory[SYSTEM_THEORY_CHANGED_FACTS_FIELD], 'Changed facts are recorded in metadata.'),
+      '- Competing theories:',
+      markdownList(systemTheory[SYSTEM_THEORY_COMPETING_THEORIES_FIELD], 'Competing theories are recorded in metadata.'),
+      '- Eliminated theories:',
+      markdownList(systemTheory[SYSTEM_THEORY_ELIMINATED_THEORIES_FIELD], 'Eliminated theories are recorded in metadata.'),
+      '- Downstream symptoms:',
+      markdownList(systemTheory[SYSTEM_THEORY_DOWNSTREAM_SYMPTOMS_FIELD], 'Downstream symptoms are recorded in metadata.'),
+      '- Transition table:',
+      formatTransitionRows(systemTheory[SYSTEM_THEORY_TRANSITION_TABLE_FIELD]),
+      '- Ownership migration triggers:',
+      markdownList(systemTheory[SYSTEM_THEORY_OWNERSHIP_MIGRATION_TRIGGERS_FIELD], 'Migration triggers are recorded in metadata.'),
+      '- Architecture-gap triggers:',
+      markdownList(systemTheory[SYSTEM_THEORY_ARCHITECTURE_GAP_TRIGGERS_FIELD], 'Architecture-gap triggers are recorded in metadata.'),
+      `- Whole-system invariant: ${systemTheory[SYSTEM_THEORY_WHOLE_SYSTEM_INVARIANT_FIELD]}`,
+      EMPTY_TEXT,
+    );
+  }
+  if (sliceTheory) {
+    const score = sliceTheory[SLICE_THEORY_THEORY_FIT_SCORE_FIELD] || {};
+    lines.push(
+      '## Slice Theory',
+      EMPTY_TEXT,
+      `- System theory reference: ${sliceTheory[SLICE_THEORY_SYSTEM_REF_FIELD]}`,
+      `- Selected system theory: ${sliceTheory[SLICE_THEORY_SELECTED_THEORY_FIELD]}`,
+      `- Selected mechanism: ${sliceTheory[SLICE_THEORY_SELECTED_MECHANISM_FIELD]}`,
+      `- Source/test contract: ${sliceTheory[SLICE_THEORY_SOURCE_TEST_CONTRACT_FIELD]}`,
+      `- Falsifier: \`${sliceTheory[SLICE_THEORY_FALSIFIER_FIELD]}\``,
+      `- Representative expected movement: ${sliceTheory[SLICE_THEORY_REPRESENTATIVE_MOVEMENT_FIELD]}`,
+      `- Redirect rule: ${sliceTheory[SLICE_THEORY_KILL_RULE_FIELD]}`,
+      '- Theory-fit score:',
+      markdownList([
+        `Evidence fit: ${score[THEORY_FIT_SCORE_EVIDENCE_FIT_FIELD]}`,
+        `Owner-boundary fit: ${score[THEORY_FIT_SCORE_OWNER_BOUNDARY_FIT_FIELD]}`,
+        `Falsifiability: ${score[THEORY_FIT_SCORE_FALSIFIABILITY_FIELD]}`,
+        `Representative movement: ${score[THEORY_FIT_SCORE_REPRESENTATIVE_MOVEMENT_FIELD]}`,
+        `Downstream risk containment: ${score[THEORY_FIT_SCORE_DOWNSTREAM_RISK_FIELD]}`,
+      ], 'Theory-fit score is recorded in metadata.'),
+      '- Wrong-slice triggers:',
+      markdownList(sliceTheory[SLICE_THEORY_WRONG_SLICE_TRIGGERS_FIELD], 'Wrong-slice triggers are recorded in metadata.'),
+    );
+  }
+  return lines;
 }
 
 function buildModelTheoryLines(metadata = {}) {
@@ -2173,18 +2227,18 @@ async function buildPackageContent(flags = {}) {
     metadata,
     modelFitProof,
     packagePath,
+    {systemContractRef: normalizeText(flags[FLAG_SYSTEM_CONTRACT_REF])},
   );
   if (twoLevelTheory) {
-    metadata[SYSTEM_THEORY_FIELD] = twoLevelTheory[SYSTEM_THEORY_FIELD];
+    if (twoLevelTheory[SYSTEM_THEORY_FIELD]) {
+      metadata[SYSTEM_THEORY_FIELD] = twoLevelTheory[SYSTEM_THEORY_FIELD];
+    }
     metadata[SLICE_THEORY_FIELD] = twoLevelTheory[SLICE_THEORY_FIELD];
     const systemContractRef = normalizeText(flags[FLAG_SYSTEM_CONTRACT_REF]);
     if (systemContractRef.length > NUM_ZERO) {
       metadata.systemContractRef = systemContractRef;
       metadata[SLICE_THEORY_FIELD][SLICE_THEORY_SYSTEM_REF_FIELD] =
         systemContractRef;
-      metadata[SYSTEM_THEORY_FIELD][SYSTEM_THEORY_STABLE_FACTS_FIELD].push(
-        `Durable contract record is ${systemContractRef}.`,
-      );
     }
   } else {
     const systemContractRef = normalizeText(flags[FLAG_SYSTEM_CONTRACT_REF]);
@@ -2278,7 +2332,7 @@ async function buildPackageContent(flags = {}) {
     ...freshnessReviewEvidenceLine(metadata, packagePath),
     `- [ ] action: implementation; owner: ${owner}; files-changed: none recorded yet; validation: ${firstFocusedProofCommand(modelFitProof)} and parent revalidated focused proof: yes before closure; outcome: pending.`,
     `- [ ] action: verification-fix; owner: ${owner}; files-changed: none recorded yet; validation: verifier reruns focused proof and parent revalidated focused proof: yes before closure; outcome: pending.`,
-    '- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json, work/sprints/current-blocker.md; validation: `npm run work:repair`; outcome: pending.',
+    '- [ ] action: repair; owner: workflow_tooling_owner; files-changed: work/sprints/current-blocker.json; validation: `npm run work:repair`; outcome: pending.',
     EMPTY_TEXT,
     '## Validation',
     EMPTY_TEXT,

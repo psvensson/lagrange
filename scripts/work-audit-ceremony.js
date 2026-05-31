@@ -14,7 +14,13 @@ const DONE_PREFIX = 'done-';
 const MARKDOWN_EXTENSION = '.md';
 const PACKAGE_METADATA_OPEN = '<!-- work-package';
 const PACKAGE_METADATA_CLOSE = '-->';
-const SOURCE_PREFIX = 'src/';
+const REAL_WORK_PREFIXES = Object.freeze([
+  'src/',
+  'test/',
+  'scripts/',
+  'architecture/',
+  'docs/specs/',
+]);
 const FLAG_SINCE = '--since';
 const FLAG_LIMIT = '--limit';
 const FLAG_DETAILS = '--details';
@@ -34,7 +40,7 @@ const SCRIPT_FILE_NAME = 'work-audit-ceremony.js';
 const HELP_TEXT = [
   'Usage: node scripts/work-audit-ceremony.js [--since YYYY-MM-DD] [--summary] [--details] [--limit N] [--by-lane] [--by-owner]',
   '',
-  'Finds done packages with no runtime write scope and no theory-ledger refs.',
+  'Finds done packages with no durable implementation/spec/tooling writes and no theory-ledger refs.',
   'Default output is a bounded summary; add --details for package examples.',
   'Use --limit 0 with --details to print all matching packages.',
 ].join(NEWLINE);
@@ -130,11 +136,16 @@ function shouldIncludeByDate(packageDate, sinceDate) {
   return !sinceDate || !packageDate || packageDate >= sinceDate;
 }
 
+function isDurableWorkPath(filePath) {
+  const normalizedPath = normalizeWhitespace(filePath).replace(/\\/gu, '/');
+  return REAL_WORK_PREFIXES.some((prefix) => normalizedPath.startsWith(prefix));
+}
+
 function isPureCeremonyPackage(metadata) {
   const hasTheoryRefs = metadataTheoryLedgerRefs(metadata).length > 0;
-  const hasRuntimeChanges = metadataWriteScope(metadata)
-    .some((filePath) => normalizeWhitespace(filePath).startsWith(SOURCE_PREFIX));
-  return !hasTheoryRefs && !hasRuntimeChanges;
+  const hasDurableWorkChanges = metadataWriteScope(metadata)
+    .some(isDurableWorkPath);
+  return !hasTheoryRefs && !hasDurableWorkChanges;
 }
 
 async function buildCeremonyAudit(options = {}) {
@@ -296,6 +307,7 @@ if (isDirectRun()) {
 
 export {
   buildCeremonyAudit,
+  isDurableWorkPath,
   isPureCeremonyPackage,
   parseArgs,
   renderCeremonyAudit,

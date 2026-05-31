@@ -17,7 +17,6 @@
   "mustNotEdit": [
     "src/",
     "work/sprints/current-blocker.json",
-    "work/sprints/current-blocker.md",
     "work/theory-ledger.md"
   ],
   "writesAllowed": [],

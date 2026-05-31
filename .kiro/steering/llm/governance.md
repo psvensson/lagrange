@@ -23,16 +23,16 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 3. [GOV-0006] Do not create heading, directory, checkbox, or sidecar status systems that contradict the filename. _(see workflow-guidelines/packages.md:25)_
 4. [GOV-0007] Do not archive package files into a second package-status directory. _(see workflow-guidelines/packages.md:28)_
 5. [GOV-0008] Run validation before committing so current-blocker never points at a missing active-... package. _(see workflow-guidelines/packages.md:79)_
-6. [GOV-0009] If the fixture/probe is missing, create the fixture/probe or stop as evidence-incomplete. Do not patch runtime from a representative red run alone. _(see workflow-guidelines/subagents.md:244)_
+6. [GOV-0009] If the fixture/probe is missing, create the fixture/probe or stop as evidence-incomplete. Do not patch runtime from a representative red run alone. _(see workflow-guidelines/subagents.md:247)_
 7. [GOV-0012] Do not open a new package merely because artifact path, epoch, node ids, counts, attempts, timings, timestamps, or presentation shape changed. _(see workflow-guidelines/closure.md:494)_
 8. [GOV-0014] Sprint files do not replace work packages. _(see roadmap.md:97)_
 9. [GOV-0015] docs/ is reserved for end-user or operator-facing documentation. Internal planning, work-package execution, and sprint tracking must not live there. _(see roadmap.md:112)_
 10. [GOV-0017] If the system theory cannot select a slice, do not open another local runtime patch. _(see workflow-guidelines/closure.md:166)_
 11. [GOV-0019] Do not invent historical proof. _(see workflow-guidelines/packages.md:53)_
 12. [GOV-0020] Do not leave the repository between package states. _(see workflow-guidelines/packages.md:66)_
-13. [GOV-0024] freshness-review is different: parent-session, local/manual, or generic Codex labels do not satisfy it. _(see workflow-guidelines/subagents.md:42)_
-14. [GOV-0025] These optional roles do not replace the freshness-review, implementation, and verification-fix roles when those roles are required. _(see workflow-guidelines/subagents.md:71)_
-15. [GOV-0026] work/sprints/current-blocker.json is generated handoff state, but it must not be stale. _(see workflow-guidelines/subagents.md:204)_
+13. [GOV-0024] freshness-review is different: parent-session, local/manual, or generic Codex labels do not satisfy it. _(see workflow-guidelines/subagents.md:45)_
+14. [GOV-0025] These optional roles do not replace the freshness-review, implementation, and verification-fix roles when those roles are required. _(see workflow-guidelines/subagents.md:74)_
+15. [GOV-0026] work/sprints/current-blocker.json is generated handoff state, but it must not be stale. _(see workflow-guidelines/subagents.md:207)_
 16. [GOV-0028] Do not close if relevant guardrail counts increase. _(see workflow-guidelines/validators.md:35)_
 17. [GOV-0030] Do not open another classification package from the same unchanged artifact. _(see workflow-guidelines/closure.md:300)_
 
@@ -59,4 +59,4 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 27. [GOV-0001] Roadmap corrections discovered during implementation should land with the package or sprint closure that discovered them. Do not leave truth repair as an out-of-band memory item. _(see roadmap.md:170)_
 28. [GOV-0022] Do not start a second active package on the same architectural boundary while the first has unresolved in-scope residuals. _(see workflow-guidelines/packages.md:135)_
 29. [GOV-0023] Representative evidence must not be reclassified as roadmap truth when it belongs to the release, track, sprint, or package layer. _(see workflow-guidelines/packages.md:168)_
-30. [GOV-0027] For LLMs, "do not edit" boundaries are higher-signal than a long positive scope list. _(see workflow-guidelines/subagents.md:230)_
+30. [GOV-0027] For LLMs, "do not edit" boundaries are higher-signal than a long positive scope list. _(see workflow-guidelines/subagents.md:233)_

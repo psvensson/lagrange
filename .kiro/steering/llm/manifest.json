@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-05-29T08:20:14.915Z",
+  "generatedAt": "2026-05-31T17:23:33.707Z",
   "packs": [
     {
       "name": "core",
       "title": "Core Steering Pack",
       "description": "Always-load compact rules for ownership, safety, scope, and quality baseline.",
       "ruleCount": 22,
-      "estimatedTokens": 2750,
+      "estimatedTokens": 2775,
       "domains": [
         "architecture",
         "testing",

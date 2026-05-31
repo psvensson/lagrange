@@ -118,7 +118,7 @@ An architecture-gap-analysis package is **analysis-only — it writes no `src/`*
 To guarantee stability, implementation changes must compile and pass structured verification:
 
 *   **Focused Verification**: Runtime, scenario, experiment, proof, and other implementation packages specify a proof ladder containing role-tagged commands: exactly one `falsifier` command (whose failure proves the implementation theory wrong), exactly one `regression` command (which fails if existing behavior is broken), and optional `supporting` commands. Prefer compact ladders of 3-5 commands for readability, but command count is not enforced. **Exception (Phase 4 coupled invariants):** packages of `packageClass` `system-theory-rederive` or any `architecture-gap*` class MAY add one additional `falsifier` command tagged with the trailing comment `# coupled-invariant` (the joint coupled-invariant probe required by R3). Equivalently, the joint command may be carried in the `theoryLoop.jointFalsifierCommand` field. Joint falsifiers tagged this way do not count toward the "exactly one `falsifier`" cardinality rule; the runtime falsifier is still required.
-*   **Freshness Review Gate**: Strict workflow packages (`runtime-owner-boundary`, `scenario-release-gate`, `causal-escalation`, or any package declaring `freshness: "strict"` / `gates.freshness: "strict"`) MUST start each package execution with a new real `freshness-review` subagent before implementation. The freshness reviewer independently checks current-blocker, package metadata, route evidence, owner, boundary, proof ladder, and write scope from repository state only. Implementation may start only after checked `## Execution Evidence` records `action: freshness-review`, a real `Agent <name> (<agent-id>)`, `decision: fresh`, and terminal validation. This role is per-package; freshness evidence from a predecessor or prior sprint package never carries forward.
+*   **Freshness Review Gate**: Strict workflow packages (`runtime-owner-boundary`, `scenario-release-gate`, `causal-escalation`, any package carrying `src/` write/commit scope on a strict lane, or any package declaring `freshness: "strict"` / `gates.freshness: "strict"`) MUST start each package execution with a new real `freshness-review` subagent before implementation. No-runtime-write analysis classes such as `system-theory-rederive` and `architecture-gap-analysis` may use parent-executed lite freshness unless they explicitly opt into strict freshness. The freshness reviewer independently checks current-blocker, package metadata, route evidence, owner, boundary, proof ladder, and write scope from repository state only. Implementation may start only after checked `## Execution Evidence` records `action: freshness-review`, a real `Agent <name> (<agent-id>)`, `decision: fresh`, and terminal validation. This role is per-package; freshness evidence from a predecessor or prior sprint package never carries forward.
 *   **Lane Exceptions**: Maintenance lanes may use a `regression`-only ladder. Classification-only fast-path packages may use two or three canonical evidence commands while runtime, test, script, and report paths stay out of `writeScope` and `commitScope`. Compact probe packages validated with `--probe` may omit the closure evidence ladder when they stay within the probe lane contract.
 *   **Evidence Collection**: Sprints owning active classification or diagnostics packages must record representative residuals and link to specific run output artifacts.
 *   **Local vs. Representative Proof**: A package remains in diagnostic state until it is backed by a fresh representative rerun or canonical route-after-rerun result.
@@ -178,7 +178,7 @@ immediate next action.
 Only the coordinator may:
 
 1. Change active package status.
-2. Update `work/sprints/current-blocker.json` or `work/sprints/current-blocker.md`.
+2. Update `work/sprints/current-blocker.json`.
 3. Update sprint status or package queues.
 4. Create successor packages.
 5. Record theory-ledger decisions.
@@ -858,7 +858,7 @@ All runtime code must strictly adhere to the following rules:
 
 *   The worktree may already be dirty. Do not revert or overwrite changes you did not make.
 *   Keep edits inside the package write scope, ignore unrelated dirty files, and stop for human direction if package-owned and unrelated changes cannot be separated safely.
-*   **Unrelated dirty entries** (as reported by `npm run work:context`) MUST NOT be staged in package closure commits. A *focused commit* contains only files listed in the closing package's `commitScope` plus tracker-generated handoff files (`work/sprints/current-blocker.{json,md}` and the active sprint file).
+*   **Unrelated dirty entries** (as reported by `npm run work:context`) MUST NOT be staged in package closure commits. A *focused commit* contains only files listed in the closing package's `commitScope` plus tracker-generated handoff files (`work/sprints/current-blocker.json` and the active sprint file).
 
 ---
 
@@ -926,7 +926,7 @@ wording.
 Package closure is atomic — the following steps move as a unit.
 
 1. Fill `## Execution Evidence` or front-matter execution metadata block per the rules above.
-2. `npm run work:repair` — refresh `current-blocker.{json,md}` and the active sprint file references.
+2. `npm run work:repair` — refresh `current-blocker.json` and the active sprint file references.
 3. Run the automated close command:
    `npm run work:close work/packages/active-<slug>.md`
    This command automatically runs closure validation, **regenerates and verifies the compiled steering packs (`steering:check`) so a close cannot ship stale `.kiro/steering/llm` packs**, renames the file to `done-`, flips the status, updates active sprint file references, renumbers the package queue, refreshes current-blocker state, stages exactly the `commitScope` files and tracker-generated handoff files, and creates the focused local close commit. The local commit MUST NOT include "unrelated dirty entries" reported by `work:context`.

@@ -83,8 +83,10 @@ package, use `work/releases/0.1-dependency-map.md`.
 
 Use the tracker utility for current sprint/package mechanics:
 
-1. `npm run work:current-blocker` regenerates the compact current-blocker
-   handoff files from the active package metadata.
+1. `npm run work:current-blocker` prints the compact current-blocker JSON
+   handoff from active package metadata. Add `-- --write` to refresh the
+   canonical snapshot at `work/sprints/current-blocker.json`; add
+   `-- --markdown` only when a human-readable Markdown view is needed.
 2. `npm run work:context` prints a compact human and LLM handoff with the
    current blocker, first-read files, proof ladder, useful commands, and dirty
    worktree summary. Add `-- --bootstrap` for the minimal LLM boot commands,
@@ -152,7 +154,7 @@ Use the tracker utility for current sprint/package mechanics:
    ready to become the active blocker. It also prints the required refresh
    sequence: update Sprint Strategy Brief, update Current Edge Card, run
    `npm run work:repair`, and run pre-implementation validation.
-15. `npm run work:repair` regenerates generated current-blocker files and the
+15. `npm run work:repair` regenerates generated current-blocker JSON and the
    active sprint Current Edge Card, then checks freshness. Use this instead of
    hand-editing generated tracker state.
 16. `npm run work:evidence-summary -- <artifact>` prints a compact deterministic
@@ -219,7 +221,7 @@ Use the tracker utility for current sprint/package mechanics:
 
 Use `work/theory-ledger.md` as a compact memory of experiments and theories
 that agents should consider before selecting or resuming work. The ledger is an
-index, not source of truth: package metadata, generated current-blocker files,
+index, not source of truth: package metadata, generated current-blocker JSON,
 and artifacts decide package status and routing.
 
 Update the ledger only at package closure, representative rerun routing,
@@ -314,9 +316,10 @@ groups in `work/RULES.md`:
    `## Execution Evidence`.
 17. Before adding more workflow policy, run the feedback loop:
    `npm run work:audit:ceremony -- --summary --limit 10`,
-   `npm run work:audit:siblings`, and `npm run work:audit:validators`. Use the
-   largest owner/lane or sibling clusters to decide whether an epic/frontier
-   parent, validator simplification, or no new package is the right response.
+   `npm run work:audit:siblings -- --cluster --min-shared 2`, and
+   `npm run work:audit:validators -- --details`. Use the largest owner/lane or
+   sibling clusters to decide whether an epic/frontier parent, validator
+   simplification, or no new package is the right response.
 
 ## Discovery Gate
 
@@ -537,8 +540,9 @@ real `freshness-review` sub-agent (vs parent-executed review) is driven by
 
 | packageClass (or lane fallback) | Mode | Required pre-impl review |
 | --- | --- | --- |
-| `system-theory-rederive` (and aliases) | strict | real `freshness-review` sub-agent. |
-| `architecture-gap-analysis` (`architecture-gap*`) | strict | real `freshness-review` sub-agent. |
+| `system-theory-rederive` (and aliases) with no `src/` write/commit scope | lite | parent-executed review acceptable; record the five freshness fields inline. |
+| `architecture-gap-analysis` (`architecture-gap*`) with no `src/` write/commit scope | lite | parent-executed review acceptable; record the five freshness fields inline. |
+| Any package declaring `freshness: "strict"` / `gates.freshness: "strict"` or carrying `src/` write/commit scope on a strict lane | strict | real `freshness-review` sub-agent. |
 | `representative-frontier-closure` on runtime/scenario/causal lane | strict | real `freshness-review` sub-agent. |
 | `classification-only`, `documentation-only`, `lightweight-maintenance`, `probe-only` (and `read-doc` / `*-maintenance` lanes) | lite | parent-executed review acceptable; record the five freshness fields inline in the package ledger. |
 
@@ -1293,15 +1297,13 @@ brief is governance-owned, not runtime-owned, and must name:
 6. The stale-proof check that decides whether the brief must be refreshed before
    activation.
 
-Scenario-driven active sprints should keep their newest compact handoff in:
-
-1. `work/sprints/current-blocker.json`
-2. `work/sprints/current-blocker.md`
-
-These files are generated from the active package metadata by
-`npm run work:current-blocker`. Keep long migration narratives in package
-history or archived sprint notes; the current-blocker files are the starting
-point for humans and LLM agents.
+Scenario-driven active sprints should keep their newest compact handoff in
+`work/sprints/current-blocker.json`. It is generated from the active package
+metadata by `npm run work:current-blocker -- --write`. Use
+`npm run work:current-blocker -- --markdown` for an on-demand Markdown view
+instead of committing a parallel mirror. Keep long migration narratives in
+package history or archived sprint notes; the current-blocker JSON is the
+starting point for humans and LLM agents.
 
 Recommended naming:
 

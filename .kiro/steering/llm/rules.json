@@ -99,12 +99,12 @@
     }
   ],
   "stats": {
-    "candidateCount": 334,
-    "dedupedRuleCount": 327,
-    "exportedRuleCount": 327,
+    "candidateCount": 335,
+    "dedupedRuleCount": 328,
+    "exportedRuleCount": 328,
     "aliasRuleCount": 11,
-    "masterRuleCount": 316,
-    "estimatedAllRulesTokens": 13061
+    "masterRuleCount": 317,
+    "estimatedAllRulesTokens": 13092
   },
   "rules": [
     {
@@ -1631,7 +1631,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 244,
+          "line": 247,
           "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
@@ -2638,7 +2638,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 42,
+          "line": 45,
           "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents > packageClass → freshness-review mode matrix"
         }
       ]
@@ -2653,7 +2653,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 71,
+          "line": 74,
           "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents > packageClass → freshness-review mode matrix"
         }
       ]
@@ -2668,7 +2668,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 204,
+          "line": 207,
           "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
         }
       ]
@@ -2685,7 +2685,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 230,
+          "line": 233,
           "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
@@ -2752,7 +2752,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 277,
+          "line": 280,
           "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
@@ -4158,7 +4158,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 27,
+          "line": 29,
           "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents > packageClass → freshness-review mode matrix"
         }
       ]
@@ -4173,7 +4173,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 78,
+          "line": 81,
           "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents > packageClass → freshness-review mode matrix"
         }
       ]
@@ -4188,7 +4188,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 101,
+          "line": 104,
           "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents > packageClass → freshness-review mode matrix"
         }
       ]
@@ -4203,7 +4203,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 115,
+          "line": 118,
           "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents > packageClass → freshness-review mode matrix"
         }
       ]
@@ -4218,7 +4218,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 215,
+          "line": 218,
           "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
@@ -4316,7 +4316,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 274,
+          "line": 277,
           "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
@@ -4331,7 +4331,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 277,
+          "line": 280,
           "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
@@ -4435,7 +4435,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 42,
+          "line": 45,
           "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents > packageClass → freshness-review mode matrix"
         }
       ]
@@ -4454,7 +4454,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 101,
+          "line": 104,
           "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents > packageClass → freshness-review mode matrix"
         }
       ]
@@ -4469,7 +4469,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 124,
+          "line": 127,
           "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents > packageClass → freshness-review mode matrix"
         }
       ]
@@ -4703,7 +4703,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 164,
+          "line": 167,
           "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
         }
       ]
@@ -5025,7 +5025,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 78,
+          "line": 81,
           "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents > packageClass → freshness-review mode matrix"
         }
       ]
@@ -5042,7 +5042,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 135,
+          "line": 138,
           "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
         }
       ]
@@ -5189,7 +5189,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 184,
+          "line": 187,
           "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
         }
       ]
@@ -5200,11 +5200,11 @@
       "strength": "may",
       "tags": [],
       "rule": "Runtime edits may start only after the classification gate and implementation gate are both satisfied.",
-      "score": 155,
+      "score": 154,
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 247,
+          "line": 250,
           "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
         }
       ]
@@ -5325,18 +5325,33 @@
       "domain": "governance",
       "strength": "may",
       "tags": [],
-      "rule": "A real sub-agent may perform implementation or verification-fix, but real sub-agent identity is optional provenance for those closure roles.",
+      "rule": "No-runtime-write analysis packages may use parent-executed lite freshness unless they opt into strict freshness.",
       "score": 145,
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 42,
-          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents > packageClass → freshness-review mode matrix"
+          "line": 17,
+          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
         }
       ]
     },
     {
       "id": "GOV-0101",
+      "domain": "governance",
+      "strength": "may",
+      "tags": [],
+      "rule": "A real sub-agent may perform implementation or verification-fix, but real sub-agent identity is optional provenance for those closure roles.",
+      "score": 145,
+      "sources": [
+        {
+          "file": "workflow-guidelines/subagents.md",
+          "line": 45,
+          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents > packageClass → freshness-review mode matrix"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0102",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5347,13 +5362,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 42,
+          "line": 45,
           "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents > packageClass → freshness-review mode matrix"
         }
       ]
     },
     {
-      "id": "GOV-0102",
+      "id": "GOV-0103",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5362,13 +5377,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 115,
+          "line": 118,
           "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents > packageClass → freshness-review mode matrix"
         }
       ]
     },
     {
-      "id": "GOV-0103",
+      "id": "GOV-0104",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5385,7 +5400,7 @@
       ]
     },
     {
-      "id": "GOV-0104",
+      "id": "GOV-0105",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5403,7 +5418,7 @@
       ]
     },
     {
-      "id": "GOV-0105",
+      "id": "GOV-0106",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -5433,7 +5448,7 @@
       ]
     },
     {
-      "id": "GOV-0106",
+      "id": "GOV-0107",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5450,7 +5465,7 @@
       ]
     },
     {
-      "id": "GOV-0107",
+      "id": "GOV-0108",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5467,7 +5482,7 @@
       ]
     },
     {
-      "id": "GOV-0108",
+      "id": "GOV-0109",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5484,7 +5499,7 @@
       ]
     },
     {
-      "id": "GOV-0109",
+      "id": "GOV-0110",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5497,13 +5512,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 172,
+          "line": 175,
           "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
         }
       ]
     },
     {
-      "id": "GOV-0110",
+      "id": "GOV-0111",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5514,13 +5529,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
-          "line": 179,
+          "line": 182,
           "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
         }
       ]
     },
     {
-      "id": "GOV-0111",
+      "id": "GOV-0112",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5537,5 +5552,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-05-29T09:25:33.006Z"
+  "generatedAt": "2026-05-31T17:23:33.703Z"
 }

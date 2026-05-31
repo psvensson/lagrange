@@ -108,15 +108,15 @@ These are LLM-specific operational steps. Process semantics for each lane live i
 Every lane that closes a package ends with these four steps in order. They are the LLM-facing surface of the canonical [Closure Recipe](../../../work/RULES.md#closure-recipe); follow that recipe for the exact command shapes and evidence grammar.
 
 1. Fill structured `execution.*` metadata or checked `## Execution Evidence` with replayable proof.
-2. `npm run work:repair` — refresh generated current-blocker and sprint handoff files before closure.
-3. `npm run work:close <package>` — runs closure validation, renames `active-*` or `todo-*` to `done-*`, flips status, rewrites sprint refs, renumbers the sprint queue, refreshes current-blocker state, stages only commit-scope plus tracker-generated handoff files, and creates the focused local close commit.
+2. `npm run work:repair` — refresh generated current-blocker JSON and sprint handoff files before closure.
+3. `npm run work:close <package>` — runs closure validation, renames `active-*` or `todo-*` to `done-*`, flips status, rewrites sprint refs, renumbers the sprint queue, refreshes current-blocker state, stages only commit-scope plus tracker-generated JSON handoff files, and creates the focused local close commit.
 4. Push the focused close commit with `npm run work:sprint:push -- <git-push-args>` before starting the next package. If `npm run work:sprint:remaining` reports zero packages left after the push, use `npm run work:sprint:advance -- --dry-run` and then `--write` to close the sprint in a separate focused transaction.
 
 ## packageClass → Freshness-Review Mode
 
-Freshness-review mode is driven by `modelFit.packageClass` (lane is a legacy fallback). Strict packages require a real `freshness-review` sub-agent before implementation; lite packages may run the review in the parent session.
+Freshness-review mode is driven by `modelFit.packageClass` (lane is a legacy fallback). Strict packages require a real `freshness-review` sub-agent before implementation; lite packages may run the review in the parent session. No-runtime-write `system-theory-rederive` and `architecture-gap-analysis` packages are lite unless they declare strict freshness.
 
-* **strict**: `system-theory-rederive` (and aliases), `architecture-gap*`, `representative-frontier-closure` on `runtime-owner-boundary`/`scenario-release-gate`/`causal-escalation` lane.
+* **strict**: explicit `freshness: "strict"` / `gates.freshness: "strict"`, strict-lane packages with `src/` write/commit scope, and `representative-frontier-closure` on `runtime-owner-boundary`/`scenario-release-gate`/`causal-escalation` lane.
 * **lite**: `classification-only`, `documentation-only`, `lightweight-maintenance`, `probe-only`, and the `read-doc` / `*-maintenance` lanes.
 
 Canonical matrix: [`.kiro/steering/workflow-guidelines/subagents.md`](../workflow-guidelines/subagents.md). Mirror in [`work/README.md`](../../../work/README.md).

@@ -116,30 +116,7 @@ async function main() {
   // measured number rather than an unrecorded field.
   autofillResidualCount(packagePath, relativePackagePath);
 
-  // 1. Run active package validation before the tracker validates the done target.
-  console.log('Running active package closure preflight...');
-  try {
-    execSync(`node scripts/work-tracker.js validate --closure ${relativePackagePath}`, { stdio: 'inherit' });
-  } catch (error) {
-    console.error('Closure preflight failed. Closure aborted.');
-    process.exit(1);
-  }
-
-  // 1b. Guard against stale compiled steering packs. steering:check regenerates
-  // the packs and fails if the working tree still differs, so a close can never
-  // ship doctrine edits without the matching .kiro/steering/llm regeneration.
-  console.log('Checking steering pack freshness...');
-  try {
-    execSync('npm run --silent steering:check', { stdio: 'inherit' });
-  } catch (error) {
-    console.error(
-      'Steering packs are stale. Run `npm run steering:llm:pack`, review the ' +
-      'diff, and re-run work:close.',
-    );
-    process.exit(1);
-  }
-
-  // 2. Read package metadata to get commitScope and other details
+  // 1. Read package metadata to get commitScope and other details.
   const openMarker = '<!-- work-package';
   const closeMarker = '-->';
   const openIndex = content.indexOf(openMarker);
@@ -170,11 +147,34 @@ async function main() {
     console.log('- Update status to "done" in metadata');
     console.log('- Rewrite all references to the package in the workspace');
     console.log('- Renumber the sprint queue if required');
-    console.log('- Stage only commitScope files plus sprint and blocker files');
+    console.log('- Stage only commitScope files plus sprint and current-blocker.json');
     if (push) {
       console.log('- Push the close commit and flip package ledgers to Pushed: yes (--push)');
     }
     return;
+  }
+
+  // 2. Run active package validation before the tracker validates the done target.
+  console.log('Running active package closure preflight...');
+  try {
+    execSync(`node scripts/work-tracker.js validate --closure ${relativePackagePath}`, { stdio: 'inherit' });
+  } catch (error) {
+    console.error('Closure preflight failed. Closure aborted.');
+    process.exit(1);
+  }
+
+  // 2b. Guard against stale compiled steering packs. steering:check regenerates
+  // the packs and fails if the working tree still differs, so a close can never
+  // ship doctrine edits without the matching .kiro/steering/llm regeneration.
+  console.log('Checking steering pack freshness...');
+  try {
+    execSync('npm run --silent steering:check', { stdio: 'inherit' });
+  } catch (error) {
+    console.error(
+      'Steering packs are stale. Run `npm run steering:llm:pack`, review the ' +
+      'diff, and re-run work:close.',
+    );
+    process.exit(1);
   }
 
   // 3. Run the movePackageCommand through work-tracker CLI
@@ -228,9 +228,7 @@ async function main() {
 
   // Blocker and sprint files
   const blockerJson = 'work/sprints/current-blocker.json';
-  const blockerMd = 'work/sprints/current-blocker.md';
   if (fs.existsSync(blockerJson)) filesToStage.add(blockerJson);
-  if (fs.existsSync(blockerMd)) filesToStage.add(blockerMd);
   if (fs.existsSync(activeSprintPath)) filesToStage.add(activeSprintPath);
 
   console.log('\nStaging files...');

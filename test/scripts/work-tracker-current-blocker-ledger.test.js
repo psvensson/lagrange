@@ -364,9 +364,16 @@ describe('work tracker scenario causal closure validation', () => {
         theoryLedgerRefs: [TEST_THEORY_LEDGER_REF],
         writeScope: ['scripts/work-tracker.js'],
         handoffFiles: ['work/packages/done-test-package.md'],
-        generatedFiles: ['work/sprints/current-blocker.md'],
+        generatedFiles: [
+          'work/sprints/current-blocker.json',
+          'work/sprints/current-blocker.md',
+        ],
         candidateRuntimeFiles: ['src/example.js'],
-        commitScope: ['scripts/work-tracker.js', 'work/sprints/current-blocker.md'],
+        commitScope: [
+          'scripts/work-tracker.js',
+          'work/sprints/current-blocker.json',
+          'work/sprints/current-blocker.md',
+        ],
         modelFit: {
           packageClass: 'representative-frontier-closure',
           intendedMinimumModel: 'gpt-5.3-codex',
@@ -410,11 +417,11 @@ describe('work tracker scenario causal closure validation', () => {
       assert.equal(payload.modelFit.outputProfile, 'medium');
       assert.deepEqual(payload.writeScope, ['scripts/work-tracker.js']);
       assert.deepEqual(payload.handoffFiles, ['work/packages/done-test-package.md']);
-      assert.deepEqual(payload.generatedFiles, ['work/sprints/current-blocker.md']);
+      assert.deepEqual(payload.generatedFiles, ['work/sprints/current-blocker.json']);
       assert.deepEqual(payload.candidateRuntimeFiles, ['src/example.js']);
       assert.deepEqual(payload.commitScope, [
         'scripts/work-tracker.js',
-        'work/sprints/current-blocker.md',
+        'work/sprints/current-blocker.json',
       ]);
       assert.deepEqual(payload.theoryLedgerRefs, [TEST_THEORY_LEDGER_REF]);
       assert.equal(payload.representativeResidual.status, 'red');

@@ -4,25 +4,43 @@
 {
   "schema": "work-package-v2",
   "status": "todo",
-  "opened": "YYYY-MM-DD",
-  "lane": "read-review-doc-only",
-  "scenario": "none",
-  "artifact": "none",
-  "playback": "none",
-  "owner": "docs_or_governance_owner",
-  "boundary": "doc_boundary",
-  "dominantReason": "doc_truth_update",
-  "currentState": "one-line current state",
-  "nextAction": "edit docs and validate diff",
-  "stabilityCredit": "local-proof-only",
-  "whyHighestLeverageNow": "why this doc update is the highest-leverage truth repair",
-  "proof": ["git diff --check -- <files>"],
-  "theoryLedgerRefs": [],
-  "writeScope": ["path/to/doc.md"],
-  "handoffFiles": [],
-  "generatedFiles": [],
-  "candidateRuntimeFiles": [],
-  "commitScope": ["path/to/doc.md", "work/packages/done-YYYYMMDD-slug.md"],
+  "intent": {
+    "opened": "YYYY-MM-DD",
+    "lane": "read-review-doc-only",
+    "scenario": "none",
+    "artifact": "none",
+    "playback": "none",
+    "owner": "docs_or_governance_owner",
+    "boundary": "doc_boundary",
+    "dominantReason": "doc_truth_update",
+    "currentState": "one-line current state",
+    "nextAction": "edit docs and validate diff"
+  },
+  "scope": {
+    "writeScope": ["path/to/doc.md"],
+    "handoffFiles": [],
+    "generatedFiles": [],
+    "candidateRuntimeFiles": [],
+    "commitScope": ["path/to/doc.md", "work/packages/done-YYYYMMDD-slug.md"]
+  },
+  "gates": {
+    "stabilityCredit": "local-proof-only",
+    "whyHighestLeverageNow": "why this doc update is the highest-leverage truth repair"
+  },
+  "modelFit": {
+    "packageClass": "documentation-only",
+    "intendedMinimumModel": "gpt-5.3-codex-spark",
+    "scopeShape": "leaf-slice",
+    "outputProfile": "small",
+    "ambiguityScore": 1,
+    "escalationTriggers": ["doc edit changes runtime ownership or scope"]
+  },
+  "execution": {
+    "theoryLedgerRefs": [],
+    "proof": {
+      "commands": ["git diff --check -- <files>"]
+    }
+  },
   "closureSummary": {
     "resultClassification": "pending-before-probe",
     "predictionAccuracy": "pending-before-observation",

@@ -31,8 +31,7 @@
     "test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json"
   ],
   "generatedFiles": [
-    "work/sprints/current-blocker.json",
-    "work/sprints/current-blocker.md"
+    "work/sprints/current-blocker.json"
   ],
   "candidateRuntimeFiles": [
     "src/rebalancer/operation-workflow-owner-ports.js",
@@ -44,8 +43,7 @@
     "work/packages/todo-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-architecture-gap-experiment.md",
     "work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md",
     "work/theory-ledger.md",
-    "work/sprints/current-blocker.json",
-    "work/sprints/current-blocker.md"
+    "work/sprints/current-blocker.json"
   ],
   "touchedFiles": [],
   "theoryLedgerRefs": [
