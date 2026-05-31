@@ -28,6 +28,13 @@
       ]
     },
     {
+      "name": "representativeRerunRoute",
+      "values": [
+        "eligible",
+        "blocked_model_route"
+      ]
+    },
+    {
       "name": "writeScopeFit",
       "values": [
         "declared_owner_file",
@@ -73,6 +80,7 @@
         "routeOwnerBoundary": "*",
         "dominantReason": "*",
         "causalOutcome": "*",
+        "representativeRerunRoute": "*",
         "writeScopeFit": "outside_scope"
       },
       "outcome": {
@@ -90,6 +98,7 @@
         "routeOwnerBoundary": "other",
         "dominantReason": "*",
         "causalOutcome": "*",
+        "representativeRerunRoute": "*",
         "writeScopeFit": "declared_owner_file"
       },
       "outcome": {
@@ -107,6 +116,7 @@
         "routeOwnerBoundary": "operation_workflow_owner/rebalancer_handoff",
         "dominantReason": "other",
         "causalOutcome": "*",
+        "representativeRerunRoute": "*",
         "writeScopeFit": "declared_owner_file"
       },
       "outcome": {
@@ -124,6 +134,7 @@
         "routeOwnerBoundary": "operation_workflow_owner/rebalancer_handoff",
         "dominantReason": "priority_recovery_event_driven_wait",
         "causalOutcome": "accept_classified_backpressure",
+        "representativeRerunRoute": "eligible",
         "writeScopeFit": "declared_owner_file"
       },
       "outcome": {
@@ -136,11 +147,30 @@
       ]
     },
     {
+      "id": "accepted-backpressure-blocked-rerun-opens-model-contract-successor",
+      "when": {
+        "routeOwnerBoundary": "operation_workflow_owner/rebalancer_handoff",
+        "dominantReason": "priority_recovery_event_driven_wait",
+        "causalOutcome": "accept_classified_backpressure",
+        "representativeRerunRoute": "blocked_model_route",
+        "writeScopeFit": "declared_owner_file"
+      },
+      "outcome": {
+        "action": "open_successor_or_architecture_experiment",
+        "packageClass": "architecture-gap-analysis"
+      },
+      "reason": "Accepted backpressure cannot emit representative rerun when the representative-progress model blocks the rerun; repair or continue through a non-repeated model/contract successor.",
+      "invariantRefs": [
+        "single-canonical-outcome"
+      ]
+    },
+    {
       "id": "same-frontier-escalates-instead-of-repatching",
       "when": {
         "routeOwnerBoundary": "operation_workflow_owner/rebalancer_handoff",
         "dominantReason": "priority_recovery_event_driven_wait",
         "causalOutcome": "same_frontier",
+        "representativeRerunRoute": "*",
         "writeScopeFit": "declared_owner_file"
       },
       "outcome": {
@@ -159,6 +189,7 @@
         "routeOwnerBoundary": "operation_workflow_owner/rebalancer_handoff",
         "dominantReason": "priority_recovery_event_driven_wait",
         "causalOutcome": "green_or_reduced",
+        "representativeRerunRoute": "*",
         "writeScopeFit": "declared_owner_file"
       },
       "outcome": {
@@ -176,6 +207,7 @@
         "routeOwnerBoundary": "operation_workflow_owner/rebalancer_handoff",
         "dominantReason": "priority_recovery_event_driven_wait",
         "causalOutcome": "contradictory_or_blocked",
+        "representativeRerunRoute": "*",
         "writeScopeFit": "declared_owner_file"
       },
       "outcome": {

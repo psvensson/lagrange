@@ -14,12 +14,14 @@
   "failureClasses": [
     "priority recovery handoff retry can wait on event-driven progress without a scheduler wake",
     "pending acknowledgement residuals can stay unresolved when representative evidence returns same-frontier",
-    "same-frontier evidence can trigger another local patch instead of a contract-level discriminator"
+    "same-frontier evidence can trigger another local patch instead of a contract-level discriminator",
+    "accepted classified backpressure can map to representative rerun after the representative-progress model has already blocked that rerun"
   ],
   "stateVariables": [
     "routeOwnerBoundary",
     "dominantReason",
     "causalOutcome",
+    "representativeRerunRoute",
     "writeScopeFit",
     "pendingAcknowledgementResidual",
     "representativeMetricDelta"
@@ -38,6 +40,10 @@
     {
       "id": "pending-ack-eventually-routes",
       "statement": "A pending rebalancer handoff acknowledgement eventually reruns representative evidence, retries through the owner wake path, migrates owner, or records an architecture-gap stop."
+    },
+    {
+      "id": "blocked-rerun-routes-to-model-successor",
+      "statement": "When the representative-progress model reports blocked_model_route, accepted classified backpressure must route to a non-repeated model or architecture successor instead of another representative rerun."
     },
     {
       "id": "bounded-owner-reentry",
@@ -59,7 +65,7 @@
     {
       "kind": "decision-table",
       "artifact": "docs/specs/decision-tables/rebalancer-handoff-priority-recovery.json",
-      "properties": "every route evidence combination emits exactly one owner-owned action"
+      "properties": "every route evidence combination, including blocked_model_route representative rerun evidence, emits exactly one owner-owned action"
     },
     {
       "kind": "tla-spec",
@@ -84,11 +90,13 @@
   ],
   "packageRefs": [
     "work/packages/done-20260530-rolling-restart-priority-recovery-rebalancer-handoff-scheduling-retry.md",
-    "work/packages/superseded-20260530-rolling-restart-priority-recovery-rebalancer-handoff-rerun-backpressure-residual.md"
+    "work/packages/superseded-20260530-rolling-restart-priority-recovery-rebalancer-handoff-rerun-backpressure-residual.md",
+    "work/packages/active-20260531-rolling-restart-priority-recovery-rebalancer-handoff-decision-table-circuit-breaker-repair.md"
   ],
   "theoryLedgerRefs": [
     "theory-20260530-rolling-restart-priority-recovery-rebalancer-handoff-scheduling-retry-architecture-gap",
-    "theory-20260529-rolling-restart-active-gate-priority-recovery-coupled-invariants"
+    "theory-20260529-rolling-restart-active-gate-priority-recovery-coupled-invariants",
+    "theory-20260531-rolling-restart-priority-recovery-rebalancer-handoff-decision-table-circuit-breaker-repair"
   ],
   "failureAnalysis": {
     "fmea": [
