@@ -561,7 +561,7 @@ Agent identity is optional provenance. Use the compact five-field shape for new 
 
 ## Commit And Push Ledger
 
-1. Focused package commit: 72bc13359de8269f55eee2222af84328c2dc5da5
+1. Focused package commit: 652034a9bd9c5a68873e748bdbf45032caf1d83c
 2. Push target: origin/codex/pending-ack-eligibility-filter
 3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
-4. Pushed: no
+4. Pushed: yes 2026-05-31T18:57:38.919Z
