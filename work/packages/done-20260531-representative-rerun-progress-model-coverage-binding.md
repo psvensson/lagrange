@@ -3,9 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "todo",
   "intent": {
-    "opened": "2026-05-31",
     "lane": "causal-escalation",
     "scenario": "rolling-restart",
     "artifact": "test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json",
@@ -15,11 +13,12 @@
     "dominantReason": "representative_rerun_model_coverage_binding",
     "currentState": "docs/specs/representative-rerun-progress-model.json exists, but owner-dossier reports contractRecord=null, invariants=[], and modelStatus=none for representative_evidence_owner / rolling_restart_rerun.",
     "nextAction": "Bind the representative rerun progress model into a System Contract Record and invariant registry so the pair has owner-dossier-visible model coverage before another rerun is considered.",
-    "predecessor": "work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-blocked-route-rerun-gate.md"
+    "predecessor": "work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-blocked-route-rerun-gate.md",
+    "closed": "2026-05-31"
   },
   "scope": {
     "writeScope": [
-      "work/packages/todo-20260531-representative-rerun-progress-model-coverage-binding.md",
+      "work/packages/active-20260531-representative-rerun-progress-model-coverage-binding.md",
       "architecture/contracts/rolling-restart-representative-rerun-progress.md",
       "architecture/contracts/invariants.json",
       "work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md",
@@ -34,7 +33,7 @@
     ],
     "candidateRuntimeFiles": [],
     "commitScope": [
-      "work/packages/todo-20260531-representative-rerun-progress-model-coverage-binding.md",
+      "work/packages/active-20260531-representative-rerun-progress-model-coverage-binding.md",
       "architecture/contracts/rolling-restart-representative-rerun-progress.md",
       "architecture/contracts/invariants.json",
       "work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md",
@@ -77,7 +76,7 @@
     "gateMarker": "same-mechanism-repeat",
     "jointFalsifierCommand": "npm --silent run work:owner-dossier -- --owner representative_evidence_owner --boundary rolling_restart_rerun --json",
     "result": "architecture-gap",
-    "outcome": "inconclusive",
+    "outcome": "theory-confirmed",
     "successorRequired": true,
     "architectureRoute": {
       "selectedLayer": "model",
@@ -86,13 +85,13 @@
     }
   },
   "representativeResidual": {
-    "status": "architecture-gap",
     "scenario": "rolling-restart",
     "artifact": "test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json",
-    "frontier": "representative-progress-circuit-breaker / representative_evidence_owner / rolling_restart_rerun",
     "owner": "representative_evidence_owner",
     "boundary": "rolling_restart_rerun",
     "dominantReason": "representative_rerun_model_coverage_binding",
+    "status": "architecture-gap",
+    "frontier": "representative-progress-circuit-breaker / representative_evidence_owner / rolling_restart_rerun",
     "nextAction": "Bind model coverage before another representative rerun.",
     "residualCount": 1
   },
@@ -113,9 +112,9 @@
   "observablePrediction": {
     "metric": "owner-dossier model coverage for representative_evidence_owner / rolling_restart_rerun",
     "predicted": "contractRecord becomes architecture/contracts/rolling-restart-representative-rerun-progress.md and modelStatus becomes proven with a model selectedLayer route.",
-    "observed": "pending-before-implementation",
-    "accuracy": "pending-before-observation",
-    "evidence": "pending-before-implementation"
+    "observed": "contractRecord becomes architecture/contracts/rolling-restart-representative-rerun-progress.md and modelStatus becomes proven with a model selectedLayer route.",
+    "accuracy": "matched",
+    "evidence": "npm --silent run work:owner-dossier -- --owner representative_evidence_owner --boundary rolling_restart_rerun --json; npm run work:contract:check -- architecture/contracts/rolling-restart-representative-rerun-progress.md; npm run work:invariants:check"
   },
   "boundedExperiment": {
     "hypothesis": "Owner-dossier can see the existing representative rerun progress model once it is bound through a System Contract Record and invariant registry entries.",
@@ -176,7 +175,7 @@
         "summary": "Run another representative rerun from the non-shrinking residual window.",
         "route": "continue-local-proof",
         "proof": [
-          "npm run work:validate -- --pre-impl work/packages/todo-20260531-representative-rerun-progress-model-coverage-binding.md"
+          "npm run work:validate -- --pre-impl work/packages/active-20260531-representative-rerun-progress-model-coverage-binding.md"
         ]
       },
       {
@@ -226,8 +225,8 @@
     "maxProgressBound": "one model coverage binding package before route continuation",
     "sameFrontierFallback": "If owner-dossier remains modelStatus=none, open workflow_tooling_owner / owner_dossier_model_coverage rather than rerunning evidence.",
     "expectedNextFrontier": "model-covered representative rerun route decision",
-    "resultClassification": "pending-before-probe",
-    "stopCondition": "continue-local-fix"
+    "resultClassification": "architecture-gap",
+    "stopCondition": "architecture-gap-stop"
   },
   "systemTheory": {
     "problemStatement": "The representative rerun progress model exists but is not connected to the workflow read models that govern rerun authorization.",
@@ -295,7 +294,7 @@
     ]
   },
   "sliceTheory": {
-    "systemTheoryRef": "work/packages/todo-20260531-representative-rerun-progress-model-coverage-binding.md systemTheory",
+    "systemTheoryRef": "work/packages/active-20260531-representative-rerun-progress-model-coverage-binding.md systemTheory",
     "selectedSystemTheory": "The existing model must be bound into contract and invariant surfaces before the rerun gate can legally continue.",
     "selectedMechanism": "contract_gap with observation_gap and ownership_gap as alternates",
     "sourceTestContract": "architecture/contracts/rolling-restart-representative-rerun-progress.md, architecture/contracts/invariants.json, and owner-dossier output",
@@ -327,7 +326,19 @@
       "Runtime source and representative rerun execution remain frozen while coverage is bound."
     ],
     "counterExampleHandling": "If owner-dossier still reports modelStatus none after contract and invariant binding, escalate to workflow_tooling_owner / owner_dossier_model_coverage.",
-    "linkedSystemTheoryRef": "work/packages/todo-20260531-representative-rerun-progress-model-coverage-binding.md systemTheory"
+    "linkedSystemTheoryRef": "work/packages/active-20260531-representative-rerun-progress-model-coverage-binding.md systemTheory"
+  },
+  "closureSummary": {
+    "resultClassification": "architecture-gap",
+    "predictionAccuracy": "matched",
+    "observedMovement": "Owner-dossier now reports contractRecord=architecture/contracts/rolling-restart-representative-rerun-progress.md, modelStatus=proven, one model selectedLayer proven route, and two invariant modelRef entries for representative_evidence_owner / rolling_restart_rerun.",
+    "successorReason": "The stale representative artifact still routes priority_recovery_partition_progress to operation_workflow_owner / rebalancer_handoff with accept_classified_backpressure; the next route decision must use the proven representative rerun model instead of treating blocked_model_route as rerun permission.",
+    "nextOwnerBoundary": "representative_evidence_owner / rolling_restart_rerun",
+    "evidenceArtifact": "architecture/contracts/rolling-restart-representative-rerun-progress.md; architecture/contracts/invariants.json; docs/specs/representative-rerun-progress-model.json"
+  },
+  "commitAndPushLedgerRequired": true,
+  "result": {
+    "classification": "architecture-gap"
   }
 }
 -->
@@ -366,4 +377,12 @@ into those durable surfaces before any new representative rerun.
 
 ## Execution Evidence
 
-- [ ] action: freshness-review; owner: Agent <name> (<agent-id>); files-changed: none; validation: npm run work:context; npm run work:validate -- --entry work/packages/todo-20260531-representative-rerun-progress-model-coverage-binding.md; decision: fresh; outcome: pending.
+- [x] action: freshness-review; owner: Agent Popper (019e7fb5-0cb4-7c62-b2da-95b4333c395f); files-changed: none; validation: `npm run work:context` passed and confirmed active package plus modelStatus=none; `npm run work:package:doctor -- work/packages/active-20260531-representative-rerun-progress-model-coverage-binding.md` failed only on missing checked freshness-review and implementation evidence; `npm run work:validate -- --entry work/packages/active-20260531-representative-rerun-progress-model-coverage-binding.md` passed; `npm --silent run work:owner-dossier -- --owner representative_evidence_owner --boundary rolling_restart_rerun --json` passed with contractRecord=null, invariants=[], modelStatus=none, provenRoutes=[]; `npm run work:invariants:check` passed; model JSON property probe passed; decision: fresh; outcome: passed.
+- [x] action: implementation; owner: representative_evidence_owner; files-changed: architecture/contracts/rolling-restart-representative-rerun-progress.md, architecture/contracts/invariants.json, work/packages/active-20260531-representative-rerun-progress-model-coverage-binding.md; validation: `npm run work:contract:check -- architecture/contracts/rolling-restart-representative-rerun-progress.md` passed; `npm run work:invariants:check` passed; owner-dossier assertion passed with contractRecord=architecture/contracts/rolling-restart-representative-rerun-progress.md, modelStatus=proven, provenRoutes=1, invariants=2; model JSON property probe passed; `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json --owner representative_evidence_owner --boundary rolling_restart_rerun --dominant-reason representative_rerun_model_coverage_binding` passed; `npm run analyze:causal-model -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json` passed with accept_classified_backpressure; parent revalidated focused proof: yes; outcome: passed.
+- [x] action: verification-fix; owner: Agent Herschel (019e7fbc-0b8f-74c2-813c-c1669dbe744f); files-changed: none; validation: verifier ran active entry/pre-impl validation, `npm run work:contract:check -- architecture/contracts/rolling-restart-representative-rerun-progress.md`, `npm run work:invariants:check`, owner-dossier assertion with modelStatus=proven, contractRecord=architecture/contracts/rolling-restart-representative-rerun-progress.md, provenRoutes=1, invariants=2, `npm run work:theory-ledger -- validate`, and `git diff --check` for touched files; verifier confirmed the new contract `modelProvenRoutes` and invariant modelRef entries are the minimal owner-dossier coverage binding and do not claim representative green movement or runtime behavior changes; parent revalidated focused proof: yes; outcome: validated.
+
+## Commit And Push Ledger
+
+1. Push target: origin/codex/pending-ack-eligibility-filter
+2. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
+3. Pushed: no

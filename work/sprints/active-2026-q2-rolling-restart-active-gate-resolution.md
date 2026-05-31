@@ -102,7 +102,7 @@ current-blocker files, sprint state, package queues, or theory-ledger decisions.
   route, widening scope beyond the declared owner/boundary, or treating
   classification-only output as sprint success.
 - Next best package:
-  `work/packages/todo-20260531-representative-rerun-progress-model-coverage-binding.md`
+  `work/packages/done-20260531-representative-rerun-progress-model-coverage-binding.md`
 - Redirect rule: if the rederive cannot select one route, open the
   architecture-gap or contract/model repair successor; do not stop the theory
   loop on non-terminal classification, same-frontier, migration, or
@@ -112,21 +112,21 @@ current-blocker files, sprint state, package queues, or theory-ledger decisions.
 
 ```text
 Representative artifact: test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json
-Visible first frontier: representative_evidence_owner / rolling_restart_rerun model coverage binding pending
-Active package: work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-blocked-route-rerun-gate.md
+Visible first frontier: representative_evidence_owner / rolling_restart_rerun model coverage binding
+Active package: work/packages/done-20260531-representative-rerun-progress-model-coverage-binding.md
 Active package owner: representative_evidence_owner
 Active package boundary: rolling_restart_rerun
-Selected cause: priority_recovery_blocked_route_rerun
-Required action: Run architecture-gap analysis for representative_evidence_owner / rolling_restart_rerun and select a non-rerun successor before any further runtime or downstream owner work.
+Selected cause: representative_rerun_model_coverage_binding
+Required action: Bind the representative rerun progress model into a System Contract Record and invariant registry so the pair has owner-dossier-visible model coverage before another rerun is considered.
 Representative status: architecture-gap
 Causal outcome: architecture-gap
-Architecture gate: selected / bind-representative-rerun-progress-model-coverage
-Expected delta: The next package binds docs/specs/representative-rerun-progress-model.json into owner-dossier-visible contract or invariant coverage before any representative rerun.
-Current state: The runtime progress contract now exposes representativeRerunRoute=blocked_model_route, but the representative rerun pair is blocked by the representative-progress circuit breaker before another fresh rerun.
-Allowed edits: work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-blocked-route-rerun-gate.md, work/packages/todo-20260531-representative-rerun-progress-model-coverage-binding.md, work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md, work/theory-ledger.md
+Architecture gate: selected / bind-contract-and-invariant-model-coverage
+Expected delta: Owner-dossier-visible model coverage blocks unmodelled rerun churn and enables the next legal route decision.
+Current state: docs/specs/representative-rerun-progress-model.json exists, but owner-dossier reports contractRecord=null, invariants=[], and modelStatus=none for representative_evidence_owner / rolling_restart_rerun.
+Allowed edits: work/packages/done-20260531-representative-rerun-progress-model-coverage-binding.md, architecture/contracts/rolling-restart-representative-rerun-progress.md, architecture/contracts/invariants.json, work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md, work/theory-ledger.md
 Candidate runtime files: unknown
-Forbidden edits: Accepted backpressure under blocked_model_route cannot authorize rerun_representative_evidence.
-Required latest proof: falsifier: npm run work:frontier-history -- --owner representative_evidence_owner --boundary rolling_restart_rerun --limit 12, regression: npm run work:loop-health -- --owner representative_evidence_owner --boundary rolling_restart_rerun, supporting: npm run work:owner-dossier -- --owner representative_evidence_owner --boundary rolling_restart_rerun --json, supporting: npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json --owner representative_evidence_owner --boundary rolling_restart_rerun --dominant-reason priority_recovery_blocked_route_rerun --explain priority_recovery_partition_progress, supporting: npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json
+Forbidden edits: A blocked_model_route artifact cannot authorize rerun_representative_evidence until model coverage and route selection allow it.
+Required latest proof: falsifier: node -e "const {execFileSync}=require('child_process'); const out=execFileSync('npm',['--silent','run','work:owner-dossier','--','--owner','representative_evidence_owner','--boundary','rolling_restart_rerun','--json'],{encoding:'utf8'}); const d=JSON.parse(out); if (d.modelStatus!=='proven') throw new Error('expected proven modelStatus'); if (!d.contractRecord) throw new Error('missing contractRecord'); if (!Array.isArray(d.provenRoutes)||d.provenRoutes.length===0) throw new Error('missing provenRoutes');", regression: npm run work:contract:check -- architecture/contracts/rolling-restart-representative-rerun-progress.md, supporting: npm run work:invariants:check, supporting: node -e "const fs=require('fs'); const m=JSON.parse(fs.readFileSync('docs/specs/representative-rerun-progress-model.json','utf8')); if (!m.properties.some((p)=>p.id==='non_shrinking_window_blocks_rerun')) throw new Error('missing non_shrinking_window_blocks_rerun'); if (!m.properties.some((p)=>p.id==='blocked_route_has_non_rerun_exits')) throw new Error('missing blocked_route_has_non_rerun_exits');"
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -210,7 +210,7 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Runtime architecture-route implementation that emits the
      `blocked_model_route` discriminator from the rebalancer handoff progress
      contract for the repaired decision-table route.
-17. `active` -
+17. `done` -
    [Rolling Restart Priority Recovery Rebalancer Handoff Blocked Route Rerun Gate](work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-blocked-route-rerun-gate.md)
    - Architecture-gap analysis after the runtime progress contract emits
      `blocked_model_route`; direct rerun is blocked by the representative
@@ -220,8 +220,8 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Workflow-tooling maintenance to derive package lifecycle, scope, route,
      result, and sprint handoff views from package metadata instead of
      hand-maintained mirror state.
-19. `todo` -
-   [Representative Rerun Progress Model Coverage Binding](work/packages/todo-20260531-representative-rerun-progress-model-coverage-binding.md)
+19. `active` -
+   [Representative Rerun Progress Model Coverage Binding](work/packages/done-20260531-representative-rerun-progress-model-coverage-binding.md)
    - Bind the existing representative rerun progress model into a System
      Contract Record and invariant registry entries so owner-dossier reports
      proven coverage before another representative rerun is considered.
