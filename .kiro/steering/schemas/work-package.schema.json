@@ -312,6 +312,49 @@
       },
       "additionalProperties": false
     },
+    "parallelDiagnostics": {
+      "type": "object",
+      "required": [
+        "mode",
+        "requiredCards",
+        "reportDir",
+        "coordinatorOnlyWrites",
+        "routeDecisionRequired"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["read-only-scouts", "verify-only", "none"]
+        },
+        "requiredCards": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "evidence-scout",
+              "model-contract-scout",
+              "source-map-scout",
+              "verifier"
+            ]
+          }
+        },
+        "reportDir": {
+          "type": "string",
+          "pattern": "^work/agent-reports/.+"
+        },
+        "coordinatorOnlyWrites": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "routeDecisionRequired": {
+          "type": "boolean"
+        },
+        "trigger": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
     "mechanismCard": {
       "type": "object",
       "properties": {

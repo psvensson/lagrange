@@ -584,6 +584,20 @@ Each entry must include these labels:
 - Representative movement: classification-only
 - Linked packages: `work/packages/active-20260531-rolling-restart-contract-first-route-discriminator.md`
 - Supersedes: `theory-20260530-rolling-restart-priority-recovery-rebalancer-handoff-scheduling-retry-architecture-gap`
-- Superseded by: none
+- Superseded by: theory-20260531-rolling-restart-contract-first-green-fresh-rerun
 - Next implication: Open fresh representative rolling-restart evidence before
   runtime source work; if the rerun is red, route the fresh first frontier.
+
+## theory-20260531-rolling-restart-contract-first-green-fresh-rerun
+
+- Status: supported
+- Scenario/gate: rolling-restart / rolling_restart_fully_green_gate
+- Owner/boundary: release_gate_owner / rolling_restart_fully_green_gate
+- Hypothesis: After release-gate observation-gap saturation is rederived, a fresh representative rerun either exits green or selects one fresh first frontier before runtime promotion.
+- Probe: `npm run work:system-theory:rederive -- --owner release_gate_owner --boundary rolling_restart_fully_green_gate --sprint work/sprints/active-2026-q2-rolling-restart-contract-first-green-theory-loop.md --write`, `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-contract-first-green-rerun.report.json --fast-local --verbose`, and `npm run work:scenario-route -- test-output/reports/rolling-restart-contract-first-green-rerun.report.json --owner release_gate_owner --boundary rolling_restart_fully_green_gate --dominant-reason accepted_classified_backpressure_rerun --explain active_gate_snapshot_coverage`
+- Artifact/result: `test-output/reports/rolling-restart-contract-first-green-rerun.report.json` - fresh representative evidence is red at `active_gate_snapshot_coverage` under `startup_active_gate_owner / snapshot_coverage` with `owner_reconcile_pending`, `selected_snapshot_source_timeout`, and `snapshot_repair_deferred`; priority-recovery residual witnesses are `0`; route-after-rerun reports `runtimePromotionGuard.state=blocked` with `saturated_history_requires_non_repeated_source_contract`.
+- Representative movement: reduced
+- Linked packages: `work/packages/active-20260531-rolling-restart-fresh-representative-rerun-gate.md`, `work/packages/todo-20260531-rolling-restart-active-gate-observation-route.md`
+- Supersedes: theory-20260531-rolling-restart-contract-first-green-loop
+- Superseded by: none
+- Next implication: Continue with the startup_active_gate_owner / snapshot_coverage observation-layer architecture-route successor before any unguided runtime source promotion; representative green remains required to close the sprint.

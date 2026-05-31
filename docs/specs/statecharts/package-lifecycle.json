@@ -1,0 +1,97 @@
+{
+  "schema": "statechart-v1",
+  "id": "work-package-lifecycle",
+  "initial": "idea",
+  "states": [
+    {
+      "id": "idea",
+      "description": "A candidate concern exists outside the executable queue."
+    },
+    {
+      "id": "todo",
+      "description": "The package is queueable and has declared lane, owner, boundary, scope, and proof."
+    },
+    {
+      "id": "active",
+      "description": "The package owns the current execution slice and current-blocker projection."
+    },
+    {
+      "id": "done",
+      "description": "The package closed atomically with evidence, validation, package rename, and sprint/current-blocker refresh."
+    },
+    {
+      "id": "superseded",
+      "description": "The package is no longer executable because a successor, migration, or architecture decision replaced it."
+    }
+  ],
+  "terminalStates": [
+    "done",
+    "superseded"
+  ],
+  "transitions": [
+    {
+      "from": "idea",
+      "event": "scaffold_with_lane",
+      "to": "todo",
+      "evidence": "npm run work:package:new -- --write with lane, owner, boundary, dominant reason, scope, and proof."
+    },
+    {
+      "from": "todo",
+      "event": "activate",
+      "to": "active",
+      "evidence": "npm run work:sprint:queue -- --activate refreshes current-blocker and active sprint references."
+    },
+    {
+      "from": "active",
+      "event": "close_with_evidence",
+      "to": "done",
+      "evidence": "npm run work:close runs repair, closure validation, package rename, current-blocker refresh, focused staging, and close commit."
+    },
+    {
+      "from": "active",
+      "event": "supersede_with_successor",
+      "to": "superseded",
+      "evidence": "The active package records successor or migration evidence before package status changes."
+    },
+    {
+      "from": "todo",
+      "event": "supersede_unstarted",
+      "to": "superseded",
+      "evidence": "The todo package records why a newer route, owner, or architecture decision replaced it."
+    }
+  ],
+  "forbiddenTransitions": [
+    {
+      "from": "done",
+      "event": "reopen_without_new_package",
+      "to": "active",
+      "reason": "Closed package evidence is immutable; new work needs a successor package."
+    },
+    {
+      "from": "superseded",
+      "event": "reopen_without_route_decision",
+      "to": "active",
+      "reason": "Superseded packages cannot silently become the active owner of a later route."
+    },
+    {
+      "from": "active",
+      "event": "close_without_evidence",
+      "to": "done",
+      "reason": "Closure requires validation, execution evidence, and package/sprint/current-blocker atomicity."
+    }
+  ],
+  "invariants": [
+    {
+      "id": "one-active-owner-boundary",
+      "statement": "An active package must name exactly one owner and boundary as the executable slice."
+    },
+    {
+      "id": "closure-evidence-before-done",
+      "statement": "A package cannot enter done without replayable closure evidence and workflow repair."
+    },
+    {
+      "id": "superseded-has-causal-replacement",
+      "statement": "A superseded package records the successor, migration, or architecture decision that replaced it."
+    }
+  ]
+}

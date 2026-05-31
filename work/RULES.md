@@ -167,6 +167,44 @@ Allowed outcomes:
 
 ---
 
+## Parallel Diagnostics
+<a name="parallel-diagnostics"></a>
+
+Parallel diagnostics are advisory route-card evidence, not workflow authority.
+Use them when independent evidence interpretation, model/contract review, source
+mapping, or verification can run in parallel without blocking the coordinator's
+immediate next action.
+
+Only the coordinator may:
+
+1. Change active package status.
+2. Update `work/sprints/current-blocker.json` or `work/sprints/current-blocker.md`.
+3. Update sprint status or package queues.
+4. Create successor packages.
+5. Record theory-ledger decisions.
+
+Scout agents must be read-only and produce exactly one route card under
+`work/agent-reports/<package-id>/`. Scout cards must not add runtime, test,
+script, or tracker files to `writeScope`; they may list candidate files only as
+evidence. Implementation agents may write only after the coordinator selects one
+route and grants a non-overlapping write scope. Verifier agents must review
+package state, proof, schema, and behavioral risk independently of the
+implementation agent.
+
+The supported route-card commands are:
+
+1. `npm run work:agent:plan -- --package <package.md>`
+2. `npm run work:agent:validate -- --package <package.md>`
+3. `npm run work:agent:collect -- --package <package.md>`
+
+Packages may declare `parallelDiagnostics` metadata with mode
+`read-only-scouts` or `verify-only`. The coordinator compares all required cards
+and records disagreement explicitly before opening a runtime, contract repair,
+evidence regeneration, release-gate expectation, architecture-gap, or
+representative-green successor route.
+
+---
+
 ## Mechanism Taxonomy and Card Contract
 <a name="mechanism-taxonomy-and-card-contract"></a>
 
@@ -262,6 +300,35 @@ Evidence-only reasoning stays at sprint level. Promote a package only when
 slice theory can execute one declared `src/` source/test contract, change that
 source code, and verify the theory. If system theory cannot select a source
 slice, do not open a theory-loop work package.
+
+### System Contract Records
+
+Durable reasoning belongs above packages in a System Contract Record under
+`architecture/contracts/`. Packages are execution envelopes against those
+records. Runtime, scenario, repeated-frontier, architecture-route, and
+contract-changing packages should cite the record through
+`sliceTheory.systemTheoryRef`; model-backed packages should also cite it through
+`modelTheory.linkedSystemTheoryRef`.
+
+System Contract Records are validated with `npm run work:contract:check`. They
+must bind a failure class to owner/boundary, state variables, safety
+invariants, liveness expectations, runtime paths, model artifacts, package
+history, theory ledger entries, residuals, and FMEA/STPA operational analysis.
+
+Use the existing `modelTheory.modelKind` field as the package-local executable
+binding:
+
+* `invariant-spec` — TLA+, decision tables, structural constraints, or other
+  invariant checks.
+* `property-test` — fast-check or other generated implementation pressure.
+* `state-model` — statecharts or lifecycle models.
+* `simulator` — replay or scenario simulation scripts.
+
+Lower-resolution models must be executable. Decision tables run through
+`npm run model:decision-tables`; statecharts run through
+`npm run model:statecharts`; contract records run through
+`npm run work:contract:check`; the combined gate is
+`npm run model:contracts`.
 
 **Exception (rederive and architecture-gap classes).** Two packageClasses
 are explicitly permitted as theory-loop work packages without `src/` edits,

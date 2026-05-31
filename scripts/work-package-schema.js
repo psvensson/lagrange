@@ -302,6 +302,26 @@ const BOUNDED_EXPERIMENT_FIELDS = Object.freeze([
   BOUNDED_EXPERIMENT_MERGE_REQUIREMENT_FIELD,
   BOUNDED_EXPERIMENT_KILL_RULE_FIELD,
 ]);
+const PARALLEL_DIAGNOSTICS_FIELD = 'parallelDiagnostics';
+const PARALLEL_DIAGNOSTICS_FIELDS = Object.freeze([
+  'mode',
+  'requiredCards',
+  'reportDir',
+  'coordinatorOnlyWrites',
+  'routeDecisionRequired',
+  'trigger',
+]);
+const PARALLEL_DIAGNOSTICS_MODES = Object.freeze([
+  'read-only-scouts',
+  'verify-only',
+  'none',
+]);
+const PARALLEL_DIAGNOSTICS_CARD_ROLES = Object.freeze([
+  'evidence-scout',
+  'model-contract-scout',
+  'source-map-scout',
+  'verifier',
+]);
 const INHERITS_CONTEXT_FIELD = 'inheritsContext';
 const INHERITS_CONTEXT_FIELDS = Object.freeze([
   'owner',
@@ -1144,6 +1164,24 @@ function renderSchemaReference() {
     EMPTY_TEXT,
     `- Validation tier field: \`${VALIDATION_TIER_FIELD}\``,
     renderEnumList(VALIDATION_TIERS),
+    EMPTY_TEXT,
+    '## Parallel Diagnostics',
+    EMPTY_TEXT,
+    `- Metadata field: \`${PARALLEL_DIAGNOSTICS_FIELD}\``,
+    '- Purpose: let the coordinator request parallel read-only scout or verifier route cards without handing workflow-state authority to subagents.',
+    '- Scout cards are advisory evidence, not package truth. The coordinator alone updates active package status, current-blocker, sprint status, and theory-ledger decisions.',
+    EMPTY_TEXT,
+    'Fields:',
+    EMPTY_TEXT,
+    renderEnumList(PARALLEL_DIAGNOSTICS_FIELDS),
+    EMPTY_TEXT,
+    'Modes:',
+    EMPTY_TEXT,
+    renderEnumList(PARALLEL_DIAGNOSTICS_MODES),
+    EMPTY_TEXT,
+    'Card roles:',
+    EMPTY_TEXT,
+    renderEnumList(PARALLEL_DIAGNOSTICS_CARD_ROLES),
     EMPTY_TEXT,
     '## Validation Phases',
     EMPTY_TEXT,

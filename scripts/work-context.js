@@ -178,6 +178,7 @@ const SECTION_SCOPE = 'Scope';
 const SECTION_PROOF_LADDER = 'Proof Ladder';
 const SECTION_SUBAGENT_SEQUENCING = 'Subagent Sequencing';
 const SECTION_SUBAGENT_PROGRESS = 'Subagent Progress';
+const SECTION_PARALLEL_DIAGNOSTICS = 'Parallel Diagnostics';
 const SECTION_MODEL_FIT = 'Model Fit';
 const SECTION_REPRESENTATIVE_RESIDUAL = 'Representative Residual';
 const SECTION_CAUSAL_GOVERNANCE = 'Causal Governance';
@@ -321,6 +322,11 @@ const FIELD_LABELS = Object.freeze({
   STOP_RULE: 'Redirect rule',
   SUBAGENT_ROLE: 'Next required subagent role',
   SUBAGENT_STATUS: 'Subagent sequencing status',
+  MODE: 'Mode',
+  REQUIRED_CARDS: 'Required cards',
+  REPORT_DIR: 'Report dir',
+  ROUTE_DECISION_REQUIRED: 'Route decision required',
+  COORDINATOR_ONLY_WRITES: 'Coordinator-only writes',
   THEORY_UNDER_TEST: 'Theory under test',
   REPRESENTATIVE_OUTCOME: 'Representative outcome',
   REFERENCE_SCENARIO_OR_PROBE: 'Reference scenario/probe',
@@ -396,6 +402,7 @@ const METADATA_FIELD_REPRESENTATIVE_RESIDUAL = 'representativeResidual';
 const METADATA_FIELD_CAUSAL_GOVERNANCE = 'causalGovernance';
 const METADATA_FIELD_SCENARIO_CAUSAL_CLOSURE = 'scenarioCausalClosure';
 const METADATA_FIELD_ARCHITECTURE_DECISION_GATE = 'architectureDecisionGate';
+const METADATA_FIELD_PARALLEL_DIAGNOSTICS = 'parallelDiagnostics';
 const MODEL_FIT_FIELD_PACKAGE_CLASS = 'packageClass';
 const MODEL_FIT_FIELD_INTENDED_MINIMUM_MODEL = 'intendedMinimumModel';
 const MODEL_FIT_FIELD_SCOPE_SHAPE = 'scopeShape';
@@ -2274,6 +2281,28 @@ async function buildContextLines(currentBlocker, packageContent, options = {}) {
     buildSubagentProgressSummary(packageContent || EMPTY_STRING),
     MESSAGE_NO_SUBAGENT_PROGRESS,
   );
+
+  const parallelDiagnostics =
+    currentBlocker[METADATA_FIELD_PARALLEL_DIAGNOSTICS] || {};
+  appendSection(lines, SECTION_PARALLEL_DIAGNOSTICS);
+  appendKeyValue(lines, FIELD_LABELS.MODE, parallelDiagnostics.mode);
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.REQUIRED_CARDS,
+    normalizeStringList(parallelDiagnostics.requiredCards).join(', '),
+  );
+  appendKeyValue(lines, FIELD_LABELS.REPORT_DIR, parallelDiagnostics.reportDir);
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.ROUTE_DECISION_REQUIRED,
+    parallelDiagnostics.routeDecisionRequired,
+  );
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.COORDINATOR_ONLY_WRITES,
+    normalizeStringList(parallelDiagnostics.coordinatorOnlyWrites).join(', '),
+  );
+  appendKeyValue(lines, FIELD_LABELS.TRIGGER, parallelDiagnostics.trigger);
 
   appendSection(lines, SECTION_MODEL_FIT);
   appendKeyValue(

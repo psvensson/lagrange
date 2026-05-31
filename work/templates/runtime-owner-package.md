@@ -57,6 +57,33 @@
       "regression: affected consumer proof",
       "supporting: static guardrails"
     ]
+  },
+  "parallelDiagnostics": {
+    "mode": "verify-only",
+    "requiredCards": [
+      "verifier"
+    ],
+    "reportDir": "work/agent-reports/active-YYYYMMDD-package",
+    "coordinatorOnlyWrites": [
+      "work/packages/",
+      "work/sprints/current-blocker.json",
+      "work/sprints/current-blocker.md",
+      "work/theory-ledger.md"
+    ],
+    "routeDecisionRequired": false,
+    "trigger": "after implementation proof before closure"
+  },
+  "modelTheory": {
+    "modelKind": "invariant-spec",
+    "executableArtifact": "docs/specs/decision-tables/example.json",
+    "propertiesProven": [
+      "each owner-boundary input combination maps to one canonical runtime outcome"
+    ],
+    "assumptions": [
+      "none"
+    ],
+    "counterExampleHandling": "Fail the package falsifier and convert the counterexample into a focused regression or contract update before implementation continues.",
+    "linkedSystemTheoryRef": "architecture/contracts/example.md#contract-id"
   }
 }
 -->
@@ -99,6 +126,19 @@ Describe the runtime owner-boundary problem.
 - Selected route:
 - Promotion rule:
 
+## Parallel Diagnostics
+
+- Mode: `verify-only` for implementation packages after proof, or
+  `read-only-scouts` before implementation when owner/boundary route ambiguity is
+  still material.
+- Report directory:
+- Required cards:
+- Coordinator-only writes:
+- Route decision required:
+- Trigger:
+- Collection command:
+  `npm run work:agent:collect -- --package work/packages/active-YYYYMMDD-package.md`
+
 ## Core Logic Brief
 
 - Canonical outcome:
@@ -107,6 +147,15 @@ Describe the runtime owner-boundary problem.
 - Non-goals and forbidden interpretations:
 - Proof mapping:
 - Wrong-slice trigger:
+
+## System Contract Binding
+
+- Contract record:
+- Failure class changed or bounded:
+- Invariant preserved or strengthened:
+- Runtime binding:
+- Model binding:
+- Counterexample handling:
 
 ## Expected Representative Delta
 

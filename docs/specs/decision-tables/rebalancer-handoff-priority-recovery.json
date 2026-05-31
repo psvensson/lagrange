@@ -1,0 +1,191 @@
+{
+  "schema": "decision-table-v1",
+  "id": "rebalancer-handoff-priority-recovery",
+  "owner": "operation_workflow_owner",
+  "boundary": "rebalancer_handoff",
+  "inputs": [
+    {
+      "name": "routeOwnerBoundary",
+      "values": [
+        "operation_workflow_owner/rebalancer_handoff",
+        "other"
+      ]
+    },
+    {
+      "name": "dominantReason",
+      "values": [
+        "priority_recovery_event_driven_wait",
+        "other"
+      ]
+    },
+    {
+      "name": "causalOutcome",
+      "values": [
+        "accept_classified_backpressure",
+        "same_frontier",
+        "green_or_reduced",
+        "contradictory_or_blocked"
+      ]
+    },
+    {
+      "name": "writeScopeFit",
+      "values": [
+        "declared_owner_file",
+        "outside_scope"
+      ]
+    }
+  ],
+  "outputs": [
+    {
+      "name": "action",
+      "values": [
+        "rerun_representative_evidence",
+        "open_successor_or_architecture_experiment",
+        "close_or_continue_representative_green",
+        "stop_split_or_migrate_owner_boundary",
+        "human_or_architecture_escalation"
+      ]
+    },
+    {
+      "name": "packageClass",
+      "values": [
+        "runtime-owner-boundary",
+        "architecture-gap-analysis",
+        "representative-frontier-closure",
+        "human-escalation"
+      ]
+    }
+  ],
+  "invariants": [
+    {
+      "id": "single-canonical-outcome",
+      "statement": "Every route evidence combination emits exactly one owner-owned workflow action."
+    },
+    {
+      "id": "no-downstream-patch-on-wrong-owner",
+      "statement": "Evidence outside operation_workflow_owner / rebalancer_handoff cannot promote a local rebalancer runtime patch."
+    }
+  ],
+  "rules": [
+    {
+      "id": "outside-write-scope-stops-local-runtime",
+      "when": {
+        "routeOwnerBoundary": "*",
+        "dominantReason": "*",
+        "causalOutcome": "*",
+        "writeScopeFit": "outside_scope"
+      },
+      "outcome": {
+        "action": "stop_split_or_migrate_owner_boundary",
+        "packageClass": "architecture-gap-analysis"
+      },
+      "reason": "A proof needing do-not-edit scope means the owner slice is wrong.",
+      "invariantRefs": [
+        "no-downstream-patch-on-wrong-owner"
+      ]
+    },
+    {
+      "id": "wrong-route-owner-stops-local-runtime",
+      "when": {
+        "routeOwnerBoundary": "other",
+        "dominantReason": "*",
+        "causalOutcome": "*",
+        "writeScopeFit": "declared_owner_file"
+      },
+      "outcome": {
+        "action": "stop_split_or_migrate_owner_boundary",
+        "packageClass": "architecture-gap-analysis"
+      },
+      "reason": "Only the selected owner boundary may decide the local runtime transition.",
+      "invariantRefs": [
+        "no-downstream-patch-on-wrong-owner"
+      ]
+    },
+    {
+      "id": "wrong-dominant-reason-stops-local-runtime",
+      "when": {
+        "routeOwnerBoundary": "operation_workflow_owner/rebalancer_handoff",
+        "dominantReason": "other",
+        "causalOutcome": "*",
+        "writeScopeFit": "declared_owner_file"
+      },
+      "outcome": {
+        "action": "stop_split_or_migrate_owner_boundary",
+        "packageClass": "architecture-gap-analysis"
+      },
+      "reason": "A different dominant reason requires a different system theory slice.",
+      "invariantRefs": [
+        "single-canonical-outcome"
+      ]
+    },
+    {
+      "id": "accepted-backpressure-reruns-representative-evidence",
+      "when": {
+        "routeOwnerBoundary": "operation_workflow_owner/rebalancer_handoff",
+        "dominantReason": "priority_recovery_event_driven_wait",
+        "causalOutcome": "accept_classified_backpressure",
+        "writeScopeFit": "declared_owner_file"
+      },
+      "outcome": {
+        "action": "rerun_representative_evidence",
+        "packageClass": "runtime-owner-boundary"
+      },
+      "reason": "The local owner transition is selected and must be checked against fresh representative evidence before another local patch.",
+      "invariantRefs": [
+        "single-canonical-outcome"
+      ]
+    },
+    {
+      "id": "same-frontier-escalates-instead-of-repatching",
+      "when": {
+        "routeOwnerBoundary": "operation_workflow_owner/rebalancer_handoff",
+        "dominantReason": "priority_recovery_event_driven_wait",
+        "causalOutcome": "same_frontier",
+        "writeScopeFit": "declared_owner_file"
+      },
+      "outcome": {
+        "action": "open_successor_or_architecture_experiment",
+        "packageClass": "architecture-gap-analysis"
+      },
+      "reason": "Unchanged evidence must select a higher-level discriminator before another local runtime package.",
+      "invariantRefs": [
+        "single-canonical-outcome",
+        "no-downstream-patch-on-wrong-owner"
+      ]
+    },
+    {
+      "id": "green-or-reduced-closes-or-continues-representative-proof",
+      "when": {
+        "routeOwnerBoundary": "operation_workflow_owner/rebalancer_handoff",
+        "dominantReason": "priority_recovery_event_driven_wait",
+        "causalOutcome": "green_or_reduced",
+        "writeScopeFit": "declared_owner_file"
+      },
+      "outcome": {
+        "action": "close_or_continue_representative_green",
+        "packageClass": "representative-frontier-closure"
+      },
+      "reason": "Measured representative movement can close the package or continue toward the release gate without reinterpreting ownership.",
+      "invariantRefs": [
+        "single-canonical-outcome"
+      ]
+    },
+    {
+      "id": "contradictory-or-blocked-escalates",
+      "when": {
+        "routeOwnerBoundary": "operation_workflow_owner/rebalancer_handoff",
+        "dominantReason": "priority_recovery_event_driven_wait",
+        "causalOutcome": "contradictory_or_blocked",
+        "writeScopeFit": "declared_owner_file"
+      },
+      "outcome": {
+        "action": "human_or_architecture_escalation",
+        "packageClass": "human-escalation"
+      },
+      "reason": "Contradictory or unavailable evidence is not a local runtime proof surface.",
+      "invariantRefs": [
+        "no-downstream-patch-on-wrong-owner"
+      ]
+    }
+  ]
+}

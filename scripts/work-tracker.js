@@ -6418,6 +6418,15 @@ function validateModelTheory(filePath, modelTheory) {
       'or docs/specs/.',
     );
   }
+  if (
+    typeof artifact === 'string' &&
+    /^(?:test|scripts|docs\/specs)\//u.test(artifact) &&
+    !fsSync.existsSync(path.resolve(artifact))
+  ) {
+    errors.push(
+      `${filePath}: ${artifactPath} does not exist: ${artifact}.`,
+    );
+  }
   errors.push(...validateTwoLevelConcreteArray(
     filePath,
     MODEL_THEORY_FIELD,
@@ -6539,6 +6548,19 @@ function validateSliceTheory(filePath, sliceTheory) {
       'must redirect (open an architecture/causal experiment or successor) or ' +
       'terminate on unchanged, same-frontier, no-reduction, or ' +
       'architecture-gap evidence — never a bare stop.',
+    );
+  }
+  const systemTheoryRef = normalizeLedgerText(
+    sliceTheory[SLICE_THEORY_SYSTEM_REF_FIELD],
+  );
+  const contractRefPath = systemTheoryRef.split('#')[NUM_ZERO];
+  if (
+    /^architecture\/contracts\/.+\.md$/u.test(contractRefPath) &&
+    !fsSync.existsSync(path.resolve(contractRefPath))
+  ) {
+    errors.push(
+      `${filePath}: ${SLICE_THEORY_FIELD}.${SLICE_THEORY_SYSTEM_REF_FIELD} ` +
+      `points to a missing System Contract Record: ${contractRefPath}.`,
     );
   }
   return errors;
@@ -11602,6 +11624,7 @@ export function buildCurrentBlockerPayload(
     experimentOutcome: metadata[EXPERIMENT_OUTCOME_FIELD] || {},
     rerunDecision: metadata[RERUN_DECISION_FIELD] || {},
     classificationEfficiency: metadata[CLASSIFICATION_EFFICIENCY_FIELD],
+    parallelDiagnostics: metadata.parallelDiagnostics || {},
     systemTheory: metadata[SYSTEM_THEORY_FIELD] || {},
     sliceTheory: metadata[SLICE_THEORY_FIELD] || {},
     architectureDecisionGate: buildArchitectureDecisionGatePayload(
@@ -12050,6 +12073,27 @@ export function renderCurrentBlockerMarkdown(payload) {
     '## Proof Ladder',
     '',
     formatMarkdownList(payload.proof),
+    '',
+    '## Parallel Diagnostics',
+    '',
+    `Mode: \`${payload.parallelDiagnostics?.mode || DEFAULT_UNKNOWN}\``,
+    '',
+    `Report dir: \`${payload.parallelDiagnostics?.reportDir || DEFAULT_UNKNOWN}\``,
+    '',
+    'Required cards:',
+    '',
+    formatMarkdownList(payload.parallelDiagnostics?.requiredCards || []),
+    '',
+    'Coordinator-only writes:',
+    '',
+    formatMarkdownList(
+      payload.parallelDiagnostics?.coordinatorOnlyWrites || [],
+    ),
+    '',
+    'Route decision required: ' +
+      `\`${payload.parallelDiagnostics?.routeDecisionRequired ?? DEFAULT_UNKNOWN}\``,
+    '',
+    `Trigger: ${payload.parallelDiagnostics?.trigger || DEFAULT_UNKNOWN}`,
     '',
     '## Model Fit',
     '',

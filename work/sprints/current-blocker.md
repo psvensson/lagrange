@@ -4,231 +4,308 @@
 
 ## Theory And Implementation Focus
 
-Theory under test: No active work package. Start a new package when implementation resumes.
+Theory under test: H1/H2/H3/H4 are distinguished by the release-gate rederive, fresh representative rerun, and route proof.
 
-Causal question: none
+Causal question: rolling-restart cannot close from accepted classified backpressure while release-gate observation_gap is saturated; the sprint revised release-gate system theory, ran fresh representative evidence, and now must redirect to the active-gate snapshot-coverage successor selected by that evidence.
 
-Implementation slice: Create or activate one focused package for the next executable concern.
+Implementation slice: No runtime source files are in writeScope; the executable contract is the system-theory rederive plus representative rerun and route proof.
 
 Implementation files:
 
-1. None recorded
+1. `scripts/list-commands.js`
+2. `scripts/work-agent-cards.js`
+3. `scripts/work-agent-plan.js`
+4. `scripts/work-agent-validate.js`
+5. `scripts/work-agent-collect.js`
+6. `scripts/work-context.js`
+7. `scripts/work-package-schema.js`
+8. `scripts/work-tracker.js`
+9. `test/scripts/work-agent-cards.test.js`
+10. `scripts/work-package-new.js`
+11. `src/rebalancer/operation-workflow-owner-ports.js`
+12. `test/scripts/work-llm-usability-tools.test.js`
+13. `scripts/check-decision-tables.js`
+14. `scripts/check-statecharts.js`
+15. `scripts/work-contract-check.js`
+16. `scripts/work-contract-utils.js`
+17. `scripts/work-loop-health.js`
+18. `test/scripts/work-contract-tools.test.js`
+19. `src/rebalancer/operation-workflow-owner-ports.js`
+20. `src/control-plane/publication-active-gate-handoff-contract-decision.js`
 
-Expected implementation delta: unknown
+Expected implementation delta: system-theory revision plus representative green, owner-boundary migration, concrete reduction, same-frontier classification, or architecture-gap result.
 
-Falsifying probe: unknown
+Falsifying probe: npm run work:system-theory:rederive -- --owner release_gate_owner --boundary rolling_restart_fully_green_gate --sprint work/sprints/active-2026-q2-rolling-restart-contract-first-green-theory-loop.md --write
 
-Redirect rule: unknown
+Redirect rule: If the fresh artifact is unchanged same-frontier/no-reduction, redirect to architecture/causal experiment or successor; never stop the sprint on classification-only evidence.
 
 Sprint: `work/sprints/active-2026-q2-rolling-restart-contract-first-green-theory-loop.md`
 
-Package: `none`
+Package: `work/packages/active-20260531-rolling-restart-fresh-representative-rerun-gate.md`
 
-Workflow lane: `none`
+Workflow lane: `causal-escalation`
 
-Scenario: `none`
+Scenario: `rolling-restart`
 
-Artifact: `none`
+Artifact: `test-output/reports/rolling-restart-contract-first-green-rerun.report.json`
 
 Playback: `none`
 
 ## Boundary
 
-Owner: `none`
+Owner: `release_gate_owner`
 
-Boundary: `none`
+Boundary: `rolling_restart_fully_green_gate`
 
-Dominant reason: `none`
+Dominant reason: `accepted_classified_backpressure_rerun`
 
-Current state: No active work package. Start a new package when implementation resumes.
+Current state: The predecessor selected accepted classified backpressure, but release-gate history is saturated on observation_gap, so a system-theory revision must be recorded before the fresh representative rerun executes.
 
 ## Next Action
 
-Create or activate one focused package for the next executable concern.
+Rederive the release-gate system theory, run fresh rolling-restart representative evidence, route the resulting artifact, and select representative-green closure or one fresh successor.
 
 ## Proof Ladder
 
-1. None recorded
+1. `falsifier: npm run work:system-theory:rederive -- --owner release_gate_owner --boundary rolling_restart_fully_green_gate --sprint work/sprints/active-2026-q2-rolling-restart-contract-first-green-theory-loop.md --write`
+2. `supporting: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-contract-first-green-rerun.report.json --fast-local --verbose`
+3. `regression: npm run work:scenario-route -- test-output/reports/rolling-restart-contract-first-green-rerun.report.json --owner release_gate_owner --boundary rolling_restart_fully_green_gate --dominant-reason accepted_classified_backpressure_rerun`
+4. `supporting: npm run work:evidence-summary -- test-output/reports/rolling-restart-contract-first-green-rerun.report.json`
+
+## Parallel Diagnostics
+
+Mode: `read-only-scouts`
+
+Report dir: `work/agent-reports/active-20260531-rolling-restart-fresh-representative-rerun-gate`
+
+Required cards:
+
+1. `evidence-scout`
+2. `model-contract-scout`
+3. `source-map-scout`
+
+Coordinator-only writes:
+
+1. `work/packages/`
+2. `work/sprints/current-blocker.json`
+3. `work/sprints/current-blocker.md`
+4. `work/theory-ledger.md`
+
+Route decision required: `true`
+
+Trigger: after the fresh representative rerun routes red or before opening a runtime successor
 
 ## Model Fit
 
-Package class: `unknown`
+Package class: `system-theory-rederive`
 
-Intended minimum model: `unknown`
+Intended minimum model: `gpt-5.3-codex`
 
-Scope shape: `unknown`
+Scope shape: `release-gate/fresh-representative-rerun`
 
-Output profile: `unknown`
+Output profile: `medium`
 
 Escalation triggers:
 
-1. None recorded
+1. `rederive fails to record a durable release-gate invariant`
+2. `fresh evidence selects a runtime owner boundary`
+3. `fresh evidence repeats the same frontier with no metric reduction`
+4. `representative evidence is unavailable or contradictory`
 
 ## System Theory
 
-Problem statement: unknown
+Problem statement: rolling-restart cannot close from accepted classified backpressure while release-gate observation_gap is saturated; the sprint revised release-gate system theory, ran fresh representative evidence, and now must redirect to the active-gate snapshot-coverage successor selected by that evidence.
 
 Phase chain:
 
-1. None recorded
+1. `contract-first discriminator selected accepted backpressure`
+2. `model contracts passed`
+3. `release-gate same-mechanism-repeat blocks a plain rerun package`
+4. `fresh representative evidence must prove green or route the next first frontier after the rederive`
 
 Owner-boundary map:
 
-1. None recorded
+1. `release_gate_owner / rolling_restart_fully_green_gate owns the representative rerun gate.`
+2. `operation_workflow_owner / rebalancer_handoff is candidate only if fresh priority recovery evidence reappears.`
+3. `startup_active_gate_owner / snapshot_coverage is candidate only if fresh active-gate evidence becomes first frontier.`
 
 Stable facts:
 
-1. None recorded
+1. `Scenario remains rolling-restart.`
+2. `The sprint success condition is representative green.`
+3. `Runtime files remain candidate-only.`
 
 Changed facts:
 
-1. None recorded
+1. `The active artifact has been regenerated after accepted backpressure classification.`
+2. `Priority-recovery residual witnesses are zero.`
+3. `The next executable concern is active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending.`
 
 Competing theories:
 
-1. None recorded
+1. `H1 the fresh rerun is representative-green.`
+2. `H2 priority recovery remains first frontier.`
+3. `H3 priority recovery drains and active-gate snapshot coverage becomes first frontier.`
+4. `H4 the fresh evidence is contradictory or unavailable.`
 
 Eliminated theories:
 
-1. None recorded
+1. `A plain release-gate rerun package without system-theory revision is eliminated by compositional validation.`
+2. `Runtime source work from the stale artifact is eliminated.`
+3. `Sprint closure from model evidence alone is eliminated.`
 
 Downstream symptoms:
 
-1. None recorded
+1. `active-gate convergence`
+2. `publication handoff`
+3. `readiness support evidence`
 
 Transition table:
 
-1. None recorded
+1. Input `accepted classified backpressure after contract/model green` owner `release_gate_owner / rolling_restart_fully_green_gate`; missing `release-gate system-theory rederive plus fresh representative rerun`; expected `system-theory rederive output plus representative-green or one canonical route from test-output/reports/rolling-restart-contract-first-green-rerun.report.json`; falsifier `npm run work:system-theory:rederive -- --owner release_gate_owner --boundary rolling_restart_fully_green_gate --sprint work/sprints/active-2026-q2-rolling-restart-contract-first-green-theory-loop.md --write`; migration trigger `scenario-route selected active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage`
 
 Ownership migration triggers:
 
-1. None recorded
+1. `Migrate only when fresh scenario-route names a different owner and boundary.`
 
 Architecture-gap triggers:
 
-1. None recorded
+1. `Open or activate an architecture-route successor when fresh evidence selects active-gate snapshot coverage but runtimePromotionGuard blocks unguided source promotion.`
+2. `Regenerate evidence if the rerun artifact is contradictory or unavailable.`
 
-Whole-system invariant: unknown
+Whole-system invariant: Representative green, not model-only classification or repeated release-gate observation_gap, closes the sprint.
 
 ## Slice Theory
 
-System theory reference: unknown
+System theory reference: architecture/contracts/rolling-restart-rebalancer-handoff.md#rolling-restart-rebalancer-handoff
 
-Selected system theory: unknown
+Selected system theory: H1/H2/H3/H4 are distinguished by the release-gate rederive, fresh representative rerun, and route proof.
 
-Selected mechanism: unknown
+Selected mechanism: observation_gap with contract_gap as alternate
 
-Source/test contract: unknown
+Source/test contract: No runtime source files are in writeScope; the executable contract is the system-theory rederive plus representative rerun and route proof.
 
-Falsifier: unknown
+Falsifier: npm run work:system-theory:rederive -- --owner release_gate_owner --boundary rolling_restart_fully_green_gate --sprint work/sprints/active-2026-q2-rolling-restart-contract-first-green-theory-loop.md --write
 
-Representative expected movement: unknown
+Representative expected movement: system-theory revision plus representative green, owner-boundary migration, concrete reduction, same-frontier classification, or architecture-gap result.
 
-Redirect rule: unknown
+Redirect rule: If the fresh artifact is unchanged same-frontier/no-reduction, redirect to architecture/causal experiment or successor; never stop the sprint on classification-only evidence.
 
 Theory-fit score:
 
-1. `evidenceFit`: unknown
-2. `ownerBoundaryFit`: unknown
-3. `falsifiability`: unknown
-4. `representativeMovement`: unknown
-5. `downstreamRiskContainment`: unknown
+1. `evidenceFit`: high - the package directly records the required rederive and runs the representative gate required by the sprint.
+2. `ownerBoundaryFit`: high - release_gate_owner owns representative green.
+3. `falsifiability`: high - the distributed rerun can pass, fail, or produce a routeable artifact.
+4. `representativeMovement`: high - proof combines the release-gate rederive with the representative scenario itself.
+5. `downstreamRiskContainment`: high - runtime edits stay out of scope.
 
 Wrong-slice triggers:
 
-1. None recorded
+1. `system-theory rederive cannot produce a release-gate revision`
+2. `representative rerun cannot produce an artifact`
+3. `scenario-route cannot select one route from the fresh artifact`
+4. `proof requires runtime source edits before route selection`
 
 ## Theory Ledger References
 
-1. None recorded
+1. `theory-20260531-rolling-restart-contract-first-green-loop`
+2. `theory-20260531-rolling-restart-contract-first-green-fresh-rerun`
 
 ## Representative Residual
 
-Status: `unknown`
+Status: `reduced`
 
-Scenario: `unknown`
+Scenario: `rolling-restart`
 
-Artifact: `unknown`
+Artifact: `test-output/reports/rolling-restart-contract-first-green-rerun.report.json`
 
-Frontier: `unknown`
+Frontier: `active_gate_snapshot_coverage`
 
-Owner: `unknown`
+Owner: `startup_active_gate_owner`
 
-Boundary: `unknown`
+Boundary: `snapshot_coverage`
 
-Dominant reason: `unknown`
+Dominant reason: `owner_reconcile_pending`
 
-Next action: `unknown`
+Next action: `Open the selected startup_active_gate_owner / snapshot_coverage architecture-route successor; priority-recovery residual witness count is zero.`
 
 ## Causal Governance
 
-Causal hypothesis: `unknown`
+Causal hypothesis: `Accepted classified backpressure is only a valid non-runtime route if release-gate observation-gap saturation is recorded and a fresh rolling-restart rerun either exits green or selects a fresh first frontier for successor work.`
 
-Stop-condition check: `unknown`
+Stop-condition check: `Run npm run analyze:causal-model -- test-output/reports/rolling-restart-contract-first-green-rerun.report.json after the system-theory rederive, representative rerun, and route proof.`
 
-Expected causal-model change: `unknown`
+Expected causal-model change: `The package records a release-gate system-theory revision plus representative-green, a fresh owner/boundary migration, a concrete reduction, same-frontier classification, or architecture/non-runtime successor decision.`
 
-Representative outcome: `unknown`
+Representative outcome: `reduced`
 
-Causal debt: `unknown`
+Causal debt: `The sprint remains non-green: the fresh artifact is red at active_gate_snapshot_coverage with owner_reconcile_pending, selected_snapshot_source_timeout, and snapshot_repair_deferred.`
 
-Cross-boundary review: `unknown`
+Cross-boundary review: `No runtime source edits are in this package; source changes are delegated to the successor selected by fresh route evidence and the architecture-route guard.`
 
 ## Scenario Causal Closure
 
-Reference scenario/probe: `unknown`
+Reference scenario/probe: `rolling-restart fresh representative rerun gate`
 
 Phase chain:
 
-1. None recorded
+1. `contract-first discriminator repaired the stale system contract reference`
+2. `model contracts passed`
+3. `canonical route classified priority recovery as accepted backpressure`
+4. `release-gate observation-gap saturation blocks a plain rerun package`
+5. `fresh representative evidence must prove green or name a fresh first frontier after the rederive`
 
-Current first frontier: `unknown`
+Current first frontier: `release_gate_owner / rolling_restart_fully_green_gate routed to active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending`
 
 Known downstream blockers:
 
-1. None recorded
+1. `startup_readiness_owner / startup_support_evidence remains downstream until active-gate snapshot coverage improves`
+2. `benchmark_events table partition visibility remains downstream of startup/readiness convergence`
 
-Missing causal edge: `unknown`
+Missing causal edge: `Fresh evidence drained priority recovery but exposed active_gate_snapshot_coverage owner_reconcile_pending; the next edge is a non-repeated startup_active_gate_owner / snapshot_coverage architecture-route implementation.`
 
-Missing causal edge probe: `unknown`
+Missing causal edge probe: `npm run work:system-theory:rederive -- --owner release_gate_owner --boundary rolling_restart_fully_green_gate --sprint work/sprints/active-2026-q2-rolling-restart-contract-first-green-theory-loop.md --write; node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-contract-first-green-rerun.report.json --fast-local --verbose`
 
-Bounded progress proof: `unknown`
+Bounded progress proof: `The rederive must record release-gate saturation and the representative rerun must pass green or produce one canonical first-frontier route with a bounded progress, retry, reconcile, drain, dispatch, delivery, timer, timeout, wake, or advance mechanism named by fresh evidence.`
 
-Bounded progress proof artifact: `unknown`
+Bounded progress proof artifact: `test-output/reports/rolling-restart-contract-first-green-rerun.report.json`
 
-Expected observable transition: `unknown`
+Expected observable transition: `rolling-restart exits green or route proof selects one fresh owner/boundary successor from the rerun artifact; observed successor is startup_active_gate_owner / snapshot_coverage with priority-recovery residuals at zero.`
 
-Max progress bound: `unknown`
+Max progress bound: `one system-theory rederive, one representative rerun, and one canonical route decision`
 
-Same-frontier fallback: `unknown`
+Same-frontier fallback: `If fresh evidence repeats the same frontier with no metric reduction, open an architecture/causal experiment or successor instead of local runtime edits.`
 
-Expected next frontier: `unknown`
+Expected next frontier: `startup_active_gate_owner / snapshot_coverage architecture-route successor, then representative rerun or downstream startup readiness route`
 
-Result classification: `unknown`
+Result classification: `reduced`
 
-Stop condition: `unknown`
+Stop condition: `continue-local-fix`
 
 Recent frontier history:
 
-1. None recorded
+1. `active-20260531-rolling-restart-fresh-representative-rerun-gate.md / release_gate_owner / rolling_restart_fully_green_gate / reduced`
+2. `done-20260531-rolling-restart-contract-first-route-discriminator.md / release_gate_owner / rolling_restart_fully_green_gate / classification-only`
+3. `done-20260530-rolling-restart-release-gate-observation-gap-system-theory-rederive.md / release_gate_owner / rolling_restart_fully_green_gate / architecture-gap`
+4. `done-20260529-rolling-restart-post-architecture-gap-fresh-representative-green-gate.md / release_gate_owner / rolling_restart_fully_green_gate / same-frontier`
 
-Oscillation check: `unknown`
+Oscillation check: `Release-gate history is saturated and the fresh route guard reports runtimePromotionGuard.state=blocked; route-card disagreement was resolved by opening the required architecture-route runtime successor rather than another classifier.`
 
-Handoff invariant: `unknown`
+Handoff invariant: `Fresh representative evidence must either close rolling-restart green or name a single successor without reinterpreting stale release-gate artifacts as runtime authorization.`
 
 ## Observable Prediction
 
-Metric: `unknown`
+Metric: `release-gate system-theory revision plus rolling-restart representative result and first frontier`
 
-Predicted: `unknown`
+Predicted: `rederive records release-gate observation_gap saturation; fresh rerun either passes green or routes to exactly one first-frontier successor.`
 
-Observed: `unknown`
+Observed: `rederive recorded release-gate observation_gap saturation; fresh rerun stayed red but drained priority-recovery residual witnesses to 0 and selected active_gate_snapshot_coverage / startup_active_gate_owner / snapshot_coverage / owner_reconcile_pending.`
 
-Accuracy: `unknown`
+Accuracy: `partial`
 
-Evidence: `unknown`
+Evidence: `npm run work:system-theory:rederive -- --owner release_gate_owner --boundary rolling_restart_fully_green_gate --sprint work/sprints/active-2026-q2-rolling-restart-contract-first-green-theory-loop.md --write; node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-contract-first-green-rerun.report.json --fast-local --verbose; npm run work:scenario-route -- test-output/reports/rolling-restart-contract-first-green-rerun.report.json --owner release_gate_owner --boundary rolling_restart_fully_green_gate --dominant-reason accepted_classified_backpressure_rerun --explain active_gate_snapshot_coverage`
 
-Metric delta: `unknown`
+Metric delta: `7`
 
 ## Experiment Outcome
 
@@ -244,73 +321,104 @@ Evidence: `unknown`
 
 ## Rerun Decision
 
-Source artifact: `unknown`
+Source artifact: `test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json`
 
-Route owner: `unknown`
+Route owner: `release_gate_owner`
 
-Route boundary: `unknown`
+Route boundary: `rolling_restart_fully_green_gate`
 
-Route dominant reason: `unknown`
+Route dominant reason: `accepted_classified_backpressure_rerun`
 
-Route causal outcome: `unknown`
+Route causal outcome: `continue_local_fix`
 
-Stop mode: `unknown`
+Stop mode: `classified_local_blocker`
 
-Next lane: `unknown`
+Next lane: `runtime-owner-boundary`
 
-Expected delta: `unknown`
+Expected delta: `System-theory rederive recorded release-gate observation-gap saturation; fresh representative evidence drained priority-recovery residuals to zero and selected active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage, while runtime promotion remains guarded by saturated history until a non-repeated architecture route is implemented.`
 
 Required refresh commands:
 
-1. None recorded
-
-## Classification Efficiency
-
-Default mode: `unknown`
-
-Separate package reason: `unknown`
-
-Artifact budget: `unknown`
-
-Proof command budget: `unknown`
-
-Commands:
-
-1. None recorded
-
-Decision record: `unknown`
-
-Successor action: `unknown`
-
-Runtime promotion rule: `unknown`
+1. `npm run work:system-theory:rederive -- --owner release_gate_owner --boundary rolling_restart_fully_green_gate --sprint work/sprints/active-2026-q2-rolling-restart-contract-first-green-theory-loop.md --write`
+2. `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-contract-first-green-rerun.report.json --owner release_gate_owner --boundary rolling_restart_fully_green_gate --dominant-reason accepted_classified_backpressure_rerun --explain active_gate_snapshot_coverage`
+3. `update Sprint Strategy Brief and Current Edge Card from the route result`
+4. `npm run work:repair`
+5. `npm run work:validate -- --entry work/packages/active-20260531-rolling-restart-fresh-representative-rerun-gate.md`
+6. `npm run work:validate -- --pre-impl work/packages/active-20260531-rolling-restart-fresh-representative-rerun-gate.md`
 
 ## Architecture Decision Gate
 
-Status: `unknown`
+Status: `watching`
 
-Trigger: `unknown`
+Trigger: `frontier-oscillation`
 
 Trigger evidence:
 
-1. None recorded
+1. `frontier returned to a recently closed related boundary`
+2. `work/packages/done-20260531-rolling-restart-contract-first-route-discriminator.md / release_gate_owner / rolling_restart_fully_green_gate / classification-only`
+3. `work/packages/done-20260530-rolling-restart-startup-readiness-sql-query-engine-available-check.md / startup_readiness_owner / startup_support_evidence / reduced`
+4. `work/packages/done-20260530-rolling-restart-active-gate-bounded-reentry-representative-rerun.md / startup_active_gate_owner / snapshot_coverage / reduced`
 
 Choices:
 
-1. None recorded
+1. `continue-local-proof` route=`continue-local-proof` - Continue with a bounded local proof if the missing edge stays inside this owner boundary.
+2. `migrate-owner-boundary` route=`owner-boundary-migration` - Migrate the active package to the owner boundary named by the first frontier evidence.
+3. `open-architecture-package` route=`architecture-package` - Open a bounded autonomous architecture experiment for the missing owner contract.
+4. `human-escalation` route=`human-escalation` - Escalate to a human only when evidence is contradictory, policy-blocked, credential-blocked, or unavailable.
 
 Selected choice: `unknown`
 
-Gate next action: unknown
+Gate next action: Watch for repeated frontier oscillation; open an autonomous architecture experiment if another local proof returns here unchanged.
 
 ## Scope
 
 Write scope:
 
-1. None recorded
+1. `work/packages/active-20260531-rolling-restart-fresh-representative-rerun-gate.md`
+2. `work/sprints/active-2026-q2-rolling-restart-contract-first-green-theory-loop.md`
+3. `work/sprints/current-blocker.json`
+4. `work/sprints/current-blocker.md`
+5. `work/theory-ledger.md`
+6. `.kiro/steering/schemas/work-package.schema.json`
+7. `package.json`
+8. `scripts/list-commands.js`
+9. `scripts/work-agent-cards.js`
+10. `scripts/work-agent-plan.js`
+11. `scripts/work-agent-validate.js`
+12. `scripts/work-agent-collect.js`
+13. `scripts/work-context.js`
+14. `scripts/work-package-schema.js`
+15. `scripts/work-tracker.js`
+16. `test/scripts/work-agent-cards.test.js`
+17. `work/RULES.md`
+18. `work/agent-reports/README.md`
+19. `work/agent-reports/active-20260531-rolling-restart-fresh-representative-rerun-gate/evidence-scout.md`
+20. `work/agent-reports/active-20260531-rolling-restart-fresh-representative-rerun-gate/model-contract-scout.md`
+21. `work/agent-reports/active-20260531-rolling-restart-fresh-representative-rerun-gate/source-map-scout.md`
+22. `work/templates/agent-route-card.md`
+23. `work/templates/agent-verifier-card.md`
+24. `work/templates/runtime-owner-package.md`
+25. `work/templates/scenario-closure-package.md`
+26. `work/packages/todo-20260531-rolling-restart-active-gate-observation-route.md`
+27. `architecture/INDEX.md`
+28. `scripts/work-package-new.js`
+29. `src/rebalancer/operation-workflow-owner-ports.js`
+30. `test/scripts/work-llm-usability-tools.test.js`
+31. `architecture/contracts/active-gate-convergence.md`
+32. `architecture/contracts/package-lifecycle.md`
+33. `docs/specs/`
+34. `scripts/check-decision-tables.js`
+35. `scripts/check-statecharts.js`
+36. `scripts/work-contract-check.js`
+37. `scripts/work-contract-utils.js`
+38. `scripts/work-loop-health.js`
+39. `test/scripts/work-contract-tools.test.js`
+40. `work/agent-reports/`
+41. `work/templates/system-contract-record.md`
 
 Handoff files:
 
-1. None recorded
+1. `test-output/reports/rolling-restart-contract-first-green-rerun.report.json`
 
 Generated files:
 
@@ -319,11 +427,52 @@ Generated files:
 
 Candidate runtime files:
 
-1. None recorded
+1. `src/rebalancer/operation-workflow-owner-ports.js`
+2. `src/control-plane/publication-active-gate-handoff-contract-decision.js`
 
 Commit scope:
 
-1. None recorded
+1. `work/packages/active-20260531-rolling-restart-fresh-representative-rerun-gate.md`
+2. `work/sprints/active-2026-q2-rolling-restart-contract-first-green-theory-loop.md`
+3. `work/sprints/current-blocker.json`
+4. `work/sprints/current-blocker.md`
+5. `work/theory-ledger.md`
+6. `.kiro/steering/schemas/work-package.schema.json`
+7. `package.json`
+8. `scripts/list-commands.js`
+9. `scripts/work-agent-cards.js`
+10. `scripts/work-agent-plan.js`
+11. `scripts/work-agent-validate.js`
+12. `scripts/work-agent-collect.js`
+13. `scripts/work-context.js`
+14. `scripts/work-package-schema.js`
+15. `scripts/work-tracker.js`
+16. `test/scripts/work-agent-cards.test.js`
+17. `work/RULES.md`
+18. `work/agent-reports/README.md`
+19. `work/agent-reports/active-20260531-rolling-restart-fresh-representative-rerun-gate/evidence-scout.md`
+20. `work/agent-reports/active-20260531-rolling-restart-fresh-representative-rerun-gate/model-contract-scout.md`
+21. `work/agent-reports/active-20260531-rolling-restart-fresh-representative-rerun-gate/source-map-scout.md`
+22. `work/templates/agent-route-card.md`
+23. `work/templates/agent-verifier-card.md`
+24. `work/templates/runtime-owner-package.md`
+25. `work/templates/scenario-closure-package.md`
+26. `work/packages/todo-20260531-rolling-restart-active-gate-observation-route.md`
+27. `architecture/INDEX.md`
+28. `scripts/work-package-new.js`
+29. `src/rebalancer/operation-workflow-owner-ports.js`
+30. `test/scripts/work-llm-usability-tools.test.js`
+31. `architecture/contracts/active-gate-convergence.md`
+32. `architecture/contracts/package-lifecycle.md`
+33. `docs/specs/`
+34. `scripts/check-decision-tables.js`
+35. `scripts/check-statecharts.js`
+36. `scripts/work-contract-check.js`
+37. `scripts/work-contract-utils.js`
+38. `scripts/work-loop-health.js`
+39. `test/scripts/work-contract-tools.test.js`
+40. `work/agent-reports/`
+41. `work/templates/system-contract-record.md`
 
 Legacy touched files:
 

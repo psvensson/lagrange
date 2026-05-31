@@ -39,6 +39,14 @@ import {
   LANE_SCENARIO_RELEASE_GATE,
   LANE_SINGLE_FILE_RUNTIME,
   LANE_TEST_ONLY_PROOF,
+  MODEL_THEORY_ASSUMPTIONS_FIELD,
+  MODEL_THEORY_COUNTER_EXAMPLE_HANDLING_FIELD,
+  MODEL_THEORY_EXECUTABLE_ARTIFACT_FIELD,
+  MODEL_THEORY_FIELD,
+  MODEL_THEORY_KIND_FIELD,
+  MODEL_THEORY_LINKED_SYSTEM_THEORY_REF_FIELD,
+  MODEL_THEORY_PROPERTIES_PROVEN_FIELD,
+  MODEL_THEORY_VALID_KINDS,
   MODEL_FIT_SPLIT_ALLOWED_DECISION_DEPTH_FIELD,
   MODEL_FIT_SPLIT_CHILD_CANDIDATES_FIELD,
   MODEL_FIT_SPLIT_FIELD,
@@ -191,6 +199,12 @@ const FLAG_ARCHITECTURE_ROUTE_COUPLED_INVARIANT =
 const FLAG_ARCHITECTURE_ROUTE_GAP_REF = 'architecture-route-gap-ref';
 const FLAG_VALIDATION_TIER = 'validation-tier';
 const FLAG_SPLIT_CANDIDATE = 'split-candidate';
+const FLAG_SYSTEM_CONTRACT_REF = 'system-contract-ref';
+const FLAG_MODEL_THEORY_KIND = 'model-theory-kind';
+const FLAG_MODEL_THEORY_ARTIFACT = 'model-theory-artifact';
+const FLAG_MODEL_THEORY_PROPERTY = 'model-theory-property';
+const FLAG_MODEL_THEORY_ASSUMPTION = 'model-theory-assumption';
+const FLAG_MODEL_THEORY_COUNTEREXAMPLE = 'model-theory-counterexample';
 const FLAG_THEORY_LOOP = 'theory-loop';
 const FLAG_SCHEMA = 'schema';
 const FLAG_HELP = 'help';
@@ -271,6 +285,8 @@ const REPEATED_FLAGS = Object.freeze([
   FLAG_COMMIT_SCOPE,
   FLAG_FORBIDDEN_FILE,
   FLAG_SPLIT_CANDIDATE,
+  FLAG_MODEL_THEORY_PROPERTY,
+  FLAG_MODEL_THEORY_ASSUMPTION,
 ]);
 const HELP_TEXT = [
   'Usage:',
@@ -312,6 +328,12 @@ const HELP_TEXT = [
   '  --architecture-route-gap-ref <path>  Optional closed gap-analysis package path.',
   '  --validation-tier <file-local|single-owner|cross-owner|release-gate>',
   '  --split-candidate <text>  Candidate child package for lower-model execution.',
+  '  --system-contract-ref <path-or-anchor>  Durable System Contract Record ref bound into sliceTheory/modelTheory.',
+  '  --model-theory-kind <state-model|simulator|invariant-spec|property-test>',
+  '  --model-theory-artifact <test|scripts|docs/specs path>',
+  '  --model-theory-property <text>  Repeat for each proved property.',
+  '  --model-theory-assumption <text>  Repeat for each assumption, or use "none".',
+  '  --model-theory-counterexample <text>  Counterexample handling rule.',
   '',
   'Use --schema to print the shared work-package schema reference.',
 ].join(NEWLINE);
@@ -532,6 +554,31 @@ function validateFlags(flags = {}) {
     throw new Error(
       `--${FLAG_VALIDATION_TIER} must be one of ` +
       `${VALIDATION_TIERS.join(', ')}.`,
+    );
+  }
+  const modelTheoryKind = normalizeText(flags[FLAG_MODEL_THEORY_KIND]);
+  if (
+    modelTheoryKind.length > NUM_ZERO &&
+    !MODEL_THEORY_VALID_KINDS.includes(modelTheoryKind)
+  ) {
+    throw new Error(
+      `--${FLAG_MODEL_THEORY_KIND} must be one of ` +
+      `${MODEL_THEORY_VALID_KINDS.join(', ')}.`,
+    );
+  }
+  const modelTheoryFlagsPresent = [
+    FLAG_MODEL_THEORY_KIND,
+    FLAG_MODEL_THEORY_ARTIFACT,
+    FLAG_MODEL_THEORY_COUNTEREXAMPLE,
+  ].some((flagName) => normalizeText(flags[flagName]).length > NUM_ZERO) ||
+    (flags[FLAG_MODEL_THEORY_PROPERTY] || []).length > NUM_ZERO ||
+    (flags[FLAG_MODEL_THEORY_ASSUMPTION] || []).length > NUM_ZERO;
+  if (
+    modelTheoryFlagsPresent &&
+    normalizeText(flags[FLAG_MODEL_THEORY_ARTIFACT]).length === NUM_ZERO
+  ) {
+    throw new Error(
+      `--${FLAG_MODEL_THEORY_ARTIFACT} is required when modelTheory flags are used.`,
     );
   }
   if (lane === LANE_BOUNDED_EXPERIMENT || lane === LANE_EXPERIMENT) {
@@ -1345,6 +1392,81 @@ function buildTwoLevelTheoryMetadata(
   };
 }
 
+function inferModelTheoryKind(artifact) {
+  const normalized = normalizeText(artifact);
+  if (normalized.includes('/statecharts/')) {
+    return 'state-model';
+  }
+  if (normalized.includes('/decision-tables/')) {
+    return 'invariant-spec';
+  }
+  if (normalized.endsWith('.test.js')) {
+    return 'property-test';
+  }
+  if (normalized.startsWith('scripts/')) {
+    return 'simulator';
+  }
+  return 'invariant-spec';
+}
+
+function buildModelTheoryMetadata(flags = {}, metadata = {}) {
+  const artifact = normalizeText(flags[FLAG_MODEL_THEORY_ARTIFACT]);
+  if (artifact.length === NUM_ZERO) {
+    return null;
+  }
+  const requestedKind = normalizeText(flags[FLAG_MODEL_THEORY_KIND]);
+  const modelKind = requestedKind || inferModelTheoryKind(artifact);
+  const linkedSystemTheoryRef =
+    normalizeText(flags[FLAG_SYSTEM_CONTRACT_REF]) ||
+    normalizeText(metadata[SLICE_THEORY_FIELD]?.[SLICE_THEORY_SYSTEM_REF_FIELD]) ||
+    `${metadata.owner || 'unknown-owner'} / ${metadata.boundary || 'unknown-boundary'} system theory`;
+  const properties = (flags[FLAG_MODEL_THEORY_PROPERTY] || [])
+    .map(normalizeText)
+    .filter(Boolean);
+  const assumptions = (flags[FLAG_MODEL_THEORY_ASSUMPTION] || [])
+    .map(normalizeText)
+    .filter(Boolean);
+  return {
+    [MODEL_THEORY_KIND_FIELD]: modelKind,
+    [MODEL_THEORY_EXECUTABLE_ARTIFACT_FIELD]: artifact,
+    [MODEL_THEORY_PROPERTIES_PROVEN_FIELD]: properties.length > NUM_ZERO ?
+      properties :
+      [`${artifact} preserves the selected ${metadata.owner} / ${metadata.boundary} contract.`],
+    [MODEL_THEORY_ASSUMPTIONS_FIELD]: assumptions.length > NUM_ZERO ?
+      assumptions :
+      ['none'],
+    [MODEL_THEORY_COUNTER_EXAMPLE_HANDLING_FIELD]:
+      normalizeText(flags[FLAG_MODEL_THEORY_COUNTEREXAMPLE]) ||
+      'Fail the package falsifier and promote the counterexample to a focused regression or contract update before implementation continues.',
+    [MODEL_THEORY_LINKED_SYSTEM_THEORY_REF_FIELD]: linkedSystemTheoryRef,
+  };
+}
+
+function buildSystemContractBindingLines(flags = {}, metadata = {}) {
+  const systemContractRef = normalizeText(flags[FLAG_SYSTEM_CONTRACT_REF]);
+  if (systemContractRef.length === NUM_ZERO && !metadata[MODEL_THEORY_FIELD]) {
+    return [];
+  }
+  const lines = [
+    '## System Contract Binding',
+    EMPTY_TEXT,
+  ];
+  if (systemContractRef.length > NUM_ZERO) {
+    lines.push(`- Contract record: \`${systemContractRef}\``);
+    lines.push('- Closure question: which failure class became impossible, earlier-detected, bounded, or explicitly residual?');
+  }
+  if (metadata[MODEL_THEORY_FIELD]) {
+    lines.push(
+      `- Model artifact: \`${metadata[MODEL_THEORY_FIELD][MODEL_THEORY_EXECUTABLE_ARTIFACT_FIELD]}\``,
+    );
+    lines.push(
+      `- Model kind: \`${metadata[MODEL_THEORY_FIELD][MODEL_THEORY_KIND_FIELD]}\``,
+    );
+  }
+  lines.push(EMPTY_TEXT);
+  return lines;
+}
+
 function formatTransitionRows(rows = []) {
   return markdownList(rows.map((row) =>
     `Input \`${row[SYSTEM_THEORY_TRANSITION_INPUT_SIGNAL_FIELD]}\`; owner ` +
@@ -1408,6 +1530,32 @@ function buildTwoLevelTheoryLines(metadata = {}) {
     ], 'Theory-fit score is recorded in metadata.'),
     '- Wrong-slice triggers:',
     markdownList(sliceTheory[SLICE_THEORY_WRONG_SLICE_TRIGGERS_FIELD], 'Wrong-slice triggers are recorded in metadata.'),
+  ];
+}
+
+function buildModelTheoryLines(metadata = {}) {
+  const modelTheory = metadata[MODEL_THEORY_FIELD];
+  if (!modelTheory) {
+    return [];
+  }
+  return [
+    EMPTY_TEXT,
+    '## Model Theory',
+    EMPTY_TEXT,
+    `- Model kind: \`${modelTheory[MODEL_THEORY_KIND_FIELD]}\``,
+    `- Executable artifact: \`${modelTheory[MODEL_THEORY_EXECUTABLE_ARTIFACT_FIELD]}\``,
+    '- Properties proven:',
+    markdownList(
+      modelTheory[MODEL_THEORY_PROPERTIES_PROVEN_FIELD],
+      'Properties are recorded in metadata.',
+    ),
+    '- Assumptions:',
+    markdownList(
+      modelTheory[MODEL_THEORY_ASSUMPTIONS_FIELD],
+      'Assumptions are recorded in metadata.',
+    ),
+    `- Counterexample handling: ${modelTheory[MODEL_THEORY_COUNTER_EXAMPLE_HANDLING_FIELD]}`,
+    `- Linked system theory: ${modelTheory[MODEL_THEORY_LINKED_SYSTEM_THEORY_REF_FIELD]}`,
   ];
 }
 
@@ -2029,6 +2177,24 @@ async function buildPackageContent(flags = {}) {
   if (twoLevelTheory) {
     metadata[SYSTEM_THEORY_FIELD] = twoLevelTheory[SYSTEM_THEORY_FIELD];
     metadata[SLICE_THEORY_FIELD] = twoLevelTheory[SLICE_THEORY_FIELD];
+    const systemContractRef = normalizeText(flags[FLAG_SYSTEM_CONTRACT_REF]);
+    if (systemContractRef.length > NUM_ZERO) {
+      metadata.systemContractRef = systemContractRef;
+      metadata[SLICE_THEORY_FIELD][SLICE_THEORY_SYSTEM_REF_FIELD] =
+        systemContractRef;
+      metadata[SYSTEM_THEORY_FIELD][SYSTEM_THEORY_STABLE_FACTS_FIELD].push(
+        `Durable contract record is ${systemContractRef}.`,
+      );
+    }
+  } else {
+    const systemContractRef = normalizeText(flags[FLAG_SYSTEM_CONTRACT_REF]);
+    if (systemContractRef.length > NUM_ZERO) {
+      metadata.systemContractRef = systemContractRef;
+    }
+  }
+  const modelTheory = buildModelTheoryMetadata(flags, metadata);
+  if (modelTheory) {
+    metadata[MODEL_THEORY_FIELD] = modelTheory;
   }
 
   return [
@@ -2056,6 +2222,8 @@ async function buildPackageContent(flags = {}) {
     buildLaneSufficiencyLine(lane),
     '- Escalation trigger to a heavier lane: runtime ownership, shared contract, or representative scenario evidence changes.',
     EMPTY_TEXT,
+    ...buildSystemContractBindingLines(flags, metadata),
+    EMPTY_TEXT,
     ...buildCoreLogicBriefLines(lane, flags, proof, forbiddenFiles, metadata),
     EMPTY_TEXT,
     ...buildCausalDecisionContractLines(
@@ -2069,6 +2237,7 @@ async function buildPackageContent(flags = {}) {
     ...buildDecisionExperimentGateLines(lane, flags, proof, metadata),
     EMPTY_TEXT,
     ...buildTwoLevelTheoryLines(metadata),
+    ...buildModelTheoryLines(metadata),
     EMPTY_TEXT,
     ...buildTheoryLoopPackageContractLines(metadata),
     EMPTY_TEXT,

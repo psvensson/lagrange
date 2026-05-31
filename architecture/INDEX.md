@@ -19,6 +19,10 @@ Use this index to choose the narrowest architecture domain file before reading i
 ## Supporting Documents
 
 - [Current Owner Maps](current-owner-maps.md) - Current concrete owner maps and subsystem ownership detail.
+- [System Contract Records](contracts/) - Durable failure-class contracts that bind invariants, owners, models, runtime paths, package history, and residual evidence.
+- [Rolling Restart Rebalancer Handoff Contract](contracts/rolling-restart-rebalancer-handoff.md) - Priority recovery handoff convergence contract and decision-table binding.
+- [Active Gate Convergence Contract](contracts/active-gate-convergence.md) - Coupled active-gate/rebalancer invariant contract backed by TLA+ and fast-check models.
+- [Package Lifecycle Contract](contracts/package-lifecycle.md) - Workflow statechart contract for package status, closure, supersession, and redirect safety.
 - [Runtime Grammar Hierarchy](runtime-grammar-hierarchy.md) - Runtime grammar and boundary hierarchy reference.
 - [Lagrange Kernel Platform API v0](lagrange-kernel-platform-api-v0.md) - Kernel platform API contract.
 - [Lagrange Service Manifest](lagrange-service-manifest.md) - Service manifest format and activation model.

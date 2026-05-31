@@ -51,6 +51,23 @@
       "supporting: representative scenario rerun"
     ]
   },
+  "parallelDiagnostics": {
+    "mode": "read-only-scouts",
+    "requiredCards": [
+      "evidence-scout",
+      "model-contract-scout",
+      "source-map-scout"
+    ],
+    "reportDir": "work/agent-reports/active-YYYYMMDD-package",
+    "coordinatorOnlyWrites": [
+      "work/packages/",
+      "work/sprints/current-blocker.json",
+      "work/sprints/current-blocker.md",
+      "work/theory-ledger.md"
+    ],
+    "routeDecisionRequired": true,
+    "trigger": "before opening a runtime successor from ambiguous representative evidence"
+  },
   "causalGovernance": {
     "hypothesis": "If this package is correct, the named causal edge will reduce, migrate, or converge.",
     "stopConditionCheck": "npm --silent run analyze:causal-model -- path/to/latest.report.json",
@@ -87,6 +104,19 @@
     "handoffInvariant": "producer outcome + consumer precondition + freshness/revision/ack edge"
   },
   "predecessor": "work/packages/done-predecessor.md"
+  ,
+  "modelTheory": {
+    "modelKind": "state-model",
+    "executableArtifact": "docs/specs/statecharts/example.json",
+    "propertiesProven": [
+      "the scenario lifecycle cannot close without one canonical evidence-backed transition"
+    ],
+    "assumptions": [
+      "none"
+    ],
+    "counterExampleHandling": "Fail the package falsifier and route to architecture-gap analysis, owner migration, or a focused regression before implementation continues.",
+    "linkedSystemTheoryRef": "architecture/contracts/example.md#contract-id"
+  }
 }
 -->
 
@@ -139,6 +169,15 @@ frontier.
 - Proof mapping:
 - Wrong-slice trigger:
 
+## System Contract Binding
+
+- Contract record:
+- Failure class changed or bounded:
+- Invariant preserved or strengthened:
+- Runtime binding:
+- Model binding:
+- Counterexample handling:
+
 ## Classification-Only Fast Path
 
 Use when focused proof classifies the current edge and no runtime, test, script,
@@ -176,6 +215,20 @@ or report edit is justified.
 - Required after rerun: route-after-rerun, Sprint Strategy Brief update,
   Current Edge Card update, `npm run work:current-blocker -- --write`, and
   `npm run work:validate -- --pre-impl`.
+
+## Parallel Diagnostics
+
+- Mode: `read-only-scouts` when representative evidence is ambiguous, stale,
+  contradictory, or selecting a runtime successor.
+- Report directory:
+- Required cards:
+- Coordinator-only writes:
+- Route decision required:
+- Trigger:
+- Plan command:
+  `npm run work:agent:plan -- --package work/packages/active-YYYYMMDD-package.md`
+- Collection command:
+  `npm run work:agent:collect -- --package work/packages/active-YYYYMMDD-package.md`
 
 ## Scope
 

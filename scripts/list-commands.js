@@ -77,6 +77,26 @@ const COMMAND_GROUPS = Object.freeze([
         description: 'Summarize repeated owner/boundary/mechanism history, movement classifications, and package outcomes.',
       }),
       Object.freeze({
+        command: 'npm run work:loop-health -- --owner <owner> --boundary <boundary>',
+        description: 'Report ping-pong risk, route progress, supersede ratio, contract refs, and next legal move for one owner boundary.',
+      }),
+      Object.freeze({
+        command: 'npm run work:contract:check -- [architecture/contracts/name.md]',
+        description: 'Validate durable System Contract Records and their runtime, model, package, and theory-ledger bindings.',
+      }),
+      Object.freeze({
+        command: 'npm run work:agent:plan -- --package <package.md>',
+        description: 'Print required parallel diagnostic route-card paths and bounded scout/verifier prompts for a package.',
+      }),
+      Object.freeze({
+        command: 'npm run work:agent:collect -- --package <package.md> [--allow-missing]',
+        description: 'Collect agent route cards into a coordinator route matrix and surface disagreement before implementation.',
+      }),
+      Object.freeze({
+        command: 'npm run work:agent:validate -- --package <package.md> [--allow-missing]',
+        description: 'Validate agent route-card metadata, read-only scout constraints, evidence paths, and required report coverage.',
+      }),
+      Object.freeze({
         command: 'npm run work:validate -- --entry|--probe|--pre-impl|--closure',
         description: 'Validate active work-package metadata, probe packages, checklist state, and lane-required proof at a workflow phase.',
       }),
@@ -205,6 +225,18 @@ const COMMAND_GROUPS = Object.freeze([
       Object.freeze({
         command: 'npm run work:oversized-refactor -- --run',
         description: 'List oversized files, then run gpt-5.3-codex direct refactors without creating work packages.',
+      }),
+      Object.freeze({
+        command: 'npm run model:decision-tables',
+        description: 'Validate executable decision-table specs and prove every input combination has exactly one canonical outcome.',
+      }),
+      Object.freeze({
+        command: 'npm run model:statecharts',
+        description: 'Validate lifecycle and owner-state statecharts for reachability, terminal states, evidence, and forbidden transitions.',
+      }),
+      Object.freeze({
+        command: 'npm run model:contracts',
+        description: 'Run contract records, decision tables, statecharts, and protocol model checks as one model-contract gate.',
       }),
     ]),
   }),

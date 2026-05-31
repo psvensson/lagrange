@@ -199,6 +199,11 @@ test('shared package schema lists validator enums for LLM scaffolding', (t) => {
   t.match(rendered, /single-owner/u);
   t.match(rendered, /Classification-Only Fast Path/u);
   t.match(rendered, /candidateRuntimeFiles/u);
+  t.match(rendered, /Parallel Diagnostics/u);
+  t.match(rendered, /parallelDiagnostics/u);
+  t.match(rendered, /evidence-scout/u);
+  t.match(rendered, /model-contract-scout/u);
+  t.match(rendered, /source-map-scout/u);
   t.end();
 });
 

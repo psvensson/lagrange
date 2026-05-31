@@ -679,6 +679,17 @@ async function wakeOperationWorkflowRemoteOwner(
   context = OPERATION_WORKFLOW_OWNER_PORT_DEFAULT_CONTEXT,
 ) {
   const nowMs = Number.isFinite(context?.nowMs) ? context.nowMs : Date.now();
+  const operationId = getOperationWorkflowOwnerPortOperationId(
+    owner,
+    operation,
+  );
+  const hasActiveHandoffRetry =
+    typeof owner.hasActiveCreatedOperationHandoffRetry ===
+      OPERATION_WORKFLOW_OWNER_PORT_FUNCTION_TYPE &&
+    owner.hasActiveCreatedOperationHandoffRetry(operationId, nowMs);
+  if (hasActiveHandoffRetry) {
+    return true;
+  }
   const handoffTimeoutDecision =
     owner.buildCoordinatorCreatedRemoteHandoffTimeoutDecision?.(
       operation,
