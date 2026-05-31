@@ -18,6 +18,10 @@ import {
   requireConcreteField,
   validateEnum,
 } from './work-contract-utils.js';
+import {
+  loadInvariantRegistry,
+  validateInvariantRegistry,
+} from './work-invariants.js';
 
 const DEFAULT_CONTRACT_DIR = 'architecture/contracts';
 const CONTRACT_MARKER = 'system-contract';
@@ -175,6 +179,83 @@ function validateMarkdownSections(errors, filePath, content) {
   }
 }
 
+function validateContractSystemTheory(errors, filePath, contract, rootDir) {
+  const systemTheory = contract.systemTheory;
+  if (systemTheory === undefined || systemTheory === null) {
+    return;
+  }
+  if (!isObjectRecord(systemTheory)) {
+    errors.push(`${filePath}: systemTheory must be an object.`);
+    return;
+  }
+  requireConcreteField(
+    errors, filePath, 'systemTheory.problemStatement',
+    systemTheory.problemStatement,
+  );
+  requireConcreteArray(
+    errors, filePath, 'systemTheory.phaseChain', systemTheory.phaseChain,
+    {minLength: 2},
+  );
+  requireConcreteArray(
+    errors, filePath, 'systemTheory.ownerBoundaryMap',
+    systemTheory.ownerBoundaryMap,
+  );
+  requireConcreteArray(
+    errors, filePath, 'systemTheory.invariantRefs',
+    systemTheory.invariantRefs,
+  );
+  const loaded = loadInvariantRegistry(null, rootDir);
+  if (loaded.error || !isObjectRecord(loaded.registry)) {
+    return;
+  }
+  const known = new Set(
+    (loaded.registry.invariants || [])
+      .filter((entry) => isObjectRecord(entry) && hasConcreteText(entry.id))
+      .map((entry) => entry.id),
+  );
+  for (const [index, ref] of (systemTheory.invariantRefs || []).entries()) {
+    if (hasConcreteText(ref) && !known.has(ref)) {
+      errors.push(
+        `${filePath}: systemTheory.invariantRefs[${index}] is not a registered ` +
+        `invariant id: ${ref}.`,
+      );
+    }
+  }
+}
+
+function validateModelProvenRoutes(errors, filePath, contract, rootDir) {
+  const routes = contract.modelProvenRoutes;
+  if (routes === undefined || routes === null) {
+    return;
+  }
+  if (!Array.isArray(routes)) {
+    errors.push(`${filePath}: modelProvenRoutes must be an array.`);
+    return;
+  }
+  routes.forEach((route, index) => {
+    const routePath = `modelProvenRoutes[${index}]`;
+    if (!isObjectRecord(route)) {
+      errors.push(`${filePath}: ${routePath} must be an object.`);
+      return;
+    }
+    for (const field of ['owner', 'boundary', 'selectedLayer', 'ledgerRef']) {
+      requireConcreteField(errors, filePath, `${routePath}.${field}`, route[field]);
+    }
+    if (route.livenessHolds !== true) {
+      errors.push(
+        `${filePath}: ${routePath}.livenessHolds must be true — a proven route ` +
+        'records a model that demonstrates the liveness property holds.',
+      );
+    }
+    const artifact = route.evidenceArtifact;
+    if (hasConcreteText(artifact) && !pathExists(artifact, rootDir)) {
+      errors.push(
+        `${filePath}: ${routePath}.evidenceArtifact does not exist: ${artifact}`,
+      );
+    }
+  });
+}
+
 function validateSystemContractFile(filePath, {rootDir = process.cwd()} = {}) {
   const relativeFilePath = relativeToCwd(filePath);
   const errors = [];
@@ -283,18 +364,79 @@ function validateSystemContractFile(filePath, {rootDir = process.cwd()} = {}) {
   );
   validateArtifactReferences(errors, relativeFilePath, contract, rootDir);
   validateTheoryLedgerRefs(errors, relativeFilePath, contract, rootDir);
+  validateContractSystemTheory(errors, relativeFilePath, contract, rootDir);
+  validateModelProvenRoutes(errors, relativeFilePath, contract, rootDir);
   validateMarkdownSections(errors, relativeFilePath, content);
   return {contract, errors};
+}
+
+function collectContractInvariantIds(contract) {
+  const ids = new Set();
+  if (!isObjectRecord(contract)) {
+    return ids;
+  }
+  const groups = [contract.safetyInvariants, contract.livenessExpectations];
+  for (const group of groups) {
+    if (!Array.isArray(group)) {
+      continue;
+    }
+    for (const entry of group) {
+      if (isObjectRecord(entry) && hasConcreteText(entry.id)) {
+        ids.add(entry.id);
+      }
+    }
+  }
+  return ids;
+}
+
+function crossCheckRegistryAgainstContracts(errors, contractIdsByPath, rootDir) {
+  const loaded = loadInvariantRegistry(null, rootDir);
+  if (loaded.error === 'registry-not-found') {
+    return;
+  }
+  const registryLabel = relativeToCwd(loaded.path);
+  if (loaded.error) {
+    errors.push(`${registryLabel}: cannot parse registry: ${loaded.error}`);
+    return;
+  }
+  errors.push(...validateInvariantRegistry(loaded.registry, {
+    label: registryLabel,
+    rootDir,
+  }));
+  for (const entry of loaded.registry.invariants || []) {
+    if (!isObjectRecord(entry) || !hasConcreteText(entry.contractRef)) {
+      continue;
+    }
+    const resolvedRef = path.resolve(rootDir, entry.contractRef);
+    const declaredIds = contractIdsByPath.get(resolvedRef);
+    if (declaredIds && !declaredIds.has(entry.id)) {
+      errors.push(
+        `${registryLabel}: invariant ${entry.id} names contractRef ` +
+        `${entry.contractRef}, but that record does not declare an invariant ` +
+        `with id ${entry.id}.`,
+      );
+    }
+  }
 }
 
 function validateSystemContracts(files, options = {}) {
   const errors = [];
   const checkedFiles = [];
+  const contractIdsByPath = new Map();
   for (const filePath of files) {
     checkedFiles.push(relativeToCwd(filePath));
     const result = validateSystemContractFile(filePath, options);
     errors.push(...result.errors);
+    contractIdsByPath.set(
+      path.resolve(filePath),
+      collectContractInvariantIds(result.contract),
+    );
   }
+  crossCheckRegistryAgainstContracts(
+    errors,
+    contractIdsByPath,
+    options.rootDir || process.cwd(),
+  );
   return {
     label: 'work-contract-check',
     checkedFiles,

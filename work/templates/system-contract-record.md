@@ -29,6 +29,32 @@
       "statement": "concrete progress property"
     }
   ],
+  "systemTheory": {
+    "problemStatement": "durable whole-system problem this record reasons about",
+    "phaseChain": [
+      "ordered phases of the whole-system theory"
+    ],
+    "ownerBoundaryMap": [
+      {
+        "owner": "semantic_owner",
+        "boundary": "owner_boundary",
+        "role": "what this owner/boundary contributes to the whole-system theory"
+      }
+    ],
+    "invariantRefs": [
+      "safety-invariant-id"
+    ]
+  },
+  "modelProvenRoutes": [
+    {
+      "owner": "semantic_owner",
+      "boundary": "owner_boundary",
+      "selectedLayer": "observation",
+      "livenessHolds": true,
+      "evidenceArtifact": "test-output/reports/name.model.report.json",
+      "ledgerRef": "theory-YYYYMMDD-...-architecture-gap"
+    }
+  ],
   "knownResiduals": [
     "known bounded residual or the literal none with evidence"
   ],

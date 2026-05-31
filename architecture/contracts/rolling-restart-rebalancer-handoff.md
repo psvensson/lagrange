@@ -38,6 +38,10 @@
     {
       "id": "pending-ack-eventually-routes",
       "statement": "A pending rebalancer handoff acknowledgement eventually reruns representative evidence, retries through the owner wake path, migrates owner, or records an architecture-gap stop."
+    },
+    {
+      "id": "bounded-owner-reentry",
+      "statement": "A reconciled-but-not-yet-published node may be deferred back to pending only a bounded number of times; unbounded deferred owner re-entry is the higher-level oscillation that prevents convergence."
     }
   ],
   "knownResiduals": [

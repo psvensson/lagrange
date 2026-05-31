@@ -315,6 +315,34 @@ must bind a failure class to owner/boundary, state variables, safety
 invariants, liveness expectations, runtime paths, model artifacts, package
 history, theory ledger entries, residuals, and FMEA/STPA operational analysis.
 
+**`systemTheory` block (home of whole-system reasoning, R2).** A record may carry
+an optional `systemTheory` object (`problemStatement`, `phaseChain`,
+`ownerBoundaryMap`, `invariantRefs[]`). When present, a package whose
+`sliceTheory.systemTheoryRef` resolves to that record may **omit** its in-package
+`systemTheory` object — the durable whole-system theory lives once in the record
+instead of being re-recorded (and drifting) across hundreds of packages. Legacy
+packages with an inline `systemTheory` still validate. Enforced by
+`validateTwoLevelTheoryContract` (work-tracker) and `validateContractSystemTheory`
+(work-contract-check).
+
+**`modelProvenRoutes` block (R15).** A record may list
+`modelProvenRoutes: [{ owner, boundary, selectedLayer, livenessHolds,
+evidenceArtifact, ledgerRef }]`. An entry with `livenessHolds: true` declares
+that a formal model proved the named route converges; R15 then forces the loop to
+implement that route rather than re-analyse the pair. `evidenceArtifact` must
+point at the proof report (e.g. a TLC/fast-check route report).
+
+**Invariant registry (R6).** `architecture/contracts/invariants.json`
+(`invariant-registry-v1`) is the machine-readable home of every named invariant:
+`{ id, owner, boundary, kind(safety|liveness), statement, formalPredicate,
+coupledWith[], modelRef, contractRef }`. It is validated by
+`npm run work:invariants:check` (unique ids, valid kind, concrete fields,
+**symmetric** `coupledWith`, no self-coupling, existing `modelRef`/`contractRef`
+paths) and cross-checked against the contract records' `safetyInvariants` /
+`livenessExpectations` ids by `work:contract:check`. Contract-record invariant ids
+must reference registry entries. The registry also feeds R16 (a `modelRef` counts
+as model coverage) and R18 (the owner-dossier read model).
+
 Use the existing `modelTheory.modelKind` field as the package-local executable
 binding:
 
@@ -599,6 +627,64 @@ packages and sprints without the relevant fields/signals are exempt.
     (default no-flag behaviour unchanged), and the close auto-binds
     `residualCount` from the artifact so the consistency gate validates against
     measured data with no extra package or commit.
+
+* **R15. Model-Proven Route Forcing** —
+  `validateModelProvenRouteForcing`
+  (`model-proven-route-forces-implementation` /
+  `model-proven-route-marker-required` / `model-proven-route-layer-mismatch`) at
+  `--pre-impl`. A formal model (TLA+/fast-check) that *proves* a liveness
+  property holds for a chosen route is the strongest possible stop for the
+  analysis loop, yet nothing forced the loop to honour it. When a System Contract
+  Record lists a `modelProvenRoutes` entry with `livenessHolds: true` for the
+  package's `owner`/`boundary`, R15 makes the proof binding:
+  * Re-opening an **architecture-gap-analysis** or **system-theory-rederive** on
+    that pair is rejected — the model already settled which layer converges, so
+    the only legal next package is the architecture-route implementation (R13).
+  * A runtime package on the pair must declare
+    `theoryLoop.architectureRoute` whose `selectedLayer` is one of the
+    model-proven layers; a different layer is rejected
+    (`model-proven-route-layer-mismatch`) until a new model proof is recorded.
+  * Additive: pairs with no `modelProvenRoutes` entry, and all legacy packages,
+    are exempt no-ops. The proof artifact (`evidenceArtifact`) is cited in the
+    error so the reviewer can see *why* the route is forced.
+
+* **R16. Model-Coverage Requirement** —
+  `validateModelCoverageRequirement` (`model-coverage-required`) at `--pre-impl`.
+  When a pair keeps closing packages without moving its representative metric and
+  **no model exists** to reason about it, the loop is guessing in the dark. After
+  `MODEL_COVERAGE_STALL_THRESHOLD` (3) closed packages on the pair recorded
+  `metricDelta <= 0`, and the pair has neither a model-proven route (R15) nor an
+  invariant-registry entry carrying a `modelRef`, the next package must *build the
+  model* — `lane: model` / `modelTheory: true` / an architecture-route with
+  `selectedLayer: model` — or re-open an architecture-gap analysis. This converts
+  "yet another unmodelled runtime slice" into "make the part reasoned-about".
+  Additive: model-building, analysis, and rederive packages are the sanctioned
+  exits and are never blocked; covered pairs are exempt no-ops.
+
+* **R17. Representative-Progress Circuit Breaker** —
+  `validateRepresentativeProgressCircuitBreaker`
+  (`representative-progress-circuit-breaker`) at `--pre-impl`. A *blocking*,
+  artifact-keyed companion to the soft same-frontier stop. When the last
+  `CIRCUIT_BREAKER_WINDOW` (3) closed packages on the pair did **not** shrink the
+  artifact-bound `representativeResidual.residualCount` (newest ≥ oldest in the
+  window), every further local slice is blocked. The only exits are the
+  sanctioned escalations: an architecture-gap analysis, a system-theory rederive,
+  a model-building package, an owner-boundary migration
+  (`ownerBoundaryMigration: true`), or an architecture-route that **rotates to a
+  new layer**. Because it keys on the `residualCount` chain rather than on lane
+  labels, it cannot be evaded by renaming the lane. Additive: fires only once a
+  full window of residual-bearing closures exists.
+
+* **R18. Owner-Dossier Read Model** — `buildOwnerDossier` /
+  `npm run work:owner-dossier -- --owner <o> --boundary <b> [--json]`. Not a
+  guardrail but the read surface the guardrails reason over: for one
+  owner/boundary it assembles the System Contract Record, the coupled invariants
+  from the registry (id, kind, coupling), the model status
+  (`proven` / `modeled` / `stalled` / `none`), the current artifact-bound
+  residual, the recent closed-package outcomes (with `metricDelta` /
+  `residualCount`), and the theory-ledger trail those packages reference. It never
+  mutates state. Use it before choosing the next package on a pair to see the
+  whole reasoning context in one place.
 
 ### Compositional Auto-Promote Rule
 

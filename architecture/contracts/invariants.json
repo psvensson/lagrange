@@ -1,0 +1,50 @@
+{
+  "schema": "invariant-registry-v1",
+  "description": "Machine-readable registry of owner-scoped safety and liveness invariants. Contract records and modelTheory blocks cite these entries by id so coupling is checked structurally rather than as prose. Validate with `npm run work:invariants:check`.",
+  "invariants": [
+    {
+      "id": "published-subset-covered",
+      "owner": "startup_active_gate_owner",
+      "boundary": "snapshot_coverage",
+      "kind": "safety",
+      "statement": "A node can never be published before its snapshot coverage is accepted; published is always a subset of covered.",
+      "formalPredicate": "published \\subseteq covered",
+      "coupledWith": ["covered-disjoint-pending"],
+      "modelRef": "models/active-gate/ActiveGate.tla",
+      "contractRef": "architecture/contracts/active-gate-convergence.md"
+    },
+    {
+      "id": "covered-disjoint-pending",
+      "owner": "startup_active_gate_owner",
+      "boundary": "snapshot_coverage",
+      "kind": "safety",
+      "statement": "A node with accepted snapshot coverage has already been reconciled by the owner; covered and pending never intersect.",
+      "formalPredicate": "covered \\cap pending = {}",
+      "coupledWith": ["published-subset-covered"],
+      "modelRef": "models/active-gate/ActiveGate.tla",
+      "contractRef": "architecture/contracts/active-gate-convergence.md"
+    },
+    {
+      "id": "active-gate-eventually-converged",
+      "owner": "startup_active_gate_owner",
+      "boundary": "snapshot_coverage",
+      "kind": "liveness",
+      "statement": "Under weak fairness of the progress actions and bounded owner re-entry, every node eventually reaches published with a fresh quorum snapshot, so the active gate eventually goes green.",
+      "formalPredicate": "<>Converged",
+      "coupledWith": ["bounded-owner-reentry"],
+      "modelRef": "models/active-gate/ActiveGate.tla",
+      "contractRef": "architecture/contracts/active-gate-convergence.md"
+    },
+    {
+      "id": "bounded-owner-reentry",
+      "owner": "operation_workflow_owner",
+      "boundary": "rebalancer_handoff",
+      "kind": "liveness",
+      "statement": "A reconciled-but-not-yet-published node may be deferred back to pending only a bounded number of times; unbounded deferred owner re-entry is the higher-level oscillation that prevents convergence.",
+      "formalPredicate": "\\A n: bounded(count(DeferReentry(n)))",
+      "coupledWith": ["active-gate-eventually-converged"],
+      "modelRef": "models/active-gate/ActiveGate.tla",
+      "contractRef": "architecture/contracts/rolling-restart-rebalancer-handoff.md"
+    }
+  ]
+}

@@ -188,6 +188,10 @@ import {
   extractMechanismTerm,
   COMPOSITIONAL_PAIRS,
 } from './work-frontier-history.js';
+import {
+  loadInvariantRegistry,
+  findInvariantsForOwnerBoundary,
+} from './work-invariants.js';
 
 let globalKindOption = null;
 let globalDryRunOption = false;
@@ -6566,6 +6570,39 @@ function validateSliceTheory(filePath, sliceTheory) {
   return errors;
 }
 
+// R2 — System Contract Record is the home of systemTheory. A package may omit the
+// in-package systemTheory object when its sliceTheory.systemTheoryRef resolves to a
+// System Contract Record that records a `systemTheory` block. This inverts the old
+// per-package re-recording (which drifted across hundreds of packages): durable
+// whole-system reasoning lives once in architecture/contracts/, and packages carry
+// only the slice plus a ref. Legacy packages with inline systemTheory still pass.
+function readSystemContractBlock(contractFilePath) {
+  let content;
+  try {
+    content = fsSync.readFileSync(contractFilePath, ENCODING_UTF8);
+  } catch (_e) {
+    return null;
+  }
+  const match = content.match(/<!--\s*system-contract\s*\n([\s\S]*?)\n\s*-->/i);
+  if (!match) return null;
+  try {
+    return JSON.parse(match[1].trim());
+  } catch (_e) {
+    return null;
+  }
+}
+
+function contractRefRecordsSystemTheory(systemTheoryRef) {
+  const ref = normalizeLedgerText(systemTheoryRef);
+  if (!ref) return false;
+  const filePart = ref.split('#')[NUM_ZERO];
+  if (!/^architecture\/contracts\/.+\.md$/u.test(filePart)) return false;
+  const resolved = path.resolve(filePart);
+  if (!fsSync.existsSync(resolved)) return false;
+  const contract = readSystemContractBlock(resolved);
+  return isObjectRecord(contract) && isObjectRecord(contract.systemTheory);
+}
+
 export function validateTwoLevelTheoryContract(
   metadata,
   filePath,
@@ -6579,10 +6616,14 @@ export function validateTwoLevelTheoryContract(
   const systemTheory = metadata?.[SYSTEM_THEORY_FIELD];
   const sliceTheory = metadata?.[SLICE_THEORY_FIELD];
   const errors = [];
-  if (!systemTheory && requiresTheory) {
+  const systemTheoryRef = sliceTheory?.[SLICE_THEORY_SYSTEM_REF_FIELD];
+  const refSatisfiesSystemTheory = contractRefRecordsSystemTheory(systemTheoryRef);
+  if (!systemTheory && requiresTheory && !refSatisfiesSystemTheory) {
     errors.push(
       `${filePath}: metadata ${SYSTEM_THEORY_FIELD} is required for active ` +
-      'causal-escalation, architecture-gated, owner-migration, or repeated-frontier packages.',
+      'causal-escalation, architecture-gated, owner-migration, or repeated-frontier ' +
+      `packages, unless ${SLICE_THEORY_FIELD}.${SLICE_THEORY_SYSTEM_REF_FIELD} ` +
+      'points to a System Contract Record that records a systemTheory block.',
     );
   }
   if (!sliceTheory && requiresTheory) {
@@ -7695,6 +7736,398 @@ export function validateMetricProgressLayerRotation(
     'same non-moving layer is the higher-level oscillation R14 forbids.',
   );
   return errors;
+}
+
+// ---------------------------------------------------------------------------
+// R15 — Model-proven route forcing (recommendation 1).
+// When a System Contract Record records a `modelProvenRoutes` entry whose model
+// demonstrates the liveness property holds for an owner/boundary, the loop must
+// implement that route, not keep re-litigating it. Re-opening an
+// architecture-gap-analysis or system-theory-rederive on the pair is rejected at
+// pre-impl; a runtime package must bind to the proven layer. This is the single
+// biggest churn sink: a liveness proof should end the analysis loop, not feed it.
+// Additive: pairs with no proven route, and legacy packages, are exempt no-ops.
+// ---------------------------------------------------------------------------
+const CONTRACT_RECORDS_DIR = path.join('architecture', 'contracts');
+
+function loadModelProvenRoutes(contractDir) {
+  const dir = contractDir ?
+    path.resolve(contractDir) :
+    path.resolve(process.cwd(), CONTRACT_RECORDS_DIR);
+  let files;
+  try {
+    files = fsSync.readdirSync(dir);
+  } catch (_e) {
+    return [];
+  }
+  const routes = [];
+  for (const fileName of files) {
+    if (!fileName.endsWith('.md')) continue;
+    const contract = readSystemContractBlock(path.join(dir, fileName));
+    if (!isObjectRecord(contract) || !Array.isArray(contract.modelProvenRoutes)) {
+      continue;
+    }
+    for (const route of contract.modelProvenRoutes) {
+      if (!isObjectRecord(route) || route.livenessHolds !== true) continue;
+      routes.push({
+        owner: normalizeLedgerText(route.owner),
+        boundary: normalizeLedgerText(route.boundary),
+        selectedLayer: normalizeLedgerText(route.selectedLayer).toLowerCase(),
+        ledgerRef: normalizeLedgerText(route.ledgerRef),
+        evidenceArtifact: normalizeLedgerText(route.evidenceArtifact),
+        contractFile: path.join(CONTRACT_RECORDS_DIR, fileName),
+      });
+    }
+  }
+  return routes;
+}
+
+function findProvenRoutesForPair(routes, owner, boundary) {
+  return routes.filter((r) => r.owner === owner && r.boundary === boundary);
+}
+
+export function validateModelProvenRouteForcing(metadata, filePath, options = {}) {
+  const errors = [];
+  if (!metadata || typeof metadata !== 'object') return errors;
+  const phase = options.phase || VALIDATION_PHASE_PRE_IMPL;
+  if (phase !== VALIDATION_PHASE_PRE_IMPL) return errors;
+  const status = options.status || normalizeLedgerText(metadata.status);
+  if (status !== STATUS_ACTIVE && status !== STATUS_TODO) return errors;
+  const owner = normalizeLedgerText(metadata.owner);
+  const boundary = normalizeLedgerText(metadata.boundary);
+  if (!owner || !boundary) return errors;
+  const routes = findProvenRoutesForPair(
+    loadModelProvenRoutes(options.contractDir), owner, boundary,
+  );
+  if (routes.length === 0) return errors;
+  const provenLayers = [...new Set(
+    routes.map((r) => r.selectedLayer).filter(Boolean),
+  )];
+  const layerList = provenLayers.join(', ');
+  const evidence = routes[0].evidenceArtifact || routes[0].contractFile;
+  if (
+    metadataIsArchitectureGapAnalysis(metadata, filePath) ||
+    metadataIsSystemTheoryRevision(metadata, filePath)
+  ) {
+    errors.push(
+      `${filePath}: model-proven-route-forces-implementation — a model records ` +
+      `that the {${layerList}} route on owner=${owner} boundary=${boundary} ` +
+      `satisfies its liveness property (${evidence}). Re-opening an ` +
+      'architecture-gap-analysis or system-theory-rederive on this pair is not a ' +
+      'valid move; the only legal next package is the architecture-route ' +
+      'implementation of the proven layer (R13).',
+    );
+    return errors;
+  }
+  const route = getArchitectureRoute(metadata);
+  if (!route) {
+    errors.push(
+      `${filePath}: model-proven-route-marker-required — owner=${owner} ` +
+      `boundary=${boundary} has a model-proven route ({${layerList}}); a runtime ` +
+      'package on this pair must declare theoryLoop.architectureRoute bound to ' +
+      `the proven layer (${evidence}).`,
+    );
+    return errors;
+  }
+  const candidateLayer = normalizeLedgerText(
+    route[ARCHITECTURE_ROUTE_SELECTED_LAYER_FIELD],
+  ).toLowerCase();
+  if (
+    candidateLayer &&
+    provenLayers.length > 0 &&
+    !provenLayers.includes(candidateLayer)
+  ) {
+    errors.push(
+      `${filePath}: model-proven-route-layer-mismatch — selectedLayer=` +
+      `${candidateLayer} does not match the model-proven layer(s) {${layerList}} ` +
+      `for owner=${owner} boundary=${boundary}. Implement the proven route or ` +
+      'record a new model proof before selecting a different layer.',
+    );
+  }
+  return errors;
+}
+
+// ---------------------------------------------------------------------------
+// R16 — Model-coverage requirement (recommendation 4).
+// When a pair keeps closing packages without moving its representative metric
+// AND no model exists to reason about it, the loop is guessing. After
+// MODEL_COVERAGE_STALL_THRESHOLD closed packages with metricDelta <= 0 on a pair
+// that has neither a model-proven route nor a registry invariant carrying a
+// modelRef, the next package must build that model (or re-open analysis). This
+// converts "yet another runtime slice" into "make the part reasoned-about".
+// ---------------------------------------------------------------------------
+const MODEL_COVERAGE_STALL_THRESHOLD = 3;
+const CIRCUIT_BREAKER_WINDOW = 3;
+
+function metadataIsModelBuildingPackage(metadata) {
+  if (!isObjectRecord(metadata)) return false;
+  if (metadata.modelTheory === true) return true;
+  const lane = normalizeLedgerText(metadata.lane || metadata?.intent?.lane);
+  if (lane === 'model' || lane === 'model-building' || lane === 'model-theory') {
+    return true;
+  }
+  const route = getArchitectureRoute(metadata);
+  if (route) {
+    const layer = normalizeLedgerText(
+      route[ARCHITECTURE_ROUTE_SELECTED_LAYER_FIELD],
+    ).toLowerCase();
+    if (layer === 'model') return true;
+  }
+  return false;
+}
+
+function pairHasModelCoverage(owner, boundary, options) {
+  const provenRoutes = findProvenRoutesForPair(
+    loadModelProvenRoutes(options.contractDir), owner, boundary,
+  );
+  if (provenRoutes.length > 0) return true;
+  const {registry} = loadInvariantRegistry(
+    options.registryPath, options.registryRootDir || process.cwd(),
+  );
+  const invariants = findInvariantsForOwnerBoundary(registry, owner, boundary);
+  return invariants.some(
+    (inv) => typeof inv.modelRef === 'string' && inv.modelRef.trim() !== '',
+  );
+}
+
+// Returns the closed packages on the alternating pair containing owner/boundary,
+// newest-first, annotated with metricDelta, residualCount and outcome. Unlike
+// getRouteChainForPair this is not restricted to architecture-route packages.
+function getClosedPackageChainForPair(packageDir, owner, boundary) {
+  if (!owner || !boundary) return [];
+  const pairBoundaries = getAlternatingPairBoundariesForGate(
+    packageDir, owner, boundary,
+  );
+  const relevant = new Set([
+    `${owner}::${boundary}`,
+    ...pairBoundaries.map((p) => `${p.owner}::${p.boundary}`),
+  ]);
+  return listPackagesInDir(packageDir)
+    .filter((pkg) => pkg.status === 'done')
+    .filter((pkg) => relevant.has(`${pkg.owner}::${pkg.boundary}`))
+    .map((pkg) => {
+      const meta = readPackageMetadata(path.join(packageDir, pkg.fileName));
+      return {
+        fileName: pkg.fileName,
+        opened: pkg.opened,
+        metricDelta: readPackageMetricDelta(meta),
+        residualCount: readPackageResidualCount(meta),
+        outcome: packageOutcome(meta),
+      };
+    })
+    .sort((a, b) => String(b.opened || '').localeCompare(String(a.opened || '')));
+}
+
+export function validateModelCoverageRequirement(metadata, filePath, options = {}) {
+  const errors = [];
+  if (!metadata || typeof metadata !== 'object') return errors;
+  const phase = options.phase || VALIDATION_PHASE_PRE_IMPL;
+  if (phase !== VALIDATION_PHASE_PRE_IMPL) return errors;
+  const status = options.status || normalizeLedgerText(metadata.status);
+  if (status !== STATUS_ACTIVE && status !== STATUS_TODO) return errors;
+  const owner = normalizeLedgerText(metadata.owner);
+  const boundary = normalizeLedgerText(metadata.boundary);
+  if (!owner || !boundary) return errors;
+  if (
+    metadataIsModelBuildingPackage(metadata) ||
+    metadataIsArchitectureGapAnalysis(metadata, filePath) ||
+    metadataIsSystemTheoryRevision(metadata, filePath)
+  ) {
+    return errors;
+  }
+  if (pairHasModelCoverage(owner, boundary, options)) return errors;
+  const packageDir = options.packageDir ?
+    path.resolve(options.packageDir) :
+    path.resolve(process.cwd(), COMPOSITIONAL_GATE_PACKAGE_DIR);
+  const chain = getClosedPackageChainForPair(packageDir, owner, boundary);
+  const stalled = chain.filter(
+    (c) => c.metricDelta !== null && c.metricDelta <= 0,
+  );
+  if (stalled.length < MODEL_COVERAGE_STALL_THRESHOLD) return errors;
+  errors.push(
+    `${filePath}: model-coverage-required — owner=${owner} boundary=${boundary} ` +
+    `has ${stalled.length} closed packages with no representative-metric ` +
+    'progress and no model covering the pair (no model-proven route and no ' +
+    'invariant-registry modelRef). The next package must build a model for this ' +
+    'pair (lane=model / modelTheory:true / architectureRoute selectedLayer=model) ' +
+    'or re-open an architecture-gap analysis — not another unmodelled runtime ' +
+    'slice.',
+  );
+  return errors;
+}
+
+// ---------------------------------------------------------------------------
+// R17 — Representative-progress circuit breaker (recommendation 5).
+// A blocking, artifact-keyed version of the soft same-frontier stop. When the
+// last CIRCUIT_BREAKER_WINDOW closed packages on a pair did not shrink the
+// artifact-bound representativeResidual.residualCount, every further local slice
+// is blocked at pre-impl. The only exits are the sanctioned escalations:
+// architecture-gap analysis, system-theory rederive, model-building, an owner-
+// boundary migration, or an architecture-route that rotates to a new layer.
+// Keys on the residualCount chain, not on lane labels, so it cannot be evaded by
+// renaming the lane.
+// ---------------------------------------------------------------------------
+function isLayerRotatingRoute(metadata, packageDir, owner, boundary) {
+  const route = getArchitectureRoute(metadata);
+  if (!route) return false;
+  const candidateLayer = normalizeLedgerText(
+    route[ARCHITECTURE_ROUTE_SELECTED_LAYER_FIELD],
+  ).toLowerCase();
+  if (!candidateLayer) return false;
+  const chain = getRouteChainForPair(packageDir, owner, boundary);
+  if (chain.length === 0) return true;
+  return chain[0].selectedLayer !== candidateLayer;
+}
+
+export function validateRepresentativeProgressCircuitBreaker(
+  metadata,
+  filePath,
+  options = {},
+) {
+  const errors = [];
+  if (!metadata || typeof metadata !== 'object') return errors;
+  const phase = options.phase || VALIDATION_PHASE_PRE_IMPL;
+  if (phase !== VALIDATION_PHASE_PRE_IMPL) return errors;
+  const status = options.status || normalizeLedgerText(metadata.status);
+  if (status !== STATUS_ACTIVE && status !== STATUS_TODO) return errors;
+  const owner = normalizeLedgerText(metadata.owner);
+  const boundary = normalizeLedgerText(metadata.boundary);
+  if (!owner || !boundary) return errors;
+  const packageDir = options.packageDir ?
+    path.resolve(options.packageDir) :
+    path.resolve(process.cwd(), COMPOSITIONAL_GATE_PACKAGE_DIR);
+  if (
+    metadataIsArchitectureGapAnalysis(metadata, filePath) ||
+    metadataIsSystemTheoryRevision(metadata, filePath) ||
+    metadataIsModelBuildingPackage(metadata) ||
+    metadata.ownerBoundaryMigration === true ||
+    isLayerRotatingRoute(metadata, packageDir, owner, boundary)
+  ) {
+    return errors;
+  }
+  const chain = getClosedPackageChainForPair(packageDir, owner, boundary)
+    .filter((c) => c.residualCount !== null);
+  const window = chain.slice(0, CIRCUIT_BREAKER_WINDOW);
+  if (window.length < CIRCUIT_BREAKER_WINDOW) return errors;
+  const newest = window[0].residualCount;
+  const oldest = window[window.length - NUM_ONE].residualCount;
+  if (newest < oldest) return errors;
+  errors.push(
+    `${filePath}: representative-progress-circuit-breaker — the last ` +
+    `${CIRCUIT_BREAKER_WINDOW} closed packages on owner=${owner} ` +
+    `boundary=${boundary} did not shrink the artifact-bound representative ` +
+    `residual (residualCount ${oldest} -> ${newest}). Another local slice is ` +
+    'blocked. Open an architecture-gap analysis, rotate the architecture-route ' +
+    'layer, build a model for this pair, migrate the owner-boundary, or record ' +
+    'a system-theory rederive.',
+  );
+  return errors;
+}
+
+// ---------------------------------------------------------------------------
+// R18 — Owner-dossier aggregation (recommendation 3).
+// Assembles, for a single owner/boundary, the full reasoning surface: the
+// System Contract Record, the coupled invariants from the registry, the model
+// status (proven / modeled / stalled / none), the current artifact-bound
+// residual, the recent closed-package outcomes, and the theory-ledger trail.
+// This is the read model behind the `work:owner-dossier` command; it never
+// mutates state.
+// ---------------------------------------------------------------------------
+const OWNER_DOSSIER_RECENT_WINDOW = 5;
+
+function findContractRecordForPair(contractDir, owner, boundary) {
+  const dir = contractDir ?
+    path.resolve(contractDir) :
+    path.resolve(process.cwd(), CONTRACT_RECORDS_DIR);
+  let files;
+  try {
+    files = fsSync.readdirSync(dir);
+  } catch (_e) {
+    return null;
+  }
+  for (const fileName of files) {
+    if (!fileName.endsWith('.md')) continue;
+    const contract = readSystemContractBlock(path.join(dir, fileName));
+    if (!isObjectRecord(contract)) continue;
+    const recordOwner = normalizeLedgerText(contract.owner);
+    const recordBoundary = normalizeLedgerText(contract.boundary);
+    const routes = Array.isArray(contract.modelProvenRoutes) ?
+      contract.modelProvenRoutes :
+      [];
+    const routeMatch = routes.some(
+      (r) => isObjectRecord(r) &&
+        normalizeLedgerText(r.owner) === owner &&
+        normalizeLedgerText(r.boundary) === boundary,
+    );
+    if ((recordOwner === owner && recordBoundary === boundary) || routeMatch) {
+      return {file: path.join(CONTRACT_RECORDS_DIR, fileName), contract};
+    }
+  }
+  return null;
+}
+
+export function buildOwnerDossier(owner, boundary, options = {}) {
+  const normOwner = normalizeLedgerText(owner);
+  const normBoundary = normalizeLedgerText(boundary);
+  const packageDir = options.packageDir ?
+    path.resolve(options.packageDir) :
+    path.resolve(process.cwd(), COMPOSITIONAL_GATE_PACKAGE_DIR);
+  const provenRoutes = findProvenRoutesForPair(
+    loadModelProvenRoutes(options.contractDir), normOwner, normBoundary,
+  );
+  const {registry} = loadInvariantRegistry(
+    options.registryPath, options.registryRootDir || process.cwd(),
+  );
+  const invariants = findInvariantsForOwnerBoundary(
+    registry, normOwner, normBoundary,
+  ).map((inv) => ({
+    id: inv.id,
+    kind: inv.kind,
+    statement: inv.statement,
+    coupledWith: Array.isArray(inv.coupledWith) ? inv.coupledWith : [],
+    modelRef: inv.modelRef || null,
+  }));
+  const chain = getClosedPackageChainForPair(packageDir, normOwner, normBoundary);
+  const recentPackages = chain.slice(0, OWNER_DOSSIER_RECENT_WINDOW);
+  const currentResidual = recentPackages.length > 0 ?
+    recentPackages[NUM_ZERO].residualCount :
+    null;
+  const stalled = chain.filter(
+    (c) => c.metricDelta !== null && c.metricDelta <= 0,
+  );
+  const hasModelRef = invariants.some((inv) => inv.modelRef);
+  let modelStatus = 'none';
+  if (provenRoutes.length > 0) {
+    modelStatus = 'proven';
+  } else if (hasModelRef) {
+    modelStatus = 'modeled';
+  } else if (stalled.length >= MODEL_COVERAGE_STALL_THRESHOLD) {
+    modelStatus = 'stalled';
+  }
+  const ledgerRefs = [...new Set(
+    chain
+      .map((c) => readPackageMetadata(path.join(packageDir, c.fileName)))
+      .filter(Boolean)
+      .flatMap((meta) => []
+        .concat(meta.theoryLedgerRefs || [])
+        .concat(meta?.execution?.theoryLedgerRefs || []))
+      .map(normalizeLedgerText)
+      .filter(Boolean),
+  )];
+  const record = findContractRecordForPair(
+    options.contractDir, normOwner, normBoundary,
+  );
+  return {
+    owner: normOwner,
+    boundary: normBoundary,
+    contractRecord: record ? record.file : null,
+    invariants,
+    modelStatus,
+    provenRoutes,
+    currentResidual,
+    recentPackages,
+    ledgerRefs,
+  };
 }
 
 // R14 (consistency half). Binds the self-reported metricDelta to the recorded,
@@ -9787,6 +10220,27 @@ function runPackageValidationsSync(filePath, content, fileStatus, metadata, opti
     status: fileStatus,
     packageDir: options.packageDir,
   }));
+  errors.push(...validateModelProvenRouteForcing(metadata, relativePath, {
+    phase,
+    status: fileStatus,
+    contractDir: options.contractDir,
+  }));
+  errors.push(...validateModelCoverageRequirement(metadata, relativePath, {
+    phase,
+    status: fileStatus,
+    packageDir: options.packageDir,
+    contractDir: options.contractDir,
+  }));
+  errors.push(...validateRepresentativeProgressCircuitBreaker(
+    metadata,
+    relativePath,
+    {
+      phase,
+      status: fileStatus,
+      packageDir: options.packageDir,
+      ledgerPath: options.ledgerPath,
+    },
+  ));
   errors.push(...validateTheoryLoopPackageContract(
     content,
     metadata,

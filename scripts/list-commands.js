@@ -85,6 +85,14 @@ const COMMAND_GROUPS = Object.freeze([
         description: 'Validate durable System Contract Records and their runtime, model, package, and theory-ledger bindings.',
       }),
       Object.freeze({
+        command: 'npm run work:invariants:check -- [--json] [architecture/contracts/invariants.json]',
+        description: 'Validate the machine-readable invariant registry: unique ids, valid kinds, symmetric coupling, existing modelRef/contractRef.',
+      }),
+      Object.freeze({
+        command: 'npm run work:owner-dossier -- --owner <owner> --boundary <boundary> [--json]',
+        description: 'Assemble one owner/boundary reasoning surface: contract record, coupled invariants, model status, current residual, recent outcomes, ledger trail.',
+      }),
+      Object.freeze({
         command: 'npm run work:agent:plan -- --package <package.md>',
         description: 'Print required parallel diagnostic route-card paths and bounded scout/verifier prompts for a package.',
       }),
