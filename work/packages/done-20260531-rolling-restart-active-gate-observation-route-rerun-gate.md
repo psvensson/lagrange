@@ -358,8 +358,7 @@ Preferred closure evidence for new packages. One executor owns implementation en
 1. Focused package commit: a02fe0d1db3b1d5104ed49a059f08ef58abbac39
 2. Push target: origin/codex/pending-ack-eligibility-filter
 3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
-4. Pushed: no
-
+4. Pushed: yes 2026-05-31T12:09:20.469Z
 ## Validation
 
 1. falsifier: node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-active-gate-observation-route-rerun.report.json --fast-local --verbose
