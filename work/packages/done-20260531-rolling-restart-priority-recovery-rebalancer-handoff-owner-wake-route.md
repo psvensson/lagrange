@@ -399,8 +399,7 @@ fix in-scope problems directly.
 1. Focused package commit: 291af3516a384742c7c942d09eb655a034a04d8f
 2. Push target: origin/codex/pending-ack-eligibility-filter
 3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
-4. Pushed: no
-
+4. Pushed: yes 2026-05-31T16:05:40.149Z
 ## Validation
 
 1. falsifier: npm test -- test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js

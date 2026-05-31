@@ -1,0 +1,59 @@
+{
+  "schema": "representative-rerun-progress-model-v1",
+  "owner": "representative_evidence_owner",
+  "boundary": "rolling_restart_rerun",
+  "windowSize": 3,
+  "states": [
+    "routeable_rerun",
+    "blocked_model_route",
+    "owner_boundary_migration",
+    "architecture_or_causal_successor"
+  ],
+  "inputs": [
+    "window_shrinks",
+    "window_non_shrinking",
+    "fresh_evidence_migrates",
+    "fresh_evidence_contradictory_or_unavailable"
+  ],
+  "transitions": [
+    {
+      "from": "routeable_rerun",
+      "on": "window_shrinks",
+      "next": "routeable_rerun",
+      "reason": "A shrinking residual-count window permits another representative rerun."
+    },
+    {
+      "from": "routeable_rerun",
+      "on": "window_non_shrinking",
+      "next": "blocked_model_route",
+      "reason": "A non-shrinking residual-count window blocks another local rerun and requires a model, migration, or architecture route."
+    },
+    {
+      "from": "blocked_model_route",
+      "on": "fresh_evidence_migrates",
+      "next": "owner_boundary_migration",
+      "reason": "Fresh evidence that names another deciding owner exits the representative rerun pair."
+    },
+    {
+      "from": "blocked_model_route",
+      "on": "fresh_evidence_contradictory_or_unavailable",
+      "next": "architecture_or_causal_successor",
+      "reason": "Contradictory or unavailable evidence cannot authorize another local rerun."
+    }
+  ],
+  "properties": [
+    {
+      "id": "non_shrinking_window_blocks_rerun",
+      "statement": "When the latest residual-count window is non-shrinking, the next state is blocked_model_route rather than routeable_rerun."
+    },
+    {
+      "id": "blocked_route_has_non_rerun_exits",
+      "statement": "A blocked model route exits only through owner-boundary migration or architecture/causal successor selection."
+    }
+  ],
+  "assumptions": [
+    "Closed package residualCount values are artifact-bound and authoritative.",
+    "The active package does not edit runtime source while the representative pair is blocked.",
+    "Fresh representative evidence can resume only after the model route records a non-rerun successor or a shrinking residual window."
+  ]
+}

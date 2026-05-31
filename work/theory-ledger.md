@@ -732,5 +732,19 @@ Each entry must include these labels:
 - Representative movement: classification-only
 - Linked packages: `work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-owner-wake-route.md`, `work/packages/todo-20260531-rolling-restart-priority-recovery-rebalancer-handoff-owner-wake-rerun-gate.md`
 - Supersedes: theory-20260531-rolling-restart-priority-recovery-rebalancer-handoff-owner-wake-architecture-gap
-- Superseded by: none
+- Superseded by: theory-20260531-rolling-restart-representative-rerun-progress-model-route
 - Next implication: Activate the representative rerun gate and do not open another runtime source package until fresh post-route evidence reduces, clears, migrates, repeats with no reduction, or records architecture-gap continuation.
+
+## theory-20260531-rolling-restart-representative-rerun-progress-model-route
+
+- Status: supported
+- Scenario/gate: rolling-restart / representative_progress_circuit_breaker
+- Owner/boundary: representative_evidence_owner / rolling_restart_rerun
+- Hypothesis: After the owner wake route proof, the non-shrinking representative residual-count window blocks another rolling_restart_rerun evidence slice; the next legal move is a model-layer route that records blocked_model_route and exits through system-theory rederive, owner-boundary migration, or architecture/causal successor.
+- Probe: `node -e "const fs=require('fs'); const m=JSON.parse(fs.readFileSync('docs/specs/representative-rerun-progress-model.json','utf8')); if (!m.transitions.some((t)=>t.on==='window_non_shrinking' && t.next==='blocked_model_route')) throw new Error('missing non-shrinking window block'); if (!m.properties.some((p)=>p.id==='non_shrinking_window_blocks_rerun')) throw new Error('missing model property');"`, `npm run work:owner-dossier -- --owner representative_evidence_owner --boundary rolling_restart_rerun --json`, and `npm run work:frontier-history -- --owner representative_evidence_owner --boundary rolling_restart_rerun --limit 12`
+- Artifact/result: `docs/specs/representative-rerun-progress-model.json` records `window_non_shrinking -> blocked_model_route` and the `non_shrinking_window_blocks_rerun` property. Owner-dossier reports `currentResidual=1`, no contract record, no invariants, and no model coverage for `representative_evidence_owner / rolling_restart_rerun`. Frontier-history keeps the pair in implement-pending model-route state, while the stale representative artifact remains `accept_classified_backpressure` at `operation_workflow_owner / rebalancer_handoff`.
+- Representative movement: architecture-gap
+- Linked packages: `work/packages/active-20260531-rolling-restart-priority-recovery-rebalancer-handoff-owner-wake-rerun-gate.md`, `work/packages/todo-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-system-theory-rederive.md`
+- Supersedes: theory-20260531-rolling-restart-priority-recovery-rebalancer-handoff-owner-wake-implementation
+- Superseded by: none
+- Next implication: Close the model route as non-terminal architecture-gap learning and activate the post-model operation_workflow_owner / rebalancer_handoff system-theory rederive; do not run another representative rerun from the non-shrinking residual window.
