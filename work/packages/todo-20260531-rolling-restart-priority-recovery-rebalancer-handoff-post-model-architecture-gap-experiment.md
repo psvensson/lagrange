@@ -15,7 +15,7 @@
     "dominantReason": "priority_recovery_event_driven_wait",
     "currentState": "The post-model system-theory rederive repeated same-mechanism contract_gap; representative evidence still accepts classified backpressure with two priority-recovery witnesses and no concrete runtime, migration, evidence-regeneration, or rerun route selected.",
     "nextAction": "Run an autonomous architecture-gap experiment and select a non-repeated protocol, scheduling, model, evidence-regeneration, owner-migration, or architecture-stop route before runtime source promotion or representative rerun.",
-    "predecessor": "work/packages/active-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-system-theory-rederive.md"
+    "predecessor": "work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-system-theory-rederive.md"
   },
   "scope": {
     "writeScope": [
@@ -121,7 +121,7 @@
     "hypothesis": "Post-model priority-recovery backpressure is an architecture-gap route problem until proof names a non-repeated transition, migration, evidence-regeneration, model repair, or architecture stop.",
     "hypothesisDiscriminator": "Owner-dossier, contract check, frontier history, loop health, scenario route, and causal model must name exactly one non-repeated route or keep runtime and representative promotion blocked.",
     "expectedMetric": "One selected route: non-repeated runtime transition, owner migration, evidence regeneration, model or contract repair, or architecture-gap stop.",
-    "inheritsFrom": "work/packages/active-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-system-theory-rederive.md",
+    "inheritsFrom": "work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-system-theory-rederive.md",
     "timebox": "24h",
     "mergeRequirement": "frontier-history, scenario-route, loop-health, causal-model, owner-dossier, contract check, sprint/current-blocker refresh, and one selected successor or stop route",
     "killRule": "Do not open runtime source work or representative rerun unless this experiment names a non-repeated route; otherwise close as architecture-gap continuation."

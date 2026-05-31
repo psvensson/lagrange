@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v2",
-  "status": "active",
+  "status": "done",
   "intent": {
     "opened": "2026-05-31",
     "lane": "causal-escalation",
@@ -15,7 +15,8 @@
     "dominantReason": "priority_recovery_event_driven_wait",
     "currentState": "The owner wake route is locally proven, and the representative rerun model route blocks another rolling_restart_rerun evidence slice while the stale artifact still classifies operation_workflow_owner / rebalancer_handoff as the first frontier.",
     "nextAction": "Rederive operation_workflow_owner / rebalancer_handoff system theory after the representative rerun model route and select the next legal successor without editing runtime source.",
-    "predecessor": "work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-owner-wake-rerun-gate.md"
+    "predecessor": "work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-owner-wake-rerun-gate.md",
+    "closed": "2026-05-31"
   },
   "scope": {
     "writeScope": [
@@ -314,7 +315,8 @@
     "successorReason": "post-model architecture-gap experiment must select a non-repeated route before runtime source or representative rerun promotion",
     "nextOwnerBoundary": "operation_workflow_owner / rebalancer_handoff post-model architecture-gap experiment",
     "evidenceArtifact": "test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json"
-  }
+  },
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -360,6 +362,7 @@ first frontier. This package rederives the route before any source edit or rerun
 
 - [x] action: freshness-review; owner: Agent Bacon (019e7eec-cbb7-7531-8344-e638d675c858); files-changed: none; validation: `npm run work:context` passed; `npm run work:package:doctor -- --suggest work/packages/active-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-system-theory-rederive.md` failed only on expected circular missing freshness-review/implementation evidence; `npm run work:validate -- --entry work/packages/active-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-system-theory-rederive.md` passed; `npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress` passed; `npm run work:frontier-history -- --owner operation_workflow_owner --boundary rebalancer_handoff --limit 12` passed; decision: fresh; outcome: validated.
 - [x] action: implementation; owner: operation_workflow_owner; files-changed: work/packages/active-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-system-theory-rederive.md, work/packages/todo-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-architecture-gap-experiment.md, work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md, work/theory-ledger.md; validation: npm run work:system-theory:rederive -- --owner operation_workflow_owner --boundary rebalancer_handoff --limit 12 --sprint work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md --write passed with rederivationRequired=true, same-mechanism-repeat contract_gap, and sprint stamped systemTheoryRederivedAt=2026-05-31; npm run work:frontier-history -- --owner operation_workflow_owner --boundary rebalancer_handoff --limit 12 passed with loopHealth=rederive-in-progress, continuationRequired=true, architectureRouteState=implemented, and closuresSinceLastRederive=0; npm run work:loop-health -- --owner operation_workflow_owner --boundary rebalancer_handoff passed with ping-pong risk medium and next legal move continue with the lightest package selected by current evidence; npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress passed with causalOutcome=accept_classified_backpressure, stopMode=classified_backpressure, priorityRecoveryResiduals.witnessCount=2, and runtimePromotionGuard.state=not_applicable; npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json passed with outcome=accept_classified_backpressure, failedInvariantCount=0, and exhaustedBudgetCount=0; npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait passed and required an explicit successor before --write; parent revalidated focused proof: yes; outcome: validated - post-model architecture-gap successor selected before runtime source promotion or another representative rerun.
+- [x] action: verification-fix; owner: operation_workflow_owner; files-changed: work/packages/active-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-system-theory-rederive.md, work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md; validation: `npm run work:package:doctor -- --suggest work/packages/active-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-system-theory-rederive.md` passed; `npm run work:validate -- --entry work/packages/active-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-system-theory-rederive.md` passed; `npm run work:validate -- --pre-impl work/packages/active-20260531-rolling-restart-priority-recovery-rebalancer-handoff-post-model-system-theory-rederive.md` passed; `npm run work:system-theory:rederive -- --owner operation_workflow_owner --boundary rebalancer_handoff --limit 12 --sprint work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md --write` passed with rederivationRequired=true and same-mechanism-repeat contract_gap; `npm run work:frontier-history -- --owner operation_workflow_owner --boundary rebalancer_handoff --limit 12` passed with loopHealth=rederive-in-progress, continuationRequired=true, and architectureRouteState=implemented; `npm run work:loop-health -- --owner operation_workflow_owner --boundary rebalancer_handoff` passed with ping-pong risk medium; `npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress` passed with causalOutcome=accept_classified_backpressure and priorityRecoveryResiduals.witnessCount=2; `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json` passed with outcome=accept_classified_backpressure, failedInvariantCount=0, and exhaustedBudgetCount=0; `npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait` passed and required explicit successor before --write; `npm run work:sprint:remaining` passed with active=1 and todo=1 after linking the architecture-gap successor; `npm run work:repair` passed and refreshed work/sprints/current-blocker.json; parent revalidated focused proof: yes; outcome: validated - no runtime source, test, script, or candidate runtime files changed.
 
 ## Validation
 
@@ -369,3 +372,10 @@ first frontier. This package rederives the route before any source edit or rerun
 4. supporting: npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress
 5. supporting: npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json
 6. supporting: npm run work:package:route-after-rerun -- --artifact test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait
+
+## Commit And Push Ledger
+
+1. Focused package commit: fe31ca8ac01b4219bccd36334e21c144d6211e9a
+2. Push target: origin/codex/pending-ack-eligibility-filter
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
+4. Pushed: no
