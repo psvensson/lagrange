@@ -20,7 +20,7 @@ Falsifying probe: unknown
 
 Redirect rule: unknown
 
-Sprint: `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
+Sprint: `work/sprints/active-2026-q2-rolling-restart-contract-first-green-theory-loop.md`
 
 Package: `none`
 

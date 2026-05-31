@@ -555,7 +555,7 @@ Each entry must include these labels:
 - Superseded by: none
 - Next implication: The active-gate snapshot-coverage oscillation is resolved (status: reduced). The sprint can now proceed to address the downstream startup readiness or table partition visibility blockers.
 
-## theory-20260530-rolling-restart-priority-recovery-rebalancer-handoff-scheduling-retry
+## theory-20260530-rolling-restart-priority-recovery-rebalancer-handoff-scheduling-retry-architecture-gap
 
 - Status: supported
 - Scenario/gate: rolling-restart / rebalancer_handoff
@@ -569,4 +569,21 @@ Each entry must include these labels:
 - Superseded by: none
 - Next implication: Open the successor runtime-owner-boundary package to implement the scheduler retry wake convergence in src/rebalancer/operation-workflow-owner-ports.js.
 
+## theory-20260531-rolling-restart-contract-first-green-loop
 
+- Status: supported
+- Scenario/gate: rolling-restart / rolling_restart_fully_green_gate
+- Owner/boundary: release_gate_owner / rolling_restart_fully_green_gate
+- Hypothesis: After the previous sprint stayed at `accept_classified_backpressure`,
+  the highest-leverage next step is a contract-first route discriminator that
+  decides whether the residual is accepted bounded backpressure, rebalancer handoff
+  defect, active-gate convergence defect, stale evidence, or release-gate
+  expectation mismatch.
+- Probe: `npm run model:contracts`, `npm run work:loop-health -- --owner operation_workflow_owner --boundary rebalancer_handoff`, and `npm run work:scenario-route -- test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait`
+- Artifact/result: `test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json` - `npm run model:contracts` passed after repairing the stale `architecture/contracts/rolling-restart-rebalancer-handoff.md` package reference; canonical route evidence reports causal outcome `accept_classified_backpressure`.
+- Representative movement: classification-only
+- Linked packages: `work/packages/active-20260531-rolling-restart-contract-first-route-discriminator.md`
+- Supersedes: `theory-20260530-rolling-restart-priority-recovery-rebalancer-handoff-scheduling-retry-architecture-gap`
+- Superseded by: none
+- Next implication: Open fresh representative rolling-restart evidence before
+  runtime source work; if the rerun is red, route the fresh first frontier.
