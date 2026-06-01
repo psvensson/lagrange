@@ -27,12 +27,12 @@ const WORK_SPRINT_PUSH_COMMAND = 'npm run work:sprint:push -- <git-push-args>';
 const MODEL_LEDGER_SUMMARY_COMMAND = 'npm run work:model-ledger -- summary';
 const THEORY_LEDGER_COMMAND = 'npm run work:theory-ledger -- validate|list|new';
 const PACKAGE_NEW_COMMAND =
-  'npm run work:package:new -- --lane <lane> --title <title> --slug <slug> --owner <owner> --boundary <boundary> --dominant-reason <reason> --next-action <action>';
+  'npm run work:package:new -- --write --lane <lane> --title <title> --slug <slug> --owner <owner> --boundary <boundary> --dominant-reason <reason> --next-action <action>';
 const PACKAGE_ROUTE_AFTER_RERUN_COMMAND =
   'npm run work:package:route-after-rerun -- --artifact <artifact> --successor <active-successor>';
 const PACKAGE_SCHEMA_COMMAND = 'npm run work:package:schema';
 const SUBAGENT_PROMPT_COMMAND =
-  'npm run work:subagent-prompt -- --role <role> --package <package>';
+  'npm run work:subagent-prompt -- --role freshness-review|implementation|verification-fix --package <package>';
 const SUBAGENT_NEXT_COMMAND = 'npm run work:subagent-next';
 const GUIDELINE_LITERALS_COMMAND =
   'npm run audit:guideline:literals -- <files...>';
@@ -202,6 +202,9 @@ const WORK_DIRTY_SCOPE_SCRIPT = 'work:dirty-scope';
 const WORK_DIRTY_SCOPE_SCRIPT_COMMAND = 'node scripts/work-context.js --dirty-scope';
 const WORK_CONTEXT_SCRIPT = 'work:context';
 const WORK_CONTEXT_SCRIPT_COMMAND = 'node scripts/work-context.js';
+const WORK_CURRENT_BLOCKER_SCRIPT = 'work:current-blocker';
+const WORK_CURRENT_BLOCKER_SCRIPT_COMMAND =
+  'node scripts/work-tracker.js current-blocker';
 const WORK_HELP_SCRIPT = 'work:help';
 const WORK_HELP_SCRIPT_COMMAND = 'node scripts/list-commands.js';
 const WORK_TRACKS_SCRIPT = 'work:tracks';
@@ -608,6 +611,10 @@ test(RUNTIME_GRAMMAR_TEST_NAME,
     t.equal(
       scripts[WORK_CONTEXT_SCRIPT],
       WORK_CONTEXT_SCRIPT_COMMAND,
+    );
+    t.equal(
+      scripts[WORK_CURRENT_BLOCKER_SCRIPT],
+      WORK_CURRENT_BLOCKER_SCRIPT_COMMAND,
     );
     t.equal(
       scripts[WORK_TRACKS_SCRIPT],

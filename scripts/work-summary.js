@@ -68,19 +68,30 @@ async function getSummary(options = {}) {
   const activeSprint = await findActiveSprint();
 
   let packagesLeft = 0;
+  let remainingSummary = null;
   if (activeSprint) {
     try {
-      const remaining = await buildSprintRemainingSummary({sprintPath: activeSprint});
-      packagesLeft = remaining.counts.left;
+      remainingSummary = await buildSprintRemainingSummary({
+        sprintPath: activeSprint,
+      });
+      packagesLeft = remainingSummary.counts.left;
     } catch {
       packagesLeft = activePackage ? 1 : 0;
     }
   }
 
   let nextCommandHint = 'npm run work:package:new';
+  let nextPackage = null;
   if (activePackage) {
     if (activePackage.status === 'active') {
       nextCommandHint = 'npm run work:advance -- --check';
+    }
+  } else {
+    nextPackage = remainingSummary?.leftPackages.find((workPackage) =>
+      workPackage.status === 'todo') || null;
+    if (nextPackage) {
+      nextCommandHint =
+        `npm run work:sprint:queue -- --activate ${nextPackage.path}`;
     }
   }
 
@@ -90,6 +101,7 @@ async function getSummary(options = {}) {
       path: activeSprint,
       packagesLeft,
     } : null,
+    nextPackage,
     nextCommandHint,
   };
 
@@ -108,6 +120,10 @@ async function getSummary(options = {}) {
     if (activeSprint) {
       console.log(`\x1b[32mActive Sprint:\x1b[0m ${path.basename(activeSprint)}`);
       console.log(`  \x1b[90mTodo packages left:\x1b[0m ${packagesLeft}`);
+    }
+    if (nextPackage) {
+      console.log(`\x1b[32mNext Queued Package:\x1b[0m ${nextPackage.title}`);
+      console.log(`  \x1b[90mPath:\x1b[0m ${nextPackage.path}`);
     }
     console.log(`\x1b[35mRecommended Next Command:\x1b[0m ${nextCommandHint}`);
   }

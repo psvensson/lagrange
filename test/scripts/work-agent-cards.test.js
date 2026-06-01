@@ -101,7 +101,7 @@ function cardMetadata(role, overrides = {}) {
   if (role === 'model-contract-scout') {
     base.recommendedRoute = 'contract-model-repair';
     base.contractRefs = ['work/RULES.md'];
-    base.modelRefs = ['.kiro/steering/schemas/work-package.schema.json'];
+    base.modelRefs = ['work/schemas/work-package.schema.json'];
   }
   if (role === 'source-map-scout') {
     base.recommendedRoute = 'runtime-owner-implementation';

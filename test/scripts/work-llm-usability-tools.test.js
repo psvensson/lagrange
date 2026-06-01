@@ -1307,6 +1307,38 @@ test('llm-start combines context, doctor, dirty scope, model ledger, and evidenc
     t.match(rendered, /## Representative Evidence/u);
   });
 
+test('llm-start renders a no-active-package handoff without failing',
+  async (t) => {
+    await fs.mkdir(TEMP_ROOT, {recursive: true});
+    await fs.writeFile(
+      TEMP_CURRENT_BLOCKER_PATH,
+      `${JSON.stringify({
+        schema: 'current-blocker-v1',
+        sprint: 'work/sprints/active-test.md',
+        package: 'none',
+        status: 'none',
+        generatedFiles: ['work/sprints/current-blocker.json'],
+        currentState: 'No active work package.',
+        nextAction: 'Activate a queued package or create one focused package.',
+      })}\n`,
+      'utf8',
+    );
+
+    const lines = await buildLlmStartLines([
+      '--current-blocker',
+      TEMP_CURRENT_BLOCKER_PATH,
+      '--ledger',
+      TEMP_LEDGER_PATH,
+    ]);
+    const rendered = lines.join('\n');
+
+    t.match(rendered, /# LLM Start/u);
+    t.match(rendered, /## Work Context/u);
+    t.match(rendered, /## Sprint Remaining/u);
+    t.match(rendered, /No active package recorded\. Package doctor skipped/u);
+    t.match(rendered, /## Dirty Scope/u);
+  });
+
 test('llm-start gives a repair command for stale current-blocker packages',
   async (t) => {
     await fs.mkdir(TEMP_ROOT, {recursive: true});

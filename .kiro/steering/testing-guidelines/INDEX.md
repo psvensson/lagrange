@@ -26,7 +26,7 @@ Use this tree for:
 Do not use this tree for:
 
 - runtime/contract policy (see [`../system-guidelines.md`](../system-guidelines.md) and [`../doctrine/INDEX.md`](../doctrine/INDEX.md))
-- workflow/package lifecycle (see [`../workflow-guidelines/INDEX.md`](../workflow-guidelines/INDEX.md))
+- Quest workflow lifecycle (see [`../workflow-guidelines/INDEX.md`](../workflow-guidelines/INDEX.md))
 - lint/style (see [`../code-style.md`](../code-style.md))
 
 ## Files
@@ -36,5 +36,5 @@ Do not use this tree for:
 | [`harness.md`](harness.md) | Runner stability/parallelism, test duration, timeout budget, execution strategy, output management, distributed harness, external resources. |
 | [`fixtures.md`](fixtures.md) | System-table mutation requirements, no skipped tests, no test-only production paths, system-guideline conformance gate. |
 | [`regression-policy.md`](regression-policy.md) | Test-first/reuse-first fix, bug-cluster escalation, owner-path/gateway/control-loop/temporal/continuity/memory/deferred-outcome/read-side-repair regression policies, availability under pressure, baseline-discovered closure. |
-| [`release-gate.md`](release-gate.md) | Scenario-driven failure migration, distributed validation ladder, artifact-first triage, boundary-transition scenario layer, agent/sub-agent validation handoff. |
-| [`proof-ladders.md`](proof-ladders.md) | Package-driven validation, static guardrail preflight & closure, file-size ratchet. |
+| [`release-gate.md`](release-gate.md) | Scenario-driven Quest failure migration, distributed validation ladder, artifact-first triage, boundary-transition scenario layer, delegated validation handoff. |
+| [`proof-ladders.md`](proof-ladders.md) | Quest-driven validation, static guardrail preflight & closure, file-size ratchet. |

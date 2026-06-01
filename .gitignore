@@ -19,6 +19,9 @@ data2/
 .playback/
 test-output/
 
+# Generated on-demand handoff render; current-blocker.json is canonical.
+work/sprints/current-blocker.md
+
 # Beads / Dolt files (added by bd init)
 .dolt/
 .beads-credential-key
@@ -29,3 +32,10 @@ tools/tla2tools.jar
 # TLC liveness counterexample trace artifacts
 models/**/*_TTrace_*.tla
 models/**/*_TTrace_*.bin
+
+# Solver runtime data (the append-only log, derived state, reports and change diffs
+# are regenerable byproducts). Authored quests under solve/quests/ stay tracked.
+solve/log/
+solve/state/
+solve/report/
+solve/changes/

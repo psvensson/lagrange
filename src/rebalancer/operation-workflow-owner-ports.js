@@ -722,7 +722,10 @@ async function reconcileOperationWorkflowStaleProgress(
 }
 
 function isOperationWorkflowOwnerPortRemoteHandoffRetryProgress(progress) {
-  return progress?.waitMode === PRIORITY_RECOVERY_WAIT_MODE.RETRY_SCHEDULED &&
+  return (
+    progress?.waitMode === PRIORITY_RECOVERY_WAIT_MODE.RETRY_SCHEDULED ||
+    progress?.waitMode === PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN
+  ) &&
     progress?.blockingBoundary ===
       PRIORITY_RECOVERY_BLOCKING_BOUNDARY.REBALANCER_HANDOFF;
 }
@@ -767,9 +770,15 @@ function resolveOperationWorkflowOwnerPortProgressContractRetryAfterMs(
   ) {
     return Math.max(NUM.ZERO, Math.floor(progress.retryAfterMs));
   }
-  return progress?.waitMode === PRIORITY_RECOVERY_WAIT_MODE.RETRY_SCHEDULED ?
-    TIME_MS.SECOND :
-    NUM.ZERO;
+  if (
+    progress?.waitMode === PRIORITY_RECOVERY_WAIT_MODE.RETRY_SCHEDULED ||
+    (progress?.waitMode === PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN &&
+     progress?.blockingBoundary ===
+       PRIORITY_RECOVERY_BLOCKING_BOUNDARY.REBALANCER_HANDOFF)
+  ) {
+    return TIME_MS.SECOND;
+  }
+  return NUM.ZERO;
 }
 
 function buildOperationWorkflowOwnerPortProgressContract(result) {

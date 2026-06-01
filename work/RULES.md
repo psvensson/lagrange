@@ -4,6 +4,33 @@ Canonical single source of truth for repository process lanes, validator phases,
 
 ---
 
+## Working Modes — Sprint Mode and Quest Mode
+<a name="working-modes"></a>
+
+This canon governs **sprint mode**: the default, validator-driven workflow of
+sprints, work packages, lanes, the causal ledger, and the `work:*` validators. It
+is authoritative for all sprint/package work, including the active rolling-restart
+effort.
+
+An optional second mode, **quest mode**, runs alongside it. Quest mode is the
+Solver (`scripts/solve.js`): it drives one declarative **Quest**
+(`solve/quests/<id>.json`) to a terminal result — SOLVED, EXHAUSTED, or the
+MAX_CYCLES safety bound — with minimal process and without blocking on a human. Use
+quest mode for autonomy-first work whose definition of done can be sealed up front
+and whose progress is a numeric, lower-is-better metric from a real probe. Its
+policy lives in
+[`.kiro/steering/workflow-guidelines/solver-quests.md`](../.kiro/steering/workflow-guidelines/solver-quests.md).
+
+Coexistence is strict and one-directional:
+
+1. Quest mode never edits `work/`, sprint files, or `work/theory-ledger.md`, and
+   never weakens or bypasses a sprint validator.
+2. A Quest reaching SOLVED is not a sprint-package closure. Record sprint truth
+   only through the `work:*` tools.
+3. Nothing in this canon is relaxed by quest mode. When in doubt, use sprint mode.
+
+---
+
 ## Lane Definitions
 <a name="lane-definitions"></a>
 
@@ -674,6 +701,42 @@ packages and sprints without the relevant fields/signals are exempt.
   new layer**. Because it keys on the `residualCount` chain rather than on lane
   labels, it cannot be evaded by renaming the lane. Additive: fires only once a
   full window of residual-bearing closures exists.
+
+* **R19. Analysis-Loop Exhaustion Cap** —
+  `validateAnalysisLoopExhaustionCap` (`analysis-loop-exhaustion`) at `--pre-impl`.
+  Closes R17's unbounded analysis exit. R17 lets a stalled pair escape the breaker
+  by classifying as an architecture-gap analysis or a system-theory rederive — but
+  that exit is only meant to be taken **once or twice**, not forever. When a pair
+  already has `ANALYSIS_LOOP_THRESHOLD` (2) consecutive closed analysis packages
+  (architecture-gap analysis or system-theory rederive) on it with **no**
+  representative-residual reduction across the run, the next analysis package is
+  blocked. The sanctioned exits are now a recorded human decision
+  (`architectureDecisionGate` route `human-escalation`), an owner-boundary migration
+  (`ownerBoundaryMigration: true`), or an actual runtime change that moves the
+  residual. Model-building is **not** an analysis package (it produces a reusable
+  model and R16 may mandate it), so it is never capped here. A non-analysis package
+  or a strict `residualCount` reduction across the run resets the consecutive count.
+  Keys on the closed-package chain + `residualCount`, so it cannot be evaded by lane
+  renaming. Together R17 (forces the analysis exit when a local slice stalls) and
+  R19 (caps how many analyses may be taken before a human decides) make the
+  re-analysis loop finite.
+
+* **R20. In-Package Iteration Log** — `validateIterationLog`
+  (`iteration-log-*`) at all phases (stall bound at `--pre-impl` / `--closure`).
+  Reduces micro-slice ceremony: instead of opening one full work package per
+  reasoning pass, a package may carry an optional `iterationLog` array, each entry a
+  single pass `{ iteration, hypothesis, observation, residualCount, outcome? }`
+  (`outcome` ∈ `progressed` / `flat` / `regressed` / `escalate`). The validator keeps
+  the field trustworthy so the residual-keyed gates (R16/R17/R19) still read the
+  truth: entries must be well-formed (non-empty hypothesis/observation, numeric
+  `residualCount`, contiguous 1-based `iteration`, known `outcome`), the **last**
+  entry's `residualCount` must equal the package headline
+  `representativeResidual.residualCount`, and a stall bound mirrors R19 inside the
+  package — once the log reaches `ITERATION_LOG_STALL_LIMIT` (4) passes with no net
+  residual reduction, an escalation must be recorded (a final `outcome=escalate`, an
+  `architectureDecisionGate` route `human-escalation`, or an owner-boundary
+  migration) so the in-package loop cannot silently replace the package loop R19
+  closed. Additive: packages without an `iterationLog` are unaffected.
 
 * **R18. Owner-Dossier Read Model** — `buildOwnerDossier` /
   `npm run work:owner-dossier -- --owner <o> --boundary <b> [--json]`. Not a

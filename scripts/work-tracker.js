@@ -7872,6 +7872,23 @@ export function validateModelProvenRouteForcing(metadata, filePath, options = {}
 // ---------------------------------------------------------------------------
 const MODEL_COVERAGE_STALL_THRESHOLD = 3;
 const CIRCUIT_BREAKER_WINDOW = 3;
+// R19 — the maximum number of consecutive analysis-loop packages (architecture-gap
+// analysis or system-theory rederive) tolerated on one pair before a human
+// decision is forced. Two analyses are allowed; the third is blocked.
+const ANALYSIS_LOOP_THRESHOLD = 2;
+// R20 — in-package iteration log. Lets a single analysis package record multiple
+// reasoning passes (hypothesis -> observation -> residual) instead of spawning one
+// package per micro-slice. ITERATION_LOG_STALL_LIMIT bounds the internal loop the
+// same way R19 bounds the package loop: that many flat passes force an escalation.
+const ITERATION_LOG_FIELD = 'iterationLog';
+const ITERATION_LOG_STALL_LIMIT = 4;
+const ITERATION_LOG_ESCALATE_OUTCOME = 'escalate';
+const ITERATION_LOG_OUTCOME_VALUES = Object.freeze([
+  'progressed',
+  'flat',
+  'regressed',
+  ITERATION_LOG_ESCALATE_OUTCOME,
+]);
 
 function metadataIsModelBuildingPackage(metadata) {
   if (!isObjectRecord(metadata)) return false;
@@ -7888,6 +7905,15 @@ function metadataIsModelBuildingPackage(metadata) {
     if (layer === 'model') return true;
   }
   return false;
+}
+
+// An "analysis-loop" package re-reasons about a pair without building a reusable
+// artifact or landing a runtime change: an architecture-gap analysis or a
+// system-theory rederive. Model-building is deliberately excluded — it produces a
+// reusable model (and R16 can mandate it), so it is forward progress, not loop.
+function metadataIsAnalysisLoopPackage(metadata, filePath) {
+  return metadataIsArchitectureGapAnalysis(metadata, filePath) ||
+    metadataIsSystemTheoryRevision(metadata, filePath);
 }
 
 function pairHasModelCoverage(owner, boundary, options) {
@@ -7927,6 +7953,9 @@ function getClosedPackageChainForPair(packageDir, owner, boundary) {
         metricDelta: readPackageMetricDelta(meta),
         residualCount: readPackageResidualCount(meta),
         outcome: packageOutcome(meta),
+        isAnalysis: metadataIsAnalysisLoopPackage(
+          meta, path.join(packageDir, pkg.fileName),
+        ),
       };
     })
     .sort((a, b) => String(b.opened || '').localeCompare(String(a.opened || '')));
@@ -8039,6 +8068,173 @@ export function validateRepresentativeProgressCircuitBreaker(
 }
 
 // ---------------------------------------------------------------------------
+// R19 — Analysis-loop exhaustion cap (recommendations 2 + 3).
+// R17 lets a pair escape the circuit breaker by classifying as an architecture-gap
+// analysis or a system-theory rederive. That exit is correct once, but unbounded:
+// a frontier can spin forever by re-opening analysis after analysis while the
+// representative residual never moves. This cap closes that loophole. Once a pair
+// has ANALYSIS_LOOP_THRESHOLD consecutive closed analysis packages with no residual
+// reduction, the next analysis package is blocked and a human decision (an
+// architectureDecisionGate route=human-escalation), an owner-boundary migration, or
+// an actual runtime change is required instead. Model-building is not an analysis
+// package (it produces a reusable model and R16 may mandate it), so it is never
+// capped here. Keys on the closed-package chain + residualCount, not on lane labels.
+// ---------------------------------------------------------------------------
+export function validateAnalysisLoopExhaustionCap(
+  metadata,
+  filePath,
+  options = {},
+) {
+  const errors = [];
+  if (!metadata || typeof metadata !== 'object') return errors;
+  const phase = options.phase || VALIDATION_PHASE_PRE_IMPL;
+  if (phase !== VALIDATION_PHASE_PRE_IMPL) return errors;
+  const status = options.status || normalizeLedgerText(metadata.status);
+  if (status !== STATUS_ACTIVE && status !== STATUS_TODO) return errors;
+  const owner = normalizeLedgerText(metadata.owner);
+  const boundary = normalizeLedgerText(metadata.boundary);
+  if (!owner || !boundary) return errors;
+  // Only further analysis packages are capped. Runtime slices answer to R17;
+  // migration and an explicit human-escalation route are the sanctioned exits.
+  if (!metadataIsAnalysisLoopPackage(metadata, filePath)) return errors;
+  if (
+    metadata.ownerBoundaryMigration === true ||
+    selectedArchitectureGateRoute(metadata) ===
+      ARCHITECTURE_DECISION_GATE_ROUTE_HUMAN_ESCALATION
+  ) {
+    return errors;
+  }
+  const packageDir = options.packageDir ?
+    path.resolve(options.packageDir) :
+    path.resolve(process.cwd(), COMPOSITIONAL_GATE_PACKAGE_DIR);
+  const chain = getClosedPackageChainForPair(packageDir, owner, boundary);
+  const run = [];
+  for (const entry of chain) {
+    if (!entry.isAnalysis) break;
+    run.push(entry);
+  }
+  if (run.length < ANALYSIS_LOOP_THRESHOLD) return errors;
+  // A strict residual reduction across the run is genuine progress and resets the
+  // cap. Missing residualCounts cannot prove progress, so they do not reset it.
+  const counted = run.filter((c) => c.residualCount !== null);
+  if (counted.length >= ANALYSIS_LOOP_THRESHOLD) {
+    const newest = counted[0].residualCount;
+    const oldest = counted[counted.length - NUM_ONE].residualCount;
+    if (newest < oldest) return errors;
+  }
+  errors.push(
+    `${filePath}: analysis-loop-exhaustion — owner=${owner} ` +
+    `boundary=${boundary} already has ${run.length} consecutive closed analysis ` +
+    'packages (architecture-gap analysis or system-theory rederive) with no ' +
+    'representative-residual reduction. Another analysis package is blocked. ' +
+    'Record an architectureDecisionGate route=human-escalation for a human ' +
+    'decision, migrate the owner-boundary, or land a runtime change that moves ' +
+    'the residual — do not open another analysis package.',
+  );
+  return errors;
+}
+
+// ---------------------------------------------------------------------------
+// R20 — In-package iteration log (recommendation 4: reduce micro-slice ceremony).
+// Instead of opening one full work package per reasoning pass, a package may carry
+// an `iterationLog` array, each entry recording one pass: { iteration, hypothesis,
+// observation, residualCount, outcome? }. This validator keeps the field
+// trustworthy so the residual-keyed gates (R16/R17/R19) still read the truth:
+//   * structural well-formedness (array of objects, non-empty hypothesis/
+//     observation, numeric residualCount, contiguous iteration numbering, known
+//     outcome enum);
+//   * the last entry's residualCount must equal the package headline
+//     representativeResidual.residualCount, so the log and the artifact agree;
+//   * a stall bound — once the internal loop reaches ITERATION_LOG_STALL_LIMIT
+//     passes with no net residual reduction, an escalation must be recorded (a
+//     final entry outcome=escalate, an architectureDecisionGate route
+//     human-escalation, or an owner-boundary migration), so the in-package loop
+//     cannot silently replace the unbounded package loop R19 just closed.
+// Additive: packages without an iterationLog are unaffected.
+// ---------------------------------------------------------------------------
+function iterationLogEntryErrors(entry, index, filePath) {
+  const errors = [];
+  const label = `${filePath}: iteration-log entry ${index + NUM_ONE}`;
+  if (!isObjectRecord(entry)) {
+    errors.push(`${label} must be an object.`);
+    return errors;
+  }
+  if (normalizeLedgerText(entry.hypothesis).length === NUM_ZERO) {
+    errors.push(`${label} requires a non-empty hypothesis.`);
+  }
+  if (normalizeLedgerText(entry.observation).length === NUM_ZERO) {
+    errors.push(`${label} requires a non-empty observation.`);
+  }
+  const residual = Number(entry.residualCount);
+  if (!Number.isFinite(residual) || residual < NUM_ZERO) {
+    errors.push(`${label} requires a numeric residualCount >= 0.`);
+  }
+  const iteration = Number(entry.iteration);
+  if (!Number.isInteger(iteration) || iteration !== index + NUM_ONE) {
+    errors.push(
+      `${label} must carry iteration=${index + NUM_ONE} ` +
+      '(contiguous, 1-based).',
+    );
+  }
+  const outcome = normalizeLedgerText(entry.outcome);
+  if (outcome.length > NUM_ZERO && !ITERATION_LOG_OUTCOME_VALUES.includes(outcome)) {
+    errors.push(
+      `${label} outcome "${outcome}" is not one of ` +
+      `${ITERATION_LOG_OUTCOME_VALUES.join(', ')}.`,
+    );
+  }
+  return errors;
+}
+
+export function validateIterationLog(metadata, filePath, options = {}) {
+  const errors = [];
+  if (!metadata || typeof metadata !== 'object') return errors;
+  const log = metadata[ITERATION_LOG_FIELD];
+  if (log === undefined || log === null) return errors;
+  if (!Array.isArray(log) || log.length === NUM_ZERO) {
+    errors.push(
+      `${filePath}: iterationLog, when present, must be a non-empty array of ` +
+      'reasoning passes.',
+    );
+    return errors;
+  }
+  log.forEach((entry, index) => {
+    errors.push(...iterationLogEntryErrors(entry, index, filePath));
+  });
+  if (errors.length > NUM_ZERO) return errors;
+  const lastResidual = Number(log[log.length - NUM_ONE].residualCount);
+  const headlineResidual = readPackageResidualCount(metadata);
+  if (headlineResidual !== null && lastResidual !== headlineResidual) {
+    errors.push(
+      `${filePath}: iterationLog last residualCount (${lastResidual}) must equal ` +
+      `the package representativeResidual.residualCount (${headlineResidual}); ` +
+      'the headline residual is the result of the final pass.',
+    );
+  }
+  const phase = options.phase || VALIDATION_PHASE_PRE_IMPL;
+  const runsStallChecks =
+    phase === VALIDATION_PHASE_PRE_IMPL || phase === VALIDATION_PHASE_CLOSURE;
+  if (runsStallChecks && log.length >= ITERATION_LOG_STALL_LIMIT) {
+    const firstResidual = Number(log[0].residualCount);
+    const reduced = lastResidual < firstResidual;
+    const escalated =
+      normalizeLedgerText(log[log.length - NUM_ONE].outcome) ===
+        ITERATION_LOG_ESCALATE_OUTCOME ||
+      metadata.ownerBoundaryMigration === true ||
+      selectedArchitectureGateRoute(metadata) ===
+        ARCHITECTURE_DECISION_GATE_ROUTE_HUMAN_ESCALATION;
+    if (!reduced && !escalated) {
+      errors.push(
+        `${filePath}: iteration-log-exhaustion — ${log.length} reasoning passes ` +
+        `with no net residual reduction (${firstResidual} -> ${lastResidual}). ` +
+        'Record an escalation: a final entry outcome=escalate, an ' +
+        'architectureDecisionGate route=human-escalation, or an owner-boundary ' +
+        'migration — do not keep iterating in place.',
+      );
+    }
+  }
+  return errors;
+}
 // R18 — Owner-dossier aggregation (recommendation 3).
 // Assembles, for a single owner/boundary, the full reasoning surface: the
 // System Contract Record, the coupled invariants from the registry, the model
@@ -8700,7 +8896,7 @@ function getAjvValidator() {
     return ajvValidator;
   }
   const ajv = new Ajv({ allErrors: true });
-  const schemaPath = path.join(process.cwd(), '.kiro', 'steering', 'schemas', 'work-package.schema.json');
+  const schemaPath = path.join(process.cwd(), 'work', 'schemas', 'work-package.schema.json');
   try {
     if (fsSync.existsSync(schemaPath)) {
       const schemaContent = fsSync.readFileSync(schemaPath, 'utf8');
@@ -10352,6 +10548,24 @@ function runPackageValidationsSync(filePath, content, fileStatus, metadata, opti
       status: fileStatus,
       packageDir: options.packageDir,
       ledgerPath: options.ledgerPath,
+    },
+  ));
+  errors.push(...validateAnalysisLoopExhaustionCap(
+    metadata,
+    relativePath,
+    {
+      phase,
+      status: fileStatus,
+      packageDir: options.packageDir,
+      ledgerPath: options.ledgerPath,
+    },
+  ));
+  errors.push(...validateIterationLog(
+    metadata,
+    relativePath,
+    {
+      phase,
+      status: fileStatus,
     },
   ));
   errors.push(...validateTheoryLoopPackageContract(

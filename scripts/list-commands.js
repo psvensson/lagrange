@@ -109,7 +109,7 @@ const COMMAND_GROUPS = Object.freeze([
         description: 'Validate active work-package metadata, probe packages, checklist state, and lane-required proof at a workflow phase.',
       }),
       Object.freeze({
-        command: 'npm run work:package:new -- --lane <lane> --title <title> --slug <slug> --owner <owner> --boundary <boundary> --dominant-reason <reason> --next-action <action>',
+        command: 'npm run work:package:new -- --write --lane <lane> --title <title> --slug <slug> --owner <owner> --boundary <boundary> --dominant-reason <reason> --next-action <action>',
         description: 'Scaffold a schema-valid package with Model Fit defaults from the model ledger.',
       }),
       Object.freeze({

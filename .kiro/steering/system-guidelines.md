@@ -35,23 +35,22 @@ Use this file for:
 - repo-wide hard stops
 - ownership and single-path rules
 - scalar, state, cache, communication, and pressure invariants
-- closure expectations that apply to every non-trivial package
+- closure expectations that apply to every non-trivial Quest
 
 Use focused steering files for detail:
 
-- [`doctrine.md`](doctrine.md): architectural intent behind these rules
+- [`doctrine/INDEX.md`](doctrine/INDEX.md): architectural intent behind these rules
 - [`runtime-contracts.md`](runtime-contracts.md): detailed runtime,
   control-plane, data, cache, and transport contracts
-- [`workflow-guidelines.md`](workflow-guidelines.md): package, sprint,
-  sub-agent, causal-closure, guardrail, and roadmap-truth workflow
-- [`testing-guidelines.md`](testing-guidelines.md): validation policy
+- [`workflow-guidelines/INDEX.md`](workflow-guidelines/INDEX.md): Quest workflow,
+  delegated execution, guardrails, findings, and terminal reports
+- [`testing-guidelines/INDEX.md`](testing-guidelines/INDEX.md): validation policy
 - [`code-style.md`](code-style.md): formatting and lint policy
 - [`roadmap.md`](roadmap.md): implementation scope and edition boundaries
 - [`../../architecture/INDEX.md`](../../architecture/INDEX.md): canonical
   architecture entrypoint, current owner maps, and subsystem detail index
 - [`../../architecture.md`](../../architecture.md): compatibility pointer for
   older links only
-- [`../../work/README.md`](../../work/README.md): local work-tracker procedure
 
 These rules are non-negotiable. The compact packs derived from this file
 carry the same authority during a session; the detailed source files explain
@@ -61,49 +60,41 @@ The system is called lagrange.
 
 ## Process Weight Gate
 
-Use the lightest process lane that protects the owner boundary:
+Use the lightest Quest shape that protects the owner boundary:
 
-1. **Read/review/doc-only**: answer questions or edit explanatory docs. No work
-   package is required unless implementation truth, roadmap scope/state, or
-   architecture ownership changes.
-2. **Lightweight maintenance**: use one focused package and focused proof. Do
-   not require causal ledgers, representative reruns, or delegated role
-   provenance unless runtime ownership or shared contracts can change.
-3. **Runtime owner-boundary work**: use full package discipline with owner
-   contract, static guardrails, focused owner tests, affected consumers, and
-   package closure proof.
-4. **Scenario or release-gate work**: use full scenario discipline with
-   checked implementation and verification-fix role evidence, causal closure
-   ledger, missing-edge probe, representative proof, and blocker-migration
-   notes.
+1. **Read/review/doc-only**: answer questions or edit explanatory docs. A Quest
+   is optional unless implementation truth, roadmap scope/state, or architecture
+   ownership changes.
+2. **Lightweight maintenance**: use one focused Quest and focused proof. Keep
+   frontiers narrow and metrics cheap.
+3. **Runtime owner-boundary work**: use a Quest with explicit owner constraints,
+   static guardrails, focused owner tests, and affected-consumer proof.
+4. **Scenario or release-gate work**: use a Quest with a scenario-harness
+   `doneWhen`, representative evidence, and findings for failure migration.
 
-When unsure, choose the heavier lane only if runtime ownership, shared
-contracts, or representative scenario evidence can change.
+When unsure, add constraints and proof to the Quest only if runtime ownership,
+shared contracts, or representative scenario evidence can change.
 
-## 1. Work Starts From One Bounded Package
+## 1. Work Starts From One Bounded Quest
 
-All non-trivial implementation work MUST follow the repository work-tracking
-workflow.
+All non-trivial implementation work MUST follow the Quest workflow.
 
 Required contract:
 
-1. Human ideas start in `work/ideas/`.
-2. Broad or scope-changing work sharpens `../../roadmap.md` before code.
-3. Bounded implementation work runs from one active package in `work/packages/`.
-4. One work package owns one executable concern, one primary owner boundary,
-   and one focused proof surface.
-5. Package status lives in the filename: `idea-`, `todo-`, `active-`,
-   `done-`, or `superseded-`. Do not create a second status system.
-6. `docs/` is reserved for end-user or operator-facing documentation. Internal
-   planning and package execution live under `work/`.
-7. The model ledger is advisory only for model, reasoning-effort, and
-   output-profile choice. It never replaces validation, review sub-agents,
-   package sequencing, closure proof, or focused commits.
-8. Completed package slices are renamed to `done-...`, committed, and pushed as
-   focused slices before the next package starts.
+1. Broad or scope-changing work sharpens `../../roadmap.md` before code.
+2. Bounded implementation work runs from one Quest under `solve/quests/`.
+3. One Quest owns one sealed `doneWhen`, one primary owner boundary, and one
+   focused proof surface.
+4. Quest progress is recorded by Solver attempts and findings, not parallel
+   status files.
+5. `docs/` is reserved for end-user or operator-facing documentation. Active
+   work definition lives under `solve/quests/`.
+6. Model choice notes are advisory only. They never replace validation,
+   delegated review, Solver attempts, or terminal reports.
+7. Quest closure is SOLVED or EXHAUSTED in the Solver report.
 
-See [`workflow-guidelines.md`](workflow-guidelines.md) for closure, residual,
-sub-agent, causal-ledger, and commit-and-push detail.
+See [`workflow-guidelines/INDEX.md`](workflow-guidelines/INDEX.md) for Quest
+closure, findings, delegation, and report detail.
 
 ## 2. One Semantic Owner Per Concern
 
@@ -340,28 +331,28 @@ Required contract:
 
 ## 13. Closure Requires Proof, Review, And Truth Repair
 
-A package is not done merely because the hot path passes.
+A Quest is not SOLVED merely because the hot path passes.
 
 Required contract:
 
-1. Package validation must prove the owner path and affected tail consumers.
+1. Quest validation must prove the owner path and affected tail consumers.
 2. Static guardrail proof is required for touched runtime/control-plane,
    diagnostics, admin, harness, or shared test infrastructure boundaries.
 3. Before closure, perform the affected-area deep dive required by
-   [`workflow-guidelines.md`](workflow-guidelines.md) and
-   [`testing-guidelines.md`](testing-guidelines.md).
+   [`workflow-guidelines/INDEX.md`](workflow-guidelines/INDEX.md) and
+   [`testing-guidelines/INDEX.md`](testing-guidelines/INDEX.md).
 4. Known in-scope doctrine or system-guideline violations in the affected area
-   must be fixed before package closure.
-5. Scenario-driven packages must prove what the original scenario does next:
+   must be fixed before Quest closure.
+5. Scenario-driven Quests must prove what the original scenario does next:
    representative green, same frontier, reduced, migrated, classification-only,
    architecture gap, autonomous architecture experiment, or human-only
    escalation for blocked/contradictory evidence.
-6. If a package discovers roadmap or architecture truth drift, repair the
-   tracker, roadmap, or architecture record in the same closure cycle.
+6. If a Quest discovers roadmap or architecture truth drift, repair the
+   roadmap or architecture record with the same Quest changes.
 7. Architectural exceptions must be explicit, owned, time-bounded, and recorded
    in an active spec or architecture note with a removal checkpoint.
 8. If a representative blocker returns to a recently closed owner boundary,
-   stop local patching and raise a causal-escalation package for the
+   stop local patching and add or author a frontier that models the
    cross-boundary handoff.
 
 ## 14. Stop Checklist Before Writing Code
@@ -382,7 +373,7 @@ Stop before implementation if any answer is yes:
    without an owner, bound, teardown rule, and diagnostics?
 8. Am I turning pressure or topology lag into user-visible hard failure instead
    of structured retry, defer, or backpressure?
-9. Am I closing a package while residuals, guardrail drift, tail consumers, or
+9. Am I claiming SOLVED while residuals, guardrail drift, tail consumers, or
    scenario migration evidence remain unnamed?
 10. Am I starting another local runtime patch after the representative frontier
     returned to a recently closed related owner boundary?

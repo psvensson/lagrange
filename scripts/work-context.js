@@ -26,6 +26,7 @@ import {
 } from './work-theory-ledger.js';
 import {normalizeMetadata} from './work-package-schema.js';
 import {recommendLaneForPackage} from './work-lane-picker.js';
+import {buildSprintRemainingSummary} from './work-sprint-remaining.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -98,6 +99,8 @@ const NPM_RUN_WORK_PACKAGE_DOCTOR_COMMAND = 'npm run work:package:doctor --';
 const NPM_RUN_WORK_PACKAGE_DOCTOR_SUGGEST_COMMAND =
   'npm run work:package:doctor -- --suggest';
 const NPM_RUN_WORK_SUBAGENT_NEXT_COMMAND = 'npm run work:subagent-next';
+const NPM_RUN_WORK_SPRINT_QUEUE_ACTIVATE_COMMAND =
+  'npm run work:sprint:queue -- --activate';
 const NPM_RUN_WORK_EVIDENCE_SUMMARY_COMMAND = 'npm run work:evidence-summary --';
 const NPM_RUN_WORK_SCENARIO_ROUTE_COMMAND = 'npm run work:scenario-route --';
 const NPM_RUN_WORK_SCENARIO_TRIAGE_COMMAND = 'npm run work:scenario-triage --';
@@ -154,6 +157,7 @@ const LANE_LIGHTWEIGHT_MAINTENANCE = 'lightweight-maintenance';
 const LANE_TEST_ONLY_PROOF = 'test-only-proof';
 const LANE_BOUNDED_EXPERIMENT = 'bounded-experiment';
 const LANE_SINGLE_FILE_RUNTIME = 'single-file-runtime';
+const STATUS_TODO = 'todo';
 const LOWER_MODEL_EXECUTION_LANES = Object.freeze([
   LANE_MECHANICAL_MAINTENANCE,
   LANE_LIGHTWEIGHT_MAINTENANCE,
@@ -1759,11 +1763,11 @@ function buildRelevantSteeringRules(currentBlocker = {}, packageContent = EMPTY_
   if (hasRuntimeSourceScope(currentBlocker)) {
     appendActiveRule(
       rules,
-      'ARCH-0042 Every runtime state transition, lifecycle decision, diagnostic grammar, and resource has one semantic owner.',
+      'ARCH-0041 Every runtime state transition, lifecycle decision, diagnostic grammar, and resource has one semantic owner.',
     );
     appendActiveRule(
       rules,
-      'ARCH-0062 Do not keep patching symptoms while leaving the owner boundary porous.',
+      'TEST-0014 Do not keep patching symptoms while leaving the owner boundary porous.',
     );
     appendActiveRule(
       rules,
@@ -1773,7 +1777,7 @@ function buildRelevantSteeringRules(currentBlocker = {}, packageContent = EMPTY_
   if (hasScenarioSignal(currentBlocker) || hasTestScope(currentBlocker)) {
     appendActiveRule(
       rules,
-      'TEST-0028 The active work package must define the required validation surface.',
+      'TEST-0026 The active work package must define the required validation surface.',
     );
     appendActiveRule(
       rules,
@@ -1789,26 +1793,26 @@ function buildRelevantSteeringRules(currentBlocker = {}, packageContent = EMPTY_
   if (forbiddenScope.length > NUM_ZERO) {
     appendActiveRule(
       rules,
-      'GOV-0023 Do-not-edit boundaries are higher signal than long positive scope lists.',
+      'GOV-0028 Do-not-edit boundaries are higher signal than long positive scope lists.',
     );
   }
   if (hasWorkScope(currentBlocker)) {
     appendActiveRule(
       rules,
-      'GOV-0078 LLM-driven package work uses canonical workflow tools before raw JSON or log slicing.',
+      'GOV-0091 LLM-driven package work uses canonical workflow tools before raw JSON or log slicing.',
     );
   }
   if (hasScriptScope(currentBlocker)) {
     appendActiveRule(
       rules,
-      'STYLE-0007 Write code with ESLint rules in mind from the start.',
+      'STYLE-0010 Write code with ESLint rules in mind from the start.',
     );
   }
 
   for (const fallbackRule of [
-    'ARCH-0041 All non-trivial implementation work must follow the repository work-tracking workflow.',
-    'TEST-0028 The active work package must define the required validation surface.',
-    'GOV-0078 LLM-driven package work uses canonical workflow tools before raw JSON or log slicing.',
+    'ARCH-0040 All non-trivial implementation work must follow the repository work-tracking workflow.',
+    'TEST-0026 The active work package must define the required validation surface.',
+    'GOV-0091 LLM-driven package work uses canonical workflow tools before raw JSON or log slicing.',
   ]) {
     if (rules.length >= MIN_ACTIVE_STEERING_RULES) {
       break;
@@ -2547,9 +2551,29 @@ async function buildDirtyScopeLines(currentBlocker, gitStatusOverride = null) {
   return lines;
 }
 
-function buildBootstrapLines(currentBlocker, packageContent = EMPTY_STRING) {
+async function findQueuedTodoPackage(currentBlocker = {}) {
+  if (!pathHasRealValue(currentBlocker.sprint)) {
+    return null;
+  }
+  try {
+    const remaining = await buildSprintRemainingSummary({
+      sprintPath: currentBlocker.sprint,
+    });
+    return remaining.leftPackages.find((workPackage) =>
+      workPackage.status === STATUS_TODO) || null;
+  } catch {
+    return null;
+  }
+}
+
+function buildBootstrapLines(
+  currentBlocker,
+  packageContent = EMPTY_STRING,
+  queuedTodoPackage = null,
+) {
   const lines = [BOOTSTRAP_OUTPUT_TITLE];
-  const hasPackage = currentBlocker.package && currentBlocker.package !== 'none';
+  const hasPackage = currentBlocker.package &&
+    currentBlocker.package !== 'none';
   const packagePath = hasPackage ? currentBlocker.package : '<new-package>';
   const firstReadPaths = new Set([
     AGENTS_PATH,
@@ -2569,9 +2593,12 @@ function buildBootstrapLines(currentBlocker, packageContent = EMPTY_STRING) {
       NPM_RUN_WORK_SPRINT_ADVANCE_WRITE_COMMAND,
     ]);
   } else {
+    const nextPackageCommand = queuedTodoPackage ?
+      `${NPM_RUN_WORK_SPRINT_QUEUE_ACTIVATE_COMMAND} ${queuedTodoPackage.path}` :
+      'npm run work:package:new -- --write --lane <lane> --title <title> --slug <slug> --owner <owner> --boundary <boundary> --dominant-reason <reason> --next-action <action>';
     appendList(lines, [
       NPM_RUN_WORK_CURRENT_BLOCKER_COMMAND,
-      'npm run work:package:new -- --write --lane <lane> --title <title> --slug <slug> --owner <owner> --boundary <boundary> --dominant-reason <reason> --next-action <action>',
+      nextPackageCommand,
       NPM_RUN_WORK_ADVANCE_CHECK_COMMAND,
     ]);
   }
@@ -2582,7 +2609,11 @@ function buildBootstrapLines(currentBlocker, packageContent = EMPTY_STRING) {
   appendSection(lines, 'Current Guardrails');
   appendKeyValue(lines, FIELD_LABELS.PACKAGE, currentBlocker.package);
   appendKeyValue(lines, 'Lane', currentBlocker.lane);
-  appendKeyValue(lines, 'Owner / boundary', `${currentBlocker.owner} / ${currentBlocker.boundary}`);
+  appendKeyValue(
+    lines,
+    'Owner / boundary',
+    `${currentBlocker.owner} / ${currentBlocker.boundary}`,
+  );
   appendKeyValue(lines, 'Write scope', buildWriteScope(currentBlocker).join(', '));
   appendKeyValue(
     lines,
@@ -2592,7 +2623,11 @@ function buildBootstrapLines(currentBlocker, packageContent = EMPTY_STRING) {
   appendKeyValue(lines, 'Closure path', hasPackage ?
     `${NPM_RUN_WORK_CLOSE_COMMAND} ${packagePath}` :
     'create or activate one package first');
-  appendKeyValue(lines, 'Sprint finish check', NPM_RUN_WORK_SPRINT_ADVANCE_DRY_RUN_COMMAND);
+  appendKeyValue(
+    lines,
+    'Sprint finish check',
+    NPM_RUN_WORK_SPRINT_ADVANCE_DRY_RUN_COMMAND,
+  );
 
   return lines;
 }
@@ -2641,7 +2676,12 @@ async function main() {
       const packageRead = await readOptionalTextFile(currentBlocker.package);
       packageContent = packageRead.content;
     }
-    const lines = buildBootstrapLines(currentBlocker, packageContent);
+    const queuedTodoPackage = await findQueuedTodoPackage(currentBlocker);
+    const lines = buildBootstrapLines(
+      currentBlocker,
+      packageContent,
+      queuedTodoPackage,
+    );
     console.log(lines.join(NEWLINE));
     return EXIT_SUCCESS;
   }

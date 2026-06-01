@@ -30,9 +30,9 @@ Do not use this file for:
 
 For those concerns, use:
 
-- [`.kiro/steering/doctrine.md`](doctrine.md)
+- [`.kiro/steering/doctrine/INDEX.md`](doctrine/INDEX.md)
 - [`.kiro/steering/system-guidelines.md`](system-guidelines.md)
-- [`.kiro/steering/testing-guidelines.md`](testing-guidelines.md)
+- [`.kiro/steering/testing-guidelines/INDEX.md`](testing-guidelines/INDEX.md)
 - [`../../architecture/INDEX.md`](../../architecture/INDEX.md)
 - [`../../roadmap.md`](../../roadmap.md)
 
@@ -58,7 +58,7 @@ When writing or modifying code:
 - New or newly edited source-code files must finish within the per-scope thresholds owned by `scripts/check-file-size-thresholds.js` (currently src ≤ 800, test ≤ 1500 lines; run `npm run audit:file-size` to confirm).
 - If an edit would leave a touched source-code file over its scope threshold, extract
   a smaller semantic owner, helper, contract, state model, or consumer boundary
-  before closure.
+  before Quest closure.
 - New source-code files must be named for the semantic responsibility they own,
   not for their position in a split.
 - Prefer names that describe the owner boundary, decision, contract, state
@@ -98,16 +98,16 @@ When writing or modifying code:
 - Break long lines appropriately to stay under 100 characters
 - Use consistent formatting with existing codebase patterns
 - Confirm every new or edited source-code file is within its scope threshold (see `scripts/check-file-size-thresholds.js`), or
-  refactor the touched file before closure.
+  refactor the touched file before Quest closure.
 
 ## Related Checks
 
 After writing or modifying code, also review the adjacent steering documents for
 non-style concerns:
 
-- [`.kiro/steering/doctrine.md`](doctrine.md)
+- [`.kiro/steering/doctrine/INDEX.md`](doctrine/INDEX.md)
 - [`.kiro/steering/system-guidelines.md`](system-guidelines.md)
-- [`.kiro/steering/testing-guidelines.md`](testing-guidelines.md)
+- [`.kiro/steering/testing-guidelines/INDEX.md`](testing-guidelines/INDEX.md)
 
 ## Common Patterns
 

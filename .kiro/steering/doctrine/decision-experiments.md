@@ -46,11 +46,11 @@ A causal model must name:
 - the stop conditions for continuing local fixes, migrating owner boundary,
   widening architecture work, or stopping for human direction
 
-Runtime packages that follow such a model should cite it as their scope basis
-and proof surface. Otherwise the sprint is still patching symptoms.
+Runtime Quests that follow such a model should cite it as their scope basis
+and proof surface. Otherwise the Quest is still patching symptoms.
 
-Scenario-driven sprints and packages must maintain scenario causal closure
-across the whole chain, not only the current first frontier. Each package must
+Scenario-driven Quests must maintain scenario causal closure across the whole
+chain, not only the current first frontier. Each Quest must
 keep enough evidence for a new agent to understand:
 
 - the full phase chain from the scenario/probe through the current first
@@ -71,7 +71,7 @@ keep enough evidence for a new agent to understand:
 Classification-only is a valid result only when the causal chain is still
 explicit, the focused probe command and artifact are named, the
 bounded-progress proof has an observable transition and bound, and the stop
-condition says why no local runtime patch should continue in that package.
+condition says why no local runtime patch should continue in that Quest.
 Retryable or backpressure first frontiers cannot become bounded non-frontiers
 through prose-only proof.
 
@@ -81,33 +81,33 @@ Implementation work should be as explicit and bounded as the runtime design.
 
 - A human idea should first become either:
   - a sharpened roadmap item
-  - or a bounded work package
+  - or a bounded Quest
 - Broad ideas must not go straight into code.
-- Active implementation should target one executable concern per work package.
-- Work-package status should live in the filename under `work/` rather than in
-  several parallel trackers.
-- Every active package must name its residual-closure inventory before code is
+- Active implementation should target one executable concern per Quest.
+- Quest status should live in the Solver event log and report rather than in
+  parallel trackers.
+- Every active Quest must name its residual-closure inventory before code is
   treated as complete. At minimum that inventory must cover:
   - owner-path cutovers
   - direct and tail consumers
   - status, diagnostics, and reporting surfaces
   - deletion of superseded paths or stale vocabulary
   - required proof layers
-- Do not treat a package as complete when only the hot path is fixed. A
-  package is complete only when the hot path, tail consumers, diagnostics or
+- Do not treat a Quest as SOLVED when only the hot path is fixed. A
+  Quest is complete only when the hot path, tail consumers, diagnostics or
   reporting, deletion work, and required proof are all closed.
-- Do not begin the next package on the same architectural boundary while the
-  current package still has unresolved in-scope residuals. Either finish the
-  residuals in the current package or split them explicitly into a new package
-  before moving on.
-- Parallel package execution on the same boundary is allowed only when the
-  packages have explicitly disjoint file and owner scope, or one umbrella
-  package owns the combined closure plan.
-- A package is not complete when the narrow change lands; it is complete only
+- Do not begin a new local patch on the same architectural boundary while the
+  current Quest still has unresolved in-scope residuals. Either finish the
+  residuals in the current Quest or author a new Quest/frontier before moving
+  on.
+- Parallel Quest execution on the same boundary is allowed only when the Quests
+  have explicitly disjoint file and owner scope, or one Quest owns the combined
+  closure plan.
+- A Quest is not complete when the narrow change lands; it is complete only
   after a final deep dive across the affected owner boundaries confirms the
   area is free of known doctrine and system-guideline violations.
 - Use the model ledger as an advisory feedback loop for future model,
-  reasoning-effort, and output-profile choice when a package produces useful
+  reasoning-effort, and output-profile choice when a Quest produces useful
   evidence. Output profile controls final-response and handoff verbosity, not
   reasoning depth. It must not replace validation, review, sequencing, or
   closure proof.
@@ -124,15 +124,14 @@ incidental noise.
 
 Prefer:
 
-- recording the previous dominant blocker and the new one in the active work
-  package
+- recording the previous dominant blocker and the new one as a Quest finding
 - asking what boundary meaning allowed the new blocker to stay implicit
-- splitting the next concern explicitly when the blocker has moved to a new
-  owner seam
+- adding or authoring the next frontier explicitly when the blocker has moved
+  to a new owner seam
 
 Do not treat hot-path green tests as analysis closure while the original
 scenario now fails for a different named reason. Failure migration is often
 proof that the previous fix worked and exposed the next missing contract.
-Sprints and packages must never close from symptom movement alone (such as
-changed timeout durations, timing offsets, or message counts); they must
-prove the named contract transition or owner-boundary correctness.
+Quests must never close from symptom movement alone (such as changed timeout
+durations, timing offsets, or message counts); they must prove the named
+contract transition or owner-boundary correctness.

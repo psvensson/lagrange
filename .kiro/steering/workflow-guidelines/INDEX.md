@@ -4,38 +4,43 @@ status: canonical
 always_load: false
 source_of_truth: self
 compiled_pack: .kiro/steering/llm/governance.md
-last_reviewed: 2026-05-23
+last_reviewed: 2026-06-01
 ---
 
-> **Canonical source — index.** This is the navigation index for workflow/package policy. Rule content lives in the sub-files; the LLM pack generator reads them via `llm-pack.config.json`.
+> **Canonical source - index.** This tree governs Quest workflow policy. Rule
+> content lives in the sub-files; the LLM pack generator reads them via
+> `llm-pack.config.json`.
 
 # Workflow Guidelines
 
 ## Document Role
 
-This document tree governs the package lifecycle, sub-agent sequencing, validator workflow, and sprint cadence for the repository.
+This document tree governs the Solver workflow: Quest authoring, measured
+attempts, findings, terminal reports, delegated execution, and validation
+guardrails.
 
 Use this tree for:
 
-- selecting lanes and meeting lane requirements
-- declaring package status, closure, and residual inventories
-- Discovery Gate, decision, and experiment gates
-- sub-agent sequencing and triage
-- roadmap and work-tracker truth
+- creating or selecting a Quest;
+- choosing supervised `step` versus autonomous `run`;
+- recording attempts and findings;
+- interpreting SOLVED, EXHAUSTED, and MAX_CYCLES;
+- keeping Quest evidence tied to probe artifacts.
 
 Do not use this tree for:
 
-- runtime/contract policy (see [`../system-guidelines.md`](../system-guidelines.md) and [`../doctrine/INDEX.md`](../doctrine/INDEX.md))
-- testing policy (see [`../testing-guidelines/INDEX.md`](../testing-guidelines/INDEX.md))
-- lint/style (see [`../code-style.md`](../code-style.md))
-- canonical process rules (those live in [`../../../work/RULES.md`](../../../work/RULES.md))
+- runtime/contract policy (see [`../system-guidelines.md`](../system-guidelines.md)
+  and [`../doctrine/INDEX.md`](../doctrine/INDEX.md));
+- testing policy (see [`../testing-guidelines/INDEX.md`](../testing-guidelines/INDEX.md));
+- lint/style (see [`../code-style.md`](../code-style.md)).
 
 ## Files
 
 | File | Topics covered |
 | --- | --- |
-| [`lifecycle.md`](lifecycle.md) | Workflow lanes, lane requirements, sprint entry & width limits, lifecycle progress grammar. |
-| [`validators.md`](validators.md) | Static drift ledger, post-rerun decision gate. |
-| [`packages.md`](packages.md) | Package status & closure, Discovery Gate promotion boundaries, residual closure inventory, affected-area deep dive, shared boundary contracts, roadmap & work-tracker truth. |
-| [`closure.md`](closure.md) | Discovery Gate, Core Logic Brief, Sprint Strategy Brief, Decision Experiment Gate, Sprint Architecture Decision Gate, classification fast-path & efficiency, causal closure ledger, failure migration, frontier oscillation, causal analysis escalation. |
-| [`subagents.md`](subagents.md) | Sub-agent sequencing, optional Discovery Gate roles, LLM tool-first triage, current edge card and trap list. |
+| [`solver-quests.md`](solver-quests.md) | Canonical Quest workflow, anatomy, terminal conditions, strategy ladder, findings log, and agent executor. |
+| [`lifecycle.md`](lifecycle.md) | Quest lifecycle phases and first commands. |
+| [`validators.md`](validators.md) | Probe-owned truth, honesty checks, goalpost immutability, and report projection. |
+| [`quest-artifacts.md`](quest-artifacts.md) | Quest artifact ownership and tracked versus regenerable data. |
+| [`closure.md`](closure.md) | SOLVED / EXHAUSTED closure policy and failure migration handling. |
+| [`subagents.md`](subagents.md) | Delegated worker roles for Quest attempts and reviews. |

@@ -814,7 +814,7 @@ Each entry must include these labels:
 - Probe: `npm run work:owner-dossier -- --owner representative_evidence_owner --boundary rolling_restart_rerun --json` and `npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json --owner representative_evidence_owner --boundary rolling_restart_rerun --dominant-reason representative_rerun_model_route_decision --explain priority_recovery_partition_progress`
 - Artifact/result: `active-20260601-rolling-restart-priority-recovery-rebalancer-handoff-backpressure-drain-escalation.md` analyzed the rebalancer handoff evidence and confirmed that the event-driven wait is stalled with enqueued=false and retryAfterMs=0, meaning backpressure does not drain autonomously and requires a scheduling-layer timer retry.
 - Representative movement: none; local proof reduced route ambiguity and confirmed H2.
-- Linked packages: `work/packages/active-20260601-representative-rerun-progress-model-route-decision.md`, `work/packages/todo-20260601-rolling-restart-priority-recovery-rebalancer-handoff-backpressure-drain-escalation.md`
+- Linked packages: `work/packages/active-20260601-representative-rerun-progress-model-route-decision.md`, `work/packages/todo-20260601-rolling-restart-priority-recovery-rebalancer-handoff-backpressure-drain-escalation.md`, `work/packages/active-20260601-rolling-restart-priority-recovery-rebalancer-handoff-backpressure-drain-residual-split.md`
 - Supersedes: theory-20260531-rolling-restart-representative-rerun-progress-model-coverage-binding
 - Superseded by: none
 - Next implication: Scaffold the successor package to implement a scheduling-layer retry timer for rebalancer handoff when stuck in event-driven wait.

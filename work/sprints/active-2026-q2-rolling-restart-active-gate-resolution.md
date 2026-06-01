@@ -112,22 +112,22 @@ current-blocker files, sprint state, package queues, or theory-ledger decisions.
 
 ```text
 Representative artifact: test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json
-Visible first frontier: operation_workflow_owner / rebalancer_handoff
-Active package: work/packages/done-20260601-rolling-restart-priority-recovery-rebalancer-handoff-backpressure-drain-escalation.md
+Visible first frontier: operation_workflow_owner / rebalancer_handoff / priority_recovery_event_driven_wait
+Active package: work/packages/active-20260601-rolling-restart-priority-recovery-rebalancer-handoff-backpressure-drain-residual-split.md
 Active package owner: operation_workflow_owner
 Active package boundary: rebalancer_handoff
 Selected cause: priority_recovery_event_driven_wait
-Required action: Escalate priority recovery backpressure under model-blocked representative rerun; analyze if backpressure drains or if rebalancer handoff requires scheduling-layer timer or manual recovery.
-Representative status: classification-only
-Causal outcome: classification-only
+Required action: Implement a retry timer/scheduling re-arm in the operation workflow rebalancer handoff path so stuck event-driven waits can advance retry states.
+Representative status: active-theory-loop
+Causal outcome: accept_classified_backpressure
 Architecture gate: watching / unknown
-Expected delta: focused proof shows backpressure drains or a scheduling-layer timer advances recovery
-Current state: The representative rerun progress model blocks direct rerun from a non-shrinking residual window, routing accepted backpressure to open-causal-escalation. Rebalancer handoff is stuck in backpressure wait.
-Allowed edits: work/packages/todo-20260601-rolling-restart-priority-recovery-rebalancer-handoff-backpressure-drain-residual-split.md, work/packages/todo-20260601-rolling-restart-priority-recovery-rebalancer-handoff-backpressure-drain-escalation.md, work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md, work/theory-ledger.md
-Candidate runtime files: src/rebalancer/operation-workflow-owner-ports.js
-Forbidden edits: A blocked_model_route artifact cannot authorize rerun_representative_evidence until model-backed route classification allows it.
-Required latest proof: falsifier: npm run work:advance -- --check, regression: npm run work:advance -- --check
-Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
+Expected delta: Implementing a retry timer in the event-driven progress path of rebalancer handoff allows event-driven wait states to re-arm and drain.
+Current state: Escalation package confirmed H2: backpressure drains are stalled in event-driven wait and require a scheduling-layer timer or retry.
+Allowed edits: src/rebalancer/operation-workflow-owner-ports.js, test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js, .gitignore, .kiro/steering/code-style.md, .kiro/steering/doctrine/INDEX.md, .kiro/steering/llm/architecture.md, .kiro/steering/llm/boot.md, .kiro/steering/llm/core.md, .kiro/steering/llm/governance.md, .kiro/steering/llm/manifest.json, .kiro/steering/llm/rules.json, .kiro/steering/roadmap.md, .kiro/steering/system-guidelines.md, .kiro/steering/workflow-guidelines/lifecycle.md, AGENTS.md, scripts/list-commands.js, scripts/work-context.js, scripts/work-llm-start.js, scripts/work-summary.js, scripts/work-tracker.js, test/scripts/list-commands.test.js, test/scripts/work-context.test.js, test/scripts/work-llm-usability-tools.test.js, work/RULES.md, test/scripts/work-tracker-analysis-loop-cap.test.js, test/scripts/work-tracker-iteration-log.test.js
+Candidate runtime files: unknown
+Forbidden edits: rebalancer_handoff retry progress timer re-arms event-driven wait state on retry scheduler
+Required latest proof: falsifier: npm test -- test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js, regression: npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress, supporting: npm run work:advance -- --check
+Allowed stop modes: success-condition-met only; representative-green, owner-boundary-migration, architecture-gap, same-frontier, classification-only, needs-rerun, pending, and unknown are package outcomes unless they exactly match the original sprint success condition
 ```
 
 ## Package Queue
@@ -235,12 +235,15 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Classification successor that uses the proven representative rerun progress
      model coverage to select the next legal route before any representative
      rerun, runtime promotion, migration, or architecture continuation.
-22. `active` -
+22. `done` -
    [Rolling Restart Priority Recovery Rebalancer Handoff Backpressure Drain Escalation](work/packages/done-20260601-rolling-restart-priority-recovery-rebalancer-handoff-backpressure-drain-escalation.md)
    - Escalate priority recovery backpressure under model-blocked representative rerun; analyze if backpressure drains or if rebalancer handoff requires scheduling-layer timer or manual recovery.
-23. `todo` -
-   [Rolling Restart Priority Recovery Rebalancer Handoff Backpressure Drain Residual Split](work/packages/todo-20260601-rolling-restart-priority-recovery-rebalancer-handoff-backpressure-drain-residual-split.md)
+23. `active` -
+   [Rolling Restart Priority Recovery Rebalancer Handoff Backpressure Drain Residual Split](work/packages/active-20260601-rolling-restart-priority-recovery-rebalancer-handoff-backpressure-drain-residual-split.md)
    - Implement a retry timer/scheduling re-arm in the operation workflow rebalancer handoff path so stuck event-driven waits can advance retry states.
+24. `todo` -
+   [Rolling Restart Priority Recovery Rebalancer Handoff Backpressure Drain Representative Rerun](work/packages/todo-20260601-rolling-restart-priority-recovery-rebalancer-handoff-backpressure-drain-representative-rerun.md)
+   - Rerun the representative rolling-restart scenario to measure priority recovery progress.
 
 ## Sprint Proof Ladder
 

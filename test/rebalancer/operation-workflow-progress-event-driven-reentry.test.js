@@ -1498,3 +1498,76 @@ test(TEST_LOCAL_INITIALIZATION_RETRY_TEST_NAME, async (t) => {
     await coordinator.shutdown();
   }
 });
+
+test('event-driven rebalancer handoff waits resolve retry contract fields', async (t) => {
+  const deliveries = [];
+  const deferredTimers = [];
+  const operation = buildEventDrivenOperation();
+  const operationRow = buildEventDrivenOperationRow();
+  const coordinator = createEventDrivenCoordinator(
+    deliveries,
+    deferredTimers,
+    operationRow,
+  );
+
+  try {
+    coordinator.initialize();
+    coordinator.workflowOwner.repository
+      .getOperationsByEntityAuthoritativeObservation = async () => {
+        return Object.freeze({
+          state: 'present',
+          operationCount: NUM.ONE,
+          operations: Object.freeze([operation]),
+          deferredOutcome: null,
+          retryAfterMs: null,
+        });
+      };
+
+    const snapshot =
+      await coordinator.workflowOwner
+        .getPriorityRecoveryDecisionSnapshotForPartitionOperations(
+          TEST_PARTITION_ID,
+          [operation],
+        );
+
+    const handoffRetrySnapshot =
+      coordinator.workflowOwner
+        .normalizePriorityRecoveryDispatchPendingOwnerSnapshot(
+          {
+            ...snapshot,
+            actuation: {
+              ...snapshot.actuation,
+              state: PRIORITY_RECOVERY_ACTUATION_STATE.DISPATCHED_WAITING_PROGRESS,
+            },
+            progress: {
+              ...snapshot.progress,
+              blockingBoundary:
+                PRIORITY_RECOVERY_BLOCKING_BOUNDARY.REBALANCER_HANDOFF,
+              waitMode: PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
+            },
+          }, operation);
+
+    const contract = handoffRetrySnapshot?.progress?.progressContract;
+
+
+    t.ok(contract, 'progressContract should exist for the handoff snapshot');
+    t.equal(
+      contract?.representativeRerunRoute,
+      'blocked_model_route',
+      'event-driven rebalancer handoff wait resolves representative rerun route to blocked_model_route',
+    );
+    t.equal(
+      contract?.ownerReentryState,
+      'bounded_owner_reentry_scheduled',
+      'event-driven rebalancer handoff wait resolves owner reentry state to bounded_owner_reentry_scheduled',
+    );
+    t.equal(
+      contract?.retryAfterMs,
+      1000,
+      'event-driven rebalancer handoff wait resolves retryAfterMs to 1000ms',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+

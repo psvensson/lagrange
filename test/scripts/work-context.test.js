@@ -579,7 +579,7 @@ test('work context advertises triage commands before raw artifact reads',
       'Steering rule: CORE-02 Work one bounded concern',
     ));
     t.ok(rendered.includes(
-      'Steering rule: ARCH-0042 Every runtime state transition',
+      'Steering rule: ARCH-0041 Every runtime state transition',
     ));
     t.ok(rendered.includes(
       'Steering rule: TEST-0085 Distributed artifact triage starts',

@@ -22,7 +22,7 @@
     "work/RULES.md"
   ],
   "modelRefs": [
-    ".kiro/steering/schemas/work-package.schema.json"
+    "work/schemas/work-package.schema.json"
   ]
 }
 -->

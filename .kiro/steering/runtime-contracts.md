@@ -16,14 +16,14 @@ last_reviewed: 2026-05-23
 This file expands the runtime, control-plane, data, cache, and transport
 contracts summarized by [`system-guidelines.md`](system-guidelines.md).
 
-Use this file when a package touches:
+Use this file when a Quest touches:
 
 - system-table row ownership or mutation
 - cache, CDC, snapshot, readiness, admission, or service discovery paths
 - topology workflow, rebalance, split, recovery, or operation progression
 - pressure, backpressure, resource lifetime, routing, or transport behavior
 
-Do not use this file for package workflow, roadmap scope, or style-only rules.
+Do not use this file for Quest workflow, roadmap scope, or style-only rules.
 
 ## Owner And Path Detail
 

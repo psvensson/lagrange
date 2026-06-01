@@ -6,6 +6,10 @@ import process from 'node:process';
 import {fileURLToPath} from 'node:url';
 import {buildRepresentativeEvidenceSummary} from './summarize-representative-evidence.js';
 import {
+  buildSprintRemainingSummary,
+  renderSprintRemainingSummary,
+} from './work-sprint-remaining.js';
+import {
   buildContextLines,
   buildCurrentBlockerFromPackage,
   buildDirtyScopeLines,
@@ -38,6 +42,7 @@ const TITLE = '# LLM Start';
 const STATUS_ACTIVE = 'active';
 const ACTIVE_PACKAGE_FILE_PATTERN = /^active-.+\.md$/u;
 const CURRENT_BLOCKER_REPAIR_COMMAND = 'npm run work:repair';
+const SPRINT_REMAINING_COMMAND = 'npm run work:sprint:remaining';
 
 function normalizeText(value) {
   return String(value || EMPTY_TEXT).trim();
@@ -86,10 +91,7 @@ function packagePathLooksActive(filePath) {
 
 async function readCurrentBlockerPackageContent(currentBlocker) {
   if (!pathHasRealValue(currentBlocker.package)) {
-    throw new Error(
-      'Current blocker snapshot does not name a package. Run ' +
-      `${CURRENT_BLOCKER_REPAIR_COMMAND}, then rerun npm run work:llm-start.`,
-    );
+    return EMPTY_TEXT;
   }
   if (
     currentBlocker.status !== STATUS_ACTIVE ||
@@ -110,6 +112,35 @@ async function readCurrentBlockerPackageContent(currentBlocker) {
       );
     }
     throw error;
+  }
+}
+
+function buildPackageDoctorSection(
+  currentBlocker,
+  packageContent,
+  theoryLedgerContext,
+) {
+  if (!pathHasRealValue(currentBlocker.package)) {
+    return 'No active package recorded. Package doctor skipped; use ' +
+      `${SPRINT_REMAINING_COMMAND} to select the next queued package or ` +
+      'create one focused package if no queued package owns the work.';
+  }
+  return buildPackageDoctorLines(currentBlocker.package, packageContent, {
+    suggest: true,
+    theoryLedgerContext,
+  }).lines.join(NEWLINE);
+}
+
+async function buildSprintRemainingSection(currentBlocker) {
+  if (!pathHasRealValue(currentBlocker.sprint)) {
+    return 'No active sprint recorded.';
+  }
+  try {
+    return renderSprintRemainingSummary(
+      await buildSprintRemainingSummary({sprintPath: currentBlocker.sprint}),
+    );
+  } catch (error) {
+    return `Sprint remaining summary unavailable: ${error.message}`;
   }
 }
 
@@ -162,11 +193,13 @@ async function buildLlmStartLines(args = []) {
   );
   appendSection(
     lines,
+    'Sprint Remaining',
+    await buildSprintRemainingSection(currentBlocker),
+  );
+  appendSection(
+    lines,
     'Package Doctor',
-    buildPackageDoctorLines(currentBlocker.package, packageContent, {
-      suggest: true,
-      theoryLedgerContext,
-    }).lines.join(NEWLINE),
+    buildPackageDoctorSection(currentBlocker, packageContent, theoryLedgerContext),
   );
   appendSection(
     lines,
@@ -174,7 +207,11 @@ async function buildLlmStartLines(args = []) {
     (await buildDirtyScopeLines(currentBlocker)).join(NEWLINE),
   );
   appendSection(lines, 'Model Ledger', await buildModelLedgerSection(args));
-  appendSection(lines, 'Representative Evidence', await buildEvidenceSection(currentBlocker));
+  appendSection(
+    lines,
+    'Representative Evidence',
+    await buildEvidenceSection(currentBlocker),
+  );
   return lines;
 }
 

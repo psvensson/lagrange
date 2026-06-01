@@ -83,7 +83,7 @@
       "priority": 115
     },
     {
-      "file": "workflow-guidelines/packages.md",
+      "file": "workflow-guidelines/quest-artifacts.md",
       "domain": "governance",
       "priority": 115
     },
@@ -96,66 +96,39 @@
       "file": "workflow-guidelines/subagents.md",
       "domain": "governance",
       "priority": 115
+    },
+    {
+      "file": "workflow-guidelines/solver-quests.md",
+      "domain": "governance",
+      "priority": 110
     }
   ],
   "stats": {
-    "candidateCount": 337,
-    "dedupedRuleCount": 330,
-    "exportedRuleCount": 330,
-    "aliasRuleCount": 11,
-    "masterRuleCount": 319,
-    "estimatedAllRulesTokens": 13164
+    "candidateCount": 215,
+    "dedupedRuleCount": 209,
+    "exportedRuleCount": 209,
+    "aliasRuleCount": 0,
+    "masterRuleCount": 209,
+    "estimatedAllRulesTokens": 6850
   },
   "rules": [
     {
       "id": "ARCH-0001",
       "domain": "architecture",
       "strength": "must_not",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "Lightweight maintenance: use one focused package and focused proof. Do not require causal ledgers, representative reruns, or delegated role provenance unless runtime ownership or shared contracts can change.",
+      "tags": [],
+      "rule": "Model choice notes are advisory only. They never replace validation, delegated review, Solver attempts, or terminal reports.",
       "score": 256,
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 69,
-          "section": "System Guidelines — Mandatory Implementation Contract > Process Weight Gate"
+          "line": 92,
+          "section": "System Guidelines — Mandatory Implementation Contract > 1. Work Starts From One Bounded Quest"
         }
       ]
     },
     {
       "id": "ARCH-0002",
-      "domain": "architecture",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "Package status lives in the filename: idea-, todo-, active-, done-, or superseded-. Do not create a second status system.",
-      "score": 256,
-      "sources": [
-        {
-          "file": "system-guidelines.md",
-          "line": 95,
-          "section": "System Guidelines — Mandatory Implementation Contract > 1. Work Starts From One Bounded Package"
-        }
-      ]
-    },
-    {
-      "id": "ARCH-0003",
-      "domain": "architecture",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "The model ledger is advisory only for model, reasoning-effort, and output-profile choice. It never replaces validation, review sub-agents, package sequencing, closure proof, or focused commits.",
-      "score": 256,
-      "sources": [
-        {
-          "file": "system-guidelines.md",
-          "line": 99,
-          "section": "System Guidelines — Mandatory Implementation Contract > 1. Work Starts From One Bounded Package"
-        }
-      ]
-    },
-    {
-      "id": "ARCH-0004",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -166,13 +139,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 118,
+          "line": 109,
           "section": "System Guidelines — Mandatory Implementation Contract > 2. One Semantic Owner Per Concern"
         }
       ]
     },
     {
-      "id": "ARCH-0005",
+      "id": "ARCH-0003",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -183,13 +156,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 120,
+          "line": 111,
           "section": "System Guidelines — Mandatory Implementation Contract > 2. One Semantic Owner Per Concern"
         }
       ]
     },
     {
-      "id": "ARCH-0006",
+      "id": "ARCH-0004",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -200,13 +173,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 144,
+          "line": 135,
           "section": "System Guidelines — Mandatory Implementation Contract > 3. One Path Per Semantic Decision"
         }
       ]
     },
     {
-      "id": "ARCH-0007",
+      "id": "ARCH-0005",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -215,16 +188,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 172,
+          "line": 163,
           "section": "System Guidelines — Mandatory Implementation Contract > 4. Scalars, State, And Naming Have Owners"
         }
-      ],
-      "aliases": [
-        "STYLE-0002"
       ]
     },
     {
-      "id": "ARCH-0008",
+      "id": "ARCH-0006",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -233,13 +203,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 175,
+          "line": 166,
           "section": "System Guidelines — Mandatory Implementation Contract > 4. Scalars, State, And Naming Have Owners"
         }
       ]
     },
     {
-      "id": "ARCH-0009",
+      "id": "ARCH-0007",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -248,17 +218,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 178,
+          "line": 169,
           "section": "System Guidelines — Mandatory Implementation Contract > 4. Scalars, State, And Naming Have Owners"
         }
-      ],
-      "aliases": [
-        "STYLE-0001",
-        "STYLE-0008"
       ]
     },
     {
-      "id": "ARCH-0010",
+      "id": "ARCH-0008",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -269,14 +235,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 216,
+          "line": 207,
           "section": "System Guidelines — Mandatory Implementation Contract > 6. Tables, Cache, And Metadata Follow One Authority Chain"
         }
-      ],
-      "canonical_of": "ARCH-0041"
+      ]
     },
     {
-      "id": "ARCH-0011",
+      "id": "ARCH-0009",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -288,13 +253,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 223,
+          "line": 214,
           "section": "System Guidelines — Mandatory Implementation Contract > 6. Tables, Cache, And Metadata Follow One Authority Chain"
         }
       ]
     },
     {
-      "id": "ARCH-0012",
+      "id": "ARCH-0010",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -305,7 +270,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 241,
+          "line": 232,
           "section": "System Guidelines — Mandatory Implementation Contract > 7. Phase Code Must Hand Off To Runtime Owners"
         },
         {
@@ -316,7 +281,7 @@
       ]
     },
     {
-      "id": "ARCH-0013",
+      "id": "ARCH-0011",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -327,13 +292,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 248,
+          "line": 239,
           "section": "System Guidelines — Mandatory Implementation Contract > 7. Phase Code Must Hand Off To Runtime Owners"
         }
       ]
     },
     {
-      "id": "ARCH-0014",
+      "id": "ARCH-0012",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -344,13 +309,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 266,
+          "line": 257,
           "section": "System Guidelines — Mandatory Implementation Contract > 8. Control-Plane Work Uses Shared Primitives"
         }
       ]
     },
     {
-      "id": "ARCH-0015",
+      "id": "ARCH-0013",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -361,13 +326,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 271,
+          "line": 262,
           "section": "System Guidelines — Mandatory Implementation Contract > 8. Control-Plane Work Uses Shared Primitives"
         }
       ]
     },
     {
-      "id": "ARCH-0016",
+      "id": "ARCH-0014",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -376,13 +341,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 284,
+          "line": 275,
           "section": "System Guidelines — Mandatory Implementation Contract > 9. Load May Slow The System, Not Break It"
         }
       ]
     },
     {
-      "id": "ARCH-0017",
+      "id": "ARCH-0015",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -391,13 +356,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 285,
+          "line": 276,
           "section": "System Guidelines — Mandatory Implementation Contract > 9. Load May Slow The System, Not Break It"
         }
       ]
     },
     {
-      "id": "ARCH-0018",
+      "id": "ARCH-0016",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -408,13 +373,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 289,
+          "line": 280,
           "section": "System Guidelines — Mandatory Implementation Contract > 9. Load May Slow The System, Not Break It"
         }
       ]
     },
     {
-      "id": "ARCH-0019",
+      "id": "ARCH-0017",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -423,13 +388,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 290,
+          "line": 281,
           "section": "System Guidelines — Mandatory Implementation Contract > 9. Load May Slow The System, Not Break It"
         }
       ]
     },
     {
-      "id": "ARCH-0020",
+      "id": "ARCH-0018",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -438,13 +403,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 306,
+          "line": 297,
           "section": "System Guidelines — Mandatory Implementation Contract > 10. Communication Has One Replicated Data Path"
         }
       ]
     },
     {
-      "id": "ARCH-0021",
+      "id": "ARCH-0019",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -456,13 +421,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 331,
+          "line": 322,
           "section": "System Guidelines — Mandatory Implementation Contract > 12. User-Facing Model Stays Small"
         }
       ]
     },
     {
-      "id": "ARCH-0022",
+      "id": "ARCH-0020",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -471,13 +436,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 199,
+          "line": 190,
           "section": "System Guidelines — Mandatory Implementation Contract > 5. Shared Runtime Contracts Have One Shape"
         }
       ]
     },
     {
-      "id": "ARCH-0023",
+      "id": "ARCH-0021",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -486,13 +451,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 226,
+          "line": 217,
           "section": "System Guidelines — Mandatory Implementation Contract > 6. Tables, Cache, And Metadata Follow One Authority Chain"
         }
       ]
     },
     {
-      "id": "ARCH-0024",
+      "id": "ARCH-0022",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -503,13 +468,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 232,
+          "line": 223,
           "section": "System Guidelines — Mandatory Implementation Contract > 7. Phase Code Must Hand Off To Runtime Owners"
         }
       ]
     },
     {
-      "id": "ARCH-0025",
+      "id": "ARCH-0023",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -523,11 +488,10 @@
           "line": 39,
           "section": "Runtime Contracts Detail > Owner And Path Detail"
         }
-      ],
-      "canonical_of": "ARCH-0041"
+      ]
     },
     {
-      "id": "ARCH-0026",
+      "id": "ARCH-0024",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -544,7 +508,7 @@
       ]
     },
     {
-      "id": "ARCH-0027",
+      "id": "ARCH-0025",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -562,7 +526,7 @@
       ]
     },
     {
-      "id": "ARCH-0028",
+      "id": "ARCH-0026",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -579,7 +543,7 @@
       ]
     },
     {
-      "id": "ARCH-0029",
+      "id": "ARCH-0027",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -594,25 +558,7 @@
       ]
     },
     {
-      "id": "ARCH-0030",
-      "domain": "architecture",
-      "strength": "must",
-      "tags": [
-        "ownership",
-        "governance"
-      ],
-      "rule": "Read/review/doc-only: answer questions or edit explanatory docs. No work package is required unless implementation truth, roadmap scope/state, or architecture ownership changes.",
-      "score": 238,
-      "sources": [
-        {
-          "file": "system-guidelines.md",
-          "line": 66,
-          "section": "System Guidelines — Mandatory Implementation Contract > Process Weight Gate"
-        }
-      ]
-    },
-    {
-      "id": "ARCH-0031",
+      "id": "ARCH-0028",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -623,13 +569,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 218,
+          "line": 209,
           "section": "System Guidelines — Mandatory Implementation Contract > 6. Tables, Cache, And Metadata Follow One Authority Chain"
         }
       ]
     },
     {
-      "id": "ARCH-0032",
+      "id": "ARCH-0029",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -642,30 +588,30 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 238,
+          "line": 229,
           "section": "System Guidelines — Mandatory Implementation Contract > 7. Phase Code Must Hand Off To Runtime Owners"
         }
       ]
     },
     {
-      "id": "ARCH-0033",
+      "id": "ARCH-0030",
       "domain": "architecture",
       "strength": "must",
       "tags": [
         "ownership"
       ],
-      "rule": "Package validation must prove the owner path and affected tail consumers.",
+      "rule": "Quest validation must prove the owner path and affected tail consumers.",
       "score": 237,
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 347,
+          "line": 338,
           "section": "System Guidelines — Mandatory Implementation Contract > 13. Closure Requires Proof, Review, And Truth Repair"
         }
       ]
     },
     {
-      "id": "ARCH-0034",
+      "id": "ARCH-0031",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -676,47 +622,47 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 348,
+          "line": 339,
           "section": "System Guidelines — Mandatory Implementation Contract > 13. Closure Requires Proof, Review, And Truth Repair"
         }
       ]
     },
     {
-      "id": "ARCH-0035",
+      "id": "ARCH-0032",
       "domain": "architecture",
       "strength": "must",
       "tags": [
         "testing"
       ],
-      "rule": "Before closure, perform the affected-area deep dive required by workflow-guidelines.md and testing-guidelines.md.",
+      "rule": "Before closure, perform the affected-area deep dive required by workflow-guidelines/INDEX.md and testing-guidelines/INDEX.md.",
       "score": 237,
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 350,
+          "line": 341,
           "section": "System Guidelines — Mandatory Implementation Contract > 13. Closure Requires Proof, Review, And Truth Repair"
         }
       ]
     },
     {
-      "id": "ARCH-0036",
+      "id": "ARCH-0033",
       "domain": "architecture",
       "strength": "must",
       "tags": [
         "governance"
       ],
-      "rule": "Known in-scope doctrine or system-guideline violations in the affected area must be fixed before package closure.",
+      "rule": "Known in-scope doctrine or system-guideline violations in the affected area must be fixed before Quest closure.",
       "score": 237,
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 353,
+          "line": 344,
           "section": "System Guidelines — Mandatory Implementation Contract > 13. Closure Requires Proof, Review, And Truth Repair"
         }
       ]
     },
     {
-      "id": "ARCH-0037",
+      "id": "ARCH-0034",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -725,7 +671,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 361,
+          "line": 352,
           "section": "System Guidelines — Mandatory Implementation Contract > 13. Closure Requires Proof, Review, And Truth Repair"
         }
       ]
@@ -745,8 +691,7 @@
           "line": 66,
           "section": "Code Style Guidelines > Source File Size And Naming"
         }
-      ],
-      "canonical_of": "ARCH-0009"
+      ]
     },
     {
       "id": "STYLE-0002",
@@ -763,8 +708,7 @@
           "line": 79,
           "section": "Code Style Guidelines > Constants And Naming"
         }
-      ],
-      "canonical_of": "ARCH-0007"
+      ]
     },
     {
       "id": "STYLE-0003",
@@ -842,8 +786,7 @@
           "line": 35,
           "section": "Testing — Fixtures & Mutation Requirements > No Skipped Tests Policy"
         }
-      ],
-      "canonical_of": "TEST-0025"
+      ]
     },
     {
       "id": "TEST-0003",
@@ -860,8 +803,7 @@
           "line": 36,
           "section": "Testing — Fixtures & Mutation Requirements > No Skipped Tests Policy"
         }
-      ],
-      "canonical_of": "TEST-0025"
+      ]
     },
     {
       "id": "TEST-0004",
@@ -878,8 +820,7 @@
           "line": 37,
           "section": "Testing — Fixtures & Mutation Requirements > No Skipped Tests Policy"
         }
-      ],
-      "canonical_of": "TEST-0025"
+      ]
     },
     {
       "id": "TEST-0005",
@@ -988,13 +929,13 @@
       "domain": "testing",
       "strength": "must_not",
       "tags": [],
-      "rule": "A package must not be renamed to done-... until its required validation has passed.",
+      "rule": "A Quest must not report SOLVED until its required validation has passed.",
       "score": 236,
       "sources": [
         {
           "file": "testing-guidelines/proof-ladders.md",
           "line": 25,
-          "section": "Testing — Proof Ladders & Static Guardrails > Package-Driven Validation Policy"
+          "section": "Testing — Proof Ladders & Static Guardrails > Quest-Driven Validation Policy"
         }
       ]
     },
@@ -1011,7 +952,7 @@
       "sources": [
         {
           "file": "testing-guidelines/proof-ladders.md",
-          "line": 85,
+          "line": 83,
           "section": "Testing — Proof Ladders & Static Guardrails > Static Guardrail Preflight And Closure Policy"
         }
       ]
@@ -1065,38 +1006,19 @@
       "id": "TEST-0016",
       "domain": "testing",
       "strength": "must_not",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "A second analysis step may map the owner path, focused fixture, or affected presentation surface, but must not broaden beyond the current snapshot.",
+      "tags": [],
+      "rule": "Do not claim SOLVED on local green proof alone while the reference scenario still fails for a different named reason.",
       "score": 236,
       "sources": [
         {
           "file": "testing-guidelines/release-gate.md",
-          "line": 211,
-          "section": "Testing — Release-Gate & Distributed Validation > Agent And Execution-Role Validation Handoff Policy"
+          "line": 28,
+          "section": "Testing — Scenario And Release-Gate Quests > Reference Scenario Policy"
         }
       ]
     },
     {
       "id": "TEST-0017",
-      "domain": "testing",
-      "strength": "must_not",
-      "tags": [
-        "governance"
-      ],
-      "rule": "If several real sub-agents are used, give each one a disjoint question or file scope. Do not ask several workers to independently fix the same blocker.",
-      "score": 236,
-      "sources": [
-        {
-          "file": "testing-guidelines/release-gate.md",
-          "line": 215,
-          "section": "Testing — Release-Gate & Distributed Validation > Agent And Execution-Role Validation Handoff Policy"
-        }
-      ]
-    },
-    {
-      "id": "TEST-0018",
       "domain": "testing",
       "strength": "must_not",
       "tags": [
@@ -1113,7 +1035,7 @@
       ]
     },
     {
-      "id": "TEST-0019",
+      "id": "TEST-0018",
       "domain": "testing",
       "strength": "must_not",
       "tags": [],
@@ -1128,7 +1050,7 @@
       ]
     },
     {
-      "id": "TEST-0020",
+      "id": "TEST-0019",
       "domain": "testing",
       "strength": "must_not",
       "tags": [],
@@ -1143,7 +1065,7 @@
       ]
     },
     {
-      "id": "TEST-0021",
+      "id": "TEST-0020",
       "domain": "testing",
       "strength": "must_not",
       "tags": [
@@ -1160,7 +1082,7 @@
       ]
     },
     {
-      "id": "ARCH-0038",
+      "id": "ARCH-0035",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -1178,7 +1100,7 @@
       ]
     },
     {
-      "id": "ARCH-0039",
+      "id": "ARCH-0036",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -1193,22 +1115,22 @@
       ]
     },
     {
-      "id": "ARCH-0040",
+      "id": "ARCH-0037",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
-      "rule": "All non-trivial implementation work MUST follow the repository work-tracking workflow.",
+      "rule": "All non-trivial implementation work MUST follow the Quest workflow.",
       "score": 228,
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 85,
-          "section": "System Guidelines — Mandatory Implementation Contract > 1. Work Starts From One Bounded Package"
+          "line": 80,
+          "section": "System Guidelines — Mandatory Implementation Contract > 1. Work Starts From One Bounded Quest"
         }
       ]
     },
     {
-      "id": "ARCH-0041",
+      "id": "ARCH-0038",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -1221,17 +1143,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 110,
+          "line": 101,
           "section": "System Guidelines — Mandatory Implementation Contract > 2. One Semantic Owner Per Concern"
         }
-      ],
-      "aliases": [
-        "ARCH-0010",
-        "ARCH-0025"
       ]
     },
     {
-      "id": "ARCH-0042",
+      "id": "ARCH-0039",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -1240,13 +1158,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 138,
+          "line": 129,
           "section": "System Guidelines — Mandatory Implementation Contract > 3. One Path Per Semantic Decision"
         }
       ]
     },
     {
-      "id": "ARCH-0043",
+      "id": "ARCH-0040",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -1258,13 +1176,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 226,
+          "line": 217,
           "section": "System Guidelines — Mandatory Implementation Contract > 6. Tables, Cache, And Metadata Follow One Authority Chain"
         }
       ]
     },
     {
-      "id": "ARCH-0044",
+      "id": "ARCH-0041",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -1273,13 +1191,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 279,
+          "line": 270,
           "section": "System Guidelines — Mandatory Implementation Contract > 9. Load May Slow The System, Not Break It"
         }
       ]
     },
     {
-      "id": "ARCH-0045",
+      "id": "ARCH-0042",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -1288,7 +1206,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 314,
+          "line": 305,
           "section": "System Guidelines — Mandatory Implementation Contract > 11. Mutations Are Idempotent"
         },
         {
@@ -1299,7 +1217,7 @@
       ]
     },
     {
-      "id": "ARCH-0046",
+      "id": "ARCH-0043",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -1314,11 +1232,11 @@
       ]
     },
     {
-      "id": "ARCH-0047",
+      "id": "ARCH-0044",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
-      "rule": "Do not treat a package as complete when only the hot path is fixed. A package is complete only when the hot path, tail consumers, diagnostics or reporting, deletion work, and required proof are all closed.",
+      "rule": "Do not treat a Quest as SOLVED when only the hot path is fixed. A Quest is complete only when the hot path, tail consumers, diagnostics or reporting, deletion work, and required proof are all closed.",
       "score": 226,
       "sources": [
         {
@@ -1329,7 +1247,7 @@
       ]
     },
     {
-      "id": "ARCH-0048",
+      "id": "ARCH-0045",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -1346,7 +1264,7 @@
       ]
     },
     {
-      "id": "ARCH-0049",
+      "id": "ARCH-0046",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -1361,7 +1279,7 @@
       ]
     },
     {
-      "id": "ARCH-0050",
+      "id": "ARCH-0047",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -1384,12 +1302,12 @@
       "tags": [
         "governance"
       ],
-      "rule": "Roadmap corrections discovered during implementation should land with the package or sprint closure that discovered them. Do not leave truth repair as an out-of-band memory item.",
+      "rule": "Roadmap corrections discovered during implementation should land with the Quest changes that discovered them. Do not leave truth repair as chat-only memory.",
       "score": 226,
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 170,
+          "line": 128,
           "section": "Roadmap Steering Pointer > Roadmap State Policy"
         }
       ]
@@ -1399,31 +1317,15 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [
-        "readiness",
         "governance"
       ],
-      "rule": "Do not use roadmap state to close packages, close sprints, or claim release readiness. Those claims require the relevant package, sprint, release, and track evidence.",
+      "rule": "Do not use roadmap state to claim Quest closure. Closure requires Solver terminal evidence.",
       "score": 226,
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 173,
+          "line": 131,
           "section": "Roadmap Steering Pointer > Roadmap State Policy"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0003",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "Do not create a new package solely for changed artifact timestamps, epochs, node ids, counters, or presentation-only shape.",
-      "score": 226,
-      "sources": [
-        {
-          "file": "roadmap.md",
-          "line": 187,
-          "section": "Roadmap Steering Pointer > Sprint Continuation And Package Split Policy"
         }
       ]
     },
@@ -1445,7 +1347,7 @@
       ]
     },
     {
-      "id": "TEST-0022",
+      "id": "TEST-0021",
       "domain": "testing",
       "strength": "must_not",
       "tags": [
@@ -1462,7 +1364,7 @@
       ]
     },
     {
-      "id": "TEST-0023",
+      "id": "TEST-0022",
       "domain": "testing",
       "strength": "must_not",
       "tags": [
@@ -1479,7 +1381,7 @@
       ]
     },
     {
-      "id": "TEST-0024",
+      "id": "TEST-0023",
       "domain": "testing",
       "strength": "must_not",
       "tags": [],
@@ -1494,7 +1396,7 @@
       ]
     },
     {
-      "id": "ARCH-0051",
+      "id": "ARCH-0048",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -1511,7 +1413,7 @@
       ]
     },
     {
-      "id": "ARCH-0052",
+      "id": "ARCH-0049",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -1528,7 +1430,7 @@
       ]
     },
     {
-      "id": "ARCH-0053",
+      "id": "ARCH-0050",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -1545,180 +1447,22 @@
       ]
     },
     {
-      "id": "GOV-0004",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "Non-goals and forbidden interpretations: meanings, consumers, owner boundaries, or downstream symptoms this package must not treat as authority.",
-      "score": 221,
-      "sources": [
-        {
-          "file": "workflow-guidelines/closure.md",
-          "line": 29,
-          "section": "Workflow — Decision & Closure Gates > Core Logic Brief Gate"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0005",
+      "id": "GOV-0003",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "Escalate to causal analysis when repeated local fixes or classifications do not make the representative gate pass.",
+      "rule": "Seal the goal. Define doneWhen before implementation begins. Do not change it after the first attempt has been recorded.",
       "score": 221,
       "sources": [
         {
           "file": "workflow-guidelines/lifecycle.md",
-          "line": 37,
-          "section": "Workflow — Lanes & Lifecycle > Workflow Lanes"
+          "line": 22,
+          "section": "Workflow Lifecycle > Quest Lifecycle"
         }
       ]
     },
     {
-      "id": "GOV-0006",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "Do not create heading, directory, checkbox, or sidecar status systems that contradict the filename.",
-      "score": 221,
-      "sources": [
-        {
-          "file": "workflow-guidelines/packages.md",
-          "line": 25,
-          "section": "Workflow — Packages & Closure > Package Status And Closure"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0007",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "Do not archive package files into a second package-status directory.",
-      "score": 221,
-      "sources": [
-        {
-          "file": "workflow-guidelines/packages.md",
-          "line": 28,
-          "section": "Workflow — Packages & Closure > Package Status And Closure"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0008",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "Regenerate work/sprints/current-blocker.json after the successor is active, or explicitly record that no active package remains. Render current-blocker Markdown on demand; do not commit a parallel mirror.",
-      "score": 221,
-      "sources": [
-        {
-          "file": "workflow-guidelines/packages.md",
-          "line": 77,
-          "section": "Workflow — Packages & Closure > Package Status And Closure"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0009",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "Run validation before committing so current-blocker never points at a missing active-... package.",
-      "score": 221,
-      "sources": [
-        {
-          "file": "workflow-guidelines/packages.md",
-          "line": 80,
-          "section": "Workflow — Packages & Closure > Package Status And Closure"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0010",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "If the fixture/probe is missing, create the fixture/probe or stop as evidence-incomplete. Do not patch runtime from a representative red run alone.",
-      "score": 221,
-      "sources": [
-        {
-          "file": "workflow-guidelines/subagents.md",
-          "line": 248,
-          "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0011",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "Do not create another classification-only package from the same unchanged artifact unless owner/boundary, package class, or stop condition changes. Close, rerun fresh evidence, or escalate.",
-      "score": 220,
-      "sources": [
-        {
-          "file": "workflow-guidelines/closure.md",
-          "line": 267,
-          "section": "Workflow — Decision & Closure Gates > Classification-Only Fast Path"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0012",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "Refresh the sprint gate card whenever the representative artifact, canonical owner boundary, or required action changes.",
-      "score": 220,
-      "sources": [
-        {
-          "file": "workflow-guidelines/closure.md",
-          "line": 418,
-          "section": "Workflow — Decision & Closure Gates > Sprint Architecture Decision Gate"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0013",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "Do not open a new package merely because artifact path, epoch, node ids, counts, attempts, timings, timestamps, or presentation shape changed.",
-      "score": 220,
-      "sources": [
-        {
-          "file": "workflow-guidelines/closure.md",
-          "line": 494,
-          "section": "Workflow — Decision & Closure Gates > Scenario Failure Migration"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0014",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "Escalate to causal analysis when two focused fixes in adjacent owner boundaries are green locally but do not produce representative green or monotonic representative reduction.",
-      "score": 219,
-      "sources": [
-        {
-          "file": "workflow-guidelines/closure.md",
-          "line": 536,
-          "section": "Workflow — Decision & Closure Gates > Frontier Oscillation Escalation"
-        }
-      ]
-    },
-    {
-      "id": "TEST-0025",
+      "id": "TEST-0024",
       "domain": "testing",
       "strength": "must_not",
       "tags": [
@@ -1732,11 +1476,6 @@
           "line": 33,
           "section": "Testing — Fixtures & Mutation Requirements > No Skipped Tests Policy"
         }
-      ],
-      "aliases": [
-        "TEST-0002",
-        "TEST-0003",
-        "TEST-0004"
       ]
     },
     {
@@ -1755,10 +1494,6 @@
           "line": 58,
           "section": "Code Style Guidelines > Source File Size And Naming"
         }
-      ],
-      "aliases": [
-        "TEST-0031",
-        "TEST-0032"
       ]
     },
     {
@@ -1774,8 +1509,7 @@
           "line": 62,
           "section": "Code Style Guidelines > Source File Size And Naming"
         }
-      ],
-      "canonical_of": "ARCH-0009"
+      ]
     },
     {
       "id": "STYLE-0009",
@@ -1795,17 +1529,35 @@
       ]
     },
     {
-      "id": "TEST-0026",
+      "id": "TEST-0025",
       "domain": "testing",
       "strength": "must",
       "tags": [],
-      "rule": "The active work package must define the required validation surface.",
+      "rule": "The active Quest must define the required validation surface.",
       "score": 218,
       "sources": [
         {
           "file": "testing-guidelines/proof-ladders.md",
           "line": 22,
-          "section": "Testing — Proof Ladders & Static Guardrails > Package-Driven Validation Policy"
+          "section": "Testing — Proof Ladders & Static Guardrails > Quest-Driven Validation Policy"
+        }
+      ]
+    },
+    {
+      "id": "TEST-0026",
+      "domain": "testing",
+      "strength": "must",
+      "tags": [
+        "testing",
+        "governance"
+      ],
+      "rule": "Tests added during the change must match the Quest concern rather than an unrelated umbrella scope.",
+      "score": 218,
+      "sources": [
+        {
+          "file": "testing-guidelines/proof-ladders.md",
+          "line": 23,
+          "section": "Testing — Proof Ladders & Static Guardrails > Quest-Driven Validation Policy"
         }
       ]
     },
@@ -1813,17 +1565,14 @@
       "id": "TEST-0027",
       "domain": "testing",
       "strength": "must",
-      "tags": [
-        "testing",
-        "governance"
-      ],
-      "rule": "Tests added during the change must match the package concern rather than an unrelated umbrella scope.",
+      "tags": [],
+      "rule": "After the Quest validation surface is green, perform the required closure deep dive across the affected area before claiming SOLVED.",
       "score": 218,
       "sources": [
         {
           "file": "testing-guidelines/proof-ladders.md",
-          "line": 23,
-          "section": "Testing — Proof Ladders & Static Guardrails > Package-Driven Validation Policy"
+          "line": 28,
+          "section": "Testing — Proof Ladders & Static Guardrails > Quest-Driven Validation Policy"
         }
       ]
     },
@@ -1832,50 +1581,18 @@
       "domain": "testing",
       "strength": "must",
       "tags": [],
-      "rule": "After the package validation surface is green, perform the required package-closure deep dive across the affected area before closing the package.",
+      "rule": "When residual closure moves to a follow-on Quest or frontier, the original Quest must stop short of SOLVED until the split is explicit in a finding or the current Quest report.",
       "score": 218,
       "sources": [
         {
           "file": "testing-guidelines/proof-ladders.md",
-          "line": 29,
-          "section": "Testing — Proof Ladders & Static Guardrails > Package-Driven Validation Policy"
+          "line": 37,
+          "section": "Testing — Proof Ladders & Static Guardrails > Quest-Driven Validation Policy"
         }
       ]
     },
     {
       "id": "TEST-0029",
-      "domain": "testing",
-      "strength": "must",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "If a package changes a shared contract, validation must prove not only the runtime owner path, but also the direct status, diagnostics, admin, harness, or reporting surfaces that consume that contract.",
-      "score": 218,
-      "sources": [
-        {
-          "file": "testing-guidelines/proof-ladders.md",
-          "line": 35,
-          "section": "Testing — Proof Ladders & Static Guardrails > Package-Driven Validation Policy"
-        }
-      ]
-    },
-    {
-      "id": "TEST-0030",
-      "domain": "testing",
-      "strength": "must",
-      "tags": [],
-      "rule": "When residual closures are split into a follow-on package, the original package must stop short of done-... until the split is explicit in work/ and the original package file names the exact handoff.",
-      "score": 218,
-      "sources": [
-        {
-          "file": "testing-guidelines/proof-ladders.md",
-          "line": 40,
-          "section": "Testing — Proof Ladders & Static Guardrails > Package-Driven Validation Policy"
-        }
-      ]
-    },
-    {
-      "id": "TEST-0031",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -1887,32 +1604,30 @@
       "sources": [
         {
           "file": "testing-guidelines/proof-ladders.md",
-          "line": 102,
+          "line": 100,
           "section": "Testing — Proof Ladders & Static Guardrails > File-Size Ratchet Policy"
         }
-      ],
-      "canonical_of": "STYLE-0007"
+      ]
     },
     {
-      "id": "TEST-0032",
+      "id": "TEST-0030",
       "domain": "testing",
       "strength": "must",
       "tags": [
         "governance"
       ],
-      "rule": "If a package touches an inherited oversized source-code file, it must extract or refactor the touched file until it is within its scope threshold before closure.",
+      "rule": "If a Quest touches an inherited oversized source-code file, it must extract or refactor the touched file until it is within its scope threshold before closure.",
       "score": 218,
       "sources": [
         {
           "file": "testing-guidelines/proof-ladders.md",
-          "line": 103,
+          "line": 101,
           "section": "Testing — Proof Ladders & Static Guardrails > File-Size Ratchet Policy"
         }
-      ],
-      "canonical_of": "STYLE-0007"
+      ]
     },
     {
-      "id": "TEST-0033",
+      "id": "TEST-0031",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -1929,7 +1644,7 @@
       ]
     },
     {
-      "id": "TEST-0034",
+      "id": "TEST-0032",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -1944,110 +1659,29 @@
       ]
     },
     {
-      "id": "TEST-0035",
-      "domain": "testing",
-      "strength": "must",
-      "tags": [
-        "ownership",
-        "testing"
-      ],
-      "rule": "If the representative scenario still fails after the fixture and focused tests pass, the package must record whether the fixture contract was correct and what new owner boundary now dominates.",
-      "score": 218,
-      "sources": [
-        {
-          "file": "testing-guidelines/release-gate.md",
-          "line": 47,
-          "section": "Testing — Release-Gate & Distributed Validation > Scenario-Driven Failure Migration Validation Policy"
-        }
-      ]
-    },
-    {
-      "id": "TEST-0036",
+      "id": "TEST-0033",
       "domain": "testing",
       "strength": "must",
       "tags": [
         "ownership"
       ],
-      "rule": "When the same owner boundary still dominates, validation must update the active package and sprint current blocker snapshot instead of forcing a new package split.",
+      "rule": "A scenario-driven Quest that changes runtime meaning, decision meaning, or shared reporting must prove the direct owner path and the consuming status, diagnostics, admin, harness, or report surface.",
       "score": 218,
       "sources": [
         {
           "file": "testing-guidelines/release-gate.md",
-          "line": 54,
-          "section": "Testing — Release-Gate & Distributed Validation > Scenario-Driven Failure Migration Validation Policy"
-        }
-      ]
-    },
-    {
-      "id": "TEST-0037",
-      "domain": "testing",
-      "strength": "must",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "Repeated crossings of the same owner boundary must escalate to a causal analysis package or autonomous architecture experiment unless the package includes a focused probe for the missing causal edge.",
-      "score": 218,
-      "sources": [
+          "line": 32,
+          "section": "Testing — Scenario And Release-Gate Quests > Reference Scenario Policy"
+        },
         {
-          "file": "testing-guidelines/release-gate.md",
-          "line": 81,
-          "section": "Testing — Release-Gate & Distributed Validation > Scenario-Driven Failure Migration Validation Policy"
+          "file": "testing-guidelines/proof-ladders.md",
+          "line": 32,
+          "section": "Testing — Proof Ladders & Static Guardrails > Quest-Driven Validation Policy"
         }
       ]
     },
     {
-      "id": "TEST-0038",
-      "domain": "testing",
-      "strength": "must",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "The evidence block must name the canonical blocker, owner boundary, source artifact paths, prior blocker status, subordinate evidence, and next focused proof surface.",
-      "score": 218,
-      "sources": [
-        {
-          "file": "testing-guidelines/release-gate.md",
-          "line": 147,
-          "section": "Testing — Release-Gate & Distributed Validation > Artifact-First Distributed Failure Triage Policy"
-        }
-      ]
-    },
-    {
-      "id": "TEST-0039",
-      "domain": "testing",
-      "strength": "must",
-      "tags": [
-        "testing"
-      ],
-      "rule": "The first delegated or local analysis step must extract the canonical evidence from the latest artifact and compare it with the sprint current blocker snapshot.",
-      "score": 218,
-      "sources": [
-        {
-          "file": "testing-guidelines/release-gate.md",
-          "line": 195,
-          "section": "Testing — Release-Gate & Distributed Validation > Agent And Execution-Role Validation Handoff Policy"
-        }
-      ]
-    },
-    {
-      "id": "TEST-0040",
-      "domain": "testing",
-      "strength": "must",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "The final validation note must state whether the representative scenario passed, stayed on the same owner boundary, or migrated to a new named owner boundary.",
-      "score": 218,
-      "sources": [
-        {
-          "file": "testing-guidelines/release-gate.md",
-          "line": 217,
-          "section": "Testing — Release-Gate & Distributed Validation > Agent And Execution-Role Validation Handoff Policy"
-        }
-      ]
-    },
-    {
-      "id": "TEST-0041",
+      "id": "TEST-0034",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2064,7 +1698,7 @@
       ]
     },
     {
-      "id": "ARCH-0054",
+      "id": "ARCH-0051",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2079,7 +1713,7 @@
       ]
     },
     {
-      "id": "ARCH-0055",
+      "id": "ARCH-0052",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -2090,31 +1724,31 @@
       "sources": [
         {
           "file": "doctrine/decision-experiments.md",
-          "line": 133,
+          "line": 132,
           "section": "Doctrine — Decisions And Experiments > 16. Treat Failure Migration As Boundary Evidence"
         }
       ]
     },
     {
-      "id": "ARCH-0056",
+      "id": "ARCH-0053",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
         "ownership",
         "timeout"
       ],
-      "rule": "Sprints and packages must never close from symptom movement alone (such as changed timeout durations, timing offsets, or message counts); they must prove the named contract transition or owner-boundary correctness.",
+      "rule": "Quests must never close from symptom movement alone (such as changed timeout durations, timing offsets, or message counts); they must prove the named contract transition or owner-boundary correctness.",
       "score": 216,
       "sources": [
         {
           "file": "doctrine/decision-experiments.md",
-          "line": 133,
+          "line": 132,
           "section": "Doctrine — Decisions And Experiments > 16. Treat Failure Migration As Boundary Evidence"
         }
       ]
     },
     {
-      "id": "ARCH-0057",
+      "id": "ARCH-0054",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -2131,7 +1765,7 @@
       ]
     },
     {
-      "id": "ARCH-0058",
+      "id": "ARCH-0055",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2146,7 +1780,7 @@
       ]
     },
     {
-      "id": "ARCH-0059",
+      "id": "ARCH-0056",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -2164,22 +1798,22 @@
       ]
     },
     {
-      "id": "ARCH-0060",
+      "id": "ARCH-0057",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
-      "rule": "Do not let old migration history, stale residual packages, or several optional delegated findings create competing active interpretations of the same blocker.",
+      "rule": "Do not let old migration history or several optional delegated findings create competing active interpretations of the same blocker.",
       "score": 216,
       "sources": [
         {
           "file": "doctrine/owner-boundaries.md",
-          "line": 75,
-          "section": "Doctrine — Owner Boundaries > 17. Sprint Execution Has One Current Boundary"
+          "line": 74,
+          "section": "Doctrine — Owner Boundaries > 17. Quest Execution Has One Current Boundary"
         }
       ]
     },
     {
-      "id": "ARCH-0061",
+      "id": "ARCH-0058",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -2196,7 +1830,7 @@
       ]
     },
     {
-      "id": "ARCH-0062",
+      "id": "ARCH-0059",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -2213,7 +1847,7 @@
       ]
     },
     {
-      "id": "ARCH-0063",
+      "id": "ARCH-0060",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -2230,7 +1864,7 @@
       ]
     },
     {
-      "id": "ARCH-0064",
+      "id": "ARCH-0061",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2245,7 +1879,7 @@
       ]
     },
     {
-      "id": "ARCH-0065",
+      "id": "ARCH-0062",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2260,7 +1894,7 @@
       ]
     },
     {
-      "id": "ARCH-0066",
+      "id": "ARCH-0063",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2275,7 +1909,7 @@
       ]
     },
     {
-      "id": "ARCH-0067",
+      "id": "ARCH-0064",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -2293,7 +1927,7 @@
       ]
     },
     {
-      "id": "ARCH-0068",
+      "id": "ARCH-0065",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2308,7 +1942,7 @@
       ]
     },
     {
-      "id": "ARCH-0069",
+      "id": "ARCH-0066",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2323,7 +1957,7 @@
       ]
     },
     {
-      "id": "ARCH-0070",
+      "id": "ARCH-0067",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2338,37 +1972,7 @@
       ]
     },
     {
-      "id": "GOV-0015",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "Sprint files do not replace work packages.",
-      "score": 216,
-      "sources": [
-        {
-          "file": "roadmap.md",
-          "line": 97,
-          "section": "Roadmap Steering Pointer > Work Intake And Execution Flow"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0016",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "docs/ is reserved for end-user or operator-facing documentation. Internal planning, work-package execution, and sprint tracking must not live there.",
-      "score": 216,
-      "sources": [
-        {
-          "file": "roadmap.md",
-          "line": 112,
-          "section": "Roadmap Steering Pointer > Work Intake And Execution Flow"
-        }
-      ]
-    },
-    {
-      "id": "ARCH-0071",
+      "id": "ARCH-0068",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -2391,7 +1995,7 @@
       ]
     },
     {
-      "id": "ARCH-0072",
+      "id": "ARCH-0069",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -2408,22 +2012,22 @@
       ]
     },
     {
-      "id": "ARCH-0073",
+      "id": "ARCH-0070",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
-      "rule": "Scenario-driven packages must prove what the original scenario does next: representative green, same frontier, reduced, migrated, classification-only, architecture gap, autonomous architecture experiment, or human-only escalation for blocked/contradictory evidence.",
+      "rule": "Scenario-driven Quests must prove what the original scenario does next: representative green, same frontier, reduced, migrated, classification-only, architecture gap, autonomous architecture experiment, or human-only escalation for blocked/contradictory evidence.",
       "score": 213,
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 355,
+          "line": 346,
           "section": "System Guidelines — Mandatory Implementation Contract > 13. Closure Requires Proof, Review, And Truth Repair"
         }
       ]
     },
     {
-      "id": "TEST-0042",
+      "id": "TEST-0035",
       "domain": "testing",
       "strength": "must_not",
       "tags": [
@@ -2438,11 +2042,10 @@
           "line": 58,
           "section": "Testing — Harness & Execution > Test Duration Hard Limit"
         }
-      ],
-      "canonical_of": "GOV-0029"
+      ]
     },
     {
-      "id": "TEST-0043",
+      "id": "TEST-0036",
       "domain": "testing",
       "strength": "must_not",
       "tags": [
@@ -2459,42 +2062,7 @@
       ]
     },
     {
-      "id": "TEST-0044",
-      "domain": "testing",
-      "strength": "must_not",
-      "tags": [
-        "ownership",
-        "timeout"
-      ],
-      "rule": "Do not close the package on local green proof alone while the reference scenario still fails for a different named reason. Sprints and packages must never close from symptom movement alone (such as changed timeout durations, timing offsets, or message counts); they must prove the named contract transition or owner-boundary correctness.",
-      "score": 212,
-      "sources": [
-        {
-          "file": "testing-guidelines/release-gate.md",
-          "line": 31,
-          "section": "Testing — Release-Gate & Distributed Validation > Scenario-Driven Failure Migration Validation Policy"
-        }
-      ]
-    },
-    {
-      "id": "TEST-0045",
-      "domain": "testing",
-      "strength": "must_not",
-      "tags": [
-        "timeout"
-      ],
-      "rule": "Retryable or backpressure states require focused probes that prove the concrete progress mechanism: wake, retry, timeout, reconcile, drain, dispatch, delivery, timer, advance, or bounded progress. A representative rerun may confirm that proof, but it must not replace the missing causal-edge probe.",
-      "score": 212,
-      "sources": [
-        {
-          "file": "testing-guidelines/release-gate.md",
-          "line": 69,
-          "section": "Testing — Release-Gate & Distributed Validation > Scenario-Driven Failure Migration Validation Policy"
-        }
-      ]
-    },
-    {
-      "id": "ARCH-0074",
+      "id": "ARCH-0071",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -2509,271 +2077,82 @@
       ]
     },
     {
-      "id": "GOV-0017",
+      "id": "GOV-0004",
       "domain": "governance",
       "strength": "must_not",
-      "tags": [
-        "readiness"
-      ],
-      "rule": "Do not treat those packages as pre-implementation ready unless they record both systemTheory and sliceTheory with the fields below.",
+      "tags": [],
+      "rule": "Do not treat symptom movement as SOLVED.",
       "score": 211,
       "sources": [
         {
           "file": "workflow-guidelines/closure.md",
-          "line": 129,
-          "section": "Workflow — Decision & Closure Gates > Two-Level Theory Contract"
+          "line": 51,
+          "section": "Quest Closure > Failure Migration"
         }
       ]
     },
     {
-      "id": "GOV-0018",
+      "id": "GOV-0005",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "If the system theory cannot select a slice, do not open another local runtime patch.",
+      "rule": "Delegated agents do not decide whether the Quest is solved.",
       "score": 211,
       "sources": [
         {
-          "file": "workflow-guidelines/closure.md",
-          "line": 166,
-          "section": "Workflow — Decision & Closure Gates > Two-Level Theory Contract"
+          "file": "workflow-guidelines/subagents.md",
+          "line": 18,
+          "section": "Quest Delegation > Delegation Model"
         }
       ]
     },
     {
-      "id": "GOV-0019",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "Use the lightweight maintenance lane for small internal docs, workflow, template, and tooling changes that do not change runtime ownership or shared runtime contracts.",
-      "score": 211,
-      "sources": [
-        {
-          "file": "workflow-guidelines/lifecycle.md",
-          "line": 69,
-          "section": "Workflow — Lanes & Lifecycle > Lane Requirements > Lightweight Maintenance Lane"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0020",
+      "id": "GOV-0006",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "Do not invent historical proof.",
-      "score": 211,
-      "sources": [
-        {
-          "file": "workflow-guidelines/packages.md",
-          "line": 53,
-          "section": "Workflow — Packages & Closure > Package Status And Closure"
-        },
-        {
-          "file": "roadmap.md",
-          "line": 89,
-          "section": "Roadmap Steering Pointer > Work Intake And Execution Flow"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0021",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "Do not leave the repository between package states.",
-      "score": 211,
-      "sources": [
-        {
-          "file": "workflow-guidelines/packages.md",
-          "line": 66,
-          "section": "Workflow — Packages & Closure > Package Status And Closure"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0022",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "Do not create new headings, sidecar files, ledger rows, or current-blocker edits from discovery thinking unless the selected route changes owner, boundary, required action, stop condition, successor, or durable theory.",
-      "score": 211,
-      "sources": [
-        {
-          "file": "workflow-guidelines/packages.md",
-          "line": 88,
-          "section": "Workflow — Packages & Closure > Package Status And Closure"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0023",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [
-        "governance"
-      ],
-      "rule": "Do not start a second active package on the same architectural boundary while the first has unresolved in-scope residuals.",
-      "score": 211,
-      "sources": [
-        {
-          "file": "workflow-guidelines/packages.md",
-          "line": 136,
-          "section": "Workflow — Packages & Closure > Residual Closure Inventory"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0024",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [
-        "governance"
-      ],
-      "rule": "Representative evidence must not be reclassified as roadmap truth when it belongs to the release, track, sprint, or package layer.",
-      "score": 211,
-      "sources": [
-        {
-          "file": "workflow-guidelines/packages.md",
-          "line": 169,
-          "section": "Workflow — Packages & Closure > Roadmap, Release, And Work-Tracker Truth"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0025",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "freshness-review is different: parent-session, local/manual, or generic Codex labels do not satisfy it.",
+      "rule": "The worker must not report done: true as proof.",
       "score": 211,
       "sources": [
         {
           "file": "workflow-guidelines/subagents.md",
           "line": 45,
-          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents > packageClass → freshness-review mode matrix"
+          "section": "Quest Delegation > Worker Response"
         }
       ]
     },
     {
-      "id": "GOV-0026",
+      "id": "GOV-0007",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "These optional roles do not replace the freshness-review, implementation, and verification-fix roles when those roles are required.",
-      "score": 211,
-      "sources": [
-        {
-          "file": "workflow-guidelines/subagents.md",
-          "line": 74,
-          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents > packageClass → freshness-review mode matrix"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0027",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "work/sprints/current-blocker.json is generated handoff state, but it must not be stale.",
-      "score": 211,
-      "sources": [
-        {
-          "file": "workflow-guidelines/subagents.md",
-          "line": 208,
-          "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0028",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [
-        "governance"
-      ],
-      "rule": "For LLMs, \"do not edit\" boundaries are higher-signal than a long positive scope list.",
-      "score": 211,
-      "sources": [
-        {
-          "file": "workflow-guidelines/subagents.md",
-          "line": 234,
-          "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0029",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "Do not close if relevant guardrail counts increase.",
+      "rule": "The Solver never trusts an agent's claim that work succeeded.",
       "score": 211,
       "sources": [
         {
           "file": "workflow-guidelines/validators.md",
-          "line": 35,
-          "section": "Workflow — Validators & Drift > Static Drift Ledger"
+          "line": 18,
+          "section": "Workflow Validators > Probe-Owned Truth"
         }
-      ],
-      "aliases": [
-        "TEST-0042"
       ]
     },
     {
-      "id": "GOV-0030",
+      "id": "GOV-0008",
       "domain": "governance",
       "strength": "must_not",
-      "tags": [
-        "testing",
-        "style",
-        "governance"
-      ],
-      "rule": "Do not hide failures by weakening scripts, expanding allowlists, renaming files out of scan scope, or moving code into test-only paths.",
+      "tags": [],
+      "rule": "The report projection must not invent terminal status, synthetic attempts, or unmeasured progress.",
       "score": 211,
       "sources": [
         {
           "file": "workflow-guidelines/validators.md",
-          "line": 35,
-          "section": "Workflow — Validators & Drift > Static Drift Ledger"
+          "line": 42,
+          "section": "Workflow Validators > Report Projection"
         }
       ]
     },
     {
-      "id": "GOV-0031",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "Do not open another classification package from the same unchanged artifact.",
-      "score": 210,
-      "sources": [
-        {
-          "file": "workflow-guidelines/closure.md",
-          "line": 300,
-          "section": "Workflow — Decision & Closure Gates > Classification Efficiency Contract"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0032",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "Do not name new representative rerun outputs with placeholder timestamps such as T000000Z; placeholder names make lineage ambiguous and can hide accidental overwrite.",
-      "score": 210,
-      "sources": [
-        {
-          "file": "workflow-guidelines/subagents.md",
-          "line": 281,
-          "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
-        }
-      ]
-    },
-    {
-      "id": "ARCH-0075",
+      "id": "ARCH-0072",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -2788,7 +2167,7 @@
       ]
     },
     {
-      "id": "ARCH-0076",
+      "id": "ARCH-0073",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -2806,7 +2185,7 @@
       ]
     },
     {
-      "id": "ARCH-0077",
+      "id": "ARCH-0074",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -2823,7 +2202,7 @@
       ]
     },
     {
-      "id": "ARCH-0078",
+      "id": "ARCH-0075",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -2838,7 +2217,24 @@
       ]
     },
     {
-      "id": "GOV-0033",
+      "id": "GOV-0009",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [
+        "governance"
+      ],
+      "rule": "The Quest must cite or encode enough scope context to prevent local invention.",
+      "score": 208,
+      "sources": [
+        {
+          "file": "roadmap.md",
+          "line": 76,
+          "section": "Roadmap Steering Pointer > Quest Intake And Execution Flow"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0010",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2849,13 +2245,13 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 138,
+          "line": 106,
           "section": "Roadmap Steering Pointer > Readiness To Start Work"
         }
       ]
     },
     {
-      "id": "GOV-0034",
+      "id": "GOV-0011",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -2864,77 +2260,25 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 140,
+          "line": 107,
           "section": "Roadmap Steering Pointer > Readiness To Start Work"
         }
       ]
     },
     {
-      "id": "GOV-0035",
+      "id": "GOV-0012",
       "domain": "governance",
       "strength": "must",
       "tags": [
         "governance"
       ],
-      "rule": "Non-trivial implementation changes must be driven by an active work package under work/packages/, unless the immediate work is the roadmap-sharpening step itself.",
+      "rule": "The Quest must name the roadmap row, approved maintenance scope, or explicit user request that makes it valid.",
       "score": 208,
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 144,
+          "line": 111,
           "section": "Roadmap Steering Pointer > Readiness To Start Work"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0036",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [
-        "readiness",
-        "governance"
-      ],
-      "rule": "Direct work packages must cite the roadmap row they belong to, or the already-approved maintenance/refactor scope that makes them valid without a roadmap change.",
-      "score": 208,
-      "sources": [
-        {
-          "file": "roadmap.md",
-          "line": 147,
-          "section": "Roadmap Steering Pointer > Readiness To Start Work"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0037",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "Keep artifact-derived evidence attached to the current package while the semantic owner, owner boundary, and next required action remain the same.",
-      "score": 208,
-      "sources": [
-        {
-          "file": "roadmap.md",
-          "line": 185,
-          "section": "Roadmap Steering Pointer > Sprint Continuation And Package Split Policy"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0038",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "The main package owner must reconcile optional delegated findings into one package status update rather than creating parallel status narratives.",
-      "score": 208,
-      "sources": [
-        {
-          "file": "roadmap.md",
-          "line": 206,
-          "section": "Roadmap Steering Pointer > Sprint Continuation And Package Split Policy"
         }
       ]
     },
@@ -2956,7 +2300,7 @@
       ]
     },
     {
-      "id": "TEST-0046",
+      "id": "TEST-0037",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2973,7 +2317,7 @@
       ]
     },
     {
-      "id": "TEST-0047",
+      "id": "TEST-0038",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2990,7 +2334,7 @@
       ]
     },
     {
-      "id": "TEST-0048",
+      "id": "TEST-0039",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -3007,7 +2351,7 @@
       ]
     },
     {
-      "id": "TEST-0049",
+      "id": "TEST-0040",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -3024,7 +2368,7 @@
       ]
     },
     {
-      "id": "TEST-0050",
+      "id": "TEST-0041",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -3042,39 +2386,39 @@
       ]
     },
     {
-      "id": "TEST-0051",
+      "id": "TEST-0042",
       "domain": "testing",
       "strength": "must",
       "tags": [
         "testing"
       ],
-      "rule": "Test closure and package closure both require the final affected-area deep dive required by .kiro/steering/system-guidelines.md.",
+      "rule": "Test closure and Quest closure both require the final affected-area deep dive required by .kiro/steering/system-guidelines.md.",
       "score": 208,
       "sources": [
         {
           "file": "testing-guidelines/proof-ladders.md",
-          "line": 47,
-          "section": "Testing — Proof Ladders & Static Guardrails > Package-Driven Validation Policy"
+          "line": 44,
+          "section": "Testing — Proof Ladders & Static Guardrails > Quest-Driven Validation Policy"
         }
       ]
     },
     {
-      "id": "TEST-0052",
+      "id": "TEST-0043",
       "domain": "testing",
       "strength": "must",
       "tags": [],
-      "rule": "Every non-trivial package must prove that it did not increase architecture drift while fixing behavior.",
+      "rule": "Every non-trivial Quest must prove that it did not increase architecture drift while fixing behavior.",
       "score": 208,
       "sources": [
         {
           "file": "testing-guidelines/proof-ladders.md",
-          "line": 53,
+          "line": 50,
           "section": "Testing — Proof Ladders & Static Guardrails > Static Guardrail Preflight And Closure Policy"
         }
       ]
     },
     {
-      "id": "TEST-0053",
+      "id": "TEST-0044",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -3091,7 +2435,7 @@
       ]
     },
     {
-      "id": "TEST-0054",
+      "id": "TEST-0045",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -3106,7 +2450,7 @@
       ]
     },
     {
-      "id": "TEST-0055",
+      "id": "TEST-0046",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -3125,7 +2469,7 @@
       ]
     },
     {
-      "id": "TEST-0056",
+      "id": "TEST-0047",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -3142,7 +2486,7 @@
       ]
     },
     {
-      "id": "TEST-0057",
+      "id": "TEST-0048",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -3162,7 +2506,7 @@
       ]
     },
     {
-      "id": "TEST-0058",
+      "id": "TEST-0049",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -3181,7 +2525,7 @@
       ]
     },
     {
-      "id": "TEST-0059",
+      "id": "TEST-0050",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -3199,41 +2543,56 @@
       ]
     },
     {
-      "id": "TEST-0060",
+      "id": "TEST-0051",
       "domain": "testing",
       "strength": "must",
       "tags": [
         "testing"
       ],
-      "rule": "When a package exists because a distributed, integration, load, or scenario failure exposed a blocker, validation must prove not only the local fix but also what the original scenario does next.",
+      "rule": "When a Quest exists because a distributed, integration, load, or scenario failure must be resolved, the Quest must keep one named reference scenario or probe as its doneWhen.",
       "score": 208,
       "sources": [
         {
           "file": "testing-guidelines/release-gate.md",
-          "line": 17,
-          "section": "Testing — Release-Gate & Distributed Validation > Scenario-Driven Failure Migration Validation Policy"
+          "line": 18,
+          "section": "Testing — Scenario And Release-Gate Quests > Reference Scenario Policy"
         }
       ]
     },
     {
-      "id": "TEST-0061",
+      "id": "TEST-0052",
       "domain": "testing",
       "strength": "must",
       "tags": [
         "ownership"
       ],
-      "rule": "When an agent continues a sprint or an optional sub-agent is delegated, validation ownership must follow the same evidence ladder as package work.",
+      "rule": "If the fixture contract was correct, the next attempt must target the runtime owner boundary that now dominates.",
       "score": 208,
       "sources": [
         {
           "file": "testing-guidelines/release-gate.md",
-          "line": 190,
-          "section": "Testing — Release-Gate & Distributed Validation > Agent And Execution-Role Validation Handoff Policy"
+          "line": 38,
+          "section": "Testing — Scenario And Release-Gate Quests > Fixture Versus Runtime Proof"
         }
       ]
     },
     {
-      "id": "TEST-0062",
+      "id": "TEST-0053",
+      "domain": "testing",
+      "strength": "must",
+      "tags": [],
+      "rule": "When a delegated worker reviews a scenario Quest, it must compare current probe evidence with the Quest's selected frontier and findings.",
+      "score": 208,
+      "sources": [
+        {
+          "file": "testing-guidelines/release-gate.md",
+          "line": 62,
+          "section": "Testing — Scenario And Release-Gate Quests > Delegated Review"
+        }
+      ]
+    },
+    {
+      "id": "TEST-0054",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -3251,7 +2610,7 @@
       ]
     },
     {
-      "id": "TEST-0063",
+      "id": "TEST-0055",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -3268,7 +2627,7 @@
       ]
     },
     {
-      "id": "TEST-0064",
+      "id": "TEST-0056",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -3285,7 +2644,22 @@
       ]
     },
     {
-      "id": "ARCH-0079",
+      "id": "GOV-0013",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Do not move goalposts in place.",
+      "score": 206,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 30,
+          "section": "Quest Workflow > Operating Contract"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0076",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -3294,149 +2668,36 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 335,
+          "line": 326,
           "section": "System Guidelines — Mandatory Implementation Contract > 12. User-Facing Model Stays Small"
         }
       ]
     },
     {
-      "id": "GOV-0039",
+      "id": "GOV-0014",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
         "governance"
       ],
-      "rule": "Such examples must not define implementation tasks in this repository unless the active package explicitly limits the work to AGPL-owned substrate and excludes paid-only behavior, operator flows, and control surfaces.",
+      "rule": "Such examples must not define implementation tasks in this repository unless the active Quest explicitly limits the work to AGPL-owned substrate and excludes paid-only behavior, operator flows, and control surfaces.",
       "score": 204,
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 128,
+          "line": 96,
           "section": "Roadmap Steering Pointer > AGPL Preparatory Work"
         }
       ]
     },
     {
-      "id": "GOV-0040",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "Classification and implementation gates before runtime edits: canonical extractors must agree on owner/boundary/cause, then the package must name exact candidate runtime files and focused proof.",
-      "score": 203,
-      "sources": [
-        {
-          "file": "workflow-guidelines/closure.md",
-          "line": 88,
-          "section": "Workflow — Decision & Closure Gates > Core Logic Brief Gate > Scenario/Release-Gate Lane"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0041",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [],
-      "rule": "Open or use an experiment/probe package when the discriminator must run before implementation.",
-      "score": 203,
-      "sources": [
-        {
-          "file": "workflow-guidelines/closure.md",
-          "line": 198,
-          "section": "Workflow — Decision & Closure Gates > Discovery Gate"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0042",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "Update current-blocker or successor truth only when selected owner, boundary, required action, stop condition, or successor changes.",
-      "score": 203,
-      "sources": [
-        {
-          "file": "workflow-guidelines/closure.md",
-          "line": 200,
-          "section": "Workflow — Decision & Closure Gates > Discovery Gate"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0043",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [],
-      "rule": "Escalate to scenario/release-gate when the work is driven by a failing representative artifact or must prove what that scenario does next.",
-      "score": 203,
-      "sources": [
-        {
-          "file": "workflow-guidelines/lifecycle.md",
-          "line": 35,
-          "section": "Workflow — Lanes & Lifecycle > Workflow Lanes"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0044",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "If the same owner, boundary, and required action remain selected, keep the same package active and update its Current Edge Card instead of closing it.",
-      "score": 203,
-      "sources": [
-        {
-          "file": "workflow-guidelines/packages.md",
-          "line": 70,
-          "section": "Workflow — Packages & Closure > Package Status And Closure"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0045",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "Create or activate the successor only when canonical evidence changed owner, boundary, required action, or the work is intentionally finished.",
-      "score": 203,
-      "sources": [
-        {
-          "file": "workflow-guidelines/packages.md",
-          "line": 75,
-          "section": "Workflow — Packages & Closure > Package Status And Closure"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0046",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [],
-      "rule": "requiredRefreshCommands (legacy alias; execution.proof.commands is the canonical command list)",
-      "score": 203,
-      "sources": [
-        {
-          "file": "workflow-guidelines/validators.md",
-          "line": 58,
-          "section": "Workflow — Validators & Drift > Post-Rerun Decision Gate"
-        }
-      ]
-    },
-    {
-      "id": "ARCH-0080",
+      "id": "ARCH-0077",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
         "governance"
       ],
-      "rule": "Do not begin the next package on the same architectural boundary while the current package still has unresolved in-scope residuals. Either finish the residuals in the current package or split them explicitly into a new package before moving on.",
+      "rule": "Do not begin a new local patch on the same architectural boundary while the current Quest still has unresolved in-scope residuals. Either finish the residuals in the current Quest or author a new Quest/frontier before moving on.",
       "score": 202,
       "sources": [
         {
@@ -3447,11 +2708,11 @@
       ]
     },
     {
-      "id": "ARCH-0081",
+      "id": "ARCH-0078",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
-      "rule": "Use the model ledger as an advisory feedback loop for future model, reasoning-effort, and output-profile choice when a package produces useful evidence. Output profile controls final-response and handoff verbosity, not reasoning depth. It must not replace validation, review, sequencing, or closure proof.",
+      "rule": "Use the model ledger as an advisory feedback loop for future model, reasoning-effort, and output-profile choice when a Quest produces useful evidence. Output profile controls final-response and handoff verbosity, not reasoning depth. It must not replace validation, review, sequencing, or closure proof.",
       "score": 202,
       "sources": [
         {
@@ -3462,94 +2723,11 @@
       ]
     },
     {
-      "id": "GOV-0047",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "Execute owner-boundary work through required implementation and verification-fix roles. Optional delegated review, artifact extraction, owner-path mapping, and focused proof design can accelerate those roles but do not replace them.",
-      "score": 202,
-      "sources": [
-        {
-          "file": "roadmap.md",
-          "line": 191,
-          "section": "Roadmap Steering Pointer > Sprint Continuation And Package Split Policy"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0048",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "Canonical extractors agree on the first frontier, owner boundary, cause, and next required action, or the sprint records the exact extractor conflict.",
-      "score": 202,
-      "sources": [
-        {
-          "file": "workflow-guidelines/closure.md",
-          "line": 347,
-          "section": "Workflow — Decision & Closure Gates > Sprint Architecture Decision Gate"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0049",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [
-        "governance"
-      ],
-      "rule": "roadmap-sharpening-required: the proposed reset is real but too broad for a bounded runtime package and must be converted into roadmap/spec/architecture scope first.",
-      "score": 202,
-      "sources": [
-        {
-          "file": "workflow-guidelines/closure.md",
-          "line": 370,
-          "section": "Workflow — Decision & Closure Gates > Sprint Architecture Decision Gate"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0050",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [],
-      "rule": "The gate cannot replace canonical extractor evidence, package closure, required Execution Evidence roles, validation, or focused commit and push proof.",
-      "score": 202,
-      "sources": [
-        {
-          "file": "workflow-guidelines/closure.md",
-          "line": 409,
-          "section": "Workflow — Decision & Closure Gates > Sprint Architecture Decision Gate"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0051",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "If the same owner boundary and next required action remain dominant, append normalized evidence to the current package and update the sprint blocker snapshot.",
-      "score": 202,
-      "sources": [
-        {
-          "file": "workflow-guidelines/closure.md",
-          "line": 491,
-          "section": "Workflow — Decision & Closure Gates > Scenario Failure Migration"
-        }
-      ]
-    },
-    {
-      "id": "ARCH-0082",
+      "id": "ARCH-0079",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
-      "rule": "Scenario-driven sprints and packages must maintain scenario causal closure across the whole chain, not only the current first frontier.",
+      "rule": "Scenario-driven Quests must maintain scenario causal closure across the whole chain, not only the current first frontier.",
       "score": 198,
       "sources": [
         {
@@ -3560,7 +2738,7 @@
       ]
     },
     {
-      "id": "ARCH-0083",
+      "id": "ARCH-0080",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3577,7 +2755,7 @@
       ]
     },
     {
-      "id": "ARCH-0084",
+      "id": "ARCH-0081",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3594,39 +2772,41 @@
       ]
     },
     {
-      "id": "ARCH-0085",
-      "domain": "architecture",
-      "strength": "must",
-      "tags": [],
-      "rule": "An active sprint may have a long history, but execution must start from one current blocker snapshot.",
-      "score": 198,
-      "sources": [
-        {
-          "file": "doctrine/owner-boundaries.md",
-          "line": 63,
-          "section": "Doctrine — Owner Boundaries > 17. Sprint Execution Has One Current Boundary"
-        }
-      ]
-    },
-    {
-      "id": "ARCH-0086",
+      "id": "ARCH-0082",
       "domain": "architecture",
       "strength": "must",
       "tags": [
         "ownership"
       ],
-      "rule": "If the semantic owner, owner boundary, or next required action changes, split or activate one new representative package and make the old boundary historical.",
+      "rule": "An active Quest may have several frontiers, but each attempt must start from one selected frontier and one semantic owner boundary.",
       "score": 198,
       "sources": [
         {
           "file": "doctrine/owner-boundaries.md",
-          "line": 78,
-          "section": "Doctrine — Owner Boundaries > 17. Sprint Execution Has One Current Boundary"
+          "line": 63,
+          "section": "Doctrine — Owner Boundaries > 17. Quest Execution Has One Current Boundary"
         }
       ]
     },
     {
-      "id": "ARCH-0087",
+      "id": "ARCH-0083",
+      "domain": "architecture",
+      "strength": "must",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "If the semantic owner, owner boundary, or next required action changes, record a finding and add or author the frontier that owns the new boundary.",
+      "score": 198,
+      "sources": [
+        {
+          "file": "doctrine/owner-boundaries.md",
+          "line": 77,
+          "section": "Doctrine — Owner Boundaries > 17. Quest Execution Has One Current Boundary"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0084",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3649,7 +2829,7 @@
       ]
     },
     {
-      "id": "ARCH-0088",
+      "id": "ARCH-0085",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3666,7 +2846,7 @@
       ]
     },
     {
-      "id": "ARCH-0089",
+      "id": "ARCH-0086",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -3681,7 +2861,7 @@
       ]
     },
     {
-      "id": "ARCH-0090",
+      "id": "ARCH-0087",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -3696,88 +2876,22 @@
       ]
     },
     {
-      "id": "GOV-0052",
+      "id": "GOV-0015",
       "domain": "governance",
       "strength": "must",
       "tags": [],
-      "rule": "Scenario-driven sprint files must keep a compact current blocker snapshot near the top of the document.",
+      "rule": "constraints[]: optional hard limits the agent must preserve.",
       "score": 198,
       "sources": [
         {
-          "file": "roadmap.md",
-          "line": 100,
-          "section": "Roadmap Steering Pointer > Work Intake And Execution Flow"
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 46,
+          "section": "Quest Workflow > Quest Anatomy"
         }
       ]
     },
     {
-      "id": "GOV-0053",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [
-        "ownership",
-        "testing"
-      ],
-      "rule": "The snapshot must identify the latest artifact, representative gate, current representative package, owner boundary, canonical blocker, prior blocker status, subordinate evidence, and next focused proof surface.",
-      "score": 198,
-      "sources": [
-        {
-          "file": "roadmap.md",
-          "line": 100,
-          "section": "Roadmap Steering Pointer > Work Intake And Execution Flow"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0054",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [
-        "ownership",
-        "governance"
-      ],
-      "rule": "Residual packages that are not currently being executed must be renamed to todo-... or superseded-... unless they are actively worked with explicitly disjoint owner and file scope.",
-      "score": 198,
-      "sources": [
-        {
-          "file": "roadmap.md",
-          "line": 107,
-          "section": "Roadmap Steering Pointer > Work Intake And Execution Flow"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0055",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "Redirect rule (legacy name Stop or escalate rule, still accepted): the next autonomous action a non-terminal outcome triggers — open/select an autonomous architecture experiment, causal escalation, or successor package instead of another local runtime patch. In theory-loop terms (see work/RULES.md#non-halting-continuation-invariant-r12), an architecture experiment or causal escalation is a redirect(next-action) — an autonomous continuation, never a halt. It must never instruct the agent to end the turn, await a human, or pause work; for a running theory-loop sprint the validator rejects a non-actionable or halt-framed redirect rule (theory-loop-redirect-rule-not-actionable). Only a human-only block maps to terminate(blocked-frozen-decision | blocked-external-dependency).",
-      "score": 197,
-      "sources": [
-        {
-          "file": "workflow-guidelines/closure.md",
-          "line": 230,
-          "section": "Workflow — Decision & Closure Gates > Sprint Strategy Brief"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0056",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "This fast path is forbidden for theory-loop work packages and cannot close a theory-loop sprint. In theory-loop sprints, classification-only evidence is sprint-level discrimination until it promotes a real src/ source-code package, and the sprint continues until its success condition is met by fresh representative evidence.",
-      "score": 196,
-      "sources": [
-        {
-          "file": "workflow-guidelines/closure.md",
-          "line": 270,
-          "section": "Workflow — Decision & Closure Gates > Classification-Only Fast Path"
-        }
-      ]
-    },
-    {
-      "id": "ARCH-0091",
+      "id": "ARCH-0088",
       "domain": "architecture",
       "strength": "should",
       "tags": [
@@ -3788,505 +2902,77 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 300,
+          "line": 291,
           "section": "System Guidelines — Mandatory Implementation Contract > 10. Communication Has One Replicated Data Path"
         }
       ]
     },
     {
-      "id": "TEST-0065",
+      "id": "TEST-0057",
       "domain": "testing",
       "strength": "must",
       "tags": [
         "governance"
       ],
-      "rule": "Existing violations in touched files must be fixed when they are part of the same semantic boundary. If they are genuinely outside scope, the package must name the excluded boundary and link a follow-on package before closure.",
+      "rule": "Existing violations in touched files must be fixed when they are part of the same semantic boundary. If they are genuinely outside scope, the Quest must name the excluded boundary and record a follow-on Quest/frontier before closure.",
       "score": 194,
       "sources": [
         {
           "file": "testing-guidelines/proof-ladders.md",
-          "line": 82,
+          "line": 79,
           "section": "Testing — Proof Ladders & Static Guardrails > Static Guardrail Preflight And Closure Policy"
         }
       ]
     },
     {
-      "id": "TEST-0066",
-      "domain": "testing",
+      "id": "GOV-0016",
+      "domain": "governance",
       "strength": "must",
       "tags": [
-        "ownership",
-        "readiness"
-      ],
-      "rule": "If the package has already recorded two material blocker migrations, the next validation cycle must start from a replayable owner-decision fixture or the narrowest blocker probe that represents the current dominant owner.",
-      "score": 194,
-      "sources": [
-        {
-          "file": "testing-guidelines/release-gate.md",
-          "line": 36,
-          "section": "Testing — Release-Gate & Distributed Validation > Scenario-Driven Failure Migration Validation Policy"
-        }
-      ]
-    },
-    {
-      "id": "TEST-0067",
-      "domain": "testing",
-      "strength": "must",
-      "tags": [
-        "ownership",
         "testing"
       ],
-      "rule": "A scenario-driven package that changes runtime meaning, decision meaning, or presentation meaning must prove the current blocker in this order: owner-decision fixture or blocker probe, focused owner tests, affected presentation tests, then the representative scenario.",
-      "score": 194,
+      "rule": "Use source, test, architecture, and steering files for the implementation or documentation changes required by the Quest.",
+      "score": 193,
       "sources": [
         {
-          "file": "testing-guidelines/release-gate.md",
-          "line": 39,
-          "section": "Testing — Release-Gate & Distributed Validation > Scenario-Driven Failure Migration Validation Policy"
+          "file": "workflow-guidelines/quest-artifacts.md",
+          "line": 45,
+          "section": "Quest Artifacts > Artifact Boundaries"
         }
       ]
     },
     {
-      "id": "TEST-0068",
-      "domain": "testing",
+      "id": "GOV-0017",
+      "domain": "governance",
       "strength": "must",
-      "tags": [
-        "ownership",
-        "testing"
-      ],
-      "rule": "Presentation tests are required when failure bundles, triage summaries, admin summaries, active gates, or report writers consume the changed contract. A green owner test alone is not sufficient if presentation can still classify the same evidence under a different blocker.",
-      "score": 194,
+      "tags": [],
+      "rule": "Durable conclusions must be recorded with node scripts/solve.js finding before they are relied on by later attempts.",
+      "score": 193,
       "sources": [
         {
-          "file": "testing-guidelines/release-gate.md",
-          "line": 43,
-          "section": "Testing — Release-Gate & Distributed Validation > Scenario-Driven Failure Migration Validation Policy"
-        }
-      ]
-    },
-    {
-      "id": "TEST-0069",
-      "domain": "testing",
-      "strength": "must",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "A fresh artifact with different counts, node ids, epochs, or timing does not by itself prove blocker migration. Treat it as the same blocker until the normalized evidence shows a different semantic owner, owner boundary, or next required action.",
-      "score": 194,
-      "sources": [
-        {
-          "file": "testing-guidelines/release-gate.md",
+          "file": "workflow-guidelines/subagents.md",
           "line": 50,
-          "section": "Testing — Release-Gate & Distributed Validation > Scenario-Driven Failure Migration Validation Policy"
+          "section": "Quest Delegation > Review Delegation"
         }
       ]
     },
     {
-      "id": "TEST-0070",
-      "domain": "testing",
-      "strength": "must",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "The active scenario package owner and boundary must match the canonical current first frontier recorded in scenarioCausalClosure. If a package intentionally owns a diagnostic/support role while the first frontier stays elsewhere, it must record explicit ownerBoundaryMigrationProof metadata with from/to owner-boundary, reason, and focused evidence.",
-      "score": 194,
-      "sources": [
-        {
-          "file": "testing-guidelines/release-gate.md",
-          "line": 57,
-          "section": "Testing — Release-Gate & Distributed Validation > Scenario-Driven Failure Migration Validation Policy"
-        }
-      ]
-    },
-    {
-      "id": "TEST-0071",
-      "domain": "testing",
-      "strength": "must",
-      "tags": [],
-      "rule": "When a package classifies a retryable or backpressure state as bounded rather than fixing runtime code, the validation must prove why the state is not the first frontier, which downstream blockers remain, and which stop condition prevents another local patch. That classification cannot rest on prose alone: it must name the focused probe command, proof artifact path, expected observable transition, maximum progress bound, and same-frontier fallback.",
-      "score": 194,
-      "sources": [
-        {
-          "file": "testing-guidelines/release-gate.md",
-          "line": 74,
-          "section": "Testing — Release-Gate & Distributed Validation > Scenario-Driven Failure Migration Validation Policy"
-        }
-      ]
-    },
-    {
-      "id": "TEST-0072",
-      "domain": "testing",
-      "strength": "must",
-      "tags": [
-        "ownership",
-        "testing"
-      ],
-      "rule": "If representative evidence oscillates between two related owner boundaries, the next validation surface must be a replayable handoff fixture or missing-edge probe that includes both boundaries. Focused owner tests for either boundary alone are insufficient. The fixture or probe must decide which owner owns progress, defer, retry, or terminal classification for the handoff before another owner-local runtime patch starts.",
-      "score": 194,
-      "sources": [
-        {
-          "file": "testing-guidelines/release-gate.md",
-          "line": 84,
-          "section": "Testing — Release-Gate & Distributed Validation > Scenario-Driven Failure Migration Validation Policy"
-        }
-      ]
-    },
-    {
-      "id": "TEST-0073",
-      "domain": "testing",
-      "strength": "must",
-      "tags": [
-        "lifecycle",
-        "timeout"
-      ],
-      "rule": "When repeated scenario runs keep failing after local fixes or classification-only reductions, the next validation package must establish a causal-analysis boundary or autonomous architecture experiment before more runtime fixes. At minimum it must validate the end-to-end phase model, cross-entity causal graph, budget/timeout accounting, invariant review, failure-class taxonomy, and architecture-level stop conditions.",
-      "score": 194,
-      "sources": [
-        {
-          "file": "testing-guidelines/release-gate.md",
-          "line": 90,
-          "section": "Testing — Release-Gate & Distributed Validation > Scenario-Driven Failure Migration Validation Policy"
-        }
-      ]
-    },
-    {
-      "id": "TEST-0074",
-      "domain": "testing",
-      "strength": "must",
-      "tags": [],
-      "rule": "A runtime fix that follows causal-analysis escalation must cite the causal model or artifact it uses, then prove that its local regression changes the relevant causal edge rather than only improving the immediate symptom.",
-      "score": 194,
-      "sources": [
-        {
-          "file": "testing-guidelines/release-gate.md",
-          "line": 96,
-          "section": "Testing — Release-Gate & Distributed Validation > Scenario-Driven Failure Migration Validation Policy"
-        }
-      ]
-    },
-    {
-      "id": "TEST-0075",
-      "domain": "testing",
-      "strength": "must",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "Manual evidence summaries are allowed only when no extractor exists or the extractor output is insufficient. They must preserve the normalized owner fields from the artifact rather than reclassifying from raw logs, and the package must record why the extractor was not enough.",
-      "score": 194,
-      "sources": [
-        {
-          "file": "testing-guidelines/release-gate.md",
-          "line": 150,
-          "section": "Testing — Release-Gate & Distributed Validation > Artifact-First Distributed Failure Triage Policy"
-        }
-      ]
-    },
-    {
-      "id": "TEST-0076",
-      "domain": "testing",
-      "strength": "must",
-      "tags": [],
-      "rule": "The review must check package closure evidence, residual inventory, guardrail ledger, blocker migration notes, sprint snapshot consistency, and whether the last package's stated next action still matches current artifact evidence.",
-      "score": 194,
-      "sources": [
-        {
-          "file": "testing-guidelines/release-gate.md",
-          "line": 202,
-          "section": "Testing — Release-Gate & Distributed Validation > Agent And Execution-Role Validation Handoff Policy"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0057",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "Runtime owner-boundary, scenario/release-gate, and causal-escalation packages must carry a ## Core Logic Brief before implementation starts.",
-      "score": 193,
-      "sources": [
-        {
-          "file": "workflow-guidelines/closure.md",
-          "line": 17,
-          "section": "Workflow — Decision & Closure Gates > Core Logic Brief Gate"
-        },
-        {
-          "file": "workflow-guidelines/closure.md",
-          "line": 307,
-          "section": "Workflow — Decision & Closure Gates > Decision Experiment Gate"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0058",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "This lane is required when runtime behavior, shared metadata, control-plane progression, owner contracts, diagnostics grammar, guardrails, or affected runtime consumers can change.",
-      "score": 193,
-      "sources": [
-        {
-          "file": "workflow-guidelines/closure.md",
-          "line": 48,
-          "section": "Workflow — Decision & Closure Gates > Core Logic Brief Gate > Runtime Owner-Boundary Lane"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0059",
+      "id": "GOV-0018",
       "domain": "governance",
       "strength": "must",
       "tags": [],
-      "rule": "Representative scenario proof is required when a scenario artifact drove the work; otherwise focused proof may be sufficient.",
-      "score": 193,
-      "sources": [
-        {
-          "file": "workflow-guidelines/closure.md",
-          "line": 68,
-          "section": "Workflow — Decision & Closure Gates > Core Logic Brief Gate > Runtime Owner-Boundary Lane"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0060",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [
-        "testing"
-      ],
-      "rule": "This lane is required when work is driven by a distributed, integration, load, or release-gate artifact.",
-      "score": 193,
-      "sources": [
-        {
-          "file": "workflow-guidelines/closure.md",
-          "line": 73,
-          "section": "Workflow — Decision & Closure Gates > Core Logic Brief Gate > Scenario/Release-Gate Lane"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0061",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [],
-      "rule": "This lane is required when the representative gate remains red after repeated related local fixes or classification-only reductions.",
-      "score": 193,
-      "sources": [
-        {
-          "file": "workflow-guidelines/closure.md",
-          "line": 105,
-          "section": "Workflow — Decision & Closure Gates > Core Logic Brief Gate > Causal Escalation Lane"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0062",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "Active causal-escalation, architecture-gated, owner-boundary migration, and repeated-frontier packages must split theory into two metadata levels before implementation.",
-      "score": 193,
-      "sources": [
-        {
-          "file": "workflow-guidelines/closure.md",
-          "line": 125,
-          "section": "Workflow — Decision & Closure Gates > Two-Level Theory Contract"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0063",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "Packages that touch or modify control-plane progression or owner boundaries must document their active progress contract shape under the progressContract metadata in their front matter.",
-      "score": 193,
-      "sources": [
-        {
-          "file": "workflow-guidelines/lifecycle.md",
-          "line": 124,
-          "section": "Workflow — Lanes & Lifecycle > Lifecycle Progress Grammar"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0064",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [],
-      "rule": "Every completed work-package slice MUST end in a focused local close commit and push before the next slice starts.",
-      "score": 193,
-      "sources": [
-        {
-          "file": "workflow-guidelines/packages.md",
-          "line": 35,
-          "section": "Workflow — Packages & Closure > Package Status And Closure"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0065",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [],
-      "rule": "The required push remains the next step and should use npm run work:sprint:push -- <git-push-args>.",
-      "score": 193,
-      "sources": [
-        {
-          "file": "workflow-guidelines/packages.md",
-          "line": 56,
-          "section": "Workflow — Packages & Closure > Package Status And Closure"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0066",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [],
-      "rule": "Stop for human direction when package-owned and unrelated changes cannot be separated safely, when no push target exists, or when credentials/policy prevent the required push.",
-      "score": 193,
-      "sources": [
-        {
-          "file": "workflow-guidelines/packages.md",
-          "line": 62,
-          "section": "Workflow — Packages & Closure > Package Status And Closure"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0067",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [
-        "testing"
-      ],
-      "rule": "The required closure roles are implementation and, when the package changes code, tests, scripts, runtime contracts, tracker truth, or generated handoff state, verification-fix.",
-      "score": 193,
-      "sources": [
-        {
-          "file": "workflow-guidelines/subagents.md",
-          "line": 17,
-          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0068",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [],
-      "rule": "The required freshness-review mode is driven by modelFit.packageClass (with lane as a legacy fallback).",
-      "score": 193,
-      "sources": [
-        {
-          "file": "workflow-guidelines/subagents.md",
-          "line": 29,
-          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents > packageClass → freshness-review mode matrix"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0069",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [],
-      "rule": "They are not a third required closure role.",
-      "score": 193,
-      "sources": [
-        {
-          "file": "workflow-guidelines/subagents.md",
-          "line": 81,
-          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents > packageClass → freshness-review mode matrix"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0070",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [],
-      "rule": "Review may cite runtime/static proof as required later; implementation, verification-fix, and parent revalidation run it.",
-      "score": 193,
-      "sources": [
-        {
-          "file": "workflow-guidelines/subagents.md",
-          "line": 104,
-          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents > packageClass → freshness-review mode matrix"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0071",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [],
-      "rule": "interrupted and partial-unvalidated attempts must be followed by a checked superseded/discarded/revalidated line before closure.",
-      "score": 193,
-      "sources": [
-        {
-          "file": "workflow-guidelines/subagents.md",
-          "line": 118,
-          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents > packageClass → freshness-review mode matrix"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0072",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [],
-      "rule": "Scenario-driven packages and active sprint snapshots must include a compact Current Edge Card that an LLM can keep in working memory without rereading the full package history.",
-      "score": 193,
-      "sources": [
-        {
-          "file": "workflow-guidelines/subagents.md",
-          "line": 219,
-          "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0073",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [],
-      "rule": "execution.proof.commands must cite the focused proof commands.",
+      "rule": "Later attempts must use the same sealed goalposts.",
       "score": 193,
       "sources": [
         {
           "file": "workflow-guidelines/validators.md",
-          "line": 61,
-          "section": "Workflow — Validators & Drift > Post-Rerun Decision Gate"
+          "line": 37,
+          "section": "Workflow Validators > Goalpost Immutability"
         }
       ]
     },
     {
-      "id": "GOV-0074",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "Packages must state the expected representative delta before implementation: what metric, owner, boundary, dominant reason, or route is expected to change.",
-      "score": 193,
-      "sources": [
-        {
-          "file": "workflow-guidelines/validators.md",
-          "line": 67,
-          "section": "Workflow — Validators & Drift > Post-Rerun Decision Gate"
-        }
-      ]
-    },
-    {
-      "id": "TEST-0077",
+      "id": "TEST-0058",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -4301,73 +2987,7 @@
       ]
     },
     {
-      "id": "GOV-0075",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "The active scenario package owner and boundary must appear in scenarioCausalClosure.currentFirstFrontier.",
-      "score": 192,
-      "sources": [
-        {
-          "file": "workflow-guidelines/closure.md",
-          "line": 446,
-          "section": "Workflow — Decision & Closure Gates > Scenario Causal Closure Ledger"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0076",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "Same-owner reductions stay in the current package unless the required action changes.",
-      "score": 192,
-      "sources": [
-        {
-          "file": "workflow-guidelines/closure.md",
-          "line": 497,
-          "section": "Workflow — Decision & Closure Gates > Scenario Failure Migration"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0077",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "That fast path should avoid a broad package unless canonical evidence changes owner, boundary, or required action.",
-      "score": 192,
-      "sources": [
-        {
-          "file": "workflow-guidelines/subagents.md",
-          "line": 278,
-          "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0078",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [],
-      "rule": "Representative artifacts must use real unique timestamps or otherwise unique run identifiers.",
-      "score": 192,
-      "sources": [
-        {
-          "file": "workflow-guidelines/subagents.md",
-          "line": 281,
-          "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
-        }
-      ]
-    },
-    {
-      "id": "ARCH-0092",
+      "id": "ARCH-0089",
       "domain": "architecture",
       "strength": "may",
       "tags": [
@@ -4378,7 +2998,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 123,
+          "line": 114,
           "section": "System Guidelines — Mandatory Implementation Contract > 2. One Semantic Owner Per Concern"
         },
         {
@@ -4389,7 +3009,7 @@
       ]
     },
     {
-      "id": "ARCH-0093",
+      "id": "ARCH-0090",
       "domain": "architecture",
       "strength": "may",
       "tags": [
@@ -4400,13 +3020,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 150,
+          "line": 141,
           "section": "System Guidelines — Mandatory Implementation Contract > 3. One Path Per Semantic Decision"
         }
       ]
     },
     {
-      "id": "ARCH-0094",
+      "id": "ARCH-0091",
       "domain": "architecture",
       "strength": "may",
       "tags": [
@@ -4418,13 +3038,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 221,
+          "line": 212,
           "section": "System Guidelines — Mandatory Implementation Contract > 6. Tables, Cache, And Metadata Follow One Authority Chain"
         }
       ]
     },
     {
-      "id": "ARCH-0095",
+      "id": "ARCH-0092",
       "domain": "architecture",
       "strength": "may",
       "tags": [
@@ -4435,13 +3055,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 243,
+          "line": 234,
           "section": "System Guidelines — Mandatory Implementation Contract > 7. Phase Code Must Hand Off To Runtime Owners"
         }
       ]
     },
     {
-      "id": "ARCH-0096",
+      "id": "ARCH-0093",
       "domain": "architecture",
       "strength": "may",
       "tags": [],
@@ -4450,57 +3070,8 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 333,
+          "line": 324,
           "section": "System Guidelines — Mandatory Implementation Contract > 12. User-Facing Model Stays Small"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0079",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "If delegation is unavailable, record one of human-waived, tool-unavailable, or blocked-by-environment-policy with reason: ... as a blocker; do not check the freshness gate as fresh unless a later real sub-agent records fresh proof.",
-      "score": 187,
-      "sources": [
-        {
-          "file": "workflow-guidelines/subagents.md",
-          "line": 45,
-          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents > packageClass → freshness-review mode matrix"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0080",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [
-        "routing",
-        "testing",
-        "governance"
-      ],
-      "rule": "Optional review roles do not run focused runtime tests, npm run test:static, broad extractor stacks, raw report JSON, raw logs, or older handoff-file archaeology unless the capped commands contradict package routing, scope, stale blocker state, or metadata shape.",
-      "score": 187,
-      "sources": [
-        {
-          "file": "workflow-guidelines/subagents.md",
-          "line": 104,
-          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents > packageClass → freshness-review mode matrix"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0081",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "If a worker goes silent after a checkpoint or stops with edited files and no validation, record the attempt as partial-unvalidated or interrupted, discard or supersede that patch, and do not commit delegated runtime edits until local proof passes.",
-      "score": 187,
-      "sources": [
-        {
-          "file": "workflow-guidelines/subagents.md",
-          "line": 127,
-          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents > packageClass → freshness-review mode matrix"
         }
       ]
     },
@@ -4523,7 +3094,7 @@
       ]
     },
     {
-      "id": "TEST-0078",
+      "id": "TEST-0059",
       "domain": "testing",
       "strength": "should",
       "tags": [
@@ -4540,7 +3111,7 @@
       ]
     },
     {
-      "id": "TEST-0079",
+      "id": "TEST-0060",
       "domain": "testing",
       "strength": "should",
       "tags": [],
@@ -4555,7 +3126,7 @@
       ]
     },
     {
-      "id": "TEST-0080",
+      "id": "TEST-0061",
       "domain": "testing",
       "strength": "should",
       "tags": [
@@ -4572,7 +3143,7 @@
       ]
     },
     {
-      "id": "TEST-0081",
+      "id": "TEST-0062",
       "domain": "testing",
       "strength": "should",
       "tags": [],
@@ -4587,47 +3158,13 @@
       ]
     },
     {
-      "id": "TEST-0082",
-      "domain": "testing",
-      "strength": "should",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "A representative rerun should not be the next debugging step while the current owner-decision fixture or narrow blocker probe is missing.",
-      "score": 186,
-      "sources": [
-        {
-          "file": "testing-guidelines/release-gate.md",
-          "line": 67,
-          "section": "Testing — Release-Gate & Distributed Validation > Scenario-Driven Failure Migration Validation Policy"
-        }
-      ]
-    },
-    {
-      "id": "TEST-0083",
-      "domain": "testing",
-      "strength": "should",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "Implementation work should start only after the current owner boundary and smallest proof surface are named.",
-      "score": 186,
-      "sources": [
-        {
-          "file": "testing-guidelines/release-gate.md",
-          "line": 213,
-          "section": "Testing — Release-Gate & Distributed Validation > Agent And Execution-Role Validation Handoff Policy"
-        }
-      ]
-    },
-    {
-      "id": "ARCH-0097",
+      "id": "ARCH-0094",
       "domain": "architecture",
       "strength": "must",
       "tags": [
         "ownership"
       ],
-      "rule": "Every active package must name its residual-closure inventory before code is treated as complete. At minimum that inventory must cover: - owner-path cutovers; - direct and tail consumers; - status, diagnostics, and reporting surfaces; - deletion of superseded paths or stale vocabulary; - required proof layers",
+      "rule": "Every active Quest must name its residual-closure inventory before code is treated as complete. At minimum that inventory must cover: - owner-path cutovers; - direct and tail consumers; - status, diagnostics, and reporting surfaces; - deletion of superseded paths or stale vocabulary; - required proof layers",
       "score": 184,
       "sources": [
         {
@@ -4638,7 +3175,7 @@
       ]
     },
     {
-      "id": "TEST-0084",
+      "id": "TEST-0063",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -4656,41 +3193,7 @@
       ]
     },
     {
-      "id": "TEST-0085",
-      "domain": "testing",
-      "strength": "must",
-      "tags": [
-        "readiness"
-      ],
-      "rule": "For control-plane, readiness, topology, and other shared distributed-boundary work, the normal debugging loop must follow one validation ladder instead of jumping straight from unit failures to repeated full distributed reruns.",
-      "score": 184,
-      "sources": [
-        {
-          "file": "testing-guidelines/release-gate.md",
-          "line": 102,
-          "section": "Testing — Release-Gate & Distributed Validation > Distributed Validation Ladder Policy"
-        }
-      ]
-    },
-    {
-      "id": "TEST-0086",
-      "domain": "testing",
-      "strength": "must",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "Distributed artifact triage must start with npm run work:evidence-summary -- <artifact>, the focused extractor for the failure class such as npm run analyze:priority-recovery-residuals -- <artifact>, and npm run analyze:owner-files -- <owner> [boundary] before broad text search, raw JSON slicing, ad hoc jq, or raw logs.",
-      "score": 184,
-      "sources": [
-        {
-          "file": "testing-guidelines/release-gate.md",
-          "line": 124,
-          "section": "Testing — Release-Gate & Distributed Validation > Artifact-First Distributed Failure Triage Policy"
-        }
-      ]
-    },
-    {
-      "id": "ARCH-0098",
+      "id": "ARCH-0095",
       "domain": "architecture",
       "strength": "may",
       "tags": [
@@ -4703,93 +3206,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 232,
+          "line": 223,
           "section": "System Guidelines — Mandatory Implementation Contract > 7. Phase Code Must Hand Off To Runtime Owners"
         }
       ]
     },
     {
-      "id": "GOV-0082",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [],
-      "rule": "Final classification: representative-green, reduced, same-frontier, migrated, classification-only, architecture-gap, contradictory, or human-only escalation for blocked/contradictory evidence. Reduced requires a concrete metric delta; classification-only must name the accepted bounded/backpressure state and stop reason.",
-      "score": 179,
-      "sources": [
-        {
-          "file": "workflow-guidelines/closure.md",
-          "line": 97,
-          "section": "Workflow — Decision & Closure Gates > Core Logic Brief Gate > Scenario/Release-Gate Lane"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0083",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [],
-      "rule": "Use npm run work:subagent-prompt -- --role <role> --package <package> to prepare bounded delegated role tasks. The generated text assists optional real sub-agents but does not replace checked ## Execution Evidence role entries. The prompt must carry the package Model Fit output profile so delegated agents know expected response verbosity separately from model or reasoning effort.",
-      "score": 179,
-      "sources": [
-        {
-          "file": "workflow-guidelines/subagents.md",
-          "line": 167,
-          "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0084",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [],
-      "rule": "status: required means the tracker has enough evidence to stop and request concrete choices. status: presented means choices are visible but no route has been selected. Both states fail pre-implementation validation for active runtime/scenario work.",
-      "score": 178,
-      "sources": [
-        {
-          "file": "workflow-guidelines/closure.md",
-          "line": 389,
-          "section": "Workflow — Decision & Closure Gates > Sprint Architecture Decision Gate"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0085",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [
-        "ownership",
-        "governance"
-      ],
-      "rule": "status: selected names the selected choice and opens the bounded route for the next package or new sprint. For architecture gaps and unchanged same-frontier/no-reduction evidence, the default selected route is architecture-package, implemented as an autonomous architecture experiment. The selected route still must carry normal owner, boundary, scope, execution-role, validation, commit, and push evidence.",
-      "score": 178,
-      "sources": [
-        {
-          "file": "workflow-guidelines/closure.md",
-          "line": 393,
-          "section": "Workflow — Decision & Closure Gates > Sprint Architecture Decision Gate"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0086",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "Split one follow-on package only when canonical extraction shows semantic movement: first-frontier edge, semantic owner, owner boundary, or next required action changes. A dominant reason change qualifies only when it changes the next required action.",
-      "score": 178,
-      "sources": [
-        {
-          "file": "workflow-guidelines/closure.md",
-          "line": 487,
-          "section": "Workflow — Decision & Closure Gates > Scenario Failure Migration"
-        }
-      ]
-    },
-    {
-      "id": "TEST-0087",
+      "id": "TEST-0064",
       "domain": "testing",
       "strength": "should",
       "tags": [
@@ -4806,13 +3229,13 @@
       ]
     },
     {
-      "id": "ARCH-0099",
+      "id": "ARCH-0096",
       "domain": "architecture",
       "strength": "should",
       "tags": [
         "governance"
       ],
-      "rule": "A human idea should first become either: - a sharpened roadmap item; - or a bounded work package",
+      "rule": "A human idea should first become either: - a sharpened roadmap item; - or a bounded Quest",
       "score": 176,
       "sources": [
         {
@@ -4823,11 +3246,11 @@
       ]
     },
     {
-      "id": "ARCH-0100",
+      "id": "ARCH-0097",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
-      "rule": "Active implementation should target one executable concern per work package.",
+      "rule": "Active implementation should target one executable concern per Quest.",
       "score": 176,
       "sources": [
         {
@@ -4838,11 +3261,11 @@
       ]
     },
     {
-      "id": "ARCH-0101",
+      "id": "ARCH-0098",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
-      "rule": "Work-package status should live in the filename under work/ rather than in several parallel trackers.",
+      "rule": "Quest status should live in the Solver event log and report rather than in parallel trackers.",
       "score": 176,
       "sources": [
         {
@@ -4853,40 +3276,40 @@
       ]
     },
     {
-      "id": "TEST-0088",
+      "id": "TEST-0065",
       "domain": "testing",
       "strength": "should",
       "tags": [],
-      "rule": "All non-trivial implementation work should have validation owned by its active work package.",
+      "rule": "All non-trivial implementation work should have validation owned by its active Quest.",
       "score": 176,
       "sources": [
         {
           "file": "testing-guidelines/proof-ladders.md",
           "line": 17,
-          "section": "Testing — Proof Ladders & Static Guardrails > Package-Driven Validation Policy"
+          "section": "Testing — Proof Ladders & Static Guardrails > Quest-Driven Validation Policy"
         }
       ]
     },
     {
-      "id": "TEST-0089",
+      "id": "TEST-0066",
       "domain": "testing",
       "strength": "should",
       "tags": [
         "ownership",
         "readiness"
       ],
-      "rule": "Runtime packages that touch already oversized files should record whether they are adding local size debt or extracting a smaller owner/helper boundary.",
+      "rule": "Runtime Quests that touch already oversized files should record whether they are adding local size debt or extracting a smaller owner/helper boundary.",
       "score": 176,
       "sources": [
         {
           "file": "testing-guidelines/proof-ladders.md",
-          "line": 93,
+          "line": 91,
           "section": "Testing — Proof Ladders & Static Guardrails > File-Size Ratchet Policy"
         }
       ]
     },
     {
-      "id": "TEST-0090",
+      "id": "TEST-0067",
       "domain": "testing",
       "strength": "should",
       "tags": [
@@ -4903,55 +3326,22 @@
       ]
     },
     {
-      "id": "TEST-0091",
+      "id": "TEST-0068",
       "domain": "testing",
       "strength": "should",
-      "tags": [
-        "ownership",
-        "testing"
-      ],
-      "rule": "Work packages should list their targeted owner tests, the relevant boundary-transition scenarios, and the final distributed checkpoint command in that same order.",
+      "tags": [],
+      "rule": "The review should produce candidate findings or risks; the Solver still owns terminal status.",
       "score": 176,
       "sources": [
         {
           "file": "testing-guidelines/release-gate.md",
-          "line": 117,
-          "section": "Testing — Release-Gate & Distributed Validation > Distributed Validation Ladder Policy"
+          "line": 62,
+          "section": "Testing — Scenario And Release-Gate Quests > Delegated Review"
         }
       ]
     },
     {
-      "id": "GOV-0087",
-      "domain": "governance",
-      "strength": "should",
-      "tags": [],
-      "rule": "Wrong-slice trigger: the concrete signal that should stop, split, or migrate the package instead of continuing locally.",
-      "score": 171,
-      "sources": [
-        {
-          "file": "workflow-guidelines/closure.md",
-          "line": 33,
-          "section": "Workflow — Decision & Closure Gates > Core Logic Brief Gate"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0088",
-      "domain": "governance",
-      "strength": "should",
-      "tags": [],
-      "rule": "Add or supersede a theory-ledger entry only for durable route knowledge that future packages should reuse.",
-      "score": 171,
-      "sources": [
-        {
-          "file": "workflow-guidelines/closure.md",
-          "line": 202,
-          "section": "Workflow — Decision & Closure Gates > Discovery Gate"
-        }
-      ]
-    },
-    {
-      "id": "TEST-0092",
+      "id": "TEST-0069",
       "domain": "testing",
       "strength": "may",
       "tags": [],
@@ -4966,7 +3356,7 @@
       ]
     },
     {
-      "id": "TEST-0093",
+      "id": "TEST-0070",
       "domain": "testing",
       "strength": "may",
       "tags": [],
@@ -4981,7 +3371,7 @@
       ]
     },
     {
-      "id": "TEST-0094",
+      "id": "TEST-0071",
       "domain": "testing",
       "strength": "may",
       "tags": [],
@@ -4996,112 +3386,13 @@
       ]
     },
     {
-      "id": "TEST-0095",
-      "domain": "testing",
-      "strength": "may",
-      "tags": [],
-      "rule": "Only after the artifact summaries and relevant extractors have been read may raw container logs, node logs, raw JSON slicing, or ad hoc jq become the primary debugging surface.",
-      "score": 170,
-      "sources": [
-        {
-          "file": "testing-guidelines/release-gate.md",
-          "line": 141,
-          "section": "Testing — Release-Gate & Distributed Validation > Artifact-First Distributed Failure Triage Policy"
-        }
-      ]
-    },
-    {
-      "id": "TEST-0096",
-      "domain": "testing",
-      "strength": "may",
-      "tags": [],
-      "rule": "The current package's implementation role may start only after the previous-package review is clean, not needed, or fixed.",
-      "score": 170,
-      "sources": [
-        {
-          "file": "testing-guidelines/release-gate.md",
-          "line": 209,
-          "section": "Testing — Release-Gate & Distributed Validation > Agent And Execution-Role Validation Handoff Policy"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0089",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [
-        "ownership",
-        "style"
-      ],
-      "rule": "Every owner-boundary progress contract must explicitly declare the canonical 10-field progress contract shape (owner, boundary, state, reason, nextAction, wakeSource, retryAfterMs, terminalState, evidencePath, blockingDependency) using local constants rather than inline strings.",
-      "score": 169,
-      "sources": [
-        {
-          "file": "workflow-guidelines/lifecycle.md",
-          "line": 124,
-          "section": "Workflow — Lanes & Lifecycle > Lifecycle Progress Grammar"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0090",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "They may help compare candidate owners, hypotheses, or discriminators, but their output must resolve to the package Discovery Gate, an experiment/probe package, current-blocker or successor truth, or a theory-ledger entry.",
-      "score": 169,
-      "sources": [
-        {
-          "file": "workflow-guidelines/subagents.md",
-          "line": 81,
-          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents > packageClass → freshness-review mode matrix"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0091",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "LLM-driven work across all packages and delegated tasks must use canonical workflow and artifact tools before raw JSON or log slicing: work:llm-start, work:evidence-summary, work:package:doctor -- --suggest, work:package:schema, work:package:new, analyze:owner-files, focused scenario extractors such as analyze:priority-recovery-residuals, work:subagent-prompt, and work:oversized-next.",
-      "score": 169,
-      "sources": [
-        {
-          "file": "workflow-guidelines/subagents.md",
-          "line": 138,
-          "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0092",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "If the same two boundaries alternate again without representative green or monotonic reduction, the next validation surface must be a replayable handoff fixture or missing-edge probe that includes both owners before more runtime edits start.",
-      "score": 167,
-      "sources": [
-        {
-          "file": "workflow-guidelines/closure.md",
-          "line": 555,
-          "section": "Workflow — Decision & Closure Gates > Frontier Oscillation Escalation"
-        }
-      ]
-    },
-    {
-      "id": "ARCH-0102",
+      "id": "ARCH-0099",
       "domain": "architecture",
       "strength": "should",
       "tags": [
         "governance"
       ],
-      "rule": "Runtime packages that follow such a model should cite it as their scope basis and proof surface.",
+      "rule": "Runtime Quests that follow such a model should cite it as their scope basis and proof surface.",
       "score": 166,
       "sources": [
         {
@@ -5112,7 +3403,7 @@
       ]
     },
     {
-      "id": "ARCH-0103",
+      "id": "ARCH-0100",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -5127,7 +3418,7 @@
       ]
     },
     {
-      "id": "ARCH-0104",
+      "id": "ARCH-0101",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -5136,30 +3427,58 @@
       "sources": [
         {
           "file": "doctrine/owner-boundaries.md",
-          "line": 83,
-          "section": "Doctrine — Owner Boundaries > 17. Sprint Execution Has One Current Boundary"
+          "line": 82,
+          "section": "Doctrine — Owner Boundaries > 17. Quest Execution Has One Current Boundary"
         }
       ]
     },
     {
-      "id": "GOV-0093",
+      "id": "GOV-0019",
+      "domain": "governance",
+      "strength": "should",
+      "tags": [],
+      "rule": "optional rulesOut text for approaches that should not be retried.",
+      "score": 166,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 104,
+          "section": "Quest Workflow > Findings Log"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0020",
+      "domain": "governance",
+      "strength": "should",
+      "tags": [],
+      "rule": "The review should return findings, candidate risks, or suggested frontiers.",
+      "score": 161,
+      "sources": [
+        {
+          "file": "workflow-guidelines/subagents.md",
+          "line": 50,
+          "section": "Quest Delegation > Review Delegation"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0021",
       "domain": "governance",
       "strength": "may",
-      "tags": [
-        "governance"
-      ],
-      "rule": "A row may move to active implementation only when the intended behavior is sharp enough to produce tasks without inventing scope locally.",
+      "tags": [],
+      "rule": "A row may move to active implementation only when the intended behavior is sharp enough to produce a sealed doneWhen.",
       "score": 160,
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 142,
+          "line": 109,
           "section": "Roadmap Steering Pointer > Readiness To Start Work"
         }
       ]
     },
     {
-      "id": "TEST-0097",
+      "id": "TEST-0072",
       "domain": "testing",
       "strength": "may",
       "tags": [
@@ -5176,71 +3495,7 @@
       ]
     },
     {
-      "id": "TEST-0098",
-      "domain": "testing",
-      "strength": "may",
-      "tags": [],
-      "rule": "Local execution may use scripts/run-distributed-validation-ladder.js to make this order explicit.",
-      "score": 160,
-      "sources": [
-        {
-          "file": "testing-guidelines/release-gate.md",
-          "line": 117,
-          "section": "Testing — Release-Gate & Distributed Validation > Distributed Validation Ladder Policy"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0094",
-      "domain": "governance",
-      "strength": "may",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "Sprint Architecture Decision Gate when the sprint may continue local proof, migrate owner boundary, classify architecture-gap, or route broad architecture work.",
-      "score": 155,
-      "sources": [
-        {
-          "file": "workflow-guidelines/closure.md",
-          "line": 119,
-          "section": "Workflow — Decision & Closure Gates > Core Logic Brief Gate > Causal Escalation Lane"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0095",
-      "domain": "governance",
-      "strength": "may",
-      "tags": [
-        "lifecycle"
-      ],
-      "rule": "Use validation phases deliberately: npm run work:validate -- --entry for package shape, --pre-impl when review/fix proof is complete and implementation may still be pending, and --closure before close/commit.",
-      "score": 155,
-      "sources": [
-        {
-          "file": "workflow-guidelines/subagents.md",
-          "line": 188,
-          "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0096",
-      "domain": "governance",
-      "strength": "may",
-      "tags": [],
-      "rule": "Runtime edits may start only after the classification gate and implementation gate are both satisfied.",
-      "score": 154,
-      "sources": [
-        {
-          "file": "workflow-guidelines/subagents.md",
-          "line": 251,
-          "section": "Workflow — Execution Roles & Triage > LLM Current Edge Card And Trap List"
-        }
-      ]
-    },
-    {
-      "id": "ARCH-0105",
+      "id": "ARCH-0102",
       "domain": "architecture",
       "strength": "may",
       "tags": [],
@@ -5255,219 +3510,26 @@
       ]
     },
     {
-      "id": "GOV-0097",
+      "id": "GOV-0022",
       "domain": "governance",
       "strength": "may",
       "tags": [],
-      "rule": "At most one package in a sprint may own the current representative re-entry gate.",
-      "score": 150,
-      "sources": [
-        {
-          "file": "roadmap.md",
-          "line": 107,
-          "section": "Roadmap Steering Pointer > Work Intake And Execution Flow"
-        }
-      ]
-    },
-    {
-      "id": "TEST-0099",
-      "domain": "testing",
-      "strength": "may",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "Before implementing a new or continued package, review the most recently executed package on the same sprint or owner boundary when that context can affect the new package. A real sub-agent may perform the review, but identity is optional provenance.",
-      "score": 146,
-      "sources": [
-        {
-          "file": "testing-guidelines/release-gate.md",
-          "line": 198,
-          "section": "Testing — Release-Gate & Distributed Validation > Agent And Execution-Role Validation Handoff Policy"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0098",
-      "domain": "governance",
-      "strength": "may",
-      "tags": [
-        "routing"
-      ],
-      "rule": "Diagnostic-classification packages use the brief when they reshape diagnostic meaning or scenario routing, and may otherwise record not-needed.",
+      "rule": "They are git-ignored and may be rebuilt or regenerated from the Quest and available evidence.",
       "score": 145,
       "sources": [
         {
-          "file": "workflow-guidelines/closure.md",
+          "file": "workflow-guidelines/quest-artifacts.md",
           "line": 36,
-          "section": "Workflow — Decision & Closure Gates > Core Logic Brief Gate"
+          "section": "Quest Artifacts > Runtime Artifacts"
         }
       ]
     },
     {
-      "id": "GOV-0099",
-      "domain": "governance",
-      "strength": "may",
-      "tags": [],
-      "rule": "Read/review/doc-only and lightweight maintenance packages may omit the brief or record not-needed: no runtime, scenario, or shared contract decision changes.",
-      "score": 145,
-      "sources": [
-        {
-          "file": "workflow-guidelines/closure.md",
-          "line": 36,
-          "section": "Workflow — Decision & Closure Gates > Core Logic Brief Gate"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0100",
-      "domain": "governance",
-      "strength": "may",
-      "tags": [],
-      "rule": "work:close may populate the focused commit SHA and remote branch target before the push has happened.",
-      "score": 145,
-      "sources": [
-        {
-          "file": "workflow-guidelines/packages.md",
-          "line": 56,
-          "section": "Workflow — Packages & Closure > Package Status And Closure"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0101",
-      "domain": "governance",
-      "strength": "may",
-      "tags": [
-        "governance"
-      ],
-      "rule": "A package may not close with open in-scope residuals.",
-      "score": 145,
-      "sources": [
-        {
-          "file": "workflow-guidelines/packages.md",
-          "line": 132,
-          "section": "Workflow — Packages & Closure > Residual Closure Inventory"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0102",
-      "domain": "governance",
-      "strength": "may",
-      "tags": [],
-      "rule": "No-runtime-write analysis packages may use parent-executed lite freshness unless they opt into strict freshness.",
-      "score": 145,
-      "sources": [
-        {
-          "file": "workflow-guidelines/subagents.md",
-          "line": 17,
-          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0103",
-      "domain": "governance",
-      "strength": "may",
-      "tags": [],
-      "rule": "A real sub-agent may perform implementation or verification-fix, but real sub-agent identity is optional provenance for those closure roles.",
-      "score": 145,
-      "sources": [
-        {
-          "file": "workflow-guidelines/subagents.md",
-          "line": 45,
-          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents > packageClass → freshness-review mode matrix"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0104",
-      "domain": "governance",
-      "strength": "may",
-      "tags": [
-        "testing"
-      ],
-      "rule": "The parent session may perform those roles directly when that is the lightest valid path.",
-      "score": 145,
-      "sources": [
-        {
-          "file": "workflow-guidelines/subagents.md",
-          "line": 45,
-          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents > packageClass → freshness-review mode matrix"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0105",
-      "domain": "governance",
-      "strength": "may",
-      "tags": [],
-      "rule": "When a real sub-agent is used, the package may keep Subagent Progress or Attempt Ledger notes as provenance.",
-      "score": 145,
-      "sources": [
-        {
-          "file": "workflow-guidelines/subagents.md",
-          "line": 118,
-          "section": "Workflow — Execution Roles & Triage > Execution Roles And Optional Sub-Agents > packageClass → freshness-review mode matrix"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0106",
-      "domain": "governance",
-      "strength": "may",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "Use this gate when a scenario-driven or causal-escalation sprint may decide between continued local proof, owner-boundary migration, autonomous architecture experiment, or human-only escalation.",
-      "score": 144,
-      "sources": [
-        {
-          "file": "workflow-guidelines/closure.md",
-          "line": 337,
-          "section": "Workflow — Decision & Closure Gates > Sprint Architecture Decision Gate"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0107",
-      "domain": "governance",
-      "strength": "may",
-      "tags": [
-        "ownership",
-        "readiness"
-      ],
-      "rule": "If an active package is already in the causal-escalation lane, it may continue only when it explicitly owns that handoff, names the missing cross-boundary causal edge, and keeps same-owner evidence in the same package.",
-      "score": 143,
-      "sources": [
-        {
-          "file": "workflow-guidelines/closure.md",
-          "line": 540,
-          "section": "Workflow — Decision & Closure Gates > Frontier Oscillation Escalation"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0108",
-      "domain": "governance",
-      "strength": "may",
-      "tags": [],
-      "rule": "No further runtime patch in either oscillating boundary may start until that handoff package identifies the failing causal edge.",
-      "score": 143,
-      "sources": [
-        {
-          "file": "workflow-guidelines/closure.md",
-          "line": 555,
-          "section": "Workflow — Decision & Closure Gates > Frontier Oscillation Escalation"
-        }
-      ]
-    },
-    {
-      "id": "ARCH-0106",
+      "id": "ARCH-0103",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
-      "rule": "Classification-only is a valid result only when the causal chain is still explicit, the focused probe command and artifact are named, the bounded-progress proof has an observable transition and bound, and the stop condition says why no local runtime patch should continue in that package.",
+      "rule": "Classification-only is a valid result only when the causal chain is still explicit, the focused probe command and artifact are named, the bounded-progress proof has an observable transition and bound, and the stop condition says why no local runtime patch should continue in that Quest.",
       "score": 142,
       "sources": [
         {
@@ -5478,7 +3540,7 @@
       ]
     },
     {
-      "id": "GOV-0109",
+      "id": "GOV-0023",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5489,98 +3551,11 @@
       "sources": [
         {
           "file": "roadmap.md",
-          "line": 128,
+          "line": 96,
           "section": "Roadmap Steering Pointer > AGPL Preparatory Work"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0110",
-      "domain": "governance",
-      "strength": "may",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "When starting or continuing a work package, review the most recently executed package on the same sprint or owner boundary when that context can affect the new package. A real sub-agent may perform the review, but identity is optional provenance.",
-      "score": 136,
-      "sources": [
-        {
-          "file": "roadmap.md",
-          "line": 195,
-          "section": "Roadmap Steering Pointer > Sprint Continuation And Package Split Policy"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0111",
-      "domain": "governance",
-      "strength": "may",
-      "tags": [
-        "testing"
-      ],
-      "rule": "Use a Mechanism Card only when the maintenance package tests or changes a failure mechanism. Purely mechanical docs, template, schema-text, generated steering, or package-metadata cleanup may record not-needed: mechanical maintenance, no failure mechanism or omit the card when validation does not require it.",
-      "score": 131,
-      "sources": [
-        {
-          "file": "workflow-guidelines/lifecycle.md",
-          "line": 81,
-          "section": "Workflow — Lanes & Lifecycle > Lane Requirements > Lightweight Maintenance Lane"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0112",
-      "domain": "governance",
-      "strength": "may",
-      "tags": [
-        "ownership",
-        "testing",
-        "governance"
-      ],
-      "rule": "Before closure, confirm every new or edited source-code file in package scope is within its scope threshold (see scripts/check-file-size-thresholds.js; currently src ≤ 800, test ≤ 1500 lines). If a touched source-code file exceeds the cap, refactor or extract a semantically named owner/helper/contract boundary in the current package before closing. work:oversized-next may choose the extraction order, but it is not a waiver for newly created or edited oversize.",
-      "score": 131,
-      "sources": [
-        {
-          "file": "workflow-guidelines/subagents.md",
-          "line": 175,
-          "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0113",
-      "domain": "governance",
-      "strength": "may",
-      "tags": [
-        "governance"
-      ],
-      "rule": "Use explicit metadata scope fields for new packages: writeScope for files the package may edit, handoffFiles for read-only context, generatedFiles for deterministic outputs, candidateRuntimeFiles for files gated by a focused probe, commitScopeExtra for rare additions to the derived focused commit, and commitScopeExclude for explicit removals. commitScope and touchedFiles are legacy compatibility only.",
-      "score": 131,
-      "sources": [
-        {
-          "file": "workflow-guidelines/subagents.md",
-          "line": 182,
-          "section": "Workflow — Execution Roles & Triage > LLM Tool-First Triage"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0114",
-      "domain": "governance",
-      "strength": "may",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "A package may diverge only when it records metadata ownerBoundaryMigrationProof with concrete from/to owner and boundary, reason, and focused evidence proving a bounded diagnostic/support role or owner-boundary migration.",
-      "score": 120,
-      "sources": [
-        {
-          "file": "workflow-guidelines/closure.md",
-          "line": 446,
-          "section": "Workflow — Decision & Closure Gates > Scenario Causal Closure Ledger"
         }
       ]
     }
   ],
-  "generatedAt": "2026-05-31T19:55:01.691Z"
+  "generatedAt": "2026-06-01T07:47:58.680Z"
 }
