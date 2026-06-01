@@ -23,6 +23,7 @@ const FLAG_DRY_RUN = '--dry-run';
 const FLAG_FORCE = '--force';
 const FLAG_SPRINT = '--sprint';
 const FLAG_HELP = '--help';
+const FLAG_CHECK_CONTINUATION = '--check-continuation';
 const STATUS_ACTIVE = 'active';
 const STATUS_DONE = 'done';
 const PROCESS_ARG_SCRIPT_INDEX = 1;
@@ -30,16 +31,31 @@ const SCRIPT_FILE_NAME = 'work-sprint-advance.js';
 const THEORY_LOOP_SUCCESS_EVIDENCE_HEADING =
   '## Theory Loop Success Evidence';
 const THEORY_LOOP_EVIDENCE_ANCHOR_HEADING = '## Evidence Anchor';
+const THEORY_LOOP_TERMINATION_HEADING = '## Theory Loop Termination';
+const THEORY_LOOP_TERMINATION_LOOP_STATUS_LABEL = 'Loop status';
+const THEORY_LOOP_TERMINATION_REASON_LABEL = 'Termination reason';
+const THEORY_LOOP_TERMINATION_EVIDENCE_LABEL = 'Evidence';
+const THEORY_LOOP_TERMINATION_HUMAN_OVERRIDE_LABEL = 'Human override ref';
+const THEORY_LOOP_TERMINATION_BLOCKED_FROZEN =
+  'blocked-frozen-decision';
+const THEORY_LOOP_TERMINATION_BLOCKED_REASONS = new Set([
+  THEORY_LOOP_TERMINATION_BLOCKED_FROZEN,
+  'blocked-external-dependency',
+]);
+const THEORY_LOOP_TERMINATION_TERMINATED = 'terminated';
 const THEORY_LOOP_SUCCESS_RESULT_VALUE = 'success-condition-met';
 const THEORY_LOOP_FORBIDDEN_SUCCESS_CONDITION_PATTERN =
   /\b(?:architecture[-\s]+gap|architecture[-\s]+stop|owner[-\s]+boundary[-\s]+migration|same[-\s]+frontier|classification[-\s]+only|needs[-\s]+rerun|route[-\s]+selection|human[-\s]+escalation)\b/iu;
 const THEORY_LOOP_UNFINISHED_RESULT_PATTERN =
   /\b(?:same-frontier|classification-only|needs-rerun|pending|unknown|not[-\s]+met)\b/iu;
+const THEORY_LOOP_EMPTY_TERMINATION_FIELD_PATTERN =
+  /^(?:tbd|todo|pending|unknown|n\/a|none|-|<[^>]+>)$/iu;
 const HELP_TEXT = [
-  'Usage: node scripts/work-sprint-advance.js [--dry-run|--write] [--sprint <active-sprint.md>] [--force]',
+  'Usage: node scripts/work-sprint-advance.js [--dry-run|--write|--check-continuation] [--sprint <active-sprint.md>] [--force]',
   '',
   'Closes the active sprint only when no active or todo packages remain.',
   'Theory-loop sprints also require ## Theory Loop Success Evidence proving the original success condition is met.',
+  'With --check-continuation, fails if a running theory-loop sprint has no active/todo package and no terminal evidence.',
   'With --write, renames active-*.md to done-*.md and updates track/release references.',
   'Without --write, runs as a dry run.',
 ].join(NEWLINE);
@@ -110,6 +126,7 @@ function findMarkdownField(section, label) {
 function isTheoryLoopSprint(content, filePath = EMPTY_TEXT) {
   return (
     /^## Theory Loop Sprint\b/mu.test(content) ||
+    /^## Theory Loop Shape\b/mu.test(content) ||
     (
       /^## Theory Option Set\b/mu.test(content) &&
       /^## Discriminator First\b/mu.test(content) &&
@@ -120,6 +137,75 @@ function isTheoryLoopSprint(content, filePath = EMPTY_TEXT) {
       /^## Theory Loop Generative Brief\b/mu.test(content)
     )
   );
+}
+
+function isConcreteTheoryLoopTerminationValue(value) {
+  const normalized = normalizeLedgerFieldValue(value);
+  return normalized.length > 0 &&
+    !THEORY_LOOP_EMPTY_TERMINATION_FIELD_PATTERN.test(normalized);
+}
+
+function validateBlockedTheoryLoopTerminationEvidence(content, sprintPath) {
+  const section = extractMarkdownLevelTwoSection(
+    content,
+    THEORY_LOOP_TERMINATION_HEADING,
+  );
+  if (!section) {
+    return [
+      `${sprintPath}: active theory-loop sprint has no active/todo ` +
+      `packages and lacks ${THEORY_LOOP_TERMINATION_HEADING}.`,
+    ];
+  }
+  const loopStatus = findMarkdownField(
+    section,
+    THEORY_LOOP_TERMINATION_LOOP_STATUS_LABEL,
+  ).toLowerCase();
+  const reason = findMarkdownField(
+    section,
+    THEORY_LOOP_TERMINATION_REASON_LABEL,
+  ).toLowerCase();
+  const evidence = findMarkdownField(
+    section,
+    THEORY_LOOP_TERMINATION_EVIDENCE_LABEL,
+  );
+  const humanOverride = findMarkdownField(
+    section,
+    THEORY_LOOP_TERMINATION_HUMAN_OVERRIDE_LABEL,
+  );
+  const errors = [];
+  if (loopStatus !== THEORY_LOOP_TERMINATION_TERMINATED) {
+    errors.push(
+      `${sprintPath}: ${THEORY_LOOP_TERMINATION_HEADING} ` +
+      `${THEORY_LOOP_TERMINATION_LOOP_STATUS_LABEL} must be ` +
+      `${THEORY_LOOP_TERMINATION_TERMINATED} before the package queue can be empty.`,
+    );
+  }
+  if (!THEORY_LOOP_TERMINATION_BLOCKED_REASONS.has(reason)) {
+    errors.push(
+      `${sprintPath}: empty active theory-loop queue requires blocked ` +
+      `${THEORY_LOOP_TERMINATION_REASON_LABEL} to be ` +
+      'blocked-frozen-decision or blocked-external-dependency, or else ' +
+      `record ${THEORY_LOOP_SUCCESS_EVIDENCE_HEADING} and close the sprint.`,
+    );
+  }
+  if (!isConcreteTheoryLoopTerminationValue(evidence)) {
+    errors.push(
+      `${sprintPath}: ${THEORY_LOOP_TERMINATION_HEADING} requires concrete ` +
+      `${THEORY_LOOP_TERMINATION_EVIDENCE_LABEL} for a blocked handoff.`,
+    );
+  }
+  if (
+    reason === THEORY_LOOP_TERMINATION_BLOCKED_FROZEN &&
+    !isConcreteTheoryLoopTerminationValue(humanOverride)
+  ) {
+    errors.push(
+      `${sprintPath}: ${THEORY_LOOP_TERMINATION_HEADING} with ` +
+      `${THEORY_LOOP_TERMINATION_REASON_LABEL} ` +
+      `${THEORY_LOOP_TERMINATION_BLOCKED_FROZEN} requires concrete ` +
+      `${THEORY_LOOP_TERMINATION_HUMAN_OVERRIDE_LABEL}.`,
+    );
+  }
+  return errors;
 }
 
 function validateTheoryLoopSuccessEvidence(content, sprintPath) {
@@ -216,6 +302,99 @@ function validateTheoryLoopSuccessEvidence(content, sprintPath) {
     );
   }
   return errors;
+}
+
+function validateTheoryLoopQueueExhaustion(summary, sprintContent) {
+  const sprintPath = summary.sprintPath;
+  if (!isTheoryLoopSprint(sprintContent, sprintPath)) {
+    return [];
+  }
+  if (summary.counts.left > 0) {
+    return [];
+  }
+  const successErrors = validateTheoryLoopSuccessEvidence(
+    sprintContent,
+    sprintPath,
+  );
+  if (successErrors.length === 0) {
+    return [];
+  }
+  const blockedTerminationErrors = validateBlockedTheoryLoopTerminationEvidence(
+    sprintContent,
+    sprintPath,
+  );
+  if (blockedTerminationErrors.length === 0) {
+    return [];
+  }
+  return [
+    `${sprintPath}: active theory-loop sprint has no active/todo ` +
+    'packages but no terminal success evidence or blocked termination ' +
+    'handoff. Create or activate the next successor package before ' +
+    'stopping, or record valid terminal evidence.',
+    ...successErrors,
+    ...blockedTerminationErrors,
+  ];
+}
+
+async function buildTheoryLoopContinuationGuard(options = {}) {
+  const root = options.root ?? process.cwd();
+  const sprintPath = options.sprintPath ?
+    normalizeRelativePath(options.sprintPath) :
+    undefined;
+  const summary = await buildSprintRemainingSummary({root, sprintPath});
+  const sprintContent = await fs.readFile(
+    path.join(root, summary.sprintPath),
+    ENCODING_UTF8,
+  );
+  const errors = validateTheoryLoopQueueExhaustion(summary, sprintContent);
+  if (errors.length > 0) {
+    throw new Error(errors.join(NEWLINE));
+  }
+  return {
+    sprintPath: summary.sprintPath,
+    packagesLeft: summary.counts.left,
+    theoryLoop: isTheoryLoopSprint(sprintContent, summary.sprintPath),
+  };
+}
+
+async function assertTheoryLoopQueueWillRemainValidAfterPackageClose(
+  options = {},
+) {
+  const root = options.root ?? process.cwd();
+  const closingPackagePath = normalizeRelativePath(options.packagePath || EMPTY_TEXT);
+  const sprintPath = options.sprintPath ?
+    normalizeRelativePath(options.sprintPath) :
+    undefined;
+  const summary = await buildSprintRemainingSummary({root, sprintPath});
+  const remainingPackages = summary.leftPackages.filter((workPackage) =>
+    workPackage.path !== closingPackagePath);
+  if (remainingPackages.length > 0) {
+    return;
+  }
+  const sprintContent = await fs.readFile(
+    path.join(root, summary.sprintPath),
+    ENCODING_UTF8,
+  );
+  const hypotheticalSummary = {
+    ...summary,
+    leftPackages: [],
+    counts: {
+      active: 0,
+      todo: 0,
+      left: 0,
+    },
+  };
+  const errors = validateTheoryLoopQueueExhaustion(
+    hypotheticalSummary,
+    sprintContent,
+  );
+  if (errors.length > 0) {
+    throw new Error([
+      `Closing ${closingPackagePath} would exhaust the active theory-loop ` +
+      'package queue.',
+      ...errors,
+    ].join(NEWLINE));
+  }
 }
 
 function updateReferenceContent(content, activeSprintPath, doneSprintPath) {
@@ -380,9 +559,29 @@ function renderSprintAdvancePlan(plan, options = {}) {
   return `${lines.join(NEWLINE)}${NEWLINE}`;
 }
 
+function renderTheoryLoopContinuationGuard(result) {
+  return [
+    '# Theory Loop Continuation Guard',
+    EMPTY_TEXT,
+    `Sprint: \`${result.sprintPath}\``,
+    `Theory loop: ${result.theoryLoop ? 'yes' : 'no'}`,
+    `Packages left: ${result.packagesLeft}`,
+    'Status: valid',
+    EMPTY_TEXT,
+  ].join(NEWLINE);
+}
+
 async function runCli(args = process.argv.slice(2), options = {}) {
   if (args.includes(FLAG_HELP)) {
     return `${HELP_TEXT}${NEWLINE}`;
+  }
+  if (args.includes(FLAG_CHECK_CONTINUATION)) {
+    const sprintPath = parseOptionValue(args, FLAG_SPRINT);
+    const result = await buildTheoryLoopContinuationGuard({
+      root: options.root,
+      sprintPath,
+    });
+    return renderTheoryLoopContinuationGuard(result);
   }
   const write = args.includes(FLAG_WRITE);
   const dryRun = args.includes(FLAG_DRY_RUN) || !write;
@@ -415,8 +614,12 @@ if (isDirectRun()) {
 
 export {
   applySprintAdvancePlan,
+  assertTheoryLoopQueueWillRemainValidAfterPackageClose,
   buildSprintAdvancePlan,
+  buildTheoryLoopContinuationGuard,
   renderSprintAdvancePlan,
+  renderTheoryLoopContinuationGuard,
   runCli,
   updateReferenceContent,
+  validateTheoryLoopQueueExhaustion,
 };

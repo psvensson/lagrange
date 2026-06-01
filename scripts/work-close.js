@@ -10,6 +10,9 @@ import {
   normalizeMetadata,
 } from './work-package-schema.js';
 import {computeResidualCountFromArtifact} from './work-residual-count.js';
+import {
+  assertTheoryLoopQueueWillRemainValidAfterPackageClose,
+} from './work-sprint-advance.js';
 import {runSprintPush} from './work-sprint-push.js';
 
 // R14 ceremony fold. Before closing, bind representativeResidual.residualCount to
@@ -235,6 +238,18 @@ async function main() {
       console.log('- Push the close commit and flip package ledgers to Pushed: yes (--push)');
     }
     return;
+  }
+
+  // Theory-loop sprints are non-halting. Closing the last active package must
+  // either leave a successor package or record terminal sprint evidence first.
+  try {
+    await assertTheoryLoopQueueWillRemainValidAfterPackageClose({
+      root: process.cwd(),
+      packagePath: relativePackagePath,
+    });
+  } catch (error) {
+    console.error(error.message);
+    process.exit(1);
   }
 
   // 2. Run active package validation before the tracker validates the done target.

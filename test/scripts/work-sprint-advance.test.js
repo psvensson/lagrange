@@ -5,7 +5,9 @@ import path from 'node:path';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   applySprintAdvancePlan,
+  assertTheoryLoopQueueWillRemainValidAfterPackageClose,
   buildSprintAdvancePlan,
+  buildTheoryLoopContinuationGuard,
   renderSprintAdvancePlan,
   runCli,
   updateReferenceContent,
@@ -22,6 +24,7 @@ const ACTIVE_SPRINT = path.join(SPRINTS_DIRECTORY, 'active-alpha.md');
 const DONE_SPRINT = path.join(SPRINTS_DIRECTORY, 'done-alpha.md');
 const DONE_PACKAGE = path.join(PACKAGES_DIRECTORY, 'done-alpha-package.md');
 const ACTIVE_PACKAGE = path.join(PACKAGES_DIRECTORY, 'active-alpha-package.md');
+const TODO_PACKAGE = path.join(PACKAGES_DIRECTORY, 'todo-alpha-package.md');
 const TRACK_FILE = path.join(TRACKS_DIRECTORY, 'alpha.md');
 const RELEASE_FILE = path.join(RELEASES_DIRECTORY, '0.1-dependency-map.md');
 
@@ -296,6 +299,30 @@ test('sprint advance rejects alternate stop labels in theory-loop success condit
   );
 });
 
+test('sprint advance treats Theory Loop Shape sprints as theory-loop closures', async (t) => {
+  const root = await makeTempRoot(t);
+  await writeFixture(root, ACTIVE_SPRINT, [
+    '# Alpha Sprint',
+    '',
+    'Status: active.',
+    '',
+    '## Evidence Anchor',
+    '',
+    '- Success condition: rolling-restart representative run passes with all nodes ACTIVE',
+    '',
+    '## Theory Loop Shape',
+    '',
+    '- System theory: continue until representative green.',
+    '- Promotion rule: create one executable package after each discriminator.',
+    '',
+  ].join('\n'));
+
+  await t.rejects(
+    buildSprintAdvancePlan({root}),
+    /cannot close without ## Theory Loop Success Evidence/u,
+  );
+});
+
 test('sprint advance accepts theory-loop closure only on the original success condition', async (t) => {
   const root = await makeTempRoot(t);
   await writeFixture(root, ACTIVE_SPRINT, [
@@ -333,6 +360,117 @@ test('sprint advance accepts theory-loop closure only on the original success co
 
   t.equal(plan.packagesLeft, 0);
   t.equal(plan.doneSprintPath, DONE_SPRINT);
+});
+
+test('theory-loop continuation guard rejects an exhausted active package queue', async (t) => {
+  const root = await makeTempRoot(t);
+  await writeFixture(root, ACTIVE_SPRINT, [
+    '# Alpha Sprint',
+    '',
+    'Status: active.',
+    '',
+    '## Evidence Anchor',
+    '',
+    '- Success condition: rolling-restart representative run passes with all nodes ACTIVE',
+    '',
+    '## Theory Loop Shape',
+    '',
+    '- System theory: continue until representative green.',
+    '',
+  ].join('\n'));
+
+  await t.rejects(
+    buildTheoryLoopContinuationGuard({root}),
+    /no active\/todo packages but no terminal success evidence/u,
+  );
+});
+
+test('theory-loop continuation guard accepts a blocked termination handoff', async (t) => {
+  const root = await makeTempRoot(t);
+  await writeFixture(root, ACTIVE_SPRINT, [
+    '# Alpha Sprint',
+    '',
+    'Status: active.',
+    '',
+    '## Evidence Anchor',
+    '',
+    '- Success condition: rolling-restart representative run passes with all nodes ACTIVE',
+    '',
+    '## Theory Loop Shape',
+    '',
+    '- System theory: continue until representative green.',
+    '',
+    '## Theory Loop Termination',
+    '',
+    '- Loop status: terminated',
+    '- Termination reason: blocked-external-dependency',
+    '- Evidence: upstream scenario harness artifact is unavailable in CI incident 42',
+    '',
+  ].join('\n'));
+
+  const result = await buildTheoryLoopContinuationGuard({root});
+
+  t.equal(result.theoryLoop, true);
+  t.equal(result.packagesLeft, 0);
+});
+
+test('package close preflight rejects exhausting a running theory-loop queue', async (t) => {
+  const root = await makeTempRoot(t);
+  await writeFixture(root, ACTIVE_SPRINT, [
+    '# Alpha Sprint',
+    '',
+    'Status: active.',
+    '',
+    '## Evidence Anchor',
+    '',
+    '- Success condition: rolling-restart representative run passes with all nodes ACTIVE',
+    '',
+    '## Theory Loop Shape',
+    '',
+    '- System theory: continue until representative green.',
+    '',
+    `1. [Active](../packages/${path.basename(ACTIVE_PACKAGE)})`,
+    '',
+  ].join('\n'));
+  await writeFixture(root, ACTIVE_PACKAGE, packageFile('active'));
+
+  await t.rejects(
+    assertTheoryLoopQueueWillRemainValidAfterPackageClose({
+      root,
+      packagePath: ACTIVE_PACKAGE,
+    }),
+    /would exhaust the active theory-loop package queue/u,
+  );
+});
+
+test('package close preflight accepts a remaining successor package', async (t) => {
+  const root = await makeTempRoot(t);
+  await writeFixture(root, ACTIVE_SPRINT, [
+    '# Alpha Sprint',
+    '',
+    'Status: active.',
+    '',
+    '## Evidence Anchor',
+    '',
+    '- Success condition: rolling-restart representative run passes with all nodes ACTIVE',
+    '',
+    '## Theory Loop Shape',
+    '',
+    '- System theory: continue until representative green.',
+    '',
+    `1. [Active](../packages/${path.basename(ACTIVE_PACKAGE)})`,
+    `2. [Todo](../packages/${path.basename(TODO_PACKAGE)})`,
+    '',
+  ].join('\n'));
+  await writeFixture(root, ACTIVE_PACKAGE, packageFile('active'));
+  await writeFixture(root, TODO_PACKAGE, packageFile('todo'));
+
+  await assertTheoryLoopQueueWillRemainValidAfterPackageClose({
+    root,
+    packagePath: ACTIVE_PACKAGE,
+  });
+
+  t.pass('successor package keeps the theory-loop queue non-empty');
 });
 
 test('sprint advance renderer shows the files that will change', async (t) => {

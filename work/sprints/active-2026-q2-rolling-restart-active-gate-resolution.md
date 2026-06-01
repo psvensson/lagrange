@@ -111,22 +111,22 @@ current-blocker files, sprint state, package queues, or theory-ledger decisions.
 ## Current Edge Card
 
 ```text
-Representative artifact: test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json
-Visible first frontier: representative_evidence_owner / rolling_restart_rerun model coverage binding
-Active package: work/packages/done-20260531-representative-rerun-progress-model-coverage-binding.md
-Active package owner: representative_evidence_owner
-Active package boundary: rolling_restart_rerun
-Selected cause: representative_rerun_model_coverage_binding
-Required action: Bind the representative rerun progress model into a System Contract Record and invariant registry so the pair has owner-dossier-visible model coverage before another rerun is considered.
-Representative status: architecture-gap
-Causal outcome: architecture-gap
-Architecture gate: selected / bind-contract-and-invariant-model-coverage
-Expected delta: Owner-dossier-visible model coverage blocks unmodelled rerun churn and enables the next legal route decision.
-Current state: docs/specs/representative-rerun-progress-model.json exists, but owner-dossier reports contractRecord=null, invariants=[], and modelStatus=none for representative_evidence_owner / rolling_restart_rerun.
-Allowed edits: work/packages/done-20260531-representative-rerun-progress-model-coverage-binding.md, architecture/contracts/rolling-restart-representative-rerun-progress.md, architecture/contracts/invariants.json, work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md, work/theory-ledger.md
+Representative artifact: none
+Visible first frontier: unknown
+Active package: work/packages/done-20260601-queue-exhaustion-guard.md
+Active package owner: workflow_tooling_owner
+Active package boundary: continuation_guard
+Selected cause: theory_loop_queue_exhaustion_guard
+Required action: Make sprint close and push reject an active theory-loop sprint with zero active/todo packages unless success evidence or blocked termination evidence is recorded; leave a successor package before closing this maintenance package.
+Representative status: unknown
+Causal outcome: unknown
+Architecture gate: not-required / unknown
+Expected delta: unknown
+Current state: Package opened with declared owner, boundary, scope, proof, and stop rule.
+Allowed edits: scripts/work-sprint-advance.js, scripts/work-sprint-push.js, scripts/work-close.js, scripts/work-tracker.js, test/scripts/work-sprint-advance.test.js, test/scripts/work-sprint-remaining.test.js, test/scripts/work-tracker-theory-loop-continuation.test.js, work/packages/todo-20260601-representative-rerun-progress-model-route-decision.md, work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md, work/sprints/current-blocker.json
 Candidate runtime files: unknown
-Forbidden edits: A blocked_model_route artifact cannot authorize rerun_representative_evidence until model coverage and route selection allow it.
-Required latest proof: falsifier: node -e "const {execFileSync}=require('child_process'); const out=execFileSync('npm',['--silent','run','work:owner-dossier','--','--owner','representative_evidence_owner','--boundary','rolling_restart_rerun','--json'],{encoding:'utf8'}); const d=JSON.parse(out); if (d.modelStatus!=='proven') throw new Error('expected proven modelStatus'); if (!d.contractRecord) throw new Error('missing contractRecord'); if (!Array.isArray(d.provenRoutes)||d.provenRoutes.length===0) throw new Error('missing provenRoutes');", regression: npm run work:contract:check -- architecture/contracts/rolling-restart-representative-rerun-progress.md, supporting: npm run work:invariants:check, supporting: node -e "const fs=require('fs'); const m=JSON.parse(fs.readFileSync('docs/specs/representative-rerun-progress-model.json','utf8')); if (!m.properties.some((p)=>p.id==='non_shrinking_window_blocks_rerun')) throw new Error('missing non_shrinking_window_blocks_rerun'); if (!m.properties.some((p)=>p.id==='blocked_route_has_non_rerun_exits')) throw new Error('missing blocked_route_has_non_rerun_exits');"
+Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
+Required latest proof: regression: npm test -- test/scripts/work-sprint-advance.test.js test/scripts/work-sprint-remaining.test.js test/scripts/work-tracker-theory-loop-continuation.test.js, supporting: npm run work:sprint:push -- --dry-run, supporting: git diff --check
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -225,6 +225,16 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Bind the existing representative rerun progress model into a System
      Contract Record and invariant registry entries so owner-dossier reports
      proven coverage before another representative rerun is considered.
+20. `active` -
+   [Theory Loop Queue Exhaustion Guard](work/packages/done-20260601-queue-exhaustion-guard.md)
+   - Workflow-tooling maintenance that prevents an active theory-loop sprint
+     from reaching zero active/todo packages without terminal success evidence,
+     blocked termination evidence, or an autonomous successor package.
+21. `todo` -
+   [Representative Rerun Progress Model Route Decision](work/packages/todo-20260601-representative-rerun-progress-model-route-decision.md)
+   - Classification successor that uses the proven representative rerun progress
+     model coverage to select the next legal route before any representative
+     rerun, runtime promotion, migration, or architecture continuation.
 
 ## Sprint Proof Ladder
 

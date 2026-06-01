@@ -45,6 +45,22 @@ function theoryLoopSprint(extraSections = []) {
   ].join('\n');
 }
 
+function theoryLoopShapeSprint(extraSections = []) {
+  return [
+    '# Sprint',
+    '',
+    '## Evidence Anchor',
+    '',
+    '- Success condition: rolling-restart representative run passes with all nodes ACTIVE',
+    '',
+    '## Theory Loop Shape',
+    '',
+    '- System theory: continue until representative green.',
+    '- Promotion rule: create one executable package after each discriminator.',
+    ...(extraSections.length > 0 ? ['', ...extraSections] : []),
+  ].join('\n');
+}
+
 function terminationSection(lines) {
   return ['## Theory Loop Termination', '', ...lines];
 }
@@ -203,6 +219,18 @@ test('strategy brief redirect rule accepts the new redirect-rule label', (t) => 
 
 test('running theory-loop sprint with a bare-halt redirect rule is rejected', (t) => {
   const sprint = theoryLoopSprint(strategyBrief(
+    '- Redirect rule: on unchanged evidence end the turn and await human ' +
+      'confirmation before proceeding.',
+  ));
+  const errors = validateTheoryLoopContinuation(sprint, SPRINT_PATH, {
+    status: 'active',
+  });
+  t.match(errors.join('\n'), /theory-loop-redirect-rule-not-actionable/u);
+  t.end();
+});
+
+test('running Theory Loop Shape sprint with a bare-halt redirect rule is rejected', (t) => {
+  const sprint = theoryLoopShapeSprint(strategyBrief(
     '- Redirect rule: on unchanged evidence end the turn and await human ' +
       'confirmation before proceeding.',
   ));

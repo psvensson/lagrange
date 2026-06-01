@@ -8,7 +8,9 @@ import process from 'node:process';
 const COMMAND_GIT = 'git';
 const COMMAND_NODE = process.execPath;
 const SCRIPT_SPRINT_REMAINING = 'scripts/work-sprint-remaining.js';
+const SCRIPT_SPRINT_ADVANCE = 'scripts/work-sprint-advance.js';
 const PUSH_COMMAND = 'push';
+const FLAG_CHECK_CONTINUATION = '--check-continuation';
 const EXIT_SUCCESS = 0;
 const EXIT_FAILURE = 1;
 const PROCESS_ARG_USER_START = 2;
@@ -60,6 +62,15 @@ function flipPushedBoolean(now = new Date()) {
 }
 
 function runSprintPush(args = [], runner = spawnSync) {
+  const continuationResult = runCommand(
+    COMMAND_NODE,
+    [SCRIPT_SPRINT_ADVANCE, FLAG_CHECK_CONTINUATION],
+    runner,
+  );
+  const continuationStatus = statusFromResult(continuationResult);
+  if (continuationStatus !== EXIT_SUCCESS) {
+    return continuationStatus;
+  }
   const pushResult = runCommand(
     COMMAND_GIT,
     [PUSH_COMMAND, ...args],

@@ -33,6 +33,10 @@ const CURRENT_BLOCKER_ONLY_TITLE = 'Current Blocker Only';
 const TEST_GIT_COMMAND = 'git';
 const TEST_NODE_COMMAND_SUFFIX = 'node';
 const TEST_PUSH_COMMAND = 'push';
+const TEST_CONTINUATION_GUARD_ARGS = [
+  'scripts/work-sprint-advance.js',
+  '--check-continuation',
+];
 const EXIT_SUCCESS = 0;
 const EXIT_FAILURE = 1;
 const SUMMARY_TEST_NAME =
@@ -42,9 +46,11 @@ const CURRENT_BLOCKER_TEST_NAME =
 const LINK_PARSE_TEST_NAME =
   'sprint package link parser normalizes package paths';
 const PUSH_WRAPPER_TEST_NAME =
-  'sprint push wrapper runs remaining summary after successful push';
+  'sprint push wrapper runs continuation guard before push and remaining summary after successful push';
 const PUSH_FAILURE_TEST_NAME =
   'sprint push wrapper skips remaining summary after failed push';
+const PUSH_GUARD_FAILURE_TEST_NAME =
+  'sprint push wrapper skips git push when continuation guard fails';
 
 function packageFile(title, metadata) {
   return [
@@ -179,14 +185,34 @@ test(PUSH_WRAPPER_TEST_NAME, (t) => {
   const status = runSprintPush(['origin', 'branch'], runner);
 
   t.equal(status, EXIT_SUCCESS);
-  t.equal(calls[0][0], TEST_GIT_COMMAND);
-  t.same(calls[0][1], [TEST_PUSH_COMMAND, 'origin', 'branch']);
-  t.match(calls[1][0], new RegExp(`${TEST_NODE_COMMAND_SUFFIX}$`, 'u'));
-  t.same(calls[1][1], ['scripts/work-sprint-remaining.js']);
+  t.match(calls[0][0], new RegExp(`${TEST_NODE_COMMAND_SUFFIX}$`, 'u'));
+  t.same(calls[0][1], TEST_CONTINUATION_GUARD_ARGS);
+  t.equal(calls[1][0], TEST_GIT_COMMAND);
+  t.same(calls[1][1], [TEST_PUSH_COMMAND, 'origin', 'branch']);
+  t.match(calls[2][0], new RegExp(`${TEST_NODE_COMMAND_SUFFIX}$`, 'u'));
+  t.same(calls[2][1], ['scripts/work-sprint-remaining.js']);
   t.end();
 });
 
 test(PUSH_FAILURE_TEST_NAME, (t) => {
+  const calls = [];
+  const runner = (command, args) => {
+    calls.push([command, args]);
+    return command === TEST_GIT_COMMAND ?
+      {status: EXIT_FAILURE} :
+      {status: EXIT_SUCCESS};
+  };
+
+  const status = runSprintPush(['origin', 'branch'], runner);
+
+  t.equal(status, EXIT_FAILURE);
+  t.equal(calls.length, 2);
+  t.same(calls[0][1], TEST_CONTINUATION_GUARD_ARGS);
+  t.equal(calls[1][0], TEST_GIT_COMMAND);
+  t.end();
+});
+
+test(PUSH_GUARD_FAILURE_TEST_NAME, (t) => {
   const calls = [];
   const runner = (command, args) => {
     calls.push([command, args]);
@@ -197,5 +223,6 @@ test(PUSH_FAILURE_TEST_NAME, (t) => {
 
   t.equal(status, EXIT_FAILURE);
   t.equal(calls.length, 1);
+  t.same(calls[0][1], TEST_CONTINUATION_GUARD_ARGS);
   t.end();
 });

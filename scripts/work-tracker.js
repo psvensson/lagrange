@@ -3105,6 +3105,7 @@ function validateSprintStrategyBriefRedirectRule(filePath, section) {
 function isTheoryLoopSprint(content, filePath = EMPTY_TEXT) {
   return (
     /^## Theory Loop Sprint\b/mu.test(content) ||
+    /^## Theory Loop Shape\b/mu.test(content) ||
     (
       /^## Theory Option Set\b/mu.test(content) &&
       /^## Discriminator First\b/mu.test(content) &&
