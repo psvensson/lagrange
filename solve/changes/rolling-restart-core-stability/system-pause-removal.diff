@@ -1,0 +1,966 @@
+diff --git a/.kiro/steering/workflow-guidelines/solver-quests.md b/.kiro/steering/workflow-guidelines/solver-quests.md
+index d6167821..637a7696 100644
+--- a/.kiro/steering/workflow-guidelines/solver-quests.md
++++ b/.kiro/steering/workflow-guidelines/solver-quests.md
+@@ -10,7 +10,7 @@ last_reviewed: 2026-06-01
+ 
+ > **Canonical source.** The Solver is the repository work system. Its unit of
+ > work is a **Quest**: one sealed goal, one append-only event log, measured
+-> attempts, durable findings, and a terminal report. Runbook:
++> attempts, durable findings, Quest-native theories, and a terminal report. Runbook:
+ > [`../../../docs/solver-runbook.md`](../../../docs/solver-runbook.md).
+ 
+ # Quest Workflow
+@@ -48,16 +48,52 @@ The file declares:
+ Keep `metric` and `doneWhen` separate. A metric is a gradient; only `doneWhen`
+ can close the Quest.
+ 
++## Two-Layer Theory
++
++Use Quest-native theories when a frontier stalls, when the work crosses owner or
++layer boundaries, or when the strategy ladder reaches the model rung.
++
++The two layers are:
++
++- **System theory**: why the scenario is stuck across owners, phases,
++  invariants, or feedback loops.
++- **Frontier theory**: why the next local intervention should move the selected
++  frontier metric.
++
++The active command surface is:
++
++```sh
++node scripts/solve.js theory system --id <id> ...
++node scripts/solve.js theory option --id <id> --frontier <frontier> ...
++node scripts/solve.js theory select --id <id> --frontier <frontier> --theory <theory-id>
++node scripts/solve.js theory record --id <id> --theory <theory-id> --result supported|falsified|superseded|avoided|stale|needs-rerun ...
++node scripts/solve.js theory card --evidence <artifact>
++node scripts/solve.js health --id <id>
++```
++
++Do not revive sprint/package theory state as active authority. The archived
++theory ledger may be imported only as archive memory; imported archive theories
++cannot be selected for implementation until fresh Quest evidence reselects a
++frontier theory.
++
++The Solver enforces theory in supervised steps and autonomous loop preflight
++only where it removes repeated local patching:
++
++- `local-fix`: theory optional.
++- `widen-scope`: selected frontier theory required.
++- `model`: selected frontier theory, active system theory, and `--modelRef` or
++  `--modelNotApplicable` required.
++- `change-approach`: selected frontier theory remains required; model evidence
++  is not required unless this rung explicitly returns to a model test.
++
+ ## Attempt Flow
+ 
+ For supervised work:
+ 
+-1. `node scripts/solve.js step --id <id>` prints the current frontier dossier
+-   and pins the before metric.
+-2. Do the work and rerun the relevant harness/probe.
+-3. `node scripts/solve.js step --id <id> --commit --changeRef diff:<path>`
+-   re-measures, validates the attempt, updates the ladder, and records the log
+-   event.
++1. Do the work and rerun the relevant harness/probe.
++2. `node scripts/solve.js step --id <id> --changeRef diff:<path> --summary "<hypothesis>"`
++   measures, validates the attempt, updates the strategy ladder, and records the log
++   event synchronously without intermediate pending files or pauses.
+ 
+ For autonomous work:
+ 
+@@ -106,14 +142,20 @@ Use `node scripts/solve.js finding` to record durable knowledge:
+ Findings are replayed into future dossiers for the same frontier. They replace
+ ad-hoc memory and chat-only handoff notes.
+ 
+-## Terminal Conditions
++Theory result events are likewise durable memory. A measured attempt linked to a
++theory records supported, falsified, or needs-rerun learning so failed attempts
++still narrow the next move.
++
++## Terminal And Blocking Conditions
+ 
+-A Quest run ends in exactly one terminal result:
++A Quest run can end in one terminal result or stop at a non-terminal gate:
+ 
+ - **SOLVED**: `doneWhen` is satisfied against live evidence.
+ - **EXHAUSTED**: every frontier is parked and no honest remaining move exists.
+ - **MAX_CYCLES**: the configured safety bound stopped the loop; treat this as a
+   runner configuration problem, not a Quest result.
++- **THEORY_REQUIRED**: the selected rung needs system or frontier theory before
++  another attempt; record the theory and resume instead of patching through it.
+ 
+ `node scripts/solve.js report --id <id>` is the closure projection. It is a pure
+ read of the event log and derived state.
+@@ -122,9 +164,13 @@ read of the event log and derived state.
+ 
+ Track authored Quest files under `solve/quests/`.
+ 
+-The append-only log, projected state, generated reports, and generated change
+-artifacts live under `solve/{log,state,report,changes}/`. These are
+-regenerable runtime artifacts and are git-ignored.
++Track the append-only event log under `solve/log/` because it is the durable
++source of truth for findings, attempts, and terminal state. Track generated
++reports under `solve/report/` and attempt change artifacts under
++`solve/changes/` when they explain committed work.
++
++Projected state under `solve/state/` is local cache and may be rebuilt from the
++Quest plus append-only log. Do not rely on `solve/state/` as durable memory.
+ 
+ ## User-Facing Vocabulary
+ 
+@@ -134,5 +180,7 @@ Use these terms consistently:
+ - **Frontier**: an independent attack surface within a Quest.
+ - **Attempt**: one measured try against a frontier.
+ - **Finding**: durable knowledge learned during the Quest.
++- **Theory**: system-level or frontier-level causal explanation tested by
++  discriminators and attempts.
+ - **Report**: the Solver's terminal or in-progress projection.
+ - **Solver**: the tooling under `scripts/solve.js` and `scripts/solve/`.
+diff --git a/docs/solver-runbook.md b/docs/solver-runbook.md
+index 42c056eb..da04e8fa 100644
+--- a/docs/solver-runbook.md
++++ b/docs/solver-runbook.md
+@@ -13,6 +13,7 @@ from a worker's self-report.
+ | Frontier | Independent work surface with a lower-is-better metric. |
+ | Attempt | One recorded try: hypothesis, metric before -> after, changeRef. |
+ | Finding | Durable knowledge: a claim, optional evidence, optional `rulesOut`. |
++| Theory | Durable two-layer reasoning: system theory plus selected frontier theory. |
+ | Report (`solve/report/<id>.md`) | Read-only projection of the event log and terminal state. |
+ 
+ `doneWhen` is binary terminal success. `metric` is a progress gradient. Keep them
+@@ -47,21 +48,14 @@ Available probes:
+ 
+ ## Supervised Step
+ 
+-Use a supervised step when a human or local agent performs one vertical slice
+-between measurements.
++Use a supervised step when a human or local agent performs one vertical slice.
+ 
+ ```sh
+-# 1. Begin: prints the rung dossier and pins the baseline metric.
+-node scripts/solve.js step --id rolling-restart
++# 1. Do the work, then rerun the harness so fresh evidence exists.
+ 
+-# 2. Do the work, then rerun the harness so fresh evidence exists.
+-
+-# 3. Commit: re-measures and records the attempt.
+-node scripts/solve.js step --id rolling-restart --commit \
++# 2. Step: measures, validates the attempt, and records the event synchronously.
++node scripts/solve.js step --id rolling-restart \
+   --changeRef diff:path/to.patch --summary "tightened restart backpressure guard"
+-
+-# Abort a pending step without recording an attempt:
+-node scripts/solve.js step --id rolling-restart --abort
+ ```
+ 
+ `--changeRef` must resolve to an existing patch artifact:
+@@ -87,6 +81,77 @@ node scripts/solve.js finding --id rolling-restart --frontier rolling-restart-co
+ 
+ Findings are replayed into future dossiers for the same frontier.
+ 
++## Recording Quest Theories
++
++Use Quest-native theories when a frontier stalls, a fix crosses owner/layer
++boundaries, or a model route is due. Do not revive sprint/package theory state
++as active authority; archived theory ledger entries can only be imported as
++archive memory.
++
++System theory explains why the whole scenario is stuck:
++
++```sh
++node scripts/solve.js theory system --id rolling-restart \
++  --theory theory-rolling-system \
++  --problem "active gate stalls across owners" \
++  --evidence test-output/reports/rolling-restart.report.json \
++  --success "rolling-restart passes the sealed doneWhen" \
++  --mechanism coupled_invariants \
++  --owner startup_active_gate_owner \
++  --missing-edge "cross-owner publication discriminator" \
++  --discriminator "npm run model:contracts" \
++  --stable-fact "representative metric stayed flat" \
++  --changed-fact "frontier climbed to model rung"
++```
++
++Frontier theory explains the next local intervention:
++
++```sh
++node scripts/solve.js theory option --id rolling-restart \
++  --frontier rolling-restart-main \
++  --theory theory-fresh-observation \
++  --layer observation \
++  --mechanism observation_gap \
++  --intervention "capture fresh owner evidence" \
++  --expected-movement "priority metric decreases" \
++  --negative-result "same metric falsifies observation-only fix" \
++  --discriminator "npm run analyze:topology-convergence -- <report>" \
++  --promotion "fresh owner evidence identifies a source path" \
++  --rejection "fresh evidence keeps the same blocker"
++
++node scripts/solve.js theory select --id rolling-restart \
++  --frontier rolling-restart-main --theory theory-fresh-observation
++```
++
++Record learning explicitly when a discriminator or attempt settles a theory:
++
++```sh
++node scripts/solve.js theory record --id rolling-restart \
++  --theory theory-fresh-observation --result falsified \
++  --evidence test-output/reports/rolling-restart.report.json
++```
++
++Supported results are `active`, `supported`, `falsified`, `superseded`,
++`avoided`, `stale`, and `needs-rerun`.
++
++The supervised step gate and autonomous loop preflight enforce theory only when
++it becomes valuable:
++
++- `local-fix`: theory optional.
++- `widen-scope`: selected frontier theory required.
++- `model`: selected frontier theory, active system theory, and `--modelRef` or
++  `--modelNotApplicable` required.
++- `change-approach`: selected frontier theory remains required; model evidence
++  is not required unless this rung is explicitly returning to a model test.
++
++Inspect the current theory and loop-health state with:
++
++```sh
++node scripts/solve.js theory list --id rolling-restart
++node scripts/solve.js health --id rolling-restart
++node scripts/solve.js theory card --evidence test-output/reports/rolling-restart.report.json
++```
++
+ ## Autonomous Run
+ 
+ ```sh
+@@ -117,14 +182,19 @@ The Solver writes a JSON dossier to `{requestFile}` and exports
+ The agent reports only what it did. `doneWhen` and metric movement are
+ re-measured from artifacts after the command exits. Timeout, non-zero exit, or
+ malformed response is recorded as a no-op attempt and the ladder escalates.
++If the selected rung needs theory, autonomous run stops at `theory-required`
++before invoking the executor; record or select the missing theory, then resume.
+ 
+ ## Tracked Versus Regenerable
+ 
+ Commit authored quests under `solve/quests/`.
+ 
+-The append-only log (`solve/log/`), derived state (`solve/state/`), generated
+-reports (`solve/report/`), and generated change artifacts (`solve/changes/`) are
+-runtime byproducts and are git-ignored.
++Commit the append-only log under `solve/log/`; it is durable Quest memory and
++the source for attempts, findings, and terminal state. Commit generated reports
++under `solve/report/` and attempt diffs under `solve/changes/` when they explain
++work that moved a metric or closed a Quest.
++
++`solve/state/` is derived cache and remains git-ignored.
+ 
+ ## Inspecting A Probe Directly
+ 
+diff --git a/scripts/solve.js b/scripts/solve.js
+index 9a434145..2b407fa7 100644
+--- a/scripts/solve.js
++++ b/scripts/solve.js
+@@ -3,10 +3,12 @@
+ //
+ // Subcommands:
+ //   new     scaffold a quest file you then edit (the only authored artifact)
+-//   run     run the control loop to a terminal (SOLVED / EXHAUSTED), then report
++//   run     run the control loop to a terminal or non-terminal gate, then report
+ //   status  print the projected state (frontiers, rungs, metrics)
+ //   report  (re)generate and print the markdown result projection
+ //   probe   ad-hoc: ask a probe for {metric, done, evidence} without recording
++//   theory  record two-layer Quest theories and their outcomes
++//   health  print Quest loop-health and next-action signals
+ //
+ // The CLI is a thin shell over scripts/solve/*. All Quest truth lives in the
+ // append-only log; reports and state are projections.
+@@ -21,8 +23,12 @@ import {makeAgentExecutor} from './solve/agent-executor.js';
+ import {runLoop} from './solve/loop.js';
+ import {writeReport} from './solve/report.js';
+ import {getProbe} from './solve/probe.js';
+-import {stepBegin, stepCommit, stepAbort, stepPending} from './solve/step.js';
++import {runStep} from './solve/step.js';
+ import {SOLVE_DATA_DIR} from './solve/constants.js';
++import {runTheoryCommand, theoryCommitArgs} from './solve/theory.js';
++import {analyzeQuestHealth, renderHealth} from './solve/health.js';
++import {ingestEvidence} from './solve/evidence.js';
++import {runAttemptCommand} from './solve/attempt.js';
+ 
+ function parseArgs(argv) {
+   const args = {_: []};
+@@ -34,7 +40,13 @@ function parseArgs(argv) {
+       if (next === undefined || next.startsWith('--')) {
+         args[key] = true;
+       } else {
+-        args[key] = next;
++        if (args[key] === undefined) {
++          args[key] = next;
++        } else if (Array.isArray(args[key])) {
++          args[key].push(next);
++        } else {
++          args[key] = [args[key], next];
++        }
+         i += 1;
+       }
+     } else {
+@@ -91,8 +103,12 @@ function cmdRun(root, args) {
+   if (args.max !== undefined) options.maxCycles = Number(args.max);
+   const result = runLoop(root, quest, options);
+   const {file} = writeReport(root, id);
++  const problems = result.problems?.length ?
++    `problems:\n${result.problems.map((problem) => `- ${problem}`).join('\n')}\n` :
++    '';
+   process.stdout.write(
+     `terminal: ${result.outcome}\nevidence: ${result.evidence || '(none)'}\n` +
++    problems +
+     `report: ${file}\n`);
+ }
+ 
+@@ -157,12 +173,32 @@ function cmdFinding(root, args) {
+   });
+   process.stdout.write(`recorded finding for ${args.frontier} @ ${stamped.ts}\n`);
+ }
+-
+-function stepCommitCmd(root, quest, args) {
+-  const r = stepCommit(root, quest, {
++function cmdStep(root, args) {
++  const id = args.id || args._[0];
++  if (!id) throw new Error('step: --id <questId> is required');
++  const quest = loadQuest(root, id);
++  if (!args.changeRef) {
++    throw new Error('step requires --changeRef diff:<path> and --summary "<hypothesis>"');
++  }
++  const r = runStep(root, quest, {
+     changeRef: typeof args.changeRef === 'string' ? args.changeRef : undefined,
+     summary: typeof args.summary === 'string' ? args.summary : undefined,
++    ...theoryCommitArgs(args),
+   });
++  if (r.terminal === 'theory-required') {
++    process.stdout.write(
++      `THEORY REQUIRED — ${r.frontier} rung ${r.rungIndex}\n` +
++      `${r.problems.map((problem) => `- ${problem}`).join('\n')}\n`);
++    return;
++  }
++  if (r.terminal === 'solved') {
++    process.stdout.write(`SOLVED — evidence: ${r.evidence || '(none)'}\n`);
++    return;
++  }
++  if (r.terminal === 'exhausted') {
++    process.stdout.write('EXHAUSTED — no open frontier; human decision needed\n');
++    return;
++  }
+   const moved = r.progressed ? 'PROGRESS' : 'flat';
+   const viol = r.violations.length ? ` violations: ${r.violations.join('; ')}` : '';
+   process.stdout.write(
+@@ -170,41 +206,41 @@ function stepCommitCmd(root, quest, args) {
+     `(${moved})${r.done ? ' DONE' : ''}${viol}\n`);
+ }
+ 
+-function stepBeginCmd(root, quest, id, args = {}) {
+-  const out = stepBegin(root, quest, {force: Boolean(args.force)});
+-  if (out.terminal === 'solved') {
+-    process.stdout.write(`SOLVED — evidence: ${out.evidence || '(none)'}\n`);
+-    return;
+-  }
+-  if (out.terminal === 'exhausted') {
+-    process.stdout.write('EXHAUSTED — no open frontier; human decision needed\n');
+-    return;
+-  }
+-  process.stdout.write(
+-    `${out.dossier}\n\n` +
+-    `# baseline metric: ${out.before.metric}\n` +
+-    '# Do the work, re-run the harness, then:\n' +
+-    `#   solve step --id ${id} --commit --changeRef diff:<path> ` +
+-    '--summary "<hypothesis>"\n');
++function cmdTheory(root, args) {
++  process.stdout.write(`${runTheoryCommand(root, args)}\n`);
+ }
+ 
+-function cmdStep(root, args) {
++function cmdHealth(root, args) {
+   const id = args.id || args._[0];
+-  if (!id) throw new Error('step: --id <questId> is required');
++  if (!id) throw new Error('health: --id <questId> is required');
+   const quest = loadQuest(root, id);
+-  if (args.abort) {
+-    process.stdout.write(stepAbort(root, id) ?
+-      'pending step aborted\n' : 'no pending step\n');
+-    return;
++  const health = analyzeQuestHealth(root, quest);
++  if (args.json) {
++    process.stdout.write(`${JSON.stringify(health, null, 2)}\n`);
++  } else {
++    process.stdout.write(renderHealth(health));
+   }
+-  if (args.commit) {
+-    stepCommitCmd(root, quest, args);
+-    return;
+-  }
+-  if (stepPending(root, id) && !args.force) {
+-    throw new Error('a step is already pending; use --commit, --abort, or --force');
+-  }
+-  stepBeginCmd(root, quest, id, args);
++}
++
++function cmdIngestEvidence(root, args) {
++  const id = args.id || args._[0];
++  if (!id) throw new Error('ingest-evidence: --id <questId> is required');
++  const frontier = args.frontier;
++  if (!frontier) throw new Error('ingest-evidence: --frontier <frontierId> is required');
++  const evidence = args.evidence;
++  if (!evidence) throw new Error('ingest-evidence: --evidence <evidencePath> is required');
++
++  const stamped = ingestEvidence(root, {
++    questId: id,
++    frontierId: frontier,
++    evidencePath: evidence,
++  });
++  process.stdout.write(`Ingested evidence: ${stamped.evidence} for ${frontier}\n`);
++}
++
++function cmdAttempt(root, args) {
++  runAttemptCommand(root, args);
++  process.stdout.write('Harness execution attempt complete and recorded.\n');
+ }
+ 
+ const COMMANDS = {
+@@ -215,6 +251,10 @@ const COMMANDS = {
+   probe: cmdProbe,
+   finding: cmdFinding,
+   step: cmdStep,
++  theory: cmdTheory,
++  health: cmdHealth,
++  'ingest-evidence': cmdIngestEvidence,
++  attempt: cmdAttempt,
+ };
+ 
+ function main() {
+@@ -226,7 +266,20 @@ function main() {
+     process.exit(command ? 1 : 0);
+     return;
+   }
+-  const args = parseArgs(rest);
++  let args;
++  if (command === 'attempt') {
++    const dashDashIndex = process.argv.indexOf('--');
++    if (dashDashIndex !== -1) {
++      const commandArgs = process.argv.slice(3, dashDashIndex);
++      const harnessCmd = process.argv.slice(dashDashIndex + 1);
++      args = parseArgs(commandArgs);
++      args._ = harnessCmd;
++    } else {
++      args = parseArgs(rest);
++    }
++  } else {
++    args = parseArgs(rest);
++  }
+   const root = args.root || process.cwd();
+   try {
+     handler(root, args);
+diff --git a/scripts/solve/step.js b/scripts/solve/step.js
+index c7d72af0..c9b5cf1c 100644
+--- a/scripts/solve/step.js
++++ b/scripts/solve/step.js
+@@ -1,128 +1,87 @@
+-// Manual vertical — the two-phase `step` flow for human/agent-in-the-loop work.
++// Single-phase synchronous `step` command for the minimal autonomy-first solver.
+ //
+-// Unlike the autonomous loop (whose executors never block), manual work happens
+-// out-of-band: a person makes a change and re-runs the harness between two CLI calls.
+-// So a manual attempt is bracketed across two invocations:
+-//
+-//   begin   measure the metric NOW, pick the frontier, print the rung dossier, and
+-//           persist a pending baseline.
+-//   commit  measure the metric again (after the operator's change + harness rerun),
+-//           then record the attempt through the SAME honesty + ladder decision path
+-//           the autonomous loop uses (loop.finalizeAttempt).
+-//
+-// This keeps "before" honestly pinned to the pre-work state while reusing all of the
+-// loop's guarantees (evidence-bound metrics, sealed goalposts, keep/climb/park).
+-
+-import fs from 'node:fs';
+-import path from 'node:path';
++// Replaces the split begin/commit flow, removing intermediate pending state and pauses.
++// The attempt is recorded synchronously.
+ 
+-import {SOLVE_DATA_DIR, STATE_SUBDIR, LADDER, EVENT_ATTEMPT}
+-  from './constants.js';
+-import {readLog, projectState, assertSafeQuestId} from './store.js';
++import {makeRunContext, ensureSealedGoal, finalizeAttempt, recordQuestSolvedIfDone} from './loop.js';
++import {readLog, projectState, loadQuest, assertSafeQuestId} from './store.js';
+ import {evaluate} from './probe.js';
+ import {pickFrontier} from './scheduler.js';
+-import {rungPrompt} from './ladder.js';
+-import {
+-  makeRunContext,
+-  ensureSealedGoal,
+-  finalizeAttempt,
+-  recordQuestSolvedIfDone,
+-} from './loop.js';
+-
+-export function pendingFilePath(root, questId) {
+-  return path.join(root, SOLVE_DATA_DIR, STATE_SUBDIR,
+-    `${assertSafeQuestId(questId)}.pending.json`);
+-}
+-
+-function metricName(frontierDef) {
+-  return frontierDef.metric?.args?.metric || frontierDef.metric?.probe || 'metric';
+-}
+-
+-function metricHistory(root, questId, frontierId) {
+-  return readLog(root, questId)
+-    .filter((e) => e.type === EVENT_ATTEMPT && e.frontier === frontierId)
+-    .map((e) => e.metricAfter);
+-}
++import {stepTheoryGateProblems} from './theory.js';
++import {detectUnrecordedEvidence} from './evidence.js';
++import {STATUS_SOLVED} from './constants.js';
+ 
+-function loadPending(root, questId) {
+-  const file = pendingFilePath(root, questId);
+-  if (!fs.existsSync(file)) return null;
+-  return JSON.parse(fs.readFileSync(file, 'utf8'));
+-}
+-
+-function savePending(root, questId, pending) {
+-  const file = pendingFilePath(root, questId);
+-  fs.mkdirSync(path.dirname(file), {recursive: true});
+-  fs.writeFileSync(file, `${JSON.stringify(pending, null, 2)}\n`);
+-  return file;
+-}
+-
+-function clearPending(root, questId) {
+-  const file = pendingFilePath(root, questId);
+-  if (fs.existsSync(file)) fs.rmSync(file);
+-}
+-
+-// Phase 1: pick the frontier and emit the dossier; pin the pre-work baseline.
+-export function stepBegin(root, quest, options = {}) {
++export function runStep(root, quest, options = {}) {
+   const ctx = makeRunContext(options);
+   ensureSealedGoal(root, quest);
+-  if (loadPending(root, quest.id)) {
+-    if (options.force) {
+-      clearPending(root, quest.id);
+-    } else {
+-      throw new Error(
+-        'a step is already pending; run `solve step --commit` or `--abort` first');
+-    }
++
++  const unrecorded = detectUnrecordedEvidence(root, quest.id);
++  if (unrecorded) {
++    throw new Error(
++      `UNRECORDED_EVIDENCE: latest probe evidence is newer than Quest memory. Ingest it first:\n` +
++      `  node scripts/solve.js ingest-evidence --id ${quest.id} --frontier ${unrecorded.frontier} --evidence ${unrecorded.evidence}`
++    );
+   }
+-  const questDone = evaluate(quest.doneWhen, ctx.probeCtx);
+-  if (questDone.done) {
+-    return {terminal: 'solved', evidence: questDone.evidence};
++
++  const log = readLog(root, quest.id);
++  const state = projectState(quest, log);
++  if (state.questStatus === STATUS_SOLVED) {
++    return {terminal: 'solved', evidence: state.questEvidence};
+   }
+-  const state = projectState(quest, readLog(root, quest.id));
++
+   const pick = pickFrontier(quest, state, ctx.scoreFn);
+   if (!pick) return {terminal: 'exhausted'};
+-  const before = evaluate(pick.def.metric, ctx.probeCtx);
++
+   const rungIndex = pick.state.rungIndex;
+-  const dossier = rungPrompt({
+-    quest,
+-    frontierDef: pick.def,
+-    metricName: metricName(pick.def),
++  const readinessProblems = stepTheoryGateProblems({
++    log,
++    state,
++    frontierId: pick.def.id,
+     rungIndex,
+-    metricHistory: [...metricHistory(root, quest.id, pick.def.id), before.metric],
+-    findings: pick.state.findings,
++    theoryRef: options.theoryRef,
++    modelRef: options.modelRef,
++    modelNotApplicable: options.modelNotApplicable,
++    phase: 'commit',
+   });
+-  const pending = {
+-    frontier: pick.def.id,
+-    rungIndex,
+-    before: {metric: before.metric, evidence: before.evidence, done: before.done},
+-  };
+-  const pendingFile = savePending(root, quest.id, pending);
+-  return {terminal: null, frontier: pick.def.id, rung: LADDER[rungIndex], rungIndex,
+-    before, dossier, pendingFile};
+-}
++  if (readinessProblems.length > 0) {
++    if (readinessProblems.some(p => p.includes('theory required') || p.includes('frontier theory required') || p.includes('system theory required') || p.includes('theory result required') || p.includes('theory result update required'))) {
++      return {
++        terminal: 'theory-required',
++        frontier: pick.def.id,
++        rungIndex,
++        problems: readinessProblems,
++      };
++    }
++    throw new Error(`theory gate failed: ${readinessProblems.join('; ')}`);
++  }
+ 
+-// Phase 2: re-measure and record the attempt via the shared honesty/ladder path.
+-export function stepCommit(root, quest, options = {}) {
+-  const pending = loadPending(root, quest.id);
+-  if (!pending) throw new Error('no pending step; run `solve step` first');
+-  if (!options.changeRef) {
+-    throw new Error('commit requires --changeRef diff:<path>');
++  let beforeMetric = pick.state.current;
++  if (beforeMetric === null || beforeMetric === undefined) {
++    const beforeEval = evaluate(pick.def.metric, ctx.probeCtx);
++    beforeMetric = beforeEval.metric;
+   }
+-  const ctx = makeRunContext(options);
+-  const state = projectState(quest, readLog(root, quest.id));
+-  const def = quest.frontiers.find((f) => f.id === pending.frontier);
+-  const fState = state.frontiers.find((f) => f.id === pending.frontier);
+-  if (!def || !fState) throw new Error(`pending frontier ${pending.frontier} not found`);
+-  // The persisted rung is authoritative for this attempt.
+-  fState.rungIndex = pending.rungIndex;
+-  const pick = {def, state: fState};
+-  const result = {changeRef: options.changeRef, summary: options.summary || null};
+-  const outcome = finalizeAttempt(root, quest, ctx, pick, pending.before, result);
++  const before = {
++    metric: beforeMetric,
++    evidence: pick.state.findings?.slice(-1)[0]?.evidence || null,
++    done: false,
++  };
++
++  const result = {
++    changeRef: options.changeRef,
++    summary: options.summary || null,
++    theoryRef: options.theoryRef || null,
++    expectedMovement: options.expectedMovement || null,
++    negativeResultMeans: options.negativeResultMeans || null,
++    modelRef: options.modelRef || null,
++    modelNotApplicable: options.modelNotApplicable || null,
++  };
++
++  const outcome = finalizeAttempt(root, quest, ctx, pick, before, result);
+   const questOutcome = recordQuestSolvedIfDone(root, quest, ctx);
+-  clearPending(root, quest.id);
++
+   return {
+-    frontier: pending.frontier,
+-    before: pending.before.metric,
++    frontier: pick.def.id,
++    before: before.metric,
+     after: outcome.after.metric,
+     done: questOutcome.done,
+     progressed: outcome.progressed,
+@@ -130,12 +89,16 @@ export function stepCommit(root, quest, options = {}) {
+   };
+ }
+ 
+-export function stepAbort(root, questId) {
+-  const had = Boolean(loadPending(root, questId));
+-  clearPending(root, questId);
+-  return had;
++// Backward-compatible stubs for the step interface
++export function stepPending() {
++  return null;
++}
++
++export function stepAbort() {
++  return false;
+ }
+ 
+-export function stepPending(root, questId) {
+-  return loadPending(root, questId);
++export function pendingFilePath(root, questId) {
++  assertSafeQuestId(questId);
++  return null;
+ }
+diff --git a/test/solve/cli.test.js b/test/solve/cli.test.js
+index c348a7e8..683ad41a 100644
+--- a/test/solve/cli.test.js
++++ b/test/solve/cli.test.js
+@@ -86,17 +86,16 @@ tap.test('solve CLI smoke (P2)', async (t) => {
+     fs.writeFileSync(oracle, JSON.stringify({metric: 2, target: 0}));
+     writeOracleGoal(root, 'demo', oracle);
+ 
+-    const begin = run(root, ['step', '--id', 'demo']);
+-    t.match(begin, /Rung 0 \(local-fix\)/, 'dossier printed');
+-    t.match(begin, /baseline metric: 2/);
++    // 1. Ingest initial evidence to establish baseline of 2
++    run(root, ['ingest-evidence', '--id', 'demo', '--frontier', 'demo-main', '--evidence', oracle]);
+ 
+     // Operator does the work + re-runs the harness: metric 2 -> 1.
+     fs.writeFileSync(oracle, JSON.stringify({metric: 1, target: 0}));
+     const diff = path.join(root, 'a.diff');
+     fs.writeFileSync(diff, '# change\n');
+-    const commit = run(root, ['step', '--id', 'demo', '--commit',
++    const commit = run(root, ['step', '--id', 'demo',
+       '--changeRef', `diff:${diff}`, '--summary', 'tighten']);
+-    t.match(commit, /metric 2 -> 1 \(PROGRESS\)/);
++    t.match(commit, /recorded attempt on demo-main: metric 2 -> 1 \(PROGRESS\)/);
+ 
+     const status = JSON.parse(run(root, ['status', '--id', 'demo']));
+     t.equal(status.frontiers[0].attempts, 1, 'attempt recorded');
+diff --git a/test/solve/step.test.js b/test/solve/step.test.js
+index 1c406b30..fcdac6f4 100644
+--- a/test/solve/step.test.js
++++ b/test/solve/step.test.js
+@@ -3,9 +3,8 @@ import fs from 'node:fs';
+ import path from 'node:path';
+ import os from 'node:os';
+ 
+-import {saveQuest, readLog, projectState} from '../../scripts/solve/store.js';
+-import {stepBegin, stepCommit, stepAbort, stepPending}
+-  from '../../scripts/solve/step.js';
++import {saveQuest, readLog, projectState, appendEvent} from '../../scripts/solve/store.js';
++import {runStep} from '../../scripts/solve/step.js';
+ import {EVENT_ATTEMPT, EVENT_SOLVED, EVENT_QUEST, STATUS_SOLVED}
+   from '../../scripts/solve/constants.js';
+ 
+@@ -13,7 +12,6 @@ function tmp() {
+   return fs.mkdtempSync(path.join(os.tmpdir(), 'step-'));
+ }
+ 
+-// A change artifact the honesty check (changeRef resolves) can verify.
+ function makeDiff(root, name) {
+   const file = path.join(root, `${name}.diff`);
+   fs.writeFileSync(file, `# change ${name}\n`);
+@@ -33,140 +31,155 @@ function goalFor(oracleFile) {
+   };
+ }
+ 
+-tap.test('manual step (P3)', async (t) => {
+-  t.test('begin emits a dossier and pins a pending baseline', (t) => {
++tap.test('synchronous runStep (P3)', async (t) => {
++  t.test('runStep records a successful step with progress', (t) => {
+     const root = tmp();
+     const oracle = path.join(root, 'o.json');
+     fs.writeFileSync(oracle, JSON.stringify({metric: 3, target: 0}));
+     const quest = goalFor(oracle);
+     saveQuest(root, quest);
+-    const out = stepBegin(root, quest);
+-    t.equal(out.terminal, null);
+-    t.equal(out.frontier, 'demo-main');
+-    t.match(out.dossier, /Rung 0 \(local-fix\)/);
+-    t.equal(out.before.metric, 3);
+-    const pending = stepPending(root, quest.id);
+-    t.equal(pending.before.metric, 3, 'baseline persisted across calls');
+-    fs.rmSync(root, {recursive: true, force: true});
+-    t.end();
+-  });
+ 
+-  t.test('out-of-band progress between begin and commit keeps the rung', (t) => {
+-    const root = tmp();
+-    const oracle = path.join(root, 'o.json');
+-    fs.writeFileSync(oracle, JSON.stringify({metric: 3, target: 0}));
+-    const quest = goalFor(oracle);
+-    saveQuest(root, quest);
+-    stepBegin(root, quest);
+-    // Operator does the work + re-runs the harness: metric drops 3 -> 1.
++    // Write initial baseline evidence event so current metric is 3
++    appendEvent(root, quest.id, {
++      type: 'evidence-ingested',
++      frontier: 'demo-main',
++      evidence: 'initial.json',
++      metric: 3,
++      done: false,
++    });
++
++    // Operator makes changes and runs harness: metric drops to 1
+     fs.writeFileSync(oracle, JSON.stringify({metric: 1, target: 0}));
+-    const r = stepCommit(root, quest, {changeRef: makeDiff(root, 'a'),
+-      summary: 'tighten guard'});
++
++    const r = runStep(root, quest, {
++      changeRef: makeDiff(root, 'a'),
++      summary: 'tighten guard',
++    });
++
++    console.log('Progress Test Output:', r);
++
+     t.equal(r.before, 3);
+     t.equal(r.after, 1);
+-    t.equal(r.progressed, true, 'honest progress recorded');
++    t.equal(r.progressed, true);
+     t.same(r.violations, []);
++
+     const state = projectState(quest, readLog(root, quest.id));
+     t.equal(state.frontiers[0].rungIndex, 0, 'progress keeps the rung');
+-    t.equal(stepPending(root, quest.id), null, 'pending cleared');
+     fs.rmSync(root, {recursive: true, force: true});
+     t.end();
+   });
+ 
+-  t.test('a flat step climbs the ladder', (t) => {
++  t.test('a flat step climbs the strategy ladder', (t) => {
+     const root = tmp();
+     const oracle = path.join(root, 'o.json');
+     fs.writeFileSync(oracle, JSON.stringify({metric: 3, target: 0}));
+     const quest = goalFor(oracle);
+     saveQuest(root, quest);
+-    stepBegin(root, quest);
+-    // No change to the oracle: metric stays 3.
+-    const r = stepCommit(root, quest, {changeRef: makeDiff(root, 'b'),
+-      summary: 'no effect'});
++
++    appendEvent(root, quest.id, {
++      type: 'evidence-ingested',
++      frontier: 'demo-main',
++      evidence: 'initial.json',
++      metric: 3,
++      done: false,
++    });
++
++    // No change to metric
++    const r = runStep(root, quest, {
++      changeRef: makeDiff(root, 'b'),
++      summary: 'no progress',
++    });
++
++    t.equal(r.before, 3);
++    t.equal(r.after, 3);
+     t.equal(r.progressed, false);
++
+     const state = projectState(quest, readLog(root, quest.id));
+-    t.equal(state.frontiers[0].rungIndex, 1, 'stall escalates one rung');
++    t.equal(state.frontiers[0].rungIndex, 1, 'stall climbs the ladder');
+     fs.rmSync(root, {recursive: true, force: true});
+     t.end();
+   });
+ 
+-  t.test('git changeRefs are rejected as attempt proof', (t) => {
++  t.test('invalid git changeRefs are rejected', (t) => {
+     const root = tmp();
+     const oracle = path.join(root, 'o.json');
+     fs.writeFileSync(oracle, JSON.stringify({metric: 3, target: 0}));
+     const quest = goalFor(oracle);
+     saveQuest(root, quest);
+-    stepBegin(root, quest);
+-    fs.writeFileSync(oracle, JSON.stringify({metric: 2, target: 0}));
+-    const r = stepCommit(root, quest, {changeRef: 'git:abc123',
+-      summary: 'claimed commit'});
+-    t.equal(r.progressed, false, 'invalid attempt proof blocks progress credit');
++
++    appendEvent(root, quest.id, {
++      type: 'evidence-ingested',
++      frontier: 'demo-main',
++      evidence: 'initial.json',
++      metric: 3,
++      done: false,
++    });
++
++    const r = runStep(root, quest, {
++      changeRef: 'git:abc123',
++      summary: 'invalid diff',
++    });
++
++    t.equal(r.progressed, false);
+     t.match(r.violations.join('\n'), /changeRef does not resolve/);
+     fs.rmSync(root, {recursive: true, force: true});
+     t.end();
+   });
+ 
+-  t.test('reaching the target records SOLVED for the frontier and quest', (t) => {
++  t.test('reaching target records solved status', (t) => {
+     const root = tmp();
+     const oracle = path.join(root, 'o.json');
+     fs.writeFileSync(oracle, JSON.stringify({metric: 1, target: 0}));
+     const quest = goalFor(oracle);
+     saveQuest(root, quest);
+-    stepBegin(root, quest);
++
++    appendEvent(root, quest.id, {
++      type: 'evidence-ingested',
++      frontier: 'demo-main',
++      evidence: 'initial.json',
++      metric: 1,
++      done: false,
++    });
++
+     fs.writeFileSync(oracle, JSON.stringify({metric: 0, target: 0}));
+-    const r = stepCommit(root, quest, {changeRef: makeDiff(root, 'c'),
+-      summary: 'close it'});
++
++    const r = runStep(root, quest, {
++      changeRef: makeDiff(root, 'c'),
++      summary: 'target reached',
++    });
++
++    console.log('Reaching Target Test Output:', r);
++
+     t.equal(r.done, true);
+     const log = readLog(root, quest.id);
+-    const solved = log.some((e) => e.type === EVENT_SOLVED);
+-    const questSolved = log.some((e) =>
+-      e.type === EVENT_QUEST && e.status === STATUS_SOLVED);
+-    t.ok(solved, 'frontier EVENT_SOLVED recorded');
+-    t.ok(questSolved, 'quest terminal recorded');
++    t.ok(log.some((e) => e.type === EVENT_SOLVED), 'frontier EVENT_SOLVED recorded');
++    t.ok(log.some((e) => e.type === EVENT_QUEST && e.status === STATUS_SOLVED), 'quest terminal recorded');
+     fs.rmSync(root, {recursive: true, force: true});
+     t.end();
+   });
+ 
+-  t.test('begin returns solved terminal when done_when already holds', (t) => {
++  t.test('runStep returns solved early if done_when holds', (t) => {
+     const root = tmp();
+     const oracle = path.join(root, 'o.json');
+     fs.writeFileSync(oracle, JSON.stringify({metric: 0, target: 0}));
+     const quest = goalFor(oracle);
+     saveQuest(root, quest);
+-    const out = stepBegin(root, quest);
+-    t.equal(out.terminal, 'solved');
+-    fs.rmSync(root, {recursive: true, force: true});
+-    t.end();
+-  });
+ 
+-  t.test('commit requires a changeRef and a prior begin', (t) => {
+-    const root = tmp();
+-    const oracle = path.join(root, 'o.json');
+-    fs.writeFileSync(oracle, JSON.stringify({metric: 2, target: 0}));
+-    const quest = goalFor(oracle);
+-    saveQuest(root, quest);
+-    t.throws(() => stepCommit(root, quest, {changeRef: 'diff:x'}),
+-      /no pending step/, 'commit without begin throws');
+-    stepBegin(root, quest);
+-    t.throws(() => stepCommit(root, quest, {}), /requires --changeRef/,
+-      'commit without changeRef throws');
+-    fs.rmSync(root, {recursive: true, force: true});
+-    t.end();
+-  });
++    // Record the solved event in the quest log first to simulate already solved
++    appendEvent(root, quest.id, {
++      type: 'quest',
++      status: STATUS_SOLVED,
++      evidence: 'o.json',
++    });
+ 
+-  t.test('double begin is blocked until commit/abort', (t) => {
+-    const root = tmp();
+-    const oracle = path.join(root, 'o.json');
+-    fs.writeFileSync(oracle, JSON.stringify({metric: 2, target: 0}));
+-    const quest = goalFor(oracle);
+-    saveQuest(root, quest);
+-    stepBegin(root, quest);
+-    t.throws(() => stepBegin(root, quest), /already pending/);
+-    t.ok(stepAbort(root, quest.id), 'abort clears the pending step');
+-    t.equal(stepPending(root, quest.id), null);
+-    // After abort, begin works again and no attempt was recorded.
+-    stepBegin(root, quest);
+-    t.equal(readLog(root, quest.id).filter((e) => e.type === EVENT_ATTEMPT).length, 0);
++    const r = runStep(root, quest, {
++      changeRef: makeDiff(root, 'd'),
++      summary: 'check already done',
++    });
++
++    t.equal(r.terminal, 'solved');
++    const log = readLog(root, quest.id);
++    t.ok(log.some((e) => e.type === EVENT_QUEST && e.status === STATUS_SOLVED), 'solved persisted');
+     fs.rmSync(root, {recursive: true, force: true});
+     t.end();
+   });

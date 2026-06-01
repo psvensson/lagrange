@@ -327,6 +327,7 @@ async function createSqlRuntimeComposition(options) {
     rebalanceCoordinator: options.owner.rebalanceCoordinator,
     controlPlaneReadinessService:
       resolveOwnerControlPlaneReadinessService(options.owner),
+    partitionServicesProvider: () => options.partitionServices,
     runtimeDriverRegistry: options.owner.runtimeDriverRegistry,
     serviceRuntimeLifecycle: options.owner.serviceRuntimeLifecycle,
     wasmExecutor,

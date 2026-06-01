@@ -119,13 +119,12 @@
       "probe": "npm run model:check"
     },
     {
-      "name": "joint coupled invariant frontier",
-      "probe": "npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12"
+      "name": "rolling restart Quest status",
+      "probe": "npm run solve:status -- --id rolling-restart"
     }
   ],
-  "packageRefs": [
-    "work/packages/done-20260529-rolling-restart-active-gate-saturation-checkpoint-system-theory-rederive.md",
-    "work/packages/done-20260529-rolling-restart-active-gate-owner-reconcile-pending-architecture-gap-analysis.md"
+  "questRefs": [
+    "solve/quests/rolling-restart-core-stability.json"
   ],
   "theoryLedgerRefs": [
     "theory-20260529-rolling-restart-active-gate-priority-recovery-coupled-invariants"
@@ -144,7 +143,7 @@
       {
         "controller": "theory-loop workflow",
         "unsafeAction": "opens another same-layer runtime package after repeated no-progress route implementations",
-        "feedbackSignal": "observablePrediction.metricDelta and work:frontier-history loopMetrics",
+        "feedbackSignal": "Quest metric movement, Solver health, and representative scenario probe output",
         "ownerBoundary": "startup_active_gate_owner / snapshot_coverage and operation_workflow_owner / rebalancer_handoff"
       }
     ]
@@ -181,6 +180,6 @@ the drift guard between the two surfaces.
 ## Operational Analysis
 
 The FMEA/STPA entries make the ping-pong risk explicit: same-layer proof can
-keep closing without representative movement. R13/R14 and `work:loop-health`
-are the workflow controls that prevent that from becoming another local patch
-cycle.
+keep closing without representative movement. Quest theory gates and
+`npm run solve:health` are the workflow controls that prevent that from
+becoming another local patch cycle.

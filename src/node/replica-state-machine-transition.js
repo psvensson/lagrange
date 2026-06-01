@@ -240,16 +240,42 @@ async function updateReplicaStateInCdc(
 ) {
   try {
     const serviceId = replicaState.serviceId || replicaState.replicaId;
+    const serviceType = replicaState.serviceType || SERVICE_TYPE.PARTITION;
+    const addressManager = AddressManager.getInstance();
+    const address = replicaState.serviceAddress ||
+      addressManager.format(replicaState.nodeId, serviceType, serviceId);
     const persistenceOptions = stateMachine._buildCdcPersistenceOptions(
       replicaState,
       serviceId,
     );
-    await stateMachine.getControlPlaneSystemTableGateway().submitMutation({
-      operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
-      tableName: TABLES.SERVICES,
-      whereClause: {service_id: serviceId},
-      data: stateMachine._buildUpdateCdcData(replicaState, previousState),
-    }, persistenceOptions);
+    const hasServiceCacheLookup =
+      typeof stateMachine.systemTableCache?.get === TYPEOF.FUNCTION;
+    const cachedService = hasServiceCacheLookup ?
+      stateMachine.systemTableCache.get(TABLES.SERVICES, serviceId) :
+      null;
+    const shouldUpsertMissingServiceRow =
+      hasServiceCacheLookup && !cachedService;
+    const mutation = shouldUpsertMissingServiceRow ?
+      {
+        operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
+        tableName: TABLES.SERVICES,
+        row: stateMachine._buildCreateCdcData(
+          replicaState,
+          serviceId,
+          serviceType,
+          address,
+        ),
+      } :
+      {
+        operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+        tableName: TABLES.SERVICES,
+        whereClause: {service_id: serviceId},
+        data: stateMachine._buildUpdateCdcData(replicaState, previousState),
+      };
+    await stateMachine.getControlPlaneSystemTableGateway().submitMutation(
+      mutation,
+      persistenceOptions,
+    );
     await stateMachine._clearCanonicalPartitionLeaderIfNeeded(replicaState);
 
     stateMachine.logger.debug(REPLICA_STATE_MACHINE_LOG_MSG.STATE_PERSISTED, {

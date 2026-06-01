@@ -20,9 +20,12 @@ const {
   TABLES,
   compactEligibilitySnapshot,
   evaluateEligibilityDecision,
+  isPriorityControlPlanePartition,
   resolveBootstrapLeaderSelection,
   resolveCanonicalPartitionLeaderObservation,
 } = QUERY_EXECUTOR_SHARED;
+
+const PRIORITY_CONTROL_PLANE_CONNECTED_STATE = 'connected';
 
 class QueryExecutorSegment3 extends QueryExecutorSegment3Part1 {
   /**
@@ -132,6 +135,32 @@ class QueryExecutorSegment3 extends QueryExecutorSegment3Part1 {
       return routabilityResult;
     }
     const nodeId = service?.node_id || service?.nodeId || null;
+    const partitionId = String(
+      service?.partition_id || service?.partitionId || '',
+    );
+    const partitionRow =
+      partitionId.length > NUM.ZERO ?
+        this.getPartitionRecord(partitionId) :
+        null;
+    if (
+      nodeId &&
+      nodeId !== this.nodeId &&
+      isPriorityControlPlanePartition({partitionId, partitionRow}) &&
+      typeof this.messageRouter?.getConnectionState ===
+        QUERY_EXECUTOR_LITERAL.STRING_FUNCTION
+    ) {
+      const connectionState = this.messageRouter.getConnectionState(nodeId);
+      if (
+        connectionState &&
+        connectionState !== PRIORITY_CONTROL_PLANE_CONNECTED_STATE
+      ) {
+        return {
+          routable: false,
+          reasonCode: QUERY_ROUTING_DIAGNOSTIC_REASON.NODE_NOT_ELIGIBLE,
+          readinessSummary: null,
+        };
+      }
+    }
     if (
       !nodeId ||
       !this.controlPlaneReadinessService ||
@@ -150,13 +179,6 @@ class QueryExecutorSegment3 extends QueryExecutorSegment3Part1 {
     if (routabilityResult) {
       return routabilityResult;
     }
-    const partitionId = String(
-      service?.partition_id || service?.partitionId || '',
-    );
-    const partitionRow =
-      partitionId.length > NUM.ZERO ?
-        this.getPartitionRecord(partitionId) :
-        null;
     const tableName =
       String(
         partitionRow?.table_name ||

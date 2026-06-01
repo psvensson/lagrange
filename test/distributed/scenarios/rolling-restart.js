@@ -140,6 +140,7 @@ async function buildRollingRestartLoadPlan(cluster, scenarioOptions, {
       requiredBootstrapVisibilityState:
         TABLE_BOOTSTRAP_VISIBILITY_STATE.PARTITIONS_VISIBLE,
       queryNodes: clusterNodes,
+      timeoutMs: preLoadReadinessTimeoutMs,
     },
   );
   const requiredNodeCount = Math.max(
@@ -324,6 +325,10 @@ function resolveRollingRestartScenarioConfig(options = {}) {
         options.postRestartControlPlaneQuiescenceNoProgressTimeoutMs,
         POST_RESTART_CONTROL_PLANE_QUIESCENCE_NO_PROGRESS_TIMEOUT_MS,
       ),
+    postRestartActiveNoProgressMaxAttempts: normalizeFiniteNumber(
+      options.postRestartActiveNoProgressMaxAttempts,
+      POST_RESTART_LOAD_READINESS_NO_PROGRESS_MAX_ATTEMPTS,
+    ),
     postRestartLoadReadinessNoProgressMaxAttempts: normalizeFiniteNumber(
       options.postRestartLoadReadinessNoProgressMaxAttempts,
       POST_RESTART_LOAD_READINESS_NO_PROGRESS_MAX_ATTEMPTS,
@@ -400,6 +405,7 @@ async function waitForPostRestartRecoveryBarrier(cluster, {
   postRestartActiveTimeoutMs,
   postRestartQuietWindowMs,
   postRestartControlPlaneQuiescenceNoProgressTimeoutMs,
+  postRestartActiveNoProgressMaxAttempts,
   postRestartLoadReadinessNoProgressMaxAttempts,
 }) {
   const postRestartRecoveryStableWindowMs =
@@ -410,6 +416,7 @@ async function waitForPostRestartRecoveryBarrier(cluster, {
     // final leader maps.
     await cluster.waitForAllActive({
       timeoutMs: postRestartActiveTimeoutMs,
+      noProgressMaxAttempts: postRestartActiveNoProgressMaxAttempts,
     });
   }
 
@@ -465,6 +472,7 @@ async function run(cluster, options = {}) {
     postRestartQuietWindowMs,
     postRestartActiveTimeoutMs,
     postRestartControlPlaneQuiescenceNoProgressTimeoutMs,
+    postRestartActiveNoProgressMaxAttempts,
     postRestartLoadReadinessNoProgressMaxAttempts,
     postRestartConsistencyTimeoutMs,
     postRestartConsistencyPollIntervalMs,
@@ -609,6 +617,7 @@ async function run(cluster, options = {}) {
       postRestartActiveTimeoutMs,
       postRestartQuietWindowMs,
       postRestartControlPlaneQuiescenceNoProgressTimeoutMs,
+      postRestartActiveNoProgressMaxAttempts,
       postRestartLoadReadinessNoProgressMaxAttempts,
     });
 

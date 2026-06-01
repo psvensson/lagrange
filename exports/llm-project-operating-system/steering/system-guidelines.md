@@ -7,7 +7,7 @@ This document governs stable repo-wide implementation rules.
 Use it for:
 
 - ownership rules
-- work-package discipline
+- implementation-slice discipline
 - single-path execution rules
 - cache and communication discipline
 - idempotency and resource lifetime rules
@@ -22,22 +22,22 @@ Do not use it for:
 
 ## Mandatory Work Intake
 
-All non-trivial implementation work should follow the project work-tracking
-workflow.
+All non-trivial implementation work should follow the target repository's
+active workflow.
 
 Rules:
 
-1. Human ideas start in `work/ideas/` as `idea-YYYYMMDD-slug.md`.
+1. Human ideas are captured in the target repository's active planning surface.
 2. Broad or scope-changing ideas sharpen `roadmap.md` before active
    implementation starts.
-3. In-scope bounded work is executed from a package in `work/packages/`.
-4. Work packages are one executable concern per file.
-5. Package status lives in the filename: `idea-`, `todo-`, `active-`,
-   `done-`, or `superseded-`.
-6. Internal planning and execution material lives under `work/`; reserve
-   `docs/` for user-facing or operator-facing documentation.
-7. The model ledger is advisory. It never replaces validation, review,
-   sequencing, focused commits, or closure proof.
+3. In-scope bounded work is executed from a recorded implementation slice.
+4. Implementation slices are one executable concern each.
+5. Status must be explicit in the active workflow state.
+6. Internal planning and execution material stays separate from user-facing or
+   operator-facing `docs/`.
+7. Historical legacy tracker material under `_legacy_work/` is advisory only.
+   It never replaces validation, review, sequencing, focused commits, or
+   closure proof.
 
 ## Package Closure
 
@@ -45,19 +45,19 @@ Closure is filename-first and proof-first.
 
 Rules:
 
-1. Close completed work by renaming `active-...` to `done-...`.
-2. Rename dormant work to `todo-...`; do not leave inactive work in
-   `active-...`.
-3. Rename displaced work to `superseded-...` and link the superseding package.
+1. Close completed work only when live proof is true.
+2. Mark dormant work inactive in the active workflow state.
+3. Link displaced work to the superseding slice.
 4. A completed package slice ends in one focused commit and push.
-5. The commit includes only package-owned changes and package-status or
-   allowed handoff updates.
-6. If package-owned and unrelated changes cannot be separated safely, stop for
+5. The commit includes only slice-owned changes and allowed status or handoff
+   updates.
+6. If slice-owned and unrelated changes cannot be separated safely, stop for
    human direction instead of committing a mixed slice.
 
 ## Deep-Dive Review Before Closure
 
-Every package should end with a review of the affected area before it is closed.
+Every implementation slice should end with a review of the affected area before
+it is closed.
 
 Affected area means:
 
@@ -77,7 +77,7 @@ Look for:
 7. Mutations that cross ownership boundaries.
 
 If the deep dive finds an in-scope concrete mistake or guideline violation, the
-package is not done until it is fixed or explicitly split.
+slice is not done until it is fixed or explicitly split.
 
 ## Shared Boundary Contract
 

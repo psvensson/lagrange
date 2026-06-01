@@ -4,7 +4,7 @@
 {
   "schema": "system-contract-v1",
   "contractId": "rolling-restart-representative-rerun-progress",
-  "status": "active",
+  "status": "deprecated",
   "owners": [
     {
       "owner": "representative_evidence_owner",
@@ -70,10 +70,10 @@
   ],
   "runtimeBindings": [
     {
-      "path": "scripts/work-tracker.js",
+      "path": "_legacy_work/scripts/work-tracker.js",
       "owner": "workflow_tooling_owner",
       "boundary": "owner_dossier_model_coverage",
-      "transition": "owner-dossier reads modelProvenRoutes and invariant modelRef coverage for representative rerun admission"
+      "transition": "archived owner-dossier read model formerly read modelProvenRoutes and invariant modelRef coverage for representative rerun admission"
     },
     {
       "path": "src/rebalancer/operation-workflow-owner-ports.js",
@@ -91,18 +91,16 @@
   ],
   "metrics": [
     {
-      "name": "owner-dossier model coverage",
-      "probe": "npm --silent run work:owner-dossier -- --owner representative_evidence_owner --boundary rolling_restart_rerun --json"
+      "name": "archived owner-dossier model coverage",
+      "probe": "archived under _legacy_work/scripts/work-tracker.js; active workflow uses Quest health and Solver reports"
     },
     {
-      "name": "representative rerun route health",
-      "probe": "npm run work:frontier-history -- --owner representative_evidence_owner --boundary rolling_restart_rerun --limit 12"
+      "name": "representative rerun Quest probe",
+      "probe": "npm run solve:probe -- --probe scenario-harness --scenario rolling-restart --reportDir test-output/reports --consecutive 3 --metric priority"
     }
   ],
-  "packageRefs": [
-    "work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-owner-wake-rerun-gate.md",
-    "work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-blocked-route-rerun-gate.md",
-    "work/packages/active-20260531-representative-rerun-progress-model-coverage-binding.md"
+  "questRefs": [
+    "solve/quests/rolling-restart-core-stability.json"
   ],
   "theoryLedgerRefs": [
     "theory-20260531-rolling-restart-representative-rerun-progress-model-route",
@@ -113,9 +111,9 @@
       {
         "failureMode": "owner-dossier cannot see the representative rerun model and reports modelStatus=none",
         "severity": "high - the loop can repeat unmodelled rerun attempts after no residual movement",
-        "detectability": "high - owner-dossier JSON exposes contractRecord, invariants, modelStatus, and provenRoutes",
+        "detectability": "historical - archived owner-dossier JSON exposed contractRecord, invariants, modelStatus, and provenRoutes",
         "mitigation": "bind modelProvenRoutes and invariant modelRef entries for the exact owner boundary",
-        "probe": "npm --silent run work:owner-dossier -- --owner representative_evidence_owner --boundary rolling_restart_rerun --json"
+        "probe": "archived owner-dossier material under _legacy_work/; active proof uses the rolling-restart Quest"
       }
     ],
     "stpa": [
@@ -145,10 +143,11 @@ successor selection before representative evidence runs again.
 
 ## Runtime Bindings
 
-`scripts/work-tracker.js` owns the owner-dossier read model that reports proven
-or modeled coverage. `src/rebalancer/operation-workflow-owner-ports.js` owns
-the upstream `blocked_model_route` signal consumed by this representative rerun
-progress model.
+`_legacy_work/scripts/work-tracker.js` archives the former owner-dossier read
+model that reported proven or modeled coverage.
+`src/rebalancer/operation-workflow-owner-ports.js` owns the upstream
+`blocked_model_route` signal consumed by this representative rerun progress
+model.
 
 ## Model Bindings
 
@@ -161,5 +160,6 @@ rolling_restart_rerun`.
 
 FMEA/STPA frame the risk as an unsafe rerun admission problem: the controller
 must not authorize another representative evidence slice while the residual
-window is non-shrinking and model coverage is absent. The owner-dossier command
-is the operator-facing proof that coverage is visible.
+window is non-shrinking and model coverage is absent. This contract is now an
+archive of the pre-Quest owner-dossier proof surface; active proof lives in the
+rolling-restart Quest report.

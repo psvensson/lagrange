@@ -92,10 +92,10 @@ canonical before projection/readiness consumers are cut over.
 
 ## Validation Strategy
 
-Each runtime package must provide:
+Each runtime Quest must provide:
 
 1. A boundary-specific static drift ledger.
 2. Focused owner tests before and after cutover.
 3. Harness or representative proof appropriate to Phase 0.1.
-4. `npm run work:validate`.
-5. `git diff --check` over package-owned files.
+4. `npm run solve:status -- --id <quest>` and the Quest's focused validation.
+5. `git diff --check` over Quest-owned files.

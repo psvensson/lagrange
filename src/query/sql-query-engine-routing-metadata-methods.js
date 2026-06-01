@@ -20,11 +20,13 @@ const {
   PARTITION_SERVICE_MESSAGE_TYPE,
   PARTITION_TRANSITION_METADATA_FIELD,
   QUERY_ERROR_MSG,
+  SERVICE_STATUS,
   SERVICE_TYPE,
   TABLES,
   TIMEOUT_BUDGET_CLASSIFICATION,
   TIMEOUT_BUDGET_DEFAULT,
   getRemainingBudgetMs,
+  isPriorityControlPlanePartition,
   isRetryableManagedSplitTransition,
 } = SQL_QUERY_ENGINE_SHARED;
 
@@ -309,6 +311,90 @@ class SQLQueryEngineRoutingMetadataMethods {
    */
   getAuthoritativeRoutingOverlayServices(partitionId) {
     return this.getAuthoritativeRoutingOverlayEntryState(partitionId).services;
+  }
+
+  /**
+   * Resolve local runtime partition services that are safe to expose while
+   * priority control-plane service-row publication is retrying.
+   * @param {string} partitionId
+   * @return {Array<Object>}
+   * @private
+   */
+  getLocalRuntimeRoutingOverlayServices(partitionId) {
+    if (
+      typeof partitionId !== LOCAL_STR_STRING ||
+      partitionId.length === LOCAL_NUM_ZERO ||
+      typeof this.partitionServicesProvider !== LOCAL_STR_FUNCTION
+    ) {
+      return [];
+    }
+    const partitionRow =
+      typeof this.getCachedPartitionRecord === LOCAL_STR_FUNCTION ?
+        this.getCachedPartitionRecord(partitionId) :
+        null;
+    if (!isPriorityControlPlanePartition({partitionId, partitionRow})) {
+      return [];
+    }
+    const partitionServices = this.partitionServicesProvider();
+    if (
+      !partitionServices ||
+      typeof partitionServices.values !== LOCAL_STR_FUNCTION
+    ) {
+      return [];
+    }
+    const serviceRows = [];
+    for (const service of partitionServices.values()) {
+      if (
+        !service ||
+        service.partitionId !== partitionId ||
+        service.initialized !== true
+      ) {
+        continue;
+      }
+      const replicaId =
+        typeof service.replicaId === LOCAL_STR_STRING &&
+        service.replicaId.length > LOCAL_NUM_ZERO ?
+          service.replicaId :
+          null;
+      const nodeId =
+        typeof service.nodeId === LOCAL_STR_STRING &&
+        service.nodeId.length > LOCAL_NUM_ZERO ?
+          service.nodeId :
+          this.nodeId;
+      const address =
+        typeof service.unifiedAddress === LOCAL_STR_STRING &&
+        service.unifiedAddress.length > LOCAL_NUM_ZERO ?
+          service.unifiedAddress :
+          typeof service.address === LOCAL_STR_STRING &&
+          service.address.length > LOCAL_NUM_ZERO ?
+            service.address :
+            null;
+      if (!replicaId || !nodeId || !address) {
+        continue;
+      }
+      const raftRole =
+        typeof service.getRole === LOCAL_STR_FUNCTION ?
+          service.getRole() :
+          service.role;
+      const now = Date.now();
+      serviceRows.push({
+        [COLUMN.SERVICE_ID]: replicaId,
+        [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+        [COLUMN.NODE_ID]: nodeId,
+        [COLUMN.PARTITION_ID]: partitionId,
+        [COLUMN.REPLICA_ID]: replicaId,
+        [COLUMN.RAFT_ROLE]:
+          typeof raftRole === LOCAL_STR_STRING &&
+          raftRole.length > LOCAL_NUM_ZERO ?
+            raftRole :
+            null,
+        [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+        [COLUMN.ADDRESS]: address,
+        [COLUMN.CREATED_AT]: now,
+        [COLUMN.UPDATED_AT]: now,
+      });
+    }
+    return serviceRows;
   }
 
   /**

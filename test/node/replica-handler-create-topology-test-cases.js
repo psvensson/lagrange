@@ -357,6 +357,121 @@ export async function registerReplicaHandlerCreateTopologyTests({
   );
 
   t.test(
+    'handleCreateReplica - priority recovery excludes disconnected stale peers',
+    async (t) => {
+      const partitionId = 'replica_operations-p1';
+      const cache = createSeededCache({
+        tableId: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+        partitionId,
+        leaderNodeId: 'dead-node',
+        leaderReplicaId: 'replica_operations-p1-r2',
+      });
+      seedReplicaOperation(cache, 'op-1', {
+        partitionId,
+        replicaId: 'replica_operations-p1-r4',
+      });
+
+      const now = Date.now();
+      for (const nodeId of ['dead-node', 'live-node']) {
+        cache.applySystemTableChange(SYSTEM_TABLE_NAME.NODES, 'INSERT', {
+          node_id: nodeId,
+          status: SERVICE_STATUS.ACTIVE,
+          last_heartbeat: now,
+          ready_lease_expires_at: now + 60_000,
+        });
+      }
+      cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
+        service_id: 'replica_operations-p1-r3',
+        service_type: 'partition',
+        partition_id: partitionId,
+        node_id: 'dead-node',
+        status: ReplicaStatus.ACTIVE,
+        raft_role: RAFT_ROLE.FOLLOWER,
+        address: 'dead-node/partition/replica_operations-p1-r3',
+        created_at: now,
+        updated_at: now,
+      });
+      cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
+        service_id: 'replica_operations-p1-r5',
+        service_type: 'partition',
+        partition_id: partitionId,
+        node_id: 'live-node',
+        status: ReplicaStatus.ACTIVE,
+        raft_role: RAFT_ROLE.FOLLOWER,
+        address: 'live-node/partition/replica_operations-p1-r5',
+        created_at: now,
+        updated_at: now,
+      });
+
+      const mockCDC = createMockCDCService(cache);
+      let capturedOptions = null;
+      let resolveFactoryCalled = null;
+      const factoryCalled = new Promise((resolve) => {
+        resolveFactoryCalled = resolve;
+      });
+
+      const handler = new ReplicaHandler({
+        nodeId: 'test-node',
+        cdcIntegrationService: mockCDC,
+        systemTableCache: cache,
+        messageRouter: {
+          getConnectionState(nodeId) {
+            return nodeId === 'dead-node' ? 'disconnected' : 'connected';
+          },
+        },
+        dataDir: getTempDir(),
+        createPartitionService: async (options) => {
+          capturedOptions = options;
+          resolveFactoryCalled();
+          return {
+            partitionId: options.partitionId,
+            replicaId: options.replicaId,
+            initialized: true,
+            async shutdown() {},
+            async syncFromLeader() {},
+          };
+        },
+      });
+
+      handler.initialize();
+
+      await handler.handleCreateReplica({
+        operationId: 'op-1',
+        operationType: 'REPLACE',
+        partitionId,
+        replicaId: 'replica_operations-p1-r4',
+      });
+      await factoryCalled;
+
+      t.ok(capturedOptions, 'partition factory should receive create options');
+      t.equal(
+        capturedOptions.leaderAddress,
+        null,
+        'disconnected priority leader should not be used as a join target',
+      );
+      t.notOk(
+        capturedOptions.peerAddresses.includes(
+          'dead-node/partition/replica_operations-p1-r3',
+        ),
+        'disconnected stale peer should be excluded from priority recovery topology',
+      );
+      t.ok(
+        capturedOptions.peerAddresses.includes(
+          'live-node/partition/replica_operations-p1-r5',
+        ),
+        'connected peer should remain available for priority recovery topology',
+      );
+      t.equal(
+        capturedOptions.isJoiningExistingGroup,
+        false,
+        'priority replacement should not join a group led by disconnected metadata',
+      );
+
+      handler.shutdown();
+    },
+  );
+
+  t.test(
     'handleCreateReplica - ready leader should still use learner join mode',
     async (t) => {
       const cache = createSeededCache();

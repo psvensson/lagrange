@@ -52,8 +52,8 @@
     }
   ],
   "assumptions": [
-    "Closed package residualCount values are artifact-bound and authoritative.",
-    "The active package does not edit runtime source while the representative pair is blocked.",
+    "Quest attempt residual evidence is artifact-bound and authoritative.",
+    "The active Quest does not edit runtime source while the representative pair is blocked.",
     "Fresh representative evidence can resume only after the model route records a non-rerun successor or a shrinking residual window."
   ]
 }

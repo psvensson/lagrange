@@ -1,0 +1,26 @@
+{
+  "id": "rolling-restart-fail-fast-deadlines",
+  "statement": "Rolling-restart harness failure paths share phase deadlines across nested probes and candidates, fail on sustained no-progress with diagnostics, and avoid sequential teardown timeout tax while preserving healthy behavior.",
+  "priority": 1,
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "rolling-restart-fail-fast-deadlines",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "rolling-restart-fail-fast-deadlines-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "rolling-restart-fail-fast-deadlines",
+          "metric": "priority"
+        }
+      }
+    }
+  ]
+}

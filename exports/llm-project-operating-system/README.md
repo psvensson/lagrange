@@ -9,31 +9,30 @@ It provides:
 - `AGENTS.md` with the default LLM workflow contract.
 - `steering/` with generic steering source documents and compact LLM
   packs.
-- `work/` with idea and work-package templates.
 - `scripts/` with small project-local workflow tools.
 - `package-scripts.json` with npm scripts to merge into a project
   `package.json`.
+- `_legacy_work/` with archived legacy work-package templates and tracker
+  utilities kept for reference only.
 
 ## Install Into A New Project
 
 1. Copy the contents of this folder to the new project root.
 2. Merge `package-scripts.json` into the target `package.json`.
 3. Create or adapt root `roadmap.md` and `architecture.md`.
-4. Start new work from `work/ideas/` or `work/packages/`.
-5. Run `npm run work:context` before non-trivial implementation.
+4. Use the target repository's active workflow for new implementation work.
 
 ## Design Intent
 
 The operating model is intentionally narrow:
 
-1. One concern per work package.
+1. One concern per implementation slice.
 2. One semantic owner per durable concern.
 3. One canonical path per semantic decision.
 4. Evidence is collected and normalized before decisions are made.
 5. Domain/runtime scalars have owners.
 6. Absence is represented by explicit states, not `null` or `undefined`.
-7. Validation, review, focused commits, and package closure are not optional.
-8. The model ledger is advisory only.
+7. Validation, review, and focused commits are not optional.
 
 ## What Was Removed
 
@@ -50,8 +49,6 @@ This export does not include:
 After copying this folder into a new repository, make one focused commit:
 
 ```bash
-git add AGENTS.md steering work scripts package-scripts.json roadmap.md architecture.md
+git add AGENTS.md steering scripts package-scripts.json roadmap.md architecture.md
 git commit -m "Add project operating system"
 ```
-
-Then create the first real package under `work/packages/`.

@@ -80,18 +80,16 @@
   ],
   "metrics": [
     {
-      "name": "representative residual route",
-      "probe": "npm run work:scenario-route -- test-output/reports/rolling-restart-active-gate-bounded-reentry-model-route.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait"
+      "name": "representative Quest priority metric",
+      "probe": "npm run solve:probe -- --probe scenario-harness --scenario rolling-restart --reportDir test-output/reports --metric priority"
     },
     {
-      "name": "loop health",
-      "probe": "npm run work:loop-health -- --owner operation_workflow_owner --boundary rebalancer_handoff"
+      "name": "core stability Quest status",
+      "probe": "npm run solve:status -- --id rolling-restart-core-stability"
     }
   ],
-  "packageRefs": [
-    "work/packages/done-20260530-rolling-restart-priority-recovery-rebalancer-handoff-scheduling-retry.md",
-    "work/packages/superseded-20260530-rolling-restart-priority-recovery-rebalancer-handoff-rerun-backpressure-residual.md",
-    "work/packages/done-20260531-rolling-restart-priority-recovery-rebalancer-handoff-decision-table-circuit-breaker-repair.md"
+  "questRefs": [
+    "solve/quests/rolling-restart-core-stability.json"
   ],
   "theoryLedgerRefs": [
     "theory-20260530-rolling-restart-priority-recovery-rebalancer-handoff-scheduling-retry-architecture-gap",
@@ -149,5 +147,5 @@ bindings for convergence and coupled invariant checks.
 
 FMEA records the missing scheduler wake and representative rerun risk. STPA
 records the unsafe control action: continuing local patching after unchanged
-frontier feedback. `npm run work:loop-health` is the operator-facing summary of
-that risk.
+frontier feedback. `npm run solve:health -- --id rolling-restart-core-stability`
+is the operator-facing summary of that risk.

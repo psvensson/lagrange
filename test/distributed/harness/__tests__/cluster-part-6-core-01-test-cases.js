@@ -206,7 +206,7 @@ export function registerClusterPart6Core01Tests(context) {
         image: 'distributed-db:test',
         timeouts: {
           convergence: 200,
-          activeWaitNoProgressMaxAttempts: 2,
+          activeWaitNoProgressMaxAttempts: 0,
         },
       });
 

@@ -1491,3 +1491,42 @@ test('CDCIntegrationService - steady-state system table writes prefer local part
       'should preserve the system table SQL mutation',
     );
   });
+
+test('CDCIntegrationService - local system table writes do not require SQL engine',
+  async (t) => {
+    const localWrites = [];
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      partitionServicesProvider: () => createLocalSystemTablePartitionServices(
+        SYSTEM_TABLE_NAME.NODES,
+        {
+          async executeQuery(sql, params) {
+            localWrites.push({sql, params});
+            return {
+              success: true,
+              changes: 1,
+            };
+          },
+        },
+      ),
+    });
+    service.initialize();
+
+    await service.updateSystemTableRow(
+      SYSTEM_TABLE_NAME.NODES,
+      {node_id: 'node-1'},
+      {status: 'ready'},
+      {skipCacheWait: true},
+    );
+
+    t.equal(
+      service.sqlQueryEngine,
+      null,
+      'test should cover the missing SQL engine path',
+    );
+    t.equal(
+      localWrites.length,
+      1,
+      'local partition service should carry the write without routed SQL',
+    );
+  });

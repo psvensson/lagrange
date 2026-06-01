@@ -5,164 +5,64 @@ const COMMAND_GROUPS = Object.freeze([
     title: 'Orientation',
     commands: Object.freeze([
       Object.freeze({
-        command: 'npm run work:help',
-        description: 'Print the unified workflow command index with diagnostic, triage, and validation entrypoints.',
+        command: 'npm run commands',
+        description: 'Print the Quest-first command index with diagnostic, triage, and validation entrypoints.',
       }),
       Object.freeze({
-        command: 'npm run work:context',
-        description: 'Print current blocker, first-read files, proof ladder, and dirty worktree.',
+        command: 'npm run quest:context -- --id <quest>',
+        description: 'Print Quest status, pending step, latest probe, findings, and dirty worktree.',
       }),
       Object.freeze({
-        command: 'npm run work:context -- --bootstrap',
-        description: 'Print the minimal LLM boot commands, first files, guardrails, and closure path for the current package.',
+        command: 'npm run solve:status -- --id <quest>',
+        description: 'Print the Solver projection for a Quest.',
       }),
       Object.freeze({
-        command: 'npm run work:advance',
-        description: 'Refresh orientation around the active package, doctor findings, validation, and next subagent role.',
+        command: 'npm run solve:step -- --id <quest>',
+        description: 'Begin a supervised attempt and pin the before metric.',
       }),
       Object.freeze({
-        command: 'npm run work:llm-start',
-        description: 'Print combined LLM handoff, doctor suggestions, dirty scope, model ledger, and evidence summary.',
+        command: 'npm run solve:step -- --id <quest> --commit --changeRef diff:<path> --summary "<what changed>"',
+        description: 'Validate a Quest-scoped patch artifact and record the measured result.',
       }),
       Object.freeze({
-        command: 'npm run work:lane-picker -- --docs-only|--maintenance|--tests-only|--experiment|--runtime|--scenario|--discovery',
-        description: 'Recommend one canonical lane bucket and compatible package lane from a few workflow signals.',
+        command: 'npm run solve:step-pending -- --id <quest>',
+        description: 'Inspect the pinned supervised-step baseline without changing Quest memory.',
       }),
       Object.freeze({
-        command: 'npm run work:dirty-scope',
-        description: 'Report dirty worktree entries grouped as package-owned, tracker-generated, or unrelated.',
+        command: 'npm run solve:attempt -- --id <quest> --frontier <frontier> --changeRef diff:<path> --summary "<what changed>" -- <command...>',
+        description: 'Run a command through the Solver-owned measured-attempt path.',
       }),
       Object.freeze({
-        command: 'npm run work:tracks',
-        description: 'Print current tracks with status, active sprints, upcoming sprints, and track relation.',
+        command: 'npm run solve:finding -- --id <quest> --frontier <frontier> --claim "<claim>"',
+        description: 'Record durable Quest memory for a frontier.',
       }),
       Object.freeze({
-        command: 'npm run work:sprint:remaining',
-        description: 'Print active and todo packages left in the current sprint.',
+        command: 'npm run solve:theory -- list --id <quest>',
+        description: 'List Quest-native system theories, frontier theories, selections, and outcomes.',
       }),
       Object.freeze({
-        command: 'npm run work:sprint:advance -- --dry-run|--write',
-        description: 'Close a package-complete active sprint by renaming it to done and updating track/release references.',
+        command: 'npm run solve:health -- --id <quest>',
+        description: 'Report Quest loop-health, theory gates, divergence signals, and the next legal action.',
       }),
       Object.freeze({
-        command: 'npm run work:sprint:push -- <git-push-args>',
-        description: 'Push with git, then print packages left in the current sprint after a successful push.',
+        command: 'npm run solve:audit -- --id <quest>',
+        description: 'Validate Quest workflow integrity before trusting a closure projection.',
       }),
       Object.freeze({
-        command: 'npm run work:model-ledger -- summary',
-        description: 'Summarize recent model, reasoning-effort, and output-profile fit signals.',
+        command: 'npm run solve:upgrade -- --id <quest>',
+        description: 'Establish a strict-audit baseline for an existing pre-hardening Quest.',
       }),
       Object.freeze({
-        command: 'npm run work:theory-ledger -- validate|list|new',
-        description: 'Validate, query, or append evidence-linked experiment/theory ledger entries.',
+        command: 'npm run solve:probe -- --probe scenario-harness --scenario <scenario> --reportDir test-output/reports --metric priority',
+        description: 'Measure a scenario metric directly without recording an attempt.',
       }),
       Object.freeze({
-        command: 'npm run work:theory-loop -- start|next|record|fix',
-        description: 'Run low-ceremony theory-loop option-set, package, result, and ledger updates through intent flags.',
+        command: 'npm run solve:report -- --id <quest>',
+        description: 'Print the Quest report projection.',
       }),
       Object.freeze({
-        command: 'npm run work:mechanism-card -- <path-to-package-or-artifact>',
-        description: 'Print a structured mechanism card containing failure mechanism, stable facts, changed facts, and expected movement.',
-      }),
-      Object.freeze({
-        command: 'npm run work:artifact-compare -- <old-artifact.json> <new-artifact.json>',
-        description: 'Compare two evidence artifacts and report stable facts, changed facts, invariant blockers, and plausible mechanism movements.',
-      }),
-      Object.freeze({
-        command: 'npm run work:negative-learning -- --package-dir work/packages --limit 12',
-        description: 'Summarize recent package lessons, mechanisms ruled out, invariant facts, and the next mechanism to test.',
-      }),
-      Object.freeze({
-        command: 'npm run work:frontier-history -- --owner startup_active_gate_owner --boundary snapshot_coverage --limit 12',
-        description: 'Summarize repeated owner/boundary/mechanism history, movement classifications, and package outcomes.',
-      }),
-      Object.freeze({
-        command: 'npm run work:loop-health -- --owner <owner> --boundary <boundary>',
-        description: 'Report ping-pong risk, route progress, supersede ratio, contract refs, and next legal move for one owner boundary.',
-      }),
-      Object.freeze({
-        command: 'npm run work:contract:check -- [architecture/contracts/name.md]',
-        description: 'Validate durable System Contract Records and their runtime, model, package, and theory-ledger bindings.',
-      }),
-      Object.freeze({
-        command: 'npm run work:invariants:check -- [--json] [architecture/contracts/invariants.json]',
-        description: 'Validate the machine-readable invariant registry: unique ids, valid kinds, symmetric coupling, existing modelRef/contractRef.',
-      }),
-      Object.freeze({
-        command: 'npm run work:owner-dossier -- --owner <owner> --boundary <boundary> [--json]',
-        description: 'Assemble one owner/boundary reasoning surface: contract record, coupled invariants, model status, current residual, recent outcomes, ledger trail.',
-      }),
-      Object.freeze({
-        command: 'npm run work:agent:plan -- --package <package.md>',
-        description: 'Print required parallel diagnostic route-card paths and bounded scout/verifier prompts for a package.',
-      }),
-      Object.freeze({
-        command: 'npm run work:agent:collect -- --package <package.md> [--allow-missing]',
-        description: 'Collect agent route cards into a coordinator route matrix and surface disagreement before implementation.',
-      }),
-      Object.freeze({
-        command: 'npm run work:agent:validate -- --package <package.md> [--allow-missing]',
-        description: 'Validate agent route-card metadata, read-only scout constraints, evidence paths, and required report coverage.',
-      }),
-      Object.freeze({
-        command: 'npm run work:validate -- --entry|--probe|--pre-impl|--closure',
-        description: 'Validate active work-package metadata, probe packages, checklist state, and lane-required proof at a workflow phase.',
-      }),
-      Object.freeze({
-        command: 'npm run work:package:new -- --write --lane <lane> --title <title> --slug <slug> --owner <owner> --boundary <boundary> --dominant-reason <reason> --next-action <action>',
-        description: 'Scaffold a schema-valid package with Model Fit defaults from the model ledger.',
-      }),
-      Object.freeze({
-        command: 'npm run work:package:evidence -- --action <action> [--outcome <outcome>] [--files <files>] [--validation <validation>]',
-        description: 'Mutate the active package Execution Evidence checklist using intent flags instead of manual Markdown edits.',
-      }),
-      Object.freeze({
-        command: 'npm run work:package:ledger -- --no-ledger',
-        description: 'Set theory-ledger: not-needed and empty theoryLedgerRefs inside the active package via intent command.',
-      }),
-      Object.freeze({
-        command: 'npm run work:sprint:queue -- --activate <package-selector>',
-        description: 'Rename a todo package to active-*, update its status, adjust the active sprint queue reference, and refresh current-blocker.',
-      }),
-      Object.freeze({
-        command: 'npm run work:package:route-after-rerun -- --artifact <artifact> --successor <active-successor>',
-        description: 'Combine post-rerun routing, required sprint/current-blocker refresh steps, and the package migration transaction.',
-      }),
-      Object.freeze({
-        command: 'npm run work:package:schema',
-        description: 'Print the shared work-package schema enums used by templates and validation.',
-      }),
-      Object.freeze({
-        command: 'npm run work:package:cost',
-        description: 'Summarize closed packages per representative movement point and observable prediction accuracy.',
-      }),
-      Object.freeze({
-        command: 'npm run work:subagent-prompt -- --role freshness-review|implementation|verification-fix --package <package>',
-        description: 'Generate bounded subagent prompts plus sequencing and progress ledger guidance.',
-      }),
-      Object.freeze({
-        command: 'npm run work:subagent-next',
-        description: 'Detect the next required subagent role for the active package and print its bounded prompt.',
-      }),
-      Object.freeze({
-        command: 'npm run work:summary -- [--json]',
-        description: 'Print a compact workflow state summary of active package, sprint queue, and next action hints.',
-      }),
-      Object.freeze({
-        command: 'npm run work:track-summary -- [--json]',
-        description: 'Print completeness percentage and task status summaries for all tracks and releases.',
-      }),
-      Object.freeze({
-        command: 'npm run work:admin -- --route --package <path> --successor <successor>',
-        description: 'Safely execute successor package routing via admin transaction.',
-      }),
-      Object.freeze({
-        command: 'npm run work:admin -- --attach-track --package <path> --track <track>',
-        description: 'Safely attach a track/release reference to a package file via admin transaction.',
-      }),
-      Object.freeze({
-        command: 'npm run work:admin -- --advance-sprint',
-        description: 'Safely advance the current active sprint to done/closed state.',
+        command: 'npm run solve:new -- --id <quest> --statement "<done condition>"',
+        description: 'Create an authored Quest file under solve/quests.',
       }),
       Object.freeze({
         command: 'npm run steering:llm:pack',
@@ -171,19 +71,28 @@ const COMMAND_GROUPS = Object.freeze([
     ]),
   }),
   Object.freeze({
-    title: 'Workflow Audit',
+    title: 'Model And Contract Checks',
     commands: Object.freeze([
       Object.freeze({
-        command: 'npm run work:audit:ceremony -- --summary --limit 10',
-        description: 'Summarize pure-ceremony package clusters by lane and owner.',
+        command: 'npm run model:contract-records -- [architecture/contracts/name.md]',
+        description: 'Validate System Contract Records and their runtime, model, Quest, archived trace, and theory-ledger bindings.',
       }),
       Object.freeze({
-        command: 'npm run work:audit:siblings',
-        description: 'Find high-overlap sibling packages that may belong under an epic/frontier parent.',
+        command: 'npm run model:invariants -- [--json] [architecture/contracts/invariants.json]',
+        description: 'Validate the machine-readable invariant registry: unique ids, valid kinds, symmetric coupling, existing modelRef/contractRef.',
+      }),
+    ]),
+  }),
+  Object.freeze({
+    title: 'Evidence Tools',
+    commands: Object.freeze([
+      Object.freeze({
+        command: 'npm run solve:ingest-evidence -- --id <quest> --frontier <frontier> --evidence <path>',
+        description: 'Record fresh probe evidence with a content fingerprint before the next attempt.',
       }),
       Object.freeze({
-        command: 'npm run work:audit:validators',
-        description: 'Report validator gates and whether they have produced useful rejections.',
+        command: 'npm run solve:theory -- card --evidence <path-to-artifact>',
+        description: 'Print a Quest-native mechanism card that can seed system or frontier theory events.',
       }),
     ]),
   }),
@@ -193,18 +102,6 @@ const COMMAND_GROUPS = Object.freeze([
       Object.freeze({
         command: 'npm test -- test/path/to/file.test.js',
         description: 'Run one focused TAP test file.',
-      }),
-      Object.freeze({
-        command: 'npm run work:test',
-        description: 'Run the work-tooling test slice (test/scripts/*.test.js) serially and stream output.',
-      }),
-      Object.freeze({
-        command: 'npm run work:test:regression -- [--update]',
-        description: 'Run the work-tooling slice and fail only on failures not in work/test-baseline.json; --update rewrites the baseline from a clean tree.',
-      }),
-      Object.freeze({
-        command: 'npm run work:theory-loop -- lint-redirect --redirect "<text>"',
-        description: 'Dry-run a candidate redirect-rule string against the running-theory-loop continuation checks before writing it into a sprint or package.',
       }),
       Object.freeze({
         command: 'npm run test:metrics:scoped -- <files...>',
@@ -225,14 +122,6 @@ const COMMAND_GROUPS = Object.freeze([
       Object.freeze({
         command: 'npm run audit:operation-progress-authority',
         description: 'Block retired operation-progress source vocabulary and new rebalancer ordinal files outside the owner-map ledger.',
-      }),
-      Object.freeze({
-        command: 'npm run work:oversized-next -- --markdown',
-        description: 'Turn oversized owner-boundary files into package-ready extraction candidates.',
-      }),
-      Object.freeze({
-        command: 'npm run work:oversized-refactor -- --run',
-        description: 'List oversized files, then run gpt-5.3-codex direct refactors without creating work packages.',
       }),
       Object.freeze({
         command: 'npm run model:decision-tables',
@@ -278,18 +167,6 @@ const COMMAND_GROUPS = Object.freeze([
       Object.freeze({
         command: 'npm run analyze:priority-recovery-residuals -- <artifact>',
         description: 'Extract priority-recovery residual witnesses grouped by owner and boundary.',
-      }),
-      Object.freeze({
-        command: 'npm run work:package:evidence-block -- <artifact>',
-        description: 'Generate a package migration/evidence block from topology analyzer output.',
-      }),
-      Object.freeze({
-        command: 'npm run work:scenario-triage -- <artifact>',
-        description: 'Combine representative evidence and priority residual grouping into one scenario handoff.',
-      }),
-      Object.freeze({
-        command: 'npm run work:scenario-route -- <artifact>',
-        description: 'Combine evidence, causal routing, residuals, owner files, and capped proof into one handoff.',
       }),
       Object.freeze({
         command: 'npm run summarize:harness -- --report-dir test-output/reports',

@@ -80,6 +80,24 @@ const CONTROL_SNAPSHOT_PUBLICATION_SUMMARY_UNAVAILABLE = null;
 const LOAD_ACTIVE_GATE_SNAPSHOT_COVERAGE_ATTEMPT_TIMEOUT_MS =
   ACTIVE_POLL_INTERVAL_MS;
 
+function resolveActiveProbeOperationTimeoutMs(deadline) {
+  const remainingMs = Math.floor(deadline - Date.now());
+  const cappedTimeoutMs = Math.min(
+    ADMIN_QUERY_TIMEOUT_MS,
+    CLUSTER_ACTIVE_NODE_PROBE_TIMEOUT_MS,
+  );
+  if (remainingMs <= MIN_TIMEOUT_MS) {
+    return MIN_TIMEOUT_MS;
+  }
+  if (remainingMs < REACHABILITY_PROBE_TIMEOUT_FLOOR_MS) {
+    return Math.min(cappedTimeoutMs, remainingMs);
+  }
+  return Math.max(
+    REACHABILITY_PROBE_TIMEOUT_FLOOR_MS,
+    Math.min(cappedTimeoutMs, remainingMs),
+  );
+}
+
 class Cluster4 extends Cluster3 {
   async _probeClusterActiveState(deadline, options = {}) {
     const readinessMode =
@@ -90,27 +108,20 @@ class Cluster4 extends Cluster3 {
     const expectedNodeIds = nodes.map((node) => node.id);
     const nodeDiagnosticsPromise = Promise.all(
       nodes.map(async (node) => {
-        const remainingMs = Math.max(MIN_TIMEOUT_MS, deadline - Date.now());
-        const probeTimeoutMs = Math.max(
-          REACHABILITY_PROBE_TIMEOUT_FLOOR_MS,
-          Math.min(
-            ADMIN_QUERY_TIMEOUT_MS,
-            CLUSTER_ACTIVE_NODE_PROBE_TIMEOUT_MS,
-            remainingMs,
-          ),
-        );
         let attemptedReadinessProbe = false;
         let attemptedReadinessProbeSource = ACTIVE_PROBE_ACTIVITY_SOURCE_STATUS;
         const buildStatusProbeResult = async (
           statusReason = null,
           activitySource = ACTIVE_PROBE_ACTIVITY_SOURCE_STATUS_QUERY,
         ) => {
+          const statusProbeTimeoutMs =
+            resolveActiveProbeOperationTimeoutMs(deadline);
           const status = await withTimeout(
             node.getStatus({
-              timeoutMs: probeTimeoutMs,
+              timeoutMs: statusProbeTimeoutMs,
               lane: ADMIN_SOCKET_LANE_PROBE,
             }),
-            probeTimeoutMs,
+            statusProbeTimeoutMs,
             'Node status probe timed out for ' + node.id,
           );
           const active = this._isNodeActive(status);
@@ -171,11 +182,13 @@ class Cluster4 extends Cluster3 {
             }
             attemptedReadinessProbe = true;
             attemptedReadinessProbeSource = probeSource;
+            const readinessProbeTimeoutMs =
+              resolveActiveProbeOperationTimeoutMs(deadline);
             readiness = await withTimeout(
               node[probeMethod]({
-                timeoutMs: probeTimeoutMs,
+                timeoutMs: readinessProbeTimeoutMs,
               }),
-              probeTimeoutMs,
+              readinessProbeTimeoutMs,
               'Node readiness probe timed out for ' + node.id,
             );
             active =
@@ -208,11 +221,13 @@ class Cluster4 extends Cluster3 {
           if (readiness) {
             if (typeof node.getReachabilityDiagnostics === 'function') {
               try {
+                const adminProbeTimeoutMs =
+                  resolveActiveProbeOperationTimeoutMs(deadline);
                 const adminDiagnostics = await withTimeout(
                   node.getReachabilityDiagnostics({
-                    timeoutMs: probeTimeoutMs,
+                    timeoutMs: adminProbeTimeoutMs,
                   }),
-                  probeTimeoutMs,
+                  adminProbeTimeoutMs,
                   'Node admin readiness probe timed out for ' + node.id,
                 );
                 if (

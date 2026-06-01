@@ -15,7 +15,7 @@ Start here before opening large `cluster-segment-*` files.
 
 ## LLM Starting Points
 
-1. Run `npm run work:evidence-summary -- <report-or-failure-bundle.json>`.
+1. Run `npm run analyze:distributed-failure -- --report <report-or-failure-bundle.json>`.
 2. Run `npm run analyze:topology-convergence -- <artifact>` and, when needed,
    `npm run analyze:topology-convergence -- <artifact> --explain <edge>`.
 3. Run `npm --silent run analyze:causal-model -- <artifact>` for stop-condition

@@ -313,6 +313,22 @@ class UnifiedRebalancerSegment4Stage2 extends UnifiedRebalancerSegment4Stage1 {
   selectPriorityRecoveryClosureWitnessNeedsOperationPartitionId(
     evidence = {},
   ) {
+    const needsOperationCandidatePartitionIds = Array.isArray(
+      evidence.needsOperationCandidatePartitionIds,
+    ) ?
+      evidence.needsOperationCandidatePartitionIds :
+      [];
+    const selectedNeedsOperationPartitionId =
+      this.selectPreferredPriorityRecoveryFollowUpPartitionId(
+        needsOperationCandidatePartitionIds,
+        {
+          currentNeedsOperation:
+            needsOperationCandidatePartitionIds.includes(this.entityId),
+        },
+      );
+    if (selectedNeedsOperationPartitionId) {
+      return selectedNeedsOperationPartitionId;
+    }
     const candidatePartitionIds = Array.isArray(
       evidence.candidatePartitionIds,
     ) ?

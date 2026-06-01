@@ -108,12 +108,12 @@ It is complete only when:
 2. Old branch logic is deleted or guarded from new imports.
 3. Diagnostics match the new contract.
 4. Representative proof passes or migrates to one named successor boundary.
-5. Static guardrails and work tracker validation pass.
+5. Static guardrails and Quest/Solver validation pass.
 
 ## Requirement 9: Runtime Packages Freeze One Contract
 
-Before a queued runtime package edits production or test code, it must freeze
-one filled module contract in the package file or a linked spec subsection.
+Before a queued runtime Quest edits production or test code, it must freeze one
+filled module contract in the Quest or a linked spec subsection.
 
 The frozen contract must:
 

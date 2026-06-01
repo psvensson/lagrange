@@ -208,25 +208,25 @@ const TOPOLOGY_FAILURE_GATE_ASSERTION = Object.freeze({
 
 const TOPOLOGY_FAILURE_GATE_SPLIT_PACKAGE = Object.freeze({
   FAILURE_DETECTION_REPAIR_GATE:
-    'work/packages/todo-20260514-topology-failure-detection-repair-gate.md',
+    '_legacy_work/packages/todo-20260514-topology-failure-detection-repair-gate.md',
   KILLED_JOIN_GATE:
-    'work/packages/todo-20260514-topology-killed-join-gate.md',
+    '_legacy_work/packages/todo-20260514-topology-killed-join-gate.md',
   KILLED_REJOIN_GATE:
-    'work/packages/todo-20260514-topology-killed-rejoin-gate.md',
+    '_legacy_work/packages/todo-20260514-topology-killed-rejoin-gate.md',
   LEADER_KILL_DURING_DISPATCH_GATE:
-    'work/packages/todo-20260520-topology-leader-kill-during-dispatch-gate.md',
+    '_legacy_work/packages/todo-20260520-topology-leader-kill-during-dispatch-gate.md',
   MISSED_HANDOFF_ACK_GATE:
-    'work/packages/todo-20260514-topology-missed-handoff-ack-gate.md',
+    '_legacy_work/packages/todo-20260514-topology-missed-handoff-ack-gate.md',
   REBALANCE_DISRUPTION_RECOVERY_GATE:
-    'work/packages/todo-20260514-topology-rebalance-disruption-recovery-gate.md',
+    '_legacy_work/packages/todo-20260514-topology-rebalance-disruption-recovery-gate.md',
   REMOTE_COORDINATOR_HANDOFF_GATE:
-    'work/packages/todo-20260514-topology-remote-coordinator-handoff-gate.md',
+    '_legacy_work/packages/todo-20260514-topology-remote-coordinator-handoff-gate.md',
   SLOW_NETWORK_PUBLICATION_GATE:
-    'work/packages/todo-20260520-topology-slow-network-publication-gate.md',
+    '_legacy_work/packages/todo-20260520-topology-slow-network-publication-gate.md',
   STALE_EVIDENCE_SNAPSHOT_COVERAGE_GATE:
-    'work/packages/todo-20260520-topology-stale-evidence-snapshot-coverage-gate.md',
+    '_legacy_work/packages/todo-20260520-topology-stale-evidence-snapshot-coverage-gate.md',
   STALE_PUBLICATION_DURABLE_TRUTH_GATE:
-    'work/packages/todo-20260514-topology-stale-publication-durable-truth-gate.md',
+    '_legacy_work/packages/todo-20260514-topology-stale-publication-durable-truth-gate.md',
 });
 
 const TOPOLOGY_FAILURE_GATE_MATRIX = Object.freeze([

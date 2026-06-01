@@ -1,0 +1,28 @@
+{
+  "id": "rolling-restart-core-stability",
+  "statement": "rolling-restart passes 3 consecutive harness runs with no priority items after core stability fixes.",
+  "priority": 1,
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "rolling-restart",
+      "reportDir": "test-output/reports",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "rolling-restart-core-stability-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "rolling-restart",
+          "reportDir": "test-output/reports",
+          "metric": "priority"
+        }
+      }
+    }
+  ]
+}

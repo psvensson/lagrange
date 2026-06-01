@@ -34,7 +34,14 @@ function checkMetricEvidence(event, ctx) {
 
 // Check 3: the recorded change actually exists as a diff artifact.
 function checkChangeRef(event, ctx) {
-  if (!event.changeRef || !ctx.changeRefResolves(event.changeRef)) {
+  if (ctx.inspectChangeRef) {
+    const inspection = ctx.inspectChangeRef(event.changeRef);
+    if (!inspection.valid) {
+      return inspection.problems;
+    }
+    return [];
+  }
+  if (!event.changeRef || !ctx.changeRefResolves(event.changeRef, event)) {
     return [`changeRef does not resolve: ${event.changeRef || '(none)'}`];
   }
   return [];

@@ -196,6 +196,81 @@ export function registerClusterPart6Core02Tests(context) {
       );
     });
 
+  test('Unit: _waitForAllActive startup mode fails on configured ' +
+  'no-progress with active-gate diagnostics', async () => {
+    const cluster = createCluster({
+      size: 2,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+      timeouts: {
+        convergence: 5000,
+        activeWaitNoProgressMaxAttempts: 1,
+      },
+    });
+
+    cluster._sleep = async () => {};
+    cluster._collectFailureLogs = async () => {};
+    cluster._recordClusterStage = () => {};
+    const stalledProbe = {
+      allActive: false,
+      nodeDiagnostics: [{
+        nodeId: TERMINAL_PRIORITY_REGRESSION_SEED_ID,
+        active: true,
+        state: TERMINAL_PRIORITY_REGRESSION_ACTIVE_STATE,
+      }, {
+        nodeId: TERMINAL_PRIORITY_REGRESSION_JOINER_A_ID,
+        active: false,
+        state: 'inactive',
+        reasons: ['startup_publication_pending'],
+      }],
+      snapshotCoverage: {
+        completeCoverage: false,
+        expectedNodeCount: 2,
+        bestCoverageNodeCount: 1,
+        selectedNodeId: TERMINAL_PRIORITY_REGRESSION_SEED_ID,
+      },
+      publicationConvergenceGate: {
+        ready: false,
+        reasons: ['publication_convergence_missing'],
+        publicationStatus: TERMINAL_PRIORITY_REGRESSION_PUBLICATION_STATUS,
+        pendingAckNodeIds: [TERMINAL_PRIORITY_REGRESSION_JOINER_A_ID],
+        missingPublishedNodeIds: [TERMINAL_PRIORITY_REGRESSION_JOINER_A_ID],
+      },
+      priorityRecoveryInvariants: {
+        invariants: [],
+        failingInvariantIds: [],
+        passed: false,
+      },
+    };
+    let probeCallCount = 0;
+    cluster._probeClusterActiveState = async () => {
+      probeCallCount += 1;
+      return stalledProbe;
+    };
+
+    await assert.rejects(
+      async () => {
+        await cluster._waitForAllActive();
+      },
+      (error) => {
+        assert.match(error.message, /stalled/i);
+        assert.equal(error?.diagnostics?.noProgress?.enabled, true);
+        assert.equal(error?.diagnostics?.noProgress?.mode, 'startup');
+        assert.equal(error?.diagnostics?.noProgress?.maxAttempts, 1);
+        assert.equal(
+          error?.diagnostics?.activeGate?.mode,
+          'startup',
+        );
+        return true;
+      },
+    );
+    assert.equal(
+      probeCallCount,
+      2,
+      'startup ACTIVE wait should stop after the no-progress attempt budget',
+    );
+  });
+
   test('Unit: _waitForAllActive returns a terminal activeGate with the ' +
   'successful progress snapshot', async () => {
     const cluster = createCluster({

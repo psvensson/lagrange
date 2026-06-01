@@ -60,7 +60,21 @@ class UnifiedRebalancerSegment3 extends UnifiedRebalancerSegment2 {
     if (
       !this.isReadinessDimensionSatisfied(readiness, readinessDecisionDimension)
     ) {
-      return false;
+      if (
+        !this.isStartupAuthorityControlPlanePlacementEligibleNode(
+          nodeId,
+          readinessDecisionDimension,
+        )
+      ) {
+        return false;
+      }
+      if (!this.isTransportReady(nodeId)) {
+        return false;
+      }
+      if (this.enableReadinessPing) {
+        return this.checkReadinessPing(nodeId);
+      }
+      return true;
     }
 
     // Delegate transport-level checks (connection, outbound queue, and

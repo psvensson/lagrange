@@ -146,6 +146,7 @@ class ReplicaHandlerSetup {
       systemTableCache,
       cdcIntegrationService,
       replicaStateMachine,
+      messageRouter,
       createPartitionService,
       dataDir,
       executorOutcomeEmitter,

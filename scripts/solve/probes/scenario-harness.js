@@ -29,9 +29,12 @@ function safeRead(file) {
 }
 
 function scenarioEntry(data, scenario) {
-  const scenarios = data?.standardSummary?.scenarios;
-  if (!Array.isArray(scenarios)) return null;
-  return scenarios.find((s) => s.scenario === scenario) || null;
+  const directScenarios = Array.isArray(data?.scenarios) ? data.scenarios : [];
+  const standardScenarios = Array.isArray(data?.standardSummary?.scenarios) ?
+    data.standardSummary.scenarios :
+    [];
+  return [...directScenarios, ...standardScenarios]
+    .find((s) => s?.scenario === scenario) || null;
 }
 
 function reportCoversScenario(data, scenario) {
@@ -40,10 +43,42 @@ function reportCoversScenario(data, scenario) {
 
 function scenarioPassed(data, scenario) {
   const entry = scenarioEntry(data, scenario);
+  if (typeof entry?.passed === 'boolean') return entry.passed;
   if (entry?.current && typeof entry.current.passed === 'boolean') {
     return entry.current.passed;
   }
   return data?.summary?.failed === 0;
+}
+
+function failureCandidate(data, scenario) {
+  const entry = scenarioEntry(data, scenario);
+  return entry?.details?.diagnostics?.failure ||
+    entry?.details?.failure ||
+    entry?.failureBundle?.summary ||
+    entry?.failureClassification ||
+    data?.failureBundle?.summary ||
+    null;
+}
+
+function classification(data, scenario) {
+  const entry = scenarioEntry(data, scenario);
+  const failure = failureCandidate(data, scenario);
+  return {
+    verdict: entry?.current?.verdict || entry?.verdict || null,
+    verdictReason: entry?.current?.verdictReason || entry?.verdictReason || null,
+    rootCauseClass:
+      failure?.rootCauseClass ||
+      entry?.rootCauseClass ||
+      entry?.failureClassification?.rootCauseClass ||
+      null,
+    dominantReason:
+      failure?.dominantReason ||
+      entry?.dominantReason ||
+      entry?.failureClassification?.dominantReason ||
+      null,
+    owner: null,
+    boundary: null,
+  };
 }
 
 // Most-recent-first, de-duplicated by run timestamp so re-read/identical reports do
@@ -95,6 +130,7 @@ export const scenarioHarnessProbe = {
       metric: readMetric(latest.data, metricKind),
       done,
       evidence: latest.file,
+      classification: classification(latest.data, scenario),
       detail: {
         runs: runs.length,
         verdict: scenarioEntry(latest.data, scenario)?.current?.verdict || null,

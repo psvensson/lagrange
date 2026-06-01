@@ -55,8 +55,16 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
     options.defaultRoutingReadinessDimension ||
     CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE;
   engine.routingMetadataOverlay = options.routingMetadataOverlay || null;
+  engine.partitionServicesProvider =
+    typeof options.partitionServicesProvider === LOCAL_STR_FUNCTION ?
+      options.partitionServicesProvider :
+      null;
   engine.authoritativeRoutingOverlayEntries = new Map();
   engine.bootstrapRoutingOverlayEntries = new Map();
+  engine.localRuntimeRoutingOverlay = {
+    getServicesForPartition: (partitionId) =>
+      engine.getLocalRuntimeRoutingOverlayServices(partitionId),
+  };
   engine.authoritativeRoutingOverlay = {
     getPartitionById: (partitionId) =>
       engine.getAuthoritativeRoutingOverlayPartition(partitionId),
@@ -124,8 +132,11 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
     engine.composeRoutingMetadataOverlay(
       engine.routingMetadataOverlay,
       engine.composeRoutingMetadataOverlay(
-        engine.authoritativeRoutingOverlay,
-        engine.bootstrapRoutingOverlay,
+        engine.localRuntimeRoutingOverlay,
+        engine.composeRoutingMetadataOverlay(
+          engine.authoritativeRoutingOverlay,
+          engine.bootstrapRoutingOverlay,
+        ),
       ),
     ),
   );

@@ -2,20 +2,12 @@
 
 ## LLM First Step
 
-Before non-trivial implementation work, run:
+Before non-trivial implementation work, load this file and the relevant compact
+steering pack. This export does not install the legacy work tracker as an active
+workflow surface.
 
-```bash
-npm run work:context
-```
-
-Use that output as the current handoff. It names the active package, first
-files to read, proof ladder, useful commands, and dirty worktree summary.
-
-Use `npm run work:model-ledger -- summary` as an advisory signal when choosing
-model and reasoning effort for a package. Record the final package experience
-with `npm run work:model-ledger -- record ...` before closure when the work
-adds useful evidence. The ledger informs future choices; it does not replace
-validation, review, package sequencing, or closure proof.
+Archived work-package templates, the former tracker, and the former model
+ledger utility live under `_legacy_work/` for reference only.
 
 For steering context, load the compact LLM pack first:
 
@@ -26,35 +18,19 @@ For steering context, load the compact LLM pack first:
 Use the full steering source documents only when the handoff or compact pack
 requires source-level detail for the current boundary.
 
-## Work Package Discipline
+## Implementation Discipline
 
-Non-trivial implementation work should be driven by a package under
-`work/packages/`.
+Non-trivial implementation work should be driven by the target repository's
+active workflow and recorded with live validation evidence.
 
 Default sequence:
 
-1. Capture or update the work package.
-2. Review the most recently executed package on the same owner boundary.
-3. Fix review findings before new implementation starts.
-4. Implement only the current package.
-5. Run the package proof ladder.
-6. Commit only package-owned files and push the focused slice.
-7. Rename the package to `done-...` only when closure proof is true.
-
-If real subagents are available, use separate review, fix, and implementation
-subagents for package work and record their names and ids in the package file.
-If subagents are unavailable or the human disables them, record that explicit
-exception in the package before implementation starts.
-
-Checked sequencing entries must not contain placeholders such as `<...>`,
-pending markers, or non-real identities such as `current-session`, `manual`,
-`local`, or `session`.
-
-Packages closed under this policy should carry a Commit And Push Ledger:
-
-1. `Focused package commit: <sha>`
-2. `Pushed to: <remote>/<branch>`
-3. `Commit contains only package-owned files/package-status/allowed sprint handoff: yes`
+1. Capture the intended scope and owner boundary.
+2. Review related prior work before new implementation starts.
+3. Fix blocking review findings before adding new behavior.
+4. Implement only the current scoped concern.
+5. Run the proof ladder for the changed boundary.
+6. Commit only the focused slice.
 
 ## Canonical Steering Sources
 

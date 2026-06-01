@@ -1,7 +1,6 @@
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
 
 const {
-  CONTROL_PLANE_READINESS_DIMENSION,
   LIFECYCLE_PHASE,
   NUM,
   TABLES,
@@ -524,14 +523,9 @@ class UnifiedRebalancerPriorityReadinessMethods {
    * @private
    */
   getLocalControlPlaneMutationReadinessBlocker() {
-    const requiredDimensions =
-      this.shouldBypassLocalPriorityControlPlaneStartupReadiness() ?
-        [CONTROL_PLANE_READINESS_DIMENSION.METADATA_PUBLICATION_HEALTHY] :
-        null;
     return getLocalControlPlaneMutationReadinessBlocker({
       nodeId: this.nodeId,
       controlPlaneReadinessService: this.controlPlaneReadinessService,
-      requiredDimensions,
       requirePublishedConvergence:
         this.shouldRequirePublishedConvergenceBeforeBackgroundMutation(),
     });

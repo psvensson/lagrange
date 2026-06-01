@@ -382,6 +382,7 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
         this.logger.warn(REPLICA_HANDLER_LOG_MSG.NO_MESSAGE_ROUTER);
         return;
       }
+      this.messageRouter = messageRouter;
       const handlerAddress =
         `${this.nodeId}/${REPLICA_HANDLER_ADDRESS.SERVICE_SEGMENT}/` +
         `${REPLICA_HANDLER_ADDRESS.HANDLER_ID}`;
@@ -420,6 +421,9 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
         `${this.nodeId}/${REPLICA_HANDLER_ADDRESS.SERVICE_SEGMENT}/` +
         `${REPLICA_HANDLER_ADDRESS.HANDLER_ID}`;
       messageRouter.unregister(handlerAddress);
+      if (this.messageRouter === messageRouter) {
+        this.messageRouter = null;
+      }
       this.logger.info(REPLICA_HANDLER_LOG_MSG.UNREGISTERED_ROUTER, {
         address: handlerAddress,
         nodeId: this.nodeId,

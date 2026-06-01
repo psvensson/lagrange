@@ -1087,6 +1087,86 @@ export function registerTableDistributionHelpersReadPathTailMoreTests({
     }
   });
 
+  test('table-distribution-helpers bounds service and repair reads by the ' +
+  'shared distribution deadline', async () => {
+    const TEST_DISTRIBUTION_READ_TIMEOUT_MS = 10;
+    const TEST_DISTRIBUTION_DEADLINE_MS = 25;
+    const TEST_LATE_DEADLINE_TIMEOUT_MS = 1;
+    const queryTimeouts = [];
+    const repairTimeouts = [];
+    const originalDateNow = Date.now;
+    let fakeNow = 0;
+    let repairApplied = false;
+    Date.now = () => fakeNow;
+    const seedNode = {
+      id: 'seed-1',
+      async queryWithTimeout(sql, _params, options = {}) {
+        if (sql.includes('control_snapshot_local(true)')) {
+          repairTimeouts.push(options.timeoutMs);
+          repairApplied = true;
+          return {rows: [{scope: 'forced'}]};
+        }
+        if (sql.includes('control_snapshot_local()')) {
+          repairTimeouts.push(options.timeoutMs);
+          return {rows: []};
+        }
+        if (sql.includes(TABLES_SQL_FRAGMENT)) {
+          queryTimeouts.push({sql: 'tables', timeoutMs: options.timeoutMs});
+          fakeNow += options.timeoutMs;
+          return {rows: [{table_id: 'tbl-deadline-bounded'}]};
+        }
+        if (sql.includes(PARTITIONS_SQL_FRAGMENT)) {
+          queryTimeouts.push({
+            sql: 'partitions',
+            timeoutMs: options.timeoutMs,
+          });
+          fakeNow += options.timeoutMs;
+          return {
+            rows: [buildVisiblePartitionRow('tbl-deadline-bounded-p1')],
+          };
+        }
+        if (sql.includes(SERVICES_SQL_FRAGMENT)) {
+          queryTimeouts.push({sql: 'services', timeoutMs: options.timeoutMs});
+          fakeNow += options.timeoutMs;
+          return {
+            rows: repairApplied ?
+              [buildActiveLeaderServiceRow('tbl-deadline-bounded-p1')] :
+              [],
+          };
+        }
+        return {rows: []};
+      },
+    };
+
+    try {
+      const distribution = await queryTableDistribution(seedNode, {
+        tableName: 'benchmark_events',
+        queryNodes: [seedNode],
+        queryTimeoutMs: TEST_DISTRIBUTION_READ_TIMEOUT_MS,
+        deadlineAtMs: TEST_DISTRIBUTION_DEADLINE_MS,
+      });
+
+      assert.equal(distribution.partitionCount, 1);
+      assert.equal(distribution.replicaNodeCount, 1);
+      assert.deepEqual(
+        queryTimeouts.slice(0, 3),
+        [
+          {sql: 'partitions', timeoutMs: TEST_DISTRIBUTION_READ_TIMEOUT_MS},
+          {sql: 'tables', timeoutMs: TEST_DISTRIBUTION_READ_TIMEOUT_MS},
+          {sql: 'services', timeoutMs: 5},
+        ],
+      );
+      assert.ok(
+        repairTimeouts.every(
+          (timeoutMs) => timeoutMs === TEST_LATE_DEADLINE_TIMEOUT_MS,
+        ),
+        'repair probes should not reopen a full query timeout after deadline',
+      );
+    } finally {
+      Date.now = originalDateNow;
+    }
+  });
+
 
   registerTableDistributionHelpersReadPathTailFinalTests({
     test,

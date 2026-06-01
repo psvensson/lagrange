@@ -84,7 +84,7 @@ const TEST_RETRYABLE_CREATE_STATUS_ERROR =
   'Distributed operation failed due to participant failures';
 const TEST_RETRYABLE_CREATE_STATUS_CODE =
   'DISTRIBUTED_PARTICIPANT_FAILURE';
-const TEST_RETRYABLE_CREATE_STATUS_RETRY_AFTER_MS = 1000;
+const TEST_RETRYABLE_CREATE_STATUS_RETRY_AFTER_MS = 1;
 const TEST_WAIT_FOR_CONDITION_TIMEOUT_MS = 100;
 const TEST_WAIT_FOR_CONDITION_POLL_MS = 5;
 const TEST_WAIT_FOR_CONDITION_TIMEOUT_ERROR = 'condition not reached';
@@ -610,11 +610,14 @@ test('ReplicaHandler', async (t) => {
     t,
     ReplicaHandler,
     ReplicaStatus,
+    ReplicaStateMachine,
+    SYSTEM_TABLE_NAME,
     createMockCDCService,
     createMockPartitionServiceFactory,
     createSeededCache,
     createMetadataOnlyCache,
     seedReplicaOperation,
+    applyGatewayMutationToCache,
     waitForReplicaEvent,
     getTempDir: () => tempDir,
     ReplicaOperationResponseStatus,
@@ -969,7 +972,7 @@ test('ReplicaHandler', async (t) => {
     });
 
   t.test(
-    'handleCreateReplica - retryable initial status failure allows replay',
+    'handleCreateReplica - retryable initial status failure drains locally',
     async (t) => {
       const cache = createSeededCache({
         partitionId: TEST_RETRYABLE_CREATE_STATUS_PARTITION_ID,
@@ -980,6 +983,7 @@ test('ReplicaHandler', async (t) => {
       });
       const mockCDC = createMockCDCService(cache);
       let creatingTransitionAttempted = false;
+      let creatingTransitionFailures = 0;
       let createCallCount = 0;
 
       const handler = new ReplicaHandler({
@@ -1001,6 +1005,10 @@ test('ReplicaHandler', async (t) => {
               newStatus === ReplicaStatus.CREATING
             ) {
               creatingTransitionAttempted = true;
+              if (creatingTransitionFailures > 0) {
+                return true;
+              }
+              creatingTransitionFailures += 1;
               const error = new Error(TEST_RETRYABLE_CREATE_STATUS_ERROR);
               error.code = TEST_RETRYABLE_CREATE_STATUS_CODE;
               error.retryAfterMs =
@@ -1014,6 +1022,12 @@ test('ReplicaHandler', async (t) => {
 
       handler.initialize();
 
+      const created = waitForReplicaEvent(
+        handler,
+        'replicaCreated',
+        'replicaCreationFailed',
+      );
+
       const response = await handler.handleCreateReplica({
         operationId: TEST_RETRYABLE_CREATE_STATUS_OPERATION_ID,
         partitionId: TEST_RETRYABLE_CREATE_STATUS_PARTITION_ID,
@@ -1026,38 +1040,28 @@ test('ReplicaHandler', async (t) => {
         'first create should ACK',
       );
 
-      await waitForCondition(() => creatingTransitionAttempted === true);
-      await waitForCondition(() => handler.inProgressOperations.size === 0);
+      await created;
 
       t.equal(
-        handler.getLocalReplica(TEST_RETRYABLE_CREATE_STATUS_REPLICA_ID)
-          ?.status,
-        ReplicaStatus.PENDING,
-        'retryable initial status failure leaves retryable pending state',
+        creatingTransitionAttempted,
+        true,
+        'retryable initial status persistence should be attempted',
       );
       t.equal(
         createCallCount,
+        1,
+        'partition service should start after CREATING persistence retries',
+      );
+      t.equal(
+        handler.getLocalReplica(TEST_RETRYABLE_CREATE_STATUS_REPLICA_ID)
+          ?.status,
+        ReplicaStatus.ACTIVE,
+        'retryable initial status pressure should converge to active locally',
+      );
+      t.equal(
+        handler.inProgressOperations.size,
         0,
-        'partition service should not start without CREATING persistence',
-      );
-
-      const replayResponse = await handler.handleCreateReplica({
-        operationId: TEST_RETRYABLE_CREATE_STATUS_OPERATION_ID,
-        partitionId: TEST_RETRYABLE_CREATE_STATUS_PARTITION_ID,
-        replicaId: TEST_RETRYABLE_CREATE_STATUS_REPLICA_ID,
-      });
-
-      t.equal(
-        replayResponse.status,
-        ReplicaOperationResponseStatus.INITIATED,
-        'pending replay should be accepted after deferred status write',
-      );
-      t.equal(
-        handler.inProgressOperations.has(
-          TEST_RETRYABLE_CREATE_STATUS_OPERATION_ID,
-        ),
-        true,
-        'pending replay should re-track the create operation',
+        'completed local retry should clear operation tracking',
       );
 
       await handler.shutdown();

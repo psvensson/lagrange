@@ -3,10 +3,15 @@
 //
 // Subcommands:
 //   new     scaffold a quest file you then edit (the only authored artifact)
-//   run     run the control loop to a terminal (SOLVED / EXHAUSTED), then report
+//   run     run the control loop to a terminal or non-terminal gate, then report
 //   status  print the projected state (frontiers, rungs, metrics)
 //   report  (re)generate and print the markdown result projection
 //   probe   ad-hoc: ask a probe for {metric, done, evidence} without recording
+//   theory  record two-layer Quest theories and their outcomes
+//   health  print Quest loop-health and next-action signals
+//   attempt run a command through the atomic measured-attempt path
+//   audit   validate Quest workflow integrity
+//   upgrade establish a strict-audit baseline for an existing legacy Quest
 //
 // The CLI is a thin shell over scripts/solve/*. All Quest truth lives in the
 // append-only log; reports and state are projections.
@@ -20,9 +25,15 @@ import {makeDryExecutor} from './solve/executor.js';
 import {makeAgentExecutor} from './solve/agent-executor.js';
 import {runLoop} from './solve/loop.js';
 import {writeReport} from './solve/report.js';
-import {getProbe} from './solve/probe.js';
-import {stepBegin, stepCommit, stepAbort, stepPending} from './solve/step.js';
+import {runStep, stepAbort, stepPending} from './solve/step.js';
 import {SOLVE_DATA_DIR} from './solve/constants.js';
+import {runTheoryCommand, theoryCommitArgs} from './solve/theory.js';
+import {analyzeQuestHealth, renderHealth} from './solve/health.js';
+import {detectUnrecordedEvidence, ingestEvidence} from './solve/evidence.js';
+import {runAttemptCommand} from './solve/attempt.js';
+import {runAuditCommand} from './solve/audit.js';
+import {runUpgradeCommand} from './solve/upgrade.js';
+import {evaluate} from './solve/probe.js';
 
 function parseArgs(argv) {
   const args = {_: []};
@@ -34,7 +45,13 @@ function parseArgs(argv) {
       if (next === undefined || next.startsWith('--')) {
         args[key] = true;
       } else {
-        args[key] = next;
+        if (args[key] === undefined) {
+          args[key] = next;
+        } else if (Array.isArray(args[key])) {
+          args[key].push(next);
+        } else {
+          args[key] = [args[key], next];
+        }
         i += 1;
       }
     } else {
@@ -91,8 +108,12 @@ function cmdRun(root, args) {
   if (args.max !== undefined) options.maxCycles = Number(args.max);
   const result = runLoop(root, quest, options);
   const {file} = writeReport(root, id);
+  const problems = result.problems?.length ?
+    `problems:\n${result.problems.map((problem) => `- ${problem}`).join('\n')}\n` :
+    '';
   process.stdout.write(
     `terminal: ${result.outcome}\nevidence: ${result.evidence || '(none)'}\n` +
+    problems +
     `report: ${file}\n`);
 }
 
@@ -127,17 +148,20 @@ function cmdReport(root, args) {
   const id = args.id || args._[0];
   if (!id) throw new Error('report: --id <questId> is required');
   const {file, md} = writeReport(root, id);
-  process.stdout.write(`${md}\n(written to ${file})\n`);
+  const unrecorded = detectUnrecordedEvidence(root, id);
+  const warning = unrecorded ?
+    `\nWARNING: fresh probe evidence is not recorded. Run:\n  ${unrecorded.command}\n` :
+    '';
+  process.stdout.write(`${md}${warning}\n(written to ${file})\n`);
 }
 
 function cmdProbe(root, args) {
   const name = args.probe;
   if (!name) throw new Error('probe: --probe <name> is required');
-  const probe = getProbe(name);
   const probeArgs = {...args};
   delete probeArgs._;
   delete probeArgs.probe;
-  const result = probe.measure(probeArgs, {});
+  const result = evaluate({probe: name, args: probeArgs}, {root});
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 }
 
@@ -157,12 +181,51 @@ function cmdFinding(root, args) {
   });
   process.stdout.write(`recorded finding for ${args.frontier} @ ${stamped.ts}\n`);
 }
-
-function stepCommitCmd(root, quest, args) {
-  const r = stepCommit(root, quest, {
+function cmdStep(root, args) {
+  const id = args.id || args._[0];
+  if (!id) throw new Error('step: --id <questId> is required');
+  const quest = loadQuest(root, id);
+  if (args.abort) {
+    process.stdout.write(stepAbort(root, id) ?
+      'pending step aborted\n' :
+      'no pending step\n');
+    return;
+  }
+  if (args.changeRef && !args.commit) {
+    throw new Error('step commit requires --commit with --changeRef');
+  }
+  if (args.commit && !args.changeRef) {
+    throw new Error('step --commit requires --changeRef diff:<path>');
+  }
+  const r = runStep(root, quest, {
     changeRef: typeof args.changeRef === 'string' ? args.changeRef : undefined,
     summary: typeof args.summary === 'string' ? args.summary : undefined,
+    force: Boolean(args.force),
+    ...theoryCommitArgs(args),
   });
+  if (r.terminal === 'theory-required') {
+    process.stdout.write(
+      `THEORY REQUIRED — ${r.frontier} rung ${r.rungIndex}\n` +
+      `${r.problems.map((problem) => `- ${problem}`).join('\n')}\n`);
+    return;
+  }
+  if (r.terminal === 'solved') {
+    process.stdout.write(`SOLVED — evidence: ${r.evidence || '(none)'}\n`);
+    return;
+  }
+  if (r.terminal === 'exhausted') {
+    process.stdout.write('EXHAUSTED — no open frontier; human decision needed\n');
+    return;
+  }
+  if (!args.changeRef) {
+    process.stdout.write(
+      `pinned ${r.frontier}: metric ${r.before.metric}\n` +
+      `pending: ${r.pendingFile}\n` +
+      `next: node scripts/solve.js step --id ${id} --commit ` +
+      '--changeRef diff:<path> --summary "<what changed>"\n',
+    );
+    return;
+  }
   const moved = r.progressed ? 'PROGRESS' : 'flat';
   const viol = r.violations.length ? ` violations: ${r.violations.join('; ')}` : '';
   process.stdout.write(
@@ -170,41 +233,59 @@ function stepCommitCmd(root, quest, args) {
     `(${moved})${r.done ? ' DONE' : ''}${viol}\n`);
 }
 
-function stepBeginCmd(root, quest, id, args = {}) {
-  const out = stepBegin(root, quest, {force: Boolean(args.force)});
-  if (out.terminal === 'solved') {
-    process.stdout.write(`SOLVED — evidence: ${out.evidence || '(none)'}\n`);
-    return;
-  }
-  if (out.terminal === 'exhausted') {
-    process.stdout.write('EXHAUSTED — no open frontier; human decision needed\n');
-    return;
-  }
-  process.stdout.write(
-    `${out.dossier}\n\n` +
-    `# baseline metric: ${out.before.metric}\n` +
-    '# Do the work, re-run the harness, then:\n' +
-    `#   solve step --id ${id} --commit --changeRef diff:<path> ` +
-    '--summary "<hypothesis>"\n');
+function cmdTheory(root, args) {
+  process.stdout.write(`${runTheoryCommand(root, args)}\n`);
 }
 
-function cmdStep(root, args) {
+function cmdHealth(root, args) {
   const id = args.id || args._[0];
-  if (!id) throw new Error('step: --id <questId> is required');
+  if (!id) throw new Error('health: --id <questId> is required');
   const quest = loadQuest(root, id);
-  if (args.abort) {
-    process.stdout.write(stepAbort(root, id) ?
-      'pending step aborted\n' : 'no pending step\n');
-    return;
+  const health = analyzeQuestHealth(root, quest);
+  if (args.json) {
+    process.stdout.write(`${JSON.stringify(health, null, 2)}\n`);
+  } else {
+    process.stdout.write(renderHealth(health));
   }
-  if (args.commit) {
-    stepCommitCmd(root, quest, args);
-    return;
-  }
-  if (stepPending(root, id) && !args.force) {
-    throw new Error('a step is already pending; use --commit, --abort, or --force');
-  }
-  stepBeginCmd(root, quest, id, args);
+}
+
+function cmdStepPending(root, args) {
+  const id = args.id || args._[0];
+  if (!id) throw new Error('step-pending: --id <questId> is required');
+  process.stdout.write(`${JSON.stringify(stepPending(root, id), null, 2)}\n`);
+}
+
+function cmdIngestEvidence(root, args) {
+  const id = args.id || args._[0];
+  if (!id) throw new Error('ingest-evidence: --id <questId> is required');
+  const frontier = args.frontier;
+  if (!frontier) throw new Error('ingest-evidence: --frontier <frontierId> is required');
+  const evidence = args.evidence;
+  if (!evidence) throw new Error('ingest-evidence: --evidence <evidencePath> is required');
+
+  const stamped = ingestEvidence(root, {
+    questId: id,
+    frontierId: frontier,
+    evidencePath: evidence,
+  });
+  process.stdout.write(`Ingested evidence: ${stamped.evidence} for ${frontier}\n`);
+}
+
+function cmdAttempt(root, args) {
+  runAttemptCommand(root, {
+    ...args,
+    ...theoryCommitArgs(args),
+  });
+  process.stdout.write('Harness execution attempt complete and recorded.\n');
+}
+
+function cmdAudit(root, args) {
+  const output = runAuditCommand(root, args);
+  process.stdout.write(output);
+}
+
+function cmdUpgrade(root, args) {
+  process.stdout.write(runUpgradeCommand(root, args));
 }
 
 const COMMANDS = {
@@ -215,6 +296,13 @@ const COMMANDS = {
   probe: cmdProbe,
   finding: cmdFinding,
   step: cmdStep,
+  'step-pending': cmdStepPending,
+  theory: cmdTheory,
+  health: cmdHealth,
+  'ingest-evidence': cmdIngestEvidence,
+  attempt: cmdAttempt,
+  audit: cmdAudit,
+  upgrade: cmdUpgrade,
 };
 
 function main() {
@@ -226,7 +314,20 @@ function main() {
     process.exit(command ? 1 : 0);
     return;
   }
-  const args = parseArgs(rest);
+  let args;
+  if (command === 'attempt') {
+    const dashDashIndex = process.argv.indexOf('--');
+    if (dashDashIndex !== -1) {
+      const commandArgs = process.argv.slice(3, dashDashIndex);
+      const harnessCmd = process.argv.slice(dashDashIndex + 1);
+      args = parseArgs(commandArgs);
+      args._ = harnessCmd;
+    } else {
+      args = parseArgs(rest);
+    }
+  } else {
+    args = parseArgs(rest);
+  }
   const root = args.root || process.cwd();
   try {
     handler(root, args);

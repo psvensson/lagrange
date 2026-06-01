@@ -37,6 +37,7 @@ const TEST_DEGRADATION_STATE_UNKNOWN = 'unknown';
 const TEST_RETRY_AFTER_NONE_MS = 0;
 const TEST_TABLE_ID_BOOTSTRAP_TIMEOUT_MS = 10000;
 const TEST_CONTROL_QUERY_TIMEOUT_MS = 15000;
+const TEST_MULTI_NODE_CREATE_TIMEOUT_MS = 5000;
 const TEST_CONTROL_QUERY_FAILOVER_MIN_TIMEOUT_MS =
   Math.floor(TEST_CONTROL_QUERY_TIMEOUT_MS / 2) + 1;
 const TEST_TABLE_ID_BOOTSTRAP_FAILOVER_MIN_TIMEOUT_MS =
@@ -358,7 +359,7 @@ test('table-distribution-helpers keeps timed-out create mutations ' +
   assert.equal(ensured.tableId, 'tbl-benchmark-events-meaningful');
   assert.deepEqual(createCalls, [{
     nodeId: 'seed-1',
-    timeoutMs: TEST_CONTROL_QUERY_TIMEOUT_MS,
+    timeoutMs: TEST_MULTI_NODE_CREATE_TIMEOUT_MS,
   }]);
 });
 
@@ -378,7 +379,7 @@ test('table-distribution-helpers reroutes a timed-out create mutation once ' +
           nodeId: 'seed-1',
           timeoutMs: options.timeoutMs,
         });
-        fakeNow += TEST_CONTROL_QUERY_TIMEOUT_MS;
+        fakeNow += options.timeoutMs;
         throw new Error(
           'Admin API query timed out for node seed-1 on lane control after ' +
           String(options.timeoutMs) + 'ms',
@@ -449,7 +450,7 @@ test('table-distribution-helpers reroutes a timed-out create mutation once ' +
     assert.equal(createCalls.length, 2);
     assert.deepEqual(createCalls[0], {
       nodeId: 'seed-1',
-      timeoutMs: TEST_CONTROL_QUERY_TIMEOUT_MS,
+      timeoutMs: TEST_MULTI_NODE_CREATE_TIMEOUT_MS,
     });
     assert.deepEqual(createCalls[1], {
       nodeId: 'node-2',
@@ -717,18 +718,12 @@ test('table-distribution-helpers fails over create mutations only ' +
   assert.equal(createTimeoutBudgets[0].nodeId, 'seed-1');
   assert.equal(
     createTimeoutBudgets[0].timeoutMs,
-    TEST_TABLE_ID_BOOTSTRAP_TIMEOUT_MS,
+    TEST_MULTI_NODE_CREATE_TIMEOUT_MS,
   );
   assert.equal(createTimeoutBudgets[1].nodeId, 'node-2');
-  assert.ok(
-    createTimeoutBudgets[1].timeoutMs >=
-      TEST_TABLE_ID_BOOTSTRAP_FAILOVER_MIN_TIMEOUT_MS,
-    'reachability failover should preserve a meaningful remaining mutation timeout budget',
-  );
-  assert.ok(
-    createTimeoutBudgets[1].timeoutMs <=
-      TEST_TABLE_ID_BOOTSTRAP_TIMEOUT_MS,
-    'failover mutation timeout should stay within the original control budget',
+  assert.equal(
+    createTimeoutBudgets[1].timeoutMs,
+    TEST_MULTI_NODE_CREATE_TIMEOUT_MS,
   );
 });
 
@@ -809,16 +804,14 @@ test('table-distribution-helpers reroutes pre-execution control-plane ' +
   assert.equal(ensured.tableId, 'tbl-benchmark-events-deferred');
   assert.equal(createTimeoutBudgets.length, 2);
   assert.equal(createTimeoutBudgets[0].nodeId, 'seed-1');
-  assert.equal(createTimeoutBudgets[0].timeoutMs, TEST_CONTROL_QUERY_TIMEOUT_MS);
-  assert.equal(createTimeoutBudgets[1].nodeId, 'node-2');
-  assert.ok(
-    createTimeoutBudgets[1].timeoutMs >=
-      TEST_CONTROL_QUERY_FAILOVER_MIN_TIMEOUT_MS,
-    'pre-execution deferred failover should preserve a meaningful remaining mutation timeout budget',
+  assert.equal(
+    createTimeoutBudgets[0].timeoutMs,
+    TEST_MULTI_NODE_CREATE_TIMEOUT_MS,
   );
-  assert.ok(
-    createTimeoutBudgets[1].timeoutMs <= TEST_CONTROL_QUERY_TIMEOUT_MS,
-    'deferred failover mutation timeout should stay within the original control budget',
+  assert.equal(createTimeoutBudgets[1].nodeId, 'node-2');
+  assert.equal(
+    createTimeoutBudgets[1].timeoutMs,
+    TEST_MULTI_NODE_CREATE_TIMEOUT_MS,
   );
 });
 
@@ -1264,7 +1257,7 @@ async () => {
     id: 'seed-1',
     async queryWithTimeout(sql, _params, options = {}) {
       if (sql.includes('CREATE TABLE IF NOT EXISTS')) {
-        fakeNow += TEST_CONTROL_QUERY_TIMEOUT_MS;
+        fakeNow += options.timeoutMs;
         const error = new Error(
           'Admin API query timed out for node seed-1 on lane control after ' +
           String(options.timeoutMs) + 'ms',

@@ -104,12 +104,12 @@
     }
   ],
   "stats": {
-    "candidateCount": 215,
-    "dedupedRuleCount": 209,
-    "exportedRuleCount": 209,
+    "candidateCount": 224,
+    "dedupedRuleCount": 218,
+    "exportedRuleCount": 218,
     "aliasRuleCount": 0,
-    "masterRuleCount": 209,
-    "estimatedAllRulesTokens": 6850
+    "masterRuleCount": 218,
+    "estimatedAllRulesTokens": 7100
   },
   "rules": [
     {
@@ -2659,6 +2659,36 @@
       ]
     },
     {
+      "id": "GOV-0014",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Do not revive sprint/package theory state as active authority.",
+      "score": 206,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 74,
+          "section": "Quest Workflow > Two-Layer Theory"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0015",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Do not rely on solve/state/ as durable memory.",
+      "score": 206,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 172,
+          "section": "Quest Workflow > Tracked Versus Regenerable"
+        }
+      ]
+    },
+    {
       "id": "ARCH-0076",
       "domain": "architecture",
       "strength": "should",
@@ -2674,7 +2704,7 @@
       ]
     },
     {
-      "id": "GOV-0014",
+      "id": "GOV-0016",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2876,7 +2906,7 @@
       ]
     },
     {
-      "id": "GOV-0015",
+      "id": "GOV-0017",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -2887,6 +2917,70 @@
           "file": "workflow-guidelines/solver-quests.md",
           "line": 46,
           "section": "Quest Workflow > Quest Anatomy"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0018",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [
+        "governance"
+      ],
+      "rule": "widen-scope: selected frontier theory required.",
+      "score": 198,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 83,
+          "section": "Quest Workflow > Two-Layer Theory"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0019",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [],
+      "rule": "model: selected frontier theory, active system theory, and --modelRef or --modelNotApplicable required.",
+      "score": 198,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 84,
+          "section": "Quest Workflow > Two-Layer Theory"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0020",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [
+        "testing"
+      ],
+      "rule": "change-approach: selected frontier theory remains required; model evidence is not required unless this rung explicitly returns to a model test.",
+      "score": 198,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 86,
+          "section": "Quest Workflow > Two-Layer Theory"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0021",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [],
+      "rule": "THEORY_REQUIRED: the selected rung needs system or frontier theory before another attempt; record the theory and resume instead of patching through it.",
+      "score": 198,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 157,
+          "section": "Quest Workflow > Terminal And Blocking Conditions"
         }
       ]
     },
@@ -2925,7 +3019,7 @@
       ]
     },
     {
-      "id": "GOV-0016",
+      "id": "GOV-0022",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2936,13 +3030,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/quest-artifacts.md",
-          "line": 45,
+          "line": 49,
           "section": "Quest Artifacts > Artifact Boundaries"
         }
       ]
     },
     {
-      "id": "GOV-0017",
+      "id": "GOV-0023",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -2957,7 +3051,7 @@
       ]
     },
     {
-      "id": "GOV-0018",
+      "id": "GOV-0024",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3433,7 +3527,22 @@
       ]
     },
     {
-      "id": "GOV-0019",
+      "id": "GOV-0025",
+      "domain": "governance",
+      "strength": "should",
+      "tags": [],
+      "rule": "Frontier theory: why the next local intervention should move the selected frontier metric.",
+      "score": 166,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 60,
+          "section": "Quest Workflow > Two-Layer Theory"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0026",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -3442,13 +3551,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 104,
+          "line": 140,
           "section": "Quest Workflow > Findings Log"
         }
       ]
     },
     {
-      "id": "GOV-0020",
+      "id": "GOV-0027",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -3463,7 +3572,7 @@
       ]
     },
     {
-      "id": "GOV-0021",
+      "id": "GOV-0028",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -3510,16 +3619,16 @@
       ]
     },
     {
-      "id": "GOV-0022",
+      "id": "GOV-0029",
       "domain": "governance",
       "strength": "may",
       "tags": [],
-      "rule": "They are git-ignored and may be rebuilt or regenerated from the Quest and available evidence.",
+      "rule": "It is git-ignored and may be rebuilt from the Quest plus event log.",
       "score": 145,
       "sources": [
         {
           "file": "workflow-guidelines/quest-artifacts.md",
-          "line": 36,
+          "line": 40,
           "section": "Quest Artifacts > Runtime Artifacts"
         }
       ]
@@ -3540,7 +3649,39 @@
       ]
     },
     {
-      "id": "GOV-0023",
+      "id": "GOV-0030",
+      "domain": "governance",
+      "strength": "may",
+      "tags": [],
+      "rule": "The archived theory ledger may be imported only as archive memory; imported archive theories cannot be selected for implementation until fresh Quest evidence reselects a frontier theory.",
+      "score": 140,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 74,
+          "section": "Quest Workflow > Two-Layer Theory"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0031",
+      "domain": "governance",
+      "strength": "may",
+      "tags": [
+        "cache"
+      ],
+      "rule": "Projected state under solve/state/ is local cache and may be rebuilt from the Quest plus append-only log.",
+      "score": 140,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 172,
+          "section": "Quest Workflow > Tracked Versus Regenerable"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0032",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -3557,5 +3698,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-06-01T07:47:58.680Z"
+  "generatedAt": "2026-06-01T14:08:43.366Z"
 }

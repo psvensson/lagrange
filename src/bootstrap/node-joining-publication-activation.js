@@ -197,58 +197,78 @@ class NodeJoiningPublicationActivation extends NodeJoiningServiceSegment4 {
     );
     const tableName = options.tableName;
     if (tableName && shouldAttachPartitionCdcPropagation(tableName)) {
-      const subscriptionSelection =
-        await this.resolveOperationalMessageGroupSelectionAsync({
-          requiredTables: [tableName],
-          preferredService: messageGroupService,
-          reuseCapturedIngress: true,
+      const attachCdcPropagation = async () => {
+        const subscriptionSelection =
+          await this.resolveOperationalMessageGroupSelectionAsync({
+            requiredTables: [tableName],
+            preferredService: messageGroupService,
+            reuseCapturedIngress: true,
+          });
+        const subscriptionMessageGroupService = subscriptionSelection.service;
+        if (!subscriptionMessageGroupService) {
+          throw this.buildMessageGroupOwnerNotReadyError(
+            subscriptionSelection,
+            {
+              message:
+                NODE_JOINING_SERVICE_LITERAL
+                  .OPERATIONAL_MESSAGE_GROUP_CDC_INGRESS_NOT_READY +
+                `for ${tableName} CDC subscription`,
+            },
+          );
+        }
+        await subscriptionMessageGroupService.subscribeToCDC(tableName);
+        const subscriberId = [
+          'joining',
+          this.nodeId,
+          tableName,
+          options.replicaId,
+          subscriptionMessageGroupService?.groupId || 'message-group',
+        ].join(':');
+        const cdcSubscriber = buildPartitionCdcPropagationSubscriber({
+          tableName,
+          partitionId: options.partitionId,
+          replicaId: options.replicaId,
+          logger: this.logger,
+          eventLogMessage: JOINING_LOG_MSG.CDC_EVENT_RECEIVED,
+          preferredService: subscriptionMessageGroupService,
+          resolveOperationalMessageGroupSelection: (selectionOptions = {}) =>
+            this.resolveOperationalMessageGroupSelection(selectionOptions),
+          resolveOperationalMessageGroupSelectionAsync:
+            (selectionOptions = {}) =>
+              this.resolveOperationalMessageGroupSelectionAsync(
+                selectionOptions,
+              ),
+          buildMessageGroupOwnerNotReadyError: (selection, errorOptions) =>
+            this.buildMessageGroupOwnerNotReadyError(selection, errorOptions),
+          propagatePartitionCDCEvent: (messageGroupService, cdcEvent) =>
+            this.propagatePartitionCDCEvent(messageGroupService, cdcEvent),
         });
-      const subscriptionMessageGroupService = subscriptionSelection.service;
-      if (!subscriptionMessageGroupService) {
-        throw this.buildMessageGroupOwnerNotReadyError(subscriptionSelection, {
-          message:
-            NODE_JOINING_SERVICE_LITERAL
-              .OPERATIONAL_MESSAGE_GROUP_CDC_INGRESS_NOT_READY +
-            `for ${tableName} CDC subscription`,
+        const handshake = await partition.subscribeToCDCWithHandshake(
+          cdcSubscriber,
+          {subscriberId},
+        );
+        this.logger.debug(JOINING_LOG_MSG.CDC_SUBSCRIPTION_REGISTERED, {
+          tableName,
+          partitionId: options.partitionId,
+          replicaId: options.replicaId,
+          subscriberId: handshake.subscriberId,
+          subscriptionEpoch: handshake.subscriptionEpoch,
+          catchupMode: handshake.catchup.mode,
+          bufferedEventsReplayed: handshake.catchup.bufferedEventsReplayed,
         });
+      };
+      if (options.deferCdcPropagationHandshake === true) {
+        attachCdcPropagation().catch((error) => {
+          this.logger.error(JOINING_LOG_MSG.CDC_SUBSCRIPTION_FAILED, {
+            tableName,
+            partitionId: options.partitionId,
+            replicaId: options.replicaId,
+            error: error?.message || String(error),
+          });
+        });
+      } else {
+        await attachCdcPropagation();
       }
-      await subscriptionMessageGroupService.subscribeToCDC(tableName);
-      const subscriberId = [
-        'joining',
-        this.nodeId,
-        tableName,
-        options.replicaId,
-        subscriptionMessageGroupService?.groupId || 'message-group',
-      ].join(':');
-      const cdcSubscriber = buildPartitionCdcPropagationSubscriber({
-        tableName,
-        partitionId: options.partitionId,
-        replicaId: options.replicaId,
-        logger: this.logger,
-        eventLogMessage: JOINING_LOG_MSG.CDC_EVENT_RECEIVED,
-        preferredService: subscriptionMessageGroupService,
-        resolveOperationalMessageGroupSelection: (selectionOptions = {}) =>
-          this.resolveOperationalMessageGroupSelection(selectionOptions),
-        resolveOperationalMessageGroupSelectionAsync: (selectionOptions = {}) =>
-          this.resolveOperationalMessageGroupSelectionAsync(selectionOptions),
-        buildMessageGroupOwnerNotReadyError: (selection, errorOptions) =>
-          this.buildMessageGroupOwnerNotReadyError(selection, errorOptions),
-        propagatePartitionCDCEvent: (messageGroupService, cdcEvent) =>
-          this.propagatePartitionCDCEvent(messageGroupService, cdcEvent),
-      });
-      const handshake = await partition.subscribeToCDCWithHandshake(
-        cdcSubscriber,
-        {subscriberId},
-      );
-      this.logger.debug(JOINING_LOG_MSG.CDC_SUBSCRIPTION_REGISTERED, {
-        tableName,
-        partitionId: options.partitionId,
-        replicaId: options.replicaId,
-        subscriberId: handshake.subscriberId,
-        subscriptionEpoch: handshake.subscriptionEpoch,
-        catchupMode: handshake.catchup.mode,
-        bufferedEventsReplayed: handshake.catchup.bufferedEventsReplayed,
-      });
     }
     return partition;
   }

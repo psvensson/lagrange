@@ -24,6 +24,7 @@ function assignReplicaHandlerRuntimeMetadataMethods(
     createControlPlaneRuntimeBundle,
     createSystemMetadataGatewayRequiredError,
     isFreshPartitionBootstrapWindow,
+    isPriorityControlPlanePartition,
     isReplicaJoinNodeViable,
     partitionMetadataMissingError,
   } = options;
@@ -161,6 +162,11 @@ function assignReplicaHandlerRuntimeMetadataMethods(
         cachedServices,
         hydratedMetadata?.serviceRows || [],
       );
+      const shouldFilterUnavailablePeerTopology =
+        isPriorityControlPlanePartition({
+          partitionId,
+          partitionRow: partition,
+        });
       const now = Date.now();
       const addressManager = AddressManager.getInstance();
       const replicaIds = [];
@@ -194,12 +200,25 @@ function assignReplicaHandlerRuntimeMetadataMethods(
         }
         return isReplicaJoinNodeViable(
           this.systemTableCache.get(SYSTEM_TABLE_NAME.NODES, service.node_id),
-          {now},
+          {
+            now,
+            nodeId: service.node_id,
+            localNodeId: this.nodeId,
+            messageRouter: this.messageRouter,
+          },
         );
       };
       for (const service of services) {
         const serviceReplicaId = service.service_id || service.replica_id;
         if (!serviceReplicaId) {
+          continue;
+        }
+        const joinServiceViable = isViableJoinService(service);
+        if (
+          shouldFilterUnavailablePeerTopology &&
+          serviceReplicaId !== replicaId &&
+          !joinServiceViable
+        ) {
           continue;
         }
         if (!seenReplicaIds.has(serviceReplicaId)) {
@@ -212,7 +231,7 @@ function assignReplicaHandlerRuntimeMetadataMethods(
         if (
           serviceReplicaId !== replicaId &&
           isEstablishedVoter &&
-          isViableJoinService(service)
+          joinServiceViable
         ) {
           establishedExistingReplicaIds.add(serviceReplicaId);
         }

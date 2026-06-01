@@ -438,7 +438,13 @@ function selectPublicationConvergenceGateStatus(candidates) {
   if (normalizedStatuses.length === ZERO) {
     return PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.EMPTY;
   }
-  return normalizedStatuses.sort(comparePublicationConvergenceGateStatusDebt)[
+  const knownStatuses = normalizedStatuses.filter(
+    (status) => status !== ACTIVE_WAIT_PUBLICATION_STATUS_UNKNOWN,
+  );
+  const rankedStatuses = knownStatuses.length > ZERO ?
+    knownStatuses :
+    normalizedStatuses;
+  return rankedStatuses.sort(comparePublicationConvergenceGateStatusDebt)[
     ZERO
   ];
 }

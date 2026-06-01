@@ -537,6 +537,13 @@ class ParallelQueryCoordinator {
       sql,
       params,
     ).then((result) => {
+      if (result && result.success === false) {
+        speculativeMetrics.fail(
+          new Error(result.error || QUERY_ERROR_MSG.QUERY_ROUTING_FAILED),
+          result,
+        );
+        return result;
+      }
       speculativeMetrics.complete(result.rows?.length || NUM.ZERO);
       if (!results.has(partitionId)) {
         results.set(partitionId, result);
@@ -645,6 +652,9 @@ class ParallelQueryCoordinator {
   async executeQueryOnService(service, sql, params, partitionId, options = {}) {
     if (this.partitionQueryExecutor) {
       return this.partitionQueryExecutor(sql, partitionId, params, options);
+    }
+    if (!service) {
+      throw new Error(QUERY_ERROR_MSG.PARTITION_SERVICE_NOT_FOUND);
     }
     if (typeof service.executeQuery === TYPEOF.FUNCTION) {
       return service.executeQuery(sql, params);

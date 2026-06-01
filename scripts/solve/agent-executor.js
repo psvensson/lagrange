@@ -12,7 +12,8 @@
 //           rungPrompt, repoRoot, metricName, metricHistory[], evidencePaths[],
 //           findings[], constraints.
 //   response (agent -> solver) JSON: { changeRef, summary, notes? }. The agent reports
-//           only WHAT IT DID, never whether it succeeded.
+//           only WHAT IT DID, never whether it succeeded. Theory/model refs may be
+//           included to bind the attempt to the selected reasoning path.
 //
 // Truth comes from the probe, not the agent: after the command returns (or the
 // per-attempt timeout elapses → treated as a no-op attempt), the loop re-measures, so
@@ -69,12 +70,18 @@ function buildDossier(task, repoRoot) {
       rungIndex: task.rungIndex,
       metricHistory,
       findings,
+      selectedTheory:
+        task.theories?.byId?.[
+          task.theories?.selectedByFrontier?.[task.frontierDef.id]
+        ] || null,
     }),
     repoRoot,
     metricName,
     metricHistory,
     evidencePaths,
     findings,
+    selectedTheory:
+      task.theories?.selectedByFrontier?.[task.frontierDef.id] || null,
     constraints: task.quest.constraints || [],
   };
 }
@@ -94,7 +101,12 @@ function readResponse(responseFile) {
     const parsed = JSON.parse(fs.readFileSync(responseFile, 'utf8'));
     if (!parsed || typeof parsed.changeRef !== 'string') return null;
     return {changeRef: parsed.changeRef, summary: parsed.summary || null,
-      notes: parsed.notes || null};
+      notes: parsed.notes || null,
+      theoryRef: parsed.theoryRef || null,
+      expectedMovement: parsed.expectedMovement || null,
+      negativeResultMeans: parsed.negativeResultMeans || null,
+      modelRef: parsed.modelRef || null,
+      modelNotApplicable: parsed.modelNotApplicable || null};
   } catch (_error) {
     return null;
   }
@@ -120,6 +132,7 @@ export function makeAgentExecutor(root, options = {}) {
       fs.writeFileSync(requestFile, JSON.stringify(buildDossier(task, repoRoot), null, 2));
       const [cmd, ...args] = buildArgv(config.agentCommand, requestFile, responseFile);
       const result = run(cmd, args, {
+        cwd: repoRoot,
         timeout: timeoutMs,
         env: {...process.env,
           SOLVE_REQUEST_FILE: requestFile, SOLVE_RESPONSE_FILE: responseFile},

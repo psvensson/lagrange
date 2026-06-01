@@ -781,11 +781,18 @@ function resolveControlQueryNodes(primaryNode, options = {}) {
   return uniqueCandidates;
 }
 
-async function forceRepairControlSnapshot(node) {
+async function forceRepairControlSnapshot(node, options = {}) {
   const candidateLanes = [
     CONTROL_QUERY_LANE_SNAPSHOT,
     CONTROL_QUERY_LANE_CONTROL,
   ];
+  const resolveRepairTimeoutMs = () =>
+    Number.isFinite(options.deadlineAtMs) ?
+      Math.min(
+        resolveControlQueryTimeoutMs(options.timeoutMs),
+        resolveRemainingControlQueryTimeoutMs(options.deadlineAtMs),
+      ) :
+      resolveControlQueryTimeoutMs(options.timeoutMs);
   for (const lane of candidateLanes) {
     try {
       const localSnapshot = await queryControlSingle(
@@ -794,6 +801,7 @@ async function forceRepairControlSnapshot(node) {
         [],
         {
           lane,
+          timeoutMs: resolveRepairTimeoutMs(),
         },
       );
       if (!shouldFallbackToForcedControlSnapshot(localSnapshot)) {
@@ -805,6 +813,7 @@ async function forceRepairControlSnapshot(node) {
     try {
       await queryControlSingle(node, SQL_CONTROL_SNAPSHOT_FORCE_REPAIR, [], {
         lane,
+        timeoutMs: resolveRepairTimeoutMs(),
       });
       return true;
     } catch (_forcedSnapshotError) {
@@ -821,7 +830,12 @@ async function forceRepairControlSnapshotAcrossQueryNodes(
   const queryNodes = resolveControlQueryNodes(primaryNode, options);
   let repaired = false;
   for (const candidateNode of queryNodes) {
-    repaired = (await forceRepairControlSnapshot(candidateNode)) || repaired;
+    if (Number.isFinite(options.deadlineAtMs) &&
+      Date.now() >= options.deadlineAtMs) {
+      break;
+    }
+    repaired =
+      (await forceRepairControlSnapshot(candidateNode, options)) || repaired;
   }
   return repaired;
 }

@@ -44,6 +44,13 @@ function writeChangeRef(changeDir, task) {
   if (!changeDir) return `diff:dry-${task.frontierDef.id}-${task.rungIndex}`;
   fs.mkdirSync(changeDir, {recursive: true});
   const file = `${changeDir}/${task.frontierDef.id}-${Date.now()}.diff`;
-  fs.writeFileSync(file, `# dry change for ${task.frontierDef.id} @ ${task.rung}\n`);
+  fs.writeFileSync(file, [
+    `diff --git a/src/${task.frontierDef.id}.js b/src/${task.frontierDef.id}.js`,
+    `--- a/src/${task.frontierDef.id}.js`,
+    `+++ b/src/${task.frontierDef.id}.js`,
+    '@@ -1 +1 @@',
+    `-dry before ${task.frontierDef.id}`,
+    `+dry ${task.rung} ${task.frontierDef.id}`,
+  ].join('\n'));
   return `diff:${file}`;
 }

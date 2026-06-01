@@ -27,8 +27,6 @@ const SEARCH_DIRECTORIES = Object.freeze([
   'test',
   'scripts',
   'architecture',
-  'work/packages',
-  'work/sprints',
 ]);
 const SEARCH_EXTENSIONS = Object.freeze([
   '.js',

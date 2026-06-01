@@ -613,6 +613,98 @@ export function registerClusterPart6Core05Tests(context) {
       await cluster.stop();
     });
 
+  test('Unit: Cluster.stop stops and removes node containers in parallel',
+    async () => {
+      const cluster = createCluster({
+        size: 3,
+        docker: {socketPath: '/var/run/docker.sock'},
+        image: 'distributed-db:test',
+      });
+
+      const stopStarted = [];
+      const removeStarted = [];
+      const stopResolvers = [];
+      const removeResolvers = [];
+      const provider = {
+        removeNetwork: async () => {},
+        stopContainer: async (containerId) => {
+          stopStarted.push(containerId);
+          await new Promise((resolve) => {
+            stopResolvers.push(resolve);
+          });
+        },
+        removeContainer: async (containerId) => {
+          removeStarted.push(containerId);
+          await new Promise((resolve) => {
+            removeResolvers.push(resolve);
+          });
+        },
+      };
+      cluster._recordPlaybackEvent = () => {};
+      const teardownNodes = [
+        ['node-a', {
+          id: 'node-a',
+          role: NODE_ROLES.SEED,
+          containerId: 'container-a',
+          _dockerProvider: provider,
+          closeQueryConnection: () => {},
+        }],
+        ['node-b', {
+          id: 'node-b',
+          role: NODE_ROLES.JOINER,
+          containerId: 'container-b',
+          _dockerProvider: provider,
+          closeQueryConnection: () => {},
+        }],
+        ['node-c', {
+          id: 'node-c',
+          role: NODE_ROLES.JOINER,
+          containerId: 'container-c',
+          _dockerProvider: provider,
+          closeQueryConnection: () => {},
+        }],
+      ];
+
+      const errors = [];
+      const stopPromise = cluster._stopNodeContainersForTeardown(
+        teardownNodes,
+        errors,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+
+      assert.deepStrictEqual(
+        [...stopStarted].sort(),
+        ['container-a', 'container-b', 'container-c'],
+        'all stop calls should be in flight before any stop resolves',
+      );
+      assert.deepStrictEqual(
+        removeStarted,
+        [],
+        'container removal should wait until all stop calls finish',
+      );
+
+      stopResolvers.forEach((resolve) => resolve());
+      await stopPromise;
+
+      const removePromise = cluster._removeNodeContainersForTeardown(
+        teardownNodes,
+        errors,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+
+      assert.deepStrictEqual(
+        [...removeStarted].sort(),
+        ['container-a', 'container-b', 'container-c'],
+        'all remove calls should be in flight before any remove resolves',
+      );
+
+      removeResolvers.forEach((resolve) => resolve());
+      await removePromise;
+      assert.deepStrictEqual(errors, []);
+    });
+
   test('Unit: _startNode sets NODE_ADDRESS to routable host:port', async () => {
     const cluster = createCluster({
       size: 1,

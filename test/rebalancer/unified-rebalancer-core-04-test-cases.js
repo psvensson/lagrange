@@ -170,6 +170,7 @@ export function registerUnifiedRebalancerCore04Tests(context) {
         PRIORITY_FOLLOW_UP_NODE_ID_A,
         PRIORITY_FOLLOW_UP_NODE_ID_B,
         PRIORITY_FOLLOW_UP_NODE_ID_C,
+        PRIORITY_FOLLOW_UP_NODE_ID_D,
       ],
     });
     rebalancer.movePlanner.calculateMoves = () => [];

@@ -29,7 +29,7 @@ budget enforcement.
 - `runtime-runner.js` and `execution-context.js` for runtime API changes.
 - Existing `sql-query-engine-segment-*`, `query-executor-segment-*`, and
   `table-creation-service-class-part-*` files are legacy compatibility
-  surfaces. Use `work/inventory/ordinal-segments.md` when opening semantic
+  surfaces. Use `_legacy_work/inventory/ordinal-segments.md` when opening semantic
   migration packages for these files.
 
 ## Do Not

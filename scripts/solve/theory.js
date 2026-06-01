@@ -1,0 +1,549 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
+import {
+  EVENT_THEORY_OPTION_DECLARED,
+  EVENT_THEORY_RESULT,
+  EVENT_THEORY_SELECTED,
+  EVENT_THEORY_SUPERSEDED,
+  EVENT_THEORY_SYSTEM_DECLARED,
+  LADDER,
+  RUNG_MODEL,
+  RUNG_WIDEN_SCOPE,
+  THEORY_LAYERS,
+  THEORY_RESULT_ACTIVE,
+  THEORY_RESULT_AVOIDED,
+  THEORY_RESULT_FALSIFIED,
+  THEORY_RESULT_NEEDS_RERUN,
+  THEORY_RESULT_STALE,
+  THEORY_RESULT_SUPPORTED,
+  THEORY_RESULT_SUPERSEDED,
+  THEORY_RESULTS,
+  THEORY_SCOPE_FRONTIER,
+  THEORY_SCOPE_SYSTEM,
+} from './constants.js';
+import {buildMechanismCardFromEvidence} from './mechanism-card.js';
+import {appendEvent, loadQuest, projectState, readLog} from './store.js';
+import {
+  extractTheoryLedgerEntries,
+  THEORY_LEDGER_FIELDS,
+} from '../../_legacy_work/scripts/work-theory-ledger.js';
+
+const FLAG_ID = 'id';
+const FLAG_THEORY = 'theory';
+const FLAG_FRONTIER = 'frontier';
+const FLAG_EVIDENCE = 'evidence';
+const FLAG_CARD = 'card';
+const DEFAULT_LEDGER = path.join('_legacy_work', 'theory-ledger.md');
+const MODEL_REF_PREFIXES = Object.freeze(['model:', 'statechart:', 'contract:', 'tla:']);
+const SELECTABLE_THEORY_STATUSES = Object.freeze([
+  THEORY_RESULT_ACTIVE,
+  THEORY_RESULT_SUPPORTED,
+]);
+const BLOCKED_THEORY_STATUSES = Object.freeze([
+  THEORY_RESULT_AVOIDED,
+  THEORY_RESULT_FALSIFIED,
+  THEORY_RESULT_NEEDS_RERUN,
+  THEORY_RESULT_STALE,
+  THEORY_RESULT_SUPERSEDED,
+]);
+const GENERATED_ID_WORD_LIMIT = 6;
+const DATE_SLICE_END = 10;
+const NUM_ONE = 1;
+const NUM_TWO = 2;
+const RUNG_INDEX_WIDEN_SCOPE = LADDER.indexOf(RUNG_WIDEN_SCOPE);
+const RUNG_INDEX_MODEL = LADDER.indexOf(RUNG_MODEL);
+
+function normalizeText(value) {
+  return String(value || '').trim();
+}
+
+function repeatedFlag(args, key) {
+  const value = args[key];
+  if (value === undefined) return [];
+  return Array.isArray(value) ? value.map(normalizeText).filter(Boolean) :
+    [normalizeText(value)].filter(Boolean);
+}
+
+function requireFlag(args, key) {
+  const value = normalizeText(args[key]);
+  if (!value) throw new Error(`theory: --${key} is required`);
+  return value;
+}
+
+function slugify(value) {
+  const slug = normalizeText(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gu, '-')
+    .replace(/^-|-$/gu, '')
+    .split('-')
+    .filter(Boolean)
+    .slice(0, GENERATED_ID_WORD_LIMIT)
+    .join('-');
+  return slug || 'quest-theory';
+}
+
+function todayStamp() {
+  return new Date().toISOString().slice(0, DATE_SLICE_END).replaceAll('-', '');
+}
+
+function nextTheoryId(state, seed) {
+  const base = `theory-${todayStamp()}-${slugify(seed)}`;
+  if (!state.theories.byId[base]) return base;
+  for (let index = NUM_TWO; ; index += NUM_ONE) {
+    const candidate = `${base}-${index}`;
+    if (!state.theories.byId[candidate]) return candidate;
+  }
+}
+
+function currentState(root, quest) {
+  const log = readLog(root, quest.id);
+  return {log, state: projectState(quest, log)};
+}
+
+function validateLayer(layer) {
+  if (!THEORY_LAYERS.includes(layer)) {
+    throw new Error(`theory: --layer must be one of ${THEORY_LAYERS.join(', ')}`);
+  }
+}
+
+function validateResult(result) {
+  if (!THEORY_RESULTS.includes(result)) {
+    throw new Error(`theory: --result must be one of ${THEORY_RESULTS.join(', ')}`);
+  }
+}
+
+function maybeCard(args) {
+  const cardPath = normalizeText(args[FLAG_CARD]);
+  if (!cardPath) return null;
+  return buildMechanismCardFromEvidence(cardPath);
+}
+
+function requireTheoryExists(state, theoryId) {
+  const theory = state.theories.byId[theoryId];
+  if (!theory) throw new Error(`theory: unknown theory "${theoryId}"`);
+  return theory;
+}
+
+function activeSystemTheoryExists(state) {
+  return state.theories.system.some((theory) =>
+    theory.archive !== true &&
+    SELECTABLE_THEORY_STATUSES.includes(theory.status));
+}
+
+function noProgressAttemptCount(log, frontierId) {
+  return log.filter((event) =>
+    event.type === 'attempt' &&
+    event.frontier === frontierId &&
+    (event.metricBefore === null ||
+      event.metricAfter === null ||
+      event.metricAfter >= event.metricBefore)).length;
+}
+
+function modelRefPath(modelRef) {
+  for (const prefix of MODEL_REF_PREFIXES) {
+    if (modelRef.startsWith(prefix)) return modelRef.slice(prefix.length);
+  }
+  return '';
+}
+
+function validateModelRef(modelRef) {
+  const ref = normalizeText(modelRef);
+  if (!ref) return null;
+  const filePath = modelRefPath(ref);
+  if (!filePath) {
+    return `modelRef must start with ${MODEL_REF_PREFIXES.join(', ')}`;
+  }
+  if (!fs.existsSync(filePath)) {
+    return `modelRef target does not exist: ${filePath}`;
+  }
+  return null;
+}
+
+function selectedTheory(state, frontierId, explicitTheoryRef) {
+  const theoryId = normalizeText(explicitTheoryRef) ||
+    state.theories.selectedByFrontier[frontierId] ||
+    '';
+  return theoryId ? state.theories.byId[theoryId] || null : null;
+}
+
+export function resolveAttemptTheoryRef(state, frontierId, explicitTheoryRef) {
+  const theory = selectedTheory(state, frontierId, explicitTheoryRef);
+  return theory ? theory.id : null;
+}
+
+export function stepTheoryGateProblems({
+  log,
+  state,
+  frontierId,
+  rungIndex,
+  theoryRef,
+  modelRef,
+  modelNotApplicable,
+  phase = 'commit',
+}) {
+  const problems = [];
+  const explicitTheory = normalizeText(theoryRef);
+  const selected = selectedTheory(state, frontierId, explicitTheory);
+  if (explicitTheory && !selected) {
+    problems.push(`unknown selected theory: ${explicitTheory}`);
+  }
+  if (selected && (
+    selected.archive ||
+    selected.scope !== THEORY_SCOPE_FRONTIER ||
+    selected.frontier !== frontierId
+  )) {
+    problems.push(`theory ${selected.id} is not selectable for ${frontierId}`);
+  }
+  if (selected && BLOCKED_THEORY_STATUSES.includes(selected.status)) {
+    problems.push(
+      `selected theory ${selected.id} is ${selected.status}; ` +
+      'select a fresh frontier theory',
+    );
+  }
+  if (rungIndex >= RUNG_INDEX_WIDEN_SCOPE && !selected) {
+    problems.push(`frontier theory required at rung ${rungIndex}`);
+  }
+
+  // Escalation rule 1 & 3:
+  const evidenceEvents = log.filter((e) => e.type === 'evidence-ingested');
+  const sameDominantReasonRepeat = evidenceEvents.length >= 2 &&
+    evidenceEvents[evidenceEvents.length - 1].dominantReason &&
+    evidenceEvents[evidenceEvents.length - 1].dominantReason === evidenceEvents[evidenceEvents.length - 2].dominantReason;
+  const sameOwnerBoundaryRepeat = evidenceEvents.length >= 2 &&
+    evidenceEvents[evidenceEvents.length - 1].owner &&
+    evidenceEvents[evidenceEvents.length - 1].owner === evidenceEvents[evidenceEvents.length - 2].owner &&
+    evidenceEvents[evidenceEvents.length - 1].boundary === evidenceEvents[evidenceEvents.length - 2].boundary;
+
+  const latestEvidence = [...log].reverse().find((e) => e.type === 'evidence-ingested');
+  const namesLiveness = latestEvidence && (latestEvidence.owner || latestEvidence.boundary || latestEvidence.waitMode);
+  const selectedIsObservationGap = selected && (selected.mechanism === 'observation_gap' || selected.layer === 'observation');
+  const localTheoryTooNarrow = namesLiveness && selectedIsObservationGap;
+
+  const systemTheoryRequired =
+    rungIndex === RUNG_INDEX_MODEL ||
+    noProgressAttemptCount(log, frontierId) >= NUM_TWO ||
+    sameDominantReasonRepeat ||
+    sameOwnerBoundaryRepeat ||
+    localTheoryTooNarrow;
+
+  if (systemTheoryRequired && !activeSystemTheoryExists(state)) {
+    problems.push('system theory required after repeated same-frontier stalls');
+  }
+
+  // Escalation rule 2: If metric is 0 and done=false, require a theory result before more edits
+  const latestMetricEvent = [...log].reverse().find((e) =>
+    (e.type === 'attempt' && typeof e.metricAfter === 'number') ||
+    (e.type === 'evidence-ingested' && typeof e.metric === 'number')
+  );
+  if (latestMetricEvent) {
+    const metricVal = latestMetricEvent.type === 'attempt' ? latestMetricEvent.metricAfter : latestMetricEvent.metric;
+    const isDone = latestMetricEvent.done;
+    if (metricVal === 0 && !isDone) {
+      const latestMetricEventIndex = log.indexOf(latestMetricEvent);
+      const hasTheoryResultAfter = log.slice(latestMetricEventIndex + 1).some((e) => e.type === 'theory-result');
+      if (!hasTheoryResultAfter) {
+        problems.push('theory result required when metric is 0 but done is false');
+      }
+    }
+  }
+
+  // Escalation rule 4: If selected theory is older than latest evidence, require theory result update
+  if (selected && latestEvidence) {
+    const selectedEvent = log.find((e) =>
+      (e.type === 'theory-system-declared' || e.type === 'theory-option-declared') && e.theory === selected.id
+    );
+    const selectedTs = selectedEvent ? new Date(selectedEvent.ts).getTime() : new Date(selected.ts).getTime();
+    const latestEvidenceTs = new Date(latestEvidence.ts).getTime();
+    if (selectedTs < latestEvidenceTs) {
+      const latestEvidenceIndex = log.indexOf(latestEvidence);
+      const hasResultAfter = log.slice(latestEvidenceIndex + 1).some((e) => e.type === 'theory-result' && e.theory === selected.id);
+      if (!hasResultAfter) {
+        problems.push(`theory result update required for theory ${selected.id} because it is older than latest evidence`);
+      }
+    }
+  }
+
+  const LIFECYCLE_KEYWORDS = [
+    'dispatched_waiting_progress',
+    'retry_scheduled',
+    'wait_for_operation_progress',
+    'visibility',
+    'publication',
+    'handoff',
+    'completion',
+  ];
+  const hasLifecycleLanguage = (e) => {
+    const fields = [
+      e.summary,
+      e.dominantReason,
+      e.verdictReason,
+      e.mechanism,
+      e.owner,
+      e.boundary,
+      e.waitMode,
+      e.nextAction,
+    ].map(String).join(' ').toLowerCase();
+    return LIFECYCLE_KEYWORDS.some((kw) => fields.includes(kw));
+  };
+  const lifecycleEvents = log.filter((e) => e.type === 'evidence-ingested' && hasLifecycleLanguage(e));
+  const hasRepeatedLifecycleEvidence = lifecycleEvents.length >= 2;
+
+  const modelProblem = validateModelRef(normalizeText(modelRef));
+  if (modelProblem) problems.push(modelProblem);
+  const needsModel =
+    phase === 'commit' && rungIndex === RUNG_INDEX_MODEL &&
+    !normalizeText(modelRef) &&
+    !normalizeText(modelNotApplicable);
+  if (needsModel) {
+    problems.push('model evidence or modelNotApplicable is required at model rung');
+  } else if (phase === 'commit' && hasRepeatedLifecycleEvidence && !normalizeText(modelRef)) {
+    problems.push('model reference is required when repeated evidence has lifecycle language');
+  }
+  return problems;
+}
+
+export function theoryResultForAttempt(progressed, violations) {
+  if (violations.length > 0) return THEORY_RESULT_NEEDS_RERUN;
+  return progressed ? THEORY_RESULT_SUPPORTED : THEORY_RESULT_FALSIFIED;
+}
+
+export function appendTheoryResultForAttempt(root, quest, event, progressed, violations) {
+  if (!event.theoryRef) return null;
+  return appendEvent(root, quest.id, {
+    type: EVENT_THEORY_RESULT,
+    theory: event.theoryRef,
+    frontier: event.frontier,
+    result: theoryResultForAttempt(progressed, violations),
+    evidence: event.evidence || null,
+    validation: event.modelRef || null,
+  });
+}
+
+function cmdSystem(root, args) {
+  const quest = loadQuest(root, requireFlag(args, FLAG_ID));
+  const {state} = currentState(root, quest);
+  const seed = normalizeText(args.mechanism) || normalizeText(args.problem) ||
+    quest.id;
+  const theory = normalizeText(args[FLAG_THEORY]) || nextTheoryId(state, seed);
+  const stamped = appendEvent(root, quest.id, {
+    type: EVENT_THEORY_SYSTEM_DECLARED,
+    theory,
+    scope: THEORY_SCOPE_SYSTEM,
+    status: THEORY_RESULT_ACTIVE,
+    problem: requireFlag(args, 'problem'),
+    evidence: requireFlag(args, FLAG_EVIDENCE),
+    successCondition: requireFlag(args, 'success'),
+    stableFacts: repeatedFlag(args, 'stable-fact'),
+    changedFacts: repeatedFlag(args, 'changed-fact'),
+    mechanism: requireFlag(args, 'mechanism'),
+    decidingOwner: requireFlag(args, 'owner'),
+    missingTransitionOrObservation: requireFlag(args, 'missing-edge'),
+    discriminator: requireFlag(args, 'discriminator'),
+    card: maybeCard(args),
+  });
+  return `recorded system theory ${stamped.theory}`;
+}
+
+function cmdOption(root, args) {
+  const quest = loadQuest(root, requireFlag(args, FLAG_ID));
+  const {state} = currentState(root, quest);
+  const frontier = requireFlag(args, FLAG_FRONTIER);
+  if (!quest.frontiers.some((item) => item.id === frontier)) {
+    throw new Error(`theory: unknown frontier "${frontier}"`);
+  }
+  const layer = requireFlag(args, 'layer');
+  validateLayer(layer);
+  const seed = normalizeText(args.mechanism) || normalizeText(args.intervention) ||
+    frontier;
+  const theory = normalizeText(args[FLAG_THEORY]) || nextTheoryId(state, seed);
+  const stamped = appendEvent(root, quest.id, {
+    type: EVENT_THEORY_OPTION_DECLARED,
+    theory,
+    scope: THEORY_SCOPE_FRONTIER,
+    frontier,
+    status: THEORY_RESULT_ACTIVE,
+    layer,
+    mechanism: requireFlag(args, 'mechanism'),
+    intervention: requireFlag(args, 'intervention'),
+    expectedMovement: requireFlag(args, 'expected-movement'),
+    negativeResultMeans: requireFlag(args, 'negative-result'),
+    discriminator: requireFlag(args, 'discriminator'),
+    promotionRule: requireFlag(args, 'promotion'),
+    rejectionRule: requireFlag(args, 'rejection'),
+    evidence: normalizeText(args[FLAG_EVIDENCE]) || null,
+    card: maybeCard(args),
+  });
+  return `recorded frontier theory ${stamped.theory} for ${frontier}`;
+}
+
+function cmdSelect(root, args) {
+  const quest = loadQuest(root, requireFlag(args, FLAG_ID));
+  const {state} = currentState(root, quest);
+  const frontier = requireFlag(args, FLAG_FRONTIER);
+  const theoryId = requireFlag(args, FLAG_THEORY);
+  const theory = requireTheoryExists(state, theoryId);
+  if (theory.archive || theory.scope !== THEORY_SCOPE_FRONTIER ||
+    theory.frontier !== frontier) {
+    throw new Error(`theory: ${theoryId} is not selectable for ${frontier}`);
+  }
+  if (!SELECTABLE_THEORY_STATUSES.includes(theory.status)) {
+    throw new Error(`theory: ${theoryId} has non-selectable status ${theory.status}`);
+  }
+  appendEvent(root, quest.id, {
+    type: EVENT_THEORY_SELECTED,
+    frontier,
+    theory: theoryId,
+    evidence: normalizeText(args[FLAG_EVIDENCE]) || null,
+  });
+  return `selected ${theoryId} for ${frontier}`;
+}
+
+function cmdRecord(root, args) {
+  const quest = loadQuest(root, requireFlag(args, FLAG_ID));
+  const {state} = currentState(root, quest);
+  const theoryId = requireFlag(args, FLAG_THEORY);
+  requireTheoryExists(state, theoryId);
+  const result = requireFlag(args, 'result');
+  validateResult(result);
+  appendEvent(root, quest.id, {
+    type: EVENT_THEORY_RESULT,
+    theory: theoryId,
+    frontier: normalizeText(args[FLAG_FRONTIER]) || null,
+    result,
+    evidence: requireFlag(args, FLAG_EVIDENCE),
+    validation: normalizeText(args.validation) || null,
+  });
+  return `recorded ${result} for ${theoryId}`;
+}
+
+function cmdSupersede(root, args) {
+  const quest = loadQuest(root, requireFlag(args, FLAG_ID));
+  const {state} = currentState(root, quest);
+  const theoryId = requireFlag(args, FLAG_THEORY);
+  requireTheoryExists(state, theoryId);
+  appendEvent(root, quest.id, {
+    type: EVENT_THEORY_SUPERSEDED,
+    theory: theoryId,
+    by: requireFlag(args, 'by'),
+    evidence: requireFlag(args, FLAG_EVIDENCE),
+  });
+  return `superseded ${theoryId}`;
+}
+
+function renderList(state) {
+  const lines = ['# Quest Theories', ''];
+  for (const theory of [...state.theories.system, ...state.theories.frontier]) {
+    const frontier = theory.frontier ? ` frontier=${theory.frontier}` : '';
+    const layer = theory.layer ? ` layer=${theory.layer}` : '';
+    const archive = theory.archive ? ' archive=true' : '';
+    lines.push(
+      `- ${theory.id}: scope=${theory.scope}${frontier}${layer} ` +
+      `status=${theory.status} mechanism=${theory.mechanism || 'unknown'}${archive}`,
+    );
+  }
+  lines.push('', '## Selected');
+  const selected = Object.entries(state.theories.selectedByFrontier);
+  if (selected.length === 0) {
+    lines.push('- none');
+  } else {
+    for (const [frontier, theory] of selected) {
+      lines.push(`- ${frontier}: ${theory}`);
+    }
+  }
+  return `${lines.join('\n')}\n`;
+}
+
+function cmdList(root, args) {
+  const quest = loadQuest(root, requireFlag(args, FLAG_ID));
+  const {state} = currentState(root, quest);
+  if (args.json) return JSON.stringify(state.theories, null, 2);
+  return renderList(state);
+}
+
+function cmdCard(_root, args) {
+  const card = buildMechanismCardFromEvidence(requireFlag(args, FLAG_EVIDENCE));
+  if (args.json) return JSON.stringify(card, null, 2);
+  return [
+    '# Mechanism Card',
+    '',
+    `- failureMechanism: ${card.failureMechanism}`,
+    `- stableFacts: ${card.stableFacts.join('; ')}`,
+    `- changedFacts: ${card.changedFacts.join('; ')}`,
+    `- rejectedAlternatives: ${card.rejectedAlternatives.join(', ')}`,
+    `- missingTransitionOrObservation: ${card.missingTransitionOrObservation}`,
+    `- smallestFalsifyingProbe: ${card.smallestFalsifyingProbe}`,
+    `- expectedMovement: ${card.expectedMovement}`,
+    `- negativeResultMeans: ${card.negativeResultMeans}`,
+  ].join('\n');
+}
+
+function ledgerField(entry, field) {
+  return normalizeText(entry.fields?.[field]);
+}
+
+function entryMatches(entry, owner, boundary) {
+  const ownerBoundary = ledgerField(entry, THEORY_LEDGER_FIELDS.OWNER_BOUNDARY)
+    .toLowerCase();
+  return (!owner || ownerBoundary.includes(owner.toLowerCase())) &&
+    (!boundary || ownerBoundary.includes(boundary.toLowerCase()));
+}
+
+function cmdImportLedger(root, args) {
+  const quest = loadQuest(root, requireFlag(args, FLAG_ID));
+  const ledgerPath = normalizeText(args.ledger) || DEFAULT_LEDGER;
+  const owner = normalizeText(args.owner);
+  const boundary = normalizeText(args.boundary);
+  const {state} = currentState(root, quest);
+  const entries = extractTheoryLedgerEntries(fs.readFileSync(ledgerPath, 'utf8'))
+    .filter((entry) => entryMatches(entry, owner, boundary))
+    .filter((entry) => !state.theories.byId[entry.id]);
+  for (const entry of entries) {
+    appendEvent(root, quest.id, {
+      type: EVENT_THEORY_SYSTEM_DECLARED,
+      theory: entry.id,
+      scope: THEORY_SCOPE_SYSTEM,
+      status: ledgerField(entry, THEORY_LEDGER_FIELDS.STATUS) || THEORY_RESULT_ACTIVE,
+      problem: ledgerField(entry, THEORY_LEDGER_FIELDS.HYPOTHESIS),
+      evidence: ledgerField(entry, THEORY_LEDGER_FIELDS.ARTIFACT_RESULT),
+      mechanism: 'archive',
+      discriminator: ledgerField(entry, THEORY_LEDGER_FIELDS.PROBE),
+      expectedMovement:
+        ledgerField(entry, THEORY_LEDGER_FIELDS.REPRESENTATIVE_MOVEMENT),
+      archive: true,
+    });
+  }
+  return `imported ${entries.length} archived theor${entries.length === 1 ? 'y' : 'ies'}`;
+}
+
+const COMMANDS = Object.freeze({
+  'system': cmdSystem,
+  'option': cmdOption,
+  'select': cmdSelect,
+  'record': cmdRecord,
+  'supersede': cmdSupersede,
+  'list': cmdList,
+  'card': cmdCard,
+  'import-ledger': cmdImportLedger,
+});
+
+export function runTheoryCommand(root, args) {
+  const command = args._[0];
+  const handler = COMMANDS[command];
+  if (!handler) {
+    throw new Error(
+      `theory: expected one of ${Object.keys(COMMANDS).join('|')}`);
+  }
+  return handler(root, args);
+}
+
+export function theoryCommitArgs(args = {}) {
+  return {
+    theoryRef: normalizeText(args.theoryRef) || normalizeText(args[FLAG_THEORY]) ||
+      undefined,
+    expectedMovement: normalizeText(args.expectedMovement) || undefined,
+    negativeResultMeans: normalizeText(args.negativeResultMeans) || undefined,
+    modelRef: normalizeText(args.modelRef) || undefined,
+    modelNotApplicable: normalizeText(args.modelNotApplicable) || undefined,
+  };
+}

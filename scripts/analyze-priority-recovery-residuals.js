@@ -24,19 +24,11 @@ const COMMAND_SEPARATOR = ' ';
 const SCHEMA_VERSION = 'priority-recovery-residuals-v1';
 const UNKNOWN_VALUE = 'unknown';
 const PRIORITY_REASON = 'priority_recovery_progress_blocked';
-const SCENARIO_RELEASE_GATE_LANE = 'scenario-release-gate';
 const SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT =
   'spread_satisfied_in_flight';
-const PACKAGE_NEW_COMMAND_PREFIX = 'npm run work:package:new --';
-const PACKAGE_NEW_FLAG_LANE = '--lane';
-const PACKAGE_NEW_FLAG_TITLE = '--title';
-const PACKAGE_NEW_FLAG_SLUG = '--slug';
-const PACKAGE_NEW_FLAG_OWNER = '--owner';
-const PACKAGE_NEW_FLAG_BOUNDARY = '--boundary';
-const PACKAGE_NEW_FLAG_DOMINANT_REASON = '--dominant-reason';
-const PACKAGE_NEW_FLAG_SCENARIO = '--scenario';
-const PACKAGE_NEW_FLAG_ARTIFACT = '--artifact';
-const PACKAGE_NEW_FLAG_NEXT_ACTION = '--next-action';
+const QUEST_NEW_COMMAND_PREFIX = 'npm run solve:new --';
+const QUEST_NEW_FLAG_ID = '--id';
+const QUEST_NEW_FLAG_STATEMENT = '--statement';
 const SUCCESSOR_NEXT_ACTION =
   'Prove or split this residual owner boundary.';
 const MARKDOWN_NO_WITNESSES_LINE =
@@ -165,16 +157,13 @@ function buildSuccessorSuggestion(group, artifactPath, scenario) {
     slug,
     title,
     command: [
-      PACKAGE_NEW_COMMAND_PREFIX,
-      PACKAGE_NEW_FLAG_LANE, SCENARIO_RELEASE_GATE_LANE,
-      PACKAGE_NEW_FLAG_TITLE, JSON.stringify(title),
-      PACKAGE_NEW_FLAG_SLUG, slug,
-      PACKAGE_NEW_FLAG_OWNER, group.owner,
-      PACKAGE_NEW_FLAG_BOUNDARY, group.boundary,
-      PACKAGE_NEW_FLAG_DOMINANT_REASON, PRIORITY_REASON,
-      PACKAGE_NEW_FLAG_SCENARIO, scenario,
-      PACKAGE_NEW_FLAG_ARTIFACT, artifactPath,
-      PACKAGE_NEW_FLAG_NEXT_ACTION, JSON.stringify(SUCCESSOR_NEXT_ACTION),
+      QUEST_NEW_COMMAND_PREFIX,
+      QUEST_NEW_FLAG_ID, slug,
+      QUEST_NEW_FLAG_STATEMENT,
+      JSON.stringify(
+        `${title} is resolved for ${scenario} using ${artifactPath}; ` +
+        `${PRIORITY_REASON}; ${SUCCESSOR_NEXT_ACTION}`,
+      ),
     ].join(COMMAND_SEPARATOR),
   };
 }

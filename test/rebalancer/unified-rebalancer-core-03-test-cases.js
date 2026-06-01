@@ -395,6 +395,7 @@ export function registerUnifiedRebalancerCore03Tests(context) {
         PRIORITY_FOLLOW_UP_NODE_ID_A,
         PRIORITY_FOLLOW_UP_NODE_ID_B,
         PRIORITY_FOLLOW_UP_NODE_ID_C,
+        PRIORITY_FOLLOW_UP_NODE_ID_D,
       ],
     });
     rebalancer.movePlanner.calculateMoves = () => [];
@@ -431,6 +432,11 @@ export function registerUnifiedRebalancerCore03Tests(context) {
         createdOperations[0].type,
         OperationType.REPLACE,
         'full cache topology should produce a replacement follow-up',
+      );
+      t.equal(
+        createdOperations[0].controlPlaneMutationWorkClass,
+        'background',
+        'priority follow-up operation creation should use background mutation admission',
       );
       t.equal(
         createdOperations[0].nodeId,
@@ -651,6 +657,7 @@ export function registerUnifiedRebalancerCore03Tests(context) {
         PRIORITY_FOLLOW_UP_NODE_ID_A,
         PRIORITY_FOLLOW_UP_NODE_ID_B,
         PRIORITY_FOLLOW_UP_NODE_ID_C,
+        PRIORITY_FOLLOW_UP_NODE_ID_D,
       ],
     });
     rebalancer.movePlanner.calculateMoves = () => [];
@@ -810,6 +817,11 @@ export function registerUnifiedRebalancerCore03Tests(context) {
         move.replicaId,
         PRIORITY_FOLLOW_UP_SOURCE_REPLICA_ID,
         'replacement should retain a concrete healthy source replica',
+      );
+      t.equal(
+        move.controlPlaneMutationWorkClass,
+        'background',
+        'replacement follow-up moves should use background mutation admission',
       );
     } finally {
       rebalancer.shutdown();

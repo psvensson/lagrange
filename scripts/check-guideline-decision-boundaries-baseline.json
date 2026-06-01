@@ -82,7 +82,7 @@
       "ruleReference": "system-guidelines.md §6.3 Persistent system state authority"
     },
     {
-      "filePath": "scripts/model-ledger.js",
+      "filePath": "_legacy_work/scripts/model-ledger.js",
       "line": 488,
       "column": 1,
       "functionName": "buildRecommendation",
@@ -93,7 +93,7 @@
       "ruleReference": "system-guidelines.md §4.1.1 Semantic Decision Boundaries Must Use Explicit State Models"
     },
     {
-      "filePath": "scripts/model-ledger.js",
+      "filePath": "_legacy_work/scripts/model-ledger.js",
       "line": 546,
       "column": 1,
       "functionName": "buildModelSizingAdvice",
@@ -113,7 +113,7 @@
       "ruleReference": "system-guidelines.md §4.5 Raw null or undefined must not encode runtime state"
     },
     {
-      "filePath": "scripts/work-package-new.js",
+      "filePath": "_legacy_work/scripts/work-package-new.js",
       "line": 597,
       "column": 5,
       "functionName": "buildCausalDecisionContractLines",
@@ -122,7 +122,7 @@
       "ruleReference": "system-guidelines.md §4.5 Raw null or undefined must not encode runtime state"
     },
     {
-      "filePath": "scripts/work-package-new.js",
+      "filePath": "_legacy_work/scripts/work-package-new.js",
       "line": 663,
       "column": 5,
       "functionName": "buildDecisionExperimentGateLines",
@@ -131,7 +131,7 @@
       "ruleReference": "system-guidelines.md §4.5 Raw null or undefined must not encode runtime state"
     },
     {
-      "filePath": "scripts/work-package-new.js",
+      "filePath": "_legacy_work/scripts/work-package-new.js",
       "line": 1001,
       "column": 5,
       "functionName": "buildRerunDecisionMetadata",
@@ -140,7 +140,7 @@
       "ruleReference": "system-guidelines.md §4.5 Raw null or undefined must not encode runtime state"
     },
     {
-      "filePath": "scripts/work-tracker.js",
+      "filePath": "_legacy_work/scripts/work-tracker.js",
       "line": 927,
       "column": 5,
       "functionName": "findSubagentUnavailableState",
@@ -149,7 +149,7 @@
       "ruleReference": "system-guidelines.md §4.5 Raw null or undefined must not encode runtime state"
     },
     {
-      "filePath": "scripts/work-tracker.js",
+      "filePath": "_legacy_work/scripts/work-tracker.js",
       "line": 2064,
       "column": 3,
       "functionName": "validateCausalDecisionContractField",
@@ -158,7 +158,7 @@
       "ruleReference": "system-guidelines.md §4.5 Raw null or undefined must not encode runtime state"
     },
     {
-      "filePath": "scripts/work-tracker.js",
+      "filePath": "_legacy_work/scripts/work-tracker.js",
       "line": 2131,
       "column": 7,
       "functionName": "validateCausalDecisionContract",
@@ -167,7 +167,7 @@
       "ruleReference": "system-guidelines.md §4.5 Raw null or undefined must not encode runtime state"
     },
     {
-      "filePath": "scripts/work-tracker.js",
+      "filePath": "_legacy_work/scripts/work-tracker.js",
       "line": 2251,
       "column": 3,
       "functionName": "validateDecisionExperimentGateField",
@@ -176,7 +176,7 @@
       "ruleReference": "system-guidelines.md §4.5 Raw null or undefined must not encode runtime state"
     },
     {
-      "filePath": "scripts/work-tracker.js",
+      "filePath": "_legacy_work/scripts/work-tracker.js",
       "line": 2276,
       "column": 7,
       "functionName": "validateDecisionExperimentGate",
@@ -185,7 +185,7 @@
       "ruleReference": "system-guidelines.md §4.5 Raw null or undefined must not encode runtime state"
     },
     {
-      "filePath": "scripts/work-tracker.js",
+      "filePath": "_legacy_work/scripts/work-tracker.js",
       "line": 3369,
       "column": 3,
       "functionName": "validateExperimentOutcomeConcreteValue",
@@ -194,7 +194,7 @@
       "ruleReference": "system-guidelines.md §4.5 Raw null or undefined must not encode runtime state"
     },
     {
-      "filePath": "scripts/work-tracker.js",
+      "filePath": "_legacy_work/scripts/work-tracker.js",
       "line": 3526,
       "column": 3,
       "functionName": "validateRerunDecisionConcreteValue",
@@ -203,7 +203,7 @@
       "ruleReference": "system-guidelines.md §4.5 Raw null or undefined must not encode runtime state"
     },
     {
-      "filePath": "scripts/work-tracker.js",
+      "filePath": "_legacy_work/scripts/work-tracker.js",
       "line": 4145,
       "column": 1,
       "functionName": "detectFrontierOscillation",
@@ -214,7 +214,7 @@
       "ruleReference": "system-guidelines.md §4.1.1 Semantic Decision Boundaries Must Use Explicit State Models"
     },
     {
-      "filePath": "scripts/work-tracker.js",
+      "filePath": "_legacy_work/scripts/work-tracker.js",
       "line": 4384,
       "column": 1,
       "functionName": "buildArchitectureDecisionGatePayload",

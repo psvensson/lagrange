@@ -12,6 +12,9 @@ const EXPECTED_DEFAULT_TABLE_POLICIES = Object.freeze({
   mergeStorageThreshold: 1,
   mergeTrafficThreshold: 1,
 });
+const TEST_POLICY_APPLY_TIMEOUT_MS = 60000;
+const TEST_POLICY_REMAINING_TIMEOUT_MS = 3;
+const TEST_POLICY_REPAIR_REMAINING_TIMEOUT_MS = 9;
 
 test('table-distribution-helpers split policy precondition accepts table ' +
   'preparations with applied policy by default', async () => {
@@ -253,6 +256,149 @@ test('table-distribution-helpers repairs table policy visibility from ' +
   assert.equal(repairCount, 1);
   assert.equal(preparation.tablePoliciesVisibilityRepairApplied, true);
   assert.equal(preparation.tablePoliciesApplyWarning, undefined);
+});
+
+test('table-distribution-helpers bounds policy read-back by the remaining ' +
+  'policy visibility deadline', async () => {
+  const originalDateNow = Date.now;
+  let fakeNow = 0;
+  const policyReadTimeouts = [];
+  let repairCount = 0;
+  Date.now = () => fakeNow;
+  try {
+    const seedNode = {
+      id: 'seed-1',
+      async queryWithTimeout(sql, _params, options = {}) {
+        if (sql.includes('CREATE TABLE IF NOT EXISTS')) {
+          return {rows: []};
+        }
+        if (sql.includes('SELECT table_id FROM tables WHERE table_name')) {
+          return {
+            rows: [{table_id: 'tbl-benchmark-events-policy-read-deadline'}],
+          };
+        }
+        if (sql.includes('FROM partitions WHERE table_id')) {
+          return {
+            rows: [{
+              partition_id: 'tbl-benchmark-events-policy-read-deadline-p1',
+            }],
+          };
+        }
+        if (sql.includes('FROM services')) {
+          return {
+            rows: [{
+              partition_id: 'tbl-benchmark-events-policy-read-deadline-p1',
+              node_id: 'seed-1',
+              raft_role: 'leader',
+              status: 'active',
+            }],
+          };
+        }
+        if (sql.includes('UPDATE tables SET table_policies')) {
+          fakeNow =
+            TEST_POLICY_APPLY_TIMEOUT_MS - TEST_POLICY_REMAINING_TIMEOUT_MS;
+          return {changes: 0};
+        }
+        if (sql.includes('control_snapshot')) {
+          repairCount += 1;
+          return {rows: []};
+        }
+        if (sql.includes('SELECT table_policies FROM tables')) {
+          policyReadTimeouts.push(options.timeoutMs);
+          fakeNow += options.timeoutMs;
+          throw new Error('policy read timeout');
+        }
+        return {rows: []};
+      },
+    };
+
+    let thrownError = null;
+    try {
+      await prepareBenchmarkPartitioningTable(seedNode, {
+        tableName: 'benchmark_events',
+      });
+    } catch (error) {
+      thrownError = error;
+    }
+
+    assert(thrownError instanceof Error);
+    assert.deepEqual(policyReadTimeouts, [TEST_POLICY_REMAINING_TIMEOUT_MS]);
+    assert.equal(repairCount, 0);
+  } finally {
+    Date.now = originalDateNow;
+  }
+});
+
+test('table-distribution-helpers bounds policy visibility repair by the ' +
+  'remaining policy visibility deadline', async () => {
+  const originalDateNow = Date.now;
+  let fakeNow = 0;
+  const repairTimeouts = [];
+  Date.now = () => fakeNow;
+  try {
+    const seedNode = {
+      id: 'seed-1',
+      async queryWithTimeout(sql, _params, options = {}) {
+        if (sql.includes('CREATE TABLE IF NOT EXISTS')) {
+          return {rows: []};
+        }
+        if (sql.includes('SELECT table_id FROM tables WHERE table_name')) {
+          return {
+            rows: [{table_id: 'tbl-benchmark-events-policy-repair-deadline'}],
+          };
+        }
+        if (sql.includes('FROM partitions WHERE table_id')) {
+          return {
+            rows: [{
+              partition_id: 'tbl-benchmark-events-policy-repair-deadline-p1',
+            }],
+          };
+        }
+        if (sql.includes('FROM services')) {
+          return {
+            rows: [{
+              partition_id: 'tbl-benchmark-events-policy-repair-deadline-p1',
+              node_id: 'seed-1',
+              raft_role: 'leader',
+              status: 'active',
+            }],
+          };
+        }
+        if (sql.includes('UPDATE tables SET table_policies')) {
+          fakeNow = TEST_POLICY_APPLY_TIMEOUT_MS -
+            TEST_POLICY_REPAIR_REMAINING_TIMEOUT_MS;
+          return {changes: 0};
+        }
+        if (sql.includes('SELECT table_policies FROM tables')) {
+          return {rows: [{table_policies: '{}'}]};
+        }
+        if (sql.includes('control_snapshot')) {
+          repairTimeouts.push(options.timeoutMs);
+          if (sql.includes('control_snapshot_local(true)')) {
+            fakeNow += options.timeoutMs;
+          }
+          return {rows: []};
+        }
+        return {rows: []};
+      },
+    };
+
+    let thrownError = null;
+    try {
+      await prepareBenchmarkPartitioningTable(seedNode, {
+        tableName: 'benchmark_events',
+      });
+    } catch (error) {
+      thrownError = error;
+    }
+
+    assert(thrownError instanceof Error);
+    assert.ok(repairTimeouts.length >= 1);
+    assert.ok(repairTimeouts.every((timeoutMs) =>
+      timeoutMs <= TEST_POLICY_REPAIR_REMAINING_TIMEOUT_MS));
+  } finally {
+    Date.now = originalDateNow;
+  }
 });
 
 test('table-distribution-helpers preserves deferred policy visibility ' +

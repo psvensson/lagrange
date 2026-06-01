@@ -41,7 +41,7 @@ const EXPECTED_FIRST_EXECUTION_LINE =
   'rolling-restart|test-output/reports/topology-failure-gates/' +
   '20260514T000000Z/failure-detection-rolling-restart.report.json|' +
   'topology_control_plane|failure_detection_repair_intent|' +
-  'work/packages/todo-20260514-topology-failure-detection-repair-gate.md|' +
+  '_legacy_work/packages/todo-20260514-topology-failure-detection-repair-gate.md|' +
   'active_gate_active_nodes_5_of_5,snapshot_coverage_5_of_5,' +
   'missing_published_zero,no_priority_recovery_event_driven_wait,' +
   'failure_repair_intent_consumed';

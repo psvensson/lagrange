@@ -18,10 +18,20 @@ import {
   EVENT_PARK,
   EVENT_QUEST,
   EVENT_FINDING,
+  EVENT_THEORY_OPTION_DECLARED,
+  EVENT_THEORY_RESULT,
+  EVENT_THEORY_SELECTED,
+  EVENT_THEORY_SUPERSEDED,
+  EVENT_THEORY_SYSTEM_DECLARED,
+  EVENT_EVIDENCE_INGESTED,
   STATUS_OPEN,
   STATUS_SOLVED,
   STATUS_PARKED,
   FIRST_RUNG_INDEX,
+  THEORY_RESULT_ACTIVE,
+  THEORY_RESULT_SUPERSEDED,
+  THEORY_SCOPE_FRONTIER,
+  THEORY_SCOPE_SYSTEM,
 } from './constants.js';
 
 function ensureDir(dir) {
@@ -135,11 +145,94 @@ function applyFinding(frontier, event) {
   });
 }
 
+function applyEvidenceIngested(frontierState, event) {
+  if (!frontierState) return;
+  if (event.metric !== undefined && event.metric !== null) {
+    frontierState.current = event.metric;
+  }
+}
+
+function emptyTheoryState() {
+  return {
+    system: [],
+    frontier: [],
+    selectedByFrontier: {},
+    byId: {},
+  };
+}
+
+function addTheory(theories, event, scope) {
+  if (!event.theory) return;
+  const theory = {
+    id: event.theory,
+    scope,
+    frontier: event.frontier || null,
+    layer: event.layer || null,
+    mechanism: event.mechanism || null,
+    problem: event.problem || null,
+    intervention: event.intervention || null,
+    discriminator: event.discriminator || null,
+    expectedMovement: event.expectedMovement || null,
+    negativeResultMeans: event.negativeResultMeans || null,
+    evidence: event.evidence || null,
+    status: event.status || THEORY_RESULT_ACTIVE,
+    archive: event.archive === true,
+    card: event.card || null,
+    ts: event.ts || null,
+    results: [],
+    supersedes: event.supersedes || null,
+    supersededBy: null,
+  };
+  theories.byId[theory.id] = theory;
+  if (scope === THEORY_SCOPE_SYSTEM) {
+    theories.system.push(theory);
+  } else {
+    theories.frontier.push(theory);
+  }
+}
+
+function applyTheorySelection(theories, event) {
+  const theory = theories.byId[event.theory];
+  if (!theory || theory.archive || theory.scope !== THEORY_SCOPE_FRONTIER) return;
+  if (event.frontier && theory.frontier === event.frontier) {
+    theories.selectedByFrontier[event.frontier] = event.theory;
+  }
+}
+
+function applyTheoryResult(theories, event) {
+  const theory = theories.byId[event.theory];
+  if (!theory) return;
+  const result = {
+    result: event.result || null,
+    evidence: event.evidence || null,
+    validation: event.validation || null,
+    attemptFrontier: event.frontier || null,
+    ts: event.ts || null,
+  };
+  theory.results.push(result);
+  if (event.result) theory.status = event.result;
+}
+
+function applyTheorySuperseded(theories, event) {
+  const theory = theories.byId[event.theory];
+  if (!theory) return;
+  theory.status = THEORY_RESULT_SUPERSEDED;
+  theory.supersededBy = event.by || null;
+  theory.results.push({
+    result: THEORY_RESULT_SUPERSEDED,
+    evidence: event.evidence || null,
+    validation: null,
+    attemptFrontier: event.frontier || null,
+    ts: event.ts || null,
+  });
+}
+
 const FRONTIER_HANDLERS = {
   [EVENT_ATTEMPT]: applyAttempt,
   [EVENT_SOLVED]: applySolved,
   [EVENT_PARK]: applyPark,
   [EVENT_FINDING]: applyFinding,
+  [EVENT_EVIDENCE_INGESTED]: applyEvidenceIngested,
 };
 
 // Fold the append-only log into the current projected state. Pure given the log.
@@ -148,6 +241,7 @@ export function projectState(quest, log) {
     quest.frontiers.map((f) => [f.id, initialFrontierState(f)]),
   );
   const questState = {status: STATUS_OPEN, evidence: null};
+  const theories = emptyTheoryState();
   for (const event of log) {
     if (event.type === EVENT_QUEST) {
       questState.status = event.status;
@@ -156,12 +250,24 @@ export function projectState(quest, log) {
     }
     const handler = FRONTIER_HANDLERS[event.type];
     if (handler) handler(event.frontier ? frontiers.get(event.frontier) : null, event);
+    if (event.type === EVENT_THEORY_SYSTEM_DECLARED) {
+      addTheory(theories, event, THEORY_SCOPE_SYSTEM);
+    } else if (event.type === EVENT_THEORY_OPTION_DECLARED) {
+      addTheory(theories, event, THEORY_SCOPE_FRONTIER);
+    } else if (event.type === EVENT_THEORY_SELECTED) {
+      applyTheorySelection(theories, event);
+    } else if (event.type === EVENT_THEORY_RESULT) {
+      applyTheoryResult(theories, event);
+    } else if (event.type === EVENT_THEORY_SUPERSEDED) {
+      applyTheorySuperseded(theories, event);
+    }
   }
   return {
     questId: quest.id,
     questStatus: questState.status,
     questEvidence: questState.evidence,
     frontiers: [...frontiers.values()],
+    theories,
   };
 }
 

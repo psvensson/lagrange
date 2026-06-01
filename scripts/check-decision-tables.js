@@ -15,7 +15,7 @@ import {
   requireConcreteArray,
   requireConcreteField,
   uniqueValues,
-} from './work-contract-utils.js';
+} from './system-contract-utils.js';
 
 const DEFAULT_TABLE_DIR = 'docs/specs/decision-tables';
 const TABLE_SCHEMA = 'decision-table-v1';

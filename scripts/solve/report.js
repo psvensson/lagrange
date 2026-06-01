@@ -1,5 +1,5 @@
-// Report projection — the read-only "what happened" surface that replaces sprint
-// closure. It is a pure projection of the append-only log + quest: it asserts nothing
+// Report projection — the read-only "what happened" surface for Quest closure.
+// It is a pure projection of the append-only log + quest: it asserts nothing
 // the log does not contain, and it can be regenerated at any time. This is the only
 // place a human normally needs to look to see the result of a run.
 
@@ -48,7 +48,7 @@ function attemptLine(e) {
   const moved = e.metricAfter !== null && e.metricBefore !== null &&
     e.metricAfter < e.metricBefore ? 'progress' : 'flat';
   return `| ${e.ts || ''} | ${e.frontier} | ${e.rung} | ${before} -> ${after} ` +
-    `| ${moved} | ${e.changeRef || ''} |`;
+    `| ${moved} | ${e.theoryRef || ''} | ${e.changeRef || ''} |`;
 }
 
 function outcomeBanner(state, log) {
@@ -64,10 +64,45 @@ function outcomeBanner(state, log) {
   return `TERMINAL: ${questEvent.status}`;
 }
 
+function theoryLine(theory) {
+  const frontier = theory.frontier ? `, frontier ${theory.frontier}` : '';
+  const layer = theory.layer ? `, layer ${theory.layer}` : '';
+  const archive = theory.archive ? ', archive' : '';
+  return `- **${theory.id}** [${theory.status}] ${theory.scope}${frontier}` +
+    `${layer}, mechanism ${theory.mechanism || 'unknown'}${archive}`;
+}
+
+function selectedTheoryLines(state) {
+  const rows = Object.entries(state.theories?.selectedByFrontier || {});
+  if (rows.length === 0) return ['_(none selected)_'];
+  return rows.map(([frontier, theory]) => `- **${frontier}**: ${theory}`);
+}
+
+function theoryResultLines(state) {
+  const theories = [
+    ...(state.theories?.system || []),
+    ...(state.theories?.frontier || []),
+  ];
+  const rows = [];
+  for (const theory of theories) {
+    for (const result of theory.results || []) {
+      rows.push(
+        `- **${theory.id}**: ${result.result} ` +
+        `${result.evidence ? `[${result.evidence}]` : ''}`,
+      );
+    }
+  }
+  return rows.length > 0 ? rows : ['_(none recorded)_'];
+}
+
 export function buildReport(quest, log, state) {
   const attempts = log.filter((e) => e.type === EVENT_ATTEMPT);
   const attemptRows = attempts.map(attemptLine);
   const findings = findingLines(state);
+  const theories = [
+    ...(state.theories?.system || []),
+    ...(state.theories?.frontier || []),
+  ];
   return [
     `# Solve report: ${quest.id}`,
     '',
@@ -83,9 +118,18 @@ export function buildReport(quest, log, state) {
     '## Findings',
     ...(findings.length > 0 ? findings : ['_(none recorded)_']),
     '',
+    '## Theories',
+    ...(theories.length > 0 ? theories.map(theoryLine) : ['_(none recorded)_']),
+    '',
+    '## Selected Theories',
+    ...selectedTheoryLines(state),
+    '',
+    '## Theory Results',
+    ...theoryResultLines(state),
+    '',
     '## Attempt log',
-    '| ts | frontier | rung | metric | result | change |',
-    '| --- | --- | --- | --- | --- | --- |',
+    '| ts | frontier | rung | metric | result | theory | change |',
+    '| --- | --- | --- | --- | --- | --- | --- |',
     ...attemptRows,
     '',
   ].join('\n');
@@ -99,5 +143,12 @@ export function writeReport(root, questId) {
   const file = reportFilePath(root, questId);
   fs.mkdirSync(path.dirname(file), {recursive: true});
   fs.writeFileSync(file, md);
+  const latestLogTime = log.length > 0 ?
+    new Date(log[log.length - 1].ts).getTime() :
+    NaN;
+  if (Number.isFinite(latestLogTime)) {
+    const reportTime = new Date(latestLogTime + 2);
+    fs.utimesSync(file, reportTime, reportTime);
+  }
   return {file, md};
 }

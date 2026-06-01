@@ -11,7 +11,10 @@ import path from 'path';
 import {AddressManager} from '../address/address-manager.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {STORAGE_DEFAULT} from '../storage/storage-constants.js';
-import {NUM, WORKFLOW_STEP} from '../constants/index.js';
+import {NUM, STATE, WORKFLOW_STEP} from '../constants/index.js';
+import {
+  isPriorityControlPlanePartition,
+} from '../bootstrap/system-partition-classification.js';
 import {createControlPlaneRuntimeBundle} from '../control-plane/control-plane-runtime-bundle.js';
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
 import {PartitionServiceRowOwner} from '../partition/partition-service-row-owner.js';
@@ -147,6 +150,24 @@ function hasExplicitReadyLeaseMetadata(nodeRow) {
   );
 }
 function isReplicaJoinNodeViable(nodeRow, options = {}) {
+  const nodeId =
+    typeof options.nodeId === REPLICA_HANDLER_TYPEOF.STRING ?
+      options.nodeId :
+      nodeRow?.node_id || nodeRow?.nodeId || null;
+  const localNodeId =
+    typeof options.localNodeId === REPLICA_HANDLER_TYPEOF.STRING ?
+      options.localNodeId :
+      null;
+  const router = options.messageRouter || null;
+  if (
+    nodeId &&
+    nodeId !== localNodeId &&
+    router &&
+    typeof router.getConnectionState === REPLICA_HANDLER_TYPEOF.FUNCTION &&
+    router.getConnectionState(nodeId) !== STATE.CONNECTED
+  ) {
+    return false;
+  }
   if (!nodeRow) {
     return true;
   }
@@ -609,6 +630,7 @@ assignReplicaHandlerRuntimeMethods(ReplicaHandler, {
   createSystemMetadataGatewayRequiredError,
   fs,
   isFreshPartitionBootstrapWindow,
+  isPriorityControlPlanePartition,
   isReplicaJoinNodeViable,
   path,
   partitionMetadataMissingError,

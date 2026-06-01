@@ -52,11 +52,16 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
           options,
           retryAttempt,
         );
-        const result = await this.controlPlaneSystemTableGateway.executeQuery(
-          sql,
-          params,
-          queryOptions,
-        );
+        let result = null;
+        try {
+          result = await this.controlPlaneSystemTableGateway.executeQuery(
+            sql,
+            params,
+            queryOptions,
+          );
+        } catch (error) {
+          result = error;
+        }
         if (result.success || !this.isRetryableOperationPersistError(result)) {
           return result;
         }
@@ -93,11 +98,16 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
           options,
           retryAttempt,
         );
-        const result = await this.executeReplicaOperationGatewayMutation(
-          mutation,
-          queryOptions,
-          fallback,
-        );
+        let result = null;
+        try {
+          result = await this.executeReplicaOperationGatewayMutation(
+            mutation,
+            queryOptions,
+            fallback,
+          );
+        } catch (error) {
+          result = error;
+        }
         if (result.success || !this.isRetryableOperationPersistError(result)) {
           return result;
         }

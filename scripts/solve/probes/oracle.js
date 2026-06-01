@@ -19,6 +19,12 @@ export const oracleProbe = {
     const metric = typeof data.metric === 'number' ? data.metric : null;
     const done = data.done === true ||
       (typeof data.target === 'number' && metric !== null && metric <= data.target);
-    return {metric, done, evidence: file, detail: data};
+    return {
+      metric,
+      done,
+      evidence: file,
+      classification: data.classification || null,
+      detail: data,
+    };
   },
 };

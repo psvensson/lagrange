@@ -2,12 +2,12 @@
 
 ## 1. Spec And Reference-Pattern Rebaseline
 
-- [x] Create the successor sprint and package queue.
+- [x] Create the successor Quest queue.
 - [x] Replace the coarse core topology rewrite guidance with executable owner
       contract templates.
 - [x] Record best-of-breed tactical patterns as implementation guidance.
 - [x] Update roadmap truth without changing the active release-gate blocker.
-- [x] Validate work tracker and spec/package diff hygiene.
+- [x] Validate Quest/Solver and spec diff hygiene.
 
 ## 2. Operation Owner Decision Kernel
 

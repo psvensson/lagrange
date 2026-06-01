@@ -1,0 +1,56 @@
+# Solve report: rolling-restart-core-stability
+
+**Goal:** rolling-restart passes 3 consecutive harness runs with no priority items after core stability fixes.
+
+**Outcome:** IN PROGRESS (no terminal recorded)
+
+**Attempts:** 3
+
+## Frontiers
+- **rolling-restart-core-stability-main** [open] rung 2, attempts 3, metric 1 -> 0
+
+## Findings
+- **rolling-restart-core-stability-main**: Quest probe priority metric is now zero, but doneWhen remains false until three consecutive rolling-restart runs pass. (rules out: Do not claim SOLVED from metric zero without the consecutive doneWhen evidence.) [test-output/reports/rolling-restart-core-stability-after-local-mutation-gate.report.json]
+- **rolling-restart-core-stability-main**: Legacy workflow artifacts are archive evidence only; active execution and durable memory now go through Quest files plus Solver findings and attempts. (rules out: Do not create legacy workflow successors or refresh legacy blocker state to continue this Quest.) [architecture/contracts/quest-lifecycle.md]
+- **rolling-restart-core-stability-main**: Quest restart is clear: no pending step exists, priority metric is zero, selected theory is theory-20260601-rolling-restart-consecutive-proof, and the next work should refresh rolling-restart doneWhen evidence before any new runtime patch. (rules out: Do not treat metric zero as SOLVED, and do not start with another runtime edit before the consecutive doneWhen proof or a fresh blocker is observed.) [test-output/reports/rolling-restart-core-stability-after-local-runtime-overlay.report.json]
+- **rolling-restart-core-stability-main**: Ingested evidence from rolling-restart-core-stability-after-priority-local-first.report.json. Metric: 0 -> 0. Verdict: BLOCK_EVIDENCE_INCOMPLETE (execution_incomplete_or_metrics_missing). Root cause: topology. Dominant reason: priority_recovery_rebalancer_handoff_retry_scheduled. Ingestion outcome: changed. [test-output/reports/rolling-restart-core-stability-after-priority-local-first.report.json]
+- **rolling-restart-core-stability-main**: Ingested evidence from rolling-restart-core-stability-after-cdc-defer-peer-filter.report.json. Metric: 0 -> 0. Verdict: BLOCK_EVIDENCE_INCOMPLETE (execution_incomplete_or_metrics_missing). Root cause: topology. Dominant reason: priority_recovery_rebalancer_handoff_retry_scheduled. Ingestion outcome: changed. [test-output/reports/rolling-restart-core-stability-after-cdc-defer-peer-filter.report.json]
+- **rolling-restart-core-stability-main**: Ingested evidence from rolling-restart-core-stability-after-query-transport-filter.report.json. Metric: 0 -> 1. Verdict: BLOCK_EVIDENCE_INCOMPLETE (execution_incomplete_or_metrics_missing). Root cause: topology. Dominant reason: priority_recovery_rebalancer_handoff_retry_scheduled. Owner: operation_workflow_owner. Ingestion outcome: changed. [test-output/reports/rolling-restart-core-stability-after-query-transport-filter.report.json]
+- **rolling-restart-core-stability-main**: Ingested evidence from rolling-restart-core-stability-after-rebalancer-retry-timer.report.json. Metric: 0 -> 0. Verdict: FAIL_CORE_INVARIANT (core_invariant_or_safety_violation). Root cause: topology. Dominant reason: publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72. Owner: startup_active_gate_owner. Ingestion outcome: changed. [test-output/reports/rolling-restart-core-stability-after-rebalancer-retry-timer.report.json]
+- **rolling-restart-core-stability-main**: Ingested evidence from rolling-restart-failure-diagnostics.report.json. Metric: 0 -> 0. Verdict: BLOCK_EVIDENCE_INCOMPLETE (execution_incomplete_or_metrics_missing). Root cause: startup. Dominant reason: startup_admin_projection. Owner: startup_active_gate_owner. Ingestion outcome: changed. [test-output/reports/rolling-restart-failure-diagnostics.report.json]
+- **rolling-restart-core-stability-main**: Ingested evidence from rolling-restart-failure-diagnostics.report.json. Metric: 0 -> 1. Verdict: BLOCK_EVIDENCE_INCOMPLETE (execution_incomplete_or_metrics_missing). Root cause: topology. Dominant reason: load_publication_gate_ready. Owner: startup_active_gate_owner. Ingestion outcome: changed. [test-output/reports/rolling-restart-failure-diagnostics.report.json]
+- **rolling-restart-core-stability-main**: Ingested evidence from rolling-restart-failure-diagnostics.report.json. Metric: 1 -> 1. Verdict: BLOCK_EVIDENCE_INCOMPLETE (execution_incomplete_or_metrics_missing). Root cause: load. Dominant reason: startup_admin_projection. Owner: none. Ingestion outcome: changed. [test-output/reports/rolling-restart-failure-diagnostics.report.json]
+- **rolling-restart-core-stability-main**: Ingested evidence from rolling-restart-failure-diagnostics.report.json. Metric: 1 -> 0. Verdict: BLOCK_EVIDENCE_INCOMPLETE (execution_incomplete_or_metrics_missing). Root cause: startup. Dominant reason: readiness_probe_timeout=Node readiness probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304. Owner: none. Ingestion outcome: changed. [test-output/reports/rolling-restart-failure-diagnostics.report.json]
+
+## Theories
+- **theory-20260601-rolling-restart-evidence-closure** [active] system, mechanism observation_gap
+- **theory-20260601-operation-workflow-liveness-loops-are-not** [active] system, mechanism operation workflow liveness loops are not properly terminated or observed due to backpressure or missing transitions
+- **theory-20260601-publication-missing-active-node** [active] system, mechanism publication_missing_active_node
+- **theory-20260601-rolling-restart-consecutive-proof** [needs-rerun] frontier, frontier rolling-restart-core-stability-main, layer observation, mechanism observation_gap
+- **theory-20260601-trace-a-single-operation-id-end** [falsified] frontier, frontier rolling-restart-core-stability-main, layer model, mechanism trace a single operation ID end-to-end from dispatch to partition visibility
+- **theory-20260601-publication-missing-active-node-2** [falsified] frontier, frontier rolling-restart-core-stability-main, layer observation, mechanism publication_missing_active_node
+- **theory-20260601-publication-missing-active-node-3** [needs-rerun] frontier, frontier rolling-restart-core-stability-main, layer model, mechanism publication_missing_active_node
+- **theory-20260601-readiness-probe-timeout-restart** [active] frontier, frontier rolling-restart-core-stability-main, layer model, mechanism readiness_probe_timeout
+
+## Selected Theories
+- **rolling-restart-core-stability-main**: theory-20260601-readiness-probe-timeout-restart
+
+## Theory Results
+- **theory-20260601-rolling-restart-consecutive-proof**: needs-rerun [test-output/reports/rolling-restart-core-stability-after-priority-local-first.report.json]
+- **theory-20260601-rolling-restart-consecutive-proof**: needs-rerun [test-output/reports/rolling-restart-core-stability-after-cdc-defer-peer-filter.report.json]
+- **theory-20260601-trace-a-single-operation-id-end**: needs-rerun [test-output/reports/rolling-restart-core-stability-after-query-transport-filter.report.json]
+- **theory-20260601-trace-a-single-operation-id-end**: active [test-output/reports/rolling-restart-core-stability-after-query-transport-filter.report.json]
+- **theory-20260601-trace-a-single-operation-id-end**: needs-rerun [test-output/reports/rolling-restart-core-stability-after-rebalancer-retry-timer.report.json]
+- **theory-20260601-trace-a-single-operation-id-end**: falsified [test-output/reports/rolling-restart-core-stability-after-rebalancer-retry-timer.report.json]
+- **theory-20260601-publication-missing-active-node-2**: falsified [test-output/reports/rolling-restart-core-stability-after-rebalancer-retry-timer.report.json]
+- **theory-20260601-publication-missing-active-node-3**: needs-rerun [test-output/reports/rolling-restart-failure-diagnostics.report.json]
+- **theory-20260601-publication-missing-active-node-3**: needs-rerun [test-output/reports/rolling-restart-failure-diagnostics.report.json]
+- **theory-20260601-publication-missing-active-node-3**: needs-rerun [test-output/reports/rolling-restart-failure-diagnostics.report.json]
+- **theory-20260601-publication-missing-active-node-3**: needs-rerun [test-output/reports/rolling-restart-failure-diagnostics.report.json]
+
+## Attempt log
+| ts | frontier | rung | metric | result | theory | change |
+| --- | --- | --- | --- | --- | --- | --- |
+| 2026-06-01T10:02:50.664Z | rolling-restart-core-stability-main | local-fix | 1 -> 0 | progress |  | diff:solve/changes/rolling-restart-core-stability/local-runtime-progress.diff |
+| 2026-06-01T13:58:25.056Z | rolling-restart-core-stability-main | local-fix | 1 -> 0 | progress | theory-20260601-trace-a-single-operation-id-end | diff:src/rebalancer/operation-workflow-owner-ports.js |
+| 2026-06-01T14:10:17.607Z | rolling-restart-core-stability-main | widen-scope | 0 -> 0 | flat | theory-20260601-publication-missing-active-node-2 | diff:solve/changes/rolling-restart-core-stability/system-pause-removal.diff |

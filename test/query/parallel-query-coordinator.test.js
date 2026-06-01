@@ -1,5 +1,6 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {ParallelQueryCoordinator} from '../../src/query/distributed/parallel-query-coordinator.js';
+import {QueryExecutionMetrics} from '../../src/query/distributed/parallel-query-execution-metrics.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {CancellationToken} from '../../src/query/cancellation-token.js';
 
@@ -184,6 +185,79 @@ test('ParallelQueryCoordinator - preserves bounded participant failure diagnosti
       true,
       'fanout metrics should preserve per-participant duration',
     );
+  });
+
+test('ParallelQueryCoordinator - missing service returns retryable partition miss',
+  async (t) => {
+    const coordinator = new ParallelQueryCoordinator();
+    coordinator.speculativeExecutionEnabled = false;
+
+    await t.rejects(
+      coordinator.executeQueryOnService(
+        null,
+        'SELECT * FROM replica_operations',
+        [],
+        'replica_operations-p1',
+      ),
+      /Partition service not found/,
+      'null services should not crash before CDC retry classification',
+    );
+  });
+
+test('ParallelQueryCoordinator - failed speculative replica cannot win result',
+  async (t) => {
+    const coordinator = new ParallelQueryCoordinator({
+      replicaRegistry: new Map([
+        ['p1', [{
+          replicaId: 'replica-alt',
+          status: 'active',
+          async executeQuery() {
+            return {
+              success: false,
+              error: 'Partition service not found',
+              rows: [],
+            };
+          },
+        }]],
+      ]),
+    });
+
+    const metrics = new QueryExecutionMetrics('q-speculative-test', 1);
+    const speculativePromises = new Map();
+    const results = new Map();
+    const pendingPartitions = new Set(['p1']);
+
+    coordinator.startSpeculativeExecution(
+      'p1',
+      'SELECT * FROM replica_operations',
+      [],
+      metrics,
+      speculativePromises,
+      results,
+      pendingPartitions,
+    );
+
+    const speculative = speculativePromises.get('p1');
+    t.ok(speculative?.promise, 'speculative execution should be registered');
+
+    const result = await speculative.promise;
+    t.equal(result.success, false, 'speculative failure should be reported');
+    t.equal(
+      result.error,
+      'Partition service not found',
+      'speculative failure preserves retryable error',
+    );
+    t.equal(
+      results.has('p1'),
+      false,
+      'failed speculative result should not complete the partition',
+    );
+    t.equal(
+      pendingPartitions.has('p1'),
+      true,
+      'primary execution should remain pending after speculative failure',
+    );
+    t.equal(metrics.speculativeExecutions, 1);
   });
 
 test('ParallelQueryCoordinator - emits fanout metrics log', async (t) => {

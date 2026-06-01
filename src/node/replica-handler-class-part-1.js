@@ -55,6 +55,7 @@ class ReplicaHandlerPart1 extends EventEmitter {
     this.controlPlaneSystemTableGateway =
       options.controlPlaneSystemTableGateway || null;
     this.partitionServiceRowOwner = null;
+    this.messageRouter = options.messageRouter || null;
     this.rpcClient = options.rpcClient || null;
     this.createPartitionService = options.createPartitionService || null;
     this.dataDir = options.dataDir || REPLICA_HANDLER_DEFAULT.DATA_DIR;

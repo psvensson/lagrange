@@ -9,6 +9,9 @@ import {
   EVENT_ATTEMPT,
   EVENT_SOLVED,
   EVENT_QUEST,
+  EVENT_THEORY_OPTION_DECLARED,
+  EVENT_THEORY_RESULT,
+  EVENT_THEORY_SELECTED,
   STATUS_SOLVED,
 } from '../../scripts/solve/constants.js';
 
@@ -58,6 +61,45 @@ tap.test('report projection (P2)', async (t) => {
     const {file} = writeReport(root, GOAL.id);
     t.ok(fs.existsSync(file), 'report file written');
     t.match(file, /solve[/\\]report[/\\]demo\.md$/);
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('report includes selected theories and theory results', (t) => {
+    const root = tmp();
+    saveQuest(root, GOAL);
+    appendEvent(root, GOAL.id, {
+      type: EVENT_THEORY_OPTION_DECLARED,
+      theory: 'theory-frontier',
+      frontier: 'demo-main',
+      scope: 'frontier',
+      layer: 'observation',
+      mechanism: 'observation_gap',
+    });
+    appendEvent(root, GOAL.id, {
+      type: EVENT_THEORY_SELECTED,
+      frontier: 'demo-main',
+      theory: 'theory-frontier',
+    });
+    appendEvent(root, GOAL.id, {
+      type: EVENT_ATTEMPT, frontier: 'demo-main', rung: 'widen-scope',
+      rungIndex: 1, hypothesis: 'capture evidence', changeRef: 'diff:a.diff',
+      metricBefore: 3, metricAfter: 3, metricDirection: 'lower-is-better',
+      evidence: 'r1.json', theoryRef: 'theory-frontier',
+    });
+    appendEvent(root, GOAL.id, {
+      type: EVENT_THEORY_RESULT,
+      theory: 'theory-frontier',
+      result: 'falsified',
+      evidence: 'r1.json',
+    });
+    const log = readLog(root, GOAL.id);
+    const md = buildReport(GOAL, log, projectState(GOAL, log));
+    t.match(md, /## Theories/);
+    t.match(md, /theory-frontier/);
+    t.match(md, /demo-main\*\*: theory-frontier/);
+    t.match(md, /falsified/);
+    t.match(md, /\| .* \| theory-frontier \| diff:a\.diff \|/);
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });

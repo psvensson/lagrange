@@ -1,7 +1,9 @@
-// The loop driver — the entire control flow, with exactly three terminals:
-//   SOLVED     quest.doneWhen is true            -> stop, present result
-//   EXHAUSTED  no open frontier remains          -> stop, present result
-//   MAX_CYCLES safety bound for CI/skeleton runs  -> stop (not a real terminal)
+// The loop driver — the entire control flow, with two real terminals and bounded
+// non-terminal stops:
+//   SOLVED          quest.doneWhen is true             -> stop, present result
+//   EXHAUSTED       no open frontier remains           -> stop, present result
+//   MAX_CYCLES      safety bound for CI/skeleton runs   -> stop, not terminal
+//   THEORY_REQUIRED a rung gate is missing theory input -> stop, not terminal
 //
 // Progress (metric strictly decreased) keeps the current rung; a stall climbs the
 // finite strategy ladder; reaching the park rung parks the frontier and the scheduler
@@ -23,6 +25,7 @@ import {
   OUTCOME_SOLVED,
   OUTCOME_EXHAUSTED,
   OUTCOME_MAX_CYCLES,
+  OUTCOME_THEORY_REQUIRED,
 } from './constants.js';
 import {appendEvent, readLog, projectState, rebuildState} from './store.js';
 import {evaluate} from './probe.js';
@@ -32,15 +35,20 @@ import {
   validateGoalpostsImmutable,
   METRIC_DIRECTION_LOWER_IS_BETTER,
 } from './honesty.js';
+import {
+  appendTheoryResultForAttempt,
+  resolveAttemptTheoryRef,
+  stepTheoryGateProblems,
+} from './theory.js';
+import {detectUnrecordedEvidence} from './evidence.js';
+import {inspectChangeArtifact} from './change-artifact.js';
 
 function defaultFileExists(p) {
   return Boolean(p) && fs.existsSync(p);
 }
 
-function defaultChangeRefResolves(ref) {
-  if (!ref) return false;
-  if (ref.startsWith('diff:')) return fs.existsSync(ref.slice('diff:'.length));
-  return false;
+function defaultChangeRefResolves(root, quest) {
+  return (ref) => inspectChangeArtifact(root, quest, ref).valid;
 }
 
 function sealGoal(quest) {
@@ -60,9 +68,21 @@ function ensureDeclared(root, quest) {
   });
 }
 
-function finish(root, quest, outcome, evidence) {
-  if (outcome !== OUTCOME_MAX_CYCLES) {
-    appendEvent(root, quest.id, {type: EVENT_QUEST, status: outcome, evidence});
+const NON_TERMINAL_STOPS = Object.freeze([
+  OUTCOME_MAX_CYCLES,
+  OUTCOME_THEORY_REQUIRED,
+]);
+
+function finish(root, quest, outcome, evidence, evidenceIdentity = null,
+  evidenceFingerprint = null) {
+  if (!NON_TERMINAL_STOPS.includes(outcome)) {
+    appendEvent(root, quest.id, {
+      type: EVENT_QUEST,
+      status: outcome,
+      evidence,
+      evidenceIdentity,
+      evidenceFingerprint,
+    });
   }
   const state = rebuildState(root, quest);
   return {outcome, evidence, state};
@@ -71,7 +91,12 @@ function finish(root, quest, outcome, evidence) {
 function runOneCycle(root, quest, ctx) {
   const questDone = evaluate(quest.doneWhen, ctx.probeCtx);
   if (questDone.done) {
-    return {terminal: OUTCOME_SOLVED, evidence: questDone.evidence};
+    return {
+      terminal: OUTCOME_SOLVED,
+      evidence: questDone.evidence,
+      evidenceIdentity: questDone.evidenceIdentity || null,
+      evidenceFingerprint: questDone.evidenceFingerprint || null,
+    };
   }
   const state = projectState(quest, readLog(root, quest.id));
   const pick = pickFrontier(quest, state, ctx.scoreFn);
@@ -80,17 +105,44 @@ function runOneCycle(root, quest, ctx) {
   const before = evaluate(pick.def.metric, ctx.probeCtx);
   if (before.done) {
     appendEvent(root, quest.id, {
-      type: EVENT_SOLVED, frontier: pick.def.id, evidence: before.evidence,
+      type: EVENT_SOLVED,
+      frontier: pick.def.id,
+      evidence: before.evidence,
+      evidenceIdentity: before.evidenceIdentity || null,
+      evidenceFingerprint: before.evidenceFingerprint || null,
     });
     return {terminal: null};
   }
-  applyAttempt(root, quest, ctx, pick, before);
-  return {terminal: null};
+  return applyAttempt(root, quest, ctx, pick, before);
 }
 
 function applyAttempt(root, quest, ctx, pick, before) {
   const rungIndex = pick.state.rungIndex;
   const log = readLog(root, quest.id);
+  const state = projectState(quest, log);
+  const readinessProblems = stepTheoryGateProblems({
+    log,
+    state,
+    frontierId: pick.def.id,
+    rungIndex,
+    phase: 'begin',
+  });
+  if (readinessProblems.length > 0) {
+    appendEvent(root, quest.id, {
+      type: EVENT_VIOLATION,
+      scope: 'theory-gate',
+      frontier: pick.def.id,
+      rung: LADDER[rungIndex],
+      rungIndex,
+      violations: readinessProblems,
+    });
+    return {
+      terminal: OUTCOME_THEORY_REQUIRED,
+      evidence: null,
+      frontier: pick.def.id,
+      problems: readinessProblems,
+    };
+  }
   const priorAttempts = log.filter((e) =>
     e.type === EVENT_ATTEMPT && e.frontier === pick.def.id);
   const metricHistory = priorAttempts
@@ -105,12 +157,14 @@ function applyAttempt(root, quest, ctx, pick, before) {
     quest,
     frontierDef: pick.def,
     frontierState: pick.state,
+    theories: state.theories,
     rung: LADDER[rungIndex],
     rungIndex,
     metricHistory,
     evidencePaths,
   });
   finalizeAttempt(root, quest, ctx, pick, before, result);
+  return {terminal: null};
 }
 
 // Record one attempt's outcome: re-measure the metric, build + honesty-check the
@@ -118,6 +172,13 @@ function applyAttempt(root, quest, ctx, pick, before) {
 // autonomous loop and the manual `step` flow so both obey identical honesty rules.
 export function finalizeAttempt(root, quest, ctx, pick, before, result) {
   const rungIndex = pick.state.rungIndex;
+  const log = readLog(root, quest.id);
+  const state = projectState(quest, log);
+  const theoryRef = resolveAttemptTheoryRef(
+    state,
+    pick.def.id,
+    result.theoryRef || ctx.theoryRef,
+  );
   const after = evaluate(pick.def.metric, ctx.probeCtx);
   const event = {
     type: EVENT_ATTEMPT,
@@ -131,14 +192,35 @@ export function finalizeAttempt(root, quest, ctx, pick, before, result) {
     metricAfter: after.metric,
     metricDirection: METRIC_DIRECTION_LOWER_IS_BETTER,
     evidence: after.evidence,
+    evidenceIdentity: after.evidenceIdentity || null,
+    evidenceFingerprint: after.evidenceFingerprint || null,
+    theoryRef,
+    expectedMovement: result.expectedMovement || ctx.expectedMovement || null,
+    negativeResultMeans:
+      result.negativeResultMeans || ctx.negativeResultMeans || null,
+    modelRef: result.modelRef || ctx.modelRef || null,
+    modelNotApplicable:
+      result.modelNotApplicable || ctx.modelNotApplicable || null,
   };
-  const violations = validateAttempt(event, ctx.honestyCtx);
+  const violations = [
+    ...validateAttempt(event, ctx.honestyCtx),
+    ...stepTheoryGateProblems({
+      log,
+      state,
+      frontierId: pick.def.id,
+      rungIndex,
+      theoryRef: event.theoryRef,
+      modelRef: event.modelRef,
+      modelNotApplicable: event.modelNotApplicable,
+    }),
+  ];
   if (violations.length > 0) {
     appendEvent(root, quest.id, {
       type: EVENT_VIOLATION, frontier: pick.def.id, violations, attempt: event,
     });
   }
   const progressed = decideAndRecord(root, quest, pick, event, after, violations);
+  appendTheoryResultForAttempt(root, quest, event, progressed, violations);
   return {event, after, violations, progressed};
 }
 
@@ -153,7 +235,11 @@ function decideAndRecord(root, quest, pick, event, after, violations) {
   appendEvent(root, quest.id, {...event, rungIndex: nextRung});
   if (after.done) {
     appendEvent(root, quest.id, {
-      type: EVENT_SOLVED, frontier: pick.def.id, evidence: after.evidence,
+      type: EVENT_SOLVED,
+      frontier: pick.def.id,
+      evidence: after.evidence,
+      evidenceIdentity: after.evidenceIdentity || null,
+      evidenceFingerprint: after.evidenceFingerprint || null,
     });
   } else if (!progressed && nextRung >= PARK_RUNG_INDEX) {
     appendEvent(root, quest.id, {
@@ -175,8 +261,14 @@ export function makeRunContext(options = {}) {
     probeCtx: options.probeCtx || {},
     honestyCtx: {
       fileExists: options.fileExists || defaultFileExists,
-      changeRefResolves: options.changeRefResolves || defaultChangeRefResolves,
+      changeRefResolves: options.changeRefResolves || null,
+      inspectChangeRef: options.inspectChangeRef || null,
     },
+    theoryRef: options.theoryRef || null,
+    expectedMovement: options.expectedMovement || null,
+    negativeResultMeans: options.negativeResultMeans || null,
+    modelRef: options.modelRef || null,
+    modelNotApplicable: options.modelNotApplicable || null,
   };
 }
 
@@ -204,6 +296,8 @@ export function recordQuestSolvedIfDone(root, quest, ctx) {
       type: EVENT_QUEST,
       status: STATUS_SOLVED,
       evidence: questDone.evidence,
+      evidenceIdentity: questDone.evidenceIdentity || null,
+      evidenceFingerprint: questDone.evidenceFingerprint || null,
     });
   }
   rebuildState(root, quest);
@@ -212,15 +306,53 @@ export function recordQuestSolvedIfDone(root, quest, ctx) {
 
 export function runLoop(root, quest, options = {}) {
   const ctx = makeRunContext(options);
+  ctx.probeCtx = {...ctx.probeCtx, root};
+  ctx.honestyCtx.changeRefResolves =
+    ctx.honestyCtx.changeRefResolves || defaultChangeRefResolves(root, quest);
+  ctx.honestyCtx.inspectChangeRef =
+    ctx.honestyCtx.inspectChangeRef ||
+    ((ref) => inspectChangeArtifact(root, quest, ref));
   ensureSealedGoal(root, quest);
+
+  const unrecorded = detectUnrecordedEvidence(root, quest.id, {
+    requiresMeasuredHistory: true,
+  });
+  if (unrecorded) {
+    throw new Error(
+      `UNRECORDED_EVIDENCE: latest probe evidence is newer than Quest memory. Ingest it first:\n` +
+      `  node scripts/solve.js ingest-evidence --id ${quest.id} --frontier ${unrecorded.frontier} --evidence ${unrecorded.evidence}`
+    );
+  }
+
   const maxCycles = Number.isInteger(options.maxCycles) ? options.maxCycles : 1000;
   for (let cycle = 0; cycle < maxCycles; cycle += 1) {
-    const {terminal, evidence} = runOneCycle(root, quest, ctx);
+    const {
+      terminal,
+      evidence,
+      evidenceIdentity,
+      evidenceFingerprint,
+      problems,
+      frontier,
+    } = runOneCycle(root, quest, ctx);
     if (terminal === OUTCOME_SOLVED) {
-      return finish(root, quest, STATUS_SOLVED, evidence);
+      return finish(
+        root,
+        quest,
+        STATUS_SOLVED,
+        evidence,
+        evidenceIdentity,
+        evidenceFingerprint,
+      );
     }
     if (terminal === OUTCOME_EXHAUSTED) {
       return finish(root, quest, STATUS_EXHAUSTED, evidence);
+    }
+    if (terminal === OUTCOME_THEORY_REQUIRED) {
+      return {
+        ...finish(root, quest, OUTCOME_THEORY_REQUIRED, evidence),
+        frontier,
+        problems,
+      };
     }
   }
   return finish(root, quest, OUTCOME_MAX_CYCLES, null);

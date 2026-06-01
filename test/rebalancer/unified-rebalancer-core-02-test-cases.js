@@ -221,8 +221,8 @@ export function registerUnifiedRebalancerCore02Tests(context) {
       }
     });
 
-  test('UnifiedRebalancer lets priority operation creation bypass local ' +
-  'mutation readiness deferral', async (t) => {
+  test('UnifiedRebalancer defers priority operation creation behind local ' +
+  'mutation readiness', async (t) => {
     initializeTestEnvironment();
 
     const priorityPartitionSummary = {
@@ -349,8 +349,8 @@ export function registerUnifiedRebalancerCore02Tests(context) {
 
       t.equal(
         gateSnapshot.shouldDefer,
-        false,
-        'local mutation readiness should not defer required priority creation',
+        true,
+        'local mutation readiness should defer required priority creation',
       );
       t.equal(
         gateSnapshot.priorityRecoveryOperationCreationRequired,
@@ -364,8 +364,76 @@ export function registerUnifiedRebalancerCore02Tests(context) {
       );
       t.equal(
         evaluateCalls,
-        ONE_REBALANCE_EVALUATE_CALL,
-        'priority operation creation should reach rebalance evaluation',
+        NO_GLOBAL_IN_FLIGHT_OPERATIONS,
+        'priority operation creation should not evaluate while local mutation readiness is unhealthy',
+      );
+    } finally {
+      rebalancer.shutdown();
+    }
+  });
+
+  test('UnifiedRebalancer keeps full local mutation readiness under startup ' +
+  'priority bypass', async (t) => {
+    initializeTestEnvironment();
+
+    const rebalancer = createTestRebalancer({
+      entityId: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+      entityType: EntityType.PARTITION,
+      nodeId: PRIORITY_FOLLOW_UP_NODE_ID_A,
+      nodes: [
+        {node_id: PRIORITY_FOLLOW_UP_NODE_ID_A, status: NodeStatus.ACTIVE},
+      ],
+      partitions: [{
+        partition_id: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+        table_id: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+      }],
+      startupRecoveryCoordinator: {
+        evaluate() {
+          return {
+            shouldBypassLocalPriorityControlPlaneStartupReadiness: true,
+          };
+        },
+      },
+      controlPlaneReadinessService: {
+        getNodeReadinessSync() {
+          return {
+            nodeId: PRIORITY_FOLLOW_UP_NODE_ID_A,
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
+              false,
+              [CONTROL_PLANE_READINESS_DIMENSION.METADATA_PUBLICATION_HEALTHY]:
+              true,
+              [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
+            },
+            reasons: [
+              {code: LOCAL_MUTATION_TEST_CONTROL_PLANE_WRITE_UNHEALTHY},
+            ],
+          };
+        },
+      },
+    });
+
+    rebalancer.initialize();
+
+    try {
+      const blocker =
+      rebalancer.getLocalControlPlaneMutationReadinessBlocker();
+
+      t.same(
+        blocker?.failedDimensions,
+        [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE],
+        'startup bypass should not drop the local write-readiness dimension',
+      );
+      t.same(
+        blocker?.reasonCodes,
+        [LOCAL_MUTATION_TEST_CONTROL_PLANE_WRITE_UNHEALTHY],
+        'startup bypass should preserve canonical local write-readiness reasons',
       );
     } finally {
       rebalancer.shutdown();

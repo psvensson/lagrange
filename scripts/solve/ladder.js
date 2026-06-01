@@ -1,7 +1,8 @@
 // The finite strategy ladder, as worker-facing guidance. Each rung turns a frontier
 // + its metric history into a concrete instruction for whoever does the work (a human
 // in manual mode, or the generic agent adapter in agent mode). The ladder is the same
-// for every quest — this is where "how to work" lives, instead of in per-sprint rules.
+// for every quest — this is where "how to work" lives, instead of in
+// legacy workflow rules.
 
 import {
   LADDER,
@@ -45,6 +46,12 @@ export function rungPrompt(task) {
       '(lower is better)',
     `# Metric history: ${history}`,
   ];
+  if (task.selectedTheory) {
+    lines.push(
+      `# Selected theory: ${task.selectedTheory.id} ` +
+      `(${task.selectedTheory.layer || task.selectedTheory.scope})`,
+    );
+  }
   const findings = task.findings || [];
   if (findings.length > 0) {
     lines.push('#', '# Known findings (do not re-derive or re-try ruled-out paths):');

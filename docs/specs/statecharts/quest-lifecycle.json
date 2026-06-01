@@ -1,0 +1,201 @@
+{
+  "schema": "statechart-v1",
+  "id": "quest-lifecycle",
+  "initial": "authored",
+  "states": [
+    {
+      "id": "authored",
+      "description": "A Quest file exists under solve/quests with sealed doneWhen and frontier metric definitions ready to declare."
+    },
+    {
+      "id": "declared",
+      "description": "The Solver log contains the sealed declaration event and the Quest is open for measured attempts."
+    },
+    {
+      "id": "pending_attempt",
+      "description": "A supervised step has pinned the before metric and awaits a commit or abort."
+    },
+    {
+      "id": "theory_required",
+      "description": "The selected frontier is stalled at a rung that requires Quest-native system or frontier theory before another supervised or autonomous attempt can begin."
+    },
+    {
+      "id": "theory_recorded",
+      "description": "The Solver log contains system theory, frontier theory, selected theory, or theory result events that can be projected into durable Quest memory."
+    },
+    {
+      "id": "attempt_recorded",
+      "description": "An attempt event has recorded before and after metrics, evidence, changeRef, and ladder movement."
+    },
+    {
+      "id": "frontier_parked",
+      "description": "A frontier exhausted the finite strategy ladder and has been parked."
+    },
+    {
+      "id": "solved",
+      "description": "The Quest doneWhen probe is true against live evidence and the Solver recorded SOLVED."
+    },
+    {
+      "id": "exhausted",
+      "description": "Every frontier is parked and the Solver recorded EXHAUSTED."
+    }
+  ],
+  "terminalStates": [
+    "solved",
+    "exhausted"
+  ],
+  "transitions": [
+    {
+      "from": "authored",
+      "event": "declare_goal",
+      "to": "declared",
+      "evidence": "node scripts/solve.js step or run records the initial quest-declared event."
+    },
+    {
+      "from": "declared",
+      "event": "begin_supervised_step",
+      "to": "pending_attempt",
+      "evidence": "node scripts/solve.js step --id rolling-restart-core-stability writes a pending baseline with the before metric."
+    },
+    {
+      "from": "declared",
+      "event": "theory_gate_blocks_step",
+      "to": "theory_required",
+      "evidence": "node scripts/solve.js step --id rolling-restart-core-stability returns THEORY REQUIRED when rung gates lack selected theory evidence."
+    },
+    {
+      "from": "declared",
+      "event": "theory_gate_blocks_run",
+      "to": "theory_required",
+      "evidence": "node scripts/solve.js run --id rolling-restart-core-stability stops before invoking an executor when rung gates lack selected theory evidence."
+    },
+    {
+      "from": "theory_required",
+      "event": "record_system_or_frontier_theory",
+      "to": "theory_recorded",
+      "evidence": "node scripts/solve.js theory system|option|select appends Quest-native theory events."
+    },
+    {
+      "from": "theory_recorded",
+      "event": "theory_gate_satisfied",
+      "to": "declared",
+      "evidence": "node scripts/solve.js health --id rolling-restart-core-stability reports no blocking theory-required signal for the selected rung."
+    },
+    {
+      "from": "pending_attempt",
+      "event": "commit_measured_attempt",
+      "to": "attempt_recorded",
+      "evidence": "node scripts/solve.js step --id rolling-restart-core-stability --commit records the attempt event with a diff changeRef."
+    },
+    {
+      "from": "pending_attempt",
+      "event": "abort_without_attempt",
+      "to": "declared",
+      "evidence": "node scripts/solve.js step --id rolling-restart-core-stability --abort clears the pending baseline without an attempt event."
+    },
+    {
+      "from": "declared",
+      "event": "autonomous_attempt",
+      "to": "attempt_recorded",
+      "evidence": "node scripts/solve.js run --id rolling-restart-core-stability executes loop cycles and records measured attempts."
+    },
+    {
+      "from": "attempt_recorded",
+      "event": "metric_progress_or_next_attempt",
+      "to": "declared",
+      "evidence": "The latest attempt is folded into state and the next step reselects an open frontier."
+    },
+    {
+      "from": "attempt_recorded",
+      "event": "linked_theory_result_recorded",
+      "to": "theory_recorded",
+      "evidence": "A measured attempt with theoryRef appends supported, falsified, or needs-rerun theory-result learning."
+    },
+    {
+      "from": "attempt_recorded",
+      "event": "frontier_ladder_exhausted",
+      "to": "frontier_parked",
+      "evidence": "The attempt event is followed by a park event after the finite ladder reaches park."
+    },
+    {
+      "from": "frontier_parked",
+      "event": "another_frontier_open",
+      "to": "declared",
+      "evidence": "The scheduler redirects to another open frontier in the same Quest."
+    },
+    {
+      "from": "frontier_parked",
+      "event": "all_frontiers_parked",
+      "to": "exhausted",
+      "evidence": "The Solver records EXHAUSTED only when no open frontier remains."
+    },
+    {
+      "from": "declared",
+      "event": "doneWhen_true",
+      "to": "solved",
+      "evidence": "The Solver records SOLVED only when the doneWhen probe returns done true."
+    },
+    {
+      "from": "attempt_recorded",
+      "event": "doneWhen_true",
+      "to": "solved",
+      "evidence": "The Solver re-measures doneWhen after commit and records SOLVED when live evidence satisfies it."
+    }
+  ],
+  "forbiddenTransitions": [
+    {
+      "from": "declared",
+      "event": "edit_doneWhen_after_declare",
+      "to": "declared",
+      "reason": "Goalpost changes after declaration are recorded as violations, not accepted transitions."
+    },
+    {
+      "from": "declared",
+      "event": "claim_solved_without_probe",
+      "to": "solved",
+      "reason": "Only live doneWhen evidence can close a Quest."
+    },
+    {
+      "from": "pending_attempt",
+      "event": "commit_without_diff_changeRef",
+      "to": "attempt_recorded",
+      "reason": "Attempt proof must be a resolvable diff artifact."
+    },
+    {
+      "from": "declared",
+      "event": "widen_scope_without_selected_frontier_theory",
+      "to": "pending_attempt",
+      "reason": "The widen-scope rung requires selected frontier theory before another supervised attempt begins."
+    },
+    {
+      "from": "declared",
+      "event": "autonomous_widen_scope_without_selected_frontier_theory",
+      "to": "attempt_recorded",
+      "reason": "The autonomous loop must stop at theory_required before invoking an executor or recording an attempt."
+    },
+    {
+      "from": "pending_attempt",
+      "event": "model_rung_commit_without_model_evidence",
+      "to": "attempt_recorded",
+      "reason": "The model rung requires selected frontier theory, active system theory, and modelRef or modelNotApplicable evidence."
+    }
+  ],
+  "invariants": [
+    {
+      "id": "sealed-goalposts-immutable",
+      "statement": "The declaration event's doneWhen and frontier metric definitions match the Quest file for every later step."
+    },
+    {
+      "id": "attempt-proof-is-evidence-bound",
+      "statement": "Progress credit requires finite before and after metrics, an existing evidence artifact, and a resolvable diff changeRef."
+    },
+    {
+      "id": "closure-is-solver-terminal",
+      "statement": "SOLVED and EXHAUSTED are represented by Solver terminal state events and report projection."
+    },
+    {
+      "id": "theory-gates-prevent-local-patch-loops",
+      "statement": "Widen-scope and later rungs require selected frontier theory before supervised or autonomous attempts, and model rung commits require active system theory plus model evidence or modelNotApplicable."
+    }
+  ]
+}

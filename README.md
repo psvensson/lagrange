@@ -309,10 +309,10 @@ If you are just passing through the repo, the fastest way to get oriented is:
 If you are an LLM or are handing work to one, start with the compact handoff:
 
 ```bash
-npm run work:context
+npm run quest:context
 ```
 
-That command prints the current blocker, first files to read, proof ladder,
+That command prints the active Quest, latest probe, findings, pending step,
 useful commands, and dirty worktree summary. After that, load the compact
 steering pack from [.kiro/steering/llm/README.md](.kiro/steering/llm/README.md)
 instead of opening every steering document by default.
@@ -432,8 +432,8 @@ Guard commands that are useful while changing the codebase:
 # Print common local workflows
 npm run commands
 
-# Validate active package metadata, checklist state, and subagent proof
-npm run work:validate
+# Inspect the active Quest, latest probe, findings, and pending step
+npm run quest:context
 
 # Enforce table_policies ownership rules in scenario SQL
 npm run guard:scenario-policy:file

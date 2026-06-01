@@ -38,19 +38,21 @@ Use this list before non-trivial work:
    `diff:<path>`.
 5. **Do not bypass frozen architecture decisions** without explicit user
    override/confirmation.
-6. **Do not exceed file-size caps** when modifying or creating files; refactor
+6. **Do not widen, model, or change approach** on a stalled frontier without
+   selected Quest theory evidence.
+7. **Do not exceed file-size caps** when modifying or creating files; refactor
    first if exceeded.
-7. **Do not write runtime/domain scalars inline**; use named constants or
+8. **Do not write runtime/domain scalars inline**; use named constants or
    ingress normalization.
-8. **Do not encode runtime state with `null` or `undefined`**; use explicit
+9. **Do not encode runtime state with `null` or `undefined`**; use explicit
    variants.
-9. **Do not implement semantic decisions as independent branch piles**; collect
+10. **Do not implement semantic decisions as independent branch piles**; collect
    evidence and emit one canonical outcome.
-10. **Do not let callers reproduce owner logic locally**; owners decide and
+11. **Do not let callers reproduce owner logic locally**; owners decide and
     caches observe.
-11. **Do not weaken guardrails, scripts, allowlists, or scan scope** to make
+12. **Do not weaken guardrails, scripts, allowlists, or scan scope** to make
     proof pass.
-12. **Do not keep patching a parked frontier**; record findings and redirect to
+13. **Do not keep patching a parked frontier**; record findings and redirect to
     another frontier or end EXHAUSTED.
 
 ## Canonical Guardrail Command Map
@@ -60,6 +62,8 @@ Use this list before non-trivial work:
 | Quest status | `node scripts/solve.js status --id <id>` | `scripts/solve.js` |
 | Quest report | `node scripts/solve.js report --id <id>` | `scripts/solve/report.js` |
 | Quest probe | `node scripts/solve.js probe ...` | `scripts/solve/probe.js` |
+| Quest theory | `node scripts/solve.js theory ...` | `scripts/solve/theory.js` |
+| Quest health | `node scripts/solve.js health --id <id>` | `scripts/solve/health.js` |
 | Touched/created file-size limits | `npm run audit:file-size` | `scripts/check-file-size-thresholds.js` |
 | Runtime syntax and grammar | `npm run check-runtime-grammar` | `scripts/check-runtime-grammar.js` |
 

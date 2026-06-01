@@ -57,6 +57,7 @@ const OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_STATE =
     NOT_OPERATION_WORKFLOW_OWNER: 'not_operation_workflow_owner',
     NOT_DISPATCH_PENDING: 'not_dispatch_pending',
     REBALANCER_HANDOFF_RETRY_ACTIVE: 'rebalancer_handoff_retry_active',
+    REBALANCER_HANDOFF_RETRY_SNAPSHOT: 'rebalancer_handoff_retry_snapshot',
     PERSISTED_NOT_DISPATCHED: 'persisted_not_dispatched',
     EVENT_DRIVEN_ADVANCE: 'event_driven_advance',
     NOT_REENTERABLE: 'not_reenterable',
@@ -77,6 +78,8 @@ const OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_ALLOWED_STATES =
       .EVENT_DRIVEN_ADVANCE,
     OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_STATE
       .REBALANCER_HANDOFF_RETRY_ACTIVE,
+    OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_STATE
+      .REBALANCER_HANDOFF_RETRY_SNAPSHOT,
   ]));
 
 function shouldReturnDeferredDispatchOwnerProgressResult(result) {
@@ -127,6 +130,12 @@ const OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_TABLE =
         OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_STATE
           .REBALANCER_HANDOFF_RETRY_ACTIVE,
       matches: (evidence) => evidence.rebalancerHandoffRetryActive === true,
+    }),
+    Object.freeze({
+      state:
+        OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_STATE
+          .REBALANCER_HANDOFF_RETRY_SNAPSHOT,
+      matches: (evidence) => evidence.rebalancerHandoffRetrySnapshot === true,
     }),
     Object.freeze({
       state:
@@ -210,6 +219,8 @@ function buildOperationWorkflowOwnerDispatchPendingReentryEvidence(
       snapshot?.actuation?.state ===
         PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED,
     rebalancerHandoffRetryActive,
+    rebalancerHandoffRetrySnapshot:
+      isOperationWorkflowOwnerDispatchPendingHandoffRetrySnapshot(snapshot),
     eventDrivenAdvance:
       snapshot?.progress?.nextRequiredAction ===
         PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION &&
@@ -253,6 +264,19 @@ function hasActiveOperationWorkflowOwnerDispatchPendingHandoffRetry(
     typeof operationId === typeof OPERATION_WORKFLOW_OWNER_EMPTY_TEXT &&
     operationId.length > OPERATION_WORKFLOW_OWNER_EMPTY_TEXT.length &&
     owner.hasActiveCreatedOperationHandoffRetry(operationId)
+  );
+}
+
+function isOperationWorkflowOwnerDispatchPendingHandoffRetrySnapshot(
+  snapshot,
+) {
+  return (
+    snapshot?.progress?.blockingBoundary ===
+      PRIORITY_RECOVERY_BLOCKING_BOUNDARY.REBALANCER_HANDOFF &&
+    snapshot?.progress?.waitMode ===
+      PRIORITY_RECOVERY_WAIT_MODE.RETRY_SCHEDULED &&
+    snapshot?.progress?.nextRequiredAction ===
+      PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS
   );
 }
 

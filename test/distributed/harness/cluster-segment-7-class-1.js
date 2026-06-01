@@ -688,38 +688,11 @@ class Cluster1 {
         }
       }
 
-      for (const [nodeId, node] of this._nodes) {
-        try {
-          node.closeQueryConnection();
-        } catch (_err) {
-          // Best-effort stop
-        }
-        try {
-          await this._stopNodeContainerForTeardown(nodeId, node, errors);
-        } catch (err) {
-          errors.push(
-            TEARDOWN_WARNING_STOP_CONTAINER_PREFIX + nodeId +
-              TEARDOWN_WARNING_SEPARATOR +
-              String(err?.message || err),
-          );
-        }
-        if (!reuseContainers) {
-          try {
-            await node._dockerProvider.removeContainer(node.containerId);
-            this._recordPlaybackEvent(
-              PLAYBACK_EVENT_TYPE.NODE_REMOVED,
-              PLAYBACK_SCOPE_NODE,
-              nodeId,
-              {
-                containerId: node.containerId,
-              },
-            );
-          } catch (err) {
-            errors.push(
-              'Failed to remove container for ' + nodeId + ': ' + err.message,
-            );
-          }
-        }
+      const teardownNodes = Array.from(this._nodes.entries());
+      this._closeNodeQueryConnectionsForTeardown(teardownNodes);
+      await this._stopNodeContainersForTeardown(teardownNodes, errors);
+      if (!reuseContainers) {
+        await this._removeNodeContainersForTeardown(teardownNodes, errors);
       }
 
       if (this._networkId && !reuseContainers) {
@@ -803,6 +776,57 @@ class Cluster1 {
           String(error?.message || error),
       );
     }
+  }
+
+  _closeNodeQueryConnectionsForTeardown(nodes) {
+    for (const [, node] of nodes) {
+      try {
+        node.closeQueryConnection();
+      } catch (_err) {
+        // Best-effort stop
+      }
+    }
+  }
+
+  async _stopNodeContainersForTeardown(nodes, errors) {
+    await Promise.all(
+      nodes.map(async ([nodeId, node]) => {
+        try {
+          await this._stopNodeContainerForTeardown(nodeId, node, errors);
+        } catch (err) {
+          errors.push(
+            TEARDOWN_WARNING_STOP_CONTAINER_PREFIX + nodeId +
+              TEARDOWN_WARNING_SEPARATOR +
+              String(err?.message || err),
+          );
+        }
+      }),
+    );
+  }
+
+  async _removeNodeContainersForTeardown(nodes, errors) {
+    await Promise.all(
+      nodes.map(async ([nodeId, node]) => {
+        try {
+          await node._dockerProvider.removeContainer(node.containerId);
+          this._recordPlaybackEvent(
+            PLAYBACK_EVENT_TYPE.NODE_REMOVED,
+            PLAYBACK_SCOPE_NODE,
+            nodeId,
+            {
+              containerId: node.containerId,
+            },
+          );
+        } catch (err) {
+          errors.push(
+            'Failed to remove container for ' +
+              nodeId +
+              ': ' +
+              String(err?.message || err),
+          );
+        }
+      }),
+    );
   }
 
   async _stopNodeContainerForTeardown(nodeId, node, errors) {

@@ -419,7 +419,7 @@ test('validateRulesHaveTriggerAndCitation passes for well-formed rules', (t) => 
   const rules = [{
     id: 'OK-0001',
     text: 'When a package closes, the focused commit must include only commitScope files.',
-    sources: [{file: 'work/RULES.md', line: 42}],
+    sources: [{file: '_legacy_work/RULES.md', line: 42}],
   }];
   t.doesNotThrow(() => validateRulesHaveTriggerAndCitation(rules, 'core'));
   t.end();

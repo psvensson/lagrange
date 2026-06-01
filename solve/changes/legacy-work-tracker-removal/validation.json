@@ -1,0 +1,23 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": true,
+  "timestamp": "2026-06-01T16:45:52+02:00",
+  "summary": {
+    "failed": 0,
+    "status": "PASS"
+  },
+  "checks": [
+    "work directory absent and _legacy_work directory present",
+    "package.json exposes no work:* scripts and no scripts/work-* commands",
+    "npm test -- test/scripts/list-commands.test.js test/scripts/model-contract-tools.test.js test/scripts/model-invariants.test.js test/solve/theory.test.js",
+    "npm run model:contract-records",
+    "npm run model:invariants",
+    "npm run model:decision-tables",
+    "npm run model:statecharts",
+    "npm run commands",
+    "node exports/llm-project-operating-system/scripts/list-commands.js",
+    "export starter exposes no work:* scripts and no active work tracker scripts",
+    "active reference scan found no non-legacy npm run work:, work/*, scripts/work-*, or test/scripts/work-* references"
+  ]
+}

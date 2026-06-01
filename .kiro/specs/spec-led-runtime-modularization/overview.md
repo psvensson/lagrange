@@ -11,7 +11,7 @@ specifications.
 The sprint is a follow-on to:
 
 1. `.kiro/specs/core-topology-control-plane-rewrite/`
-2. `work/sprints/archived/done-2026-q2-core-topology-control-plane-rewrite.md`
+2. `_legacy_work/sprints/archived/done-2026-q2-core-topology-control-plane-rewrite.md`
 3. The parked rolling-restart release-gate evidence that handed off the
    operation workflow/progress successor boundary.
 

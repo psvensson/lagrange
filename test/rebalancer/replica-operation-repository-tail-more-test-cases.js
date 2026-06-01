@@ -290,6 +290,65 @@ export function registerReplicaOperationRepositoryTailMoreTests({
   );
 
   test(
+    'persistNewOperation retries thrown canonical mutation ingress pressure ' +
+    'failures when the first authoritative proof is still empty',
+    async (t) => {
+      let insertCalls = 0;
+      let readCalls = 0;
+      let waitCalls = 0;
+      const repo = createTestRepository({
+        controlPlaneSystemTableGateway: {
+          cdcIntegrationService: {
+            async insertSystemTableRow() {
+              return {success: true};
+            },
+          },
+          insertSystemTableRow: async () => {
+            insertCalls += 1;
+            if (insertCalls === 1) {
+              const error = new Error('control_plane_pressure_degraded');
+              error.errorCode = 'CONTROL_PLANE_PRESSURE_DEGRADED';
+              error.retryAfterMs = 250;
+              error.deferRetry = true;
+              throw error;
+            }
+            return {success: true, changes: 1};
+          },
+          readRows: async () => {
+            readCalls += 1;
+            if (readCalls === 1) {
+              return {success: true, rows: []};
+            }
+            return {
+              success: true,
+              rows: [makeRow()],
+            };
+          },
+        },
+      });
+      repo.waitForOperationPersistRetry = async () => {
+        waitCalls += 1;
+      };
+
+      const op = repo.rowToOperation(makeRow());
+
+      await repo.persistNewOperation(op);
+
+      t.equal(
+        insertCalls,
+        2,
+        'canonical insert ingress should retry after thrown pressure failures',
+      );
+      t.equal(
+        waitCalls,
+        1,
+        'the repository should wait once before retrying the thrown failure',
+      );
+      t.equal(readCalls, 2, 'the repository should re-prove visibility after the retry succeeds');
+    },
+  );
+
+  test(
     'buildOperationPersistError marks retryable workflow participant lookup ' +
     'failures for deferred retry',
     async (t) => {

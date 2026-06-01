@@ -19,8 +19,8 @@ data2/
 .playback/
 test-output/
 
-# Generated on-demand handoff render; current-blocker.json is canonical.
-work/sprints/current-blocker.md
+# Legacy generated handoff render; Quest/Solver context is canonical.
+_legacy_work/sprints/current-blocker.md
 
 # Beads / Dolt files (added by bd init)
 .dolt/
@@ -33,9 +33,7 @@ tools/tla2tools.jar
 models/**/*_TTrace_*.tla
 models/**/*_TTrace_*.bin
 
-# Solver runtime data (the append-only log, derived state, reports and change diffs
-# are regenerable byproducts). Authored quests under solve/quests/ stay tracked.
-solve/log/
+# Solver derived state is local cache. Quest definitions, append-only event logs,
+# generated reports, and attempt change diffs are durable workflow evidence and
+# stay trackable.
 solve/state/
-solve/report/
-solve/changes/

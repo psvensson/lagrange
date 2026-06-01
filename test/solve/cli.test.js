@@ -87,20 +87,53 @@ tap.test('solve CLI smoke (P2)', async (t) => {
     writeOracleGoal(root, 'demo', oracle);
 
     const begin = run(root, ['step', '--id', 'demo']);
-    t.match(begin, /Rung 0 \(local-fix\)/, 'dossier printed');
-    t.match(begin, /baseline metric: 2/);
+    t.match(begin, /pinned demo-main: metric 2/);
 
     // Operator does the work + re-runs the harness: metric 2 -> 1.
     fs.writeFileSync(oracle, JSON.stringify({metric: 1, target: 0}));
-    const diff = path.join(root, 'a.diff');
-    fs.writeFileSync(diff, '# change\n');
+    const diff = path.join(root, 'solve', 'changes', 'demo', 'a.diff');
+    fs.mkdirSync(path.dirname(diff), {recursive: true});
+    fs.writeFileSync(diff, [
+      'diff --git a/src/demo.js b/src/demo.js',
+      '--- a/src/demo.js',
+      '+++ b/src/demo.js',
+      '@@ -1 +1 @@',
+      '-before',
+      '+after',
+    ].join('\n'));
     const commit = run(root, ['step', '--id', 'demo', '--commit',
       '--changeRef', `diff:${diff}`, '--summary', 'tighten']);
-    t.match(commit, /metric 2 -> 1 \(PROGRESS\)/);
+    t.match(commit, /recorded attempt on demo-main: metric 2 -> 1 \(PROGRESS\)/);
 
     const status = JSON.parse(run(root, ['status', '--id', 'demo']));
     t.equal(status.frontiers[0].attempts, 1, 'attempt recorded');
     t.equal(status.frontiers[0].rungIndex, 0, 'progress kept the rung');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('manual step commit requires the explicit commit flag', (t) => {
+    const root = tmp();
+    const oracle = path.join(root, 'o.json');
+    fs.writeFileSync(oracle, JSON.stringify({metric: 2, target: 0}));
+    writeOracleGoal(root, 'demo', oracle);
+    run(root, ['step', '--id', 'demo']);
+
+    const diff = path.join(root, 'solve', 'changes', 'demo', 'missing-commit.diff');
+    fs.mkdirSync(path.dirname(diff), {recursive: true});
+    fs.writeFileSync(diff, [
+      'diff --git a/src/demo.js b/src/demo.js',
+      '--- a/src/demo.js',
+      '+++ b/src/demo.js',
+      '@@ -1 +1 @@',
+      '-before',
+      '+after',
+    ].join('\n'));
+
+    t.throws(
+      () => run(root, ['step', '--id', 'demo', '--changeRef', `diff:${diff}`]),
+      /requires --commit/,
+    );
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });

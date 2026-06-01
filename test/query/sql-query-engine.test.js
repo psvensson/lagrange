@@ -17,6 +17,9 @@ import {
 import {
 } from '../../src/control-plane/control-plane-readiness-service.js';
 import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../../src/control-plane/control-plane-readiness-constants.js';
+import {
 } from '../../src/partition/partition-constants.js';
 import {
 } from '../../src/control-plane/timeout-budget.js';
@@ -798,6 +801,152 @@ test('SQLQueryEngine - composes authoritative routing overlay refresh ' +
     recoveryCandidates[0].address,
     'new-owner/partition/replica_operations-p1-r4',
     'leader recovery should target the refreshed authoritative owner endpoint',
+  );
+});
+
+test('SQLQueryEngine - exposes initialized local priority control-plane ' +
+  'partition services while durable service status lags', async (t) => {
+  const partitionId = 'replica_operations-p1';
+  const staleSeedAddress = 'seed/partition/replica_operations-p1-r1';
+  const localAddress = 'local/partition/replica_operations-p1-r4';
+  const localPartitionServices = new Map([
+    ['replica_operations-p1-r4', {
+      partitionId,
+      replicaId: 'replica_operations-p1-r4',
+      nodeId: 'local',
+      unifiedAddress: localAddress,
+      initialized: true,
+      role: 'leader',
+    }],
+  ]);
+  const engine = new SQLQueryEngine({
+    nodeId: 'local',
+    systemCache: createMockSystemCache([], [
+      {
+        partition_id: partitionId,
+        table_name: TABLES.REPLICA_OPERATIONS,
+        leader_node_id: 'seed',
+      },
+    ], [
+      {
+        service_id: 'replica_operations-p1-r1',
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: partitionId,
+        node_id: 'seed',
+        raft_role: 'leader',
+        address: staleSeedAddress,
+        status: SERVICE_STATUS.ACTIVE,
+      },
+      {
+        service_id: 'replica_operations-p1-r4',
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: partitionId,
+        node_id: 'local',
+        raft_role: 'leader',
+        address: localAddress,
+        status: 'pending',
+      },
+    ]),
+    messageRouter: createMockMessageRouter(),
+    partitionServicesProvider: () => localPartitionServices,
+  });
+
+  const routingSnapshot = engine.queryExecutor.getPartitionRoutingSnapshot(
+    partitionId,
+    CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+  );
+
+  t.ok(
+    routingSnapshot.routableServices.some(
+      (service) =>
+        service.address === localAddress &&
+        service.status === SERVICE_STATUS.ACTIVE,
+    ),
+    'initialized local runtime service should be routable as active before its durable services row converges',
+  );
+
+  const recoveryCandidates = engine.queryExecutor.getLeaderRecoveryCandidates(
+    routingSnapshot,
+    new Set([staleSeedAddress]),
+    false,
+  );
+
+  t.equal(
+    recoveryCandidates[0]?.address,
+    localAddress,
+    'priority recovery routing should widen from a failed seed owner to the local runtime service',
+  );
+});
+
+test('SQLQueryEngine - excludes disconnected priority control-plane ' +
+  'routing endpoints', async (t) => {
+  const partitionId = 'replica_operations-p1';
+  const disconnectedAddress = 'dead/partition/replica_operations-p1-r3';
+  const connectedAddress = 'live/partition/replica_operations-p1-r4';
+  const engine = new SQLQueryEngine({
+    nodeId: 'local',
+    systemCache: createMockSystemCache([], [
+      {
+        partition_id: partitionId,
+        table_name: TABLES.REPLICA_OPERATIONS,
+        leader_node_id: 'dead',
+      },
+    ], [
+      {
+        service_id: 'replica_operations-p1-r3',
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: partitionId,
+        node_id: 'dead',
+        raft_role: 'leader',
+        address: disconnectedAddress,
+        status: SERVICE_STATUS.ACTIVE,
+      },
+      {
+        service_id: 'replica_operations-p1-r4',
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: partitionId,
+        node_id: 'live',
+        raft_role: 'follower',
+        address: connectedAddress,
+        status: SERVICE_STATUS.ACTIVE,
+      },
+    ]),
+    messageRouter: {
+      ...createMockMessageRouter(),
+      getConnectionState(nodeId) {
+        return nodeId === 'dead' ? 'closed' : 'connected';
+      },
+    },
+  });
+
+  const routingSnapshot = engine.queryExecutor.getPartitionRoutingSnapshot(
+    partitionId,
+    CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+  );
+
+  t.notOk(
+    routingSnapshot.routableServices.some(
+      (service) => service.address === disconnectedAddress,
+    ),
+    'closed priority endpoint should not remain routable',
+  );
+  t.ok(
+    routingSnapshot.routableServices.some(
+      (service) => service.address === connectedAddress,
+    ),
+    'connected priority endpoint should remain routable',
+  );
+
+  const candidates = engine.queryExecutor.getPartitionServiceCandidates(
+    partitionId,
+    true,
+    false,
+    false,
+    CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+  );
+  t.notOk(
+    candidates.some((candidate) => candidate.address === disconnectedAddress),
+    'read candidates should skip the closed priority endpoint',
   );
 });
 

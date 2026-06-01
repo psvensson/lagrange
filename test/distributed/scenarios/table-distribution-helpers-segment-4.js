@@ -143,6 +143,8 @@ const {
   shouldForceAuthoritativeRepairAfterTimedOutCreate,
   resolveMutationVisibilityDelayMs,
   resolveMutationVisibilityWarning,
+  resolveTableBootstrapDeadlineAtMs,
+  resolveBoundedTableBootstrapCandidateTimeoutMs,
   shouldAdvanceTimedOutCreateMutationPrimary,
   resolveTableBootstrapRepairQueryNodes,
   resolveRequiredTableBootstrapVisibilityState,
@@ -179,15 +181,33 @@ async function queryTableDistribution(seedNode, options = {}) {
 
   const {tableName} = resolveTableDistributionQueryConfig(options);
   const queryNodes = resolveControlQueryNodes(seedNode, options);
+  const totalTimeoutMs = resolveControlQueryTimeoutMs(
+    options.queryTimeoutMs || options.timeoutMs,
+  );
+  const deadlineAtMs = resolveTableBootstrapDeadlineAtMs(
+    options,
+    totalTimeoutMs,
+  );
   let lastError = null;
   let bestDistribution = null;
   let deferredDistribution = null;
   for (const queryNode of queryNodes) {
+    if (Date.now() >= deadlineAtMs) {
+      break;
+    }
     try {
       const distribution = await queryTableDistributionFromNode(
         queryNode,
         tableName,
-        options,
+        {
+          ...options,
+          deadlineAtMs,
+          queryTimeoutMs: resolveBoundedTableBootstrapCandidateTimeoutMs(
+            deadlineAtMs,
+            totalTimeoutMs,
+            queryNodes.length,
+          ),
+        },
       );
       if (isBetterTableDistributionCandidate(distribution, bestDistribution)) {
         bestDistribution = distribution;
@@ -261,7 +281,7 @@ async function queryTableDistributionFromNode(node, tableName, options = {}) {
     options,
   );
   if (shouldRepairTableDistributionSnapshot(distribution)) {
-    await forceRepairControlSnapshot(node);
+    await forceRepairControlSnapshot(node, options);
     distribution = await readTableDistributionSnapshot(
       node,
       tableName,
@@ -270,6 +290,22 @@ async function queryTableDistributionFromNode(node, tableName, options = {}) {
   }
 
   return finalizeTableDistributionSnapshot(distribution, tableName);
+}
+
+function resolveTableDistributionReadTimeoutMs(options = {}) {
+  const configuredTimeoutMs = resolveControlQueryTimeoutMs(
+    options.queryTimeoutMs,
+  );
+  if (!Number.isFinite(options.deadlineAtMs)) {
+    return configuredTimeoutMs;
+  }
+  return Math.max(
+    ONE,
+    Math.min(
+      configuredTimeoutMs,
+      resolveRemainingControlQueryTimeoutMs(options.deadlineAtMs),
+    ),
+  );
 }
 
 async function readTableDistributionSnapshot(node, tableName, options = {}) {
@@ -282,14 +318,17 @@ async function readTableDistributionSnapshot(node, tableName, options = {}) {
     escapeSql(tableName) +
     SQL_SELECT_TABLE_ID_SUFFIX;
 
+  const resolveReadTimeoutMs = () =>
+    resolveTableDistributionReadTimeoutMs(options);
+  const initialReadTimeoutMs = resolveReadTimeoutMs();
   const [partitionResult, tableResult] = await Promise.all([
     queryControlSingleWithProgressRetry(node, partitionSql, [], {
       lane: CONTROL_QUERY_LANE_SNAPSHOT,
-      timeoutMs: options.queryTimeoutMs,
+      timeoutMs: initialReadTimeoutMs,
     }),
     queryControlSingleWithProgressRetry(node, tableIdSql, [], {
       lane: CONTROL_QUERY_LANE_SNAPSHOT,
-      timeoutMs: options.queryTimeoutMs,
+      timeoutMs: initialReadTimeoutMs,
     }),
   ]);
 
@@ -308,7 +347,7 @@ async function readTableDistributionSnapshot(node, tableName, options = {}) {
         [],
         {
           lane: CONTROL_QUERY_LANE_SNAPSHOT,
-          timeoutMs: options.queryTimeoutMs,
+          timeoutMs: resolveReadTimeoutMs(),
         },
       );
       partitionRows = rowsFromResult(partitionByIdResult);
@@ -325,7 +364,7 @@ async function readTableDistributionSnapshot(node, tableName, options = {}) {
     [],
     {
       lane: CONTROL_QUERY_LANE_SNAPSHOT,
-      timeoutMs: options.queryTimeoutMs,
+      timeoutMs: resolveReadTimeoutMs(),
     },
   );
   const serviceRows = rowsFromResult(servicesResult);
@@ -377,7 +416,7 @@ function buildActivePartitionServicesSql(options = {}) {
   return SQL_SELECT_ACTIVE_PARTITION_SERVICES_PREFIX + ' AND 1 = 0';
 }
 
-async function forceRepairControlSnapshot(node) {
+async function forceRepairControlSnapshot(node, options = {}) {
   const candidateLanes = [
     CONTROL_QUERY_LANE_SNAPSHOT,
     CONTROL_QUERY_LANE_CONTROL,
@@ -390,6 +429,7 @@ async function forceRepairControlSnapshot(node) {
         [],
         {
           lane,
+          timeoutMs: resolveTableDistributionReadTimeoutMs(options),
         },
       );
       if (!shouldFallbackToForcedControlSnapshot(localSnapshot)) {
@@ -401,6 +441,7 @@ async function forceRepairControlSnapshot(node) {
     try {
       await queryControlSingle(node, SQL_CONTROL_SNAPSHOT_FORCE_REPAIR, [], {
         lane,
+        timeoutMs: resolveTableDistributionReadTimeoutMs(options),
       });
       return true;
     } catch (_forcedSnapshotError) {

@@ -140,17 +140,26 @@ async function withCapturedReplicaFactory(
 
     PartitionService.prototype.initialize = async function() {};
     PartitionService.prototype.subscribeToCDCWithHandshake =
-      async function(_subscriber, options = {}) {
-        handshakeSubscriberIds.push(options.subscriberId);
-        return {
-          subscriberId: options.subscriberId || 'sub-1',
-          subscriptionEpoch: 1,
-          catchup: {
-            mode: 'none',
-            bufferedEventsReplayed: 0,
-          },
+      typeof options.subscribeToCDCWithHandshake === 'function' ?
+        function(subscriber, handshakeOptions = {}) {
+          return options.subscribeToCDCWithHandshake.call(
+            this,
+            subscriber,
+            handshakeOptions,
+            {handshakeSubscriberIds},
+          );
+        } :
+        async function(_subscriber, options = {}) {
+          handshakeSubscriberIds.push(options.subscriberId);
+          return {
+            subscriberId: options.subscriberId || 'sub-1',
+            subscriptionEpoch: 1,
+            catchup: {
+              mode: 'none',
+              bufferedEventsReplayed: 0,
+            },
+          };
         };
-      };
 
     ReplicaHandlerSetup.create = ({createPartitionService}) => {
       capturedCreatePartitionService = createPartitionService;
@@ -343,6 +352,90 @@ test('NodeJoiningService dynamic system partition CDC subscription reuses captur
     }, {
       createMessageGroupServices: ({subscribedTables}) =>
         createCapturedIngressMessageGroupServices(subscribedTables),
+    });
+  });
+
+test('NodeJoiningService can defer priority CDC handshake behind replica lifecycle',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new NodeJoiningService({
+      nodeId: 'join-node',
+      nodeAddress: 'ws://localhost:9002',
+      seedNodeAddress: 'http://localhost:8080',
+    });
+    let resolveHandshakeStarted = null;
+    const handshakeStarted = new Promise((resolve) => {
+      resolveHandshakeStarted = resolve;
+    });
+    let releaseHandshake = null;
+    const handshakeRelease = new Promise((resolve) => {
+      releaseHandshake = resolve;
+    });
+    let resolveHandshakeCompleted = null;
+    const handshakeCompletedSignal = new Promise((resolve) => {
+      resolveHandshakeCompleted = resolve;
+    });
+    let handshakeCompleted = false;
+
+    await withCapturedReplicaFactory(service, t, async ({
+      subscribedTables,
+      handshakeSubscriberIds,
+      createPartitionService,
+    }) => {
+      const partition = await createPartitionService({
+        partitionId: `${TEST_CONTROL_PLANE_PUBLICATIONS_TABLE}-p1`,
+        tableId: TEST_CONTROL_PLANE_PUBLICATIONS_TABLE,
+        tableName: TEST_CONTROL_PLANE_PUBLICATIONS_TABLE,
+        schema: {columns: [{name: 'id', type: 'TEXT', primaryKey: true}]},
+        keyRange: {start: null, end: null},
+        replicaId: `${TEST_CONTROL_PLANE_PUBLICATIONS_TABLE}-r1`,
+        replicaIds: [`${TEST_CONTROL_PLANE_PUBLICATIONS_TABLE}-r1`],
+        peerAddresses: [],
+        nodeId: 'join-node',
+        isJoiningExistingGroup: true,
+        deferCdcPropagationHandshake: true,
+      });
+
+      t.ok(partition, 'factory should return the initialized partition first');
+      t.equal(
+        handshakeCompleted,
+        false,
+        'deferred CDC handshake should not gate factory return',
+      );
+
+      await handshakeStarted;
+      t.ok(
+        subscribedTables.includes(TEST_CONTROL_PLANE_PUBLICATIONS_TABLE),
+        'deferred CDC attachment should still subscribe the propagated table',
+      );
+      t.ok(
+        handshakeSubscriberIds.some((subscriberId) =>
+          String(subscriberId || '')
+            .includes(TEST_CONTROL_PLANE_PUBLICATIONS_TABLE)),
+        'deferred CDC attachment should still register a handshake',
+      );
+      releaseHandshake();
+      await handshakeCompletedSignal;
+    }, {
+      createMessageGroupServices: ({subscribedTables}) =>
+        createCapturedIngressMessageGroupServices(subscribedTables),
+      subscribeToCDCWithHandshake:
+        async function(_subscriber, options = {}, {handshakeSubscriberIds}) {
+          handshakeSubscriberIds.push(options.subscriberId);
+          resolveHandshakeStarted();
+          await handshakeRelease;
+          handshakeCompleted = true;
+          resolveHandshakeCompleted();
+          return {
+            subscriberId: options.subscriberId || 'sub-1',
+            subscriptionEpoch: 1,
+            catchup: {
+              mode: 'none',
+              bufferedEventsReplayed: 0,
+            },
+          };
+        },
     });
   });
 

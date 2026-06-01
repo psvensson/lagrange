@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import {TABLE_DISTRIBUTION_HELPERS_SEGMENT_2} from './table-distribution-helpers-segment-2.js';
+import {TABLE_BOOTSTRAP_CORE_HELPERS} from
+  './table-bootstrap-core-helpers.js';
 const {
   TABLE_NAME_LOGS,
   TABLE_NAME_BENCHMARK_EVENTS,
@@ -141,544 +143,96 @@ const {
   shouldDeferAuthoritativeRepair,
 } = TABLE_DISTRIBUTION_HELPERS_SEGMENT_2;
 
-const TABLE_BOOTSTRAP_SQL_ENGINE_UNAVAILABLE_FRAGMENT =
-  'SQL query engine not available';
-const TABLE_BOOTSTRAP_MULTI_NODE_CREATE_ATTEMPT_TIMEOUT_MS = 5000;
-const TABLE_BOOTSTRAP_SQL_ENGINE_UNAVAILABLE_GRACE_MS = 60000;
+const {
+  TABLE_BOOTSTRAP_SQL_ENGINE_UNAVAILABLE_FRAGMENT,
+  TABLE_BOOTSTRAP_SQL_ENGINE_UNAVAILABLE_REASON,
+  TABLE_BOOTSTRAP_MULTI_NODE_CREATE_ATTEMPT_TIMEOUT_MS,
+  TABLE_BOOTSTRAP_SQL_ENGINE_UNAVAILABLE_GRACE_MS,
+  TABLE_BOOTSTRAP_NO_PROGRESS_TIMEOUT_MS,
+  TABLE_BOOTSTRAP_SQL_UNAVAILABLE_RETRY_DELAY_MS,
+  TABLE_BOOTSTRAP_MAX_VISIBILITY_POLL_INTERVAL_MS,
+  TABLE_BOOTSTRAP_FAILURE_REASON_TIMEOUT,
+  TABLE_BOOTSTRAP_FAILURE_REASON_NO_PROGRESS,
+  TABLE_BOOTSTRAP_PROGRESS_ERROR_NONE,
+  TABLE_BOOTSTRAP_PROGRESS_ERROR_TIMEOUT,
+  TABLE_BOOTSTRAP_PROGRESS_ERROR_UNAVAILABLE,
+  TABLE_BOOTSTRAP_PROGRESS_ERROR_RETRYABLE,
+  TABLE_BOOTSTRAP_PROGRESS_ERROR_OTHER,
+  isTableBootstrapCandidateUnavailableError,
+  isTableBootstrapCreatePrimaryAdvanceError,
+  isTableBootstrapSqlUnavailableReadiness,
+  resolveTableBootstrapDeadlineAtMs,
+  resolveBoundedTableBootstrapCandidateTimeoutMs,
+  resolveTableBootstrapNoProgressTimeoutMs,
+  classifyTableBootstrapProgressError,
+  buildTableBootstrapProgressToken,
+  buildTableBootstrapFailureMessage,
+  shouldForceAuthoritativeRepairAfterTimedOutCreate,
+  resolveMutationVisibilityDelayMs,
+  resolveMutationVisibilityWarning,
+  shouldAdvanceTimedOutCreateMutationPrimary,
+  resolveTableBootstrapRepairQueryNodes,
+  shouldDeferTableBootstrapRepairForUnavailableCreate,
+  shouldUseUnattemptedTableBootstrapVisibilityNodes,
+  resolveTableBootstrapVisibilityQueryContext,
+  shouldCycleTableBootstrapCreatePrimary,
+  resolveNextTableBootstrapCreatePrimaryIndex,
+  resolveRequiredTableBootstrapVisibilityState,
+  resolveTableBootstrapCreateTimeoutMs,
+  shouldAttemptTableBootstrapCreate,
+  shouldExtendTableBootstrapForUnavailableCreate,
+  resolveExtendedTableBootstrapDeadlineForUnavailableCreate,
+  resolveObservedTableBootstrapVisibilityState,
+  tableBootstrapVisibilityStateSatisfiesRequirement,
+  buildTableBootstrapVisibilitySnapshot,
+  buildBenchmarkTableBootstrapResult,
+  isEmptyObject,
+  policyContainsExpected,
+} = TABLE_BOOTSTRAP_CORE_HELPERS;
 
-function isTableBootstrapCandidateUnavailableError(error) {
-  const message = String(error?.message || error || '');
-  return message.includes(TABLE_BOOTSTRAP_SQL_ENGINE_UNAVAILABLE_FRAGMENT);
-}
-
-function isTableBootstrapCreatePrimaryAdvanceError(error) {
-  return (
-    isTimeoutShapedError(error) ||
-    isTableBootstrapCandidateUnavailableError(error)
-  );
-}
-
-function shouldForceAuthoritativeRepairAfterTimedOutCreate(options = {}) {
-  if (options.createTimeoutObserved !== true) {
-    return false;
-  }
-  const mutationVisibilityState = normalizeMutationVisibilityState(
-    options?.visibilitySummary?.visibilityState,
-  );
-  if (
-    options?.visibilitySummary?.authoritativeVisibilityConfirmed === true &&
-    isPendingControlPlaneSystemTableVisibilityState(mutationVisibilityState)
-  ) {
-    return false;
-  }
-  const requiredBootstrapVisibilityState =
-    typeof options.requiredBootstrapVisibilityState === 'string' ?
-      options.requiredBootstrapVisibilityState :
-      TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE;
-  const observedBootstrapVisibilityState =
-    typeof options?.bootstrapVisibilitySnapshot?.state === 'string' ?
-      options.bootstrapVisibilitySnapshot.state :
-      TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE;
-  return !tableBootstrapVisibilityStateSatisfiesRequirement(
-    requiredBootstrapVisibilityState,
-    observedBootstrapVisibilityState,
-  );
-}
-
-function resolveMutationVisibilityDelayMs(visibilitySummary, fallbackMs) {
-  return Math.max(
-    fallbackMs,
-    Number.isFinite(visibilitySummary?.retryAfterMs) ?
-      visibilitySummary.retryAfterMs :
-      ZERO,
-  );
-}
-
-function resolveMutationVisibilityWarning(options = {}) {
-  const visibilityState = normalizeMutationVisibilityState(
-    options?.visibilitySummary?.visibilityState,
-  );
-  const contractState = normalizeOwnerContractState(
-    options?.visibilitySummary?.contractState,
-    null,
-  );
-  if (
-    contractState === OWNER_CONTRACT_STATE.DEFERRED ||
-    visibilityState ===
-      CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.DEFERRED_BY_PRESSURE
-  ) {
-    return options.deferredWarning || null;
-  }
-  if (
-    contractState === OWNER_CONTRACT_STATE.PENDING ||
-    isPendingControlPlaneSystemTableVisibilityState(visibilityState)
-  ) {
-    return options.pendingWarning || null;
-  }
-  if (options.repairApplied === true) {
-    return options.repairedWarning || null;
-  }
-  return null;
-}
-
-function shouldAdvanceTimedOutCreateMutationPrimary(options = {}) {
-  if (!isTableBootstrapCreatePrimaryAdvanceError(options.lastCreateError)) {
-    return false;
-  }
-  if (
-    !Array.isArray(options.createQueryNodes) ||
-    options.createQueryNodes.length <= ONE
-  ) {
-    return false;
-  }
-  if (
-    !Number.isInteger(options.createPrimaryNodeIndex) ||
-    options.createPrimaryNodeIndex >= options.createQueryNodes.length - ONE
-  ) {
-    return false;
-  }
-  const createVisibilityState = normalizeMutationVisibilityState(
-    options?.createVisibilitySummary?.visibilityState,
-  );
-  const createContractState = normalizeOwnerContractState(
-    options?.createVisibilitySummary?.contractState,
-    null,
-  );
-  if (createVisibilityState !== null || createContractState !== null) {
-    return false;
-  }
-  return (
-    options?.bootstrapVisibilitySnapshot?.state ===
-    TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE
-  );
-}
-
-function resolveTableBootstrapRepairQueryNodes(options = {}) {
-  const attemptedCreateQueryNodes = Array.isArray(
-    options.attemptedCreateQueryNodes,
-  ) ?
-    options.attemptedCreateQueryNodes :
-    [];
-  const visibilityQueryNodes = Array.isArray(options.visibilityQueryNodes) ?
-    options.visibilityQueryNodes :
-    attemptedCreateQueryNodes;
-  const observedBootstrapVisibilityState =
-    typeof options.observedBootstrapVisibilityState === 'string' ?
-      options.observedBootstrapVisibilityState :
-      TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE;
-  if (
-    observedBootstrapVisibilityState ===
-      TABLE_BOOTSTRAP_VISIBILITY_STATE.TABLE_ID_VISIBLE &&
-    visibilityQueryNodes.length > ZERO
-  ) {
-    return visibilityQueryNodes;
-  }
-  if (
-    options.createTimeoutObserved === true &&
-    observedBootstrapVisibilityState === TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE &&
-    visibilityQueryNodes.length > attemptedCreateQueryNodes.length
-  ) {
-    return visibilityQueryNodes;
-  }
-  return attemptedCreateQueryNodes;
-}
-
-function shouldDeferTableBootstrapRepairForUnavailableCreate(options = {}) {
-  if (!isTableBootstrapCandidateUnavailableError(options.lastCreateError)) {
-    return false;
-  }
-  if (
-    options?.bootstrapVisibilitySnapshot?.state !==
-    TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE
-  ) {
-    return false;
-  }
-  const createQueryNodeCount = Array.isArray(options.createQueryNodes) ?
-    options.createQueryNodes.length :
-    ZERO;
-  if (createQueryNodeCount <= ONE) {
-    return false;
-  }
-  if (Number.isFinite(options.deadlineAtMs) &&
-      Date.now() < options.deadlineAtMs) {
-    return true;
-  }
-  return (
-    shouldExtendTableBootstrapForUnavailableCreate(options)
-  );
-}
-
-function shouldUseUnattemptedTableBootstrapVisibilityNodes(options = {}) {
-  if (!isTableBootstrapCreatePrimaryAdvanceError(options.lastCreateError)) {
-    return false;
-  }
-  if (
-    !Array.isArray(options.createQueryNodes) ||
-    options.createQueryNodes.length <= ONE
-  ) {
-    return false;
-  }
-  if (
-    !Number.isInteger(options.createPrimaryNodeIndex) ||
-    options.createPrimaryNodeIndex >= options.createQueryNodes.length - ONE
-  ) {
-    return false;
-  }
-  return (
-    options?.bootstrapVisibilitySnapshot?.state ===
-    TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE
-  );
-}
-
-function resolveTableBootstrapVisibilityQueryContext(
-  seedNode,
-  options = {},
-) {
-  if (!shouldUseUnattemptedTableBootstrapVisibilityNodes(options)) {
-    return {
-      seedNode,
-      options: options.baseOptions || {},
-    };
-  }
-  const unattemptedQueryNodes = options.createQueryNodes.slice(
-    options.createPrimaryNodeIndex + ONE,
-  );
-  return {
-    seedNode: unattemptedQueryNodes[ZERO] || seedNode,
-    options: {
-      ...(options.baseOptions || {}),
-      queryNodes: unattemptedQueryNodes.slice(ONE),
-      fallbackNodes: unattemptedQueryNodes.slice(ONE),
-    },
-  };
-}
-
-function shouldCycleTableBootstrapCreatePrimary(options = {}) {
-  if (!isTableBootstrapCandidateUnavailableError(options.lastCreateError)) {
-    return false;
-  }
-  if (
-    !Array.isArray(options.createQueryNodes) ||
-    options.createQueryNodes.length <= ONE
-  ) {
-    return false;
-  }
-  return (
-    options?.bootstrapVisibilitySnapshot?.state ===
-    TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE
-  );
-}
-
-function resolveNextTableBootstrapCreatePrimaryIndex(options = {}) {
-  const createQueryNodes = Array.isArray(options.createQueryNodes) ?
-    options.createQueryNodes :
-    [];
-  if (createQueryNodes.length <= ONE) {
-    return ZERO;
-  }
-  const createPrimaryNodeIndex = Number.isInteger(
-    options.createPrimaryNodeIndex,
-  ) ?
-    options.createPrimaryNodeIndex :
-    ZERO;
-  if (createPrimaryNodeIndex < createQueryNodes.length - ONE) {
-    return createPrimaryNodeIndex + ONE;
-  }
-  return ONE;
-}
-
-function resolveRequiredTableBootstrapVisibilityState(options = {}) {
-  const requestedState =
-    typeof options.requiredBootstrapVisibilityState === 'string' ?
-      options.requiredBootstrapVisibilityState :
-      TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE;
-  if (TABLE_BOOTSTRAP_VISIBILITY_STATE_ORDER[requestedState] >= ONE) {
-    return requestedState;
-  }
-  if (options.requirePartitionVisibility === true) {
-    return TABLE_BOOTSTRAP_VISIBILITY_STATE.ROUTABLE_DISTRIBUTION;
-  }
-  return TABLE_BOOTSTRAP_VISIBILITY_STATE.TABLE_ID_VISIBLE;
-}
-
-function resolveTableBootstrapCreateTimeoutMs(options = {}) {
-  const remainingBootstrapTimeoutMs = resolveRemainingControlQueryTimeoutMs(
-    options.deadlineAtMs,
-  );
-  const requiredBootstrapVisibilityState =
-    typeof options.requiredBootstrapVisibilityState === 'string' ?
-      options.requiredBootstrapVisibilityState :
-      TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE;
-  const createQueryNodeCount = Array.isArray(options.createQueryNodes) ?
-    options.createQueryNodes.length :
-    ZERO;
-  const createAttemptTimeoutCapMs = createQueryNodeCount > ONE ?
-    Math.min(
-      POLICY_APPLY_ATTEMPT_TIMEOUT_MS,
-      TABLE_BOOTSTRAP_MULTI_NODE_CREATE_ATTEMPT_TIMEOUT_MS,
-    ) :
-    POLICY_APPLY_ATTEMPT_TIMEOUT_MS;
-  const requiresExtendedBootstrapVisibility =
-    tableBootstrapVisibilityStateSatisfiesRequirement(
-      TABLE_BOOTSTRAP_VISIBILITY_STATE.PARTITIONS_VISIBLE,
-      requiredBootstrapVisibilityState,
-    );
-  if (!requiresExtendedBootstrapVisibility || createQueryNodeCount <= ONE) {
-    return Math.min(
-      createAttemptTimeoutCapMs,
-      remainingBootstrapTimeoutMs,
-    );
-  }
-  return Math.max(
-    ONE,
-    Math.min(
-      createAttemptTimeoutCapMs,
-      remainingBootstrapTimeoutMs -
-        TABLE_BOOTSTRAP_POST_CREATE_VISIBILITY_RESERVE_MS,
-    ),
-  );
-}
-
-function shouldAttemptTableBootstrapCreate(options = {}) {
-  const createQueryNodeCount = Array.isArray(options.createQueryNodes) ?
-    options.createQueryNodes.length :
-    ZERO;
-  const requiredBootstrapVisibilityState =
-    typeof options.requiredBootstrapVisibilityState === 'string' ?
-      options.requiredBootstrapVisibilityState :
-      TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE;
-  const remainingBootstrapTimeoutMs =
-    Number.isFinite(options.deadlineAtMs) ?
-      Math.floor(options.deadlineAtMs - Date.now()) :
-      ZERO;
-  if (remainingBootstrapTimeoutMs <= ZERO) {
-    return false;
-  }
-  if (createQueryNodeCount <= ONE) {
-    return true;
-  }
-  const requiresExtendedBootstrapVisibility =
-    tableBootstrapVisibilityStateSatisfiesRequirement(
-      TABLE_BOOTSTRAP_VISIBILITY_STATE.PARTITIONS_VISIBLE,
-      requiredBootstrapVisibilityState,
-    );
-  if (!requiresExtendedBootstrapVisibility) {
-    return true;
-  }
-  const createAttemptTimeoutCapMs = createQueryNodeCount > ONE ?
-    Math.min(
-      POLICY_APPLY_ATTEMPT_TIMEOUT_MS,
-      TABLE_BOOTSTRAP_MULTI_NODE_CREATE_ATTEMPT_TIMEOUT_MS,
-    ) :
-    POLICY_APPLY_ATTEMPT_TIMEOUT_MS;
-  return (
-    remainingBootstrapTimeoutMs >=
-    TABLE_BOOTSTRAP_POST_CREATE_VISIBILITY_RESERVE_MS +
-      createAttemptTimeoutCapMs
-  );
-}
-
-function shouldExtendTableBootstrapForUnavailableCreate(options = {}) {
-  if (!isTableBootstrapCandidateUnavailableError(options.lastCreateError)) {
-    return false;
-  }
-  if (
-    !Array.isArray(options.createQueryNodes) ||
-    options.createQueryNodes.length <= ONE
-  ) {
-    return false;
-  }
-  if (
-    options?.bootstrapVisibilitySnapshot?.state !==
-    TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE
-  ) {
-    return false;
-  }
-  if (
-    !Number.isFinite(options.deadlineAtMs) ||
-    !Number.isFinite(options.unavailableGraceDeadlineAtMs)
-  ) {
-    return false;
-  }
-  const now = Date.now();
-  if (now < options.deadlineAtMs) {
-    return false;
-  }
-  return (
-    now +
-      TABLE_BOOTSTRAP_POST_CREATE_VISIBILITY_RESERVE_MS +
-      TABLE_BOOTSTRAP_MULTI_NODE_CREATE_ATTEMPT_TIMEOUT_MS <=
-    options.unavailableGraceDeadlineAtMs
-  );
-}
-
-function resolveExtendedTableBootstrapDeadlineForUnavailableCreate(
-  options = {},
-) {
-  const unavailableGraceDeadlineAtMs = Number.isFinite(
-    options.unavailableGraceDeadlineAtMs,
-  ) ?
-    options.unavailableGraceDeadlineAtMs :
-    Date.now();
-  return Math.min(
-    unavailableGraceDeadlineAtMs,
-    Date.now() +
-      TABLE_BOOTSTRAP_POST_CREATE_VISIBILITY_RESERVE_MS +
-      TABLE_BOOTSTRAP_MULTI_NODE_CREATE_ATTEMPT_TIMEOUT_MS,
-  );
-}
-
-function resolveObservedTableBootstrapVisibilityState(options = {}) {
-  const tableId = String(options.tableId || '');
-  if (tableId.length <= ZERO) {
-    return TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE;
-  }
-  const partitionIds = Array.isArray(options.partitionIds) ?
-    options.partitionIds.filter(
-      (partitionId) =>
-        typeof partitionId === 'string' && partitionId.length > ZERO,
-    ) :
-    [];
-  if (partitionIds.length <= ZERO) {
-    return TABLE_BOOTSTRAP_VISIBILITY_STATE.TABLE_ID_VISIBLE;
-  }
-  if (
-    String(options.distribution?.topologyState || '') ===
-    TOPOLOGY_STATE_ROUTABLE
-  ) {
-    return TABLE_BOOTSTRAP_VISIBILITY_STATE.ROUTABLE_DISTRIBUTION;
-  }
-  return TABLE_BOOTSTRAP_VISIBILITY_STATE.PARTITIONS_VISIBLE;
-}
-
-function tableBootstrapVisibilityStateSatisfiesRequirement(
-  requiredState,
-  observedState,
-) {
-  return (
-    (TABLE_BOOTSTRAP_VISIBILITY_STATE_ORDER[observedState] || ZERO) >=
-    (TABLE_BOOTSTRAP_VISIBILITY_STATE_ORDER[requiredState] || ZERO)
-  );
-}
-
-function buildTableBootstrapVisibilitySnapshot(options = {}) {
-  const tableId = String(options.tableId || '');
-  const partitionIds = Array.isArray(options.partitionIds) ?
-    options.partitionIds.filter(
-      (partitionId) =>
-        typeof partitionId === 'string' && partitionId.length > ZERO,
-    ) :
-    [];
-  const distribution =
-    options.distribution && typeof options.distribution === 'object' ?
-      options.distribution :
-      null;
-  const state = resolveObservedTableBootstrapVisibilityState({
-    tableId,
-    partitionIds,
-    distribution,
-  });
-  return {
-    state,
-    tableId,
-    partitionIds,
-    distribution,
-  };
-}
-
-function buildBenchmarkTableBootstrapResult(options = {}) {
-  const visibilitySummary =
-    options.visibilitySummary && typeof options.visibilitySummary === 'object' ?
-      options.visibilitySummary :
-      summarizeMutationVisibility(null);
-  const snapshot =
-    options.bootstrapVisibilitySnapshot &&
-    typeof options.bootstrapVisibilitySnapshot === 'object' ?
-      options.bootstrapVisibilitySnapshot :
-      buildTableBootstrapVisibilitySnapshot();
-  const distribution =
-    snapshot.distribution && typeof snapshot.distribution === 'object' ?
-      snapshot.distribution :
-      null;
-  const result = {
-    tableName: options.tableName,
-    tableId: snapshot.tableId,
-    createTimeoutError: options.createTimeoutError,
-    createVisibilityState: visibilitySummary.visibilityState,
-    createContractState: visibilitySummary.contractState,
-    createNextAction: visibilitySummary.nextAction,
-    createVisibilityAuthoritativeConfirmed:
-      visibilitySummary.authoritativeVisibilityConfirmed,
-    createVisibilityRetryAfterMs: visibilitySummary.retryAfterMs,
-    tableVisibilityRepairApplied: options.tableVisibilityRepairApplied,
-    tableVisibilityWarning: resolveMutationVisibilityWarning({
-      visibilitySummary,
-      repairApplied: options.tableVisibilityRepairApplied,
-      pendingWarning: 'table_id_visibility_pending_after_authoritative_commit',
-      deferredWarning: 'table_id_visibility_deferred_by_pressure',
-      repairedWarning:
-        'table_id_visibility_repaired_from_authoritative_snapshot',
-    }),
-    tableBootstrapVisibilityRequirementState:
-      options.requiredBootstrapVisibilityState,
-    tableBootstrapVisibilityState: snapshot.state,
-  };
-  if (distribution) {
-    result.tableDistributionTopologyState = distribution.topologyState;
-    result.tableDistributionTopologySignature = distribution.topologySignature;
-    result.tableDistributionReplicaNodeCount = distribution.replicaNodeCount;
-  }
-  return result;
-}
-
-/**
- * Check whether one object has no own enumerable fields.
- * @param {*} value
- * @return {boolean}
- */
-function isEmptyObject(value) {
-  return (
-    value &&
-    typeof value === 'object' &&
-    !Array.isArray(value) &&
-    Object.keys(value).length === ZERO
-  );
-}
-
-/**
- * Resolve whether an observed policy contains every expected key/value pair.
- * @param {Object} expected
- * @param {Object} observed
- * @return {boolean}
- */
-function policyContainsExpected(expected, observed) {
-  if (
-    !expected ||
-    typeof expected !== 'object' ||
-    !observed ||
-    typeof observed !== 'object'
-  ) {
-    return false;
-  }
-
-  for (const [key, expectedValue] of Object.entries(expected)) {
-    const observedValue = observed[key];
-    if (
-      expectedValue &&
-      typeof expectedValue === 'object' &&
-      !Array.isArray(expectedValue)
-    ) {
-      if (!policyContainsExpected(expectedValue, observedValue)) {
-        return false;
+function withTableBootstrapOperationTimeout(promise, timeoutMs, message) {
+  const boundedTimeoutMs = Math.max(ONE, Math.floor(timeoutMs));
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) {
+        return;
       }
-      continue;
+      settled = true;
+      reject(new Error(message));
+    }, boundedTimeoutMs);
+    if (typeof timer.unref === 'function') {
+      timer.unref();
     }
-    if (observedValue !== expectedValue) {
-      return false;
-    }
-  }
+    Promise.resolve(promise)
+      .then((result) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        resolve(result);
+      })
+      .catch((error) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        reject(error);
+      });
+  });
+}
 
-  return true;
+function resolveDeadlineBoundControlTimeoutMs(deadlineAtMs, timeoutMs) {
+  const fallbackTimeoutMs = resolveControlQueryTimeoutMs(timeoutMs);
+  if (!Number.isFinite(deadlineAtMs)) {
+    return fallbackTimeoutMs;
+  }
+  return Math.max(ONE, Math.min(
+    fallbackTimeoutMs,
+    resolveRemainingControlQueryTimeoutMs(deadlineAtMs),
+  ));
 }
 
 /**
@@ -693,9 +247,17 @@ async function queryTableId(seedNode, tableName, options = {}) {
     escapeSql(tableName) +
     SQL_SELECT_TABLE_ID_SUFFIX;
   const queryNodes = resolveControlQueryNodes(seedNode, options);
+  const totalTimeoutMs = resolveControlQueryTimeoutMs(options.timeoutMs);
+  const deadlineAtMs = resolveTableBootstrapDeadlineAtMs(
+    options,
+    totalTimeoutMs,
+  );
   let lastError = null;
   let successfulQueryObserved = false;
   for (const candidateNode of queryNodes) {
+    if (Date.now() >= deadlineAtMs) {
+      break;
+    }
     try {
       const result = await queryControlSingleWithProgressRetry(
         candidateNode,
@@ -703,6 +265,11 @@ async function queryTableId(seedNode, tableName, options = {}) {
         [],
         {
           lane: CONTROL_QUERY_LANE_SNAPSHOT,
+          timeoutMs: resolveBoundedTableBootstrapCandidateTimeoutMs(
+            deadlineAtMs,
+            totalTimeoutMs,
+            queryNodes.length,
+          ),
         },
       );
       successfulQueryObserved = true;
@@ -734,9 +301,17 @@ async function queryPartitionIdsByTableId(seedNode, tableId, options = {}) {
     escapeSql(tableId) +
     SQL_SELECT_PARTITIONS_BY_TABLE_ID_SUFFIX;
   const queryNodes = resolveControlQueryNodes(seedNode, options);
+  const totalTimeoutMs = resolveControlQueryTimeoutMs(options.timeoutMs);
+  const deadlineAtMs = resolveTableBootstrapDeadlineAtMs(
+    options,
+    totalTimeoutMs,
+  );
   let lastError = null;
   let successfulQueryObserved = false;
   for (const candidateNode of queryNodes) {
+    if (Date.now() >= deadlineAtMs) {
+      break;
+    }
     try {
       const result = await queryControlSingleWithProgressRetry(
         candidateNode,
@@ -744,6 +319,11 @@ async function queryPartitionIdsByTableId(seedNode, tableId, options = {}) {
         [],
         {
           lane: CONTROL_QUERY_LANE_SNAPSHOT,
+          timeoutMs: resolveBoundedTableBootstrapCandidateTimeoutMs(
+            deadlineAtMs,
+            totalTimeoutMs,
+            queryNodes.length,
+          ),
         },
       );
       successfulQueryObserved = true;
@@ -789,7 +369,12 @@ async function queryTablePolicies(seedNode, tableId, options = {}) {
       SQL_SELECT_TABLE_POLICIES_BY_TABLE_ID_SUFFIX,
   );
   for (const sql of lookupSql) {
+    const timeoutMs = resolveDeadlineBoundControlTimeoutMs(
+      options.deadlineAtMs,
+      options.timeoutMs,
+    );
     const result = await queryControl(seedNode, sql, [], {
+      timeoutMs,
       lane: CONTROL_QUERY_LANE_SNAPSHOT,
       queryNodes: options.queryNodes,
       fallbackNodes: options.fallbackNodes,
@@ -859,27 +444,140 @@ async function ensureBenchmarkPartitioningTable(seedNode, options = {}) {
     SQL_CREATE_TABLE_PREFIX + resolvedTableName + SQL_CREATE_TABLE_SUFFIX;
   const createQueryNodes = resolveControlQueryNodes(seedNode, options);
   let createPrimaryNodeIndex = ZERO;
-  let deadline =
-    Date.now() +
-    (tableBootstrapVisibilityStateSatisfiesRequirement(
-      TABLE_BOOTSTRAP_VISIBILITY_STATE.PARTITIONS_VISIBLE,
-      requiredBootstrapVisibilityState,
-    ) ?
-      TABLE_BOOTSTRAP_TIMEOUT_MS :
-      TABLE_ID_VISIBILITY_TIMEOUT_MS);
+  const baseTimeoutMs =
+    Number.isFinite(options.timeoutMs) && options.timeoutMs > ZERO ?
+      options.timeoutMs :
+      (tableBootstrapVisibilityStateSatisfiesRequirement(
+        TABLE_BOOTSTRAP_VISIBILITY_STATE.PARTITIONS_VISIBLE,
+        requiredBootstrapVisibilityState,
+      ) ?
+        TABLE_BOOTSTRAP_TIMEOUT_MS :
+        TABLE_ID_VISIBILITY_TIMEOUT_MS);
+  let deadline = Date.now() + baseTimeoutMs;
   const unavailableGraceDeadline =
     deadline + TABLE_BOOTSTRAP_SQL_ENGINE_UNAVAILABLE_GRACE_MS;
   let createTimeoutError = null;
   let lastCreateError = null;
   let lastCreateErrorObject = null;
   let lastVisibilityError = null;
+  let lastVisibilityErrorObject = null;
   let lastPartitionVisibilityError = null;
+  let lastPartitionVisibilityErrorObject = null;
   let lastTopologyVisibilityError = null;
   let createVisibilitySummary = summarizeMutationVisibility(null);
   let bootstrapVisibilitySnapshot = buildTableBootstrapVisibilitySnapshot();
   let tableVisibilityRepairAttempted = false;
   let tableVisibilityRepairApplied = false;
   let postRepairVisibilitySweepPending = false;
+  let currentPollIntervalMs = TABLE_ID_VISIBILITY_POLL_INTERVAL_MS;
+  const noProgressTimeoutMs = resolveTableBootstrapNoProgressTimeoutMs(options);
+  const attemptedCreateNodeIds = new Set();
+  let lastProgressAtMs = Date.now();
+  let lastProgressToken = buildTableBootstrapProgressToken({
+    createVisibilitySummary,
+    bootstrapVisibilitySnapshot,
+    tableVisibilityRepairAttempted,
+    tableVisibilityRepairApplied,
+  });
+  const buildProgressToken = () => buildTableBootstrapProgressToken({
+    createVisibilitySummary,
+    bootstrapVisibilitySnapshot,
+    attemptedCreateNodeIds: [...attemptedCreateNodeIds],
+    tableVisibilityRepairAttempted,
+    tableVisibilityRepairApplied,
+    lastCreateErrorObject,
+    lastVisibilityErrorObject,
+    lastPartitionVisibilityErrorObject,
+  });
+  const recordProgress = () => {
+    const progressToken = buildProgressToken();
+    if (progressToken !== lastProgressToken) {
+      lastProgressToken = progressToken;
+      lastProgressAtMs = Date.now();
+    }
+    return progressToken;
+  };
+  const assertNotStalled = () => {
+    if (!Number.isInteger(noProgressTimeoutMs) || noProgressTimeoutMs <= ZERO) {
+      return;
+    }
+    const elapsedWithoutProgressMs = Date.now() - lastProgressAtMs;
+    if (elapsedWithoutProgressMs < noProgressTimeoutMs) {
+      return;
+    }
+    assert.fail(buildTableBootstrapFailureMessage({
+      tableName: resolvedTableName,
+      failureReason: TABLE_BOOTSTRAP_FAILURE_REASON_NO_PROGRESS,
+      timeoutMs: baseTimeoutMs,
+      noProgressTimeoutMs,
+      lastProgressElapsedMs: elapsedWithoutProgressMs,
+      lastProgressToken,
+      lastCreateError,
+      createVisibilitySummary,
+      lastVisibilityError,
+      lastPartitionVisibilityError,
+      lastTopologyVisibilityError,
+      requiredBootstrapVisibilityState,
+      bootstrapVisibilitySnapshot,
+      tableVisibilityRepairAttempted,
+      tableVisibilityRepairApplied,
+    }));
+  };
+  const sleepUntilNextTableBootstrapAttempt = async (delayMs) => {
+    recordProgress();
+    assertNotStalled();
+    const boundedDelayMs = Math.max(
+      ZERO,
+      Math.min(
+        Math.max(ZERO, Math.floor(delayMs)),
+        Math.max(ZERO, deadline - Date.now()),
+        Number.isInteger(noProgressTimeoutMs) && noProgressTimeoutMs > ZERO ?
+          Math.max(ZERO, lastProgressAtMs + noProgressTimeoutMs - Date.now()) :
+          Math.max(ZERO, deadline - Date.now()),
+      ),
+    );
+    if (boundedDelayMs > ZERO) {
+      await sleep(boundedDelayMs);
+    }
+  };
+  const resolveCurrentOperationDeadlineAtMs = (
+    fallbackDeadlineAtMs = deadline,
+  ) => {
+    const deadlineCandidates = [fallbackDeadlineAtMs];
+    if (Number.isInteger(noProgressTimeoutMs) && noProgressTimeoutMs > ZERO) {
+      deadlineCandidates.push(lastProgressAtMs + noProgressTimeoutMs);
+    }
+    return Math.max(
+      Date.now() + ONE,
+      Math.min(...deadlineCandidates),
+    );
+  };
+  const resolveCurrentOperationTimeoutMs = (
+    fallbackDeadlineAtMs = deadline,
+  ) =>
+    Math.max(
+      ONE,
+      Math.floor(resolveCurrentOperationDeadlineAtMs(fallbackDeadlineAtMs) -
+        Date.now()),
+    );
+  const probeBootstrapReadinessWithDeadline = async (node) => {
+    const readinessTimeoutMs = resolveCurrentOperationTimeoutMs();
+    return withTableBootstrapOperationTimeout(
+      node.probeBootstrapReadiness({
+        timeoutMs: readinessTimeoutMs,
+      }),
+      readinessTimeoutMs,
+      'Bootstrap readiness probe timed out for ' + String(node?.id || 'seed'),
+    );
+  };
+  const resolveTableBootstrapRepairDeadlineAtMs = () => {
+    if (Date.now() < deadline) {
+      return resolveCurrentOperationDeadlineAtMs(deadline);
+    }
+    return resolveCurrentOperationDeadlineAtMs(
+      Date.now() + TABLE_BOOTSTRAP_POST_CREATE_VISIBILITY_RESERVE_MS,
+    );
+  };
   while (Date.now() <= deadline || postRepairVisibilitySweepPending) {
     const visibilitySweepOnly = postRepairVisibilitySweepPending;
     postRepairVisibilitySweepPending = false;
@@ -895,8 +593,9 @@ async function ensureBenchmarkPartitioningTable(seedNode, options = {}) {
       let sqlUnavailable = false;
       for (const node of [createPrimaryNode, visQueryNode]) {
         if (node && typeof node.probeBootstrapReadiness === 'function') {
-          const readiness = await node.probeBootstrapReadiness().catch(() => null);
-          if (readiness?.reasons?.some(r => r.includes('SQL_ENGINE_UNAVAILABLE') || r.includes('SQL query engine not available'))) {
+          const readiness = await probeBootstrapReadinessWithDeadline(node)
+            .catch(() => null);
+          if (isTableBootstrapSqlUnavailableReadiness(readiness)) {
             sqlUnavailable = true;
             break;
           }
@@ -907,7 +606,9 @@ async function ensureBenchmarkPartitioningTable(seedNode, options = {}) {
           if (createQueryNodes.length > ONE) {
             createPrimaryNodeIndex = (createPrimaryNodeIndex + ONE) % createQueryNodes.length;
           }
-          await sleep(100);
+          await sleepUntilNextTableBootstrapAttempt(
+            TABLE_BOOTSTRAP_SQL_UNAVAILABLE_RETRY_DELAY_MS,
+          );
           continue;
         }
       }
@@ -924,6 +625,7 @@ async function ensureBenchmarkPartitioningTable(seedNode, options = {}) {
           requiredBootstrapVisibilityState,
           createQueryNodes,
         });
+        attemptedCreateNodeIds.add(String(createPrimaryNode?.id || 'seed'));
         try {
           const createResult = await queryControl(
             createPrimaryNode,
@@ -960,6 +662,16 @@ async function ensureBenchmarkPartitioningTable(seedNode, options = {}) {
           }
           lastCreateError = String(error?.message || error);
           lastCreateErrorObject = error;
+          if (
+            isTableBootstrapCandidateUnavailableError(error) &&
+            !isTimeoutShapedError(error) &&
+            createQueryNodes.length > ONE &&
+            createPrimaryNodeIndex < createQueryNodes.length - ONE &&
+            bootstrapVisibilitySnapshot.state ===
+              TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE
+          ) {
+            createPrimaryNodeIndex += ONE;
+          }
         }
       }
     }
@@ -972,12 +684,19 @@ async function ensureBenchmarkPartitioningTable(seedNode, options = {}) {
         createPrimaryNodeIndex,
         bootstrapVisibilitySnapshot,
       });
+    const visibilityDeadlineAtMs = visibilitySweepOnly ?
+      Date.now() + TABLE_BOOTSTRAP_POST_CREATE_VISIBILITY_RESERVE_MS :
+      deadline;
 
     try {
       const tableId = await queryTableId(
         visibilityQueryContext.seedNode,
         resolvedTableName,
-        visibilityQueryContext.options,
+        {
+          ...visibilityQueryContext.options,
+          deadlineAtMs: visibilityDeadlineAtMs,
+          timeoutMs: baseTimeoutMs,
+        },
       );
       if (tableId) {
         bootstrapVisibilitySnapshot = buildTableBootstrapVisibilitySnapshot({
@@ -1002,7 +721,11 @@ async function ensureBenchmarkPartitioningTable(seedNode, options = {}) {
           const partitionIds = await queryPartitionIdsByTableId(
             visibilityQueryContext.seedNode,
             tableId,
-            visibilityQueryContext.options,
+            {
+              ...visibilityQueryContext.options,
+              deadlineAtMs: visibilityDeadlineAtMs,
+              timeoutMs: baseTimeoutMs,
+            },
           );
           if (partitionIds.length <= ZERO) {
             bootstrapVisibilitySnapshot = buildTableBootstrapVisibilitySnapshot(
@@ -1012,8 +735,10 @@ async function ensureBenchmarkPartitioningTable(seedNode, options = {}) {
             );
             lastPartitionVisibilityError =
               TABLE_BOOTSTRAP_PARTITION_VISIBILITY_MISSING;
+            lastPartitionVisibilityErrorObject = null;
             lastTopologyVisibilityError = null;
             lastVisibilityError = null;
+            lastVisibilityErrorObject = null;
           } else {
             bootstrapVisibilitySnapshot = buildTableBootstrapVisibilitySnapshot(
               {
@@ -1041,6 +766,8 @@ async function ensureBenchmarkPartitioningTable(seedNode, options = {}) {
               {
                 ...visibilityQueryContext.options,
                 tableName: resolvedTableName,
+                deadlineAtMs: visibilityDeadlineAtMs,
+                queryTimeoutMs: baseTimeoutMs,
               },
             );
             bootstrapVisibilitySnapshot = buildTableBootstrapVisibilitySnapshot(
@@ -1074,13 +801,19 @@ async function ensureBenchmarkPartitioningTable(seedNode, options = {}) {
           }
         } catch (error) {
           lastPartitionVisibilityError = String(error?.message || error);
+          lastPartitionVisibilityErrorObject = error;
           lastTopologyVisibilityError = null;
         }
       }
       lastVisibilityError = null;
+      lastVisibilityErrorObject = null;
     } catch (error) {
       lastVisibilityError = String(error?.message || error);
+      lastVisibilityErrorObject = error;
     }
+
+    recordProgress();
+    assertNotStalled();
 
     if (visibilitySweepOnly) {
       break;
@@ -1096,6 +829,8 @@ async function ensureBenchmarkPartitioningTable(seedNode, options = {}) {
     ) {
       if (Date.now() < deadline) {
         createPrimaryNodeIndex += ONE;
+        recordProgress();
+        assertNotStalled();
         continue;
       }
     }
@@ -1145,12 +880,16 @@ async function ensureBenchmarkPartitioningTable(seedNode, options = {}) {
           ...options,
           queryNodes: repairQueryNodes,
           fallbackNodes: repairQueryNodes,
+          deadlineAtMs: resolveTableBootstrapRepairDeadlineAtMs(),
+          timeoutMs: baseTimeoutMs,
         },
       );
       tableVisibilityRepairApplied =
         repairApplied || tableVisibilityRepairApplied;
       if (Date.now() >= deadline) {
         postRepairVisibilitySweepPending = true;
+        recordProgress();
+        assertNotStalled();
         continue;
       }
     }
@@ -1166,56 +905,46 @@ async function ensureBenchmarkPartitioningTable(seedNode, options = {}) {
       deadline = resolveExtendedTableBootstrapDeadlineForUnavailableCreate({
         unavailableGraceDeadlineAtMs: unavailableGraceDeadline,
       });
+      recordProgress();
+      assertNotStalled();
       continue;
     }
 
     if (Date.now() >= deadline) {
       break;
     }
-    await sleep(
+    await sleepUntilNextTableBootstrapAttempt(
       resolveMutationVisibilityDelayMs(
         createVisibilitySummary,
         resolveControlPlaneRetryDelayMs(
           lastCreateErrorObject,
-          TABLE_ID_VISIBILITY_POLL_INTERVAL_MS,
+          currentPollIntervalMs,
         ),
       ),
     );
+    currentPollIntervalMs = Math.min(
+      TABLE_BOOTSTRAP_MAX_VISIBILITY_POLL_INTERVAL_MS,
+      currentPollIntervalMs * 1.5,
+    );
   }
 
-  assert.fail(
-    'Timed out waiting for ' +
-      TABLE_BOOTSTRAP_VISIBILITY_STATE_LABEL[requiredBootstrapVisibilityState] +
-      ' for "' +
-      resolvedTableName +
-      '" (lastCreateError=' +
-      String(lastCreateError || 'none') +
-      ', lastCreateVisibilityState=' +
-      String(createVisibilitySummary.visibilityState || 'none') +
-      ', lastCreateVisibilityRetryAfterMs=' +
-      String(createVisibilitySummary.retryAfterMs || 'none') +
-      ', lastVisibilityError=' +
-      String(lastVisibilityError || 'none') +
-      ', lastPartitionVisibilityError=' +
-      String(lastPartitionVisibilityError || 'none') +
-      ', lastTopologyVisibilityError=' +
-      String(lastTopologyVisibilityError || 'none') +
-      ', requiredBootstrapVisibilityState=' +
-      String(
-        requiredBootstrapVisibilityState ||
-          TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE,
-      ) +
-      ', observedBootstrapVisibilityState=' +
-      String(
-        bootstrapVisibilitySnapshot.state ||
-          TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE,
-      ) +
-      ', authoritativeRepairAttempted=' +
-      String(tableVisibilityRepairAttempted) +
-      ', authoritativeRepairApplied=' +
-      String(tableVisibilityRepairApplied) +
-      ')',
-  );
+  assert.fail(buildTableBootstrapFailureMessage({
+    tableName: resolvedTableName,
+    failureReason: TABLE_BOOTSTRAP_FAILURE_REASON_TIMEOUT,
+    timeoutMs: baseTimeoutMs,
+    noProgressTimeoutMs,
+    lastProgressElapsedMs: Date.now() - lastProgressAtMs,
+    lastProgressToken,
+    lastCreateError,
+    createVisibilitySummary,
+    lastVisibilityError,
+    lastPartitionVisibilityError,
+    lastTopologyVisibilityError,
+    requiredBootstrapVisibilityState,
+    bootstrapVisibilitySnapshot,
+    tableVisibilityRepairAttempted,
+    tableVisibilityRepairApplied,
+  }));
 }
 
 /**
@@ -1306,6 +1035,8 @@ async function prepareBenchmarkPartitioningTable(seedNode, options = {}) {
     try {
       observedPolicy = await queryTablePolicies(seedNode, ensured.tableId, {
         tableName: ensured.tableName,
+        deadlineAtMs: visibilityDeadline,
+        timeoutMs: POLICY_APPLY_TIMEOUT_MS,
         queryNodes: options.queryNodes,
         fallbackNodes: options.fallbackNodes,
       });
@@ -1327,6 +1058,9 @@ async function prepareBenchmarkPartitioningTable(seedNode, options = {}) {
       stableMatchCount = ZERO;
       lastPolicyVisibilityError = String(error?.message || error);
     }
+    if (Date.now() >= visibilityDeadline) {
+      break;
+    }
     if (
       !policyVisible &&
       !policyVisibilityRepairAttempted &&
@@ -1334,7 +1068,11 @@ async function prepareBenchmarkPartitioningTable(seedNode, options = {}) {
     ) {
       policyVisibilityRepairAttempted = true;
       policyVisibilityRepairApplied =
-        (await forceRepairControlSnapshotAcrossQueryNodes(seedNode, options)) ||
+        (await forceRepairControlSnapshotAcrossQueryNodes(seedNode, {
+          ...options,
+          deadlineAtMs: visibilityDeadline,
+          timeoutMs: POLICY_APPLY_TIMEOUT_MS,
+        })) ||
         policyVisibilityRepairApplied;
     }
     if (Date.now() >= visibilityDeadline) {
@@ -1467,6 +1205,7 @@ function assertSplitPolicyPrecondition(tablePreparation, options = {}) {
 }
 
 export const TABLE_DISTRIBUTION_HELPERS_SEGMENT_3 = {
+  ...TABLE_BOOTSTRAP_CORE_HELPERS,
   TABLE_NAME_LOGS,
   TABLE_NAME_BENCHMARK_EVENTS,
   SERVICE_TYPE_PARTITION,
@@ -1603,6 +1342,9 @@ export const TABLE_DISTRIBUTION_HELPERS_SEGMENT_3 = {
   shouldForceAuthoritativeRepairAfterTimedOutCreate,
   resolveMutationVisibilityDelayMs,
   resolveMutationVisibilityWarning,
+  resolveTableBootstrapDeadlineAtMs,
+  resolveBoundedTableBootstrapCandidateTimeoutMs,
+  resolveTableBootstrapNoProgressTimeoutMs,
   shouldAdvanceTimedOutCreateMutationPrimary,
   resolveTableBootstrapRepairQueryNodes,
   resolveRequiredTableBootstrapVisibilityState,

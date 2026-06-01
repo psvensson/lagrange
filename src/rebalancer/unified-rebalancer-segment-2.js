@@ -9,6 +9,8 @@ const {
   CONTROL_PLANE_PUBLICATION_STATUS,
   CONTROL_PLANE_READINESS_DIMENSION,
   NUM,
+  SERVICE_STATUS,
+  STATE,
   SYSTEM_TABLE_NAME,
   UNIFIED_REBALANCER_LITERAL,
   buildPriorityRecoveryOperationAssessment,
@@ -206,21 +208,21 @@ class UnifiedRebalancerSegment2 extends UnifiedRebalancerSegment1 {
       if (effectiveNodeIds instanceof Set && !effectiveNodeIds.has(nodeId)) {
         return false;
       }
-      if (
-        startupAuthorityNodeIds instanceof Set &&
-        startupAuthorityNodeIds.has(nodeId)
-      ) {
-        return true;
-      }
       const readiness = this.controlPlaneReadinessService.getNodeReadinessSync(
         nodeId,
         {
           decisionDimension: readinessDecisionDimension,
         },
       );
-      return this.isReadinessDimensionSatisfied(
-        readiness,
-        readinessDecisionDimension,
+      return (
+        this.isReadinessDimensionSatisfied(
+          readiness,
+          readinessDecisionDimension,
+        ) ||
+        this.isStartupAuthorityControlPlanePlacementEligibleNode(
+          node,
+          readinessDecisionDimension,
+        )
       );
     });
   }
@@ -252,6 +254,65 @@ class UnifiedRebalancerSegment2 extends UnifiedRebalancerSegment1 {
     } catch (_error) {
       return null;
     }
+  }
+
+  isStartupAuthorityControlPlanePlacementEligibleNode(
+    nodeOrId,
+    readinessDecisionDimension = null,
+  ) {
+    if (
+      readinessDecisionDimension &&
+      readinessDecisionDimension !==
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE
+    ) {
+      return false;
+    }
+    if (!this.isControlPlanePriorityPartition()) {
+      return false;
+    }
+    const nodeId =
+      typeof nodeOrId === TYPEOF.STRING ?
+        nodeOrId :
+        nodeOrId?.node_id || nodeOrId?.nodeId || null;
+    if (
+      typeof nodeId !== TYPEOF.STRING ||
+      nodeId.length === NUM.ZERO ||
+      nodeId === this.nodeId
+    ) {
+      return false;
+    }
+    const startupAuthorityNodeIds = this.getStartupAuthorityNodeIdSet();
+    if (
+      !(startupAuthorityNodeIds instanceof Set) ||
+      !startupAuthorityNodeIds.has(nodeId)
+    ) {
+      return false;
+    }
+    const node =
+      typeof nodeOrId === TYPEOF.STRING ?
+        this.systemTableCache.get(SYSTEM_TABLE_NAME.NODES, nodeId) :
+        nodeOrId;
+    if (!node || node.status !== SERVICE_STATUS.ACTIVE) {
+      return false;
+    }
+    const connectionState = String(
+      node.connection_state || node.connectionState ||
+        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    ).toLowerCase();
+    if (
+      connectionState !== STATE.CONNECTED &&
+      connectionState !== STATE.READY
+    ) {
+      return false;
+    }
+    if (
+      this.messageRouter &&
+      typeof this.messageRouter.getConnectionState === TYPEOF.FUNCTION &&
+      this.messageRouter.getConnectionState(nodeId) !== STATE.CONNECTED
+    ) {
+      return false;
+    }
+    return true;
   }
 
   /**

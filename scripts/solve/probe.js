@@ -13,6 +13,7 @@
 
 import {scenarioHarnessProbe} from './probes/scenario-harness.js';
 import {oracleProbe} from './probes/oracle.js';
+import {attachEvidenceIdentity} from './evidence-identity.js';
 
 const REGISTRY = new Map([
   ['scenario-harness', scenarioHarnessProbe],
@@ -35,5 +36,6 @@ export function evaluate(spec, ctx = {}) {
   if (!spec || !spec.probe) {
     return {metric: null, done: false, evidence: null};
   }
-  return getProbe(spec.probe).measure(spec.args || {}, ctx);
+  const result = getProbe(spec.probe).measure(spec.args || {}, ctx);
+  return attachEvidenceIdentity(ctx.root || process.cwd(), spec, result);
 }

@@ -52,6 +52,7 @@ import {
   NUM,
   TABLES,
   METRICS_LOG_TAG,
+  SERVICE_STATUS,
   SERVICE_TYPE,
   STATE,
 } from '../constants/index.js';
@@ -393,6 +394,7 @@ export const SQL_QUERY_ENGINE_SHARED = {
   RETRYABLE_CONTROL_PLANE_TIMEOUT_CLASSIFICATIONS,
   ReplicaOperationField,
   SERVICE_TYPE,
+  SERVICE_STATUS,
   SQLParser,
   SQL_PARSE_CACHE,
   STATE,

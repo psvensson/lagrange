@@ -43,7 +43,7 @@ coordination, storage admission, and execution handoff for topology changes.
   existing workflow decision callers.
 - Existing `operation-workflow-owner-segment-*`, `rebalance-coordinator-segment-*`,
   and `unified-rebalancer-segment-*` files are legacy compatibility surfaces.
-  Use `work/inventory/ordinal-segments.md` when opening semantic migration
+  Use `_legacy_work/inventory/ordinal-segments.md` when opening semantic migration
   packages for these files. New code should not add more stage/segment files.
 
 ## Do Not
@@ -59,7 +59,7 @@ coordination, storage admission, and execution handoff for topology changes.
 - Do not add local fallback planning, dispatch, or retry paths.
 - Do not add new `segment`, `stage`, or `part` files when extracting; use
   owner-specific names for new boundaries. The current ordinal files are
-  inventoried in `work/inventory/ordinal-segments.md` and should move only
+  inventoried in `_legacy_work/inventory/ordinal-segments.md` and should move only
   through explicit semantic migration packages.
 
 ## Proof Surface

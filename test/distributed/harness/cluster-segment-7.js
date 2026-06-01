@@ -77,8 +77,14 @@ class Cluster extends Cluster5 {
     ) ?
       Math.max(ZERO, this._config.timeouts.activeWaitForceRepairAfter) :
       TIMEOUTS.ACTIVE_WAIT_FORCE_REPAIR_AFTER;
+    const startupNoProgressConfigured =
+      Number.isInteger(options.noProgressMaxAttempts) ||
+      Number.isInteger(
+        this._config?.timeouts?.activeWaitNoProgressMaxAttempts,
+      );
     const noProgressMaxAttempts =
-      readinessMode === CLUSTER_READINESS_MODE_LOAD ?
+      readinessMode === CLUSTER_READINESS_MODE_LOAD ||
+        startupNoProgressConfigured ?
         this._resolveActiveWaitNoProgressMaxAttempts(options, timeout) :
         null;
     const forceRepairThreshold = Date.now() + forceRepairAfterMs;

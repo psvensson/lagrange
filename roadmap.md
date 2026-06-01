@@ -4,10 +4,10 @@ This document is the stable AGPL feature sequence and scope map. It answers
 which features belong in this repository and the intended order in which broad
 capabilities mature.
 
-This document does not activate packages, close release gates, record the
-current blocker, or certify that representative proof is green. Executable work
-is authorized by active work packages under `work/packages/`; live execution and
-release readiness live under `work/`.
+This document does not activate Quests, close release gates, record the current
+blocker, or certify that representative proof is green. Executable work is
+authorized by active Quests under `solve/quests/`; attempts, findings, reports,
+and release-readiness evidence live under `solve/`.
 
 Cross-edition product status lives in `product-roadmap.md`.
 Edition ownership and implementation-home rules live in `edition-matrix.md`.
@@ -34,7 +34,7 @@ linked spec or architecture document that makes the intended behavior concrete.
 | Symbol | Meaning |
 |--------|---------|
 | ✅     | Available at roadmap scope; release readiness may still require release-gate proof |
-| 🔧     | Approved implementation scope; execution still requires a work package |
+| 🔧     | Approved implementation scope; execution still requires a Quest |
 | 🔲     | Planned but not yet active implementation scope |
 
 ## Live Truth Pointers
@@ -43,11 +43,11 @@ Use these documents for mutable execution and readiness state:
 
 | Question | Source of truth |
 | --- | --- |
-| Current active package, blocker, owner, and next action | `npm run work:context`, `work/sprints/current-blocker.md` |
-| Release-gate thesis, risk, and closure state | `work/releases/0.1-stabilization.md` |
-| Release-specific ordering between tracks | `work/releases/0.1-dependency-map.md` |
-| Long-lived problem ownership and invariant state | `work/tracks/*.md` |
-| Package-local proof, validation, and closure evidence | `work/packages/*.md` |
+| Current active Quest, frontier, latest probe, and next action | `npm run quest:context` |
+| Quest reports / closure projection | `solve/report/*.md` |
+| Durable attempts, findings, and terminal state | `solve/log/*.ndjson` |
+| Authored Quest goals and frontiers | `solve/quests/*.json` |
+| Archived pre-Quest packages and sprint material | `_legacy_work/` |
 
 ---
 
@@ -65,9 +65,9 @@ be completed.
 Phase 0.1 feature scope is listed below. Whether the release is currently
 exit-complete is intentionally not tracked in this roadmap.
 
-Use `work/releases/0.1-stabilization.md` for release-gate truth,
-`work/releases/0.1-dependency-map.md` for track ordering, and
-`npm run work:context` for the active blocker.
+Use `solve/quests/` and `solve/report/` for active release-gate truth. Archived
+pre-Quest release notes remain under `_legacy_work/releases/` for historical
+context only.
 
 ### 0.1a. Topology Workflow Stabilization (March 2026)
 
@@ -136,21 +136,21 @@ deterministic recovery/timeout handling.
 | Item | Roadmap state | Scope notes |
 |------|---------------|-------------|
 | Distributed test harness | ✅ | Harness exists and remains the proof surface |
-| Node failure tests | ✅ | Capability is in roadmap scope; live release-gate proof belongs in `work/releases/` |
-| Network partition tests | ✅ | Capability is in roadmap scope; live release-gate proof belongs in `work/releases/` |
-| Rolling restart tests | ✅ | Capability is in roadmap scope; current representative truth belongs in `work/sprints/current-blocker.md` and `work/releases/` |
-| Node join under load | ✅ | Capability is in roadmap scope; live release-gate proof belongs in `work/releases/` |
-| Seed restart under load | ✅ | Capability is in roadmap scope; live release-gate proof belongs in `work/releases/` |
-| Sustained throughput tests | ✅ | Capability is in roadmap scope; live release-gate proof belongs in `work/releases/` |
-| Write visibility tests | ✅ | Capability is in roadmap scope; live release-gate proof belongs in `work/releases/` |
-| WASM service failover | ✅ | Capability is in roadmap scope; live release-gate proof belongs in `work/releases/` |
-| Partition kill/heal | ✅ | Capability is in roadmap scope; live release-gate proof belongs in `work/releases/` |
-| 7-node stress scenarios | ✅ | Capability is in roadmap scope; live release-gate proof belongs in `work/releases/` |
-| Postgres baseline comparison | ✅ | Capability is in roadmap scope; live release-gate proof belongs in `work/releases/` |
-| Invariant engine | ✅ | Capability is in roadmap scope; live release-gate proof belongs in `work/releases/` |
-| Disk full simulation | ✅ | Capability is in roadmap scope; live release-gate proof belongs in `work/releases/` |
-| Slow follower simulation | ✅ | Capability is in roadmap scope; live release-gate proof belongs in `work/releases/` |
-| In-cluster chaos injection | ✅ | Capability is in roadmap scope; live release-gate proof belongs in `work/releases/` |
+| Node failure tests | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
+| Network partition tests | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
+| Rolling restart tests | ✅ | Capability is in roadmap scope; current representative truth belongs in the active Quest report |
+| Node join under load | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
+| Seed restart under load | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
+| Sustained throughput tests | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
+| Write visibility tests | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
+| WASM service failover | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
+| Partition kill/heal | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
+| 7-node stress scenarios | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
+| Postgres baseline comparison | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
+| Invariant engine | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
+| Disk full simulation | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
+| Slow follower simulation | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
+| In-cluster chaos injection | ✅ | Capability is in roadmap scope; live release-gate proof belongs in Solver reports |
 
 ### Phase 0.1 Exit Criteria
 

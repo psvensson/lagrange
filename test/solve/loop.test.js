@@ -4,11 +4,20 @@ import path from 'node:path';
 import os from 'node:os';
 
 import {runLoop} from '../../scripts/solve/loop.js';
-import {projectState} from '../../scripts/solve/store.js';
-import {readLog} from '../../scripts/solve/store.js';
+import {appendEvent, projectState, readLog} from '../../scripts/solve/store.js';
 import {makeDryExecutor} from '../../scripts/solve/executor.js';
 import {
-  STATUS_SOLVED, STATUS_PARKED, STATUS_EXHAUSTED, OUTCOME_MAX_CYCLES,
+  EVENT_ATTEMPT,
+  EVENT_PARK,
+  EVENT_THEORY_OPTION_DECLARED,
+  EVENT_THEORY_SELECTED,
+  EVENT_VIOLATION,
+  STATUS_SOLVED,
+  STATUS_PARKED,
+  STATUS_EXHAUSTED,
+  THEORY_RESULT_ACTIVE,
+  OUTCOME_MAX_CYCLES,
+  OUTCOME_THEORY_REQUIRED,
 } from '../../scripts/solve/constants.js';
 
 function setup({metric, target = 0, frontiers = ['f1']}) {
@@ -35,7 +44,29 @@ function setup({metric, target = 0, frontiers = ['f1']}) {
     lastFile = file;
   });
   quest.doneWhen = {probe: 'oracle', args: {file: lastFile}};
-  return {root, quest, changeDir: path.join(root, 'changes')};
+  return {root, quest, changeDir: path.join(root, 'solve', 'changes', quest.id)};
+}
+
+function recordFrontierTheory(root, quest, frontier = 'f1', theory = 'theory-f1') {
+  appendEvent(root, quest.id, {
+    type: EVENT_THEORY_OPTION_DECLARED,
+    theory,
+    frontier,
+    status: THEORY_RESULT_ACTIVE,
+    layer: 'observation',
+    mechanism: 'observation_gap',
+    intervention: 'capture fresh evidence',
+    expectedMovement: 'metric decreases',
+    negativeResultMeans: 'same metric falsifies this path',
+    discriminator: 'oracle',
+    promotionRule: 'metric decreases',
+    rejectionRule: 'metric stays flat',
+  });
+  appendEvent(root, quest.id, {
+    type: EVENT_THEORY_SELECTED,
+    frontier,
+    theory,
+  });
 }
 
 tap.test('solver loop — P0 walking skeleton', async (t) => {
@@ -52,8 +83,14 @@ tap.test('solver loop — P0 walking skeleton', async (t) => {
     t.end();
   });
 
-  t.test('EXHAUSTED terminal when the only frontier stalls and parks', (t) => {
+  t.test('EXHAUSTED terminal when the only frontier is parked', (t) => {
     const {root, quest, changeDir} = setup({metric: 5, target: 0});
+    appendEvent(root, quest.id, {
+      type: EVENT_PARK,
+      frontier: 'f1',
+      reason: 'already exhausted',
+      finalMetric: 5,
+    });
     const res = runLoop(root, quest, {
       executor: makeDryExecutor({changeDir, stallFrontiers: ['f1']}),
       maxCycles: 50,
@@ -64,11 +101,16 @@ tap.test('solver loop — P0 walking skeleton', async (t) => {
     t.end();
   });
 
-  t.test('climbs the ladder on consecutive stalls', (t) => {
+  t.test('climbs to model rung on consecutive stalls when theory is selected', (t) => {
     const {root, quest, changeDir} = setup({metric: 5, target: 0});
     runLoop(root, quest, {
       executor: makeDryExecutor({changeDir, stallFrontiers: ['f1']}),
-      maxCycles: 2,
+      maxCycles: 1,
+    });
+    recordFrontierTheory(root, quest);
+    runLoop(root, quest, {
+      executor: makeDryExecutor({changeDir, stallFrontiers: ['f1']}),
+      maxCycles: 1,
     });
     const state = projectState(quest, readLog(root, quest.id));
     t.equal(state.frontiers[0].rungIndex, 2, 'two stalls => rung climbed to 2');
@@ -88,13 +130,19 @@ tap.test('solver loop — P0 walking skeleton', async (t) => {
     t.end();
   });
 
-  t.test('scheduler redirects: stalled frontier parks, other solves quest', (t) => {
+  t.test('scheduler redirects: parked frontier is skipped while other solves quest', (t) => {
     const {root, quest, changeDir} = setup({metric: 3, target: 0,
       frontiers: ['stuck', 'movable']});
-    // 'stuck' has higher priority (declared first) but never moves; the loop must
-    // park it and still reach SOLVED via 'movable' (whose oracle is the quest oracle).
+    appendEvent(root, quest.id, {
+      type: EVENT_PARK,
+      frontier: 'stuck',
+      reason: 'already exhausted',
+      finalMetric: 3,
+    });
+    // 'stuck' has higher priority (declared first) but is already parked; the loop
+    // must skip it and still reach SOLVED via 'movable' (the quest oracle).
     const res = runLoop(root, quest, {
-      executor: makeDryExecutor({step: 1, changeDir, stallFrontiers: ['stuck']}),
+      executor: makeDryExecutor({step: 1, changeDir}),
       maxCycles: 100,
     });
     t.equal(res.outcome, STATUS_SOLVED, 'quest solved despite a stuck frontier');
@@ -111,6 +159,34 @@ tap.test('solver loop — P0 walking skeleton', async (t) => {
       maxCycles: 1,
     });
     t.equal(res.outcome, OUTCOME_MAX_CYCLES, 'stops at the cycle bound');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('autonomous loop stops before executor when theory gate is unmet', (t) => {
+    const {root, quest, changeDir} = setup({metric: 5, target: 0});
+    runLoop(root, quest, {
+      executor: makeDryExecutor({changeDir, stallFrontiers: ['f1']}),
+      maxCycles: 1,
+    });
+
+    let executorCalls = 0;
+    const res = runLoop(root, quest, {
+      executor: {
+        run() {
+          executorCalls += 1;
+          return {changeRef: null, summary: 'should not run'};
+        },
+      },
+      maxCycles: 1,
+    });
+    const log = readLog(root, quest.id);
+    const attempts = log.filter((event) => event.type === EVENT_ATTEMPT);
+    const violations = log.filter((event) => event.type === EVENT_VIOLATION);
+    t.equal(res.outcome, OUTCOME_THEORY_REQUIRED, 'stops at the theory gate');
+    t.equal(executorCalls, 0, 'executor was not invoked');
+    t.equal(attempts.length, 1, 'no extra attempt was recorded past the gate');
+    t.equal(violations[violations.length - 1].scope, 'theory-gate');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });

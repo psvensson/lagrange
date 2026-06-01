@@ -75,25 +75,9 @@ class UnifiedRebalancerSegment4Stage3 extends UnifiedRebalancerSegment4Stage2 {
     return occupiedNodeIds;
   }
 
-  buildPriorityRecoveryFollowUpPendingTargetNodeSet(decision = null) {
-    const followUpPartitionId =
-      this.resolvePriorityRecoveryFollowUpPartitionId(decision);
+  buildPriorityRecoveryFollowUpPendingTargetNodeSet() {
     return new Set(
       this.getTopologyBlockingInFlightOperations()
-        .filter((operation) => {
-          const operationPartitionId = String(
-            operation?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.PARTITION_ID] ||
-              operation?.[
-                PRIORITY_RECOVERY_FOLLOW_UP_FIELD.PARTITION_ID_SNAKE
-              ] ||
-              operation?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.ENTITY_ID] ||
-              UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
-          ).trim();
-          return (
-            operationPartitionId.length === NUM.ZERO ||
-            operationPartitionId === followUpPartitionId
-          );
-        })
         .map((operation) =>
           String(
             operation?.target_node_id ||
@@ -355,6 +339,7 @@ class UnifiedRebalancerSegment4Stage3 extends UnifiedRebalancerSegment4Stage2 {
           entityId: partitionId,
           nodeId: targetNodeId,
           reason: MOVE_REASON.INCREASE_REPLICA_COUNT,
+          controlPlaneMutationWorkClass: UNIFIED_REBALANCER_LITERAL.BACKGROUND,
           ...serialWaitMoveFields,
           [REBALANCER_MOVE_FIELD.TARGET_READINESS_MODE]:
             REBALANCER_TARGET_READINESS_MODE.DEFER_TO_WORKFLOW_OWNER,
@@ -382,6 +367,7 @@ class UnifiedRebalancerSegment4Stage3 extends UnifiedRebalancerSegment4Stage2 {
           entityId: partitionId,
           nodeId: targetNodeId,
           reason: MOVE_REASON.INCREASE_REPLICA_COUNT,
+          controlPlaneMutationWorkClass: UNIFIED_REBALANCER_LITERAL.BACKGROUND,
           ...serialWaitMoveFields,
           [REBALANCER_MOVE_FIELD.TARGET_READINESS_MODE]:
             REBALANCER_TARGET_READINESS_MODE.DEFER_TO_WORKFLOW_OWNER,
@@ -400,6 +386,7 @@ class UnifiedRebalancerSegment4Stage3 extends UnifiedRebalancerSegment4Stage2 {
         sourceNodeId,
         replicaId,
         reason: MOVE_REASON.REPLACE_REPLICA,
+        controlPlaneMutationWorkClass: UNIFIED_REBALANCER_LITERAL.BACKGROUND,
         ...serialWaitMoveFields,
         [REBALANCER_MOVE_FIELD.TARGET_READINESS_MODE]:
           REBALANCER_TARGET_READINESS_MODE.DEFER_TO_WORKFLOW_OWNER,

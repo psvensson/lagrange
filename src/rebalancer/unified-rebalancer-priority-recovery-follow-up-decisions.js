@@ -225,10 +225,13 @@ class UnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods {
     planningSnapshot = null,
     partitionId = UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
   ) {
+    const normalizedPartitionId = String(
+      partitionId || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    ).trim();
     const decisionSnapshot =
       this.resolvePriorityRecoveryFollowUpDecisionSnapshotFromPlanning(
         planningSnapshot,
-        {partitionId},
+        {partitionId: normalizedPartitionId},
       );
     if (this.isPriorityRecoveryFollowUpOperationRequired(decisionSnapshot)) {
       return decisionSnapshot;
@@ -236,9 +239,45 @@ class UnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods {
     const operationRequiredSnapshot =
       this.buildPriorityRecoveryFollowUpDecisionSnapshotFromPlanning(
         planningSnapshot,
-        {partitionId},
+        {partitionId: normalizedPartitionId},
       );
-    return operationRequiredSnapshot || decisionSnapshot;
+    if (operationRequiredSnapshot) {
+      return operationRequiredSnapshot;
+    }
+    const closureWitnessEvidence =
+      this.buildPriorityRecoveryClosureWitnessFollowUpEvidence(planningSnapshot);
+    if (
+      decisionSnapshot &&
+      closureWitnessEvidence.needsOperationRequired === true &&
+      closureWitnessEvidence.rawCandidatePartitionIds.includes(
+        normalizedPartitionId,
+      )
+    ) {
+      const blockerReasons = Array.isArray(
+        decisionSnapshot?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.BLOCKER_REASONS],
+      ) ?
+        decisionSnapshot[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.BLOCKER_REASONS] :
+        [];
+      return Object.freeze({
+        ...decisionSnapshot,
+        semanticState: PRIORITY_RECOVERY_FOLLOW_UP_DECISION.NEEDS_OPERATION,
+        [PRIORITY_RECOVERY_FOLLOW_UP_FIELD.BLOCKER_REASONS]:
+          Object.freeze([
+            ...new Set([
+              ...blockerReasons,
+              PRIORITY_RECOVERY_FOLLOW_UP_DECISION.ELIGIBLE_NO_OPERATION,
+            ]),
+          ]),
+        [PRIORITY_RECOVERY_FOLLOW_UP_FIELD.PROGRESS]: Object.freeze({
+          ...(decisionSnapshot?.[
+            PRIORITY_RECOVERY_FOLLOW_UP_FIELD.PROGRESS
+          ] || {}),
+          [PRIORITY_RECOVERY_FOLLOW_UP_FIELD.NEXT_REQUIRED_ACTION]:
+            PRIORITY_RECOVERY_FOLLOW_UP_DECISION.CREATE_RECOVERY_OPERATION,
+        }),
+      });
+    }
+    return decisionSnapshot;
   }
 
   buildPriorityRecoverySurrogateFollowUpDecisions(
@@ -414,6 +453,21 @@ class UnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods {
         PRIORITY_RECOVERY_FOLLOW_UP_FIELD.BLOCKED_PARTITION_IDS
       ] :
       [];
+    const decisionSnapshots = Array.isArray(
+      planningSnapshot?.priorityRecoveryDecisionSnapshots?.snapshots,
+    ) ?
+      planningSnapshot.priorityRecoveryDecisionSnapshots.snapshots :
+      [];
+    const operationRequiredPartitionIds = new Set(
+      decisionSnapshots
+        .filter((snapshot) =>
+          this.isPriorityRecoveryFollowUpOperationRequired(snapshot),
+        )
+        .map((snapshot) =>
+          this.resolvePriorityRecoveryFollowUpPartitionId(snapshot),
+        )
+        .filter((partitionId) => partitionId.length > NUM.ZERO),
+    );
     const topologyBlockingPartitionIds =
       this.buildGlobalTopologyBlockingPartitionIdSet();
     const followUpRequired = PRIORITY_RECOVERY_FOLLOW_UP_REQUIREMENT_SEMANTIC_STATES.some(
@@ -439,6 +493,14 @@ class UnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods {
         (partitionId) =>
           !topologyBlockingPartitionIds.has(partitionId),
       );
+    const needsOperationRawCandidatePartitionIds =
+      rankedRawCandidatePartitionIds.filter((partitionId) =>
+        operationRequiredPartitionIds.has(partitionId),
+      );
+    const needsOperationCandidatePartitionIds =
+      needsOperationRawCandidatePartitionIds.filter((partitionId) =>
+        !topologyBlockingPartitionIds.has(partitionId),
+      );
     return Object.freeze({
       followUpRequired:
         followUpRequired,
@@ -449,6 +511,10 @@ class UnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods {
       rawCandidatePartitionIds:
         rankedRawCandidatePartitionIds,
       candidatePartitionIds: Object.freeze(candidatePartitionIds),
+      needsOperationRawCandidatePartitionIds:
+        Object.freeze(needsOperationRawCandidatePartitionIds),
+      needsOperationCandidatePartitionIds:
+        Object.freeze(needsOperationCandidatePartitionIds),
       hasRawCandidate: rawCandidatePartitionIds.length > NUM.ZERO,
       hasUnblockedCandidate: candidatePartitionIds.length > NUM.ZERO,
       topologyBlockingPartitionIds,

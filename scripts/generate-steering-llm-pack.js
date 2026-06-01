@@ -1093,7 +1093,7 @@ function renderReadme(manifestEntries = []) {
     '',
     '## Conflict Resolution',
     '',
-    'At execution time, follow the three-level Authority Order in [`boot.md`](boot.md): user instructions and safety limits, then `work/RULES.md` + `npm run work:context`, then the domain packs. The packs are the canonical execution-time surface; the source-vs-pack distinction is a generator concern, not a runtime one.',
+    'At execution time, follow the three-level Authority Order in [`boot.md`](boot.md): user instructions and safety limits, then Quest workflow canon plus the active Quest file, then the domain packs. The packs are the canonical execution-time surface; the source-vs-pack distinction is a generator concern, not a runtime one.',
     '',
     'If a domain pack rule looks wrong, fix the underlying source file under `.kiro/steering/` and regenerate with `npm run steering:llm:pack`. Do not silently prefer the source at runtime — that hides drift instead of repairing it.',
     '',

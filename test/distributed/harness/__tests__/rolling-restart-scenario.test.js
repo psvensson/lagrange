@@ -20,6 +20,7 @@ const DEFAULT_POST_RESTART_LOAD_READINESS_NO_PROGRESS_MAX_ATTEMPTS = 5;
 const DEFAULT_POST_RESTART_QUIESCENCE_NO_PROGRESS_TIMEOUT_MS = 30000;
 const OVERRIDE_PRE_LOAD_READINESS_NO_PROGRESS_MAX_ATTEMPTS = 11;
 const OVERRIDE_POST_RESTART_LOAD_READINESS_NO_PROGRESS_MAX_ATTEMPTS = 7;
+const OVERRIDE_POST_RESTART_ACTIVE_NO_PROGRESS_MAX_ATTEMPTS = 6;
 const OVERRIDE_POST_RESTART_QUIESCENCE_NO_PROGRESS_TIMEOUT_MS = 2222;
 const SQL_CREATE_TABLE_IF_NOT_EXISTS = 'CREATE TABLE IF NOT EXISTS';
 const SQL_UPDATE_TABLE_POLICIES = 'UPDATE tables SET table_policies';
@@ -139,6 +140,8 @@ describe('rolling-restart scenario', () => {
                 OVERRIDE_PRE_LOAD_READINESS_NO_PROGRESS_MAX_ATTEMPTS,
               postRestartControlPlaneQuiescenceNoProgressTimeoutMs:
                 OVERRIDE_POST_RESTART_QUIESCENCE_NO_PROGRESS_TIMEOUT_MS,
+              postRestartActiveNoProgressMaxAttempts:
+                OVERRIDE_POST_RESTART_ACTIVE_NO_PROGRESS_MAX_ATTEMPTS,
               postRestartLoadReadinessNoProgressMaxAttempts:
                 OVERRIDE_POST_RESTART_LOAD_READINESS_NO_PROGRESS_MAX_ATTEMPTS,
               postRestartConsistencyTimeoutMs: 9876,
@@ -220,7 +223,11 @@ describe('rolling-restart scenario', () => {
         true);
       assert.equal(convergenceOptions[1].ignoreStaleInFlightReplicaOperations,
         true);
-      assert.deepEqual(activeOptions, [{timeoutMs: 4321}]);
+      assert.deepEqual(activeOptions, [{
+        timeoutMs: 4321,
+        noProgressMaxAttempts:
+          OVERRIDE_POST_RESTART_ACTIVE_NO_PROGRESS_MAX_ATTEMPTS,
+      }]);
       assert.deepEqual(quiescenceOptions, [{
         timeoutMs: OVERRIDE_PER_NODE_CONVERGENCE_TIMEOUT_MS,
         stableWindowMs: 0,

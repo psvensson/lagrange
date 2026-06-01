@@ -1,47 +1,51 @@
-// Manual vertical — the two-phase `step` flow for human/agent-in-the-loop work.
+// Manual supervised step flow.
 //
-// Unlike the autonomous loop (whose executors never block), manual work happens
-// out-of-band: a person makes a change and re-runs the harness between two CLI calls.
-// So a manual attempt is bracketed across two invocations:
-//
-//   begin   measure the metric NOW, pick the frontier, print the rung dossier, and
-//           persist a pending baseline.
-//   commit  measure the metric again (after the operator's change + harness rerun),
-//           then record the attempt through the SAME honesty + ladder decision path
-//           the autonomous loop uses (loop.finalizeAttempt).
-//
-// This keeps "before" honestly pinned to the pre-work state while reusing all of the
-// loop's guarantees (evidence-bound metrics, sealed goalposts, keep/climb/park).
+// `step --id <quest>` pins the before metric from live evidence and writes a
+// pending attempt. `step --id <quest> --changeRef diff:<patch>` commits that pending
+// attempt after the operator has changed code and refreshed evidence. Command-running
+// attempts should use `solve attempt`, which measures before/after around the command
+// in one process.
 
 import fs from 'node:fs';
 import path from 'node:path';
 
-import {SOLVE_DATA_DIR, STATE_SUBDIR, LADDER, EVENT_ATTEMPT}
-  from './constants.js';
-import {readLog, projectState, assertSafeQuestId} from './store.js';
-import {evaluate} from './probe.js';
-import {pickFrontier} from './scheduler.js';
-import {rungPrompt} from './ladder.js';
 import {
   makeRunContext,
   ensureSealedGoal,
   finalizeAttempt,
   recordQuestSolvedIfDone,
 } from './loop.js';
+import {readLog, projectState, assertSafeQuestId} from './store.js';
+import {evaluate} from './probe.js';
+import {pickFrontier} from './scheduler.js';
+import {stepTheoryGateProblems} from './theory.js';
+import {detectUnrecordedEvidence} from './evidence.js';
+import {
+  SOLVE_DATA_DIR,
+  STATE_SUBDIR,
+  STATUS_SOLVED,
+} from './constants.js';
+import {inspectChangeArtifact} from './change-artifact.js';
 
 export function pendingFilePath(root, questId) {
-  return path.join(root, SOLVE_DATA_DIR, STATE_SUBDIR,
-    `${assertSafeQuestId(questId)}.pending.json`);
+  return path.join(
+    root,
+    SOLVE_DATA_DIR,
+    STATE_SUBDIR,
+    `${assertSafeQuestId(questId)}.pending.json`,
+  );
 }
 
-function metricName(frontierDef) {
-  return frontierDef.metric?.args?.metric || frontierDef.metric?.probe || 'metric';
-}
-
-function metricHistory(root, questId, frontierId) {
-  return readLog(root, questId)
-    .filter((e) => e.type === EVENT_ATTEMPT && e.frontier === frontierId)
-    .map((e) => e.metricAfter);
+function configureContext(root, quest, options = {}) {
+  const ctx = makeRunContext(options);
+  ctx.probeCtx = {...ctx.probeCtx, root};
+  ctx.honestyCtx.changeRefResolves =
+    ctx.honestyCtx.changeRefResolves ||
+    ((ref) => inspectChangeArtifact(root, quest, ref).valid);
+  ctx.honestyCtx.inspectChangeRef =
+    ctx.honestyCtx.inspectChangeRef ||
+    ((ref) => inspectChangeArtifact(root, quest, ref));
+  return ctx;
 }
 
 function loadPending(root, questId) {
@@ -62,66 +66,138 @@ function clearPending(root, questId) {
   if (fs.existsSync(file)) fs.rmSync(file);
 }
 
-// Phase 1: pick the frontier and emit the dossier; pin the pre-work baseline.
-export function stepBegin(root, quest, options = {}) {
-  const ctx = makeRunContext(options);
+function theoryGateResult(problems, pick) {
+  if (problems.length === 0) return null;
+  if (problems.some((item) =>
+    item.includes('theory required') ||
+    item.includes('frontier theory required') ||
+    item.includes('system theory required') ||
+    item.includes('theory result required') ||
+    item.includes('theory result update required'))) {
+    return {
+      terminal: 'theory-required',
+      frontier: pick.def.id,
+      rungIndex: pick.state.rungIndex,
+      problems,
+    };
+  }
+  throw new Error(`theory gate failed: ${problems.join('; ')}`);
+}
+
+export function stepPending(root, questId) {
+  return loadPending(root, questId);
+}
+
+export function stepAbort(root, questId) {
+  const hadPending = Boolean(loadPending(root, questId));
+  clearPending(root, questId);
+  return hadPending;
+}
+
+function stepBegin(root, quest, options = {}) {
+  const ctx = configureContext(root, quest, options);
   ensureSealedGoal(root, quest);
   if (loadPending(root, quest.id)) {
     if (options.force) {
       clearPending(root, quest.id);
     } else {
       throw new Error(
-        'a step is already pending; run `solve step --commit` or `--abort` first');
+        'a step is already pending; commit it, abort it, or pass --force',
+      );
     }
   }
-  const questDone = evaluate(quest.doneWhen, ctx.probeCtx);
-  if (questDone.done) {
-    return {terminal: 'solved', evidence: questDone.evidence};
+
+  const unrecorded = detectUnrecordedEvidence(root, quest.id, {
+    requiresMeasuredHistory: true,
+  });
+  if (unrecorded) {
+    throw new Error(
+      'UNRECORDED_EVIDENCE: latest probe evidence is newer than Quest memory. ' +
+      `Ingest it first:\n  ${unrecorded.command}`,
+    );
   }
+
   const state = projectState(quest, readLog(root, quest.id));
+  if (state.questStatus === STATUS_SOLVED) {
+    return {terminal: 'solved', evidence: state.questEvidence};
+  }
   const pick = pickFrontier(quest, state, ctx.scoreFn);
   if (!pick) return {terminal: 'exhausted'};
+
   const before = evaluate(pick.def.metric, ctx.probeCtx);
-  const rungIndex = pick.state.rungIndex;
-  const dossier = rungPrompt({
-    quest,
-    frontierDef: pick.def,
-    metricName: metricName(pick.def),
-    rungIndex,
-    metricHistory: [...metricHistory(root, quest.id, pick.def.id), before.metric],
-    findings: pick.state.findings,
-  });
   const pending = {
     frontier: pick.def.id,
-    rungIndex,
-    before: {metric: before.metric, evidence: before.evidence, done: before.done},
+    rungIndex: pick.state.rungIndex,
+    before: {
+      metric: before.metric,
+      done: before.done,
+      evidence: before.evidence,
+      evidenceIdentity: before.evidenceIdentity || null,
+      evidenceFingerprint: before.evidenceFingerprint || null,
+    },
   };
-  const pendingFile = savePending(root, quest.id, pending);
-  return {terminal: null, frontier: pick.def.id, rung: LADDER[rungIndex], rungIndex,
-    before, dossier, pendingFile};
+  return {
+    terminal: null,
+    frontier: pick.def.id,
+    rungIndex: pick.state.rungIndex,
+    before,
+    pendingFile: savePending(root, quest.id, pending),
+  };
 }
 
-// Phase 2: re-measure and record the attempt via the shared honesty/ladder path.
-export function stepCommit(root, quest, options = {}) {
+function stepCommit(root, quest, options = {}) {
   const pending = loadPending(root, quest.id);
-  if (!pending) throw new Error('no pending step; run `solve step` first');
-  if (!options.changeRef) {
-    throw new Error('commit requires --changeRef diff:<path>');
+  if (!pending) {
+    throw new Error(
+      'no pending step; use `solve attempt -- ...` for atomic command execution ' +
+      'or run `solve step --id <quest>` before manual work',
+    );
   }
-  const ctx = makeRunContext(options);
-  const state = projectState(quest, readLog(root, quest.id));
-  const def = quest.frontiers.find((f) => f.id === pending.frontier);
-  const fState = state.frontiers.find((f) => f.id === pending.frontier);
-  if (!def || !fState) throw new Error(`pending frontier ${pending.frontier} not found`);
-  // The persisted rung is authoritative for this attempt.
-  fState.rungIndex = pending.rungIndex;
-  const pick = {def, state: fState};
-  const result = {changeRef: options.changeRef, summary: options.summary || null};
-  const outcome = finalizeAttempt(root, quest, ctx, pick, pending.before, result);
+  const ctx = configureContext(root, quest, options);
+  ensureSealedGoal(root, quest);
+  const changeInspection = ctx.honestyCtx.inspectChangeRef(options.changeRef);
+  if (!changeInspection.valid) {
+    throw new Error(
+      `invalid changeRef: ${changeInspection.problems.join('; ')}`,
+    );
+  }
+
+  const log = readLog(root, quest.id);
+  const state = projectState(quest, log);
+  const def = quest.frontiers.find((frontier) => frontier.id === pending.frontier);
+  const frontierState = state.frontiers.find((frontier) =>
+    frontier.id === pending.frontier);
+  if (!def || !frontierState) {
+    throw new Error(`pending frontier ${pending.frontier} not found`);
+  }
+  frontierState.rungIndex = pending.rungIndex;
+  const pick = {def, state: frontierState};
+  const readinessProblems = stepTheoryGateProblems({
+    log,
+    state,
+    frontierId: def.id,
+    rungIndex: pending.rungIndex,
+    theoryRef: options.theoryRef,
+    modelRef: options.modelRef,
+    modelNotApplicable: options.modelNotApplicable,
+    phase: 'commit',
+  });
+  const gateResult = theoryGateResult(readinessProblems, pick);
+  if (gateResult) return gateResult;
+
+  const outcome = finalizeAttempt(root, quest, ctx, pick, pending.before, {
+    changeRef: options.changeRef,
+    summary: options.summary || null,
+    theoryRef: options.theoryRef || null,
+    expectedMovement: options.expectedMovement || null,
+    negativeResultMeans: options.negativeResultMeans || null,
+    modelRef: options.modelRef || null,
+    modelNotApplicable: options.modelNotApplicable || null,
+  });
   const questOutcome = recordQuestSolvedIfDone(root, quest, ctx);
   clearPending(root, quest.id);
   return {
-    frontier: pending.frontier,
+    frontier: def.id,
     before: pending.before.metric,
     after: outcome.after.metric,
     done: questOutcome.done,
@@ -130,12 +206,9 @@ export function stepCommit(root, quest, options = {}) {
   };
 }
 
-export function stepAbort(root, questId) {
-  const had = Boolean(loadPending(root, questId));
-  clearPending(root, questId);
-  return had;
-}
-
-export function stepPending(root, questId) {
-  return loadPending(root, questId);
+export function runStep(root, quest, options = {}) {
+  if (!options.changeRef) {
+    return stepBegin(root, quest, options);
+  }
+  return stepCommit(root, quest, options);
 }

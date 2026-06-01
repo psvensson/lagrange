@@ -184,6 +184,10 @@ function buildOperationWorkflowOwnerTargetProgressReentryEvidence(
       snapshot,
       targetVisibilityState,
     );
+  const representativeRerunRoute =
+    snapshot?.progressContract?.representativeRerunRoute ||
+    snapshot?.progress?.progressContract?.representativeRerunRoute ||
+    'eligible';
   return Object.freeze({
     operationAvailable: Boolean(operationId),
     operationWorkflowOwner:
@@ -192,8 +196,10 @@ function buildOperationWorkflowOwnerTargetProgressReentryEvidence(
       snapshot?.progress?.currentOwner ===
         PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
     targetProgressWait:
-      isOperationWorkflowOwnerTargetPhaseProgressWait(snapshot) === true ||
-      dispatchPendingTargetProgressWait === true,
+      representativeRerunRoute !== 'blocked_model_route' && (
+        isOperationWorkflowOwnerTargetPhaseProgressWait(snapshot) === true ||
+        dispatchPendingTargetProgressWait === true
+      ),
     targetServiceTerminal:
       snapshot?.coordinator?.operation?.targetServiceTerminalState ===
         PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE.TERMINAL ||
@@ -205,6 +211,7 @@ function buildOperationWorkflowOwnerTargetProgressReentryEvidence(
       Boolean(operationId) && owner.isOperationOwnerLaneHeld(operationId),
   });
 }
+
 
 function resolveOperationWorkflowOwnerTargetProgressReentryState(evidence) {
   return (

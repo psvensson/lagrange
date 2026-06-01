@@ -308,12 +308,15 @@ class CDCRoutedMutationReadiness extends CDCIntegrationServiceSegment1 {
   }
 
   async executeSQLViaQueryEngine(sql, params = [], options = {}) {
-    if (!this.sqlQueryEngine) {
-      throw new Error(
+    const buildMissingSqlQueryEngineError = () => {
+      const error = new Error(
         `${CDC_ERROR_MSG.CDC_ENGINE_MISSING_PREFIX}` +
           `${CDC_ERROR_MSG.CDC_ENGINE_MISSING_DETAIL}`,
       );
-    }
+      error.deferRetry = true;
+      error.retryAfterMs = Math.max(NUM.ONE, this.retryDelayMs || NUM.ONE);
+      return error;
+    };
     const maxAttempts = Math.max(
       CDC_RETRY.MIN_ATTEMPTS,
       Number(this.retryMaxAttempts) || CDC_DEFAULTS.RETRY_MAX_ATTEMPTS,
@@ -479,7 +482,11 @@ class CDCRoutedMutationReadiness extends CDCIntegrationServiceSegment1 {
             return localWriteResult.result;
           }
         }
-        const result = await this.sqlQueryEngine.executeQuery(
+        const sqlQueryEngine = this.sqlQueryEngine;
+        if (typeof sqlQueryEngine?.executeQuery !== TYPEOF.FUNCTION) {
+          throw buildMissingSqlQueryEngineError();
+        }
+        const result = await sqlQueryEngine.executeQuery(
           sql,
           params,
           queryOptions,

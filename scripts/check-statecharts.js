@@ -15,7 +15,7 @@ import {
   requireConcreteArray,
   requireConcreteField,
   uniqueValues,
-} from './work-contract-utils.js';
+} from './system-contract-utils.js';
 
 const DEFAULT_STATECHART_DIR = 'docs/specs/statecharts';
 const STATECHART_SCHEMA = 'statechart-v1';

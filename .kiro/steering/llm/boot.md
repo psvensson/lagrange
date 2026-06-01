@@ -37,6 +37,7 @@ source and regenerate with `npm run steering:llm:pack`.
 | Frontier | Independent attack surface with its own metric. |
 | Attempt | One measured try against a frontier. |
 | Finding | Durable knowledge or a ruled-out approach. |
+| Theory | System-level or frontier-level causal explanation tested by evidence. |
 | Report | Projection of the event log and terminal state. |
 
 ## First Commands
@@ -46,6 +47,16 @@ For a new task:
 ```sh
 node scripts/solve.js new --id <id> --statement "<sealed result>"
 node scripts/solve.js step --id <id>
+```
+
+When a frontier stalls or the dossier says theory is required:
+
+```sh
+node scripts/solve.js theory list --id <id>
+node scripts/solve.js health --id <id>
+node scripts/solve.js theory system --id <id> ...
+node scripts/solve.js theory option --id <id> --frontier <frontier> ...
+node scripts/solve.js theory select --id <id> --frontier <frontier> --theory <theory-id>
 ```
 
 For an existing Quest:

@@ -1,5 +1,8 @@
 import {NUM, WORKFLOW_STEP} from '../constants/index.js';
 import {
+  isPriorityControlPlanePartition,
+} from '../bootstrap/system-partition-classification.js';
+import {
   isRetryableControlPlaneError,
 } from '../control-plane/control-plane-error-classification.js';
 import {EXECUTOR_OUTCOME_TYPE} from '../rebalancer/executor-outcome-constants.js';
@@ -14,6 +17,7 @@ import {
   REPLICA_HANDLER_EVENT,
   REPLICA_HANDLER_LOG_MSG,
   REPLICA_HANDLER_PROGRESS,
+  REPLICA_HANDLER_SERVICE,
   REPLICA_HANDLER_TYPEOF,
 } from './replica-handler-constants.js';
 
@@ -101,6 +105,10 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         bootstrapPeerAddresses,
         bootstrapTableMetadata,
         bootstrapPartitionMetadata,
+        deferCdcPropagationHandshake: isPriorityControlPlanePartition({
+          partitionId,
+          partitionRow: bootstrapPartitionMetadata,
+        }),
       };
       this.logger.info(REPLICA_HANDLER_LOG_MSG.CREATE_REQUEST, {
         operationId,
@@ -315,12 +323,20 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
      */
     async persistReplicaCreateInitialStatus(options = {}) {
       const {operationId, partitionId, replicaId} = options;
+      if (this.shouldUsePriorityReplicaCreateStatusFallback(partitionId)) {
+        await this.commitPriorityReplicaCreateStatusLocally({
+          operationId,
+          partitionId,
+          replicaId,
+        });
+        return true;
+      }
       try {
-        await this.updateReplicaStatus(replicaId, ReplicaStatus.PENDING, {
+        await this.persistReplicaStatusWithRetry(replicaId, ReplicaStatus.PENDING, {
           partitionId,
         });
         this.throwIfShuttingDown();
-        await this.updateReplicaStatus(replicaId, ReplicaStatus.CREATING, {
+        await this.persistReplicaStatusWithRetry(replicaId, ReplicaStatus.CREATING, {
           partitionId,
         });
         return true;
@@ -336,6 +352,118 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         });
         return false;
       }
+    }
+    /**
+     * @param {string} partitionId
+     * @return {boolean}
+     * @private
+     */
+    shouldUsePriorityReplicaCreateStatusFallback(partitionId) {
+      return isPriorityControlPlanePartition({partitionId});
+    }
+    /**
+     * Priority control-plane recovery cannot require a second durable status
+     * write before the local service exists; that service may be part of the
+     * write path needed to make the status durable.
+     * @param {Object} options
+     * @param {string} options.operationId
+     * @param {string} options.partitionId
+     * @param {string} options.replicaId
+     * @return {Promise<boolean>}
+     * @private
+     */
+    async persistPriorityReplicaCreateCreatingStatus(options = {}) {
+      const {operationId, partitionId, replicaId} = options;
+      try {
+        await this.updateReplicaStatus(replicaId, ReplicaStatus.CREATING, {
+          partitionId,
+        });
+        return true;
+      } catch (error) {
+        if (isRetryableControlPlaneError(error) !== true) {
+          throw error;
+        }
+        await this.commitPriorityReplicaCreateStatusLocally({
+          operationId,
+          partitionId,
+          replicaId,
+          error,
+        });
+        return true;
+      }
+    }
+    /**
+     * @param {Object} options
+     * @param {string} options.operationId
+     * @param {string} options.partitionId
+     * @param {string} options.replicaId
+     * @param {Error} options.error
+     * @return {Promise<boolean>}
+     * @private
+     */
+    async commitPriorityReplicaCreateStatusLocally(options = {}) {
+      const {operationId, partitionId, replicaId, error} = options;
+      this.setLocalReplica(replicaId, {
+        replicaId,
+        partitionId,
+        status: ReplicaStatus.CREATING,
+      });
+      const transitionContext = {
+        partitionId,
+        nodeId: this.nodeId,
+        errorMessage: error?.message || null,
+        serviceId: replicaId,
+        serviceType: REPLICA_HANDLER_SERVICE.TYPE,
+        serviceAddress: this.buildTrackedServiceAddress(replicaId),
+      };
+      const trackedState =
+        this.replicaStateMachine?.getState?.(replicaId) || null;
+      if (trackedState?.state !== ReplicaStatus.CREATING) {
+        if (
+          typeof this.replicaStateMachine?._applyTransition ===
+            REPLICA_HANDLER_TYPEOF.FUNCTION
+        ) {
+          const result = await Promise.resolve(
+            this.replicaStateMachine._applyTransition(
+              replicaId,
+              ReplicaStatus.CREATING,
+              transitionContext,
+              {
+                persist: false,
+                validate: trackedState !== null,
+              },
+            ),
+          );
+          if (result === false) {
+            throw new Error(
+              `Replica local state transition rejected for ${replicaId}: ` +
+                ReplicaStatus.CREATING,
+            );
+          }
+        } else if (
+          !trackedState &&
+          typeof this.replicaStateMachine?.registerReplicaSnapshot ===
+            REPLICA_HANDLER_TYPEOF.FUNCTION
+        ) {
+          this.replicaStateMachine.registerReplicaSnapshot(replicaId, {
+            ...transitionContext,
+            state: ReplicaStatus.CREATING,
+          });
+        }
+      }
+      this.logger.warn(REPLICA_HANDLER_LOG_MSG.CREATE_STATUS_WRITE_DEFERRED, {
+        operationId,
+        partitionId,
+        replicaId,
+        status: ReplicaStatus.CREATING,
+        localProgressCommitted: true,
+        error: error?.message || this.formatReplicaCreationError(error),
+        retryAfterMs: Number.isFinite(error?.retryAfterMs) ?
+          Math.floor(error.retryAfterMs) :
+          null,
+        nodeId: this.nodeId,
+      });
+      return true;
     }
     /**
      * @param {string} operationId
@@ -423,6 +551,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         bootstrapPeerAddresses,
         bootstrapTableMetadata,
         bootstrapPartitionMetadata,
+        deferCdcPropagationHandshake = false,
         skipLifecycleStatusPersistence = false,
       } = request;
       const progress = this.startReplicaCreationProgress({
@@ -505,6 +634,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           dbPath,
           leaderAddress,
           isJoiningExistingGroup,
+          deferCdcPropagationHandshake,
           // Start as learner if joining existing group
           suppressLifecycleLogs: true,
           onInitializationStage: (stageEvent) =>

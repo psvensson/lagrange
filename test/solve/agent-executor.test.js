@@ -7,7 +7,12 @@ import {makeAgentExecutor, loadAgentConfig, configFilePath}
   from '../../scripts/solve/agent-executor.js';
 import {runLoop} from '../../scripts/solve/loop.js';
 import {saveQuest, readLog} from '../../scripts/solve/store.js';
-import {EVENT_ATTEMPT, EVENT_SOLVED} from '../../scripts/solve/constants.js';
+import {
+  EVENT_ATTEMPT,
+  EVENT_SOLVED,
+  EVENT_VIOLATION,
+  OUTCOME_THEORY_REQUIRED,
+} from '../../scripts/solve/constants.js';
 
 function tmp() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'agent-'));
@@ -34,6 +39,7 @@ tap.test('agent executor (P4)', async (t) => {
       seenRequest = JSON.parse(fs.readFileSync(reqFile, 'utf8'));
       t.equal(opts.env.SOLVE_REQUEST_FILE, reqFile, 'request env exported');
       t.equal(opts.env.SOLVE_RESPONSE_FILE, resFile, 'response env exported');
+      t.equal(opts.cwd, root, 'agent runs from repo root');
       const diff = path.join(root, 'agent.diff');
       fs.writeFileSync(diff, '# change\n');
       fs.writeFileSync(resFile, JSON.stringify({changeRef: `diff:${diff}`, summary: 'did it'}));
@@ -122,8 +128,16 @@ tap.test('agent executor (P4)', async (t) => {
       const data = JSON.parse(fs.readFileSync(oracle, 'utf8'));
       data.metric = Math.max(0, data.metric - 1);
       fs.writeFileSync(oracle, JSON.stringify(data));
-      const diff = path.join(root, `c-${data.metric}.diff`);
-      fs.writeFileSync(diff, '# change\n');
+      const diff = path.join(root, 'solve', 'changes', quest.id, `c-${data.metric}.diff`);
+      fs.mkdirSync(path.dirname(diff), {recursive: true});
+      fs.writeFileSync(diff, [
+        'diff --git a/src/oracle.js b/src/oracle.js',
+        '--- a/src/oracle.js',
+        '+++ b/src/oracle.js',
+        '@@ -1 +1 @@',
+        '-before',
+        '+after',
+      ].join('\n'));
       fs.writeFileSync(args[1], JSON.stringify({changeRef: `diff:${diff}`, summary: 'step'}));
       return {status: 0};
     };
@@ -137,7 +151,7 @@ tap.test('agent executor (P4)', async (t) => {
     t.end();
   });
 
-  t.test('loop + agent that does nothing escalates then parks', (t) => {
+  t.test('loop + agent that does nothing stops at theory gate', (t) => {
     const root = tmp();
     const oracle = path.join(root, 'o.json');
     fs.writeFileSync(oracle, JSON.stringify({metric: 5, target: 0}));
@@ -148,15 +162,20 @@ tap.test('agent executor (P4)', async (t) => {
         metric: {probe: 'oracle', args: {file: oracle, metric: 'priority'}}}],
     };
     saveQuest(root, quest);
-    // Agent never changes anything → every attempt is flat → ladder climbs → park →
-    // scheduler has no open frontier → EXHAUSTED.
+    // Agent never changes anything. The first no-op climbs to widen-scope, then
+    // the loop must stop for theory before invoking the agent again.
     const spawn = (cmd, args) => {
       fs.writeFileSync(args[1], JSON.stringify({changeRef: null, summary: 'no-op'}));
       return {status: 0};
     };
     const executor = makeAgentExecutor(root, {config: CONFIG, spawn});
     const result = runLoop(root, quest, {executor, maxCycles: 20});
-    t.equal(result.outcome, 'exhausted');
+    const log = readLog(root, quest.id);
+    const attempts = log.filter((event) => event.type === EVENT_ATTEMPT);
+    const violations = log.filter((event) => event.type === EVENT_VIOLATION);
+    t.equal(result.outcome, OUTCOME_THEORY_REQUIRED);
+    t.equal(attempts.length, 1, 'does not keep invoking no-op agent');
+    t.equal(violations[violations.length - 1].scope, 'theory-gate');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });

@@ -1,6 +1,6 @@
 {
   "schema": "invariant-registry-v1",
-  "description": "Machine-readable registry of owner-scoped safety and liveness invariants. Contract records and modelTheory blocks cite these entries by id so coupling is checked structurally rather than as prose. Validate with `npm run work:invariants:check`.",
+  "description": "Machine-readable registry of owner-scoped safety and liveness invariants. Contract records and Quest theory metadata cite these entries by id so coupling is checked structurally rather than as prose. Validate with `npm run model:invariants`.",
   "invariants": [
     {
       "id": "published-subset-covered",
