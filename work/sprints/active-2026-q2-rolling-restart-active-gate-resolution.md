@@ -112,21 +112,21 @@ current-blocker files, sprint state, package queues, or theory-ledger decisions.
 
 ```text
 Representative artifact: test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json
-Visible first frontier: representative_evidence_owner / rolling_restart_rerun model route decision
-Active package: work/packages/done-20260601-representative-rerun-progress-model-route-decision.md
-Active package owner: representative_evidence_owner
-Active package boundary: rolling_restart_rerun
-Selected cause: representative_rerun_model_route_decision
-Required action: Use owner-dossier-visible representative rerun progress model coverage to choose the next legal route; do not rerun representative evidence from blocked_model_route unless the model-backed route permits it.
+Visible first frontier: operation_workflow_owner / rebalancer_handoff
+Active package: work/packages/done-20260601-rolling-restart-priority-recovery-rebalancer-handoff-backpressure-drain-escalation.md
+Active package owner: operation_workflow_owner
+Active package boundary: rebalancer_handoff
+Selected cause: priority_recovery_event_driven_wait
+Required action: Escalate priority recovery backpressure under model-blocked representative rerun; analyze if backpressure drains or if rebalancer handoff requires scheduling-layer timer or manual recovery.
 Representative status: classification-only
-Causal outcome: accept_classified_backpressure
+Causal outcome: classification-only
 Architecture gate: watching / unknown
-Expected delta: Classify whether the proven model route permits rerun, migration, runtime source promotion, architecture continuation, or blocked handoff before any representative evidence rerun.
-Current state: Owner-dossier-visible representative rerun progress model coverage exists; the stale representative artifact still routes to priority_recovery_partition_progress and must be reclassified before rerun or runtime promotion.
-Allowed edits: work/packages/done-20260601-representative-rerun-progress-model-route-decision.md, work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md, work/theory-ledger.md
-Candidate runtime files: src/rebalancer/operation-workflow-owner-ports.js, src/scenarios/rolling-restart.js
+Expected delta: focused proof shows backpressure drains or a scheduling-layer timer advances recovery
+Current state: The representative rerun progress model blocks direct rerun from a non-shrinking residual window, routing accepted backpressure to open-causal-escalation. Rebalancer handoff is stuck in backpressure wait.
+Allowed edits: work/packages/todo-20260601-rolling-restart-priority-recovery-rebalancer-handoff-backpressure-drain-residual-split.md, work/packages/todo-20260601-rolling-restart-priority-recovery-rebalancer-handoff-backpressure-drain-escalation.md, work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md, work/theory-ledger.md
+Candidate runtime files: src/rebalancer/operation-workflow-owner-ports.js
 Forbidden edits: A blocked_model_route artifact cannot authorize rerun_representative_evidence until model-backed route classification allows it.
-Required latest proof: falsifier: npm run work:owner-dossier -- --owner representative_evidence_owner --boundary rolling_restart_rerun --json, regression: npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json --owner representative_evidence_owner --boundary rolling_restart_rerun --dominant-reason representative_rerun_model_route_decision --explain priority_recovery_partition_progress, supporting: npm run work:frontier-history -- --owner representative_evidence_owner --boundary rolling_restart_rerun --limit 12
+Required latest proof: falsifier: npm run work:advance -- --check, regression: npm run work:advance -- --check
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -230,14 +230,17 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Workflow-tooling maintenance that prevents an active theory-loop sprint
      from reaching zero active/todo packages without terminal success evidence,
      blocked termination evidence, or an autonomous successor package.
-21. `active` -
+21. `done` -
    [Representative Rerun Progress Model Route Decision](work/packages/done-20260601-representative-rerun-progress-model-route-decision.md)
    - Classification successor that uses the proven representative rerun progress
      model coverage to select the next legal route before any representative
      rerun, runtime promotion, migration, or architecture continuation.
-22. `todo` -
-   [Rolling Restart Priority Recovery Rebalancer Handoff Backpressure Drain Escalation](work/packages/todo-20260601-rolling-restart-priority-recovery-rebalancer-handoff-backpressure-drain-escalation.md)
+22. `active` -
+   [Rolling Restart Priority Recovery Rebalancer Handoff Backpressure Drain Escalation](work/packages/done-20260601-rolling-restart-priority-recovery-rebalancer-handoff-backpressure-drain-escalation.md)
    - Escalate priority recovery backpressure under model-blocked representative rerun; analyze if backpressure drains or if rebalancer handoff requires scheduling-layer timer or manual recovery.
+23. `todo` -
+   [Rolling Restart Priority Recovery Rebalancer Handoff Backpressure Drain Residual Split](work/packages/todo-20260601-rolling-restart-priority-recovery-rebalancer-handoff-backpressure-drain-residual-split.md)
+   - Implement a retry timer/scheduling re-arm in the operation workflow rebalancer handoff path so stuck event-driven waits can advance retry states.
 
 ## Sprint Proof Ladder
 
@@ -251,7 +254,7 @@ Before closing this sprint, record the following evidence:
 
 ## Joint Coupled-Invariant Probe
 
-- Command: npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress # rebalancer_handoff snapshot_coverage # coupled-invariant
+- Command: npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json --owner operation_workflow_owner --boundary rebalancer_handoff --dominant-reason priority_recovery_event_driven_wait --explain priority_recovery_partition_progress # rebalancer_handoff rolling_restart_rerun rolling_restart_fully_green_gate # coupled-invariant
 - Last run: 2026-05-31
 - Last residual count: 1
 - Residual trend: decreasing

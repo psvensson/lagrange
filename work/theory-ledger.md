@@ -812,9 +812,9 @@ Each entry must include these labels:
 - Owner/boundary: operation_workflow_owner / rebalancer_handoff
 - Hypothesis: The proven representative rerun progress model blocks direct rerun from a non-shrinking residual window, routing accepted backpressure to open-causal-escalation. Rebalancer handoff is stuck in backpressure wait and must be escalated to determine if it drains autonomously or requires a scheduling-layer timer or manual recovery.
 - Probe: `npm run work:owner-dossier -- --owner representative_evidence_owner --boundary rolling_restart_rerun --json` and `npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json --owner representative_evidence_owner --boundary rolling_restart_rerun --dominant-reason representative_rerun_model_route_decision --explain priority_recovery_partition_progress`
-- Artifact/result: `active-20260601-representative-rerun-progress-model-route-decision.md` confirmed model status is proven and causal outcome is accept_classified_backpressure / classified_backpressure.
-- Representative movement: route selection completed under the model-blocked rerun gate; opened drain escalation successor package.
+- Artifact/result: `active-20260601-rolling-restart-priority-recovery-rebalancer-handoff-backpressure-drain-escalation.md` analyzed the rebalancer handoff evidence and confirmed that the event-driven wait is stalled with enqueued=false and retryAfterMs=0, meaning backpressure does not drain autonomously and requires a scheduling-layer timer retry.
+- Representative movement: none; local proof reduced route ambiguity and confirmed H2.
 - Linked packages: `work/packages/active-20260601-representative-rerun-progress-model-route-decision.md`, `work/packages/todo-20260601-rolling-restart-priority-recovery-rebalancer-handoff-backpressure-drain-escalation.md`
 - Supersedes: theory-20260531-rolling-restart-representative-rerun-progress-model-coverage-binding
 - Superseded by: none
-- Next implication: Escalate priority recovery backpressure under model-blocked representative rerun; analyze if backpressure drains or if rebalancer handoff requires scheduling-layer timer or manual recovery.
+- Next implication: Scaffold the successor package to implement a scheduling-layer retry timer for rebalancer handoff when stuck in event-driven wait.
