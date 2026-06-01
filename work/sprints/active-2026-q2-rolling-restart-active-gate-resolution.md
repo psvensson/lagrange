@@ -111,22 +111,22 @@ current-blocker files, sprint state, package queues, or theory-ledger decisions.
 ## Current Edge Card
 
 ```text
-Representative artifact: none
-Visible first frontier: unknown
-Active package: work/packages/done-20260601-queue-exhaustion-guard.md
-Active package owner: workflow_tooling_owner
-Active package boundary: continuation_guard
-Selected cause: theory_loop_queue_exhaustion_guard
-Required action: Make sprint close and push reject an active theory-loop sprint with zero active/todo packages unless success evidence or blocked termination evidence is recorded; leave a successor package before closing this maintenance package.
-Representative status: unknown
-Causal outcome: unknown
-Architecture gate: not-required / unknown
-Expected delta: unknown
-Current state: Package opened with declared owner, boundary, scope, proof, and stop rule.
-Allowed edits: scripts/work-sprint-advance.js, scripts/work-sprint-push.js, scripts/work-close.js, scripts/work-tracker.js, test/scripts/work-sprint-advance.test.js, test/scripts/work-sprint-remaining.test.js, test/scripts/work-tracker-theory-loop-continuation.test.js, work/packages/todo-20260601-representative-rerun-progress-model-route-decision.md, work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md, work/sprints/current-blocker.json
-Candidate runtime files: unknown
-Forbidden edits: owned files expand beyond this package, a frozen decision must be reopened
-Required latest proof: regression: npm test -- test/scripts/work-sprint-advance.test.js test/scripts/work-sprint-remaining.test.js test/scripts/work-tracker-theory-loop-continuation.test.js, supporting: npm run work:sprint:push -- --dry-run, supporting: git diff --check
+Representative artifact: test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json
+Visible first frontier: representative_evidence_owner / rolling_restart_rerun model route decision
+Active package: work/packages/done-20260601-representative-rerun-progress-model-route-decision.md
+Active package owner: representative_evidence_owner
+Active package boundary: rolling_restart_rerun
+Selected cause: representative_rerun_model_route_decision
+Required action: Use owner-dossier-visible representative rerun progress model coverage to choose the next legal route; do not rerun representative evidence from blocked_model_route unless the model-backed route permits it.
+Representative status: classification-only
+Causal outcome: accept_classified_backpressure
+Architecture gate: watching / unknown
+Expected delta: Classify whether the proven model route permits rerun, migration, runtime source promotion, architecture continuation, or blocked handoff before any representative evidence rerun.
+Current state: Owner-dossier-visible representative rerun progress model coverage exists; the stale representative artifact still routes to priority_recovery_partition_progress and must be reclassified before rerun or runtime promotion.
+Allowed edits: work/packages/done-20260601-representative-rerun-progress-model-route-decision.md, work/sprints/active-2026-q2-rolling-restart-active-gate-resolution.md, work/theory-ledger.md
+Candidate runtime files: src/rebalancer/operation-workflow-owner-ports.js, src/scenarios/rolling-restart.js
+Forbidden edits: A blocked_model_route artifact cannot authorize rerun_representative_evidence until model-backed route classification allows it.
+Required latest proof: falsifier: npm run work:owner-dossier -- --owner representative_evidence_owner --boundary rolling_restart_rerun --json, regression: npm run work:scenario-route -- test-output/reports/rolling-restart-priority-recovery-backpressure-rerun.report.json --owner representative_evidence_owner --boundary rolling_restart_rerun --dominant-reason representative_rerun_model_route_decision --explain priority_recovery_partition_progress, supporting: npm run work:frontier-history -- --owner representative_evidence_owner --boundary rolling_restart_rerun --limit 12
 Allowed stop modes: representative-green, migrated, reduced, same-frontier, classification-only, architecture-gap, human-escalation
 ```
 
@@ -220,21 +220,24 @@ Allowed stop modes: representative-green, migrated, reduced, same-frontier, clas
    - Workflow-tooling maintenance to derive package lifecycle, scope, route,
      result, and sprint handoff views from package metadata instead of
      hand-maintained mirror state.
-19. `active` -
+19. `done` -
    [Representative Rerun Progress Model Coverage Binding](work/packages/done-20260531-representative-rerun-progress-model-coverage-binding.md)
    - Bind the existing representative rerun progress model into a System
      Contract Record and invariant registry entries so owner-dossier reports
      proven coverage before another representative rerun is considered.
-20. `active` -
+20. `done` -
    [Theory Loop Queue Exhaustion Guard](work/packages/done-20260601-queue-exhaustion-guard.md)
    - Workflow-tooling maintenance that prevents an active theory-loop sprint
      from reaching zero active/todo packages without terminal success evidence,
      blocked termination evidence, or an autonomous successor package.
-21. `todo` -
-   [Representative Rerun Progress Model Route Decision](work/packages/todo-20260601-representative-rerun-progress-model-route-decision.md)
+21. `active` -
+   [Representative Rerun Progress Model Route Decision](work/packages/done-20260601-representative-rerun-progress-model-route-decision.md)
    - Classification successor that uses the proven representative rerun progress
      model coverage to select the next legal route before any representative
      rerun, runtime promotion, migration, or architecture continuation.
+22. `todo` -
+   [Rolling Restart Priority Recovery Rebalancer Handoff Backpressure Drain Escalation](work/packages/todo-20260601-rolling-restart-priority-recovery-rebalancer-handoff-backpressure-drain-escalation.md)
+   - Escalate priority recovery backpressure under model-blocked representative rerun; analyze if backpressure drains or if rebalancer handoff requires scheduling-layer timer or manual recovery.
 
 ## Sprint Proof Ladder
 
