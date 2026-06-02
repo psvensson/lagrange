@@ -127,6 +127,76 @@
       "formalPredicate": "PhaseComplete => <>SteadyStateOwnerActive",
       "modelRef": "architecture/models/statecharts/core-system-logic.json",
       "contractRef": "architecture/contracts/core-system-logic.md"
+    },
+    {
+      "id": "stale-projection-never-promotes-readiness",
+      "owner": "architecture_owner",
+      "boundary": "core_system_logic",
+      "kind": "safety",
+      "statement": "A stale observer projection cannot promote readiness, admission, or owner progress across handoff boundaries.",
+      "formalPredicate": "ProjectionFreshness = stale => nextAction # proceed",
+      "modelRef": "architecture/models/alloy/core-system-logic.als",
+      "contractRef": "architecture/contracts/core-system-logic.md"
+    },
+    {
+      "id": "durable-transition-has-recoverable-wake",
+      "owner": "architecture_owner",
+      "boundary": "core_system_logic",
+      "kind": "safety",
+      "statement": "Every durable owner transition that requires follow-up work has an atomic, recoverable, or replayable wake before observers depend on it.",
+      "formalPredicate": "DurableFollowUp => RecoverableWake",
+      "modelRef": "architecture/models/statecharts/core-system-logic.json",
+      "contractRef": "architecture/contracts/core-system-logic.md"
+    },
+    {
+      "id": "single-canonical-outcome",
+      "owner": "architecture_owner",
+      "boundary": "core_system_logic",
+      "kind": "safety",
+      "statement": "Every retry, rerun, handoff, or observer evidence combination emits exactly one owner-owned canonical action.",
+      "formalPredicate": "Cardinality(RouteOutcome(evidence)) = 1",
+      "modelRef": "architecture/models/decision-tables/bounded-retry-exit-routing.json",
+      "contractRef": "architecture/contracts/core-system-logic.md"
+    },
+    {
+      "id": "non-shrinking-evidence-blocks-local-retry",
+      "owner": "architecture_owner",
+      "boundary": "core_system_logic",
+      "kind": "safety",
+      "statement": "Repeated local retry with non-shrinking evidence cannot authorize another local retry.",
+      "formalPredicate": "RepeatedLocalRetry /\\ NonShrinkingEvidence => next = blocked_model_route",
+      "modelRef": "architecture/models/decision-tables/bounded-retry-exit-routing.json",
+      "contractRef": "architecture/contracts/core-system-logic.md"
+    },
+    {
+      "id": "deferred-followup-has-recoverable-wake",
+      "owner": "architecture_owner",
+      "boundary": "core_system_logic",
+      "kind": "safety",
+      "statement": "Deferred follow-up work exits through a recoverable wake while retry budget remains available.",
+      "formalPredicate": "DeferredFollowup /\\ RetryBudgetAvailable => RecoverableWake",
+      "modelRef": "architecture/models/decision-tables/bounded-retry-exit-routing.json",
+      "contractRef": "architecture/contracts/core-system-logic.md"
+    },
+    {
+      "id": "ready-requires-serviceable-canonical-leader",
+      "owner": "startup_runtime_handoff_owner",
+      "boundary": "readiness_handoff",
+      "kind": "safety",
+      "statement": "Startup readiness cannot become active before SQL and query transport serviceability are true for the canonical leader and the observed owner epoch is fresh.",
+      "formalPredicate": "ReadyOutcome => SqlServiceable /\\ QueryServiceable /\\ observedEpoch = ownerEpoch",
+      "modelRef": "models/readiness-handoff/ReadinessHandoff.tla",
+      "contractRef": "architecture/contracts/readiness-handoff-liveness.md"
+    },
+    {
+      "id": "startup-handoff-eventually-terminal",
+      "owner": "startup_runtime_handoff_owner",
+      "boundary": "readiness_handoff",
+      "kind": "liveness",
+      "statement": "Every deferred startup readiness handoff eventually reaches ready, blocked, or escalated under fair progress and recoverable wakes.",
+      "formalPredicate": "<>Terminal",
+      "modelRef": "models/readiness-handoff/ReadinessHandoff.tla",
+      "contractRef": "architecture/contracts/readiness-handoff-liveness.md"
     }
   ]
 }

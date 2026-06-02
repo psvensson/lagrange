@@ -1,0 +1,105 @@
+{
+  "schema": "owner-trace-suite-v1",
+  "id": "core-owner-trace-examples",
+  "owner": "architecture_owner",
+  "boundary": "core_system_logic",
+  "invariants": [
+    {
+      "id": "owner-outcome-before-observer",
+      "statement": "Observer projection cannot occur before a canonical owner outcome."
+    },
+    {
+      "id": "stale-projection-never-promotes-readiness",
+      "statement": "Readiness cannot be promoted from a stale projection epoch."
+    },
+    {
+      "id": "ready-requires-serviceable-canonical-leader",
+      "statement": "Readiness promotion requires SQL and query transport serviceability for the canonical leader."
+    },
+    {
+      "id": "durable-transition-has-recoverable-wake",
+      "statement": "A durable owner transition that requires follow-up work must have a recoverable wake before observers depend on it."
+    },
+    {
+      "id": "readers-do-not-repair-authority",
+      "statement": "Observer traces must not repair authoritative owner state."
+    }
+  ],
+  "validTraces": [
+    {
+      "id": "ready-after-serviceable-fresh-owner-outcome",
+      "events": [
+        {"actor": "owner", "action": "normalized_ingress"},
+        {"actor": "owner", "action": "owner_selected", "owner": "startup_runtime_handoff_owner"},
+        {"actor": "owner", "action": "serviceable", "service": "sql"},
+        {"actor": "owner", "action": "serviceable", "service": "query_transport"},
+        {"actor": "owner", "action": "owner_outcome", "outcome": "ready", "evidence": "authoritative", "ownerEpoch": 1},
+        {"actor": "owner", "action": "fresh_projection", "observedEpoch": 1},
+        {"actor": "observer", "action": "projection"},
+        {"actor": "observer", "action": "readiness_promoted", "observedEpoch": 1}
+      ]
+    },
+    {
+      "id": "deferred-transition-enqueues-wake-before-projection",
+      "events": [
+        {"actor": "owner", "action": "normalized_ingress"},
+        {"actor": "owner", "action": "owner_selected", "owner": "startup_runtime_handoff_owner"},
+        {"actor": "owner", "action": "owner_outcome", "outcome": "deferred", "evidence": "missing", "ownerEpoch": 2},
+        {"actor": "owner", "action": "durable_transition", "followUpRequired": true, "ownerEpoch": 2},
+        {"actor": "wake", "action": "wake_enqueued", "ownerEpoch": 2},
+        {"actor": "owner", "action": "fresh_projection", "observedEpoch": 2},
+        {"actor": "observer", "action": "projection"},
+        {"actor": "owner", "action": "blocked"}
+      ]
+    }
+  ],
+  "forbiddenTraces": [
+    {
+      "id": "observer-projects-before-owner-outcome",
+      "expectedViolations": ["owner-outcome-before-observer"],
+      "events": [
+        {"actor": "owner", "action": "normalized_ingress"},
+        {"actor": "observer", "action": "projection"}
+      ]
+    },
+    {
+      "id": "stale-projection-promotes-readiness",
+      "expectedViolations": ["stale-projection-never-promotes-readiness"],
+      "events": [
+        {"actor": "owner", "action": "owner_outcome", "outcome": "ready", "evidence": "authoritative", "ownerEpoch": 3},
+        {"actor": "owner", "action": "serviceable", "service": "sql"},
+        {"actor": "owner", "action": "serviceable", "service": "query_transport"},
+        {"actor": "owner", "action": "fresh_projection", "observedEpoch": 2},
+        {"actor": "observer", "action": "readiness_promoted", "observedEpoch": 2}
+      ]
+    },
+    {
+      "id": "ready-before-query-transport-serviceable",
+      "expectedViolations": ["ready-requires-serviceable-canonical-leader"],
+      "events": [
+        {"actor": "owner", "action": "serviceable", "service": "sql"},
+        {"actor": "owner", "action": "owner_outcome", "outcome": "ready", "evidence": "authoritative", "ownerEpoch": 1},
+        {"actor": "owner", "action": "fresh_projection", "observedEpoch": 1},
+        {"actor": "observer", "action": "readiness_promoted", "observedEpoch": 1}
+      ]
+    },
+    {
+      "id": "durable-follow-up-without-wake",
+      "expectedViolations": ["durable-transition-has-recoverable-wake"],
+      "events": [
+        {"actor": "owner", "action": "owner_outcome", "outcome": "deferred", "evidence": "missing", "ownerEpoch": 4},
+        {"actor": "owner", "action": "durable_transition", "followUpRequired": true, "ownerEpoch": 4},
+        {"actor": "owner", "action": "fresh_projection", "observedEpoch": 4},
+        {"actor": "observer", "action": "projection"}
+      ]
+    },
+    {
+      "id": "observer-repairs-authority",
+      "expectedViolations": ["readers-do-not-repair-authority"],
+      "events": [
+        {"actor": "owner", "action": "owner_outcome", "outcome": "blocked", "evidence": "missing", "ownerEpoch": 1},
+        {"actor": "observer", "action": "repair_authority"}
+      ]
+    }
+  ]
+}

@@ -83,6 +83,12 @@ function questTemplate(id, statement) {
         },
       },
     ],
+    constraints: [
+      {
+        id: 'source-change-subagent-verification',
+        statement: 'If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>.',
+      },
+    ],
   };
 }
 
@@ -289,20 +295,20 @@ function cmdUpgrade(root, args) {
 }
 
 const COMMANDS = {
-  new: cmdNew,
-  run: cmdRun,
-  status: cmdStatus,
-  report: cmdReport,
-  probe: cmdProbe,
-  finding: cmdFinding,
-  step: cmdStep,
+  'new': cmdNew,
+  'run': cmdRun,
+  'status': cmdStatus,
+  'report': cmdReport,
+  'probe': cmdProbe,
+  'finding': cmdFinding,
+  'step': cmdStep,
   'step-pending': cmdStepPending,
-  theory: cmdTheory,
-  health: cmdHealth,
+  'theory': cmdTheory,
+  'health': cmdHealth,
   'ingest-evidence': cmdIngestEvidence,
-  attempt: cmdAttempt,
-  audit: cmdAudit,
-  upgrade: cmdUpgrade,
+  'attempt': cmdAttempt,
+  'audit': cmdAudit,
+  'upgrade': cmdUpgrade,
 };
 
 function main() {

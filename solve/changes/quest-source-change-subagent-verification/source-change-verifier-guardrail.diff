@@ -1,0 +1,1180 @@
+diff --git a/.kiro/steering/llm/core.md b/.kiro/steering/llm/core.md
+index 99bcbc5c..c4496c3d 100644
+--- a/.kiro/steering/llm/core.md
++++ b/.kiro/steering/llm/core.md
+@@ -54,6 +54,12 @@ Use this list before non-trivial work:
+     proof pass.
+ 13. **Do not keep patching a parked frontier**; record findings and redirect to
+     another frontier or end EXHAUSTED.
++14. **Do not hand off solved Quest work without git durability**; after Solver
++    audit passes, commit and push all Quest-scoped changes, excluding unrelated
++    dirty worktree entries.
++15. **Do not hand off Quest source changes without subagent verification**;
++    spawn a subagent verifier and record a Solver finding with evidence
++    `subagent:<id>` before audit/git handoff.
+
+ ## Canonical Guardrail Command Map
+
+diff --git a/.kiro/steering/llm/governance.md b/.kiro/steering/llm/governance.md
+index b50f83b8..7b2ac8e9 100644
+--- a/.kiro/steering/llm/governance.md
++++ b/.kiro/steering/llm/governance.md
+@@ -25,25 +25,28 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
+ 5. [GOV-0007] The Solver never trusts an agent's claim that work succeeded. _(see workflow-guidelines/validators.md:18)_
+ 6. [GOV-0008] The report projection must not invent terminal status, synthetic attempts, or unmeasured progress. _(see workflow-guidelines/validators.md:42)_
+ 7. [GOV-0011] Broad rows must gain a linked spec or architecture document before active implementation starts. _(see roadmap.md:107)_
+-8. [GOV-0013] Do not move goalposts in place. _(see workflow-guidelines/solver-quests.md:30)_
+-9. [GOV-0014] Do not revive sprint/package theory state as active authority. _(see workflow-guidelines/solver-quests.md:81)_
+-10. [GOV-0015] Do not rely on solve/state/ as durable memory. _(see workflow-guidelines/solver-quests.md:179)_
+-11. [GOV-0017] constraints[]: optional hard limits the agent must preserve. _(see workflow-guidelines/solver-quests.md:46)_
+-12. [GOV-0019] model: selected frontier theory, active system theory, and --modelRef or --modelNotApplicable required. _(see workflow-guidelines/solver-quests.md:91)_
+-13. [GOV-0021] THEORY_REQUIRED: the selected rung needs system or frontier theory before another attempt; record the theory and resume instead of patching through it. _(see workflow-guidelines/solver-quests.md:164)_
+-14. [GOV-0023] Durable conclusions must be recorded with node scripts/solve.js finding before they are relied on by later attempts. _(see workflow-guidelines/subagents.md:50)_
+-15. [GOV-0024] Later attempts must use the same sealed goalposts. _(see workflow-guidelines/validators.md:37)_
+-16. [GOV-0025] Frontier theory: why the next local intervention should move the selected frontier metric. _(see workflow-guidelines/solver-quests.md:67)_
+-17. [GOV-0026] optional rulesOut text for approaches that should not be retried. _(see workflow-guidelines/solver-quests.md:147)_
+-18. [GOV-0027] The review should return findings, candidate risks, or suggested frontiers. _(see workflow-guidelines/subagents.md:50)_
+-19. [GOV-0028] A row may move to active implementation only when the intended behavior is sharp enough to produce a sealed doneWhen. _(see roadmap.md:109)_
+-20. [GOV-0029] It is git-ignored and may be rebuilt from the Quest plus event log. _(see workflow-guidelines/quest-artifacts.md:40)_
+-21. [GOV-0030] The archived theory ledger may be imported only as archive memory; imported archive theories cannot be selected for implementation until fresh Quest evidence reselects a frontier theory. _(see workflow-guidelines/solver-quests.md:81)_
++8. [GOV-0013] Do not move goalposts in place. _(see workflow-guidelines/solver-quests.md:33)_
++9. [GOV-0014] Do not revive sprint/package theory state as active authority. _(see workflow-guidelines/solver-quests.md:84)_
++10. [GOV-0015] If the verifier finds issues, fix them or record a finding that explains why the Quest must continue; do not proceed to git handoff from an unresolved verifier finding. _(see workflow-guidelines/solver-quests.md:146)_
++11. [GOV-0016] Do not include unrelated dirty worktree entries from another Quest. _(see workflow-guidelines/solver-quests.md:157)_
++12. [GOV-0017] Do not rely on solve/state/ as durable memory. _(see workflow-guidelines/solver-quests.md:211)_
++13. [GOV-0019] constraints[]: optional hard limits the agent must preserve. _(see workflow-guidelines/solver-quests.md:49)_
++14. [GOV-0021] model: selected frontier theory, active system theory, and --modelRef or --modelNotApplicable required. _(see workflow-guidelines/solver-quests.md:94)_
++15. [GOV-0023] THEORY_REQUIRED: the selected rung needs system or frontier theory before another attempt; record the theory and resume instead of patching through it. _(see workflow-guidelines/solver-quests.md:196)_
++16. [GOV-0025] Durable conclusions must be recorded with node scripts/solve.js finding before they are relied on by later attempts. _(see workflow-guidelines/subagents.md:50)_
++17. [GOV-0026] Later attempts must use the same sealed goalposts. _(see workflow-guidelines/validators.md:37)_
++18. [GOV-0028] The verifier must inspect the Quest intent, touched source diff, system guidelines, and applicable doctrine. _(see workflow-guidelines/solver-quests.md:134)_
++19. [GOV-0029] Frontier theory: why the next local intervention should move the selected frontier metric. _(see workflow-guidelines/solver-quests.md:70)_
++20. [GOV-0030] optional rulesOut text for approaches that should not be retried. _(see workflow-guidelines/solver-quests.md:179)_
++
++### Readiness & Health Contracts
++
++21. [GOV-0027] Every Quest that changes source code must spawn a subagent verifier after the final source diff is ready and before node scripts/solve.js audit --id <id> is used for handoff. _(see workflow-guidelines/solver-quests.md:134)_
+
+ ### Testing & Harness Guidelines
+
+-22. [GOV-0020] change-approach: selected frontier theory remains required; model evidence is not required unless this rung explicitly returns to a model test. _(see workflow-guidelines/solver-quests.md:93)_
+-23. [GOV-0022] Use source, test, architecture, and steering files for the implementation or documentation changes required by the Quest. _(see workflow-guidelines/quest-artifacts.md:49)_
++22. [GOV-0022] change-approach: selected frontier theory remains required; model evidence is not required unless this rung explicitly returns to a model test. _(see workflow-guidelines/solver-quests.md:96)_
++23. [GOV-0024] Use source, test, architecture, and steering files for the implementation or documentation changes required by the Quest. _(see workflow-guidelines/quest-artifacts.md:49)_
+
+ ### Governance & Scope Controls
+
+@@ -52,5 +55,5 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
+ 26. [GOV-0009] The Quest must cite or encode enough scope context to prevent local invention. _(see roadmap.md:76)_
+ 27. [GOV-0010] The row must be in scope for this repository under ../../edition-matrix.md. _(see roadmap.md:106)_
+ 28. [GOV-0012] The Quest must name the roadmap row, approved maintenance scope, or explicit user request that makes it valid. _(see roadmap.md:111)_
+-29. [GOV-0016] Such examples must not define implementation tasks in this repository unless the active Quest explicitly limits the work to AGPL-owned substrate and excludes paid-only behavior, operator flows, and control surfaces. _(see roadmap.md:96)_
+-30. [GOV-0018] widen-scope: selected frontier theory required. _(see workflow-guidelines/solver-quests.md:90)_
++29. [GOV-0018] Such examples must not define implementation tasks in this repository unless the active Quest explicitly limits the work to AGPL-owned substrate and excludes paid-only behavior, operator flows, and control surfaces. _(see roadmap.md:96)_
++30. [GOV-0020] widen-scope: selected frontier theory required. _(see workflow-guidelines/solver-quests.md:93)_
+diff --git a/.kiro/steering/llm/manifest.json b/.kiro/steering/llm/manifest.json
+index b89e8557..dacdcec3 100644
+--- a/.kiro/steering/llm/manifest.json
++++ b/.kiro/steering/llm/manifest.json
+@@ -1,12 +1,12 @@
+ {
+-  "generatedAt": "2026-06-01T12:25:25.224Z",
++  "generatedAt": "2026-06-02T09:03:07.165Z",
+   "packs": [
+     {
+       "name": "core",
+       "title": "Core Steering Pack",
+       "description": "Always-load compact rules for ownership, safety, scope, and quality baseline.",
+-      "ruleCount": 19,
+-      "estimatedTokens": 1202,
++      "ruleCount": 21,
++      "estimatedTokens": 1298,
+       "domains": [
+         "architecture",
+         "testing",
+@@ -53,7 +53,7 @@
+       "title": "Governance Steering Pack",
+       "description": "Load for roadmap and edition-scope checks.",
+       "ruleCount": 30,
+-      "estimatedTokens": 812,
++      "estimatedTokens": 830,
+       "domains": [
+         "governance"
+       ],
+diff --git a/.kiro/steering/llm/rules.json b/.kiro/steering/llm/rules.json
+index a910a0a5..568963c7 100644
+--- a/.kiro/steering/llm/rules.json
++++ b/.kiro/steering/llm/rules.json
+@@ -104,12 +104,12 @@
+     }
+   ],
+   "stats": {
+-    "candidateCount": 224,
+-    "dedupedRuleCount": 218,
+-    "exportedRuleCount": 218,
++    "candidateCount": 228,
++    "dedupedRuleCount": 222,
++    "exportedRuleCount": 222,
+     "aliasRuleCount": 0,
+-    "masterRuleCount": 218,
+-    "estimatedAllRulesTokens": 7100
++    "masterRuleCount": 222,
++    "estimatedAllRulesTokens": 7239
+   },
+   "rules": [
+     {
+@@ -2653,7 +2653,7 @@
+       "sources": [
+         {
+           "file": "workflow-guidelines/solver-quests.md",
+-          "line": 30,
++          "line": 33,
+           "section": "Quest Workflow > Operating Contract"
+         }
+       ]
+@@ -2668,7 +2668,7 @@
+       "sources": [
+         {
+           "file": "workflow-guidelines/solver-quests.md",
+-          "line": 81,
++          "line": 84,
+           "section": "Quest Workflow > Two-Layer Theory"
+         }
+       ]
+@@ -2678,12 +2678,42 @@
+       "domain": "governance",
+       "strength": "must_not",
+       "tags": [],
++      "rule": "If the verifier finds issues, fix them or record a finding that explains why the Quest must continue; do not proceed to git handoff from an unresolved verifier finding.",
++      "score": 206,
++      "sources": [
++        {
++          "file": "workflow-guidelines/solver-quests.md",
++          "line": 146,
++          "section": "Quest Workflow > Source Change Verification"
++        }
++      ]
++    },
++    {
++      "id": "GOV-0016",
++      "domain": "governance",
++      "strength": "must_not",
++      "tags": [],
++      "rule": "Do not include unrelated dirty worktree entries from another Quest.",
++      "score": 206,
++      "sources": [
++        {
++          "file": "workflow-guidelines/solver-quests.md",
++          "line": 157,
++          "section": "Quest Workflow > Git Handoff"
++        }
++      ]
++    },
++    {
++      "id": "GOV-0017",
++      "domain": "governance",
++      "strength": "must_not",
++      "tags": [],
+       "rule": "Do not rely on solve/state/ as durable memory.",
+       "score": 206,
+       "sources": [
+         {
+           "file": "workflow-guidelines/solver-quests.md",
+-          "line": 179,
++          "line": 211,
+           "section": "Quest Workflow > Tracked Versus Regenerable"
+         }
+       ]
+@@ -2704,7 +2734,7 @@
+       ]
+     },
+     {
+-      "id": "GOV-0016",
++      "id": "GOV-0018",
+       "domain": "governance",
+       "strength": "must_not",
+       "tags": [
+@@ -2906,7 +2936,7 @@
+       ]
+     },
+     {
+-      "id": "GOV-0017",
++      "id": "GOV-0019",
+       "domain": "governance",
+       "strength": "must",
+       "tags": [],
+@@ -2915,13 +2945,13 @@
+       "sources": [
+         {
+           "file": "workflow-guidelines/solver-quests.md",
+-          "line": 46,
++          "line": 49,
+           "section": "Quest Workflow > Quest Anatomy"
+         }
+       ]
+     },
+     {
+-      "id": "GOV-0018",
++      "id": "GOV-0020",
+       "domain": "governance",
+       "strength": "must",
+       "tags": [
+@@ -2932,13 +2962,13 @@
+       "sources": [
+         {
+           "file": "workflow-guidelines/solver-quests.md",
+-          "line": 90,
++          "line": 93,
+           "section": "Quest Workflow > Two-Layer Theory"
+         }
+       ]
+     },
+     {
+-      "id": "GOV-0019",
++      "id": "GOV-0021",
+       "domain": "governance",
+       "strength": "must",
+       "tags": [],
+@@ -2947,13 +2977,13 @@
+       "sources": [
+         {
+           "file": "workflow-guidelines/solver-quests.md",
+-          "line": 91,
++          "line": 94,
+           "section": "Quest Workflow > Two-Layer Theory"
+         }
+       ]
+     },
+     {
+-      "id": "GOV-0020",
++      "id": "GOV-0022",
+       "domain": "governance",
+       "strength": "must",
+       "tags": [
+@@ -2964,13 +2994,13 @@
+       "sources": [
+         {
+           "file": "workflow-guidelines/solver-quests.md",
+-          "line": 93,
++          "line": 96,
+           "section": "Quest Workflow > Two-Layer Theory"
+         }
+       ]
+     },
+     {
+-      "id": "GOV-0021",
++      "id": "GOV-0023",
+       "domain": "governance",
+       "strength": "must",
+       "tags": [],
+@@ -2979,7 +3009,7 @@
+       "sources": [
+         {
+           "file": "workflow-guidelines/solver-quests.md",
+-          "line": 164,
++          "line": 196,
+           "section": "Quest Workflow > Terminal And Blocking Conditions"
+         }
+       ]
+@@ -3019,7 +3049,7 @@
+       ]
+     },
+     {
+-      "id": "GOV-0022",
++      "id": "GOV-0024",
+       "domain": "governance",
+       "strength": "must",
+       "tags": [
+@@ -3036,7 +3066,7 @@
+       ]
+     },
+     {
+-      "id": "GOV-0023",
++      "id": "GOV-0025",
+       "domain": "governance",
+       "strength": "must",
+       "tags": [],
+@@ -3051,7 +3081,7 @@
+       ]
+     },
+     {
+-      "id": "GOV-0024",
++      "id": "GOV-0026",
+       "domain": "governance",
+       "strength": "must",
+       "tags": [],
+@@ -3169,6 +3199,38 @@
+         }
+       ]
+     },
++    {
++      "id": "GOV-0027",
++      "domain": "governance",
++      "strength": "must",
++      "tags": [
++        "readiness"
++      ],
++      "rule": "Every Quest that changes source code must spawn a subagent verifier after the final source diff is ready and before node scripts/solve.js audit --id <id> is used for handoff.",
++      "score": 188,
++      "sources": [
++        {
++          "file": "workflow-guidelines/solver-quests.md",
++          "line": 134,
++          "section": "Quest Workflow > Source Change Verification"
++        }
++      ]
++    },
++    {
++      "id": "GOV-0028",
++      "domain": "governance",
++      "strength": "must",
++      "tags": [],
++      "rule": "The verifier must inspect the Quest intent, touched source diff, system guidelines, and applicable doctrine.",
++      "score": 188,
++      "sources": [
++        {
++          "file": "workflow-guidelines/solver-quests.md",
++          "line": 134,
++          "section": "Quest Workflow > Source Change Verification"
++        }
++      ]
++    },
+     {
+       "id": "STYLE-0011",
+       "domain": "style",
+@@ -3527,7 +3589,7 @@
+       ]
+     },
+     {
+-      "id": "GOV-0025",
++      "id": "GOV-0029",
+       "domain": "governance",
+       "strength": "should",
+       "tags": [],
+@@ -3536,13 +3598,13 @@
+       "sources": [
+         {
+           "file": "workflow-guidelines/solver-quests.md",
+-          "line": 67,
++          "line": 70,
+           "section": "Quest Workflow > Two-Layer Theory"
+         }
+       ]
+     },
+     {
+-      "id": "GOV-0026",
++      "id": "GOV-0030",
+       "domain": "governance",
+       "strength": "should",
+       "tags": [],
+@@ -3551,13 +3613,13 @@
+       "sources": [
+         {
+           "file": "workflow-guidelines/solver-quests.md",
+-          "line": 147,
++          "line": 179,
+           "section": "Quest Workflow > Findings Log"
+         }
+       ]
+     },
+     {
+-      "id": "GOV-0027",
++      "id": "GOV-0031",
+       "domain": "governance",
+       "strength": "should",
+       "tags": [],
+@@ -3572,7 +3634,7 @@
+       ]
+     },
+     {
+-      "id": "GOV-0028",
++      "id": "GOV-0032",
+       "domain": "governance",
+       "strength": "may",
+       "tags": [],
+@@ -3619,7 +3681,7 @@
+       ]
+     },
+     {
+-      "id": "GOV-0029",
++      "id": "GOV-0033",
+       "domain": "governance",
+       "strength": "may",
+       "tags": [],
+@@ -3649,7 +3711,7 @@
+       ]
+     },
+     {
+-      "id": "GOV-0030",
++      "id": "GOV-0034",
+       "domain": "governance",
+       "strength": "may",
+       "tags": [],
+@@ -3658,13 +3720,13 @@
+       "sources": [
+         {
+           "file": "workflow-guidelines/solver-quests.md",
+-          "line": 81,
++          "line": 84,
+           "section": "Quest Workflow > Two-Layer Theory"
+         }
+       ]
+     },
+     {
+-      "id": "GOV-0031",
++      "id": "GOV-0035",
+       "domain": "governance",
+       "strength": "may",
+       "tags": [
+@@ -3675,13 +3737,13 @@
+       "sources": [
+         {
+           "file": "workflow-guidelines/solver-quests.md",
+-          "line": 179,
++          "line": 211,
+           "section": "Quest Workflow > Tracked Versus Regenerable"
+         }
+       ]
+     },
+     {
+-      "id": "GOV-0032",
++      "id": "GOV-0036",
+       "domain": "governance",
+       "strength": "may",
+       "tags": [
+@@ -3698,5 +3760,5 @@
+       ]
+     }
+   ],
+-  "generatedAt": "2026-06-02T07:03:33.727Z"
++  "generatedAt": "2026-06-02T09:03:07.164Z"
+ }
+diff --git a/.kiro/steering/workflow-guidelines/solver-quests.md b/.kiro/steering/workflow-guidelines/solver-quests.md
+index 8dc2b497..55012a18 100644
+--- a/.kiro/steering/workflow-guidelines/solver-quests.md
++++ b/.kiro/steering/workflow-guidelines/solver-quests.md
+@@ -25,7 +25,10 @@ A Quest must:
+ 2. define one or more independent `frontiers[]`;
+ 3. measure progress with lower-is-better probe metrics;
+ 4. record every attempt through the Solver event log;
+-5. close only through a Solver terminal state.
++5. for every Quest-scoped source code change, spawn a subagent verifier before
++   audit and git handoff;
++6. close only through a Solver terminal state;
++7. after audit passes, commit and push every Quest-scoped change.
+
+ Do not move goalposts in place. If the goal is wrong, record the finding and
+ author a new Quest with the corrected `doneWhen`.
+@@ -126,6 +129,35 @@ but they are not Solver truth. A SHA says where code landed; it does not prove
+ which measured attempt moved the metric. The Solver therefore does not accept
+ `git:<sha>` as an attempt `changeRef`.
+
++## Source Change Verification
++
++Every Quest that changes source code must spawn a subagent verifier after the
++final source diff is ready and before `node scripts/solve.js audit --id <id>`
++is used for handoff. The verifier must inspect the Quest intent, touched source
++diff, system guidelines, and applicable doctrine. Record the result as a Solver
++finding on the active frontier with evidence `subagent:<id>`:
++
++```sh
++node scripts/solve.js finding --id <quest> --frontier <frontier> \
++  --claim "Subagent verifier approved source changes against Quest intent, system guidelines, and doctrine" \
++  --evidence subagent:<id>
++```
++
++If the verifier finds issues, fix them or record a finding that explains why the
++Quest must continue; do not proceed to git handoff from an unresolved verifier
++finding.
++
++## Git Handoff
++
++After `node scripts/solve.js audit --id <id>` passes, commit and push all
++Quest-scoped changes before handoff. Include source, tests, docs, steering,
++models, the authored Quest file, append-only log, generated report, and
++`solve/changes/` artifacts for the Quest.
++
++Do not include unrelated dirty worktree entries from another Quest. If the
++worktree is mixed, use explicit pathspecs with `git add <quest-scoped paths>`,
++then `git commit -m "<quest>: <summary>"` and `git push`.
++
+ ## Strategy Ladder
+
+ Each frontier climbs a finite ladder when it stalls:
+diff --git a/docs/solver-runbook.md b/docs/solver-runbook.md
+index 234e7682..15a84bd0 100644
+--- a/docs/solver-runbook.md
++++ b/docs/solver-runbook.md
+@@ -212,6 +212,44 @@ The upgrade command records a `quest-upgraded` event, ingests the latest fresh
+ probe evidence when available, and regenerates the report. Audit rules remain
+ strict for all events after the baseline.
+
++## Source Change Verification
++
++Every Quest that changes source code must spawn a subagent verifier after the
++final source diff is ready and before audit/git handoff. Ask the verifier to
++check the Quest intent, touched source diff, system guidelines, and applicable
++doctrine. Then record the review as a Solver finding:
++
++```sh
++node scripts/solve.js finding --id <quest> --frontier <frontier> \
++  --claim "Subagent verifier approved source changes against Quest intent, system guidelines, and doctrine" \
++  --evidence subagent:<id>
++```
++
++For Quests with the `source-change-subagent-verification` constraint, audit
++fails after source-code patch artifacts until this later verifier finding is in
++the log.
++
++## Git Handoff
++
++After `node scripts/solve.js audit --id <quest>` passes, commit and push the
++Quest-scoped changes before handing the work off. Include the authored Quest
++file, append-only log, generated report, `solve/changes/` attempt artifact, and
++all source, test, docs, steering, and model files changed for that Quest.
++
++Do not commit unrelated dirty worktree entries from another Quest. If the
++worktree is mixed, use explicit pathspecs:
++
++```sh
++git status --short
++git add <quest-scoped paths>
++git commit -m "<quest>: <summary>"
++git push
++```
++
++This git handoff does not replace Solver proof. Attempt proof remains the
++recorded `diff:<path>` changeRef plus live probe evidence; the commit and push
++make the completed Quest durable in the shared repository.
++
+ ## Autonomous Run
+
+ ```sh
+diff --git a/scripts/list-commands.js b/scripts/list-commands.js
+index fb2eb59d..1072a23a 100644
+--- a/scripts/list-commands.js
++++ b/scripts/list-commands.js
+@@ -10,7 +10,7 @@ const COMMAND_GROUPS = Object.freeze([
+       }),
+       Object.freeze({
+         command: 'npm run quest:context -- --id <quest>',
+-        description: 'Print Quest status, model guidance, pending step, latest probe, findings, and dirty worktree.',
++        description: 'Print Quest status, model guidance, source-change verifier rule, pending step, latest probe, findings, and dirty worktree.',
+       }),
+       Object.freeze({
+         command: 'npm run solve:status -- --id <quest>',
+@@ -46,7 +46,7 @@ const COMMAND_GROUPS = Object.freeze([
+       }),
+       Object.freeze({
+         command: 'npm run solve:audit -- --id <quest>',
+-        description: 'Validate Quest workflow integrity before trusting a closure projection.',
++        description: 'Validate Quest workflow integrity, source-change verifier evidence, and git handoff readiness.',
+       }),
+       Object.freeze({
+         command: 'npm run solve:upgrade -- --id <quest>',
+@@ -131,6 +131,10 @@ const COMMAND_GROUPS = Object.freeze([
+         command: 'npm run model:statecharts',
+         description: 'Validate lifecycle and owner-state statecharts for reachability, terminal states, evidence, and forbidden transitions.',
+       }),
++      Object.freeze({
++        command: 'npm run model:owner-traces',
++        description: 'Validate owner trace suites so valid traces satisfy invariants and forbidden traces violate declared invariants.',
++      }),
+       Object.freeze({
+         command: 'npm run model:alloy',
+         description: 'Validate architecture-owned Alloy models and their declared assertions, check commands, and run commands.',
+diff --git a/scripts/quest-context.js b/scripts/quest-context.js
+index cf4d8cb8..6d8eeb4e 100644
+--- a/scripts/quest-context.js
++++ b/scripts/quest-context.js
+@@ -185,7 +185,7 @@ function renderContext(context) {
+       'Show exact command:',
+       EMPTY,
+       `node scripts/solve.js ingest-evidence --id ${quest.id} --frontier ${context.unrecorded.frontier} --evidence ${context.unrecorded.evidence}`,
+-      EMPTY
++      EMPTY,
+     );
+   }
+   lines.push('## Active Quest', EMPTY);
+@@ -257,6 +257,26 @@ function renderContext(context) {
+       `${quest.health.modelGuidance.modelRef}\``,
+     );
+   }
++  lines.push(EMPTY, '## Source Change Verification', EMPTY);
++  lines.push('- required for every Quest-scoped source code change before audit and git handoff');
++  lines.push('- spawn a subagent to review the final source diff for Quest intent, system guidelines, and doctrine');
++  lines.push('- record the review as a Solver finding with evidence `subagent:<id>`');
++  lines.push(
++    `- \`node scripts/solve.js finding --id ${quest.id} ` +
++    '--frontier <frontier> --claim "Subagent verifier approved source changes" ' +
++    '--evidence subagent:<id>`',
++  );
++  lines.push(EMPTY, '## Git Handoff', EMPTY);
++  lines.push('- required after `node scripts/solve.js audit --id <quest>` passes');
++  lines.push(
++    '- commit all Quest-scoped source, test, docs, steering, Quest log, ' +
++    'Quest report, and `solve/changes/` artifacts',
++  );
++  lines.push('- do not include unrelated dirty worktree entries from other Quests');
++  lines.push('- `git status --short`');
++  lines.push('- `git add <quest-scoped paths>`');
++  lines.push(`- \`git commit -m "${quest.id}: <summary>"\``);
++  lines.push('- `git push`');
+   lines.push(EMPTY, '## Worktree Summary', EMPTY);
+   if (context.worktree === null) {
+     lines.push('- git status unavailable');
+diff --git a/scripts/solve.js b/scripts/solve.js
+index 9a3d8e33..00594b58 100644
+--- a/scripts/solve.js
++++ b/scripts/solve.js
+@@ -83,6 +83,12 @@ function questTemplate(id, statement) {
+         },
+       },
+     ],
++    constraints: [
++      {
++        id: 'source-change-subagent-verification',
++        statement: 'If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>.',
++      },
++    ],
+   };
+ }
+
+@@ -289,20 +295,20 @@ function cmdUpgrade(root, args) {
+ }
+
+ const COMMANDS = {
+-  new: cmdNew,
+-  run: cmdRun,
+-  status: cmdStatus,
+-  report: cmdReport,
+-  probe: cmdProbe,
+-  finding: cmdFinding,
+-  step: cmdStep,
++  'new': cmdNew,
++  'run': cmdRun,
++  'status': cmdStatus,
++  'report': cmdReport,
++  'probe': cmdProbe,
++  'finding': cmdFinding,
++  'step': cmdStep,
+   'step-pending': cmdStepPending,
+-  theory: cmdTheory,
+-  health: cmdHealth,
++  'theory': cmdTheory,
++  'health': cmdHealth,
+   'ingest-evidence': cmdIngestEvidence,
+-  attempt: cmdAttempt,
+-  audit: cmdAudit,
+-  upgrade: cmdUpgrade,
++  'attempt': cmdAttempt,
++  'audit': cmdAudit,
++  'upgrade': cmdUpgrade,
+ };
+
+ function main() {
+diff --git a/scripts/solve/audit.js b/scripts/solve/audit.js
+index d3dbef40..0318c0d4 100644
+--- a/scripts/solve/audit.js
++++ b/scripts/solve/audit.js
+@@ -4,6 +4,7 @@ import path from 'node:path';
+ import {
+   EVENT_ATTEMPT,
+   EVENT_EVIDENCE_INGESTED,
++  EVENT_FINDING,
+   EVENT_QUEST,
+   EVENT_QUEST_UPGRADED,
+   EVENT_SOLVED,
+@@ -12,6 +13,7 @@ import {
+   EVENT_THEORY_SELECTED,
+   EVENT_THEORY_SUPERSEDED,
+   EVENT_THEORY_SYSTEM_DECLARED,
++  STATUS_SOLVED,
+   THEORY_RESULT_ACTIVE,
+   THEORY_RESULT_AVOIDED,
+   THEORY_RESULT_FALSIFIED,
+@@ -22,7 +24,11 @@ import {
+ } from './constants.js';
+ import {detectUnrecordedEvidence} from './evidence.js';
+ import {eventEvidenceFingerprint} from './evidence-identity.js';
+-import {inspectChangeArtifact} from './change-artifact.js';
++import {
++  inspectChangeArtifact,
++  requiresModelEvidence,
++  requiresSourceVerification,
++} from './change-artifact.js';
+ import {loadQuest, projectState, readLog} from './store.js';
+
+ const BLOCKED_THEORY_STATUSES = Object.freeze([
+@@ -126,9 +132,15 @@ function auditMetricZeroNeedsTheoryResult(log, startIndex) {
+   const event = log[latestMetricIndex];
+   const metric = event.type === EVENT_ATTEMPT ? event.metricAfter : event.metric;
+   if (metric !== 0 || event.done === true) return [];
+-  const hasLaterTheoryResult = log.slice(latestMetricIndex + 1)
++  const laterEvents = log.slice(latestMetricIndex + 1);
++  const hasLaterTheoryResult = laterEvents
+     .some((item) => item.type === EVENT_THEORY_RESULT);
+   if (hasLaterTheoryResult) return [];
++  const hasLaterSolvedEvent = laterEvents.some((item) =>
++    (item.type === EVENT_SOLVED &&
++      (!event.frontier || item.frontier === event.frontier)) ||
++    (item.type === EVENT_QUEST && item.status === STATUS_SOLVED));
++  if (hasLaterSolvedEvent) return [];
+   return [problem('metric is zero but done is false without a later theory result', event)];
+ }
+
+@@ -143,6 +155,80 @@ function auditReportOrdering(root, quest, log) {
+   return [];
+ }
+
++function isSubagentVerificationFinding(event, frontier) {
++  return event.type === EVENT_FINDING &&
++    event.frontier === frontier &&
++    typeof event.evidence === 'string' &&
++    event.evidence.startsWith('subagent:') &&
++    /source|code|change|quest|intent|guideline|doctrine|verif/iu
++      .test(String(event.claim || ''));
++}
++
++function auditSourceChangeVerification(root, quest, log, startIndex) {
++  let latestSourceAttemptIndex = -1;
++  let latestSourceAttempt = null;
++  for (const [index, event] of log.entries()) {
++    if (index < startIndex || event.type !== EVENT_ATTEMPT) continue;
++    const inspection = inspectChangeArtifact(root, quest, event.changeRef);
++    if (inspection.changedPaths.some(requiresSourceVerification)) {
++      latestSourceAttemptIndex = index;
++      latestSourceAttempt = event;
++    }
++  }
++  if (latestSourceAttemptIndex < 0) return [];
++  const hasLaterVerification = log
++    .slice(latestSourceAttemptIndex + 1)
++    .some((event) =>
++      isSubagentVerificationFinding(event, latestSourceAttempt.frontier));
++  if (hasLaterVerification) return [];
++  return [problem(
++    'source code changes require a later subagent verification finding ' +
++      'with evidence subagent:<id>',
++    latestSourceAttempt,
++  )];
++}
++
++function isModelEvidenceFinding(event, frontier) {
++  if (event.type === EVENT_EVIDENCE_INGESTED && event.frontier === frontier) {
++    return isModelEvidenceRef(event.evidence);
++  }
++  return event.type === EVENT_FINDING &&
++    event.frontier === frontier &&
++    isModelEvidenceRef(event.evidence) &&
++    /model|alloy|tla|trace|decision|statechart|contract|evidence|report/iu
++      .test(String(event.claim || ''));
++}
++
++function isModelEvidenceRef(evidence) {
++  const value = String(evidence || '');
++  return /^(model|statechart|contract|tla):/u.test(value) ||
++    /^test-output\/reports\/.*\.model\.report\.json$/u.test(value) ||
++    /^models\//u.test(value) ||
++    /^architecture\/models\//u.test(value) ||
++    /^architecture\/contracts\//u.test(value);
++}
++
++function auditModelEvidence(root, quest, log, startIndex) {
++  const problems = [];
++  for (const [index, event] of log.entries()) {
++    if (index < startIndex || event.type !== EVENT_ATTEMPT) continue;
++    const inspection = inspectChangeArtifact(root, quest, event.changeRef);
++    if (!inspection.changedPaths.some(requiresModelEvidence)) continue;
++    const hasInlineModelEvidence = Boolean(event.modelRef);
++    const hasLaterModelEvidence = log
++      .slice(index + 1)
++      .some((item) => isModelEvidenceFinding(item, event.frontier));
++    if (!hasInlineModelEvidence && !hasLaterModelEvidence) {
++      problems.push(problem(
++        'model and architecture model changes require modelRef or later ' +
++          'model evidence finding on the same frontier',
++        event,
++      ));
++    }
++  }
++  return problems;
++}
++
+ export function auditQuest(root, quest) {
+   const log = readLog(root, quest.id);
+   const state = projectState(quest, log);
+@@ -151,6 +237,8 @@ export function auditQuest(root, quest) {
+     ...auditChangeRefs(root, quest, log, startIndex),
+     ...auditEvidenceIdentity(log, startIndex),
+     ...auditTheoryUse(log, startIndex),
++    ...auditSourceChangeVerification(root, quest, log, startIndex),
++    ...auditModelEvidence(root, quest, log, startIndex),
+     ...auditMetricZeroNeedsTheoryResult(log, startIndex),
+     ...auditReportOrdering(root, quest, log),
+   ];
+diff --git a/scripts/solve/change-artifact.js b/scripts/solve/change-artifact.js
+index c1a54ada..cf923e11 100644
+--- a/scripts/solve/change-artifact.js
++++ b/scripts/solve/change-artifact.js
+@@ -39,6 +39,31 @@ const RUNTIME_PATH_PREFIXES = Object.freeze([
+   'test/query/',
+ ]);
+
++const SOURCE_VERIFICATION_PATH_PREFIXES = Object.freeze([
++  'src/',
++  'scripts/',
++  'test/',
++  'models/',
++  'architecture/models/',
++  'architecture/contracts/',
++  'package.json',
++]);
++
++const MODEL_EVIDENCE_PATH_PREFIXES = Object.freeze([
++  'models/',
++  'architecture/models/',
++  'architecture/contracts/',
++  'scripts/model-',
++  'scripts/check-alloy-models.js',
++  'scripts/check-decision-tables.js',
++  'scripts/check-invariants.js',
++  'scripts/check-owner-traces.js',
++  'scripts/check-statecharts.js',
++  'scripts/check-system-contracts.js',
++  'test/scripts/check-owner-traces.test.js',
++  'package.json',
++]);
++
+ function normalizeSlash(value) {
+   return String(value || '').replaceAll(path.sep, '/');
+ }
+@@ -141,13 +166,25 @@ export function classifyPath(filePath) {
+   return 'other';
+ }
+
++export function requiresSourceVerification(filePath) {
++  const normalized = normalizeSlash(filePath);
++  return SOURCE_VERIFICATION_PATH_PREFIXES.some((prefix) =>
++    normalized.startsWith(prefix));
++}
++
++export function requiresModelEvidence(filePath) {
++  const normalized = normalizeSlash(filePath);
++  return MODEL_EVIDENCE_PATH_PREFIXES.some((prefix) =>
++    normalized.startsWith(prefix));
++}
++
+ export function classifyQuestScope(quest) {
+   const haystack = [
+     quest?.id,
+     quest?.statement,
+     ...(quest?.frontiers || []).map((frontier) => frontier.id),
+   ].join(' ').toLowerCase();
+-  if (/\b(solver|workflow|work-tracker|tooling|steering|command)\b/u
++  if (/\b(solver|workflow|work-tracker|tooling|steering|command|model|architecture|contract)\b/u
+     .test(haystack)) {
+     return 'workflow';
+   }
+diff --git a/solve/oracle/quest-source-change-subagent-verification.json b/solve/oracle/quest-source-change-subagent-verification.json
+new file mode 100644
+index 00000000..be9aefe6
+--- /dev/null
++++ b/solve/oracle/quest-source-change-subagent-verification.json
+@@ -0,0 +1,6 @@
++{
++  "metric": 0,
++  "target": 0,
++  "done": true,
++  "classification": "workflow-guidance-implemented"
++}
+diff --git a/solve/quests/quest-source-change-subagent-verification.json b/solve/quests/quest-source-change-subagent-verification.json
+new file mode 100644
+index 00000000..b158a3d9
+--- /dev/null
++++ b/solve/quests/quest-source-change-subagent-verification.json
+@@ -0,0 +1,29 @@
++{
++  "id": "quest-source-change-subagent-verification",
++  "statement": "Quest workflow guidance requires subagent verification for every Quest-scoped source code change before audit and git handoff.",
++  "priority": 1,
++  "doneWhen": {
++    "probe": "oracle",
++    "args": {
++      "file": "solve/oracle/quest-source-change-subagent-verification.json"
++    }
++  },
++  "frontiers": [
++    {
++      "id": "quest-source-change-subagent-verification-main",
++      "priority": 1,
++      "metric": {
++        "probe": "oracle",
++        "args": {
++          "file": "solve/oracle/quest-source-change-subagent-verification.json"
++        }
++      }
++    }
++  ],
++  "constraints": [
++    {
++      "id": "source-change-subagent-verification",
++      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
++    }
++  ]
++}
+diff --git a/test/scripts/list-commands.test.js b/test/scripts/list-commands.test.js
+index 386e4408..9d7ea590 100644
+--- a/test/scripts/list-commands.test.js
++++ b/test/scripts/list-commands.test.js
+@@ -46,6 +46,7 @@ const MODEL_INVARIANTS_COMMAND =
+
+ const MODEL_DECISION_TABLES_COMMAND = 'npm run model:decision-tables';
+ const MODEL_STATECHARTS_COMMAND = 'npm run model:statecharts';
++const MODEL_OWNER_TRACES_COMMAND = 'npm run model:owner-traces';
+ const MODEL_ALLOY_COMMAND = 'npm run model:alloy';
+ const MODEL_CONTRACTS_COMMAND = 'npm run model:contracts';
+ const GUIDELINE_LITERALS_COMMAND =
+@@ -86,6 +87,8 @@ const MODEL_INVARIANTS_SCRIPT = 'model:invariants';
+ const MODEL_INVARIANTS_SCRIPT_COMMAND = 'node scripts/check-invariants.js';
+ const MODEL_ALLOY_SCRIPT = 'model:alloy';
+ const MODEL_ALLOY_SCRIPT_COMMAND = 'node scripts/check-alloy-models.js';
++const MODEL_OWNER_TRACES_SCRIPT = 'model:owner-traces';
++const MODEL_OWNER_TRACES_SCRIPT_COMMAND = 'node scripts/check-owner-traces.js';
+ const SOLVE_SCRIPT = 'solve';
+ const SOLVE_SCRIPT_COMMAND = 'node scripts/solve.js';
+ const SOLVE_STATUS_SCRIPT = 'solve:status';
+@@ -156,6 +159,7 @@ test('command list is Quest-first and keeps deterministic guardrails', (t) => {
+     MODEL_INVARIANTS_COMMAND,
+     MODEL_DECISION_TABLES_COMMAND,
+     MODEL_STATECHARTS_COMMAND,
++    MODEL_OWNER_TRACES_COMMAND,
+     MODEL_ALLOY_COMMAND,
+     MODEL_CONTRACTS_COMMAND,
+     GUIDELINE_LITERALS_COMMAND,
+@@ -179,15 +183,20 @@ test('command list is Quest-first and keeps deterministic guardrails', (t) => {
+     GUIDELINE_GUARDRAILS_GROUP_TITLE,
+   );
+   t.match(
+-      rendered,
++    rendered,
+     `${QUEST_CONTEXT_COMMAND}\`${COMMAND_ENTRY_SEPARATOR}` +
+-      'Print Quest status, model guidance, pending step, latest probe, findings, and dirty worktree.',
++      'Print Quest status, model guidance, source-change verifier rule, pending step, latest probe, findings, and dirty worktree.',
+   );
+   t.match(
+     rendered,
+     `${SOLVE_FINDING_COMMAND}\`${COMMAND_ENTRY_SEPARATOR}` +
+       'Record durable Quest memory for a frontier.',
+   );
++  t.match(
++    rendered,
++    `${SOLVE_AUDIT_COMMAND}\`${COMMAND_ENTRY_SEPARATOR}` +
++      'Validate Quest workflow integrity, source-change verifier evidence, and git handoff readiness.',
++  );
+   t.end();
+ });
+
+@@ -243,6 +252,10 @@ test('package scripts expose Quest aliases and runtime grammar guards', (t) => {
+     MODEL_CONTRACT_RECORDS_SCRIPT_COMMAND,
+   );
+   t.equal(scripts[MODEL_INVARIANTS_SCRIPT], MODEL_INVARIANTS_SCRIPT_COMMAND);
++  t.equal(
++    scripts[MODEL_OWNER_TRACES_SCRIPT],
++    MODEL_OWNER_TRACES_SCRIPT_COMMAND,
++  );
+   t.equal(scripts[MODEL_ALLOY_SCRIPT], MODEL_ALLOY_SCRIPT_COMMAND);
+   for (const scriptName of Object.keys(scripts)) {
+     t.notMatch(scriptName, /^work:/u);
+diff --git a/test/scripts/quest-context.test.js b/test/scripts/quest-context.test.js
+index bfe0aa8e..2066fed6 100644
+--- a/test/scripts/quest-context.test.js
++++ b/test/scripts/quest-context.test.js
+@@ -144,7 +144,7 @@ tap.test('quest-context newer evidence warning (P2)', async (t) => {
+     // Evaluate context - since report is newer, it should warn!
+     const ctx = buildContext(root, {id: goal.id});
+     t.ok(ctx.unrecorded, 'unrecorded evidence detected');
+-
++
+     const rendered = renderContext(ctx);
+     t.match(rendered, /UNRECORDED_EVIDENCE: latest probe evidence is newer than Quest memory/);
+     t.match(rendered, /node scripts\/solve\.js ingest-evidence/);
+@@ -162,6 +162,13 @@ tap.test('quest-context newer evidence warning (P2)', async (t) => {
+
+     const rendered2 = renderContext(ctx2);
+     t.notMatch(rendered2, /UNRECORDED_EVIDENCE/);
++    t.match(rendered2, /## Git Handoff/u);
++    t.match(rendered2, /## Source Change Verification/u);
++    t.match(rendered2, /Subagent verifier approved source changes/u);
++    t.match(rendered2, /--evidence subagent:<id>/u);
++    t.match(rendered2, /git commit -m "context-quest-test: <summary>"/u);
++    t.match(rendered2, /git push/u);
++    t.match(rendered2, /do not include unrelated dirty worktree entries/u);
+
+     fs.rmSync(root, {recursive: true, force: true});
+     t.end();
+@@ -215,16 +222,16 @@ tap.test('recorded theories retain architecture model guidance', (t) => {
+   });
+
+   const result = runTheoryCommand(root, {
+-    _: ['system'],
+-    id: goal.id,
+-    theory: 'theory-architecture-owner-boundary',
+-    problem: 'architecture owner boundary can drift without model evidence',
+-    evidence: 'test-output/reports/core-system-logic-alloy.model.report.json',
+-    success: 'Quest closes with owner-boundary evidence intact',
+-    mechanism: 'coupled_invariants',
+-    owner: 'architecture_owner',
++    '_': ['system'],
++    'id': goal.id,
++    'theory': 'theory-architecture-owner-boundary',
++    'problem': 'architecture owner boundary can drift without model evidence',
++    'evidence': 'test-output/reports/core-system-logic-alloy.model.report.json',
++    'success': 'Quest closes with owner-boundary evidence intact',
++    'mechanism': 'coupled_invariants',
++    'owner': 'architecture_owner',
+     'missing-edge': 'model contract discriminator',
+-    discriminator: 'npm run model:contracts',
++    'discriminator': 'npm run model:contracts',
+   });
+   t.match(result, /recorded system theory/u);
+
+diff --git a/test/solve/audit.test.js b/test/solve/audit.test.js
+index 2a2f56e9..f624c867 100644
+--- a/test/solve/audit.test.js
++++ b/test/solve/audit.test.js
+@@ -49,7 +49,7 @@ tap.test('Quest audit', async (t) => {
+     runStep(root, quest);
+     fs.writeFileSync(oracle, JSON.stringify({metric: 1, target: 0}));
+     runStep(root, quest, {
+-      changeRef: makeDiff(root, quest.id, 'valid'),
++      changeRef: makeDiff(root, quest.id, 'valid', 'docs/demo.md'),
+       summary: 'valid scoped patch',
+     });
+
+@@ -60,6 +60,23 @@ tap.test('Quest audit', async (t) => {
+     t.end();
+   });
+
++  t.test('accepts zero metric attempts closed by later solved events', (t) => {
++    const root = tmp();
++    const {quest, oracle} = makeQuest(root);
++    runStep(root, quest);
++    fs.writeFileSync(oracle, JSON.stringify({metric: 0, target: 0}));
++    runStep(root, quest, {
++      changeRef: makeDiff(root, quest.id, 'valid', 'docs/demo.md'),
++      summary: 'valid solved patch',
++    });
++
++    const audit = auditQuest(root, quest);
++    t.equal(audit.status, 'pass');
++    t.same(audit.problems, []);
++    fs.rmSync(root, {recursive: true, force: true});
++    t.end();
++  });
++
+   t.test('fails source-file changeRefs and missing evidence identity', (t) => {
+     const root = tmp();
+     const {quest, oracle} = makeQuest(root);
+@@ -191,4 +208,101 @@ tap.test('Quest audit', async (t) => {
+     fs.rmSync(root, {recursive: true, force: true});
+     t.end();
+   });
++
++  t.test('requires subagent verification after source changes without opt-in constraint', (t) => {
++    const root = tmp();
++    const {quest, oracle} = makeQuest(root, 'workflow-source-verifier');
++    saveQuest(root, quest);
++    runStep(root, quest);
++    fs.writeFileSync(oracle, JSON.stringify({metric: 1, target: 0}));
++    runStep(root, quest, {
++      changeRef: makeDiff(root, quest.id, 'source', 'scripts/quest-context.js'),
++      summary: 'source change requiring verifier',
++    });
++
++    let audit = auditQuest(root, quest);
++    t.match(
++      audit.problems.map((item) => item.message).join('\n'),
++      /source code changes require a later subagent verification finding/u,
++    );
++
++    appendEvent(root, quest.id, {
++      type: 'finding',
++      frontier: 'wrong-frontier',
++      claim: 'Subagent verifier approved source changes against Quest intent, system guidelines, and doctrine.',
++      evidence: 'subagent:019e870d-3b19-7fa3-ae37-a85868b84226',
++    });
++
++    audit = auditQuest(root, quest);
++    t.match(
++      audit.problems.map((item) => item.message).join('\n'),
++      /source code changes require a later subagent verification finding/u,
++    );
++
++    appendEvent(root, quest.id, {
++      type: 'finding',
++      frontier: 'workflow-source-verifier-main',
++      claim: 'Subagent verifier approved source changes against Quest intent, system guidelines, and doctrine.',
++      evidence: 'subagent:019e870d-3b19-7fa3-ae37-a85868b84226',
++    });
++
++    audit = auditQuest(root, quest);
++    t.equal(audit.status, 'pass');
++    fs.rmSync(root, {recursive: true, force: true});
++    t.end();
++  });
++
++  t.test('requires model evidence after architecture model changes', (t) => {
++    const root = tmp();
++    const {quest, oracle} = makeQuest(root, 'model-contract-demo');
++    saveQuest(root, quest);
++    runStep(root, quest);
++    fs.writeFileSync(oracle, JSON.stringify({metric: 1, target: 0}));
++    runStep(root, quest, {
++      changeRef: makeDiff(
++        root,
++        quest.id,
++        'contract',
++        'architecture/contracts/invariants.json',
++      ),
++      summary: 'model contract change requiring verifier and model evidence',
++    });
++    appendEvent(root, quest.id, {
++      type: 'finding',
++      frontier: 'model-contract-demo-main',
++      claim: 'Subagent verifier approved source changes against Quest intent, system guidelines, and doctrine.',
++      evidence: 'subagent:019e870d-3b19-7fa3-ae37-a85868b84226',
++    });
++
++    let audit = auditQuest(root, quest);
++    t.match(
++      audit.problems.map((item) => item.message).join('\n'),
++      /model and architecture model changes require modelRef or later model evidence/u,
++    );
++
++    appendEvent(root, quest.id, {
++      type: 'finding',
++      frontier: 'wrong-frontier',
++      claim: 'Model evidence from architecture contract report passed.',
++      evidence: 'test-output/reports/core-system-logic-alloy.model.report.json',
++    });
++
++    audit = auditQuest(root, quest);
++    t.match(
++      audit.problems.map((item) => item.message).join('\n'),
++      /model and architecture model changes require modelRef or later model evidence/u,
++    );
++
++    appendEvent(root, quest.id, {
++      type: 'finding',
++      frontier: 'model-contract-demo-main',
++      claim: 'Model evidence from architecture contract report passed.',
++      evidence: 'test-output/reports/core-system-logic-alloy.model.report.json',
++    });
++
++    audit = auditQuest(root, quest);
++    t.equal(audit.status, 'pass');
++    fs.rmSync(root, {recursive: true, force: true});
++    t.end();
++  });
+ });

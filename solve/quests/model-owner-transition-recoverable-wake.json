@@ -1,0 +1,29 @@
+{
+  "id": "model-owner-transition-recoverable-wake",
+  "statement": "The owner transition model proves every durable owner transition that requires follow-up work has an atomic, recoverable, or replayable wake so committed state cannot strand observer projection or retry progress.",
+  "priority": 1,
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/model-owner-transition-recoverable-wake.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "model-owner-transition-recoverable-wake-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/model-owner-transition-recoverable-wake.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

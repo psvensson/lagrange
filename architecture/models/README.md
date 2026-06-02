@@ -14,6 +14,8 @@ with the architecture documents.
   checked by `npm run model:statecharts`.
 - `decision-tables/` - architecture-owned decision tables checked by
   `npm run model:decision-tables`.
+- `traces/` - architecture-owned owner trace suites checked by
+  `npm run model:owner-traces`.
 - `alloy/` - architecture-owned Alloy structural models checked by
   `npm run model:alloy`.
 

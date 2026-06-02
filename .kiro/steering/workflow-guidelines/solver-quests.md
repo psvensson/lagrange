@@ -25,7 +25,10 @@ A Quest must:
 2. define one or more independent `frontiers[]`;
 3. measure progress with lower-is-better probe metrics;
 4. record every attempt through the Solver event log;
-5. close only through a Solver terminal state.
+5. for every Quest-scoped source code change, spawn a subagent verifier before
+   audit and git handoff;
+6. close only through a Solver terminal state;
+7. after audit passes, commit and push every Quest-scoped change.
 
 Do not move goalposts in place. If the goal is wrong, record the finding and
 author a new Quest with the corrected `doneWhen`.
@@ -125,6 +128,35 @@ Commit SHAs are useful in release notes, pull requests, or human audit trails,
 but they are not Solver truth. A SHA says where code landed; it does not prove
 which measured attempt moved the metric. The Solver therefore does not accept
 `git:<sha>` as an attempt `changeRef`.
+
+## Source Change Verification
+
+Every Quest that changes source code must spawn a subagent verifier after the
+final source diff is ready and before `node scripts/solve.js audit --id <id>`
+is used for handoff. The verifier must inspect the Quest intent, touched source
+diff, system guidelines, and applicable doctrine. Record the result as a Solver
+finding on the active frontier with evidence `subagent:<id>`:
+
+```sh
+node scripts/solve.js finding --id <quest> --frontier <frontier> \
+  --claim "Subagent verifier approved source changes against Quest intent, system guidelines, and doctrine" \
+  --evidence subagent:<id>
+```
+
+If the verifier finds issues, fix them or record a finding that explains why the
+Quest must continue; do not proceed to git handoff from an unresolved verifier
+finding.
+
+## Git Handoff
+
+After `node scripts/solve.js audit --id <id>` passes, commit and push all
+Quest-scoped changes before handoff. Include source, tests, docs, steering,
+models, the authored Quest file, append-only log, generated report, and
+`solve/changes/` artifacts for the Quest.
+
+Do not include unrelated dirty worktree entries from another Quest. If the
+worktree is mixed, use explicit pathspecs with `git add <quest-scoped paths>`,
+then `git commit -m "<quest>: <summary>"` and `git push`.
 
 ## Strategy Ladder
 

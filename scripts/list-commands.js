@@ -10,7 +10,7 @@ const COMMAND_GROUPS = Object.freeze([
       }),
       Object.freeze({
         command: 'npm run quest:context -- --id <quest>',
-        description: 'Print Quest status, model guidance, pending step, latest probe, findings, and dirty worktree.',
+        description: 'Print Quest status, model guidance, source-change verifier rule, pending step, latest probe, findings, and dirty worktree.',
       }),
       Object.freeze({
         command: 'npm run solve:status -- --id <quest>',
@@ -46,7 +46,7 @@ const COMMAND_GROUPS = Object.freeze([
       }),
       Object.freeze({
         command: 'npm run solve:audit -- --id <quest>',
-        description: 'Validate Quest workflow integrity before trusting a closure projection.',
+        description: 'Validate Quest workflow integrity, source-change verifier evidence, and git handoff readiness.',
       }),
       Object.freeze({
         command: 'npm run solve:upgrade -- --id <quest>',
@@ -130,6 +130,10 @@ const COMMAND_GROUPS = Object.freeze([
       Object.freeze({
         command: 'npm run model:statecharts',
         description: 'Validate lifecycle and owner-state statecharts for reachability, terminal states, evidence, and forbidden transitions.',
+      }),
+      Object.freeze({
+        command: 'npm run model:owner-traces',
+        description: 'Validate owner trace suites so valid traces satisfy invariants and forbidden traces violate declared invariants.',
       }),
       Object.freeze({
         command: 'npm run model:alloy',

@@ -54,6 +54,12 @@ Use this list before non-trivial work:
     proof pass.
 13. **Do not keep patching a parked frontier**; record findings and redirect to
     another frontier or end EXHAUSTED.
+14. **Do not hand off solved Quest work without git durability**; after Solver
+    audit passes, commit and push all Quest-scoped changes, excluding unrelated
+    dirty worktree entries.
+15. **Do not hand off Quest source changes without subagent verification**;
+    spawn a subagent verifier and record a Solver finding with evidence
+    `subagent:<id>` before audit/git handoff.
 
 ## Canonical Guardrail Command Map
 

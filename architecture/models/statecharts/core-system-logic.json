@@ -24,8 +24,16 @@
       "description": "Any owner-managed durable transition has been persisted through the owner path before observers consume it."
     },
     {
+      "id": "recoverable_wake_enqueued",
+      "description": "A durable owner transition that requires follow-up work has an atomic, recoverable, or replayable wake before observers depend on the transition."
+    },
+    {
       "id": "observer_projection_enqueued",
       "description": "Events enqueue owner-key work or projection work with typed reasons; no long-running progression executes inline."
+    },
+    {
+      "id": "projection_freshness_verified",
+      "description": "Observer projection has a current owner epoch or observed-generation fence before readiness, admission, or progress is promoted."
     },
     {
       "id": "observer_projection_updated",
@@ -77,12 +85,30 @@
     },
     {
       "from": "owner_transition_committed",
+      "event": "enqueue_recoverable_wake",
+      "to": "recoverable_wake_enqueued",
+      "evidence": "Owner transitions that require follow-up work have a recoverable owner-key wake, replayable queue record, or equivalent outbox before observers depend on them."
+    },
+    {
+      "from": "owner_transition_committed",
+      "event": "no_followup_required",
+      "to": "observer_projection_enqueued",
+      "evidence": "The owner outcome is terminal or self-contained and requires no retry, projection, or handoff wake."
+    },
+    {
+      "from": "recoverable_wake_enqueued",
       "event": "enqueue_observer_projection",
       "to": "observer_projection_enqueued",
       "evidence": "CDC, cache, diagnostics, admin, and reconcile events enqueue typed owner-key work instead of running progression inline."
     },
     {
       "from": "observer_projection_enqueued",
+      "event": "verify_projection_freshness",
+      "to": "projection_freshness_verified",
+      "evidence": "Projection consumers compare observed epoch or generation with the owner outcome before readiness or admission decisions are promoted."
+    },
+    {
+      "from": "projection_freshness_verified",
       "event": "project_owner_outcome",
       "to": "observer_projection_updated",
       "evidence": "Observers project the canonical owner outcome and preserve its grammar instead of recomputing the semantic decision."
@@ -126,6 +152,18 @@
       "reason": "Readers, caches, diagnostics, and harness consumers observe owner state; non-forced readers do not repair authoritative state on the hot path."
     },
     {
+      "from": "owner_transition_committed",
+      "event": "observer_depends_before_recoverable_wake",
+      "to": "observer_projection_updated",
+      "reason": "Committed owner follow-up work must not strand behind a lost wake or un-replayable projection transition."
+    },
+    {
+      "from": "observer_projection_enqueued",
+      "event": "stale_projection_promotes_readiness",
+      "to": "observer_projection_updated",
+      "reason": "Stale observer projections cannot promote readiness, admission, or owner progress."
+    },
+    {
       "from": "observer_projection_updated",
       "event": "phase_scaffolding_remains_owner",
       "to": "steady_state_owner_active",
@@ -156,6 +194,14 @@
     {
       "id": "phase-owner-handoff-completes",
       "statement": "Temporary bootstrap, join, recovery, and migration owners transfer responsibility to explicit steady-state owners before phase completion."
+    },
+    {
+      "id": "stale-projection-never-promotes-readiness",
+      "statement": "A stale observer projection cannot promote readiness, admission, or owner progress across handoff boundaries."
+    },
+    {
+      "id": "durable-transition-has-recoverable-wake",
+      "statement": "Every durable owner transition that requires follow-up work has an atomic, recoverable, or replayable wake before observers depend on it."
     }
   ]
 }

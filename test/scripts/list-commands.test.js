@@ -46,6 +46,7 @@ const MODEL_INVARIANTS_COMMAND =
 
 const MODEL_DECISION_TABLES_COMMAND = 'npm run model:decision-tables';
 const MODEL_STATECHARTS_COMMAND = 'npm run model:statecharts';
+const MODEL_OWNER_TRACES_COMMAND = 'npm run model:owner-traces';
 const MODEL_ALLOY_COMMAND = 'npm run model:alloy';
 const MODEL_CONTRACTS_COMMAND = 'npm run model:contracts';
 const GUIDELINE_LITERALS_COMMAND =
@@ -86,6 +87,8 @@ const MODEL_INVARIANTS_SCRIPT = 'model:invariants';
 const MODEL_INVARIANTS_SCRIPT_COMMAND = 'node scripts/check-invariants.js';
 const MODEL_ALLOY_SCRIPT = 'model:alloy';
 const MODEL_ALLOY_SCRIPT_COMMAND = 'node scripts/check-alloy-models.js';
+const MODEL_OWNER_TRACES_SCRIPT = 'model:owner-traces';
+const MODEL_OWNER_TRACES_SCRIPT_COMMAND = 'node scripts/check-owner-traces.js';
 const SOLVE_SCRIPT = 'solve';
 const SOLVE_SCRIPT_COMMAND = 'node scripts/solve.js';
 const SOLVE_STATUS_SCRIPT = 'solve:status';
@@ -156,6 +159,7 @@ test('command list is Quest-first and keeps deterministic guardrails', (t) => {
     MODEL_INVARIANTS_COMMAND,
     MODEL_DECISION_TABLES_COMMAND,
     MODEL_STATECHARTS_COMMAND,
+    MODEL_OWNER_TRACES_COMMAND,
     MODEL_ALLOY_COMMAND,
     MODEL_CONTRACTS_COMMAND,
     GUIDELINE_LITERALS_COMMAND,
@@ -179,14 +183,19 @@ test('command list is Quest-first and keeps deterministic guardrails', (t) => {
     GUIDELINE_GUARDRAILS_GROUP_TITLE,
   );
   t.match(
-      rendered,
+    rendered,
     `${QUEST_CONTEXT_COMMAND}\`${COMMAND_ENTRY_SEPARATOR}` +
-      'Print Quest status, model guidance, pending step, latest probe, findings, and dirty worktree.',
+      'Print Quest status, model guidance, source-change verifier rule, pending step, latest probe, findings, and dirty worktree.',
   );
   t.match(
     rendered,
     `${SOLVE_FINDING_COMMAND}\`${COMMAND_ENTRY_SEPARATOR}` +
       'Record durable Quest memory for a frontier.',
+  );
+  t.match(
+    rendered,
+    `${SOLVE_AUDIT_COMMAND}\`${COMMAND_ENTRY_SEPARATOR}` +
+      'Validate Quest workflow integrity, source-change verifier evidence, and git handoff readiness.',
   );
   t.end();
 });
@@ -243,6 +252,10 @@ test('package scripts expose Quest aliases and runtime grammar guards', (t) => {
     MODEL_CONTRACT_RECORDS_SCRIPT_COMMAND,
   );
   t.equal(scripts[MODEL_INVARIANTS_SCRIPT], MODEL_INVARIANTS_SCRIPT_COMMAND);
+  t.equal(
+    scripts[MODEL_OWNER_TRACES_SCRIPT],
+    MODEL_OWNER_TRACES_SCRIPT_COMMAND,
+  );
   t.equal(scripts[MODEL_ALLOY_SCRIPT], MODEL_ALLOY_SCRIPT_COMMAND);
   for (const scriptName of Object.keys(scripts)) {
     t.notMatch(scriptName, /^work:/u);

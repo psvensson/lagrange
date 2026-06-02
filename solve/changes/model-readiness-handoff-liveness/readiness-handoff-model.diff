@@ -1,0 +1,732 @@
+diff --git a/architecture/INDEX.md b/architecture/INDEX.md
+index 7a488d16..1b378dfc 100644
+--- a/architecture/INDEX.md
++++ b/architecture/INDEX.md
+@@ -22,6 +22,7 @@ Use this index to choose the narrowest architecture domain file before reading i
+ - [System Contract Records](contracts/) - Durable failure-class contracts that bind invariants, owners, models, runtime paths, Quest history, archived trace evidence, and residual evidence.
+ - [Architecture Models](models/) - Architecture-owned executable and structured models that move with owner-boundary architecture changes.
+ - [Core System Logic Contract](contracts/core-system-logic.md) - Low-resolution core owner-flow contract backed by an architecture-adjacent statechart.
++- [Readiness Handoff Liveness Contract](contracts/readiness-handoff-liveness.md) - Startup readiness and handoff temporal contract backed by TLA+.
+ - [Rolling Restart Rebalancer Handoff Contract](contracts/rolling-restart-rebalancer-handoff.md) - Priority recovery handoff convergence contract and decision-table binding.
+ - [Active Gate Convergence Contract](contracts/active-gate-convergence.md) - Coupled active-gate/rebalancer invariant contract backed by TLA+ and fast-check models.
+ - [Quest Lifecycle Contract](contracts/quest-lifecycle.md) - Workflow statechart contract for Quest attempts, findings, closure, and redirect safety.
+diff --git a/architecture/README.md b/architecture/README.md
+index d8a0dea5..9f8271e4 100644
+--- a/architecture/README.md
++++ b/architecture/README.md
+@@ -23,6 +23,7 @@ aligned with the ownership and execution model in `INDEX.md`.
+
+ - [Architecture Models](models/)
+ - [Core System Logic Contract](contracts/core-system-logic.md)
++- [Readiness Handoff Liveness Contract](contracts/readiness-handoff-liveness.md)
+ - [Lagrange Kernel Platform API v0](lagrange-kernel-platform-api-v0.md)
+ - [Lagrange Service Manifest](lagrange-service-manifest.md)
+ - [Lagrange Service Registry](lagrange-service-registry.md)
+diff --git a/architecture/contracts/invariants.json b/architecture/contracts/invariants.json
+index f790a90c..0453fd64 100644
+--- a/architecture/contracts/invariants.json
++++ b/architecture/contracts/invariants.json
+@@ -127,6 +127,76 @@
+       "formalPredicate": "PhaseComplete => <>SteadyStateOwnerActive",
+       "modelRef": "architecture/models/statecharts/core-system-logic.json",
+       "contractRef": "architecture/contracts/core-system-logic.md"
++    },
++    {
++      "id": "stale-projection-never-promotes-readiness",
++      "owner": "architecture_owner",
++      "boundary": "core_system_logic",
++      "kind": "safety",
++      "statement": "A stale observer projection cannot promote readiness, admission, or owner progress across handoff boundaries.",
++      "formalPredicate": "ProjectionFreshness = stale => nextAction # proceed",
++      "modelRef": "architecture/models/alloy/core-system-logic.als",
++      "contractRef": "architecture/contracts/core-system-logic.md"
++    },
++    {
++      "id": "durable-transition-has-recoverable-wake",
++      "owner": "architecture_owner",
++      "boundary": "core_system_logic",
++      "kind": "safety",
++      "statement": "Every durable owner transition that requires follow-up work has an atomic, recoverable, or replayable wake before observers depend on it.",
++      "formalPredicate": "DurableFollowUp => RecoverableWake",
++      "modelRef": "architecture/models/statecharts/core-system-logic.json",
++      "contractRef": "architecture/contracts/core-system-logic.md"
++    },
++    {
++      "id": "single-canonical-outcome",
++      "owner": "architecture_owner",
++      "boundary": "core_system_logic",
++      "kind": "safety",
++      "statement": "Every retry, rerun, handoff, or observer evidence combination emits exactly one owner-owned canonical action.",
++      "formalPredicate": "Cardinality(RouteOutcome(evidence)) = 1",
++      "modelRef": "architecture/models/decision-tables/bounded-retry-exit-routing.json",
++      "contractRef": "architecture/contracts/core-system-logic.md"
++    },
++    {
++      "id": "non-shrinking-evidence-blocks-local-retry",
++      "owner": "architecture_owner",
++      "boundary": "core_system_logic",
++      "kind": "safety",
++      "statement": "Repeated local retry with non-shrinking evidence cannot authorize another local retry.",
++      "formalPredicate": "RepeatedLocalRetry /\\ NonShrinkingEvidence => next = blocked_model_route",
++      "modelRef": "architecture/models/decision-tables/bounded-retry-exit-routing.json",
++      "contractRef": "architecture/contracts/core-system-logic.md"
++    },
++    {
++      "id": "deferred-followup-has-recoverable-wake",
++      "owner": "architecture_owner",
++      "boundary": "core_system_logic",
++      "kind": "safety",
++      "statement": "Deferred follow-up work exits through a recoverable wake while retry budget remains available.",
++      "formalPredicate": "DeferredFollowup /\\ RetryBudgetAvailable => RecoverableWake",
++      "modelRef": "architecture/models/decision-tables/bounded-retry-exit-routing.json",
++      "contractRef": "architecture/contracts/core-system-logic.md"
++    },
++    {
++      "id": "ready-requires-serviceable-canonical-leader",
++      "owner": "startup_runtime_handoff_owner",
++      "boundary": "readiness_handoff",
++      "kind": "safety",
++      "statement": "Startup readiness cannot become active before SQL and query transport serviceability are true for the canonical leader and the observed owner epoch is fresh.",
++      "formalPredicate": "ReadyOutcome => SqlServiceable /\\ QueryServiceable /\\ observedEpoch = ownerEpoch",
++      "modelRef": "models/readiness-handoff/ReadinessHandoff.tla",
++      "contractRef": "architecture/contracts/readiness-handoff-liveness.md"
++    },
++    {
++      "id": "startup-handoff-eventually-terminal",
++      "owner": "startup_runtime_handoff_owner",
++      "boundary": "readiness_handoff",
++      "kind": "liveness",
++      "statement": "Every deferred startup readiness handoff eventually reaches ready, blocked, or escalated under fair progress and recoverable wakes.",
++      "formalPredicate": "<>Terminal",
++      "modelRef": "models/readiness-handoff/ReadinessHandoff.tla",
++      "contractRef": "architecture/contracts/readiness-handoff-liveness.md"
+     }
+   ]
+ }
+diff --git a/architecture/contracts/readiness-handoff-liveness.md b/architecture/contracts/readiness-handoff-liveness.md
+new file mode 100644
+index 00000000..ed5457e4
+--- /dev/null
++++ b/architecture/contracts/readiness-handoff-liveness.md
+@@ -0,0 +1,185 @@
++# Readiness Handoff Liveness Contract
++
++<!-- system-contract
++{
++  "schema": "system-contract-v1",
++  "contractId": "readiness-handoff-liveness",
++  "status": "active",
++  "owners": [
++    {
++      "owner": "startup_runtime_handoff_owner",
++      "boundary": "readiness_handoff"
++    }
++  ],
++  "failureClasses": [
++    "startup active admission can declare the cluster usable before SQL serviceability is true for the canonical leader",
++    "query transport serviceability can lag readiness promotion and turn probe success into a false green signal",
++    "observer projections can use stale owner epochs during startup, recovery, or handoff",
++    "deferred handoff outcomes can be committed without a recoverable wake, stranding follow-up work"
++  ],
++  "stateVariables": [
++    "phase",
++    "sqlServiceable",
++    "queryServiceable",
++    "ownerEpoch",
++    "observedEpoch",
++    "ownerOutcome",
++    "wakeQueued"
++  ],
++  "safetyInvariants": [
++    {
++      "id": "ready-requires-serviceable-canonical-leader",
++      "statement": "Startup readiness cannot become active before SQL and query transport serviceability are true for the canonical leader and the observed owner epoch is fresh."
++    },
++    {
++      "id": "stale-projection-never-promotes-readiness",
++      "statement": "A stale observer projection cannot promote readiness, admission, or owner progress across handoff boundaries."
++    },
++    {
++      "id": "durable-transition-has-recoverable-wake",
++      "statement": "Every durable owner transition that requires follow-up work has an atomic, recoverable, or replayable wake before observers depend on it."
++    }
++  ],
++  "livenessExpectations": [
++    {
++      "id": "startup-handoff-eventually-terminal",
++      "statement": "Every deferred startup readiness handoff eventually reaches ready, blocked, or escalated under fair progress and recoverable wakes."
++    }
++  ],
++  "knownResiduals": [
++    "The model is intentionally low-resolution and does not encode individual SQL statements, WebSocket transport details, or node-specific retry timers.",
++    "Runtime Quests must still prove the concrete serviceability evidence path and affected harness tail consumers."
++  ],
++  "systemTheory": {
++    "problemStatement": "Startup readiness behaves like a controller handoff: the owner may promote ready only when canonical SQL and query transport evidence are serviceable at a fresh owner epoch, and deferred handoff work must have a recoverable wake.",
++    "phaseChain": [
++      "startup handoff begins with pending or missing serviceability evidence",
++      "SQL and query transport serviceability become true for the canonical leader",
++      "the owner outcome advances at a new owner epoch and projection catches up to that epoch",
++      "readiness either promotes ready or emits blocked/deferred/escalated with a recoverable wake"
++    ],
++    "ownerBoundaryMap": [
++      "startup_runtime_handoff_owner / readiness_handoff owns startup active admission and phase-to-runtime handoff",
++      "control_plane_readiness_owner / readiness_gating observes canonical owner evidence but cannot upgrade stale or degraded evidence",
++      "read_model_contract_owner / observer_projection projects owner outcomes after epoch freshness is verified"
++    ],
++    "invariantRefs": [
++      "ready-requires-serviceable-canonical-leader",
++      "stale-projection-never-promotes-readiness",
++      "durable-transition-has-recoverable-wake",
++      "startup-handoff-eventually-terminal"
++    ]
++  },
++  "runtimeBindings": [
++    {
++      "path": "src/bootstrap/owners/startup-runtime-handoff-owner.js",
++      "owner": "startup_runtime_handoff_owner",
++      "boundary": "readiness_handoff",
++      "transition": "startup and recovery phase work transfers to steady-state runtime ownership before ready admission"
++    },
++    {
++      "path": "src/bootstrap/shared/startup-sql-runtime-handoff.js",
++      "owner": "startup_runtime_handoff_owner",
++      "boundary": "readiness_handoff",
++      "transition": "SQL serviceability evidence for startup runtime handoff"
++    },
++    {
++      "path": "src/bootstrap/shared/local-query-transport-readiness.js",
++      "owner": "startup_runtime_handoff_owner",
++      "boundary": "readiness_handoff",
++      "transition": "query transport serviceability evidence for startup runtime handoff"
++    },
++    {
++      "path": "src/control-plane/read-model-contract.js",
++      "owner": "read_model_contract_owner",
++      "boundary": "observer_projection",
++      "transition": "read-side projections observe canonical owner state and freshness instead of becoming readiness authority"
++    }
++  ],
++  "modelBindings": [
++    {
++      "kind": "tla-spec",
++      "artifact": "models/readiness-handoff/ReadinessHandoff.tla",
++      "properties": "temporal safety and liveness for startup readiness, serviceability gating, projection freshness, and recoverable wakes"
++    }
++  ],
++  "metrics": [
++    {
++      "name": "readiness handoff TLC model check",
++      "probe": "npm run model:tlc"
++    },
++    {
++      "name": "architecture model-contract gate",
++      "probe": "npm run model:contracts"
++    }
++  ],
++  "questRefs": [
++    "solve/quests/model-readiness-handoff-liveness.json",
++    "solve/quests/rolling-restart-core-stability.json"
++  ],
++  "theoryLedgerRefs": [
++    "theory-20260526-rolling-restart-selected-snapshot-source-staleness",
++    "theory-20260526-rolling-restart-selected-view-best-view-evidence-gap",
++    "theory-20260526-rolling-restart-restarted-node-admin-surface"
++  ],
++  "failureAnalysis": {
++    "fmea": [
++      {
++        "failureMode": "readiness promotes before canonical SQL and query transport serviceability",
++        "severity": "high - rolling restart can report green while user traffic or query routing still fails",
++        "detectability": "high - ReadinessHandoff unsafe TLC config violates ready-requires-serviceable-canonical-leader",
++        "mitigation": "gate ready promotion on canonical serviceability evidence and fresh owner epoch",
++        "probe": "npm run model:tlc"
++      },
++      {
++        "failureMode": "deferred startup handoff commits without recoverable wake",
++        "severity": "high - follow-up work can strand and leave probes waiting until timeout",
++        "detectability": "high - ReadinessHandoff lost-wake TLC config violates durable-transition-has-recoverable-wake",
++        "mitigation": "make deferred handoff outcomes enqueue, replay, or recover owner-key wake state before observers depend on them",
++        "probe": "npm run model:tlc"
++      }
++    ],
++    "stpa": [
++      {
++        "controller": "startup_runtime_handoff_owner",
++        "unsafeAction": "promotes active startup readiness from stale projection, partial serviceability, or missing wake evidence",
++        "feedbackSignal": "SQL serviceability, query transport serviceability, ownerEpoch, observedEpoch, ownerOutcome, wakeQueued",
++        "ownerBoundary": "startup_runtime_handoff_owner / readiness_handoff"
++      }
++    ]
++  }
++}
++-->
++
++## Failure Classes
++
++This contract covers startup readiness handoff failures where owner evidence can
++look locally green while canonical SQL serviceability, query transport
++serviceability, projection freshness, or recoverable wake delivery is still
++missing.
++
++## Invariants
++
++Ready admission requires SQL and query transport serviceability for the
++canonical leader and a fresh observed owner epoch. Deferred handoff work must
++retain a recoverable wake. Under fair progress, the handoff reaches ready,
++blocked, or escalated instead of waiting forever.
++
++## Runtime Bindings
++
++The runtime bindings name the startup handoff owner, SQL serviceability source,
++query transport readiness source, and read-model projection contract. Concrete
++runtime Quests must prove affected tail consumers when they edit these paths.
++
++## Model Bindings
++
++`models/readiness-handoff/ReadinessHandoff.tla` contains a bounded safe route
++and two forbidden configurations: unsafe readiness promotion and lost wake. The
++TLC runner executes all three through `npm run model:tlc`.
++
++## Operational Analysis
++
++FMEA/STPA model the startup handoff owner as the controller. Unsafe actions are
++premature readiness promotion and committing deferred work without a recoverable
++wake. These are the coarse stability risks identified from controller,
++workflow, and trace-validation systems.
+diff --git a/models/readiness-handoff/ReadinessHandoff.tla b/models/readiness-handoff/ReadinessHandoff.tla
+new file mode 100644
+index 00000000..216bbaea
+--- /dev/null
++++ b/models/readiness-handoff/ReadinessHandoff.tla
+@@ -0,0 +1,159 @@
++------------------------- MODULE ReadinessHandoff -------------------------
++(***************************************************************************)
++(* Low-resolution startup readiness / handoff model.                        *)
++(*                                                                         *)
++(* The model captures three implementation hazards seen in controller-style  *)
++(* systems: readiness promoted before canonical services are usable, stale   *)
++(* projection epochs treated as fresh, and durable deferred owner outcomes   *)
++(* stranded without a recoverable wake.                                     *)
++(*                                                                         *)
++(* AllowUnsafeReadiness selects the forbidden promotion variant.             *)
++(* LoseWake selects the forbidden committed-defer-without-wake variant.      *)
++(***************************************************************************)
++EXTENDS Naturals
++
++CONSTANTS AllowUnsafeReadiness, LoseWake
++
++VARIABLES phase,
++          sqlServiceable,
++          queryServiceable,
++          ownerEpoch,
++          observedEpoch,
++          ownerOutcome,
++          wakeQueued
++
++vars == << phase,
++          sqlServiceable,
++          queryServiceable,
++          ownerEpoch,
++          observedEpoch,
++          ownerOutcome,
++          wakeQueued >>
++
++Phase ==
++  {"boot", "handoff", "steady", "blocked", "escalated"}
++
++Outcome ==
++  {"pending", "deferred", "ready", "blocked", "escalated"}
++
++TypeOK ==
++  /\ phase \in Phase
++  /\ sqlServiceable \in BOOLEAN
++  /\ queryServiceable \in BOOLEAN
++  /\ ownerEpoch \in 0..2
++  /\ observedEpoch \in 0..2
++  /\ observedEpoch <= ownerEpoch
++  /\ ownerOutcome \in Outcome
++  /\ wakeQueued \in BOOLEAN
++
++Init ==
++  /\ phase = "boot"
++  /\ sqlServiceable = FALSE
++  /\ queryServiceable = FALSE
++  /\ ownerEpoch = 0
++  /\ observedEpoch = 0
++  /\ ownerOutcome = "pending"
++  /\ wakeQueued = FALSE
++
++Terminal ==
++  phase \in {"steady", "blocked", "escalated"}
++
++ObserveSqlService ==
++  /\ sqlServiceable = FALSE
++  /\ sqlServiceable' = TRUE
++  /\ UNCHANGED << phase, queryServiceable, ownerEpoch, observedEpoch,
++                  ownerOutcome, wakeQueued >>
++
++ObserveQueryTransport ==
++  /\ queryServiceable = FALSE
++  /\ queryServiceable' = TRUE
++  /\ UNCHANGED << phase, sqlServiceable, ownerEpoch, observedEpoch,
++                  ownerOutcome, wakeQueued >>
++
++DeferStartupHandoff ==
++  /\ phase = "boot"
++  /\ ~(sqlServiceable /\ queryServiceable)
++  /\ ownerEpoch < 2
++  /\ phase' = "handoff"
++  /\ ownerEpoch' = ownerEpoch + 1
++  /\ ownerOutcome' = "deferred"
++  /\ wakeQueued' = IF LoseWake THEN FALSE ELSE TRUE
++  /\ UNCHANGED << sqlServiceable, queryServiceable, observedEpoch >>
++
++RefreshProjection ==
++  /\ wakeQueued
++  /\ observedEpoch < ownerEpoch
++  /\ observedEpoch' = ownerEpoch
++  /\ UNCHANGED << phase, sqlServiceable, queryServiceable, ownerEpoch,
++                  ownerOutcome, wakeQueued >>
++
++PromoteReady ==
++  /\ phase \in {"boot", "handoff"}
++  /\ AllowUnsafeReadiness \/ (
++       sqlServiceable /\
++       queryServiceable /\
++       observedEpoch = ownerEpoch
++     )
++  /\ phase' = "steady"
++  /\ ownerOutcome' = "ready"
++  /\ wakeQueued' = FALSE
++  /\ UNCHANGED << sqlServiceable, queryServiceable, ownerEpoch, observedEpoch >>
++
++BlockDeferredHandoff ==
++  /\ phase = "handoff"
++  /\ wakeQueued
++  /\ observedEpoch = ownerEpoch
++  /\ ~(sqlServiceable /\ queryServiceable)
++  /\ phase' = "blocked"
++  /\ ownerOutcome' = "blocked"
++  /\ wakeQueued' = FALSE
++  /\ UNCHANGED << sqlServiceable, queryServiceable, ownerEpoch, observedEpoch >>
++
++RecoverLostWake ==
++  /\ phase = "handoff"
++  /\ ownerOutcome = "deferred"
++  /\ wakeQueued = FALSE
++  /\ LoseWake = FALSE
++  /\ wakeQueued' = TRUE
++  /\ UNCHANGED << phase, sqlServiceable, queryServiceable, ownerEpoch,
++                  observedEpoch, ownerOutcome >>
++
++TerminalStutter ==
++  /\ Terminal
++  /\ UNCHANGED vars
++
++Next ==
++  \/ ObserveSqlService
++  \/ ObserveQueryTransport
++  \/ DeferStartupHandoff
++  \/ RefreshProjection
++  \/ PromoteReady
++  \/ BlockDeferredHandoff
++  \/ RecoverLostWake
++  \/ TerminalStutter
++
++Fairness ==
++  /\ WF_vars(ObserveSqlService)
++  /\ WF_vars(ObserveQueryTransport)
++  /\ WF_vars(DeferStartupHandoff)
++  /\ WF_vars(RefreshProjection)
++  /\ WF_vars(PromoteReady)
++  /\ WF_vars(BlockDeferredHandoff)
++  /\ WF_vars(RecoverLostWake)
++
++Spec == Init /\ [][Next]_vars /\ Fairness
++
++ReadyRequiresCanonicalServiceability ==
++  ownerOutcome = "ready" =>
++    /\ sqlServiceable
++    /\ queryServiceable
++    /\ observedEpoch = ownerEpoch
++
++DeferredOutcomeHasRecoverableWake ==
++  ownerOutcome = "deferred" => wakeQueued
++
++StaleProjectionNeverPromotes ==
++  ownerOutcome = "ready" => observedEpoch = ownerEpoch
++
++EventuallyTerminal == <>Terminal
++=============================================================================
+diff --git a/models/readiness-handoff/ReadinessHandoff_lost_wake.cfg b/models/readiness-handoff/ReadinessHandoff_lost_wake.cfg
+new file mode 100644
+index 00000000..415240f1
+--- /dev/null
++++ b/models/readiness-handoff/ReadinessHandoff_lost_wake.cfg
+@@ -0,0 +1,11 @@
++\* Forbidden route: a deferred owner outcome can be committed without a
++\* recoverable wake. TLC is expected to find a violation.
++SPECIFICATION Spec
++CONSTANTS
++  AllowUnsafeReadiness = FALSE
++  LoseWake = TRUE
++INVARIANT TypeOK
++INVARIANT ReadyRequiresCanonicalServiceability
++INVARIANT DeferredOutcomeHasRecoverableWake
++INVARIANT StaleProjectionNeverPromotes
++PROPERTY EventuallyTerminal
+diff --git a/models/readiness-handoff/ReadinessHandoff_route.cfg b/models/readiness-handoff/ReadinessHandoff_route.cfg
+new file mode 100644
+index 00000000..207e3c85
+--- /dev/null
++++ b/models/readiness-handoff/ReadinessHandoff_route.cfg
+@@ -0,0 +1,11 @@
++\* Bounded route: unsafe readiness is disabled and deferred owner outcomes
++\* retain a recoverable wake. Safety and EventuallyTerminal are expected to hold.
++SPECIFICATION Spec
++CONSTANTS
++  AllowUnsafeReadiness = FALSE
++  LoseWake = FALSE
++INVARIANT TypeOK
++INVARIANT ReadyRequiresCanonicalServiceability
++INVARIANT DeferredOutcomeHasRecoverableWake
++INVARIANT StaleProjectionNeverPromotes
++PROPERTY EventuallyTerminal
+diff --git a/models/readiness-handoff/ReadinessHandoff_unsafe.cfg b/models/readiness-handoff/ReadinessHandoff_unsafe.cfg
+new file mode 100644
+index 00000000..a36402c9
+--- /dev/null
++++ b/models/readiness-handoff/ReadinessHandoff_unsafe.cfg
+@@ -0,0 +1,11 @@
++\* Forbidden route: readiness may promote before canonical SQL/query service
++\* evidence and fresh projection epoch. TLC is expected to find a violation.
++SPECIFICATION Spec
++CONSTANTS
++  AllowUnsafeReadiness = TRUE
++  LoseWake = FALSE
++INVARIANT TypeOK
++INVARIANT ReadyRequiresCanonicalServiceability
++INVARIANT DeferredOutcomeHasRecoverableWake
++INVARIANT StaleProjectionNeverPromotes
++PROPERTY EventuallyTerminal
+diff --git a/scripts/model-tlc.js b/scripts/model-tlc.js
+index 9b47dba8..3dbd8a99 100644
+--- a/scripts/model-tlc.js
++++ b/scripts/model-tlc.js
+@@ -22,22 +22,69 @@ const JAR_PATH = process.env.TLA_TOOLS_JAR ||
+   path.resolve('tools', 'tla2tools.jar');
+ const JAR_URL =
+   'https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar';
+-const MODULE = path.resolve('models', 'active-gate', 'ActiveGate.tla');
+ const REPORTS_DIR = path.resolve('test-output', 'reports');
+ const META_ROOT = path.resolve('test-output', 'tlc');
+
+ const CONFIGS = [
+   {
++    id: 'active-gate-route',
+     mode: 'route',
++    module: path.resolve('models', 'active-gate', 'ActiveGate.tla'),
+     cfg: path.resolve('models', 'active-gate', 'ActiveGate_route.cfg'),
+     expectConverged: true,
+     report: 'active-gate-tlc-route.model.report.json',
++    scenario: 'rolling-restart-active-gate-convergence',
++    owner: 'active_gate_owner',
++    boundary: 'snapshot_coverage',
+   },
+   {
++    id: 'active-gate-stall',
+     mode: 'stall',
++    module: path.resolve('models', 'active-gate', 'ActiveGate.tla'),
+     cfg: path.resolve('models', 'active-gate', 'ActiveGate_stall.cfg'),
+     expectConverged: false,
+     report: 'active-gate-tlc-stall.model.report.json',
++    scenario: 'rolling-restart-active-gate-convergence',
++    owner: 'active_gate_owner',
++    boundary: 'snapshot_coverage',
++    expectedFailurePattern: 'Temporal property EventuallyConverged was violated',
++  },
++  {
++    id: 'readiness-handoff-route',
++    mode: 'readiness-route',
++    module: path.resolve('models', 'readiness-handoff', 'ReadinessHandoff.tla'),
++    cfg: path.resolve('models', 'readiness-handoff', 'ReadinessHandoff_route.cfg'),
++    expectConverged: true,
++    report: 'readiness-handoff-tlc-route.model.report.json',
++    scenario: 'startup-readiness-handoff-liveness',
++    owner: 'startup_runtime_handoff_owner',
++    boundary: 'readiness_handoff',
++  },
++  {
++    id: 'readiness-handoff-unsafe',
++    mode: 'readiness-unsafe',
++    module: path.resolve('models', 'readiness-handoff', 'ReadinessHandoff.tla'),
++    cfg: path.resolve('models', 'readiness-handoff', 'ReadinessHandoff_unsafe.cfg'),
++    expectConverged: false,
++    report: 'readiness-handoff-tlc-unsafe.model.report.json',
++    scenario: 'startup-readiness-handoff-liveness',
++    owner: 'startup_runtime_handoff_owner',
++    boundary: 'readiness_handoff',
++    expectedFailurePattern:
++      'Invariant ReadyRequiresCanonicalServiceability is violated',
++  },
++  {
++    id: 'readiness-handoff-lost-wake',
++    mode: 'readiness-lost-wake',
++    module: path.resolve('models', 'readiness-handoff', 'ReadinessHandoff.tla'),
++    cfg: path.resolve('models', 'readiness-handoff', 'ReadinessHandoff_lost_wake.cfg'),
++    expectConverged: false,
++    report: 'readiness-handoff-tlc-lost-wake.model.report.json',
++    scenario: 'startup-readiness-handoff-liveness',
++    owner: 'startup_runtime_handoff_owner',
++    boundary: 'readiness_handoff',
++    expectedFailurePattern:
++      'Invariant DeferredOutcomeHasRecoverableWake is violated',
+   },
+ ];
+
+@@ -76,7 +123,7 @@ async function ensureJar() {
+ }
+
+ function runTlc(config) {
+-  const metadir = path.join(META_ROOT, config.mode);
++  const metadir = path.join(META_ROOT, config.id || config.mode);
+   fs.mkdirSync(metadir, {recursive: true});
+   const result = spawnSync('java', [
+     '-cp', JAR_PATH,
+@@ -84,14 +131,14 @@ function runTlc(config) {
+     '-deadlock',
+     '-metadir', metadir,
+     '-config', config.cfg,
+-    MODULE,
++    config.module,
+   ], {encoding: 'utf8', maxBuffer: 32 * 1024 * 1024});
+   const output = `${result.stdout || ''}${result.stderr || ''}`;
+   return {exitCode: result.status, output};
+ }
+
+-function cleanTraceArtifacts() {
+-  const dir = path.dirname(MODULE);
++function cleanTraceArtifacts(modulePath) {
++  const dir = path.dirname(modulePath);
+   for (const entry of fs.readdirSync(dir)) {
+     if (/_TTrace_.*\.(tla|bin)$/.test(entry)) {
+       fs.rmSync(path.join(dir, entry), {force: true});
+@@ -101,11 +148,23 @@ function cleanTraceArtifacts() {
+
+ function interpret(config, run) {
+   const noError = /No error has been found/.test(run.output);
+-  const temporalViolated = /Temporal properties were violated/.test(run.output);
++  const temporalViolated =
++    /Temporal propert(?:y|ies)\b[\s\S]*violated/iu.test(run.output);
++  const expectedFailureObserved = !config.expectConverged &&
++    typeof config.expectedFailurePattern === 'string' &&
++    run.output.includes(config.expectedFailurePattern);
+   const converged = noError && !temporalViolated;
+   const livenessHolds = converged;
+-  const expectationMet = converged === config.expectConverged;
+-  return {converged, temporalViolated, livenessHolds, expectationMet};
++  const expectationMet = config.expectConverged ?
++    converged :
++    !converged && expectedFailureObserved;
++  return {
++    converged,
++    expectedFailureObserved,
++    temporalViolated,
++    livenessHolds,
++    expectationMet,
++  };
+ }
+
+ function buildTlcReport(config, run, verdict) {
+@@ -115,14 +174,18 @@ function buildTlcReport(config, run, verdict) {
+     modelReport: true,
+     source: 'tlc',
+     mode: config.mode,
+-    scenario: 'rolling-restart-active-gate-convergence',
+-    owner: 'active_gate_owner',
+-    boundary: 'snapshot_coverage',
++    scenario: config.scenario,
++    owner: config.owner,
++    boundary: config.boundary,
++    module: path.relative(process.cwd(), config.module),
++    config: path.relative(process.cwd(), config.cfg),
+     converged: verdict.converged,
+     residual: verdict.converged ? 0 : 1,
+     frontierCount: verdict.converged ? 0 : 1,
+     livenessHolds: verdict.livenessHolds,
+     expectConverged: config.expectConverged,
++    expectedFailurePattern: config.expectedFailurePattern || null,
++    expectedFailureObserved: verdict.expectedFailureObserved,
+     expectationMet: verdict.expectationMet,
+     temporalViolated: verdict.temporalViolated,
+     exitCode: run.exitCode,
+@@ -137,7 +200,7 @@ async function main() {
+   let allMet = true;
+   for (const config of CONFIGS) {
+     const run = runTlc(config);
+-    cleanTraceArtifacts();
++    cleanTraceArtifacts(config.module);
+     const verdict = interpret(config, run);
+     const report = buildTlcReport(config, run, verdict);
+     const target = path.join(REPORTS_DIR, config.report);
+@@ -151,10 +214,10 @@ async function main() {
+   }
+
+   if (!allMet) {
+-    console.error('TLC expectations not met (route must hold, stall must fail).');
++    console.error('TLC expectations not met.');
+     process.exit(1);
+   }
+-  console.log('TLC confirms route converges and stall oscillates as expected.');
++  console.log('TLC confirms expected route and forbidden-shape outcomes.');
+ }
+
+ main().catch((err) => {
+diff --git a/solve/oracle/model-readiness-handoff-liveness.json b/solve/oracle/model-readiness-handoff-liveness.json
+new file mode 100644
+index 00000000..3cdd751a
+--- /dev/null
++++ b/solve/oracle/model-readiness-handoff-liveness.json
+@@ -0,0 +1,6 @@
++{
++  "metric": 0,
++  "target": 0,
++  "done": true,
++  "classification": "model-insight-implemented"
++}
+diff --git a/solve/quests/model-readiness-handoff-liveness.json b/solve/quests/model-readiness-handoff-liveness.json
+new file mode 100644
+index 00000000..dfc31d02
+--- /dev/null
++++ b/solve/quests/model-readiness-handoff-liveness.json
+@@ -0,0 +1,29 @@
++{
++  "id": "model-readiness-handoff-liveness",
++  "statement": "A TLA+ or equivalent temporal model proves startup readiness cannot become active before SQL and query transport serviceability are true for the canonical leader, and every deferred startup handoff eventually reaches ready, blocked, or escalated.",
++  "priority": 1,
++  "doneWhen": {
++    "probe": "oracle",
++    "args": {
++      "file": "solve/oracle/model-readiness-handoff-liveness.json"
++    }
++  },
++  "frontiers": [
++    {
++      "id": "model-readiness-handoff-liveness-main",
++      "priority": 1,
++      "metric": {
++        "probe": "oracle",
++        "args": {
++          "file": "solve/oracle/model-readiness-handoff-liveness.json"
++        }
++      }
++    }
++  ],
++  "constraints": [
++    {
++      "id": "source-change-subagent-verification",
++      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
++    }
++  ]
++}

@@ -212,6 +212,44 @@ The upgrade command records a `quest-upgraded` event, ingests the latest fresh
 probe evidence when available, and regenerates the report. Audit rules remain
 strict for all events after the baseline.
 
+## Source Change Verification
+
+Every Quest that changes source code must spawn a subagent verifier after the
+final source diff is ready and before audit/git handoff. Ask the verifier to
+check the Quest intent, touched source diff, system guidelines, and applicable
+doctrine. Then record the review as a Solver finding:
+
+```sh
+node scripts/solve.js finding --id <quest> --frontier <frontier> \
+  --claim "Subagent verifier approved source changes against Quest intent, system guidelines, and doctrine" \
+  --evidence subagent:<id>
+```
+
+For Quests with the `source-change-subagent-verification` constraint, audit
+fails after source-code patch artifacts until this later verifier finding is in
+the log.
+
+## Git Handoff
+
+After `node scripts/solve.js audit --id <quest>` passes, commit and push the
+Quest-scoped changes before handing the work off. Include the authored Quest
+file, append-only log, generated report, `solve/changes/` attempt artifact, and
+all source, test, docs, steering, and model files changed for that Quest.
+
+Do not commit unrelated dirty worktree entries from another Quest. If the
+worktree is mixed, use explicit pathspecs:
+
+```sh
+git status --short
+git add <quest-scoped paths>
+git commit -m "<quest>: <summary>"
+git push
+```
+
+This git handoff does not replace Solver proof. Attempt proof remains the
+recorded `diff:<path>` changeRef plus live probe evidence; the commit and push
+make the completed Quest durable in the shared repository.
+
 ## Autonomous Run
 
 ```sh

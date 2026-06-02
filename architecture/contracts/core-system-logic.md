@@ -15,7 +15,10 @@
     "architecture documents can change owner boundaries without updating adjacent executable models",
     "callers can reproduce owner logic locally when the architecture-level owner flow is implicit",
     "observers, caches, diagnostics, admin views, or harness reports can become accidental semantic owners",
-    "temporary bootstrap, join, or recovery phase owners can remain reachable after steady-state handoff"
+    "temporary bootstrap, join, or recovery phase owners can remain reachable after steady-state handoff",
+    "stale observer projections can promote readiness or admission after the owner epoch has moved",
+    "durable owner transitions can strand follow-up work if enqueue or wake delivery is not recoverable",
+    "non-shrinking retry evidence can keep authorizing another local retry instead of a blocked model route"
   ],
   "stateVariables": [
     "ingressShape",
@@ -49,6 +52,26 @@
     {
       "id": "degraded-evidence-never-upgrades-readiness",
       "statement": "Degraded or cross-plane evidence can explain, defer, or block, but cannot upgrade readiness or admission."
+    },
+    {
+      "id": "stale-projection-never-promotes-readiness",
+      "statement": "A stale observer projection cannot promote readiness, admission, or owner progress across handoff boundaries."
+    },
+    {
+      "id": "durable-transition-has-recoverable-wake",
+      "statement": "Every durable owner transition that requires follow-up work has an atomic, recoverable, or replayable wake before observers depend on it."
+    },
+    {
+      "id": "single-canonical-outcome",
+      "statement": "Every retry, rerun, handoff, or observer evidence combination emits exactly one owner-owned canonical action."
+    },
+    {
+      "id": "non-shrinking-evidence-blocks-local-retry",
+      "statement": "Repeated local retry with non-shrinking evidence cannot authorize another local retry."
+    },
+    {
+      "id": "deferred-followup-has-recoverable-wake",
+      "statement": "Deferred follow-up work exits through a recoverable wake while retry budget remains available."
     }
   ],
   "livenessExpectations": [
@@ -82,7 +105,12 @@
       "owner-outcome-before-observer",
       "readers-do-not-repair-authority",
       "degraded-evidence-never-upgrades-readiness",
-      "phase-owner-handoff-completes"
+      "phase-owner-handoff-completes",
+      "stale-projection-never-promotes-readiness",
+      "durable-transition-has-recoverable-wake",
+      "single-canonical-outcome",
+      "non-shrinking-evidence-blocks-local-retry",
+      "deferred-followup-has-recoverable-wake"
     ]
   },
   "runtimeBindings": [
@@ -127,6 +155,16 @@
       "kind": "statechart",
       "artifact": "architecture/models/statecharts/core-system-logic.json",
       "properties": "low-resolution core owner flow from normalized ingress through owner outcome, observer projection, and steady-state handoff"
+    },
+    {
+      "kind": "decision-table",
+      "artifact": "architecture/models/decision-tables/bounded-retry-exit-routing.json",
+      "properties": "bounded retry and handoff exit routing so repeated or non-shrinking evidence cannot authorize unbounded local retries"
+    },
+    {
+      "kind": "state-model",
+      "artifact": "architecture/models/traces/core-owner-trace-examples.json",
+      "properties": "valid and forbidden owner traces for owner outcome ordering, projection freshness, serviceability gating, recoverable wake, and observer non-repair"
     }
   ],
   "metrics": [
@@ -141,10 +179,18 @@
     {
       "name": "architecture statechart gate",
       "probe": "npm run model:statecharts"
+    },
+    {
+      "name": "architecture owner trace gate",
+      "probe": "npm run model:owner-traces"
     }
   ],
   "questRefs": [
-    "solve/quests/core-system-logic-model-adjacency.json"
+    "solve/quests/core-system-logic-model-adjacency.json",
+    "solve/quests/model-projection-freshness-epoch-fencing.json",
+    "solve/quests/model-owner-transition-recoverable-wake.json",
+    "solve/quests/model-bounded-retry-exit-routing.json",
+    "solve/quests/model-owner-trace-validation.json"
   ],
   "theoryLedgerRefs": [
     "theory-20260529-rolling-restart-active-gate-priority-recovery-coupled-invariants"
@@ -164,6 +210,13 @@
         "detectability": "medium - Alloy forbidden-shape runs reject reader repair, observer-before-owner-outcome, and degraded-readiness-promotion relations",
         "mitigation": "bind read-side consumers to owner outcome grammar and fail closed on missing owner evidence",
         "probe": "npm run model:alloy"
+      },
+      {
+        "failureMode": "stale projection or lost wake creates false readiness or stranded follow-up work",
+        "severity": "high - startup and recovery can appear green while required owner work is stale or unwoken",
+        "detectability": "high - Alloy, statechart, owner-trace, and decision-table gates reject stale promotion, missing wake, and unbounded retry shapes",
+        "mitigation": "preserve owner epochs and recoverable wakes in the core owner flow and route repeated evidence to blocked or migration outcomes",
+        "probe": "npm run model:contracts"
       }
     ],
     "stpa": [
@@ -178,6 +231,12 @@
         "unsafeAction": "lets degraded, stale, missing, or observer-only evidence upgrade readiness or admission",
         "feedbackSignal": "contractState, nextAction, readiness diagnostics, and owner-specific evidence",
         "ownerBoundary": "runtime_contract_owner / owner_outcome_envelope"
+      },
+      {
+        "controller": "architecture_owner",
+        "unsafeAction": "accepts retry or observer-flow changes that lose owner wake delivery, omit epoch freshness, or repeat non-shrinking local evidence",
+        "feedbackSignal": "bounded retry decision table, owner trace suite, statechart forbidden transitions, and model-contract gate output",
+        "ownerBoundary": "architecture_owner / core_system_logic"
       }
     ]
   }

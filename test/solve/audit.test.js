@@ -49,8 +49,25 @@ tap.test('Quest audit', async (t) => {
     runStep(root, quest);
     fs.writeFileSync(oracle, JSON.stringify({metric: 1, target: 0}));
     runStep(root, quest, {
-      changeRef: makeDiff(root, quest.id, 'valid'),
+      changeRef: makeDiff(root, quest.id, 'valid', 'docs/demo.md'),
       summary: 'valid scoped patch',
+    });
+
+    const audit = auditQuest(root, quest);
+    t.equal(audit.status, 'pass');
+    t.same(audit.problems, []);
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('accepts zero metric attempts closed by later solved events', (t) => {
+    const root = tmp();
+    const {quest, oracle} = makeQuest(root);
+    runStep(root, quest);
+    fs.writeFileSync(oracle, JSON.stringify({metric: 0, target: 0}));
+    runStep(root, quest, {
+      changeRef: makeDiff(root, quest.id, 'valid', 'docs/demo.md'),
+      summary: 'valid solved patch',
     });
 
     const audit = auditQuest(root, quest);
@@ -188,6 +205,103 @@ tap.test('Quest audit', async (t) => {
       audit.problems.map((item) => item.message).join('\n'),
       /unified diff hunk/,
     );
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('requires subagent verification after source changes without opt-in constraint', (t) => {
+    const root = tmp();
+    const {quest, oracle} = makeQuest(root, 'workflow-source-verifier');
+    saveQuest(root, quest);
+    runStep(root, quest);
+    fs.writeFileSync(oracle, JSON.stringify({metric: 1, target: 0}));
+    runStep(root, quest, {
+      changeRef: makeDiff(root, quest.id, 'source', 'scripts/quest-context.js'),
+      summary: 'source change requiring verifier',
+    });
+
+    let audit = auditQuest(root, quest);
+    t.match(
+      audit.problems.map((item) => item.message).join('\n'),
+      /source code changes require a later subagent verification finding/u,
+    );
+
+    appendEvent(root, quest.id, {
+      type: 'finding',
+      frontier: 'wrong-frontier',
+      claim: 'Subagent verifier approved source changes against Quest intent, system guidelines, and doctrine.',
+      evidence: 'subagent:019e870d-3b19-7fa3-ae37-a85868b84226',
+    });
+
+    audit = auditQuest(root, quest);
+    t.match(
+      audit.problems.map((item) => item.message).join('\n'),
+      /source code changes require a later subagent verification finding/u,
+    );
+
+    appendEvent(root, quest.id, {
+      type: 'finding',
+      frontier: 'workflow-source-verifier-main',
+      claim: 'Subagent verifier approved source changes against Quest intent, system guidelines, and doctrine.',
+      evidence: 'subagent:019e870d-3b19-7fa3-ae37-a85868b84226',
+    });
+
+    audit = auditQuest(root, quest);
+    t.equal(audit.status, 'pass');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('requires model evidence after architecture model changes', (t) => {
+    const root = tmp();
+    const {quest, oracle} = makeQuest(root, 'model-contract-demo');
+    saveQuest(root, quest);
+    runStep(root, quest);
+    fs.writeFileSync(oracle, JSON.stringify({metric: 1, target: 0}));
+    runStep(root, quest, {
+      changeRef: makeDiff(
+        root,
+        quest.id,
+        'contract',
+        'architecture/contracts/invariants.json',
+      ),
+      summary: 'model contract change requiring verifier and model evidence',
+    });
+    appendEvent(root, quest.id, {
+      type: 'finding',
+      frontier: 'model-contract-demo-main',
+      claim: 'Subagent verifier approved source changes against Quest intent, system guidelines, and doctrine.',
+      evidence: 'subagent:019e870d-3b19-7fa3-ae37-a85868b84226',
+    });
+
+    let audit = auditQuest(root, quest);
+    t.match(
+      audit.problems.map((item) => item.message).join('\n'),
+      /model and architecture model changes require modelRef or later model evidence/u,
+    );
+
+    appendEvent(root, quest.id, {
+      type: 'finding',
+      frontier: 'wrong-frontier',
+      claim: 'Model evidence from architecture contract report passed.',
+      evidence: 'test-output/reports/core-system-logic-alloy.model.report.json',
+    });
+
+    audit = auditQuest(root, quest);
+    t.match(
+      audit.problems.map((item) => item.message).join('\n'),
+      /model and architecture model changes require modelRef or later model evidence/u,
+    );
+
+    appendEvent(root, quest.id, {
+      type: 'finding',
+      frontier: 'model-contract-demo-main',
+      claim: 'Model evidence from architecture contract report passed.',
+      evidence: 'test-output/reports/core-system-logic-alloy.model.report.json',
+    });
+
+    audit = auditQuest(root, quest);
+    t.equal(audit.status, 'pass');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });

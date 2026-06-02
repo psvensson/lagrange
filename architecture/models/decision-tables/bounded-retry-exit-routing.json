@@ -1,0 +1,204 @@
+{
+  "schema": "decision-table-v1",
+  "id": "bounded-retry-exit-routing",
+  "owner": "architecture_owner",
+  "boundary": "core_system_logic",
+  "inputs": [
+    {
+      "name": "routeClass",
+      "values": [
+        "progress",
+        "deferred_followup",
+        "repeated_local_retry",
+        "owner_mismatch",
+        "contradictory"
+      ]
+    },
+    {
+      "name": "evidenceMovement",
+      "values": [
+        "shrinking",
+        "non_shrinking",
+        "unavailable"
+      ]
+    },
+    {
+      "name": "retryBudget",
+      "values": [
+        "available",
+        "exhausted"
+      ]
+    }
+  ],
+  "outputs": [
+    {
+      "name": "action",
+      "values": [
+        "continue_progress",
+        "bounded_retry",
+        "defer_with_recoverable_wake",
+        "block_model_route",
+        "migrate_owner_boundary",
+        "architecture_escalation"
+      ]
+    },
+    {
+      "name": "terminalClass",
+      "values": [
+        "non_terminal_progress",
+        "non_terminal_retry",
+        "blocked",
+        "owner_migration",
+        "architecture_stop"
+      ]
+    }
+  ],
+  "invariants": [
+    {
+      "id": "single-canonical-outcome",
+      "statement": "Every retry, rerun, or handoff evidence combination emits exactly one owner-owned action."
+    },
+    {
+      "id": "non-shrinking-evidence-blocks-local-retry",
+      "statement": "Repeated local retry with non-shrinking evidence cannot authorize another local retry."
+    },
+    {
+      "id": "deferred-followup-has-recoverable-wake",
+      "statement": "Deferred follow-up work exits through a recoverable wake while retry budget remains available."
+    }
+  ],
+  "rules": [
+    {
+      "id": "owner-mismatch-migrates",
+      "when": {
+        "routeClass": "owner_mismatch",
+        "evidenceMovement": "*",
+        "retryBudget": "*"
+      },
+      "outcome": {
+        "action": "migrate_owner_boundary",
+        "terminalClass": "owner_migration"
+      },
+      "reason": "Wrong-owner evidence cannot continue through a local retry path.",
+      "invariantRefs": ["single-canonical-outcome"]
+    },
+    {
+      "id": "contradictory-evidence-escalates",
+      "when": {
+        "routeClass": "contradictory",
+        "evidenceMovement": "*",
+        "retryBudget": "*"
+      },
+      "outcome": {
+        "action": "architecture_escalation",
+        "terminalClass": "architecture_stop"
+      },
+      "reason": "Contradictory evidence is not a local runtime retry surface.",
+      "invariantRefs": ["single-canonical-outcome"]
+    },
+    {
+      "id": "progress-continues",
+      "when": {
+        "routeClass": "progress",
+        "evidenceMovement": "*",
+        "retryBudget": "*"
+      },
+      "outcome": {
+        "action": "continue_progress",
+        "terminalClass": "non_terminal_progress"
+      },
+      "reason": "Measured progress may continue without reinterpreting ownership.",
+      "invariantRefs": ["single-canonical-outcome"]
+    },
+    {
+      "id": "deferred-followup-available-budget-wakes",
+      "when": {
+        "routeClass": "deferred_followup",
+        "evidenceMovement": "*",
+        "retryBudget": "available"
+      },
+      "outcome": {
+        "action": "defer_with_recoverable_wake",
+        "terminalClass": "non_terminal_retry"
+      },
+      "reason": "Deferred owner work must preserve a recoverable wake while retry budget remains.",
+      "invariantRefs": [
+        "single-canonical-outcome",
+        "deferred-followup-has-recoverable-wake"
+      ]
+    },
+    {
+      "id": "deferred-followup-exhausted-blocks",
+      "when": {
+        "routeClass": "deferred_followup",
+        "evidenceMovement": "*",
+        "retryBudget": "exhausted"
+      },
+      "outcome": {
+        "action": "block_model_route",
+        "terminalClass": "blocked"
+      },
+      "reason": "Deferred owner work without retry budget must block rather than spin.",
+      "invariantRefs": ["single-canonical-outcome"]
+    },
+    {
+      "id": "shrinking-repeated-local-retry-is-bounded",
+      "when": {
+        "routeClass": "repeated_local_retry",
+        "evidenceMovement": "shrinking",
+        "retryBudget": "available"
+      },
+      "outcome": {
+        "action": "bounded_retry",
+        "terminalClass": "non_terminal_retry"
+      },
+      "reason": "A shrinking residual window permits one bounded local retry.",
+      "invariantRefs": ["single-canonical-outcome"]
+    },
+    {
+      "id": "shrinking-repeated-local-retry-exhausted-blocks",
+      "when": {
+        "routeClass": "repeated_local_retry",
+        "evidenceMovement": "shrinking",
+        "retryBudget": "exhausted"
+      },
+      "outcome": {
+        "action": "block_model_route",
+        "terminalClass": "blocked"
+      },
+      "reason": "Shrinking evidence cannot override an exhausted retry budget.",
+      "invariantRefs": ["single-canonical-outcome"]
+    },
+    {
+      "id": "non-shrinking-repeated-local-retry-blocks",
+      "when": {
+        "routeClass": "repeated_local_retry",
+        "evidenceMovement": "non_shrinking",
+        "retryBudget": "*"
+      },
+      "outcome": {
+        "action": "block_model_route",
+        "terminalClass": "blocked"
+      },
+      "reason": "Non-shrinking repeated evidence blocks another local retry.",
+      "invariantRefs": [
+        "single-canonical-outcome",
+        "non-shrinking-evidence-blocks-local-retry"
+      ]
+    },
+    {
+      "id": "unavailable-repeated-local-retry-escalates",
+      "when": {
+        "routeClass": "repeated_local_retry",
+        "evidenceMovement": "unavailable",
+        "retryBudget": "*"
+      },
+      "outcome": {
+        "action": "architecture_escalation",
+        "terminalClass": "architecture_stop"
+      },
+      "reason": "Unavailable evidence cannot authorize another local retry.",
+      "invariantRefs": ["single-canonical-outcome"]
+    }
+  ]
+}

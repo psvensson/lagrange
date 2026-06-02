@@ -4,6 +4,7 @@ import path from 'node:path';
 import {
   EVENT_ATTEMPT,
   EVENT_EVIDENCE_INGESTED,
+  EVENT_FINDING,
   EVENT_QUEST,
   EVENT_QUEST_UPGRADED,
   EVENT_SOLVED,
@@ -12,6 +13,7 @@ import {
   EVENT_THEORY_SELECTED,
   EVENT_THEORY_SUPERSEDED,
   EVENT_THEORY_SYSTEM_DECLARED,
+  STATUS_SOLVED,
   THEORY_RESULT_ACTIVE,
   THEORY_RESULT_AVOIDED,
   THEORY_RESULT_FALSIFIED,
@@ -22,7 +24,11 @@ import {
 } from './constants.js';
 import {detectUnrecordedEvidence} from './evidence.js';
 import {eventEvidenceFingerprint} from './evidence-identity.js';
-import {inspectChangeArtifact} from './change-artifact.js';
+import {
+  inspectChangeArtifact,
+  requiresModelEvidence,
+  requiresSourceVerification,
+} from './change-artifact.js';
 import {loadQuest, projectState, readLog} from './store.js';
 
 const BLOCKED_THEORY_STATUSES = Object.freeze([
@@ -126,9 +132,15 @@ function auditMetricZeroNeedsTheoryResult(log, startIndex) {
   const event = log[latestMetricIndex];
   const metric = event.type === EVENT_ATTEMPT ? event.metricAfter : event.metric;
   if (metric !== 0 || event.done === true) return [];
-  const hasLaterTheoryResult = log.slice(latestMetricIndex + 1)
+  const laterEvents = log.slice(latestMetricIndex + 1);
+  const hasLaterTheoryResult = laterEvents
     .some((item) => item.type === EVENT_THEORY_RESULT);
   if (hasLaterTheoryResult) return [];
+  const hasLaterSolvedEvent = laterEvents.some((item) =>
+    (item.type === EVENT_SOLVED &&
+      (!event.frontier || item.frontier === event.frontier)) ||
+    (item.type === EVENT_QUEST && item.status === STATUS_SOLVED));
+  if (hasLaterSolvedEvent) return [];
   return [problem('metric is zero but done is false without a later theory result', event)];
 }
 
@@ -143,6 +155,80 @@ function auditReportOrdering(root, quest, log) {
   return [];
 }
 
+function isSubagentVerificationFinding(event, frontier) {
+  return event.type === EVENT_FINDING &&
+    event.frontier === frontier &&
+    typeof event.evidence === 'string' &&
+    event.evidence.startsWith('subagent:') &&
+    /source|code|change|quest|intent|guideline|doctrine|verif/iu
+      .test(String(event.claim || ''));
+}
+
+function auditSourceChangeVerification(root, quest, log, startIndex) {
+  let latestSourceAttemptIndex = -1;
+  let latestSourceAttempt = null;
+  for (const [index, event] of log.entries()) {
+    if (index < startIndex || event.type !== EVENT_ATTEMPT) continue;
+    const inspection = inspectChangeArtifact(root, quest, event.changeRef);
+    if (inspection.changedPaths.some(requiresSourceVerification)) {
+      latestSourceAttemptIndex = index;
+      latestSourceAttempt = event;
+    }
+  }
+  if (latestSourceAttemptIndex < 0) return [];
+  const hasLaterVerification = log
+    .slice(latestSourceAttemptIndex + 1)
+    .some((event) =>
+      isSubagentVerificationFinding(event, latestSourceAttempt.frontier));
+  if (hasLaterVerification) return [];
+  return [problem(
+    'source code changes require a later subagent verification finding ' +
+      'with evidence subagent:<id>',
+    latestSourceAttempt,
+  )];
+}
+
+function isModelEvidenceFinding(event, frontier) {
+  if (event.type === EVENT_EVIDENCE_INGESTED && event.frontier === frontier) {
+    return isModelEvidenceRef(event.evidence);
+  }
+  return event.type === EVENT_FINDING &&
+    event.frontier === frontier &&
+    isModelEvidenceRef(event.evidence) &&
+    /model|alloy|tla|trace|decision|statechart|contract|evidence|report/iu
+      .test(String(event.claim || ''));
+}
+
+function isModelEvidenceRef(evidence) {
+  const value = String(evidence || '');
+  return /^(model|statechart|contract|tla):/u.test(value) ||
+    /^test-output\/reports\/.*\.model\.report\.json$/u.test(value) ||
+    /^models\//u.test(value) ||
+    /^architecture\/models\//u.test(value) ||
+    /^architecture\/contracts\//u.test(value);
+}
+
+function auditModelEvidence(root, quest, log, startIndex) {
+  const problems = [];
+  for (const [index, event] of log.entries()) {
+    if (index < startIndex || event.type !== EVENT_ATTEMPT) continue;
+    const inspection = inspectChangeArtifact(root, quest, event.changeRef);
+    if (!inspection.changedPaths.some(requiresModelEvidence)) continue;
+    const hasInlineModelEvidence = Boolean(event.modelRef);
+    const hasLaterModelEvidence = log
+      .slice(index + 1)
+      .some((item) => isModelEvidenceFinding(item, event.frontier));
+    if (!hasInlineModelEvidence && !hasLaterModelEvidence) {
+      problems.push(problem(
+        'model and architecture model changes require modelRef or later ' +
+          'model evidence finding on the same frontier',
+        event,
+      ));
+    }
+  }
+  return problems;
+}
+
 export function auditQuest(root, quest) {
   const log = readLog(root, quest.id);
   const state = projectState(quest, log);
@@ -151,6 +237,8 @@ export function auditQuest(root, quest) {
     ...auditChangeRefs(root, quest, log, startIndex),
     ...auditEvidenceIdentity(log, startIndex),
     ...auditTheoryUse(log, startIndex),
+    ...auditSourceChangeVerification(root, quest, log, startIndex),
+    ...auditModelEvidence(root, quest, log, startIndex),
     ...auditMetricZeroNeedsTheoryResult(log, startIndex),
     ...auditReportOrdering(root, quest, log),
   ];

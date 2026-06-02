@@ -144,7 +144,7 @@ tap.test('quest-context newer evidence warning (P2)', async (t) => {
     // Evaluate context - since report is newer, it should warn!
     const ctx = buildContext(root, {id: goal.id});
     t.ok(ctx.unrecorded, 'unrecorded evidence detected');
-    
+
     const rendered = renderContext(ctx);
     t.match(rendered, /UNRECORDED_EVIDENCE: latest probe evidence is newer than Quest memory/);
     t.match(rendered, /node scripts\/solve\.js ingest-evidence/);
@@ -162,6 +162,13 @@ tap.test('quest-context newer evidence warning (P2)', async (t) => {
 
     const rendered2 = renderContext(ctx2);
     t.notMatch(rendered2, /UNRECORDED_EVIDENCE/);
+    t.match(rendered2, /## Git Handoff/u);
+    t.match(rendered2, /## Source Change Verification/u);
+    t.match(rendered2, /Subagent verifier approved source changes/u);
+    t.match(rendered2, /--evidence subagent:<id>/u);
+    t.match(rendered2, /git commit -m "context-quest-test: <summary>"/u);
+    t.match(rendered2, /git push/u);
+    t.match(rendered2, /do not include unrelated dirty worktree entries/u);
 
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
@@ -215,16 +222,16 @@ tap.test('recorded theories retain architecture model guidance', (t) => {
   });
 
   const result = runTheoryCommand(root, {
-    _: ['system'],
-    id: goal.id,
-    theory: 'theory-architecture-owner-boundary',
-    problem: 'architecture owner boundary can drift without model evidence',
-    evidence: 'test-output/reports/core-system-logic-alloy.model.report.json',
-    success: 'Quest closes with owner-boundary evidence intact',
-    mechanism: 'coupled_invariants',
-    owner: 'architecture_owner',
+    '_': ['system'],
+    'id': goal.id,
+    'theory': 'theory-architecture-owner-boundary',
+    'problem': 'architecture owner boundary can drift without model evidence',
+    'evidence': 'test-output/reports/core-system-logic-alloy.model.report.json',
+    'success': 'Quest closes with owner-boundary evidence intact',
+    'mechanism': 'coupled_invariants',
+    'owner': 'architecture_owner',
     'missing-edge': 'model contract discriminator',
-    discriminator: 'npm run model:contracts',
+    'discriminator': 'npm run model:contracts',
   });
   t.match(result, /recorded system theory/u);
 

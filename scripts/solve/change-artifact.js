@@ -39,6 +39,31 @@ const RUNTIME_PATH_PREFIXES = Object.freeze([
   'test/query/',
 ]);
 
+const SOURCE_VERIFICATION_PATH_PREFIXES = Object.freeze([
+  'src/',
+  'scripts/',
+  'test/',
+  'models/',
+  'architecture/models/',
+  'architecture/contracts/',
+  'package.json',
+]);
+
+const MODEL_EVIDENCE_PATH_PREFIXES = Object.freeze([
+  'models/',
+  'architecture/models/',
+  'architecture/contracts/',
+  'scripts/model-',
+  'scripts/check-alloy-models.js',
+  'scripts/check-decision-tables.js',
+  'scripts/check-invariants.js',
+  'scripts/check-owner-traces.js',
+  'scripts/check-statecharts.js',
+  'scripts/check-system-contracts.js',
+  'test/scripts/check-owner-traces.test.js',
+  'package.json',
+]);
+
 function normalizeSlash(value) {
   return String(value || '').replaceAll(path.sep, '/');
 }
@@ -141,13 +166,25 @@ export function classifyPath(filePath) {
   return 'other';
 }
 
+export function requiresSourceVerification(filePath) {
+  const normalized = normalizeSlash(filePath);
+  return SOURCE_VERIFICATION_PATH_PREFIXES.some((prefix) =>
+    normalized.startsWith(prefix));
+}
+
+export function requiresModelEvidence(filePath) {
+  const normalized = normalizeSlash(filePath);
+  return MODEL_EVIDENCE_PATH_PREFIXES.some((prefix) =>
+    normalized.startsWith(prefix));
+}
+
 export function classifyQuestScope(quest) {
   const haystack = [
     quest?.id,
     quest?.statement,
     ...(quest?.frontiers || []).map((frontier) => frontier.id),
   ].join(' ').toLowerCase();
-  if (/\b(solver|workflow|work-tracker|tooling|steering|command)\b/u
+  if (/\b(solver|workflow|work-tracker|tooling|steering|command|model|architecture|contract)\b/u
     .test(haystack)) {
     return 'workflow';
   }

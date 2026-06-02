@@ -22,22 +22,69 @@ const JAR_PATH = process.env.TLA_TOOLS_JAR ||
   path.resolve('tools', 'tla2tools.jar');
 const JAR_URL =
   'https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar';
-const MODULE = path.resolve('models', 'active-gate', 'ActiveGate.tla');
 const REPORTS_DIR = path.resolve('test-output', 'reports');
 const META_ROOT = path.resolve('test-output', 'tlc');
 
 const CONFIGS = [
   {
+    id: 'active-gate-route',
     mode: 'route',
+    module: path.resolve('models', 'active-gate', 'ActiveGate.tla'),
     cfg: path.resolve('models', 'active-gate', 'ActiveGate_route.cfg'),
     expectConverged: true,
     report: 'active-gate-tlc-route.model.report.json',
+    scenario: 'rolling-restart-active-gate-convergence',
+    owner: 'active_gate_owner',
+    boundary: 'snapshot_coverage',
   },
   {
+    id: 'active-gate-stall',
     mode: 'stall',
+    module: path.resolve('models', 'active-gate', 'ActiveGate.tla'),
     cfg: path.resolve('models', 'active-gate', 'ActiveGate_stall.cfg'),
     expectConverged: false,
     report: 'active-gate-tlc-stall.model.report.json',
+    scenario: 'rolling-restart-active-gate-convergence',
+    owner: 'active_gate_owner',
+    boundary: 'snapshot_coverage',
+    expectedFailurePattern: 'Temporal property EventuallyConverged was violated',
+  },
+  {
+    id: 'readiness-handoff-route',
+    mode: 'readiness-route',
+    module: path.resolve('models', 'readiness-handoff', 'ReadinessHandoff.tla'),
+    cfg: path.resolve('models', 'readiness-handoff', 'ReadinessHandoff_route.cfg'),
+    expectConverged: true,
+    report: 'readiness-handoff-tlc-route.model.report.json',
+    scenario: 'startup-readiness-handoff-liveness',
+    owner: 'startup_runtime_handoff_owner',
+    boundary: 'readiness_handoff',
+  },
+  {
+    id: 'readiness-handoff-unsafe',
+    mode: 'readiness-unsafe',
+    module: path.resolve('models', 'readiness-handoff', 'ReadinessHandoff.tla'),
+    cfg: path.resolve('models', 'readiness-handoff', 'ReadinessHandoff_unsafe.cfg'),
+    expectConverged: false,
+    report: 'readiness-handoff-tlc-unsafe.model.report.json',
+    scenario: 'startup-readiness-handoff-liveness',
+    owner: 'startup_runtime_handoff_owner',
+    boundary: 'readiness_handoff',
+    expectedFailurePattern:
+      'Invariant ReadyRequiresCanonicalServiceability is violated',
+  },
+  {
+    id: 'readiness-handoff-lost-wake',
+    mode: 'readiness-lost-wake',
+    module: path.resolve('models', 'readiness-handoff', 'ReadinessHandoff.tla'),
+    cfg: path.resolve('models', 'readiness-handoff', 'ReadinessHandoff_lost_wake.cfg'),
+    expectConverged: false,
+    report: 'readiness-handoff-tlc-lost-wake.model.report.json',
+    scenario: 'startup-readiness-handoff-liveness',
+    owner: 'startup_runtime_handoff_owner',
+    boundary: 'readiness_handoff',
+    expectedFailurePattern:
+      'Invariant DeferredOutcomeHasRecoverableWake is violated',
   },
 ];
 
@@ -76,7 +123,7 @@ async function ensureJar() {
 }
 
 function runTlc(config) {
-  const metadir = path.join(META_ROOT, config.mode);
+  const metadir = path.join(META_ROOT, config.id || config.mode);
   fs.mkdirSync(metadir, {recursive: true});
   const result = spawnSync('java', [
     '-cp', JAR_PATH,
@@ -84,14 +131,14 @@ function runTlc(config) {
     '-deadlock',
     '-metadir', metadir,
     '-config', config.cfg,
-    MODULE,
+    config.module,
   ], {encoding: 'utf8', maxBuffer: 32 * 1024 * 1024});
   const output = `${result.stdout || ''}${result.stderr || ''}`;
   return {exitCode: result.status, output};
 }
 
-function cleanTraceArtifacts() {
-  const dir = path.dirname(MODULE);
+function cleanTraceArtifacts(modulePath) {
+  const dir = path.dirname(modulePath);
   for (const entry of fs.readdirSync(dir)) {
     if (/_TTrace_.*\.(tla|bin)$/.test(entry)) {
       fs.rmSync(path.join(dir, entry), {force: true});
@@ -101,11 +148,23 @@ function cleanTraceArtifacts() {
 
 function interpret(config, run) {
   const noError = /No error has been found/.test(run.output);
-  const temporalViolated = /Temporal properties were violated/.test(run.output);
+  const temporalViolated =
+    /Temporal propert(?:y|ies)\b[\s\S]*violated/iu.test(run.output);
+  const expectedFailureObserved = !config.expectConverged &&
+    typeof config.expectedFailurePattern === 'string' &&
+    run.output.includes(config.expectedFailurePattern);
   const converged = noError && !temporalViolated;
   const livenessHolds = converged;
-  const expectationMet = converged === config.expectConverged;
-  return {converged, temporalViolated, livenessHolds, expectationMet};
+  const expectationMet = config.expectConverged ?
+    converged :
+    !converged && expectedFailureObserved;
+  return {
+    converged,
+    expectedFailureObserved,
+    temporalViolated,
+    livenessHolds,
+    expectationMet,
+  };
 }
 
 function buildTlcReport(config, run, verdict) {
@@ -115,14 +174,18 @@ function buildTlcReport(config, run, verdict) {
     modelReport: true,
     source: 'tlc',
     mode: config.mode,
-    scenario: 'rolling-restart-active-gate-convergence',
-    owner: 'active_gate_owner',
-    boundary: 'snapshot_coverage',
+    scenario: config.scenario,
+    owner: config.owner,
+    boundary: config.boundary,
+    module: path.relative(process.cwd(), config.module),
+    config: path.relative(process.cwd(), config.cfg),
     converged: verdict.converged,
     residual: verdict.converged ? 0 : 1,
     frontierCount: verdict.converged ? 0 : 1,
     livenessHolds: verdict.livenessHolds,
     expectConverged: config.expectConverged,
+    expectedFailurePattern: config.expectedFailurePattern || null,
+    expectedFailureObserved: verdict.expectedFailureObserved,
     expectationMet: verdict.expectationMet,
     temporalViolated: verdict.temporalViolated,
     exitCode: run.exitCode,
@@ -137,7 +200,7 @@ async function main() {
   let allMet = true;
   for (const config of CONFIGS) {
     const run = runTlc(config);
-    cleanTraceArtifacts();
+    cleanTraceArtifacts(config.module);
     const verdict = interpret(config, run);
     const report = buildTlcReport(config, run, verdict);
     const target = path.join(REPORTS_DIR, config.report);
@@ -151,10 +214,10 @@ async function main() {
   }
 
   if (!allMet) {
-    console.error('TLC expectations not met (route must hold, stall must fail).');
+    console.error('TLC expectations not met.');
     process.exit(1);
   }
-  console.log('TLC confirms route converges and stall oscillates as expected.');
+  console.log('TLC confirms expected route and forbidden-shape outcomes.');
 }
 
 main().catch((err) => {

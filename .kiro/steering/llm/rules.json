@@ -104,12 +104,12 @@
     }
   ],
   "stats": {
-    "candidateCount": 224,
-    "dedupedRuleCount": 218,
-    "exportedRuleCount": 218,
+    "candidateCount": 228,
+    "dedupedRuleCount": 222,
+    "exportedRuleCount": 222,
     "aliasRuleCount": 0,
-    "masterRuleCount": 218,
-    "estimatedAllRulesTokens": 7100
+    "masterRuleCount": 222,
+    "estimatedAllRulesTokens": 7239
   },
   "rules": [
     {
@@ -2653,7 +2653,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 30,
+          "line": 33,
           "section": "Quest Workflow > Operating Contract"
         }
       ]
@@ -2668,7 +2668,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 81,
+          "line": 84,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
@@ -2678,12 +2678,42 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
+      "rule": "If the verifier finds issues, fix them or record a finding that explains why the Quest must continue; do not proceed to git handoff from an unresolved verifier finding.",
+      "score": 206,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 146,
+          "section": "Quest Workflow > Source Change Verification"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0016",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Do not include unrelated dirty worktree entries from another Quest.",
+      "score": 206,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 157,
+          "section": "Quest Workflow > Git Handoff"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0017",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
       "rule": "Do not rely on solve/state/ as durable memory.",
       "score": 206,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 179,
+          "line": 211,
           "section": "Quest Workflow > Tracked Versus Regenerable"
         }
       ]
@@ -2704,7 +2734,7 @@
       ]
     },
     {
-      "id": "GOV-0016",
+      "id": "GOV-0018",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2906,7 +2936,7 @@
       ]
     },
     {
-      "id": "GOV-0017",
+      "id": "GOV-0019",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -2915,40 +2945,8 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 46,
+          "line": 49,
           "section": "Quest Workflow > Quest Anatomy"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0018",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [
-        "governance"
-      ],
-      "rule": "widen-scope: selected frontier theory required.",
-      "score": 198,
-      "sources": [
-        {
-          "file": "workflow-guidelines/solver-quests.md",
-          "line": 90,
-          "section": "Quest Workflow > Two-Layer Theory"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0019",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [],
-      "rule": "model: selected frontier theory, active system theory, and --modelRef or --modelNotApplicable required.",
-      "score": 198,
-      "sources": [
-        {
-          "file": "workflow-guidelines/solver-quests.md",
-          "line": 91,
-          "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
     },
@@ -2957,9 +2955,9 @@
       "domain": "governance",
       "strength": "must",
       "tags": [
-        "testing"
+        "governance"
       ],
-      "rule": "change-approach: selected frontier theory remains required; model evidence is not required unless this rung explicitly returns to a model test.",
+      "rule": "widen-scope: selected frontier theory required.",
       "score": 198,
       "sources": [
         {
@@ -2974,12 +2972,44 @@
       "domain": "governance",
       "strength": "must",
       "tags": [],
+      "rule": "model: selected frontier theory, active system theory, and --modelRef or --modelNotApplicable required.",
+      "score": 198,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 94,
+          "section": "Quest Workflow > Two-Layer Theory"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0022",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [
+        "testing"
+      ],
+      "rule": "change-approach: selected frontier theory remains required; model evidence is not required unless this rung explicitly returns to a model test.",
+      "score": 198,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 96,
+          "section": "Quest Workflow > Two-Layer Theory"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0023",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [],
       "rule": "THEORY_REQUIRED: the selected rung needs system or frontier theory before another attempt; record the theory and resume instead of patching through it.",
       "score": 198,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 164,
+          "line": 196,
           "section": "Quest Workflow > Terminal And Blocking Conditions"
         }
       ]
@@ -3019,7 +3049,7 @@
       ]
     },
     {
-      "id": "GOV-0022",
+      "id": "GOV-0024",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3036,7 +3066,7 @@
       ]
     },
     {
-      "id": "GOV-0023",
+      "id": "GOV-0025",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3051,7 +3081,7 @@
       ]
     },
     {
-      "id": "GOV-0024",
+      "id": "GOV-0026",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3166,6 +3196,38 @@
           "file": "system-guidelines.md",
           "line": 324,
           "section": "System Guidelines — Mandatory Implementation Contract > 12. User-Facing Model Stays Small"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0027",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [
+        "readiness"
+      ],
+      "rule": "Every Quest that changes source code must spawn a subagent verifier after the final source diff is ready and before node scripts/solve.js audit --id <id> is used for handoff.",
+      "score": 188,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 134,
+          "section": "Quest Workflow > Source Change Verification"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0028",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [],
+      "rule": "The verifier must inspect the Quest intent, touched source diff, system guidelines, and applicable doctrine.",
+      "score": 188,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 134,
+          "section": "Quest Workflow > Source Change Verification"
         }
       ]
     },
@@ -3527,7 +3589,7 @@
       ]
     },
     {
-      "id": "GOV-0025",
+      "id": "GOV-0029",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -3536,13 +3598,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 67,
+          "line": 70,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
     },
     {
-      "id": "GOV-0026",
+      "id": "GOV-0030",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -3551,13 +3613,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 147,
+          "line": 179,
           "section": "Quest Workflow > Findings Log"
         }
       ]
     },
     {
-      "id": "GOV-0027",
+      "id": "GOV-0031",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -3572,7 +3634,7 @@
       ]
     },
     {
-      "id": "GOV-0028",
+      "id": "GOV-0032",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -3619,7 +3681,7 @@
       ]
     },
     {
-      "id": "GOV-0029",
+      "id": "GOV-0033",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -3649,7 +3711,7 @@
       ]
     },
     {
-      "id": "GOV-0030",
+      "id": "GOV-0034",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -3658,13 +3720,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 81,
+          "line": 84,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
     },
     {
-      "id": "GOV-0031",
+      "id": "GOV-0035",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -3675,13 +3737,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 179,
+          "line": 211,
           "section": "Quest Workflow > Tracked Versus Regenerable"
         }
       ]
     },
     {
-      "id": "GOV-0032",
+      "id": "GOV-0036",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -3698,5 +3760,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-06-02T07:03:33.727Z"
+  "generatedAt": "2026-06-02T09:03:07.164Z"
 }

@@ -185,7 +185,7 @@ function renderContext(context) {
       'Show exact command:',
       EMPTY,
       `node scripts/solve.js ingest-evidence --id ${quest.id} --frontier ${context.unrecorded.frontier} --evidence ${context.unrecorded.evidence}`,
-      EMPTY
+      EMPTY,
     );
   }
   lines.push('## Active Quest', EMPTY);
@@ -257,6 +257,26 @@ function renderContext(context) {
       `${quest.health.modelGuidance.modelRef}\``,
     );
   }
+  lines.push(EMPTY, '## Source Change Verification', EMPTY);
+  lines.push('- required for every Quest-scoped source code change before audit and git handoff');
+  lines.push('- spawn a subagent to review the final source diff for Quest intent, system guidelines, and doctrine');
+  lines.push('- record the review as a Solver finding with evidence `subagent:<id>`');
+  lines.push(
+    `- \`node scripts/solve.js finding --id ${quest.id} ` +
+    '--frontier <frontier> --claim "Subagent verifier approved source changes" ' +
+    '--evidence subagent:<id>`',
+  );
+  lines.push(EMPTY, '## Git Handoff', EMPTY);
+  lines.push('- required after `node scripts/solve.js audit --id <quest>` passes');
+  lines.push(
+    '- commit all Quest-scoped source, test, docs, steering, Quest log, ' +
+    'Quest report, and `solve/changes/` artifacts',
+  );
+  lines.push('- do not include unrelated dirty worktree entries from other Quests');
+  lines.push('- `git status --short`');
+  lines.push('- `git add <quest-scoped paths>`');
+  lines.push(`- \`git commit -m "${quest.id}: <summary>"\``);
+  lines.push('- `git push`');
   lines.push(EMPTY, '## Worktree Summary', EMPTY);
   if (context.worktree === null) {
     lines.push('- git status unavailable');
