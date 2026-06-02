@@ -17,7 +17,9 @@
     "findings are lost because durable memory is not recorded in the Quest log",
     "terminal state is claimed without live doneWhen evidence",
     "a stalled frontier keeps receiving local patches without selected Quest theory",
-    "archived sprint/package theory state is treated as active implementation authority"
+    "archived sprint/package theory state is treated as active implementation authority",
+    "latest evidence moves owner or boundary while the selected frontier theory remains unrecorded",
+    "broad mixed-scope source changes accumulate without scope-pressure visibility"
   ],
   "stateVariables": [
     "questStatus",
@@ -29,7 +31,12 @@
     "findingEvents",
     "theoryEvents",
     "selectedFrontierTheory",
+    "selectedTheoryStale",
     "activeSystemTheory",
+    "currentBlocker",
+    "blockerMovement",
+    "diagnosticMovement",
+    "scopePressure",
     "terminalEvidence"
   ],
   "safetyInvariants": [
@@ -56,6 +63,14 @@
     {
       "id": "archive-theory-is-not-selectable",
       "statement": "Imported legacy theory-ledger entries are archive memory and cannot be selected for implementation without fresh Quest theory evidence."
+    },
+    {
+      "id": "stale-theory-cannot-authorize-widened-work",
+      "statement": "A selected frontier theory cannot authorize widen-scope, model, or change-approach work after latest evidence makes its owner/boundary stale unless a later theory result records the learning."
+    },
+    {
+      "id": "scope-pressure-comes-from-quest-diffs",
+      "statement": "Scope-pressure signals are computed from the Quest's own recorded diff artifacts, never from unrelated dirty worktree files."
     }
   ],
   "livenessExpectations": [
@@ -66,6 +81,10 @@
     {
       "id": "failed-theory-attempt-still-records-learning",
       "statement": "A measured attempt linked to theory records supported, falsified, or needs-rerun learning so the next step does not rediscover the same path."
+    },
+    {
+      "id": "diagnostic-movement-narrows-next-theory",
+      "statement": "Evidence that moves owner, boundary, reason, or mechanism without metric movement still records diagnostic movement so the next theory can target the new current blocker."
     }
   ],
   "knownResiduals": [
@@ -101,13 +120,31 @@
       "path": "scripts/solve/theory.js",
       "owner": "workflow_tooling_owner",
       "boundary": "quest_lifecycle",
-      "transition": "Quest-native system theory, frontier theory, selection, result, supersede, and archive import events"
+      "transition": "Quest-native system theory, frontier theory, owner-path metadata, selection, result, supersede, stale-theory gates, and archive import events"
+    },
+    {
+      "path": "scripts/solve/evidence.js",
+      "owner": "workflow_tooling_owner",
+      "boundary": "quest_lifecycle",
+      "transition": "probe evidence ingestion, blocker movement classification, and selected-theory result learning"
+    },
+    {
+      "path": "scripts/solve/current-blocker.js",
+      "owner": "workflow_tooling_owner",
+      "boundary": "quest_lifecycle",
+      "transition": "current blocker projection, diagnostic movement, stale selected-theory detection, and next-move guidance"
+    },
+    {
+      "path": "scripts/solve/scope-pressure.js",
+      "owner": "workflow_tooling_owner",
+      "boundary": "quest_lifecycle",
+      "transition": "Quest-owned diff inspection for broad owner scope and mixed runtime/workflow or runtime/harness signals"
     },
     {
       "path": "scripts/solve/health.js",
       "owner": "workflow_tooling_owner",
       "boundary": "quest_lifecycle",
-      "transition": "loop-health projection for theory-required, model-required, and live-probe divergence signals"
+      "transition": "loop-health projection for current blocker, stale theory, scope pressure, theory-required, model-required, and live-probe divergence signals"
     },
     {
       "path": "scripts/solve/mechanism-card.js",
@@ -146,6 +183,10 @@
       "probe": "npm run solve:health -- --id rolling-restart-core-stability"
     },
     {
+      "name": "Quest status current blocker",
+      "probe": "node scripts/solve.js status --id rolling-restart-core-stability"
+    },
+    {
       "name": "contract validator",
       "probe": "npm run model:contract-records"
     }
@@ -171,6 +212,20 @@
         "detectability": "high - solve health emits theory-required and model-required signals",
         "mitigation": "step begin/commit and run preflight enforce selected frontier theory and model rung evidence",
         "probe": "npm run solve:health -- --id rolling-restart-core-stability"
+      },
+      {
+        "failureMode": "latest blocker changes while an older selected theory continues to steer widened work",
+        "severity": "medium - attempts can optimize a no-longer-current owner path",
+        "detectability": "high - current blocker projection and solve health emit selected-theory-stale",
+        "mitigation": "record theory result movement or select a fresh owner-path theory before widened/model/change-approach attempts",
+        "probe": "node scripts/solve.js health --id rolling-restart-core-stability"
+      },
+      {
+        "failureMode": "Quest source edits silently spread across unrelated owner areas",
+        "severity": "medium - a single Quest can become hard to verify or hand off honestly",
+        "detectability": "medium - scope pressure is derived from recorded diff artifacts and shown in health/report",
+        "mitigation": "narrow the theory, split the Quest, or record a finding that justifies the mixed scope before more source work",
+        "probe": "node scripts/solve.js report --id rolling-restart-core-stability"
       }
     ],
     "stpa": [
@@ -185,6 +240,18 @@
         "unsafeAction": "allows a stalled frontier to continue past widen-scope or model without selected Quest theory",
         "feedbackSignal": "solve health theory-required signals, selected theory projection, and theory result events",
         "ownerBoundary": "workflow_tooling_owner / quest_lifecycle"
+      },
+      {
+        "controller": "workflow_tooling_owner",
+        "unsafeAction": "uses a selected theory after latest evidence moved the current blocker to a different owner or boundary",
+        "feedbackSignal": "current blocker movement, selected-theory-stale health signal, and recorded theory result outcomes",
+        "ownerBoundary": "workflow_tooling_owner / quest_lifecycle"
+      },
+      {
+        "controller": "workflow_tooling_owner",
+        "unsafeAction": "treats diagnostic blocker movement as scenario closure",
+        "feedbackSignal": "separate scenarioOutcome, theoryOutcome, metric, and doneWhen fields in evidence, theory results, and report",
+        "ownerBoundary": "workflow_tooling_owner / quest_lifecycle"
       }
     ]
   }
@@ -194,20 +261,28 @@
 ## Failure Classes
 
 This contract covers Quest lifecycle failures: goalpost drift, unrecorded
-attempts, chat-only memory, and premature closure claims.
+attempts, chat-only memory, stale selected theories, broad mixed-scope diffs,
+and premature closure claims.
 
 ## Invariants
 
 Quest goalposts are sealed by the first declaration event. Attempts require
 probe evidence plus a resolvable `diff:<path>` change reference. Terminal state
-comes from the Solver report projection.
+comes from the Solver report projection. A selected frontier theory cannot keep
+authorizing widened work after latest evidence moves the current blocker unless
+that movement is recorded as theory learning. Scope pressure is projected only
+from the Quest's own diff artifacts, never from unrelated dirty files.
 
 ## Runtime Bindings
 
 `scripts/solve.js` owns the CLI. `scripts/solve/step.js` owns supervised
 attempt bracketing. `scripts/solve/loop.js` owns autonomous theory preflight,
 honesty checks, ladder movement, and terminal recording. `scripts/solve/store.js`
-owns the append-only event log and derived state.
+owns the append-only event log and derived state. `scripts/solve/evidence.js`
+records blocker movement and selected-theory learning. `scripts/solve/current-blocker.js`
+projects the active owner/boundary/reason, stale theory state, and next move.
+`scripts/solve/scope-pressure.js` projects broad or mixed source scope from
+recorded attempt diffs.
 
 ## Model Bindings
 
@@ -218,6 +293,7 @@ archived theory refs from drifting independently.
 ## Operational Analysis
 
 FMEA/STPA frame the workflow controller as a safety boundary: it must not issue
-progress credit or closure without Solver evidence. `quest-context` supplies the
-active handoff surface, while legacy workflow artifacts remain archive evidence
-only.
+progress credit or closure without Solver evidence, must not keep steering from
+a no-longer-current theory, and must keep mixed source scope visible before
+handoff. `quest-context` supplies the active handoff surface, while legacy
+workflow artifacts remain archive evidence only.

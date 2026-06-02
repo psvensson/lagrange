@@ -13,6 +13,7 @@ import {
   EVENT_THEORY_OPTION_DECLARED,
   EVENT_THEORY_RESULT,
   EVENT_THEORY_SELECTED,
+  EVENT_EVIDENCE_INGESTED,
   STATUS_SOLVED,
 } from '../../scripts/solve/constants.js';
 
@@ -101,6 +102,49 @@ tap.test('report projection (P2)', async (t) => {
     t.match(md, /demo-main\*\*: theory-frontier/);
     t.match(md, /falsified/);
     t.match(md, /\| .* \| theory-frontier \| diff:a\.diff \|/);
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('report starts with current blocker and diagnostic movement', (t) => {
+    const root = tmp();
+    saveQuest(root, GOAL);
+    appendEvent(root, GOAL.id, {
+      type: EVENT_EVIDENCE_INGESTED,
+      frontier: 'demo-main',
+      evidence: 'r1.json',
+      metric: 1,
+      done: false,
+      owner: 'startup_active_gate_owner',
+      boundary: 'snapshot_coverage',
+      dominantReason: 'snapshot_coverage=1/5',
+      mechanism: 'ownership_gap',
+    });
+    appendEvent(root, GOAL.id, {
+      type: EVENT_EVIDENCE_INGESTED,
+      frontier: 'demo-main',
+      evidence: 'r2.json',
+      metric: 1,
+      done: false,
+      owner: 'operation_workflow_owner',
+      boundary: 'workflow_progress',
+      dominantReason: 'priority_spread_pending',
+      mechanism: 'observation_gap',
+      nextAction: 'advance_existing_operation',
+    });
+    appendEvent(root, GOAL.id, {
+      type: 'finding',
+      frontier: 'demo-main',
+      claim: 'snapshot retry is no longer first blocker',
+      rulesOut: 'startup snapshot selected-source retry',
+    });
+    const log = readLog(root, GOAL.id);
+    const md = buildReport(GOAL, log, projectState(GOAL, log), root);
+    t.match(md, /## Current Blocker/);
+    t.match(md, /Owner: operation_workflow_owner/);
+    t.match(md, /Boundary: workflow_progress/);
+    t.match(md, /Movement: moved_owner/);
+    t.match(md, /No longer current: .*startup snapshot selected-source retry/);
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });

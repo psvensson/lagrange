@@ -1,0 +1,30 @@
+{
+  "id": "quest-workflow-signal-quality",
+  "statement": "Quest workflow surfaces live blocker, diagnostic movement, stale theory, and broad scope risks before further attempts.",
+  "priority": 1,
+  "class": "process",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/quest-workflow-signal-quality.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "quest-workflow-signal-quality-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/quest-workflow-signal-quality.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

@@ -23,6 +23,13 @@ import {
   THEORY_SCOPE_SYSTEM,
 } from './constants.js';
 import {buildMechanismCardFromEvidence} from './mechanism-card.js';
+import {
+  BLOCKER_MOVEMENT_MOVED_BOUNDARY,
+  BLOCKER_MOVEMENT_MOVED_OWNER,
+  BLOCKER_MOVEMENT_NARROWED,
+  diagnosticMovementFor,
+  selectedTheoryStaleness,
+} from './current-blocker.js';
 import {modelGuidanceForQuest} from './model-guidance.js';
 import {appendEvent, loadQuest, projectState, readLog} from './store.js';
 import {
@@ -54,6 +61,11 @@ const NUM_ONE = 1;
 const NUM_TWO = 2;
 const RUNG_INDEX_WIDEN_SCOPE = LADDER.indexOf(RUNG_WIDEN_SCOPE);
 const RUNG_INDEX_MODEL = LADDER.indexOf(RUNG_MODEL);
+const THEORY_OUTCOME_PARTIAL = 'partial';
+const SCENARIO_OUTCOME_FAILED = 'failed';
+const SCENARIO_OUTCOME_IMPROVED = 'improved';
+const SCENARIO_OUTCOME_INVALID = 'invalid';
+const SCENARIO_OUTCOME_DONE = 'done';
 
 function normalizeText(value) {
   return String(value || '').trim();
@@ -145,6 +157,20 @@ function noProgressAttemptCount(log, frontierId) {
       event.metricAfter >= event.metricBefore)).length;
 }
 
+function diagnosticProgressAttemptCount(log, frontierId) {
+  return log.filter((event) =>
+    event.type === 'attempt' &&
+    event.frontier === frontierId &&
+    event.metricBefore !== null &&
+    event.metricAfter !== null &&
+    event.metricAfter >= event.metricBefore &&
+    [
+      BLOCKER_MOVEMENT_MOVED_OWNER,
+      BLOCKER_MOVEMENT_MOVED_BOUNDARY,
+      BLOCKER_MOVEMENT_NARROWED,
+    ].includes(event.blockerMovement)).length;
+}
+
 function modelRefPath(modelRef) {
   for (const prefix of MODEL_REF_PREFIXES) {
     if (modelRef.startsWith(prefix)) return modelRef.slice(prefix.length);
@@ -210,6 +236,14 @@ export function stepTheoryGateProblems({
     problems.push(`frontier theory required at rung ${rungIndex}`);
   }
 
+  const stale = selected ? selectedTheoryStaleness(log, state, frontierId) : null;
+  if (selected && stale?.stale && rungIndex >= RUNG_INDEX_WIDEN_SCOPE) {
+    problems.push(
+      `selected theory ${selected.id} is stale: ${stale.reason}; ` +
+      'record or select a fresh frontier theory',
+    );
+  }
+
   // Escalation rule 1 & 3:
   const evidenceEvents = log.filter((e) => e.type === 'evidence-ingested');
   const sameDominantReasonRepeat = evidenceEvents.length >= 2 &&
@@ -234,6 +268,22 @@ export function stepTheoryGateProblems({
 
   if (systemTheoryRequired && !activeSystemTheoryExists(state)) {
     problems.push('system theory required after repeated same-frontier stalls');
+  }
+
+  if (diagnosticProgressAttemptCount(log, frontierId) >= NUM_TWO &&
+    rungIndex >= RUNG_INDEX_WIDEN_SCOPE) {
+    const latestAttempt = [...log].reverse().find((event) =>
+      event.type === 'attempt' && event.frontier === frontierId);
+    const latestAttemptIndex = log.indexOf(latestAttempt);
+    const hasFreshTheorySelection = latestAttemptIndex >= 0 &&
+      log.slice(latestAttemptIndex + 1).some((event) =>
+        event.type === 'theory-selected' && event.frontier === frontierId);
+    if (!hasFreshTheorySelection) {
+      problems.push(
+        'fresh theory selection required after repeated diagnostic movement ' +
+        'without metric movement',
+      );
+    }
   }
 
   // Escalation rule 2: If metric is 0 and done=false, require a theory result before more edits
@@ -315,11 +365,37 @@ export function theoryResultForAttempt(progressed, violations) {
 
 export function appendTheoryResultForAttempt(root, quest, event, progressed, violations) {
   if (!event.theoryRef) return null;
+  const invalid = event.invalidSample === true ||
+    event.metricAfter === null ||
+    violations.length > 0;
+  const scenarioOutcome = event.done === true ?
+    SCENARIO_OUTCOME_DONE :
+    invalid ? SCENARIO_OUTCOME_INVALID :
+      progressed ? SCENARIO_OUTCOME_IMPROVED :
+        SCENARIO_OUTCOME_FAILED;
+  const movement = event.blockerMovement || null;
+  const theoryOutcome =
+    invalid ? THEORY_RESULT_NEEDS_RERUN :
+      progressed ? THEORY_RESULT_SUPPORTED :
+        [
+          BLOCKER_MOVEMENT_MOVED_OWNER,
+          BLOCKER_MOVEMENT_MOVED_BOUNDARY,
+          BLOCKER_MOVEMENT_NARROWED,
+        ].includes(movement) ?
+          THEORY_OUTCOME_PARTIAL :
+          THEORY_RESULT_FALSIFIED;
+  const result = theoryOutcome === THEORY_OUTCOME_PARTIAL ?
+    THEORY_RESULT_SUPPORTED :
+    theoryOutcome;
   return appendEvent(root, quest.id, {
     type: EVENT_THEORY_RESULT,
     theory: event.theoryRef,
     frontier: event.frontier,
-    result: theoryResultForAttempt(progressed, violations),
+    result,
+    scenarioOutcome,
+    theoryOutcome,
+    blockerMovement: movement,
+    diagnosticMovement: event.diagnosticMovement || null,
     evidence: event.evidence || null,
     validation: event.modelRef || null,
   });
@@ -371,6 +447,12 @@ function cmdOption(root, args) {
     status: THEORY_RESULT_ACTIVE,
     layer,
     mechanism: requireFlag(args, 'mechanism'),
+    owner: normalizeText(args.owner) || null,
+    boundary: normalizeText(args.boundary) || null,
+    callerRole: normalizeText(args['caller-role']) || null,
+    missingTransition: normalizeText(args['missing-transition']) || null,
+    ownedFixPath: normalizeText(args['owned-fix-path']) || null,
+    tailConsumers: repeatedFlag(args, 'tail-consumer'),
     intervention: requireFlag(args, 'intervention'),
     expectedMovement: requireFlag(args, 'expected-movement'),
     negativeResultMeans: requireFlag(args, 'negative-result'),
@@ -418,6 +500,10 @@ function cmdRecord(root, args) {
     theory: theoryId,
     frontier: normalizeText(args[FLAG_FRONTIER]) || null,
     result,
+    scenarioOutcome: normalizeText(args['scenario-outcome']) || null,
+    theoryOutcome: normalizeText(args['theory-outcome']) || null,
+    blockerMovement: normalizeText(args['blocker-movement']) || null,
+    diagnosticMovement: normalizeText(args['diagnostic-movement']) || null,
     evidence: requireFlag(args, FLAG_EVIDENCE),
     validation: normalizeText(args.validation) || null,
   });

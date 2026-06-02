@@ -32,6 +32,8 @@ import {runStep, stepAbort, stepPending} from './solve/step.js';
 import {SOLVE_DATA_DIR} from './solve/constants.js';
 import {runTheoryCommand, theoryCommitArgs} from './solve/theory.js';
 import {analyzeQuestHealth, renderHealth} from './solve/health.js';
+import {buildCurrentBlocker} from './solve/current-blocker.js';
+import {analyzeScopePressure} from './solve/scope-pressure.js';
 import {detectUnrecordedEvidence, ingestEvidence} from './solve/evidence.js';
 import {runAttemptCommand} from './solve/attempt.js';
 import {runAuditCommand} from './solve/audit.js';
@@ -158,8 +160,14 @@ function cmdStatus(root, args) {
   const id = args.id || args._[0];
   if (!id) throw new Error('status: --id <questId> is required');
   const quest = loadQuest(root, id);
-  const state = projectState(quest, readLog(root, id));
-  process.stdout.write(`${JSON.stringify(state, null, 2)}\n`);
+  const log = readLog(root, id);
+  const state = projectState(quest, log);
+  const status = {
+    ...state,
+    currentBlocker: buildCurrentBlocker({quest, log, state}),
+    scopePressure: analyzeScopePressure(root, quest, log),
+  };
+  process.stdout.write(`${JSON.stringify(status, null, 2)}\n`);
 }
 
 function cmdReport(root, args) {

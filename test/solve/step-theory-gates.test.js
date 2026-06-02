@@ -247,4 +247,41 @@ tap.test('step theory gates', async (t) => {
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });
+
+  t.test('stale selected theory blocks widened attempts after owner movement', (t) => {
+    const {root, quest} = setup();
+    commitStep(root, quest, 'a');
+    appendEvent(root, quest.id, {
+      type: 'evidence-ingested',
+      frontier: 'demo-main',
+      evidence: 'r1.json',
+      metric: 3,
+      done: false,
+      owner: 'startup_active_gate_owner',
+      boundary: 'snapshot_coverage',
+      dominantReason: 'snapshot_coverage=1/5',
+    });
+    recordFrontierTheory(root, quest, 'theory-snapshot', 'ownership');
+    appendEvent(root, quest.id, {
+      type: 'evidence-ingested',
+      frontier: 'demo-main',
+      evidence: 'r2.json',
+      metric: 3,
+      done: false,
+      owner: 'operation_workflow_owner',
+      boundary: 'workflow_progress',
+      dominantReason: 'priority_spread_pending',
+    });
+
+    runStep(root, quest);
+    const blocked = runStep(root, quest, {
+      changeRef: makeDiff(root, 'stale'),
+      summary: 'old selected theory',
+      theoryRef: 'theory-snapshot',
+    });
+    t.equal(blocked.terminal, 'theory-required');
+    t.match(blocked.problems.join('\n'), /stale/);
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
 });

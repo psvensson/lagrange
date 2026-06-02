@@ -18,6 +18,11 @@ import {
 } from './constants.js';
 import {loadQuest, readLog, projectState, assertSafeQuestId} from './store.js';
 import {questClass, closureKind} from './closure-kind.js';
+import {
+  buildCurrentBlocker,
+  renderCurrentBlocker,
+} from './current-blocker.js';
+import {analyzeScopePressure, renderScopePressure} from './scope-pressure.js';
 
 export function reportFilePath(root, questId) {
   return path.join(root, SOLVE_DATA_DIR, REPORT_SUBDIR,
@@ -52,7 +57,8 @@ function attemptLine(e) {
   const moved = e.metricAfter !== null && e.metricBefore !== null &&
     e.metricAfter < e.metricBefore ? 'progress' : 'flat';
   return `| ${e.ts || ''} | ${e.frontier} | ${e.rung} | ${before} -> ${after} ` +
-    `| ${moved} | ${e.theoryRef || ''} | ${e.changeRef || ''} |`;
+    `| ${moved} | ${e.blockerMovement || ''} | ${e.theoryRef || ''} ` +
+    `| ${e.changeRef || ''} |`;
 }
 
 function outcomeBanner(state, log, quest) {
@@ -77,11 +83,14 @@ function theoryLine(theory) {
   const frontier = theory.frontier ? `, frontier ${theory.frontier}` : '';
   const layer = theory.layer ? `, layer ${theory.layer}` : '';
   const archive = theory.archive ? ', archive' : '';
+  const owner = theory.owner ? `, owner ${theory.owner}` : '';
+  const boundary = theory.boundary ? `, boundary ${theory.boundary}` : '';
   const modelGate = theory.modelGuidance ?
     `, modelGate ${theory.modelGuidance.command}` :
     '';
   return `- **${theory.id}** [${theory.status}] ${theory.scope}${frontier}` +
-    `${layer}, mechanism ${theory.mechanism || 'unknown'}${modelGate}${archive}`;
+    `${layer}, mechanism ${theory.mechanism || 'unknown'}${owner}${boundary}` +
+    `${modelGate}${archive}`;
 }
 
 function selectedTheoryLines(state) {
@@ -98,8 +107,14 @@ function theoryResultLines(state) {
   const rows = [];
   for (const theory of theories) {
     for (const result of theory.results || []) {
+      const details = [
+        result.scenarioOutcome ? `scenario=${result.scenarioOutcome}` : null,
+        result.theoryOutcome ? `theory=${result.theoryOutcome}` : null,
+        result.blockerMovement ? `movement=${result.blockerMovement}` : null,
+      ].filter(Boolean);
       rows.push(
         `- **${theory.id}**: ${result.result} ` +
+        `${details.length > 0 ? `(${details.join(', ')}) ` : ''}` +
         `${result.evidence ? `[${result.evidence}]` : ''}`,
       );
     }
@@ -107,10 +122,12 @@ function theoryResultLines(state) {
   return rows.length > 0 ? rows : ['_(none recorded)_'];
 }
 
-export function buildReport(quest, log, state) {
+export function buildReport(quest, log, state, root = process.cwd()) {
   const attempts = log.filter((e) => e.type === EVENT_ATTEMPT);
   const attemptRows = attempts.map(attemptLine);
   const findings = findingLines(state);
+  const currentBlocker = buildCurrentBlocker({quest, log, state});
+  const scopePressure = analyzeScopePressure(root, quest, log);
   const theories = [
     ...(state.theories?.system || []),
     ...(state.theories?.frontier || []),
@@ -125,6 +142,10 @@ export function buildReport(quest, log, state) {
     `**Outcome:** ${outcomeBanner(state, log, quest)}`,
     '',
     `**Attempts:** ${attempts.length}`,
+    '',
+    ...renderCurrentBlocker(currentBlocker),
+    '',
+    ...renderScopePressure(scopePressure),
     '',
     '## Frontiers',
     ...state.frontiers.map(frontierLine),
@@ -142,8 +163,8 @@ export function buildReport(quest, log, state) {
     ...theoryResultLines(state),
     '',
     '## Attempt log',
-    '| ts | frontier | rung | metric | result | theory | change |',
-    '| --- | --- | --- | --- | --- | --- | --- |',
+    '| ts | frontier | rung | metric | result | blocker movement | theory | change |',
+    '| --- | --- | --- | --- | --- | --- | --- | --- |',
     ...attemptRows,
     '',
   ].join('\n');
@@ -152,7 +173,7 @@ export function buildReport(quest, log, state) {
 export function writeReportForQuest(root, quest) {
   const log = readLog(root, quest.id);
   const state = projectState(quest, log);
-  const md = buildReport(quest, log, state);
+  const md = buildReport(quest, log, state, root);
   const file = reportFilePath(root, quest.id);
   fs.mkdirSync(path.dirname(file), {recursive: true});
   fs.writeFileSync(file, md);

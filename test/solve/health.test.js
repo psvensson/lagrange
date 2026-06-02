@@ -5,7 +5,13 @@ import os from 'node:os';
 
 import {analyzeQuestHealth, renderHealth} from '../../scripts/solve/health.js';
 import {appendEvent, saveQuest} from '../../scripts/solve/store.js';
-import {EVENT_ATTEMPT, EVENT_PARK} from '../../scripts/solve/constants.js';
+import {
+  EVENT_ATTEMPT,
+  EVENT_EVIDENCE_INGESTED,
+  EVENT_PARK,
+  EVENT_THEORY_OPTION_DECLARED,
+  EVENT_THEORY_SELECTED,
+} from '../../scripts/solve/constants.js';
 
 function tmp() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'solve-health-'));
@@ -158,6 +164,123 @@ tap.test('Quest health', async (t) => {
     const signalTypes = health.signals.map((s) => s.type);
     t.ok(signalTypes.includes('metric-zero-but-done-false'), 'emits metric-zero-but-done-false');
 
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('fresh owner movement marks selected theory stale', (t) => {
+    const root = tmp();
+    const oracle = path.join(root, 'oracle.json');
+    fs.writeFileSync(oracle, JSON.stringify({metric: 1, target: 0}));
+    const quest = {
+      id: 'demo',
+      statement: 'Drive metric to zero.',
+      priority: 1,
+      doneWhen: {probe: 'oracle', args: {file: oracle}},
+      frontiers: [
+        {id: 'demo-main', priority: 1,
+          metric: {probe: 'oracle', args: {file: oracle}}},
+      ],
+    };
+    saveQuest(root, quest);
+    appendEvent(root, quest.id, {
+      type: EVENT_EVIDENCE_INGESTED,
+      frontier: 'demo-main',
+      evidence: 'r1.json',
+      metric: 1,
+      done: false,
+      owner: 'startup_active_gate_owner',
+      boundary: 'snapshot_coverage',
+      dominantReason: 'snapshot_coverage=1/5',
+    });
+    appendEvent(root, quest.id, {
+      type: EVENT_THEORY_OPTION_DECLARED,
+      frontier: 'demo-main',
+      theory: 'theory-snapshot',
+      scope: 'frontier',
+      status: 'active',
+      layer: 'ownership',
+      mechanism: 'snapshot_coverage',
+      owner: 'startup_active_gate_owner',
+      boundary: 'snapshot_coverage',
+    });
+    appendEvent(root, quest.id, {
+      type: EVENT_THEORY_SELECTED,
+      frontier: 'demo-main',
+      theory: 'theory-snapshot',
+    });
+    appendEvent(root, quest.id, {
+      type: EVENT_EVIDENCE_INGESTED,
+      frontier: 'demo-main',
+      evidence: 'r2.json',
+      metric: 1,
+      done: false,
+      owner: 'operation_workflow_owner',
+      boundary: 'workflow_progress',
+      dominantReason: 'priority_spread_pending',
+    });
+
+    const health = analyzeQuestHealth(root, quest);
+    t.ok(
+      health.signals.some((signal) => signal.type === 'selected-theory-stale'),
+      'stale selected theory signal emitted',
+    );
+    t.equal(health.currentBlocker.owner, 'operation_workflow_owner');
+    t.match(health.nextAction, /fresh frontier theory/);
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('broad mixed runtime and harness diff emits scope pressure', (t) => {
+    const root = tmp();
+    const oracle = path.join(root, 'oracle.json');
+    fs.writeFileSync(oracle, JSON.stringify({metric: 1, target: 0}));
+    const quest = {
+      id: 'demo',
+      statement: 'Drive metric to zero.',
+      priority: 1,
+      doneWhen: {probe: 'oracle', args: {file: oracle}},
+      frontiers: [
+        {id: 'demo-main', priority: 1,
+          metric: {probe: 'oracle', args: {file: oracle}}},
+      ],
+    };
+    saveQuest(root, quest);
+    const diffPath = path.join(root, 'solve', 'changes', 'demo', 'broad.diff');
+    fs.mkdirSync(path.dirname(diffPath), {recursive: true});
+    fs.writeFileSync(diffPath, [
+      'diff --git a/src/admin/a.js b/src/admin/a.js',
+      '--- a/src/admin/a.js',
+      '+++ b/src/admin/a.js',
+      '@@ -1 +1 @@',
+      '-a',
+      '+b',
+      'diff --git a/src/bootstrap/b.js b/src/bootstrap/b.js',
+      '--- a/src/bootstrap/b.js',
+      '+++ b/src/bootstrap/b.js',
+      '@@ -1 +1 @@',
+      '-a',
+      '+b',
+      'diff --git a/test/distributed/harness/c.js b/test/distributed/harness/c.js',
+      '--- a/test/distributed/harness/c.js',
+      '+++ b/test/distributed/harness/c.js',
+      '@@ -1 +1 @@',
+      '-a',
+      '+b',
+    ].join('\n'));
+    appendEvent(root, quest.id, {
+      type: EVENT_ATTEMPT,
+      frontier: 'demo-main',
+      changeRef: `diff:${diffPath}`,
+      metricBefore: 1,
+      metricAfter: 1,
+    });
+
+    const health = analyzeQuestHealth(root, quest);
+    const signalTypes = health.signals.map((signal) => signal.type);
+    t.ok(signalTypes.includes('broad-source-scope'), 'broad source scope emitted');
+    t.ok(signalTypes.includes('mixed-runtime-and-harness'), 'runtime+harness emitted');
+    t.equal(health.scopePressure.changedPaths.length, 3);
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });

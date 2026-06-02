@@ -4,10 +4,20 @@ import path from 'node:path';
 import {
   EVENT_EVIDENCE_INGESTED,
   EVENT_THEORY_RESULT,
+  THEORY_RESULT_FALSIFIED,
+  THEORY_RESULT_NEEDS_RERUN,
+  THEORY_RESULT_SUPPORTED,
   VERDICT_BLOCK_EVIDENCE_INCOMPLETE,
   VERDICT_REASON_EXECUTION_INCOMPLETE,
 } from './constants.js';
 import {buildMechanismCardFromEvidence} from './mechanism-card.js';
+import {
+  BLOCKER_MOVEMENT_MOVED_BOUNDARY,
+  BLOCKER_MOVEMENT_MOVED_OWNER,
+  BLOCKER_MOVEMENT_NARROWED,
+  blockerFromEvidence,
+  classifyBlockerMovement,
+} from './current-blocker.js';
 import {evaluate} from './probe.js';
 import {
   appendEvent,
@@ -199,11 +209,13 @@ export function ingestEvidence(root, {questId, frontierId, evidencePath}) {
   const reportTimestamp = data.timestamp || new Date().toISOString();
 
   const selectedTheory = state.theories.selectedByFrontier[frontierId] || null;
+  const previousEvidence = [...log].reverse().find((event) =>
+    event.type === EVENT_EVIDENCE_INGESTED && event.frontier === frontierId);
 
   const mechanismCard = buildMechanismCardFromEvidence(evidencePath);
   const classifiedMechanism = mechanismCard.failureMechanism || 'observation_gap';
 
-  const ingestedEvent = appendEvent(root, questId, {
+  const newEvidenceEvent = {
     type: EVENT_EVIDENCE_INGESTED,
     frontier: frontierId,
     evidence: evidencePath,
@@ -224,6 +236,31 @@ export function ingestEvidence(root, {questId, frontierId, evidencePath}) {
     mechanism: classifiedMechanism,
     selectedTheory,
     summary,
+  };
+  const previousBlocker = blockerFromEvidence(previousEvidence);
+  const currentBlocker = blockerFromEvidence(newEvidenceEvent);
+  const blockerMovement = classifyBlockerMovement(previousBlocker, currentBlocker);
+  const diagnosticMovement = previousBlocker ?
+    `${blockerMovement}: ${[
+      previousBlocker.owner,
+      previousBlocker.boundary,
+      previousBlocker.dominantReason,
+    ].filter(Boolean).join(' / ') || 'unknown'} -> ${[
+      currentBlocker.owner,
+      currentBlocker.boundary,
+      currentBlocker.dominantReason,
+    ].filter(Boolean).join(' / ') || 'unknown'}` :
+    `first blocker observed: ${[
+      currentBlocker.owner,
+      currentBlocker.boundary,
+      currentBlocker.dominantReason,
+    ].filter(Boolean).join(' / ') || 'unknown'}`;
+  const ingestedEvent = appendEvent(root, questId, {
+    ...newEvidenceEvent,
+    blockerBefore: previousBlocker,
+    blockerAfter: currentBlocker,
+    blockerMovement,
+    diagnosticMovement,
   });
 
   // Determine finding and repeat status
@@ -242,19 +279,38 @@ export function ingestEvidence(root, {questId, frontierId, evidencePath}) {
 
   // Evaluate theory result if a selected theory exists
   if (selectedTheory) {
-    let result = 'falsified';
     const nonMeasuring = verdict === VERDICT_BLOCK_EVIDENCE_INCOMPLETE ||
       verdictReason === VERDICT_REASON_EXECUTION_INCOMPLETE ||
       metric === null;
+    let result = THEORY_RESULT_FALSIFIED;
+    let theoryOutcome = THEORY_RESULT_FALSIFIED;
+    const currentMetric = frontierState?.current;
+    const progressed = currentMetric !== null &&
+      currentMetric !== undefined &&
+      metric !== null &&
+      metric < currentMetric;
+    const scenarioOutcome = done ?
+      'done' :
+      nonMeasuring ? 'invalid' :
+        progressed ? 'improved' :
+          'failed';
     if (nonMeasuring) {
-      result = 'needs-rerun';
+      result = THEORY_RESULT_NEEDS_RERUN;
+      theoryOutcome = THEORY_RESULT_NEEDS_RERUN;
     } else {
-      const currentMetric = frontierState?.current;
-      const progressed = currentMetric !== null && currentMetric !== undefined && metric < currentMetric;
       if (done || progressed) {
-        result = 'supported';
+        result = THEORY_RESULT_SUPPORTED;
+        theoryOutcome = THEORY_RESULT_SUPPORTED;
+      } else if ([
+        BLOCKER_MOVEMENT_MOVED_OWNER,
+        BLOCKER_MOVEMENT_MOVED_BOUNDARY,
+        BLOCKER_MOVEMENT_NARROWED,
+      ].includes(blockerMovement)) {
+        result = THEORY_RESULT_SUPPORTED;
+        theoryOutcome = 'partial';
       } else {
-        result = 'falsified';
+        result = THEORY_RESULT_FALSIFIED;
+        theoryOutcome = THEORY_RESULT_FALSIFIED;
       }
     }
 
@@ -263,6 +319,10 @@ export function ingestEvidence(root, {questId, frontierId, evidencePath}) {
       theory: selectedTheory,
       frontier: frontierId,
       result,
+      scenarioOutcome,
+      theoryOutcome,
+      blockerMovement,
+      diagnosticMovement,
       evidence: evidencePath,
       validation: null,
     });

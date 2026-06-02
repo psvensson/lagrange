@@ -167,6 +167,150 @@ tap.test('evidence ingestion (P2)', async (t) => {
     const theoryResult = log.find((e) => e.type === 'theory-result' && e.theory === 't1');
     t.ok(theoryResult, 'theory result recorded');
     t.equal(theoryResult.result, 'needs-rerun');
+    t.equal(theoryResult.scenarioOutcome, 'invalid');
+    t.equal(theoryResult.theoryOutcome, 'needs-rerun');
+
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('records partial theory support when blocker moves without metric movement', (t) => {
+    const root = tmp();
+    const goal = getGoal(root);
+    saveQuest(root, goal);
+    const reportDir = path.join(root, 'test-output', 'reports');
+    fs.mkdirSync(reportDir, {recursive: true});
+    const firstPath = path.join(reportDir, 'r1.report.json');
+    const secondPath = path.join(reportDir, 'r2.report.json');
+    const validReport = {
+      ...sampleReport,
+      scenarios: [{
+        ...sampleReport.scenarios[0],
+        verdict: 'FAIL_CORE_INVARIANT',
+        verdictReason: 'core_invariant_or_safety_violation',
+      }],
+    };
+    fs.writeFileSync(firstPath, JSON.stringify(validReport));
+    fs.writeFileSync(secondPath, JSON.stringify({
+      ...validReport,
+      timestamp: '2026-06-01T12:55:33.550Z',
+      scenarios: [{
+        ...validReport.scenarios[0],
+        details: {
+          diagnostics: {
+            failure: {
+              rootCauseClass: 'topology',
+              dominantReason: 'priority_spread_pending',
+              ownerContract: {
+                frontierWitnesses: [{
+                  owner: 'operation_workflow_owner',
+                  boundary: 'workflow_progress',
+                  source: {
+                    nextRequiredActions: 'advance_existing_operation',
+                  },
+                }],
+              },
+            },
+          },
+        },
+      }],
+    }));
+    appendEvent(root, goal.id, {
+      type: 'theory-option-declared',
+      theory: 't1',
+      frontier: 'evidence-quest-test-main',
+      scope: 'frontier',
+      status: 'active',
+      layer: 'ownership',
+      mechanism: 'active_gate',
+    });
+    appendEvent(root, goal.id, {
+      type: 'theory-selected',
+      frontier: 'evidence-quest-test-main',
+      theory: 't1',
+    });
+
+    ingestEvidence(root, {
+      questId: goal.id,
+      frontierId: 'evidence-quest-test-main',
+      evidencePath: firstPath,
+    });
+    ingestEvidence(root, {
+      questId: goal.id,
+      frontierId: 'evidence-quest-test-main',
+      evidencePath: secondPath,
+    });
+
+    const results = readLog(root, goal.id)
+      .filter((event) => event.type === 'theory-result' && event.theory === 't1');
+    const latest = results[results.length - 1];
+    t.equal(latest.result, 'supported');
+    t.equal(latest.scenarioOutcome, 'failed');
+    t.equal(latest.theoryOutcome, 'partial');
+    t.equal(latest.blockerMovement, 'moved_boundary');
+    t.match(latest.diagnosticMovement, /operation_workflow_owner/);
+
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('records scenario improvement separately from doneWhen closure', (t) => {
+    const root = tmp();
+    const goal = getGoal(root);
+    saveQuest(root, goal);
+    const reportDir = path.join(root, 'test-output', 'reports');
+    fs.mkdirSync(reportDir, {recursive: true});
+    const firstPath = path.join(reportDir, 'r1.report.json');
+    const secondPath = path.join(reportDir, 'r2.report.json');
+    const validReport = {
+      ...sampleReport,
+      scenarios: [{
+        ...sampleReport.scenarios[0],
+        verdict: 'FAIL_CORE_INVARIANT',
+        verdictReason: 'core_invariant_or_safety_violation',
+      }],
+    };
+    fs.writeFileSync(firstPath, JSON.stringify({
+      ...validReport,
+      optimizationSummary: {totalPriorityItems: 5},
+    }));
+    fs.writeFileSync(secondPath, JSON.stringify({
+      ...validReport,
+      timestamp: '2026-06-01T12:56:33.550Z',
+      optimizationSummary: {totalPriorityItems: 3},
+    }));
+    appendEvent(root, goal.id, {
+      type: 'theory-option-declared',
+      theory: 't1',
+      frontier: 'evidence-quest-test-main',
+      scope: 'frontier',
+      status: 'active',
+      layer: 'ownership',
+      mechanism: 'active_gate',
+    });
+    appendEvent(root, goal.id, {
+      type: 'theory-selected',
+      frontier: 'evidence-quest-test-main',
+      theory: 't1',
+    });
+
+    ingestEvidence(root, {
+      questId: goal.id,
+      frontierId: 'evidence-quest-test-main',
+      evidencePath: firstPath,
+    });
+    ingestEvidence(root, {
+      questId: goal.id,
+      frontierId: 'evidence-quest-test-main',
+      evidencePath: secondPath,
+    });
+
+    const results = readLog(root, goal.id)
+      .filter((event) => event.type === 'theory-result' && event.theory === 't1');
+    const latest = results[results.length - 1];
+    t.equal(latest.result, 'supported');
+    t.equal(latest.scenarioOutcome, 'improved');
+    t.equal(latest.theoryOutcome, 'supported');
 
     fs.rmSync(root, {recursive: true, force: true});
     t.end();

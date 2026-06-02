@@ -47,6 +47,7 @@ import {
   resolveAttemptTheoryRef,
   stepTheoryGateProblems,
 } from './theory.js';
+import {diagnosticMovementFor} from './current-blocker.js';
 import {detectUnrecordedEvidence} from './evidence.js';
 import {inspectChangeArtifact} from './change-artifact.js';
 
@@ -187,6 +188,7 @@ export function finalizeAttempt(root, quest, ctx, pick, before, result) {
     result.theoryRef || ctx.theoryRef,
   );
   const after = evaluate(pick.def.metric, ctx.probeCtx);
+  const diagnosticMovement = diagnosticMovementFor(log, pick.def.id);
   const event = {
     type: EVENT_ATTEMPT,
     frontier: pick.def.id,
@@ -199,6 +201,7 @@ export function finalizeAttempt(root, quest, ctx, pick, before, result) {
     metricAfter: after.metric,
     metricDirection: METRIC_DIRECTION_LOWER_IS_BETTER,
     invalidSample: Boolean(before.invalidSample) || Boolean(after.invalidSample),
+    done: after.done === true,
     evidence: after.evidence,
     evidenceIdentity: after.evidenceIdentity || null,
     evidenceFingerprint: after.evidenceFingerprint || null,
@@ -209,6 +212,10 @@ export function finalizeAttempt(root, quest, ctx, pick, before, result) {
     modelRef: result.modelRef || ctx.modelRef || null,
     modelNotApplicable:
       result.modelNotApplicable || ctx.modelNotApplicable || null,
+    blockerBefore: diagnosticMovement.previous,
+    blockerAfter: diagnosticMovement.current,
+    blockerMovement: diagnosticMovement.movement,
+    diagnosticMovement: diagnosticMovement.summary,
   };
   const violations = [
     ...validateAttempt(event, ctx.honestyCtx),

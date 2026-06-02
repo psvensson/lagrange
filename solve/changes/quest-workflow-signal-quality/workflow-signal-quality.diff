@@ -1,0 +1,2431 @@
+diff --git a/.kiro/steering/llm/governance.md b/.kiro/steering/llm/governance.md
+index 0f644bf4..4eea8d64 100644
+--- a/.kiro/steering/llm/governance.md
++++ b/.kiro/steering/llm/governance.md
+@@ -31,18 +31,21 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
+ 11. [GOV-0016] A cannot_measure park had only non-measuring samples — the harness itself never produced a valid measurement, so the fix is the measurement infrastructure, not the solution space. _(see workflow-guidelines/solver-quests.md:80)_
+ 12. [GOV-0017] An exhausted park had at least one honestly-measured sample but the metric never moved — no honest move remains. _(see workflow-guidelines/solver-quests.md:80)_
+ 13. [GOV-0018] Fix the harness (or change the attempt evidence) before reopening again, so reopen and park can never oscillate forever. _(see workflow-guidelines/solver-quests.md:80)_
+-14. [GOV-0019] A Quest must not accumulate an unrecoverable dirty tree. _(see workflow-guidelines/solver-quests.md:93)_
+-15. [GOV-0021] Do not revive sprint/package theory state as active authority. _(see workflow-guidelines/solver-quests.md:146)_
+-16. [GOV-0022] If the verifier finds issues, fix them or record a finding that explains why the Quest must continue; do not proceed to git handoff from an unresolved verifier finding. _(see workflow-guidelines/solver-quests.md:208)_
+-17. [GOV-0023] Do not include unrelated dirty worktree entries from another Quest. _(see workflow-guidelines/solver-quests.md:219)_
+-18. [GOV-0024] Do not rely on solve/state/ as durable memory. _(see workflow-guidelines/solver-quests.md:283)_
+-19. [GOV-0026] constraints[]: optional hard limits the agent must preserve. _(see workflow-guidelines/solver-quests.md:53)_
+-20. [GOV-0028] model: selected frontier theory, active system theory, and --modelRef or --modelNotApplicable required. _(see workflow-guidelines/solver-quests.md:156)_
+-21. [GOV-0030] THEORY_REQUIRED: the selected rung needs system or frontier theory before another attempt; record the theory and resume instead of patching through it. _(see workflow-guidelines/solver-quests.md:268)_
++14. [GOV-0020] A Quest must not accumulate an unrecoverable dirty tree. _(see workflow-guidelines/solver-quests.md:146)_
++15. [GOV-0022] Do not revive sprint/package theory state as active authority. _(see workflow-guidelines/solver-quests.md:231)_
++16. [GOV-0023] If the verifier finds issues, fix them or record a finding that explains why the Quest must continue; do not proceed to git handoff from an unresolved verifier finding. _(see workflow-guidelines/solver-quests.md:293)_
++17. [GOV-0024] Do not include unrelated dirty worktree entries from another Quest. _(see workflow-guidelines/solver-quests.md:304)_
++18. [GOV-0025] Do not rely on solve/state/ as durable memory. _(see workflow-guidelines/solver-quests.md:368)_
++19. [GOV-0027] constraints[]: optional hard limits the agent must preserve. _(see workflow-guidelines/solver-quests.md:53)_
++20. [GOV-0029] model: selected frontier theory, active system theory, and --modelRef or --modelNotApplicable required. _(see workflow-guidelines/solver-quests.md:241)_
++
++### Ownership & Authority Policies
++
++21. [GOV-0019] Do not keep patching under a theory whose owner path is no longer current. _(see workflow-guidelines/solver-quests.md:130)_
+ 
+ ### Testing & Harness Guidelines
+ 
+-22. [GOV-0029] change-approach: selected frontier theory remains required; model evidence is not required unless this rung explicitly returns to a model test. _(see workflow-guidelines/solver-quests.md:158)_
++22. [GOV-0030] change-approach: selected frontier theory remains required; model evidence is not required unless this rung explicitly returns to a model test. _(see workflow-guidelines/solver-quests.md:243)_
+ 
+ ### Governance & Scope Controls
+ 
+@@ -51,6 +54,6 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
+ 25. [GOV-0009] The Quest must cite or encode enough scope context to prevent local invention. _(see roadmap.md:76)_
+ 26. [GOV-0010] The row must be in scope for this repository under ../../edition-matrix.md. _(see roadmap.md:106)_
+ 27. [GOV-0012] The Quest must name the roadmap row, approved maintenance scope, or explicit user request that makes it valid. _(see roadmap.md:111)_
+-28. [GOV-0020] Each auto-commit refuses when audit does not pass, stages only the Quest's in-scope pathspec (never the dirty-tree shape), and carries the Co-authored-by: Copilot trailer. _(see workflow-guidelines/solver-quests.md:93)_
+-29. [GOV-0025] Such examples must not define implementation tasks in this repository unless the active Quest explicitly limits the work to AGPL-owned substrate and excludes paid-only behavior, operator flows, and control surfaces. _(see roadmap.md:96)_
+-30. [GOV-0027] widen-scope: selected frontier theory required. _(see workflow-guidelines/solver-quests.md:155)_
++28. [GOV-0021] Each auto-commit refuses when audit does not pass, stages only the Quest's in-scope pathspec (never the dirty-tree shape), and carries the Co-authored-by: Copilot trailer. _(see workflow-guidelines/solver-quests.md:146)_
++29. [GOV-0026] Such examples must not define implementation tasks in this repository unless the active Quest explicitly limits the work to AGPL-owned substrate and excludes paid-only behavior, operator flows, and control surfaces. _(see roadmap.md:96)_
++30. [GOV-0028] widen-scope: selected frontier theory required. _(see workflow-guidelines/solver-quests.md:240)_
+diff --git a/.kiro/steering/llm/manifest.json b/.kiro/steering/llm/manifest.json
+index efd94b73..ceba99f9 100644
+--- a/.kiro/steering/llm/manifest.json
++++ b/.kiro/steering/llm/manifest.json
+@@ -1,5 +1,5 @@
+ {
+-  "generatedAt": "2026-06-02T14:33:38.096Z",
++  "generatedAt": "2026-06-02T16:45:49.787Z",
+   "packs": [
+     {
+       "name": "core",
+@@ -53,7 +53,7 @@
+       "title": "Governance Steering Pack",
+       "description": "Load for roadmap and edition-scope checks.",
+       "ruleCount": 30,
+-      "estimatedTokens": 870,
++      "estimatedTokens": 851,
+       "domains": [
+         "governance"
+       ],
+diff --git a/.kiro/steering/llm/rules.json b/.kiro/steering/llm/rules.json
+index c05a0b43..c11a861d 100644
+--- a/.kiro/steering/llm/rules.json
++++ b/.kiro/steering/llm/rules.json
+@@ -104,12 +104,12 @@
+     }
+   ],
+   "stats": {
+-    "candidateCount": 239,
+-    "dedupedRuleCount": 233,
+-    "exportedRuleCount": 233,
++    "candidateCount": 242,
++    "dedupedRuleCount": 236,
++    "exportedRuleCount": 236,
+     "aliasRuleCount": 0,
+-    "masterRuleCount": 233,
+-    "estimatedAllRulesTokens": 7808
++    "masterRuleCount": 236,
++    "estimatedAllRulesTokens": 7914
+   },
+   "rules": [
+     {
+@@ -2737,19 +2737,36 @@
+       "id": "GOV-0019",
+       "domain": "governance",
+       "strength": "must_not",
++      "tags": [
++        "ownership"
++      ],
++      "rule": "Do not keep patching under a theory whose owner path is no longer current.",
++      "score": 206,
++      "sources": [
++        {
++          "file": "workflow-guidelines/solver-quests.md",
++          "line": 130,
++          "section": "Quest Workflow > Current Blocker And Diagnostic Movement"
++        }
++      ]
++    },
++    {
++      "id": "GOV-0020",
++      "domain": "governance",
++      "strength": "must_not",
+       "tags": [],
+       "rule": "A Quest must not accumulate an unrecoverable dirty tree.",
+       "score": 206,
+       "sources": [
+         {
+           "file": "workflow-guidelines/solver-quests.md",
+-          "line": 93,
++          "line": 146,
+           "section": "Quest Workflow > Regular Commit And Push"
+         }
+       ]
+     },
+     {
+-      "id": "GOV-0020",
++      "id": "GOV-0021",
+       "domain": "governance",
+       "strength": "must_not",
+       "tags": [
+@@ -2760,13 +2777,13 @@
+       "sources": [
+         {
+           "file": "workflow-guidelines/solver-quests.md",
+-          "line": 93,
++          "line": 146,
+           "section": "Quest Workflow > Regular Commit And Push"
+         }
+       ]
+     },
+     {
+-      "id": "GOV-0021",
++      "id": "GOV-0022",
+       "domain": "governance",
+       "strength": "must_not",
+       "tags": [],
+@@ -2775,43 +2792,43 @@
+       "sources": [
+         {
+           "file": "workflow-guidelines/solver-quests.md",
+-          "line": 146,
++          "line": 231,
+           "section": "Quest Workflow > Two-Layer Theory"
+         }
+       ]
+     },
+     {
+-      "id": "GOV-0022",
++      "id": "GOV-0023",
+       "domain": "governance",
+       "strength": "must_not",
+       "tags": [],
+       "rule": "If the verifier finds issues, fix them or record a finding that explains why the Quest must continue; do not proceed to git handoff from an unresolved verifier finding.",
+-      "score": 206,
++      "score": 205,
+       "sources": [
+         {
+           "file": "workflow-guidelines/solver-quests.md",
+-          "line": 208,
++          "line": 293,
+           "section": "Quest Workflow > Source Change Verification"
+         }
+       ]
+     },
+     {
+-      "id": "GOV-0023",
++      "id": "GOV-0024",
+       "domain": "governance",
+       "strength": "must_not",
+       "tags": [],
+       "rule": "Do not include unrelated dirty worktree entries from another Quest.",
+-      "score": 206,
++      "score": 205,
+       "sources": [
+         {
+           "file": "workflow-guidelines/solver-quests.md",
+-          "line": 219,
++          "line": 304,
+           "section": "Quest Workflow > Git Handoff"
+         }
+       ]
+     },
+     {
+-      "id": "GOV-0024",
++      "id": "GOV-0025",
+       "domain": "governance",
+       "strength": "must_not",
+       "tags": [],
+@@ -2820,7 +2837,7 @@
+       "sources": [
+         {
+           "file": "workflow-guidelines/solver-quests.md",
+-          "line": 283,
++          "line": 368,
+           "section": "Quest Workflow > Tracked Versus Regenerable"
+         }
+       ]
+@@ -2841,7 +2858,7 @@
+       ]
+     },
+     {
+-      "id": "GOV-0025",
++      "id": "GOV-0026",
+       "domain": "governance",
+       "strength": "must_not",
+       "tags": [
+@@ -3043,7 +3060,7 @@
+       ]
+     },
+     {
+-      "id": "GOV-0026",
++      "id": "GOV-0027",
+       "domain": "governance",
+       "strength": "must",
+       "tags": [],
+@@ -3058,7 +3075,7 @@
+       ]
+     },
+     {
+-      "id": "GOV-0027",
++      "id": "GOV-0028",
+       "domain": "governance",
+       "strength": "must",
+       "tags": [
+@@ -3069,13 +3086,13 @@
+       "sources": [
+         {
+           "file": "workflow-guidelines/solver-quests.md",
+-          "line": 155,
++          "line": 240,
+           "section": "Quest Workflow > Two-Layer Theory"
+         }
+       ]
+     },
+     {
+-      "id": "GOV-0028",
++      "id": "GOV-0029",
+       "domain": "governance",
+       "strength": "must",
+       "tags": [],
+@@ -3084,13 +3101,13 @@
+       "sources": [
+         {
+           "file": "workflow-guidelines/solver-quests.md",
+-          "line": 156,
++          "line": 241,
+           "section": "Quest Workflow > Two-Layer Theory"
+         }
+       ]
+     },
+     {
+-      "id": "GOV-0029",
++      "id": "GOV-0030",
+       "domain": "governance",
+       "strength": "must",
+       "tags": [
+@@ -3101,13 +3118,13 @@
+       "sources": [
+         {
+           "file": "workflow-guidelines/solver-quests.md",
+-          "line": 158,
++          "line": 243,
+           "section": "Quest Workflow > Two-Layer Theory"
+         }
+       ]
+     },
+     {
+-      "id": "GOV-0030",
++      "id": "GOV-0031",
+       "domain": "governance",
+       "strength": "must",
+       "tags": [],
+@@ -3116,7 +3133,7 @@
+       "sources": [
+         {
+           "file": "workflow-guidelines/solver-quests.md",
+-          "line": 268,
++          "line": 353,
+           "section": "Quest Workflow > Terminal And Blocking Conditions"
+         }
+       ]
+@@ -3156,7 +3173,7 @@
+       ]
+     },
+     {
+-      "id": "GOV-0031",
++      "id": "GOV-0032",
+       "domain": "governance",
+       "strength": "must",
+       "tags": [
+@@ -3173,7 +3190,7 @@
+       ]
+     },
+     {
+-      "id": "GOV-0032",
++      "id": "GOV-0033",
+       "domain": "governance",
+       "strength": "must",
+       "tags": [],
+@@ -3188,7 +3205,7 @@
+       ]
+     },
+     {
+-      "id": "GOV-0033",
++      "id": "GOV-0034",
+       "domain": "governance",
+       "strength": "must",
+       "tags": [],
+@@ -3218,7 +3235,7 @@
+       ]
+     },
+     {
+-      "id": "GOV-0034",
++      "id": "GOV-0035",
+       "domain": "governance",
+       "strength": "must_not",
+       "tags": [],
+@@ -3227,7 +3244,7 @@
+       "sources": [
+         {
+           "file": "workflow-guidelines/solver-quests.md",
+-          "line": 262,
++          "line": 347,
+           "section": "Quest Workflow > Terminal And Blocking Conditions"
+         }
+       ]
+@@ -3322,33 +3339,33 @@
+       ]
+     },
+     {
+-      "id": "GOV-0035",
++      "id": "GOV-0036",
+       "domain": "governance",
+       "strength": "must",
+       "tags": [
+         "readiness"
+       ],
+       "rule": "Every Quest that changes source code must spawn a subagent verifier after the final source diff is ready and before node scripts/solve.js audit --id <id> is used for handoff.",
+-      "score": 188,
++      "score": 187,
+       "sources": [
+         {
+           "file": "workflow-guidelines/solver-quests.md",
+-          "line": 196,
++          "line": 281,
+           "section": "Quest Workflow > Source Change Verification"
+         }
+       ]
+     },
+     {
+-      "id": "GOV-0036",
++      "id": "GOV-0037",
+       "domain": "governance",
+       "strength": "must",
+       "tags": [],
+       "rule": "The verifier must inspect the Quest intent, touched source diff, system guidelines, and applicable doctrine.",
+-      "score": 188,
++      "score": 187,
+       "sources": [
+         {
+           "file": "workflow-guidelines/solver-quests.md",
+-          "line": 196,
++          "line": 281,
+           "section": "Quest Workflow > Source Change Verification"
+         }
+       ]
+@@ -3471,7 +3488,7 @@
+       ]
+     },
+     {
+-      "id": "GOV-0037",
++      "id": "GOV-0038",
+       "domain": "governance",
+       "strength": "must_not",
+       "tags": [],
+@@ -3486,7 +3503,7 @@
+       ]
+     },
+     {
+-      "id": "GOV-0038",
++      "id": "GOV-0039",
+       "domain": "governance",
+       "strength": "must_not",
+       "tags": [
+@@ -3494,11 +3511,11 @@
+         "governance"
+       ],
+       "rule": "It runs the audit and refuses on failure, derives the in-scope set purely from the Quest's sealed solve/ artifacts plus the source/test files named inside its own diffs, and lists every other dirty file as out-of-scope so it is never swept in.",
+-      "score": 182,
++      "score": 181,
+       "sources": [
+         {
+           "file": "workflow-guidelines/solver-quests.md",
+-          "line": 223,
++          "line": 308,
+           "section": "Quest Workflow > Git Handoff"
+         }
+       ]
+@@ -3652,7 +3669,7 @@
+       ]
+     },
+     {
+-      "id": "GOV-0039",
++      "id": "GOV-0040",
+       "domain": "governance",
+       "strength": "must",
+       "tags": [],
+@@ -3759,7 +3776,7 @@
+       ]
+     },
+     {
+-      "id": "GOV-0040",
++      "id": "GOV-0041",
+       "domain": "governance",
+       "strength": "should",
+       "tags": [],
+@@ -3768,28 +3785,28 @@
+       "sources": [
+         {
+           "file": "workflow-guidelines/solver-quests.md",
+-          "line": 132,
++          "line": 185,
+           "section": "Quest Workflow > Two-Layer Theory"
+         }
+       ]
+     },
+     {
+-      "id": "GOV-0041",
++      "id": "GOV-0042",
+       "domain": "governance",
+       "strength": "should",
+       "tags": [],
+       "rule": "optional rulesOut text for approaches that should not be retried.",
+-      "score": 166,
++      "score": 165,
+       "sources": [
+         {
+           "file": "workflow-guidelines/solver-quests.md",
+-          "line": 248,
++          "line": 333,
+           "section": "Quest Workflow > Findings Log"
+         }
+       ]
+     },
+     {
+-      "id": "GOV-0042",
++      "id": "GOV-0043",
+       "domain": "governance",
+       "strength": "should",
+       "tags": [],
+@@ -3804,7 +3821,7 @@
+       ]
+     },
+     {
+-      "id": "GOV-0043",
++      "id": "GOV-0044",
+       "domain": "governance",
+       "strength": "may",
+       "tags": [],
+@@ -3835,6 +3852,21 @@
+         }
+       ]
+     },
++    {
++      "id": "GOV-0045",
++      "domain": "governance",
++      "strength": "should",
++      "tags": [],
++      "rule": "It is advisory rather than terminal, but a high-severity signal should usually produce a finding, a narrower theory, or a split Quest before more code is changed.",
++      "score": 156,
++      "sources": [
++        {
++          "file": "workflow-guidelines/solver-quests.md",
++          "line": 137,
++          "section": "Quest Workflow > Current Blocker And Diagnostic Movement"
++        }
++      ]
++    },
+     {
+       "id": "ARCH-0102",
+       "domain": "architecture",
+@@ -3851,7 +3883,7 @@
+       ]
+     },
+     {
+-      "id": "GOV-0044",
++      "id": "GOV-0046",
+       "domain": "governance",
+       "strength": "may",
+       "tags": [],
+@@ -3881,7 +3913,24 @@
+       ]
+     },
+     {
+-      "id": "GOV-0045",
++      "id": "GOV-0047",
++      "domain": "governance",
++      "strength": "may",
++      "tags": [
++        "ownership"
++      ],
++      "rule": "When a metric does not improve but the blocker moves owner, boundary, or mechanism, the selected theory may be recorded as supported with theoryOutcome=partial.",
++      "score": 140,
++      "sources": [
++        {
++          "file": "workflow-guidelines/solver-quests.md",
++          "line": 124,
++          "section": "Quest Workflow > Current Blocker And Diagnostic Movement"
++        }
++      ]
++    },
++    {
++      "id": "GOV-0048",
+       "domain": "governance",
+       "strength": "may",
+       "tags": [],
+@@ -3890,13 +3939,13 @@
+       "sources": [
+         {
+           "file": "workflow-guidelines/solver-quests.md",
+-          "line": 146,
++          "line": 231,
+           "section": "Quest Workflow > Two-Layer Theory"
+         }
+       ]
+     },
+     {
+-      "id": "GOV-0046",
++      "id": "GOV-0049",
+       "domain": "governance",
+       "strength": "may",
+       "tags": [
+@@ -3907,13 +3956,13 @@
+       "sources": [
+         {
+           "file": "workflow-guidelines/solver-quests.md",
+-          "line": 283,
++          "line": 368,
+           "section": "Quest Workflow > Tracked Versus Regenerable"
+         }
+       ]
+     },
+     {
+-      "id": "GOV-0047",
++      "id": "GOV-0050",
+       "domain": "governance",
+       "strength": "may",
+       "tags": [
+@@ -3930,5 +3979,5 @@
+       ]
+     }
+   ],
+-  "generatedAt": "2026-06-02T14:33:38.095Z"
++  "generatedAt": "2026-06-02T16:45:49.786Z"
+ }
+diff --git a/.kiro/steering/workflow-guidelines/solver-quests.md b/.kiro/steering/workflow-guidelines/solver-quests.md
+index 8bb68245..1a488bc2 100644
+--- a/.kiro/steering/workflow-guidelines/solver-quests.md
++++ b/.kiro/steering/workflow-guidelines/solver-quests.md
+@@ -88,6 +88,59 @@ re-running an unchanged harness only reproduces the same non-measuring loop. Fix
+ the harness (or change the attempt evidence) before reopening again, so reopen and
+ park can never oscillate forever.
+ 
++## Current Blocker And Diagnostic Movement
++
++`status`, `health`, and `report` project a **Current Blocker** from the latest
++ingested evidence for the active frontier. The card names the owner, boundary,
++dominant reason, latest evidence artifact, selected theory, stale-theory reason
++when present, and the next move the Solver expects. Treat this as the active
++failure surface. Older blockers remain useful only as findings or "no longer
++current" context.
++
++Every evidence ingestion classifies blocker movement:
++
++- `same`: the same owner/boundary/reason remains.
++- `moved_owner`: the blocker crossed to a different owner.
++- `moved_boundary`: the owner stayed stable but the boundary changed.
++- `narrowed`: the owner/boundary stayed stable while reason, root-cause class,
++  or mechanism changed.
++- `solved`: the evidence satisfies `doneWhen`.
++- `invalid`: the latest sample did not measure a valid metric.
++- `unknown`: evidence changed, but not along a recognized owner path.
++
++The movement classification is recorded on evidence, attempts, and theory
++results as `blockerMovement` / `diagnosticMovement`. It gives credit for useful
++diagnostic progress without pretending that the Quest moved closer to closure:
++metric movement remains the only product progress, and `doneWhen` remains the
++only closure predicate.
++
++A theory result records two outcomes:
++
++- `scenarioOutcome`: what happened to the measured scenario (`improved`,
++  `failed`, `invalid`, or `done`).
++- `theoryOutcome`: what the attempt taught about the theory (`supported`,
++  `partial`, `falsified`, or `needs-rerun`).
++
++When a metric does not improve but the blocker moves owner, boundary, or
++mechanism, the selected theory may be recorded as `supported` with
++`theoryOutcome=partial`. This keeps the theory selectable as useful diagnostic
++learning while making the report clear that the scenario itself is still not
++solved.
++
++Selected frontier theories are stale when later evidence changes the current
++blocker after selection and no theory result has recorded that learning, or when
++the selected theory's owner/boundary no longer matches the latest evidence.
++`health`, supervised `step`, and autonomous preflight then stop widened work with
++the next action: record the old theory result or select a fresh frontier theory.
++Do not keep patching under a theory whose owner path is no longer current.
++
++`health` and `report` also project **Scope Pressure** from the Quest's recorded
++`diff:<path>` attempt artifacts. Scope pressure flags broad owner areas, large
++diff stacks, mixed runtime/workflow changes, and mixed runtime/harness changes.
++It is advisory rather than terminal, but a high-severity signal should usually
++produce a finding, a narrower theory, or a split Quest before more code is
++changed.
++
+ ## Regular Commit And Push
+ 
+ A Quest must not accumulate an unrecoverable dirty tree. The Solver commits — and
+@@ -143,6 +196,38 @@ node scripts/solve.js theory card --evidence <artifact>
+ node scripts/solve.js health --id <id>
+ ```
+ 
++Frontier theories should name their owner path when the evidence exposes one:
++
++```sh
++node scripts/solve.js theory option --id <id> --frontier <frontier> \
++  --layer ownership --mechanism operation_workflow_owner \
++  --intervention "advance persisted recovery operations" \
++  --expected-movement "current blocker moves from workflow_progress to completion" \
++  --negative-result "same operation workflow blocker remains" \
++  --discriminator "npm run model:contracts && <scenario probe>" \
++  --promotion "owner/boundary evidence changes or doneWhen passes" \
++  --rejection "same owner/boundary/reason recurs" \
++  --owner operation_workflow_owner \
++  --boundary workflow_progress \
++  --caller-role startup_active_gate_owner \
++  --missing-transition "pending recovery operation is advanced after restart" \
++  --owned-fix-path src/rebalancer \
++  --tail-consumer startup_active_gate_owner
++```
++
++Record results with the scenario/theory split and movement fields when an
++attempt changed what the Quest now knows:
++
++```sh
++node scripts/solve.js theory record --id <id> --theory <theory-id> \
++  --result supported \
++  --scenario-outcome failed \
++  --theory-outcome partial \
++  --blocker-movement moved_boundary \
++  --diagnostic-movement "owner stayed stable; boundary moved to workflow_progress" \
++  --evidence test-output/reports/<scenario>.report.json
++```
++
+ Do not revive sprint/package theory state as active authority. The archived
+ theory ledger may be imported only as archive memory; imported archive theories
+ cannot be selected for implementation until fresh Quest evidence reselects a
+diff --git a/architecture/contracts/quest-lifecycle.md b/architecture/contracts/quest-lifecycle.md
+index 314ca206..99997c1e 100644
+--- a/architecture/contracts/quest-lifecycle.md
++++ b/architecture/contracts/quest-lifecycle.md
+@@ -17,7 +17,9 @@
+     "findings are lost because durable memory is not recorded in the Quest log",
+     "terminal state is claimed without live doneWhen evidence",
+     "a stalled frontier keeps receiving local patches without selected Quest theory",
+-    "archived sprint/package theory state is treated as active implementation authority"
++    "archived sprint/package theory state is treated as active implementation authority",
++    "latest evidence moves owner or boundary while the selected frontier theory remains unrecorded",
++    "broad mixed-scope source changes accumulate without scope-pressure visibility"
+   ],
+   "stateVariables": [
+     "questStatus",
+@@ -29,7 +31,12 @@
+     "findingEvents",
+     "theoryEvents",
+     "selectedFrontierTheory",
++    "selectedTheoryStale",
+     "activeSystemTheory",
++    "currentBlocker",
++    "blockerMovement",
++    "diagnosticMovement",
++    "scopePressure",
+     "terminalEvidence"
+   ],
+   "safetyInvariants": [
+@@ -56,6 +63,14 @@
+     {
+       "id": "archive-theory-is-not-selectable",
+       "statement": "Imported legacy theory-ledger entries are archive memory and cannot be selected for implementation without fresh Quest theory evidence."
++    },
++    {
++      "id": "stale-theory-cannot-authorize-widened-work",
++      "statement": "A selected frontier theory cannot authorize widen-scope, model, or change-approach work after latest evidence makes its owner/boundary stale unless a later theory result records the learning."
++    },
++    {
++      "id": "scope-pressure-comes-from-quest-diffs",
++      "statement": "Scope-pressure signals are computed from the Quest's own recorded diff artifacts, never from unrelated dirty worktree files."
+     }
+   ],
+   "livenessExpectations": [
+@@ -66,6 +81,10 @@
+     {
+       "id": "failed-theory-attempt-still-records-learning",
+       "statement": "A measured attempt linked to theory records supported, falsified, or needs-rerun learning so the next step does not rediscover the same path."
++    },
++    {
++      "id": "diagnostic-movement-narrows-next-theory",
++      "statement": "Evidence that moves owner, boundary, reason, or mechanism without metric movement still records diagnostic movement so the next theory can target the new current blocker."
+     }
+   ],
+   "knownResiduals": [
+@@ -101,13 +120,31 @@
+       "path": "scripts/solve/theory.js",
+       "owner": "workflow_tooling_owner",
+       "boundary": "quest_lifecycle",
+-      "transition": "Quest-native system theory, frontier theory, selection, result, supersede, and archive import events"
++      "transition": "Quest-native system theory, frontier theory, owner-path metadata, selection, result, supersede, stale-theory gates, and archive import events"
++    },
++    {
++      "path": "scripts/solve/evidence.js",
++      "owner": "workflow_tooling_owner",
++      "boundary": "quest_lifecycle",
++      "transition": "probe evidence ingestion, blocker movement classification, and selected-theory result learning"
++    },
++    {
++      "path": "scripts/solve/current-blocker.js",
++      "owner": "workflow_tooling_owner",
++      "boundary": "quest_lifecycle",
++      "transition": "current blocker projection, diagnostic movement, stale selected-theory detection, and next-move guidance"
++    },
++    {
++      "path": "scripts/solve/scope-pressure.js",
++      "owner": "workflow_tooling_owner",
++      "boundary": "quest_lifecycle",
++      "transition": "Quest-owned diff inspection for broad owner scope and mixed runtime/workflow or runtime/harness signals"
+     },
+     {
+       "path": "scripts/solve/health.js",
+       "owner": "workflow_tooling_owner",
+       "boundary": "quest_lifecycle",
+-      "transition": "loop-health projection for theory-required, model-required, and live-probe divergence signals"
++      "transition": "loop-health projection for current blocker, stale theory, scope pressure, theory-required, model-required, and live-probe divergence signals"
+     },
+     {
+       "path": "scripts/solve/mechanism-card.js",
+@@ -145,6 +182,10 @@
+       "name": "Quest health",
+       "probe": "npm run solve:health -- --id rolling-restart-core-stability"
+     },
++    {
++      "name": "Quest status current blocker",
++      "probe": "node scripts/solve.js status --id rolling-restart-core-stability"
++    },
+     {
+       "name": "contract validator",
+       "probe": "npm run model:contract-records"
+@@ -171,6 +212,20 @@
+         "detectability": "high - solve health emits theory-required and model-required signals",
+         "mitigation": "step begin/commit and run preflight enforce selected frontier theory and model rung evidence",
+         "probe": "npm run solve:health -- --id rolling-restart-core-stability"
++      },
++      {
++        "failureMode": "latest blocker changes while an older selected theory continues to steer widened work",
++        "severity": "medium - attempts can optimize a no-longer-current owner path",
++        "detectability": "high - current blocker projection and solve health emit selected-theory-stale",
++        "mitigation": "record theory result movement or select a fresh owner-path theory before widened/model/change-approach attempts",
++        "probe": "node scripts/solve.js health --id rolling-restart-core-stability"
++      },
++      {
++        "failureMode": "Quest source edits silently spread across unrelated owner areas",
++        "severity": "medium - a single Quest can become hard to verify or hand off honestly",
++        "detectability": "medium - scope pressure is derived from recorded diff artifacts and shown in health/report",
++        "mitigation": "narrow the theory, split the Quest, or record a finding that justifies the mixed scope before more source work",
++        "probe": "node scripts/solve.js report --id rolling-restart-core-stability"
+       }
+     ],
+     "stpa": [
+@@ -185,6 +240,18 @@
+         "unsafeAction": "allows a stalled frontier to continue past widen-scope or model without selected Quest theory",
+         "feedbackSignal": "solve health theory-required signals, selected theory projection, and theory result events",
+         "ownerBoundary": "workflow_tooling_owner / quest_lifecycle"
++      },
++      {
++        "controller": "workflow_tooling_owner",
++        "unsafeAction": "uses a selected theory after latest evidence moved the current blocker to a different owner or boundary",
++        "feedbackSignal": "current blocker movement, selected-theory-stale health signal, and recorded theory result outcomes",
++        "ownerBoundary": "workflow_tooling_owner / quest_lifecycle"
++      },
++      {
++        "controller": "workflow_tooling_owner",
++        "unsafeAction": "treats diagnostic blocker movement as scenario closure",
++        "feedbackSignal": "separate scenarioOutcome, theoryOutcome, metric, and doneWhen fields in evidence, theory results, and report",
++        "ownerBoundary": "workflow_tooling_owner / quest_lifecycle"
+       }
+     ]
+   }
+@@ -194,20 +261,28 @@
+ ## Failure Classes
+ 
+ This contract covers Quest lifecycle failures: goalpost drift, unrecorded
+-attempts, chat-only memory, and premature closure claims.
++attempts, chat-only memory, stale selected theories, broad mixed-scope diffs,
++and premature closure claims.
+ 
+ ## Invariants
+ 
+ Quest goalposts are sealed by the first declaration event. Attempts require
+ probe evidence plus a resolvable `diff:<path>` change reference. Terminal state
+-comes from the Solver report projection.
++comes from the Solver report projection. A selected frontier theory cannot keep
++authorizing widened work after latest evidence moves the current blocker unless
++that movement is recorded as theory learning. Scope pressure is projected only
++from the Quest's own diff artifacts, never from unrelated dirty files.
+ 
+ ## Runtime Bindings
+ 
+ `scripts/solve.js` owns the CLI. `scripts/solve/step.js` owns supervised
+ attempt bracketing. `scripts/solve/loop.js` owns autonomous theory preflight,
+ honesty checks, ladder movement, and terminal recording. `scripts/solve/store.js`
+-owns the append-only event log and derived state.
++owns the append-only event log and derived state. `scripts/solve/evidence.js`
++records blocker movement and selected-theory learning. `scripts/solve/current-blocker.js`
++projects the active owner/boundary/reason, stale theory state, and next move.
++`scripts/solve/scope-pressure.js` projects broad or mixed source scope from
++recorded attempt diffs.
+ 
+ ## Model Bindings
+ 
+@@ -218,6 +293,7 @@ archived theory refs from drifting independently.
+ ## Operational Analysis
+ 
+ FMEA/STPA frame the workflow controller as a safety boundary: it must not issue
+-progress credit or closure without Solver evidence. `quest-context` supplies the
+-active handoff surface, while legacy workflow artifacts remain archive evidence
+-only.
++progress credit or closure without Solver evidence, must not keep steering from
++a no-longer-current theory, and must keep mixed source scope visible before
++handoff. `quest-context` supplies the active handoff surface, while legacy
++workflow artifacts remain archive evidence only.
+diff --git a/docs/solver-runbook.md b/docs/solver-runbook.md
+index eec0ee28..5321b1c3 100644
+--- a/docs/solver-runbook.md
++++ b/docs/solver-runbook.md
+@@ -14,6 +14,8 @@ from a worker's self-report.
+ | Attempt | One recorded try: hypothesis, metric before -> after, changeRef. |
+ | Finding | Durable knowledge: a claim, optional evidence, optional `rulesOut`. |
+ | Theory | Durable two-layer reasoning: system theory plus selected frontier theory. |
++| Current Blocker | Latest owner/boundary/reason projection from ingested evidence. |
++| Scope Pressure | Advisory signal from recorded `diff:<path>` artifacts. |
+ | Report (`solve/report/<id>.md`) | Read-only projection of the event log and terminal state. |
+ 
+ `doneWhen` is binary terminal success. `metric` is a progress gradient. Keep them
+@@ -28,6 +30,33 @@ local-fix -> widen-scope -> model -> change-approach -> park
+ Honest progress keeps the rung, a stall climbs it, and `park` redirects the
+ scheduler to another frontier. The run stops on **SOLVED** or **EXHAUSTED**.
+ 
++## Reading The Current Blocker
++
++Use the status, health, and report views before widening a fix:
++
++```sh
++node scripts/solve.js status --id <quest>
++node scripts/solve.js health --id <quest>
++node scripts/solve.js report --id <quest>
++```
++
++The Current Blocker card is the active failure surface. It reports the latest
++frontier, owner, boundary, dominant reason, selected theory, latest evidence,
++and next move. Its `movement` field tells whether the latest evidence left the
++blocker `same`, `moved_owner`, `moved_boundary`, `narrowed`, `solved`,
++`invalid`, or `unknown`.
++
++Metric movement is still the only product progress, and `doneWhen` is still the
++only closure condition. Blocker movement is diagnostic progress: it can justify
++recording partial theory support, a fresh owner-path theory, or a finding that a
++previous blocker is no longer current.
++
++Scope Pressure appears in `health` and `report`. It scans the Quest's recorded
++attempt diffs and flags broad owner areas, large diff stacks, mixed
++runtime/workflow changes, and mixed runtime/harness changes. A high-severity
++signal is not an automatic failure, but it is a strong prompt to narrow the next
++theory, split work, or record why the Quest scope is still honest.
++
+ ## Authoring A Quest
+ 
+ ```sh
+@@ -152,12 +181,22 @@ node scripts/solve.js theory option --id rolling-restart \
+   --negative-result "same metric falsifies observation-only fix" \
+   --discriminator "npm run analyze:topology-convergence -- <report>" \
+   --promotion "fresh owner evidence identifies a source path" \
+-  --rejection "fresh evidence keeps the same blocker"
++  --rejection "fresh evidence keeps the same blocker" \
++  --owner startup_active_gate_owner \
++  --boundary publication_visibility \
++  --caller-role startup_active_gate_observer \
++  --missing-transition "observer wakes after publication handoff" \
++  --owned-fix-path src/bootstrap \
++  --tail-consumer cluster_startup
+ 
+ node scripts/solve.js theory select --id rolling-restart \
+   --frontier rolling-restart-main --theory theory-fresh-observation
+ ```
+ 
++Owner-path fields are optional for simple local work. Add them whenever the
++Current Blocker identifies an owner/boundary path; they let the Solver detect
++when later evidence has made the selected theory stale.
++
+ Record learning explicitly when a discriminator or attempt settles a theory:
+ 
+ ```sh
+@@ -169,6 +208,24 @@ node scripts/solve.js theory record --id rolling-restart \
+ Supported results are `active`, `supported`, `falsified`, `superseded`,
+ `avoided`, `stale`, and `needs-rerun`.
+ 
++When an attempt does not move the metric but does move the blocker, split the
++scenario outcome from the theory outcome:
++
++```sh
++node scripts/solve.js theory record --id rolling-restart \
++  --theory theory-fresh-observation --result supported \
++  --scenario-outcome failed \
++  --theory-outcome partial \
++  --blocker-movement moved_boundary \
++  --diagnostic-movement "publication visibility moved to workflow progress" \
++  --evidence test-output/reports/rolling-restart.report.json
++```
++
++Use `scenarioOutcome=invalid` and `theoryOutcome=needs-rerun` when the evidence
++sample did not measure. Use `theoryOutcome=falsified` when the same blocker
++recurs after a valid measurement. Use `theoryOutcome=supported` only when the
++metric improved or `doneWhen` passed.
++
+ The supervised step gate and autonomous loop preflight enforce theory only when
+ it becomes valuable:
+ 
+@@ -187,6 +244,15 @@ node scripts/solve.js health --id rolling-restart
+ node scripts/solve.js theory card --evidence test-output/reports/rolling-restart.report.json
+ ```
+ 
++If `health` prints `selected-theory-stale`, do one of these before another
++widened/model/change-approach attempt:
++
++- record the selected theory result with the latest evidence and movement;
++- select a fresh frontier theory whose owner/boundary matches the Current
++  Blocker;
++- record a finding explaining why the current evidence should not retire the
++  selected theory.
++
+ ## Quest Audit
+ 
+ Audit a Quest before relying on its closure projection:
+diff --git a/scripts/solve.js b/scripts/solve.js
+index da789294..d6a0e8cb 100644
+--- a/scripts/solve.js
++++ b/scripts/solve.js
+@@ -32,6 +32,8 @@ import {runStep, stepAbort, stepPending} from './solve/step.js';
+ import {SOLVE_DATA_DIR} from './solve/constants.js';
+ import {runTheoryCommand, theoryCommitArgs} from './solve/theory.js';
+ import {analyzeQuestHealth, renderHealth} from './solve/health.js';
++import {buildCurrentBlocker} from './solve/current-blocker.js';
++import {analyzeScopePressure} from './solve/scope-pressure.js';
+ import {detectUnrecordedEvidence, ingestEvidence} from './solve/evidence.js';
+ import {runAttemptCommand} from './solve/attempt.js';
+ import {runAuditCommand} from './solve/audit.js';
+@@ -158,8 +160,14 @@ function cmdStatus(root, args) {
+   const id = args.id || args._[0];
+   if (!id) throw new Error('status: --id <questId> is required');
+   const quest = loadQuest(root, id);
+-  const state = projectState(quest, readLog(root, id));
+-  process.stdout.write(`${JSON.stringify(state, null, 2)}\n`);
++  const log = readLog(root, id);
++  const state = projectState(quest, log);
++  const status = {
++    ...state,
++    currentBlocker: buildCurrentBlocker({quest, log, state}),
++    scopePressure: analyzeScopePressure(root, quest, log),
++  };
++  process.stdout.write(`${JSON.stringify(status, null, 2)}\n`);
+ }
+ 
+ function cmdReport(root, args) {
+diff --git a/scripts/solve/evidence.js b/scripts/solve/evidence.js
+index fba1e6b6..109f2205 100644
+--- a/scripts/solve/evidence.js
++++ b/scripts/solve/evidence.js
+@@ -4,10 +4,20 @@ import path from 'node:path';
+ import {
+   EVENT_EVIDENCE_INGESTED,
+   EVENT_THEORY_RESULT,
++  THEORY_RESULT_FALSIFIED,
++  THEORY_RESULT_NEEDS_RERUN,
++  THEORY_RESULT_SUPPORTED,
+   VERDICT_BLOCK_EVIDENCE_INCOMPLETE,
+   VERDICT_REASON_EXECUTION_INCOMPLETE,
+ } from './constants.js';
+ import {buildMechanismCardFromEvidence} from './mechanism-card.js';
++import {
++  BLOCKER_MOVEMENT_MOVED_BOUNDARY,
++  BLOCKER_MOVEMENT_MOVED_OWNER,
++  BLOCKER_MOVEMENT_NARROWED,
++  blockerFromEvidence,
++  classifyBlockerMovement,
++} from './current-blocker.js';
+ import {evaluate} from './probe.js';
+ import {
+   appendEvent,
+@@ -199,11 +209,13 @@ export function ingestEvidence(root, {questId, frontierId, evidencePath}) {
+   const reportTimestamp = data.timestamp || new Date().toISOString();
+ 
+   const selectedTheory = state.theories.selectedByFrontier[frontierId] || null;
++  const previousEvidence = [...log].reverse().find((event) =>
++    event.type === EVENT_EVIDENCE_INGESTED && event.frontier === frontierId);
+ 
+   const mechanismCard = buildMechanismCardFromEvidence(evidencePath);
+   const classifiedMechanism = mechanismCard.failureMechanism || 'observation_gap';
+ 
+-  const ingestedEvent = appendEvent(root, questId, {
++  const newEvidenceEvent = {
+     type: EVENT_EVIDENCE_INGESTED,
+     frontier: frontierId,
+     evidence: evidencePath,
+@@ -224,6 +236,31 @@ export function ingestEvidence(root, {questId, frontierId, evidencePath}) {
+     mechanism: classifiedMechanism,
+     selectedTheory,
+     summary,
++  };
++  const previousBlocker = blockerFromEvidence(previousEvidence);
++  const currentBlocker = blockerFromEvidence(newEvidenceEvent);
++  const blockerMovement = classifyBlockerMovement(previousBlocker, currentBlocker);
++  const diagnosticMovement = previousBlocker ?
++    `${blockerMovement}: ${[
++      previousBlocker.owner,
++      previousBlocker.boundary,
++      previousBlocker.dominantReason,
++    ].filter(Boolean).join(' / ') || 'unknown'} -> ${[
++      currentBlocker.owner,
++      currentBlocker.boundary,
++      currentBlocker.dominantReason,
++    ].filter(Boolean).join(' / ') || 'unknown'}` :
++    `first blocker observed: ${[
++      currentBlocker.owner,
++      currentBlocker.boundary,
++      currentBlocker.dominantReason,
++    ].filter(Boolean).join(' / ') || 'unknown'}`;
++  const ingestedEvent = appendEvent(root, questId, {
++    ...newEvidenceEvent,
++    blockerBefore: previousBlocker,
++    blockerAfter: currentBlocker,
++    blockerMovement,
++    diagnosticMovement,
+   });
+ 
+   // Determine finding and repeat status
+@@ -242,19 +279,38 @@ export function ingestEvidence(root, {questId, frontierId, evidencePath}) {
+ 
+   // Evaluate theory result if a selected theory exists
+   if (selectedTheory) {
+-    let result = 'falsified';
+     const nonMeasuring = verdict === VERDICT_BLOCK_EVIDENCE_INCOMPLETE ||
+       verdictReason === VERDICT_REASON_EXECUTION_INCOMPLETE ||
+       metric === null;
++    let result = THEORY_RESULT_FALSIFIED;
++    let theoryOutcome = THEORY_RESULT_FALSIFIED;
++    const currentMetric = frontierState?.current;
++    const progressed = currentMetric !== null &&
++      currentMetric !== undefined &&
++      metric !== null &&
++      metric < currentMetric;
++    const scenarioOutcome = done ?
++      'done' :
++      nonMeasuring ? 'invalid' :
++        progressed ? 'improved' :
++          'failed';
+     if (nonMeasuring) {
+-      result = 'needs-rerun';
++      result = THEORY_RESULT_NEEDS_RERUN;
++      theoryOutcome = THEORY_RESULT_NEEDS_RERUN;
+     } else {
+-      const currentMetric = frontierState?.current;
+-      const progressed = currentMetric !== null && currentMetric !== undefined && metric < currentMetric;
+       if (done || progressed) {
+-        result = 'supported';
++        result = THEORY_RESULT_SUPPORTED;
++        theoryOutcome = THEORY_RESULT_SUPPORTED;
++      } else if ([
++        BLOCKER_MOVEMENT_MOVED_OWNER,
++        BLOCKER_MOVEMENT_MOVED_BOUNDARY,
++        BLOCKER_MOVEMENT_NARROWED,
++      ].includes(blockerMovement)) {
++        result = THEORY_RESULT_SUPPORTED;
++        theoryOutcome = 'partial';
+       } else {
+-        result = 'falsified';
++        result = THEORY_RESULT_FALSIFIED;
++        theoryOutcome = THEORY_RESULT_FALSIFIED;
+       }
+     }
+ 
+@@ -263,6 +319,10 @@ export function ingestEvidence(root, {questId, frontierId, evidencePath}) {
+       theory: selectedTheory,
+       frontier: frontierId,
+       result,
++      scenarioOutcome,
++      theoryOutcome,
++      blockerMovement,
++      diagnosticMovement,
+       evidence: evidencePath,
+       validation: null,
+     });
+diff --git a/scripts/solve/health.js b/scripts/solve/health.js
+index 8e04a12f..1b599b0c 100644
+--- a/scripts/solve/health.js
++++ b/scripts/solve/health.js
+@@ -13,6 +13,11 @@ import {pickFrontier} from './scheduler.js';
+ import {projectState, readLog} from './store.js';
+ import {detectUnrecordedEvidence} from './evidence.js';
+ import {modelGuidanceForQuest} from './model-guidance.js';
++import {
++  buildCurrentBlocker,
++  selectedTheoryStaleness,
++} from './current-blocker.js';
++import {analyzeScopePressure} from './scope-pressure.js';
+ 
+ const NUM_TWO = 2;
+ const NUM_THREE = 3;
+@@ -111,6 +116,9 @@ function frontierNeeds(quest, state, log, frontier) {
+   const selectedUsable = selected &&
+     selected.archive !== true &&
+     SELECTABLE_THEORY_STATUSES.includes(selected.status);
++  const staleness = selected ?
++    selectedTheoryStaleness(log, state, frontier.id) :
++    {stale: false, reason: null};
+   const noProgress = noProgressAttempts(log, frontier.id);
+ 
+   const evidenceEvents = log.filter((e) => e.type === 'evidence-ingested');
+@@ -140,6 +148,8 @@ function frontierNeeds(quest, state, log, frontier) {
+     modelEvidenceRecommended: Boolean(modelGuidance),
+     modelGuidance,
+     selectedTheory: selected ? selected.id : null,
++    selectedTheoryStale: staleness.stale,
++    selectedTheoryStaleReason: staleness.reason,
+     noProgressCount: noProgress.length,
+   };
+ }
+@@ -158,6 +168,9 @@ function nextActionFor(frontier, needs) {
+       '';
+     return `record and select frontier theory for ${frontier.id}${suffix}`;
+   }
++  if (needs.selectedTheoryStale) {
++    return `record or select a fresh frontier theory for ${frontier.id}`;
++  }
+   if (needs.modelEvidenceRequired) {
+     return `continue ${frontier.id} with modelRef or modelNotApplicable evidence`;
+   }
+@@ -172,6 +185,8 @@ export function analyzeQuestHealth(root, quest, options = {}) {
+   const frontier = pick?.state || null;
+   const needs = frontier ? frontierNeeds(quest, state, log, frontier) : {};
+   const theories = frontier ? lastAttemptTheories(log, state, frontier.id) : [];
++  const currentBlocker = buildCurrentBlocker({quest, log, state});
++  const scopePressure = analyzeScopePressure(root, quest, log);
+   const signals = [
+     sameMechanismSignal(theories),
+     layerPingPongSignal(theories),
+@@ -251,6 +266,13 @@ export function analyzeQuestHealth(root, quest, options = {}) {
+       severity: 'medium',
+     });
+   }
++  if (frontier && needs.selectedTheoryStale) {
++    signals.push({
++      type: 'selected-theory-stale',
++      mechanism: needs.selectedTheoryStaleReason || frontier.id,
++      severity: 'high',
++    });
++  }
+   if (frontier && needs.modelGuidance) {
+     signals.push({
+       type: needs.modelEvidenceRequired ?
+@@ -271,6 +293,9 @@ export function analyzeQuestHealth(root, quest, options = {}) {
+       severity: 'high',
+     });
+   }
++  for (const signal of scopePressure.signals) {
++    signals.push(signal);
++  }
+ 
+   const rungName = frontier ? (quest.frontiers.find((item) =>
+     item.id === frontier.id)?.rung || null) : null;
+@@ -287,6 +312,8 @@ export function analyzeQuestHealth(root, quest, options = {}) {
+     ),
+     needs,
+     modelGuidance: needs.modelGuidance || null,
++    currentBlocker,
++    scopePressure,
+     reopens,
+     cannotMeasureParked: cannotMeasureParked.map((f) => ({
+       id: f.id,
+@@ -304,6 +331,12 @@ export function renderHealth(health) {
+   lines.push(`- rungIndex: ${health.rungIndex ?? 'none'}`);
+   lines.push(`- reopens: ${health.reopens || 0}`);
+   lines.push(`- nextAction: ${health.nextAction}`);
++  if (health.currentBlocker) {
++    lines.push(`- currentOwner: ${health.currentBlocker.owner || 'unknown'}`);
++    lines.push(`- currentBoundary: ${health.currentBlocker.boundary || 'unknown'}`);
++    lines.push(`- currentReason: ${health.currentBlocker.dominantReason || 'unknown'}`);
++    lines.push(`- blockerMovement: ${health.currentBlocker.movement || 'unknown'}`);
++  }
+   lines.push('', '## Signals');
+   if (health.signals.length === 0) {
+     lines.push('- none');
+@@ -319,5 +352,10 @@ export function renderHealth(health) {
+     lines.push(`- reportPattern: ${health.modelGuidance.reportPattern}`);
+     lines.push(`- reasons: ${health.modelGuidance.reasons.join(', ')}`);
+   }
++  if (health.scopePressure) {
++    lines.push('', '## Scope Pressure');
++    lines.push(`- changedFiles: ${health.scopePressure.changedPaths.length}`);
++    lines.push(`- ownerAreas: ${health.scopePressure.ownerAreas.join(', ') || 'none'}`);
++  }
+   return `${lines.join('\n')}\n`;
+ }
+diff --git a/scripts/solve/loop.js b/scripts/solve/loop.js
+index 12148736..8d5e9558 100644
+--- a/scripts/solve/loop.js
++++ b/scripts/solve/loop.js
+@@ -47,6 +47,7 @@ import {
+   resolveAttemptTheoryRef,
+   stepTheoryGateProblems,
+ } from './theory.js';
++import {diagnosticMovementFor} from './current-blocker.js';
+ import {detectUnrecordedEvidence} from './evidence.js';
+ import {inspectChangeArtifact} from './change-artifact.js';
+ 
+@@ -187,6 +188,7 @@ export function finalizeAttempt(root, quest, ctx, pick, before, result) {
+     result.theoryRef || ctx.theoryRef,
+   );
+   const after = evaluate(pick.def.metric, ctx.probeCtx);
++  const diagnosticMovement = diagnosticMovementFor(log, pick.def.id);
+   const event = {
+     type: EVENT_ATTEMPT,
+     frontier: pick.def.id,
+@@ -199,6 +201,7 @@ export function finalizeAttempt(root, quest, ctx, pick, before, result) {
+     metricAfter: after.metric,
+     metricDirection: METRIC_DIRECTION_LOWER_IS_BETTER,
+     invalidSample: Boolean(before.invalidSample) || Boolean(after.invalidSample),
++    done: after.done === true,
+     evidence: after.evidence,
+     evidenceIdentity: after.evidenceIdentity || null,
+     evidenceFingerprint: after.evidenceFingerprint || null,
+@@ -209,6 +212,10 @@ export function finalizeAttempt(root, quest, ctx, pick, before, result) {
+     modelRef: result.modelRef || ctx.modelRef || null,
+     modelNotApplicable:
+       result.modelNotApplicable || ctx.modelNotApplicable || null,
++    blockerBefore: diagnosticMovement.previous,
++    blockerAfter: diagnosticMovement.current,
++    blockerMovement: diagnosticMovement.movement,
++    diagnosticMovement: diagnosticMovement.summary,
+   };
+   const violations = [
+     ...validateAttempt(event, ctx.honestyCtx),
+diff --git a/scripts/solve/report.js b/scripts/solve/report.js
+index 8a1279c7..74a328e2 100644
+--- a/scripts/solve/report.js
++++ b/scripts/solve/report.js
+@@ -18,6 +18,11 @@ import {
+ } from './constants.js';
+ import {loadQuest, readLog, projectState, assertSafeQuestId} from './store.js';
+ import {questClass, closureKind} from './closure-kind.js';
++import {
++  buildCurrentBlocker,
++  renderCurrentBlocker,
++} from './current-blocker.js';
++import {analyzeScopePressure, renderScopePressure} from './scope-pressure.js';
+ 
+ export function reportFilePath(root, questId) {
+   return path.join(root, SOLVE_DATA_DIR, REPORT_SUBDIR,
+@@ -52,7 +57,8 @@ function attemptLine(e) {
+   const moved = e.metricAfter !== null && e.metricBefore !== null &&
+     e.metricAfter < e.metricBefore ? 'progress' : 'flat';
+   return `| ${e.ts || ''} | ${e.frontier} | ${e.rung} | ${before} -> ${after} ` +
+-    `| ${moved} | ${e.theoryRef || ''} | ${e.changeRef || ''} |`;
++    `| ${moved} | ${e.blockerMovement || ''} | ${e.theoryRef || ''} ` +
++    `| ${e.changeRef || ''} |`;
+ }
+ 
+ function outcomeBanner(state, log, quest) {
+@@ -77,11 +83,14 @@ function theoryLine(theory) {
+   const frontier = theory.frontier ? `, frontier ${theory.frontier}` : '';
+   const layer = theory.layer ? `, layer ${theory.layer}` : '';
+   const archive = theory.archive ? ', archive' : '';
++  const owner = theory.owner ? `, owner ${theory.owner}` : '';
++  const boundary = theory.boundary ? `, boundary ${theory.boundary}` : '';
+   const modelGate = theory.modelGuidance ?
+     `, modelGate ${theory.modelGuidance.command}` :
+     '';
+   return `- **${theory.id}** [${theory.status}] ${theory.scope}${frontier}` +
+-    `${layer}, mechanism ${theory.mechanism || 'unknown'}${modelGate}${archive}`;
++    `${layer}, mechanism ${theory.mechanism || 'unknown'}${owner}${boundary}` +
++    `${modelGate}${archive}`;
+ }
+ 
+ function selectedTheoryLines(state) {
+@@ -98,8 +107,14 @@ function theoryResultLines(state) {
+   const rows = [];
+   for (const theory of theories) {
+     for (const result of theory.results || []) {
++      const details = [
++        result.scenarioOutcome ? `scenario=${result.scenarioOutcome}` : null,
++        result.theoryOutcome ? `theory=${result.theoryOutcome}` : null,
++        result.blockerMovement ? `movement=${result.blockerMovement}` : null,
++      ].filter(Boolean);
+       rows.push(
+         `- **${theory.id}**: ${result.result} ` +
++        `${details.length > 0 ? `(${details.join(', ')}) ` : ''}` +
+         `${result.evidence ? `[${result.evidence}]` : ''}`,
+       );
+     }
+@@ -107,10 +122,12 @@ function theoryResultLines(state) {
+   return rows.length > 0 ? rows : ['_(none recorded)_'];
+ }
+ 
+-export function buildReport(quest, log, state) {
++export function buildReport(quest, log, state, root = process.cwd()) {
+   const attempts = log.filter((e) => e.type === EVENT_ATTEMPT);
+   const attemptRows = attempts.map(attemptLine);
+   const findings = findingLines(state);
++  const currentBlocker = buildCurrentBlocker({quest, log, state});
++  const scopePressure = analyzeScopePressure(root, quest, log);
+   const theories = [
+     ...(state.theories?.system || []),
+     ...(state.theories?.frontier || []),
+@@ -126,6 +143,10 @@ export function buildReport(quest, log, state) {
+     '',
+     `**Attempts:** ${attempts.length}`,
+     '',
++    ...renderCurrentBlocker(currentBlocker),
++    '',
++    ...renderScopePressure(scopePressure),
++    '',
+     '## Frontiers',
+     ...state.frontiers.map(frontierLine),
+     '',
+@@ -142,8 +163,8 @@ export function buildReport(quest, log, state) {
+     ...theoryResultLines(state),
+     '',
+     '## Attempt log',
+-    '| ts | frontier | rung | metric | result | theory | change |',
+-    '| --- | --- | --- | --- | --- | --- | --- |',
++    '| ts | frontier | rung | metric | result | blocker movement | theory | change |',
++    '| --- | --- | --- | --- | --- | --- | --- | --- |',
+     ...attemptRows,
+     '',
+   ].join('\n');
+@@ -152,7 +173,7 @@ export function buildReport(quest, log, state) {
+ export function writeReportForQuest(root, quest) {
+   const log = readLog(root, quest.id);
+   const state = projectState(quest, log);
+-  const md = buildReport(quest, log, state);
++  const md = buildReport(quest, log, state, root);
+   const file = reportFilePath(root, quest.id);
+   fs.mkdirSync(path.dirname(file), {recursive: true});
+   fs.writeFileSync(file, md);
+diff --git a/scripts/solve/step.js b/scripts/solve/step.js
+index 1df50637..478ba0cc 100644
+--- a/scripts/solve/step.js
++++ b/scripts/solve/step.js
+@@ -74,6 +74,8 @@ function theoryGateResult(problems, pick) {
+     item.includes('theory required') ||
+     item.includes('frontier theory required') ||
+     item.includes('system theory required') ||
++    item.includes('fresh frontier theory') ||
++    item.includes('fresh theory selection required') ||
+     item.includes('theory result required') ||
+     item.includes('theory result update required'))) {
+     return {
+diff --git a/scripts/solve/store.js b/scripts/solve/store.js
+index 660a7692..004d6de0 100644
+--- a/scripts/solve/store.js
++++ b/scripts/solve/store.js
+@@ -191,6 +191,14 @@ function addTheory(theories, event, scope) {
+     mechanism: event.mechanism || null,
+     problem: event.problem || null,
+     intervention: event.intervention || null,
++    owner: event.owner || event.decidingOwner || null,
++    boundary: event.boundary || null,
++    callerRole: event.callerRole || null,
++    missingTransition: event.missingTransition ||
++      event.missingTransitionOrObservation ||
++      null,
++    ownedFixPath: event.ownedFixPath || null,
++    tailConsumers: event.tailConsumers || [],
+     discriminator: event.discriminator || null,
+     expectedMovement: event.expectedMovement || null,
+     negativeResultMeans: event.negativeResultMeans || null,
+@@ -225,6 +233,10 @@ function applyTheoryResult(theories, event) {
+   if (!theory) return;
+   const result = {
+     result: event.result || null,
++    scenarioOutcome: event.scenarioOutcome || null,
++    theoryOutcome: event.theoryOutcome || null,
++    blockerMovement: event.blockerMovement || null,
++    diagnosticMovement: event.diagnosticMovement || null,
+     evidence: event.evidence || null,
+     validation: event.validation || null,
+     attemptFrontier: event.frontier || null,
+diff --git a/scripts/solve/theory.js b/scripts/solve/theory.js
+index 8d0b4be0..89d790c7 100644
+--- a/scripts/solve/theory.js
++++ b/scripts/solve/theory.js
+@@ -23,6 +23,13 @@ import {
+   THEORY_SCOPE_SYSTEM,
+ } from './constants.js';
+ import {buildMechanismCardFromEvidence} from './mechanism-card.js';
++import {
++  BLOCKER_MOVEMENT_MOVED_BOUNDARY,
++  BLOCKER_MOVEMENT_MOVED_OWNER,
++  BLOCKER_MOVEMENT_NARROWED,
++  diagnosticMovementFor,
++  selectedTheoryStaleness,
++} from './current-blocker.js';
+ import {modelGuidanceForQuest} from './model-guidance.js';
+ import {appendEvent, loadQuest, projectState, readLog} from './store.js';
+ import {
+@@ -54,6 +61,11 @@ const NUM_ONE = 1;
+ const NUM_TWO = 2;
+ const RUNG_INDEX_WIDEN_SCOPE = LADDER.indexOf(RUNG_WIDEN_SCOPE);
+ const RUNG_INDEX_MODEL = LADDER.indexOf(RUNG_MODEL);
++const THEORY_OUTCOME_PARTIAL = 'partial';
++const SCENARIO_OUTCOME_FAILED = 'failed';
++const SCENARIO_OUTCOME_IMPROVED = 'improved';
++const SCENARIO_OUTCOME_INVALID = 'invalid';
++const SCENARIO_OUTCOME_DONE = 'done';
+ 
+ function normalizeText(value) {
+   return String(value || '').trim();
+@@ -145,6 +157,20 @@ function noProgressAttemptCount(log, frontierId) {
+       event.metricAfter >= event.metricBefore)).length;
+ }
+ 
++function diagnosticProgressAttemptCount(log, frontierId) {
++  return log.filter((event) =>
++    event.type === 'attempt' &&
++    event.frontier === frontierId &&
++    event.metricBefore !== null &&
++    event.metricAfter !== null &&
++    event.metricAfter >= event.metricBefore &&
++    [
++      BLOCKER_MOVEMENT_MOVED_OWNER,
++      BLOCKER_MOVEMENT_MOVED_BOUNDARY,
++      BLOCKER_MOVEMENT_NARROWED,
++    ].includes(event.blockerMovement)).length;
++}
++
+ function modelRefPath(modelRef) {
+   for (const prefix of MODEL_REF_PREFIXES) {
+     if (modelRef.startsWith(prefix)) return modelRef.slice(prefix.length);
+@@ -210,6 +236,14 @@ export function stepTheoryGateProblems({
+     problems.push(`frontier theory required at rung ${rungIndex}`);
+   }
+ 
++  const stale = selected ? selectedTheoryStaleness(log, state, frontierId) : null;
++  if (selected && stale?.stale && rungIndex >= RUNG_INDEX_WIDEN_SCOPE) {
++    problems.push(
++      `selected theory ${selected.id} is stale: ${stale.reason}; ` +
++      'record or select a fresh frontier theory',
++    );
++  }
++
+   // Escalation rule 1 & 3:
+   const evidenceEvents = log.filter((e) => e.type === 'evidence-ingested');
+   const sameDominantReasonRepeat = evidenceEvents.length >= 2 &&
+@@ -236,6 +270,22 @@ export function stepTheoryGateProblems({
+     problems.push('system theory required after repeated same-frontier stalls');
+   }
+ 
++  if (diagnosticProgressAttemptCount(log, frontierId) >= NUM_TWO &&
++    rungIndex >= RUNG_INDEX_WIDEN_SCOPE) {
++    const latestAttempt = [...log].reverse().find((event) =>
++      event.type === 'attempt' && event.frontier === frontierId);
++    const latestAttemptIndex = log.indexOf(latestAttempt);
++    const hasFreshTheorySelection = latestAttemptIndex >= 0 &&
++      log.slice(latestAttemptIndex + 1).some((event) =>
++        event.type === 'theory-selected' && event.frontier === frontierId);
++    if (!hasFreshTheorySelection) {
++      problems.push(
++        'fresh theory selection required after repeated diagnostic movement ' +
++        'without metric movement',
++      );
++    }
++  }
++
+   // Escalation rule 2: If metric is 0 and done=false, require a theory result before more edits
+   const latestMetricEvent = [...log].reverse().find((e) =>
+     (e.type === 'attempt' && typeof e.metricAfter === 'number') ||
+@@ -315,11 +365,37 @@ export function theoryResultForAttempt(progressed, violations) {
+ 
+ export function appendTheoryResultForAttempt(root, quest, event, progressed, violations) {
+   if (!event.theoryRef) return null;
++  const invalid = event.invalidSample === true ||
++    event.metricAfter === null ||
++    violations.length > 0;
++  const scenarioOutcome = event.done === true ?
++    SCENARIO_OUTCOME_DONE :
++    invalid ? SCENARIO_OUTCOME_INVALID :
++      progressed ? SCENARIO_OUTCOME_IMPROVED :
++        SCENARIO_OUTCOME_FAILED;
++  const movement = event.blockerMovement || null;
++  const theoryOutcome =
++    invalid ? THEORY_RESULT_NEEDS_RERUN :
++      progressed ? THEORY_RESULT_SUPPORTED :
++        [
++          BLOCKER_MOVEMENT_MOVED_OWNER,
++          BLOCKER_MOVEMENT_MOVED_BOUNDARY,
++          BLOCKER_MOVEMENT_NARROWED,
++        ].includes(movement) ?
++          THEORY_OUTCOME_PARTIAL :
++          THEORY_RESULT_FALSIFIED;
++  const result = theoryOutcome === THEORY_OUTCOME_PARTIAL ?
++    THEORY_RESULT_SUPPORTED :
++    theoryOutcome;
+   return appendEvent(root, quest.id, {
+     type: EVENT_THEORY_RESULT,
+     theory: event.theoryRef,
+     frontier: event.frontier,
+-    result: theoryResultForAttempt(progressed, violations),
++    result,
++    scenarioOutcome,
++    theoryOutcome,
++    blockerMovement: movement,
++    diagnosticMovement: event.diagnosticMovement || null,
+     evidence: event.evidence || null,
+     validation: event.modelRef || null,
+   });
+@@ -371,6 +447,12 @@ function cmdOption(root, args) {
+     status: THEORY_RESULT_ACTIVE,
+     layer,
+     mechanism: requireFlag(args, 'mechanism'),
++    owner: normalizeText(args.owner) || null,
++    boundary: normalizeText(args.boundary) || null,
++    callerRole: normalizeText(args['caller-role']) || null,
++    missingTransition: normalizeText(args['missing-transition']) || null,
++    ownedFixPath: normalizeText(args['owned-fix-path']) || null,
++    tailConsumers: repeatedFlag(args, 'tail-consumer'),
+     intervention: requireFlag(args, 'intervention'),
+     expectedMovement: requireFlag(args, 'expected-movement'),
+     negativeResultMeans: requireFlag(args, 'negative-result'),
+@@ -418,6 +500,10 @@ function cmdRecord(root, args) {
+     theory: theoryId,
+     frontier: normalizeText(args[FLAG_FRONTIER]) || null,
+     result,
++    scenarioOutcome: normalizeText(args['scenario-outcome']) || null,
++    theoryOutcome: normalizeText(args['theory-outcome']) || null,
++    blockerMovement: normalizeText(args['blocker-movement']) || null,
++    diagnosticMovement: normalizeText(args['diagnostic-movement']) || null,
+     evidence: requireFlag(args, FLAG_EVIDENCE),
+     validation: normalizeText(args.validation) || null,
+   });
+diff --git a/test/solve/evidence.test.js b/test/solve/evidence.test.js
+index 7d1b8ac9..434239fa 100644
+--- a/test/solve/evidence.test.js
++++ b/test/solve/evidence.test.js
+@@ -167,6 +167,150 @@ tap.test('evidence ingestion (P2)', async (t) => {
+     const theoryResult = log.find((e) => e.type === 'theory-result' && e.theory === 't1');
+     t.ok(theoryResult, 'theory result recorded');
+     t.equal(theoryResult.result, 'needs-rerun');
++    t.equal(theoryResult.scenarioOutcome, 'invalid');
++    t.equal(theoryResult.theoryOutcome, 'needs-rerun');
++
++    fs.rmSync(root, {recursive: true, force: true});
++    t.end();
++  });
++
++  t.test('records partial theory support when blocker moves without metric movement', (t) => {
++    const root = tmp();
++    const goal = getGoal(root);
++    saveQuest(root, goal);
++    const reportDir = path.join(root, 'test-output', 'reports');
++    fs.mkdirSync(reportDir, {recursive: true});
++    const firstPath = path.join(reportDir, 'r1.report.json');
++    const secondPath = path.join(reportDir, 'r2.report.json');
++    const validReport = {
++      ...sampleReport,
++      scenarios: [{
++        ...sampleReport.scenarios[0],
++        verdict: 'FAIL_CORE_INVARIANT',
++        verdictReason: 'core_invariant_or_safety_violation',
++      }],
++    };
++    fs.writeFileSync(firstPath, JSON.stringify(validReport));
++    fs.writeFileSync(secondPath, JSON.stringify({
++      ...validReport,
++      timestamp: '2026-06-01T12:55:33.550Z',
++      scenarios: [{
++        ...validReport.scenarios[0],
++        details: {
++          diagnostics: {
++            failure: {
++              rootCauseClass: 'topology',
++              dominantReason: 'priority_spread_pending',
++              ownerContract: {
++                frontierWitnesses: [{
++                  owner: 'operation_workflow_owner',
++                  boundary: 'workflow_progress',
++                  source: {
++                    nextRequiredActions: 'advance_existing_operation',
++                  },
++                }],
++              },
++            },
++          },
++        },
++      }],
++    }));
++    appendEvent(root, goal.id, {
++      type: 'theory-option-declared',
++      theory: 't1',
++      frontier: 'evidence-quest-test-main',
++      scope: 'frontier',
++      status: 'active',
++      layer: 'ownership',
++      mechanism: 'active_gate',
++    });
++    appendEvent(root, goal.id, {
++      type: 'theory-selected',
++      frontier: 'evidence-quest-test-main',
++      theory: 't1',
++    });
++
++    ingestEvidence(root, {
++      questId: goal.id,
++      frontierId: 'evidence-quest-test-main',
++      evidencePath: firstPath,
++    });
++    ingestEvidence(root, {
++      questId: goal.id,
++      frontierId: 'evidence-quest-test-main',
++      evidencePath: secondPath,
++    });
++
++    const results = readLog(root, goal.id)
++      .filter((event) => event.type === 'theory-result' && event.theory === 't1');
++    const latest = results[results.length - 1];
++    t.equal(latest.result, 'supported');
++    t.equal(latest.scenarioOutcome, 'failed');
++    t.equal(latest.theoryOutcome, 'partial');
++    t.equal(latest.blockerMovement, 'moved_boundary');
++    t.match(latest.diagnosticMovement, /operation_workflow_owner/);
++
++    fs.rmSync(root, {recursive: true, force: true});
++    t.end();
++  });
++
++  t.test('records scenario improvement separately from doneWhen closure', (t) => {
++    const root = tmp();
++    const goal = getGoal(root);
++    saveQuest(root, goal);
++    const reportDir = path.join(root, 'test-output', 'reports');
++    fs.mkdirSync(reportDir, {recursive: true});
++    const firstPath = path.join(reportDir, 'r1.report.json');
++    const secondPath = path.join(reportDir, 'r2.report.json');
++    const validReport = {
++      ...sampleReport,
++      scenarios: [{
++        ...sampleReport.scenarios[0],
++        verdict: 'FAIL_CORE_INVARIANT',
++        verdictReason: 'core_invariant_or_safety_violation',
++      }],
++    };
++    fs.writeFileSync(firstPath, JSON.stringify({
++      ...validReport,
++      optimizationSummary: {totalPriorityItems: 5},
++    }));
++    fs.writeFileSync(secondPath, JSON.stringify({
++      ...validReport,
++      timestamp: '2026-06-01T12:56:33.550Z',
++      optimizationSummary: {totalPriorityItems: 3},
++    }));
++    appendEvent(root, goal.id, {
++      type: 'theory-option-declared',
++      theory: 't1',
++      frontier: 'evidence-quest-test-main',
++      scope: 'frontier',
++      status: 'active',
++      layer: 'ownership',
++      mechanism: 'active_gate',
++    });
++    appendEvent(root, goal.id, {
++      type: 'theory-selected',
++      frontier: 'evidence-quest-test-main',
++      theory: 't1',
++    });
++
++    ingestEvidence(root, {
++      questId: goal.id,
++      frontierId: 'evidence-quest-test-main',
++      evidencePath: firstPath,
++    });
++    ingestEvidence(root, {
++      questId: goal.id,
++      frontierId: 'evidence-quest-test-main',
++      evidencePath: secondPath,
++    });
++
++    const results = readLog(root, goal.id)
++      .filter((event) => event.type === 'theory-result' && event.theory === 't1');
++    const latest = results[results.length - 1];
++    t.equal(latest.result, 'supported');
++    t.equal(latest.scenarioOutcome, 'improved');
++    t.equal(latest.theoryOutcome, 'supported');
+ 
+     fs.rmSync(root, {recursive: true, force: true});
+     t.end();
+diff --git a/test/solve/health.test.js b/test/solve/health.test.js
+index bc3ddb3e..14f6a7d7 100644
+--- a/test/solve/health.test.js
++++ b/test/solve/health.test.js
+@@ -5,7 +5,13 @@ import os from 'node:os';
+ 
+ import {analyzeQuestHealth, renderHealth} from '../../scripts/solve/health.js';
+ import {appendEvent, saveQuest} from '../../scripts/solve/store.js';
+-import {EVENT_ATTEMPT, EVENT_PARK} from '../../scripts/solve/constants.js';
++import {
++  EVENT_ATTEMPT,
++  EVENT_EVIDENCE_INGESTED,
++  EVENT_PARK,
++  EVENT_THEORY_OPTION_DECLARED,
++  EVENT_THEORY_SELECTED,
++} from '../../scripts/solve/constants.js';
+ 
+ function tmp() {
+   return fs.mkdtempSync(path.join(os.tmpdir(), 'solve-health-'));
+@@ -161,4 +167,121 @@ tap.test('Quest health', async (t) => {
+     fs.rmSync(root, {recursive: true, force: true});
+     t.end();
+   });
++
++  t.test('fresh owner movement marks selected theory stale', (t) => {
++    const root = tmp();
++    const oracle = path.join(root, 'oracle.json');
++    fs.writeFileSync(oracle, JSON.stringify({metric: 1, target: 0}));
++    const quest = {
++      id: 'demo',
++      statement: 'Drive metric to zero.',
++      priority: 1,
++      doneWhen: {probe: 'oracle', args: {file: oracle}},
++      frontiers: [
++        {id: 'demo-main', priority: 1,
++          metric: {probe: 'oracle', args: {file: oracle}}},
++      ],
++    };
++    saveQuest(root, quest);
++    appendEvent(root, quest.id, {
++      type: EVENT_EVIDENCE_INGESTED,
++      frontier: 'demo-main',
++      evidence: 'r1.json',
++      metric: 1,
++      done: false,
++      owner: 'startup_active_gate_owner',
++      boundary: 'snapshot_coverage',
++      dominantReason: 'snapshot_coverage=1/5',
++    });
++    appendEvent(root, quest.id, {
++      type: EVENT_THEORY_OPTION_DECLARED,
++      frontier: 'demo-main',
++      theory: 'theory-snapshot',
++      scope: 'frontier',
++      status: 'active',
++      layer: 'ownership',
++      mechanism: 'snapshot_coverage',
++      owner: 'startup_active_gate_owner',
++      boundary: 'snapshot_coverage',
++    });
++    appendEvent(root, quest.id, {
++      type: EVENT_THEORY_SELECTED,
++      frontier: 'demo-main',
++      theory: 'theory-snapshot',
++    });
++    appendEvent(root, quest.id, {
++      type: EVENT_EVIDENCE_INGESTED,
++      frontier: 'demo-main',
++      evidence: 'r2.json',
++      metric: 1,
++      done: false,
++      owner: 'operation_workflow_owner',
++      boundary: 'workflow_progress',
++      dominantReason: 'priority_spread_pending',
++    });
++
++    const health = analyzeQuestHealth(root, quest);
++    t.ok(
++      health.signals.some((signal) => signal.type === 'selected-theory-stale'),
++      'stale selected theory signal emitted',
++    );
++    t.equal(health.currentBlocker.owner, 'operation_workflow_owner');
++    t.match(health.nextAction, /fresh frontier theory/);
++    fs.rmSync(root, {recursive: true, force: true});
++    t.end();
++  });
++
++  t.test('broad mixed runtime and harness diff emits scope pressure', (t) => {
++    const root = tmp();
++    const oracle = path.join(root, 'oracle.json');
++    fs.writeFileSync(oracle, JSON.stringify({metric: 1, target: 0}));
++    const quest = {
++      id: 'demo',
++      statement: 'Drive metric to zero.',
++      priority: 1,
++      doneWhen: {probe: 'oracle', args: {file: oracle}},
++      frontiers: [
++        {id: 'demo-main', priority: 1,
++          metric: {probe: 'oracle', args: {file: oracle}}},
++      ],
++    };
++    saveQuest(root, quest);
++    const diffPath = path.join(root, 'solve', 'changes', 'demo', 'broad.diff');
++    fs.mkdirSync(path.dirname(diffPath), {recursive: true});
++    fs.writeFileSync(diffPath, [
++      'diff --git a/src/admin/a.js b/src/admin/a.js',
++      '--- a/src/admin/a.js',
++      '+++ b/src/admin/a.js',
++      '@@ -1 +1 @@',
++      '-a',
++      '+b',
++      'diff --git a/src/bootstrap/b.js b/src/bootstrap/b.js',
++      '--- a/src/bootstrap/b.js',
++      '+++ b/src/bootstrap/b.js',
++      '@@ -1 +1 @@',
++      '-a',
++      '+b',
++      'diff --git a/test/distributed/harness/c.js b/test/distributed/harness/c.js',
++      '--- a/test/distributed/harness/c.js',
++      '+++ b/test/distributed/harness/c.js',
++      '@@ -1 +1 @@',
++      '-a',
++      '+b',
++    ].join('\n'));
++    appendEvent(root, quest.id, {
++      type: EVENT_ATTEMPT,
++      frontier: 'demo-main',
++      changeRef: `diff:${diffPath}`,
++      metricBefore: 1,
++      metricAfter: 1,
++    });
++
++    const health = analyzeQuestHealth(root, quest);
++    const signalTypes = health.signals.map((signal) => signal.type);
++    t.ok(signalTypes.includes('broad-source-scope'), 'broad source scope emitted');
++    t.ok(signalTypes.includes('mixed-runtime-and-harness'), 'runtime+harness emitted');
++    t.equal(health.scopePressure.changedPaths.length, 3);
++    fs.rmSync(root, {recursive: true, force: true});
++    t.end();
++  });
+ });
+diff --git a/test/solve/report.test.js b/test/solve/report.test.js
+index 8518ec80..9997cd79 100644
+--- a/test/solve/report.test.js
++++ b/test/solve/report.test.js
+@@ -13,6 +13,7 @@ import {
+   EVENT_THEORY_OPTION_DECLARED,
+   EVENT_THEORY_RESULT,
+   EVENT_THEORY_SELECTED,
++  EVENT_EVIDENCE_INGESTED,
+   STATUS_SOLVED,
+ } from '../../scripts/solve/constants.js';
+ 
+@@ -105,6 +106,49 @@ tap.test('report projection (P2)', async (t) => {
+     t.end();
+   });
+ 
++  t.test('report starts with current blocker and diagnostic movement', (t) => {
++    const root = tmp();
++    saveQuest(root, GOAL);
++    appendEvent(root, GOAL.id, {
++      type: EVENT_EVIDENCE_INGESTED,
++      frontier: 'demo-main',
++      evidence: 'r1.json',
++      metric: 1,
++      done: false,
++      owner: 'startup_active_gate_owner',
++      boundary: 'snapshot_coverage',
++      dominantReason: 'snapshot_coverage=1/5',
++      mechanism: 'ownership_gap',
++    });
++    appendEvent(root, GOAL.id, {
++      type: EVENT_EVIDENCE_INGESTED,
++      frontier: 'demo-main',
++      evidence: 'r2.json',
++      metric: 1,
++      done: false,
++      owner: 'operation_workflow_owner',
++      boundary: 'workflow_progress',
++      dominantReason: 'priority_spread_pending',
++      mechanism: 'observation_gap',
++      nextAction: 'advance_existing_operation',
++    });
++    appendEvent(root, GOAL.id, {
++      type: 'finding',
++      frontier: 'demo-main',
++      claim: 'snapshot retry is no longer first blocker',
++      rulesOut: 'startup snapshot selected-source retry',
++    });
++    const log = readLog(root, GOAL.id);
++    const md = buildReport(GOAL, log, projectState(GOAL, log), root);
++    t.match(md, /## Current Blocker/);
++    t.match(md, /Owner: operation_workflow_owner/);
++    t.match(md, /Boundary: workflow_progress/);
++    t.match(md, /Movement: moved_owner/);
++    t.match(md, /No longer current: .*startup snapshot selected-source retry/);
++    fs.rmSync(root, {recursive: true, force: true});
++    t.end();
++  });
++
+   t.test('closure kind: oracle done_when => DECISION, harness => MEASURED', (t) => {
+     const root = tmp();
+     const decisionQuest = {...GOAL, id: 'decision-quest'};
+diff --git a/test/solve/step-theory-gates.test.js b/test/solve/step-theory-gates.test.js
+index 872873fb..fafaee93 100644
+--- a/test/solve/step-theory-gates.test.js
++++ b/test/solve/step-theory-gates.test.js
+@@ -247,4 +247,41 @@ tap.test('step theory gates', async (t) => {
+     fs.rmSync(root, {recursive: true, force: true});
+     t.end();
+   });
++
++  t.test('stale selected theory blocks widened attempts after owner movement', (t) => {
++    const {root, quest} = setup();
++    commitStep(root, quest, 'a');
++    appendEvent(root, quest.id, {
++      type: 'evidence-ingested',
++      frontier: 'demo-main',
++      evidence: 'r1.json',
++      metric: 3,
++      done: false,
++      owner: 'startup_active_gate_owner',
++      boundary: 'snapshot_coverage',
++      dominantReason: 'snapshot_coverage=1/5',
++    });
++    recordFrontierTheory(root, quest, 'theory-snapshot', 'ownership');
++    appendEvent(root, quest.id, {
++      type: 'evidence-ingested',
++      frontier: 'demo-main',
++      evidence: 'r2.json',
++      metric: 3,
++      done: false,
++      owner: 'operation_workflow_owner',
++      boundary: 'workflow_progress',
++      dominantReason: 'priority_spread_pending',
++    });
++
++    runStep(root, quest);
++    const blocked = runStep(root, quest, {
++      changeRef: makeDiff(root, 'stale'),
++      summary: 'old selected theory',
++      theoryRef: 'theory-snapshot',
++    });
++    t.equal(blocked.terminal, 'theory-required');
++    t.match(blocked.problems.join('\n'), /stale/);
++    fs.rmSync(root, {recursive: true, force: true});
++    t.end();
++  });
+ });
+diff --git a/scripts/solve/current-blocker.js b/scripts/solve/current-blocker.js
+new file mode 100644
+index 00000000..ecffd561
+--- /dev/null
++++ b/scripts/solve/current-blocker.js
+@@ -0,0 +1,315 @@
++import {
++  EVENT_EVIDENCE_INGESTED,
++  EVENT_FINDING,
++  EVENT_THEORY_OPTION_DECLARED,
++  EVENT_THEORY_RESULT,
++  EVENT_THEORY_SELECTED,
++  THEORY_RESULT_ACTIVE,
++  THEORY_RESULT_SUPPORTED,
++} from './constants.js';
++
++const MOVEMENT_NO_EVIDENCE = 'no_evidence';
++const MOVEMENT_NO_PREVIOUS = 'no_previous';
++export const BLOCKER_MOVEMENT_SAME = 'same';
++export const BLOCKER_MOVEMENT_MOVED_OWNER = 'moved_owner';
++export const BLOCKER_MOVEMENT_MOVED_BOUNDARY = 'moved_boundary';
++export const BLOCKER_MOVEMENT_NARROWED = 'narrowed';
++export const BLOCKER_MOVEMENT_SOLVED = 'solved';
++export const BLOCKER_MOVEMENT_INVALID = 'invalid';
++export const BLOCKER_MOVEMENT_UNKNOWN = 'unknown';
++
++const SELECTABLE_THEORY_STATUSES = Object.freeze([
++  THEORY_RESULT_ACTIVE,
++  THEORY_RESULT_SUPPORTED,
++]);
++
++function last(items) {
++  return items.length > 0 ? items[items.length - 1] : null;
++}
++
++function normalizeValue(value) {
++  if (value === undefined || value === null || value === '') return null;
++  if (Array.isArray(value)) return value.join('|') || null;
++  return String(value);
++}
++
++function eventTime(event) {
++  const ts = new Date(event?.ts || 0).getTime();
++  return Number.isFinite(ts) ? ts : 0;
++}
++
++export function evidenceEvents(log, frontierId = null) {
++  return log.filter((event) =>
++    event.type === EVENT_EVIDENCE_INGESTED &&
++    (!frontierId || event.frontier === frontierId));
++}
++
++export function blockerFromEvidence(event = null) {
++  if (!event) return null;
++  return {
++    frontier: event.frontier || null,
++    evidence: event.evidence || null,
++    ts: event.ts || null,
++    owner: normalizeValue(event.owner),
++    boundary: normalizeValue(event.boundary),
++    dominantReason: normalizeValue(event.dominantReason),
++    rootCauseClass: normalizeValue(event.rootCauseClass),
++    mechanism: normalizeValue(event.mechanism),
++    waitMode: normalizeValue(event.waitMode),
++    nextAction: normalizeValue(event.nextAction),
++    verdict: normalizeValue(event.verdict),
++    verdictReason: normalizeValue(event.verdictReason),
++    metric: event.metric ?? null,
++    done: event.done === true,
++    invalidSample: event.invalidSample === true || event.metric === null,
++    summary: normalizeValue(event.summary),
++  };
++}
++
++function blockerLabel(blocker) {
++  if (!blocker) return 'none';
++  return [
++    blocker.owner,
++    blocker.boundary,
++    blocker.dominantReason,
++  ].filter(Boolean).join(' / ') || blocker.dominantReason ||
++    blocker.rootCauseClass || blocker.verdict || 'unknown';
++}
++
++export function classifyBlockerMovement(previous, current) {
++  if (!current) return MOVEMENT_NO_EVIDENCE;
++  if (current.done) return BLOCKER_MOVEMENT_SOLVED;
++  if (current.invalidSample) return BLOCKER_MOVEMENT_INVALID;
++  if (!previous) return MOVEMENT_NO_PREVIOUS;
++  if (previous.owner && current.owner && previous.owner !== current.owner) {
++    return BLOCKER_MOVEMENT_MOVED_OWNER;
++  }
++  if (previous.boundary && current.boundary &&
++    previous.boundary !== current.boundary) {
++    return BLOCKER_MOVEMENT_MOVED_BOUNDARY;
++  }
++  if (previous.dominantReason && current.dominantReason &&
++    previous.dominantReason !== current.dominantReason) {
++    return BLOCKER_MOVEMENT_NARROWED;
++  }
++  if (previous.rootCauseClass && current.rootCauseClass &&
++    previous.rootCauseClass !== current.rootCauseClass) {
++    return BLOCKER_MOVEMENT_NARROWED;
++  }
++  if (previous.mechanism && current.mechanism &&
++    previous.mechanism !== current.mechanism) {
++    return BLOCKER_MOVEMENT_NARROWED;
++  }
++  if (blockerLabel(previous) === blockerLabel(current)) {
++    return BLOCKER_MOVEMENT_SAME;
++  }
++  return BLOCKER_MOVEMENT_UNKNOWN;
++}
++
++function movementSummary(previous, current, movement) {
++  if (!current) return 'no evidence recorded';
++  if (!previous) return `first blocker observed: ${blockerLabel(current)}`;
++  if (movement === BLOCKER_MOVEMENT_SAME) {
++    return `same blocker remains: ${blockerLabel(current)}`;
++  }
++  return `${movement}: ${blockerLabel(previous)} -> ${blockerLabel(current)}`;
++}
++
++export function diagnosticMovementFor(log, frontierId = null) {
++  const events = evidenceEvents(log, frontierId);
++  const current = blockerFromEvidence(last(events));
++  const previous = blockerFromEvidence(events.length > 1 ?
++    events[events.length - 2] :
++    null);
++  const movement = classifyBlockerMovement(previous, current);
++  return {
++    movement,
++    previous,
++    current,
++    summary: movementSummary(previous, current, movement),
++  };
++}
++
++function latestEvidence(log, frontierId = null) {
++  return last(evidenceEvents(log, frontierId));
++}
++
++function latestFindingLines(log, frontierId, limit = 3) {
++  return log.filter((event) =>
++    event.type === EVENT_FINDING &&
++    (!frontierId || event.frontier === frontierId))
++    .slice(-limit)
++    .map((event) => ({
++      claim: event.claim || null,
++      rulesOut: event.rulesOut || null,
++      evidence: event.evidence || null,
++    }));
++}
++
++function selectedTheory(state, frontierId) {
++  const id = state.theories?.selectedByFrontier?.[frontierId];
++  return id ? state.theories.byId[id] || null : null;
++}
++
++function selectedTheoryEvent(log, frontierId, theoryId) {
++  return [...log].reverse().find((event) =>
++    event.type === EVENT_THEORY_SELECTED &&
++    event.frontier === frontierId &&
++    event.theory === theoryId) || null;
++}
++
++function theoryResultAfter(log, theoryId, afterIndex) {
++  return log.some((event, index) =>
++    event.type === EVENT_THEORY_RESULT &&
++    event.theory === theoryId &&
++    index > afterIndex);
++}
++
++function theoryDeclaredEvent(log, theoryId) {
++  return log.find((event) =>
++    event.type === EVENT_THEORY_OPTION_DECLARED &&
++    event.theory === theoryId) || null;
++}
++
++function theoryOwnerMismatch(theory, current) {
++  if (!theory || !current) return false;
++  const theoryOwner = normalizeValue(theory.owner || theory.decidingOwner);
++  const theoryBoundary = normalizeValue(theory.boundary || theory.ownerBoundary);
++  if (theoryOwner && current.owner && theoryOwner !== current.owner) return true;
++  if (theoryBoundary && current.boundary && theoryBoundary !== current.boundary) {
++    return true;
++  }
++  return false;
++}
++
++export function selectedTheoryStaleness(log, state, frontierId) {
++  const theory = selectedTheory(state, frontierId);
++  if (!theory) return {stale: false, theory: null, reason: null};
++  if (!SELECTABLE_THEORY_STATUSES.includes(theory.status)) {
++    return {
++      stale: true,
++      theory,
++      reason: `selected theory status is ${theory.status}`,
++    };
++  }
++  const movement = diagnosticMovementFor(log, frontierId);
++  const currentEvidence = latestEvidence(log, frontierId);
++  const selectedEvent = selectedTheoryEvent(log, frontierId, theory.id) ||
++    theoryDeclaredEvent(log, theory.id);
++  if (theoryOwnerMismatch(theory, movement.current)) {
++    return {
++      stale: true,
++      theory,
++      reason: 'selected theory owner/boundary no longer matches latest evidence',
++      movement,
++    };
++  }
++  if (!currentEvidence || !selectedEvent) {
++    return {stale: false, theory, reason: null, movement};
++  }
++  const currentIndex = log.indexOf(currentEvidence);
++  const selectedIndex = log.indexOf(selectedEvent);
++  const currentTs = eventTime(currentEvidence);
++  const selectedTs = eventTime(selectedEvent);
++  const movementChanged = [
++    BLOCKER_MOVEMENT_MOVED_OWNER,
++    BLOCKER_MOVEMENT_MOVED_BOUNDARY,
++    BLOCKER_MOVEMENT_NARROWED,
++    BLOCKER_MOVEMENT_SOLVED,
++  ].includes(movement.movement);
++  if (
++    (currentIndex > selectedIndex || currentTs > selectedTs) &&
++    movementChanged &&
++    !theoryResultAfter(log, theory.id, currentIndex)
++  ) {
++    return {
++      stale: true,
++      theory,
++      reason: `latest evidence changed blocker (${movement.movement}) after selection`,
++      movement,
++    };
++  }
++  return {stale: false, theory, reason: null, movement};
++}
++
++function nextMove(frontier, staleness, movement) {
++  if (!frontier) return 'No open frontier remains; inspect solve report.';
++  if (staleness.stale) {
++    return `record or select a fresh frontier theory for ${frontier.id}`;
++  }
++  if (movement?.current?.nextAction) {
++    return `${frontier.id}: ${movement.current.nextAction}`;
++  }
++  if (movement?.current?.owner || movement?.current?.boundary) {
++    return `${frontier.id}: inspect ${[
++      movement.current.owner,
++      movement.current.boundary,
++    ].filter(Boolean).join(' / ')}`;
++  }
++  return `continue supervised step for ${frontier.id}`;
++}
++
++export function buildCurrentBlocker({quest, log, state, frontierId = null}) {
++  const evidence = latestEvidence(log, frontierId);
++  const effectiveFrontierId = frontierId || evidence?.frontier ||
++    state.frontiers.find((frontier) => frontier.status === 'open')?.id ||
++    quest.frontiers[0]?.id ||
++    null;
++  const movement = diagnosticMovementFor(log, effectiveFrontierId);
++  const frontier = state.frontiers.find((item) => item.id === effectiveFrontierId) ||
++    null;
++  const staleness = effectiveFrontierId ?
++    selectedTheoryStaleness(log, state, effectiveFrontierId) :
++    {stale: false, theory: null, reason: null};
++  const findings = latestFindingLines(log, effectiveFrontierId);
++  const noLongerCurrentBlockers = [];
++  if (movement.previous &&
++    movement.movement !== BLOCKER_MOVEMENT_SAME &&
++    movement.movement !== MOVEMENT_NO_PREVIOUS &&
++    movement.movement !== MOVEMENT_NO_EVIDENCE) {
++    noLongerCurrentBlockers.push(blockerLabel(movement.previous));
++  }
++  for (const finding of findings) {
++    if (finding.rulesOut) noLongerCurrentBlockers.push(finding.rulesOut);
++  }
++  return {
++    questId: quest.id,
++    frontier: effectiveFrontierId,
++    rungIndex: frontier?.rungIndex ?? null,
++    latestEvidence: movement.current?.evidence || evidence?.evidence || null,
++    owner: movement.current?.owner || null,
++    boundary: movement.current?.boundary || null,
++    dominantReason: movement.current?.dominantReason || null,
++    rootCauseClass: movement.current?.rootCauseClass || null,
++    mechanism: movement.current?.mechanism || null,
++    nextAction: nextMove(frontier, staleness, movement),
++    movement: movement.movement,
++    movementSummary: movement.summary,
++    selectedTheory: staleness.theory?.id || null,
++    selectedTheoryStale: staleness.stale,
++    selectedTheoryStaleReason: staleness.reason,
++    noLongerCurrentBlockers: [...new Set(noLongerCurrentBlockers)].filter(Boolean),
++  };
++}
++
++export function renderCurrentBlocker(blocker) {
++  const lines = ['## Current Blocker'];
++  lines.push(`- Frontier: ${blocker.frontier || 'none'}`);
++  lines.push(`- Owner: ${blocker.owner || 'unknown'}`);
++  lines.push(`- Boundary: ${blocker.boundary || 'unknown'}`);
++  lines.push(`- Dominant reason: ${blocker.dominantReason || 'unknown'}`);
++  lines.push(`- Mechanism: ${blocker.mechanism || 'unknown'}`);
++  lines.push(`- Movement: ${blocker.movementSummary}`);
++  lines.push(`- Latest evidence: ${blocker.latestEvidence || 'none'}`);
++  lines.push(`- Selected theory: ${blocker.selectedTheory || 'none'}${
++    blocker.selectedTheoryStale ?
++      ` (stale: ${blocker.selectedTheoryStaleReason})` :
++      ''
++  }`);
++  lines.push(`- Next move: ${blocker.nextAction}`);
++  if (blocker.noLongerCurrentBlockers.length > 0) {
++    lines.push('- No longer current: ' +
++      blocker.noLongerCurrentBlockers.join('; '));
++  }
++  return lines;
++}
+diff --git a/scripts/solve/scope-pressure.js b/scripts/solve/scope-pressure.js
+new file mode 100644
+index 00000000..2bd20cb5
+--- /dev/null
++++ b/scripts/solve/scope-pressure.js
+@@ -0,0 +1,90 @@
++import {
++  EVENT_ATTEMPT,
++} from './constants.js';
++import {inspectChangeArtifact} from './change-artifact.js';
++
++const BROAD_OWNER_AREA_LIMIT = 2;
++const LARGE_DIFF_FILE_LIMIT = 10;
++
++function ownerAreaForPath(filePath) {
++  const segments = String(filePath || '').split('/');
++  if (segments[0] === 'src' && segments[1]) return `src/${segments[1]}`;
++  if (segments[0] === 'test' && segments[1]) {
++    if (segments[1] === 'distributed' && segments[2]) {
++      return `test/distributed/${segments[2]}`;
++    }
++    return `test/${segments[1]}`;
++  }
++  if (segments[0] === 'scripts' && segments[1]) return `scripts/${segments[1]}`;
++  if (segments[0] === 'docs') return 'docs';
++  if (segments[0] === '.kiro') return '.kiro';
++  if (segments[0] === 'architecture') return 'architecture';
++  if (segments[0] === 'solve') return 'solve';
++  return segments[0] || 'unknown';
++}
++
++function attemptInspections(root, quest, log) {
++  return log.filter((event) => event.type === EVENT_ATTEMPT && event.changeRef)
++    .map((event) => ({
++      event,
++      inspection: inspectChangeArtifact(root, quest, event.changeRef),
++    }));
++}
++
++export function analyzeScopePressure(root, quest, log) {
++  const inspections = attemptInspections(root, quest, log);
++  const changedPaths = [...new Set(inspections.flatMap((entry) =>
++    entry.inspection.changedPaths || []))].sort();
++  const ownerAreas = [...new Set(changedPaths.map(ownerAreaForPath))].sort();
++  const categories = [...new Set(inspections.flatMap((entry) =>
++    entry.inspection.categories || []))].sort();
++  const signals = [];
++  if (ownerAreas.length > BROAD_OWNER_AREA_LIMIT) {
++    signals.push({
++      type: 'broad-source-scope',
++      severity: 'medium',
++      ownerAreas,
++    });
++  }
++  if (changedPaths.length > LARGE_DIFF_FILE_LIMIT) {
++    signals.push({
++      type: 'large-diff-stack',
++      severity: 'medium',
++      fileCount: changedPaths.length,
++    });
++  }
++  if (categories.includes('runtime') && categories.includes('workflow')) {
++    signals.push({
++      type: 'mixed-runtime-and-workflow',
++      severity: 'high',
++    });
++  }
++  if (categories.includes('runtime') &&
++    ownerAreas.some((area) => area.startsWith('test/distributed'))) {
++    signals.push({
++      type: 'mixed-runtime-and-harness',
++      severity: 'medium',
++    });
++  }
++  return {
++    changedPaths,
++    ownerAreas,
++    categories,
++    signals,
++  };
++}
++
++export function renderScopePressure(scopePressure) {
++  const lines = ['## Scope Pressure'];
++  lines.push(`- Changed files: ${scopePressure.changedPaths.length}`);
++  lines.push(`- Owner areas: ${scopePressure.ownerAreas.join(', ') || 'none'}`);
++  lines.push(`- Categories: ${scopePressure.categories.join(', ') || 'none'}`);
++  if (scopePressure.signals.length === 0) {
++    lines.push('- Signals: none');
++  } else {
++    for (const signal of scopePressure.signals) {
++      lines.push(`- Signal: ${signal.type} severity=${signal.severity}`);
++    }
++  }
++  return lines;
++}
+diff --git a/solve/quests/quest-workflow-signal-quality.json b/solve/quests/quest-workflow-signal-quality.json
+new file mode 100644
+index 00000000..6a1a5507
+--- /dev/null
++++ b/solve/quests/quest-workflow-signal-quality.json
+@@ -0,0 +1,30 @@
++{
++  "id": "quest-workflow-signal-quality",
++  "statement": "Quest workflow surfaces live blocker, diagnostic movement, stale theory, and broad scope risks before further attempts.",
++  "priority": 1,
++  "class": "process",
++  "doneWhen": {
++    "probe": "oracle",
++    "args": {
++      "file": "solve/oracle/quest-workflow-signal-quality.json"
++    }
++  },
++  "frontiers": [
++    {
++      "id": "quest-workflow-signal-quality-main",
++      "priority": 1,
++      "metric": {
++        "probe": "oracle",
++        "args": {
++          "file": "solve/oracle/quest-workflow-signal-quality.json"
++        }
++      }
++    }
++  ],
++  "constraints": [
++    {
++      "id": "source-change-subagent-verification",
++      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
++    }
++  ]
++}
+diff --git a/solve/oracle/quest-workflow-signal-quality.json b/solve/oracle/quest-workflow-signal-quality.json
+new file mode 100644
+index 00000000..cdbcc908
+--- /dev/null
++++ b/solve/oracle/quest-workflow-signal-quality.json
+@@ -0,0 +1,5 @@
++{
++  "metric": 0,
++  "target": 0,
++  "done": true
++}

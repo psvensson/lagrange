@@ -191,6 +191,14 @@ function addTheory(theories, event, scope) {
     mechanism: event.mechanism || null,
     problem: event.problem || null,
     intervention: event.intervention || null,
+    owner: event.owner || event.decidingOwner || null,
+    boundary: event.boundary || null,
+    callerRole: event.callerRole || null,
+    missingTransition: event.missingTransition ||
+      event.missingTransitionOrObservation ||
+      null,
+    ownedFixPath: event.ownedFixPath || null,
+    tailConsumers: event.tailConsumers || [],
     discriminator: event.discriminator || null,
     expectedMovement: event.expectedMovement || null,
     negativeResultMeans: event.negativeResultMeans || null,
@@ -225,6 +233,10 @@ function applyTheoryResult(theories, event) {
   if (!theory) return;
   const result = {
     result: event.result || null,
+    scenarioOutcome: event.scenarioOutcome || null,
+    theoryOutcome: event.theoryOutcome || null,
+    blockerMovement: event.blockerMovement || null,
+    diagnosticMovement: event.diagnosticMovement || null,
     evidence: event.evidence || null,
     validation: event.validation || null,
     attemptFrontier: event.frontier || null,

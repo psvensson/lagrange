@@ -104,12 +104,12 @@
     }
   ],
   "stats": {
-    "candidateCount": 239,
-    "dedupedRuleCount": 233,
-    "exportedRuleCount": 233,
+    "candidateCount": 242,
+    "dedupedRuleCount": 236,
+    "exportedRuleCount": 236,
     "aliasRuleCount": 0,
-    "masterRuleCount": 233,
-    "estimatedAllRulesTokens": 7808
+    "masterRuleCount": 236,
+    "estimatedAllRulesTokens": 7914
   },
   "rules": [
     {
@@ -2737,19 +2737,36 @@
       "id": "GOV-0019",
       "domain": "governance",
       "strength": "must_not",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "Do not keep patching under a theory whose owner path is no longer current.",
+      "score": 206,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 130,
+          "section": "Quest Workflow > Current Blocker And Diagnostic Movement"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0020",
+      "domain": "governance",
+      "strength": "must_not",
       "tags": [],
       "rule": "A Quest must not accumulate an unrecoverable dirty tree.",
       "score": 206,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 93,
+          "line": 146,
           "section": "Quest Workflow > Regular Commit And Push"
         }
       ]
     },
     {
-      "id": "GOV-0020",
+      "id": "GOV-0021",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2760,23 +2777,8 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 93,
-          "section": "Quest Workflow > Regular Commit And Push"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0021",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "Do not revive sprint/package theory state as active authority.",
-      "score": 206,
-      "sources": [
-        {
-          "file": "workflow-guidelines/solver-quests.md",
           "line": 146,
-          "section": "Quest Workflow > Two-Layer Theory"
+          "section": "Quest Workflow > Regular Commit And Push"
         }
       ]
     },
@@ -2785,13 +2787,13 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "If the verifier finds issues, fix them or record a finding that explains why the Quest must continue; do not proceed to git handoff from an unresolved verifier finding.",
+      "rule": "Do not revive sprint/package theory state as active authority.",
       "score": 206,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 208,
-          "section": "Quest Workflow > Source Change Verification"
+          "line": 231,
+          "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
     },
@@ -2800,13 +2802,13 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "Do not include unrelated dirty worktree entries from another Quest.",
-      "score": 206,
+      "rule": "If the verifier finds issues, fix them or record a finding that explains why the Quest must continue; do not proceed to git handoff from an unresolved verifier finding.",
+      "score": 205,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 219,
-          "section": "Quest Workflow > Git Handoff"
+          "line": 293,
+          "section": "Quest Workflow > Source Change Verification"
         }
       ]
     },
@@ -2815,12 +2817,27 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
+      "rule": "Do not include unrelated dirty worktree entries from another Quest.",
+      "score": 205,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 304,
+          "section": "Quest Workflow > Git Handoff"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0025",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
       "rule": "Do not rely on solve/state/ as durable memory.",
       "score": 205,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 283,
+          "line": 368,
           "section": "Quest Workflow > Tracked Versus Regenerable"
         }
       ]
@@ -2841,7 +2858,7 @@
       ]
     },
     {
-      "id": "GOV-0025",
+      "id": "GOV-0026",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3043,7 +3060,7 @@
       ]
     },
     {
-      "id": "GOV-0026",
+      "id": "GOV-0027",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3058,7 +3075,7 @@
       ]
     },
     {
-      "id": "GOV-0027",
+      "id": "GOV-0028",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3069,13 +3086,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 155,
+          "line": 240,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
     },
     {
-      "id": "GOV-0028",
+      "id": "GOV-0029",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3084,13 +3101,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 156,
+          "line": 241,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
     },
     {
-      "id": "GOV-0029",
+      "id": "GOV-0030",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3101,13 +3118,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 158,
+          "line": 243,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
     },
     {
-      "id": "GOV-0030",
+      "id": "GOV-0031",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3116,7 +3133,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 268,
+          "line": 353,
           "section": "Quest Workflow > Terminal And Blocking Conditions"
         }
       ]
@@ -3156,7 +3173,7 @@
       ]
     },
     {
-      "id": "GOV-0031",
+      "id": "GOV-0032",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3173,7 +3190,7 @@
       ]
     },
     {
-      "id": "GOV-0032",
+      "id": "GOV-0033",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3188,7 +3205,7 @@
       ]
     },
     {
-      "id": "GOV-0033",
+      "id": "GOV-0034",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3218,7 +3235,7 @@
       ]
     },
     {
-      "id": "GOV-0034",
+      "id": "GOV-0035",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3227,7 +3244,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 262,
+          "line": 347,
           "section": "Quest Workflow > Terminal And Blocking Conditions"
         }
       ]
@@ -3322,33 +3339,33 @@
       ]
     },
     {
-      "id": "GOV-0035",
+      "id": "GOV-0036",
       "domain": "governance",
       "strength": "must",
       "tags": [
         "readiness"
       ],
       "rule": "Every Quest that changes source code must spawn a subagent verifier after the final source diff is ready and before node scripts/solve.js audit --id <id> is used for handoff.",
-      "score": 188,
+      "score": 187,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 196,
+          "line": 281,
           "section": "Quest Workflow > Source Change Verification"
         }
       ]
     },
     {
-      "id": "GOV-0036",
+      "id": "GOV-0037",
       "domain": "governance",
       "strength": "must",
       "tags": [],
       "rule": "The verifier must inspect the Quest intent, touched source diff, system guidelines, and applicable doctrine.",
-      "score": 188,
+      "score": 187,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 196,
+          "line": 281,
           "section": "Quest Workflow > Source Change Verification"
         }
       ]
@@ -3471,7 +3488,7 @@
       ]
     },
     {
-      "id": "GOV-0037",
+      "id": "GOV-0038",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3486,7 +3503,7 @@
       ]
     },
     {
-      "id": "GOV-0038",
+      "id": "GOV-0039",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3494,11 +3511,11 @@
         "governance"
       ],
       "rule": "It runs the audit and refuses on failure, derives the in-scope set purely from the Quest's sealed solve/ artifacts plus the source/test files named inside its own diffs, and lists every other dirty file as out-of-scope so it is never swept in.",
-      "score": 182,
+      "score": 181,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 223,
+          "line": 308,
           "section": "Quest Workflow > Git Handoff"
         }
       ]
@@ -3652,7 +3669,7 @@
       ]
     },
     {
-      "id": "GOV-0039",
+      "id": "GOV-0040",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3759,7 +3776,7 @@
       ]
     },
     {
-      "id": "GOV-0040",
+      "id": "GOV-0041",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -3768,28 +3785,28 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 132,
+          "line": 185,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
     },
     {
-      "id": "GOV-0041",
+      "id": "GOV-0042",
       "domain": "governance",
       "strength": "should",
       "tags": [],
       "rule": "optional rulesOut text for approaches that should not be retried.",
-      "score": 166,
+      "score": 165,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 248,
+          "line": 333,
           "section": "Quest Workflow > Findings Log"
         }
       ]
     },
     {
-      "id": "GOV-0042",
+      "id": "GOV-0043",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -3804,7 +3821,7 @@
       ]
     },
     {
-      "id": "GOV-0043",
+      "id": "GOV-0044",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -3836,6 +3853,21 @@
       ]
     },
     {
+      "id": "GOV-0045",
+      "domain": "governance",
+      "strength": "should",
+      "tags": [],
+      "rule": "It is advisory rather than terminal, but a high-severity signal should usually produce a finding, a narrower theory, or a split Quest before more code is changed.",
+      "score": 156,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 137,
+          "section": "Quest Workflow > Current Blocker And Diagnostic Movement"
+        }
+      ]
+    },
+    {
       "id": "ARCH-0102",
       "domain": "architecture",
       "strength": "may",
@@ -3851,7 +3883,7 @@
       ]
     },
     {
-      "id": "GOV-0044",
+      "id": "GOV-0046",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -3881,7 +3913,24 @@
       ]
     },
     {
-      "id": "GOV-0045",
+      "id": "GOV-0047",
+      "domain": "governance",
+      "strength": "may",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "When a metric does not improve but the blocker moves owner, boundary, or mechanism, the selected theory may be recorded as supported with theoryOutcome=partial.",
+      "score": 140,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 124,
+          "section": "Quest Workflow > Current Blocker And Diagnostic Movement"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0048",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -3890,13 +3939,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 146,
+          "line": 231,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
     },
     {
-      "id": "GOV-0046",
+      "id": "GOV-0049",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -3907,13 +3956,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 283,
+          "line": 368,
           "section": "Quest Workflow > Tracked Versus Regenerable"
         }
       ]
     },
     {
-      "id": "GOV-0047",
+      "id": "GOV-0050",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -3930,5 +3979,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-06-02T14:33:38.095Z"
+  "generatedAt": "2026-06-02T16:45:49.786Z"
 }

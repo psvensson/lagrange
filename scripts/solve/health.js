@@ -13,6 +13,11 @@ import {pickFrontier} from './scheduler.js';
 import {projectState, readLog} from './store.js';
 import {detectUnrecordedEvidence} from './evidence.js';
 import {modelGuidanceForQuest} from './model-guidance.js';
+import {
+  buildCurrentBlocker,
+  selectedTheoryStaleness,
+} from './current-blocker.js';
+import {analyzeScopePressure} from './scope-pressure.js';
 
 const NUM_TWO = 2;
 const NUM_THREE = 3;
@@ -111,6 +116,9 @@ function frontierNeeds(quest, state, log, frontier) {
   const selectedUsable = selected &&
     selected.archive !== true &&
     SELECTABLE_THEORY_STATUSES.includes(selected.status);
+  const staleness = selected ?
+    selectedTheoryStaleness(log, state, frontier.id) :
+    {stale: false, reason: null};
   const noProgress = noProgressAttempts(log, frontier.id);
 
   const evidenceEvents = log.filter((e) => e.type === 'evidence-ingested');
@@ -140,6 +148,8 @@ function frontierNeeds(quest, state, log, frontier) {
     modelEvidenceRecommended: Boolean(modelGuidance),
     modelGuidance,
     selectedTheory: selected ? selected.id : null,
+    selectedTheoryStale: staleness.stale,
+    selectedTheoryStaleReason: staleness.reason,
     noProgressCount: noProgress.length,
   };
 }
@@ -158,6 +168,9 @@ function nextActionFor(frontier, needs) {
       '';
     return `record and select frontier theory for ${frontier.id}${suffix}`;
   }
+  if (needs.selectedTheoryStale) {
+    return `record or select a fresh frontier theory for ${frontier.id}`;
+  }
   if (needs.modelEvidenceRequired) {
     return `continue ${frontier.id} with modelRef or modelNotApplicable evidence`;
   }
@@ -172,6 +185,8 @@ export function analyzeQuestHealth(root, quest, options = {}) {
   const frontier = pick?.state || null;
   const needs = frontier ? frontierNeeds(quest, state, log, frontier) : {};
   const theories = frontier ? lastAttemptTheories(log, state, frontier.id) : [];
+  const currentBlocker = buildCurrentBlocker({quest, log, state});
+  const scopePressure = analyzeScopePressure(root, quest, log);
   const signals = [
     sameMechanismSignal(theories),
     layerPingPongSignal(theories),
@@ -251,6 +266,13 @@ export function analyzeQuestHealth(root, quest, options = {}) {
       severity: 'medium',
     });
   }
+  if (frontier && needs.selectedTheoryStale) {
+    signals.push({
+      type: 'selected-theory-stale',
+      mechanism: needs.selectedTheoryStaleReason || frontier.id,
+      severity: 'high',
+    });
+  }
   if (frontier && needs.modelGuidance) {
     signals.push({
       type: needs.modelEvidenceRequired ?
@@ -271,6 +293,9 @@ export function analyzeQuestHealth(root, quest, options = {}) {
       severity: 'high',
     });
   }
+  for (const signal of scopePressure.signals) {
+    signals.push(signal);
+  }
 
   const rungName = frontier ? (quest.frontiers.find((item) =>
     item.id === frontier.id)?.rung || null) : null;
@@ -287,6 +312,8 @@ export function analyzeQuestHealth(root, quest, options = {}) {
     ),
     needs,
     modelGuidance: needs.modelGuidance || null,
+    currentBlocker,
+    scopePressure,
     reopens,
     cannotMeasureParked: cannotMeasureParked.map((f) => ({
       id: f.id,
@@ -304,6 +331,12 @@ export function renderHealth(health) {
   lines.push(`- rungIndex: ${health.rungIndex ?? 'none'}`);
   lines.push(`- reopens: ${health.reopens || 0}`);
   lines.push(`- nextAction: ${health.nextAction}`);
+  if (health.currentBlocker) {
+    lines.push(`- currentOwner: ${health.currentBlocker.owner || 'unknown'}`);
+    lines.push(`- currentBoundary: ${health.currentBlocker.boundary || 'unknown'}`);
+    lines.push(`- currentReason: ${health.currentBlocker.dominantReason || 'unknown'}`);
+    lines.push(`- blockerMovement: ${health.currentBlocker.movement || 'unknown'}`);
+  }
   lines.push('', '## Signals');
   if (health.signals.length === 0) {
     lines.push('- none');
@@ -318,6 +351,11 @@ export function renderHealth(health) {
     lines.push(`- modelRef: ${health.modelGuidance.modelRef}`);
     lines.push(`- reportPattern: ${health.modelGuidance.reportPattern}`);
     lines.push(`- reasons: ${health.modelGuidance.reasons.join(', ')}`);
+  }
+  if (health.scopePressure) {
+    lines.push('', '## Scope Pressure');
+    lines.push(`- changedFiles: ${health.scopePressure.changedPaths.length}`);
+    lines.push(`- ownerAreas: ${health.scopePressure.ownerAreas.join(', ') || 'none'}`);
   }
   return `${lines.join('\n')}\n`;
 }

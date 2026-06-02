@@ -14,6 +14,8 @@ from a worker's self-report.
 | Attempt | One recorded try: hypothesis, metric before -> after, changeRef. |
 | Finding | Durable knowledge: a claim, optional evidence, optional `rulesOut`. |
 | Theory | Durable two-layer reasoning: system theory plus selected frontier theory. |
+| Current Blocker | Latest owner/boundary/reason projection from ingested evidence. |
+| Scope Pressure | Advisory signal from recorded `diff:<path>` artifacts. |
 | Report (`solve/report/<id>.md`) | Read-only projection of the event log and terminal state. |
 
 `doneWhen` is binary terminal success. `metric` is a progress gradient. Keep them
@@ -27,6 +29,33 @@ local-fix -> widen-scope -> model -> change-approach -> park
 
 Honest progress keeps the rung, a stall climbs it, and `park` redirects the
 scheduler to another frontier. The run stops on **SOLVED** or **EXHAUSTED**.
+
+## Reading The Current Blocker
+
+Use the status, health, and report views before widening a fix:
+
+```sh
+node scripts/solve.js status --id <quest>
+node scripts/solve.js health --id <quest>
+node scripts/solve.js report --id <quest>
+```
+
+The Current Blocker card is the active failure surface. It reports the latest
+frontier, owner, boundary, dominant reason, selected theory, latest evidence,
+and next move. Its `movement` field tells whether the latest evidence left the
+blocker `same`, `moved_owner`, `moved_boundary`, `narrowed`, `solved`,
+`invalid`, or `unknown`.
+
+Metric movement is still the only product progress, and `doneWhen` is still the
+only closure condition. Blocker movement is diagnostic progress: it can justify
+recording partial theory support, a fresh owner-path theory, or a finding that a
+previous blocker is no longer current.
+
+Scope Pressure appears in `health` and `report`. It scans the Quest's recorded
+attempt diffs and flags broad owner areas, large diff stacks, mixed
+runtime/workflow changes, and mixed runtime/harness changes. A high-severity
+signal is not an automatic failure, but it is a strong prompt to narrow the next
+theory, split work, or record why the Quest scope is still honest.
 
 ## Authoring A Quest
 
@@ -152,11 +181,21 @@ node scripts/solve.js theory option --id rolling-restart \
   --negative-result "same metric falsifies observation-only fix" \
   --discriminator "npm run analyze:topology-convergence -- <report>" \
   --promotion "fresh owner evidence identifies a source path" \
-  --rejection "fresh evidence keeps the same blocker"
+  --rejection "fresh evidence keeps the same blocker" \
+  --owner startup_active_gate_owner \
+  --boundary publication_visibility \
+  --caller-role startup_active_gate_observer \
+  --missing-transition "observer wakes after publication handoff" \
+  --owned-fix-path src/bootstrap \
+  --tail-consumer cluster_startup
 
 node scripts/solve.js theory select --id rolling-restart \
   --frontier rolling-restart-main --theory theory-fresh-observation
 ```
+
+Owner-path fields are optional for simple local work. Add them whenever the
+Current Blocker identifies an owner/boundary path; they let the Solver detect
+when later evidence has made the selected theory stale.
 
 Record learning explicitly when a discriminator or attempt settles a theory:
 
@@ -168,6 +207,24 @@ node scripts/solve.js theory record --id rolling-restart \
 
 Supported results are `active`, `supported`, `falsified`, `superseded`,
 `avoided`, `stale`, and `needs-rerun`.
+
+When an attempt does not move the metric but does move the blocker, split the
+scenario outcome from the theory outcome:
+
+```sh
+node scripts/solve.js theory record --id rolling-restart \
+  --theory theory-fresh-observation --result supported \
+  --scenario-outcome failed \
+  --theory-outcome partial \
+  --blocker-movement moved_boundary \
+  --diagnostic-movement "publication visibility moved to workflow progress" \
+  --evidence test-output/reports/rolling-restart.report.json
+```
+
+Use `scenarioOutcome=invalid` and `theoryOutcome=needs-rerun` when the evidence
+sample did not measure. Use `theoryOutcome=falsified` when the same blocker
+recurs after a valid measurement. Use `theoryOutcome=supported` only when the
+metric improved or `doneWhen` passed.
 
 The supervised step gate and autonomous loop preflight enforce theory only when
 it becomes valuable:
@@ -186,6 +243,15 @@ node scripts/solve.js theory list --id rolling-restart
 node scripts/solve.js health --id rolling-restart
 node scripts/solve.js theory card --evidence test-output/reports/rolling-restart.report.json
 ```
+
+If `health` prints `selected-theory-stale`, do one of these before another
+widened/model/change-approach attempt:
+
+- record the selected theory result with the latest evidence and movement;
+- select a fresh frontier theory whose owner/boundary matches the Current
+  Blocker;
+- record a finding explaining why the current evidence should not retire the
+  selected theory.
 
 ## Quest Audit
 

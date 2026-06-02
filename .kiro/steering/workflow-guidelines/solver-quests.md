@@ -88,6 +88,59 @@ re-running an unchanged harness only reproduces the same non-measuring loop. Fix
 the harness (or change the attempt evidence) before reopening again, so reopen and
 park can never oscillate forever.
 
+## Current Blocker And Diagnostic Movement
+
+`status`, `health`, and `report` project a **Current Blocker** from the latest
+ingested evidence for the active frontier. The card names the owner, boundary,
+dominant reason, latest evidence artifact, selected theory, stale-theory reason
+when present, and the next move the Solver expects. Treat this as the active
+failure surface. Older blockers remain useful only as findings or "no longer
+current" context.
+
+Every evidence ingestion classifies blocker movement:
+
+- `same`: the same owner/boundary/reason remains.
+- `moved_owner`: the blocker crossed to a different owner.
+- `moved_boundary`: the owner stayed stable but the boundary changed.
+- `narrowed`: the owner/boundary stayed stable while reason, root-cause class,
+  or mechanism changed.
+- `solved`: the evidence satisfies `doneWhen`.
+- `invalid`: the latest sample did not measure a valid metric.
+- `unknown`: evidence changed, but not along a recognized owner path.
+
+The movement classification is recorded on evidence, attempts, and theory
+results as `blockerMovement` / `diagnosticMovement`. It gives credit for useful
+diagnostic progress without pretending that the Quest moved closer to closure:
+metric movement remains the only product progress, and `doneWhen` remains the
+only closure predicate.
+
+A theory result records two outcomes:
+
+- `scenarioOutcome`: what happened to the measured scenario (`improved`,
+  `failed`, `invalid`, or `done`).
+- `theoryOutcome`: what the attempt taught about the theory (`supported`,
+  `partial`, `falsified`, or `needs-rerun`).
+
+When a metric does not improve but the blocker moves owner, boundary, or
+mechanism, the selected theory may be recorded as `supported` with
+`theoryOutcome=partial`. This keeps the theory selectable as useful diagnostic
+learning while making the report clear that the scenario itself is still not
+solved.
+
+Selected frontier theories are stale when later evidence changes the current
+blocker after selection and no theory result has recorded that learning, or when
+the selected theory's owner/boundary no longer matches the latest evidence.
+`health`, supervised `step`, and autonomous preflight then stop widened work with
+the next action: record the old theory result or select a fresh frontier theory.
+Do not keep patching under a theory whose owner path is no longer current.
+
+`health` and `report` also project **Scope Pressure** from the Quest's recorded
+`diff:<path>` attempt artifacts. Scope pressure flags broad owner areas, large
+diff stacks, mixed runtime/workflow changes, and mixed runtime/harness changes.
+It is advisory rather than terminal, but a high-severity signal should usually
+produce a finding, a narrower theory, or a split Quest before more code is
+changed.
+
 ## Regular Commit And Push
 
 A Quest must not accumulate an unrecoverable dirty tree. The Solver commits — and
@@ -141,6 +194,38 @@ node scripts/solve.js theory select --id <id> --frontier <frontier> --theory <th
 node scripts/solve.js theory record --id <id> --theory <theory-id> --result supported|falsified|superseded|avoided|stale|needs-rerun ...
 node scripts/solve.js theory card --evidence <artifact>
 node scripts/solve.js health --id <id>
+```
+
+Frontier theories should name their owner path when the evidence exposes one:
+
+```sh
+node scripts/solve.js theory option --id <id> --frontier <frontier> \
+  --layer ownership --mechanism operation_workflow_owner \
+  --intervention "advance persisted recovery operations" \
+  --expected-movement "current blocker moves from workflow_progress to completion" \
+  --negative-result "same operation workflow blocker remains" \
+  --discriminator "npm run model:contracts && <scenario probe>" \
+  --promotion "owner/boundary evidence changes or doneWhen passes" \
+  --rejection "same owner/boundary/reason recurs" \
+  --owner operation_workflow_owner \
+  --boundary workflow_progress \
+  --caller-role startup_active_gate_owner \
+  --missing-transition "pending recovery operation is advanced after restart" \
+  --owned-fix-path src/rebalancer \
+  --tail-consumer startup_active_gate_owner
+```
+
+Record results with the scenario/theory split and movement fields when an
+attempt changed what the Quest now knows:
+
+```sh
+node scripts/solve.js theory record --id <id> --theory <theory-id> \
+  --result supported \
+  --scenario-outcome failed \
+  --theory-outcome partial \
+  --blocker-movement moved_boundary \
+  --diagnostic-movement "owner stayed stable; boundary moved to workflow_progress" \
+  --evidence test-output/reports/<scenario>.report.json
 ```
 
 Do not revive sprint/package theory state as active authority. The archived

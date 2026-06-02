@@ -74,6 +74,8 @@ function theoryGateResult(problems, pick) {
     item.includes('theory required') ||
     item.includes('frontier theory required') ||
     item.includes('system theory required') ||
+    item.includes('fresh frontier theory') ||
+    item.includes('fresh theory selection required') ||
     item.includes('theory result required') ||
     item.includes('theory result update required'))) {
     return {
