@@ -9,7 +9,7 @@
 **Attempts:** 7
 
 ## Frontiers
-- **rolling-restart-core-stability-main** [open] rung 1, attempts 7, metric 1 -> 0 — Concern-1 metric-validity fix: the ladder climb to park included a non-measuring (execution_incomplete) harness sample that the pre-fix probe counted as a real metric 0, so the 'ladder exhausted without metric movement' park verdict is not trustworthy. Reopen at rung 0 for fresh, honestly-measured attempts; doneWhen and frontier metric are unchanged and parkedCount is preserved.
+- **rolling-restart-core-stability-main** [open] rung 1, attempts 7, reopened 1, metric 1 -> 0 — Concern-1 metric-validity fix: the ladder climb to park included a non-measuring (execution_incomplete) harness sample that the pre-fix probe counted as a real metric 0, so the 'ladder exhausted without metric movement' park verdict is not trustworthy. Reopen at rung 0 for fresh, honestly-measured attempts; doneWhen and frontier metric are unchanged and parkedCount is preserved.
 
 ## Findings
 - **rolling-restart-core-stability-main**: Quest probe priority metric is now zero, but doneWhen remains false until three consecutive rolling-restart runs pass. (rules out: Do not claim SOLVED from metric zero without the consecutive doneWhen evidence.) [test-output/reports/rolling-restart-core-stability-after-local-mutation-gate.report.json]
@@ -29,6 +29,7 @@
 - **rolling-restart-core-stability-main**: Ingested evidence from rolling-restart-core-stability-after-logs-pressure-and-harness-import.report.json. Metric: 0 -> 0. Verdict: FAIL_CORE_INVARIANT (core_invariant_or_safety_violation). Root cause: topology. Dominant reason: publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72. Owner: operation_workflow_owner. Ingestion outcome: changed. [test-output/reports/rolling-restart-core-stability-after-logs-pressure-and-harness-import.report.json]
 - **rolling-restart-core-stability-main**: Ingested evidence from rolling-restart-core-stability-after-recovery-eligible-target-follow-up.report.json. Metric: 0 -> 0. Verdict: BLOCK_HARNESS_INVALID (harness_connectivity_or_system_failure). Root cause: unknown. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/rolling-restart-core-stability-after-recovery-eligible-target-follow-up.report.json]
 - **rolling-restart-core-stability-main**: Ingested evidence from rolling-restart-core-stability-after-critical-transport-source-reserve.report.json. Metric: 0 -> 0. Verdict: BLOCK_EVIDENCE_INCOMPLETE (execution_incomplete_or_metrics_missing). Root cause: topology. Dominant reason: priority_recovery_rebalancer_handoff_retry_scheduled. Owner: operation_workflow_owner. Ingestion outcome: changed. [test-output/reports/rolling-restart-core-stability-after-critical-transport-source-reserve.report.json]
+- **rolling-restart-core-stability-main**: Independent subagent verifier APPROVED the rolling-restart source diffs: confirmed each diff (strict-priority-bootstrap, critical-transport-source-reserve, reserved-critical-source-dispatch-budget, priority-recovery-eligible-follow-up-target, operation-workflow-transition-retry-uninitialized-rearm, local-runtime-progress, recovery-system-table-select-routing, system-pause-removal) is applied and coherent in current src/, respects owner boundaries and runtime contracts, and introduces no regressions; solver suite 372 assertions pass. [subagent:rolling-verifier]
 
 ## Theories
 - **theory-20260601-rolling-restart-evidence-closure** [active] system, mechanism observation_gap
@@ -41,10 +42,11 @@
 - **theory-20260601-readiness-probe-timeout-restart** [falsified] frontier, frontier rolling-restart-core-stability-main, layer model, mechanism readiness_probe_timeout
 - **theory-20260601-startup-active-before-sql-serviceable** [falsified] frontier, frontier rolling-restart-core-stability-main, layer model, mechanism startup active admission declares the cluster usable before SQL/query transport control-plane serviceability is true for the canonical leader
 - **theory-20260602-priority-recovery-eligible-target-handoff** [falsified] frontier, frontier rolling-restart-core-stability-main, layer model, mechanism priority recovery follow-up target pre-selector rejects recovery-eligible lease-incomplete targets before workflow-owned handoff creation, modelGate npm run model:contracts
-- **theory-20260602-critical-transport-source-reserve** [needs-rerun] frontier, frontier rolling-restart-core-stability-main, layer model, mechanism critical, modelGate npm run model:contracts
+- **theory-20260602-critical-transport-source-reserve** [falsified] frontier, frontier rolling-restart-core-stability-main, layer model, mechanism critical, modelGate npm run model:contracts
+- **theory-20260602-reserved-critical-source-dispatch-budget** [active] frontier, frontier rolling-restart-core-stability-main, layer model, mechanism critical_source_dispatch_budget, modelGate npm run model:contracts
 
 ## Selected Theories
-- **rolling-restart-core-stability-main**: theory-20260602-critical-transport-source-reserve
+- **rolling-restart-core-stability-main**: theory-20260602-reserved-critical-source-dispatch-budget
 
 ## Theory Results
 - **theory-20260601-rolling-restart-consecutive-proof**: needs-rerun [test-output/reports/rolling-restart-core-stability-after-priority-local-first.report.json]
@@ -66,6 +68,7 @@
 - **theory-20260602-priority-recovery-eligible-target-handoff**: falsified [test-output/reports/rolling-restart-core-stability-after-recovery-eligible-target-follow-up.report.json]
 - **theory-20260602-critical-transport-source-reserve**: falsified [test-output/reports/rolling-restart-core-stability-after-critical-transport-source-reserve.report.json]
 - **theory-20260602-critical-transport-source-reserve**: needs-rerun [test-output/reports/rolling-restart-core-stability-after-critical-transport-source-reserve.report.json]
+- **theory-20260602-critical-transport-source-reserve**: falsified [test-output/reports/rolling-restart-core-stability-after-critical-transport-source-reserve.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | theory | change |
