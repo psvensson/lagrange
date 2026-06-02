@@ -122,6 +122,7 @@ function cmdRun(root, args) {
   const executor = buildExecutor(root, id, args);
   const options = {executor};
   if (args.max !== undefined) options.maxCycles = Number(args.max);
+  if (args['no-push']) options.push = false;
   const result = runLoop(root, quest, options);
   const {file} = writeReport(root, id);
   const problems = result.problems?.length ?
@@ -130,6 +131,7 @@ function cmdRun(root, args) {
   process.stdout.write(
     `terminal: ${result.outcome}\nevidence: ${result.evidence || '(none)'}\n` +
     problems +
+    commitLine(result.commit) +
     `report: ${file}\n`);
 }
 
@@ -217,6 +219,7 @@ function cmdStep(root, args) {
     changeRef: typeof args.changeRef === 'string' ? args.changeRef : undefined,
     summary: typeof args.summary === 'string' ? args.summary : undefined,
     force: Boolean(args.force),
+    push: args['no-push'] ? false : undefined,
     ...theoryCommitArgs(args),
   });
   if (r.terminal === 'theory-required') {
@@ -246,7 +249,18 @@ function cmdStep(root, args) {
   const viol = r.violations.length ? ` violations: ${r.violations.join('; ')}` : '';
   process.stdout.write(
     `recorded attempt on ${r.frontier}: metric ${r.before} -> ${r.after} ` +
-    `(${moved})${r.done ? ' DONE' : ''}${viol}\n`);
+    `(${moved})${r.done ? ' DONE' : ''}${viol}\n${commitLine(r.commit)}`);
+}
+
+// One-line human summary of the auto commit+push outcome (R1), printed after a step.
+function commitLine(commit) {
+  if (!commit) return '';
+  if (commit.committed) {
+    const push = commit.pushed ? 'pushed' :
+      (commit.pushError ? `push failed (commit kept): ${commit.pushError}` : 'not pushed');
+    return `committed ${commit.paths.length} path(s), ${push}\n`;
+  }
+  return `no auto-commit (${commit.skipped})\n`;
 }
 
 function cmdTheory(root, args) {

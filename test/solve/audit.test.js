@@ -5,6 +5,7 @@ import os from 'node:os';
 
 import {auditQuest} from '../../scripts/solve/audit.js';
 import {runStep} from '../../scripts/solve/step.js';
+import {writeReport} from '../../scripts/solve/report.js';
 import {appendEvent, saveQuest} from '../../scripts/solve/store.js';
 
 function tmp() {
@@ -245,6 +246,7 @@ tap.test('Quest audit', async (t) => {
       claim: 'Subagent verifier approved source changes against Quest intent, system guidelines, and doctrine.',
       evidence: 'subagent:019e870d-3b19-7fa3-ae37-a85868b84226',
     });
+    writeReport(root, quest.id);
 
     audit = auditQuest(root, quest);
     t.equal(audit.status, 'pass');
@@ -299,6 +301,7 @@ tap.test('Quest audit', async (t) => {
       claim: 'Model evidence from architecture contract report passed.',
       evidence: 'test-output/reports/core-system-logic-alloy.model.report.json',
     });
+    writeReport(root, quest.id);
 
     audit = auditQuest(root, quest);
     t.equal(audit.status, 'pass');

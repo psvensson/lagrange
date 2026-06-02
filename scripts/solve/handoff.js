@@ -88,7 +88,10 @@ export function classifyDirtyPaths(dirtyFiles, scope) {
 }
 
 function gitDirtyFiles(root) {
-  const output = execFileSync('git', ['status', '--porcelain'], {
+  // -uall lists individual untracked files; without it git collapses a wholly
+  // untracked directory (e.g. a brand-new quest's solve/ tree) into one entry,
+  // which would never match the Quest's per-file scope.
+  const output = execFileSync('git', ['status', '--porcelain', '-uall'], {
     cwd: root,
     encoding: 'utf8',
   });
@@ -122,12 +125,19 @@ export function buildHandoff(root, quest, options = {}) {
   };
 }
 
+const COAUTHOR_TRAILER =
+  'Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>';
+
+function commitMessage(handoff) {
+  return `${handoff.questId}: ${handoff.summary}\n\n${COAUTHOR_TRAILER}`;
+}
+
 function gitCommands(handoff) {
   if (handoff.inScope.length === 0) return [];
-  const message = `${handoff.questId}: ${handoff.summary}`;
   return [
     ['git', 'add', '--', ...handoff.inScope],
-    ['git', 'commit', '-m', message],
+    ['git', 'commit', '--only', '-m', commitMessage(handoff), '--',
+      ...handoff.inScope],
     ['git', 'push'],
   ];
 }
@@ -172,6 +182,67 @@ function executeCommit(root, handoff) {
   for (const command of gitCommands(handoff)) {
     execFileSync(command[0], command.slice(1), {cwd: root, stdio: 'inherit'});
   }
+}
+
+// Is `root` inside a real git work tree? Auto-commit must be a no-op in throwaway
+// tmpdirs (e.g. the unit-test fixtures) and anywhere git is unavailable, so we never
+// surface a hard failure for an environment that simply isn't a repository.
+function insideWorkTree(root) {
+  try {
+    const out = execFileSync('git', ['rev-parse', '--is-inside-work-tree'], {
+      cwd: root,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    return out.trim() === 'true';
+  } catch {
+    return false;
+  }
+}
+
+// Auto commit (and optionally push) a Quest's in-scope work as it progresses, so the
+// Solver routinely persists its own scope-clean changes instead of accumulating an
+// unrecoverable dirty tree. This is the programmatic counterpart of `handoff --commit`
+// and obeys the same scope and honesty rules:
+//   - never runs outside a git work tree (returns {skipped:'not-a-git-work-tree'});
+//   - refuses when the Quest's audit does not pass (a scope-clean commit of dishonest
+//     evidence is still dishonest);
+//   - commits only the Quest's in-scope pathspec, never the dirty-tree shape;
+//   - skips cleanly when there is nothing in scope to commit;
+//   - pushes by default but treats a push failure as non-fatal — the commit is never
+//     lost — and can be suppressed with {push:false} (the --no-push / SOLVER_NO_PUSH
+//     escape hatch for offline or CI use).
+export function autoCommitQuest(root, questId, options = {}) {
+  if (!insideWorkTree(root)) {
+    return {committed: false, skipped: 'not-a-git-work-tree'};
+  }
+  const push = options.push !== false && process.env.SOLVER_NO_PUSH !== '1';
+  const quest = loadQuest(root, questId);
+  const handoff = buildHandoff(root, quest);
+  if (!handoff.ok) {
+    return {committed: false, skipped: 'audit-failed', audit: handoff.audit};
+  }
+  if (handoff.inScope.length === 0) {
+    return {committed: false, skipped: 'nothing-in-scope'};
+  }
+  execFileSync('git', ['add', '--', ...handoff.inScope], {cwd: root, stdio: 'ignore'});
+  execFileSync('git', ['commit', '--only', '-m', commitMessage(handoff), '--',
+    ...handoff.inScope], {cwd: root, stdio: 'ignore'});
+  const result = {
+    committed: true,
+    paths: handoff.inScope,
+    pushed: false,
+    questId,
+  };
+  if (push) {
+    try {
+      execFileSync('git', ['push'], {cwd: root, stdio: 'ignore'});
+      result.pushed = true;
+    } catch (err) {
+      result.pushError = err.message;
+    }
+  }
+  return result;
 }
 
 export function runHandoffCommand(root, args) {

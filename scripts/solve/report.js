@@ -14,6 +14,7 @@ import {
   STATUS_SOLVED,
   STATUS_EXHAUSTED,
   STATUS_PARKED,
+  PARK_KIND_CANNOT_MEASURE,
 } from './constants.js';
 import {loadQuest, readLog, projectState, assertSafeQuestId} from './store.js';
 import {questClass, closureKind} from './closure-kind.js';
@@ -27,8 +28,10 @@ function frontierLine(f) {
   const metric = f.current === null ? '?' : f.current;
   const base = f.baseline === null ? '?' : f.baseline;
   const reason = f.reason ? ` — ${f.reason}` : '';
-  return `- **${f.id}** [${f.status}] rung ${f.rungIndex}, attempts ${f.attempts}, ` +
-    `metric ${base} -> ${metric}${reason}`;
+  const kind = f.status === STATUS_PARKED && f.parkKind ? ` {${f.parkKind}}` : '';
+  const reopened = f.reopenCount ? `, reopened ${f.reopenCount}` : '';
+  return `- **${f.id}** [${f.status}${kind}] rung ${f.rungIndex}, ` +
+    `attempts ${f.attempts}${reopened}, metric ${base} -> ${metric}${reason}`;
 }
 
 function findingLines(state) {
@@ -60,7 +63,12 @@ function outcomeBanner(state, log, quest) {
   }
   if (questEvent.status === STATUS_EXHAUSTED) {
     const parked = state.frontiers.filter((f) => f.status === STATUS_PARKED);
-    return `EXHAUSTED — ${parked.length} frontier(s) parked; human decision needed`;
+    const cannotMeasure = parked.filter(
+      (f) => f.parkKind === PARK_KIND_CANNOT_MEASURE).length;
+    const suffix = cannotMeasure > 0 ?
+      ` (${cannotMeasure} cannot-measure: fix the harness, then reopen)` : '';
+    return `EXHAUSTED — ${parked.length} frontier(s) parked; ` +
+      `human decision needed${suffix}`;
   }
   return `TERMINAL: ${questEvent.status}`;
 }
@@ -141,12 +149,11 @@ export function buildReport(quest, log, state) {
   ].join('\n');
 }
 
-export function writeReport(root, questId) {
-  const quest = loadQuest(root, questId);
-  const log = readLog(root, questId);
+export function writeReportForQuest(root, quest) {
+  const log = readLog(root, quest.id);
   const state = projectState(quest, log);
   const md = buildReport(quest, log, state);
-  const file = reportFilePath(root, questId);
+  const file = reportFilePath(root, quest.id);
   fs.mkdirSync(path.dirname(file), {recursive: true});
   fs.writeFileSync(file, md);
   const latestLogTime = log.length > 0 ?
@@ -157,4 +164,8 @@ export function writeReport(root, questId) {
     fs.utimesSync(file, reportTime, reportTime);
   }
   return {file, md};
+}
+
+export function writeReport(root, questId) {
+  return writeReportForQuest(root, loadQuest(root, questId));
 }

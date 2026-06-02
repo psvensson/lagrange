@@ -119,6 +119,22 @@ export const NON_MEASURING_VERDICT_REASONS = Object.freeze([
   VERDICT_REASON_EXECUTION_INCOMPLETE,
 ]);
 
+// Park provenance — WHY a frontier reached the terminal park rung.
+//   EXHAUSTED:      the frontier was genuinely measured and the finite ladder ran out
+//                   of honest moves. This is real solution-space exhaustion.
+//   CANNOT_MEASURE: no attempt on the frontier ever produced a trustworthy sample, so
+//                   "no metric movement" is not evidence of exhaustion — it is an
+//                   artifact of a measurement infrastructure (harness) failure. The
+//                   honest next step is to fix the harness, not to declare the work
+//                   impossible. Keeping these distinct stops a broken harness from
+//                   masquerading as a solved-or-impossible verdict, and lets `reopen`
+//                   bound itself so it cannot oscillate against a never-measuring park.
+export const PARK_KIND_EXHAUSTED = 'exhausted';
+export const PARK_KIND_CANNOT_MEASURE = 'cannot_measure';
+export const PARK_REASON_EXHAUSTED = 'ladder exhausted without metric movement';
+export const PARK_REASON_CANNOT_MEASURE =
+  'measurement unavailable: no attempt produced a trustworthy sample';
+
 // Quest classification: product goals must be measured against real artifacts;
 // process goals are scaffolding/decision records (often oracle-backed).
 export const QUEST_CLASS_PRODUCT = 'product';

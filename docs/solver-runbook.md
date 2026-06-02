@@ -232,6 +232,23 @@ measured park is never reopened. It leaves `doneWhen` and the frontier metric
 unchanged (no goalpost movement), keeps the original `park` event in the log,
 preserves `parkedCount`, and resets the frontier to the first rung.
 
+### Cannot-Measure Versus Exhausted Parks
+
+A park is classified by why the ladder stopped. If the contributing attempts
+produced at least one honestly-measured sample but the metric never moved, the
+park is `exhausted` — no honest move remains. If every contributing attempt was
+non-measuring (the harness never produced a valid measurement), the park is
+`cannot_measure` — the measurement infrastructure is broken, not the solution
+space. `status`, `health`, `report`, and `portfolio` show the distinction and a
+`cannot_measure` park points the operator at fixing the harness, then reopening.
+
+Reopens are bounded and recorded. The frontier projection tracks `reopenCount`
+(shown by `status`, `health`, and `portfolio`). A second reopen is refused while
+nothing has changed since the last reopen — re-running an unchanged harness can
+only reproduce the same non-measuring loop. For a `cannot_measure` park the
+refusal points at fixing the harness; for any park, changing the source or the
+attempt evidence allows the reopen again.
+
 ## Source Change Verification
 
 Every Quest that changes source code must spawn a subagent verifier after the
@@ -286,6 +303,30 @@ git push
 This git handoff does not replace Solver proof. Attempt proof remains the
 recorded `diff:<path>` changeRef plus live probe evidence; the commit and push
 make the completed Quest durable in the shared repository.
+
+## Regular Commit And Push
+
+A Quest should not accumulate an unrecoverable dirty tree. The Solver commits —
+and by default pushes — each Quest's own scope-clean work as it progresses, so a
+single bad `git checkout` can never lose it. This happens automatically:
+
+- after a supervised `node scripts/solve.js step --id <quest> --commit` whose
+  attempt carries a resolved `diff:<path>` changeRef, and
+- on every autonomous-run terminal (`SOLVED`, and the `cannot-measure` terminal).
+
+Each auto-commit obeys the same rules as `handoff`: it refuses when `audit` does
+not pass (a scope-clean commit of dishonest evidence is still dishonest), stages
+only the Quest's in-scope pathspec (never the dirty-tree shape), and carries the
+`Co-authored-by: Copilot` trailer. It is a no-op outside a git work tree.
+
+Push is best-effort: a push failure (no remote, no auth) is non-fatal and the
+commit is kept — only a warning is surfaced. Suppress pushing for offline or CI
+use with the `--no-push` flag or the `SOLVER_NO_PUSH=1` environment variable:
+
+```sh
+node scripts/solve.js step --id <quest> --commit --no-push
+SOLVER_NO_PUSH=1 node scripts/solve.js run --id <quest>
+```
 
 ## Autonomous Run
 

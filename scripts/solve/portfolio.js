@@ -23,10 +23,12 @@ import {
   STATUS_SOLVED,
   STATUS_EXHAUSTED,
   STATUS_OPEN,
+  STATUS_PARKED,
+  PARK_KIND_CANNOT_MEASURE,
   QUEST_CLASS_PRODUCT,
   QUEST_CLASS_PROCESS,
 } from './constants.js';
-import {loadQuest, readLog} from './store.js';
+import {loadQuest, readLog, projectState} from './store.js';
 import {questClass, closureKind} from './closure-kind.js';
 
 function listQuestIds(root) {
@@ -49,6 +51,10 @@ function terminalOutcome(log) {
 
 export function questPortfolioRow(quest, log) {
   const outcome = terminalOutcome(log);
+  const state = projectState(quest, log);
+  const reopens = state.frontiers.reduce((sum, f) => sum + (f.reopenCount || 0), 0);
+  const cannotMeasure = state.frontiers.filter(
+    (f) => f.status === STATUS_PARKED && f.parkKind === PARK_KIND_CANNOT_MEASURE).length;
   return {
     id: quest.id,
     class: questClass(quest),
@@ -57,6 +63,8 @@ export function questPortfolioRow(quest, log) {
     solved: outcome === STATUS_SOLVED,
     open: outcome === STATUS_OPEN,
     attempts: log.filter((e) => e.type === EVENT_ATTEMPT).length,
+    reopens,
+    cannotMeasure,
   };
 }
 
@@ -106,11 +114,12 @@ export function renderPortfolio(portfolio) {
     lines.push('_(no quests found)_', '');
     return lines.join('\n');
   }
-  lines.push('| id | class | closure | outcome | attempts |');
-  lines.push('| --- | --- | --- | --- | --- |');
+  lines.push('| id | class | closure | outcome | attempts | reopens | cannot-measure |');
+  lines.push('| --- | --- | --- | --- | --- | --- | --- |');
   for (const row of rows) {
     lines.push(
-      `| ${row.id} | ${row.class} | ${row.closure} | ${row.outcome} | ${row.attempts} |`,
+      `| ${row.id} | ${row.class} | ${row.closure} | ${row.outcome} | ` +
+      `${row.attempts} | ${row.reopens} | ${row.cannotMeasure} |`,
     );
   }
   const product = summary.byClass[QUEST_CLASS_PRODUCT];

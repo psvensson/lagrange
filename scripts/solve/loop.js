@@ -22,12 +22,19 @@ import {
   STATUS_EXHAUSTED,
   LADDER,
   PARK_RUNG_INDEX,
+  PARK_KIND_EXHAUSTED,
+  PARK_KIND_CANNOT_MEASURE,
+  PARK_REASON_EXHAUSTED,
+  PARK_REASON_CANNOT_MEASURE,
   OUTCOME_SOLVED,
   OUTCOME_EXHAUSTED,
   OUTCOME_MAX_CYCLES,
   OUTCOME_THEORY_REQUIRED,
 } from './constants.js';
 import {appendEvent, readLog, projectState, rebuildState} from './store.js';
+import {frontierHasValidSample} from './sample-validity.js';
+import {autoCommitQuest} from './handoff.js';
+import {writeReportForQuest} from './report.js';
 import {evaluate} from './probe.js';
 import {pickFrontier} from './scheduler.js';
 import {
@@ -243,14 +250,29 @@ function decideAndRecord(root, quest, pick, event, after, violations) {
       evidenceFingerprint: after.evidenceFingerprint || null,
     });
   } else if (!progressed && nextRung >= PARK_RUNG_INDEX) {
+    const kind = classifyParkKind(root, quest, pick.def);
     appendEvent(root, quest.id, {
       type: EVENT_PARK,
       frontier: pick.def.id,
-      reason: 'ladder exhausted without metric movement',
+      kind,
+      reason: kind === PARK_KIND_CANNOT_MEASURE ?
+        PARK_REASON_CANNOT_MEASURE : PARK_REASON_EXHAUSTED,
       finalMetric: after.metric,
     });
   }
   return progressed;
+}
+
+// A park is only honest exhaustion when the frontier was actually measured at least
+// once. If every attempt on the frontier was a non-measuring sample, "no metric
+// movement" reflects a broken measurement harness, not solution-space exhaustion, so
+// the park is classified CANNOT_MEASURE — a distinct terminal that points the operator
+// at fixing the harness instead of abandoning the work.
+function classifyParkKind(root, quest, frontierDef) {
+  const attempts = readLog(root, quest.id)
+    .filter((e) => e.type === EVENT_ATTEMPT && e.frontier === frontierDef.id);
+  return frontierHasValidSample(root, attempts, frontierDef) ?
+    PARK_KIND_EXHAUSTED : PARK_KIND_CANNOT_MEASURE;
 }
 
 // Build the shared run context (honesty hooks + probe context). Used by both the
@@ -320,8 +342,10 @@ export function runLoop(root, quest, options = {}) {
   });
   if (unrecorded) {
     throw new Error(
-      `UNRECORDED_EVIDENCE: latest probe evidence is newer than Quest memory. Ingest it first:\n` +
-      `  node scripts/solve.js ingest-evidence --id ${quest.id} --frontier ${unrecorded.frontier} --evidence ${unrecorded.evidence}`
+      'UNRECORDED_EVIDENCE: latest probe evidence is newer than Quest memory. ' +
+      'Ingest it first:\n' +
+      `  node scripts/solve.js ingest-evidence --id ${quest.id} ` +
+      `--frontier ${unrecorded.frontier} --evidence ${unrecorded.evidence}`,
     );
   }
 
@@ -336,7 +360,7 @@ export function runLoop(root, quest, options = {}) {
       frontier,
     } = runOneCycle(root, quest, ctx);
     if (terminal === OUTCOME_SOLVED) {
-      return finish(
+      const result = finish(
         root,
         quest,
         STATUS_SOLVED,
@@ -344,9 +368,15 @@ export function runLoop(root, quest, options = {}) {
         evidenceIdentity,
         evidenceFingerprint,
       );
+      writeReportForQuest(root, quest);
+      result.commit = autoCommitQuest(root, quest.id, {push: options.push});
+      return result;
     }
     if (terminal === OUTCOME_EXHAUSTED) {
-      return finish(root, quest, STATUS_EXHAUSTED, evidence);
+      const result = finish(root, quest, STATUS_EXHAUSTED, evidence);
+      writeReportForQuest(root, quest);
+      result.commit = autoCommitQuest(root, quest.id, {push: options.push});
+      return result;
     }
     if (terminal === OUTCOME_THEORY_REQUIRED) {
       return {

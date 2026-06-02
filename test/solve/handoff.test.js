@@ -5,11 +5,14 @@ import os from 'node:os';
 
 import {saveQuest, appendEvent, appendFinding} from '../../scripts/solve/store.js';
 import {runStep} from '../../scripts/solve/step.js';
+import {writeReport} from '../../scripts/solve/report.js';
 import {
   buildHandoff,
   classifyDirtyPaths,
   renderHandoff,
+  autoCommitQuest,
 } from '../../scripts/solve/handoff.js';
+import {execFileSync} from 'node:child_process';
 
 function tmp() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'handoff-'));
@@ -95,6 +98,7 @@ tap.test('scope-safe handoff (Concern 4)', async (t) => {
       claim: 'subagent verified the source change against quest intent',
       evidence: 'subagent:verify-1',
     });
+    writeReport(root, quest.id);
 
     const dirtyFiles = [
       'solve/quests/demo.json',
@@ -164,6 +168,105 @@ tap.test('scope-safe handoff (Concern 4)', async (t) => {
     t.same(handoff.inScope, [], 'nothing dirty means nothing to commit');
     const md = renderHandoff(handoff);
     t.match(md, /nothing to commit/, 'render notes there is nothing to do');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+});
+
+function initGit(root) {
+  const run = (...args) => execFileSync('git', args, {cwd: root, stdio: 'ignore'});
+  run('init');
+  run('config', 'user.email', 'solver@example.com');
+  run('config', 'user.name', 'Solver');
+  run('config', 'commit.gpgsign', 'false');
+  // Seed an initial commit so subsequent commits have a parent.
+  fs.writeFileSync(path.join(root, '.gitkeep'), '');
+  run('add', '-A');
+  run('commit', '-m', 'init');
+}
+
+function committedFiles(root) {
+  return execFileSync('git', ['show', '--name-only', '--format=', 'HEAD'],
+    {cwd: root, encoding: 'utf8'}).split('\n').filter(Boolean);
+}
+
+tap.test('auto commit+push (R1)', async (t) => {
+  t.test('skips cleanly outside a git work tree', (t) => {
+    const root = tmp();
+    makeQuest(root);
+    const result = autoCommitQuest(root, 'demo');
+    t.same(result, {committed: false, skipped: 'not-a-git-work-tree'});
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('a passing-audit step commits only in-scope paths and skips pushing',
+    (t) => {
+      const root = tmp();
+      initGit(root);
+      const {quest, oracle} = makeQuest(root);
+      runStep(root, quest);
+      fs.writeFileSync(oracle, JSON.stringify({metric: 0, target: 0}));
+      // An unrelated dirty file must never be swept into the quest commit.
+      fs.mkdirSync(path.join(root, 'src'), {recursive: true});
+      fs.writeFileSync(path.join(root, 'src', 'unrelated.js'), 'noise');
+      execFileSync('git', ['add', 'src/unrelated.js'], {cwd: root, stdio: 'ignore'});
+      const r = runStep(root, quest, {
+        changeRef: makeDiff(root, quest.id, 'fix', 'docs/demo.md'),
+        summary: 'scoped doc fix',
+        push: false,
+      });
+      t.ok(r.commit.committed, 'the step auto-committed');
+      t.equal(r.commit.pushed, false, 'no push under push:false');
+      t.notOk(r.commit.pushError, 'no push attempt means no push error');
+      const files = committedFiles(root);
+      t.ok(files.includes('solve/quests/demo.json'), 'commits the quest file');
+      t.ok(files.some((f) => f.startsWith('solve/changes/demo/')),
+        'commits the change artifact');
+      t.notOk(files.includes('src/unrelated.js'), 'excludes the unrelated file');
+      const status = execFileSync('git', ['status', '--porcelain', '-uall'],
+        {cwd: root, encoding: 'utf8'});
+      t.match(status, /src\/unrelated\.js/, 'unrelated file is left uncommitted');
+      // The commit message carries the Co-authored-by trailer.
+      const msg = execFileSync('git', ['log', '-1', '--format=%B'],
+        {cwd: root, encoding: 'utf8'});
+      t.match(msg, /Co-authored-by: Copilot/, 'includes the co-author trailer');
+      fs.rmSync(root, {recursive: true, force: true});
+      t.end();
+    });
+
+  t.test('a push failure is non-fatal and keeps the commit', (t) => {
+    const root = tmp();
+    initGit(root);
+    const {quest, oracle} = makeQuest(root);
+    runStep(root, quest);
+    fs.writeFileSync(oracle, JSON.stringify({metric: 0, target: 0}));
+    // push:true (default) but there is no remote, so push must fail without throwing.
+    const r = runStep(root, quest, {
+      changeRef: makeDiff(root, quest.id, 'fix', 'docs/demo.md'),
+      summary: 'scoped doc fix',
+    });
+    t.ok(r.commit.committed, 'commit is made despite the push target missing');
+    t.equal(r.commit.pushed, false, 'push did not succeed');
+    t.ok(r.commit.pushError, 'a non-fatal push error is surfaced');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('a failing audit suppresses the auto-commit', (t) => {
+    const root = tmp();
+    initGit(root);
+    const {quest} = makeQuest(root);
+    // A source-file change with no subagent verification finding fails the audit.
+    runStep(root, quest);
+    fs.writeFileSync(path.join(root, 'oracle.json'),
+      JSON.stringify({metric: 0, target: 0}));
+    const r = runStep(root, quest, {
+      changeRef: makeDiff(root, quest.id, 'fix', 'src/demo.js'),
+      summary: 'unverified source change',
+    });
+    t.notOk(r.commit.committed, 'no commit when the audit fails');
+    t.equal(r.commit.skipped, 'audit-failed', 'reports the audit gate');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });

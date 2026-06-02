@@ -77,6 +77,28 @@ keeps the park event in the append-only log, preserves `parkedCount` so the
 scheduler still de-prioritizes a chronic parker, and returns the frontier to the
 first rung for fresh, honestly-measured attempts.
 
+A park is further classified by its cause. An `exhausted` park had at least one
+honestly-measured sample but the metric never moved — no honest move remains. A
+`cannot_measure` park had only non-measuring samples — the harness itself never
+produced a valid measurement, so the fix is the measurement infrastructure, not
+the solution space. `status`, `health`, `report`, and `portfolio` show the
+distinction. Reopens are bounded and recorded: the frontier tracks `reopenCount`,
+and a second reopen is refused while nothing has changed since the last reopen —
+re-running an unchanged harness only reproduces the same non-measuring loop. Fix
+the harness (or change the attempt evidence) before reopening again, so reopen and
+park can never oscillate forever.
+
+## Regular Commit And Push
+
+A Quest must not accumulate an unrecoverable dirty tree. The Solver commits — and
+by default pushes — each Quest's own scope-clean work as it progresses: after a
+`step --commit` whose attempt carries a resolved `diff:<path>` changeRef, and on
+every autonomous-run terminal. Each auto-commit refuses when `audit` does not
+pass, stages only the Quest's in-scope pathspec (never the dirty-tree shape), and
+carries the `Co-authored-by: Copilot` trailer. It is a no-op outside a git work
+tree. Push is best-effort: a failure is non-fatal and the commit is kept. Suppress
+pushing with `--no-push` or `SOLVER_NO_PUSH=1` for offline or CI use.
+
 ## Closure Strength
 
 Closure provenance is derived purely from the sealed `doneWhen.probe`:
@@ -238,6 +260,9 @@ A Quest run can end in one terminal result or stop at a non-terminal gate:
 
 - **SOLVED**: `doneWhen` is satisfied against live evidence.
 - **EXHAUSTED**: every frontier is parked and no honest remaining move exists.
+  A park is `exhausted` when it had at least one honestly-measured sample, or
+  `cannot_measure` when every contributing sample was non-measuring (the harness
+  never measured anything — fix the measurement infrastructure, then reopen).
 - **MAX_CYCLES**: the configured safety bound stopped the loop; treat this as a
   runner configuration problem, not a Quest result.
 - **THEORY_REQUIRED**: the selected rung needs system or frontier theory before

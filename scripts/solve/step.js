@@ -26,6 +26,8 @@ import {
   STATUS_SOLVED,
 } from './constants.js';
 import {inspectChangeArtifact} from './change-artifact.js';
+import {autoCommitQuest} from './handoff.js';
+import {writeReport} from './report.js';
 
 export function pendingFilePath(root, questId) {
   return path.join(
@@ -196,6 +198,11 @@ function stepCommit(root, quest, options = {}) {
   });
   const questOutcome = recordQuestSolvedIfDone(root, quest, ctx);
   clearPending(root, quest.id);
+  writeReport(root, quest.id);
+  // Persist the Quest's own scope-clean work as it progresses (R1). Auto-commit is a
+  // no-op outside a git work tree and refuses on a failing audit, so it is safe to call
+  // unconditionally; it can be suppressed per-invocation with options.push === false.
+  const commit = autoCommitQuest(root, quest.id, {push: options.push});
   return {
     frontier: def.id,
     before: pending.before.metric,
@@ -203,6 +210,7 @@ function stepCommit(root, quest, options = {}) {
     done: questOutcome.done,
     progressed: outcome.progressed,
     violations: outcome.violations,
+    commit,
   };
 }
 

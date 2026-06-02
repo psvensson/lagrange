@@ -2,6 +2,8 @@ import {
   EVENT_ATTEMPT,
   RUNG_MODEL,
   RUNG_WIDEN_SCOPE,
+  STATUS_PARKED,
+  PARK_KIND_CANNOT_MEASURE,
   THEORY_RESULT_ACTIVE,
   THEORY_RESULT_SUPPORTED,
   THEORY_RESULT_SUPERSEDED,
@@ -258,8 +260,23 @@ export function analyzeQuestHealth(root, quest, options = {}) {
       severity: needs.modelEvidenceRequired ? 'high' : 'medium',
     });
   }
+  const reopens = state.frontiers.reduce(
+    (sum, f) => sum + (f.reopenCount || 0), 0);
+  const cannotMeasureParked = state.frontiers.filter(
+    (f) => f.status === STATUS_PARKED && f.parkKind === PARK_KIND_CANNOT_MEASURE);
+  if (cannotMeasureParked.length > 0) {
+    signals.push({
+      type: 'cannot-measure',
+      mechanism: cannotMeasureParked.map((f) => f.id).join(','),
+      severity: 'high',
+    });
+  }
+
   const rungName = frontier ? (quest.frontiers.find((item) =>
     item.id === frontier.id)?.rung || null) : null;
+  const nextAction = !frontier && cannotMeasureParked.length > 0 ?
+    `fix the measurement harness for ${cannotMeasureParked[0].id}, then reopen` :
+    nextActionFor(frontier, needs);
   return {
     questId: quest.id,
     frontier: frontier ? frontier.id : null,
@@ -270,8 +287,13 @@ export function analyzeQuestHealth(root, quest, options = {}) {
     ),
     needs,
     modelGuidance: needs.modelGuidance || null,
+    reopens,
+    cannotMeasureParked: cannotMeasureParked.map((f) => ({
+      id: f.id,
+      reopenCount: f.reopenCount || 0,
+    })),
     signals,
-    nextAction: nextActionFor(frontier, needs),
+    nextAction,
   };
 }
 
@@ -280,6 +302,7 @@ export function renderHealth(health) {
   lines.push(`- quest: ${health.questId}`);
   lines.push(`- frontier: ${health.frontier || 'none'}`);
   lines.push(`- rungIndex: ${health.rungIndex ?? 'none'}`);
+  lines.push(`- reopens: ${health.reopens || 0}`);
   lines.push(`- nextAction: ${health.nextAction}`);
   lines.push('', '## Signals');
   if (health.signals.length === 0) {

@@ -50,6 +50,21 @@ function makeQuest(root, reportDir) {
   return quest;
 }
 
+function makeDiff(root, questId, name, changedPath = 'docs/reopen.md') {
+  const file = path.join(root, 'solve', 'changes', questId, `${name}.diff`);
+  fs.mkdirSync(path.dirname(file), {recursive: true});
+  fs.writeFileSync(file, [
+    `diff --git a/${changedPath} b/${changedPath}`,
+    `--- a/${changedPath}`,
+    `+++ b/${changedPath}`,
+    '@@ -1 +1 @@',
+    '-before',
+    '+after',
+    '',
+  ].join('\n'));
+  return `diff:${path.relative(root, file)}`;
+}
+
 function appendAttempt(root, quest, evidence, extra = {}) {
   appendEvent(root, quest.id, {
     type: 'attempt',
@@ -69,6 +84,18 @@ function park(root, quest) {
     type: 'park',
     frontier: 'reopen-demo-main',
     reason: 'ladder exhausted without metric movement',
+    finalMetric: 0,
+  });
+}
+
+function parkWithKind(root, quest, kind) {
+  appendEvent(root, quest.id, {
+    type: 'park',
+    frontier: 'reopen-demo-main',
+    kind,
+    reason: kind === 'cannot_measure' ?
+      'measurement unavailable: no attempt produced a trustworthy sample' :
+      'ladder exhausted without metric movement',
     finalMetric: 0,
   });
 }
@@ -129,6 +156,45 @@ tap.test('reopen (evidence-gated frontier reopen)', async (t) => {
     t.end();
   });
 
+  t.test('reopens a mixed park whose climb counted a non-measuring sample', (t) => {
+    const root = tmp();
+    const quest = makeQuest(root, 'reports');
+    const bad = writeReport(root, 'reports/incomplete.report.json', {
+      ts: '2026-06-01T01:00:00Z', passed: false, priorityItems: null,
+      failed: 1, verdictReason: INCOMPLETE_REASON});
+    const good = writeReport(root, 'reports/measured.report.json', {
+      ts: '2026-06-01T01:01:00Z', passed: false, priorityItems: 2, failed: 1});
+    appendAttempt(root, quest, good);
+    appendAttempt(root, quest, bad);
+    // An exhausted-kind park (it had a measured sample) that still counted one
+    // non-measuring rung is reopenable on the first reopen: that rung was untested.
+    parkWithKind(root, quest, 'exhausted');
+
+    const assessment = assessReopen(root, quest, 'reopen-demo-main');
+    t.equal(assessment.ok, true, 'a mixed park is not an honest park');
+    t.equal(assessment.invalidSampleCount, 1);
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('bounds a re-reopen of any park kind once nothing changes', (t) => {
+    const root = tmp();
+    const quest = makeQuest(root, 'reports');
+    const good = writeReport(root, 'reports/measured.report.json', {
+      ts: '2026-06-01T01:01:00Z', passed: false, priorityItems: 2, failed: 1});
+    appendAttempt(root, quest, good);
+    appendAttempt(root, quest, 'reports/x.report.json', {invalidSample: true});
+    parkWithKind(root, quest, 'exhausted');
+    reopenFrontier(root, {id: quest.id, reason: 'first reopen'});
+    // Re-park with nothing changed since the reopen.
+    parkWithKind(root, quest, 'exhausted');
+    const assessment = assessReopen(root, quest, 'reopen-demo-main');
+    t.equal(assessment.ok, false, 'second reopen is bounded for exhausted parks too');
+    t.match(assessment.reason, /already reopened/);
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
   t.test('refuses to reopen a frontier that is not parked', (t) => {
     const root = tmp();
     const quest = makeQuest(root, 'reports');
@@ -149,6 +215,69 @@ tap.test('reopen (evidence-gated frontier reopen)', async (t) => {
     appendAttempt(root, quest, 'reports/x.report.json', {invalidSample: true});
     park(root, quest);
     t.throws(() => reopenFrontier(root, {id: quest.id}), /--reason/);
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('tracks reopenCount across reopens', (t) => {
+    const root = tmp();
+    const quest = makeQuest(root, 'reports');
+    appendAttempt(root, quest, 'reports/x.report.json', {invalidSample: true});
+    parkWithKind(root, quest, 'cannot_measure');
+    reopenFrontier(root, {id: quest.id, reason: 'first reopen'});
+    const after = projectState(quest, readLog(root, quest.id))
+      .frontiers.find((f) => f.id === 'reopen-demo-main');
+    t.equal(after.reopenCount, 1, 'reopen is counted');
+    t.equal(after.parkedCount, 1, 'park history preserved');
+    t.equal(after.parkKind, null, 'parkKind cleared on reopen');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('refuses a second cannot-measure reopen with nothing changed', (t) => {
+    const root = tmp();
+    const quest = makeQuest(root, 'reports');
+    appendAttempt(root, quest, 'reports/x.report.json', {invalidSample: true});
+    parkWithKind(root, quest, 'cannot_measure');
+    reopenFrontier(root, {id: quest.id, reason: 'first reopen'});
+    // Re-park with nothing changed since the reopen.
+    parkWithKind(root, quest, 'cannot_measure');
+    const assessment = assessReopen(root, quest, 'reopen-demo-main');
+    t.equal(assessment.ok, false, 'second reopen is bounded');
+    t.match(assessment.reason, /fix the measurement harness/);
+    t.throws(() => reopenFrontier(root, {id: quest.id, reason: 'again'}),
+      /reopen refused/);
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('does not count an unresolved changeRef as a reopen-worthy change', (t) => {
+    const root = tmp();
+    const quest = makeQuest(root, 'reports');
+    appendAttempt(root, quest, 'reports/x.report.json', {invalidSample: true});
+    parkWithKind(root, quest, 'cannot_measure');
+    reopenFrontier(root, {id: quest.id, reason: 'first reopen'});
+    appendAttempt(root, quest, 'reports/x.report.json',
+      {invalidSample: true, changeRef: 'diff:missing.diff'});
+    parkWithKind(root, quest, 'cannot_measure');
+    const assessment = assessReopen(root, quest, 'reopen-demo-main');
+    t.equal(assessment.ok, false, 'bogus changeRef cannot bypass the reopen bound');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('re-allows reopen once evidence changes after the last reopen', (t) => {
+    const root = tmp();
+    const quest = makeQuest(root, 'reports');
+    appendAttempt(root, quest, 'reports/x.report.json', {invalidSample: true});
+    parkWithKind(root, quest, 'cannot_measure');
+    reopenFrontier(root, {id: quest.id, reason: 'first reopen'});
+    // A fresh attempt carrying a resolved changeRef means something changed.
+    appendAttempt(root, quest, 'reports/x.report.json',
+      {invalidSample: true, changeRef: makeDiff(root, quest.id, 'fix')});
+    parkWithKind(root, quest, 'cannot_measure');
+    const assessment = assessReopen(root, quest, 'reopen-demo-main');
+    t.equal(assessment.ok, true, 'reopen re-allowed after a change');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });

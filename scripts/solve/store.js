@@ -28,6 +28,7 @@ import {
   STATUS_OPEN,
   STATUS_SOLVED,
   STATUS_PARKED,
+  PARK_KIND_EXHAUSTED,
   FIRST_RUNG_INDEX,
   THEORY_RESULT_ACTIVE,
   THEORY_RESULT_SUPERSEDED,
@@ -104,6 +105,8 @@ function initialFrontierState(frontier) {
     rungIndex: FIRST_RUNG_INDEX,
     attempts: 0,
     parkedCount: 0,
+    reopenCount: 0,
+    parkKind: null,
     baseline: null,
     current: null,
     reason: null,
@@ -133,17 +136,22 @@ function applyPark(frontier, event) {
   if (!frontier) return;
   frontier.status = STATUS_PARKED;
   frontier.parkedCount += 1;
+  frontier.parkKind = event.kind || PARK_KIND_EXHAUSTED;
   frontier.reason = event.reason || null;
 }
 
 // Reopen a parked frontier: return it to the first rung so the Solver re-enters it with
 // fresh, honestly-measured attempts. parkedCount is preserved as history (the scheduler
-// still de-prioritizes a frequently-parked frontier) and the reopen reason is recorded.
+// still de-prioritizes a frequently-parked frontier), reopenCount is incremented so the
+// reopen bound can refuse to oscillate against a never-measuring park, the cleared
+// parkKind reflects that the frontier is no longer parked, and the reason is recorded.
 function applyReopen(frontier, event) {
   if (!frontier) return;
   if (frontier.status !== STATUS_PARKED) return;
   frontier.status = STATUS_OPEN;
   frontier.rungIndex = FIRST_RUNG_INDEX;
+  frontier.reopenCount += 1;
+  frontier.parkKind = null;
   frontier.reason = event.reason || null;
 }
 

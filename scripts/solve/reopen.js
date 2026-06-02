@@ -13,31 +13,38 @@
 // Reopen is refused when no contributing attempt was a non-measuring sample: an honest
 // park (the frontier was genuinely measured and did not move) must not be reopened.
 
-import path from 'node:path';
-
 import {
   EVENT_ATTEMPT,
   EVENT_FRONTIER_REOPENED,
   STATUS_PARKED,
+  PARK_KIND_CANNOT_MEASURE,
 } from './constants.js';
 import {appendEvent, loadQuest, readLog, projectState, rebuildState} from './store.js';
-import {reportSampleIsNonMeasuring} from './probes/scenario-harness.js';
+import {attemptIsNonMeasuring} from './sample-validity.js';
+import {inspectChangeArtifact} from './change-artifact.js';
 import {writeReport} from './report.js';
 
-function harnessArgs(frontierDef) {
-  const metric = frontierDef && frontierDef.metric;
-  if (!metric || metric.probe !== 'scenario-harness') return null;
-  return metric.args || {};
-}
-
-// Decide, from sealed evidence only, whether one attempt on the frontier was a
-// non-measuring sample. A post-fix attempt carries invalidSample directly; a pre-fix
-// attempt is re-classified by reading its evidence report through the shared harness
-// classifier so historical parks are judged by today's honest definition.
-function attemptIsInvalid(root, attempt, args) {
-  if (attempt.invalidSample === true) return true;
-  if (!args || !attempt.evidence) return false;
-  return reportSampleIsNonMeasuring(path.join(root, attempt.evidence), args);
+// Has anything changed since the most recent reopen of this frontier that could make it
+// measurable again? "Change" means a fresh attempt landed after the reopen carrying a
+// resolved changeRef (a real source/test edit) OR a newly trustworthy (measuring)
+// sample. With nothing changed, reopening a cannot-measure park again would only restart
+// the same never-measuring loop, so the bound refuses and points at the harness instead.
+function changedSinceLastReopen(root, quest, log, frontierId, frontierDef) {
+  let lastReopenIndex = -1;
+  log.forEach((e, i) => {
+    if (e.type === EVENT_FRONTIER_REOPENED && e.frontier === frontierId) {
+      lastReopenIndex = i;
+    }
+  });
+  if (lastReopenIndex === -1) return true;
+  const after = log
+    .slice(lastReopenIndex + 1)
+    .filter((e) => e.type === EVENT_ATTEMPT && e.frontier === frontierId);
+  return after.some((a) => {
+    const resolvedChange = Boolean(a.changeRef) &&
+      inspectChangeArtifact(root, quest, a.changeRef).valid;
+    return resolvedChange || !attemptIsNonMeasuring(root, a, frontierDef);
+  });
 }
 
 export function assessReopen(root, quest, frontierId) {
@@ -54,20 +61,54 @@ export function assessReopen(root, quest, frontierId) {
       reason: `frontier ${frontierId} is ${frontierState.status}, not parked`,
     };
   }
-  const args = harnessArgs(frontierDef);
   const attempts = log.filter((e) =>
     e.type === EVENT_ATTEMPT && e.frontier === frontierId);
-  const invalidAttempts = attempts.filter((a) => attemptIsInvalid(root, a, args));
+  const invalidAttempts = attempts.filter(
+    (a) => attemptIsNonMeasuring(root, a, frontierDef));
+  // Honest-park refusal: with zero non-measuring samples the frontier was genuinely
+  // measured at every rung and simply did not move, so the exhaustion verdict stands.
+  // A park that counted even one non-measuring sample left at least one rung untested,
+  // so its exhaustion is not fully trustworthy and a reopen is warranted — regardless
+  // of how many other rungs were honestly measured (a mixed park is not an honest park).
+  if (invalidAttempts.length === 0) {
+    return {
+      ok: false,
+      frontierId,
+      attempts: attempts.length,
+      invalidSampleCount: 0,
+      reason:
+        `frontier ${frontierId} parked on honestly-measured attempts ` +
+        '(no non-measuring samples); reopen refused to protect the exhaustion verdict',
+    };
+  }
+  // Oscillation bound: a frontier already reopened at least once, with nothing changed
+  // since that reopen, must not be reopened again — re-running an unchanged harness can
+  // only reproduce the same non-measuring loop. This guards both park kinds; for a
+  // cannot-measure park it specifically points the operator at fixing the harness.
+  if (
+    frontierState.reopenCount > 0 &&
+    !changedSinceLastReopen(root, quest, log, frontierId, frontierDef)
+  ) {
+    const harnessHint = frontierState.parkKind === PARK_KIND_CANNOT_MEASURE ?
+      'fix the measurement harness before reopening again' :
+      'change the source or attempt evidence before reopening again';
+    return {
+      ok: false,
+      frontierId,
+      attempts: attempts.length,
+      invalidSampleCount: invalidAttempts.length,
+      reason:
+        `frontier ${frontierId} was already reopened ${frontierState.reopenCount} ` +
+        `time(s) with nothing changed since; ${harnessHint}`,
+    };
+  }
   return {
-    ok: invalidAttempts.length > 0,
+    ok: true,
     frontierId,
     attempts: attempts.length,
     invalidSampleCount: invalidAttempts.length,
     contributingEvidence: invalidAttempts.map((a) => a.evidence).filter(Boolean),
-    reason: invalidAttempts.length > 0 ?
-      null :
-      `frontier ${frontierId} parked on honestly-measured attempts ` +
-      '(no non-measuring samples); reopen refused to protect the exhaustion verdict',
+    reason: null,
   };
 }
 
