@@ -662,7 +662,7 @@ async function reconcileActiveGateMembershipPublication(
       await drainActiveGateMembershipPublicationSnapshotQueue() :
       false;
     const rawEnqueueOutcome =
-      ownerRecoveryWait && drainedSnapshotQueue !== true &&
+      ownerRecoveryWait &&
       typeof coordinator?.enqueueClusterMembershipReconcile ===
         TYPEOF.FUNCTION ?
         coordinator.enqueueClusterMembershipReconcile(
@@ -672,8 +672,9 @@ async function reconcileActiveGateMembershipPublication(
               .PUBLICATION_ACTIVE_GATE_HANDOFF]: publicationActiveGateHandoff,
           },
         ) :
-        drainedSnapshotQueue;
+        false;
     const enqueued =
+      drainedSnapshotQueue ||
       isActiveGateMembershipPublicationHandoffRetryAccepted(
         rawEnqueueOutcome,
         coordinator?.lastControlPlaneConvergenceQueueOutcome,
@@ -882,4 +883,11 @@ async function reconcileActiveGateMembershipPublication(
     );
   }
 }
-export {ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME, ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD, readActiveGateMembershipPublicationVisibleRow, readActiveGateMembershipPublicationVisibleReconcileRow, reconcileActiveGateMembershipPublication, shouldRouteActiveGateMembershipPublicationReconcile};
+export {
+  ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD,
+  ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME,
+  readActiveGateMembershipPublicationVisibleReconcileRow,
+  readActiveGateMembershipPublicationVisibleRow,
+  reconcileActiveGateMembershipPublication,
+  shouldRouteActiveGateMembershipPublicationReconcile,
+};

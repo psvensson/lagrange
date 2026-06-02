@@ -251,6 +251,143 @@ export function registerQueryExecutorRecoveryRoutingTests() {
     );
   });
 
+  test('QueryExecutor - priority recovery reads use readiness before ' +
+    'connection prefiltering and bounded delivery', async (t) => {
+    const partitionId = 'replica_operations-p1';
+    const seedNodeId = 'node-recovery-read-seed';
+    const peerNodeId = 'node-recovery-read-peer';
+    const blockedNodeId = 'node-recovery-read-blocked';
+    const seedAddress = `${seedNodeId}/partition/${partitionId}-r1`;
+    const peerAddress = `${peerNodeId}/partition/${partitionId}-r2`;
+    const deliveries = [];
+    const partition = {
+      partition_id: partitionId,
+      table_name: TABLES.REPLICA_OPERATIONS,
+      leader_node_id: seedNodeId,
+    };
+    const buildService = (nodeId, replicaSuffix) => ({
+      service_id: `${partitionId}-${replicaSuffix}`,
+      service_type: SERVICE_TYPE.PARTITION,
+      partition_id: partitionId,
+      node_id: nodeId,
+      address: `${nodeId}/partition/${partitionId}-${replicaSuffix}`,
+      status: SERVICE_STATUS.ACTIVE,
+    });
+    const services = [buildService(seedNodeId, 'r1'),
+      buildService(peerNodeId, 'r2'), buildService(blockedNodeId, 'r3')];
+    const systemCache = {
+      get(type, key) {
+        return type === TABLES.PARTITIONS && key === partitionId ?
+          partition :
+          null;
+      },
+      filter(type, predicate) {
+        if (type === TABLES.SERVICES) {
+          return services.filter(predicate);
+        }
+        if (type === TABLES.PARTITIONS) {
+          return [partition].filter(predicate);
+        }
+        return [];
+      },
+    };
+    const readinessService = {
+      getNodeReadinessSync(nodeId) {
+        const recoveryEligible = nodeId !== blockedNodeId;
+        return {
+          nodeId,
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION
+              .CONTROL_PLANE_RECOVERY_ELIGIBLE]: recoveryEligible,
+          },
+          reasons: recoveryEligible ?
+            [] :
+            [{
+              code:
+                CONTROL_PLANE_READINESS_REASON
+                  .PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+            }],
+        };
+      },
+    };
+    const executor = new QueryExecutor({
+      messageRouter: {
+        getConnectionState(nodeId) {
+          return nodeId === seedNodeId ? 'disconnected' : 'connected';
+        },
+        async deliver(address, _message, options) {
+          deliveries.push({address, timeoutMs: options?.timeoutMs});
+          if (address === seedAddress) {
+            return {
+              acknowledged: false,
+              success: false,
+              error: `Connection to node ${seedNodeId} closed`,
+              errorCode: 'ROUTER_CONNECTION_CLOSED',
+              retryAfterMs: 50,
+              deferRetry: true,
+            };
+          }
+          return {
+            acknowledged: true,
+            success: true,
+            rows: [{operation_id: 'operation-1'}],
+          };
+        },
+      },
+      systemCache,
+      controlPlaneReadinessService: readinessService,
+    });
+    executor.readRetryAttempts = 1;
+    executor.leaderRetryDelayMs = 1;
+
+    const resolution = executor.resolvePartitionServiceCandidates(
+      partitionId,
+      true,
+      false,
+      false,
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    );
+
+    t.equal(resolution.routingSnapshot.routableServiceCount, 2,
+      'eligible recovery-read services should survive connection-state lag');
+    t.same(
+      resolution.candidates.map((candidate) => candidate.address),
+      [seedAddress, peerAddress],
+      'recovery reads should leave eligible candidates for bounded delivery',
+    );
+    t.same(Object.keys(resolution.routingSnapshot.deniedByNodeId),
+      [blockedNodeId],
+      'ineligible recovery-read services should retain readiness diagnostics');
+    t.same(
+      resolution.routingSnapshot.deniedByNodeId[blockedNodeId]
+        .failedDimensions,
+      [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE],
+      'the denied summary should name the recovery readiness dimension',
+    );
+
+    const result = await executor.executeOnPartition(
+      partitionId,
+      'SELECT * FROM replica_operations WHERE operation_id = ?',
+      ['operation-1'],
+      true,
+      false,
+      false,
+      {
+        timeoutMs: 6000,
+        routingReadinessDimension:
+          CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+      },
+    );
+
+    t.equal(result.success, true,
+      'recovery read should fall through to the live peer');
+    t.same(deliveries.map((delivery) => delivery.address),
+      [seedAddress, peerAddress],
+      'read delivery should attempt the lagged seed before the admitted peer');
+    t.equal(deliveries[0].timeoutMs, 1,
+      'lagged recovery-read candidate should receive a reconnect-defer budget');
+  });
+
   test('QueryExecutor - priority recovery bootstrap write grace stays ' +
     'closed outside exact circular evidence', async (t) => {
     const nodeId = 'node-recovering';

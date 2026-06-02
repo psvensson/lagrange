@@ -1,0 +1,7 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": true,
+  "classification": "git_handoff_required",
+  "detail": "Quest workflow now requires committing and pushing Quest-scoped changes after Solver audit passes, while excluding unrelated dirty worktree entries."
+}

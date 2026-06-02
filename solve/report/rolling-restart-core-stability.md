@@ -7,7 +7,7 @@
 **Attempts:** 4
 
 ## Frontiers
-- **rolling-restart-core-stability-main** [open] rung 3, attempts 4, metric 1 -> 1
+- **rolling-restart-core-stability-main** [open] rung 3, attempts 4, metric 1 -> 0
 
 ## Findings
 - **rolling-restart-core-stability-main**: Quest probe priority metric is now zero, but doneWhen remains false until three consecutive rolling-restart runs pass. (rules out: Do not claim SOLVED from metric zero without the consecutive doneWhen evidence.) [test-output/reports/rolling-restart-core-stability-after-local-mutation-gate.report.json]
@@ -22,6 +22,7 @@
 - **rolling-restart-core-stability-main**: Ingested evidence from rolling-restart-failure-diagnostics.report.json. Metric: 1 -> 1. Verdict: BLOCK_EVIDENCE_INCOMPLETE (execution_incomplete_or_metrics_missing). Root cause: load. Dominant reason: startup_admin_projection. Owner: none. Ingestion outcome: changed. [test-output/reports/rolling-restart-failure-diagnostics.report.json]
 - **rolling-restart-core-stability-main**: Ingested evidence from rolling-restart-failure-diagnostics.report.json. Metric: 1 -> 0. Verdict: BLOCK_EVIDENCE_INCOMPLETE (execution_incomplete_or_metrics_missing). Root cause: startup. Dominant reason: readiness_probe_timeout=Node readiness probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304. Owner: none. Ingestion outcome: changed. [test-output/reports/rolling-restart-failure-diagnostics.report.json]
 - **rolling-restart-core-stability-main**: Quest restart state upgraded: no pending step remains; strict priority-bootstrap attempt is recorded and falsified; next selected theory is startup active admission before SQL/query transport serviceability. (rules out: Do not restart from the stale readiness-probe theory or treat strict priority bootstrap gates as sufficient for SOLVED evidence.) [test-output/reports/rolling-restart-core-stability-after-strict-priority-bootstrap.report.json]
+- **rolling-restart-core-stability-main**: Ingested evidence from rolling-restart-core-stability-after-endpoint-pressure-defer.report.json. Metric: 1 -> 0. Verdict: BLOCK_HARNESS_INVALID (harness_connectivity_or_system_failure). Root cause: startup. Dominant reason: readiness_probe_timeout=Node readiness probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304. Owner: none. Ingestion outcome: changed. [test-output/reports/rolling-restart-core-stability-after-endpoint-pressure-defer.report.json]
 
 ## Theories
 - **theory-20260601-rolling-restart-evidence-closure** [active] system, mechanism observation_gap
@@ -32,7 +33,7 @@
 - **theory-20260601-publication-missing-active-node-2** [falsified] frontier, frontier rolling-restart-core-stability-main, layer observation, mechanism publication_missing_active_node
 - **theory-20260601-publication-missing-active-node-3** [needs-rerun] frontier, frontier rolling-restart-core-stability-main, layer model, mechanism publication_missing_active_node
 - **theory-20260601-readiness-probe-timeout-restart** [falsified] frontier, frontier rolling-restart-core-stability-main, layer model, mechanism readiness_probe_timeout
-- **theory-20260601-startup-active-before-sql-serviceable** [active] frontier, frontier rolling-restart-core-stability-main, layer model, mechanism startup active admission declares the cluster usable before SQL/query transport control-plane serviceability is true for the canonical leader
+- **theory-20260601-startup-active-before-sql-serviceable** [supported] frontier, frontier rolling-restart-core-stability-main, layer model, mechanism startup active admission declares the cluster usable before SQL/query transport control-plane serviceability is true for the canonical leader
 
 ## Selected Theories
 - **rolling-restart-core-stability-main**: theory-20260601-startup-active-before-sql-serviceable
@@ -50,6 +51,7 @@
 - **theory-20260601-publication-missing-active-node-3**: needs-rerun [test-output/reports/rolling-restart-failure-diagnostics.report.json]
 - **theory-20260601-publication-missing-active-node-3**: needs-rerun [test-output/reports/rolling-restart-failure-diagnostics.report.json]
 - **theory-20260601-readiness-probe-timeout-restart**: falsified [test-output/reports/rolling-restart-core-stability-after-strict-priority-bootstrap.report.json]
+- **theory-20260601-startup-active-before-sql-serviceable**: supported [test-output/reports/rolling-restart-core-stability-after-endpoint-pressure-defer.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | theory | change |

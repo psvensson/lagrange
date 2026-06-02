@@ -16,6 +16,7 @@ const {
   LEADER_GAP_REASON_SERVICE_MISSING,
   NUM,
   QUERY_EXECUTOR_LITERAL,
+  QUERY_EXECUTOR_ROUTING_OPTION_FIELD,
   QUERY_LOG_MSG,
   QUERY_ROUTING_DIAGNOSTIC_REASON,
   RAFT_ROLE,
@@ -155,11 +156,17 @@ class QueryExecutorSegment3 extends QueryExecutorSegment3Part1 {
         routingReadinessDimension,
         routingOptions,
       });
+    const priorityRecoveryReadRouting =
+      priorityControlPlanePartition &&
+      routingReadinessDimension ===
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE &&
+      routingOptions?.[QUERY_EXECUTOR_ROUTING_OPTION_FIELD.FOR_READ] === true;
     if (
       nodeId &&
       nodeId !== this.nodeId &&
       priorityControlPlanePartition &&
       !priorityRecoveryWriteRouting &&
+      !priorityRecoveryReadRouting &&
       typeof this.messageRouter?.getConnectionState ===
         QUERY_EXECUTOR_LITERAL.STRING_FUNCTION
     ) {

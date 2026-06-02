@@ -143,6 +143,56 @@ test('active-gate owner recovery wait enqueues owner wake reentry',
     }
   });
 
+test('active-gate owner recovery wait enqueues owner wake after snapshot drain',
+  async (t) => {
+    const enqueueCalls = [];
+    const originalDrainQueueForSnapshot = SnapshotService.drainQueueForSnapshot;
+    const originalIsQueuePressureDetected =
+      SnapshotService.isQueuePressureDetected;
+    SnapshotService.isQueuePressureDetected = () => true;
+    SnapshotService.drainQueueForSnapshot =
+      async () => OWNER_RECOVERY_DRAINED_QUEUE_COUNT;
+    try {
+      const publicationOutcome = await reconcileActiveGateMembershipPublication(
+        buildOwnerRecoveryEnqueueCoordinator(enqueueCalls),
+        buildOwnerRecoveryWaitHandoff(),
+      );
+
+      t.match(
+        publicationOutcome,
+        {
+          state: OWNER_RECOVERY_TARGET_BLOCKED,
+          enqueued: true,
+          target: {
+            pendingRecoveryNodeIds: [...OWNER_RECOVERY_PENDING_NODE_IDS],
+          },
+        },
+        'owner-recovery wait should stay enqueued after draining snapshot pressure',
+      );
+      t.equal(
+        enqueueCalls.length,
+        OWNER_RECOVERY_ENQUEUED_COUNT,
+        'draining snapshot pressure must not replace the owner wake',
+      );
+      t.match(
+        enqueueCalls[0],
+        {
+          reason: OWNER_RECOVERY_RECONCILE_REASON,
+          context: {
+            publicationActiveGateHandoff: {
+              nextAction: OWNER_RECOVERY_WAIT_ACTION,
+            },
+          },
+        },
+        'owner wake should still carry the active-gate handoff context',
+      );
+    } finally {
+      SnapshotService.drainQueueForSnapshot = originalDrainQueueForSnapshot;
+      SnapshotService.isQueuePressureDetected =
+        originalIsQueuePressureDetected;
+    }
+  });
+
 test('active-gate owner recovery wait reports queue pressure reentry',
   async (t) => {
     const originalDrainQueueForSnapshot = SnapshotService.drainQueueForSnapshot;

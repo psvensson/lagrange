@@ -1,0 +1,23 @@
+{
+  "id": "quest-git-handoff-requirement",
+  "statement": "Quest workflow tooling requires committing and pushing Quest-scoped changes after Solver audit passes.",
+  "priority": 1,
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/quest-git-handoff-requirement.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "quest-git-handoff-requirement-main",
+      "priority": 1,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/quest-git-handoff-requirement.json"
+          }
+        }
+      }
+    ]
+  }
