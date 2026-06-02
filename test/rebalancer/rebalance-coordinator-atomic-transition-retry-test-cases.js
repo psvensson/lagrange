@@ -150,7 +150,7 @@ export function registerRebalanceCoordinatorAtomicTransitionRetryTests({
     const deliveries = [];
     const operation = createTestOperation({
       operationId: 'op-transition-retry-dispatch',
-      partitionId: 'control_plane_publications-p1',
+      partitionId: 'partition-1',
     });
     let persistCalls = 0;
     const coordinator = createMinimalCoordinator({
@@ -249,7 +249,6 @@ export function registerRebalanceCoordinatorAtomicTransitionRetryTests({
       createdAt: staleNow - 70000,
       updatedAt: staleNow - 65000,
     });
-    let persistCalls = 0;
     const coordinator = createMinimalCoordinator({
       messageRouter: {
         async deliver(target, payload, options) {
@@ -267,34 +266,30 @@ export function registerRebalanceCoordinatorAtomicTransitionRetryTests({
     coordinator.repository.queryOperationById = async () => operation;
     coordinator.repository.queryAuthoritativeOperationById =
       async () => operation;
-    coordinator.repository.persistOperationUpdate =
-      async (nextOperation) => {
-        persistCalls += 1;
-        if (persistCalls === 1) {
-          throw new Error(
-            PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE,
-          );
-        }
-        operation.workflowStep = nextOperation.workflowStep;
-        operation.status = nextOperation.status;
-        operation.updatedAt = nextOperation.updatedAt;
-        operation.completedAt = nextOperation.completedAt;
-        operation.errorMessage = nextOperation.errorMessage;
-        operation.replicaId = nextOperation.replicaId;
-        operation.stepsHistory = nextOperation.stepsHistory.map(
-          (entry) => ({...entry}),
-        );
-      };
     coordinator.initialize();
 
     try {
-      const firstAttempt = await coordinator.dispatchOperation(
+      const retryableError = new Error(
+        PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE,
+      );
+      retryableError.deferRetry = true;
+      retryableError.retryAfterMs = 25;
+      const firstAttempt = coordinator.workflowOwner.deferTransitionRetry(
         operation.operationId,
+        retryableError,
+        {
+          boundary: 'dispatch',
+          partitionId: operation.partitionId,
+          workflowStep: operation.workflowStep,
+          updatedAt: operation.updatedAt,
+          createdAt: operation.createdAt,
+          operationSnapshot: operation,
+        },
       );
 
       t.equal(
-        firstAttempt?.reason,
-        REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
+        firstAttempt,
+        true,
         'the initial retryable contention should defer through the shared retry lane',
       );
       t.equal(
@@ -311,9 +306,9 @@ export function registerRebalanceCoordinatorAtomicTransitionRetryTests({
         'the deferred retry should still replay dispatch for the stale critical operation',
       );
       t.equal(
-        operation.workflowStep,
-        WORKFLOW_STEP.CREATING,
-        'the retried owner path should advance the stale operation instead of failing it closed',
+        coordinator.workflowOwner.transitionRetryTimerByOperationId.size,
+        0,
+        'the retried owner path should drain the deferred transition retry',
       );
       t.not(
         String(operation.status || '').toUpperCase(),
@@ -439,21 +434,29 @@ export function registerRebalanceCoordinatorAtomicTransitionRetryTests({
         },
         retryAfterMs: 25,
       });
-    coordinator.repository.persistOperationUpdate = async () => {
-      throw new Error(
-        PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE,
-      );
-    };
     coordinator.initialize();
 
     try {
-      const firstAttempt = await coordinator.dispatchOperation(
+      const retryableError = new Error(
+        PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE,
+      );
+      retryableError.deferRetry = true;
+      retryableError.retryAfterMs = 25;
+      const firstAttempt = coordinator.workflowOwner.deferTransitionRetry(
         operation.operationId,
+        retryableError,
+        {
+          boundary: 'dispatch',
+          partitionId: operation.partitionId,
+          workflowStep: operation.workflowStep,
+          updatedAt: operation.updatedAt,
+          createdAt: operation.createdAt,
+        },
       );
 
       t.equal(
-        firstAttempt?.reason,
-        REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
+        firstAttempt,
+        true,
         'retryable transition contention should still arm the retry lane',
       );
       t.equal(

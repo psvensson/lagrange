@@ -4,6 +4,8 @@ import path from 'node:path';
 import {
   EVENT_EVIDENCE_INGESTED,
   EVENT_THEORY_RESULT,
+  VERDICT_BLOCK_EVIDENCE_INCOMPLETE,
+  VERDICT_REASON_EXECUTION_INCOMPLETE,
 } from './constants.js';
 import {buildMechanismCardFromEvidence} from './mechanism-card.js';
 import {evaluate} from './probe.js';
@@ -241,7 +243,10 @@ export function ingestEvidence(root, {questId, frontierId, evidencePath}) {
   // Evaluate theory result if a selected theory exists
   if (selectedTheory) {
     let result = 'falsified';
-    if (verdict === 'BLOCK_EVIDENCE_INCOMPLETE' || verdictReason === 'execution_incomplete_or_metrics_missing' || metric === null) {
+    const nonMeasuring = verdict === VERDICT_BLOCK_EVIDENCE_INCOMPLETE ||
+      verdictReason === VERDICT_REASON_EXECUTION_INCOMPLETE ||
+      metric === null;
+    if (nonMeasuring) {
       result = 'needs-rerun';
     } else {
       const currentMetric = frontierState?.current;

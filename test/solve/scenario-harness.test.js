@@ -5,7 +5,7 @@ import os from 'node:os';
 
 import {scenarioHarnessProbe} from '../../scripts/solve/probes/scenario-harness.js';
 
-function writeReport(dir, name, {ts, scenario, passed, priorityItems, failed}) {
+function writeReport(dir, name, {ts, scenario, passed, priorityItems, failed, verdictReason}) {
   fs.writeFileSync(
     path.join(dir, `${name}.report.json`),
     JSON.stringify({
@@ -15,12 +15,18 @@ function writeReport(dir, name, {ts, scenario, passed, priorityItems, failed}) {
       standardSummary: {
         scenarios: [{
           scenario,
-          current: {passed, verdict: passed ? 'PASS' : 'BLOCK_EVIDENCE_INCOMPLETE'},
+          current: {
+            passed,
+            verdict: passed ? 'PASS' : 'BLOCK_EVIDENCE_INCOMPLETE',
+            ...(verdictReason ? {verdictReason} : {}),
+          },
         }],
       },
     }),
   );
 }
+
+const INCOMPLETE_REASON = 'execution_incomplete_or_metrics_missing';
 
 function tmp() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'probe-'));
@@ -126,6 +132,50 @@ tap.test('scenario-harness probe (P1)', async (t) => {
     const r = scenarioHarnessProbe.measure(
       {scenario: SC, reportDir: dir, metric: 'failed'});
     t.equal(r.metric, 1, 'failed mode returns summary.failed');
+    fs.rmSync(dir, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('an incomplete run is an invalid sample => null metric, not a false 0', (t) => {
+    const dir = tmp();
+    // The run reports 0 outstanding items only because it never finished measuring.
+    writeReport(dir, 'blocked', {ts: '2026-06-01T01:00:00Z', scenario: SC,
+      passed: false, priorityItems: 0, failed: 0, verdictReason: INCOMPLETE_REASON});
+    const r = scenarioHarnessProbe.measure({scenario: SC, reportDir: dir});
+    t.equal(r.metric, null, 'blocked run does not read as metric 0');
+    t.equal(r.invalidSample, true, 'flagged as an invalid sample');
+    t.equal(r.done, false, 'an incomplete run can never be done');
+    fs.rmSync(dir, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('a structurally missing metric breaks the consecutive-green streak', (t) => {
+    const dir = tmp();
+    writeReport(dir, 'r1', {ts: '2026-06-01T01:00:00Z', scenario: SC,
+      passed: true, priorityItems: undefined, failed: undefined});
+    writeReport(dir, 'r2', {ts: '2026-06-01T02:00:00Z', scenario: SC,
+      passed: true, priorityItems: 0, failed: 0});
+    writeReport(dir, 'r3', {ts: '2026-06-01T03:00:00Z', scenario: SC,
+      passed: true, priorityItems: 0, failed: 0});
+    const r = scenarioHarnessProbe.measure(
+      {scenario: SC, reportDir: dir, consecutive: 3});
+    t.equal(r.done, false, 'a missing metric within the window blocks done');
+    fs.rmSync(dir, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('an incomplete run breaks the consecutive-green streak', (t) => {
+    const dir = tmp();
+    writeReport(dir, 'r1', {ts: '2026-06-01T01:00:00Z', scenario: SC,
+      passed: true, priorityItems: 0, failed: 0});
+    writeReport(dir, 'r2', {ts: '2026-06-01T02:00:00Z', scenario: SC,
+      passed: true, priorityItems: 0, failed: 0});
+    // newest run is incomplete: even though it claims passed, it did not measure.
+    writeReport(dir, 'r3', {ts: '2026-06-01T03:00:00Z', scenario: SC,
+      passed: true, priorityItems: 0, failed: 0, verdictReason: INCOMPLETE_REASON});
+    const r = scenarioHarnessProbe.measure(
+      {scenario: SC, reportDir: dir, consecutive: 3});
+    t.equal(r.done, false, 'a non-measuring run within the window blocks done');
     fs.rmSync(dir, {recursive: true, force: true});
     t.end();
   });

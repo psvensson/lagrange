@@ -23,7 +23,7 @@ import {
 } from './routing-repair-test-helpers.js';
 
 const SQL_ENGINE_SYSTEM_TABLE_UPDATE_SQL =
-  "UPDATE nodes SET status = 'active' WHERE node_id = 'node-a'";
+  'UPDATE nodes SET status = \'active\' WHERE node_id = \'node-a\'';
 const SQL_ENGINE_SYSTEM_TABLE_WRITE_DELIVERY_SOURCE =
   'control-plane:write:nodes:node-a';
 const TEST_PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_PRIORITY = 'critical';
@@ -238,79 +238,84 @@ function registerSqlQueryEngineExecutionTestCases({
     }, 'user transaction delivery should keep the default serve routing');
   });
 
-  test('SQLQueryEngine - defaults system-table selects to recovery routing',
-    async (t) => {
-      const partitionId = 'logs-p1';
-      const cache = createMockSystemCache(
-        [
-          {
-            table_name: TABLES.LOGS,
-          },
-        ],
-        [
-          {
-            partition_id: partitionId,
-            table_name: TABLES.LOGS,
-          },
-        ],
-        [
-          {
-            service_id: `${partitionId}-r1`,
-            service_type: SERVICE_TYPE.PARTITION,
-            partition_id: partitionId,
-            node_id: 'seed-node',
-            raft_role: 'leader',
-            address: `seed-node/partition/${partitionId}-r1`,
-            status: SERVICE_STATUS.ACTIVE,
-          },
-        ],
-      );
-      const engine = new SQLQueryEngine({
-        nodeId: 'select-node',
-        systemCache: cache,
-        messageRouter: createMockMessageRouter(),
-        distributedQueryPlanner: {
-          planSelect() {
-            return {
-              tablePlans: new Map([
-                [
-                  TABLES.LOGS,
-                  {
-                    partitions: [partitionId],
-                  },
-                ],
-              ]),
-              diagnostics: {
-                tablePlans: [],
-              },
-            };
-          },
+  test('SQLQueryEngine - defaults system-table recovery selects to replica ' +
+    'routing', async (t) => {
+    const partitionId = 'logs-p1';
+    const cache = createMockSystemCache(
+      [
+        {
+          table_name: TABLES.LOGS,
         },
-      });
-      let capturedExecutionOptions = null;
-      engine.queryExecutor = {
-        async executeSelect(_ast, _partitionIds, _params, executionOptions = {}) {
-          capturedExecutionOptions = executionOptions;
+      ],
+      [
+        {
+          partition_id: partitionId,
+          table_name: TABLES.LOGS,
+        },
+      ],
+      [
+        {
+          service_id: `${partitionId}-r1`,
+          service_type: SERVICE_TYPE.PARTITION,
+          partition_id: partitionId,
+          node_id: 'seed-node',
+          raft_role: 'leader',
+          address: `seed-node/partition/${partitionId}-r1`,
+          status: SERVICE_STATUS.ACTIVE,
+        },
+      ],
+    );
+    const engine = new SQLQueryEngine({
+      nodeId: 'select-node',
+      systemCache: cache,
+      messageRouter: createMockMessageRouter(),
+      distributedQueryPlanner: {
+        planSelect() {
           return {
-            success: true,
-            rows: [],
-            count: 0,
-            distributedMetrics: {},
+            tablePlans: new Map([
+              [
+                TABLES.LOGS,
+                {
+                  partitions: [partitionId],
+                },
+              ],
+            ]),
+            diagnostics: {
+              tablePlans: [],
+            },
           };
         },
-      };
-
-      const result = await engine.executeQuery(
-        'SELECT * FROM logs WHERE log_id = \'log-1\'',
-      );
-
-      t.equal(result.success, true, 'system-table select should still succeed');
-      t.equal(
-        capturedExecutionOptions?.routingReadinessDimension,
-        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-        'system-table select should default to the recovery-eligible routing lane',
-      );
+      },
     });
+    let capturedExecutionOptions = null;
+    engine.queryExecutor = {
+      async executeSelect(_ast, _partitionIds, _params, executionOptions = {}) {
+        capturedExecutionOptions = executionOptions;
+        return {
+          success: true,
+          rows: [],
+          count: 0,
+          distributedMetrics: {},
+        };
+      },
+    };
+
+    const result = await engine.executeQuery(
+      'SELECT * FROM logs WHERE log_id = \'log-1\'',
+    );
+
+    t.equal(result.success, true, 'system-table select should still succeed');
+    t.equal(
+      capturedExecutionOptions?.preferLeader,
+      false,
+      'recovery-lane system-table SELECT should prefer any eligible replica',
+    );
+    t.equal(
+      capturedExecutionOptions?.routingReadinessDimension,
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+      'system-table select should default to the recovery-eligible routing lane',
+    );
+  });
 
   test('SQLQueryEngine - system-table selects honor replica-preferred routing',
     async (t) => {

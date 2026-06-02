@@ -30,6 +30,7 @@ import {
   requiresSourceVerification,
 } from './change-artifact.js';
 import {loadQuest, projectState, readLog} from './store.js';
+import {questClass, closureKind, isDecisionClosure} from './closure-kind.js';
 
 const BLOCKED_THEORY_STATUSES = Object.freeze([
   THEORY_RESULT_AVOIDED,
@@ -229,6 +230,19 @@ function auditModelEvidence(root, quest, log, startIndex) {
   return problems;
 }
 
+function closureStrengthWarnings(quest, log) {
+  const solved = log.some((event) =>
+    event.type === EVENT_QUEST && event.status === STATUS_SOLVED);
+  if (!solved) return [];
+  if (questClass(quest) === 'product' && isDecisionClosure(quest, log)) {
+    return [
+      `product quest closed on a ${closureKind(quest, log)} (oracle) probe; ` +
+      'product goals should be MEASURED against a real artifact, not asserted',
+    ];
+  }
+  return [];
+}
+
 export function auditQuest(root, quest) {
   const log = readLog(root, quest.id);
   const state = projectState(quest, log);
@@ -248,12 +262,14 @@ export function auditQuest(root, quest) {
       `fresh probe evidence is not recorded: ${unrecorded.evidence}`,
     ));
   }
+  const warnings = closureStrengthWarnings(quest, log);
   return {
     questId: quest.id,
     status: problems.length === 0 ? 'pass' : 'fail',
     problemCount: problems.length,
     strictAuditStartedAt: startIndex > 0 ? log[startIndex - 1]?.ts || null : null,
     problems,
+    warnings,
     state,
   };
 }
@@ -278,6 +294,12 @@ export function runAuditCommand(root, args) {
     for (const item of result.problems) {
       const frontier = item.frontier ? ` [${item.frontier}]` : '';
       lines.push(`- ${item.message}${frontier}`);
+    }
+  }
+  if (result.warnings && result.warnings.length > 0) {
+    lines.push('', '## Warnings');
+    for (const warning of result.warnings) {
+      lines.push(`- ${warning}`);
     }
   }
   return `${lines.join('\n')}\n`;

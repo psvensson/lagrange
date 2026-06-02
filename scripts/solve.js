@@ -6,12 +6,15 @@
 //   run     run the control loop to a terminal or non-terminal gate, then report
 //   status  print the projected state (frontiers, rungs, metrics)
 //   report  (re)generate and print the markdown result projection
+//   portfolio cross-quest governance view (class/closure/outcome + meta ratio)
 //   probe   ad-hoc: ask a probe for {metric, done, evidence} without recording
 //   theory  record two-layer Quest theories and their outcomes
 //   health  print Quest loop-health and next-action signals
 //   attempt run a command through the atomic measured-attempt path
 //   audit   validate Quest workflow integrity
+//   handoff compute the scope-safe git commit pathspec for one Quest
 //   upgrade establish a strict-audit baseline for an existing legacy Quest
+//   reopen  re-open a frontier parked on non-measuring samples (evidence-gated)
 //
 // The CLI is a thin shell over scripts/solve/*. All Quest truth lives in the
 // append-only log; reports and state are projections.
@@ -33,6 +36,9 @@ import {detectUnrecordedEvidence, ingestEvidence} from './solve/evidence.js';
 import {runAttemptCommand} from './solve/attempt.js';
 import {runAuditCommand} from './solve/audit.js';
 import {runUpgradeCommand} from './solve/upgrade.js';
+import {runReopenCommand} from './solve/reopen.js';
+import {runPortfolioCommand} from './solve/portfolio.js';
+import {runHandoffCommand} from './solve/handoff.js';
 import {evaluate} from './solve/probe.js';
 
 function parseArgs(argv) {
@@ -66,6 +72,10 @@ function questTemplate(id, statement) {
     id,
     statement: statement || 'Describe the terminal success condition in one line.',
     priority: 1,
+    // class: "product" (default) goals must be MEASURED against a real artifact;
+    // "process" goals are scaffolding/decision records and may close on an oracle.
+    // This drives report closure-strength labeling and the audit closure-mismatch warning.
+    class: 'product',
     // done_when: the binary, artifact-bound success predicate. Sealed once declared.
     doneWhen: {
       probe: 'scenario-harness',
@@ -294,11 +304,26 @@ function cmdUpgrade(root, args) {
   process.stdout.write(runUpgradeCommand(root, args));
 }
 
+function cmdReopen(root, args) {
+  process.stdout.write(runReopenCommand(root, args));
+}
+
+// Portfolio is a cross-quest governance view and deliberately takes no --id.
+function cmdPortfolio(root) {
+  process.stdout.write(runPortfolioCommand(root));
+}
+
+function cmdHandoff(root, args) {
+  process.stdout.write(runHandoffCommand(root, args));
+}
+
 const COMMANDS = {
   'new': cmdNew,
   'run': cmdRun,
   'status': cmdStatus,
   'report': cmdReport,
+  'portfolio': cmdPortfolio,
+  'handoff': cmdHandoff,
   'probe': cmdProbe,
   'finding': cmdFinding,
   'step': cmdStep,
@@ -309,6 +334,7 @@ const COMMANDS = {
   'attempt': cmdAttempt,
   'audit': cmdAudit,
   'upgrade': cmdUpgrade,
+  'reopen': cmdReopen,
 };
 
 function main() {

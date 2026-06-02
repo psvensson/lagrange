@@ -191,6 +191,7 @@ export function finalizeAttempt(root, quest, ctx, pick, before, result) {
     metricBefore: before.metric,
     metricAfter: after.metric,
     metricDirection: METRIC_DIRECTION_LOWER_IS_BETTER,
+    invalidSample: Boolean(before.invalidSample) || Boolean(after.invalidSample),
     evidence: after.evidence,
     evidenceIdentity: after.evidenceIdentity || null,
     evidenceFingerprint: after.evidenceFingerprint || null,

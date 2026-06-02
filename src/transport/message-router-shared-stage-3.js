@@ -3,7 +3,20 @@ import {
   TRANSPORT_NUM,
 } from '../constants/transport.js';
 import {EMPTY_DELIVERY_SOURCE, MESSAGE_ROUTER_LITERAL, OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE, OUTBOUND_QUEUE_BACKPRESSURE_SCOPE, OutboundDeliveryPriority, TRANSPORT_PRESSURE_SUMMARY_FIELD, createQueueWaitHistogram, normalizeIdentifier, recordQueueWaitDuration, resolvePendingReplacementKey} from './message-router-shared-stage-1.js';
-import {adjustInFlightPriorityCount, adjustInFlightSourceCount, buildPendingSourceAdmission, buildPendingSourceSummary, buildSupersededPendingResult, canDispatchPendingItem, countInFlightByPriority, countPendingByPriority, dequeueNextPendingItem, normalizeOutboundDeliveryPriority, normalizeQueuedDeliverySource, peekNextPendingItem, resolveBackgroundPendingLimit, resolveDeliverySource} from './message-router-shared-stage-2.js';
+import {adjustInFlightCriticalSourceReserveCount, adjustInFlightPriorityCount, adjustInFlightSourceCount, buildPendingSourceAdmission, buildPendingSourceSummary, buildSupersededPendingResult, canDispatchPendingItem, countInFlightByPriority, countPendingByPriority, dequeueNextPendingItem, normalizeOutboundDeliveryPriority, normalizeQueuedDeliverySource, peekNextPendingItem, resolveBackgroundPendingLimit, resolveDeliverySource, takeCriticalPendingItemForSourceReserve} from './message-router-shared-stage-2.js';
+
+function buildOutboundQueueBackpressureError(
+  nodeId,
+  queue,
+  backpressureScope,
+) {
+  const error = new Error(
+    ROUTER_ERROR_MSG.outboundQueueBackpressured(nodeId, queue.maxPending),
+  );
+  error.code = OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE;
+  error.backpressureScope = backpressureScope;
+  return error;
+}
 
 class OutboundDeliveryRegistryOwner {
   constructor(router) {
@@ -16,6 +29,7 @@ class OutboundDeliveryRegistryOwner {
         inFlight: TRANSPORT_NUM.ZERO,
         inFlightCritical: TRANSPORT_NUM.ZERO,
         inFlightBackground: TRANSPORT_NUM.ZERO,
+        inFlightCriticalSourceReserve: TRANSPORT_NUM.ZERO,
         inFlightBySource: new Map(),
         pending: [],
         maxConcurrent: this.router.outboundQueueMaxConcurrent,
@@ -85,20 +99,80 @@ class OutboundDeliveryRegistryOwner {
         deliverySource,
         deliveryPriority,
       );
-      const isNodeBackpressured =
+      let isNodeBackpressured =
         deliveryPriority === OutboundDeliveryPriority.CRITICAL ?
           queue.pending.length >= queue.maxPending :
           pendingBackground >= backgroundPendingLimit;
       const isSourceBackpressured =
         pendingSourceAdmission.sourceBackpressured === true;
+      let criticalSourceReserveAdmission = false;
+      if (
+        isNodeBackpressured &&
+        !isSourceBackpressured &&
+        deliveryPriority === OutboundDeliveryPriority.CRITICAL
+      ) {
+        while (queue.pending.length >= queue.maxPending) {
+          const preemptedItem = takeCriticalPendingItemForSourceReserve(
+            queue,
+            deliverySource,
+          );
+          if (!preemptedItem) {
+            break;
+          }
+          const preemptionError = buildOutboundQueueBackpressureError(
+            nodeId,
+            queue,
+            OUTBOUND_QUEUE_BACKPRESSURE_SCOPE.DELIVERY_SOURCE,
+          );
+          preemptionError.preemptedByCriticalSource = deliverySource;
+          preemptedItem.reject(preemptionError);
+          this.router.logger.warn(
+            MESSAGE_ROUTER_LITERAL
+              .STRING_OUTBOUND_QUEUE_SATURATED_FOR_NODE_DELIVERY,
+            {
+              localNodeId: this.router.nodeId,
+              targetNodeId: nodeId,
+              deliveryPriority: preemptedItem?.priority,
+              attemptedDeliverySource: preemptedItem?.deliverySource,
+              admittedDeliverySource: deliverySource,
+              backpressureScope:
+                OUTBOUND_QUEUE_BACKPRESSURE_SCOPE.DELIVERY_SOURCE,
+              preemptedForCriticalSourceReserve: true,
+              pending: queue.pending.length,
+              pendingCritical: countPendingByPriority(
+                queue,
+                OutboundDeliveryPriority.CRITICAL,
+              ),
+              pendingBackground,
+              backgroundPendingLimit,
+              criticalReserve: queue.criticalReserve,
+              maxPending: queue.maxPending,
+              inFlight: queue.inFlight,
+              inFlightCritical: countInFlightByPriority(
+                queue,
+                OutboundDeliveryPriority.CRITICAL,
+              ),
+              inFlightBackground: countInFlightByPriority(
+                queue,
+                OutboundDeliveryPriority.BACKGROUND,
+              ),
+              pendingSourceSummary: buildPendingSourceSummary(queue),
+            },
+          );
+        }
+        criticalSourceReserveAdmission =
+          queue.pending.length < queue.maxPending;
+        isNodeBackpressured =
+          queue.pending.length >= queue.maxPending;
+      }
       if (isNodeBackpressured || isSourceBackpressured) {
-        const error = new Error(
-          ROUTER_ERROR_MSG.outboundQueueBackpressured(nodeId, queue.maxPending),
+        const error = buildOutboundQueueBackpressureError(
+          nodeId,
+          queue,
+          isSourceBackpressured ?
+            OUTBOUND_QUEUE_BACKPRESSURE_SCOPE.DELIVERY_SOURCE :
+            OUTBOUND_QUEUE_BACKPRESSURE_SCOPE.NODE,
         );
-        error.code = OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE;
-        error.backpressureScope = isSourceBackpressured ?
-          OUTBOUND_QUEUE_BACKPRESSURE_SCOPE.DELIVERY_SOURCE :
-          OUTBOUND_QUEUE_BACKPRESSURE_SCOPE.NODE;
         this.router.logger.warn(
           MESSAGE_ROUTER_LITERAL.STRING_OUTBOUND_QUEUE_SATURATED_FOR_NODE_DELIVERY,
           {
@@ -143,6 +217,7 @@ class OutboundDeliveryRegistryOwner {
         priority: deliveryPriority,
         deliverySource,
         replacePendingKey,
+        criticalSourceReserve: criticalSourceReserveAdmission,
       });
       this.process(nodeId);
     });
@@ -172,6 +247,12 @@ class OutboundDeliveryRegistryOwner {
           TRANSPORT_NUM.ONE,
         );
       }
+      if (item?.criticalSourceReserve === true) {
+        adjustInFlightCriticalSourceReserveCount(
+          queue,
+          TRANSPORT_NUM.ONE,
+        );
+      }
       const queueWaitMs = Math.max(
         TRANSPORT_NUM.ZERO,
         Date.now() - (item?.queuedAt || Date.now()),
@@ -193,6 +274,12 @@ class OutboundDeliveryRegistryOwner {
               -TRANSPORT_NUM.ONE,
             );
           }
+          if (item?.criticalSourceReserve === true) {
+            adjustInFlightCriticalSourceReserveCount(
+              queue,
+              -TRANSPORT_NUM.ONE,
+            );
+          }
           item.resolve({
             result,
             queueWaitMs,
@@ -210,6 +297,12 @@ class OutboundDeliveryRegistryOwner {
             adjustInFlightSourceCount(
               queue,
               item?.deliverySource,
+              -TRANSPORT_NUM.ONE,
+            );
+          }
+          if (item?.criticalSourceReserve === true) {
+            adjustInFlightCriticalSourceReserveCount(
+              queue,
               -TRANSPORT_NUM.ONE,
             );
           }

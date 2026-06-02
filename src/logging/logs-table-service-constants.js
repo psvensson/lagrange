@@ -20,6 +20,8 @@ const LOCAL_STR_10NUJ = 'control-plane:write';
 const LOCAL_STR_1KX9P = 'control-plane:read';
 const LOCAL_STR_121M5 = 'control-plane:table:logs';
 const LOCAL_STR_1SYL3 = 'transport:logs-writer';
+const LOGS_TABLE_BACKGROUND_WRITE_PRESSURE_RESOURCE_KEY =
+  'control-plane:logs-table:background-write';
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_INFO = 'INFO';
 const LOCAL_STR_PIPE = '|';
@@ -35,7 +37,7 @@ const LOGS_TABLE_TRANSPORT_PRESSURE_RESOURCE_KEYS = Object.freeze([
   LOCAL_STR_1SYL3,
 ]);
 const LOGS_TABLE_CONTROL_PLANE_WRITE_PRESSURE_RESOURCE_KEYS = Object.freeze([
-  LOCAL_STR_10NUJ,
+  LOGS_TABLE_BACKGROUND_WRITE_PRESSURE_RESOURCE_KEY,
   LOCAL_STR_121M5,
 ]);
 const LOGS_TABLE_CONTROL_PLANE_QUERY_PRESSURE_RESOURCE_KEYS = Object.freeze([

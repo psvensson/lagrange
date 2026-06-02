@@ -43,6 +43,10 @@ node scripts/solve.js new --id <id> --statement "<sealed result>"
 
 The file declares:
 
+- `class`: `"product"` (default) or `"process"`. Product goals must be MEASURED
+  against a real artifact probe; process goals are scaffolding/decision records
+  and may legitimately close on an oracle. This drives report closure labeling,
+  the audit closure-strength warning, and the portfolio meta ratio.
 - `doneWhen`: the binary victory condition. This is artifact-bound and sealed.
 - `frontiers[]`: independent attack surfaces. Each frontier has a priority and
   a metric probe.
@@ -50,6 +54,42 @@ The file declares:
 
 Keep `metric` and `doneWhen` separate. A metric is a gradient; only `doneWhen`
 can close the Quest.
+
+## Metric Validity And Invalid Samples
+
+A metric is only meaningful when it was read from a run that actually measured
+something. A scenario-harness run whose verdict is `BLOCK_EVIDENCE_INCOMPLETE`
+(reason `execution_incomplete_or_metrics_missing`) did not validate anything, so
+the probe reports `metric: null` with `invalidSample: true` rather than a
+misleading `0`. An invalid sample is an honest no-measurement: it never counts as
+progress, never satisfies `doneWhen`, breaks the consecutive-pass streak, and
+climbs the strategy ladder like any other stall. Never treat a blocked or
+incomplete run as a metric floor.
+
+When a frontier has already parked and its ladder climb to the park rung
+included one or more invalid samples, the `ladder exhausted without metric
+movement` verdict rests partly on untrustworthy data. Reopen it with
+`node scripts/solve.js reopen --id <quest> --frontier <id> --reason "..."`. The
+reopen is evidence-gated: it is refused unless at least one contributing attempt
+re-classifies as a non-measuring sample (so an honest park is never reopened),
+it leaves `doneWhen` and the frontier metric untouched (no goalpost movement),
+keeps the park event in the append-only log, preserves `parkedCount` so the
+scheduler still de-prioritizes a chronic parker, and returns the frontier to the
+first rung for fresh, honestly-measured attempts.
+
+## Closure Strength
+
+Closure provenance is derived purely from the sealed `doneWhen.probe`:
+
+- **MEASURED**: `doneWhen` read a real artifact probe (e.g. `scenario-harness`).
+  Convergence was observed against external evidence.
+- **DECISION**: `doneWhen` read a hand-authored `oracle` file. The closure is a
+  recorded decision/process judgement, not a measurement.
+
+Both are legitimate, but a `product`-class Quest that closes on a DECISION is a
+closure-strength mismatch: the audit surfaces it as a warning. Reports label the
+banner `SOLVED (MEASURED)` or `SOLVED (DECISION)` so a reader can always tell
+asserted closures from measured ones.
 
 ## Two-Layer Theory
 
@@ -158,6 +198,13 @@ Do not include unrelated dirty worktree entries from another Quest. If the
 worktree is mixed, use explicit pathspecs with `git add <quest-scoped paths>`,
 then `git commit -m "<quest>: <summary>"` and `git push`.
 
+`node scripts/solve.js handoff --id <quest>` computes this scope-safe pathspec.
+It runs the audit and refuses on failure, derives the in-scope set purely from
+the Quest's sealed `solve/` artifacts plus the source/test files named inside its
+own diffs, and lists every other dirty file as out-of-scope so it is never
+swept in. It is a dry run by default; `--commit` executes the printed
+`git add`/`commit`/`push` for the in-scope paths only.
+
 ## Strategy Ladder
 
 Each frontier climbs a finite ladder when it stalls:
@@ -210,6 +257,22 @@ reports under `solve/report/` and attempt change artifacts under
 
 Projected state under `solve/state/` is local cache and may be rebuilt from the
 Quest plus append-only log. Do not rely on `solve/state/` as durable memory.
+
+## Portfolio And Meta Ratio
+
+The Solver is a means, not the product. Most Quests are easy to author about the
+solver, the models, or the process itself; only some attack real product
+problems. Left unwatched, scaffolding work quietly dominates the open frontier.
+
+`node scripts/solve.js portfolio` is the cross-quest governance view. It scans
+`solve/quests/*.json`, reads each terminal outcome from the log, and prints a
+table of id, class, closure kind, outcome, and attempts, plus a summary with the
+open `process:product` ratio. This view takes no `--id`.
+
+Governance guidance: process Quests are scaffolding. A healthy portfolio keeps
+product Quests as the majority of *open* work. A rising open `process:product`
+ratio, or a cluster of `product` Quests closing on DECISION, is a signal to
+re-balance toward measured product outcomes rather than self-graded meta-work.
 
 ## User-Facing Vocabulary
 

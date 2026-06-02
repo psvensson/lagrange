@@ -2,12 +2,14 @@
 
 **Goal:** rolling-restart passes 3 consecutive harness runs with no priority items after core stability fixes.
 
+**Class:** product · **Closure:** MEASURED
+
 **Outcome:** IN PROGRESS (no terminal recorded)
 
-**Attempts:** 4
+**Attempts:** 7
 
 ## Frontiers
-- **rolling-restart-core-stability-main** [open] rung 3, attempts 4, metric 1 -> 0
+- **rolling-restart-core-stability-main** [open] rung 1, attempts 7, metric 1 -> 0 — Concern-1 metric-validity fix: the ladder climb to park included a non-measuring (execution_incomplete) harness sample that the pre-fix probe counted as a real metric 0, so the 'ladder exhausted without metric movement' park verdict is not trustworthy. Reopen at rung 0 for fresh, honestly-measured attempts; doneWhen and frontier metric are unchanged and parkedCount is preserved.
 
 ## Findings
 - **rolling-restart-core-stability-main**: Quest probe priority metric is now zero, but doneWhen remains false until three consecutive rolling-restart runs pass. (rules out: Do not claim SOLVED from metric zero without the consecutive doneWhen evidence.) [test-output/reports/rolling-restart-core-stability-after-local-mutation-gate.report.json]
@@ -23,6 +25,10 @@
 - **rolling-restart-core-stability-main**: Ingested evidence from rolling-restart-failure-diagnostics.report.json. Metric: 1 -> 0. Verdict: BLOCK_EVIDENCE_INCOMPLETE (execution_incomplete_or_metrics_missing). Root cause: startup. Dominant reason: readiness_probe_timeout=Node readiness probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304. Owner: none. Ingestion outcome: changed. [test-output/reports/rolling-restart-failure-diagnostics.report.json]
 - **rolling-restart-core-stability-main**: Quest restart state upgraded: no pending step remains; strict priority-bootstrap attempt is recorded and falsified; next selected theory is startup active admission before SQL/query transport serviceability. (rules out: Do not restart from the stale readiness-probe theory or treat strict priority bootstrap gates as sufficient for SOLVED evidence.) [test-output/reports/rolling-restart-core-stability-after-strict-priority-bootstrap.report.json]
 - **rolling-restart-core-stability-main**: Ingested evidence from rolling-restart-core-stability-after-endpoint-pressure-defer.report.json. Metric: 1 -> 0. Verdict: BLOCK_HARNESS_INVALID (harness_connectivity_or_system_failure). Root cause: startup. Dominant reason: readiness_probe_timeout=Node readiness probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304. Owner: none. Ingestion outcome: changed. [test-output/reports/rolling-restart-core-stability-after-endpoint-pressure-defer.report.json]
+- **rolling-restart-core-stability-main**: Subagent verifier Lovelace reviewed the recovery-lane system-table SELECT and bounded recovery-read candidate changes with no blocking findings before the measured rerun. (rules out: Do not treat the latest source changes as unverified before continuing rolling-restart.) [subagent:019e880f-4a2a-7241-b065-5a54407fa9ed]
+- **rolling-restart-core-stability-main**: Ingested evidence from rolling-restart-core-stability-after-logs-pressure-and-harness-import.report.json. Metric: 0 -> 0. Verdict: FAIL_CORE_INVARIANT (core_invariant_or_safety_violation). Root cause: topology. Dominant reason: publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72. Owner: operation_workflow_owner. Ingestion outcome: changed. [test-output/reports/rolling-restart-core-stability-after-logs-pressure-and-harness-import.report.json]
+- **rolling-restart-core-stability-main**: Ingested evidence from rolling-restart-core-stability-after-recovery-eligible-target-follow-up.report.json. Metric: 0 -> 0. Verdict: BLOCK_HARNESS_INVALID (harness_connectivity_or_system_failure). Root cause: unknown. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/rolling-restart-core-stability-after-recovery-eligible-target-follow-up.report.json]
+- **rolling-restart-core-stability-main**: Ingested evidence from rolling-restart-core-stability-after-critical-transport-source-reserve.report.json. Metric: 0 -> 0. Verdict: BLOCK_EVIDENCE_INCOMPLETE (execution_incomplete_or_metrics_missing). Root cause: topology. Dominant reason: priority_recovery_rebalancer_handoff_retry_scheduled. Owner: operation_workflow_owner. Ingestion outcome: changed. [test-output/reports/rolling-restart-core-stability-after-critical-transport-source-reserve.report.json]
 
 ## Theories
 - **theory-20260601-rolling-restart-evidence-closure** [active] system, mechanism observation_gap
@@ -33,10 +39,12 @@
 - **theory-20260601-publication-missing-active-node-2** [falsified] frontier, frontier rolling-restart-core-stability-main, layer observation, mechanism publication_missing_active_node
 - **theory-20260601-publication-missing-active-node-3** [needs-rerun] frontier, frontier rolling-restart-core-stability-main, layer model, mechanism publication_missing_active_node
 - **theory-20260601-readiness-probe-timeout-restart** [falsified] frontier, frontier rolling-restart-core-stability-main, layer model, mechanism readiness_probe_timeout
-- **theory-20260601-startup-active-before-sql-serviceable** [supported] frontier, frontier rolling-restart-core-stability-main, layer model, mechanism startup active admission declares the cluster usable before SQL/query transport control-plane serviceability is true for the canonical leader
+- **theory-20260601-startup-active-before-sql-serviceable** [falsified] frontier, frontier rolling-restart-core-stability-main, layer model, mechanism startup active admission declares the cluster usable before SQL/query transport control-plane serviceability is true for the canonical leader
+- **theory-20260602-priority-recovery-eligible-target-handoff** [falsified] frontier, frontier rolling-restart-core-stability-main, layer model, mechanism priority recovery follow-up target pre-selector rejects recovery-eligible lease-incomplete targets before workflow-owned handoff creation, modelGate npm run model:contracts
+- **theory-20260602-critical-transport-source-reserve** [needs-rerun] frontier, frontier rolling-restart-core-stability-main, layer model, mechanism critical, modelGate npm run model:contracts
 
 ## Selected Theories
-- **rolling-restart-core-stability-main**: theory-20260601-startup-active-before-sql-serviceable
+- **rolling-restart-core-stability-main**: theory-20260602-critical-transport-source-reserve
 
 ## Theory Results
 - **theory-20260601-rolling-restart-consecutive-proof**: needs-rerun [test-output/reports/rolling-restart-core-stability-after-priority-local-first.report.json]
@@ -52,6 +60,12 @@
 - **theory-20260601-publication-missing-active-node-3**: needs-rerun [test-output/reports/rolling-restart-failure-diagnostics.report.json]
 - **theory-20260601-readiness-probe-timeout-restart**: falsified [test-output/reports/rolling-restart-core-stability-after-strict-priority-bootstrap.report.json]
 - **theory-20260601-startup-active-before-sql-serviceable**: supported [test-output/reports/rolling-restart-core-stability-after-endpoint-pressure-defer.report.json]
+- **theory-20260601-startup-active-before-sql-serviceable**: supported [test-output/reports/rolling-restart-core-stability-after-recovery-system-table-select-routing.report.json]
+- **theory-20260601-startup-active-before-sql-serviceable**: falsified [test-output/reports/rolling-restart-core-stability-after-logs-pressure-and-harness-import.report.json]
+- **theory-20260602-priority-recovery-eligible-target-handoff**: falsified [test-output/reports/rolling-restart-core-stability-after-logs-pressure-and-harness-import.report.json]
+- **theory-20260602-priority-recovery-eligible-target-handoff**: falsified [test-output/reports/rolling-restart-core-stability-after-recovery-eligible-target-follow-up.report.json]
+- **theory-20260602-critical-transport-source-reserve**: falsified [test-output/reports/rolling-restart-core-stability-after-critical-transport-source-reserve.report.json]
+- **theory-20260602-critical-transport-source-reserve**: needs-rerun [test-output/reports/rolling-restart-core-stability-after-critical-transport-source-reserve.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | theory | change |
@@ -60,3 +74,6 @@
 | 2026-06-01T13:58:25.056Z | rolling-restart-core-stability-main | local-fix | 1 -> 0 | progress | theory-20260601-trace-a-single-operation-id-end | diff:src/rebalancer/operation-workflow-owner-ports.js |
 | 2026-06-01T14:10:17.607Z | rolling-restart-core-stability-main | widen-scope | 0 -> 0 | flat | theory-20260601-publication-missing-active-node-2 | diff:solve/changes/rolling-restart-core-stability/system-pause-removal.diff |
 | 2026-06-01T19:48:37.900Z | rolling-restart-core-stability-main | model | 0 -> 1 | flat | theory-20260601-readiness-probe-timeout-restart | diff:solve/changes/rolling-restart-core-stability/strict-priority-bootstrap-attempt.diff |
+| 2026-06-02T11:32:36.256Z | rolling-restart-core-stability-main | change-approach | 1 -> 0 | progress | theory-20260601-startup-active-before-sql-serviceable | diff:solve/changes/rolling-restart-core-stability/recovery-system-table-select-routing.diff |
+| 2026-06-02T12:30:26.442Z | rolling-restart-core-stability-main | change-approach | 0 -> 0 | flat | theory-20260602-priority-recovery-eligible-target-handoff | diff:solve/changes/rolling-restart-core-stability/priority-recovery-eligible-follow-up-target.diff |
+| 2026-06-02T13:45:10.066Z | rolling-restart-core-stability-main | local-fix | 0 -> ? | flat | theory-20260602-critical-transport-source-reserve | diff:solve/changes/rolling-restart-core-stability/critical-transport-source-reserve.diff |

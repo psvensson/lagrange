@@ -235,6 +235,24 @@ function countPendingBySource(queue, deliverySource) {
   }, TRANSPORT_NUM.ZERO);
 }
 
+function countCriticalPendingBySource(queue, deliverySource) {
+  if (!queue || !Array.isArray(queue.pending)) {
+    return TRANSPORT_NUM.ZERO;
+  }
+  const normalizedDeliverySource = normalizeQueuedDeliverySource(
+    deliverySource,
+  );
+  return queue.pending.reduce((count, item) => {
+    if (item?.priority !== OutboundDeliveryPriority.CRITICAL) {
+      return count;
+    }
+    return normalizeQueuedDeliverySource(item?.deliverySource) ===
+      normalizedDeliverySource ?
+      count + TRANSPORT_NUM.ONE :
+      count;
+  }, TRANSPORT_NUM.ZERO);
+}
+
 function buildPendingSourceAdmission(queue, deliverySource, deliveryPriority) {
   const pendingForSource = countPendingBySource(queue, deliverySource);
   const pendingSourceLimit = resolvePendingSourceLimit(
@@ -328,7 +346,88 @@ function normalizeQueuedDeliverySource(deliverySource) {
   );
 }
 
+function selectCriticalPendingSourcePreemptionCandidateIndex(
+  queue,
+  incomingDeliverySource,
+) {
+  if (
+    !queue ||
+    !Array.isArray(queue.pending) ||
+    queue.pending.length === TRANSPORT_NUM.ZERO
+  ) {
+    return -LOCAL_NUM_ONE;
+  }
+  const incomingSource = normalizeQueuedDeliverySource(incomingDeliverySource);
+  if (countCriticalPendingBySource(queue, incomingSource) > TRANSPORT_NUM.ZERO) {
+    return -LOCAL_NUM_ONE;
+  }
+  const sourceCounts = new Map();
+  for (const item of queue.pending) {
+    if (item?.priority !== OutboundDeliveryPriority.CRITICAL) {
+      continue;
+    }
+    const source = normalizeQueuedDeliverySource(item?.deliverySource);
+    if (source === incomingSource) {
+      continue;
+    }
+    sourceCounts.set(
+      source,
+      (sourceCounts.get(source) || TRANSPORT_NUM.ZERO) + TRANSPORT_NUM.ONE,
+    );
+  }
+  let selectedSource = null;
+  let selectedCount = TRANSPORT_NUM.ZERO;
+  for (const [source, count] of sourceCounts.entries()) {
+    if (count > selectedCount) {
+      selectedSource = source;
+      selectedCount = count;
+    }
+  }
+  if (selectedCount <= TRANSPORT_NUM.ONE) {
+    return -LOCAL_NUM_ONE;
+  }
+  for (
+    let index = queue.pending.length - TRANSPORT_NUM.ONE;
+    index >= TRANSPORT_NUM.ZERO;
+    index--
+  ) {
+    const item = queue.pending[index];
+    if (
+      item?.priority === OutboundDeliveryPriority.CRITICAL &&
+      normalizeQueuedDeliverySource(item?.deliverySource) === selectedSource
+    ) {
+      return index;
+    }
+  }
+  return -LOCAL_NUM_ONE;
+}
+
+function takeCriticalPendingItemForSourceReserve(
+  queue,
+  incomingDeliverySource,
+) {
+  const preemptionCandidateIndex =
+    selectCriticalPendingSourcePreemptionCandidateIndex(
+      queue,
+      incomingDeliverySource,
+    );
+  if (preemptionCandidateIndex < TRANSPORT_NUM.ZERO) {
+    return null;
+  }
+  return queue.pending.splice(
+    preemptionCandidateIndex,
+    TRANSPORT_NUM.ONE,
+  )[TRANSPORT_NUM.ZERO] || null;
+}
+
 function resolveNextCriticalPendingItemIndex(queue) {
+  const reservedCriticalIndex = queue.pending.findIndex((item) => {
+    return item?.priority === OutboundDeliveryPriority.CRITICAL &&
+      item?.criticalSourceReserve === true;
+  });
+  if (reservedCriticalIndex >= TRANSPORT_NUM.ZERO) {
+    return reservedCriticalIndex;
+  }
   const firstCriticalIndex = queue.pending.findIndex((item) => {
     return item?.priority === OutboundDeliveryPriority.CRITICAL;
   });
@@ -381,6 +480,13 @@ function countInFlightBySource(queue, deliverySource) {
     TRANSPORT_NUM.ZERO;
 }
 
+function countInFlightCriticalSourceReserve(queue) {
+  const rawCount = queue?.inFlightCriticalSourceReserve;
+  return Number.isFinite(rawCount) && rawCount > TRANSPORT_NUM.ZERO ?
+    Math.floor(rawCount) :
+    TRANSPORT_NUM.ZERO;
+}
+
 function resolveCriticalInFlightSourceLimit(queue) {
   if (!queue) {
     return TRANSPORT_NUM.ZERO;
@@ -410,6 +516,24 @@ function resolveCriticalInFlightSourceLimit(queue) {
   );
 }
 
+function resolveCriticalSourceReserveInFlightLimit(queue) {
+  if (!queue) {
+    return TRANSPORT_NUM.ZERO;
+  }
+  const maxConcurrent =
+    Number.isFinite(queue.maxConcurrent) &&
+    queue.maxConcurrent > TRANSPORT_NUM.ZERO ?
+      Math.floor(queue.maxConcurrent) :
+      TRANSPORT_NUM.ZERO;
+  if (maxConcurrent <= TRANSPORT_NUM.ZERO) {
+    return TRANSPORT_NUM.ZERO;
+  }
+  return Math.max(
+    TRANSPORT_NUM.ONE,
+    resolveBoundedCriticalReserve(queue.criticalReserve, maxConcurrent),
+  );
+}
+
 function adjustInFlightSourceCount(queue, deliverySource, delta) {
   if (
     !(queue?.inFlightBySource instanceof Map) ||
@@ -432,6 +556,18 @@ function adjustInFlightSourceCount(queue, deliverySource, delta) {
     return;
   }
   queue.inFlightBySource.delete(normalizedDeliverySource);
+}
+
+function adjustInFlightCriticalSourceReserveCount(queue, delta) {
+  if (!queue || !Number.isFinite(delta) || delta === TRANSPORT_NUM.ZERO) {
+    return;
+  }
+  const normalizedDelta =
+    delta > TRANSPORT_NUM.ZERO ? TRANSPORT_NUM.ONE : -TRANSPORT_NUM.ONE;
+  queue.inFlightCriticalSourceReserve = Math.max(
+    TRANSPORT_NUM.ZERO,
+    countInFlightCriticalSourceReserve(queue) + normalizedDelta,
+  );
 }
 
 function resolveBoundedCriticalReserve(rawReserve, maxReserve) {
@@ -545,14 +681,31 @@ function dequeueNextPendingItem(queue) {
 }
 
 function canDispatchPendingItem(queue, item) {
-  if (!queue || !item || queue.inFlight >= queue.maxConcurrent) {
+  if (!queue || !item) {
     return false;
   }
+  const queueAtConcurrentLimit = queue.inFlight >= queue.maxConcurrent;
   if (item.priority === OutboundDeliveryPriority.CRITICAL) {
+    if (
+      queueAtConcurrentLimit &&
+      item?.criticalSourceReserve !== true
+    ) {
+      return false;
+    }
+    if (
+      queueAtConcurrentLimit &&
+      countInFlightCriticalSourceReserve(queue) >=
+        resolveCriticalSourceReserveInFlightLimit(queue)
+    ) {
+      return false;
+    }
     return (
       countInFlightBySource(queue, item?.deliverySource) <
       resolveCriticalInFlightSourceLimit(queue)
     );
+  }
+  if (queueAtConcurrentLimit) {
+    return false;
   }
   return (
     countInFlightByPriority(queue, OutboundDeliveryPriority.BACKGROUND) <
@@ -582,6 +735,7 @@ function adjustInFlightPriorityCount(queue, priority, delta) {
 }
 
 export {
+  adjustInFlightCriticalSourceReserveCount,
   adjustInFlightPriorityCount,
   adjustInFlightSourceCount,
   buildDerivedDeliverySource,
@@ -592,6 +746,7 @@ export {
   buildServiceResponseDisposition,
   buildSupersededPendingResult,
   canDispatchPendingItem,
+  countCriticalPendingBySource,
   countInFlightByPriority,
   countInFlightBySource,
   countPendingByPriority,
@@ -614,4 +769,6 @@ export {
   resolvePendingSourceLimit,
   resolveProportionalPendingSourceLimit,
   resolveSemanticDeliverySourceMessage,
+  selectCriticalPendingSourcePreemptionCandidateIndex,
+  takeCriticalPendingItemForSourceReserve,
 };

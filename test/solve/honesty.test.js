@@ -36,6 +36,39 @@ tap.test('honesty checks (the only process)', async (t) => {
     t.end();
   });
 
+  t.test('an invalid sample may carry a null metric (honest no-measurement)', (t) => {
+    // A blocked/incomplete probe run reports a null metric. With invalidSample set
+    // this is an honest stall, not dishonest data, so it must not be flagged — but
+    // the evidence artifact and sealed direction are still required.
+    const v = validateAttempt(
+      attempt({invalidSample: true, metricBefore: 5, metricAfter: null}),
+      okCtx,
+    );
+    t.same(v, [], 'null metric on an invalid sample is permitted');
+    t.end();
+  });
+
+  t.test('a null metric WITHOUT the invalid-sample flag is still rejected', (t) => {
+    const v = validateAttempt(attempt({metricAfter: null}), okCtx);
+    t.ok(v.some((e) => e.includes('finite numbers')));
+    t.end();
+  });
+
+  t.test('invalid-sample only exempts null metrics, not arbitrary values', (t) => {
+    const v = validateAttempt(attempt({invalidSample: true, metricAfter: 'bad'}), okCtx);
+    t.ok(v.some((e) => e.includes('finite numbers')));
+    t.end();
+  });
+
+  t.test('an invalid sample still requires its evidence artifact', (t) => {
+    const v = validateAttempt(
+      attempt({invalidSample: true, metricAfter: null}),
+      {...okCtx, fileExists: () => false},
+    );
+    t.ok(v.some((e) => e.includes('evidence artifact missing')));
+    t.end();
+  });
+
   t.test('missing evidence artifact is rejected', (t) => {
     const v = validateAttempt(attempt(), {...okCtx, fileExists: () => false});
     t.ok(v.some((e) => e.includes('evidence artifact missing')));

@@ -12,6 +12,7 @@ import {
 } from '../../../src/control-plane/control-plane-error-classification.js';
 import {
   BENCHMARK_PARTITION_DISPATCH_MODE,
+  buildBenchmarkConvergenceEvaluationSummaries,
   buildBenchmarkLoadAdmissionSnapshot,
   buildBenchmarkPartitionConvergenceSnapshot,
   isBenchmarkCriticalControlPlaneStable,
@@ -1182,6 +1183,7 @@ export const TABLE_DISTRIBUTION_HELPERS_SEGMENT_1 = {
   resolveBenchmarkBootstrapRequiredNodeCount,
   resolveBenchmarkAdmissionTimeoutMs,
   resolveBenchmarkAdmissionStableWindowMs,
+  buildBenchmarkConvergenceEvaluationSummaries,
   buildBenchmarkLoadAdmissionSnapshot,
   buildBenchmarkPartitionConvergenceSnapshot,
   BENCHMARK_PARTITION_DISPATCH_MODE,

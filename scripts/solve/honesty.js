@@ -13,12 +13,23 @@ function isFiniteNumber(value) {
   return typeof value === 'number' && Number.isFinite(value);
 }
 
+function isValidMetricValue(value, invalidSample) {
+  return isFiniteNumber(value) || (invalidSample && value === null);
+}
+
 // Check 1 + 2: metrics are real numbers read from an existing evidence artifact, and
 // the metric direction is explicitly the supported monotone one (so "progress" can
 // not be redefined per attempt).
 function checkMetricEvidence(event, ctx) {
   const violations = [];
-  if (!isFiniteNumber(event.metricBefore) || !isFiniteNumber(event.metricAfter)) {
+  // An invalid sample is an honest "no measurement": the probe run was blocked or
+  // incomplete, so it reported a null metric rather than fabricating a number. We
+  // still demand a real evidence artifact and the sealed metric direction, but a
+  // null metricBefore/metricAfter is permitted (the ladder treats it as a stall and
+  // climbs). Without this exemption an honest blocked run would be punished as if it
+  // were dishonest, which is exactly the false-floor bug this guards against.
+  if (!isValidMetricValue(event.metricBefore, event.invalidSample) ||
+    !isValidMetricValue(event.metricAfter, event.invalidSample)) {
     violations.push('metricBefore/metricAfter must be finite numbers from a probe');
   }
   if (event.metricDirection !== METRIC_DIRECTION_LOWER_IS_BETTER) {

@@ -130,7 +130,6 @@ const TEST_SERIAL_WAIT_PARTITION_IDS = Object.freeze([
   TEST_LOCAL_OWNER_PARTITION_ID,
 ]);
 const TEST_REPLICA_OPERATIONS_TABLE = 'replica_operations';
-const TEST_SERVICES_TABLE = 'services';
 const TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT = 'FROM replica_operations';
 const TEST_QUERY_OPERATION_BY_ID_FRAGMENT = 'WHERE operation_id = ?';
 const TEST_UPDATE_REPLICA_OPERATIONS_PREFIX =
@@ -294,6 +293,9 @@ const TEST_RETRY_SCHEDULED_REENTRY_TEST_NAME =
   'owner progress';
 const TEST_RETRY_SCHEDULED_NORMALIZATION_REENTRY_TEST_NAME =
   'retry-scheduled handoff owner snapshots re-enter during normalization';
+const TEST_UNINITIALIZED_TRANSITION_RETRY_REENTRY_TEST_NAME =
+  'priority transition retries stay armed while the workflow owner is ' +
+  'uninitialized';
 const TEST_ADVANCE_EFFECT_CAPTURED_AT_REENTRY_TEST_NAME =
   'dispatch-pending owner observation effects wake remote handoff using ' +
   'snapshot captured time';
@@ -319,6 +321,14 @@ const TEST_ASSERT_RETRY_SCHEDULED_REENTRY_TARGET =
   'retry-scheduled handoff re-entry should use the canonical dispatch ingress';
 const TEST_ASSERT_RETRY_SCHEDULED_REENTRY_TIMER =
   'retry-scheduled handoff re-entry should arm bounded handoff verification';
+const TEST_ASSERT_UNINITIALIZED_TRANSITION_RETRY_ARMS =
+  'initial retryable transition pressure should arm one transition retry';
+const TEST_ASSERT_UNINITIALIZED_TRANSITION_RETRY_REARMS =
+  'uninitialized workflow owners should re-arm protected priority ' +
+  'transition retries';
+const TEST_ASSERT_UNINITIALIZED_TRANSITION_RETRY_TIMER =
+  'one protected transition retry timer should remain armed while ' +
+  'initialization recovers';
 const TEST_ASSERT_ADVANCE_EFFECT_CAPTURED_AT_WAKE =
   'unexecuted advance-owner effects should wake the remote owner before drain';
 const TEST_ASSERT_ADVANCE_EFFECT_CAPTURED_AT_TARGET =
@@ -1044,10 +1054,121 @@ registerCase(
   },
 );
 
-registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({registerCase, dependencies: registrationDependencies});
-registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({registerCase, dependencies: registrationDependencies});
-registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({registerCase, dependencies: registrationDependencies});
-registerPriorityRecoverySerialWaitCoordinatorHandoffTestCases({registerCase, dependencies: registrationDependencies});
+registerCase(
+  TEST_UNINITIALIZED_TRANSITION_RETRY_REENTRY_TEST_NAME,
+  async (t) => {
+    const deferredTimers = [];
+    const operation = Object.freeze({
+      operationId: TEST_OPERATION_ID,
+      partitionId: TEST_SQL_TRANSACTION_PARTICIPANTS_PARTITION_ID,
+      type: TEST_OPERATION_TYPE_REPLACE,
+      status: TEST_STATUS_PENDING,
+      workflowStep: WORKFLOW_STEP.SENDING,
+      sourceNodeId: TEST_SOURCE_NODE_ID,
+      targetNodeId: TEST_TARGET_NODE_ID,
+      replicaId: TEST_SQL_TRANSACTION_PARTICIPANTS_REPLICA_ID,
+      createdAt: TEST_OPERATION_CREATED_AT_MS,
+      updatedAt: TEST_CAPTURED_AT_MS,
+    });
+    const coordinator = createCoordinator({
+      nodeId: TEST_TARGET_NODE_ID,
+      transactionCoordinator: buildTransactionCoordinator(),
+      systemTableCache: {
+        get() {
+          return TEST_EMPTY_VALUE;
+        },
+        getAll() {
+          return [];
+        },
+        filter() {
+          return [];
+        },
+      },
+      cdcIntegrationService: {
+        async waitForCacheUpdate() {},
+      },
+      messageRouter: {
+        async deliver() {
+          return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
+        },
+      },
+      tablePolicyService: {
+        async getPolicyForPartition() {
+          return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+        },
+      },
+      setTimeoutFn(fn, delayMs) {
+        const handle = {fn, delayMs};
+        deferredTimers.push(handle);
+        return handle;
+      },
+      clearTimeoutFn() {},
+      enableTimeouts: false,
+    });
+    const originalDateNow = Date.now;
+    Date.now = () => TEST_CAPTURED_AT_MS;
+
+    try {
+      coordinator.initialize();
+
+      t.equal(
+        coordinator.workflowOwner.deferTransitionRetry(
+          operation.operationId,
+          buildRetryableTransitionFailure(),
+          {
+            boundary: TEST_COORDINATOR_CREATED_REMOTE_HANDOFF,
+            partitionId: operation.partitionId,
+            workflowStep: operation.workflowStep,
+            updatedAt: operation.updatedAt,
+            createdAt: operation.createdAt,
+            operationSnapshot: operation,
+          },
+        ),
+        true,
+        TEST_ASSERT_UNINITIALIZED_TRANSITION_RETRY_ARMS,
+      );
+      t.equal(
+        deferredTimers.length,
+        NUM.ONE,
+        TEST_ASSERT_UNINITIALIZED_TRANSITION_RETRY_ARMS,
+      );
+
+      coordinator.initialized = false;
+      await deferredTimers[NUM.ZERO].fn();
+
+      t.equal(
+        deferredTimers.length,
+        NUM.TWO,
+        TEST_ASSERT_UNINITIALIZED_TRANSITION_RETRY_REARMS,
+      );
+      t.equal(
+        coordinator.workflowOwner.transitionRetryTimerByOperationId.size,
+        NUM.ONE,
+        TEST_ASSERT_UNINITIALIZED_TRANSITION_RETRY_TIMER,
+      );
+    } finally {
+      Date.now = originalDateNow;
+      await coordinator.shutdown();
+    }
+  },
+);
+
+registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({
+  registerCase,
+  dependencies: registrationDependencies,
+});
+registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
+  registerCase,
+  dependencies: registrationDependencies,
+});
+registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
+  registerCase,
+  dependencies: registrationDependencies,
+});
+registerPriorityRecoverySerialWaitCoordinatorHandoffTestCases({
+  registerCase,
+  dependencies: registrationDependencies,
+});
 
 export const priorityRecoveryDispatchPendingTimeoutReentryTestCases =
   Object.freeze(testCases);

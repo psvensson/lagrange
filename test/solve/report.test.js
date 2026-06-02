@@ -9,6 +9,7 @@ import {
   EVENT_ATTEMPT,
   EVENT_SOLVED,
   EVENT_QUEST,
+  EVENT_QUEST_DECLARED,
   EVENT_THEORY_OPTION_DECLARED,
   EVENT_THEORY_RESULT,
   EVENT_THEORY_SELECTED,
@@ -100,6 +101,54 @@ tap.test('report projection (P2)', async (t) => {
     t.match(md, /demo-main\*\*: theory-frontier/);
     t.match(md, /falsified/);
     t.match(md, /\| .* \| theory-frontier \| diff:a\.diff \|/);
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('closure kind: oracle done_when => DECISION, harness => MEASURED', (t) => {
+    const root = tmp();
+    const decisionQuest = {...GOAL, id: 'decision-quest'};
+    const measuredQuest = {
+      ...GOAL,
+      id: 'measured-quest',
+      doneWhen: {probe: 'scenario-harness', args: {scenario: 'x', consecutive: 3}},
+    };
+    saveQuest(root, decisionQuest);
+    saveQuest(root, measuredQuest);
+    for (const id of ['decision-quest', 'measured-quest']) {
+      appendEvent(root, id, {type: EVENT_QUEST, status: STATUS_SOLVED, evidence: 'e'});
+    }
+    const dLog = readLog(root, 'decision-quest');
+    const dMd = buildReport(decisionQuest, dLog, projectState(decisionQuest, dLog));
+    t.match(dMd, /Outcome:\*\* SOLVED \(DECISION\)/, 'oracle closure labeled DECISION');
+    t.match(dMd, /Closure:\*\* DECISION/, 'header shows DECISION');
+    const mLog = readLog(root, 'measured-quest');
+    const mMd = buildReport(measuredQuest, mLog, projectState(measuredQuest, mLog));
+    t.match(mMd, /Outcome:\*\* SOLVED \(MEASURED\)/, 'harness closure labeled MEASURED');
+    t.match(mMd, /Class:\*\* product/, 'header shows class');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('closure kind follows the sealed done_when instead of edited quest JSON', (t) => {
+    const root = tmp();
+    const quest = {
+      ...GOAL,
+      id: 'sealed-decision',
+      doneWhen: {probe: 'scenario-harness', args: {scenario: 'x'}},
+    };
+    saveQuest(root, quest);
+    appendEvent(root, quest.id, {
+      type: EVENT_QUEST_DECLARED,
+      sealed: {
+        doneWhen: {probe: 'oracle', args: {file: 'sealed.json'}},
+        frontierMetrics: quest.frontiers.map((frontier) => frontier.metric),
+      },
+    });
+    appendEvent(root, quest.id, {type: EVENT_QUEST, status: STATUS_SOLVED, evidence: 'e'});
+    const log = readLog(root, quest.id);
+    const md = buildReport(quest, log, projectState(quest, log));
+    t.match(md, /SOLVED \(DECISION\)/, 'uses the sealed oracle probe');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });

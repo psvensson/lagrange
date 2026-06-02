@@ -16,6 +16,7 @@ import {
   STATUS_PARKED,
 } from './constants.js';
 import {loadQuest, readLog, projectState, assertSafeQuestId} from './store.js';
+import {questClass, closureKind} from './closure-kind.js';
 
 export function reportFilePath(root, questId) {
   return path.join(root, SOLVE_DATA_DIR, REPORT_SUBDIR,
@@ -51,11 +52,11 @@ function attemptLine(e) {
     `| ${moved} | ${e.theoryRef || ''} | ${e.changeRef || ''} |`;
 }
 
-function outcomeBanner(state, log) {
+function outcomeBanner(state, log, quest) {
   const questEvent = [...log].reverse().find((e) => e.type === EVENT_QUEST);
   if (!questEvent) return 'IN PROGRESS (no terminal recorded)';
   if (questEvent.status === STATUS_SOLVED) {
-    return `SOLVED — evidence: ${questEvent.evidence || '(none)'}`;
+    return `SOLVED (${closureKind(quest, log)}) — evidence: ${questEvent.evidence || '(none)'}`;
   }
   if (questEvent.status === STATUS_EXHAUSTED) {
     const parked = state.frontiers.filter((f) => f.status === STATUS_PARKED);
@@ -111,7 +112,9 @@ export function buildReport(quest, log, state) {
     '',
     `**Goal:** ${quest.statement}`,
     '',
-    `**Outcome:** ${outcomeBanner(state, log)}`,
+    `**Class:** ${questClass(quest)} · **Closure:** ${closureKind(quest, log)}`,
+    '',
+    `**Outcome:** ${outcomeBanner(state, log, quest)}`,
     '',
     `**Attempts:** ${attempts.length}`,
     '',

@@ -1,0 +1,604 @@
+diff --git a/src/rebalancer/operation-workflow-dispatch-rearm-evidence.js b/src/rebalancer/operation-workflow-dispatch-rearm-evidence.js
+index 8ce786a9..abe49d96 100644
+--- a/src/rebalancer/operation-workflow-dispatch-rearm-evidence.js
++++ b/src/rebalancer/operation-workflow-dispatch-rearm-evidence.js
+@@ -1,4 +1,14 @@
+-import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js'; import {OPERATION_OWNER_RESUME_ACTION, OPERATION_OWNER_RETRY_ACTION, OPERATION_OWNER_RETRY_KIND, buildOperationOwnerResumeOutcome, buildOperationOwnerRetryOutcome,} from './topology-owner-constants.js';
++import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
++import {
++  OPERATION_OWNER_RETRY_ACTION,
++  OPERATION_OWNER_RETRY_KIND,
++  buildOperationOwnerRetryOutcome,
++} from './topology-owner-constants.js';
++import {
++  deferTransitionRetry,
++  handleDeferredTransitionRetryFailure,
++  resumeDeferredTransitionOperation,
++} from './operation-workflow-transition-retry.js';
+ const {
+   DISPATCH_RETRY_DELAY_MS,
+   NUM,
+@@ -10,7 +20,6 @@ const {
+   ReplicaStatus,
+   SAFETY_DEFERRED_RETRY_DELAY_MS,
+   TIMEOUT_BUDGET_DEFAULT,
+-  TRANSITION_RETRY_DELAY_MS,
+   TYPEOF,
+   WORKFLOW_STEP,
+   getControlPlaneRetryAfterMs,
+@@ -479,131 +488,6 @@ function isOperationStepTimedOut(owner, operation, now = Date.now()) {
+     owner.getTimeoutForStep(operation.workflowStep, operation)
+   );
+ }
+-async function resumeDeferredTransitionOperation(owner, operationId) {
+-  const visibilityObservation =
+-    await owner.repository.getOperationByIdVisibilityObservation(operationId, {
+-      requireOwnerRpcRead: false,
+-      allowPriorityRecoveryDeferredVisibility: true,
+-    });
+-  const operation =
+-    visibilityObservation?.operation ||
+-    owner.getTransitionRetryOperationSnapshot(operationId);
+-  const now = Date.now();
+-  const resumeOutcome = buildOperationOwnerResumeOutcome({
+-    operationAvailable: Boolean(operation),
+-    terminalOperation: operation ?
+-      owner.repository.isOperationTerminal(operation) :
+-      false,
+-    locallyOwned: operation ?
+-      owner.repository.isOperationLocallyOwned(operation) :
+-      false,
+-    dispatchRetryable: operation ?
+-      owner.isDispatchRetryableWorkflowStep(operation) :
+-      false,
+-    retryGraceActive: owner.hasActiveTransitionRetryGrace(operationId, now),
+-    stepTimedOut: operation ?
+-      owner.isOperationStepTimedOut(operation, now) :
+-      false,
+-  });
+-  if (resumeOutcome.action === OPERATION_OWNER_RESUME_ACTION.CLEAR_RETRY) {
+-    owner.clearTransitionRetry(operationId);
+-    return;
+-  }
+-  if (resumeOutcome.action === OPERATION_OWNER_RESUME_ACTION.DISPATCH) {
+-    await owner.runOperationOwnerAction(
+-      OPERATION_OWNER_ACTION.DISPATCH,
+-      operation,
+-      {
+-        boundary: OPERATION_WORKFLOW_OWNER_LITERAL.TRANSITION_RETRY_RESUME,
+-        workflowStep: operation.workflowStep || null,
+-        partitionId: operation.partitionId || null,
+-        runInlineWhenOwnerLaneHeld: true,
+-      },
+-    );
+-    return;
+-  }
+-  await owner.reconcileTimeoutOperation(operation, now);
+-}
+-function deferTransitionRetry(
+-  owner,
+-  operationId,
+-  errorLike,
+-  retryContext = {},
+-) {
+-  const retryAfterMs = getControlPlaneRetryAfterMs(errorLike);
+-  const retryOutcome = buildOperationOwnerRetryOutcome({
+-    operationId,
+-    retryable: isRetryableControlPlaneError(errorLike),
+-    timerActive: owner.transitionRetryTimerByOperationId.has(operationId),
+-    retryAfterMs,
+-    fallbackDelayMs: TRANSITION_RETRY_DELAY_MS,
+-    retryKind: OPERATION_OWNER_RETRY_KIND.TRANSITION,
+-  });
+-  if (retryOutcome.action === OPERATION_OWNER_RETRY_ACTION.REJECT) {
+-    return false;
+-  }
+-  owner.recordTransitionRetryOperationSnapshot(
+-    retryContext.operationSnapshot || retryContext.operation || null,
+-  );
+-  const delayMs = retryOutcome.delayMs;
+-  owner.recordTransitionRetryGrace(operationId, retryContext, delayMs);
+-  if (retryOutcome.action === OPERATION_OWNER_RETRY_ACTION.REUSE_TIMER) {
+-    return true;
+-  }
+-  const errorMessage = owner.normalizeErrorMessage(
+-    errorLike,
+-    'Retryable control-plane transition failure',
+-  );
+-  owner.logger.warn(
+-    REBALANCE_COORDINATOR_LOG_MSG.OPERATION_TRANSITION_RETRY_DEFERRED,
+-    {
+-      operationId,
+-      boundary: retryContext.boundary || null,
+-      partitionId: retryContext.partitionId || null,
+-      workflowStep: retryContext.workflowStep || null,
+-      delayMs,
+-      errorMessage,
+-    },
+-  );
+-  const timerHandle = owner.setTimeoutFn(() => {
+-    owner.transitionRetryTimerByOperationId.delete(operationId);
+-    if (owner.isShuttingDown || !owner.isInitialized) {
+-      return;
+-    }
+-    return owner.operationWorkflowRunExclusive(
+-      owner.getOperationOwnerSingleFlightKey(operationId),
+-      () => owner.resumeDeferredTransitionOperation(operationId),
+-    ).catch((retryError) => {
+-      owner.handleDeferredTransitionRetryFailure(
+-        operationId,
+-        retryError,
+-        retryContext,
+-      );
+-    });
+-  }, delayMs);
+-  owner.transitionRetryTimerByOperationId.set(operationId, timerHandle);
+-  return true;
+-}
+-function handleDeferredTransitionRetryFailure(
+-  owner,
+-  operationId,
+-  error,
+-  retryContext = {},
+-) {
+-  if (owner.deferTransitionRetry(operationId, error, retryContext)) {
+-    return;
+-  }
+-  owner.logger.error(
+-    REBALANCE_COORDINATOR_LOG_MSG.OPERATION_TRANSITION_RETRY_FAILED,
+-    {
+-      operationId,
+-      boundary: retryContext.boundary || null,
+-      partitionId: retryContext.partitionId || null,
+-      workflowStep: retryContext.workflowStep || null,
+-      error: error?.message || error?.error || String(error),
+-    },
+-  );
+-}
+ function cloneOperationSnapshot(operation) {
+   if (!operation || typeof operation !== TYPEOF.OBJECT) {
+     return null;
+@@ -798,4 +682,35 @@ function scheduleCoordinatorCreatedRemoteHandoffFollowUp(
+   );
+   return true;
+ }
+-export {buildCoordinatorCreatedDispatchIngress, buildCoordinatorCreatedDispatchRow, buildCoordinatorCreatedRemoteHandoffTimeoutDecision, buildDispatchRearmFromProgressReconcileEvidence, canContinueCoordinatorCreatedRemoteHandoff, cloneOperationSnapshot, deferDispatchRetry, deferTransitionRetry, getDeferredDispatchRetryOperation, handleDeferredDispatchRetryFailure, handleDeferredTransitionRetryFailure, hasActiveTransitionRetryGrace, isCoordinatorCreatedOperationLocallyOwned, isCreateRearmDispatchPhase, isDispatchRetryableWorkflowStep, isOperationDeferredRetryActive, isOperationStepTimedOut, isRemoveInitialDispatchPhase, isSafetyDeferredRetryableOperation, resolveCoordinatorCreatedOperationOwnerNodeId, resolveDeferredRetryVisibleOperation, resolveDispatchRearmFromProgressReconcileState, resolveTransitionRetryGraceTimeoutCeilingMs, resumeDeferredTransitionOperation, scheduleCoordinatorCreatedRemoteHandoffFollowUp, scheduleDeferredSafetyRetry, shouldDeferRetryableDispatchFailure, shouldRearmDispatchFromProgressReconcile, shouldRetryCoordinatorCreatedRemoteHandoff, shouldUseOperationBudgetTransitionRetryGrace,};
++export {
++  buildCoordinatorCreatedDispatchIngress,
++  buildCoordinatorCreatedDispatchRow,
++  buildCoordinatorCreatedRemoteHandoffTimeoutDecision,
++  buildDispatchRearmFromProgressReconcileEvidence,
++  canContinueCoordinatorCreatedRemoteHandoff,
++  cloneOperationSnapshot,
++  deferDispatchRetry,
++  deferTransitionRetry,
++  getDeferredDispatchRetryOperation,
++  handleDeferredDispatchRetryFailure,
++  handleDeferredTransitionRetryFailure,
++  hasActiveTransitionRetryGrace,
++  isCoordinatorCreatedOperationLocallyOwned,
++  isCreateRearmDispatchPhase,
++  isDispatchRetryableWorkflowStep,
++  isOperationDeferredRetryActive,
++  isOperationStepTimedOut,
++  isRemoveInitialDispatchPhase,
++  isSafetyDeferredRetryableOperation,
++  resolveCoordinatorCreatedOperationOwnerNodeId,
++  resolveDeferredRetryVisibleOperation,
++  resolveDispatchRearmFromProgressReconcileState,
++  resolveTransitionRetryGraceTimeoutCeilingMs,
++  resumeDeferredTransitionOperation,
++  scheduleCoordinatorCreatedRemoteHandoffFollowUp,
++  scheduleDeferredSafetyRetry,
++  shouldDeferRetryableDispatchFailure,
++  shouldRearmDispatchFromProgressReconcile,
++  shouldRetryCoordinatorCreatedRemoteHandoff,
++  shouldUseOperationBudgetTransitionRetryGrace,
++};
+diff --git a/test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js b/test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js
+index 50e7c79e..b28d0f52 100644
+--- a/test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js
++++ b/test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js
+@@ -130,7 +130,6 @@ const TEST_SERIAL_WAIT_PARTITION_IDS = Object.freeze([
+   TEST_LOCAL_OWNER_PARTITION_ID,
+ ]);
+ const TEST_REPLICA_OPERATIONS_TABLE = 'replica_operations';
+-const TEST_SERVICES_TABLE = 'services';
+ const TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT = 'FROM replica_operations';
+ const TEST_QUERY_OPERATION_BY_ID_FRAGMENT = 'WHERE operation_id = ?';
+ const TEST_UPDATE_REPLICA_OPERATIONS_PREFIX =
+@@ -294,6 +293,9 @@ const TEST_RETRY_SCHEDULED_REENTRY_TEST_NAME =
+   'owner progress';
+ const TEST_RETRY_SCHEDULED_NORMALIZATION_REENTRY_TEST_NAME =
+   'retry-scheduled handoff owner snapshots re-enter during normalization';
++const TEST_UNINITIALIZED_TRANSITION_RETRY_REENTRY_TEST_NAME =
++  'priority transition retries stay armed while the workflow owner is ' +
++  'uninitialized';
+ const TEST_ADVANCE_EFFECT_CAPTURED_AT_REENTRY_TEST_NAME =
+   'dispatch-pending owner observation effects wake remote handoff using ' +
+   'snapshot captured time';
+@@ -319,6 +321,14 @@ const TEST_ASSERT_RETRY_SCHEDULED_REENTRY_TARGET =
+   'retry-scheduled handoff re-entry should use the canonical dispatch ingress';
+ const TEST_ASSERT_RETRY_SCHEDULED_REENTRY_TIMER =
+   'retry-scheduled handoff re-entry should arm bounded handoff verification';
++const TEST_ASSERT_UNINITIALIZED_TRANSITION_RETRY_ARMS =
++  'initial retryable transition pressure should arm one transition retry';
++const TEST_ASSERT_UNINITIALIZED_TRANSITION_RETRY_REARMS =
++  'uninitialized workflow owners should re-arm protected priority ' +
++  'transition retries';
++const TEST_ASSERT_UNINITIALIZED_TRANSITION_RETRY_TIMER =
++  'one protected transition retry timer should remain armed while ' +
++  'initialization recovers';
+ const TEST_ASSERT_ADVANCE_EFFECT_CAPTURED_AT_WAKE =
+   'unexecuted advance-owner effects should wake the remote owner before drain';
+ const TEST_ASSERT_ADVANCE_EFFECT_CAPTURED_AT_TARGET =
+@@ -1044,10 +1054,121 @@ registerCase(
+   },
+ );
+ 
+-registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({registerCase, dependencies: registrationDependencies});
+-registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({registerCase, dependencies: registrationDependencies});
+-registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({registerCase, dependencies: registrationDependencies});
+-registerPriorityRecoverySerialWaitCoordinatorHandoffTestCases({registerCase, dependencies: registrationDependencies});
++registerCase(
++  TEST_UNINITIALIZED_TRANSITION_RETRY_REENTRY_TEST_NAME,
++  async (t) => {
++    const deferredTimers = [];
++    const operation = Object.freeze({
++      operationId: TEST_OPERATION_ID,
++      partitionId: TEST_SQL_TRANSACTION_PARTICIPANTS_PARTITION_ID,
++      type: TEST_OPERATION_TYPE_REPLACE,
++      status: TEST_STATUS_PENDING,
++      workflowStep: WORKFLOW_STEP.SENDING,
++      sourceNodeId: TEST_SOURCE_NODE_ID,
++      targetNodeId: TEST_TARGET_NODE_ID,
++      replicaId: TEST_SQL_TRANSACTION_PARTICIPANTS_REPLICA_ID,
++      createdAt: TEST_OPERATION_CREATED_AT_MS,
++      updatedAt: TEST_CAPTURED_AT_MS,
++    });
++    const coordinator = createCoordinator({
++      nodeId: TEST_TARGET_NODE_ID,
++      transactionCoordinator: buildTransactionCoordinator(),
++      systemTableCache: {
++        get() {
++          return TEST_EMPTY_VALUE;
++        },
++        getAll() {
++          return [];
++        },
++        filter() {
++          return [];
++        },
++      },
++      cdcIntegrationService: {
++        async waitForCacheUpdate() {},
++      },
++      messageRouter: {
++        async deliver() {
++          return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
++        },
++      },
++      tablePolicyService: {
++        async getPolicyForPartition() {
++          return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
++        },
++      },
++      setTimeoutFn(fn, delayMs) {
++        const handle = {fn, delayMs};
++        deferredTimers.push(handle);
++        return handle;
++      },
++      clearTimeoutFn() {},
++      enableTimeouts: false,
++    });
++    const originalDateNow = Date.now;
++    Date.now = () => TEST_CAPTURED_AT_MS;
++
++    try {
++      coordinator.initialize();
++
++      t.equal(
++        coordinator.workflowOwner.deferTransitionRetry(
++          operation.operationId,
++          buildRetryableTransitionFailure(),
++          {
++            boundary: TEST_COORDINATOR_CREATED_REMOTE_HANDOFF,
++            partitionId: operation.partitionId,
++            workflowStep: operation.workflowStep,
++            updatedAt: operation.updatedAt,
++            createdAt: operation.createdAt,
++            operationSnapshot: operation,
++          },
++        ),
++        true,
++        TEST_ASSERT_UNINITIALIZED_TRANSITION_RETRY_ARMS,
++      );
++      t.equal(
++        deferredTimers.length,
++        NUM.ONE,
++        TEST_ASSERT_UNINITIALIZED_TRANSITION_RETRY_ARMS,
++      );
++
++      coordinator.initialized = false;
++      await deferredTimers[NUM.ZERO].fn();
++
++      t.equal(
++        deferredTimers.length,
++        NUM.TWO,
++        TEST_ASSERT_UNINITIALIZED_TRANSITION_RETRY_REARMS,
++      );
++      t.equal(
++        coordinator.workflowOwner.transitionRetryTimerByOperationId.size,
++        NUM.ONE,
++        TEST_ASSERT_UNINITIALIZED_TRANSITION_RETRY_TIMER,
++      );
++    } finally {
++      Date.now = originalDateNow;
++      await coordinator.shutdown();
++    }
++  },
++);
++
++registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({
++  registerCase,
++  dependencies: registrationDependencies,
++});
++registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
++  registerCase,
++  dependencies: registrationDependencies,
++});
++registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
++  registerCase,
++  dependencies: registrationDependencies,
++});
++registerPriorityRecoverySerialWaitCoordinatorHandoffTestCases({
++  registerCase,
++  dependencies: registrationDependencies,
++});
+ 
+ export const priorityRecoveryDispatchPendingTimeoutReentryTestCases =
+   Object.freeze(testCases);
+diff --git a/src/rebalancer/operation-workflow-transition-retry.js b/src/rebalancer/operation-workflow-transition-retry.js
+new file mode 100644
+index 00000000..58c4b7e5
+--- /dev/null
++++ b/src/rebalancer/operation-workflow-transition-retry.js
+@@ -0,0 +1,238 @@
++import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
++import {
++  OPERATION_OWNER_RESUME_ACTION,
++  OPERATION_OWNER_RETRY_ACTION,
++  OPERATION_OWNER_RETRY_KIND,
++  buildOperationOwnerResumeOutcome,
++  buildOperationOwnerRetryOutcome,
++} from './topology-owner-constants.js';
++
++const {
++  OPERATION_OWNER_ACTION,
++  OPERATION_WORKFLOW_OWNER_LITERAL,
++  REBALANCE_COORDINATOR_LOG_MSG,
++  TRANSITION_RETRY_DELAY_MS,
++  WORKFLOW_STEP,
++  getControlPlaneRetryAfterMs,
++  isRetryableControlPlaneError,
++} = OPERATION_WORKFLOW_OWNER_SHARED;
++
++function selectTransitionRetryRetainedOperation(
++  owner,
++  operationId,
++  retryContext,
++) {
++  return retryContext.operationSnapshot ||
++    retryContext.operation ||
++    owner.getTransitionRetryOperationSnapshot(operationId);
++}
++
++function buildUninitializedTransitionRetryError(retryContext) {
++  const error = new Error(
++    OPERATION_WORKFLOW_OWNER_LITERAL
++      .RETRYABLE_CONTROL_DASH_PLANE_TRANSITION_FAILURE,
++  );
++  error.code =
++    OPERATION_WORKFLOW_OWNER_LITERAL.CONTROL_PLANE_PRESSURE_DEGRADED;
++  error.errorCode =
++    OPERATION_WORKFLOW_OWNER_LITERAL.CONTROL_PLANE_PRESSURE_DEGRADED;
++  error.deferRetry = true;
++  error.retryAfterMs = TRANSITION_RETRY_DELAY_MS;
++  error.partitionId = retryContext.partitionId || null;
++  return error;
++}
++
++function shouldRetainTransitionRetryWhileUninitialized(
++  owner,
++  operationId,
++  retryContext,
++) {
++  const operation = selectTransitionRetryRetainedOperation(
++    owner,
++    operationId,
++    retryContext,
++  );
++  const workflowStep =
++    retryContext.workflowStep || operation?.workflowStep || WORKFLOW_STEP.PENDING;
++  const now = Date.now();
++  if (
++    !operation ||
++    owner.isDispatchRetryableWorkflowStep(operation) !== true ||
++    owner.hasActiveTransitionRetryGrace(operationId, now) !== true ||
++    owner.shouldUseOperationBudgetTransitionRetryGrace(
++      retryContext,
++      workflowStep,
++    ) !== true
++  ) {
++    return false;
++  }
++  const handoffTimeoutDecision =
++    owner.buildCoordinatorCreatedRemoteHandoffTimeoutDecision?.(
++      operation,
++      now,
++    );
++  return handoffTimeoutDecision?.shouldStop !== true;
++}
++
++function rearmTransitionRetryWhileUninitialized(
++  owner,
++  operationId,
++  retryContext,
++) {
++  if (
++    !shouldRetainTransitionRetryWhileUninitialized(
++      owner,
++      operationId,
++      retryContext,
++    )
++  ) {
++    return false;
++  }
++  return owner.deferTransitionRetry(
++    operationId,
++    buildUninitializedTransitionRetryError(retryContext),
++    retryContext,
++  );
++}
++
++async function resumeDeferredTransitionOperation(owner, operationId) {
++  const visibilityObservation =
++    await owner.repository.getOperationByIdVisibilityObservation(operationId, {
++      requireOwnerRpcRead: false,
++      allowPriorityRecoveryDeferredVisibility: true,
++    });
++  const operation =
++    visibilityObservation?.operation ||
++    owner.getTransitionRetryOperationSnapshot(operationId);
++  const now = Date.now();
++  const resumeOutcome = buildOperationOwnerResumeOutcome({
++    operationAvailable: Boolean(operation),
++    terminalOperation: operation ?
++      owner.repository.isOperationTerminal(operation) :
++      false,
++    locallyOwned: operation ?
++      owner.repository.isOperationLocallyOwned(operation) :
++      false,
++    dispatchRetryable: operation ?
++      owner.isDispatchRetryableWorkflowStep(operation) :
++      false,
++    retryGraceActive: owner.hasActiveTransitionRetryGrace(operationId, now),
++    stepTimedOut: operation ?
++      owner.isOperationStepTimedOut(operation, now) :
++      false,
++  });
++  if (resumeOutcome.action === OPERATION_OWNER_RESUME_ACTION.CLEAR_RETRY) {
++    owner.clearTransitionRetry(operationId);
++    return;
++  }
++  if (resumeOutcome.action === OPERATION_OWNER_RESUME_ACTION.DISPATCH) {
++    await owner.runOperationOwnerAction(
++      OPERATION_OWNER_ACTION.DISPATCH,
++      operation,
++      {
++        boundary: OPERATION_WORKFLOW_OWNER_LITERAL.TRANSITION_RETRY_RESUME,
++        workflowStep: operation.workflowStep || null,
++        partitionId: operation.partitionId || null,
++        runInlineWhenOwnerLaneHeld: true,
++      },
++    );
++    return;
++  }
++  await owner.reconcileTimeoutOperation(operation, now);
++}
++
++function deferTransitionRetry(
++  owner,
++  operationId,
++  errorLike,
++  retryContext = {},
++) {
++  const retryAfterMs = getControlPlaneRetryAfterMs(errorLike);
++  const retryOutcome = buildOperationOwnerRetryOutcome({
++    operationId,
++    retryable: isRetryableControlPlaneError(errorLike),
++    timerActive: owner.transitionRetryTimerByOperationId.has(operationId),
++    retryAfterMs,
++    fallbackDelayMs: TRANSITION_RETRY_DELAY_MS,
++    retryKind: OPERATION_OWNER_RETRY_KIND.TRANSITION,
++  });
++  if (retryOutcome.action === OPERATION_OWNER_RETRY_ACTION.REJECT) {
++    return false;
++  }
++  owner.recordTransitionRetryOperationSnapshot(
++    retryContext.operationSnapshot || retryContext.operation || null,
++  );
++  const delayMs = retryOutcome.delayMs;
++  owner.recordTransitionRetryGrace(operationId, retryContext, delayMs);
++  if (retryOutcome.action === OPERATION_OWNER_RETRY_ACTION.REUSE_TIMER) {
++    return true;
++  }
++  const errorMessage = owner.normalizeErrorMessage(
++    errorLike,
++    'Retryable control-plane transition failure',
++  );
++  owner.logger.warn(
++    REBALANCE_COORDINATOR_LOG_MSG.OPERATION_TRANSITION_RETRY_DEFERRED,
++    {
++      operationId,
++      boundary: retryContext.boundary || null,
++      partitionId: retryContext.partitionId || null,
++      workflowStep: retryContext.workflowStep || null,
++      delayMs,
++      errorMessage,
++    },
++  );
++  const timerHandle = owner.setTimeoutFn(() => {
++    owner.transitionRetryTimerByOperationId.delete(operationId);
++    if (owner.isShuttingDown) {
++      return;
++    }
++    if (!owner.isInitialized) {
++      rearmTransitionRetryWhileUninitialized(
++        owner,
++        operationId,
++        retryContext,
++      );
++      return;
++    }
++    return owner.operationWorkflowRunExclusive(
++      owner.getOperationOwnerSingleFlightKey(operationId),
++      () => owner.resumeDeferredTransitionOperation(operationId),
++    ).catch((retryError) => {
++      owner.handleDeferredTransitionRetryFailure(
++        operationId,
++        retryError,
++        retryContext,
++      );
++    });
++  }, delayMs);
++  owner.transitionRetryTimerByOperationId.set(operationId, timerHandle);
++  return true;
++}
++
++function handleDeferredTransitionRetryFailure(
++  owner,
++  operationId,
++  error,
++  retryContext = {},
++) {
++  if (owner.deferTransitionRetry(operationId, error, retryContext)) {
++    return;
++  }
++  owner.logger.error(
++    REBALANCE_COORDINATOR_LOG_MSG.OPERATION_TRANSITION_RETRY_FAILED,
++    {
++      operationId,
++      boundary: retryContext.boundary || null,
++      partitionId: retryContext.partitionId || null,
++      workflowStep: retryContext.workflowStep || null,
++      error: error?.message || error?.error || String(error),
++    },
++  );
++}
++
++export {
++  deferTransitionRetry,
++  handleDeferredTransitionRetryFailure,
++  resumeDeferredTransitionOperation,
++};

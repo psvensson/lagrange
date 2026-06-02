@@ -14,6 +14,11 @@ export const EVENT_QUEST_UPGRADED = 'quest-upgraded';
 export const EVENT_ATTEMPT = 'attempt';
 export const EVENT_SOLVED = 'solved';
 export const EVENT_PARK = 'park';
+// Reopens a parked frontier when its exhaustion verdict was driven by non-measuring
+// (invalid) samples and therefore cannot be trusted. Append-only and evidence-gated:
+// the park event stays in the log; the reopen resets the frontier to the first rung so
+// the Solver can take fresh, honestly-measured attempts.
+export const EVENT_FRONTIER_REOPENED = 'frontier-reopened';
 export const EVENT_QUEST = 'quest';
 export const EVENT_VIOLATION = 'violation';
 // A durable, append-only knowledge note bound to a frontier: what was learned, the
@@ -95,3 +100,35 @@ export const OUTCOME_MAX_CYCLES = 'max-cycles';
 export const OUTCOME_THEORY_REQUIRED = 'theory-required';
 
 export const FIRST_RUNG_INDEX = 0;
+
+// Harness verdicts/reasons that mean a run did NOT actually measure the metric
+// (it was blocked or aborted before producing trustworthy numbers). Such a sample
+// must never be read as metric progress: an incomplete run that reports "0 priority
+// items" only did so because it never got far enough to find any. These are shared so
+// the scenario-harness probe (metric validity) and evidence ingestion (theory rerun)
+// agree on the same signal instead of duplicating string literals.
+export const VERDICT_BLOCK_EVIDENCE_INCOMPLETE = 'BLOCK_EVIDENCE_INCOMPLETE';
+export const VERDICT_REASON_EXECUTION_INCOMPLETE =
+  'execution_incomplete_or_metrics_missing';
+
+// The precise discriminator for an invalid metric sample is the reason code (the
+// metric itself is missing/untrustworthy), not the verdict alone: a completed-but-
+// failing run can carry an incomplete-ish verdict yet still report a trustworthy
+// outstanding-item count.
+export const NON_MEASURING_VERDICT_REASONS = Object.freeze([
+  VERDICT_REASON_EXECUTION_INCOMPLETE,
+]);
+
+// Quest classification: product goals must be measured against real artifacts;
+// process goals are scaffolding/decision records (often oracle-backed).
+export const QUEST_CLASS_PRODUCT = 'product';
+export const QUEST_CLASS_PROCESS = 'process';
+export const QUEST_CLASSES = Object.freeze([
+  QUEST_CLASS_PRODUCT,
+  QUEST_CLASS_PROCESS,
+]);
+
+// Closure provenance — how a SOLVED verdict was established.
+export const CLOSURE_MEASURED = 'MEASURED'; // real artifact probe (e.g. scenario-harness)
+export const CLOSURE_DECISION = 'DECISION'; // hand-authored oracle file
+export const DECISION_PROBES = Object.freeze(['oracle']);

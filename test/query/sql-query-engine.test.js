@@ -878,8 +878,8 @@ test('SQLQueryEngine - exposes initialized local priority control-plane ' +
   );
 });
 
-test('SQLQueryEngine - excludes disconnected priority control-plane ' +
-  'routing endpoints', async (t) => {
+test('SQLQueryEngine - keeps disconnected priority recovery-read endpoints ' +
+  'for bounded delivery', async (t) => {
   const partitionId = 'replica_operations-p1';
   const disconnectedAddress = 'dead/partition/replica_operations-p1-r3';
   const connectedAddress = 'live/partition/replica_operations-p1-r4';
@@ -944,9 +944,13 @@ test('SQLQueryEngine - excludes disconnected priority control-plane ' +
     false,
     CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
   );
-  t.notOk(
+  t.ok(
     candidates.some((candidate) => candidate.address === disconnectedAddress),
-    'read candidates should skip the closed priority endpoint',
+    'recovery-read candidates should keep the closed priority endpoint',
+  );
+  t.ok(
+    candidates.some((candidate) => candidate.address === connectedAddress),
+    'recovery-read candidates should also keep the connected peer',
   );
 });
 

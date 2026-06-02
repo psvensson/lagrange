@@ -16,6 +16,7 @@ import {
   EVENT_ATTEMPT,
   EVENT_SOLVED,
   EVENT_PARK,
+  EVENT_FRONTIER_REOPENED,
   EVENT_QUEST,
   EVENT_FINDING,
   EVENT_THEORY_OPTION_DECLARED,
@@ -135,6 +136,17 @@ function applyPark(frontier, event) {
   frontier.reason = event.reason || null;
 }
 
+// Reopen a parked frontier: return it to the first rung so the Solver re-enters it with
+// fresh, honestly-measured attempts. parkedCount is preserved as history (the scheduler
+// still de-prioritizes a frequently-parked frontier) and the reopen reason is recorded.
+function applyReopen(frontier, event) {
+  if (!frontier) return;
+  if (frontier.status !== STATUS_PARKED) return;
+  frontier.status = STATUS_OPEN;
+  frontier.rungIndex = FIRST_RUNG_INDEX;
+  frontier.reason = event.reason || null;
+}
+
 function applyFinding(frontier, event) {
   if (!frontier) return;
   frontier.findings.push({
@@ -232,6 +244,7 @@ const FRONTIER_HANDLERS = {
   [EVENT_ATTEMPT]: applyAttempt,
   [EVENT_SOLVED]: applySolved,
   [EVENT_PARK]: applyPark,
+  [EVENT_FRONTIER_REOPENED]: applyReopen,
   [EVENT_FINDING]: applyFinding,
   [EVENT_EVIDENCE_INGESTED]: applyEvidenceIngested,
 };

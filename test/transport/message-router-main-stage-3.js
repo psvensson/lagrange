@@ -297,6 +297,165 @@ t.test('MessageRouter unit tests chunk 3', async (t) => {
   );
 
   t.test(
+    'should admit a new critical source by preempting a hot critical source',
+    async (t) => {
+      const TEST_LOCAL_NODE_ID = 'local-node';
+      const TEST_REMOTE_NODE_ID = 'remote-node';
+      const TEST_NODE_ADDRESS = 'ws://local-node:7000';
+      const TEST_MAX_CONCURRENT = 1;
+      const TEST_MAX_PENDING = 4;
+      const TEST_CRITICAL_RESERVE = 2;
+      const TEST_HOT_SOURCE_A =
+        'remote-node/partition/sql_transaction_participants-p1-r4';
+      const TEST_HOT_SOURCE_B =
+        'remote-node/partition/sql_write_operations-p1-r4';
+      const TEST_CONTROL_MESSAGE_SOURCE = 'message:node_state_update';
+      const TEST_HOT_INITIAL_LABEL = 'hot-initial';
+      const TEST_CONTROL_PLANE_LABEL = 'control-plane';
+      const router = new MessageRouter({
+        nodeId: TEST_LOCAL_NODE_ID,
+        nodeAddress: TEST_NODE_ADDRESS,
+        startServer: false,
+        outboundQueueMaxConcurrent: TEST_MAX_CONCURRENT,
+        outboundQueueMaxPending: TEST_MAX_PENDING,
+        outboundQueueCriticalReserve: TEST_CRITICAL_RESERVE,
+      });
+      await router.initialize();
+
+      const warnEntries = [];
+      const originalWarn = router.logger.warn.bind(router.logger);
+      router.logger.warn = (message, context) => {
+        warnEntries.push({message, context});
+        return originalWarn(message, context);
+      };
+
+      let releaseFirstSend = null;
+      let releaseControlPlaneSend = null;
+      const startedDeliveries = [];
+      const firstDelivery = router.enqueueOutbound(
+        TEST_REMOTE_NODE_ID,
+        () => new Promise((resolve) => {
+          startedDeliveries.push(TEST_HOT_INITIAL_LABEL);
+          releaseFirstSend = () => resolve({acknowledged: true});
+        }),
+        {
+          deliveryPriority: 'critical',
+          targetAddress: TEST_HOT_SOURCE_A,
+          message: {},
+        },
+      );
+      await Promise.resolve();
+
+      const queuedDeliveries = [];
+      for (const targetAddress of [
+        TEST_HOT_SOURCE_A,
+        TEST_HOT_SOURCE_A,
+        TEST_HOT_SOURCE_B,
+        TEST_HOT_SOURCE_B,
+      ]) {
+        queuedDeliveries.push(
+          router.enqueueOutbound(
+            TEST_REMOTE_NODE_ID,
+            async () => {
+              startedDeliveries.push(targetAddress);
+              return {acknowledged: true, targetAddress};
+            },
+            {
+              deliveryPriority: 'critical',
+              targetAddress,
+              message: {},
+            },
+          ).then(
+            (result) => ({state: 'fulfilled', result}),
+            (error) => ({state: 'rejected', error}),
+          ),
+        );
+        await Promise.resolve();
+      }
+
+      const controlPlaneDelivery = router.enqueueOutbound(
+        TEST_REMOTE_NODE_ID,
+        () => new Promise((resolve) => {
+          startedDeliveries.push(TEST_CONTROL_PLANE_LABEL);
+          releaseControlPlaneSend = () =>
+            resolve({acknowledged: true, controlPlane: true});
+        }),
+        {
+          deliveryPriority: 'critical',
+          targetAddress: 'remote-node/service/control-plane',
+          message: {
+            type: 'NODE_STATE_UPDATE',
+            node_id: TEST_REMOTE_NODE_ID,
+            heartbeat_only: true,
+          },
+        },
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+
+      const queue = router.getOutboundQueue(TEST_REMOTE_NODE_ID);
+      t.equal(
+        queue.pending.length,
+        TEST_MAX_PENDING - 1,
+        'reserved dispatch should immediately consume the admitted slot',
+      );
+      t.equal(
+        queue.inFlightCriticalSourceReserve,
+        1,
+        'the admitted critical source should borrow one reserve dispatch slot',
+      );
+      t.same(
+        startedDeliveries.slice(0, 2),
+        [TEST_HOT_INITIAL_LABEL, TEST_CONTROL_PLANE_LABEL],
+        'reserved critical-source dispatch should not wait behind hot backlog',
+      );
+      t.equal(
+        queue.pending.some((item) =>
+          item?.deliverySource === TEST_CONTROL_MESSAGE_SOURCE),
+        false,
+        'the newly arrived critical source should be in flight, not stuck pending',
+      );
+      t.equal(
+        queue.inFlight > TEST_MAX_CONCURRENT,
+        true,
+        'reserved critical-source dispatch may temporarily exceed normal concurrency',
+      );
+      const preemptionEntry = warnEntries.find((entry) =>
+        entry.message === 'Outbound queue saturated for node delivery' &&
+        entry.context?.preemptedForCriticalSourceReserve === true);
+      t.ok(
+        preemptionEntry,
+        'router should emit a typed preemption pressure warning',
+      );
+      t.equal(
+        preemptionEntry?.context?.admittedDeliverySource,
+        TEST_CONTROL_MESSAGE_SOURCE,
+        'warning should identify the admitted critical source',
+      );
+
+      releaseFirstSend();
+      await firstDelivery;
+      releaseControlPlaneSend();
+      await controlPlaneDelivery;
+      const settledQueuedDeliveries = await Promise.all(queuedDeliveries);
+      const rejectedDeliveries = settledQueuedDeliveries.filter(
+        (outcome) => outcome.state === 'rejected',
+      );
+      t.equal(
+        rejectedDeliveries.length,
+        1,
+        'one pending hot-source delivery should receive backpressure',
+      );
+      t.equal(
+        rejectedDeliveries[0]?.error?.code,
+        'ROUTER_OUTBOUND_QUEUE_BACKPRESSURED',
+        'preempted delivery should receive the canonical backpressure code',
+      );
+      await router.shutdown();
+    },
+  );
+
+  t.test(
     'should classify wrapped query payloads by nested payload semantics',
     async (t) => {
       const WRAPPED_QUERY_TARGET_ADDRESS =

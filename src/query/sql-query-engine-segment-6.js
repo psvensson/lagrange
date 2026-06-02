@@ -18,6 +18,7 @@ const LOCAL_STR_COLUMN_REF = 'column_ref';
 
 const {
   AuthoritativeControlPlaneView,
+  CONTROL_PLANE_READINESS_DIMENSION,
   LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
   QUERY_ERROR_CODE,
   QUERY_ERROR_MSG,
@@ -203,10 +204,18 @@ class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
       sessionId,
     });
 
+    const routingReadinessDimension = this.resolveTableRoutingReadinessDimension(
+      tableName,
+      queryOptions.routingReadinessDimension,
+    );
+    const recoveryLaneSystemTableSelect =
+      this.isSystemTable(tableName) &&
+      routingReadinessDimension ===
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
     const preferLeader =
       typeof queryOptions?.preferLeader === 'boolean' ?
         queryOptions.preferLeader :
-        this.isSystemTable(tableName);
+        (this.isSystemTable(tableName) && !recoveryLaneSystemTableSelect);
     for (const join of ast.joins || []) {
       const joinTableName = join.table?.name;
       if (!joinTableName) {
@@ -240,10 +249,7 @@ class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
         preferLeader,
         deliveryPriority,
         distributedPlan,
-        routingReadinessDimension: this.resolveTableRoutingReadinessDimension(
-          tableName,
-          queryOptions.routingReadinessDimension,
-        ),
+        routingReadinessDimension,
         timeoutMs: queryOptions.timeoutMs,
         cancellationToken: queryOptions.cancellationToken || null,
       },
@@ -390,9 +396,14 @@ class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
     if (!schema) {
       return [];
     }
-    if (Array.isArray(schema.primaryKey) && schema.primaryKey.length > LOCAL_NUM_ZERO) {
+    if (
+      Array.isArray(schema.primaryKey) &&
+      schema.primaryKey.length > LOCAL_NUM_ZERO
+    ) {
       return schema.primaryKey.filter(
-        (columnName) => typeof columnName === LOCAL_STR_STRING && columnName.length > LOCAL_NUM_ZERO,
+        (columnName) =>
+          typeof columnName === LOCAL_STR_STRING &&
+          columnName.length > LOCAL_NUM_ZERO,
       );
     }
     if (!Array.isArray(schema.columns)) {
@@ -402,7 +413,9 @@ class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
       .filter((column) => column?.primaryKey === true)
       .map((column) => column.name)
       .filter(
-        (columnName) => typeof columnName === LOCAL_STR_STRING && columnName.length > LOCAL_NUM_ZERO,
+        (columnName) =>
+          typeof columnName === LOCAL_STR_STRING &&
+          columnName.length > LOCAL_NUM_ZERO,
       );
   }
 

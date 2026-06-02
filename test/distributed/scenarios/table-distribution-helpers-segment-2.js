@@ -125,6 +125,7 @@ const {
   resolveBenchmarkBootstrapRequiredNodeCount,
   resolveBenchmarkAdmissionTimeoutMs,
   resolveBenchmarkAdmissionStableWindowMs,
+  buildBenchmarkConvergenceEvaluationSummaries,
   buildBenchmarkLoadAdmissionSnapshot,
   buildBenchmarkPartitionConvergenceSnapshot,
   BENCHMARK_PARTITION_DISPATCH_MODE,

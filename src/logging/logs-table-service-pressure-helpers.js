@@ -1,3 +1,4 @@
+/* eslint-disable no-invalid-this */
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
 import {METRICS_LOG_PREFIX} from '../constants/metrics-constants.js';
@@ -92,6 +93,7 @@ function isSharedPressureBackpressured(resourceKeys = null) {
       LOGS_TABLE_SHARED_PRESSURE_RESOURCE_KEYS;
   return this.getPressureGovernor().isBackpressured({
     resourceKeys: pressureResourceKeys,
+    workClass: PRESSURE_WORK_CLASS.BACKGROUND,
   });
 }
 

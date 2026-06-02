@@ -212,6 +212,26 @@ The upgrade command records a `quest-upgraded` event, ingests the latest fresh
 probe evidence when available, and regenerates the report. Audit rules remain
 strict for all events after the baseline.
 
+## Reopening A Parked Frontier
+
+A frontier parks when the strategy ladder reaches the park rung without metric
+movement. If that climb counted any non-measuring sample — a blocked or
+incomplete harness run that the metric-validity probe now reports as
+`invalidSample` / `metric: null` — the exhaustion verdict is not trustworthy.
+Reopen the frontier so the Solver can take fresh, honestly-measured attempts:
+
+```sh
+node scripts/solve.js reopen --id rolling-restart \
+  --reason "park climb included an execution_incomplete sample; verdict untrusted"
+```
+
+The `--frontier <id>` flag is optional when the Quest has a single parked
+frontier. The reopen is evidence-gated: it is refused unless at least one
+contributing attempt re-classifies as a non-measuring sample, so an honestly
+measured park is never reopened. It leaves `doneWhen` and the frontier metric
+unchanged (no goalpost movement), keeps the original `park` event in the log,
+preserves `parkedCount`, and resets the frontier to the first rung.
+
 ## Source Change Verification
 
 Every Quest that changes source code must spawn a subagent verifier after the
@@ -237,7 +257,24 @@ file, append-only log, generated report, `solve/changes/` attempt artifact, and
 all source, test, docs, steering, and model files changed for that Quest.
 
 Do not commit unrelated dirty worktree entries from another Quest. If the
-worktree is mixed, use explicit pathspecs:
+worktree is mixed, use explicit pathspecs.
+
+The `handoff` command computes the scope-safe pathspec for you. It runs the
+audit (and refuses on failure), derives the in-scope set purely from the Quest's
+own sealed artifacts — its `solve/quests`, `solve/log`, `solve/report`,
+`solve/state`, and `solve/changes/<id>` paths plus the source/test files named
+inside that Quest's diffs — and explicitly lists every other dirty file as
+out-of-scope so it is never swept in:
+
+```sh
+# Dry run by default: prints in-scope, out-of-scope, and the exact git commands.
+node scripts/solve.js handoff --id <quest>
+
+# Execute the printed git add/commit/push for the in-scope paths only:
+node scripts/solve.js handoff --id <quest> --commit
+```
+
+If you prefer to drive git by hand, mirror the in-scope list manually:
 
 ```sh
 git status --short

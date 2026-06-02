@@ -1,0 +1,268 @@
+diff --git a/src/query/sql-query-engine-segment-6.js b/src/query/sql-query-engine-segment-6.js
+index 5271b559..12cef1b2 100644
+--- a/src/query/sql-query-engine-segment-6.js
++++ b/src/query/sql-query-engine-segment-6.js
+@@ -18,6 +18,7 @@ const LOCAL_STR_COLUMN_REF = 'column_ref';
+ 
+ const {
+   AuthoritativeControlPlaneView,
++  CONTROL_PLANE_READINESS_DIMENSION,
+   LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
+   QUERY_ERROR_CODE,
+   QUERY_ERROR_MSG,
+@@ -203,10 +204,18 @@ class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
+       sessionId,
+     });
+ 
++    const routingReadinessDimension = this.resolveTableRoutingReadinessDimension(
++      tableName,
++      queryOptions.routingReadinessDimension,
++    );
++    const recoveryLaneSystemTableSelect =
++      this.isSystemTable(tableName) &&
++      routingReadinessDimension ===
++        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
+     const preferLeader =
+       typeof queryOptions?.preferLeader === 'boolean' ?
+         queryOptions.preferLeader :
+-        this.isSystemTable(tableName);
++        (this.isSystemTable(tableName) && !recoveryLaneSystemTableSelect);
+     for (const join of ast.joins || []) {
+       const joinTableName = join.table?.name;
+       if (!joinTableName) {
+@@ -240,10 +249,7 @@ class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
+         preferLeader,
+         deliveryPriority,
+         distributedPlan,
+-        routingReadinessDimension: this.resolveTableRoutingReadinessDimension(
+-          tableName,
+-          queryOptions.routingReadinessDimension,
+-        ),
++        routingReadinessDimension,
+         timeoutMs: queryOptions.timeoutMs,
+         cancellationToken: queryOptions.cancellationToken || null,
+       },
+@@ -390,9 +396,14 @@ class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
+     if (!schema) {
+       return [];
+     }
+-    if (Array.isArray(schema.primaryKey) && schema.primaryKey.length > LOCAL_NUM_ZERO) {
++    if (
++      Array.isArray(schema.primaryKey) &&
++      schema.primaryKey.length > LOCAL_NUM_ZERO
++    ) {
+       return schema.primaryKey.filter(
+-        (columnName) => typeof columnName === LOCAL_STR_STRING && columnName.length > LOCAL_NUM_ZERO,
++        (columnName) =>
++          typeof columnName === LOCAL_STR_STRING &&
++          columnName.length > LOCAL_NUM_ZERO,
+       );
+     }
+     if (!Array.isArray(schema.columns)) {
+@@ -402,7 +413,9 @@ class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
+       .filter((column) => column?.primaryKey === true)
+       .map((column) => column.name)
+       .filter(
+-        (columnName) => typeof columnName === LOCAL_STR_STRING && columnName.length > LOCAL_NUM_ZERO,
++        (columnName) =>
++          typeof columnName === LOCAL_STR_STRING &&
++          columnName.length > LOCAL_NUM_ZERO,
+       );
+   }
+ 
+diff --git a/test/query/sql-query-engine-execution-test-cases.js b/test/query/sql-query-engine-execution-test-cases.js
+index e53949a7..3e549d97 100644
+--- a/test/query/sql-query-engine-execution-test-cases.js
++++ b/test/query/sql-query-engine-execution-test-cases.js
+@@ -23,7 +23,7 @@ import {
+ } from './routing-repair-test-helpers.js';
+ 
+ const SQL_ENGINE_SYSTEM_TABLE_UPDATE_SQL =
+-  "UPDATE nodes SET status = 'active' WHERE node_id = 'node-a'";
++  'UPDATE nodes SET status = \'active\' WHERE node_id = \'node-a\'';
+ const SQL_ENGINE_SYSTEM_TABLE_WRITE_DELIVERY_SOURCE =
+   'control-plane:write:nodes:node-a';
+ const TEST_PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_PRIORITY = 'critical';
+@@ -238,79 +238,84 @@ function registerSqlQueryEngineExecutionTestCases({
+     }, 'user transaction delivery should keep the default serve routing');
+   });
+ 
+-  test('SQLQueryEngine - defaults system-table selects to recovery routing',
+-    async (t) => {
+-      const partitionId = 'logs-p1';
+-      const cache = createMockSystemCache(
+-        [
+-          {
+-            table_name: TABLES.LOGS,
+-          },
+-        ],
+-        [
+-          {
+-            partition_id: partitionId,
+-            table_name: TABLES.LOGS,
+-          },
+-        ],
+-        [
+-          {
+-            service_id: `${partitionId}-r1`,
+-            service_type: SERVICE_TYPE.PARTITION,
+-            partition_id: partitionId,
+-            node_id: 'seed-node',
+-            raft_role: 'leader',
+-            address: `seed-node/partition/${partitionId}-r1`,
+-            status: SERVICE_STATUS.ACTIVE,
+-          },
+-        ],
+-      );
+-      const engine = new SQLQueryEngine({
+-        nodeId: 'select-node',
+-        systemCache: cache,
+-        messageRouter: createMockMessageRouter(),
+-        distributedQueryPlanner: {
+-          planSelect() {
+-            return {
+-              tablePlans: new Map([
+-                [
+-                  TABLES.LOGS,
+-                  {
+-                    partitions: [partitionId],
+-                  },
+-                ],
+-              ]),
+-              diagnostics: {
+-                tablePlans: [],
+-              },
+-            };
+-          },
++  test('SQLQueryEngine - defaults system-table recovery selects to replica ' +
++    'routing', async (t) => {
++    const partitionId = 'logs-p1';
++    const cache = createMockSystemCache(
++      [
++        {
++          table_name: TABLES.LOGS,
+         },
+-      });
+-      let capturedExecutionOptions = null;
+-      engine.queryExecutor = {
+-        async executeSelect(_ast, _partitionIds, _params, executionOptions = {}) {
+-          capturedExecutionOptions = executionOptions;
++      ],
++      [
++        {
++          partition_id: partitionId,
++          table_name: TABLES.LOGS,
++        },
++      ],
++      [
++        {
++          service_id: `${partitionId}-r1`,
++          service_type: SERVICE_TYPE.PARTITION,
++          partition_id: partitionId,
++          node_id: 'seed-node',
++          raft_role: 'leader',
++          address: `seed-node/partition/${partitionId}-r1`,
++          status: SERVICE_STATUS.ACTIVE,
++        },
++      ],
++    );
++    const engine = new SQLQueryEngine({
++      nodeId: 'select-node',
++      systemCache: cache,
++      messageRouter: createMockMessageRouter(),
++      distributedQueryPlanner: {
++        planSelect() {
+           return {
+-            success: true,
+-            rows: [],
+-            count: 0,
+-            distributedMetrics: {},
++            tablePlans: new Map([
++              [
++                TABLES.LOGS,
++                {
++                  partitions: [partitionId],
++                },
++              ],
++            ]),
++            diagnostics: {
++              tablePlans: [],
++            },
+           };
+         },
+-      };
++      },
++    });
++    let capturedExecutionOptions = null;
++    engine.queryExecutor = {
++      async executeSelect(_ast, _partitionIds, _params, executionOptions = {}) {
++        capturedExecutionOptions = executionOptions;
++        return {
++          success: true,
++          rows: [],
++          count: 0,
++          distributedMetrics: {},
++        };
++      },
++    };
+ 
+-      const result = await engine.executeQuery(
+-        'SELECT * FROM logs WHERE log_id = \'log-1\'',
+-      );
++    const result = await engine.executeQuery(
++      'SELECT * FROM logs WHERE log_id = \'log-1\'',
++    );
+ 
+-      t.equal(result.success, true, 'system-table select should still succeed');
+-      t.equal(
+-        capturedExecutionOptions?.routingReadinessDimension,
+-        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+-        'system-table select should default to the recovery-eligible routing lane',
+-      );
+-    });
++    t.equal(result.success, true, 'system-table select should still succeed');
++    t.equal(
++      capturedExecutionOptions?.preferLeader,
++      false,
++      'recovery-lane system-table SELECT should prefer any eligible replica',
++    );
++    t.equal(
++      capturedExecutionOptions?.routingReadinessDimension,
++      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
++      'system-table select should default to the recovery-eligible routing lane',
++    );
++  });
+ 
+   test('SQLQueryEngine - system-table selects honor replica-preferred routing',
+     async (t) => {
+diff --git a/test/query/sql-query-engine.test.js b/test/query/sql-query-engine.test.js
+index 7cd6bbb6..dc8b99ae 100644
+--- a/test/query/sql-query-engine.test.js
++++ b/test/query/sql-query-engine.test.js
+@@ -878,8 +878,8 @@ test('SQLQueryEngine - exposes initialized local priority control-plane ' +
+   );
+ });
+ 
+-test('SQLQueryEngine - excludes disconnected priority control-plane ' +
+-  'routing endpoints', async (t) => {
++test('SQLQueryEngine - keeps disconnected priority recovery-read endpoints ' +
++  'for bounded delivery', async (t) => {
+   const partitionId = 'replica_operations-p1';
+   const disconnectedAddress = 'dead/partition/replica_operations-p1-r3';
+   const connectedAddress = 'live/partition/replica_operations-p1-r4';
+@@ -944,9 +944,13 @@ test('SQLQueryEngine - excludes disconnected priority control-plane ' +
+     false,
+     CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+   );
+-  t.notOk(
++  t.ok(
+     candidates.some((candidate) => candidate.address === disconnectedAddress),
+-    'read candidates should skip the closed priority endpoint',
++    'recovery-read candidates should keep the closed priority endpoint',
++  );
++  t.ok(
++    candidates.some((candidate) => candidate.address === connectedAddress),
++    'recovery-read candidates should also keep the connected peer',
+   );
+ });
+ 

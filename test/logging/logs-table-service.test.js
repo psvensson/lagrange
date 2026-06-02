@@ -993,8 +993,10 @@ test('LogsTableService arms a shared-pressure defer window before the local ' +
   'queue saturates', async (t) => {
   LogsTableService.resetInstance();
   const currentNow = 5000;
+  const evaluations = [];
   const pressureGovernor = {
     evaluate(request) {
+      evaluations.push(request);
       t.equal(
         request.workClass,
         PRESSURE_WORK_CLASS.BACKGROUND,
@@ -1040,6 +1042,19 @@ test('LogsTableService arms a shared-pressure defer window before the local ' +
     5250,
     'shared pressure should arm a bounded defer window',
   );
+  t.same(
+    evaluations[0]?.resourceKeys,
+    [
+      'control-plane:logs-table:background-write',
+      'control-plane:table:logs',
+      'transport:logs-writer',
+    ],
+    'shared logs pressure should use the isolated background write resource key',
+  );
+  t.notOk(
+    evaluations[0]?.resourceKeys?.includes('control-plane:write'),
+    'shared logs pressure must not consume the control-plane write ingress key',
+  );
 
   await service.shutdown();
 });
@@ -1053,7 +1068,12 @@ test('LogsTableService evaluates shared pressure with explicit resource keys',
           action: PRESSURE_GOVERNOR_ACTION.ADMIT,
         };
       },
-      isBackpressured() {
+      isBackpressured(request) {
+        t.equal(
+          request.workClass,
+          PRESSURE_WORK_CLASS.BACKGROUND,
+          'shared pressure checks should preserve the background work class',
+        );
         return true;
       },
       configure() {},

@@ -334,6 +334,65 @@ test('Publication mutation workload defers when the control-plane critical ' +
   );
 });
 
+test('Logs table background workload stays off the control-plane critical ' +
+  'reserve', async (t) => {
+  const governor = new PressureGovernor({
+    nodeId: 'node-a',
+    messageRouter: {
+      getStats() {
+        return {
+          outboundQueues: {
+            'node-b': {
+              pending: 32,
+              pendingCritical: 16,
+              pendingBackground: 16,
+              criticalReserve: 16,
+              backgroundPendingLimit: 48,
+              maxPending: 64,
+            },
+          },
+        };
+      },
+    },
+  });
+  const logsTableProfile = buildControlPlaneWorkloadProfile(
+    CONTROL_PLANE_WORKLOAD_CLASS.LOGS_TABLE_BACKGROUND_WRITE,
+  );
+
+  const decision = governor.evaluate({
+    workClass: logsTableProfile.workClass,
+    resourceKeys: logsTableProfile.resourceKeys,
+    allowDegrade: logsTableProfile.allowPressureDegrade,
+    allowDefer: logsTableProfile.allowPressureDefer,
+  });
+
+  t.equal(
+    logsTableProfile.workClass,
+    PRESSURE_WORK_CLASS.BACKGROUND,
+    'logs-table persistence should stay on the background work lane',
+  );
+  t.same(
+    logsTableProfile.resourceKeys,
+    ['control-plane:logs-table:background-write'],
+    'logs-table persistence should use the isolated background resource key',
+  );
+  t.equal(
+    decision.action,
+    PRESSURE_GOVERNOR_ACTION.ALLOW,
+    'logs-table background work should not defer on critical reserve exhaustion',
+  );
+  t.equal(
+    decision.summary?.capacityPartition,
+    'background',
+    'logs-table background work should consume the background partition',
+  );
+  t.equal(
+    decision.summary?.criticalReserveExhausted,
+    false,
+    'background partition summaries should not report critical reserve exhaustion',
+  );
+});
+
 test('PressureGovernor keeps bootstrap-critical work admissible when the ' +
   'control-plane critical reserve is exhausted', async (t) => {
   const governor = new PressureGovernor({
@@ -470,7 +529,7 @@ test('PressureGovernor rate-limits pressure metric logging',
       now: () => currentTime,
       logger: {
         info(tag, data) {
-          logCalls.push({ tag, data });
+          logCalls.push({tag, data});
         },
       },
     });
@@ -507,4 +566,3 @@ test('PressureGovernor rate-limits pressure metric logging',
     governor.evaluate(request);
     t.equal(logCalls.length, 2, 'emission after 1000ms should log');
   });
-

@@ -104,12 +104,12 @@
     }
   ],
   "stats": {
-    "candidateCount": 228,
-    "dedupedRuleCount": 222,
-    "exportedRuleCount": 222,
+    "candidateCount": 233,
+    "dedupedRuleCount": 227,
+    "exportedRuleCount": 227,
     "aliasRuleCount": 0,
-    "masterRuleCount": 222,
-    "estimatedAllRulesTokens": 7239
+    "masterRuleCount": 227,
+    "estimatedAllRulesTokens": 7559
   },
   "rules": [
     {
@@ -2663,13 +2663,13 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "Do not revive sprint/package theory state as active authority.",
+      "rule": "An invalid sample is an honest no-measurement: it never counts as progress, never satisfies doneWhen, breaks the consecutive-pass streak, and climbs the strategy ladder like any other stall.",
       "score": 206,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 84,
-          "section": "Quest Workflow > Two-Layer Theory"
+          "line": 60,
+          "section": "Quest Workflow > Metric Validity And Invalid Samples"
         }
       ]
     },
@@ -2678,13 +2678,13 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "If the verifier finds issues, fix them or record a finding that explains why the Quest must continue; do not proceed to git handoff from an unresolved verifier finding.",
+      "rule": "Never treat a blocked or incomplete run as a metric floor.",
       "score": 206,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 146,
-          "section": "Quest Workflow > Source Change Verification"
+          "line": 60,
+          "section": "Quest Workflow > Metric Validity And Invalid Samples"
         }
       ]
     },
@@ -2693,13 +2693,13 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "Do not include unrelated dirty worktree entries from another Quest.",
+      "rule": "Do not revive sprint/package theory state as active authority.",
       "score": 206,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 157,
-          "section": "Quest Workflow > Git Handoff"
+          "line": 124,
+          "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
     },
@@ -2708,12 +2708,42 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "Do not rely on solve/state/ as durable memory.",
+      "rule": "If the verifier finds issues, fix them or record a finding that explains why the Quest must continue; do not proceed to git handoff from an unresolved verifier finding.",
       "score": 206,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 211,
+          "line": 186,
+          "section": "Quest Workflow > Source Change Verification"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0018",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Do not include unrelated dirty worktree entries from another Quest.",
+      "score": 206,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 197,
+          "section": "Quest Workflow > Git Handoff"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0019",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Do not rely on solve/state/ as durable memory.",
+      "score": 205,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 258,
           "section": "Quest Workflow > Tracked Versus Regenerable"
         }
       ]
@@ -2734,7 +2764,7 @@
       ]
     },
     {
-      "id": "GOV-0018",
+      "id": "GOV-0020",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2936,7 +2966,7 @@
       ]
     },
     {
-      "id": "GOV-0019",
+      "id": "GOV-0021",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -2945,13 +2975,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 49,
+          "line": 53,
           "section": "Quest Workflow > Quest Anatomy"
         }
       ]
     },
     {
-      "id": "GOV-0020",
+      "id": "GOV-0022",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2962,13 +2992,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 93,
+          "line": 133,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
     },
     {
-      "id": "GOV-0021",
+      "id": "GOV-0023",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -2977,13 +3007,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 94,
+          "line": 134,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
     },
     {
-      "id": "GOV-0022",
+      "id": "GOV-0024",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2994,13 +3024,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 96,
+          "line": 136,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
     },
     {
-      "id": "GOV-0023",
+      "id": "GOV-0025",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3009,7 +3039,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 196,
+          "line": 243,
           "section": "Quest Workflow > Terminal And Blocking Conditions"
         }
       ]
@@ -3049,7 +3079,7 @@
       ]
     },
     {
-      "id": "GOV-0024",
+      "id": "GOV-0026",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3066,7 +3096,7 @@
       ]
     },
     {
-      "id": "GOV-0025",
+      "id": "GOV-0027",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3081,7 +3111,7 @@
       ]
     },
     {
-      "id": "GOV-0026",
+      "id": "GOV-0028",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3200,7 +3230,7 @@
       ]
     },
     {
-      "id": "GOV-0027",
+      "id": "GOV-0029",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3211,13 +3241,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 134,
+          "line": 174,
           "section": "Quest Workflow > Source Change Verification"
         }
       ]
     },
     {
-      "id": "GOV-0028",
+      "id": "GOV-0030",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3226,7 +3256,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 134,
+          "line": 174,
           "section": "Quest Workflow > Source Change Verification"
         }
       ]
@@ -3345,6 +3375,39 @@
           "file": "testing-guidelines/regression-policy.md",
           "line": 186,
           "section": "Testing — Regression Policy > Temporal Witness Replay Policy"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0031",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "The reopen is evidence-gated: it is refused unless at least one contributing attempt re-classifies as a non-measuring sample (so an honest park is never reopened), it leaves doneWhen and the frontier metric untouched (no goalpost movement), keeps the park event in the append-only log, preserves parkedCount so the scheduler still de-prioritizes a chronic parker, and returns the frontier to the first rung for fresh, honestly-measured attempts.",
+      "score": 182,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 69,
+          "section": "Quest Workflow > Metric Validity And Invalid Samples"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0032",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [
+        "testing",
+        "governance"
+      ],
+      "rule": "It runs the audit and refuses on failure, derives the in-scope set purely from the Quest's sealed solve/ artifacts plus the source/test files named inside its own diffs, and lists every other dirty file as out-of-scope so it is never swept in.",
+      "score": 182,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 201,
+          "section": "Quest Workflow > Git Handoff"
         }
       ]
     },
@@ -3497,6 +3560,21 @@
       ]
     },
     {
+      "id": "GOV-0033",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [],
+      "rule": "class: \"product\" (default) or \"process\". Product goals must be MEASURED against a real artifact probe; process goals are scaffolding/decision records and may legitimately close on an oracle. This drives report closure labeling, the audit closure-strength warning, and the portfolio meta ratio.",
+      "score": 174,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 46,
+          "section": "Quest Workflow > Quest Anatomy"
+        }
+      ]
+    },
+    {
       "id": "TEST-0069",
       "domain": "testing",
       "strength": "may",
@@ -3589,7 +3667,7 @@
       ]
     },
     {
-      "id": "GOV-0029",
+      "id": "GOV-0034",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -3598,13 +3676,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 70,
+          "line": 110,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
     },
     {
-      "id": "GOV-0030",
+      "id": "GOV-0035",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -3613,13 +3691,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 179,
+          "line": 226,
           "section": "Quest Workflow > Findings Log"
         }
       ]
     },
     {
-      "id": "GOV-0031",
+      "id": "GOV-0036",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -3634,7 +3712,7 @@
       ]
     },
     {
-      "id": "GOV-0032",
+      "id": "GOV-0037",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -3681,7 +3759,7 @@
       ]
     },
     {
-      "id": "GOV-0033",
+      "id": "GOV-0038",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -3711,7 +3789,7 @@
       ]
     },
     {
-      "id": "GOV-0034",
+      "id": "GOV-0039",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -3720,30 +3798,30 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 84,
+          "line": 124,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
     },
     {
-      "id": "GOV-0035",
+      "id": "GOV-0040",
       "domain": "governance",
       "strength": "may",
       "tags": [
         "cache"
       ],
       "rule": "Projected state under solve/state/ is local cache and may be rebuilt from the Quest plus append-only log.",
-      "score": 140,
+      "score": 139,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 211,
+          "line": 258,
           "section": "Quest Workflow > Tracked Versus Regenerable"
         }
       ]
     },
     {
-      "id": "GOV-0036",
+      "id": "GOV-0041",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -3760,5 +3838,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-06-02T09:03:07.164Z"
+  "generatedAt": "2026-06-02T13:16:34.191Z"
 }

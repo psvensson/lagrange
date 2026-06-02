@@ -305,4 +305,41 @@ tap.test('Quest audit', async (t) => {
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });
+
+  t.test('warns when a product quest closes on a DECISION (oracle) probe', (t) => {
+    const root = tmp();
+    const {quest, oracle} = makeQuest(root);
+    runStep(root, quest);
+    fs.writeFileSync(oracle, JSON.stringify({metric: 0, target: 0}));
+    runStep(root, quest, {
+      changeRef: makeDiff(root, quest.id, 'valid', 'docs/demo.md'),
+      summary: 'close the product quest on its oracle',
+    });
+    const audit = auditQuest(root, quest);
+    t.equal(audit.status, 'pass', 'closure-strength is a warning, not a failure');
+    t.match(
+      (audit.warnings || []).join('\n'),
+      /product quest closed on a DECISION/u,
+      'surfaces the closure-strength mismatch warning',
+    );
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('a process quest closing on oracle emits no closure warning', (t) => {
+    const root = tmp();
+    const {quest, oracle} = makeQuest(root, 'proc');
+    quest.class = 'process';
+    saveQuest(root, quest);
+    runStep(root, quest);
+    fs.writeFileSync(oracle, JSON.stringify({metric: 0, target: 0}));
+    runStep(root, quest, {
+      changeRef: makeDiff(root, quest.id, 'valid', 'docs/demo.md'),
+      summary: 'close the process quest on its oracle',
+    });
+    const audit = auditQuest(root, quest);
+    t.same(audit.warnings, [], 'process quests may legitimately close on a DECISION');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
 });

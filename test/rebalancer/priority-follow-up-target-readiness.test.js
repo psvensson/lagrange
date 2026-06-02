@@ -271,7 +271,9 @@ test(
         systemTableCache,
         readinessByNodeId: {
           [TEST_NODE_ID_A]: createNodeReadiness(TEST_NODE_ID_A),
-          [TEST_NODE_ID_B]: createNodeReadiness(TEST_NODE_ID_B),
+          [TEST_NODE_ID_B]: createNodeReadiness(TEST_NODE_ID_B, {
+            recoveryEligible: false,
+          }),
         },
       });
     const createdOperations = [];
@@ -377,6 +379,155 @@ test(
 );
 
 test(
+  'UnifiedRebalancer creates priority follow-up for a recovery-eligible ' +
+    'locally lease-incomplete target',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const expiredReadyLeaseExpiresAt =
+      Date.now() + TEST_EXPIRED_READY_LEASE_OFFSET_MS;
+    const systemTableCache = createMockCache({
+      nodes: [
+        createNodeRow(TEST_NODE_ID_A),
+        createNodeRow(TEST_NODE_ID_B, {
+          readyLeaseExpiresAt: expiredReadyLeaseExpiresAt,
+        }),
+      ],
+      services: [
+        createReplicaRow(TEST_REPLICA_ID_A, TEST_NODE_ID_A),
+      ],
+      partitions: [{
+        partition_id: TEST_PARTITION_ID,
+        table_id: TEST_TABLE_ID,
+      }],
+      replicaOperations: [{
+        operation_id: TEST_PENDING_TARGET_OPERATION_ID,
+        partition_id: TEST_SUPPORTING_PARTITION_ID,
+        type: MoveType.ADD,
+        status: ReplicaStatus.PENDING,
+        workflow_step: WORKFLOW_STEP.PENDING,
+        target_node_id: TEST_NODE_ID_B,
+      }],
+    });
+    const controlPlaneReadinessService =
+      createMockControlPlaneReadinessService({
+        systemTableCache,
+        readinessByNodeId: {
+          [TEST_NODE_ID_A]: createNodeReadiness(TEST_NODE_ID_A),
+          [TEST_NODE_ID_B]: createNodeReadiness(TEST_NODE_ID_B, {
+            repairEligible: false,
+            serveEligible: false,
+          }),
+        },
+      });
+    const createdOperations = [];
+    const rebalanceCoordinator = {
+      ...createMockCoordinator(),
+      createOperation: async (move) => {
+        createdOperations.push(move);
+        return {
+          operationId: TEST_CREATED_OPERATION_ID,
+          type: move.type,
+          partitionId: move.partitionId,
+          targetNodeId: move.nodeId,
+          replicaId: move.replicaId,
+          status: ReplicaStatus.PENDING,
+          workflowStep: WORKFLOW_STEP.PENDING,
+        };
+      },
+    };
+    const rebalancer = createTestRebalancer({
+      entityId: TEST_PARTITION_ID,
+      entityType: EntityType.PARTITION,
+      nodeId: TEST_NODE_ID_A,
+      systemTableCache,
+      rebalanceCoordinator,
+      controlPlaneReadinessService,
+    });
+
+    rebalancer.initialize();
+    rebalancer.controlPlaneReadinessService = controlPlaneReadinessService;
+    rebalancer.rebalanceCoordinator.controlPlaneReadinessService =
+      controlPlaneReadinessService;
+    rebalancer.setLeader(true);
+    rebalancer.clusterReadinessConfirmed = true;
+    rebalancer.isStabilized = () => true;
+    rebalancer.evaluateState = async () => true;
+    rebalancer.getConfiguredRebalanceBudget = async () =>
+      TEST_TARGET_REPLICA_COUNT;
+    rebalancer.getGlobalInFlightOperationCount = async () =>
+      TEST_NO_IN_FLIGHT_OPERATIONS;
+    rebalancer.getCurrentPriorityRecoveryFollowUpDecisionSnapshot =
+      async () =>
+        Object.freeze({
+          planningSnapshot: Object.freeze({}),
+          decisionSnapshot: Object.freeze({
+            partitionId: TEST_PARTITION_ID,
+            semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE.NEEDS_OPERATION,
+            progress: Object.freeze({
+              nextRequiredAction:
+                PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION
+                  .CREATE_RECOVERY_OPERATION,
+            }),
+            admission: Object.freeze({
+              effectiveEligibleNodeIds: Object.freeze([
+                TEST_NODE_ID_A,
+                TEST_NODE_ID_B,
+              ]),
+            }),
+            publication: Object.freeze({
+              recoveryActiveNodeIds: Object.freeze([
+                TEST_NODE_ID_A,
+                TEST_NODE_ID_B,
+              ]),
+            }),
+          }),
+        });
+    rebalancer.movePlanner.calculateTargetState = async () => ({
+      targetReplicaCount: TEST_TARGET_REPLICA_COUNT,
+      targetNodes: [
+        TEST_NODE_ID_A,
+        TEST_NODE_ID_B,
+      ],
+    });
+    rebalancer.movePlanner.calculateMoves = () => [];
+    rebalancer.movePlanner.applyPressureGating = async (moves) => moves;
+
+    try {
+      const result = await rebalancer.rebalance(
+        TriggerType.PERIODIC,
+        {
+          targetReplicaCount: TEST_TARGET_REPLICA_COUNT,
+          placementConstraints: {
+            spreadAcrossNodes: true,
+          },
+        },
+      );
+
+      t.equal(
+        createdOperations.length,
+        1,
+        'recovery-eligible lease-incomplete target should still create when no unused target exists',
+      );
+      t.equal(
+        createdOperations[0]?.nodeId,
+        TEST_NODE_ID_B,
+        'follow-up should keep the recovery-eligible target node',
+      );
+      t.equal(
+        result.moves[0]?.success,
+        true,
+        'follow-up should execute through the workflow owner despite the local lease gap',
+      );
+    } finally {
+      rebalancer.shutdown();
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+    }
+  },
+);
+
+test(
   'UnifiedRebalancer skips locally lease-incomplete priority follow-up ' +
     'targets while preserving ready alternatives',
   async (t) => {
@@ -405,7 +556,9 @@ test(
         systemTableCache,
         readinessByNodeId: {
           [TEST_NODE_ID_A]: createNodeReadiness(TEST_NODE_ID_A),
-          [TEST_NODE_ID_B]: createNodeReadiness(TEST_NODE_ID_B),
+          [TEST_NODE_ID_B]: createNodeReadiness(TEST_NODE_ID_B, {
+            recoveryEligible: false,
+          }),
           [TEST_NODE_ID_C]: createNodeReadiness(TEST_NODE_ID_C),
         },
       });

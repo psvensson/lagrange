@@ -27,6 +27,7 @@ const {
   UNIFIED_REBALANCER_LITERAL,
 } = SHARED;
 const {
+  CONTROL_PLANE_READINESS_DIMENSION,
   NodeStatus,
   buildPriorityRecoveryBlockedPartitions,
   isNodeReadyLeaseExplicitlyCleared,
@@ -106,6 +107,38 @@ class UnifiedRebalancerSegment4Stage3 extends UnifiedRebalancerSegment4Stage2 {
     return pendingTargetNodeIds;
   }
 
+  buildPriorityRecoveryFollowUpCrossPartitionPendingTargetNodeSet(
+    decision = null,
+  ) {
+    const followUpPartitionId =
+      this.resolvePriorityRecoveryFollowUpPartitionId(decision);
+    const pendingTargetNodeIds = new Set();
+    for (const operation of this.getGlobalTopologyBlockingInFlightOperations()) {
+      const operationPartitionId = String(
+        operation?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.PARTITION_ID] ||
+          operation?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.PARTITION_ID_SNAKE] ||
+          operation?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.ENTITY_ID] ||
+          UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+      ).trim();
+      if (
+        followUpPartitionId.length > NUM.ZERO &&
+        operationPartitionId.length > NUM.ZERO &&
+        operationPartitionId === followUpPartitionId
+      ) {
+        continue;
+      }
+      const targetNodeId = String(
+        operation?.target_node_id ||
+          operation?.targetNodeId ||
+          UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+      ).trim();
+      if (targetNodeId.length > NUM.ZERO) {
+        pendingTargetNodeIds.add(targetNodeId);
+      }
+    }
+    return pendingTargetNodeIds;
+  }
+
   resolvePriorityRecoveryFollowUpCandidateNodeIds(
     decision,
     targetState = null,
@@ -136,19 +169,38 @@ class UnifiedRebalancerSegment4Stage3 extends UnifiedRebalancerSegment4Stage2 {
     const status = nodeRow.status;
     const nodeStatusKnownNotActive =
       typeof status === TYPEOF.STRING && status !== NodeStatus.ACTIVE;
+    if (nodeStatusKnownNotActive) {
+      return true;
+    }
+    if (this.isPriorityRecoveryFollowUpTargetRecoveryEligible(nodeId)) {
+      return false;
+    }
     const nodeReady = isNodeRecordReady(nodeRow, {now: Date.now()});
     const readyLeaseExplicitlyCleared =
       isNodeReadyLeaseExplicitlyCleared(nodeRow, {
         requireActiveStatus: false,
       });
     return (
-      nodeStatusKnownNotActive ||
-      (
-        status === NodeStatus.ACTIVE &&
-        !nodeReady
-      ) ||
+      (status === NodeStatus.ACTIVE && !nodeReady) ||
       readyLeaseExplicitlyCleared
     );
+  }
+
+  isPriorityRecoveryFollowUpTargetRecoveryEligible(nodeId) {
+    if (
+      nodeId.length === NUM.ZERO ||
+      typeof this.controlPlaneReadinessService?.getNodeReadinessSync !==
+        TYPEOF.FUNCTION
+    ) {
+      return false;
+    }
+    const readiness = this.controlPlaneReadinessService.getNodeReadinessSync(
+      nodeId,
+      {allowStaleOnCacheChange: false},
+    );
+    return readiness?.dimensions?.[
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE
+    ] === true;
   }
 
   selectPriorityRecoveryFollowUpTargetNodeId(
@@ -167,6 +219,10 @@ class UnifiedRebalancerSegment4Stage3 extends UnifiedRebalancerSegment4Stage2 {
       this.buildPriorityRecoveryFollowUpOccupiedNodeSet(currentReplicas);
     const pendingTargetNodeIds =
       this.buildPriorityRecoveryFollowUpPendingTargetNodeSet(decision);
+    const crossPartitionPendingTargetNodeIds =
+      this.buildPriorityRecoveryFollowUpCrossPartitionPendingTargetNodeSet(
+        decision,
+      );
     const previousFailedTargetNodeId = String(
       decision?.decisionSnapshot?.coordinator?.operation?.[
         PRIORITY_RECOVERY_FOLLOW_UP_FIELD.TARGET_NODE_ID
@@ -177,6 +233,7 @@ class UnifiedRebalancerSegment4Stage3 extends UnifiedRebalancerSegment4Stage2 {
         !healthyNodeIds.has(nodeId) &&
         !occupiedNodeIds.has(nodeId) &&
         !pendingTargetNodeIds.has(nodeId) &&
+        !crossPartitionPendingTargetNodeIds.has(nodeId) &&
         !this.isPriorityRecoveryFollowUpTargetKnownLocallyNotReady(nodeId),
     );
     const preferredUnusedEligibleNodeId = unusedEligibleNodeIds.find(
