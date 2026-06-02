@@ -320,6 +320,125 @@ async (t) => {
   }
 });
 
+test('sendHeartbeat does not fail READY publication on retryable endpoint ' +
+  'pressure',
+async (t) => {
+  initEnv();
+
+  const nodeWrites = [];
+  const endpointWrites = [];
+  const service = new HeartbeatService({
+    nodeId: TEST_NODE_ID,
+    nodeAddress: TEST_NODE_ADDRESS,
+    controlPlaneSystemTableGateway: {
+      async updateSystemTableRow(tableName, whereClause, row, options) {
+        nodeWrites.push({tableName, whereClause, row, options});
+        return {
+          success: true,
+          partitionResult: {affectedRows: 1},
+        };
+      },
+      async upsertSystemTableRow(tableName, row, options) {
+        endpointWrites.push({tableName, row, options});
+        const error = new Error(
+          'Distributed operation failed due to participant failures',
+        );
+        error.code = 'DISTRIBUTED_PARTICIPANT_FAILURE';
+        error.retryAfterMs = 2250;
+        throw error;
+      },
+    },
+    systemTableCache: createCacheWithBudget(),
+    now: () => TEST_NOW,
+  });
+
+  try {
+    await service.sendHeartbeat(null, null);
+
+    t.equal(nodeWrites.length, 1, 'node heartbeat remains strict and succeeds');
+    t.equal(
+      endpointWrites.length,
+      1,
+      'endpoint heartbeat upsert is still attempted once',
+    );
+    t.equal(
+      endpointWrites[0].options?.allowPressureDefer,
+      true,
+      'endpoint heartbeat upsert keeps the pressure-deferred contract',
+    );
+    t.equal(
+      service.lastEndpointUpsertAt,
+      TEST_NOW,
+      'deferred endpoint pressure still records the refresh attempt',
+    );
+    t.equal(
+      service.lastEndpointUpsertSignature,
+      service.buildEndpointUpsertSignature(endpointWrites[0].row),
+      'deferred endpoint pressure coalesces repeated refresh attempts',
+    );
+  } finally {
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+  }
+});
+
+test('sendHeartbeat still fails READY publication on non-retryable endpoint ' +
+  'upsert failures',
+async (t) => {
+  initEnv();
+
+  const nodeWrites = [];
+  const endpointWrites = [];
+  const service = new HeartbeatService({
+    nodeId: TEST_NODE_ID,
+    nodeAddress: TEST_NODE_ADDRESS,
+    controlPlaneSystemTableGateway: {
+      async updateSystemTableRow(tableName, whereClause, row, options) {
+        nodeWrites.push({tableName, whereClause, row, options});
+        return {
+          success: true,
+          partitionResult: {affectedRows: 1},
+        };
+      },
+      async upsertSystemTableRow(tableName, row, options) {
+        endpointWrites.push({tableName, row, options});
+        const error = new Error('node endpoint heartbeat validation failed');
+        error.code = 'VALIDATION_ERROR';
+        throw error;
+      },
+    },
+    systemTableCache: createCacheWithBudget(),
+    now: () => TEST_NOW,
+  });
+
+  try {
+    await t.rejects(
+      service.sendHeartbeat(null, null),
+      /validation failed/,
+      'non-retryable endpoint upsert failures should not be deferred',
+    );
+    t.equal(nodeWrites.length, 1, 'node heartbeat still succeeds first');
+    t.equal(
+      endpointWrites.length,
+      1,
+      'endpoint heartbeat upsert is attempted once before failing',
+    );
+    t.equal(
+      service.lastEndpointUpsertAt,
+      null,
+      'failed non-retryable endpoint writes should not record refresh success',
+    );
+    t.equal(
+      service.lastEndpointUpsertSignature,
+      null,
+      'failed non-retryable endpoint writes should not update coalescing state',
+    );
+  } finally {
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+  }
+});
+
 test('sendHeartbeat omits budget fields when cache has no budget ' +
   'to avoid writing null/zero budget over a valid value',
 async (t) => {

@@ -35,7 +35,6 @@ const TEST_REPLICA_ID_A = 'sql_write_operations-p1-r1';
 const TEST_REPLICA_ID_B = 'sql_write_operations-p1-r2';
 const TEST_REPLICA_ID_C = 'sql_write_operations-p1-r3';
 const TEST_TABLE_ID = SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS;
-const TEST_SERVICE_TYPE = EntityType.PARTITION;
 const TEST_PARTITION_SERVICE_TYPE = 'partition';
 const TEST_ADDRESS_PREFIX = 'local/partition/';
 const TEST_RAFT_ROLE_VOTER = 'voter';
@@ -43,6 +42,7 @@ const TEST_TARGET_REPLICA_COUNT = 3;
 const TEST_NO_IN_FLIGHT_OPERATIONS = 0;
 const TEST_READY_LEASE_EXTENSION_MS = 60000;
 const TEST_EXPIRED_READY_LEASE_OFFSET_MS = -1000;
+const TEST_DEFER_TO_WORKFLOW_OWNER = 'defer_to_workflow_owner';
 const TEST_CREATED_OPERATION_ID = 'op-priority-follow-up-ready-defer';
 const TEST_PENDING_TARGET_OPERATION_ID = 'op-priority-follow-up-pending';
 
@@ -139,6 +139,109 @@ function buildCurrentPriorityDecisionSnapshot() {
     }),
   });
 }
+
+test(
+  'UnifiedRebalancer marks current priority spread-gap add moves as ' +
+    'workflow-owned when follow-up decisions are unavailable',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const priorityPartitionSummary = Object.freeze({
+      requiredDistinctNodeCount: TEST_TARGET_REPLICA_COUNT,
+      readyEligibleNodeCount: TEST_TARGET_REPLICA_COUNT,
+      blockedPartitions: Object.freeze([Object.freeze({
+        partitionId: TEST_PARTITION_ID,
+        readyDistinctNodeCount: 1,
+        requiredDistinctNodeCount: TEST_TARGET_REPLICA_COUNT,
+        spreadGap: 2,
+      })]),
+      missingPartitionIds: Object.freeze([TEST_PARTITION_ID]),
+      satisfied: false,
+    });
+    const systemTableCache = createMockCache({
+      nodes: [
+        createNodeRow(TEST_NODE_ID_A),
+        createNodeRow(TEST_RECOVERY_ONLY_NODE_ID),
+      ],
+      services: [
+        createReplicaRow(TEST_REPLICA_ID_A, TEST_NODE_ID_A),
+      ],
+      partitions: [{
+        partition_id: TEST_PARTITION_ID,
+        table_id: TEST_TABLE_ID,
+      }],
+    });
+    const controlPlaneReadinessService =
+      createMockControlPlaneReadinessService({
+        systemTableCache,
+        readinessByNodeId: {
+          [TEST_NODE_ID_A]: createNodeReadiness(TEST_NODE_ID_A),
+          [TEST_RECOVERY_ONLY_NODE_ID]: createNodeReadiness(
+            TEST_RECOVERY_ONLY_NODE_ID,
+            {
+              repairEligible: false,
+              recoveryEligible: false,
+              serveEligible: false,
+            },
+          ),
+        },
+      });
+    const rebalancer = createTestRebalancer({
+      entityId: TEST_PARTITION_ID,
+      entityType: EntityType.PARTITION,
+      nodeId: TEST_NODE_ID_A,
+      systemTableCache,
+      rebalanceCoordinator: createMockCoordinator(),
+      controlPlaneReadinessService,
+    });
+
+    rebalancer.initialize();
+    rebalancer.isControlPlanePriorityPartition = () => true;
+    rebalancer.isPriorityControlPlaneRecoveryActive = () => true;
+    rebalancer.getCurrentPriorityRecoveryFollowUpDecisionSnapshot =
+      async () => null;
+    rebalancer.getPriorityRecoveryPlanningSnapshot = async () =>
+      Object.freeze({priorityPartitionSummary});
+
+    try {
+      t.equal(
+        rebalancer.hasCurrentPriorityRecoverySpreadGap(
+          Object.freeze({priorityPartitionSummary}),
+        ),
+        true,
+        'fixture should expose a current priority spread gap',
+      );
+      const moves = await rebalancer.augmentMovesWithPriorityRecoveryFollowUp([
+        Object.freeze({
+          type: MoveType.ADD,
+          nodeId: TEST_RECOVERY_ONLY_NODE_ID,
+          reason: MOVE_REASON.INCREASE_REPLICA_COUNT,
+        }),
+      ], {
+        currentReplicas: [createReplicaRow(TEST_REPLICA_ID_A, TEST_NODE_ID_A)],
+        targetState: {
+          targetReplicaCount: TEST_TARGET_REPLICA_COUNT,
+          targetNodes: [TEST_NODE_ID_A, TEST_RECOVERY_ONLY_NODE_ID],
+        },
+      });
+
+      t.equal(
+        moves.length,
+        1,
+        'current calculated recovery move should remain the only move',
+      );
+      t.equal(
+        moves[0]?.targetReadinessMode,
+        TEST_DEFER_TO_WORKFLOW_OWNER,
+        'current priority spread-gap add should defer target readiness to the workflow owner',
+      );
+    } finally {
+      rebalancer.shutdown();
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+    }
+  },
+);
 
 test(
   'UnifiedRebalancer waits instead of creating priority follow-up for a ' +

@@ -15,6 +15,9 @@ import {
   getControlPlaneNodeStatePublicationProfile,
   isHeartbeatEscalatedControlPlaneNodeStatePublicationMode,
 } from './control-plane-constants.js';
+import {
+  isRetryableControlPlaneError,
+} from './control-plane-error-classification.js';
 import {CONTROL_PLANE_MUTATION_MERGE_POLICY} from './control-plane-system-table-gateway.js';
 import {
   HEARTBEAT_EVENT,
@@ -51,6 +54,22 @@ import {
 import {PRESSURE_WORK_CLASS} from './pressure-governor.js';
 
 class HeartbeatServicePublicationMethods {
+  shouldTreatEndpointHeartbeatWriteAsDeferred(resultOrError, writeOptions) {
+    if (writeOptions?.allowPressureDefer !== true || !resultOrError) {
+      return false;
+    }
+    if (isRetryableControlPlaneError(resultOrError)) {
+      return true;
+    }
+    return resultOrError.success === false &&
+      (
+        resultOrError.deferRetry === true ||
+        resultOrError.contractState === 'deferred' ||
+        resultOrError.outcome === 'deferred' ||
+        resultOrError.nextAction === 'retry'
+      );
+  }
+
   /**
    * Send a single heartbeat update.
    * @param {Object} [stats] - Node stats.
@@ -170,11 +189,40 @@ class HeartbeatServicePublicationMethods {
         );
         return;
       }
-      await this.getControlPlaneSystemTableGateway().upsertSystemTableRow(
-        SYSTEM_TABLE_NAME.NODE_ENDPOINTS,
-        endpointRow,
-        this.buildEndpointHeartbeatWriteOptions(endpointId, heartbeatWriteQueryTimeoutMs),
-      );
+      const endpointWriteOptions =
+        this.buildEndpointHeartbeatWriteOptions(
+          endpointId,
+          heartbeatWriteQueryTimeoutMs,
+        );
+      try {
+        const endpointWriteResult =
+          await this.getControlPlaneSystemTableGateway().upsertSystemTableRow(
+            SYSTEM_TABLE_NAME.NODE_ENDPOINTS,
+            endpointRow,
+            endpointWriteOptions,
+          );
+        if (
+          endpointWriteResult?.success === false &&
+          !this.shouldTreatEndpointHeartbeatWriteAsDeferred(
+            endpointWriteResult,
+            endpointWriteOptions,
+          )
+        ) {
+          throw new Error(
+            endpointWriteResult.error ||
+              'node endpoint heartbeat upsert failed',
+          );
+        }
+      } catch (error) {
+        if (
+          !this.shouldTreatEndpointHeartbeatWriteAsDeferred(
+            error,
+            endpointWriteOptions,
+          )
+        ) {
+          throw error;
+        }
+      }
       this.lastEndpointUpsertAt = now;
       this.lastEndpointUpsertSignature = this.buildEndpointUpsertSignature(endpointRow);
     }
@@ -502,7 +550,9 @@ class HeartbeatServicePublicationMethods {
 }
 
 function defineHeartbeatServicePublicationMethods(HeartbeatService) {
-  const methodDescriptors = Object.getOwnPropertyDescriptors(HeartbeatServicePublicationMethods.prototype);
+  const methodDescriptors = Object.getOwnPropertyDescriptors(
+    HeartbeatServicePublicationMethods.prototype,
+  );
   delete methodDescriptors.constructor;
   Object.defineProperties(HeartbeatService.prototype, methodDescriptors);
 }

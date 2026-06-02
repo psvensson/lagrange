@@ -17,7 +17,10 @@ import {
   uniqueValues,
 } from './system-contract-utils.js';
 
-const DEFAULT_TABLE_DIR = 'docs/specs/decision-tables';
+const DEFAULT_TABLE_DIRS = Object.freeze([
+  'docs/specs/decision-tables',
+  'architecture/models/decision-tables',
+]);
 const TABLE_SCHEMA = 'decision-table-v1';
 const WILDCARD = '*';
 const HELP_TEXT = [
@@ -25,6 +28,7 @@ const HELP_TEXT = [
   '',
   'Validates executable decision tables and proves every input combination',
   'maps to exactly one canonical outcome.',
+  'Default scan roots: docs/specs/decision-tables and architecture/models/decision-tables.',
 ].join('\n');
 
 function parseArgs(args) {
@@ -47,7 +51,8 @@ function tableFilesFromArgs(files) {
   if (files.length > 0) {
     return files.map((filePath) => path.resolve(filePath));
   }
-  return listFiles(DEFAULT_TABLE_DIR, {suffix: '.json', recursive: false});
+  return DEFAULT_TABLE_DIRS.flatMap((dirPath) =>
+    listFiles(dirPath, {suffix: '.json', recursive: false}));
 }
 
 function validateNamedValues(errors, filePath, fieldPath, entries) {

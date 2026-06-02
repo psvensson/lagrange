@@ -1,0 +1,23 @@
+{
+  "id": "alloy-execution-guardrails-verifier-fix",
+  "statement": "Verifier findings for Alloy model-contract workflow tooling are fixed: invariant refs cross-check the registry, negative-shape runs execute, polarity failures are tested, and docs describe SAT-backed execution.",
+  "priority": 1,
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/alloy-execution-guardrails-verifier-fix.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "alloy-execution-guardrails-verifier-fix-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/alloy-execution-guardrails-verifier-fix.json"
+        }
+      }
+    }
+  ]
+}

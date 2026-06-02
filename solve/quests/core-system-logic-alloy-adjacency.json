@@ -1,0 +1,23 @@
+{
+  "id": "core-system-logic-alloy-adjacency",
+  "statement": "Core system logic has an architecture-adjacent Alloy model checked by the standard model-contract workflow tooling while existing TLA+ checks remain active.",
+  "priority": 1,
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/core-system-logic-alloy-adjacency.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "core-system-logic-alloy-adjacency-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/core-system-logic-alloy-adjacency.json"
+        }
+      }
+    }
+  ]
+}

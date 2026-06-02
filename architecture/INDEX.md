@@ -20,6 +20,8 @@ Use this index to choose the narrowest architecture domain file before reading i
 
 - [Current Owner Maps](current-owner-maps.md) - Current concrete owner maps and subsystem ownership detail.
 - [System Contract Records](contracts/) - Durable failure-class contracts that bind invariants, owners, models, runtime paths, Quest history, archived trace evidence, and residual evidence.
+- [Architecture Models](models/) - Architecture-owned executable and structured models that move with owner-boundary architecture changes.
+- [Core System Logic Contract](contracts/core-system-logic.md) - Low-resolution core owner-flow contract backed by an architecture-adjacent statechart.
 - [Rolling Restart Rebalancer Handoff Contract](contracts/rolling-restart-rebalancer-handoff.md) - Priority recovery handoff convergence contract and decision-table binding.
 - [Active Gate Convergence Contract](contracts/active-gate-convergence.md) - Coupled active-gate/rebalancer invariant contract backed by TLA+ and fast-check models.
 - [Quest Lifecycle Contract](contracts/quest-lifecycle.md) - Workflow statechart contract for Quest attempts, findings, closure, and redirect safety.

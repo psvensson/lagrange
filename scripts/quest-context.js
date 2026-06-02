@@ -222,6 +222,15 @@ function renderContext(context) {
       lines.push(`- signal: ${signal.type} severity=${signal.severity}`);
     }
   }
+  if (quest.health.modelGuidance) {
+    lines.push(EMPTY, '## Model Guidance', EMPTY);
+    lines.push(`- command: ${quest.health.modelGuidance.command}`);
+    lines.push(`- theory discriminator: ${quest.health.modelGuidance.discriminator}`);
+    lines.push(`- modelRef: ${quest.health.modelGuidance.modelRef}`);
+    lines.push(`- report pattern: ${quest.health.modelGuidance.reportPattern}`);
+    lines.push(`- reasons: ${quest.health.modelGuidance.reasons.join(', ')}`);
+    lines.push(`- instruction: ${quest.health.modelGuidance.instruction}`);
+  }
   lines.push(EMPTY, '## Selected Theories', EMPTY);
   const selected = Object.entries(quest.theories?.selectedByFrontier || {});
   if (selected.length === 0) {
@@ -240,6 +249,14 @@ function renderContext(context) {
   lines.push(`- \`node scripts/solve.js theory list --id ${quest.id}\``);
   lines.push(`- \`node scripts/solve.js health --id ${quest.id}\``);
   lines.push(`- \`node scripts/solve.js report --id ${quest.id}\``);
+  if (quest.health.modelGuidance) {
+    lines.push(`- \`${quest.health.modelGuidance.command}\``);
+    lines.push(
+      `- \`node scripts/solve.js step --id ${quest.id} --commit ` +
+      '--changeRef diff:<path> --summary "<what changed>" --modelRef ' +
+      `${quest.health.modelGuidance.modelRef}\``,
+    );
+  }
   lines.push(EMPTY, '## Worktree Summary', EMPTY);
   if (context.worktree === null) {
     lines.push('- git status unavailable');

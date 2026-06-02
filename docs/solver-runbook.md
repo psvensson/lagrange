@@ -104,6 +104,25 @@ boundaries, or a model route is due. Do not revive sprint/package theory state
 as active authority; archived theory ledger entries can only be imported as
 archive memory.
 
+Before recording theories for architecture, owner-boundary, core-system,
+lifecycle, handoff, invariant, Alloy, TLA+, or statechart work, inspect:
+
+```sh
+npm run quest:context -- --id <quest>
+node scripts/solve.js health --id <quest>
+```
+
+If they print **Model Guidance**, use `npm run model:contracts` as the theory
+discriminator. At the model rung, pass the printed `modelRef` when committing
+the attempt unless a finding explains why the architecture model is not
+applicable:
+
+```sh
+node scripts/solve.js step --id <quest> --commit \
+  --changeRef diff:path/to.patch --summary "..." \
+  --modelRef model:architecture/contracts/core-system-logic.md
+```
+
 System theory explains why the whole scenario is stuck:
 
 ```sh

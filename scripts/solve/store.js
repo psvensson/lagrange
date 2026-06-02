@@ -175,6 +175,7 @@ function addTheory(theories, event, scope) {
     expectedMovement: event.expectedMovement || null,
     negativeResultMeans: event.negativeResultMeans || null,
     evidence: event.evidence || null,
+    modelGuidance: event.modelGuidance || null,
     status: event.status || THEORY_RESULT_ACTIVE,
     archive: event.archive === true,
     card: event.card || null,

@@ -1,6 +1,8 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
   CONTROL_PLANE_READINESS_DIMENSION,
+  CONTROL_PLANE_READINESS_REASON,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {RECONCILE_REASON} from '../../src/workflow/reconcile-queue-constants.js';
 import {
@@ -343,6 +345,224 @@ test('ReplicaDispatchService uses recovery eligibility for critical ' +
     );
   } finally {
     service.stop();
+  }
+});
+
+test('ReplicaDispatchService admits priority dispatch blocked by circular ' +
+  'recovery evidence', async (t) => {
+  initEnv();
+
+  const TARGET_NODE_ID = 'node-2';
+  const SOURCE_NODE_ID = 'node-1';
+  const OPERATION_ID = 'op-priority-recovery-bootstrap-dispatch-1';
+  const PARTITION_ID = 'replica_operations-p1';
+  const REPLICA_ID = 'replica_operations-p1-r4';
+  let dispatchCalls = NUM.ZERO;
+  const operationRow = {
+    operation_id: OPERATION_ID,
+    type: OperationType.ADD,
+    partition_id: PARTITION_ID,
+    replica_id: REPLICA_ID,
+    source_node_id: SOURCE_NODE_ID,
+    target_node_id: TARGET_NODE_ID,
+    status: 'pending',
+    workflow_step: WORKFLOW_STEP.PENDING,
+    created_at: Date.now(),
+    updated_at: Date.now(),
+    steps_history: '[]',
+  };
+  const circularReadiness = {
+    nodeId: TARGET_NODE_ID,
+    dimensions: {
+      [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+      [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+      [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: false,
+      [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: true,
+      [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: false,
+      [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED]: true,
+      [CONTROL_PLANE_READINESS_DIMENSION
+        .CONTROL_PLANE_RECOVERY_ELIGIBLE]: false,
+      [CONTROL_PLANE_READINESS_DIMENSION
+        .METADATA_PUBLICATION_HEALTHY]: true,
+      [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
+      [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
+    },
+    reasons: [
+      {
+        code: CONTROL_PLANE_READINESS_REASON
+          .PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+      },
+    ],
+    runtimeAuthority: {
+      reasonCodes: [
+        CONTROL_PLANE_PRIORITY_RECOVERY_REASON
+          .PRIORITY_PARTITIONS_NOT_SPREAD,
+      ],
+    },
+  };
+
+  const service = createService({
+    cdcIntegrationService: {
+      upsertSystemTableRow: async () => ({success: true}),
+      updateSystemTableRow: async () => ({success: true}),
+    },
+    controlPlaneReadinessService: {
+      getNodeReadinessSync() {
+        return circularReadiness;
+      },
+      async getNodeReadiness() {
+        return circularReadiness;
+      },
+    },
+    rebalanceCoordinator: {
+      async dispatchOperation() {
+        dispatchCalls += NUM.ONE;
+        return {success: true};
+      },
+      isOperationLocallyOwned() {
+        return true;
+      },
+    },
+  });
+
+  try {
+    await service.dispatchOperationRow(operationRow);
+
+    t.equal(
+      dispatchCalls,
+      NUM.ONE,
+      'priority dispatch should proceed when the only blocker is the recovery loop',
+    );
+    t.equal(
+      service.operationDispatchDeferredRetries.size,
+      NUM.ZERO,
+      'circular priority recovery evidence should not arm a not-ready retry',
+    );
+  } finally {
+    service.stop();
+  }
+});
+
+test('ReplicaDispatchService keeps priority dispatch bootstrap closed for ' +
+  'non-circular blockers', async (t) => {
+  initEnv();
+
+  const TARGET_NODE_ID = 'node-2';
+  const SOURCE_NODE_ID = 'node-1';
+  const buildOperationRow = (partitionId) => ({
+    operation_id: `op-${partitionId}`,
+    type: OperationType.ADD,
+    partition_id: partitionId,
+    replica_id: `${partitionId}-r4`,
+    source_node_id: SOURCE_NODE_ID,
+    target_node_id: TARGET_NODE_ID,
+    status: 'pending',
+    workflow_step: WORKFLOW_STEP.PENDING,
+    created_at: Date.now(),
+    updated_at: Date.now(),
+    steps_history: '[]',
+  });
+  const buildReadiness = (overrides = {}) => ({
+    nodeId: TARGET_NODE_ID,
+    dimensions: {
+      [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+      [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+      [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: false,
+      [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: true,
+      [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: false,
+      [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED]: true,
+      [CONTROL_PLANE_READINESS_DIMENSION
+        .CONTROL_PLANE_RECOVERY_ELIGIBLE]: false,
+      [CONTROL_PLANE_READINESS_DIMENSION
+        .METADATA_PUBLICATION_HEALTHY]: true,
+      [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
+      [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
+      ...(overrides.dimensions || {}),
+    },
+    reasons: overrides.reasons || [
+      {
+        code: CONTROL_PLANE_READINESS_REASON
+          .PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+      },
+    ],
+    runtimeAuthority: overrides.runtimeAuthority || {
+      reasonCodes: [
+        CONTROL_PLANE_PRIORITY_RECOVERY_REASON
+          .PRIORITY_PARTITIONS_NOT_SPREAD,
+      ],
+    },
+  });
+  const cases = [
+    {
+      name: 'missing priority spread reason',
+      partitionId: 'replica_operations-p1',
+      readiness: buildReadiness({runtimeAuthority: {reasonCodes: []}}),
+    },
+    {
+      name: 'hard placement blocker',
+      partitionId: 'replica_operations-p1',
+      readiness: buildReadiness({
+        dimensions: {
+          [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: false,
+        },
+        reasons: [
+          {
+            code: CONTROL_PLANE_READINESS_REASON
+              .PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+          },
+          {code: CONTROL_PLANE_READINESS_REASON.STORAGE_PRESSURE_HARD},
+        ],
+      }),
+    },
+    {
+      name: 'non-priority partition',
+      partitionId: 'user_table-p1',
+      readiness: buildReadiness(),
+    },
+  ];
+
+  for (const testCase of cases) {
+    let dispatchCalls = NUM.ZERO;
+    const service = createService({
+      cdcIntegrationService: {
+        upsertSystemTableRow: async () => ({success: true}),
+        updateSystemTableRow: async () => ({success: true}),
+      },
+      controlPlaneReadinessService: {
+        getNodeReadinessSync() {
+          return testCase.readiness;
+        },
+        async getNodeReadiness() {
+          return testCase.readiness;
+        },
+      },
+      rebalanceCoordinator: {
+        async dispatchOperation() {
+          dispatchCalls += NUM.ONE;
+          return {success: true};
+        },
+        isOperationLocallyOwned() {
+          return true;
+        },
+      },
+    });
+
+    try {
+      await service.dispatchOperationRow(buildOperationRow(testCase.partitionId));
+
+      t.equal(
+        dispatchCalls,
+        NUM.ZERO,
+        `${testCase.name} should not dispatch through the bootstrap grace`,
+      );
+      t.equal(
+        service.operationDispatchDeferredRetries.size,
+        NUM.ONE,
+        `${testCase.name} should stay on the not-ready retry path`,
+      );
+    } finally {
+      service.stop();
+    }
   }
 });
 

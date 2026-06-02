@@ -67,6 +67,66 @@
       "coupledWith": ["non_shrinking_window_blocks_rerun"],
       "modelRef": "docs/specs/representative-rerun-progress-model.json",
       "contractRef": "architecture/contracts/rolling-restart-representative-rerun-progress.md"
+    },
+    {
+      "id": "single-semantic-owner",
+      "owner": "architecture_owner",
+      "boundary": "core_system_logic",
+      "kind": "safety",
+      "statement": "Every state transition, lifecycle decision, data transformation, cache view, diagnostic grammar, and runtime resource has exactly one semantic owner.",
+      "formalPredicate": "Cardinality(SemanticOwner(concern)) = 1",
+      "modelRef": "architecture/models/alloy/core-system-logic.als",
+      "contractRef": "architecture/contracts/core-system-logic.md"
+    },
+    {
+      "id": "normalized-state-only",
+      "owner": "architecture_owner",
+      "boundary": "core_system_logic",
+      "kind": "safety",
+      "statement": "Runtime logic consumes normalized state and does not reopen raw storage, transport, bootstrap, cache, or wire shapes.",
+      "formalPredicate": "RuntimeInput = NormalizedState",
+      "modelRef": "architecture/models/alloy/core-system-logic.als",
+      "contractRef": "architecture/contracts/core-system-logic.md"
+    },
+    {
+      "id": "owner-outcome-before-observer",
+      "owner": "architecture_owner",
+      "boundary": "core_system_logic",
+      "kind": "safety",
+      "statement": "An owner emits one canonical outcome before observers, caches, diagnostics, admin views, or harness reports project the result.",
+      "formalPredicate": "ObserverProjection => OwnerOutcomeEmitted",
+      "modelRef": "architecture/models/alloy/core-system-logic.als",
+      "contractRef": "architecture/contracts/core-system-logic.md"
+    },
+    {
+      "id": "readers-do-not-repair-authority",
+      "owner": "architecture_owner",
+      "boundary": "core_system_logic",
+      "kind": "safety",
+      "statement": "Reader-local caches, diagnostics, and reports do not repair or replace authoritative owner state on the hot path.",
+      "formalPredicate": "ReaderAction # RepairAuthoritativeState",
+      "modelRef": "architecture/models/alloy/core-system-logic.als",
+      "contractRef": "architecture/contracts/core-system-logic.md"
+    },
+    {
+      "id": "degraded-evidence-never-upgrades-readiness",
+      "owner": "architecture_owner",
+      "boundary": "core_system_logic",
+      "kind": "safety",
+      "statement": "Degraded or cross-plane evidence can explain, defer, or block, but cannot upgrade readiness or admission.",
+      "formalPredicate": "DegradedEvidence => nextAction # proceed",
+      "modelRef": "architecture/models/alloy/core-system-logic.als",
+      "contractRef": "architecture/contracts/core-system-logic.md"
+    },
+    {
+      "id": "phase-owner-handoff-completes",
+      "owner": "architecture_owner",
+      "boundary": "core_system_logic",
+      "kind": "liveness",
+      "statement": "Temporary bootstrap, join, recovery, and migration owners transfer responsibility to explicit steady-state owners before phase completion.",
+      "formalPredicate": "PhaseComplete => <>SteadyStateOwnerActive",
+      "modelRef": "architecture/models/statecharts/core-system-logic.json",
+      "contractRef": "architecture/contracts/core-system-logic.md"
     }
   ]
 }

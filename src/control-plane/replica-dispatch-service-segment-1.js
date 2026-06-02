@@ -4,8 +4,6 @@ import {
 } from './replica-dispatch-state-publication.js';
 
 const {
-  COLUMN,
-  CONTROL_PLANE_ALLOWED_STATES,
   CONTROL_PLANE_CONFIG_KEY,
   CONTROL_PLANE_EVENT,
   ConfigurationManager,
@@ -16,7 +14,6 @@ const {
   DISPATCH_ERROR_MSG,
   DISPATCH_LOG_MSG,
   DISPATCH_QUEUE_NAME,
-  DISPATCH_READINESS_ERROR_REASON,
   DISPATCH_STATE,
   DISPATCH_SUBSYSTEM,
   EventEmitter,
@@ -28,9 +25,6 @@ const {
   REBALANCE_COORDINATOR_EVENT,
   RECONCILE_REASON,
   REPLICA_DISPATCH_SERVICE_LITERAL,
-  SERVICE_STATUS,
-  STATE,
-  STRING,
   SYSTEM_TABLE_NAME,
   TYPEOF,
   WORKFLOW_STEP,
@@ -38,12 +32,9 @@ const {
   classifyTransportDeliveryOutcome,
   createControlPlaneRuntimeBundle,
   getControlPlaneMessageRequiredTables,
-  getNodeHeartbeatWatermark,
   isDeliveredTransportDeliveryOutcome,
   isPriorityControlPlanePartition,
-  isRetryableControlPlaneError,
   wasNodeRecordReadyWhenWritten,
-  REPLICA_OPERATION_DISPATCH_TIMEOUT_MS,
 } = REPLICA_DISPATCH_SERVICE_SHARED;
 
 const DIRECT_DISPATCH_WAKEUP_EMPTY_VALUE = null;
@@ -114,6 +105,7 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
     this.nodeReadyRetryWatermarks = new Map();
     this.dispatchFailureSignaturesByOperationId = new Map();
     this.operationDispatchDeferredRetries = new Map();
+    this.directDispatchWakeupsInFlight = new Map();
     this.nodeStateUpdateDeferredRetries = new Map();
     this.membershipPublicationAckDeferredRetries = new Map();
     this.nodeStateUpdateRetryStateByNodeId = new Map();
@@ -700,11 +692,20 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
       return false;
     }
     const operationRow = this.buildOperationRowFromCoordinator(operation);
+    if (
+      this.coalesceActiveDirectDispatchWakeup(
+        operation.operationId,
+        operationRow,
+      )
+    ) {
+      return true;
+    }
     const ownerNodeId = this.resolveReplicaOperationOwnerNodeId(operation);
     const targetAddress = this.buildDirectDispatchServiceAddress(ownerNodeId);
     if (!targetAddress) {
       return false;
     }
+    this.markDirectDispatchWakeupInFlight(operation.operationId, operationRow);
     try {
       const deliveryOutcome = classifyTransportDeliveryOutcome(
         await this.messageRouter.deliver(
@@ -724,24 +725,32 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
             this.operationDispatchRetryAfterMs,
         },
       );
+      const latestOperationRow = this.clearDirectDispatchWakeupInFlight(
+        operation.operationId,
+        operationRow,
+      );
       if (isDeliveredTransportDeliveryOutcome(deliveryOutcome)) {
         this.scheduleRemoteDispatchWakeupVerification(
           operation.operationId,
-          operationRow,
+          latestOperationRow,
         );
         return true;
       }
       this.deferOperationDispatchRetry(
         operation.operationId,
         deliveryOutcome,
-        operationRow,
+        latestOperationRow,
       );
       return false;
     } catch (error) {
+      const latestOperationRow = this.clearDirectDispatchWakeupInFlight(
+        operation.operationId,
+        operationRow,
+      );
       this.deferOperationDispatchRetry(
         operation.operationId,
         error,
-        operationRow,
+        latestOperationRow,
       );
       return false;
     }

@@ -7,6 +7,7 @@ import {
   TABLES,
 } from '../../src/constants/index.js';
 import {
+  CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_READINESS_REASON,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
@@ -137,6 +138,255 @@ export function registerQueryExecutorRecoveryRoutingTests() {
       deliveries[1].timeoutMs > reconnectDeferTimeoutMs &&
         deliveries[1].timeoutMs <= queryTimeoutMs,
       'live peer write should keep the remaining query budget',
+    );
+  });
+
+  test('QueryExecutor - priority recovery write admits circular bootstrap ' +
+    'candidates without widening reads', async (t) => {
+    const partitionId = 'control_plane_publications-p1';
+    const nodeId = 'node-recovering';
+    const address = `${nodeId}/partition/${partitionId}-r1`;
+    const systemCache = {
+      partitions: [
+        {
+          partition_id: partitionId,
+          table_name: TABLES.CONTROL_PLANE_PUBLICATIONS,
+          leader_node_id: nodeId,
+        },
+      ],
+      services: [
+        {
+          service_id: `${partitionId}-r1`,
+          service_type: SERVICE_TYPE.PARTITION,
+          partition_id: partitionId,
+          node_id: nodeId,
+          raft_role: 'leader',
+          address,
+          status: SERVICE_STATUS.ACTIVE,
+        },
+      ],
+      get(type, key) {
+        if (type === TABLES.PARTITIONS) {
+          return this.partitions.find(
+            (partition) => partition.partition_id === key,
+          ) || null;
+        }
+        return null;
+      },
+      filter(type, predicate) {
+        if (type === TABLES.SERVICES) {
+          return this.services.filter(predicate);
+        }
+        if (type === TABLES.PARTITIONS) {
+          return this.partitions.filter(predicate);
+        }
+        return [];
+      },
+    };
+    const readiness = {
+      nodeId,
+      dimensions: {
+        [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+        [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+        [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: false,
+        [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: true,
+        [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: false,
+        [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED]: true,
+        [CONTROL_PLANE_READINESS_DIMENSION
+          .CONTROL_PLANE_RECOVERY_ELIGIBLE]: false,
+        [CONTROL_PLANE_READINESS_DIMENSION
+          .METADATA_PUBLICATION_HEALTHY]: true,
+        [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
+        [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
+      },
+      reasons: [
+        {
+          code: CONTROL_PLANE_READINESS_REASON
+            .PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+        },
+      ],
+      runtimeAuthority: {
+        reasonCodes: [
+          CONTROL_PLANE_PRIORITY_RECOVERY_REASON
+            .PRIORITY_PARTITIONS_NOT_SPREAD,
+        ],
+      },
+    };
+    const executor = new QueryExecutor({
+      messageRouter: {
+        getConnectionState: () => 'closed',
+      },
+      systemCache,
+      controlPlaneReadinessService: {
+        getNodeReadinessSync() {
+          return readiness;
+        },
+      },
+    });
+
+    const writeCandidates = executor.getPartitionServiceCandidates(
+      partitionId,
+      false,
+      false,
+      false,
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    );
+    const readCandidates = executor.getPartitionServiceCandidates(
+      partitionId,
+      true,
+      false,
+      false,
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    );
+
+    t.same(
+      writeCandidates.map((candidate) => candidate.address),
+      [address],
+      'priority recovery writes should keep the circular bootstrap candidate',
+    );
+    t.same(
+      readCandidates,
+      [],
+      'priority recovery reads should not use the bootstrap write grace',
+    );
+  });
+
+  test('QueryExecutor - priority recovery bootstrap write grace stays ' +
+    'closed outside exact circular evidence', async (t) => {
+    const nodeId = 'node-recovering';
+    const buildReadiness = (overrides = {}) => ({
+      nodeId,
+      dimensions: {
+        [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+        [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+        [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: false,
+        [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: true,
+        [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: false,
+        [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED]: true,
+        [CONTROL_PLANE_READINESS_DIMENSION
+          .CONTROL_PLANE_RECOVERY_ELIGIBLE]: false,
+        [CONTROL_PLANE_READINESS_DIMENSION
+          .METADATA_PUBLICATION_HEALTHY]: true,
+        [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
+        [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
+        ...(overrides.dimensions || {}),
+      },
+      reasons: overrides.reasons || [
+        {
+          code: CONTROL_PLANE_READINESS_REASON
+            .PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+        },
+      ],
+      runtimeAuthority: overrides.runtimeAuthority || {
+        reasonCodes: [
+          CONTROL_PLANE_PRIORITY_RECOVERY_REASON
+            .PRIORITY_PARTITIONS_NOT_SPREAD,
+        ],
+      },
+    });
+    const buildExecutor = ({
+      partitionId = 'control_plane_publications-p1',
+      tableName = TABLES.CONTROL_PLANE_PUBLICATIONS,
+      readiness = buildReadiness(),
+    } = {}) => {
+      const address = `${nodeId}/partition/${partitionId}-r1`;
+      return {
+        address,
+        executor: new QueryExecutor({
+          messageRouter: {
+            getConnectionState: () => 'closed',
+          },
+          systemCache: {
+            partitions: [{
+              partition_id: partitionId,
+              table_name: tableName,
+              leader_node_id: nodeId,
+            }],
+            services: [{
+              service_id: `${partitionId}-r1`,
+              service_type: SERVICE_TYPE.PARTITION,
+              partition_id: partitionId,
+              node_id: nodeId,
+              raft_role: 'leader',
+              address,
+              status: SERVICE_STATUS.ACTIVE,
+            }],
+            get(type, key) {
+              if (type === TABLES.PARTITIONS) {
+                return this.partitions.find(
+                  (partition) => partition.partition_id === key,
+                ) || null;
+              }
+              return null;
+            },
+            filter(type, predicate) {
+              if (type === TABLES.SERVICES) {
+                return this.services.filter(predicate);
+              }
+              if (type === TABLES.PARTITIONS) {
+                return this.partitions.filter(predicate);
+              }
+              return [];
+            },
+          },
+          controlPlaneReadinessService: {
+            getNodeReadinessSync() {
+              return readiness;
+            },
+          },
+        }),
+        partitionId,
+      };
+    };
+    const resolveWriteCandidates = (setup, routingOptions = {}) =>
+      setup.executor.resolvePartitionServiceCandidates(
+        setup.partitionId,
+        false,
+        false,
+        false,
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+        routingOptions,
+      ).candidates;
+
+    t.same(
+      resolveWriteCandidates(buildExecutor({
+        readiness: buildReadiness({runtimeAuthority: {reasonCodes: []}}),
+      })),
+      [],
+      'missing priority spread evidence should not open the write grace',
+    );
+    t.same(
+      resolveWriteCandidates(buildExecutor({
+        readiness: buildReadiness({
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: false,
+          },
+          reasons: [
+            {
+              code: CONTROL_PLANE_READINESS_REASON
+                .PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+            },
+            {code: CONTROL_PLANE_READINESS_REASON.STORAGE_PRESSURE_HARD},
+          ],
+        }),
+      })),
+      [],
+      'extra hard blockers should not be hidden by priority recovery evidence',
+    );
+    t.same(
+      resolveWriteCandidates(buildExecutor({
+        partitionId: 'user_table-p1',
+        tableName: 'user_table',
+      })),
+      [],
+      'non-priority partitions should not use the priority bootstrap grace',
+    );
+    t.same(
+      resolveWriteCandidates(buildExecutor(), {
+        allowPriorityRecoveryBootstrap: false,
+      }),
+      [],
+      'callers can opt out of the bootstrap write grace',
     );
   });
 
@@ -576,6 +826,181 @@ export function registerQueryExecutorRecoveryRoutingTests() {
       'write routing should use the recovery-eligible peer replica',
     );
     t.end();
+  });
+
+  test('QueryExecutor - all-filtered priority recovery routing refreshes ' +
+    'overlay and widens when denial details are unavailable', async (t) => {
+    const partitionId = 'replica_operations-p1';
+    const leaderNodeId = 'node-seed-stale';
+    const peerNodeId = 'node-peer-ready';
+    const leaderServiceId = `${partitionId}-r1`;
+    const leaderServiceId2 = `${partitionId}-r2`;
+    const leaderServiceId3 = `${partitionId}-r3`;
+    const peerServiceId = `${partitionId}-r4`;
+    const peerAddress = `${peerNodeId}/partition/${peerServiceId}`;
+    const overlayRefreshes = [];
+    const readinessRefreshNodeIds = [];
+    let overlayServices = [];
+    const buildLeaderService = (serviceId) => ({
+      service_id: serviceId,
+      service_type: SERVICE_TYPE.PARTITION,
+      partition_id: partitionId,
+      node_id: leaderNodeId,
+      address: `${leaderNodeId}/partition/${serviceId}`,
+      status: SERVICE_STATUS.ACTIVE,
+    });
+    const systemCache = {
+      get(tableNameArg, key) {
+        if (tableNameArg === TABLES.PARTITIONS && key === partitionId) {
+          return {
+            partition_id: partitionId,
+            table_name: TABLES.REPLICA_OPERATIONS,
+            leader_node_id: leaderNodeId,
+          };
+        }
+        return null;
+      },
+      filter(tableNameArg, predicate) {
+        if (tableNameArg === TABLES.PARTITIONS) {
+          return [
+            {
+              partition_id: partitionId,
+              table_name: TABLES.REPLICA_OPERATIONS,
+              leader_node_id: leaderNodeId,
+            },
+          ].filter(predicate);
+        }
+        if (tableNameArg !== TABLES.SERVICES) {
+          return [];
+        }
+        return [
+          buildLeaderService(leaderServiceId),
+          buildLeaderService(leaderServiceId2),
+          buildLeaderService(leaderServiceId3),
+        ].filter(predicate);
+      },
+    };
+    const readinessService = {
+      getNodeReadinessSync(nodeId) {
+        if (nodeId !== peerNodeId) {
+          return null;
+        }
+        return {
+          nodeId,
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION
+              .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
+          },
+          reasons: [],
+        };
+      },
+      async getNodeReadiness(nodeId) {
+        readinessRefreshNodeIds.push(nodeId);
+        return this.getNodeReadinessSync(nodeId);
+      },
+    };
+    const executor = new QueryExecutor({
+      messageRouter: createMockMessageRouter(),
+      systemCache,
+      controlPlaneReadinessService: readinessService,
+      routingMetadataOverlay: {
+        getServicesForPartition(requestedPartitionId) {
+          return requestedPartitionId === partitionId ? overlayServices : [];
+        },
+        shouldMaskCacheServicesForPartition() {
+          return false;
+        },
+        async refreshPartitionRouting(requestedPartitionId, options = {}) {
+          overlayRefreshes.push({
+            partitionId: requestedPartitionId,
+            reason: options.refreshReason || null,
+          });
+          overlayServices = [
+            {
+              service_id: peerServiceId,
+              service_type: SERVICE_TYPE.PARTITION,
+              partition_id: partitionId,
+              node_id: peerNodeId,
+              address: peerAddress,
+              status: SERVICE_STATUS.ACTIVE,
+            },
+          ];
+          return true;
+        },
+      },
+    });
+
+    let resolution = executor.resolvePartitionServiceCandidates(
+      partitionId,
+      false,
+      false,
+      false,
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    );
+
+    t.equal(
+      resolution.routingSnapshot.reasonCode,
+      QUERY_ROUTING_DIAGNOSTIC_REASON.ALL_SERVICES_FILTERED_BY_READINESS,
+      'fixture should start with every stale leader row filtered',
+    );
+    t.same(
+      resolution.routingSnapshot.deniedByNodeId,
+      {},
+      'fixture should cover the empty denial-summary repair path',
+    );
+    t.same(
+      resolution.candidates,
+      [],
+      'initial routing should fail closed before authoritative repair',
+    );
+
+    const repaired =
+      await executor.maybeAwaitDeniedPartitionRoutingRepair(
+        resolution.routingSnapshot,
+      );
+
+    t.equal(repaired, true,
+      'all-filtered priority recovery routing should refresh overlay metadata');
+    t.same(
+      readinessRefreshNodeIds,
+      [leaderNodeId],
+      'repair should refresh the active addressed node when denial details are empty',
+    );
+    t.same(
+      overlayRefreshes.map((entry) => entry.partitionId),
+      [partitionId],
+      'repair should refresh authoritative routing for the priority partition',
+    );
+
+    resolution = executor.resolvePartitionServiceCandidates(
+      partitionId,
+      false,
+      false,
+      false,
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    );
+    const recoveryContract =
+      executor.resolveCanonicalLeaderGapRecoveryRoutingContract(
+        partitionId,
+        resolution.routingSnapshot,
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+      );
+
+    t.equal(
+      recoveryContract.canonicalLeaderFilteredByReadiness,
+      true,
+      'stale leader rows should count as filtered when no leader row is routable',
+    );
+    t.equal(
+      recoveryContract.recoveryCandidateWidening,
+      true,
+      'priority recovery routing should widen after overlay refresh',
+    );
+    t.same(
+      resolution.candidates.map((candidate) => candidate.address),
+      [peerAddress],
+      'write routing should use the refreshed recovery peer',
+    );
   });
 
   test('QueryExecutor - recovery-owned system-table writes fail closed when ' +

@@ -68,8 +68,11 @@ function theoryLine(theory) {
   const frontier = theory.frontier ? `, frontier ${theory.frontier}` : '';
   const layer = theory.layer ? `, layer ${theory.layer}` : '';
   const archive = theory.archive ? ', archive' : '';
+  const modelGate = theory.modelGuidance ?
+    `, modelGate ${theory.modelGuidance.command}` :
+    '';
   return `- **${theory.id}** [${theory.status}] ${theory.scope}${frontier}` +
-    `${layer}, mechanism ${theory.mechanism || 'unknown'}${archive}`;
+    `${layer}, mechanism ${theory.mechanism || 'unknown'}${modelGate}${archive}`;
 }
 
 function selectedTheoryLines(state) {

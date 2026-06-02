@@ -1,0 +1,7 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": true,
+  "classification": "alloy_verifier_findings_fixed",
+  "detail": "Invariant refs cross-check the registry, forbidden-shape runs execute with UNSAT expectations, polarity and receipt parsing failures are unit tested, release archive and default binary checksums are verified, and docs describe SAT-backed execution."
+}

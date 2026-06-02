@@ -29,6 +29,10 @@ _legacy_work/sprints/current-blocker.md
 # Vendored TLA+ model checker (auto-fetched by scripts/model-tlc.js)
 tools/tla2tools.jar
 
+# Vendored Alloy model checker (auto-fetched by scripts/check-alloy-models.js)
+tools/alloy-*/
+tools/alloy-*.tar.gz
+
 # TLC liveness counterexample trace artifacts
 models/**/*_TTrace_*.tla
 models/**/*_TTrace_*.bin

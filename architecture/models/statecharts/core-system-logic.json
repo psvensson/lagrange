@@ -1,0 +1,161 @@
+{
+  "schema": "statechart-v1",
+  "id": "core-system-logic",
+  "initial": "ingress_normalized",
+  "states": [
+    {
+      "id": "ingress_normalized",
+      "description": "External, runtime, cache, bootstrap, or diagnostic input has been normalized into the shared architecture vocabulary before semantic branching."
+    },
+    {
+      "id": "semantic_owner_selected",
+      "description": "Exactly one semantic owner and owner boundary has been selected for the normalized concern."
+    },
+    {
+      "id": "authoritative_evidence_resolved",
+      "description": "The selected owner has either authoritative evidence or a typed missing, deferred, blocked, or failed dependency outcome."
+    },
+    {
+      "id": "canonical_outcome_emitted",
+      "description": "The owner emits one canonical outcome with contractState, nextAction, owner-specific evidence, and reason vocabulary."
+    },
+    {
+      "id": "owner_transition_committed",
+      "description": "Any owner-managed durable transition has been persisted through the owner path before observers consume it."
+    },
+    {
+      "id": "observer_projection_enqueued",
+      "description": "Events enqueue owner-key work or projection work with typed reasons; no long-running progression executes inline."
+    },
+    {
+      "id": "observer_projection_updated",
+      "description": "Read models, diagnostics, admin views, harness reports, or caches project the owner outcome without becoming a second authority."
+    },
+    {
+      "id": "steady_state_owner_active",
+      "description": "Temporary phase scaffolding has handed off to the steady-state runtime owner or the existing steady-state owner remains active."
+    },
+    {
+      "id": "fail_closed_outcome",
+      "description": "Missing owner dependencies, blocked readiness, or failed evidence emit typed fail-closed owner outcomes instead of allow-by-default behavior."
+    }
+  ],
+  "terminalStates": [
+    "steady_state_owner_active",
+    "fail_closed_outcome"
+  ],
+  "transitions": [
+    {
+      "from": "ingress_normalized",
+      "event": "select_single_semantic_owner",
+      "to": "semantic_owner_selected",
+      "evidence": "Architecture single-owner rules and current owner maps identify one owner boundary for the normalized concern."
+    },
+    {
+      "from": "semantic_owner_selected",
+      "event": "resolve_authoritative_evidence",
+      "to": "authoritative_evidence_resolved",
+      "evidence": "The owner reads canonical rows, declared read models, runtime authority, or typed dependency gaps instead of caller-local fragments."
+    },
+    {
+      "from": "authoritative_evidence_resolved",
+      "event": "emit_ready_or_pending_outcome",
+      "to": "canonical_outcome_emitted",
+      "evidence": "The owner emits a ready or pending owner-contract outcome with a single nextAction and reason vocabulary."
+    },
+    {
+      "from": "authoritative_evidence_resolved",
+      "event": "emit_blocked_failed_or_deferred_outcome",
+      "to": "fail_closed_outcome",
+      "evidence": "Typed blocked, failed, or deferred outcomes prevent missing evidence from upgrading readiness or admission."
+    },
+    {
+      "from": "canonical_outcome_emitted",
+      "event": "persist_owner_transition",
+      "to": "owner_transition_committed",
+      "evidence": "Owner-managed fields and lifecycle state change only through the owner writer or coordinator path."
+    },
+    {
+      "from": "owner_transition_committed",
+      "event": "enqueue_observer_projection",
+      "to": "observer_projection_enqueued",
+      "evidence": "CDC, cache, diagnostics, admin, and reconcile events enqueue typed owner-key work instead of running progression inline."
+    },
+    {
+      "from": "observer_projection_enqueued",
+      "event": "project_owner_outcome",
+      "to": "observer_projection_updated",
+      "evidence": "Observers project the canonical owner outcome and preserve its grammar instead of recomputing the semantic decision."
+    },
+    {
+      "from": "observer_projection_updated",
+      "event": "handoff_to_steady_state_owner",
+      "to": "steady_state_owner_active",
+      "evidence": "Bootstrap, join, recovery, and temporary phase owners transfer live responsibility to an explicit runtime owner before completion."
+    },
+    {
+      "from": "observer_projection_updated",
+      "event": "steady_state_owner_already_active",
+      "to": "steady_state_owner_active",
+      "evidence": "No phase handoff is required because the selected steady-state owner remains the only authority."
+    }
+  ],
+  "forbiddenTransitions": [
+    {
+      "from": "ingress_normalized",
+      "event": "runtime_reopens_raw_shape",
+      "to": "semantic_owner_selected",
+      "reason": "Runtime logic consumes normalized state and must not reopen raw storage, transport, cache, bootstrap, or wire shapes."
+    },
+    {
+      "from": "semantic_owner_selected",
+      "event": "caller_recomputes_owner_logic",
+      "to": "canonical_outcome_emitted",
+      "reason": "Callers submit intent to owners; they do not reproduce owner logic locally."
+    },
+    {
+      "from": "authoritative_evidence_resolved",
+      "event": "degraded_evidence_upgrades_readiness",
+      "to": "canonical_outcome_emitted",
+      "reason": "Degraded or cross-plane evidence may explain or defer, but must not upgrade a blocked entity to ready or admitted."
+    },
+    {
+      "from": "observer_projection_updated",
+      "event": "reader_repairs_authoritative_state",
+      "to": "owner_transition_committed",
+      "reason": "Readers, caches, diagnostics, and harness consumers observe owner state; non-forced readers do not repair authoritative state on the hot path."
+    },
+    {
+      "from": "observer_projection_updated",
+      "event": "phase_scaffolding_remains_owner",
+      "to": "steady_state_owner_active",
+      "reason": "Bootstrap, join, and recovery phases must not remain the steady-state owner after the phase completes."
+    }
+  ],
+  "invariants": [
+    {
+      "id": "single-semantic-owner",
+      "statement": "Every state transition, lifecycle decision, data transformation, cache view, diagnostic grammar, and runtime resource has exactly one semantic owner."
+    },
+    {
+      "id": "normalized-state-only",
+      "statement": "Runtime logic consumes normalized state and does not reopen raw storage, transport, bootstrap, cache, or wire shapes."
+    },
+    {
+      "id": "owner-outcome-before-observer",
+      "statement": "An owner emits one canonical outcome before observers, caches, diagnostics, admin views, or harness reports project the result."
+    },
+    {
+      "id": "readers-do-not-repair-authority",
+      "statement": "Reader-local caches, diagnostics, and reports do not repair or replace authoritative owner state on the hot path."
+    },
+    {
+      "id": "degraded-evidence-never-upgrades-readiness",
+      "statement": "Degraded or cross-plane evidence can explain, defer, or block, but cannot upgrade readiness or admission."
+    },
+    {
+      "id": "phase-owner-handoff-completes",
+      "statement": "Temporary bootstrap, join, recovery, and migration owners transfer responsibility to explicit steady-state owners before phase completion."
+    }
+  ]
+}

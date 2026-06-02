@@ -28,6 +28,7 @@ const {
 } = SHARED;
 const {
   NodeStatus,
+  buildPriorityRecoveryBlockedPartitions,
   isNodeReadyLeaseExplicitlyCleared,
   isNodeRecordReady,
 } = SHARED.UNIFIED_REBALANCER_SHARED;
@@ -75,18 +76,34 @@ class UnifiedRebalancerSegment4Stage3 extends UnifiedRebalancerSegment4Stage2 {
     return occupiedNodeIds;
   }
 
-  buildPriorityRecoveryFollowUpPendingTargetNodeSet() {
-    return new Set(
-      this.getTopologyBlockingInFlightOperations()
-        .map((operation) =>
-          String(
-            operation?.target_node_id ||
-              operation?.targetNodeId ||
-              UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
-          ).trim(),
-        )
-        .filter((nodeId) => nodeId.length > NUM.ZERO),
-    );
+  buildPriorityRecoveryFollowUpPendingTargetNodeSet(decision = null) {
+    const followUpPartitionId =
+      this.resolvePriorityRecoveryFollowUpPartitionId(decision);
+    const pendingTargetNodeIds = new Set();
+    for (const operation of this.getTopologyBlockingInFlightOperations()) {
+      const operationPartitionId = String(
+        operation?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.PARTITION_ID] ||
+          operation?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.PARTITION_ID_SNAKE] ||
+          operation?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.ENTITY_ID] ||
+          UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+      ).trim();
+      if (
+        followUpPartitionId.length > NUM.ZERO &&
+        operationPartitionId.length > NUM.ZERO &&
+        operationPartitionId !== followUpPartitionId
+      ) {
+        continue;
+      }
+      const targetNodeId = String(
+        operation?.target_node_id ||
+          operation?.targetNodeId ||
+          UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+      ).trim();
+      if (targetNodeId.length > NUM.ZERO) {
+        pendingTargetNodeIds.add(targetNodeId);
+      }
+    }
+    return pendingTargetNodeIds;
   }
 
   resolvePriorityRecoveryFollowUpCandidateNodeIds(
@@ -483,6 +500,90 @@ class UnifiedRebalancerSegment4Stage3 extends UnifiedRebalancerSegment4Stage2 {
     });
   }
 
+  resolvePriorityRecoveryPlanningPriorityPartitionSummary(
+    planningSnapshot = null,
+  ) {
+    if (!planningSnapshot || typeof planningSnapshot !== TYPEOF.OBJECT) {
+      return null;
+    }
+    const directSummary = planningSnapshot.priorityPartitionSummary;
+    if (directSummary && typeof directSummary === TYPEOF.OBJECT) {
+      return directSummary;
+    }
+    const recoveryGateSummary =
+      planningSnapshot[PRIORITY_RECOVERY_FOLLOW_UP_FIELD
+        .PUBLICATION_RECOVERY_GATE]?.priorityPartitionSummary;
+    return recoveryGateSummary && typeof recoveryGateSummary === TYPEOF.OBJECT ?
+      recoveryGateSummary :
+      null;
+  }
+
+  hasCurrentPriorityRecoverySpreadGap(planningSnapshot = null) {
+    if (
+      !this.isControlPlanePriorityPartition() ||
+      this.isPriorityControlPlaneRecoveryActive() !== true
+    ) {
+      return false;
+    }
+    const priorityPartitionSummary =
+      this.resolvePriorityRecoveryPlanningPriorityPartitionSummary(
+        planningSnapshot,
+      );
+    const blockedPartitions =
+      buildPriorityRecoveryBlockedPartitions(priorityPartitionSummary);
+    return blockedPartitions.some((partition) => {
+      const partitionId = String(
+        partition?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.PARTITION_ID] ||
+          UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+      ).trim();
+      const spreadGap = Number(partition?.spreadGap);
+      return (
+        partitionId === this.entityId &&
+        Number.isFinite(spreadGap) &&
+        spreadGap > NUM.ZERO
+      );
+    });
+  }
+
+  normalizeCurrentPriorityRecoverySpreadGapMoves(
+    moves = [],
+    planningSnapshot = null,
+  ) {
+    const normalizedMoves = Array.isArray(moves) ? moves : [];
+    if (!this.hasCurrentPriorityRecoverySpreadGap(planningSnapshot)) {
+      return normalizedMoves;
+    }
+    return normalizedMoves.map((move) => {
+      if (
+        move?.type !== MoveType.ADD &&
+        move?.type !== MoveType.REPLACE
+      ) {
+        return move;
+      }
+      return Object.freeze({
+        ...move,
+        [REBALANCER_MOVE_FIELD.TARGET_READINESS_MODE]:
+          REBALANCER_TARGET_READINESS_MODE.DEFER_TO_WORKFLOW_OWNER,
+      });
+    });
+  }
+
+  async resolvePriorityRecoveryFollowUpPlanningSnapshot(decision = null) {
+    const decisionPlanningSnapshot = decision?.planningSnapshot || null;
+    if (
+      this.resolvePriorityRecoveryPlanningPriorityPartitionSummary(
+        decisionPlanningSnapshot,
+      )
+    ) {
+      return decisionPlanningSnapshot;
+    }
+    const livePlanningSnapshot =
+      await this.getPriorityRecoveryPlanningSnapshot({
+        partitionId: this.entityId,
+      });
+    return livePlanningSnapshot || decisionPlanningSnapshot;
+  }
+
   resolvePriorityRecoveryFollowUpAugmentationState(evidence = {}) {
     const tableEntry =
       PRIORITY_RECOVERY_FOLLOW_UP_AUGMENTATION_STATE_TABLE.find((entry) =>
@@ -510,11 +611,18 @@ class UnifiedRebalancerSegment4Stage3 extends UnifiedRebalancerSegment4Stage2 {
     const decision =
       context.decision ||
       (await this.getCurrentPriorityRecoveryFollowUpDecisionSnapshot());
+    const planningSnapshot =
+      await this.resolvePriorityRecoveryFollowUpPlanningSnapshot(decision);
+    const currentRecoveryMoves =
+      this.normalizeCurrentPriorityRecoverySpreadGapMoves(
+        normalizedMoves,
+        planningSnapshot,
+      );
     const currentFollowUpPartitionId =
       this.resolvePriorityRecoveryFollowUpPartitionId(decision);
     const currentFollowUpAlreadyPlanned =
       currentFollowUpPartitionId.length > NUM.ZERO &&
-      normalizedMoves.some((move) =>
+      currentRecoveryMoves.some((move) =>
         this.isPriorityRecoveryCurrentFollowUpMove(
           move,
           currentFollowUpPartitionId,
@@ -528,17 +636,12 @@ class UnifiedRebalancerSegment4Stage3 extends UnifiedRebalancerSegment4Stage2 {
     ) {
       const normalizedCurrentMoves =
         this.normalizePriorityRecoveryCurrentFollowUpMoves(
-          normalizedMoves,
+          currentRecoveryMoves,
           Object.freeze({
             followUpPartitionId: currentFollowUpPartitionId,
             followUpTargetsCurrentEntity: true,
           }),
         );
-      const planningSnapshot =
-        decision?.planningSnapshot ||
-        await this.getPriorityRecoveryPlanningSnapshot({
-          partitionId: this.entityId,
-        });
       return this.prependPriorityRecoverySurrogateFollowUpMoves(
         normalizedCurrentMoves,
         context,
@@ -551,11 +654,6 @@ class UnifiedRebalancerSegment4Stage3 extends UnifiedRebalancerSegment4Stage2 {
       decision,
     });
     if (!this.isPriorityRecoveryFollowUpMoveCreated(followUpMove)) {
-      const planningSnapshot =
-        decision?.planningSnapshot ||
-        await this.getPriorityRecoveryPlanningSnapshot({
-          partitionId: this.entityId,
-        });
       followUpMove = this.buildPriorityRecoveryFollowUpMove({
         ...context,
         decision: this.buildPriorityRecoverySurrogateFollowUpDecision(
@@ -564,13 +662,13 @@ class UnifiedRebalancerSegment4Stage3 extends UnifiedRebalancerSegment4Stage2 {
       });
     }
     if (!this.isPriorityRecoveryFollowUpMoveCreated(followUpMove)) {
-      return normalizedMoves;
+      return currentRecoveryMoves;
     }
     const followUpPartitionId =
       this.resolvePriorityRecoveryCurrentFollowUpPartitionId(followUpMove);
     const augmentationEvidence =
       this.buildPriorityRecoveryFollowUpAugmentationEvidence({
-        moves: normalizedMoves,
+        moves: currentRecoveryMoves,
         followUpMove,
       });
     const augmentationAction =
@@ -581,13 +679,8 @@ class UnifiedRebalancerSegment4Stage3 extends UnifiedRebalancerSegment4Stage2 {
       augmentationAction ===
       PRIORITY_RECOVERY_FOLLOW_UP_AUGMENTATION_ACTION.PREPEND_FOLLOW_UP
     ) {
-      const planningSnapshot =
-        decision?.planningSnapshot ||
-        await this.getPriorityRecoveryPlanningSnapshot({
-          partitionId: this.entityId,
-        });
       return this.prependPriorityRecoverySurrogateFollowUpMoves(
-        [followUpMove, ...normalizedMoves],
+        [followUpMove, ...currentRecoveryMoves],
         context,
         planningSnapshot,
         new Set([followUpPartitionId]),
@@ -599,11 +692,11 @@ class UnifiedRebalancerSegment4Stage3 extends UnifiedRebalancerSegment4Stage2 {
         .NORMALIZE_CURRENT_FOLLOW_UP
     ) {
       return this.normalizePriorityRecoveryCurrentFollowUpMoves(
-        normalizedMoves,
+        currentRecoveryMoves,
         augmentationEvidence,
       );
     }
-    return normalizedMoves;
+    return currentRecoveryMoves;
   }
 
   prependPriorityRecoverySurrogateFollowUpMoves(

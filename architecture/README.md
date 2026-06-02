@@ -21,6 +21,8 @@ aligned with the ownership and execution model in `INDEX.md`.
 
 ## Current Supporting Documents
 
+- [Architecture Models](models/)
+- [Core System Logic Contract](contracts/core-system-logic.md)
 - [Lagrange Kernel Platform API v0](lagrange-kernel-platform-api-v0.md)
 - [Lagrange Service Manifest](lagrange-service-manifest.md)
 - [Lagrange Service Registry](lagrange-service-registry.md)

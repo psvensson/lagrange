@@ -1,10 +1,9 @@
 import {REPLICA_DISPATCH_SERVICE_SHARED} from './replica-dispatch-service-shared.js';
 import {ReplicaDispatchServiceSegment3} from './replica-dispatch-service-segment-3.js';
-import {MESSAGE_GROUP_SERVICE_HANDLER_ADDRESS} from '../node/message-group-service-handler-constants.js';
-import {REPLICA_HANDLER_ADDRESS} from '../node/replica-handler-constants.js';
-import {RUNTIME_SERVICE_HANDLER_ADDRESS} from '../node/runtime-service-handler-constants.js';
-import {UNIFIED_SERVICE_TYPE} from '../constants/index.js';
 import {createReplicaDispatchServiceDispatchObservationMethods} from './replica-dispatch-service-dispatch-observation-methods.js';
+import {
+  shouldAllowPriorityRecoveryDispatchBootstrap,
+} from './replica-dispatch-priority-recovery-bootstrap.js';
 
 const {
   COLUMN,
@@ -12,45 +11,24 @@ const {
   ControlPlaneField,
   ControlPlaneReadinessService,
   DISPATCH_ERROR_MSG,
-  DISPATCH_EVENT,
-  DISPATCH_LOG_MSG,
   DISPATCH_QUEUE_NAME,
-  DISPATCH_READINESS_ERROR_REASON,
   DISPATCH_READINESS_MESSAGE,
   DISPATCH_READINESS_REASON,
-  DISPATCH_SUBSYSTEM,
   NUM,
   OPERATION_METADATA_KEY,
   REPLICA_DISPATCH_SERVICE_LITERAL,
   ReplicaOperationField,
-  SERVICE_STATUS,
   SERVICE_TYPE,
   STRING,
-  SYSTEM_TABLE_NAME,
   TYPEOF,
   getOperationMetadataObject,
   getOperationMetadataString,
   getOperationMetadataStringArray,
   isSystemTablePartition,
   isRetryableControlPlaneError,
-  unwrapRowReadResult,
   wasNodeRecordReadyWhenWritten,
 } = REPLICA_DISPATCH_SERVICE_SHARED;
 
-const LOCAL_DISPATCH_HANDLER_ADDRESS = Object.freeze({
-  [SERVICE_TYPE.PARTITION]: Object.freeze({
-    serviceSegment: REPLICA_HANDLER_ADDRESS.SERVICE_SEGMENT,
-    handlerId: REPLICA_HANDLER_ADDRESS.HANDLER_ID,
-  }),
-  [SERVICE_TYPE.MESSAGE_GROUP]: Object.freeze({
-    serviceSegment: MESSAGE_GROUP_SERVICE_HANDLER_ADDRESS.SERVICE_SEGMENT,
-    handlerId: MESSAGE_GROUP_SERVICE_HANDLER_ADDRESS.HANDLER_ID,
-  }),
-  [UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE]: Object.freeze({
-    serviceSegment: RUNTIME_SERVICE_HANDLER_ADDRESS.SERVICE_SEGMENT,
-    handlerId: RUNTIME_SERVICE_HANDLER_ADDRESS.HANDLER_ID,
-  }),
-});
 const DISPATCH_RETRY_READY_NODE_DIMENSIONS = Object.freeze([
   CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
   CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
@@ -530,7 +508,31 @@ class ReplicaDispatchServiceSegment4 extends ReplicaDispatchServiceSegment3 {
         });
       }
     }
-    return this.buildDispatchReadinessResult(readiness, decisionDimension);
+    return this.buildDispatchReadinessResult(readiness, decisionDimension, {
+      ready: this.resolveDispatchReadinessReady(
+        operation,
+        readiness,
+        decisionDimension,
+      ),
+    });
+  }
+
+  /**
+   * @param {Object|null} operation
+   * @param {Object|null} readiness
+   * @param {string} decisionDimension
+   * @return {boolean}
+   * @private
+   */
+  resolveDispatchReadinessReady(operation, readiness, decisionDimension) {
+    return (
+      this.isReadinessDimensionSatisfied(readiness, decisionDimension) ||
+      shouldAllowPriorityRecoveryDispatchBootstrap({
+        operation,
+        readiness,
+        decisionDimension,
+      })
+    );
   }
 
   /**
@@ -763,6 +765,9 @@ class ReplicaDispatchServiceSegment4 extends ReplicaDispatchServiceSegment3 {
    */
 }
 
-Object.defineProperties(ReplicaDispatchServiceSegment4.prototype, createReplicaDispatchServiceDispatchObservationMethods());
+Object.defineProperties(
+  ReplicaDispatchServiceSegment4.prototype,
+  createReplicaDispatchServiceDispatchObservationMethods(),
+);
 
 export {ReplicaDispatchServiceSegment4};

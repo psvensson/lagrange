@@ -411,9 +411,13 @@ class TableCreationServicePart1 {
    * @private
    */
   async provisionInitialPartition(context) {
+    const minimumRoutableReplicaCountWasDefaulted =
+      !(
+        Number.isInteger(context?.minimumRoutableReplicaCount) &&
+        context.minimumRoutableReplicaCount > 0
+      );
     const minimumRoutableReplicaCount =
-      Number.isInteger(context?.minimumRoutableReplicaCount) &&
-      context.minimumRoutableReplicaCount > 0 ?
+      minimumRoutableReplicaCountWasDefaulted === false ?
         context.minimumRoutableReplicaCount :
         this.resolveDefaultMinimumRoutableReplicaCount(context?.replicaCount);
     if (
@@ -436,6 +440,7 @@ class TableCreationServicePart1 {
       const provisioningResult = await this.partitionProvisioner({
         ...context,
         minimumRoutableReplicaCount,
+        minimumRoutableReplicaCountWasDefaulted,
       });
       this.logger.debug(QUERY_LOG_MSG.TABLE_PARTITION_PROVISION_SUCCESS, {
         tableId,

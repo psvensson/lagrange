@@ -67,7 +67,8 @@ class SQLQueryEngineSegment3 extends SQLQueryEngineSegment2 {
         Math.max(LOCAL_NUM_ONE, requestedReplicaCount);
     const hasExplicitMinimumRoutableReplicaCount =
       Number.isInteger(context?.minimumRoutableReplicaCount) &&
-      context.minimumRoutableReplicaCount > 0;
+      context.minimumRoutableReplicaCount > 0 &&
+      context?.minimumRoutableReplicaCountWasDefaulted !== true;
     let minimumRoutableReplicaCount =
       this.resolveMinimumProvisioningReplicaCount(
         context?.minimumRoutableReplicaCount,
@@ -162,12 +163,20 @@ class SQLQueryEngineSegment3 extends SQLQueryEngineSegment2 {
           targetReplicaCount,
           provisionTargetDiagnostics?.activeNodeRowCount,
         );
+      const fallbackMinimumReplicaCount =
+        this.resolveProvisioningShortfallFallbackMinimum({
+          hasExplicitMinimumRoutableReplicaCount,
+          implicitFallbackMinimumReplicaCount,
+          maximumProvisionableReplicaCount,
+          rejectedTargetNodePlans:
+            admissionConvergence?.rejectedTargetNodePlans,
+        });
 
       if (
         convergenceResult.nextAction === OWNER_CONTRACT_NEXT_ACTION.WAIT &&
         maximumProvisionableReplicaCount > LOCAL_NUM_ZERO &&
         maximumProvisionableReplicaCount < targetReplicaCount &&
-        maximumProvisionableReplicaCount >= implicitFallbackMinimumReplicaCount
+        maximumProvisionableReplicaCount >= fallbackMinimumReplicaCount
       ) {
         targetReplicaCount = Math.max(LOCAL_NUM_ONE, maximumProvisionableReplicaCount);
         if (!hasExplicitMinimumRoutableReplicaCount) {
@@ -312,17 +321,60 @@ class SQLQueryEngineSegment3 extends SQLQueryEngineSegment2 {
       supportsAdmissionPrecheck &&
       maximumPrecheckedProvisionableReplicaCount < minimumRoutableReplicaCount
     ) {
-      this.throwProvisioningInsufficientTargets({
-        partitionId,
-        targetReplicaCount,
-        minimumRoutableReplicaCount,
-        candidateTargetNodeIds: provisionTargetNodeIds,
-        existingRoutableNodeIds: [...routableNodeIdSet],
-        plannedTargetNodeIds: admittedTargetNodeIds,
-        rejectedTargetNodePlans,
-        maximumProvisionableReplicaCount:
+      const implicitFallbackMinimumReplicaCount =
+        this.resolveImplicitProvisioningFallbackReplicaCount(
+          targetReplicaCount,
+          provisionTargetDiagnostics?.activeNodeRowCount,
+        );
+      const fallbackMinimumReplicaCount =
+        this.resolveProvisioningShortfallFallbackMinimum({
+          hasExplicitMinimumRoutableReplicaCount,
+          implicitFallbackMinimumReplicaCount,
+          maximumProvisionableReplicaCount:
+            maximumPrecheckedProvisionableReplicaCount,
+          rejectedTargetNodePlans,
+        });
+      if (
+        !hasExplicitMinimumRoutableReplicaCount &&
+        maximumPrecheckedProvisionableReplicaCount > LOCAL_NUM_ZERO &&
+        maximumPrecheckedProvisionableReplicaCount >= fallbackMinimumReplicaCount
+      ) {
+        const previousTargetReplicaCount = targetReplicaCount;
+        const previousMinimumRoutableReplicaCount = minimumRoutableReplicaCount;
+        targetReplicaCount = Math.max(
+          LOCAL_NUM_ONE,
           maximumPrecheckedProvisionableReplicaCount,
-      });
+        );
+        minimumRoutableReplicaCount = targetReplicaCount;
+        enforceEveryProvisioningOperation =
+          minimumRoutableReplicaCount >= targetReplicaCount;
+        this.logger.warn(
+          QUERY_LOG_MSG.TABLE_PARTITION_TARGET_NODE_FALLBACK_USED,
+          {
+            partitionId,
+            requiredReplicaCount: previousTargetReplicaCount,
+            resolvedReplicaCount: targetReplicaCount,
+            minimumRoutableReplicaCount,
+            previousMinimumRoutableReplicaCount,
+            admissionShortfall: true,
+            existingRoutableNodeIds: [...routableNodeIdSet],
+            plannedTargetNodeIds: admittedTargetNodeIds,
+            rejectedTargetNodePlans,
+          },
+        );
+      } else {
+        this.throwProvisioningInsufficientTargets({
+          partitionId,
+          targetReplicaCount,
+          minimumRoutableReplicaCount,
+          candidateTargetNodeIds: provisionTargetNodeIds,
+          existingRoutableNodeIds: [...routableNodeIdSet],
+          plannedTargetNodeIds: admittedTargetNodeIds,
+          rejectedTargetNodePlans,
+          maximumProvisionableReplicaCount:
+            maximumPrecheckedProvisionableReplicaCount,
+        });
+      }
     }
 
     for (const targetNodeId of admittedTargetNodeIds) {
@@ -378,11 +430,18 @@ class SQLQueryEngineSegment3 extends SQLQueryEngineSegment2 {
         targetReplicaCount,
         provisionTargetDiagnostics?.activeNodeRowCount,
       );
+    const fallbackMinimumReplicaCount =
+      this.resolveProvisioningShortfallFallbackMinimum({
+        hasExplicitMinimumRoutableReplicaCount,
+        implicitFallbackMinimumReplicaCount,
+        maximumProvisionableReplicaCount,
+        rejectedTargetNodePlans,
+      });
     if (maximumProvisionableReplicaCount < minimumRoutableReplicaCount) {
       if (
         !hasExplicitMinimumRoutableReplicaCount &&
         maximumProvisionableReplicaCount > LOCAL_NUM_ZERO &&
-        maximumProvisionableReplicaCount >= implicitFallbackMinimumReplicaCount
+        maximumProvisionableReplicaCount >= fallbackMinimumReplicaCount
       ) {
         const previousTargetReplicaCount = targetReplicaCount;
         const previousMinimumRoutableReplicaCount = minimumRoutableReplicaCount;

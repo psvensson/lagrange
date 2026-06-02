@@ -6,6 +6,7 @@ const {
   LEADER_GAP_REASON_SERVICE_MISSING,
   NUM,
   QUERY_EXECUTOR_LITERAL,
+  QUERY_EXECUTOR_ROUTING_OPTION_FIELD,
   TABLES,
 } = QUERY_EXECUTOR_SHARED;
 
@@ -93,11 +94,28 @@ const queryExecutorPartitionRoutingCandidateMethods = {
     routingReadinessDimension = this.defaultRoutingReadinessDimension,
     routingOptions = {},
   ) {
+    const allowPriorityRecoveryBootstrap =
+      Object.prototype.hasOwnProperty.call(
+        routingOptions,
+        QUERY_EXECUTOR_ROUTING_OPTION_FIELD
+          .ALLOW_PRIORITY_RECOVERY_BOOTSTRAP,
+      ) ?
+        routingOptions[
+          QUERY_EXECUTOR_ROUTING_OPTION_FIELD
+            .ALLOW_PRIORITY_RECOVERY_BOOTSTRAP
+        ] === true :
+        forRead === false;
+    const resolvedRoutingOptions = {
+      ...routingOptions,
+      [QUERY_EXECUTOR_ROUTING_OPTION_FIELD.ALLOW_PRIORITY_RECOVERY_BOOTSTRAP]:
+        allowPriorityRecoveryBootstrap,
+      [QUERY_EXECUTOR_ROUTING_OPTION_FIELD.FOR_READ]: forRead,
+    };
     const prioritizeLeader = preferLeader || !forRead;
     const routingSnapshot = this.getPartitionRoutingSnapshot(
       partitionId,
       routingReadinessDimension,
-      routingOptions,
+      resolvedRoutingOptions,
     );
     const services = routingSnapshot.routableServices;
     if (services.length === NUM.ZERO) {
@@ -119,7 +137,7 @@ const queryExecutorPartitionRoutingCandidateMethods = {
         partitionId,
         routingSnapshot,
         routingReadinessDimension,
-        routingOptions?.allowReadinessAuthoritativeRefresh !== false,
+        resolvedRoutingOptions?.allowReadinessAuthoritativeRefresh !== false,
       );
     const bootstrapLeaderServices =
       !forRead && !canonicalLeaderNodeId ?
@@ -168,7 +186,7 @@ const queryExecutorPartitionRoutingCandidateMethods = {
         if (recoveryRoutingContract.recoveryCandidateWidening === true) {
           this.orderRecoveryCandidateServices(
             orderedServices,
-            routingOptions,
+            resolvedRoutingOptions,
           ).forEach(addService);
           if (candidates.length > NUM.ZERO) {
             return {
@@ -191,7 +209,7 @@ const queryExecutorPartitionRoutingCandidateMethods = {
         if (recoveryRoutingContract.recoveryCandidateWidening === true) {
           this.orderRecoveryCandidateServices(
             orderedServices,
-            routingOptions,
+            resolvedRoutingOptions,
           ).forEach(addService);
           if (candidates.length > NUM.ZERO) {
             return {

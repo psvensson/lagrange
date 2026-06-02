@@ -2668,7 +2668,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 74,
+          "line": 81,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
@@ -2683,7 +2683,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 172,
+          "line": 179,
           "section": "Quest Workflow > Tracked Versus Regenerable"
         }
       ]
@@ -2932,7 +2932,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 83,
+          "line": 90,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
@@ -2947,7 +2947,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 84,
+          "line": 91,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
@@ -2964,7 +2964,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 86,
+          "line": 93,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
@@ -2979,7 +2979,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 157,
+          "line": 164,
           "section": "Quest Workflow > Terminal And Blocking Conditions"
         }
       ]
@@ -3536,7 +3536,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 60,
+          "line": 67,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
@@ -3551,7 +3551,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 140,
+          "line": 147,
           "section": "Quest Workflow > Findings Log"
         }
       ]
@@ -3658,7 +3658,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 74,
+          "line": 81,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
@@ -3675,7 +3675,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 172,
+          "line": 179,
           "section": "Quest Workflow > Tracked Versus Regenerable"
         }
       ]
@@ -3698,5 +3698,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-06-01T14:08:43.366Z"
+  "generatedAt": "2026-06-02T07:03:33.727Z"
 }

@@ -3,9 +3,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
-import {saveQuest, appendEvent} from '../../scripts/solve/store.js';
+import {
+  appendEvent,
+  projectState,
+  readLog,
+  saveQuest,
+} from '../../scripts/solve/store.js';
 import {ingestEvidence} from '../../scripts/solve/evidence.js';
 import {buildContext, renderContext} from '../../scripts/quest-context.js';
+import {runTheoryCommand} from '../../scripts/solve/theory.js';
 
 function tmp() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'context-test-'));
@@ -80,6 +86,38 @@ const sampleReport = {
   ],
 };
 
+function oracleQuest(id, statement) {
+  return {
+    id,
+    statement,
+    priority: 1,
+    doneWhen: {
+      probe: 'oracle',
+      args: {file: `solve/oracle/${id}.json`},
+    },
+    frontiers: [
+      {
+        id: `${id}-main`,
+        priority: 1,
+        metric: {
+          probe: 'oracle',
+          args: {file: `solve/oracle/${id}.json`},
+        },
+      },
+    ],
+  };
+}
+
+function writeOracle(root, id) {
+  const oracleDir = path.join(root, 'solve', 'oracle');
+  fs.mkdirSync(oracleDir, {recursive: true});
+  fs.writeFileSync(path.join(oracleDir, `${id}.json`), JSON.stringify({
+    metric: 1,
+    target: 0,
+    done: false,
+  }));
+}
+
 
 tap.test('quest-context newer evidence warning (P2)', async (t) => {
   t.test('warns on unrecorded newer evidence and disappears after ingest', (t) => {
@@ -128,4 +166,76 @@ tap.test('quest-context newer evidence warning (P2)', async (t) => {
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });
+});
+
+tap.test('quest-context surfaces model guidance for owner-boundary theories', (t) => {
+  const root = tmp();
+  const goal = oracleQuest(
+    'architecture-owner-boundary-model-guidance',
+    'Core system architecture owner-boundary theory must preserve semantic ownership.',
+  );
+  writeOracle(root, goal.id);
+  saveQuest(root, goal);
+  appendEvent(root, goal.id, {
+    type: 'quest-declared',
+    ts: new Date().toISOString(),
+  });
+
+  const context = buildContext(root, {id: goal.id});
+  t.equal(context.quest.health.modelGuidance.command, 'npm run model:contracts');
+  t.equal(
+    context.quest.health.modelGuidance.modelRef,
+    'model:architecture/contracts/core-system-logic.md',
+  );
+  t.ok(
+    context.quest.health.signals.some((signal) =>
+      signal.type === 'model-contract-guidance-available'),
+  );
+
+  const rendered = renderContext(context);
+  t.match(rendered, /## Model Guidance/u);
+  t.match(rendered, /theory discriminator: npm run model:contracts/u);
+  t.match(rendered, /--modelRef model:architecture\/contracts\/core-system-logic\.md/u);
+
+  fs.rmSync(root, {recursive: true, force: true});
+  t.end();
+});
+
+tap.test('recorded theories retain architecture model guidance', (t) => {
+  const root = tmp();
+  const goal = oracleQuest(
+    'architecture-theory-model-guidance',
+    'Architecture owner-boundary theory for core system handoff.',
+  );
+  writeOracle(root, goal.id);
+  saveQuest(root, goal);
+  appendEvent(root, goal.id, {
+    type: 'quest-declared',
+    ts: new Date().toISOString(),
+  });
+
+  const result = runTheoryCommand(root, {
+    _: ['system'],
+    id: goal.id,
+    theory: 'theory-architecture-owner-boundary',
+    problem: 'architecture owner boundary can drift without model evidence',
+    evidence: 'test-output/reports/core-system-logic-alloy.model.report.json',
+    success: 'Quest closes with owner-boundary evidence intact',
+    mechanism: 'coupled_invariants',
+    owner: 'architecture_owner',
+    'missing-edge': 'model contract discriminator',
+    discriminator: 'npm run model:contracts',
+  });
+  t.match(result, /recorded system theory/u);
+
+  const state = projectState(goal, readLog(root, goal.id));
+  const theory = state.theories.byId['theory-architecture-owner-boundary'];
+  t.equal(theory.modelGuidance.command, 'npm run model:contracts');
+  t.equal(
+    theory.modelGuidance.modelRef,
+    'model:architecture/contracts/core-system-logic.md',
+  );
+
+  fs.rmSync(root, {recursive: true, force: true});
+  t.end();
 });

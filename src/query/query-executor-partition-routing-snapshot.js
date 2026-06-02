@@ -1,6 +1,7 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 
 const {
+  CONTROL_PLANE_READINESS_DIMENSION,
   LOG_MSG,
   NUM,
   QUERY_EXECUTOR_LITERAL,
@@ -9,7 +10,9 @@ const {
   QUERY_ROUTING_REPAIR_REASON,
   READINESS_SNAPSHOT_KEY,
   SERVICE_TYPE,
+  SERVICE_STATUS,
   TABLES,
+  isPriorityControlPlanePartition,
   resolveCanonicalLeaderRoutingGapState,
 } = QUERY_EXECUTOR_SHARED;
 
@@ -93,6 +96,7 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
       routableServiceCount: routableServices.length,
       canonicalLeaderServiceCount,
       serviceRows: Object.freeze([...serviceRows]),
+      activeAddressedServices: Object.freeze([...activeAddressedServices]),
       routableServices: Object.freeze([...routableServices]),
       deniedByNodeId: this.buildRoutingDeniedNodeSummary(
         evaluatedServices,
@@ -232,6 +236,18 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
       ) {
         existing[READINESS_SNAPSHOT_KEY.RUNTIME_AUTHORITY] = runtimeAuthority;
       }
+      const projectionReadinessContract =
+        routing.readinessSummary[
+          READINESS_SNAPSHOT_KEY.PROJECTION_READINESS_CONTRACT
+        ] || null;
+      if (
+        projectionReadinessContract &&
+        typeof projectionReadinessContract ===
+          QUERY_EXECUTOR_LITERAL.STRING_OBJECT
+      ) {
+        existing[READINESS_SNAPSHOT_KEY.PROJECTION_READINESS_CONTRACT] =
+          projectionReadinessContract;
+      }
       for (const reasonCode of routing.readinessSummary.reasonCodes) {
         if (!existing.reasonCodes.includes(reasonCode)) {
           existing.reasonCodes.push(reasonCode);
@@ -329,13 +345,11 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
       this.controlPlaneReadinessService &&
       typeof this.controlPlaneReadinessService.getNodeReadiness === 'function';
     const deniedNodeIds =
-      routingSnapshot.reasonCode ===
-        QUERY_ROUTING_DIAGNOSTIC_REASON.ALL_SERVICES_FILTERED_BY_READINESS &&
-      routingSnapshot.activeAddressedServiceCount > NUM.ZERO ?
-        Object.keys(routingSnapshot.deniedByNodeId || {}) :
-        [];
+      this.collectAllFilteredRoutingRepairNodeIds(routingSnapshot);
     const shouldRepairServiceGap =
       this.shouldRepairCanonicalLeaderServiceGap(routingSnapshot);
+    const shouldRepairFilteredRecoveryRouting =
+      this.shouldRepairAllFilteredRecoveryRouting(routingSnapshot);
     const repairNodeIds = new Set(deniedNodeIds);
     if (shouldRepairServiceGap) {
       repairNodeIds.add(routingSnapshot.canonicalLeaderNodeId);
@@ -362,7 +376,7 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
         }),
       );
     }
-    if (!shouldRepairServiceGap) {
+    if (!shouldRepairServiceGap && !shouldRepairFilteredRecoveryRouting) {
       return attemptedRepair;
     }
     const overlayRepaired = await this.refreshRoutingMetadataOverlay(
@@ -376,6 +390,80 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
       },
     );
     return attemptedRepair || overlayRepaired;
+  },
+
+  /**
+   * Collect nodes to refresh when every active service row was filtered. Older
+   * snapshots can lack denial details when readiness is unavailable, so fall
+   * back to active addressed rows instead of skipping repair entirely.
+   * @param {Object|null} routingSnapshot
+   * @return {Array<string>}
+   * @private
+   */
+  collectAllFilteredRoutingRepairNodeIds(routingSnapshot) {
+    if (
+      routingSnapshot?.reasonCode !==
+        QUERY_ROUTING_DIAGNOSTIC_REASON.ALL_SERVICES_FILTERED_BY_READINESS ||
+      Number(routingSnapshot.activeAddressedServiceCount) <= NUM.ZERO
+    ) {
+      return [];
+    }
+    const deniedNodeIds = Object.keys(routingSnapshot.deniedByNodeId || {});
+    if (deniedNodeIds.length > NUM.ZERO) {
+      return deniedNodeIds;
+    }
+    const serviceRows =
+      Array.isArray(routingSnapshot.activeAddressedServices) ?
+        routingSnapshot.activeAddressedServices :
+        Array.isArray(routingSnapshot.serviceRows) ?
+          routingSnapshot.serviceRows.filter((service) =>
+            service?.status !== SERVICE_STATUS.INACTIVE &&
+            typeof service?.address === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
+            service.address.length > NUM.ZERO,
+          ) :
+          [];
+    const nodeIds = [];
+    const seen = new Set();
+    for (const service of serviceRows) {
+      const nodeId = service?.node_id || service?.nodeId || null;
+      if (
+        typeof nodeId !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
+        nodeId.length === NUM.ZERO ||
+        seen.has(nodeId)
+      ) {
+        continue;
+      }
+      seen.add(nodeId);
+      nodeIds.push(nodeId);
+    }
+    return nodeIds;
+  },
+
+  /**
+   * Refresh authoritative routing metadata when priority recovery has active
+   * service rows but local readiness filtered all candidates.
+   * @param {Object|null} routingSnapshot
+   * @return {boolean}
+   * @private
+   */
+  shouldRepairAllFilteredRecoveryRouting(routingSnapshot) {
+    if (
+      routingSnapshot?.reasonCode !==
+        QUERY_ROUTING_DIAGNOSTIC_REASON.ALL_SERVICES_FILTERED_BY_READINESS ||
+      routingSnapshot.routingReadinessDimension !==
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE ||
+      Number(routingSnapshot.activeAddressedServiceCount) <= NUM.ZERO ||
+      typeof routingSnapshot.partitionId !==
+        QUERY_EXECUTOR_LITERAL.STRING_STRING ||
+      routingSnapshot.partitionId.length === NUM.ZERO
+    ) {
+      return false;
+    }
+    const partitionRow = this.getPartitionRecord(routingSnapshot.partitionId);
+    return isPriorityControlPlanePartition({
+      partitionId: routingSnapshot.partitionId,
+      partitionRow,
+    });
   },
 
   /**

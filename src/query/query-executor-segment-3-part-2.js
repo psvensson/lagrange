@@ -2,6 +2,10 @@ import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 import {QueryExecutorSegment3Part1} from './query-executor-segment-3-part-1.js';
 import {installQueryExecutorSelectAggregationHelpers} from './query-executor-select-aggregation.js';
 import {installQueryExecutorSqlCommandHelpers} from './query-executor-sql-command-rendering.js';
+import {
+  isPriorityRecoveryWriteRouting,
+  shouldAllowPriorityRecoveryBootstrapRoutingGrace,
+} from './query-executor-priority-recovery-bootstrap-routing.js';
 
 
 const {
@@ -142,10 +146,20 @@ class QueryExecutorSegment3 extends QueryExecutorSegment3Part1 {
       partitionId.length > NUM.ZERO ?
         this.getPartitionRecord(partitionId) :
         null;
+    const priorityControlPlanePartition =
+      isPriorityControlPlanePartition({partitionId, partitionRow});
+    const priorityRecoveryWriteRouting =
+      isPriorityRecoveryWriteRouting({
+        partitionId,
+        partitionRow,
+        routingReadinessDimension,
+        routingOptions,
+      });
     if (
       nodeId &&
       nodeId !== this.nodeId &&
-      isPriorityControlPlanePartition({partitionId, partitionRow}) &&
+      priorityControlPlanePartition &&
+      !priorityRecoveryWriteRouting &&
       typeof this.messageRouter?.getConnectionState ===
         QUERY_EXECUTOR_LITERAL.STRING_FUNCTION
     ) {
@@ -217,6 +231,9 @@ class QueryExecutorSegment3 extends QueryExecutorSegment3Part1 {
           failedDimensions: Array.isArray(participation?.failedDimensions) ?
             participation.failedDimensions :
             Object.freeze([]),
+          reasonCodes: Array.isArray(participation?.reasonCodes) ?
+            participation.reasonCodes :
+            Object.freeze([]),
         },
         compactSnapshot: participation?.summary || null,
       };
@@ -258,10 +275,24 @@ class QueryExecutorSegment3 extends QueryExecutorSegment3Part1 {
     const bootstrapGraceRoutable =
       decision?.eligible !== true &&
       this.shouldAllowFreshBootstrapRoutingGrace(service, readiness, decision);
+    const priorityRecoveryBootstrapRoutable =
+      decision?.eligible !== true &&
+      shouldAllowPriorityRecoveryBootstrapRoutingGrace({
+        partitionId,
+        partitionRow,
+        routingReadinessDimension,
+        routingOptions,
+        readiness,
+        decision,
+      });
+    const routable =
+      decision.eligible === true ||
+      bootstrapGraceRoutable ||
+      priorityRecoveryBootstrapRoutable;
     return {
-      routable: decision.eligible === true || bootstrapGraceRoutable,
+      routable,
       reasonCode:
-        decision.eligible === true || bootstrapGraceRoutable ?
+        routable ?
           QUERY_ROUTING_DIAGNOSTIC_REASON.OK :
           QUERY_ROUTING_DIAGNOSTIC_REASON.NODE_NOT_ELIGIBLE,
       readinessSummary: compactSnapshot ?
@@ -274,6 +305,10 @@ class QueryExecutorSegment3 extends QueryExecutorSegment3Part1 {
           failedDimensions: decision.failedDimensions || Object.freeze([]),
           [READINESS_SNAPSHOT_KEY.RUNTIME_AUTHORITY]:
             compactSnapshot[READINESS_SNAPSHOT_KEY.RUNTIME_AUTHORITY] || null,
+          [READINESS_SNAPSHOT_KEY.PROJECTION_READINESS_CONTRACT]:
+            compactSnapshot[
+              READINESS_SNAPSHOT_KEY.PROJECTION_READINESS_CONTRACT
+            ] || null,
         } :
         null,
     };
@@ -680,7 +715,6 @@ class QueryExecutorSegment3 extends QueryExecutorSegment3Part1 {
     }
     return overlay.shouldMaskCacheServicesForPartition(partitionId) === true;
   }
-
 }
 
 installQueryExecutorSelectAggregationHelpers(QueryExecutorSegment3);

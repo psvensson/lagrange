@@ -23,6 +23,7 @@ import {
   THEORY_SCOPE_SYSTEM,
 } from './constants.js';
 import {buildMechanismCardFromEvidence} from './mechanism-card.js';
+import {modelGuidanceForQuest} from './model-guidance.js';
 import {appendEvent, loadQuest, projectState, readLog} from './store.js';
 import {
   extractTheoryLedgerEntries,
@@ -99,6 +100,10 @@ function nextTheoryId(state, seed) {
 function currentState(root, quest) {
   const log = readLog(root, quest.id);
   return {log, state: projectState(quest, log)};
+}
+
+function eventModelGuidance(root, quest) {
+  return modelGuidanceForQuest(quest, readLog(root, quest.id));
 }
 
 function validateLayer(layer) {
@@ -340,6 +345,7 @@ function cmdSystem(root, args) {
     decidingOwner: requireFlag(args, 'owner'),
     missingTransitionOrObservation: requireFlag(args, 'missing-edge'),
     discriminator: requireFlag(args, 'discriminator'),
+    modelGuidance: eventModelGuidance(root, quest),
     card: maybeCard(args),
   });
   return `recorded system theory ${stamped.theory}`;
@@ -369,6 +375,7 @@ function cmdOption(root, args) {
     expectedMovement: requireFlag(args, 'expected-movement'),
     negativeResultMeans: requireFlag(args, 'negative-result'),
     discriminator: requireFlag(args, 'discriminator'),
+    modelGuidance: eventModelGuidance(root, quest),
     promotionRule: requireFlag(args, 'promotion'),
     rejectionRule: requireFlag(args, 'rejection'),
     evidence: normalizeText(args[FLAG_EVIDENCE]) || null,
@@ -437,9 +444,13 @@ function renderList(state) {
     const frontier = theory.frontier ? ` frontier=${theory.frontier}` : '';
     const layer = theory.layer ? ` layer=${theory.layer}` : '';
     const archive = theory.archive ? ' archive=true' : '';
+    const modelGate = theory.modelGuidance ?
+      ` modelGate="${theory.modelGuidance.command}"` :
+      '';
     lines.push(
       `- ${theory.id}: scope=${theory.scope}${frontier}${layer} ` +
-      `status=${theory.status} mechanism=${theory.mechanism || 'unknown'}${archive}`,
+      `status=${theory.status} mechanism=${theory.mechanism || 'unknown'}` +
+      `${modelGate}${archive}`,
     );
   }
   lines.push('', '## Selected');

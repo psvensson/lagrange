@@ -4,8 +4,18 @@ const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_EMPTY = '';
 const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_ONE = 1;
 const LOCAL_STR_1AM9G = '; ';
 const LOCAL_STR_WARN = 'warn';
+const TRANSIENT_PROVISIONING_SHORTFALL_REASONS = new Set([
+  'cluster_member_unhealthy',
+  'control_plane_write_unhealthy',
+  'metadata_publication_degraded',
+  'routing_not_ready',
+]);
+const AGGREGATE_TRANSIENT_PROVISIONING_SHORTFALL_REASONS = new Set([
+  'insufficient_placement_eligible_nodes',
+]);
 
 const {
   OperationType,
@@ -171,6 +181,85 @@ class SQLQueryEngineProvisioningAdmissionMethods {
     return summaryEntries.length > LOCAL_NUM_ZERO ?
       summaryEntries.join(LOCAL_STR_1AM9G) :
       PROVISIONING_REJECTION_SUMMARY_NONE;
+  }
+
+  /**
+   * Return true when rejected targets are blocked only by transient control
+   * plane recovery/readiness reasons.
+   * @param {Object[]} rejectedTargetNodePlans
+   * @return {boolean}
+   * @private
+   */
+  hasOnlyTransientProvisioningShortfall(rejectedTargetNodePlans) {
+    if (
+      !Array.isArray(rejectedTargetNodePlans) ||
+      rejectedTargetNodePlans.length === LOCAL_NUM_ZERO
+    ) {
+      return false;
+    }
+    let foundTransientReason = false;
+    for (const rejection of rejectedTargetNodePlans) {
+      const blockingReasons = (Array.isArray(rejection?.blockingReasons) ?
+        rejection.blockingReasons :
+        []).map((reason) => String(reason || LOCAL_STR_EMPTY))
+        .filter(Boolean);
+      const reasonCodes = (Array.isArray(rejection?.reasonCodes) ?
+        rejection.reasonCodes :
+        []).map((reason) => String(reason || LOCAL_STR_EMPTY))
+        .filter(Boolean);
+      const reasons = [...blockingReasons, ...reasonCodes];
+      if (reasons.length === LOCAL_NUM_ZERO) {
+        return false;
+      }
+      const hasTransientReason = reasons.some((reason) =>
+        TRANSIENT_PROVISIONING_SHORTFALL_REASONS.has(reason),
+      );
+      if (!hasTransientReason) {
+        return false;
+      }
+      for (const blockingReason of blockingReasons) {
+        if (
+          !TRANSIENT_PROVISIONING_SHORTFALL_REASONS.has(blockingReason) &&
+          !AGGREGATE_TRANSIENT_PROVISIONING_SHORTFALL_REASONS.has(
+            blockingReason,
+          )
+        ) {
+          return false;
+        }
+      }
+      for (const reasonCode of reasonCodes) {
+        if (!TRANSIENT_PROVISIONING_SHORTFALL_REASONS.has(reasonCode)) {
+          return false;
+        }
+      }
+      foundTransientReason = true;
+    }
+    return foundTransientReason;
+  }
+
+  /**
+   * Resolve the fallback floor for default CREATE TABLE provisioning minimums.
+   * Explicit caller minimums must still be honored exactly.
+   * @param {Object} options
+   * @return {number}
+   * @private
+   */
+  resolveProvisioningShortfallFallbackMinimum(options = {}) {
+    const implicitMinimum =
+      Number.isInteger(options.implicitFallbackMinimumReplicaCount) &&
+      options.implicitFallbackMinimumReplicaCount > LOCAL_NUM_ZERO ?
+        options.implicitFallbackMinimumReplicaCount :
+        LOCAL_NUM_ONE;
+    if (
+      options.hasExplicitMinimumRoutableReplicaCount === true ||
+      options.maximumProvisionableReplicaCount <= LOCAL_NUM_ZERO ||
+      !this.hasOnlyTransientProvisioningShortfall(
+        options.rejectedTargetNodePlans,
+      )
+    ) {
+      return implicitMinimum;
+    }
+    return LOCAL_NUM_ONE;
   }
 
   /**

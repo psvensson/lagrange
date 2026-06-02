@@ -53,6 +53,13 @@ can close the Quest.
 Use Quest-native theories when a frontier stalls, when the work crosses owner or
 layer boundaries, or when the strategy ladder reaches the model rung.
 
+For architecture, owner-boundary, core-system, lifecycle, handoff, invariant,
+Alloy, TLA+, or statechart work, inspect `npm run quest:context -- --id <id>`
+or `node scripts/solve.js health --id <id>` before recording theories. If the
+output prints **Model Guidance**, use `npm run model:contracts` as the theory
+discriminator and pass the printed `modelRef` on model-rung attempts unless a
+finding explains why the architecture model is not applicable.
+
 The two layers are:
 
 - **System theory**: why the scenario is stuck across owners, phases,

@@ -10,6 +10,7 @@ import {evaluate} from './probe.js';
 import {pickFrontier} from './scheduler.js';
 import {projectState, readLog} from './store.js';
 import {detectUnrecordedEvidence} from './evidence.js';
+import {modelGuidanceForQuest} from './model-guidance.js';
 
 const NUM_TWO = 2;
 const NUM_THREE = 3;
@@ -102,7 +103,7 @@ function liveProbeDivergence(state, liveProbe) {
   return null;
 }
 
-function frontierNeeds(state, log, frontier) {
+function frontierNeeds(quest, state, log, frontier) {
   const rung = frontier.rungIndex;
   const selected = selectedTheory(state, frontier.id);
   const selectedUsable = selected &&
@@ -128,10 +129,14 @@ function frontierNeeds(state, log, frontier) {
     (rung === 2 || noProgress.length >= NUM_TWO || sameDominantReasonRepeat || sameOwnerBoundaryRepeat || localTheoryTooNarrow) &&
     activeSystemTheories(state).length === 0;
 
+  const modelGuidance = modelGuidanceForQuest(quest, log);
+
   return {
     frontierTheoryRequired: rung >= 1 && !selectedUsable,
     systemTheoryRequired,
     modelEvidenceRequired: rung === 2,
+    modelEvidenceRecommended: Boolean(modelGuidance),
+    modelGuidance,
     selectedTheory: selected ? selected.id : null,
     noProgressCount: noProgress.length,
   };
@@ -140,10 +145,16 @@ function frontierNeeds(state, log, frontier) {
 function nextActionFor(frontier, needs) {
   if (!frontier) return 'No open frontier remains; inspect solve report.';
   if (needs.systemTheoryRequired) {
-    return `record system theory before the next ${frontier.id} attempt`;
+    const suffix = needs.modelGuidance ?
+      ` using ${needs.modelGuidance.command} as model discriminator` :
+      '';
+    return `record system theory before the next ${frontier.id} attempt${suffix}`;
   }
   if (needs.frontierTheoryRequired) {
-    return `record and select frontier theory for ${frontier.id}`;
+    const suffix = needs.modelGuidance ?
+      ` with ${needs.modelGuidance.command} as discriminator` :
+      '';
+    return `record and select frontier theory for ${frontier.id}${suffix}`;
   }
   if (needs.modelEvidenceRequired) {
     return `continue ${frontier.id} with modelRef or modelNotApplicable evidence`;
@@ -157,7 +168,7 @@ export function analyzeQuestHealth(root, quest, options = {}) {
   const pick = pickFrontier(quest, state, options.scoreFn);
   const liveProbe = options.liveProbe || evaluate(quest.doneWhen, {root});
   const frontier = pick?.state || null;
-  const needs = frontier ? frontierNeeds(state, log, frontier) : {};
+  const needs = frontier ? frontierNeeds(quest, state, log, frontier) : {};
   const theories = frontier ? lastAttemptTheories(log, state, frontier.id) : [];
   const signals = [
     sameMechanismSignal(theories),
@@ -238,6 +249,15 @@ export function analyzeQuestHealth(root, quest, options = {}) {
       severity: 'medium',
     });
   }
+  if (frontier && needs.modelGuidance) {
+    signals.push({
+      type: needs.modelEvidenceRequired ?
+        'model-contract-evidence-required' :
+        'model-contract-guidance-available',
+      mechanism: needs.modelGuidance.command,
+      severity: needs.modelEvidenceRequired ? 'high' : 'medium',
+    });
+  }
   const rungName = frontier ? (quest.frontiers.find((item) =>
     item.id === frontier.id)?.rung || null) : null;
   return {
@@ -249,6 +269,7 @@ export function analyzeQuestHealth(root, quest, options = {}) {
         frontier?.rungIndex >= 1 ? RUNG_WIDEN_SCOPE : 'local-fix'
     ),
     needs,
+    modelGuidance: needs.modelGuidance || null,
     signals,
     nextAction: nextActionFor(frontier, needs),
   };
@@ -267,6 +288,13 @@ export function renderHealth(health) {
     for (const signal of health.signals) {
       lines.push(`- ${signal.type}: severity=${signal.severity}`);
     }
+  }
+  if (health.modelGuidance) {
+    lines.push('', '## Model Guidance');
+    lines.push(`- command: ${health.modelGuidance.command}`);
+    lines.push(`- modelRef: ${health.modelGuidance.modelRef}`);
+    lines.push(`- reportPattern: ${health.modelGuidance.reportPattern}`);
+    lines.push(`- reasons: ${health.modelGuidance.reasons.join(', ')}`);
   }
   return `${lines.join('\n')}\n`;
 }

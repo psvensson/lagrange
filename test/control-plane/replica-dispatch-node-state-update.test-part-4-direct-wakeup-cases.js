@@ -21,6 +21,8 @@ const DIRECT_WAKEUP_VERIFICATION_TEST_NAME =
 const DIRECT_WAKEUP_RETRY_OPERATION_ID = 'op-remote-wakeup-retry-1';
 const DIRECT_WAKEUP_VERIFICATION_OPERATION_ID =
   'op-remote-wakeup-verification-1';
+const DIRECT_WAKEUP_IN_FLIGHT_OPERATION_ID =
+  'op-remote-wakeup-in-flight-1';
 const DIRECT_WAKEUP_RETRY_PARTITION_ID = 'control_plane_publications-p1';
 const DIRECT_WAKEUP_RETRY_REPLICA_ID = 'control_plane_publications-p1-r4';
 const DIRECT_WAKEUP_RETRY_SOURCE_NODE_ID = 'node-1';
@@ -50,6 +52,12 @@ const DIRECT_WAKEUP_RETRY_ASSERT_RETRY_REENTRY =
   'retry timer should re-enter the remote direct wake-up path';
 const DIRECT_WAKEUP_RETRY_ASSERT_VERIFICATION_ARMED =
   'successful remote wake-up retry should arm a verification dispatch slot';
+const DIRECT_WAKEUP_RETRY_ASSERT_COALESCED =
+  'duplicate remote wake-up should coalesce while retry is armed';
+const DIRECT_WAKEUP_RETRY_ASSERT_RETAINED_ROW =
+  'coalesced retry should retain the freshest operation row';
+const DIRECT_WAKEUP_IN_FLIGHT_ASSERT_COALESCED =
+  'duplicate remote wake-up should coalesce while transport is in flight';
 const DIRECT_WAKEUP_VERIFICATION_ASSERT_TIMER =
   'acknowledged remote wake-up should arm a source-side verification timer';
 const DIRECT_WAKEUP_VERIFICATION_ASSERT_REENTRY =
@@ -228,6 +236,101 @@ test(DIRECT_WAKEUP_VERIFICATION_TEST_NAME, async (t) => {
   }
 });
 
+test('ReplicaDispatchService coalesces duplicate remote direct wake-ups ' +
+  'while transport delivery is still in flight', async (t) => {
+  initEnv();
+
+  const deliveries = [];
+  const deferredTimers = [];
+  let resolveDelivery = null;
+  const pendingDelivery = new Promise((resolve) => {
+    resolveDelivery = resolve;
+  });
+  const service = createService({
+    operationDispatchRetryAfterMs: DIRECT_WAKEUP_RETRY_AFTER_MS,
+    messageRouter: {
+      async deliver(address, payload, options) {
+        deliveries.push({address, payload, options});
+        return pendingDelivery;
+      },
+    },
+    cdcIntegrationService: {
+      upsertSystemTableRow: async () => ({success: true}),
+      updateSystemTableRow: async () => ({success: true}),
+    },
+    rebalanceCoordinator: {
+      async dispatchOperation() {
+        t.fail('remote-owned direct wake should not dispatch locally');
+      },
+      isOperationLocallyOwned() {
+        return false;
+      },
+    },
+    setTimeoutFn(callback, delayMs) {
+      const handle = {callback, delayMs};
+      deferredTimers.push(handle);
+      return handle;
+    },
+    clearTimeoutFn(handle) {
+      if (handle) {
+        handle.cleared = true;
+      }
+    },
+  });
+
+  try {
+    const firstWakeup = service.handleCoordinatorOperationCreated({
+      operationId: DIRECT_WAKEUP_IN_FLIGHT_OPERATION_ID,
+      partitionId: DIRECT_WAKEUP_RETRY_PARTITION_ID,
+      replicaId: DIRECT_WAKEUP_RETRY_REPLICA_ID,
+      type: OperationType.REPLACE,
+      workflowStep: WORKFLOW_STEP.PENDING,
+      sourceNodeId: DIRECT_WAKEUP_RETRY_SOURCE_NODE_ID,
+      targetNodeId: DIRECT_WAKEUP_RETRY_TARGET_NODE_ID,
+      createdAt: DIRECT_WAKEUP_RETRY_CREATED_AT,
+      updatedAt: DIRECT_WAKEUP_RETRY_UPDATED_AT,
+      stepsHistory: [],
+    });
+
+    await service.handleCoordinatorOperationCreated({
+      operationId: DIRECT_WAKEUP_IN_FLIGHT_OPERATION_ID,
+      partitionId: DIRECT_WAKEUP_RETRY_PARTITION_ID,
+      replicaId: DIRECT_WAKEUP_RETRY_REPLICA_ID,
+      type: OperationType.REPLACE,
+      workflowStep: WORKFLOW_STEP.PENDING,
+      sourceNodeId: DIRECT_WAKEUP_RETRY_SOURCE_NODE_ID,
+      targetNodeId: DIRECT_WAKEUP_RETRY_TARGET_NODE_ID,
+      createdAt: DIRECT_WAKEUP_RETRY_CREATED_AT,
+      updatedAt: DIRECT_WAKEUP_RETRY_UPDATED_AT + NUM.ONE,
+      stepsHistory: [],
+    });
+
+    t.equal(
+      deliveries.length,
+      DIRECT_WAKEUP_RETRY_EXPECTED_SINGLE_CALL,
+      DIRECT_WAKEUP_IN_FLIGHT_ASSERT_COALESCED,
+    );
+
+    resolveDelivery({acknowledged: true});
+    await firstWakeup;
+
+    t.equal(
+      service.operationDispatchDeferredRetries.get(
+        DIRECT_WAKEUP_IN_FLIGHT_OPERATION_ID,
+      )?.row?.updated_at,
+      DIRECT_WAKEUP_RETRY_UPDATED_AT + NUM.ONE,
+      DIRECT_WAKEUP_RETRY_ASSERT_RETAINED_ROW,
+    );
+    t.equal(
+      deferredTimers.length,
+      DIRECT_WAKEUP_RETRY_EXPECTED_SINGLE_CALL,
+      DIRECT_WAKEUP_VERIFICATION_ASSERT_TIMER,
+    );
+  } finally {
+    service.stop();
+  }
+});
+
 test(DIRECT_WAKEUP_RETRY_TEST_NAME, async (t) => {
   initEnv();
 
@@ -337,6 +440,32 @@ test(DIRECT_WAKEUP_RETRY_TEST_NAME, async (t) => {
       DIRECT_WAKEUP_RETRY_ASSERT_RETRY_DELAY,
     );
 
+    await service.handleCoordinatorOperationCreated({
+      operationId: DIRECT_WAKEUP_RETRY_OPERATION_ID,
+      partitionId: DIRECT_WAKEUP_RETRY_PARTITION_ID,
+      replicaId: DIRECT_WAKEUP_RETRY_REPLICA_ID,
+      type: OperationType.REPLACE,
+      workflowStep: WORKFLOW_STEP.PENDING,
+      sourceNodeId: DIRECT_WAKEUP_RETRY_SOURCE_NODE_ID,
+      targetNodeId: DIRECT_WAKEUP_RETRY_TARGET_NODE_ID,
+      createdAt: DIRECT_WAKEUP_RETRY_CREATED_AT,
+      updatedAt: DIRECT_WAKEUP_RETRY_UPDATED_AT + NUM.ONE,
+      stepsHistory: [],
+    });
+
+    t.equal(
+      deliveries.length,
+      DIRECT_WAKEUP_RETRY_EXPECTED_SINGLE_CALL,
+      DIRECT_WAKEUP_RETRY_ASSERT_COALESCED,
+    );
+    t.equal(
+      service.operationDispatchDeferredRetries.get(
+        DIRECT_WAKEUP_RETRY_OPERATION_ID,
+      )?.row?.updated_at,
+      DIRECT_WAKEUP_RETRY_UPDATED_AT + NUM.ONE,
+      DIRECT_WAKEUP_RETRY_ASSERT_RETAINED_ROW,
+    );
+
     let retryPromise = null;
     const retryEnqueues = [];
     const originalQueue = service.operationDispatchQueue;
@@ -364,6 +493,11 @@ test(DIRECT_WAKEUP_RETRY_TEST_NAME, async (t) => {
         reason: RECONCILE_REASON.RETRYABLE_OPERATION_DISPATCH,
       }],
       DIRECT_WAKEUP_RETRY_ASSERT_RETRY_REENTRY,
+    );
+    t.equal(
+      retryEnqueues[NUM.ZERO]?.context?.row?.updated_at,
+      DIRECT_WAKEUP_RETRY_UPDATED_AT + NUM.ONE,
+      DIRECT_WAKEUP_RETRY_ASSERT_RETAINED_ROW,
     );
     t.equal(
       deliveries.length,

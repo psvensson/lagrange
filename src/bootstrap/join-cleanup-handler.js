@@ -542,12 +542,7 @@ class JoinCleanupHandler {
     const latencyTopology = this.delegates.getLatencyTopology();
     await LatencyTopologySetup.stop(latencyTopology);
     this.delegates.setLatencyTopology(null);
-    this.clearReplicaStateMachine();
-    await this.shutdownRpcClient();
-    await this.shutdownCdcSqlQueryEngine();
-    this.stopControlPlaneServices();
 
-    // Shutdown replica handler
     const replicaHandler = this.delegates.getReplicaHandler();
     const messageRouter = this.delegates.getMessageRouter();
     if (replicaHandler) {
@@ -555,6 +550,11 @@ class JoinCleanupHandler {
       await replicaHandler.shutdown();
       this.delegates.setReplicaHandler(null);
     }
+
+    this.clearReplicaStateMachine();
+    await this.shutdownRpcClient();
+    await this.shutdownCdcSqlQueryEngine();
+    this.stopControlPlaneServices();
 
     await this.shutdownServiceMap({
       logger,

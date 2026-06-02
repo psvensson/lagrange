@@ -26,23 +26,23 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 6. [GOV-0008] The report projection must not invent terminal status, synthetic attempts, or unmeasured progress. _(see workflow-guidelines/validators.md:42)_
 7. [GOV-0011] Broad rows must gain a linked spec or architecture document before active implementation starts. _(see roadmap.md:107)_
 8. [GOV-0013] Do not move goalposts in place. _(see workflow-guidelines/solver-quests.md:30)_
-9. [GOV-0014] Do not revive sprint/package theory state as active authority. _(see workflow-guidelines/solver-quests.md:74)_
-10. [GOV-0015] Do not rely on solve/state/ as durable memory. _(see workflow-guidelines/solver-quests.md:172)_
+9. [GOV-0014] Do not revive sprint/package theory state as active authority. _(see workflow-guidelines/solver-quests.md:81)_
+10. [GOV-0015] Do not rely on solve/state/ as durable memory. _(see workflow-guidelines/solver-quests.md:179)_
 11. [GOV-0017] constraints[]: optional hard limits the agent must preserve. _(see workflow-guidelines/solver-quests.md:46)_
-12. [GOV-0019] model: selected frontier theory, active system theory, and --modelRef or --modelNotApplicable required. _(see workflow-guidelines/solver-quests.md:84)_
-13. [GOV-0021] THEORY_REQUIRED: the selected rung needs system or frontier theory before another attempt; record the theory and resume instead of patching through it. _(see workflow-guidelines/solver-quests.md:157)_
+12. [GOV-0019] model: selected frontier theory, active system theory, and --modelRef or --modelNotApplicable required. _(see workflow-guidelines/solver-quests.md:91)_
+13. [GOV-0021] THEORY_REQUIRED: the selected rung needs system or frontier theory before another attempt; record the theory and resume instead of patching through it. _(see workflow-guidelines/solver-quests.md:164)_
 14. [GOV-0023] Durable conclusions must be recorded with node scripts/solve.js finding before they are relied on by later attempts. _(see workflow-guidelines/subagents.md:50)_
 15. [GOV-0024] Later attempts must use the same sealed goalposts. _(see workflow-guidelines/validators.md:37)_
-16. [GOV-0025] Frontier theory: why the next local intervention should move the selected frontier metric. _(see workflow-guidelines/solver-quests.md:60)_
-17. [GOV-0026] optional rulesOut text for approaches that should not be retried. _(see workflow-guidelines/solver-quests.md:140)_
+16. [GOV-0025] Frontier theory: why the next local intervention should move the selected frontier metric. _(see workflow-guidelines/solver-quests.md:67)_
+17. [GOV-0026] optional rulesOut text for approaches that should not be retried. _(see workflow-guidelines/solver-quests.md:147)_
 18. [GOV-0027] The review should return findings, candidate risks, or suggested frontiers. _(see workflow-guidelines/subagents.md:50)_
 19. [GOV-0028] A row may move to active implementation only when the intended behavior is sharp enough to produce a sealed doneWhen. _(see roadmap.md:109)_
 20. [GOV-0029] It is git-ignored and may be rebuilt from the Quest plus event log. _(see workflow-guidelines/quest-artifacts.md:40)_
-21. [GOV-0030] The archived theory ledger may be imported only as archive memory; imported archive theories cannot be selected for implementation until fresh Quest evidence reselects a frontier theory. _(see workflow-guidelines/solver-quests.md:74)_
+21. [GOV-0030] The archived theory ledger may be imported only as archive memory; imported archive theories cannot be selected for implementation until fresh Quest evidence reselects a frontier theory. _(see workflow-guidelines/solver-quests.md:81)_
 
 ### Testing & Harness Guidelines
 
-22. [GOV-0020] change-approach: selected frontier theory remains required; model evidence is not required unless this rung explicitly returns to a model test. _(see workflow-guidelines/solver-quests.md:86)_
+22. [GOV-0020] change-approach: selected frontier theory remains required; model evidence is not required unless this rung explicitly returns to a model test. _(see workflow-guidelines/solver-quests.md:93)_
 23. [GOV-0022] Use source, test, architecture, and steering files for the implementation or documentation changes required by the Quest. _(see workflow-guidelines/quest-artifacts.md:49)_
 
 ### Governance & Scope Controls
@@ -53,4 +53,4 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 27. [GOV-0010] The row must be in scope for this repository under ../../edition-matrix.md. _(see roadmap.md:106)_
 28. [GOV-0012] The Quest must name the roadmap row, approved maintenance scope, or explicit user request that makes it valid. _(see roadmap.md:111)_
 29. [GOV-0016] Such examples must not define implementation tasks in this repository unless the active Quest explicitly limits the work to AGPL-owned substrate and excludes paid-only behavior, operator flows, and control surfaces. _(see roadmap.md:96)_
-30. [GOV-0018] widen-scope: selected frontier theory required. _(see workflow-guidelines/solver-quests.md:83)_
+30. [GOV-0018] widen-scope: selected frontier theory required. _(see workflow-guidelines/solver-quests.md:90)_

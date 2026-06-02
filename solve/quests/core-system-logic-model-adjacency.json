@@ -1,0 +1,23 @@
+{
+  "id": "core-system-logic-model-adjacency",
+  "statement": "Core system logic has an architecture-adjacent model contract and executable model checked with the existing model-contract gate.",
+  "priority": 1,
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/core-system-logic-model-adjacency.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "core-system-logic-model-adjacency-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/core-system-logic-model-adjacency.json"
+        }
+      }
+    }
+  ]
+}

@@ -237,11 +237,23 @@ class QueryExecutorCanonicalLeaderRoutingMethods
         QUERY_EXECUTOR_LITERAL.STRING_OBJECT ?
         resolvedRoutingSnapshot.deniedByNodeId :
         Object.freeze({});
+    const routableServices =
+      Array.isArray(resolvedRoutingSnapshot?.routableServices) ?
+        resolvedRoutingSnapshot.routableServices :
+        [];
+    const routableCanonicalLeaderServiceCount = canonicalLeaderNodeId === null ?
+      NUM.ZERO :
+      routableServices.filter(
+        (service) => service?.node_id === canonicalLeaderNodeId,
+      ).length;
     const canonicalLeaderFilteredByReadiness =
       canonicalLeaderNodeId !== null &&
       Number(resolvedRoutingSnapshot?.canonicalLeaderServiceCount) > NUM.ZERO &&
       Number(resolvedRoutingSnapshot?.routableServiceCount) > NUM.ZERO &&
-      Boolean(deniedByNodeId[canonicalLeaderNodeId]);
+      (
+        Boolean(deniedByNodeId[canonicalLeaderNodeId]) ||
+        routableCanonicalLeaderServiceCount === NUM.ZERO
+      );
     const preferDifferentNodeAfterRuntimeWitness = priorityRecoveryRouting;
     const systemTableRecoveryServiceGap =
       systemTableRecoveryRouting &&

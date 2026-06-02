@@ -1,0 +1,779 @@
+diff --git a/.kiro/steering/llm/governance.md b/.kiro/steering/llm/governance.md
+index 01550674..b50f83b8 100644
+--- a/.kiro/steering/llm/governance.md
++++ b/.kiro/steering/llm/governance.md
+@@ -26,23 +26,23 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
+ 6. [GOV-0008] The report projection must not invent terminal status, synthetic attempts, or unmeasured progress. _(see workflow-guidelines/validators.md:42)_
+ 7. [GOV-0011] Broad rows must gain a linked spec or architecture document before active implementation starts. _(see roadmap.md:107)_
+ 8. [GOV-0013] Do not move goalposts in place. _(see workflow-guidelines/solver-quests.md:30)_
+-9. [GOV-0014] Do not revive sprint/package theory state as active authority. _(see workflow-guidelines/solver-quests.md:74)_
+-10. [GOV-0015] Do not rely on solve/state/ as durable memory. _(see workflow-guidelines/solver-quests.md:172)_
++9. [GOV-0014] Do not revive sprint/package theory state as active authority. _(see workflow-guidelines/solver-quests.md:81)_
++10. [GOV-0015] Do not rely on solve/state/ as durable memory. _(see workflow-guidelines/solver-quests.md:179)_
+ 11. [GOV-0017] constraints[]: optional hard limits the agent must preserve. _(see workflow-guidelines/solver-quests.md:46)_
+-12. [GOV-0019] model: selected frontier theory, active system theory, and --modelRef or --modelNotApplicable required. _(see workflow-guidelines/solver-quests.md:84)_
+-13. [GOV-0021] THEORY_REQUIRED: the selected rung needs system or frontier theory before another attempt; record the theory and resume instead of patching through it. _(see workflow-guidelines/solver-quests.md:157)_
++12. [GOV-0019] model: selected frontier theory, active system theory, and --modelRef or --modelNotApplicable required. _(see workflow-guidelines/solver-quests.md:91)_
++13. [GOV-0021] THEORY_REQUIRED: the selected rung needs system or frontier theory before another attempt; record the theory and resume instead of patching through it. _(see workflow-guidelines/solver-quests.md:164)_
+ 14. [GOV-0023] Durable conclusions must be recorded with node scripts/solve.js finding before they are relied on by later attempts. _(see workflow-guidelines/subagents.md:50)_
+ 15. [GOV-0024] Later attempts must use the same sealed goalposts. _(see workflow-guidelines/validators.md:37)_
+-16. [GOV-0025] Frontier theory: why the next local intervention should move the selected frontier metric. _(see workflow-guidelines/solver-quests.md:60)_
+-17. [GOV-0026] optional rulesOut text for approaches that should not be retried. _(see workflow-guidelines/solver-quests.md:140)_
++16. [GOV-0025] Frontier theory: why the next local intervention should move the selected frontier metric. _(see workflow-guidelines/solver-quests.md:67)_
++17. [GOV-0026] optional rulesOut text for approaches that should not be retried. _(see workflow-guidelines/solver-quests.md:147)_
+ 18. [GOV-0027] The review should return findings, candidate risks, or suggested frontiers. _(see workflow-guidelines/subagents.md:50)_
+ 19. [GOV-0028] A row may move to active implementation only when the intended behavior is sharp enough to produce a sealed doneWhen. _(see roadmap.md:109)_
+ 20. [GOV-0029] It is git-ignored and may be rebuilt from the Quest plus event log. _(see workflow-guidelines/quest-artifacts.md:40)_
+-21. [GOV-0030] The archived theory ledger may be imported only as archive memory; imported archive theories cannot be selected for implementation until fresh Quest evidence reselects a frontier theory. _(see workflow-guidelines/solver-quests.md:74)_
++21. [GOV-0030] The archived theory ledger may be imported only as archive memory; imported archive theories cannot be selected for implementation until fresh Quest evidence reselects a frontier theory. _(see workflow-guidelines/solver-quests.md:81)_
+
+ ### Testing & Harness Guidelines
+
+-22. [GOV-0020] change-approach: selected frontier theory remains required; model evidence is not required unless this rung explicitly returns to a model test. _(see workflow-guidelines/solver-quests.md:86)_
++22. [GOV-0020] change-approach: selected frontier theory remains required; model evidence is not required unless this rung explicitly returns to a model test. _(see workflow-guidelines/solver-quests.md:93)_
+ 23. [GOV-0022] Use source, test, architecture, and steering files for the implementation or documentation changes required by the Quest. _(see workflow-guidelines/quest-artifacts.md:49)_
+
+ ### Governance & Scope Controls
+@@ -53,4 +53,4 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
+ 27. [GOV-0010] The row must be in scope for this repository under ../../edition-matrix.md. _(see roadmap.md:106)_
+ 28. [GOV-0012] The Quest must name the roadmap row, approved maintenance scope, or explicit user request that makes it valid. _(see roadmap.md:111)_
+ 29. [GOV-0016] Such examples must not define implementation tasks in this repository unless the active Quest explicitly limits the work to AGPL-owned substrate and excludes paid-only behavior, operator flows, and control surfaces. _(see roadmap.md:96)_
+-30. [GOV-0018] widen-scope: selected frontier theory required. _(see workflow-guidelines/solver-quests.md:83)_
++30. [GOV-0018] widen-scope: selected frontier theory required. _(see workflow-guidelines/solver-quests.md:90)_
+diff --git a/.kiro/steering/llm/rules.json b/.kiro/steering/llm/rules.json
+index b6ef384b..a910a0a5 100644
+--- a/.kiro/steering/llm/rules.json
++++ b/.kiro/steering/llm/rules.json
+@@ -2668,7 +2668,7 @@
+       "sources": [
+         {
+           "file": "workflow-guidelines/solver-quests.md",
+-          "line": 74,
++          "line": 81,
+           "section": "Quest Workflow > Two-Layer Theory"
+         }
+       ]
+@@ -2683,7 +2683,7 @@
+       "sources": [
+         {
+           "file": "workflow-guidelines/solver-quests.md",
+-          "line": 172,
++          "line": 179,
+           "section": "Quest Workflow > Tracked Versus Regenerable"
+         }
+       ]
+@@ -2932,7 +2932,7 @@
+       "sources": [
+         {
+           "file": "workflow-guidelines/solver-quests.md",
+-          "line": 83,
++          "line": 90,
+           "section": "Quest Workflow > Two-Layer Theory"
+         }
+       ]
+@@ -2947,7 +2947,7 @@
+       "sources": [
+         {
+           "file": "workflow-guidelines/solver-quests.md",
+-          "line": 84,
++          "line": 91,
+           "section": "Quest Workflow > Two-Layer Theory"
+         }
+       ]
+@@ -2964,7 +2964,7 @@
+       "sources": [
+         {
+           "file": "workflow-guidelines/solver-quests.md",
+-          "line": 86,
++          "line": 93,
+           "section": "Quest Workflow > Two-Layer Theory"
+         }
+       ]
+@@ -2979,7 +2979,7 @@
+       "sources": [
+         {
+           "file": "workflow-guidelines/solver-quests.md",
+-          "line": 157,
++          "line": 164,
+           "section": "Quest Workflow > Terminal And Blocking Conditions"
+         }
+       ]
+@@ -3536,7 +3536,7 @@
+       "sources": [
+         {
+           "file": "workflow-guidelines/solver-quests.md",
+-          "line": 60,
++          "line": 67,
+           "section": "Quest Workflow > Two-Layer Theory"
+         }
+       ]
+@@ -3551,7 +3551,7 @@
+       "sources": [
+         {
+           "file": "workflow-guidelines/solver-quests.md",
+-          "line": 140,
++          "line": 147,
+           "section": "Quest Workflow > Findings Log"
+         }
+       ]
+@@ -3658,7 +3658,7 @@
+       "sources": [
+         {
+           "file": "workflow-guidelines/solver-quests.md",
+-          "line": 74,
++          "line": 81,
+           "section": "Quest Workflow > Two-Layer Theory"
+         }
+       ]
+@@ -3675,7 +3675,7 @@
+       "sources": [
+         {
+           "file": "workflow-guidelines/solver-quests.md",
+-          "line": 172,
++          "line": 179,
+           "section": "Quest Workflow > Tracked Versus Regenerable"
+         }
+       ]
+@@ -3698,5 +3698,5 @@
+       ]
+     }
+   ],
+-  "generatedAt": "2026-06-01T14:08:43.366Z"
++  "generatedAt": "2026-06-02T07:03:33.727Z"
+ }
+diff --git a/.kiro/steering/workflow-guidelines/solver-quests.md b/.kiro/steering/workflow-guidelines/solver-quests.md
+index 637a7696..8dc2b497 100644
+--- a/.kiro/steering/workflow-guidelines/solver-quests.md
++++ b/.kiro/steering/workflow-guidelines/solver-quests.md
+@@ -53,6 +53,13 @@ can close the Quest.
+ Use Quest-native theories when a frontier stalls, when the work crosses owner or
+ layer boundaries, or when the strategy ladder reaches the model rung.
+
++For architecture, owner-boundary, core-system, lifecycle, handoff, invariant,
++Alloy, TLA+, or statechart work, inspect `npm run quest:context -- --id <id>`
++or `node scripts/solve.js health --id <id>` before recording theories. If the
++output prints **Model Guidance**, use `npm run model:contracts` as the theory
++discriminator and pass the printed `modelRef` on model-rung attempts unless a
++finding explains why the architecture model is not applicable.
++
+ The two layers are:
+
+ - **System theory**: why the scenario is stuck across owners, phases,
+diff --git a/docs/solver-runbook.md b/docs/solver-runbook.md
+index 4bcbd351..234e7682 100644
+--- a/docs/solver-runbook.md
++++ b/docs/solver-runbook.md
+@@ -104,6 +104,25 @@ boundaries, or a model route is due. Do not revive sprint/package theory state
+ as active authority; archived theory ledger entries can only be imported as
+ archive memory.
+
++Before recording theories for architecture, owner-boundary, core-system,
++lifecycle, handoff, invariant, Alloy, TLA+, or statechart work, inspect:
++
++```sh
++npm run quest:context -- --id <quest>
++node scripts/solve.js health --id <quest>
++```
++
++If they print **Model Guidance**, use `npm run model:contracts` as the theory
++discriminator. At the model rung, pass the printed `modelRef` when committing
++the attempt unless a finding explains why the architecture model is not
++applicable:
++
++```sh
++node scripts/solve.js step --id <quest> --commit \
++  --changeRef diff:path/to.patch --summary "..." \
++  --modelRef model:architecture/contracts/core-system-logic.md
++```
++
+ System theory explains why the whole scenario is stuck:
+
+ ```sh
+diff --git a/scripts/list-commands.js b/scripts/list-commands.js
+index c1e21368..fb2eb59d 100644
+--- a/scripts/list-commands.js
++++ b/scripts/list-commands.js
+@@ -10,7 +10,7 @@ const COMMAND_GROUPS = Object.freeze([
+       }),
+       Object.freeze({
+         command: 'npm run quest:context -- --id <quest>',
+-        description: 'Print Quest status, pending step, latest probe, findings, and dirty worktree.',
++        description: 'Print Quest status, model guidance, pending step, latest probe, findings, and dirty worktree.',
+       }),
+       Object.freeze({
+         command: 'npm run solve:status -- --id <quest>',
+@@ -131,9 +131,13 @@ const COMMAND_GROUPS = Object.freeze([
+         command: 'npm run model:statecharts',
+         description: 'Validate lifecycle and owner-state statecharts for reachability, terminal states, evidence, and forbidden transitions.',
+       }),
++      Object.freeze({
++        command: 'npm run model:alloy',
++        description: 'Validate architecture-owned Alloy models and their declared assertions, check commands, and run commands.',
++      }),
+       Object.freeze({
+         command: 'npm run model:contracts',
+-        description: 'Run contract records, decision tables, statecharts, and protocol model checks as one model-contract gate.',
++        description: 'Run contract records, decision tables, statecharts, Alloy, and protocol model checks as one model-contract gate.',
+       }),
+     ]),
+   }),
+diff --git a/scripts/quest-context.js b/scripts/quest-context.js
+index 58bfe49d..cf4d8cb8 100644
+--- a/scripts/quest-context.js
++++ b/scripts/quest-context.js
+@@ -222,6 +222,15 @@ function renderContext(context) {
+       lines.push(`- signal: ${signal.type} severity=${signal.severity}`);
+     }
+   }
++  if (quest.health.modelGuidance) {
++    lines.push(EMPTY, '## Model Guidance', EMPTY);
++    lines.push(`- command: ${quest.health.modelGuidance.command}`);
++    lines.push(`- theory discriminator: ${quest.health.modelGuidance.discriminator}`);
++    lines.push(`- modelRef: ${quest.health.modelGuidance.modelRef}`);
++    lines.push(`- report pattern: ${quest.health.modelGuidance.reportPattern}`);
++    lines.push(`- reasons: ${quest.health.modelGuidance.reasons.join(', ')}`);
++    lines.push(`- instruction: ${quest.health.modelGuidance.instruction}`);
++  }
+   lines.push(EMPTY, '## Selected Theories', EMPTY);
+   const selected = Object.entries(quest.theories?.selectedByFrontier || {});
+   if (selected.length === 0) {
+@@ -240,6 +249,14 @@ function renderContext(context) {
+   lines.push(`- \`node scripts/solve.js theory list --id ${quest.id}\``);
+   lines.push(`- \`node scripts/solve.js health --id ${quest.id}\``);
+   lines.push(`- \`node scripts/solve.js report --id ${quest.id}\``);
++  if (quest.health.modelGuidance) {
++    lines.push(`- \`${quest.health.modelGuidance.command}\``);
++    lines.push(
++      `- \`node scripts/solve.js step --id ${quest.id} --commit ` +
++      '--changeRef diff:<path> --summary "<what changed>" --modelRef ' +
++      `${quest.health.modelGuidance.modelRef}\``,
++    );
++  }
+   lines.push(EMPTY, '## Worktree Summary', EMPTY);
+   if (context.worktree === null) {
+     lines.push('- git status unavailable');
+diff --git a/scripts/solve/health.js b/scripts/solve/health.js
+index 6e2b3133..3883dd67 100644
+--- a/scripts/solve/health.js
++++ b/scripts/solve/health.js
+@@ -10,6 +10,7 @@ import {evaluate} from './probe.js';
+ import {pickFrontier} from './scheduler.js';
+ import {projectState, readLog} from './store.js';
+ import {detectUnrecordedEvidence} from './evidence.js';
++import {modelGuidanceForQuest} from './model-guidance.js';
+
+ const NUM_TWO = 2;
+ const NUM_THREE = 3;
+@@ -102,7 +103,7 @@ function liveProbeDivergence(state, liveProbe) {
+   return null;
+ }
+
+-function frontierNeeds(state, log, frontier) {
++function frontierNeeds(quest, state, log, frontier) {
+   const rung = frontier.rungIndex;
+   const selected = selectedTheory(state, frontier.id);
+   const selectedUsable = selected &&
+@@ -128,10 +129,14 @@ function frontierNeeds(state, log, frontier) {
+     (rung === 2 || noProgress.length >= NUM_TWO || sameDominantReasonRepeat || sameOwnerBoundaryRepeat || localTheoryTooNarrow) &&
+     activeSystemTheories(state).length === 0;
+
++  const modelGuidance = modelGuidanceForQuest(quest, log);
++
+   return {
+     frontierTheoryRequired: rung >= 1 && !selectedUsable,
+     systemTheoryRequired,
+     modelEvidenceRequired: rung === 2,
++    modelEvidenceRecommended: Boolean(modelGuidance),
++    modelGuidance,
+     selectedTheory: selected ? selected.id : null,
+     noProgressCount: noProgress.length,
+   };
+@@ -140,10 +145,16 @@ function frontierNeeds(state, log, frontier) {
+ function nextActionFor(frontier, needs) {
+   if (!frontier) return 'No open frontier remains; inspect solve report.';
+   if (needs.systemTheoryRequired) {
+-    return `record system theory before the next ${frontier.id} attempt`;
++    const suffix = needs.modelGuidance ?
++      ` using ${needs.modelGuidance.command} as model discriminator` :
++      '';
++    return `record system theory before the next ${frontier.id} attempt${suffix}`;
+   }
+   if (needs.frontierTheoryRequired) {
+-    return `record and select frontier theory for ${frontier.id}`;
++    const suffix = needs.modelGuidance ?
++      ` with ${needs.modelGuidance.command} as discriminator` :
++      '';
++    return `record and select frontier theory for ${frontier.id}${suffix}`;
+   }
+   if (needs.modelEvidenceRequired) {
+     return `continue ${frontier.id} with modelRef or modelNotApplicable evidence`;
+@@ -157,7 +168,7 @@ export function analyzeQuestHealth(root, quest, options = {}) {
+   const pick = pickFrontier(quest, state, options.scoreFn);
+   const liveProbe = options.liveProbe || evaluate(quest.doneWhen, {root});
+   const frontier = pick?.state || null;
+-  const needs = frontier ? frontierNeeds(state, log, frontier) : {};
++  const needs = frontier ? frontierNeeds(quest, state, log, frontier) : {};
+   const theories = frontier ? lastAttemptTheories(log, state, frontier.id) : [];
+   const signals = [
+     sameMechanismSignal(theories),
+@@ -238,6 +249,15 @@ export function analyzeQuestHealth(root, quest, options = {}) {
+       severity: 'medium',
+     });
+   }
++  if (frontier && needs.modelGuidance) {
++    signals.push({
++      type: needs.modelEvidenceRequired ?
++        'model-contract-evidence-required' :
++        'model-contract-guidance-available',
++      mechanism: needs.modelGuidance.command,
++      severity: needs.modelEvidenceRequired ? 'high' : 'medium',
++    });
++  }
+   const rungName = frontier ? (quest.frontiers.find((item) =>
+     item.id === frontier.id)?.rung || null) : null;
+   return {
+@@ -249,6 +269,7 @@ export function analyzeQuestHealth(root, quest, options = {}) {
+         frontier?.rungIndex >= 1 ? RUNG_WIDEN_SCOPE : 'local-fix'
+     ),
+     needs,
++    modelGuidance: needs.modelGuidance || null,
+     signals,
+     nextAction: nextActionFor(frontier, needs),
+   };
+@@ -268,5 +289,12 @@ export function renderHealth(health) {
+       lines.push(`- ${signal.type}: severity=${signal.severity}`);
+     }
+   }
++  if (health.modelGuidance) {
++    lines.push('', '## Model Guidance');
++    lines.push(`- command: ${health.modelGuidance.command}`);
++    lines.push(`- modelRef: ${health.modelGuidance.modelRef}`);
++    lines.push(`- reportPattern: ${health.modelGuidance.reportPattern}`);
++    lines.push(`- reasons: ${health.modelGuidance.reasons.join(', ')}`);
++  }
+   return `${lines.join('\n')}\n`;
+ }
+diff --git a/scripts/solve/model-guidance.js b/scripts/solve/model-guidance.js
+new file mode 100644
+index 00000000..99c91cb2
+--- /dev/null
++++ b/scripts/solve/model-guidance.js
+@@ -0,0 +1,108 @@
++const MODEL_CONTRACT_COMMAND = 'npm run model:contracts';
++const CORE_SYSTEM_MODEL_REF = 'model:architecture/contracts/core-system-logic.md';
++const MODEL_REPORT_PATTERN = 'test-output/reports/*.model.report.json';
++
++const QUEST_KEYWORD_RULES = Object.freeze([
++  Object.freeze({
++    reason: 'architecture boundary language',
++    pattern: /\barchitecture\b|\barchitectural\b|\bcurrent-owner-maps\b/u,
++  }),
++  Object.freeze({
++    reason: 'owner-boundary language',
++    pattern: /\bowner(?:ship)?\b|\bowner[-_\s]?boundary\b|\bsemantic[-_\s]?owner\b/u,
++  }),
++  Object.freeze({
++    reason: 'core-system logic language',
++    pattern: /\bcore[-_\s]?system\b|\bsystem[-_\s]?logic\b|\bnormalized[-_\s]?state\b/u,
++  }),
++  Object.freeze({
++    reason: 'model-contract language',
++    pattern: /\bmodel[-_\s]?contract\b|\binvariant\b|\bstatechart\b|\balloy\b|\btla\+?\b/u,
++  }),
++  Object.freeze({
++    reason: 'handoff or lifecycle language',
++    pattern: /\bhandoff\b|\blifecycle\b|\bphase[-_\s]?owner\b|\bread[-_\s]?model\b/u,
++  }),
++]);
++
++function normalizeText(value) {
++  return String(value || '').trim();
++}
++
++function textFromValue(value) {
++  if (value === null || value === undefined) return '';
++  if (typeof value === 'string' || typeof value === 'number' ||
++    typeof value === 'boolean') {
++    return String(value);
++  }
++  if (Array.isArray(value)) {
++    return value.map(textFromValue).join(' ');
++  }
++  if (typeof value === 'object') {
++    return Object.values(value).map(textFromValue).join(' ');
++  }
++  return '';
++}
++
++function questText(quest) {
++  return [
++    quest.id,
++    quest.statement,
++    textFromValue(quest.doneWhen),
++    textFromValue(quest.frontiers),
++    textFromValue(quest.constraints),
++  ].join(' ');
++}
++
++function logText(log) {
++  return log
++    .map((event) => textFromValue({
++      type: event.type,
++      claim: event.claim,
++      evidence: event.evidence,
++      rulesOut: event.rulesOut,
++      summary: event.summary,
++      hypothesis: event.hypothesis,
++      owner: event.owner,
++      boundary: event.boundary,
++      dominantReason: event.dominantReason,
++      verdictReason: event.verdictReason,
++      mechanism: event.mechanism,
++      nextAction: event.nextAction,
++      waitMode: event.waitMode,
++      problem: event.problem,
++      intervention: event.intervention,
++    }))
++    .join(' ');
++}
++
++function matchedRules(text) {
++  const normalized = normalizeText(text).toLowerCase();
++  return QUEST_KEYWORD_RULES
++    .filter((rule) => rule.pattern.test(normalized))
++    .map((rule) => rule.reason);
++}
++
++export function modelGuidanceForQuest(quest, log = []) {
++  const reasons = matchedRules(`${questText(quest)} ${logText(log)}`);
++  if (reasons.length === 0) return null;
++  return {
++    applies: true,
++    reasons,
++    command: MODEL_CONTRACT_COMMAND,
++    discriminator: MODEL_CONTRACT_COMMAND,
++    modelRef: CORE_SYSTEM_MODEL_REF,
++    reportPattern: MODEL_REPORT_PATTERN,
++    instruction:
++      'Use this gate as the Quest theory discriminator for architecture, ' +
++      'owner-boundary, core-system, lifecycle, or model-contract theories. ' +
++      'At the model rung, pass the modelRef unless a finding explains why the ' +
++      'architecture model is not applicable.',
++  };
++}
++
++export {
++  CORE_SYSTEM_MODEL_REF,
++  MODEL_CONTRACT_COMMAND,
++  MODEL_REPORT_PATTERN,
++};
+diff --git a/scripts/solve/report.js b/scripts/solve/report.js
+index dbcf7a56..3b43f4e3 100644
+--- a/scripts/solve/report.js
++++ b/scripts/solve/report.js
+@@ -68,8 +68,11 @@ function theoryLine(theory) {
+   const frontier = theory.frontier ? `, frontier ${theory.frontier}` : '';
+   const layer = theory.layer ? `, layer ${theory.layer}` : '';
+   const archive = theory.archive ? ', archive' : '';
++  const modelGate = theory.modelGuidance ?
++    `, modelGate ${theory.modelGuidance.command}` :
++    '';
+   return `- **${theory.id}** [${theory.status}] ${theory.scope}${frontier}` +
+-    `${layer}, mechanism ${theory.mechanism || 'unknown'}${archive}`;
++    `${layer}, mechanism ${theory.mechanism || 'unknown'}${modelGate}${archive}`;
+ }
+
+ function selectedTheoryLines(state) {
+diff --git a/scripts/solve/store.js b/scripts/solve/store.js
+index 590ab72c..c097a923 100644
+--- a/scripts/solve/store.js
++++ b/scripts/solve/store.js
+@@ -175,6 +175,7 @@ function addTheory(theories, event, scope) {
+     expectedMovement: event.expectedMovement || null,
+     negativeResultMeans: event.negativeResultMeans || null,
+     evidence: event.evidence || null,
++    modelGuidance: event.modelGuidance || null,
+     status: event.status || THEORY_RESULT_ACTIVE,
+     archive: event.archive === true,
+     card: event.card || null,
+diff --git a/scripts/solve/theory.js b/scripts/solve/theory.js
+index 992916bb..8d0b4be0 100644
+--- a/scripts/solve/theory.js
++++ b/scripts/solve/theory.js
+@@ -23,6 +23,7 @@ import {
+   THEORY_SCOPE_SYSTEM,
+ } from './constants.js';
+ import {buildMechanismCardFromEvidence} from './mechanism-card.js';
++import {modelGuidanceForQuest} from './model-guidance.js';
+ import {appendEvent, loadQuest, projectState, readLog} from './store.js';
+ import {
+   extractTheoryLedgerEntries,
+@@ -101,6 +102,10 @@ function currentState(root, quest) {
+   return {log, state: projectState(quest, log)};
+ }
+
++function eventModelGuidance(root, quest) {
++  return modelGuidanceForQuest(quest, readLog(root, quest.id));
++}
++
+ function validateLayer(layer) {
+   if (!THEORY_LAYERS.includes(layer)) {
+     throw new Error(`theory: --layer must be one of ${THEORY_LAYERS.join(', ')}`);
+@@ -340,6 +345,7 @@ function cmdSystem(root, args) {
+     decidingOwner: requireFlag(args, 'owner'),
+     missingTransitionOrObservation: requireFlag(args, 'missing-edge'),
+     discriminator: requireFlag(args, 'discriminator'),
++    modelGuidance: eventModelGuidance(root, quest),
+     card: maybeCard(args),
+   });
+   return `recorded system theory ${stamped.theory}`;
+@@ -369,6 +375,7 @@ function cmdOption(root, args) {
+     expectedMovement: requireFlag(args, 'expected-movement'),
+     negativeResultMeans: requireFlag(args, 'negative-result'),
+     discriminator: requireFlag(args, 'discriminator'),
++    modelGuidance: eventModelGuidance(root, quest),
+     promotionRule: requireFlag(args, 'promotion'),
+     rejectionRule: requireFlag(args, 'rejection'),
+     evidence: normalizeText(args[FLAG_EVIDENCE]) || null,
+@@ -437,9 +444,13 @@ function renderList(state) {
+     const frontier = theory.frontier ? ` frontier=${theory.frontier}` : '';
+     const layer = theory.layer ? ` layer=${theory.layer}` : '';
+     const archive = theory.archive ? ' archive=true' : '';
++    const modelGate = theory.modelGuidance ?
++      ` modelGate="${theory.modelGuidance.command}"` :
++      '';
+     lines.push(
+       `- ${theory.id}: scope=${theory.scope}${frontier}${layer} ` +
+-      `status=${theory.status} mechanism=${theory.mechanism || 'unknown'}${archive}`,
++      `status=${theory.status} mechanism=${theory.mechanism || 'unknown'}` +
++      `${modelGate}${archive}`,
+     );
+   }
+   lines.push('', '## Selected');
+diff --git a/solve/oracle/quest-model-guidance-theory-use.json b/solve/oracle/quest-model-guidance-theory-use.json
+new file mode 100644
+index 00000000..46a31380
+--- /dev/null
++++ b/solve/oracle/quest-model-guidance-theory-use.json
+@@ -0,0 +1,7 @@
++{
++  "metric": 0,
++  "target": 0,
++  "done": true,
++  "classification": "quest_model_guidance_active",
++  "detail": "Owner-boundary and architecture Quests now surface model-contract guidance in Quest health/context, attach it to recorded theories, and document model:contracts as the theory discriminator."
++}
+diff --git a/solve/quests/quest-model-guidance-theory-use.json b/solve/quests/quest-model-guidance-theory-use.json
+new file mode 100644
+index 00000000..343923e4
+--- /dev/null
++++ b/solve/quests/quest-model-guidance-theory-use.json
+@@ -0,0 +1,23 @@
++{
++  "id": "quest-model-guidance-theory-use",
++  "statement": "Quest workflow tooling surfaces model-contract guidance for owner-boundary and architecture Quests during theory intake and context review.",
++  "priority": 1,
++  "doneWhen": {
++    "probe": "oracle",
++    "args": {
++      "file": "solve/oracle/quest-model-guidance-theory-use.json"
++    }
++  },
++  "frontiers": [
++    {
++      "id": "quest-model-guidance-theory-use-main",
++      "priority": 1,
++        "metric": {
++          "probe": "oracle",
++          "args": {
++            "file": "solve/oracle/quest-model-guidance-theory-use.json"
++          }
++        }
++      }
++    ]
++  }
+diff --git a/test/scripts/list-commands.test.js b/test/scripts/list-commands.test.js
+index 8670c90e..386e4408 100644
+--- a/test/scripts/list-commands.test.js
++++ b/test/scripts/list-commands.test.js
+@@ -46,6 +46,7 @@ const MODEL_INVARIANTS_COMMAND =
+
+ const MODEL_DECISION_TABLES_COMMAND = 'npm run model:decision-tables';
+ const MODEL_STATECHARTS_COMMAND = 'npm run model:statecharts';
++const MODEL_ALLOY_COMMAND = 'npm run model:alloy';
+ const MODEL_CONTRACTS_COMMAND = 'npm run model:contracts';
+ const GUIDELINE_LITERALS_COMMAND =
+   'npm run audit:guideline:literals -- <files...>';
+@@ -83,6 +84,8 @@ const MODEL_CONTRACT_RECORDS_SCRIPT_COMMAND =
+   'node scripts/check-system-contracts.js';
+ const MODEL_INVARIANTS_SCRIPT = 'model:invariants';
+ const MODEL_INVARIANTS_SCRIPT_COMMAND = 'node scripts/check-invariants.js';
++const MODEL_ALLOY_SCRIPT = 'model:alloy';
++const MODEL_ALLOY_SCRIPT_COMMAND = 'node scripts/check-alloy-models.js';
+ const SOLVE_SCRIPT = 'solve';
+ const SOLVE_SCRIPT_COMMAND = 'node scripts/solve.js';
+ const SOLVE_STATUS_SCRIPT = 'solve:status';
+@@ -153,6 +156,7 @@ test('command list is Quest-first and keeps deterministic guardrails', (t) => {
+     MODEL_INVARIANTS_COMMAND,
+     MODEL_DECISION_TABLES_COMMAND,
+     MODEL_STATECHARTS_COMMAND,
++    MODEL_ALLOY_COMMAND,
+     MODEL_CONTRACTS_COMMAND,
+     GUIDELINE_LITERALS_COMMAND,
+     CONSTANT_NAME_GUARD_COMMAND,
+@@ -175,9 +179,9 @@ test('command list is Quest-first and keeps deterministic guardrails', (t) => {
+     GUIDELINE_GUARDRAILS_GROUP_TITLE,
+   );
+   t.match(
+-    rendered,
++      rendered,
+     `${QUEST_CONTEXT_COMMAND}\`${COMMAND_ENTRY_SEPARATOR}` +
+-      'Print Quest status, pending step, latest probe, findings, and dirty worktree.',
++      'Print Quest status, model guidance, pending step, latest probe, findings, and dirty worktree.',
+   );
+   t.match(
+     rendered,
+@@ -239,6 +243,7 @@ test('package scripts expose Quest aliases and runtime grammar guards', (t) => {
+     MODEL_CONTRACT_RECORDS_SCRIPT_COMMAND,
+   );
+   t.equal(scripts[MODEL_INVARIANTS_SCRIPT], MODEL_INVARIANTS_SCRIPT_COMMAND);
++  t.equal(scripts[MODEL_ALLOY_SCRIPT], MODEL_ALLOY_SCRIPT_COMMAND);
+   for (const scriptName of Object.keys(scripts)) {
+     t.notMatch(scriptName, /^work:/u);
+   }
+diff --git a/test/scripts/quest-context.test.js b/test/scripts/quest-context.test.js
+index 2b32f1d5..bfe0aa8e 100644
+--- a/test/scripts/quest-context.test.js
++++ b/test/scripts/quest-context.test.js
+@@ -3,9 +3,15 @@ import fs from 'node:fs';
+ import path from 'node:path';
+ import os from 'node:os';
+
+-import {saveQuest, appendEvent} from '../../scripts/solve/store.js';
++import {
++  appendEvent,
++  projectState,
++  readLog,
++  saveQuest,
++} from '../../scripts/solve/store.js';
+ import {ingestEvidence} from '../../scripts/solve/evidence.js';
+ import {buildContext, renderContext} from '../../scripts/quest-context.js';
++import {runTheoryCommand} from '../../scripts/solve/theory.js';
+
+ function tmp() {
+   return fs.mkdtempSync(path.join(os.tmpdir(), 'context-test-'));
+@@ -80,6 +86,38 @@ const sampleReport = {
+   ],
+ };
+
++function oracleQuest(id, statement) {
++  return {
++    id,
++    statement,
++    priority: 1,
++    doneWhen: {
++      probe: 'oracle',
++      args: {file: `solve/oracle/${id}.json`},
++    },
++    frontiers: [
++      {
++        id: `${id}-main`,
++        priority: 1,
++        metric: {
++          probe: 'oracle',
++          args: {file: `solve/oracle/${id}.json`},
++        },
++      },
++    ],
++  };
++}
++
++function writeOracle(root, id) {
++  const oracleDir = path.join(root, 'solve', 'oracle');
++  fs.mkdirSync(oracleDir, {recursive: true});
++  fs.writeFileSync(path.join(oracleDir, `${id}.json`), JSON.stringify({
++    metric: 1,
++    target: 0,
++    done: false,
++  }));
++}
++
+
+ tap.test('quest-context newer evidence warning (P2)', async (t) => {
+   t.test('warns on unrecorded newer evidence and disappears after ingest', (t) => {
+@@ -129,3 +167,75 @@ tap.test('quest-context newer evidence warning (P2)', async (t) => {
+     t.end();
+   });
+ });
++
++tap.test('quest-context surfaces model guidance for owner-boundary theories', (t) => {
++  const root = tmp();
++  const goal = oracleQuest(
++    'architecture-owner-boundary-model-guidance',
++    'Core system architecture owner-boundary theory must preserve semantic ownership.',
++  );
++  writeOracle(root, goal.id);
++  saveQuest(root, goal);
++  appendEvent(root, goal.id, {
++    type: 'quest-declared',
++    ts: new Date().toISOString(),
++  });
++
++  const context = buildContext(root, {id: goal.id});
++  t.equal(context.quest.health.modelGuidance.command, 'npm run model:contracts');
++  t.equal(
++    context.quest.health.modelGuidance.modelRef,
++    'model:architecture/contracts/core-system-logic.md',
++  );
++  t.ok(
++    context.quest.health.signals.some((signal) =>
++      signal.type === 'model-contract-guidance-available'),
++  );
++
++  const rendered = renderContext(context);
++  t.match(rendered, /## Model Guidance/u);
++  t.match(rendered, /theory discriminator: npm run model:contracts/u);
++  t.match(rendered, /--modelRef model:architecture\/contracts\/core-system-logic\.md/u);
++
++  fs.rmSync(root, {recursive: true, force: true});
++  t.end();
++});
++
++tap.test('recorded theories retain architecture model guidance', (t) => {
++  const root = tmp();
++  const goal = oracleQuest(
++    'architecture-theory-model-guidance',
++    'Architecture owner-boundary theory for core system handoff.',
++  );
++  writeOracle(root, goal.id);
++  saveQuest(root, goal);
++  appendEvent(root, goal.id, {
++    type: 'quest-declared',
++    ts: new Date().toISOString(),
++  });
++
++  const result = runTheoryCommand(root, {
++    _: ['system'],
++    id: goal.id,
++    theory: 'theory-architecture-owner-boundary',
++    problem: 'architecture owner boundary can drift without model evidence',
++    evidence: 'test-output/reports/core-system-logic-alloy.model.report.json',
++    success: 'Quest closes with owner-boundary evidence intact',
++    mechanism: 'coupled_invariants',
++    owner: 'architecture_owner',
++    'missing-edge': 'model contract discriminator',
++    discriminator: 'npm run model:contracts',
++  });
++  t.match(result, /recorded system theory/u);
++
++  const state = projectState(goal, readLog(root, goal.id));
++  const theory = state.theories.byId['theory-architecture-owner-boundary'];
++  t.equal(theory.modelGuidance.command, 'npm run model:contracts');
++  t.equal(
++    theory.modelGuidance.modelRef,
++    'model:architecture/contracts/core-system-logic.md',
++  );
++
++  fs.rmSync(root, {recursive: true, force: true});
++  t.end();
++});

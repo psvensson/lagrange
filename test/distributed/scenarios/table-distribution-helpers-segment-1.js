@@ -54,6 +54,7 @@ const CONTROL_QUERY_PROGRESS_RETRY_DELAY_MS = 100;
 const CONTROL_QUERY_MIN_CANDIDATE_TIMEOUT_MS = 1000;
 const CONTROL_QUERY_MUTATION_FALLBACK_ERROR_FRAGMENTS = Object.freeze([
   'failed to reconnect target node before delivery',
+  'sql query engine not available',
   'socket is not open',
   'websocket transport required but not available',
   'channel closed',

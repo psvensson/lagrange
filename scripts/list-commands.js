@@ -10,7 +10,7 @@ const COMMAND_GROUPS = Object.freeze([
       }),
       Object.freeze({
         command: 'npm run quest:context -- --id <quest>',
-        description: 'Print Quest status, pending step, latest probe, findings, and dirty worktree.',
+        description: 'Print Quest status, model guidance, pending step, latest probe, findings, and dirty worktree.',
       }),
       Object.freeze({
         command: 'npm run solve:status -- --id <quest>',
@@ -132,8 +132,12 @@ const COMMAND_GROUPS = Object.freeze([
         description: 'Validate lifecycle and owner-state statecharts for reachability, terminal states, evidence, and forbidden transitions.',
       }),
       Object.freeze({
+        command: 'npm run model:alloy',
+        description: 'Validate architecture-owned Alloy models and their declared assertions, check commands, and run commands.',
+      }),
+      Object.freeze({
         command: 'npm run model:contracts',
-        description: 'Run contract records, decision tables, statecharts, and protocol model checks as one model-contract gate.',
+        description: 'Run contract records, decision tables, statecharts, Alloy, and protocol model checks as one model-contract gate.',
       }),
     ]),
   }),

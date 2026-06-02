@@ -383,6 +383,123 @@ test('join cleanup step ordering — phase-to-cleanup-index mapping ' +
   t.end();
 });
 
+test('join cleanup drains replica handler before CDC SQL teardown',
+  async (t) => {
+    const events = [];
+    const sqlQueryEngine = {
+      shutdown: async () => {
+        events.push('sqlQueryEngine.shutdown');
+      },
+    };
+    const cdcIntegrationService = {sqlQueryEngine};
+    const replicaStateMachine = {
+      stopTimeoutChecker: () => {
+        events.push('replicaStateMachine.stopTimeoutChecker');
+      },
+      clear: () => {
+        events.push('replicaStateMachine.clear');
+      },
+    };
+    const messageRouter = {
+      shutdown: async () => {
+        events.push('messageRouter.shutdown');
+      },
+    };
+    const replicaHandler = {
+      unregisterFromRouter: (router) => {
+        t.equal(router, messageRouter,
+          'replica handler unregisters from the live message router');
+        events.push('replicaHandler.unregisterFromRouter');
+      },
+      shutdown: async () => {
+        t.equal(
+          cdcIntegrationService.sqlQueryEngine,
+          sqlQueryEngine,
+          'replica handler drains while CDC SQL query engine is attached',
+        );
+        t.equal(
+          delegates.getReplicaStateMachine(),
+          replicaStateMachine,
+          'replica handler drains while replica state machine is attached',
+        );
+        events.push('replicaHandler.shutdown');
+      },
+    };
+    const delegates = {
+      getLogger: () => silentLogger,
+      getMessageGroupServices: () => new Map(),
+      getPartitionServices: () => new Map(),
+      getMessageRouter: () => messageRouter,
+      setMessageRouter: noop,
+      getTransport: () => null,
+      setTransport: noop,
+      getCdcIntegrationService: () => cdcIntegrationService,
+      setCdcIntegrationService: (value) => {
+        events.push('setCdcIntegrationService');
+        delegates.cdcIntegrationService = value;
+      },
+      getRebalanceCoordinator: () => null,
+      setRebalanceCoordinator: noop,
+      getLatencyTopology: () => null,
+      setLatencyTopology: noop,
+      getReplicaStateMachine: () => delegates.replicaStateMachine,
+      setReplicaStateMachine: (value) => {
+        events.push('setReplicaStateMachine');
+        delegates.replicaStateMachine = value;
+      },
+      getRpcClient: () => null,
+      setRpcClient: noop,
+      getHeartbeatService: () => null,
+      setHeartbeatService: noop,
+      getLeaseService: () => null,
+      setLeaseService: noop,
+      getEndpointService: () => null,
+      setEndpointService: noop,
+      getDispatchService: () => null,
+      setDispatchService: noop,
+      getReplicaHandler: () => delegates.replicaHandler,
+      setReplicaHandler: (value) => {
+        events.push('setReplicaHandler');
+        delegates.replicaHandler = value;
+      },
+      stopJoiningLifecycleOwners: () => {
+        events.push('stopJoiningLifecycleOwners');
+      },
+    };
+    delegates.replicaHandler = replicaHandler;
+    delegates.replicaStateMachine = replicaStateMachine;
+
+    const handler = new JoinCleanupHandler({
+      nodeId: JOIN_NODE_ID,
+      delegates,
+    });
+
+    await handler.cleanup();
+
+    t.same(
+      events,
+      [
+        'stopJoiningLifecycleOwners',
+        'replicaHandler.unregisterFromRouter',
+        'replicaHandler.shutdown',
+        'setReplicaHandler',
+        'replicaStateMachine.stopTimeoutChecker',
+        'replicaStateMachine.clear',
+        'setReplicaStateMachine',
+        'sqlQueryEngine.shutdown',
+        'messageRouter.shutdown',
+        'setCdcIntegrationService',
+      ],
+      'cleanup keeps lifecycle dependencies alive until replica tasks drain',
+    );
+    t.equal(
+      cdcIntegrationService.sqlQueryEngine,
+      null,
+      'CDC SQL query engine is detached after replica handler shutdown',
+    );
+    t.end();
+  });
+
 // ── 3. Best-effort semantics ───────────────────────────────────────
 
 test('seed cleanup best-effort — individual step error returns ' +

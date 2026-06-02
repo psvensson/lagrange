@@ -278,6 +278,82 @@ class ReplicaDispatchServiceSegment3 extends ReplicaDispatchReplayHealthReadines
   }
 
   /**
+   * Refresh the retained row for an already-armed dispatch retry.
+   * @param {string} operationId
+   * @param {Object|null} row
+   * @return {boolean}
+   * @private
+   */
+  refreshDeferredOperationDispatchRetryRow(operationId, row = null) {
+    const deferredRetry =
+      this.operationDispatchDeferredRetries.get(operationId);
+    if (!deferredRetry) {
+      return false;
+    }
+    if (row) {
+      deferredRetry.row = this.cloneDeferredOperationDispatchRow(row);
+    }
+    return true;
+  }
+
+  /**
+   * Coalesce duplicate remote wake-ups while the same operation is already
+   * either in transport or waiting on its deferred retry/verification timer.
+   * @param {string} operationId
+   * @param {Object|null} row
+   * @return {boolean}
+   * @private
+   */
+  coalesceActiveDirectDispatchWakeup(operationId, row = null) {
+    if (!operationId) {
+      return false;
+    }
+    if (this.refreshDeferredOperationDispatchRetryRow(operationId, row)) {
+      return true;
+    }
+    if (!this.directDispatchWakeupsInFlight.has(operationId)) {
+      return false;
+    }
+    if (row) {
+      this.directDispatchWakeupsInFlight.set(
+        operationId,
+        this.cloneDeferredOperationDispatchRow(row),
+      );
+    }
+    return true;
+  }
+
+  /**
+   * Mark one direct wake-up as occupying the operation's remote handoff lane.
+   * @param {string} operationId
+   * @param {Object|null} row
+   * @return {void}
+   * @private
+   */
+  markDirectDispatchWakeupInFlight(operationId, row = null) {
+    if (!operationId) {
+      return;
+    }
+    this.directDispatchWakeupsInFlight.set(
+      operationId,
+      this.cloneDeferredOperationDispatchRow(row),
+    );
+  }
+
+  /**
+   * Clear one in-flight direct wake-up and return the freshest retained row.
+   * @param {string} operationId
+   * @param {Object|null} fallbackRow
+   * @return {Object|null}
+   * @private
+   */
+  clearDirectDispatchWakeupInFlight(operationId, fallbackRow = null) {
+    const retainedRow = this.directDispatchWakeupsInFlight.get(operationId);
+    this.directDispatchWakeupsInFlight.delete(operationId);
+    return retainedRow || this.cloneDeferredOperationDispatchRow(fallbackRow);
+  }
+
+  /**
    * @param {string} operationId
    * @return {void}
    * @private

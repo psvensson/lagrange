@@ -17,12 +17,16 @@ import {
   uniqueValues,
 } from './system-contract-utils.js';
 
-const DEFAULT_STATECHART_DIR = 'docs/specs/statecharts';
+const DEFAULT_STATECHART_DIRS = Object.freeze([
+  'docs/specs/statecharts',
+  'architecture/models/statecharts',
+]);
 const STATECHART_SCHEMA = 'statechart-v1';
 const HELP_TEXT = [
   'Usage: npm run model:statecharts -- [--json] [statechart.json ...]',
   '',
   'Validates statechart specs for lifecycle and owner-state contracts.',
+  'Default scan roots: docs/specs/statecharts and architecture/models/statecharts.',
 ].join('\n');
 
 function parseArgs(args) {
@@ -45,7 +49,8 @@ function statechartFilesFromArgs(files) {
   if (files.length > 0) {
     return files.map((filePath) => path.resolve(filePath));
   }
-  return listFiles(DEFAULT_STATECHART_DIR, {suffix: '.json', recursive: false});
+  return DEFAULT_STATECHART_DIRS.flatMap((dirPath) =>
+    listFiles(dirPath, {suffix: '.json', recursive: false}));
 }
 
 function validateStates(errors, filePath, statechart) {

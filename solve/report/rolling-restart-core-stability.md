@@ -4,10 +4,10 @@
 
 **Outcome:** IN PROGRESS (no terminal recorded)
 
-**Attempts:** 3
+**Attempts:** 4
 
 ## Frontiers
-- **rolling-restart-core-stability-main** [open] rung 2, attempts 3, metric 1 -> 0
+- **rolling-restart-core-stability-main** [open] rung 3, attempts 4, metric 1 -> 1
 
 ## Findings
 - **rolling-restart-core-stability-main**: Quest probe priority metric is now zero, but doneWhen remains false until three consecutive rolling-restart runs pass. (rules out: Do not claim SOLVED from metric zero without the consecutive doneWhen evidence.) [test-output/reports/rolling-restart-core-stability-after-local-mutation-gate.report.json]
@@ -21,6 +21,7 @@
 - **rolling-restart-core-stability-main**: Ingested evidence from rolling-restart-failure-diagnostics.report.json. Metric: 0 -> 1. Verdict: BLOCK_EVIDENCE_INCOMPLETE (execution_incomplete_or_metrics_missing). Root cause: topology. Dominant reason: load_publication_gate_ready. Owner: startup_active_gate_owner. Ingestion outcome: changed. [test-output/reports/rolling-restart-failure-diagnostics.report.json]
 - **rolling-restart-core-stability-main**: Ingested evidence from rolling-restart-failure-diagnostics.report.json. Metric: 1 -> 1. Verdict: BLOCK_EVIDENCE_INCOMPLETE (execution_incomplete_or_metrics_missing). Root cause: load. Dominant reason: startup_admin_projection. Owner: none. Ingestion outcome: changed. [test-output/reports/rolling-restart-failure-diagnostics.report.json]
 - **rolling-restart-core-stability-main**: Ingested evidence from rolling-restart-failure-diagnostics.report.json. Metric: 1 -> 0. Verdict: BLOCK_EVIDENCE_INCOMPLETE (execution_incomplete_or_metrics_missing). Root cause: startup. Dominant reason: readiness_probe_timeout=Node readiness probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304. Owner: none. Ingestion outcome: changed. [test-output/reports/rolling-restart-failure-diagnostics.report.json]
+- **rolling-restart-core-stability-main**: Quest restart state upgraded: no pending step remains; strict priority-bootstrap attempt is recorded and falsified; next selected theory is startup active admission before SQL/query transport serviceability. (rules out: Do not restart from the stale readiness-probe theory or treat strict priority bootstrap gates as sufficient for SOLVED evidence.) [test-output/reports/rolling-restart-core-stability-after-strict-priority-bootstrap.report.json]
 
 ## Theories
 - **theory-20260601-rolling-restart-evidence-closure** [active] system, mechanism observation_gap
@@ -30,10 +31,11 @@
 - **theory-20260601-trace-a-single-operation-id-end** [falsified] frontier, frontier rolling-restart-core-stability-main, layer model, mechanism trace a single operation ID end-to-end from dispatch to partition visibility
 - **theory-20260601-publication-missing-active-node-2** [falsified] frontier, frontier rolling-restart-core-stability-main, layer observation, mechanism publication_missing_active_node
 - **theory-20260601-publication-missing-active-node-3** [needs-rerun] frontier, frontier rolling-restart-core-stability-main, layer model, mechanism publication_missing_active_node
-- **theory-20260601-readiness-probe-timeout-restart** [active] frontier, frontier rolling-restart-core-stability-main, layer model, mechanism readiness_probe_timeout
+- **theory-20260601-readiness-probe-timeout-restart** [falsified] frontier, frontier rolling-restart-core-stability-main, layer model, mechanism readiness_probe_timeout
+- **theory-20260601-startup-active-before-sql-serviceable** [active] frontier, frontier rolling-restart-core-stability-main, layer model, mechanism startup active admission declares the cluster usable before SQL/query transport control-plane serviceability is true for the canonical leader
 
 ## Selected Theories
-- **rolling-restart-core-stability-main**: theory-20260601-readiness-probe-timeout-restart
+- **rolling-restart-core-stability-main**: theory-20260601-startup-active-before-sql-serviceable
 
 ## Theory Results
 - **theory-20260601-rolling-restart-consecutive-proof**: needs-rerun [test-output/reports/rolling-restart-core-stability-after-priority-local-first.report.json]
@@ -47,6 +49,7 @@
 - **theory-20260601-publication-missing-active-node-3**: needs-rerun [test-output/reports/rolling-restart-failure-diagnostics.report.json]
 - **theory-20260601-publication-missing-active-node-3**: needs-rerun [test-output/reports/rolling-restart-failure-diagnostics.report.json]
 - **theory-20260601-publication-missing-active-node-3**: needs-rerun [test-output/reports/rolling-restart-failure-diagnostics.report.json]
+- **theory-20260601-readiness-probe-timeout-restart**: falsified [test-output/reports/rolling-restart-core-stability-after-strict-priority-bootstrap.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | theory | change |
@@ -54,3 +57,4 @@
 | 2026-06-01T10:02:50.664Z | rolling-restart-core-stability-main | local-fix | 1 -> 0 | progress |  | diff:solve/changes/rolling-restart-core-stability/local-runtime-progress.diff |
 | 2026-06-01T13:58:25.056Z | rolling-restart-core-stability-main | local-fix | 1 -> 0 | progress | theory-20260601-trace-a-single-operation-id-end | diff:src/rebalancer/operation-workflow-owner-ports.js |
 | 2026-06-01T14:10:17.607Z | rolling-restart-core-stability-main | widen-scope | 0 -> 0 | flat | theory-20260601-publication-missing-active-node-2 | diff:solve/changes/rolling-restart-core-stability/system-pause-removal.diff |
+| 2026-06-01T19:48:37.900Z | rolling-restart-core-stability-main | model | 0 -> 1 | flat | theory-20260601-readiness-probe-timeout-restart | diff:solve/changes/rolling-restart-core-stability/strict-priority-bootstrap-attempt.diff |

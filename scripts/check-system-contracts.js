@@ -36,6 +36,7 @@ const VALID_MODEL_KINDS = Object.freeze([
   'statechart',
   'structural-constraint',
   'tla-spec',
+  'alloy-model',
 ]);
 const HELP_TEXT = [
   'Usage: npm run model:contract-records -- [--json] [contract.md ...]',
