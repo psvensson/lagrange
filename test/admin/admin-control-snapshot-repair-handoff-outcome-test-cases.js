@@ -727,6 +727,140 @@ test('AdminControlSnapshot distinguishes critical convergence defer from ordinar
     );
   });
 
+test('AdminControlSnapshot projects deferred repair coverage from active-gate handoff nodes',
+  async (t) => {
+    let repairOptions = null;
+    const handoffNodeIds = [
+      ...ACTIVE_GATE_SNAPSHOT_TEST_STATE
+        .ACTIVE_GATE_SNAPSHOT_DEFERRED_REPAIR_NODE_IDS,
+    ];
+    const publicationActiveGateHandoff = {
+      schemaVersion:
+        ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_COHORT_SCHEMA_VERSION,
+      state:
+        ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_COHORT_STATE_PENDING,
+      reasonCode:
+        ACTIVE_GATE_SNAPSHOT_TEST_STATE
+          .ACTIVE_GATE_OWNER_COHORT_REASON_OWNER_RECONCILE_PENDING,
+      nextAction: TEST_ACTIVE_GATE_HANDOFF_NEXT_ACTION_WAIT_OWNER_RECOVERY,
+      expectedNodeIds: handoffNodeIds,
+      publishedActiveNodeIds: [
+        ACTIVE_GATE_SNAPSHOT_TEST_STATE
+          .ACTIVE_GATE_SNAPSHOT_TIMEOUT_SELECTED_SOURCE_NODE_ID,
+      ],
+      pendingRecoveryCount: handoffNodeIds.length - 1,
+      pendingRecoveryNodeIds: handoffNodeIds.slice(1),
+    };
+    const localSnapshot = {
+      nodes: [
+        ACTIVE_GATE_SNAPSHOT_TEST_STATE
+          .ACTIVE_GATE_SNAPSHOT_TIMEOUT_SELECTED_SOURCE_NODE_ID,
+      ],
+      controlPlaneDiagnostics: {
+        publicationActiveGateHandoff,
+        activeGateOwnerCohort: publicationActiveGateHandoff,
+        publicationConvergence: {
+          publicationActiveGateHandoff,
+        },
+      },
+    };
+    const repairFailure = {
+      applied: false,
+      skipped: false,
+      failedTables: [TABLES.NODES],
+      errors: [
+        ACTIVE_GATE_SNAPSHOT_TEST_STATE
+          .ACTIVE_GATE_SNAPSHOT_NODES_QUERY_TIMEOUT_DETAIL,
+      ],
+      causeChain: [
+        ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_SNAPSHOT_QUERY_TIMEOUT_CAUSE,
+      ],
+      retryAfterMs:
+        ACTIVE_GATE_SNAPSHOT_TEST_STATE
+          .ACTIVE_GATE_SNAPSHOT_DIRECT_QUERY_TIMEOUT_MS,
+    };
+    const snapshot = new AdminControlSnapshot({
+      nodeId:
+        ACTIVE_GATE_SNAPSHOT_TEST_STATE
+          .ACTIVE_GATE_SNAPSHOT_TIMEOUT_SELECTED_SOURCE_NODE_ID,
+    });
+    snapshot.controlPlaneSnapshotOwner = new ControlPlaneSnapshotOwner({
+      controlSnapshot: snapshot,
+    });
+    snapshot.buildLocalControlSnapshot = async () => localSnapshot;
+    snapshot.canRunAuthoritativeControlSnapshotRepair = () => true;
+    snapshot.evaluateAuthoritativeControlSnapshotRepair = () => ({
+      shouldRepair: true,
+      triggerCodes: [
+        ACTIVE_GATE_SNAPSHOT_TEST_STATE
+          .ACTIVE_GATE_SNAPSHOT_DISCOVERY_NODE_COVERAGE_GAP_TRIGGER,
+      ],
+      nodeCoverage: {
+        activeProjection: {
+          hasCoverageGap: true,
+          missingNodeIds: [
+            ...ACTIVE_GATE_SNAPSHOT_TEST_STATE
+              .ACTIVE_GATE_SNAPSHOT_REPAIR_GAP_NODE_IDS,
+          ],
+        },
+      },
+    });
+    snapshot.ensureAuthoritativeDiscoveryCacheRepair = async (options = {}) => {
+      repairOptions = options;
+      return repairFailure;
+    };
+
+    const result = await snapshot.resolveLocalControlSnapshot({
+      forceAuthoritativeRepair: true,
+      allowAuthoritativeRepair: true,
+      queryTimeoutMs:
+        ACTIVE_GATE_SNAPSHOT_TEST_STATE
+          .ACTIVE_GATE_SNAPSHOT_DIRECT_QUERY_TIMEOUT_MS,
+    });
+
+    t.equal(
+      repairOptions?.queryTimeoutMs,
+      ACTIVE_GATE_SNAPSHOT_TEST_STATE
+        .ACTIVE_GATE_SNAPSHOT_FORCED_REPAIR_QUERY_TIMEOUT_MS,
+      'forced repair should still reserve caller time before deferred handoff projection',
+    );
+    t.same(
+      result.nodes,
+      handoffNodeIds.sort((left, right) => left.localeCompare(right)),
+      'deferred repair should project active-gate handoff nodes as metric-moving coverage',
+    );
+    t.match(
+      result,
+      {
+        snapshotObservation: {
+          state:
+            ACTIVE_GATE_SNAPSHOT_TEST_STATE
+              .ACTIVE_GATE_SNAPSHOT_REPAIR_DEFERRED_STATE,
+          nextAction:
+            ACTIVE_GATE_SNAPSHOT_TEST_STATE
+              .ACTIVE_GATE_SNAPSHOT_REPAIR_DEFERRED_NEXT_ACTION,
+          reasonCodes: [
+            ACTIVE_GATE_SNAPSHOT_TEST_STATE
+              .ACTIVE_GATE_SNAPSHOT_DISCOVERY_NODE_COVERAGE_GAP_TRIGGER,
+            TEST_SELECTED_SNAPSHOT_TIMEOUT_REASON,
+          ],
+        },
+        controlPlaneDiagnostics: {
+          ordinaryRepairDeferred: true,
+          publicationActiveGateHandoff: {
+            pendingRecoveryNodeIds: [
+              ACTIVE_GATE_SNAPSHOT_TEST_STATE
+                .ACTIVE_GATE_SNAPSHOT_TIMEOUT_SELECTED_SOURCE_NODE_ID,
+            ],
+            pendingRecoveryCount: 1,
+            runtimePromotionAllowed: false,
+          },
+        },
+      },
+      'selected-source timeout should become a bounded deferred handoff projection',
+    );
+  });
+
 test('AdminControlSnapshot handoff reconcile defers when publication readback is unavailable',
   async (t) => {
     let publicationReadbackAttempts = 0;

@@ -59,6 +59,25 @@ const CONTROL_SNAPSHOT_PUBLICATION_READ_REPAIR_ERROR_FRAGMENTS = Object.freeze([
 ]);
 const CONTROL_SNAPSHOT_NODES_FIELD = 'nodes';
 const CONTROL_SNAPSHOT_PROJECTED_NODES_FIELD = 'projectedNodes';
+const CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD =
+  'controlPlaneDiagnostics';
+const CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_FIELD =
+  'publicationConvergence';
+const CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD =
+  'publicationActiveGateHandoff';
+const CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_FIELD =
+  'activeGateOwnerCohort';
+const CONTROL_SNAPSHOT_ACTIVE_GATE_HANDOFF_NODE_FIELD = Object.freeze({
+  EXPECTED_NODE_IDS: 'expectedNodeIds',
+  PENDING_RECOVERY_NODE_IDS: 'pendingRecoveryNodeIds',
+  PUBLISHED_ACTIVE_NODE_IDS: 'publishedActiveNodeIds',
+});
+const CONTROL_SNAPSHOT_ACTIVE_GATE_HANDOFF_SIGNAL_FIELD = Object.freeze({
+  NEXT_ACTION: 'nextAction',
+  PENDING_RECOVERY_COUNT: 'pendingRecoveryCount',
+});
+const CONTROL_SNAPSHOT_ACTIVE_GATE_HANDOFF_RECOVERY_NEXT_ACTION =
+  'wait_owner_recovery';
 const CONTROL_SNAPSHOT_REFRESH_OPTION_FIELD = Object.freeze({
   ALLOW_AUTHORITATIVE_REPAIR: 'allowAuthoritativeRepair',
   ALLOW_AUTHORITATIVE_READINESS_REFRESH: 'allowAuthoritativeReadinessRefresh',
@@ -184,6 +203,7 @@ function resolveDeferredRepairMinNodeCoverage(
     ...normalizeControlSnapshotNodeIdList(
       snapshot.controlPlaneDiagnostics?.activeNodeViews?.locallyEligibleNodeIds,
     ),
+    ...selectDeferredRepairActiveGateHandoffProjectionNodeIds(snapshot),
     ...selectDeferredRepairProjectionNodeIds(repairEvaluation),
   ]);
   const totalKnownNodes = coverageNodeIds.length;
@@ -214,6 +234,69 @@ function selectDeferredRepairProjectionNodeIds(repairEvaluation = null) {
     ],
   );
 }
+function selectDeferredRepairActiveGateHandoffContracts(snapshot = null) {
+  const diagnostics =
+    snapshot?.[CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD];
+  if (!diagnostics || typeof diagnostics !== TYPEOF.OBJECT) {
+    return ADMIN_CACHE_DUMP.EMPTY;
+  }
+  return [
+    diagnostics[CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD],
+    diagnostics[CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_FIELD],
+    diagnostics[CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_FIELD]?.[
+      CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
+    ],
+  ].filter((handoff) =>
+      handoff && typeof handoff === TYPEOF.OBJECT && !Array.isArray(handoff),
+  );
+}
+function hasDeferredRepairActiveGateRecoveryProjectionSignal(handoff = null) {
+  if (!handoff || typeof handoff !== TYPEOF.OBJECT || Array.isArray(handoff)) {
+    return false;
+  }
+  const pendingRecoveryNodeIds = normalizeControlSnapshotNodeIdList(
+    handoff[
+      CONTROL_SNAPSHOT_ACTIVE_GATE_HANDOFF_NODE_FIELD.PENDING_RECOVERY_NODE_IDS
+    ],
+  );
+  return (
+    pendingRecoveryNodeIds.length > NUM.ZERO ||
+    Number(
+      handoff[
+        CONTROL_SNAPSHOT_ACTIVE_GATE_HANDOFF_SIGNAL_FIELD.PENDING_RECOVERY_COUNT
+      ],
+    ) > NUM.ZERO ||
+    handoff[CONTROL_SNAPSHOT_ACTIVE_GATE_HANDOFF_SIGNAL_FIELD.NEXT_ACTION] ===
+      CONTROL_SNAPSHOT_ACTIVE_GATE_HANDOFF_RECOVERY_NEXT_ACTION
+  );
+}
+function selectDeferredRepairActiveGateHandoffProjectionNodeIds(
+  snapshot = null,
+) {
+  return normalizeControlSnapshotNodeIdList(
+    selectDeferredRepairActiveGateHandoffContracts(snapshot)
+      .filter(hasDeferredRepairActiveGateRecoveryProjectionSignal)
+      .flatMap((handoff) => [
+        ...normalizeControlSnapshotNodeIdList(
+          handoff[
+            CONTROL_SNAPSHOT_ACTIVE_GATE_HANDOFF_NODE_FIELD.EXPECTED_NODE_IDS
+          ],
+        ),
+        ...normalizeControlSnapshotNodeIdList(
+          handoff[
+            CONTROL_SNAPSHOT_ACTIVE_GATE_HANDOFF_NODE_FIELD
+              .PUBLISHED_ACTIVE_NODE_IDS
+          ],
+        ),
+        ...normalizeControlSnapshotNodeIdList(
+          handoff[
+            CONTROL_SNAPSHOT_ACTIVE_GATE_HANDOFF_NODE_FIELD
+              .PENDING_RECOVERY_NODE_IDS
+          ],
+        ),
+      ]),
+  );
+}
 function resolveControlSnapshotCoverageNodeCount(snapshot = null) {
   const nodeIds = snapshot?.[CONTROL_SNAPSHOT_NODES_FIELD];
   return Array.isArray(nodeIds) ? nodeIds.length : NUM.ZERO;
@@ -232,6 +315,7 @@ function projectDeferredRepairCoverageSnapshot(
     ...normalizeControlSnapshotNodeIdList(
       snapshot[CONTROL_SNAPSHOT_PROJECTED_NODES_FIELD],
     ),
+    ...selectDeferredRepairActiveGateHandoffProjectionNodeIds(snapshot),
     ...selectDeferredRepairProjectionNodeIds(repairEvaluation),
   ]);
   const minNodeCoverage = resolveDeferredRepairMinNodeCoverage(
