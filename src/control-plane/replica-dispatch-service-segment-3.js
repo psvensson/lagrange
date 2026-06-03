@@ -116,21 +116,36 @@ class ReplicaDispatchServiceSegment3 extends ReplicaDispatchReplayHealthReadines
    * @param {string} operationId
    * @param {*} errorLike
    * @param {Object|null} [row=null]
+   * @param {Object} [options={}]
    * @return {boolean}
    * @private
    */
-  deferOperationDispatchRetry(operationId, errorLike, row = null) {
+  deferOperationDispatchRetry(
+    operationId,
+    errorLike,
+    row = null,
+    options = {},
+  ) {
     if (!operationId || !isRetryableControlPlaneError(errorLike)) {
       return false;
     }
     const retryAfterMs = this.resolveOperationDispatchRetryAfterMs(errorLike);
     const desiredAttemptAt = Date.now() + retryAfterMs;
     const errorMessage = errorLike?.message || errorLike?.error || null;
+    const refreshRowBeforeDispatch =
+      options?.[
+        REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH
+      ] === true;
     const existing = this.operationDispatchDeferredRetries.get(operationId);
     if (existing) {
       existing.errorMessage = errorMessage;
       if (row) {
         existing.row = this.cloneDeferredOperationDispatchRow(row);
+      }
+      if (refreshRowBeforeDispatch) {
+        existing[
+          REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH
+        ] = true;
       }
       if (desiredAttemptAt < existing.nextAttemptAt) {
         if (existing.timeoutHandle) {
@@ -149,6 +164,8 @@ class ReplicaDispatchServiceSegment3 extends ReplicaDispatchReplayHealthReadines
       errorMessage,
       nextAttemptAt: desiredAttemptAt,
       row: row ? this.cloneDeferredOperationDispatchRow(row) : null,
+      [REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH]:
+        refreshRowBeforeDispatch,
       timeoutHandle: this.armDeferredOperationDispatchRetry(
         operationId,
         retryAfterMs,
@@ -281,10 +298,15 @@ class ReplicaDispatchServiceSegment3 extends ReplicaDispatchReplayHealthReadines
    * Refresh the retained row for an already-armed dispatch retry.
    * @param {string} operationId
    * @param {Object|null} row
+   * @param {Object} [options={}]
    * @return {boolean}
    * @private
    */
-  refreshDeferredOperationDispatchRetryRow(operationId, row = null) {
+  refreshDeferredOperationDispatchRetryRow(
+    operationId,
+    row = null,
+    options = {},
+  ) {
     const deferredRetry =
       this.operationDispatchDeferredRetries.get(operationId);
     if (!deferredRetry) {
@@ -292,6 +314,15 @@ class ReplicaDispatchServiceSegment3 extends ReplicaDispatchReplayHealthReadines
     }
     if (row) {
       deferredRetry.row = this.cloneDeferredOperationDispatchRow(row);
+    }
+    if (
+      options?.[
+        REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH
+      ] === true
+    ) {
+      deferredRetry[
+        REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH
+      ] = true;
     }
     return true;
   }
@@ -308,7 +339,16 @@ class ReplicaDispatchServiceSegment3 extends ReplicaDispatchReplayHealthReadines
     if (!operationId) {
       return false;
     }
-    if (this.refreshDeferredOperationDispatchRetryRow(operationId, row)) {
+    if (
+      this.refreshDeferredOperationDispatchRetryRow(
+        operationId,
+        row,
+        {
+          [REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH]:
+            true,
+        },
+      )
+    ) {
       return true;
     }
     if (!this.directDispatchWakeupsInFlight.has(operationId)) {

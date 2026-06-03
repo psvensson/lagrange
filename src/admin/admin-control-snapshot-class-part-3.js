@@ -399,15 +399,26 @@ function mergeControlSnapshotActiveNodeViewsWithPublicationOwnerTruth(
 function resolveControlSnapshotUnavailableActiveCandidateNodeIds(
   controlPlaneDiagnostics = null,
   publicationConvergence = null,
+  activeNodeViews = null,
 ) {
+  const retainedPublishedNodeIds = new Set(
+    normalizeControlSnapshotNodeIdList(
+      activeNodeViews?.publishedActiveNodeIds,
+    ),
+  );
+  const normalizeCandidateDebtNodeIds = (values = ADMIN_CACHE_DUMP.EMPTY) =>
+    normalizeControlSnapshotNodeIdList(values)
+      .filter((nodeId) => !retainedPublishedNodeIds.has(nodeId));
   const pendingAckNodeIds = Array.isArray(
     publicationConvergence?.pendingAckNodeIds,
   ) ?
-    publicationConvergence.pendingAckNodeIds :
+    normalizeCandidateDebtNodeIds(publicationConvergence.pendingAckNodeIds) :
     Array.isArray(
       publicationConvergence?.membershipLifecycleSummary?.pendingAckNodeIds,
     ) ?
-      publicationConvergence.membershipLifecycleSummary.pendingAckNodeIds :
+      normalizeCandidateDebtNodeIds(
+        publicationConvergence.membershipLifecycleSummary.pendingAckNodeIds,
+      ) :
       ADMIN_CACHE_DUMP.EMPTY;
   const directHandoff =
     controlPlaneDiagnostics?.publicationActiveGateHandoff;
@@ -416,11 +427,11 @@ function resolveControlSnapshotUnavailableActiveCandidateNodeIds(
   const pendingRecoveryNodeIds = [
     ...(directHandoff &&
       Array.isArray(directHandoff.pendingRecoveryNodeIds) ?
-      directHandoff.pendingRecoveryNodeIds :
+      normalizeCandidateDebtNodeIds(directHandoff.pendingRecoveryNodeIds) :
       ADMIN_CACHE_DUMP.EMPTY),
     ...(nestedHandoff &&
       Array.isArray(nestedHandoff.pendingRecoveryNodeIds) ?
-      nestedHandoff.pendingRecoveryNodeIds :
+      normalizeCandidateDebtNodeIds(nestedHandoff.pendingRecoveryNodeIds) :
       ADMIN_CACHE_DUMP.EMPTY),
   ];
   const commaSeparatedRecovery =
@@ -432,10 +443,12 @@ function resolveControlSnapshotUnavailableActiveCandidateNodeIds(
     typeof commaSeparatedRecovery === TYPEOF.STRING
   ) {
     pendingRecoveryNodeIds.push(
-      ...commaSeparatedRecovery
-        .split(ADMIN_CONTROL_SNAPSHOT_LITERAL.COMMA)
-        .map((nodeId) => nodeId.trim())
-        .filter((nodeId) => nodeId.length > NUM.ZERO),
+      ...normalizeCandidateDebtNodeIds(
+        commaSeparatedRecovery
+          .split(ADMIN_CONTROL_SNAPSHOT_LITERAL.COMMA)
+          .map((nodeId) => nodeId.trim())
+          .filter((nodeId) => nodeId.length > NUM.ZERO),
+      ),
     );
   }
   return new Set(normalizeControlSnapshotNodeIdList([
@@ -505,25 +518,11 @@ class AdminControlSnapshotPart3 extends AdminControlSnapshotPart2 {
       resolveControlSnapshotUnavailableActiveCandidateNodeIds(
         controlPlaneDiagnostics,
         publicationConvergence,
-      );
-    const filteredLocallyEligibleNodeIds =
-      filterControlSnapshotAvailableCandidateNodeIds(
-        activeNodeViewsWithOwnerTruth.locallyEligibleNodeIds,
-        unavailableActiveCandidateNodeIds,
-      );
-    const filteredProjectedServingNodeIds =
-      filterControlSnapshotAvailableCandidateNodeIds(
-        activeNodeViewsWithOwnerTruth.projectedServingNodeIds,
-        unavailableActiveCandidateNodeIds,
+        activeNodeViewsWithOwnerTruth,
       );
     const filteredEffectiveActiveNodeIds =
       filterControlSnapshotAvailableCandidateNodeIds(
         activeNodeViewsWithOwnerTruth.effectiveActiveNodeIds,
-        unavailableActiveCandidateNodeIds,
-      );
-    const filteredProjectedActiveNodeIds =
-      filterControlSnapshotAvailableCandidateNodeIds(
-        activeNodeViewsWithOwnerTruth.projectedActiveNodeIds,
         unavailableActiveCandidateNodeIds,
       );
 
@@ -532,15 +531,21 @@ class AdminControlSnapshotPart3 extends AdminControlSnapshotPart2 {
       authoritativeActiveNodeIds: [
         ...activeNodeViewsWithOwnerTruth.authoritativeActiveNodeIds,
       ],
-      projectedServingNodeIds: filteredProjectedServingNodeIds,
-      locallyEligibleNodeIds: filteredLocallyEligibleNodeIds,
+      projectedServingNodeIds: [
+        ...activeNodeViewsWithOwnerTruth.projectedServingNodeIds,
+      ],
+      locallyEligibleNodeIds: [
+        ...activeNodeViewsWithOwnerTruth.locallyEligibleNodeIds,
+      ],
       suspectedOrTransitioningNodeIds: [
         ...activeNodeViewsWithOwnerTruth.suspectedOrTransitioningNodeIds,
       ],
       membershipFreeze: activeNodeViewsWithOwnerTruth.membershipFreeze,
       effectiveSource: activeNodeViewsWithOwnerTruth.effectiveSource,
       effectiveActiveNodeIds: filteredEffectiveActiveNodeIds,
-      projectedActiveNodeIds: filteredProjectedActiveNodeIds,
+      projectedActiveNodeIds: [
+        ...activeNodeViewsWithOwnerTruth.projectedActiveNodeIds,
+      ],
       publishedActiveNodeIds: Array.isArray(
         activeNodeViewsWithOwnerTruth.publishedActiveNodeIds,
       ) ?

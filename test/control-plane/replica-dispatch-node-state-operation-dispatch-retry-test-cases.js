@@ -11,6 +11,9 @@ import {
 } from '../../src/constants/index.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
 
+const OPERATION_DISPATCH_RETRY_REFRESH_ROW_BEFORE_DISPATCH =
+  'refreshRowBeforeDispatch';
+
 export function registerReplicaDispatchNodeStateOperationDispatchRetryTests({
   createService,
   initEnv,
@@ -133,6 +136,121 @@ export function registerReplicaDispatchNodeStateOperationDispatchRetryTests({
         service.operationDispatchDeferredRetries.size,
         0,
         'deferred retry state should clear after re-enqueue',
+      );
+    } finally {
+      service.operationDispatchQueue = originalQueue;
+      service.stop();
+    }
+  });
+
+  test('ReplicaDispatchService preserves refresh-row metadata across ' +
+    'retryable replica operation dispatch failures', async (t) => {
+    initEnv();
+
+    const scheduled = [];
+    const enqueues = [];
+    const now = Date.now();
+    const retryableError =
+      new Error('control plane pressure while claiming dispatch transition');
+    retryableError.retryAfterMs = 123;
+    const operationRow = {
+      operation_id: 'op-retryable-dispatch-refresh-1',
+      type: OperationType.REPLACE,
+      partition_id: 'control_plane_publications-p1',
+      replica_id: 'control_plane_publications-p1-r4',
+      source_node_id: 'node-1',
+      target_node_id: 'node-2',
+      status: 'pending',
+      workflow_step: WORKFLOW_STEP.PENDING,
+      created_at: now,
+      updated_at: now,
+      steps_history: '[]',
+    };
+
+    const service = createService({
+      cacheNodes: [{
+        node_id: 'node-2',
+        status: SERVICE_STATUS.ACTIVE,
+        connection_state: STATE.READY,
+        capabilities: READY_NODE_CAPABILITIES_JSON,
+        last_heartbeat: now,
+        ready_lease_expires_at: now + 30000,
+      }],
+      cdcIntegrationService: {
+        upsertSystemTableRow: async () => ({success: true}),
+        updateSystemTableRow: async () => ({success: true}),
+      },
+      controlPlaneReadinessService: {
+        getNodeReadinessSync() {
+          return {
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION
+                .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
+            },
+          };
+        },
+      },
+      rebalanceCoordinator: {
+        async dispatchOperation() {
+          throw retryableError;
+        },
+        isOperationLocallyOwned() {
+          return true;
+        },
+      },
+      setTimeoutFn(callback, delayMs) {
+        const handle = {callback, delayMs};
+        scheduled.push(handle);
+        return handle;
+      },
+      clearTimeoutFn() {},
+    });
+
+    const originalQueue = service.operationDispatchQueue;
+    service.operationDispatchQueue = {
+      enqueue(operationId, reason, context) {
+        enqueues.push({operationId, reason, context});
+        return true;
+      },
+      shutdown() {},
+    };
+
+    try {
+      await service.reconcileOperationDispatch(
+        operationRow.operation_id,
+        {
+          row: operationRow,
+          [OPERATION_DISPATCH_RETRY_REFRESH_ROW_BEFORE_DISPATCH]: true,
+        },
+      );
+
+      t.equal(
+        scheduled.length,
+        1,
+        'retryable dispatch failure should arm one deferred retry timer',
+      );
+      t.equal(
+        service.operationDispatchDeferredRetries.get(
+          operationRow.operation_id,
+        )?.[OPERATION_DISPATCH_RETRY_REFRESH_ROW_BEFORE_DISPATCH],
+        true,
+        'deferred retry state should retain refresh-row metadata',
+      );
+
+      scheduled[0].callback();
+
+      t.same(
+        enqueues,
+        [{
+          operationId: operationRow.operation_id,
+          reason: RECONCILE_REASON.RETRYABLE_OPERATION_DISPATCH,
+          context: {
+            row: operationRow,
+            [OPERATION_DISPATCH_RETRY_REFRESH_ROW_BEFORE_DISPATCH]: true,
+          },
+        }],
+        'deferred retry should re-enter with refresh-row metadata intact',
       );
     } finally {
       service.operationDispatchQueue = originalQueue;

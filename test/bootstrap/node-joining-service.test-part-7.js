@@ -1013,6 +1013,62 @@ test('NodeJoiningService - exhausted retryable seed-contact timeouts preserve ' 
   t.same(retryDelays, [10], 'phase should make one bounded retry before surfacing exhaustion');
 });
 
+test('NodeJoiningService - exhausted seed-contact transport failures preserve ' +
+  'auto-resume hints', async (t) => {
+  initializeTestEnvironment();
+
+  let currentNow = 0;
+  const retryDelays = [];
+  const service = new NodeJoiningService({
+    nodeId: '550e8400-e29b-41d4-a716-446655440120',
+    nodeAddress: 'ws://localhost:9090',
+    seedNodeAddress: 'http://localhost:8080',
+    now: () => currentNow,
+    sleep: async (delayMs) => {
+      retryDelays.push(delayMs);
+      currentNow += delayMs;
+    },
+    config: {
+      httpTimeoutMs: 10,
+      leadershipWaitTimeoutMs: 20,
+      leadershipWaitInitialDelayMs: 10,
+      leadershipWaitMaxDelayMs: 10,
+      leadershipWaitBackoffMultiplier: 1,
+      leadershipWaitJitterRatio: 0,
+    },
+    httpPost: async () => {
+      currentNow += 10;
+      throw new Error('fetch failed');
+    },
+  });
+
+  const error = await t.rejects(
+    service.phaseContactSeed(),
+    'retryable transport exhaustion should still throw',
+  );
+
+  t.equal(
+    error?.message,
+    'Failed to contact seed node: fetch failed',
+    'transport exhaustion should keep the contact-seed context',
+  );
+  t.equal(
+    error?.deferRetry,
+    true,
+    'transport exhaustion should preserve retryability',
+  );
+  t.equal(
+    error?.retryAfterMs,
+    10,
+    'transport exhaustion should preserve retry delay hints',
+  );
+  t.same(
+    retryDelays,
+    [10],
+    'phase should make one bounded retry before surfacing transport failure',
+  );
+});
+
 test('NodeJoiningService - contact-seed request timeout uses remaining retry budget',
   async (t) => {
     initializeTestEnvironment();
@@ -1205,4 +1261,3 @@ test('NodeJoiningService - retryable seed-contact bootstrap authority ' +
     'phase should keep the configured request timeout for retryable transport attempts',
   );
 });
-

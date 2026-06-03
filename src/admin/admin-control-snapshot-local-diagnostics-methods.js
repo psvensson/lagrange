@@ -16,6 +16,8 @@ function buildControlSnapshotResolveOptions(options = {}) {
         options.allowAuthoritativeReadinessRefresh,
     allowStaleReadinessOnCacheChange:
         options.allowStaleReadinessOnCacheChange,
+    allowAuthoritativePublishedMembershipRecovery:
+        options.allowAuthoritativePublishedMembershipRecovery === true,
     ignorePreRestart: options.ignorePreRestart === true,
   };
 }

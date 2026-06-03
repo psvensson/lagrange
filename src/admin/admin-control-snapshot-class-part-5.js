@@ -255,6 +255,10 @@ class AdminControlSnapshotPart5 extends AdminControlSnapshotPart4 {
     const capturedAt = Number.isFinite(options.capturedAt) ?
       options.capturedAt :
       this.nowFn();
+    const allowAuthoritativePublishedMembershipRecovery =
+      options.allowAuthoritativePublishedMembershipRecovery === true ||
+      options.preferAuthoritativePublicationRead === true ||
+      options.reconcileAuthoritativeMembershipPublication === true;
     const observedMembershipPublication =
       await this.ensureMembershipPublicationObservation({
         preferAuthoritativeRead:
@@ -274,6 +278,7 @@ class AdminControlSnapshotPart5 extends AdminControlSnapshotPart4 {
       );
     if (
       !observedPublishedMembership &&
+      allowAuthoritativePublishedMembershipRecovery === true &&
       options.preferAuthoritativePublicationRead !== true &&
       observedMembershipPublication &&
       typeof observedMembershipPublication === TYPEOF.OBJECT &&

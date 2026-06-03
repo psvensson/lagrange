@@ -704,16 +704,17 @@ function formatCriticalSystemDistributionSummary(summary) {
 /**
  * Poll a probe until success or timeout.
  * @param {Object} options
- * @param {function(): Promise<Object>} options.probe
+ * @param {function(Object=): Promise<Object>} options.probe
  * @param {function(Object): boolean} options.isSuccess
  * @param {number} options.deadline
  * @param {number} options.intervalMs
  * @param {function(number): Promise<void>} options.sleep
  * @param {function(Object): Promise<void>|void} [options.onAttempt]
+ * @param {function(Object): Object|null} [options.extendDeadline]
  * @returns {Promise<Object>}
  */
 async function pollUntilCondition(options = {}) {
-  const deadline = Number(options.deadline) || Date.now();
+  let deadline = Number(options.deadline) || Date.now();
   const intervalMs = Math.max(0, Number(options.intervalMs) || 0);
   const probe = options.probe;
   const isSuccess = options.isSuccess;
@@ -721,14 +722,44 @@ async function pollUntilCondition(options = {}) {
     typeof options.sleep === 'function' ? options.sleep : async () => {};
   const onAttempt =
     typeof options.onAttempt === 'function' ? options.onAttempt : null;
+  const extendDeadline =
+    typeof options.extendDeadline === 'function' ?
+      options.extendDeadline :
+      null;
 
   const startedAt = Date.now();
   let attempts = 0;
   let lastResult = null;
 
-  while (Date.now() < deadline) {
+  while (true) {
+    if (Date.now() >= deadline) {
+      if (extendDeadline && lastResult) {
+        const elapsedMs = Date.now() - startedAt;
+        const extension = extendDeadline({
+          attempts,
+          elapsedMs,
+          lastResult,
+          remainingMs: 0,
+          deadline,
+        });
+        const extendedDeadline = Number(extension?.deadline);
+        if (
+          Number.isFinite(extendedDeadline) &&
+          extendedDeadline > deadline &&
+          extendedDeadline > Date.now()
+        ) {
+          deadline = Math.floor(extendedDeadline);
+          continue;
+        }
+      }
+      break;
+    }
     attempts += 1;
-    lastResult = await probe();
+    lastResult = await probe({
+      attempts,
+      deadline,
+      remainingMs: Math.max(0, deadline - Date.now()),
+    });
     const elapsedMs = Date.now() - startedAt;
     const attemptResult = {
       attempts,

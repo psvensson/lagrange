@@ -32,7 +32,6 @@ const {
   TIMEOUTS,
   UNKNOWN_REASON,
   UNKNOWN_STATE,
-  ONE,
   ZERO,
   buildActiveGateWaitPolicy,
   buildActiveWaitProgressSnapshot,
@@ -54,6 +53,8 @@ import {
   buildActiveWaitReadinessFailure,
   isBetterActiveWaitSnapshotCoverageProgressSnapshot,
   selectActiveWaitReadinessDelay,
+  selectStartupActiveGateSnapshotRepairContinuation,
+  selectStartupActiveGateOwnerProgressContinuation,
   selectTerminalActiveWaitProgressSnapshot,
 } from './cluster-segment-7-alpha-active-wait.js';
 import {
@@ -99,6 +100,8 @@ class Cluster extends Cluster5 {
     let lastObservedProgressSnapshot = null;
     let lastObservedAttempt = ZERO;
     let lastObservedElapsedMs = ZERO;
+    let startupOwnerProgressContinuationUsed = false;
+    let startupSnapshotRepairContinuationUsed = false;
 
     const summarizeAdmissionState = (nodeDiagnostics = []) => {
       const summary = {
@@ -318,15 +321,86 @@ class Cluster extends Cluster5 {
       };
     };
 
+    const selectStartupTerminalProgressSnapshot = (lastResult) => {
+      const observedProgressSnapshot =
+        lastObservedProgressSnapshot ||
+        buildActiveWaitProgressSnapshot(
+          lastResult || {},
+          this._nodes.size,
+          {readinessMode},
+        );
+      return selectTerminalActiveWaitProgressSnapshot({
+        currentProgressSnapshot: observedProgressSnapshot,
+        lastMeaningfulProgressSnapshot,
+        bestSnapshotCoverageProgressSnapshot,
+      });
+    };
+
+    const extendStartupOwnerProgressDeadline = ({
+      attempts,
+      lastResult,
+    }) => {
+      if (startupOwnerProgressContinuationUsed) {
+        return null;
+      }
+      const progressSnapshot = selectStartupTerminalProgressSnapshot(lastResult);
+      const attemptsSinceProgress = Math.max(
+        ZERO,
+        attempts - (lastMeaningfulProgressAttempt || ZERO),
+      );
+      const continuation =
+        selectStartupActiveGateOwnerProgressContinuation({
+          readinessMode,
+          progressSnapshot,
+          probeResult: lastResult,
+          attemptsSinceProgress,
+          pollIntervalMs: ACTIVE_POLL_INTERVAL_MS,
+        });
+      if (continuation.continuePolling !== true) {
+        return null;
+      }
+      startupOwnerProgressContinuationUsed = true;
+      return {
+        deadline: Date.now() + continuation.extendMs,
+      };
+    };
+
+    const extendStartupSnapshotRepairDeadline = ({lastResult}) => {
+      if (startupSnapshotRepairContinuationUsed) {
+        return null;
+      }
+      const progressSnapshot = selectStartupTerminalProgressSnapshot(lastResult);
+      const continuation =
+        selectStartupActiveGateSnapshotRepairContinuation({
+          readinessMode,
+          progressSnapshot,
+          pollIntervalMs: ACTIVE_POLL_INTERVAL_MS,
+        });
+      if (continuation.continuePolling !== true) {
+        return null;
+      }
+      startupSnapshotRepairContinuationUsed = true;
+      return {
+        deadline: Date.now() + continuation.extendMs,
+      };
+    };
+
+    const extendStartupActiveGateDeadline = (attemptResult) => {
+      return (
+        extendStartupOwnerProgressDeadline(attemptResult) ||
+        extendStartupSnapshotRepairDeadline(attemptResult)
+      );
+    };
+
     let pollResult;
     try {
       pollResult = await pollUntilCondition({
         deadline,
         intervalMs: ACTIVE_POLL_INTERVAL_MS,
         sleep: (ms) => this._sleep(ms),
-        probe: () => {
+        probe: ({deadline: currentDeadline = deadline} = {}) => {
           const forceRepair = Date.now() >= forceRepairThreshold;
-          return this._probeClusterActiveState(deadline, {
+          return this._probeClusterActiveState(currentDeadline, {
             mode: readinessMode,
             forceRepair,
           });
@@ -338,6 +412,10 @@ class Cluster extends Cluster5 {
               resolveActiveGateWaitPolicy(result).allowSoftSuccess === true)
           );
         },
+        extendDeadline:
+          readinessMode === CLUSTER_READINESS_MODE_STARTUP ?
+            extendStartupActiveGateDeadline :
+            null,
         onAttempt: ({attempts, elapsedMs, lastResult}) => {
           for (const diagnostic of lastResult.nodeDiagnostics || []) {
             if (diagnostic.active === true) {

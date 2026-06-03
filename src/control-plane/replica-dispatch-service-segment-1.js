@@ -740,6 +740,10 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
         operation.operationId,
         deliveryOutcome,
         latestOperationRow,
+        {
+          [REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH]:
+            true,
+        },
       );
       return false;
     } catch (error) {
@@ -751,6 +755,10 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
         operation.operationId,
         error,
         latestOperationRow,
+        {
+          [REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH]:
+            true,
+        },
       );
       return false;
     }

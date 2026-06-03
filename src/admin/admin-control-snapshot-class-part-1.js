@@ -386,6 +386,8 @@ class AdminControlSnapshotPart1 {
           options.allowAuthoritativeReadinessRefresh,
         allowStaleReadinessOnCacheChange:
           options.allowStaleReadinessOnCacheChange,
+        allowAuthoritativePublishedMembershipRecovery:
+          options.allowAuthoritativePublishedMembershipRecovery === true,
       });
     const nodeRows = this.systemTableCache.getAll(TABLES.NODES);
     const serviceRows = this.systemTableCache.getAll(TABLES.SERVICES);
@@ -430,25 +432,35 @@ class AdminControlSnapshotPart1 {
       controlPlaneDiagnostics[
         CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
       ] = publicationActiveGateHandoff;
-      const readinessEntries = Object.values(controlPlaneDiagnostics.readinessByNodeId || {});
-      const reevaluatedEvidence = this.resolveCanonicalPublicationRecoveryEvidenceDiagnostics(
-        readinessEntries,
-        controlPlaneDiagnostics.publicationConvergence,
-        controlPlaneDiagnostics.priorityRecoveryDecisionSnapshots,
-        {
+      const readinessEntries = Object.values(
+        controlPlaneDiagnostics.readinessByNodeId || {},
+      );
+      const reevaluatedEvidence =
+        this.resolveCanonicalPublicationRecoveryEvidenceDiagnostics(
+          readinessEntries,
+          controlPlaneDiagnostics.publicationConvergence,
+          controlPlaneDiagnostics.priorityRecoveryDecisionSnapshots,
+          {
+            logsTable: controlPlaneDiagnostics.logsTable,
+            publicationActiveGateHandoff,
+          },
+        );
+      const resolvedConvergence =
+        reevaluatedEvidence.publicationConvergence ||
+        controlPlaneDiagnostics.publicationConvergence;
+      const resolvedConvergenceGate =
+        reevaluatedEvidence.publicationConvergenceGate ||
+        controlPlaneDiagnostics.publicationConvergenceGate;
+      const reevaluatedPriorityObservation =
+        reevaluatedEvidence.priorityRecoveryObservation ||
+        buildCanonicalPublicationRecoveryEvidence({
+          publicationConvergence: resolvedConvergence,
+          publicationConvergenceGate: resolvedConvergenceGate,
+          priorityRecoveryDecisionSnapshots:
+            controlPlaneDiagnostics.priorityRecoveryDecisionSnapshots,
           logsTable: controlPlaneDiagnostics.logsTable,
           publicationActiveGateHandoff,
-        }
-      );
-      const resolvedConvergence = reevaluatedEvidence.publicationConvergence || controlPlaneDiagnostics.publicationConvergence;
-      const resolvedConvergenceGate = reevaluatedEvidence.publicationConvergenceGate || controlPlaneDiagnostics.publicationConvergenceGate;
-      const reevaluatedPriorityObservation = reevaluatedEvidence.priorityRecoveryObservation || buildCanonicalPublicationRecoveryEvidence({
-        publicationConvergence: resolvedConvergence,
-        publicationConvergenceGate: resolvedConvergenceGate,
-        priorityRecoveryDecisionSnapshots: controlPlaneDiagnostics.priorityRecoveryDecisionSnapshots,
-        logsTable: controlPlaneDiagnostics.logsTable,
-        publicationActiveGateHandoff,
-      }).priorityRecoveryObservation;
+        }).priorityRecoveryObservation;
 
       controlPlaneDiagnostics.publicationConvergence = resolvedConvergence;
       controlPlaneDiagnostics.publicationConvergenceGate = resolvedConvergenceGate;

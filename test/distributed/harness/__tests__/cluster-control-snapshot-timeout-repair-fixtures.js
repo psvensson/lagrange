@@ -246,14 +246,20 @@ export const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_RETRY_EXHAUSTED_TEST_NAME =
   'Unit: _probeControlSnapshotCoverage records load owner-recovery retry ' +
   'after selected source timeout';
 export const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_HANDOFF_RETURN_TEST_NAME =
-  'Unit: _probeControlSnapshotCoverage returns after bounded load ' +
-  'owner-recovery handoff';
+  'Unit: _probeControlSnapshotCoverage probes remaining witnesses after ' +
+  'synthetic load owner-recovery handoff';
+export const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_AGGREGATED_HANDOFF_TEST_NAME =
+  'Unit: _probeControlSnapshotCoverage aggregates bounded load ' +
+  'owner-recovery handoff witnesses';
 export const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_REACHABILITY_PREFILTER_TEST_NAME =
   'Unit: _probeControlSnapshotCoverage prefilters load snapshot probes by ' +
   'admin reachability';
 export const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_REMAINING_WITNESS_TEST_NAME =
   'Unit: _probeControlSnapshotCoverage bounds load remaining snapshot ' +
   'witness probes after selected-source timeout';
+export const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_EXPIRED_REMAINING_WITNESS_TEST_NAME =
+  'Unit: _probeControlSnapshotCoverage reserves load remaining witnesses ' +
+  'after selected retry exhausts the attempt deadline';
 export const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_ALTERNATIVE_WITNESS_TEST_NAME =
   'Unit: _probeControlSnapshotCoverage preserves an alternative query-success ' +
   'witness when selected source times out with higher coverage';
@@ -645,9 +651,13 @@ export const SNAPSHOT_TIMEOUT_REPAIR_ASSERTION = Object.freeze({
   LOAD_LANE_RESET:
     'load selected snapshot timeout should reset only the snapshot lane',
   LOAD_HANDOFF_RETURN_PROBE_COUNT:
-    'load owner-recovery handoff should return after the selected source publishes a bounded handoff with no alternative witness',
+    'synthetic load owner-recovery handoff should not suppress remaining snapshot probes without real diagnostics',
   LOAD_HANDOFF_RETURN_PUBLISHED:
     'load owner-recovery handoff should preserve the published active coverage witness',
+  LOAD_AGGREGATED_HANDOFF_SELECTION:
+    'load owner-recovery handoff should retain every bounded pending recovery witness',
+  LOAD_AGGREGATED_HANDOFF_QUEUE:
+    'load aggregated owner-recovery handoff should expose a bounded owner queue for every witness',
   LOAD_REACHABILITY_PREFILTER_SOURCE:
     'load reachability prefilter should try an admin-ready witness before the non-admin-ready seed',
   LOAD_REACHABILITY_PREFILTER_SEED:
@@ -660,6 +670,12 @@ export const SNAPSHOT_TIMEOUT_REPAIR_ASSERTION = Object.freeze({
   LOAD_REMAINING_WITNESS_SELECTION:
     'load bounded remaining witness probing should still select the later ' +
     'query-success witness',
+  LOAD_EXPIRED_REMAINING_WITNESS_SELECTION:
+    'load selected-source retry should still probe a bounded remaining ' +
+    'snapshot witness after the attempt deadline is exhausted',
+  LOAD_EXPIRED_REMAINING_WITNESS_TIMEOUT:
+    'load expired remaining witness probing should reserve the owner-recovery ' +
+    'retry timeout instead of collapsing to the late floor',
   FORCED_REPAIR_SOURCE:
     'forced repair timeout fallback should preserve the selected admin-ready source',
   FORCED_REPAIR_CLEAR:

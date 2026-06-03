@@ -57,6 +57,22 @@ const BOOTSTRAP_NOT_READY_LIMITED_RESUME_FAILURE_KIND_BY_REASON =
 const SEED_READINESS_TIMEOUT_MSG = (ms) =>
   `seed readiness timeout after ${ms}ms`;
 const HTTP_ERROR_MESSAGE_PATTERN = /^HTTP (\d+):\s*(.*)$/s;
+const RETRYABLE_SEED_CONTACT_TRANSPORT_ERROR_CODES = Object.freeze([
+  'EAI_AGAIN',
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'ETIMEDOUT',
+]);
+const RETRYABLE_SEED_CONTACT_TRANSPORT_MESSAGE_FRAGMENTS = Object.freeze([
+  'fetch failed',
+  'network error',
+  'connection closed',
+  'connection refused',
+  'connection reset',
+  'socket hang up',
+]);
 
 function isRetryableSeedContactCode(code) {
   return code === BOOTSTRAP_PIPELINE_ERROR_CODE
@@ -66,6 +82,32 @@ function isRetryableSeedContactCode(code) {
       .SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT ||
     code === BOOTSTRAP_API_REGISTER_SERVICE_ERROR_CODE
       .ASSIGNMENT_TOKEN_UNKNOWN;
+}
+
+function isRetryableSeedContactTransportFailure(error, options = {}) {
+  if (!error ||
+      options.parsedError ||
+      Number.isFinite(options.statusCode)) {
+    return false;
+  }
+
+  const candidateCodes = [
+    error.code,
+    error.cause?.code,
+  ];
+  if (candidateCodes.some((code) =>
+    RETRYABLE_SEED_CONTACT_TRANSPORT_ERROR_CODES.includes(code),
+  )) {
+    return true;
+  }
+
+  if (typeof error.message !== TYPEOF.STRING) {
+    return false;
+  }
+  const message = error.message.toLowerCase();
+  return RETRYABLE_SEED_CONTACT_TRANSPORT_MESSAGE_FRAGMENTS.some((fragment) =>
+    message.includes(fragment),
+  );
 }
 
 function normalizeRetryableSeedContactEvidence(value) {
@@ -299,6 +341,7 @@ export {
   SEED_READINESS_TIMEOUT_MSG,
   formatLeaderMetadataDetails,
   isRetryableSeedContactCode,
+  isRetryableSeedContactTransportFailure,
   normalizeRetryableSeedContactEvidence,
   parseBootstrapError,
   resolveBootstrapNotReadySeedContactFailureKind,

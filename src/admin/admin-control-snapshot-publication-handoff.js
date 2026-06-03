@@ -41,6 +41,12 @@ const CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_DATA_FIELD =
     PUBLICATION_ROW: 'publicationRow',
     RETRY_AFTER_MS: 'retryAfterMs',
     STATE: 'state',
+    TARGET: 'target',
+  });
+const CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_TARGET_FIELD =
+  Object.freeze({
+    HANDOFF_CONTRACT: 'handoffContract',
+    PENDING_RECOVERY_COUNT: 'pendingRecoveryCount',
   });
 const CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD = Object.freeze({
   NEXT_ACTION: 'nextAction',
@@ -56,8 +62,15 @@ const CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_REASON =
   Object.freeze({
     OWNER_RECONCILE_PENDING: 'owner_reconcile_pending',
   });
+const CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION =
+  Object.freeze({
+    WAIT_OWNER_RECOVERY: 'wait_owner_recovery',
+  });
 const CONTROL_SNAPSHOT_CONTROL_PLANE_CONVERGENCE_FIELD =
   'controlPlaneConvergence';
+const CONTROL_SNAPSHOT_CONTROL_PLANE_CONVERGENCE_OPERATION = Object.freeze({
+  OWNER_RECOVERY_WAKE: 'owner_recovery_wake',
+});
 const CONTROL_SNAPSHOT_CRITICAL_CONVERGENCE_DEFERRED_FIELD =
   'criticalConvergenceDeferred';
 const CONTROL_SNAPSHOT_ORDINARY_REPAIR_DEFERRED_FIELD =
@@ -254,6 +267,39 @@ function normalizeControlSnapshotRetryAfterMs(value) {
     null;
 }
 
+function isControlSnapshotOwnerRecoveryWakeOutcome(outcome = null) {
+  const controlPlaneConvergence =
+    outcome?.[CONTROL_SNAPSHOT_CONTROL_PLANE_CONVERGENCE_FIELD];
+  if (
+    controlPlaneConvergence?.operation ===
+      CONTROL_SNAPSHOT_CONTROL_PLANE_CONVERGENCE_OPERATION.OWNER_RECOVERY_WAKE
+  ) {
+    return true;
+  }
+  const target =
+    outcome?.[
+      CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_DATA_FIELD.TARGET
+    ];
+  const handoffContract =
+    target?.[
+      CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_TARGET_FIELD
+        .HANDOFF_CONTRACT
+    ];
+  return (
+    handoffContract?.[
+      CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.NEXT_ACTION
+    ] ===
+      CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+        .WAIT_OWNER_RECOVERY &&
+    normalizeControlSnapshotHandoffInteger(
+      target?.[
+        CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_TARGET_FIELD
+          .PENDING_RECOVERY_COUNT
+      ],
+    ) > NUM.ZERO
+  );
+}
+
 function selectMembershipPublicationHandoffRetryAfterMs(snapshot = null) {
   const outcome = selectMembershipPublicationHandoffOutcome(snapshot);
   if (
@@ -265,10 +311,13 @@ function selectMembershipPublicationHandoffRetryAfterMs(snapshot = null) {
     ] !==
       CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_STATE
         .WRITE_DEFERRED ||
-    outcome[
-      CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_DATA_FIELD
-        .ENQUEUED
-    ] !== false
+    (
+      outcome[
+        CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_DATA_FIELD
+          .ENQUEUED
+      ] === true &&
+      isControlSnapshotOwnerRecoveryWakeOutcome(outcome) !== true
+    )
   ) {
     return CONTROL_SNAPSHOT_ABSENT_HANDOFF_RETRY_AFTER_MS;
   }

@@ -188,6 +188,112 @@ export function registerFailureBundleCore09Tests(context) {
   );
 
   it(
+    'preserves operation-owner observation fields in normalized decision snapshots',
+    async () => {
+      refreshState();
+      const OWNER_OBSERVATION_REPORT_PATH = join(
+        tempDir,
+        'priority-recovery-owner-observation-report.json',
+      );
+      const OWNER_OBSERVATION_PARTITION_ID = 'sql_write_operations-p1';
+      const OWNER_OBSERVATION_OPERATION_ID = 'owner-observation-op';
+      const OWNER_OBSERVATION_OWNER = 'operation_workflow_owner';
+      const OWNER_OBSERVATION_BOUNDARY = 'workflow_progress';
+      const OWNER_OBSERVATION_PHASE = 'dispatch_pending';
+      const OWNER_OBSERVATION_CONTRACT_STATE = 'pending';
+      const writer = new ReportWriter(OWNER_OBSERVATION_REPORT_PATH);
+      writer.addResult('rolling-restart', {
+        passed: false,
+        duration: 100,
+        error: 'startup active gate timeout',
+        details: {
+          diagnostics: {
+            controlPlaneDiagnostics: {
+              priorityRecoveryDecisionSnapshots: {
+                capturedAt: 3000,
+                publicationEpoch: 24,
+                snapshots: [{
+                  partitionId: OWNER_OBSERVATION_PARTITION_ID,
+                  operationId: OWNER_OBSERVATION_OPERATION_ID,
+                  semanticState: 'recovering_in_flight',
+                  blockerReasons: [],
+                  progress: {
+                    currentOwner: OWNER_OBSERVATION_OWNER,
+                    blockingBoundary: OWNER_OBSERVATION_BOUNDARY,
+                    workflowProgressPhaseId: OWNER_OBSERVATION_PHASE,
+                    progressContract: {
+                      state: OWNER_OBSERVATION_CONTRACT_STATE,
+                    },
+                  },
+                  operationOwnerObservation: {
+                    currentOwner: OWNER_OBSERVATION_OWNER,
+                    blockingBoundary: OWNER_OBSERVATION_BOUNDARY,
+                    workflowProgressPhaseId: OWNER_OBSERVATION_PHASE,
+                    progressContractState:
+                      OWNER_OBSERVATION_CONTRACT_STATE,
+                  },
+                  progressContract: {
+                    state: OWNER_OBSERVATION_CONTRACT_STATE,
+                    currentOwner: OWNER_OBSERVATION_OWNER,
+                  },
+                }],
+              },
+            },
+          },
+        },
+      });
+      await writer.write();
+
+      const {scenarioBundles} = await writeFailureBundlesForReport({
+        scenarios: JSON.parse(
+          await readFile(OWNER_OBSERVATION_REPORT_PATH, UTF8_ENCODING),
+        ).scenarios,
+        reportOutputPath: OWNER_OBSERVATION_REPORT_PATH,
+        outputDir: tempDir,
+        workspaceRoot: tempDir,
+      });
+      const scenarioBundle = JSON.parse(
+        await readFile(
+          resolve(tempDir, scenarioBundles[0].links.jsonPath),
+          UTF8_ENCODING,
+        ),
+      );
+      const normalizedSnapshot =
+        scenarioBundle.controlPlane.priorityRecoveryDecisionSnapshots
+          .snapshots.find((snapshot) =>
+            snapshot.partitionId === OWNER_OBSERVATION_PARTITION_ID,
+          );
+
+      assert.equal(
+        normalizedSnapshot.operationOwnerObservation.currentOwner,
+        OWNER_OBSERVATION_OWNER,
+      );
+      assert.equal(
+        normalizedSnapshot.operationOwnerObservation.blockingBoundary,
+        OWNER_OBSERVATION_BOUNDARY,
+      );
+      assert.equal(
+        normalizedSnapshot.operationOwnerObservation
+          .workflowProgressPhaseId,
+        OWNER_OBSERVATION_PHASE,
+      );
+      assert.equal(
+        normalizedSnapshot.operationOwnerObservation
+          .progressContractState,
+        OWNER_OBSERVATION_CONTRACT_STATE,
+      );
+      assert.equal(
+        normalizedSnapshot.progressContract.state,
+        OWNER_OBSERVATION_CONTRACT_STATE,
+      );
+      assert.equal(
+        normalizedSnapshot.progress.progressContract.state,
+        OWNER_OBSERVATION_CONTRACT_STATE,
+      );
+    },
+  );
+
+  it(
     'preserves pressure-shaped witness details without overriding an active priority-spread gate',
     async () => {
       refreshState();

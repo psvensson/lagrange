@@ -332,7 +332,6 @@ function collectPriorityRecoveryDecisionSummarySets({
   snapshots = [],
   blockerPartitionIdsByReason: rawBlockerPartitionIdsByReason = null,
   partitionIdsBySemanticState: rawPartitionIdsBySemanticState = null,
-  hasExplicitSemanticStateContract = false,
 } = {}) {
   const blockerPartitionIdsByReason =
     initializePriorityRecoveryDecisionSummarySetMap(
@@ -467,6 +466,12 @@ export function normalizePriorityRecoveryDecisionSnapshots(value) {
       observation: isRecord(snapshot.observation) ?
         cloneJsonValue(snapshot.observation) :
         null,
+      operationOwnerObservation: isRecord(snapshot.operationOwnerObservation) ?
+        cloneJsonValue(snapshot.operationOwnerObservation) :
+        null,
+      progressContract: isRecord(snapshot.progressContract) ?
+        cloneJsonValue(snapshot.progressContract) :
+        null,
       conditions: isRecord(snapshot.conditions) ?
         cloneJsonValue(snapshot.conditions) :
         null,
@@ -499,7 +504,6 @@ export function normalizePriorityRecoveryDecisionSnapshots(value) {
     snapshots,
     blockerPartitionIdsByReason: value.blockerPartitionIdsByReason,
     partitionIdsBySemanticState: value.partitionIdsBySemanticState,
-    hasExplicitSemanticStateContract,
   });
   for (const partitionId of summarySets.partitionIds) {
     partitionIdSet.add(partitionId);

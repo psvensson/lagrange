@@ -32,6 +32,9 @@ import {
   OPERATION_WORKFLOW_OUTCOME_VALUES,
 } from './operation-workflow-owner-constants.js';
 import {
+  OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED,
+} from './operation-workflow-recovery-reconcile-shared.js';
+import {
   applyOperationWorkflowOwnerTargetProgressReentryAction,
   isOperationWorkflowOwnerDispatchPendingTargetProgressReady,
   resolveOperationWorkflowOwnerTargetProgressReentryAction,
@@ -46,6 +49,10 @@ const OPERATION_WORKFLOW_OWNER_LOCAL_INITIALIZATION_RETRY_ERROR =
 const OPERATION_WORKFLOW_OWNER_NO_OPERATION = null;
 const OPERATION_WORKFLOW_OWNER_NO_OPERATION_ID = null;
 const OPERATION_WORKFLOW_OWNER_OBJECT_REFERENCE = Object.freeze({});
+const {
+  OBSERVED_PROGRESS_OPERATION_ROUTE_ACTION:
+    OPERATION_WORKFLOW_OWNER_OBSERVED_PROGRESS_ROUTE_ACTION,
+} = OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED;
 const OPERATION_WORKFLOW_OWNER_PRIORITY_RECOVERY_REENTRY_OPTION =
   Object.freeze({
     ALLOW_OWNER_LANE_RETRY: 'allowOwnerLaneRetry',
@@ -634,6 +641,25 @@ class OperationWorkflowOwner extends OperationWorkflowOwnerSegment7 {
         },
       );
     const operation = visibilityObservation?.operation || null;
+    const routeEvidence =
+      this.buildObservedProgressOperationRouteEvidence(operation);
+    const routeAction =
+      this.resolveObservedProgressOperationRouteAction(routeEvidence);
+    if (
+      routeAction ===
+      OPERATION_WORKFLOW_OWNER_OBSERVED_PROGRESS_ROUTE_ACTION.SKIP
+    ) {
+      this.clearObservedProgressRetry(operationId);
+      return false;
+    }
+    if (
+      routeAction ===
+      OPERATION_WORKFLOW_OWNER_OBSERVED_PROGRESS_ROUTE_ACTION.WAKE_REMOTE_OWNER
+    ) {
+      const woken = await this.wakeCoordinatorCreatedRemoteOwner(operation);
+      this.clearObservedProgressRetry(operationId);
+      return woken;
+    }
     try {
       return await this.runOperationWorkflowOwnerAdapter(
         operation,

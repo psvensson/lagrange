@@ -23,6 +23,10 @@ const ACTIVE_WAIT_PRIORITY_RECOVERY_EMPTY_TEXT = '';
 const PRIORITY_RECOVERY_SEMANTIC_STATE_ID_UNKNOWN = UNKNOWN_STATE;
 const PRIORITY_RECOVERY_DECISION_SNAPSHOT_UNKNOWN_EPOCH = -1;
 
+function isPriorityRecoveryProgressEvidenceRecord(value) {
+  return value && typeof value === TYPEOF_OBJECT && Array.isArray(value) !== true;
+}
+
 function normalizePriorityRecoverySemanticStateId(semanticState) {
   const normalizedSemanticState = String(
     semanticState || ACTIVE_WAIT_PRIORITY_RECOVERY_EMPTY_TEXT,
@@ -70,6 +74,36 @@ function buildPriorityRecoveryExplicitSemanticStateByPartitionId(
   return explicitSemanticStateByPartitionId;
 }
 
+function buildPriorityRecoveryExplicitProgressClassByPartitionId(
+  partitionIdsByClass,
+) {
+  const explicitProgressClassByPartitionId = new Map();
+  if (
+    !partitionIdsByClass ||
+    typeof partitionIdsByClass !== TYPEOF_OBJECT ||
+    Array.isArray(partitionIdsByClass)
+  ) {
+    return explicitProgressClassByPartitionId;
+  }
+  for (const [progressClass, partitionIds] of Object.entries(
+    partitionIdsByClass,
+  )) {
+    const normalizedProgressClass = String(
+      progressClass || ACTIVE_WAIT_PRIORITY_RECOVERY_EMPTY_TEXT,
+    ).trim();
+    if (normalizedProgressClass.length === ZERO) {
+      continue;
+    }
+    for (const partitionId of normalizeDistinctStringArray(partitionIds)) {
+      const progressClasses =
+        explicitProgressClassByPartitionId.get(partitionId) || new Set();
+      progressClasses.add(normalizedProgressClass);
+      explicitProgressClassByPartitionId.set(partitionId, progressClasses);
+    }
+  }
+  return explicitProgressClassByPartitionId;
+}
+
 function resolvePriorityRecoveryExplicitSemanticState(
   snapshot,
   explicitSemanticStateByPartitionId,
@@ -114,6 +148,8 @@ function resolvePriorityRecoveryDecisionSnapshotProgressSortTimestamp(
       PRIORITY_RECOVERY_DECISION_SNAPSHOT_PROGRESS_FIELD
         .TARGET_SERVICE_PROGRESS_AT_MS
     ],
+    snapshot?.lastProgressAtMs,
+    snapshot?.snapshotCapturedAt,
     snapshot?.progress?.[
       PRIORITY_RECOVERY_DECISION_SNAPSHOT_PROGRESS_FIELD.LAST_PROGRESS_AT_MS
     ],
@@ -195,12 +231,73 @@ function selectPriorityRecoveryDecisionSummarySnapshots(snapshots) {
   return [...latestSnapshotByPartitionId.values()];
 }
 
-function summarizePriorityRecoveryProgressClasses(
-  priorityRecoveryDecisionSnapshots = null,
+function selectPriorityRecoveryProgressEvidenceSnapshots(
+  priorityRecoveryProgressEvidence = null,
 ) {
-  const snapshots = Array.isArray(priorityRecoveryDecisionSnapshots?.snapshots) ?
-    priorityRecoveryDecisionSnapshots.snapshots :
-    [];
+  return [
+    ...(Array.isArray(priorityRecoveryProgressEvidence?.snapshots) ?
+      priorityRecoveryProgressEvidence.snapshots :
+      []),
+    ...(Array.isArray(priorityRecoveryProgressEvidence?.partitionSnapshots) ?
+      priorityRecoveryProgressEvidence.partitionSnapshots :
+      []),
+  ];
+}
+
+function selectPriorityRecoveryExplicitProgressClassPartitions(
+  priorityRecoveryProgressEvidence = null,
+) {
+  if (
+    isPriorityRecoveryProgressEvidenceRecord(
+      priorityRecoveryProgressEvidence?.blockerPartitionIdsByReason,
+    )
+  ) {
+    return priorityRecoveryProgressEvidence.blockerPartitionIdsByReason;
+  }
+  if (
+    isPriorityRecoveryProgressEvidenceRecord(
+      priorityRecoveryProgressEvidence?.partitionIdsByClass,
+    )
+  ) {
+    return priorityRecoveryProgressEvidence.partitionIdsByClass;
+  }
+  return {};
+}
+
+function addPriorityRecoveryProgressClassPartition(
+  partitionIdsByClass,
+  progressClass,
+  partitionId,
+) {
+  const normalizedProgressClass = String(
+    progressClass || ACTIVE_WAIT_PRIORITY_RECOVERY_EMPTY_TEXT,
+  ).trim();
+  if (
+    normalizedProgressClass.length === ZERO ||
+    partitionId.length === ZERO
+  ) {
+    return;
+  }
+  if (!Object.hasOwn(partitionIdsByClass, normalizedProgressClass)) {
+    partitionIdsByClass[normalizedProgressClass] = new Set();
+  }
+  partitionIdsByClass[normalizedProgressClass].add(partitionId);
+}
+
+function normalizePriorityRecoverySnapshotProgressClassIds(snapshot) {
+  return normalizeDistinctStringArray([
+    ...normalizeDistinctStringArray(snapshot?.blockerReasons),
+    ...normalizeDistinctStringArray(snapshot?.blockerReasonCodes),
+    ...normalizeDistinctStringArray(snapshot?.progressClassIds),
+  ]);
+}
+
+function summarizePriorityRecoveryProgressClasses(
+  priorityRecoveryProgressEvidence = null,
+) {
+  const snapshots = selectPriorityRecoveryProgressEvidenceSnapshots(
+    priorityRecoveryProgressEvidence,
+  );
   const summarySnapshots =
     selectPriorityRecoveryDecisionSummarySnapshots(snapshots);
   const partitionIdsByClass = {
@@ -219,19 +316,36 @@ function summarizePriorityRecoveryProgressClasses(
   }
   const explicitSemanticStateByPartitionId =
     buildPriorityRecoveryExplicitSemanticStateByPartitionId(
-      priorityRecoveryDecisionSnapshots?.partitionIdsBySemanticState,
+      priorityRecoveryProgressEvidence?.partitionIdsBySemanticState,
+    );
+  const explicitProgressClassByPartitionId =
+    buildPriorityRecoveryExplicitProgressClassByPartitionId(
+      selectPriorityRecoveryExplicitProgressClassPartitions(
+        priorityRecoveryProgressEvidence,
+      ),
     );
   for (const snapshot of summarySnapshots) {
     const partitionId = String(snapshot?.partitionId || '').trim();
-    const blockerReasons = normalizeDistinctStringArray(snapshot?.blockerReasons);
     if (partitionId.length === ZERO) {
       continue;
     }
-    for (const blockerReason of blockerReasons) {
-      if (!Object.hasOwn(partitionIdsByClass, blockerReason)) {
-        continue;
-      }
-      partitionIdsByClass[blockerReason].add(partitionId);
+    for (const progressClass of normalizePriorityRecoverySnapshotProgressClassIds(
+      snapshot,
+    )) {
+      addPriorityRecoveryProgressClassPartition(
+        partitionIdsByClass,
+        progressClass,
+        partitionId,
+      );
+    }
+    const explicitProgressClasses =
+      explicitProgressClassByPartitionId.get(partitionId) || new Set();
+    for (const progressClass of explicitProgressClasses) {
+      addPriorityRecoveryProgressClassPartition(
+        partitionIdsByClass,
+        progressClass,
+        partitionId,
+      );
     }
     const semanticState =
       resolvePriorityRecoveryExplicitSemanticState(

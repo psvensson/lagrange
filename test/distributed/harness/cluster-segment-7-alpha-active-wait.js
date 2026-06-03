@@ -2,11 +2,17 @@ import {CLUSTER_SEGMENT_6} from './cluster-segment-6.js';
 import {
   LIFECYCLE_REASON,
 } from '../../../src/bootstrap/lifecycle-controller-constants.js';
+import {
+  ACTIVE_GATE_CLOSURE_RECORD_ID_STARTUP_PUBLICATION_LAG,
+  ACTIVE_GATE_CLOSURE_WITNESS_CLASS_STARTUP_PUBLICATION_LAG,
+} from './active-gate-closure-classification.js';
 
 const {
   ACTIVE_WAIT_NO_PROGRESS_CLASS_CODE,
   ACTIVE_WAIT_NO_PROGRESS_REASON_CODE,
   ACTIVE_WAIT_PRIORITY_RECOVERY_PROGRESS_CLASS,
+  CLUSTER_READINESS_MODE_LOAD,
+  CLUSTER_READINESS_MODE_STARTUP,
   PRIORITY_RECOVERY_SEMANTIC_STATE,
   ONE,
   ZERO,
@@ -80,6 +86,22 @@ const ACTIVE_WAIT_READINESS_DELAY_OUTCOME_NO_PROGRESS = Object.freeze({
 const ACTIVE_WAIT_READINESS_DELAY_OUTCOME_PROGRESS = Object.freeze({
   source: ACTIVE_WAIT_READINESS_DELAY_SOURCE.PROGRESS,
 });
+const ACTIVE_WAIT_READINESS_FAILURE_CLASS_STARTUP_SUPPORT_PENDING =
+  'startup_support_pending';
+const ACTIVE_WAIT_READINESS_FAILURE_SOURCE_ACTIVE_GATE_PROGRESS =
+  'activeGateProgress';
+const ACTIVE_WAIT_READINESS_FAILURE_CAUSE_INACTIVE_NODES = 'inactive_nodes';
+const ACTIVE_WAIT_READINESS_FAILURE_CAUSE_PRIORITY_RECOVERY_PROGRESS =
+  'priority_recovery_progress';
+const ACTIVE_WAIT_READINESS_FAILURE_CAUSE_PUBLICATION_GATE =
+  'publication_gate';
+const ACTIVE_WAIT_READINESS_FAILURE_CAUSE_OWNER_RECOVERY =
+  'active_gate_owner_recovery_pending';
+const ACTIVE_WAIT_READINESS_FAILURE_CAUSE_SNAPSHOT_TIMEOUT =
+  'snapshot_timeout';
+const ACTIVE_WAIT_READINESS_FAILURE_SOURCE_SELECTED_SNAPSHOT_ERROR =
+  'selectedSnapshotError';
+const ACTIVE_WAIT_BLOCKER_INACTIVE_NODES_PREFIX = 'inactive_nodes=';
 const ACTIVE_WAIT_TERMINAL_PROGRESS_DECISION_TABLE = Object.freeze([
   Object.freeze({
     decision: ACTIVE_WAIT_TERMINAL_PROGRESS_DECISION_BEST_SNAPSHOT_COVERAGE,
@@ -156,6 +178,55 @@ const ACTIVE_WAIT_TERMINAL_PRIORITY_RECOVERY_EVIDENCE = Object.freeze({
     semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE.NEEDS_OPERATION,
   }),
 });
+const STARTUP_OWNER_PROGRESS_CONTINUATION_STATE = Object.freeze({
+  BLOCKED: 'blocked',
+  CONTINUE: 'continue',
+});
+const STARTUP_OWNER_PROGRESS_CONTINUATION_REASON = Object.freeze({
+  OWNER_PROGRESS_CONTEXT_ABSENT: 'owner_progress_context_absent',
+  PROGRESS_NOT_FRESH: 'progress_not_fresh',
+  RECOVERING_IN_FLIGHT_ABSENT: 'recovering_in_flight_absent',
+  OWNER_WITNESS_ABSENT: 'owner_witness_absent',
+  OWNER_STEP_DEADLINE: 'owner_step_deadline',
+});
+const STARTUP_OWNER_PROGRESS_PUBLICATION_PUBLISHED = 'PUBLISHED';
+const STARTUP_OWNER_PROGRESS_OPERATION_OWNER = 'operation_workflow_owner';
+const STARTUP_OWNER_PROGRESS_BOUNDARY_WORKFLOW = 'workflow_progress';
+const STARTUP_OWNER_PROGRESS_WAIT_EVENT_DRIVEN = 'event_driven';
+const STARTUP_OWNER_PROGRESS_ACTION_ADVANCE = 'advance_existing_operation';
+const STARTUP_OWNER_PROGRESS_ACTION_WAIT = 'wait_for_operation_progress';
+const STARTUP_OWNER_PROGRESS_SEMANTIC_RECOVERING =
+  PRIORITY_RECOVERY_SEMANTIC_STATE.RECOVERING_IN_FLIGHT;
+const STARTUP_OWNER_PROGRESS_NO_EXTENSION_MS = ZERO;
+const STARTUP_SNAPSHOT_REPAIR_CONTINUATION_STATE = Object.freeze({
+  BLOCKED: 'blocked',
+  CONTINUE: 'continue',
+});
+const STARTUP_SNAPSHOT_REPAIR_CONTINUATION_REASON = Object.freeze({
+  SNAPSHOT_RETRY_ABSENT: 'snapshot_retry_absent',
+  OWNER_HANDOFF_ABSENT: 'owner_handoff_absent',
+  HANDOFF_OUTCOME_ABSENT: 'handoff_outcome_absent',
+  OWNER_QUEUE_UNBOUNDED: 'owner_queue_unbounded',
+  SNAPSHOT_REPAIR_RETRY: 'snapshot_repair_retry',
+});
+const STARTUP_SNAPSHOT_REPAIR_MODE_REPAIR_DEFERRED = 'repair_deferred';
+const STARTUP_SNAPSHOT_REPAIR_CONTRACT_DEFERRED = 'deferred';
+const STARTUP_SNAPSHOT_REPAIR_NEXT_ACTION_RETRY = 'retry';
+const STARTUP_SNAPSHOT_REPAIR_HANDOFF_REASON_OWNER_RECONCILE =
+  'owner_reconcile_pending';
+const STARTUP_SNAPSHOT_REPAIR_HANDOFF_ACTION_WAIT_OWNER_RECOVERY =
+  'wait_owner_recovery';
+const STARTUP_SNAPSHOT_REPAIR_HANDOFF_OUTCOME_WRITE_DEFERRED =
+  'write_deferred';
+const STARTUP_SNAPSHOT_REPAIR_NO_EXTENSION_MS = ZERO;
+const ACTIVE_GATE_SNAPSHOT_REPAIR_STARTUP_READINESS_MODES = Object.freeze([
+  CLUSTER_READINESS_MODE_STARTUP,
+]);
+const ACTIVE_GATE_SNAPSHOT_REPAIR_LOAD_READINESS_MODES = Object.freeze([
+  CLUSTER_READINESS_MODE_LOAD,
+]);
+const ACTIVE_GATE_SNAPSHOT_REPAIR_MODE_UNSUPPORTED =
+  'readiness_mode_unsupported';
 const ACTIVE_WAIT_TERMINAL_PRIORITY_RECOVERY_REGRESSION_TABLE = Object.freeze([
   Object.freeze({
     decision: ACTIVE_WAIT_TERMINAL_PROGRESS_DECISION_LAST_MEANINGFUL,
@@ -321,6 +392,98 @@ function normalizeLoadReadinessPhase(value) {
     LOAD_READINESS_PHASE_UNSPECIFIED;
 }
 
+function hasActiveWaitBlockerWithPrefix(progressSnapshot, prefix) {
+  return Array.isArray(progressSnapshot?.blockers) &&
+    progressSnapshot.blockers.some((blocker) =>
+      typeof blocker === 'string' && blocker.startsWith(prefix),
+    );
+}
+
+function normalizeActiveWaitPositiveCount(value) {
+  return Number.isInteger(value) && value > ZERO ? value : ZERO;
+}
+
+function isSelectedSnapshotReadinessTimeout(readinessDelay) {
+  return readinessDelay?.timedOut === true &&
+    readinessDelay.cause ===
+      ACTIVE_WAIT_READINESS_FAILURE_CAUSE_SNAPSHOT_TIMEOUT &&
+    readinessDelay.source ===
+      ACTIVE_WAIT_READINESS_FAILURE_SOURCE_SELECTED_SNAPSHOT_ERROR;
+}
+
+function selectActiveWaitStartupSupportResidualCause(progressSnapshot) {
+  if (
+    !isActiveWaitProgressSnapshot(progressSnapshot) ||
+    progressSnapshot.snapshotCoverageComplete !== true
+  ) {
+    return null;
+  }
+  if (
+    normalizeActiveWaitPositiveCount(progressSnapshot.inactiveNodeCount) >
+      ZERO ||
+    hasActiveWaitBlockerWithPrefix(
+      progressSnapshot,
+      ACTIVE_WAIT_BLOCKER_INACTIVE_NODES_PREFIX,
+    )
+  ) {
+    return ACTIVE_WAIT_READINESS_FAILURE_CAUSE_INACTIVE_NODES;
+  }
+  if (
+    normalizeActiveWaitPositiveCount(
+      progressSnapshot.activeGateOwnerCohortPendingRecoveryCount,
+    ) > ZERO ||
+    normalizeActiveWaitPositiveCount(
+      progressSnapshot.activeGateOwnerCohortPendingReconcileCount,
+    ) > ZERO
+  ) {
+    return ACTIVE_WAIT_READINESS_FAILURE_CAUSE_OWNER_RECOVERY;
+  }
+  if (
+    normalizeActiveWaitPositiveCount(
+      progressSnapshot.priorityRecoveryUnresolvedClassCount,
+    ) > ZERO ||
+    normalizeActiveWaitPositiveCount(
+      progressSnapshot.priorityRecoveryUnresolvedSemanticStateCount,
+    ) > ZERO
+  ) {
+    return ACTIVE_WAIT_READINESS_FAILURE_CAUSE_PRIORITY_RECOVERY_PROGRESS;
+  }
+  if (
+    normalizeActiveWaitPositiveCount(progressSnapshot.gateReasonCount) >
+      ZERO ||
+    (Array.isArray(progressSnapshot.gateReasons) &&
+      progressSnapshot.gateReasons.length > ZERO)
+  ) {
+    return ACTIVE_WAIT_READINESS_FAILURE_CAUSE_PUBLICATION_GATE;
+  }
+  return null;
+}
+
+function selectActiveWaitReadinessFailureProjection({
+  mode = null,
+  noProgress = null,
+  readinessDelay = null,
+} = {}) {
+  if (
+    mode !== CLUSTER_READINESS_MODE_LOAD ||
+    isSelectedSnapshotReadinessTimeout(readinessDelay) !== true
+  ) {
+    return null;
+  }
+  const residualCause = selectActiveWaitStartupSupportResidualCause(
+    noProgress?.currentProgress,
+  );
+  if (!residualCause) {
+    return null;
+  }
+  return {
+    classCode: ACTIVE_WAIT_READINESS_FAILURE_CLASS_STARTUP_SUPPORT_PENDING,
+    source: ACTIVE_WAIT_READINESS_FAILURE_SOURCE_ACTIVE_GATE_PROGRESS,
+    cause: residualCause,
+    error: null,
+  };
+}
+
 function buildActiveWaitReadinessFailure({
   mode = null,
   noProgress = null,
@@ -336,15 +499,26 @@ function buildActiveWaitReadinessFailure({
       noProgress.readinessDelay :
       null;
   const timedOut = readinessDelay && readinessDelay.timedOut === true;
-  const classCode =
+  const projectedFailure = selectActiveWaitReadinessFailureProjection({
+    mode,
+    noProgress,
+    readinessDelay,
+  });
+  let classCode = null;
+  if (typeof projectedFailure?.classCode === 'string') {
+    classCode = projectedFailure.classCode;
+  } else if (
     timedOut &&
     typeof readinessDelay?.cause === 'string' &&
-    readinessDelay.cause.length > ZERO ?
-      readinessDelay.cause :
-      noProgress?.reasonCode === ACTIVE_WAIT_NO_PROGRESS_REASON_CODE ||
-          noProgress?.stalled === true ?
-        ACTIVE_WAIT_NO_PROGRESS_CLASS_CODE :
-        null;
+    readinessDelay.cause.length > ZERO
+  ) {
+    classCode = readinessDelay.cause;
+  } else if (
+    noProgress?.reasonCode === ACTIVE_WAIT_NO_PROGRESS_REASON_CODE ||
+    noProgress?.stalled === true
+  ) {
+    classCode = ACTIVE_WAIT_NO_PROGRESS_CLASS_CODE;
+  }
   return {
     mode: typeof mode === 'string' && mode.length > ZERO ? mode : null,
     classCode,
@@ -369,20 +543,28 @@ function buildActiveWaitReadinessFailure({
         noProgress.reasonCode :
         null,
     source:
-      typeof readinessDelay?.source === 'string' &&
-      readinessDelay.source.length > ZERO ?
-        readinessDelay.source :
-        null,
+      typeof projectedFailure?.source === 'string' &&
+      projectedFailure.source.length > ZERO ?
+        projectedFailure.source :
+        typeof readinessDelay?.source === 'string' &&
+        readinessDelay.source.length > ZERO ?
+          readinessDelay.source :
+          null,
     cause:
-      typeof readinessDelay?.cause === 'string' &&
-      readinessDelay.cause.length > ZERO ?
-        readinessDelay.cause :
-        null,
+      typeof projectedFailure?.cause === 'string' &&
+      projectedFailure.cause.length > ZERO ?
+        projectedFailure.cause :
+        typeof readinessDelay?.cause === 'string' &&
+        readinessDelay.cause.length > ZERO ?
+          readinessDelay.cause :
+          null,
     error:
-      typeof readinessDelay?.error === 'string' &&
-      readinessDelay.error.length > ZERO ?
-        readinessDelay.error :
-        null,
+      projectedFailure?.error === null ?
+        null :
+        typeof readinessDelay?.error === 'string' &&
+        readinessDelay.error.length > ZERO ?
+          readinessDelay.error :
+          null,
   };
 }
 
@@ -591,6 +773,385 @@ function buildTerminalPriorityRecoveryRegressionEvidence(options = {}) {
   });
 }
 
+function normalizeStartupOwnerProgressDurationMs(value) {
+  return Number.isFinite(value) && value > ZERO ?
+    Math.max(ZERO, Math.floor(value)) :
+    STARTUP_OWNER_PROGRESS_NO_EXTENSION_MS;
+}
+
+function isStartupOwnerProgressEvidenceRecord(value) {
+  return value && typeof value === ACTIVE_WAIT_TYPE_OBJECT &&
+    Array.isArray(value) !== true;
+}
+
+function selectStartupOwnerProgressEvidenceSnapshots(evidence = null) {
+  return [
+    ...(Array.isArray(evidence?.snapshots) ? evidence.snapshots : []),
+    ...(Array.isArray(evidence?.partitionSnapshots) ?
+      evidence.partitionSnapshots :
+      []),
+  ];
+}
+
+function hasStartupOwnerProgressEvidence(value) {
+  return selectStartupOwnerProgressEvidenceSnapshots(value).length > ZERO;
+}
+
+function normalizeStartupSnapshotRepairDurationMs(value) {
+  return Number.isFinite(value) && value > ZERO ?
+    Math.max(ZERO, Math.floor(value)) :
+    STARTUP_SNAPSHOT_REPAIR_NO_EXTENSION_MS;
+}
+
+function selectStartupOwnerProgressDecisionSnapshots(probeResult) {
+  const snapshotCoverage =
+    probeResult?.snapshotCoverage &&
+    typeof probeResult.snapshotCoverage === ACTIVE_WAIT_TYPE_OBJECT ?
+      probeResult.snapshotCoverage :
+      {};
+  const selectedSnapshots = [
+    snapshotCoverage.selectedPriorityRecoveryDecisionSnapshots,
+    snapshotCoverage.priorityRecoveryDecisionSnapshots,
+    probeResult?.publicationConvergenceGate?.priorityRecoveryDecisionSnapshots,
+    snapshotCoverage.selectedPublicationConvergenceGate
+      ?.priorityRecoveryDecisionSnapshots,
+    snapshotCoverage.selectedPublicationConvergence
+      ?.priorityRecoveryDecisionSnapshots,
+    snapshotCoverage.selectedPriorityRecoveryObservation
+      ?.priorityRecoveryCurrentSummary,
+    snapshotCoverage.priorityRecoveryObservation?.priorityRecoveryCurrentSummary,
+    probeResult?.publicationConvergenceGate?.priorityRecoveryCurrentSummary,
+    snapshotCoverage.selectedPublicationConvergenceGate
+      ?.priorityRecoveryCurrentSummary,
+    snapshotCoverage.selectedPublicationConvergence
+      ?.priorityRecoveryCurrentSummary,
+  ];
+  return selectedSnapshots
+    .filter(hasStartupOwnerProgressEvidence)
+    .flatMap(selectStartupOwnerProgressEvidenceSnapshots);
+}
+
+function hasStartupOwnerProgressPublicationLag(progressSnapshot) {
+  return (
+    progressSnapshot?.closureRecordId ===
+      ACTIVE_GATE_CLOSURE_RECORD_ID_STARTUP_PUBLICATION_LAG ||
+    progressSnapshot?.closureWitnessClass ===
+      ACTIVE_GATE_CLOSURE_WITNESS_CLASS_STARTUP_PUBLICATION_LAG
+  );
+}
+
+function hasStartupOwnerProgressRecoveringState(progressSnapshot) {
+  const semanticStateIds = normalizeDistinctStringArray(
+    progressSnapshot?.priorityRecoveryProgressClasses
+      ?.unresolvedSemanticStateIds,
+  );
+  return semanticStateIds.includes(
+    STARTUP_OWNER_PROGRESS_SEMANTIC_RECOVERING,
+  );
+}
+
+function hasStartupOwnerProgressPublishedRecovery(progressSnapshot) {
+  return (
+    progressSnapshot?.snapshotCoverageComplete === true &&
+    progressSnapshot?.publicationStatus ===
+      STARTUP_OWNER_PROGRESS_PUBLICATION_PUBLISHED &&
+    normalizeActiveWaitProgressMissingPublishedCount(progressSnapshot) ===
+      ZERO &&
+    normalizeActiveWaitProgressPendingAckCount(progressSnapshot) === ZERO &&
+    hasStartupOwnerProgressRecoveringState(progressSnapshot) === true
+  );
+}
+
+function hasStartupOwnerProgressContinuationContext(progressSnapshot) {
+  return (
+    hasStartupOwnerProgressPublicationLag(progressSnapshot) === true ||
+    hasStartupOwnerProgressPublishedRecovery(progressSnapshot) === true
+  );
+}
+
+function isStartupOwnerProgressAction(action) {
+  return (
+    action === STARTUP_OWNER_PROGRESS_ACTION_ADVANCE ||
+    action === STARTUP_OWNER_PROGRESS_ACTION_WAIT
+  );
+}
+
+function resolveStartupOwnerProgressSemanticState(snapshot) {
+  return snapshot?.semanticState || snapshot?.semanticStateId || null;
+}
+
+function resolveStartupOwnerProgressCurrentOwner(snapshot) {
+  return snapshot?.progress?.currentOwner ||
+    snapshot?.currentOwner ||
+    snapshot?.actuation?.owner ||
+    snapshot?.actuationOwner ||
+    null;
+}
+
+function resolveStartupOwnerProgressBlockingBoundary(snapshot) {
+  return snapshot?.progress?.blockingBoundary ||
+    snapshot?.blockingBoundary ||
+    null;
+}
+
+function resolveStartupOwnerProgressWaitMode(snapshot) {
+  return snapshot?.progress?.waitMode || snapshot?.waitMode || null;
+}
+
+function resolveStartupOwnerProgressNextAction(snapshot) {
+  return snapshot?.progress?.nextRequiredAction ||
+    snapshot?.nextRequiredAction ||
+    null;
+}
+
+function resolveStartupOwnerProgressStepAgeMs(snapshot) {
+  return normalizeStartupOwnerProgressDurationMs(
+    snapshot?.progress?.stepAgeMs ||
+      snapshot?.actuation?.stepAgeMs ||
+      snapshot?.stepAgeMs,
+  );
+}
+
+function resolveStartupOwnerProgressStepTimeoutMs(snapshot) {
+  return normalizeStartupOwnerProgressDurationMs(
+    snapshot?.progress?.stepTimeoutMs ||
+      snapshot?.actuation?.stepTimeoutMs ||
+      snapshot?.stepTimeoutMs,
+  );
+}
+
+function hasStartupOwnerProgressFreshnessEvidence(snapshot) {
+  return (
+    isStartupOwnerProgressEvidenceRecord(snapshot?.observation?.provenance) ||
+    Number.isFinite(Number(snapshot?.snapshotCapturedAt)) ||
+    Number.isFinite(Number(snapshot?.capturedAt)) ||
+    Number.isFinite(Number(snapshot?.lastProgressAtMs)) ||
+    Number.isFinite(Number(snapshot?.progress?.lastProgressAtMs)) ||
+    Number.isFinite(Number(snapshot?.actuation?.lastProgressAtMs)) ||
+    Number.isFinite(Number(snapshot?.topologyOperatorWitness?.lastObservedAtMs))
+  );
+}
+
+function isStartupOwnerProgressWitness(snapshot) {
+  return (
+    resolveStartupOwnerProgressSemanticState(snapshot) ===
+      STARTUP_OWNER_PROGRESS_SEMANTIC_RECOVERING &&
+    resolveStartupOwnerProgressCurrentOwner(snapshot) ===
+      STARTUP_OWNER_PROGRESS_OPERATION_OWNER &&
+    resolveStartupOwnerProgressBlockingBoundary(snapshot) ===
+      STARTUP_OWNER_PROGRESS_BOUNDARY_WORKFLOW &&
+    resolveStartupOwnerProgressWaitMode(snapshot) ===
+      STARTUP_OWNER_PROGRESS_WAIT_EVENT_DRIVEN &&
+    isStartupOwnerProgressAction(resolveStartupOwnerProgressNextAction(snapshot))
+  );
+}
+
+function resolveStartupOwnerProgressWitnessRemainingMs(snapshot) {
+  const stepAgeMs = resolveStartupOwnerProgressStepAgeMs(snapshot);
+  const stepTimeoutMs = resolveStartupOwnerProgressStepTimeoutMs(snapshot);
+  return Math.max(STARTUP_OWNER_PROGRESS_NO_EXTENSION_MS, stepTimeoutMs - stepAgeMs);
+}
+
+function selectStartupActiveGateOwnerProgressContinuation({
+  readinessMode = LOAD_READINESS_PHASE_UNSPECIFIED,
+  progressSnapshot = null,
+  probeResult = null,
+  attemptsSinceProgress = ZERO,
+  pollIntervalMs = ZERO,
+} = {}) {
+  if (
+    readinessMode !== CLUSTER_READINESS_MODE_STARTUP ||
+    hasStartupOwnerProgressContinuationContext(progressSnapshot) !== true
+  ) {
+    return Object.freeze({
+      state: STARTUP_OWNER_PROGRESS_CONTINUATION_STATE.BLOCKED,
+      continuePolling: false,
+      reasonCode:
+        STARTUP_OWNER_PROGRESS_CONTINUATION_REASON
+          .OWNER_PROGRESS_CONTEXT_ABSENT,
+      extendMs: STARTUP_OWNER_PROGRESS_NO_EXTENSION_MS,
+    });
+  }
+  if (hasStartupOwnerProgressRecoveringState(progressSnapshot) !== true) {
+    return Object.freeze({
+      state: STARTUP_OWNER_PROGRESS_CONTINUATION_STATE.BLOCKED,
+      continuePolling: false,
+      reasonCode:
+        STARTUP_OWNER_PROGRESS_CONTINUATION_REASON.RECOVERING_IN_FLIGHT_ABSENT,
+      extendMs: STARTUP_OWNER_PROGRESS_NO_EXTENSION_MS,
+    });
+  }
+  const ownerProgressWitnesses = selectStartupOwnerProgressDecisionSnapshots(
+    probeResult,
+  )
+    .filter(isStartupOwnerProgressWitness);
+  const witnessRemainingMs = ownerProgressWitnesses
+    .map(resolveStartupOwnerProgressWitnessRemainingMs);
+  if (witnessRemainingMs.length === ZERO) {
+    return Object.freeze({
+      state: STARTUP_OWNER_PROGRESS_CONTINUATION_STATE.BLOCKED,
+      continuePolling: false,
+      reasonCode: STARTUP_OWNER_PROGRESS_CONTINUATION_REASON.OWNER_WITNESS_ABSENT,
+      extendMs: STARTUP_OWNER_PROGRESS_NO_EXTENSION_MS,
+    });
+  }
+  const currentWitnessFresh =
+    attemptsSinceProgress === ZERO ||
+    ownerProgressWitnesses.some(hasStartupOwnerProgressFreshnessEvidence);
+  if (currentWitnessFresh !== true) {
+    return Object.freeze({
+      state: STARTUP_OWNER_PROGRESS_CONTINUATION_STATE.BLOCKED,
+      continuePolling: false,
+      reasonCode: STARTUP_OWNER_PROGRESS_CONTINUATION_REASON.PROGRESS_NOT_FRESH,
+      extendMs: STARTUP_OWNER_PROGRESS_NO_EXTENSION_MS,
+    });
+  }
+  const minimumExtensionMs = normalizeStartupOwnerProgressDurationMs(
+    pollIntervalMs,
+  );
+  return Object.freeze({
+    state: STARTUP_OWNER_PROGRESS_CONTINUATION_STATE.CONTINUE,
+    continuePolling: true,
+    reasonCode: STARTUP_OWNER_PROGRESS_CONTINUATION_REASON.OWNER_STEP_DEADLINE,
+    extendMs: Math.max(minimumExtensionMs, ...witnessRemainingMs),
+  });
+}
+
+function hasStartupSnapshotRepairRetryEvidence(progressSnapshot) {
+  return (
+    progressSnapshot?.selectedSnapshotRepairDeferred === true &&
+    progressSnapshot?.selectedSnapshotObservationMode ===
+      STARTUP_SNAPSHOT_REPAIR_MODE_REPAIR_DEFERRED &&
+    progressSnapshot?.selectedSnapshotObservationContractState ===
+      STARTUP_SNAPSHOT_REPAIR_CONTRACT_DEFERRED &&
+    progressSnapshot?.selectedSnapshotObservationRefreshState ===
+      STARTUP_SNAPSHOT_REPAIR_CONTRACT_DEFERRED &&
+    progressSnapshot?.selectedSnapshotObservationNextAction ===
+      STARTUP_SNAPSHOT_REPAIR_NEXT_ACTION_RETRY &&
+    normalizeStartupSnapshotRepairDurationMs(
+      progressSnapshot?.selectedSnapshotObservationRetryAfterMs,
+    ) > STARTUP_SNAPSHOT_REPAIR_NO_EXTENSION_MS
+  );
+}
+
+function hasStartupSnapshotRepairOwnerHandoff(progressSnapshot) {
+  return (
+    progressSnapshot?.publicationActiveGateHandoffReasonCode ===
+      STARTUP_SNAPSHOT_REPAIR_HANDOFF_REASON_OWNER_RECONCILE &&
+    progressSnapshot?.publicationActiveGateHandoffNextAction ===
+      STARTUP_SNAPSHOT_REPAIR_HANDOFF_ACTION_WAIT_OWNER_RECOVERY &&
+    progressSnapshot?.publicationActiveGateHandoffRuntimePromotionAllowed !== true
+  );
+}
+
+function hasStartupSnapshotRepairHandoffOutcome(progressSnapshot) {
+  return (
+    progressSnapshot?.membershipPublicationHandoffOutcomeState ===
+      STARTUP_SNAPSHOT_REPAIR_HANDOFF_OUTCOME_WRITE_DEFERRED &&
+    progressSnapshot?.membershipPublicationHandoffOutcomeReasonCode ===
+      STARTUP_SNAPSHOT_REPAIR_HANDOFF_REASON_OWNER_RECONCILE &&
+    progressSnapshot?.membershipPublicationHandoffOutcomeEnqueued === true &&
+    normalizeStartupSnapshotRepairDurationMs(
+      progressSnapshot?.membershipPublicationHandoffOutcomeRetryAfterMs,
+    ) > STARTUP_SNAPSHOT_REPAIR_NO_EXTENSION_MS
+  );
+}
+
+function hasStartupSnapshotRepairBoundedOwnerQueue(progressSnapshot) {
+  const queueDepth = progressSnapshot?.selectedControlPlaneOwnerQueueDepth;
+  const pendingWrites = Number.isFinite(queueDepth?.pendingWrites) ?
+    Math.max(ZERO, Math.floor(queueDepth.pendingWrites)) :
+    ZERO;
+  const pendingWriteGrowthCount = Number.isFinite(
+    queueDepth?.pendingWriteGrowthCount,
+  ) ?
+    Math.max(ZERO, Math.floor(queueDepth.pendingWriteGrowthCount)) :
+    ZERO;
+  return pendingWrites > ZERO && pendingWriteGrowthCount === ZERO;
+}
+
+function selectActiveGateSnapshotRepairContinuation({
+  readinessMode = LOAD_READINESS_PHASE_UNSPECIFIED,
+  progressSnapshot = null,
+  pollIntervalMs = ZERO,
+  allowedReadinessModes = ACTIVE_GATE_SNAPSHOT_REPAIR_STARTUP_READINESS_MODES,
+} = {}) {
+  if (allowedReadinessModes.includes(readinessMode) !== true) {
+    return Object.freeze({
+      state: STARTUP_SNAPSHOT_REPAIR_CONTINUATION_STATE.BLOCKED,
+      continuePolling: false,
+      reasonCode: ACTIVE_GATE_SNAPSHOT_REPAIR_MODE_UNSUPPORTED,
+      extendMs: STARTUP_SNAPSHOT_REPAIR_NO_EXTENSION_MS,
+    });
+  }
+  if (hasStartupSnapshotRepairRetryEvidence(progressSnapshot) !== true) {
+    return Object.freeze({
+      state: STARTUP_SNAPSHOT_REPAIR_CONTINUATION_STATE.BLOCKED,
+      continuePolling: false,
+      reasonCode:
+        STARTUP_SNAPSHOT_REPAIR_CONTINUATION_REASON.SNAPSHOT_RETRY_ABSENT,
+      extendMs: STARTUP_SNAPSHOT_REPAIR_NO_EXTENSION_MS,
+    });
+  }
+  if (hasStartupSnapshotRepairOwnerHandoff(progressSnapshot) !== true) {
+    return Object.freeze({
+      state: STARTUP_SNAPSHOT_REPAIR_CONTINUATION_STATE.BLOCKED,
+      continuePolling: false,
+      reasonCode:
+        STARTUP_SNAPSHOT_REPAIR_CONTINUATION_REASON.OWNER_HANDOFF_ABSENT,
+      extendMs: STARTUP_SNAPSHOT_REPAIR_NO_EXTENSION_MS,
+    });
+  }
+  if (hasStartupSnapshotRepairHandoffOutcome(progressSnapshot) !== true) {
+    return Object.freeze({
+      state: STARTUP_SNAPSHOT_REPAIR_CONTINUATION_STATE.BLOCKED,
+      continuePolling: false,
+      reasonCode:
+        STARTUP_SNAPSHOT_REPAIR_CONTINUATION_REASON.HANDOFF_OUTCOME_ABSENT,
+      extendMs: STARTUP_SNAPSHOT_REPAIR_NO_EXTENSION_MS,
+    });
+  }
+  if (hasStartupSnapshotRepairBoundedOwnerQueue(progressSnapshot) !== true) {
+    return Object.freeze({
+      state: STARTUP_SNAPSHOT_REPAIR_CONTINUATION_STATE.BLOCKED,
+      continuePolling: false,
+      reasonCode:
+        STARTUP_SNAPSHOT_REPAIR_CONTINUATION_REASON.OWNER_QUEUE_UNBOUNDED,
+      extendMs: STARTUP_SNAPSHOT_REPAIR_NO_EXTENSION_MS,
+    });
+  }
+  const snapshotRetryMs = normalizeStartupSnapshotRepairDurationMs(
+    progressSnapshot?.selectedSnapshotObservationRetryAfterMs,
+  );
+  const handoffRetryMs = normalizeStartupSnapshotRepairDurationMs(
+    progressSnapshot?.membershipPublicationHandoffOutcomeRetryAfterMs,
+  );
+  const minimumExtensionMs = normalizeStartupSnapshotRepairDurationMs(
+    pollIntervalMs,
+  );
+  return Object.freeze({
+    state: STARTUP_SNAPSHOT_REPAIR_CONTINUATION_STATE.CONTINUE,
+    continuePolling: true,
+    reasonCode:
+      STARTUP_SNAPSHOT_REPAIR_CONTINUATION_REASON.SNAPSHOT_REPAIR_RETRY,
+    extendMs: Math.max(minimumExtensionMs, snapshotRetryMs, handoffRetryMs),
+  });
+}
+
+function selectStartupActiveGateSnapshotRepairContinuation(options = {}) {
+  return selectActiveGateSnapshotRepairContinuation({
+    ...options,
+    allowedReadinessModes: ACTIVE_GATE_SNAPSHOT_REPAIR_STARTUP_READINESS_MODES,
+  });
+}
+
+function selectLoadActiveGateSnapshotRepairContinuation(options = {}) {
+  return selectActiveGateSnapshotRepairContinuation({
+    ...options,
+    allowedReadinessModes: ACTIVE_GATE_SNAPSHOT_REPAIR_LOAD_READINESS_MODES,
+  });
+}
+
 function buildTerminalPublicationImprovementEvidence(options = {}) {
   const currentProgressSnapshot = options.currentProgressSnapshot;
   const lastMeaningfulProgressSnapshot =
@@ -748,5 +1309,8 @@ export {
   normalizeLoadReadinessPhase,
   normalizeStableWindowTimestamp,
   selectActiveWaitReadinessDelay,
+  selectLoadActiveGateSnapshotRepairContinuation,
+  selectStartupActiveGateSnapshotRepairContinuation,
+  selectStartupActiveGateOwnerProgressContinuation,
   selectTerminalActiveWaitProgressSnapshot,
 };

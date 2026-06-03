@@ -1,0 +1,485 @@
+diff --git a/test/distributed/harness/__tests__/cluster-control-snapshot-owner-recovery-late-floor.test.js b/test/distributed/harness/__tests__/cluster-control-snapshot-owner-recovery-late-floor.test.js
+new file mode 100644
+index 00000000..135589b1
+--- /dev/null
++++ b/test/distributed/harness/__tests__/cluster-control-snapshot-owner-recovery-late-floor.test.js
+@@ -0,0 +1,126 @@
++import {
++  assert,
++  buildSelectedSnapshotSourceTimeoutError,
++  createCluster,
++  NODE_ROLES,
++  SELECTED_SNAPSHOT_SOURCE_TIMEOUT_CAPTURED_AT_MS,
++  SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_MODE,
++  SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_RETRY_TIMEOUT_MS,
++  SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_ID,
++  SELECTED_SNAPSHOT_SOURCE_TIMEOUT_UNSELECTED_ERROR_PREFIX,
++  SERVICE_STATUS,
++  SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE,
++  SNAPSHOT_REPLAY_TEST_CLUSTER_SIZE,
++  SNAPSHOT_REPLAY_TEST_DOCKER_SOCKET_PATH,
++  SNAPSHOT_REPLAY_TEST_EMPTY_LOG,
++  SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS,
++  SNAPSHOT_REPLAY_TEST_FIRST_CALL_INDEX,
++  SNAPSHOT_REPLAY_TEST_IMAGE,
++  SNAPSHOT_REPLAY_TEST_NODE_ID,
++  SNAPSHOT_REPLAY_TEST_RETRY_CALL_INDEX,
++  SNAPSHOT_TIMEOUT_REPAIR_ASSERTION,
++  test,
++} from './cluster-control-snapshot-timeout-repair-fixtures.js';
++
++const OWNER_RECOVERY_LATE_FLOOR_TEST_NAME =
++  'Unit: _probeControlSnapshotCoverage keeps owner-recovery retry floor ' +
++  'after late load selected-source timeout';
++const OWNER_RECOVERY_LATE_INITIAL_TIMEOUT_MS = 100;
++
++test(OWNER_RECOVERY_LATE_FLOOR_TEST_NAME, async () => {
++  const cluster = createCluster({
++    size: SNAPSHOT_REPLAY_TEST_CLUSTER_SIZE,
++    docker: {socketPath: SNAPSHOT_REPLAY_TEST_DOCKER_SOCKET_PATH},
++    image: SNAPSHOT_REPLAY_TEST_IMAGE,
++  });
++  const snapshotProbeCalls = [];
++
++  for (const nodeId of SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS) {
++    cluster._nodes.set(nodeId, {
++      id: nodeId,
++      role:
++        nodeId === SNAPSHOT_REPLAY_TEST_NODE_ID.SEED ?
++          NODE_ROLES.SEED :
++          NODE_ROLES.JOINER,
++      _resetAdminSocket(_lane) {},
++      async getStatus() {
++        return {rows: [{status: SERVICE_STATUS.ACTIVE}]};
++      },
++      async getReachabilityDiagnostics(options = {}) {
++        const adminReady =
++          nodeId === SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_ID;
++        return {
++          reachable: adminReady,
++          adminReady,
++          reachableBy: adminReady ?
++            SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE :
++            null,
++          lastError: null,
++          skipBootstrapReadiness: options.skipBootstrapReadiness === true,
++        };
++      },
++      async getControlSnapshot(options = {}) {
++        snapshotProbeCalls.push({
++          nodeId,
++          timeoutMs: options.timeoutMs,
++          lane: options.lane,
++        });
++        if (nodeId === SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_ID) {
++          throw new Error(buildSelectedSnapshotSourceTimeoutError(
++            nodeId,
++            options.timeoutMs,
++          ));
++        }
++        throw new Error(
++          SELECTED_SNAPSHOT_SOURCE_TIMEOUT_UNSELECTED_ERROR_PREFIX + nodeId,
++        );
++      },
++      async getLogs(_options) {
++        return SNAPSHOT_REPLAY_TEST_EMPTY_LOG;
++      },
++    });
++  }
++
++  const originalDateNow = Date.now;
++  Date.now = () => SELECTED_SNAPSHOT_SOURCE_TIMEOUT_CAPTURED_AT_MS;
++  let coverage;
++  try {
++    coverage = await cluster._probeControlSnapshotCoverage(
++      Date.now() + OWNER_RECOVERY_LATE_INITIAL_TIMEOUT_MS,
++      SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS,
++      {readinessMode: SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_MODE},
++    );
++  } finally {
++    Date.now = originalDateNow;
++  }
++  const selectedCalls = snapshotProbeCalls.filter((call) => {
++    return call.nodeId === SELECTED_SNAPSHOT_SOURCE_TIMEOUT_RESET_NODE_ID;
++  });
++
++  assert.strictEqual(
++    selectedCalls[SNAPSHOT_REPLAY_TEST_FIRST_CALL_INDEX].timeoutMs,
++    OWNER_RECOVERY_LATE_INITIAL_TIMEOUT_MS,
++    SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.LOAD_RETRY_FIRST_TIMEOUT,
++  );
++  assert.strictEqual(
++    selectedCalls[SNAPSHOT_REPLAY_TEST_RETRY_CALL_INDEX].timeoutMs,
++    SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_RETRY_TIMEOUT_MS,
++    SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.LOAD_RETRY_TIMEOUT,
++  );
++  assert.strictEqual(
++    coverage.selectedSnapshotTimeoutMs,
++    SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_RETRY_TIMEOUT_MS,
++    SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.STARTUP_RETRY_EXHAUSTED_TIMEOUT,
++  );
++  assert.strictEqual(
++    coverage.selectedSnapshotObservationRetryAfterMs,
++    SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_RETRY_TIMEOUT_MS,
++    SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.STARTUP_RETRY_EXHAUSTED_OBSERVATION,
++  );
++  assert.strictEqual(
++    coverage.selectedMembershipPublicationHandoffOutcome?.retryAfterMs,
++    SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_RETRY_TIMEOUT_MS,
++    SNAPSHOT_TIMEOUT_REPAIR_ASSERTION
++      .STARTUP_RETRY_EXHAUSTED_OWNER_QUEUE,
++  );
++});
+diff --git a/test/distributed/harness/__tests__/cluster-control-snapshot-repair-pressure.test.js b/test/distributed/harness/__tests__/cluster-control-snapshot-repair-pressure.test.js
+index b029eec4..0fce9761 100644
+--- a/test/distributed/harness/__tests__/cluster-control-snapshot-repair-pressure.test.js
++++ b/test/distributed/harness/__tests__/cluster-control-snapshot-repair-pressure.test.js
+@@ -10,7 +10,7 @@ const TEST_CLUSTER_SIZE = 5;
+ const TEST_LATE_DEADLINE_EXTENSION_MS = 1;
+ const TEST_DEADLINE_EXTENSION_MS = 5000;
+ const TEST_INITIAL_TIMEOUT_MS = 100;
+-const TEST_RETRY_TIMEOUT_MS = 3000;
++const TEST_RETRY_TIMEOUT_MS = 2500;
+ const TEST_DOCKER_SOCKET_PATH = '/var/run/docker.sock';
+ const TEST_IMAGE = 'distributed-db:test';
+ const TEST_EMPTY_LOG = '';
+@@ -112,7 +112,7 @@ test(TEST_NAME, async () => {
+             options.forceAuthoritativeRepair === true,
+         });
+         if (nodeId === TEST_SELECTED_NODE_ID) {
+-          if (options.forceAuthoritativeRepair === true) {
++          if (options.forceRepair === true) {
+             throw new Error(TEST_REPAIR_CONNECTION_CLOSED_ERROR);
+           }
+           return {
+@@ -163,7 +163,7 @@ test(TEST_NAME, async () => {
+         nodeId: TEST_SELECTED_NODE_ID,
+         lane: TEST_SNAPSHOT_LANE,
+         forceRepair: true,
+-        forceAuthoritativeRepair: true,
++        forceAuthoritativeRepair: false,
+       },
+       {
+         nodeId: TEST_SELECTED_NODE_ID,
+diff --git a/test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-fixtures.js b/test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-fixtures.js
+index fd250eb1..02f53c81 100644
+--- a/test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-fixtures.js
++++ b/test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-fixtures.js
+@@ -246,8 +246,8 @@ export const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_RETRY_EXHAUSTED_TEST_NAME =
+   'Unit: _probeControlSnapshotCoverage records load owner-recovery retry ' +
+   'after selected source timeout';
+ export const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_HANDOFF_RETURN_TEST_NAME =
+-  'Unit: _probeControlSnapshotCoverage returns after bounded load ' +
+-  'owner-recovery handoff';
++  'Unit: _probeControlSnapshotCoverage probes remaining witnesses after ' +
++  'synthetic load owner-recovery handoff';
+ export const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_REACHABILITY_PREFILTER_TEST_NAME =
+   'Unit: _probeControlSnapshotCoverage prefilters load snapshot probes by ' +
+   'admin reachability';
+@@ -645,7 +645,7 @@ export const SNAPSHOT_TIMEOUT_REPAIR_ASSERTION = Object.freeze({
+   LOAD_LANE_RESET:
+     'load selected snapshot timeout should reset only the snapshot lane',
+   LOAD_HANDOFF_RETURN_PROBE_COUNT:
+-    'load owner-recovery handoff should return after the selected source publishes a bounded handoff with no alternative witness',
++    'synthetic load owner-recovery handoff should not suppress remaining snapshot probes without real diagnostics',
+   LOAD_HANDOFF_RETURN_PUBLISHED:
+     'load owner-recovery handoff should preserve the published active coverage witness',
+   LOAD_REACHABILITY_PREFILTER_SOURCE:
+diff --git a/test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-forced-transport-test-cases.js b/test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-forced-transport-test-cases.js
+index 7c304e99..a63ae3d4 100644
+--- a/test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-forced-transport-test-cases.js
++++ b/test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-forced-transport-test-cases.js
+@@ -59,7 +59,7 @@ import {
+   SNAPSHOT_REPLAY_TEST_FAST_PATH_TIMEOUT_BUFFER_MS,
+   SNAPSHOT_REPLAY_TEST_FORCED_REPAIR_TEST_NAME,
+   SNAPSHOT_REPLAY_TEST_HANDOFF_NEXT_ACTION_WAIT_OWNER_RECOVERY,
+-  SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_ENQUEUED_FALSE,
++  SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_ENQUEUED,
+   SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_STATE_WRITE_DEFERRED,
+   SNAPSHOT_REPLAY_TEST_HANDOFF_PENDING_RECONCILE_COUNT,
+   SNAPSHOT_REPLAY_TEST_HANDOFF_PENDING_RECOVERY_COUNT,
+@@ -888,7 +888,7 @@ test(
+         state: SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_STATE_WRITE_DEFERRED,
+         reasonCode:
+           SNAPSHOT_REPLAY_TEST_HANDOFF_REASON_OWNER_RECONCILE_PENDING,
+-        enqueued: SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_ENQUEUED_FALSE,
++        enqueued: SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_ENQUEUED,
+         retryAfterMs: coverage.selectedSnapshotObservationRetryAfterMs,
+       },
+       SNAPSHOT_TIMEOUT_REPAIR_ASSERTION
+diff --git a/test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-selected-source-test-cases.js b/test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-selected-source-test-cases.js
+index a2c67dd7..794e1d3e 100644
+--- a/test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-selected-source-test-cases.js
++++ b/test/distributed/harness/__tests__/cluster-control-snapshot-timeout-repair-selected-source-test-cases.js
+@@ -52,7 +52,6 @@ import {
+   SNAPSHOT_REPLAY_TEST_FIRST_CALL_INDEX,
+   SNAPSHOT_REPLAY_TEST_HANDOFF_NEXT_ACTION_WAIT_OWNER_RECOVERY,
+   SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_ENQUEUED,
+-  SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_ENQUEUED_FALSE,
+   SNAPSHOT_REPLAY_TEST_HANDOFF_OUTCOME_STATE_WRITE_DEFERRED,
+   SNAPSHOT_REPLAY_TEST_HANDOFF_PENDING_RECONCILE_COUNT,
+   SNAPSHOT_REPLAY_TEST_HANDOFF_PENDING_RECOVERY_COUNT,
+@@ -82,10 +81,11 @@ import {AdminControlSnapshot} from
+   '../../../../src/admin/admin-control-snapshot.js';
+ import {STATE} from '../../../../src/constants/index.js';
+ 
+-const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_PENDING_ELIGIBILITY_TEST_NAME =
+-  'Unit: resolveControlSnapshotNodeViews excludes pending ACK/recovery candidates';
+-const SNAPSHOT_TIMEOUT_REPAIR_PENDING_ELIGIBILITY_ASSERTION =
+-  'pending ACK and recovery nodes must not remain in active snapshot candidate vectors';
++const SELECTED_SNAPSHOT_SOURCE_TIMEOUT_PUBLISHED_DEBT_RETENTION_TEST_NAME =
++  'Unit: resolveControlSnapshotNodeViews retains durable published ' +
++  'ACK/recovery candidates';
++const SNAPSHOT_TIMEOUT_REPAIR_PUBLISHED_DEBT_RETENTION_ASSERTION =
++  'durable published ACK and recovery nodes must remain in effective coverage';
+ /**
+  * Feature: distributed-testing-framework
+  * Property 5: Multi-Host Container Distribution
+@@ -97,7 +97,7 @@ const SNAPSHOT_TIMEOUT_REPAIR_PENDING_ELIGIBILITY_ASSERTION =
+  *
+  * **Validates: Requirements 2.3**
+  */
+-test(SELECTED_SNAPSHOT_SOURCE_TIMEOUT_PENDING_ELIGIBILITY_TEST_NAME,
++test(SELECTED_SNAPSHOT_SOURCE_TIMEOUT_PUBLISHED_DEBT_RETENTION_TEST_NAME,
+   async () => {
+     const pendingAckNodeId = SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE;
+     const pendingRecoveryNodeId =
+@@ -137,98 +137,95 @@ test(SELECTED_SNAPSHOT_SOURCE_TIMEOUT_PENDING_ELIGIBILITY_TEST_NAME,
+     );
+ 
+     assert.deepStrictEqual(
+-      [
+-        ...activeNodeViews.locallyEligibleNodeIds,
+-        ...activeNodeViews.projectedServingNodeIds,
+-        ...activeNodeViews.effectiveActiveNodeIds,
+-        ...activeNodeViews.projectedActiveNodeIds,
+-      ].filter((nodeId) => blockedNodeIds.includes(nodeId)),
+-      [],
+-      SNAPSHOT_TIMEOUT_REPAIR_PENDING_ELIGIBILITY_ASSERTION,
++      activeNodeViews.effectiveActiveNodeIds
++        .filter((nodeId) => blockedNodeIds.includes(nodeId))
++        .sort(),
++      [...blockedNodeIds].sort(),
++      SNAPSHOT_TIMEOUT_REPAIR_PUBLISHED_DEBT_RETENTION_ASSERTION,
+     );
+   });
+ 
+ test(SNAPSHOT_REPLAY_TEST_LATE_TIMEOUT_TEST_NAME,
+-async () => {
+-  const cluster = createCluster({
+-    size: SNAPSHOT_REPLAY_TEST_LATE_TIMEOUT_CLUSTER_SIZE,
+-    docker: {socketPath: SNAPSHOT_REPLAY_TEST_DOCKER_SOCKET_PATH},
+-    image: SNAPSHOT_REPLAY_TEST_IMAGE,
+-  });
++  async () => {
++    const cluster = createCluster({
++      size: SNAPSHOT_REPLAY_TEST_LATE_TIMEOUT_CLUSTER_SIZE,
++      docker: {socketPath: SNAPSHOT_REPLAY_TEST_DOCKER_SOCKET_PATH},
++      image: SNAPSHOT_REPLAY_TEST_IMAGE,
++    });
+ 
+-  const snapshotProbeCalls = [];
+-  const reachabilityProbeCalls = [];
+-  for (const [index, nodeId] of SNAPSHOT_REPLAY_TEST_LATE_TIMEOUT_NODE_IDS.entries()) {
+-    cluster._nodes.set(nodeId, {
+-      id: nodeId,
+-      role: index === SNAPSHOT_REPLAY_TEST_FIRST_CALL_INDEX ?
+-        NODE_ROLES.SEED :
+-        NODE_ROLES.JOINER,
+-      async getStatus() {
+-        return {rows: [{status: SERVICE_STATUS.ACTIVE}]};
+-      },
+-      async getReachabilityDiagnostics(options = {}) {
+-        reachabilityProbeCalls.push({
+-          nodeId,
+-          timeoutMs: options.timeoutMs,
+-        });
+-        return {
+-          reachable: true,
+-          adminReady: true,
+-          reachableBy: SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE,
+-          lastError: null,
+-        };
+-      },
+-      async getControlSnapshot(options = {}) {
+-        snapshotProbeCalls.push({
+-          nodeId,
+-          timeoutMs: options.timeoutMs,
+-        });
+-        return {
+-          rows: [{
+-            nodes: [nodeId],
+-            capturedAtMs:
++    const snapshotProbeCalls = [];
++    const reachabilityProbeCalls = [];
++    for (const [index, nodeId] of SNAPSHOT_REPLAY_TEST_LATE_TIMEOUT_NODE_IDS.entries()) {
++      cluster._nodes.set(nodeId, {
++        id: nodeId,
++        role: index === SNAPSHOT_REPLAY_TEST_FIRST_CALL_INDEX ?
++          NODE_ROLES.SEED :
++          NODE_ROLES.JOINER,
++        async getStatus() {
++          return {rows: [{status: SERVICE_STATUS.ACTIVE}]};
++        },
++        async getReachabilityDiagnostics(options = {}) {
++          reachabilityProbeCalls.push({
++            nodeId,
++            timeoutMs: options.timeoutMs,
++          });
++          return {
++            reachable: true,
++            adminReady: true,
++            reachableBy: SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE,
++            lastError: null,
++          };
++        },
++        async getControlSnapshot(options = {}) {
++          snapshotProbeCalls.push({
++            nodeId,
++            timeoutMs: options.timeoutMs,
++          });
++          return {
++            rows: [{
++              nodes: [nodeId],
++              capturedAtMs:
+               SNAPSHOT_REPLAY_TEST_LATE_TIMEOUT_FLOOR_MS + index,
+-          }],
+-        };
+-      },
+-      async getLogs(_options) {
+-        return SNAPSHOT_REPLAY_TEST_EMPTY_LOG;
+-      },
+-    });
+-  }
++            }],
++          };
++        },
++        async getLogs(_options) {
++          return SNAPSHOT_REPLAY_TEST_EMPTY_LOG;
++        },
++      });
++    }
+ 
+-  const coverage = await cluster._probeControlSnapshotCoverage(
+-    Date.now() + SNAPSHOT_REPLAY_TEST_LATE_TIMEOUT_DEADLINE_EXTENSION_MS,
+-    SNAPSHOT_REPLAY_TEST_LATE_TIMEOUT_NODE_IDS,
+-  );
++    const coverage = await cluster._probeControlSnapshotCoverage(
++      Date.now() + SNAPSHOT_REPLAY_TEST_LATE_TIMEOUT_DEADLINE_EXTENSION_MS,
++      SNAPSHOT_REPLAY_TEST_LATE_TIMEOUT_NODE_IDS,
++    );
+ 
+-  assert.strictEqual(
+-    snapshotProbeCalls.length,
+-    SNAPSHOT_REPLAY_TEST_BOUNDED_RETRY_CALL_COUNT,
+-    SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.LATE_PROBES_INSPECT_REMAINING,
+-  );
+-  assert.ok(
+-    snapshotProbeCalls.every((call) =>
+-      call.timeoutMs >= SNAPSHOT_REPLAY_TEST_LATE_TIMEOUT_FLOOR_MS),
+-    SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.SNAPSHOT_TIMEOUT_FLOOR,
+-  );
+-  assert.ok(
+-    reachabilityProbeCalls.every((call) =>
+-      call.timeoutMs >= SNAPSHOT_REPLAY_TEST_LATE_TIMEOUT_FLOOR_MS),
+-    SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.REACHABILITY_TIMEOUT_FLOOR,
+-  );
+-  assert.ok(
+-    coverage.selectedSnapshotTimeoutMs >=
++    assert.strictEqual(
++      snapshotProbeCalls.length,
++      SNAPSHOT_REPLAY_TEST_BOUNDED_RETRY_CALL_COUNT,
++      SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.LATE_PROBES_INSPECT_REMAINING,
++    );
++    assert.ok(
++      snapshotProbeCalls.every((call) =>
++        call.timeoutMs >= SNAPSHOT_REPLAY_TEST_LATE_TIMEOUT_FLOOR_MS),
++      SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.SNAPSHOT_TIMEOUT_FLOOR,
++    );
++    assert.ok(
++      reachabilityProbeCalls.every((call) =>
++        call.timeoutMs >= SNAPSHOT_REPLAY_TEST_LATE_TIMEOUT_FLOOR_MS),
++      SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.REACHABILITY_TIMEOUT_FLOOR,
++    );
++    assert.ok(
++      coverage.selectedSnapshotTimeoutMs >=
+       SNAPSHOT_REPLAY_TEST_LATE_TIMEOUT_FLOOR_MS,
+-    SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.SELECTED_SNAPSHOT_TIMEOUT_FLOOR,
+-  );
+-  assert.ok(
+-    coverage.selectedReachabilityTimeoutMs >=
++      SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.SELECTED_SNAPSHOT_TIMEOUT_FLOOR,
++    );
++    assert.ok(
++      coverage.selectedReachabilityTimeoutMs >=
+       SNAPSHOT_REPLAY_TEST_LATE_TIMEOUT_FLOOR_MS,
+-    SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.SELECTED_REACHABILITY_TIMEOUT_FLOOR,
+-  );
+-});
++      SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.SELECTED_REACHABILITY_TIMEOUT_FLOOR,
++    );
++  });
+ 
+ test(SNAPSHOT_REPLAY_TEST_SNAPSHOT_LANE_FAILURE_TEST_NAME,
+   async () => {
+@@ -1226,22 +1223,22 @@ test(SELECTED_SNAPSHOT_SOURCE_TIMEOUT_LOAD_HANDOFF_RETURN_TEST_NAME,
+     );
+     assert.strictEqual(
+       snapshotProbeCalls.length,
+-      SNAPSHOT_REPLAY_TEST_BOUNDED_RETRY_CALL_COUNT,
++      SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS.length + 1,
+       SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.LOAD_HANDOFF_RETURN_PROBE_COUNT,
+     );
+     assert.deepStrictEqual(
+       [...new Set(snapshotProbeCalls.map((call) => call.nodeId))],
+-      [SNAPSHOT_REPLAY_TEST_NODE_ID.SEED],
++      SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS,
+       SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.LOAD_HANDOFF_RETURN_PROBE_COUNT,
+     );
+     assert.strictEqual(
+       resetCalls.length,
+-      SNAPSHOT_REPLAY_TEST_BOUNDED_RETRY_CALL_COUNT,
++      SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS.length + 1,
+       SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.LOAD_LANE_RESET,
+     );
+     assert.deepStrictEqual(
+       [...new Set(resetCalls.map((call) => call.nodeId))],
+-      [SNAPSHOT_REPLAY_TEST_NODE_ID.SEED],
++      SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS,
+       SNAPSHOT_TIMEOUT_REPAIR_ASSERTION.LOAD_LANE_RESET,
+     );
+     assert.ok(
+diff --git a/test/distributed/harness/cluster-control-snapshot-recovery.js b/test/distributed/harness/cluster-control-snapshot-recovery.js
+index b26d9742..84e0cd58 100644
+--- a/test/distributed/harness/cluster-control-snapshot-recovery.js
++++ b/test/distributed/harness/cluster-control-snapshot-recovery.js
+@@ -166,6 +166,7 @@ const OWNER_RECOVERY_HANDOFF_RETURN_DECISION_TABLE = Object.freeze([
+       evidence.snapshotRepairDeferred === true &&
+       evidence.selectedRetryBounded === true &&
+       evidence.selectedReasonAllowsActiveGateHandoff === true &&
++      evidence.controlPlaneDiagnosticsAvailable === true &&
+       evidence.adminReady === true &&
+       evidence.waitOwnerRecovery === true &&
+       evidence.ownerReconcilePending === true &&
+@@ -588,6 +589,8 @@ function normalizeOwnerRecoveryHandoffReturnEvidence({
+       controlSnapshotReasonAllowsActiveGateHandoff(
+         result?.snapshotObservationReasonCodes,
+       ),
++    controlPlaneDiagnosticsAvailable:
++      result?.controlPlaneDiagnosticsAvailable === true,
+     adminReady: result?.adminReady === true,
+     waitOwnerRecovery:
+       activeGateHandoff?.[
+@@ -793,6 +796,12 @@ function resolveSnapshotRetryTimeoutMs(
+   );
+   const ownerRecoveryReconcilePending =
+     options?.ownerRecoveryReconcilePending === true;
++  if (
++    ownerRecoveryReconcilePending &&
++    normalizedSnapshotTimeoutMs <= CONTROL_SNAPSHOT_LATE_PROBE_TIMEOUT_FLOOR_MS
++  ) {
++    return ownerRecoveryRetryTimeoutMs;
++  }
+   if (
+     normalizedProbeTimeoutScale > CONTROL_SNAPSHOT_DEFAULT_PROBE_TIMEOUT_SCALE
+   ) {

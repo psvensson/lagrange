@@ -1,0 +1,292 @@
+diff --git a/test/distributed/harness/__tests__/active-gate-closure-classification.test.js b/test/distributed/harness/__tests__/active-gate-closure-classification.test.js
+index 91a52448..9d3db069 100644
+--- a/test/distributed/harness/__tests__/active-gate-closure-classification.test.js
++++ b/test/distributed/harness/__tests__/active-gate-closure-classification.test.js
+@@ -113,12 +113,19 @@ const ACTIVE_GATE_PUBLICATION_BLOCKER_PROJECTION_TEST_NAME =
+   'active gate publication blocker projection consumes complete owner handoff coverage';
+ const ACTIVE_GATE_OWNER_RECOVERY_COMPLETE_COVERAGE_TEST_NAME =
+   'active gate owner-recovery full coverage clears stale snapshot coverage blocker';
++const ACTIVE_GATE_STARTUP_OWNER_RECOVERY_PARTIAL_COVERAGE_TEST_NAME =
++  'active gate startup owner-recovery coverage uses bounded published handoff';
+ const ACTIVE_GATE_SELECTED_SNAPSHOT_NODE_ID =
+   '8be8d30f-4499-5eed-865c-71b4d529a67a';
+ const ACTIVE_GATE_SELECTED_SNAPSHOT_TIMEOUT_ERROR =
+   'Admin API query timed out for node ' +
+   ACTIVE_GATE_SELECTED_SNAPSHOT_NODE_ID +
+   ' on lane snapshot after 2500ms';
++const ACTIVE_GATE_SELECTED_SNAPSHOT_REPAIR_DEFERRED_ERROR =
++  'Admin API query failed for node ' +
++  ACTIVE_GATE_SELECTED_SNAPSHOT_NODE_ID +
++  ' on lane snapshot: Authoritative control snapshot repair failed: ' +
++  'nodes:operational message-group ingress not ready';
+ const ACTIVE_GATE_SELECTED_SNAPSHOT_TIMEOUT_MS = 2500;
+ const ACTIVE_GATE_PUBLISHED_NODE_IDS = Object.freeze([
+   '35a891b8-c1a0-5064-9c6e-2acfba61c2a7',
+@@ -683,6 +690,43 @@ test(ACTIVE_GATE_OWNER_RECOVERY_COMPLETE_COVERAGE_TEST_NAME,
+       true,
+     );
+ 
++    const countOnlySnapshotCoverage = {
++      ...snapshotCoverage,
++      selectedPublicationActiveGateHandoff: {
++        ...snapshotCoverage.selectedPublicationActiveGateHandoff,
++        pendingRecoveryNodeIds: ACTIVE_GATE_EMPTY_NODE_IDS,
++        pendingRecoveryCount:
++          ACTIVE_GATE_OWNER_RECOVERY_HANDOFF_PENDING_COUNT,
++      },
++    };
++    const countOnlyProgressSnapshot =
++      CLUSTER_SEGMENT_2.buildActiveWaitProgressSnapshot(
++        {
++          allActive: false,
++          nodeDiagnostics: ACTIVE_GATE_ALL_PUBLISHED_NODE_IDS.map(
++            (nodeId, index) => ({
++              nodeId,
++              active: index !== ACTIVE_GATE_ZERO,
++            }),
++          ),
++          publicationConvergenceGate:
++            CLUSTER_SEGMENT_2.evaluateLoadPublishedConvergence(
++              countOnlySnapshotCoverage,
++              ACTIVE_GATE_ALL_PUBLISHED_NODE_IDS,
++            ),
++          snapshotCoverage: countOnlySnapshotCoverage,
++        },
++        ACTIVE_GATE_EXPECTED_NODE_COUNT,
++        {readinessMode: ACTIVE_GATE_READINESS_MODE_STARTUP},
++      );
++
++    assert.equal(countOnlyProgressSnapshot.snapshotCoverageComplete, false);
++    assert.equal(
++      countOnlyProgressSnapshot.blockers.some((blocker) =>
++        blocker.startsWith(ACTIVE_GATE_SNAPSHOT_COVERAGE_BLOCKER_PREFIX)),
++      true,
++    );
++
+     const graph = buildTopologyConvergenceGraph({
+       scenario: ACTIVE_GATE_TOPOLOGY_REPLAY_SCENARIO,
+       publicationConvergence: {
+@@ -720,6 +764,141 @@ test(ACTIVE_GATE_OWNER_RECOVERY_COMPLETE_COVERAGE_TEST_NAME,
+     );
+   });
+ 
++test(ACTIVE_GATE_STARTUP_OWNER_RECOVERY_PARTIAL_COVERAGE_TEST_NAME,
++  () => {
++    const snapshotCoverage = {
++      expectedNodeCount: ACTIVE_GATE_EXPECTED_NODE_COUNT,
++      bestCoverageNodeCount:
++        ACTIVE_GATE_OWNER_RECOVERY_HANDOFF_PENDING_COUNT,
++      completeCoverage: false,
++      selectedNodeId: ACTIVE_GATE_SELECTED_SNAPSHOT_NODE_ID,
++      selectedAdminReady: true,
++      selectedSnapshotTimeoutMs: ACTIVE_GATE_SELECTED_SNAPSHOT_TIMEOUT_MS,
++      selectedError: ACTIVE_GATE_SELECTED_SNAPSHOT_REPAIR_DEFERRED_ERROR,
++      selectedPublishedActiveNodeIds: ACTIVE_GATE_ALL_PUBLISHED_NODE_IDS,
++      selectedMissingPublishedNodeIds: ACTIVE_GATE_EMPTY_NODE_IDS,
++      selectedSnapshotObservationMode:
++        ACTIVE_GATE_SNAPSHOT_OBSERVATION_MODE_REPAIR_DEFERRED,
++      selectedSnapshotObservationState:
++        ACTIVE_GATE_SNAPSHOT_OBSERVATION_STATE_DEFERRED_REFRESH,
++      selectedSnapshotObservationContractState:
++        ACTIVE_GATE_SNAPSHOT_OBSERVATION_CONTRACT_DEFERRED,
++      selectedSnapshotObservationRefreshState:
++        ACTIVE_GATE_SNAPSHOT_OBSERVATION_CONTRACT_DEFERRED,
++      selectedSnapshotObservationNextAction:
++        ACTIVE_GATE_SNAPSHOT_OBSERVATION_NEXT_ACTION_RETRY,
++      selectedSnapshotObservationReasonCodes: [
++        ACTIVE_GATE_SNAPSHOT_OBSERVATION_REASON_SELECTED_TIMEOUT,
++      ],
++      selectedSnapshotObservationRetryAfterMs:
++        ACTIVE_GATE_SELECTED_SNAPSHOT_TIMEOUT_MS,
++      selectedSnapshotRepairDeferred: true,
++      selectedControlPlaneOwnerQueueDepth: {
++        pendingWrites: ACTIVE_GATE_OWNER_RECOVERY_HANDOFF_PENDING_COUNT,
++        pendingWriteGrowthCount:
++          ACTIVE_GATE_OWNER_RECOVERY_QUEUE_PENDING_WRITE_GROWTH_COUNT,
++      },
++      selectedPublicationActiveGateHandoff: {
++        state: PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,
++        reasonCode:
++          PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING,
++        nextAction:
++          PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.WAIT_OWNER_RECOVERY,
++        runtimePromotionAllowed:
++          ACTIVE_GATE_HANDOFF_RUNTIME_PROMOTION_ALLOWED_FALSE,
++        publishedActiveNodeIds: ACTIVE_GATE_ALL_PUBLISHED_NODE_IDS,
++        missingPublishedNodeIds: ACTIVE_GATE_EMPTY_NODE_IDS,
++        missingPublishedCount: ACTIVE_GATE_ZERO,
++        pendingRecoveryNodeIds:
++          ACTIVE_GATE_OWNER_RECOVERY_HANDOFF_PENDING_NODE_IDS,
++        pendingRecoveryCount:
++          ACTIVE_GATE_OWNER_RECOVERY_HANDOFF_PENDING_COUNT,
++        pendingReconcileNodeIds: ACTIVE_GATE_EMPTY_NODE_IDS,
++        pendingReconcileCount: ACTIVE_GATE_ZERO,
++        membershipPublicationHandoffOutcome: {
++          state: ACTIVE_GATE_HANDOFF_OUTCOME_STATE_WRITE_DEFERRED,
++          reasonCode:
++            PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING,
++          enqueued: ACTIVE_GATE_HANDOFF_OUTCOME_ENQUEUED,
++          retryAfterMs: ACTIVE_GATE_SELECTED_SNAPSHOT_TIMEOUT_MS,
++        },
++      },
++    };
++    const publicationConvergenceGate =
++      CLUSTER_SEGMENT_2.evaluateLoadPublishedConvergence(
++        snapshotCoverage,
++        ACTIVE_GATE_ALL_PUBLISHED_NODE_IDS,
++      );
++    const progressSnapshot = CLUSTER_SEGMENT_2.buildActiveWaitProgressSnapshot(
++      {
++        allActive: false,
++        nodeDiagnostics: ACTIVE_GATE_ALL_PUBLISHED_NODE_IDS.map(
++          (nodeId, index) => ({
++            nodeId,
++            active: index !== ACTIVE_GATE_ZERO,
++          }),
++        ),
++        publicationConvergenceGate,
++        snapshotCoverage,
++      },
++      ACTIVE_GATE_EXPECTED_NODE_COUNT,
++      {readinessMode: ACTIVE_GATE_READINESS_MODE_STARTUP},
++    );
++
++    assert.equal(progressSnapshot.snapshotCoverageNodeCount,
++      ACTIVE_GATE_OWNER_RECOVERY_HANDOFF_PENDING_COUNT);
++    assert.equal(progressSnapshot.snapshotCoverageComplete, true);
++    assert.equal(
++      progressSnapshot.blockers.some((blocker) =>
++        blocker.startsWith(ACTIVE_GATE_SNAPSHOT_COVERAGE_BLOCKER_PREFIX)),
++      false,
++    );
++    assert.equal(
++      progressSnapshot.blockers.includes(ACTIVE_GATE_SNAPSHOT_ERROR_BLOCKER),
++      true,
++    );
++    assert.equal(
++      progressSnapshot.blockers.includes(ACTIVE_GATE_INACTIVE_NODES_BLOCKER),
++      true,
++    );
++
++    const graph = buildTopologyConvergenceGraph({
++      scenario: ACTIVE_GATE_TOPOLOGY_REPLAY_SCENARIO,
++      publicationConvergence: {
++        publicationStatus: ACTIVE_GATE_PUBLICATION_STATUS_PUBLISHED,
++        pendingAckNodeIds: ACTIVE_GATE_EMPTY_NODE_IDS,
++        pendingAckCount: ACTIVE_GATE_ZERO,
++        publishedActiveNodeIds: ACTIVE_GATE_ALL_PUBLISHED_NODE_IDS,
++        missingPublishedNodeIds: ACTIVE_GATE_EMPTY_NODE_IDS,
++        missingPublishedCount: ACTIVE_GATE_ZERO,
++        activeGate: {
++          state: ACTIVE_GATE_TOPOLOGY_REPLAY_ACTIVE_GATE_STATE_TIMED_OUT,
++          progress: progressSnapshot,
++        },
++      },
++      summary: {
++        readinessFailure: {
++          mode: ACTIVE_GATE_READINESS_MODE_STARTUP,
++          classCode: ACTIVE_GATE_TOPOLOGY_READINESS_CLASS_SNAPSHOT_TIMEOUT,
++          terminalReason:
++            ACTIVE_GATE_TOPOLOGY_REPLAY_READINESS_TERMINAL_REASON,
++          source:
++            ACTIVE_GATE_TOPOLOGY_READINESS_SOURCE_SELECTED_SNAPSHOT_ERROR,
++          cause: ACTIVE_GATE_TOPOLOGY_READINESS_CAUSE_SNAPSHOT_TIMEOUT,
++        },
++      },
++    });
++    const activeGateEdge = graph.edges.find((edge) =>
++      edge.id === EDGE_ID.ACTIVE_GATE_SNAPSHOT_COVERAGE,
++    );
++
++    assert.equal(activeGateEdge.state, 'satisfied');
++    assert.equal(
++      graph.summary.firstFrontierEdgeId,
++      ACTIVE_GATE_READINESS_STARTUP_SUPPORT_EDGE,
++    );
++  });
++
+ test(ACTIVE_GATE_TOPOLOGY_REPLAY_TEST_NAME,
+   () => {
+     const sourceGraph = buildTopologyConvergenceGraph(
+diff --git a/test/distributed/harness/cluster-segment-2.js b/test/distributed/harness/cluster-segment-2.js
+index dadbdad9..205df18b 100644
+--- a/test/distributed/harness/cluster-segment-2.js
++++ b/test/distributed/harness/cluster-segment-2.js
+@@ -1,6 +1,5 @@
+ import {CLUSTER_SEGMENT_1} from './cluster-segment-1.js';
+ import {
+-  TYPEOF_OBJECT,
+   TYPEOF_STRING,
+   normalizeDistinctStringArray,
+   normalizeFirstNonEmptyDistinctStringArray,
+@@ -315,6 +314,18 @@ function normalizeNonNegativeInteger(value) {
+     ZERO;
+ }
+ 
++function hasOwnerRecoverySnapshotCoverageMode({
++  readinessMode,
++  expectedNodeCount,
++  snapshotCoverageNodeCount,
++} = {}) {
++  if (readinessMode === CLUSTER_READINESS_MODE_LOAD) {
++    return snapshotCoverageNodeCount >= expectedNodeCount;
++  }
++  return readinessMode === CLUSTER_READINESS_MODE_STARTUP &&
++    snapshotCoverageNodeCount > ZERO;
++}
++
+ function hasBoundedOwnerRecoverySnapshotCoverage({
+   readinessMode,
+   expectedNodeCount,
+@@ -340,10 +351,13 @@ function hasBoundedOwnerRecoverySnapshotCoverage({
+   selectedControlPlaneOwnerQueueDepth,
+ } = {}) {
+   if (
+-    readinessMode !== CLUSTER_READINESS_MODE_LOAD ||
+     expectedNodeCount <= ZERO ||
+-    snapshotCoverageNodeCount < expectedNodeCount ||
+-    selectedPublishedActiveNodeIds.length < expectedNodeCount
++    selectedPublishedActiveNodeIds.length < expectedNodeCount ||
++    hasOwnerRecoverySnapshotCoverageMode({
++      readinessMode,
++      expectedNodeCount,
++      snapshotCoverageNodeCount,
++    }) !== true
+   ) {
+     return false;
+   }
+@@ -359,6 +373,12 @@ function hasBoundedOwnerRecoverySnapshotCoverage({
+     activeGateOwnerCohortPendingRecoveryNodeIds.every((nodeId) =>
+       selectedPublishedActiveNodeIdSet.has(nodeId),
+     );
++  const pendingRecoveryCount = normalizeNonNegativeInteger(
++    activeGateOwnerCohortPendingRecoveryCount,
++  );
++  const pendingRecoveryDebtPresent =
++    activeGateOwnerCohortPendingRecoveryNodeIds.length > ZERO &&
++    pendingRecoveryCount >= activeGateOwnerCohortPendingRecoveryNodeIds.length;
+   return (
+     selectedSnapshotRepairDeferred === true &&
+     selectedSnapshotObservationMode === ACTIVE_GATE_OWNER_RECOVERY_SNAPSHOT_MODE &&
+@@ -373,8 +393,7 @@ function hasBoundedOwnerRecoverySnapshotCoverage({
+     activeGateOwnerCohortReasonCode ===
+       ACTIVE_GATE_OWNER_RECOVERY_HANDOFF_REASON_OWNER_RECONCILE &&
+     activeGateOwnerCohortMissingPublishedCount === ZERO &&
+-    activeGateOwnerCohortPendingRecoveryNodeIds.length >= expectedNodeCount &&
+-    activeGateOwnerCohortPendingRecoveryCount >= expectedNodeCount &&
++    pendingRecoveryDebtPresent === true &&
+     pendingRecoveryCoveredByPublishedActive === true &&
+     activeGateOwnerCohortPendingReconcileCount === ZERO &&
+     publicationActiveGateHandoffNextAction ===
+@@ -387,7 +406,10 @@ function hasBoundedOwnerRecoverySnapshotCoverage({
+     membershipPublicationHandoffOutcomeEnqueued === true &&
+     normalizeNonNegativeInteger(membershipPublicationHandoffOutcomeRetryAfterMs) >
+       ZERO &&
+-    pendingWrites >= expectedNodeCount &&
++    pendingWrites >= Math.max(
++      pendingRecoveryCount,
++      activeGateOwnerCohortPendingRecoveryNodeIds.length,
++    ) &&
+     pendingWriteGrowthCount === ZERO
+   );
+ }

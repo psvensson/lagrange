@@ -22,6 +22,7 @@ import {
   SERVICE_DISCOVERY_NO_CANDIDATES_ERROR,
   TYPEOF_BOOLEAN,
   TYPEOF_STRING,
+  aggregateControlSnapshotOwnerRecoveryWitnesses,
   buildControlSnapshotObservationSummary,
   buildControlSnapshotRetryObservationSummary,
   buildTerminalControlSnapshotActiveGateHandoff,
@@ -83,6 +84,33 @@ import {Cluster4} from './cluster-segment-7-class-4.js';
 
 const LOAD_REACHABILITY_PREFLIGHT_RANK_UNKNOWN = 2;
 const LOAD_REACHABILITY_PREFLIGHT_RANK_NOT_READY = 3;
+const ACTIVE_GATE_HANDOFF_NEXT_ACTION_WAIT_OWNER_RECOVERY =
+  'wait_owner_recovery';
+
+function loadSelectedRetryNeedsRemainingWitnessPass(result = null) {
+  return (
+    result?.snapshotTimeoutEncountered === true &&
+    result?.snapshotRepairDeferred === true &&
+    result?.adminReady === true &&
+    result?.controlPlaneDiagnosticsAvailable !== true &&
+    result?.publicationActiveGateHandoff?.nextAction ===
+      ACTIVE_GATE_HANDOFF_NEXT_ACTION_WAIT_OWNER_RECOVERY &&
+    result?.missingExpectedNodeCount > ZERO
+  );
+}
+
+function resolveLoadRemainingWitnessSnapshotTimeoutMs(result = null) {
+  const retryAfterMs = parseFiniteNumberField(
+    result?.snapshotObservationRetryAfterMs,
+  );
+  if (retryAfterMs !== null) {
+    return Math.max(MIN_TIMEOUT_MS, Math.floor(retryAfterMs));
+  }
+  const snapshotTimeoutMs = parseFiniteNumberField(result?.snapshotTimeoutMs);
+  return snapshotTimeoutMs !== null ?
+    Math.max(MIN_TIMEOUT_MS, Math.floor(snapshotTimeoutMs)) :
+    MIN_TIMEOUT_MS;
+}
 
 class Cluster5 extends Cluster4 {
   async _probeControlSnapshotCoverage(
@@ -496,15 +524,21 @@ class Cluster5 extends Cluster4 {
           alternativeSnapshotWitnessAvailable:
             loadAlternativeSnapshotWitnessAvailable,
         });
+      const loadRemainingWitnessPassRequired =
+        readinessMode === CLUSTER_READINESS_MODE_LOAD &&
+        ownerRecoveryHandoffAllowsBoundedReturn !== true &&
+        loadSelectedRetryNeedsRemainingWitnessPass(firstResult);
       if (
         firstResult.missingExpectedNodeCount !== ZERO &&
         nodes.length > ONE &&
         ownerRecoveryHandoffAllowsBoundedReturn !== true &&
-        loadSnapshotCoverageAttemptDeadlineExpired() !== true
+        (loadSnapshotCoverageAttemptDeadlineExpired() !== true ||
+          loadRemainingWitnessPassRequired === true)
       ) {
-        const remainingSnapshotTimeoutMs = resolveSnapshotProbeTimeoutMs(
-          CONTROL_SNAPSHOT_PROBE_TIMEOUT_MS,
-        );
+        const remainingSnapshotTimeoutMs =
+          loadRemainingWitnessPassRequired === true ?
+            resolveLoadRemainingWitnessSnapshotTimeoutMs(firstResult) :
+            resolveSnapshotProbeTimeoutMs(CONTROL_SNAPSHOT_PROBE_TIMEOUT_MS);
         const remainingReachabilityTimeoutMs =
           resolveReachabilityProbeTimeoutMs(
             CONTROL_SNAPSHOT_REACHABILITY_PROBE_TIMEOUT_MS,
@@ -512,7 +546,10 @@ class Cluster5 extends Cluster4 {
         const remainingNodes = nodes.slice(1);
         if (readinessMode === CLUSTER_READINESS_MODE_LOAD) {
           for (const node of remainingNodes) {
-            if (loadSnapshotCoverageAttemptDeadlineExpired()) {
+            if (
+              loadSnapshotCoverageAttemptDeadlineExpired() &&
+              loadRemainingWitnessPassRequired !== true
+            ) {
               break;
             }
             const remainingResult = await probeNodeSnapshotCoverage(
@@ -668,6 +705,13 @@ class Cluster5 extends Cluster4 {
       snapshotProbeResults,
       selectedResult,
     );
+    if (readinessMode === CLUSTER_READINESS_MODE_LOAD) {
+      selectedResult = aggregateControlSnapshotOwnerRecoveryWitnesses({
+        selectedResult,
+        snapshotProbeResults,
+        expectedNodeIds: [...expectedNodeSet],
+      });
+    }
     const selectedReachabilityFallback =
       hasControlSnapshotReachabilityFallback(selectedResult);
     const selectedAdminReady =

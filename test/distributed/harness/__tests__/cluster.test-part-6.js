@@ -29,6 +29,9 @@ import {
   PORTS,
   RAFT_PROVIDER_DEFAULTS,
 } from './cluster-test-helpers.js';
+import {
+  selectStartupActiveGateOwnerProgressContinuation,
+} from '../cluster-segment-7-alpha-active-wait.js';
 
 import {
   registerClusterPart6Core01Tests,
@@ -504,6 +507,7 @@ const clusterPart6TestContext = {
   QUIESCENCE_STALE_PROGRESS_TIMEOUT_MS,
   RAFT_PROVIDER_DEFAULTS,
   RUNTIME_AUTHORITY_REPAIR_STATE,
+  selectStartupActiveGateOwnerProgressContinuation,
   summarizePriorityRecoveryProgressClasses,
   TERMINAL_IN_FLIGHT_PRIORITY_REGRESSION_ACTIVE_STATE,
   TERMINAL_IN_FLIGHT_PRIORITY_REGRESSION_ADMIN_HEALTH,

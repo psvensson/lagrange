@@ -1,0 +1,480 @@
+diff --git a/test/distributed/harness/__tests__/cluster-part-6-core-04-test-cases.js b/test/distributed/harness/__tests__/cluster-part-6-core-04-test-cases.js
+index 46be3ce5..0323bf34 100644
+--- a/test/distributed/harness/__tests__/cluster-part-6-core-04-test-cases.js
++++ b/test/distributed/harness/__tests__/cluster-part-6-core-04-test-cases.js
+@@ -423,6 +423,119 @@ export function registerClusterPart6Core04Tests(context) {
+       );
+     });
+ 
++  test(
++    'Unit: waitForLoadReadinessStability can require active-gate promotion',
++    async () => {
++      const cluster = createCluster({
++        size: LOAD_READINESS_CANONICAL_CLUSTER_SIZE,
++        docker: {socketPath: LOAD_READINESS_CANONICAL_DOCKER_SOCKET},
++        image: LOAD_READINESS_CANONICAL_IMAGE,
++      });
++
++      const recordedStages = [];
++      cluster._recordClusterStage = (stage, details = {}) => {
++        recordedStages.push({stage, details});
++      };
++      cluster._collectFailureLogs = async () => {
++        throw new Error(LOAD_READINESS_CANONICAL_LOG_FAILURE);
++      };
++
++      let sleepCallCount = LOAD_READINESS_CANONICAL_ZERO_COUNT;
++      let probeCallCount = LOAD_READINESS_CANONICAL_ZERO_COUNT;
++      let fakeNowMs = LOAD_READINESS_CANONICAL_START_MS;
++      const originalDateNow = Date.now;
++      Date.now = () => fakeNowMs;
++      cluster._sleep = async () => {
++        sleepCallCount += LOAD_READINESS_CANONICAL_SINGLE_PROBE_COUNT;
++        fakeNowMs += LOAD_READINESS_CANONICAL_SINGLE_PROBE_COUNT;
++      };
++      cluster._probeClusterActiveState = async () => {
++        probeCallCount += LOAD_READINESS_CANONICAL_SINGLE_PROBE_COUNT;
++        const ownerRecoveryPending =
++          probeCallCount === LOAD_READINESS_CANONICAL_SINGLE_PROBE_COUNT;
++        return {
++          allActive: true,
++          nodeDiagnostics: [
++            {
++              nodeId: LOAD_READINESS_CANONICAL_NODE_A,
++              active: true,
++              state: LOAD_READINESS_CANONICAL_ACTIVE_STATE,
++              reasons: [],
++            },
++            {
++              nodeId: LOAD_READINESS_CANONICAL_NODE_B,
++              active: true,
++              state: LOAD_READINESS_CANONICAL_ACTIVE_STATE,
++              reasons: [],
++            },
++          ],
++          snapshotCoverage: {
++            completeCoverage: false,
++            expectedNodeCount: LOAD_READINESS_CANONICAL_CLUSTER_SIZE,
++            bestCoverageNodeCount:
++              LOAD_READINESS_PARTIAL_COVERAGE_BEST_NODE_COUNT,
++            selectedPublicationActiveGateHandoff: ownerRecoveryPending ?
++              {
++                state: 'pending',
++                reasonCode: 'owner_reconcile_pending',
++                nextAction: 'wait_owner_recovery',
++                runtimePromotionAllowed: false,
++                pendingRecoveryCount:
++                  LOAD_READINESS_CANONICAL_SINGLE_PROBE_COUNT,
++              } :
++              {
++                state: 'complete',
++                reasonCode: 'owner_cohort_complete',
++                nextAction: 'admit_active_gate',
++                runtimePromotionAllowed: true,
++                pendingRecoveryCount:
++                  LOAD_READINESS_CANONICAL_ZERO_COUNT,
++              },
++          },
++          publicationConvergenceGate: {
++            ready: true,
++            reasons: [],
++            publicationStatus: LOAD_READINESS_CANONICAL_PUBLICATION_STATUS,
++            pendingAckNodeIds: [],
++            missingPublishedNodeIds: [],
++            priorityPartitionSummary: {
++              satisfied: true,
++              blockedPartitionCount: LOAD_READINESS_CANONICAL_ZERO_COUNT,
++              totalSpreadGap: LOAD_READINESS_CANONICAL_ZERO_COUNT,
++            },
++          },
++        };
++      };
++
++      try {
++        await cluster.waitForLoadReadinessStability({
++          stableWindowMs: LOAD_READINESS_CANONICAL_SINGLE_PROBE_COUNT,
++          timeoutMs: LOAD_READINESS_CANONICAL_TIMEOUT_MS,
++          requireActiveGatePromotion: true,
++        });
++      } finally {
++        Date.now = originalDateNow;
++      }
++
++      assert.equal(
++        probeCallCount,
++        3,
++        'owner-recovery pending evidence should reset the stable window',
++      );
++      assert.equal(sleepCallCount, 2);
++      const stableStage = recordedStages.find(
++        (entry) => entry.stage === LOAD_READINESS_CANONICAL_STAGE,
++      );
++      assert.equal(
++        stableStage?.details?.loadReadinessAdmissionGate?.required,
++        true,
++      );
++      assert.equal(
++        stableStage?.details?.loadReadinessAdmissionGate?.state,
++        'ready',
++      );
++    });
++
+   test(LOAD_READINESS_FORCE_REPAIR_TEST_NAME, async () => {
+     const cluster = createCluster({
+       size: LOAD_READINESS_CANONICAL_CLUSTER_SIZE,
+diff --git a/test/distributed/harness/__tests__/rolling-restart-scenario.test.js b/test/distributed/harness/__tests__/rolling-restart-scenario.test.js
+index 58a5d856..69de2194 100644
+--- a/test/distributed/harness/__tests__/rolling-restart-scenario.test.js
++++ b/test/distributed/harness/__tests__/rolling-restart-scenario.test.js
+@@ -312,9 +312,9 @@ describe('rolling-restart scenario', () => {
+         getNodes: () => [seedNode, joinerNode],
+         waitForLoadReadinessStability: async (options = {}) => {
+           calls.push(['waitForLoadReadinessStability', options]);
+-          if (options.loadReadinessPhase === LOAD_READINESS_PHASE_PRE_LOAD) {
+-            throw new Error('generic load readiness timed out');
+-          }
++        },
++        waitForControlPlaneQuiescence: async (options = {}) => {
++          calls.push(['waitForControlPlaneQuiescence', options]);
+         },
+         resolveBenchmarkReadyLoadNodes: async (options = {}) => {
+           calls.push(['resolveBenchmarkReadyLoadNodes', options]);
+@@ -364,7 +364,36 @@ describe('rolling-restart scenario', () => {
+         Array.isArray(call) && call[0] === 'startLoad');
+       const admissionIndex = calls.findIndex((call) =>
+         Array.isArray(call) && call[0] === 'resolveBenchmarkReadyLoadNodes');
++      const quiescenceIndex = calls.findIndex((call) =>
++        Array.isArray(call) && call[0] === 'waitForControlPlaneQuiescence');
++      const createIndex = calls.findIndex((call) =>
++        call === 'createBenchmarkTable');
++      assert.deepEqual(calls[ZERO], [
++        'waitForLoadReadinessStability',
++        {
++          stableWindowMs: ZERO,
++          timeoutMs: 2000,
++          noProgressMaxAttempts: ZERO,
++          loadReadinessPhase: LOAD_READINESS_PHASE_PRE_LOAD,
++          requireActiveGatePromotion: true,
++        },
++      ]);
++      assert.deepEqual(calls[quiescenceIndex], [
++        'waitForControlPlaneQuiescence',
++        {
++          timeoutMs: 2000,
++          stableWindowMs: ZERO,
++          maxInFlightCount: ZERO,
++          ignoreStaleInFlightReplicaOperations: true,
++          requireCriticalSystemSpread: true,
++        },
++      ]);
++      assert.ok(quiescenceIndex > ZERO);
++      if (createIndex >= ZERO) {
++        assert.ok(createIndex > quiescenceIndex);
++      }
+       assert.ok(admissionIndex >= 0);
++      assert.ok(admissionIndex > quiescenceIndex);
+       assert.ok(startLoadIndex > admissionIndex);
+       assert.equal(
+         observedStartLoadOptions.tableName,
+diff --git a/test/distributed/harness/cluster-segment-7-alpha-load-readiness.js b/test/distributed/harness/cluster-segment-7-alpha-load-readiness.js
+index 3fd3858e..5745280a 100644
+--- a/test/distributed/harness/cluster-segment-7-alpha-load-readiness.js
++++ b/test/distributed/harness/cluster-segment-7-alpha-load-readiness.js
+@@ -43,6 +43,117 @@ const {
+   upsertActiveWaitBlockerHistory,
+ } = CLUSTER_SEGMENT_6;
+ 
++const LOAD_READINESS_ADMISSION_GATE_STATE_READY = 'ready';
++const LOAD_READINESS_ADMISSION_GATE_STATE_BLOCKED = 'blocked';
++const LOAD_READINESS_ADMISSION_GATE_REASON_READY = 'ready';
++const LOAD_READINESS_ADMISSION_GATE_REASON_INACTIVE = 'inactive';
++const LOAD_READINESS_ADMISSION_GATE_REASON_OWNER_RECOVERY_PENDING =
++  'active_gate_owner_recovery_pending';
++const LOAD_READINESS_ACTIVE_GATE_COHORT_STATE_COMPLETE = 'complete';
++const LOAD_READINESS_ACTIVE_GATE_COHORT_NEXT_ACTION_ADMIT =
++  'admit_active_gate';
++const LOAD_READINESS_ACTIVE_GATE_COHORT_NEXT_ACTION_WAIT_OWNER_RECOVERY =
++  'wait_owner_recovery';
++const ZERO_COUNT = 0;
++
++function normalizeNonNegativeCount(value) {
++  return Number.isInteger(value) && value >= ZERO_COUNT ? value : ZERO_COUNT;
++}
++
++function resolveActiveGateOwnerCohort(activeProbe) {
++  const snapshotCoverage =
++    activeProbe?.snapshotCoverage &&
++    typeof activeProbe.snapshotCoverage === 'object' ?
++      activeProbe.snapshotCoverage :
++      null;
++  const publicationHandoff =
++    snapshotCoverage?.selectedPublicationActiveGateHandoff &&
++    typeof snapshotCoverage.selectedPublicationActiveGateHandoff === 'object' ?
++      snapshotCoverage.selectedPublicationActiveGateHandoff :
++      null;
++  if (publicationHandoff) {
++    return publicationHandoff;
++  }
++  return snapshotCoverage?.selectedActiveGateOwnerCohort &&
++    typeof snapshotCoverage.selectedActiveGateOwnerCohort === 'object' ?
++    snapshotCoverage.selectedActiveGateOwnerCohort :
++    null;
++}
++
++function isActiveGateOwnerCohortPromotionReady(activeProbe) {
++  const cohort = resolveActiveGateOwnerCohort(activeProbe);
++  if (!cohort) {
++    return activeProbe?.snapshotCoverage?.completeCoverage === true;
++  }
++  const catchupFence =
++    cohort.activeGateCatchupFence &&
++    typeof cohort.activeGateCatchupFence === 'object' ?
++      cohort.activeGateCatchupFence :
++      null;
++  if (
++    cohort.runtimePromotionAllowed === true ||
++    catchupFence?.promotionAllowed === true
++  ) {
++    return true;
++  }
++  return cohort.state === LOAD_READINESS_ACTIVE_GATE_COHORT_STATE_COMPLETE &&
++    cohort.nextAction === LOAD_READINESS_ACTIVE_GATE_COHORT_NEXT_ACTION_ADMIT;
++}
++
++function buildLoadReadinessAdmissionGate(activeProbe, options = {}) {
++  if (options.requireActiveGatePromotion !== true) {
++    return null;
++  }
++  const cohort = resolveActiveGateOwnerCohort(activeProbe);
++  const promotionReady = isActiveGateOwnerCohortPromotionReady(activeProbe);
++  const pendingRecoveryCount = normalizeNonNegativeCount(
++    cohort?.pendingRecoveryCount,
++  );
++  const pendingReconcileCount = normalizeNonNegativeCount(
++    cohort?.pendingReconcileCount,
++  );
++  const blockedByOwnerRecovery =
++    cohort?.nextAction ===
++      LOAD_READINESS_ACTIVE_GATE_COHORT_NEXT_ACTION_WAIT_OWNER_RECOVERY ||
++    pendingRecoveryCount > ZERO_COUNT ||
++    pendingReconcileCount > ZERO_COUNT;
++  return {
++    required: true,
++    state: promotionReady ?
++      LOAD_READINESS_ADMISSION_GATE_STATE_READY :
++      LOAD_READINESS_ADMISSION_GATE_STATE_BLOCKED,
++    reasonCode: promotionReady ?
++      LOAD_READINESS_ADMISSION_GATE_REASON_READY :
++      blockedByOwnerRecovery ?
++        LOAD_READINESS_ADMISSION_GATE_REASON_OWNER_RECOVERY_PENDING :
++        LOAD_READINESS_ADMISSION_GATE_REASON_INACTIVE,
++    promotionAllowed: promotionReady,
++    ownerState: typeof cohort?.state === 'string' ? cohort.state : null,
++    ownerReasonCode:
++      typeof cohort?.reasonCode === 'string' ? cohort.reasonCode : null,
++    ownerNextAction:
++      typeof cohort?.nextAction === 'string' ? cohort.nextAction : null,
++    pendingRecoveryCount,
++    pendingReconcileCount,
++    snapshotCoverageComplete:
++      activeProbe?.snapshotCoverage?.completeCoverage === true,
++  };
++}
++
++function applyLoadReadinessAdmissionGate(activeProbe, admissionGate) {
++  if (!admissionGate || admissionGate.promotionAllowed === true) {
++    return {
++      ...activeProbe,
++      loadReadinessAdmissionGate: admissionGate,
++    };
++  }
++  return {
++    ...activeProbe,
++    allActive: false,
++    loadReadinessAdmissionGate: admissionGate,
++  };
++}
++
+ export async function waitForLoadReadinessStability(options = {}) {
+   const stableWindowMs = this._resolveLoadReadinessStableWindowMs(options);
+   if (stableWindowMs <= ZERO) {
+@@ -254,10 +365,18 @@ export async function waitForLoadReadinessStability(options = {}) {
+       sleep: (ms) => this._sleep(ms),
+       probe: async () => {
+         const forceRepair = Date.now() >= forceRepairThreshold;
+-        const activeProbe = await this._probeClusterActiveState(deadline, {
++        const activeProbeRaw = await this._probeClusterActiveState(deadline, {
+           mode: CLUSTER_READINESS_MODE_LOAD,
+           forceRepair,
+         });
++        const loadReadinessAdmissionGate = buildLoadReadinessAdmissionGate(
++          activeProbeRaw,
++          options,
++        );
++        const activeProbe = applyLoadReadinessAdmissionGate(
++          activeProbeRaw,
++          loadReadinessAdmissionGate,
++        );
+         const now = Date.now();
+         if (activeProbe.allActive !== true) {
+           stableWindowStartedAt = LOAD_READINESS_STABLE_WINDOW_NO_TIMESTAMP;
+@@ -321,6 +440,8 @@ export async function waitForLoadReadinessStability(options = {}) {
+           stableElapsedMs: lastResult?.stableElapsedMs ?? ZERO,
+           loadReadinessStableWindow:
+             lastResult.loadReadinessStableWindow || null,
++          loadReadinessAdmissionGate:
++            lastResult.loadReadinessAdmissionGate || null,
+           nodeDiagnostics: lastResult.nodeDiagnostics || [],
+           snapshotCoverage: lastResult.snapshotCoverage || null,
+           publicationConvergenceGate:
+@@ -426,6 +547,8 @@ export async function waitForLoadReadinessStability(options = {}) {
+           stableElapsedMs: lastResult?.stableElapsedMs ?? ZERO,
+           loadReadinessStableWindow:
+             lastResult.loadReadinessStableWindow || null,
++          loadReadinessAdmissionGate:
++            lastResult.loadReadinessAdmissionGate || null,
+           nodeDiagnostics: lastResult.nodeDiagnostics || [],
+           snapshotCoverage: lastResult.snapshotCoverage || null,
+           publicationConvergenceGate:
+@@ -475,6 +598,8 @@ export async function waitForLoadReadinessStability(options = {}) {
+       stableElapsedMs: pollResult.lastResult?.stableElapsedMs ?? ZERO,
+       loadReadinessStableWindow:
+         pollResult.lastResult?.loadReadinessStableWindow || null,
++      loadReadinessAdmissionGate:
++        pollResult.lastResult?.loadReadinessAdmissionGate || null,
+       snapshotCoverage: pollResult.lastResult?.snapshotCoverage || null,
+       publicationConvergenceGate:
+         pollResult.lastResult?.publicationConvergenceGate || null,
+@@ -557,6 +682,8 @@ export async function waitForLoadReadinessStability(options = {}) {
+     stableElapsedMs: pollResult.lastResult?.stableElapsedMs ?? ZERO,
+     loadReadinessStableWindow:
+       pollResult.lastResult?.loadReadinessStableWindow || null,
++    loadReadinessAdmissionGate:
++      pollResult.lastResult?.loadReadinessAdmissionGate || null,
+     nodeDiagnostics: pollResult.lastResult?.nodeDiagnostics || [],
+     snapshotCoverage: pollResult.lastResult?.snapshotCoverage || null,
+     publicationConvergenceGate:
+@@ -594,17 +721,21 @@ export async function waitForLoadReadinessStability(options = {}) {
+     activeGate: timeoutActiveGateDetails.activeGate,
+     loadReadinessPhase,
+     ...(stableWindowFailure ? {failure: stableWindowFailure} : {}),
+-    loadReadinessStableWindow:
+-      pollResult.lastResult?.loadReadinessStableWindow || null,
+-    controlPlaneDiagnostics: {
+-      publicationConvergenceGate:
+-        pollResult.lastResult?.publicationConvergenceGate || null,
++      loadReadinessStableWindow:
++        pollResult.lastResult?.loadReadinessStableWindow || null,
++      loadReadinessAdmissionGate:
++        pollResult.lastResult?.loadReadinessAdmissionGate || null,
++      controlPlaneDiagnostics: {
++        publicationConvergenceGate:
++          pollResult.lastResult?.publicationConvergenceGate || null,
+       activeGateSnapshotCoverage:
+         pollResult.lastResult?.snapshotCoverage || null,
+       priorityRecoveryInvariants:
+         pollResult.lastResult?.priorityRecoveryInvariants || null,
+       loadReadinessStableWindow:
+         pollResult.lastResult?.loadReadinessStableWindow || null,
++      loadReadinessAdmissionGate:
++        pollResult.lastResult?.loadReadinessAdmissionGate || null,
+       activeGate: timeoutActiveGateDetails.activeGate,
+       ...timeoutActiveGateDetails,
+     },
+diff --git a/test/distributed/scenarios/rolling-restart.js b/test/distributed/scenarios/rolling-restart.js
+index b3381426..1309728b 100644
+--- a/test/distributed/scenarios/rolling-restart.js
++++ b/test/distributed/scenarios/rolling-restart.js
+@@ -35,6 +35,10 @@ const POST_RESTART_CONTROL_PLANE_MAX_IN_FLIGHT_COUNT = ZERO;
+ const POST_RESTART_CRITICAL_SYSTEM_SPREAD_REQUIRED = true;
+ const POST_RESTART_CONTROL_PLANE_QUIESCENCE_NO_PROGRESS_TIMEOUT_MS = 30000;
+ const POST_RESTART_LOAD_READINESS_NO_PROGRESS_MAX_ATTEMPTS = 5;
++const PRE_LOAD_CONTROL_PLANE_MAX_IN_FLIGHT_COUNT = ZERO;
++const PRE_LOAD_CRITICAL_SYSTEM_SPREAD_REQUIRED = true;
++const PRE_LOAD_IGNORE_STALE_IN_FLIGHT_REPLICA_OPERATIONS = true;
++const PRE_LOAD_REQUIRE_ACTIVE_GATE_PROMOTION = true;
+ const ROLLING_RESTART_REQUIRE_ADMIN_READY = true;
+ const MIN_BENCHMARK_READY_LOAD_NODES = 2;
+ const BENCHMARK_LOAD_ADMISSION_QUERY_TIMEOUT_MS = 1000;
+@@ -183,6 +187,24 @@ async function buildRollingRestartLoadPlan(cluster, scenarioOptions, {
+   };
+ }
+ 
++async function waitForPreBenchmarkBootstrapControlPlane(cluster, {
++  preLoadReadinessStableWindowMs,
++  preLoadReadinessTimeoutMs,
++}) {
++  if (typeof cluster?.waitForControlPlaneQuiescence !== 'function') {
++    return;
++  }
++  await cluster.waitForControlPlaneQuiescence({
++    timeoutMs: preLoadReadinessTimeoutMs,
++    stableWindowMs: preLoadReadinessStableWindowMs,
++    maxInFlightCount: PRE_LOAD_CONTROL_PLANE_MAX_IN_FLIGHT_COUNT,
++    ignoreStaleInFlightReplicaOperations:
++      PRE_LOAD_IGNORE_STALE_IN_FLIGHT_REPLICA_OPERATIONS,
++    requireCriticalSystemSpread:
++      PRE_LOAD_CRITICAL_SYSTEM_SPREAD_REQUIRED,
++  });
++}
++
+ function escapeSql(value) {
+   return String(value).replace(/'/g, '\'\'');
+ }
+@@ -484,26 +506,46 @@ async function run(cluster, options = {}) {
+   // enough here: rolling restart load must not compete with startup priority
+   // recovery for critical system partitions.
+   if (typeof cluster.waitForLoadReadinessStability === 'function') {
+-    const preLoadReadinessTimeoutForGate = benchmarkAdmissionSupported ?
+-      Math.min(
+-        preLoadReadinessTimeoutMs,
+-        BENCHMARK_PRE_LOAD_READINESS_WARMUP_TIMEOUT_MS,
+-      ) :
+-      preLoadReadinessTimeoutMs;
++    const requireActiveGatePromotion =
++      benchmarkAdmissionSupported === true ?
++        PRE_LOAD_REQUIRE_ACTIVE_GATE_PROMOTION :
++        false;
++    const preLoadReadinessTimeoutForGate = requireActiveGatePromotion ?
++      preLoadReadinessTimeoutMs :
++      benchmarkAdmissionSupported ?
++        Math.min(
++          preLoadReadinessTimeoutMs,
++          BENCHMARK_PRE_LOAD_READINESS_WARMUP_TIMEOUT_MS,
++        ) :
++        preLoadReadinessTimeoutMs;
+     try {
+-      await cluster.waitForLoadReadinessStability({
++      const preLoadReadinessOptions = {
+         stableWindowMs: preLoadReadinessStableWindowMs,
+         timeoutMs: preLoadReadinessTimeoutForGate,
+-        noProgressMaxAttempts: preLoadReadinessNoProgressMaxAttempts,
++        noProgressMaxAttempts: requireActiveGatePromotion ?
++          ZERO :
++          preLoadReadinessNoProgressMaxAttempts,
+         loadReadinessPhase: LOAD_READINESS_PHASE_PRE_LOAD,
+-      });
++      };
++      if (requireActiveGatePromotion) {
++        preLoadReadinessOptions.requireActiveGatePromotion =
++          PRE_LOAD_REQUIRE_ACTIVE_GATE_PROMOTION;
++      }
++      await cluster.waitForLoadReadinessStability(preLoadReadinessOptions);
+     } catch (error) {
+-      if (!benchmarkAdmissionSupported) {
++      if (!benchmarkAdmissionSupported || requireActiveGatePromotion) {
+         throw error;
+       }
+     }
+   }
+ 
++  if (benchmarkAdmissionSupported) {
++    await waitForPreBenchmarkBootstrapControlPlane(cluster, {
++      preLoadReadinessStableWindowMs,
++      preLoadReadinessTimeoutMs,
++    });
++  }
++
+   // 2. Start sustained write load.
+   const initialNodes = resolveClusterNodes(cluster);
+   const rollingRestartLoadPlan = await buildRollingRestartLoadPlan(

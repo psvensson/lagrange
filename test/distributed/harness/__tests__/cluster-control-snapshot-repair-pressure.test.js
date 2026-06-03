@@ -10,7 +10,7 @@ const TEST_CLUSTER_SIZE = 5;
 const TEST_LATE_DEADLINE_EXTENSION_MS = 1;
 const TEST_DEADLINE_EXTENSION_MS = 5000;
 const TEST_INITIAL_TIMEOUT_MS = 100;
-const TEST_RETRY_TIMEOUT_MS = 3000;
+const TEST_RETRY_TIMEOUT_MS = 2500;
 const TEST_DOCKER_SOCKET_PATH = '/var/run/docker.sock';
 const TEST_IMAGE = 'distributed-db:test';
 const TEST_EMPTY_LOG = '';
@@ -112,7 +112,7 @@ test(TEST_NAME, async () => {
             options.forceAuthoritativeRepair === true,
         });
         if (nodeId === TEST_SELECTED_NODE_ID) {
-          if (options.forceAuthoritativeRepair === true) {
+          if (options.forceRepair === true) {
             throw new Error(TEST_REPAIR_CONNECTION_CLOSED_ERROR);
           }
           return {
@@ -163,7 +163,7 @@ test(TEST_NAME, async () => {
         nodeId: TEST_SELECTED_NODE_ID,
         lane: TEST_SNAPSHOT_LANE,
         forceRepair: true,
-        forceAuthoritativeRepair: true,
+        forceAuthoritativeRepair: false,
       },
       {
         nodeId: TEST_SELECTED_NODE_ID,

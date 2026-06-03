@@ -76,7 +76,12 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchReplayReadiness {
     this.operationDispatchQueue.enqueue(
       operationId,
       RECONCILE_REASON.MESSAGE_DISPATCH_REQUEST,
-      operationRow ? {row: operationRow} : undefined,
+      operationRow ?
+        {
+          row: operationRow,
+          [REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH]: true,
+        } :
+        undefined,
     );
   }
 
@@ -129,7 +134,14 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchReplayReadiness {
         error: readinessError.message,
         readinessSnapshot: dispatchReadiness.snapshot,
       });
-      if (this.deferOperationDispatchRetry(operationId, readinessError, row)) {
+      if (
+        this.deferOperationDispatchRetry(
+          operationId,
+          readinessError,
+          row,
+          options,
+        )
+      ) {
         return;
       }
       throw readinessError;
@@ -148,7 +160,14 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchReplayReadiness {
         error: readinessError.message,
         readinessSnapshot: dispatchReadiness.snapshot,
       });
-      if (this.deferOperationDispatchRetry(operationId, readinessError, row)) {
+      if (
+        this.deferOperationDispatchRetry(
+          operationId,
+          readinessError,
+          row,
+          options,
+        )
+      ) {
         return;
       }
       return;
@@ -213,6 +232,7 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchReplayReadiness {
               operationId,
               retryableDispatchError,
               row,
+              options,
             )
           ) {
             return;
@@ -227,6 +247,7 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchReplayReadiness {
               operationId,
               retryableDispatchError,
               row,
+              options,
             )
           ) {
             return;
@@ -235,12 +256,21 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchReplayReadiness {
         if (
           (!dispatchResult ||
             getControlPlaneErrorMessage(dispatchResult).length === NUM.ZERO) &&
-          (await this.recoverUnsuccessfulDispatchResult(operationId, row))
+          (await this.recoverUnsuccessfulDispatchResult(
+            operationId,
+            row,
+            options,
+          ))
         ) {
           return;
         }
         if (
-          this.deferOperationDispatchRetry(operationId, dispatchResult, row)
+          this.deferOperationDispatchRetry(
+            operationId,
+            dispatchResult,
+            row,
+            options,
+          )
         ) {
           return;
         }
@@ -267,7 +297,9 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchReplayReadiness {
         readinessSnapshot: dispatchReadiness.snapshot,
       });
     } catch (error) {
-      if (this.deferOperationDispatchRetry(operationId, error, row)) {
+      if (
+        this.deferOperationDispatchRetry(operationId, error, row, options)
+      ) {
         return;
       }
       throw error;
@@ -307,10 +339,11 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchReplayReadiness {
    *
    * @param {string} operationId
    * @param {Object} row
+   * @param {Object} [options={}]
    * @return {Promise<boolean>}
    * @private
    */
-  async recoverUnsuccessfulDispatchResult(operationId, row) {
+  async recoverUnsuccessfulDispatchResult(operationId, row, options = {}) {
     const visibilityObservation =
       await this.getDispatchRetryOperationVisibilityObservation(operationId);
     const authoritativeRow = visibilityObservation?.row || null;
@@ -334,6 +367,7 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchReplayReadiness {
         operationId,
         visibilityLagError,
         authoritativeRow || row,
+        options,
       )
     ) {
       this.dispatchFailureSignaturesByOperationId.delete(operationId);
@@ -605,9 +639,20 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchReplayReadiness {
           context?.readyNodeRow && typeof context.readyNodeRow === TYPEOF.OBJECT ?
             context.readyNodeRow :
             null,
+        [REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH]:
+          context?.[
+            REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH
+          ] === true,
       });
     } catch (error) {
-      if (this.deferOperationDispatchRetry(operationId, error, row)) {
+      if (
+        this.deferOperationDispatchRetry(
+          operationId,
+          error,
+          row,
+          context,
+        )
+      ) {
         return;
       }
       throw error;
@@ -786,7 +831,6 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchReplayReadiness {
       RECONCILE_REASON.SERVICES_CACHE_ACTIVE,
     );
   }
-
 }
 
 export {ReplicaDispatchServiceSegment2};

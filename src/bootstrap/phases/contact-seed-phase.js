@@ -32,6 +32,7 @@ import {
   SEED_READINESS_TIMEOUT_MSG,
   formatLeaderMetadataDetails,
   isRetryableSeedContactCode,
+  isRetryableSeedContactTransportFailure,
   normalizeRetryableSeedContactEvidence,
   parseBootstrapError,
   resolveBootstrapNotReadySeedContactFailureKind,
@@ -253,7 +254,8 @@ class ContactSeedPhase {
             retryableSeedContactFailureAction ===
               RETRYABLE_SEED_CONTACT_FAILURE_ACTION
                 .CLEAR_RETAINED_EVIDENCE_AND_RETRY) {
-          if (classification.retryableTimeout) {
+          if (classification.retryableTimeout ||
+              classification.retryableTransportFailure) {
             lastRetryableSeedContactError = error.message;
           }
           const nextDelayMs = this.computeSeedContactRetryDelayMs({
@@ -270,6 +272,8 @@ class ContactSeedPhase {
             lastCode: classification.code,
             lastStatusCode: classification.statusCode,
             retryAfterMs: classification.retryAfterMs,
+            retryableTransportFailure:
+              classification.retryableTransportFailure,
             nextDelayMs,
             retryTimeoutMs,
           });
@@ -486,6 +490,11 @@ class ContactSeedPhase {
       error?.message === retryableTimeoutErrorMessage;
     const retryableStatus =
       statusCode === HTTP_STATUS.SERVICE_UNAVAILABLE;
+    const retryableTransportFailure =
+      isRetryableSeedContactTransportFailure(error, {
+        parsedError,
+        statusCode,
+      });
     const terminalValidationOrConflict =
       statusCode === HTTP_STATUS.BAD_REQUEST ||
       statusCode === HTTP_STATUS.CONFLICT;
@@ -501,7 +510,11 @@ class ContactSeedPhase {
       retryableCode,
       retryableTimeout,
       retryableStatus,
-      retryable: retryableCode || retryableTimeout || retryableStatus,
+      retryableTransportFailure,
+      retryable: retryableCode ||
+        retryableTimeout ||
+        retryableStatus ||
+        retryableTransportFailure,
       terminalValidationOrConflict,
     };
   }

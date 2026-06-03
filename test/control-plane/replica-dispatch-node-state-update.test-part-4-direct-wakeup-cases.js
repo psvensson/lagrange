@@ -18,11 +18,19 @@ const DIRECT_WAKEUP_RETRY_TEST_NAME =
   'ReplicaDispatchService retries bounded remote direct dispatch wake-ups';
 const DIRECT_WAKEUP_VERIFICATION_TEST_NAME =
   'ReplicaDispatchService verifies acknowledged remote direct wake-ups';
+const DIRECT_WAKEUP_TARGET_DISPATCH_TEST_NAME =
+  'ReplicaDispatchService refreshes rows for direct dispatch ingress';
+const DIRECT_WAKEUP_COALESCE_RETRY_REFRESH_TEST_NAME =
+  'ReplicaDispatchService promotes coalesced direct wake retries to row refresh';
 const DIRECT_WAKEUP_RETRY_OPERATION_ID = 'op-remote-wakeup-retry-1';
 const DIRECT_WAKEUP_VERIFICATION_OPERATION_ID =
   'op-remote-wakeup-verification-1';
 const DIRECT_WAKEUP_IN_FLIGHT_OPERATION_ID =
   'op-remote-wakeup-in-flight-1';
+const DIRECT_WAKEUP_TARGET_DISPATCH_OPERATION_ID =
+  'op-remote-wakeup-target-dispatch-1';
+const DIRECT_WAKEUP_COALESCE_RETRY_OPERATION_ID =
+  'op-remote-wakeup-coalesce-refresh-1';
 const DIRECT_WAKEUP_RETRY_PARTITION_ID = 'control_plane_publications-p1';
 const DIRECT_WAKEUP_RETRY_REPLICA_ID = 'control_plane_publications-p1-r4';
 const DIRECT_WAKEUP_RETRY_SOURCE_NODE_ID = 'node-1';
@@ -133,6 +141,71 @@ test('ReplicaDispatchService sends direct remote wake-up for target-owned ' +
       'remote-owned coordinator creates should wake the target owner directly',
     );
   } finally {
+    service.stop();
+  }
+});
+
+test(DIRECT_WAKEUP_TARGET_DISPATCH_TEST_NAME, async (t) => {
+  initEnv();
+
+  const enqueues = [];
+  const operationRow = {
+    operation_id: DIRECT_WAKEUP_TARGET_DISPATCH_OPERATION_ID,
+    type: OperationType.REPLACE,
+    partition_id: DIRECT_WAKEUP_RETRY_PARTITION_ID,
+    replica_id: DIRECT_WAKEUP_RETRY_REPLICA_ID,
+    source_node_id: DIRECT_WAKEUP_RETRY_SOURCE_NODE_ID,
+    target_node_id: DIRECT_WAKEUP_RETRY_TARGET_NODE_ID,
+    status: 'pending',
+    workflow_step: WORKFLOW_STEP.PENDING,
+    created_at: DIRECT_WAKEUP_RETRY_CREATED_AT,
+    updated_at: DIRECT_WAKEUP_RETRY_UPDATED_AT,
+    steps_history: DIRECT_WAKEUP_RETRY_STEPS_HISTORY_JSON,
+  };
+  const service = createService({
+    cdcIntegrationService: {
+      upsertSystemTableRow: async () => ({success: true}),
+      updateSystemTableRow: async () => ({success: true}),
+    },
+    rebalanceCoordinator: {
+      async dispatchOperation() {
+        t.fail('direct dispatch ingress should enqueue before dispatching');
+      },
+      isOperationLocallyOwned() {
+        return true;
+      },
+    },
+  });
+  const originalQueue = service.operationDispatchQueue;
+  service.operationDispatchQueue = {
+    enqueue(operationId, reason, context) {
+      enqueues.push({operationId, reason, context});
+      return true;
+    },
+    shutdown() {},
+  };
+
+  try {
+    await service.handleReplicaOperationDispatch({
+      type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
+      [ControlPlaneField.OPERATION_ID]: DIRECT_WAKEUP_TARGET_DISPATCH_OPERATION_ID,
+      [ControlPlaneField.OPERATION_ROW]: operationRow,
+    });
+
+    t.same(
+      enqueues,
+      [{
+        operationId: DIRECT_WAKEUP_TARGET_DISPATCH_OPERATION_ID,
+        reason: RECONCILE_REASON.MESSAGE_DISPATCH_REQUEST,
+        context: {
+          row: operationRow,
+          [DIRECT_WAKEUP_RETRY_REFRESH_ROW_BEFORE_DISPATCH]: true,
+        },
+      }],
+      'target ingress should use the payload row only as a fallback',
+    );
+  } finally {
+    service.operationDispatchQueue = originalQueue;
     service.stop();
   }
 });
@@ -327,6 +400,117 @@ test('ReplicaDispatchService coalesces duplicate remote direct wake-ups ' +
       DIRECT_WAKEUP_VERIFICATION_ASSERT_TIMER,
     );
   } finally {
+    service.stop();
+  }
+});
+
+test(DIRECT_WAKEUP_COALESCE_RETRY_REFRESH_TEST_NAME, async (t) => {
+  initEnv();
+
+  const deferredTimers = [];
+  const retryEnqueues = [];
+  const retryableError = new Error(DIRECT_WAKEUP_RETRY_ERROR);
+  retryableError.retryAfterMs = DIRECT_WAKEUP_RETRY_AFTER_MS;
+  const staleOperationRow = {
+    operation_id: DIRECT_WAKEUP_COALESCE_RETRY_OPERATION_ID,
+    type: OperationType.REPLACE,
+    partition_id: DIRECT_WAKEUP_RETRY_PARTITION_ID,
+    replica_id: DIRECT_WAKEUP_RETRY_REPLICA_ID,
+    source_node_id: DIRECT_WAKEUP_RETRY_SOURCE_NODE_ID,
+    target_node_id: DIRECT_WAKEUP_RETRY_TARGET_NODE_ID,
+    status: 'pending',
+    workflow_step: WORKFLOW_STEP.PENDING,
+    created_at: DIRECT_WAKEUP_RETRY_CREATED_AT,
+    updated_at: DIRECT_WAKEUP_RETRY_UPDATED_AT,
+    steps_history: DIRECT_WAKEUP_RETRY_STEPS_HISTORY_JSON,
+  };
+  const freshOperationRow = {
+    ...staleOperationRow,
+    updated_at: DIRECT_WAKEUP_RETRY_UPDATED_AT + NUM.ONE,
+  };
+  const service = createService({
+    operationDispatchRetryAfterMs: DIRECT_WAKEUP_RETRY_AFTER_MS,
+    cdcIntegrationService: {
+      upsertSystemTableRow: async () => ({success: true}),
+      updateSystemTableRow: async () => ({success: true}),
+    },
+    rebalanceCoordinator: {
+      async dispatchOperation() {
+        t.fail('coalesced retry metadata should enqueue before dispatching');
+      },
+      isOperationLocallyOwned() {
+        return false;
+      },
+    },
+    setTimeoutFn(callback, delayMs) {
+      const handle = {callback, delayMs};
+      deferredTimers.push(handle);
+      return handle;
+    },
+    clearTimeoutFn(handle) {
+      if (handle) {
+        handle.cleared = true;
+      }
+    },
+  });
+  const originalQueue = service.operationDispatchQueue;
+  service.operationDispatchQueue = {
+    enqueue(operationId, reason, context) {
+      retryEnqueues.push({operationId, reason, context});
+      return true;
+    },
+    shutdown() {},
+  };
+
+  try {
+    service.deferOperationDispatchRetry(
+      DIRECT_WAKEUP_COALESCE_RETRY_OPERATION_ID,
+      retryableError,
+      staleOperationRow,
+    );
+    t.notOk(
+      service.operationDispatchDeferredRetries.get(
+        DIRECT_WAKEUP_COALESCE_RETRY_OPERATION_ID,
+      )?.[DIRECT_WAKEUP_RETRY_REFRESH_ROW_BEFORE_DISPATCH],
+      'plain deferred retries should keep the default no-refresh mode',
+    );
+
+    service.coalesceActiveDirectDispatchWakeup(
+      DIRECT_WAKEUP_COALESCE_RETRY_OPERATION_ID,
+      freshOperationRow,
+    );
+
+    t.equal(
+      service.operationDispatchDeferredRetries.get(
+        DIRECT_WAKEUP_COALESCE_RETRY_OPERATION_ID,
+      )?.row?.updated_at,
+      freshOperationRow.updated_at,
+      DIRECT_WAKEUP_RETRY_ASSERT_RETAINED_ROW,
+    );
+    t.equal(
+      service.operationDispatchDeferredRetries.get(
+        DIRECT_WAKEUP_COALESCE_RETRY_OPERATION_ID,
+      )?.[DIRECT_WAKEUP_RETRY_REFRESH_ROW_BEFORE_DISPATCH],
+      true,
+      'coalesced direct wake should promote deferred retry row refresh',
+    );
+
+    deferredTimers[NUM.ZERO].callback();
+
+    t.same(
+      retryEnqueues,
+      [{
+        operationId: DIRECT_WAKEUP_COALESCE_RETRY_OPERATION_ID,
+        reason: RECONCILE_REASON.RETRYABLE_OPERATION_DISPATCH,
+        context: {
+          row: freshOperationRow,
+          [DIRECT_WAKEUP_RETRY_REFRESH_ROW_BEFORE_DISPATCH]: true,
+        },
+      }],
+      'coalesced direct wake retry should re-enter with row refresh metadata',
+    );
+  } finally {
+    service.operationDispatchQueue = originalQueue;
     service.stop();
   }
 });
@@ -586,6 +770,7 @@ test('ReplicaDispatchService registers a direct dispatch wake-up handler',
               workflow_step: WORKFLOW_STEP.PENDING,
               type: OperationType.REPLACE,
             },
+            [DIRECT_WAKEUP_RETRY_REFRESH_ROW_BEFORE_DISPATCH]: true,
           },
         }],
         'direct wake-up handler should enqueue the target operation',

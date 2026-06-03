@@ -312,9 +312,9 @@ describe('rolling-restart scenario', () => {
         getNodes: () => [seedNode, joinerNode],
         waitForLoadReadinessStability: async (options = {}) => {
           calls.push(['waitForLoadReadinessStability', options]);
-          if (options.loadReadinessPhase === LOAD_READINESS_PHASE_PRE_LOAD) {
-            throw new Error('generic load readiness timed out');
-          }
+        },
+        waitForControlPlaneQuiescence: async (options = {}) => {
+          calls.push(['waitForControlPlaneQuiescence', options]);
         },
         resolveBenchmarkReadyLoadNodes: async (options = {}) => {
           calls.push(['resolveBenchmarkReadyLoadNodes', options]);
@@ -364,7 +364,36 @@ describe('rolling-restart scenario', () => {
         Array.isArray(call) && call[0] === 'startLoad');
       const admissionIndex = calls.findIndex((call) =>
         Array.isArray(call) && call[0] === 'resolveBenchmarkReadyLoadNodes');
+      const quiescenceIndex = calls.findIndex((call) =>
+        Array.isArray(call) && call[0] === 'waitForControlPlaneQuiescence');
+      const createIndex = calls.findIndex((call) =>
+        call === 'createBenchmarkTable');
+      assert.deepEqual(calls[ZERO], [
+        'waitForLoadReadinessStability',
+        {
+          stableWindowMs: ZERO,
+          timeoutMs: 2000,
+          noProgressMaxAttempts: ZERO,
+          loadReadinessPhase: LOAD_READINESS_PHASE_PRE_LOAD,
+          requireActiveGatePromotion: true,
+        },
+      ]);
+      assert.deepEqual(calls[quiescenceIndex], [
+        'waitForControlPlaneQuiescence',
+        {
+          timeoutMs: 2000,
+          stableWindowMs: ZERO,
+          maxInFlightCount: ZERO,
+          ignoreStaleInFlightReplicaOperations: true,
+          requireCriticalSystemSpread: true,
+        },
+      ]);
+      assert.ok(quiescenceIndex > ZERO);
+      if (createIndex >= ZERO) {
+        assert.ok(createIndex > quiescenceIndex);
+      }
       assert.ok(admissionIndex >= 0);
+      assert.ok(admissionIndex > quiescenceIndex);
       assert.ok(startLoadIndex > admissionIndex);
       assert.equal(
         observedStartLoadOptions.tableName,

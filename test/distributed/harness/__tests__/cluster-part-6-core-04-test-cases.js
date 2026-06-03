@@ -423,6 +423,441 @@ export function registerClusterPart6Core04Tests(context) {
       );
     });
 
+  test(
+    'Unit: waitForLoadReadinessStability can require active-gate promotion',
+    async () => {
+      const cluster = createCluster({
+        size: LOAD_READINESS_CANONICAL_CLUSTER_SIZE,
+        docker: {socketPath: LOAD_READINESS_CANONICAL_DOCKER_SOCKET},
+        image: LOAD_READINESS_CANONICAL_IMAGE,
+      });
+
+      const recordedStages = [];
+      cluster._recordClusterStage = (stage, details = {}) => {
+        recordedStages.push({stage, details});
+      };
+      cluster._collectFailureLogs = async () => {
+        throw new Error(LOAD_READINESS_CANONICAL_LOG_FAILURE);
+      };
+
+      let sleepCallCount = LOAD_READINESS_CANONICAL_ZERO_COUNT;
+      let probeCallCount = LOAD_READINESS_CANONICAL_ZERO_COUNT;
+      let fakeNowMs = LOAD_READINESS_CANONICAL_START_MS;
+      const originalDateNow = Date.now;
+      Date.now = () => fakeNowMs;
+      cluster._sleep = async () => {
+        sleepCallCount += LOAD_READINESS_CANONICAL_SINGLE_PROBE_COUNT;
+        fakeNowMs += LOAD_READINESS_CANONICAL_SINGLE_PROBE_COUNT;
+      };
+      cluster._probeClusterActiveState = async () => {
+        probeCallCount += LOAD_READINESS_CANONICAL_SINGLE_PROBE_COUNT;
+        const ownerRecoveryPending =
+          probeCallCount === LOAD_READINESS_CANONICAL_SINGLE_PROBE_COUNT;
+        return {
+          allActive: true,
+          nodeDiagnostics: [
+            {
+              nodeId: LOAD_READINESS_CANONICAL_NODE_A,
+              active: true,
+              state: LOAD_READINESS_CANONICAL_ACTIVE_STATE,
+              reasons: [],
+            },
+            {
+              nodeId: LOAD_READINESS_CANONICAL_NODE_B,
+              active: true,
+              state: LOAD_READINESS_CANONICAL_ACTIVE_STATE,
+              reasons: [],
+            },
+          ],
+          snapshotCoverage: {
+            completeCoverage: false,
+            expectedNodeCount: LOAD_READINESS_CANONICAL_CLUSTER_SIZE,
+            bestCoverageNodeCount:
+              LOAD_READINESS_PARTIAL_COVERAGE_BEST_NODE_COUNT,
+            selectedPublicationActiveGateHandoff: ownerRecoveryPending ?
+              {
+                state: 'pending',
+                reasonCode: 'owner_reconcile_pending',
+                nextAction: 'wait_owner_recovery',
+                runtimePromotionAllowed: false,
+                pendingRecoveryCount:
+                  LOAD_READINESS_CANONICAL_SINGLE_PROBE_COUNT,
+              } :
+              {
+                state: 'complete',
+                reasonCode: 'owner_cohort_complete',
+                nextAction: 'admit_active_gate',
+                runtimePromotionAllowed: true,
+                pendingRecoveryCount:
+                  LOAD_READINESS_CANONICAL_ZERO_COUNT,
+              },
+          },
+          publicationConvergenceGate: {
+            ready: true,
+            reasons: [],
+            publicationStatus: LOAD_READINESS_CANONICAL_PUBLICATION_STATUS,
+            pendingAckNodeIds: [],
+            missingPublishedNodeIds: [],
+            priorityPartitionSummary: {
+              satisfied: true,
+              blockedPartitionCount: LOAD_READINESS_CANONICAL_ZERO_COUNT,
+              totalSpreadGap: LOAD_READINESS_CANONICAL_ZERO_COUNT,
+            },
+          },
+        };
+      };
+
+      try {
+        await cluster.waitForLoadReadinessStability({
+          stableWindowMs: LOAD_READINESS_CANONICAL_SINGLE_PROBE_COUNT,
+          timeoutMs: LOAD_READINESS_CANONICAL_TIMEOUT_MS,
+          requireActiveGatePromotion: true,
+        });
+      } finally {
+        Date.now = originalDateNow;
+      }
+
+      assert.equal(
+        probeCallCount,
+        3,
+        'owner-recovery pending evidence should reset the stable window',
+      );
+      assert.equal(sleepCallCount, 2);
+      const stableStage = recordedStages.find(
+        (entry) => entry.stage === LOAD_READINESS_CANONICAL_STAGE,
+      );
+      assert.equal(
+        stableStage?.details?.loadReadinessAdmissionGate?.required,
+        true,
+      );
+      assert.equal(
+        stableStage?.details?.loadReadinessAdmissionGate?.state,
+        'ready',
+      );
+    });
+
+  test(
+    'Unit: waitForLoadReadinessStability admits bounded startup-support ' +
+    'owner recovery',
+    async () => {
+      const cluster = createCluster({
+        size: LOAD_READINESS_CANONICAL_CLUSTER_SIZE,
+        docker: {socketPath: LOAD_READINESS_CANONICAL_DOCKER_SOCKET},
+        image: LOAD_READINESS_CANONICAL_IMAGE,
+      });
+
+      const recordedStages = [];
+      cluster._recordClusterStage = (stage, details = {}) => {
+        recordedStages.push({stage, details});
+      };
+      cluster._sleep = async () => {
+        throw new Error(LOAD_READINESS_CANONICAL_SLEEP_FAILURE);
+      };
+      cluster._collectFailureLogs = async () => {
+        throw new Error(LOAD_READINESS_CANONICAL_LOG_FAILURE);
+      };
+
+      let probeCallCount = LOAD_READINESS_CANONICAL_ZERO_COUNT;
+      let fakeNowMs = LOAD_READINESS_CANONICAL_START_MS;
+      const originalDateNow = Date.now;
+      Date.now = () => fakeNowMs;
+      cluster._probeClusterActiveState = async () => {
+        probeCallCount += LOAD_READINESS_CANONICAL_SINGLE_PROBE_COUNT;
+        fakeNowMs = LOAD_READINESS_CANONICAL_OBSERVED_AT_MS;
+        const publishedNodeIds = [
+          LOAD_READINESS_CANONICAL_NODE_A,
+          LOAD_READINESS_CANONICAL_NODE_B,
+        ];
+        return {
+          allActive: true,
+          nodeDiagnostics: publishedNodeIds.map((nodeId) => ({
+            nodeId,
+            active: true,
+            state: LOAD_READINESS_CANONICAL_ACTIVE_STATE,
+            reasons: [],
+          })),
+          snapshotCoverage: {
+            completeCoverage: false,
+            expectedNodeCount: LOAD_READINESS_CANONICAL_CLUSTER_SIZE,
+            bestCoverageNodeCount: LOAD_READINESS_CANONICAL_CLUSTER_SIZE,
+            selectedCapturedAtMs: LOAD_READINESS_CANONICAL_START_MS,
+            selectedSnapshotRepairDeferred: true,
+            selectedSnapshotObservationMode: 'repair_deferred',
+            selectedSnapshotObservationContractState: 'deferred',
+            selectedSnapshotObservationRefreshState: 'deferred',
+            selectedSnapshotObservationNextAction: 'retry',
+            selectedSnapshotObservationRetryAfterMs:
+              LOAD_READINESS_CANONICAL_TIMEOUT_MS,
+            selectedPublishedActiveNodeIds: publishedNodeIds,
+            selectedMissingPublishedNodeIds: [],
+            selectedPendingAckNodeIds: [],
+            selectedPublicationActiveGateHandoff: {
+              state: 'pending',
+              reasonCode: 'owner_reconcile_pending',
+              nextAction: 'wait_owner_recovery',
+              runtimePromotionAllowed: false,
+              publishedActiveNodeIds: publishedNodeIds,
+              missingPublishedNodeIds: [],
+              missingPublishedCount: LOAD_READINESS_CANONICAL_ZERO_COUNT,
+              pendingRecoveryNodeIds: publishedNodeIds,
+              pendingRecoveryCount: LOAD_READINESS_CANONICAL_CLUSTER_SIZE,
+              pendingReconcileNodeIds: [],
+              pendingReconcileCount: LOAD_READINESS_CANONICAL_ZERO_COUNT,
+            },
+            selectedMembershipPublicationHandoffOutcome: {
+              state: 'write_deferred',
+              reasonCode: 'owner_reconcile_pending',
+              enqueued: true,
+              retryAfterMs: LOAD_READINESS_CANONICAL_TIMEOUT_MS,
+            },
+            selectedControlPlaneOwnerQueueDepth: {
+              pendingWrites: LOAD_READINESS_CANONICAL_CLUSTER_SIZE,
+              pendingWriteGrowthCount: LOAD_READINESS_CANONICAL_ZERO_COUNT,
+              retainedBacklogGrowthCount: LOAD_READINESS_CANONICAL_ZERO_COUNT,
+              sharedPressureBackpressured: false,
+              transportPressureBackpressured: false,
+              queryPressureBackpressured: false,
+            },
+          },
+          publicationConvergenceGate: {
+            ready: true,
+            reasons: [],
+            publicationStatus: LOAD_READINESS_CANONICAL_PUBLICATION_STATUS,
+            pendingAckNodeIds: [],
+            missingPublishedNodeIds: [],
+            priorityPartitionSummary: {
+              satisfied: true,
+              blockedPartitionCount: LOAD_READINESS_CANONICAL_ZERO_COUNT,
+              totalSpreadGap: LOAD_READINESS_CANONICAL_ZERO_COUNT,
+            },
+          },
+        };
+      };
+
+      try {
+        await cluster.waitForLoadReadinessStability({
+          stableWindowMs: LOAD_READINESS_CANONICAL_SINGLE_PROBE_COUNT,
+          timeoutMs: LOAD_READINESS_CANONICAL_TIMEOUT_MS,
+          requireActiveGatePromotion: true,
+        });
+      } finally {
+        Date.now = originalDateNow;
+      }
+
+      assert.equal(
+        probeCallCount,
+        LOAD_READINESS_CANONICAL_SINGLE_PROBE_COUNT,
+        'bounded owner-recovery support should admit load readiness',
+      );
+      const stableStage = recordedStages.find(
+        (entry) => entry.stage === LOAD_READINESS_CANONICAL_STAGE,
+      );
+      assert.equal(
+        stableStage?.details?.loadReadinessAdmissionGate
+          ?.startupSupportOwnerRecoveryWindow,
+        true,
+      );
+      assert.equal(
+        stableStage?.details?.loadReadinessAdmissionGate?.state,
+        'ready',
+      );
+      assert.equal(stableStage?.details?.snapshotCoverage?.completeCoverage, true);
+      assert.equal(
+        stableStage?.details?.snapshotCoverage?.canonicalCompleteCoverage,
+        false,
+      );
+    });
+
+  test(
+    'Unit: waitForLoadReadinessStability follows repair-deferred active-gate ' +
+    'retry at terminal deadline',
+    async () => {
+      const LOAD_READINESS_REPAIR_START_MS = 1000;
+      const LOAD_READINESS_REPAIR_TIMEOUT_MS = 20;
+      const LOAD_READINESS_REPAIR_STABLE_WINDOW_MS = 1;
+      const LOAD_READINESS_REPAIR_RETRY_AFTER_MS = 2500;
+      const LOAD_READINESS_REPAIR_CLUSTER_SIZE = 5;
+      const LOAD_READINESS_REPAIR_ONE_COUNT = 1;
+      const LOAD_READINESS_REPAIR_ZERO_COUNT = 0;
+      const LOAD_READINESS_REPAIR_NODE_IDS = Object.freeze([
+        'load-repair-seed',
+        'load-repair-joiner-a',
+        'load-repair-joiner-b',
+        'load-repair-joiner-c',
+        'load-repair-joiner-d',
+      ]);
+      const LOAD_READINESS_REPAIR_ORIGINAL_DEADLINE =
+        LOAD_READINESS_REPAIR_START_MS + LOAD_READINESS_REPAIR_TIMEOUT_MS;
+      const cluster = createCluster({
+        size: LOAD_READINESS_REPAIR_CLUSTER_SIZE,
+        docker: {socketPath: LOAD_READINESS_CANONICAL_DOCKER_SOCKET},
+        image: LOAD_READINESS_CANONICAL_IMAGE,
+      });
+
+      let fakeNowMs = LOAD_READINESS_REPAIR_START_MS;
+      const originalDateNow = Date.now;
+      Date.now = () => fakeNowMs;
+      const probeDeadlines = [];
+      let probeCallCount = LOAD_READINESS_REPAIR_ZERO_COUNT;
+      let collectedFailureLogs = false;
+      cluster._sleep = async (ms) => {
+        fakeNowMs += Math.max(LOAD_READINESS_REPAIR_ZERO_COUNT, Number(ms) || 0);
+      };
+      cluster._collectFailureLogs = async () => {
+        collectedFailureLogs = true;
+      };
+      cluster._recordClusterStage = () => {};
+
+      const repairRetryProbe = {
+        allActive: false,
+        nodeDiagnostics: LOAD_READINESS_REPAIR_NODE_IDS.map((nodeId, index) => ({
+          nodeId,
+          active: index === LOAD_READINESS_REPAIR_ZERO_COUNT,
+          state: index === LOAD_READINESS_REPAIR_ZERO_COUNT ?
+            LOAD_READINESS_CANONICAL_ACTIVE_STATE :
+            'degraded',
+          reasons: [],
+        })),
+        snapshotCoverage: {
+          completeCoverage: false,
+          expectedNodeCount: LOAD_READINESS_REPAIR_CLUSTER_SIZE,
+          bestCoverageNodeCount: LOAD_READINESS_REPAIR_ONE_COUNT,
+          selectedNodeId: LOAD_READINESS_REPAIR_NODE_IDS[0],
+          selectedAdminReady: true,
+          selectedReachableBy: 'admin_ws',
+          selectedError:
+            'Admin API query timed out for node load-repair-seed on lane ' +
+            'snapshot after 2500ms',
+          selectedSnapshotObservationMode: 'repair_deferred',
+          selectedSnapshotObservationState: 'deferred_refresh',
+          selectedSnapshotObservationContractState: 'deferred',
+          selectedSnapshotObservationRefreshState: 'deferred',
+          selectedSnapshotObservationNextAction: 'retry',
+          selectedSnapshotObservationReasonCodes: ['selected_timeout'],
+          selectedSnapshotObservationRetryAfterMs:
+            LOAD_READINESS_REPAIR_RETRY_AFTER_MS,
+          selectedSnapshotRepairDeferred: true,
+          selectedControlPlaneOwnerQueueDepth: {
+            pendingWrites: LOAD_READINESS_REPAIR_ONE_COUNT,
+            pendingWriteGrowthCount: LOAD_READINESS_REPAIR_ZERO_COUNT,
+            retainedBacklogGrowthCount: LOAD_READINESS_REPAIR_ZERO_COUNT,
+            sharedPressureBackpressured: false,
+            transportPressureBackpressured: false,
+            queryPressureBackpressured: false,
+          },
+          selectedPublicationConvergence: {
+            publicationStatus: LOAD_READINESS_CANONICAL_PUBLICATION_STATUS,
+            recoveryProtocolState: 'steady_published',
+            publishedActiveNodeIds: LOAD_READINESS_REPAIR_NODE_IDS,
+            pendingAckNodeIds: [],
+          },
+          selectedPublicationActiveGateHandoff: {
+            state: 'pending',
+            reasonCode: 'owner_reconcile_pending',
+            nextAction: 'wait_owner_recovery',
+            runtimePromotionAllowed: false,
+            pendingRecoveryNodeIds: [LOAD_READINESS_REPAIR_NODE_IDS[0]],
+            pendingRecoveryCount: LOAD_READINESS_REPAIR_ONE_COUNT,
+            pendingReconcileNodeIds: [],
+            pendingReconcileCount: LOAD_READINESS_REPAIR_ZERO_COUNT,
+            missingPublishedNodeIds: [],
+            missingPublishedCount: LOAD_READINESS_REPAIR_ZERO_COUNT,
+            publishedActiveNodeIds: LOAD_READINESS_REPAIR_NODE_IDS,
+          },
+          selectedMembershipPublicationHandoffOutcome: {
+            state: 'write_deferred',
+            reasonCode: 'owner_reconcile_pending',
+            enqueued: true,
+            retryAfterMs: LOAD_READINESS_REPAIR_RETRY_AFTER_MS,
+          },
+          selectedPublishedActiveNodeIds: LOAD_READINESS_REPAIR_NODE_IDS,
+          selectedMissingPublishedNodeIds: [],
+        },
+        publicationConvergenceGate: {
+          ready: false,
+          reasons: ['load_publication_gate_ready'],
+          publicationStatus: LOAD_READINESS_CANONICAL_PUBLICATION_STATUS,
+          pendingAckNodeIds: [],
+          missingPublishedNodeIds: [],
+          priorityPartitionSummary: {
+            satisfied: true,
+            blockedPartitionCount: LOAD_READINESS_REPAIR_ZERO_COUNT,
+            totalSpreadGap: LOAD_READINESS_REPAIR_ZERO_COUNT,
+          },
+        },
+        priorityRecoveryInvariants: {
+          invariants: [],
+          failingInvariantIds: [],
+          failingInvariantReasonCodes: [],
+          passed: true,
+        },
+      };
+      const readyProbe = {
+        allActive: true,
+        nodeDiagnostics: LOAD_READINESS_REPAIR_NODE_IDS.map((nodeId) => ({
+          nodeId,
+          active: true,
+          state: LOAD_READINESS_CANONICAL_ACTIVE_STATE,
+          reasons: [],
+        })),
+        snapshotCoverage: {
+          completeCoverage: true,
+          expectedNodeCount: LOAD_READINESS_REPAIR_CLUSTER_SIZE,
+          bestCoverageNodeCount: LOAD_READINESS_REPAIR_CLUSTER_SIZE,
+          selectedCapturedAtMs:
+            LOAD_READINESS_REPAIR_ORIGINAL_DEADLINE +
+            LOAD_READINESS_REPAIR_ONE_COUNT,
+        },
+        publicationConvergenceGate: {
+          ready: true,
+          reasons: [],
+          publicationStatus: LOAD_READINESS_CANONICAL_PUBLICATION_STATUS,
+          pendingAckNodeIds: [],
+          missingPublishedNodeIds: [],
+          priorityPartitionSummary: {
+            satisfied: true,
+            blockedPartitionCount: LOAD_READINESS_REPAIR_ZERO_COUNT,
+            totalSpreadGap: LOAD_READINESS_REPAIR_ZERO_COUNT,
+          },
+        },
+      };
+      cluster._probeClusterActiveState = async (deadline) => {
+        probeDeadlines.push(deadline);
+        probeCallCount += LOAD_READINESS_REPAIR_ONE_COUNT;
+        if (probeCallCount === LOAD_READINESS_REPAIR_ONE_COUNT) {
+          fakeNowMs =
+            LOAD_READINESS_REPAIR_ORIGINAL_DEADLINE +
+            LOAD_READINESS_REPAIR_ONE_COUNT;
+          return repairRetryProbe;
+        }
+        return readyProbe;
+      };
+
+      try {
+        await cluster.waitForLoadReadinessStability({
+          stableWindowMs: LOAD_READINESS_REPAIR_STABLE_WINDOW_MS,
+          timeoutMs: LOAD_READINESS_REPAIR_TIMEOUT_MS,
+        });
+      } finally {
+        Date.now = originalDateNow;
+      }
+
+      assert.equal(
+        probeCallCount,
+        2,
+        'load-readiness should take the bounded repair retry probe',
+      );
+      assert.equal(
+        collectedFailureLogs,
+        false,
+        'bounded load-readiness repair retry should avoid failure logs',
+      );
+      assert.ok(
+        probeDeadlines[1] > probeDeadlines[0],
+        'load-readiness repair retry should extend the probe deadline',
+      );
+    });
+
   test(LOAD_READINESS_FORCE_REPAIR_TEST_NAME, async () => {
     const cluster = createCluster({
       size: LOAD_READINESS_CANONICAL_CLUSTER_SIZE,

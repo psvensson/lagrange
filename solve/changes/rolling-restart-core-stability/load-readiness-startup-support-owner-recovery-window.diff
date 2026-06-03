@@ -1,0 +1,1183 @@
+diff --git a/test/distributed/harness/__tests__/cluster-part-6-core-04-test-cases.js b/test/distributed/harness/__tests__/cluster-part-6-core-04-test-cases.js
+index 46be3ce5..4e2b952e 100644
+--- a/test/distributed/harness/__tests__/cluster-part-6-core-04-test-cases.js
++++ b/test/distributed/harness/__tests__/cluster-part-6-core-04-test-cases.js
+@@ -423,6 +423,441 @@ export function registerClusterPart6Core04Tests(context) {
+       );
+     });
+ 
++  test(
++    'Unit: waitForLoadReadinessStability can require active-gate promotion',
++    async () => {
++      const cluster = createCluster({
++        size: LOAD_READINESS_CANONICAL_CLUSTER_SIZE,
++        docker: {socketPath: LOAD_READINESS_CANONICAL_DOCKER_SOCKET},
++        image: LOAD_READINESS_CANONICAL_IMAGE,
++      });
++
++      const recordedStages = [];
++      cluster._recordClusterStage = (stage, details = {}) => {
++        recordedStages.push({stage, details});
++      };
++      cluster._collectFailureLogs = async () => {
++        throw new Error(LOAD_READINESS_CANONICAL_LOG_FAILURE);
++      };
++
++      let sleepCallCount = LOAD_READINESS_CANONICAL_ZERO_COUNT;
++      let probeCallCount = LOAD_READINESS_CANONICAL_ZERO_COUNT;
++      let fakeNowMs = LOAD_READINESS_CANONICAL_START_MS;
++      const originalDateNow = Date.now;
++      Date.now = () => fakeNowMs;
++      cluster._sleep = async () => {
++        sleepCallCount += LOAD_READINESS_CANONICAL_SINGLE_PROBE_COUNT;
++        fakeNowMs += LOAD_READINESS_CANONICAL_SINGLE_PROBE_COUNT;
++      };
++      cluster._probeClusterActiveState = async () => {
++        probeCallCount += LOAD_READINESS_CANONICAL_SINGLE_PROBE_COUNT;
++        const ownerRecoveryPending =
++          probeCallCount === LOAD_READINESS_CANONICAL_SINGLE_PROBE_COUNT;
++        return {
++          allActive: true,
++          nodeDiagnostics: [
++            {
++              nodeId: LOAD_READINESS_CANONICAL_NODE_A,
++              active: true,
++              state: LOAD_READINESS_CANONICAL_ACTIVE_STATE,
++              reasons: [],
++            },
++            {
++              nodeId: LOAD_READINESS_CANONICAL_NODE_B,
++              active: true,
++              state: LOAD_READINESS_CANONICAL_ACTIVE_STATE,
++              reasons: [],
++            },
++          ],
++          snapshotCoverage: {
++            completeCoverage: false,
++            expectedNodeCount: LOAD_READINESS_CANONICAL_CLUSTER_SIZE,
++            bestCoverageNodeCount:
++              LOAD_READINESS_PARTIAL_COVERAGE_BEST_NODE_COUNT,
++            selectedPublicationActiveGateHandoff: ownerRecoveryPending ?
++              {
++                state: 'pending',
++                reasonCode: 'owner_reconcile_pending',
++                nextAction: 'wait_owner_recovery',
++                runtimePromotionAllowed: false,
++                pendingRecoveryCount:
++                  LOAD_READINESS_CANONICAL_SINGLE_PROBE_COUNT,
++              } :
++              {
++                state: 'complete',
++                reasonCode: 'owner_cohort_complete',
++                nextAction: 'admit_active_gate',
++                runtimePromotionAllowed: true,
++                pendingRecoveryCount:
++                  LOAD_READINESS_CANONICAL_ZERO_COUNT,
++              },
++          },
++          publicationConvergenceGate: {
++            ready: true,
++            reasons: [],
++            publicationStatus: LOAD_READINESS_CANONICAL_PUBLICATION_STATUS,
++            pendingAckNodeIds: [],
++            missingPublishedNodeIds: [],
++            priorityPartitionSummary: {
++              satisfied: true,
++              blockedPartitionCount: LOAD_READINESS_CANONICAL_ZERO_COUNT,
++              totalSpreadGap: LOAD_READINESS_CANONICAL_ZERO_COUNT,
++            },
++          },
++        };
++      };
++
++      try {
++        await cluster.waitForLoadReadinessStability({
++          stableWindowMs: LOAD_READINESS_CANONICAL_SINGLE_PROBE_COUNT,
++          timeoutMs: LOAD_READINESS_CANONICAL_TIMEOUT_MS,
++          requireActiveGatePromotion: true,
++        });
++      } finally {
++        Date.now = originalDateNow;
++      }
++
++      assert.equal(
++        probeCallCount,
++        3,
++        'owner-recovery pending evidence should reset the stable window',
++      );
++      assert.equal(sleepCallCount, 2);
++      const stableStage = recordedStages.find(
++        (entry) => entry.stage === LOAD_READINESS_CANONICAL_STAGE,
++      );
++      assert.equal(
++        stableStage?.details?.loadReadinessAdmissionGate?.required,
++        true,
++      );
++      assert.equal(
++        stableStage?.details?.loadReadinessAdmissionGate?.state,
++        'ready',
++      );
++    });
++
++  test(
++    'Unit: waitForLoadReadinessStability admits bounded startup-support ' +
++    'owner recovery',
++    async () => {
++      const cluster = createCluster({
++        size: LOAD_READINESS_CANONICAL_CLUSTER_SIZE,
++        docker: {socketPath: LOAD_READINESS_CANONICAL_DOCKER_SOCKET},
++        image: LOAD_READINESS_CANONICAL_IMAGE,
++      });
++
++      const recordedStages = [];
++      cluster._recordClusterStage = (stage, details = {}) => {
++        recordedStages.push({stage, details});
++      };
++      cluster._sleep = async () => {
++        throw new Error(LOAD_READINESS_CANONICAL_SLEEP_FAILURE);
++      };
++      cluster._collectFailureLogs = async () => {
++        throw new Error(LOAD_READINESS_CANONICAL_LOG_FAILURE);
++      };
++
++      let probeCallCount = LOAD_READINESS_CANONICAL_ZERO_COUNT;
++      let fakeNowMs = LOAD_READINESS_CANONICAL_START_MS;
++      const originalDateNow = Date.now;
++      Date.now = () => fakeNowMs;
++      cluster._probeClusterActiveState = async () => {
++        probeCallCount += LOAD_READINESS_CANONICAL_SINGLE_PROBE_COUNT;
++        fakeNowMs = LOAD_READINESS_CANONICAL_OBSERVED_AT_MS;
++        const publishedNodeIds = [
++          LOAD_READINESS_CANONICAL_NODE_A,
++          LOAD_READINESS_CANONICAL_NODE_B,
++        ];
++        return {
++          allActive: true,
++          nodeDiagnostics: publishedNodeIds.map((nodeId) => ({
++            nodeId,
++            active: true,
++            state: LOAD_READINESS_CANONICAL_ACTIVE_STATE,
++            reasons: [],
++          })),
++          snapshotCoverage: {
++            completeCoverage: false,
++            expectedNodeCount: LOAD_READINESS_CANONICAL_CLUSTER_SIZE,
++            bestCoverageNodeCount: LOAD_READINESS_CANONICAL_CLUSTER_SIZE,
++            selectedCapturedAtMs: LOAD_READINESS_CANONICAL_START_MS,
++            selectedSnapshotRepairDeferred: true,
++            selectedSnapshotObservationMode: 'repair_deferred',
++            selectedSnapshotObservationContractState: 'deferred',
++            selectedSnapshotObservationRefreshState: 'deferred',
++            selectedSnapshotObservationNextAction: 'retry',
++            selectedSnapshotObservationRetryAfterMs:
++              LOAD_READINESS_CANONICAL_TIMEOUT_MS,
++            selectedPublishedActiveNodeIds: publishedNodeIds,
++            selectedMissingPublishedNodeIds: [],
++            selectedPendingAckNodeIds: [],
++            selectedPublicationActiveGateHandoff: {
++              state: 'pending',
++              reasonCode: 'owner_reconcile_pending',
++              nextAction: 'wait_owner_recovery',
++              runtimePromotionAllowed: false,
++              publishedActiveNodeIds: publishedNodeIds,
++              missingPublishedNodeIds: [],
++              missingPublishedCount: LOAD_READINESS_CANONICAL_ZERO_COUNT,
++              pendingRecoveryNodeIds: publishedNodeIds,
++              pendingRecoveryCount: LOAD_READINESS_CANONICAL_CLUSTER_SIZE,
++              pendingReconcileNodeIds: [],
++              pendingReconcileCount: LOAD_READINESS_CANONICAL_ZERO_COUNT,
++            },
++            selectedMembershipPublicationHandoffOutcome: {
++              state: 'write_deferred',
++              reasonCode: 'owner_reconcile_pending',
++              enqueued: true,
++              retryAfterMs: LOAD_READINESS_CANONICAL_TIMEOUT_MS,
++            },
++            selectedControlPlaneOwnerQueueDepth: {
++              pendingWrites: LOAD_READINESS_CANONICAL_CLUSTER_SIZE,
++              pendingWriteGrowthCount: LOAD_READINESS_CANONICAL_ZERO_COUNT,
++              retainedBacklogGrowthCount: LOAD_READINESS_CANONICAL_ZERO_COUNT,
++              sharedPressureBackpressured: false,
++              transportPressureBackpressured: false,
++              queryPressureBackpressured: false,
++            },
++          },
++          publicationConvergenceGate: {
++            ready: true,
++            reasons: [],
++            publicationStatus: LOAD_READINESS_CANONICAL_PUBLICATION_STATUS,
++            pendingAckNodeIds: [],
++            missingPublishedNodeIds: [],
++            priorityPartitionSummary: {
++              satisfied: true,
++              blockedPartitionCount: LOAD_READINESS_CANONICAL_ZERO_COUNT,
++              totalSpreadGap: LOAD_READINESS_CANONICAL_ZERO_COUNT,
++            },
++          },
++        };
++      };
++
++      try {
++        await cluster.waitForLoadReadinessStability({
++          stableWindowMs: LOAD_READINESS_CANONICAL_SINGLE_PROBE_COUNT,
++          timeoutMs: LOAD_READINESS_CANONICAL_TIMEOUT_MS,
++          requireActiveGatePromotion: true,
++        });
++      } finally {
++        Date.now = originalDateNow;
++      }
++
++      assert.equal(
++        probeCallCount,
++        LOAD_READINESS_CANONICAL_SINGLE_PROBE_COUNT,
++        'bounded owner-recovery support should admit load readiness',
++      );
++      const stableStage = recordedStages.find(
++        (entry) => entry.stage === LOAD_READINESS_CANONICAL_STAGE,
++      );
++      assert.equal(
++        stableStage?.details?.loadReadinessAdmissionGate
++          ?.startupSupportOwnerRecoveryWindow,
++        true,
++      );
++      assert.equal(
++        stableStage?.details?.loadReadinessAdmissionGate?.state,
++        'ready',
++      );
++      assert.equal(stableStage?.details?.snapshotCoverage?.completeCoverage, true);
++      assert.equal(
++        stableStage?.details?.snapshotCoverage?.canonicalCompleteCoverage,
++        false,
++      );
++    });
++
++  test(
++    'Unit: waitForLoadReadinessStability follows repair-deferred active-gate ' +
++    'retry at terminal deadline',
++    async () => {
++      const LOAD_READINESS_REPAIR_START_MS = 1000;
++      const LOAD_READINESS_REPAIR_TIMEOUT_MS = 20;
++      const LOAD_READINESS_REPAIR_STABLE_WINDOW_MS = 1;
++      const LOAD_READINESS_REPAIR_RETRY_AFTER_MS = 2500;
++      const LOAD_READINESS_REPAIR_CLUSTER_SIZE = 5;
++      const LOAD_READINESS_REPAIR_ONE_COUNT = 1;
++      const LOAD_READINESS_REPAIR_ZERO_COUNT = 0;
++      const LOAD_READINESS_REPAIR_NODE_IDS = Object.freeze([
++        'load-repair-seed',
++        'load-repair-joiner-a',
++        'load-repair-joiner-b',
++        'load-repair-joiner-c',
++        'load-repair-joiner-d',
++      ]);
++      const LOAD_READINESS_REPAIR_ORIGINAL_DEADLINE =
++        LOAD_READINESS_REPAIR_START_MS + LOAD_READINESS_REPAIR_TIMEOUT_MS;
++      const cluster = createCluster({
++        size: LOAD_READINESS_REPAIR_CLUSTER_SIZE,
++        docker: {socketPath: LOAD_READINESS_CANONICAL_DOCKER_SOCKET},
++        image: LOAD_READINESS_CANONICAL_IMAGE,
++      });
++
++      let fakeNowMs = LOAD_READINESS_REPAIR_START_MS;
++      const originalDateNow = Date.now;
++      Date.now = () => fakeNowMs;
++      const probeDeadlines = [];
++      let probeCallCount = LOAD_READINESS_REPAIR_ZERO_COUNT;
++      let collectedFailureLogs = false;
++      cluster._sleep = async (ms) => {
++        fakeNowMs += Math.max(LOAD_READINESS_REPAIR_ZERO_COUNT, Number(ms) || 0);
++      };
++      cluster._collectFailureLogs = async () => {
++        collectedFailureLogs = true;
++      };
++      cluster._recordClusterStage = () => {};
++
++      const repairRetryProbe = {
++        allActive: false,
++        nodeDiagnostics: LOAD_READINESS_REPAIR_NODE_IDS.map((nodeId, index) => ({
++          nodeId,
++          active: index === LOAD_READINESS_REPAIR_ZERO_COUNT,
++          state: index === LOAD_READINESS_REPAIR_ZERO_COUNT ?
++            LOAD_READINESS_CANONICAL_ACTIVE_STATE :
++            'degraded',
++          reasons: [],
++        })),
++        snapshotCoverage: {
++          completeCoverage: false,
++          expectedNodeCount: LOAD_READINESS_REPAIR_CLUSTER_SIZE,
++          bestCoverageNodeCount: LOAD_READINESS_REPAIR_ONE_COUNT,
++          selectedNodeId: LOAD_READINESS_REPAIR_NODE_IDS[0],
++          selectedAdminReady: true,
++          selectedReachableBy: 'admin_ws',
++          selectedError:
++            'Admin API query timed out for node load-repair-seed on lane ' +
++            'snapshot after 2500ms',
++          selectedSnapshotObservationMode: 'repair_deferred',
++          selectedSnapshotObservationState: 'deferred_refresh',
++          selectedSnapshotObservationContractState: 'deferred',
++          selectedSnapshotObservationRefreshState: 'deferred',
++          selectedSnapshotObservationNextAction: 'retry',
++          selectedSnapshotObservationReasonCodes: ['selected_timeout'],
++          selectedSnapshotObservationRetryAfterMs:
++            LOAD_READINESS_REPAIR_RETRY_AFTER_MS,
++          selectedSnapshotRepairDeferred: true,
++          selectedControlPlaneOwnerQueueDepth: {
++            pendingWrites: LOAD_READINESS_REPAIR_ONE_COUNT,
++            pendingWriteGrowthCount: LOAD_READINESS_REPAIR_ZERO_COUNT,
++            retainedBacklogGrowthCount: LOAD_READINESS_REPAIR_ZERO_COUNT,
++            sharedPressureBackpressured: false,
++            transportPressureBackpressured: false,
++            queryPressureBackpressured: false,
++          },
++          selectedPublicationConvergence: {
++            publicationStatus: LOAD_READINESS_CANONICAL_PUBLICATION_STATUS,
++            recoveryProtocolState: 'steady_published',
++            publishedActiveNodeIds: LOAD_READINESS_REPAIR_NODE_IDS,
++            pendingAckNodeIds: [],
++          },
++          selectedPublicationActiveGateHandoff: {
++            state: 'pending',
++            reasonCode: 'owner_reconcile_pending',
++            nextAction: 'wait_owner_recovery',
++            runtimePromotionAllowed: false,
++            pendingRecoveryNodeIds: [LOAD_READINESS_REPAIR_NODE_IDS[0]],
++            pendingRecoveryCount: LOAD_READINESS_REPAIR_ONE_COUNT,
++            pendingReconcileNodeIds: [],
++            pendingReconcileCount: LOAD_READINESS_REPAIR_ZERO_COUNT,
++            missingPublishedNodeIds: [],
++            missingPublishedCount: LOAD_READINESS_REPAIR_ZERO_COUNT,
++            publishedActiveNodeIds: LOAD_READINESS_REPAIR_NODE_IDS,
++          },
++          selectedMembershipPublicationHandoffOutcome: {
++            state: 'write_deferred',
++            reasonCode: 'owner_reconcile_pending',
++            enqueued: true,
++            retryAfterMs: LOAD_READINESS_REPAIR_RETRY_AFTER_MS,
++          },
++          selectedPublishedActiveNodeIds: LOAD_READINESS_REPAIR_NODE_IDS,
++          selectedMissingPublishedNodeIds: [],
++        },
++        publicationConvergenceGate: {
++          ready: false,
++          reasons: ['load_publication_gate_ready'],
++          publicationStatus: LOAD_READINESS_CANONICAL_PUBLICATION_STATUS,
++          pendingAckNodeIds: [],
++          missingPublishedNodeIds: [],
++          priorityPartitionSummary: {
++            satisfied: true,
++            blockedPartitionCount: LOAD_READINESS_REPAIR_ZERO_COUNT,
++            totalSpreadGap: LOAD_READINESS_REPAIR_ZERO_COUNT,
++          },
++        },
++        priorityRecoveryInvariants: {
++          invariants: [],
++          failingInvariantIds: [],
++          failingInvariantReasonCodes: [],
++          passed: true,
++        },
++      };
++      const readyProbe = {
++        allActive: true,
++        nodeDiagnostics: LOAD_READINESS_REPAIR_NODE_IDS.map((nodeId) => ({
++          nodeId,
++          active: true,
++          state: LOAD_READINESS_CANONICAL_ACTIVE_STATE,
++          reasons: [],
++        })),
++        snapshotCoverage: {
++          completeCoverage: true,
++          expectedNodeCount: LOAD_READINESS_REPAIR_CLUSTER_SIZE,
++          bestCoverageNodeCount: LOAD_READINESS_REPAIR_CLUSTER_SIZE,
++          selectedCapturedAtMs:
++            LOAD_READINESS_REPAIR_ORIGINAL_DEADLINE +
++            LOAD_READINESS_REPAIR_ONE_COUNT,
++        },
++        publicationConvergenceGate: {
++          ready: true,
++          reasons: [],
++          publicationStatus: LOAD_READINESS_CANONICAL_PUBLICATION_STATUS,
++          pendingAckNodeIds: [],
++          missingPublishedNodeIds: [],
++          priorityPartitionSummary: {
++            satisfied: true,
++            blockedPartitionCount: LOAD_READINESS_REPAIR_ZERO_COUNT,
++            totalSpreadGap: LOAD_READINESS_REPAIR_ZERO_COUNT,
++          },
++        },
++      };
++      cluster._probeClusterActiveState = async (deadline) => {
++        probeDeadlines.push(deadline);
++        probeCallCount += LOAD_READINESS_REPAIR_ONE_COUNT;
++        if (probeCallCount === LOAD_READINESS_REPAIR_ONE_COUNT) {
++          fakeNowMs =
++            LOAD_READINESS_REPAIR_ORIGINAL_DEADLINE +
++            LOAD_READINESS_REPAIR_ONE_COUNT;
++          return repairRetryProbe;
++        }
++        return readyProbe;
++      };
++
++      try {
++        await cluster.waitForLoadReadinessStability({
++          stableWindowMs: LOAD_READINESS_REPAIR_STABLE_WINDOW_MS,
++          timeoutMs: LOAD_READINESS_REPAIR_TIMEOUT_MS,
++        });
++      } finally {
++        Date.now = originalDateNow;
++      }
++
++      assert.equal(
++        probeCallCount,
++        2,
++        'load-readiness should take the bounded repair retry probe',
++      );
++      assert.equal(
++        collectedFailureLogs,
++        false,
++        'bounded load-readiness repair retry should avoid failure logs',
++      );
++      assert.ok(
++        probeDeadlines[1] > probeDeadlines[0],
++        'load-readiness repair retry should extend the probe deadline',
++      );
++    });
++
+   test(LOAD_READINESS_FORCE_REPAIR_TEST_NAME, async () => {
+     const cluster = createCluster({
+       size: LOAD_READINESS_CANONICAL_CLUSTER_SIZE,
+diff --git a/test/distributed/harness/cluster-segment-7-alpha-load-readiness.js b/test/distributed/harness/cluster-segment-7-alpha-load-readiness.js
+index 3fd3858e..ea560b96 100644
+--- a/test/distributed/harness/cluster-segment-7-alpha-load-readiness.js
++++ b/test/distributed/harness/cluster-segment-7-alpha-load-readiness.js
+@@ -15,6 +15,7 @@ import {
+   isBetterActiveWaitSnapshotCoverageProgressSnapshot,
+   normalizeLoadReadinessPhase,
+   normalizeStableWindowTimestamp,
++  selectLoadActiveGateSnapshotRepairContinuation,
+   selectTerminalActiveWaitProgressSnapshot,
+ } from './cluster-segment-7-alpha-active-wait.js';
+ 
+@@ -37,12 +38,277 @@ const {
+   formatNodeDiagnostics,
+   formatPublicationConvergenceGate,
+   formatSnapshotCoverage,
++  normalizeDistinctStringArray,
+   pollUntilCondition,
+   scoreActiveWaitProgress,
+   summarizeActiveWaitBlockerHistory,
+   upsertActiveWaitBlockerHistory,
+ } = CLUSTER_SEGMENT_6;
+ 
++const LOAD_READINESS_ADMISSION_GATE_STATE_READY = 'ready';
++const LOAD_READINESS_ADMISSION_GATE_STATE_BLOCKED = 'blocked';
++const LOAD_READINESS_ADMISSION_GATE_REASON_READY = 'ready';
++const LOAD_READINESS_ADMISSION_GATE_REASON_INACTIVE = 'inactive';
++const LOAD_READINESS_ADMISSION_GATE_REASON_OWNER_RECOVERY_PENDING =
++  'active_gate_owner_recovery_pending';
++const LOAD_READINESS_ACTIVE_GATE_COHORT_STATE_COMPLETE = 'complete';
++const LOAD_READINESS_ACTIVE_GATE_COHORT_STATE_PENDING = 'pending';
++const LOAD_READINESS_ACTIVE_GATE_COHORT_NEXT_ACTION_ADMIT =
++  'admit_active_gate';
++const LOAD_READINESS_ACTIVE_GATE_COHORT_NEXT_ACTION_WAIT_OWNER_RECOVERY =
++  'wait_owner_recovery';
++const LOAD_READINESS_ACTIVE_GATE_OWNER_RECOVERY_REASON =
++  'owner_reconcile_pending';
++const LOAD_READINESS_ACTIVE_GATE_OWNER_RECOVERY_HANDOFF_DEFERRED =
++  'write_deferred';
++const ZERO_COUNT = 0;
++
++function normalizeNonNegativeCount(value) {
++  return Number.isInteger(value) && value >= ZERO_COUNT ? value : ZERO_COUNT;
++}
++
++function normalizePositiveDurationMs(value) {
++  return Number.isFinite(value) && value > ZERO_COUNT ?
++    Math.floor(value) :
++    ZERO_COUNT;
++}
++
++function resolveLoadReadinessAdmissionExpectedNodeCount(activeProbe) {
++  const snapshotExpectedCount = activeProbe?.snapshotCoverage?.expectedNodeCount;
++  if (
++    Number.isInteger(snapshotExpectedCount) &&
++    snapshotExpectedCount > ZERO_COUNT
++  ) {
++    return snapshotExpectedCount;
++  }
++  return Array.isArray(activeProbe?.nodeDiagnostics) ?
++    activeProbe.nodeDiagnostics.length :
++    ZERO_COUNT;
++}
++
++function buildLoadReadinessAdmissionProgressSnapshot(activeProbe) {
++  return buildActiveWaitProgressSnapshot(
++    activeProbe || {},
++    resolveLoadReadinessAdmissionExpectedNodeCount(activeProbe),
++    {readinessMode: CLUSTER_READINESS_MODE_LOAD},
++  );
++}
++
++function hasSatisfiedLoadReadinessPriorityRecovery(progressSnapshot) {
++  return (
++    normalizeNonNegativeCount(
++      progressSnapshot?.priorityRecoveryUnresolvedClassCount,
++    ) === ZERO_COUNT &&
++    normalizeNonNegativeCount(
++      progressSnapshot?.priorityRecoveryUnresolvedSemanticStateCount,
++    ) === ZERO_COUNT &&
++    normalizeNonNegativeCount(
++      progressSnapshot?.priorityRecoveryBlockedPartitionCount,
++    ) === ZERO_COUNT &&
++    progressSnapshot?.prioritySpreadSatisfied !== false
++  );
++}
++
++function hasBoundedLoadReadinessOwnerRecoveryHandoff(progressSnapshot) {
++  const queueDepth = progressSnapshot?.selectedControlPlaneOwnerQueueDepth;
++  if (
++    progressSnapshot?.activeGateOwnerCohortState ===
++    LOAD_READINESS_ACTIVE_GATE_COHORT_STATE_COMPLETE
++  ) {
++    return false;
++  }
++  const pendingRecoveryCount = normalizeNonNegativeCount(
++    progressSnapshot?.activeGateOwnerCohortPendingRecoveryCount,
++  );
++  const pendingRecoveryNodeIds = normalizeDistinctStringArray(
++    progressSnapshot?.activeGateOwnerCohortPendingRecoveryNodeIds,
++  );
++  const pendingWrites = normalizeNonNegativeCount(queueDepth?.pendingWrites);
++  return (
++    progressSnapshot?.activeGateOwnerCohortState ===
++      LOAD_READINESS_ACTIVE_GATE_COHORT_STATE_PENDING &&
++    progressSnapshot?.publicationActiveGateHandoffReasonCode ===
++      LOAD_READINESS_ACTIVE_GATE_OWNER_RECOVERY_REASON &&
++    progressSnapshot?.publicationActiveGateHandoffNextAction ===
++      LOAD_READINESS_ACTIVE_GATE_COHORT_NEXT_ACTION_WAIT_OWNER_RECOVERY &&
++    progressSnapshot?.publicationActiveGateHandoffRuntimePromotionAllowed !==
++      true &&
++    pendingRecoveryCount > ZERO_COUNT &&
++    pendingRecoveryNodeIds.length > ZERO_COUNT &&
++    pendingWrites >= Math.max(
++      pendingRecoveryCount,
++      pendingRecoveryNodeIds.length,
++    ) &&
++    normalizeNonNegativeCount(
++      progressSnapshot?.activeGateOwnerCohortPendingReconcileCount,
++    ) === ZERO_COUNT &&
++    normalizeNonNegativeCount(queueDepth?.pendingWriteGrowthCount) ===
++      ZERO_COUNT &&
++    progressSnapshot?.membershipPublicationHandoffOutcomeState ===
++      LOAD_READINESS_ACTIVE_GATE_OWNER_RECOVERY_HANDOFF_DEFERRED &&
++    progressSnapshot?.membershipPublicationHandoffOutcomeReasonCode ===
++      LOAD_READINESS_ACTIVE_GATE_OWNER_RECOVERY_REASON &&
++    progressSnapshot?.membershipPublicationHandoffOutcomeEnqueued === true &&
++    normalizePositiveDurationMs(
++      progressSnapshot?.membershipPublicationHandoffOutcomeRetryAfterMs,
++    ) > ZERO_COUNT
++  );
++}
++
++function hasLoadReadinessStartupSupportOwnerRecoveryWindow(progressSnapshot) {
++  const expectedNodeCount = normalizeNonNegativeCount(
++    progressSnapshot?.expectedNodeCount,
++  );
++  return (
++    expectedNodeCount > ZERO_COUNT &&
++    normalizeNonNegativeCount(progressSnapshot?.activeNodeCount) >=
++      expectedNodeCount &&
++    normalizeNonNegativeCount(progressSnapshot?.inactiveNodeCount) ===
++      ZERO_COUNT &&
++    progressSnapshot?.snapshotCoverageComplete === true &&
++    normalizeNonNegativeCount(progressSnapshot?.selectedPublishedActiveCount) >=
++      expectedNodeCount &&
++    normalizeNonNegativeCount(progressSnapshot?.missingPublishedCount) ===
++      ZERO_COUNT &&
++    normalizeNonNegativeCount(progressSnapshot?.pendingAckCount) ===
++      ZERO_COUNT &&
++    hasSatisfiedLoadReadinessPriorityRecovery(progressSnapshot) === true &&
++    hasBoundedLoadReadinessOwnerRecoveryHandoff(progressSnapshot) === true
++  );
++}
++
++function evaluateActiveGateOwnerCohortPromotion(activeProbe) {
++  const cohort = resolveActiveGateOwnerCohort(activeProbe);
++  if (!cohort) {
++    return {
++      promotionReady: activeProbe?.snapshotCoverage?.completeCoverage === true,
++      startupSupportOwnerRecoveryWindow: false,
++    };
++  }
++  const catchupFence =
++    cohort.activeGateCatchupFence &&
++    typeof cohort.activeGateCatchupFence === 'object' ?
++      cohort.activeGateCatchupFence :
++      null;
++  if (
++    cohort.runtimePromotionAllowed === true ||
++    catchupFence?.promotionAllowed === true
++  ) {
++    return {
++      promotionReady: true,
++      startupSupportOwnerRecoveryWindow: false,
++    };
++  }
++  if (
++    cohort.state === LOAD_READINESS_ACTIVE_GATE_COHORT_STATE_COMPLETE &&
++    cohort.nextAction === LOAD_READINESS_ACTIVE_GATE_COHORT_NEXT_ACTION_ADMIT
++  ) {
++    return {
++      promotionReady: true,
++      startupSupportOwnerRecoveryWindow: false,
++    };
++  }
++  const progressSnapshot =
++    buildLoadReadinessAdmissionProgressSnapshot(activeProbe);
++  const startupSupportOwnerRecoveryWindow =
++    hasLoadReadinessStartupSupportOwnerRecoveryWindow(progressSnapshot);
++  return {
++    promotionReady: startupSupportOwnerRecoveryWindow === true,
++    startupSupportOwnerRecoveryWindow,
++  };
++}
++
++function resolveActiveGateOwnerCohort(activeProbe) {
++  const snapshotCoverage =
++    activeProbe?.snapshotCoverage &&
++    typeof activeProbe.snapshotCoverage === 'object' ?
++      activeProbe.snapshotCoverage :
++      null;
++  const publicationHandoff =
++    snapshotCoverage?.selectedPublicationActiveGateHandoff &&
++    typeof snapshotCoverage.selectedPublicationActiveGateHandoff === 'object' ?
++      snapshotCoverage.selectedPublicationActiveGateHandoff :
++      null;
++  if (publicationHandoff) {
++    return publicationHandoff;
++  }
++  return snapshotCoverage?.selectedActiveGateOwnerCohort &&
++    typeof snapshotCoverage.selectedActiveGateOwnerCohort === 'object' ?
++    snapshotCoverage.selectedActiveGateOwnerCohort :
++    null;
++}
++
++function buildLoadReadinessAdmissionGate(activeProbe, options = {}) {
++  if (options.requireActiveGatePromotion !== true) {
++    return null;
++  }
++  const cohort = resolveActiveGateOwnerCohort(activeProbe);
++  const promotion = evaluateActiveGateOwnerCohortPromotion(activeProbe);
++  const promotionReady = promotion.promotionReady;
++  const pendingRecoveryCount = normalizeNonNegativeCount(
++    cohort?.pendingRecoveryCount,
++  );
++  const pendingReconcileCount = normalizeNonNegativeCount(
++    cohort?.pendingReconcileCount,
++  );
++  const blockedByOwnerRecovery =
++    cohort?.nextAction ===
++      LOAD_READINESS_ACTIVE_GATE_COHORT_NEXT_ACTION_WAIT_OWNER_RECOVERY ||
++    pendingRecoveryCount > ZERO_COUNT ||
++    pendingReconcileCount > ZERO_COUNT;
++  return {
++    required: true,
++    state: promotionReady ?
++      LOAD_READINESS_ADMISSION_GATE_STATE_READY :
++      LOAD_READINESS_ADMISSION_GATE_STATE_BLOCKED,
++    reasonCode: promotionReady ?
++      LOAD_READINESS_ADMISSION_GATE_REASON_READY :
++      blockedByOwnerRecovery ?
++        LOAD_READINESS_ADMISSION_GATE_REASON_OWNER_RECOVERY_PENDING :
++        LOAD_READINESS_ADMISSION_GATE_REASON_INACTIVE,
++    promotionAllowed: promotionReady,
++    ownerState: typeof cohort?.state === 'string' ? cohort.state : null,
++    ownerReasonCode:
++      typeof cohort?.reasonCode === 'string' ? cohort.reasonCode : null,
++    ownerNextAction:
++      typeof cohort?.nextAction === 'string' ? cohort.nextAction : null,
++    pendingRecoveryCount,
++    pendingReconcileCount,
++    snapshotCoverageComplete:
++      activeProbe?.snapshotCoverage?.completeCoverage === true,
++    startupSupportOwnerRecoveryWindow:
++      promotion.startupSupportOwnerRecoveryWindow === true,
++  };
++}
++
++function applyLoadReadinessAdmissionGate(activeProbe, admissionGate) {
++  if (!admissionGate || admissionGate.promotionAllowed === true) {
++    const snapshotCoverage =
++      admissionGate?.startupSupportOwnerRecoveryWindow === true &&
++      activeProbe?.snapshotCoverage &&
++      typeof activeProbe.snapshotCoverage === 'object' ?
++        {
++          ...activeProbe.snapshotCoverage,
++          completeCoverage: true,
++          canonicalCompleteCoverage:
++            activeProbe.snapshotCoverage.completeCoverage === true,
++          completeCoverageSource:
++            'load_readiness_startup_support_owner_recovery_window',
++        } :
++        activeProbe?.snapshotCoverage;
++    return {
++      ...activeProbe,
++      snapshotCoverage,
++      loadReadinessAdmissionGate: admissionGate,
++    };
++  }
++  return {
++    ...activeProbe,
++    allActive: false,
++    loadReadinessAdmissionGate: admissionGate,
++  };
++}
++
+ export async function waitForLoadReadinessStability(options = {}) {
+   const stableWindowMs = this._resolveLoadReadinessStableWindowMs(options);
+   if (stableWindowMs <= ZERO) {
+@@ -74,9 +340,8 @@ export async function waitForLoadReadinessStability(options = {}) {
+   let lastMeaningfulProgressElapsedMs = ZERO;
+   let lastMeaningfulProgressSnapshot = null;
+   let lastObservedProgressSnapshot = null;
+-  let lastObservedAttempt = ZERO;
+-  let lastObservedElapsedMs = ZERO;
+   let highestStableElapsedMs = ZERO;
++  let loadSnapshotRepairContinuationUsed = false;
+ 
+   const buildLoadReadinessNoProgressDetails = (
+     attempts,
+@@ -228,8 +493,6 @@ export async function waitForLoadReadinessStability(options = {}) {
+       elapsedMs,
+     );
+     lastObservedProgressSnapshot = progressSnapshot;
+-    lastObservedAttempt = attempts;
+-    lastObservedElapsedMs = elapsedMs;
+     return {
+       progressSnapshot,
+       attemptsSinceProgress: Math.max(
+@@ -241,6 +504,43 @@ export async function waitForLoadReadinessStability(options = {}) {
+       ),
+     };
+   };
++
++  const selectLoadReadinessTerminalProgressSnapshot = (lastResult) => {
++    const observedProgressSnapshot =
++      lastObservedProgressSnapshot ||
++      buildActiveWaitProgressSnapshot(
++        lastResult || {},
++        this._nodes.size,
++        {readinessMode: CLUSTER_READINESS_MODE_LOAD},
++      );
++    return selectTerminalActiveWaitProgressSnapshot({
++      currentProgressSnapshot: observedProgressSnapshot,
++      lastMeaningfulProgressSnapshot,
++      bestSnapshotCoverageProgressSnapshot,
++    });
++  };
++
++  const extendLoadReadinessSnapshotRepairDeadline = ({lastResult}) => {
++    if (loadSnapshotRepairContinuationUsed === true) {
++      return null;
++    }
++    const progressSnapshot =
++      selectLoadReadinessTerminalProgressSnapshot(lastResult);
++    const continuation =
++      selectLoadActiveGateSnapshotRepairContinuation({
++        readinessMode: CLUSTER_READINESS_MODE_LOAD,
++        progressSnapshot,
++        pollIntervalMs: ACTIVE_POLL_INTERVAL_MS,
++      });
++    if (continuation.continuePolling !== true) {
++      return null;
++    }
++    loadSnapshotRepairContinuationUsed = true;
++    return {
++      deadline: Date.now() + continuation.extendMs,
++    };
++  };
++
+   this._recordClusterStage(CLUSTER_STAGE_LOAD_READINESS_WAITING, {
+     loadReadinessPhase,
+     stableWindowMs,
+@@ -252,12 +552,23 @@ export async function waitForLoadReadinessStability(options = {}) {
+       deadline,
+       intervalMs: ACTIVE_POLL_INTERVAL_MS,
+       sleep: (ms) => this._sleep(ms),
+-      probe: async () => {
++      probe: async ({deadline: currentDeadline = deadline} = {}) => {
+         const forceRepair = Date.now() >= forceRepairThreshold;
+-        const activeProbe = await this._probeClusterActiveState(deadline, {
+-          mode: CLUSTER_READINESS_MODE_LOAD,
+-          forceRepair,
+-        });
++        const activeProbeRaw = await this._probeClusterActiveState(
++          currentDeadline,
++          {
++            mode: CLUSTER_READINESS_MODE_LOAD,
++            forceRepair,
++          },
++        );
++        const loadReadinessAdmissionGate = buildLoadReadinessAdmissionGate(
++          activeProbeRaw,
++          options,
++        );
++        const activeProbe = applyLoadReadinessAdmissionGate(
++          activeProbeRaw,
++          loadReadinessAdmissionGate,
++        );
+         const now = Date.now();
+         if (activeProbe.allActive !== true) {
+           stableWindowStartedAt = LOAD_READINESS_STABLE_WINDOW_NO_TIMESTAMP;
+@@ -285,102 +596,105 @@ export async function waitForLoadReadinessStability(options = {}) {
+         };
+       },
+       isSuccess: (result) => result.stable === true,
++      extendDeadline: extendLoadReadinessSnapshotRepairDeadline,
+       onAttempt: ({attempts, elapsedMs, lastResult}) => {
+-      const readinessProgress = observeLoadReadinessProgress(
+-        attempts,
+-        elapsedMs,
+-        lastResult,
+-      );
+-      const noProgress = buildLoadReadinessNoProgressDetails(
+-        attempts,
+-        elapsedMs,
+-        false,
+-        readinessProgress.progressSnapshot,
+-      );
+-      for (const diagnostic of lastResult.nodeDiagnostics || []) {
+-        if (diagnostic.active === true) {
+-          continue;
+-        }
+-        const summaryKey = diagnostic.error ?
+-          'error:' + diagnostic.error :
+-          'state:' + (diagnostic.state || UNKNOWN_STATE);
+-        instabilitySummaryCounts.set(
+-          summaryKey,
+-          (instabilitySummaryCounts.get(summaryKey) || ZERO) + 1,
++        const readinessProgress = observeLoadReadinessProgress(
++          attempts,
++          elapsedMs,
++          lastResult,
+         );
+-      }
+-      this._recordPeriodicStartupWaitingStage(
+-        CLUSTER_STAGE_LOAD_READINESS_WAITING,
+-        {
++        const noProgress = buildLoadReadinessNoProgressDetails(
+           attempts,
+           elapsedMs,
+-        },
+-        {
+-          loadReadinessPhase,
+-          stableWindowMs,
+-          stableElapsedMs: lastResult?.stableElapsedMs ?? ZERO,
+-          loadReadinessStableWindow:
++          false,
++          readinessProgress.progressSnapshot,
++        );
++        for (const diagnostic of lastResult.nodeDiagnostics || []) {
++          if (diagnostic.active === true) {
++            continue;
++          }
++          const summaryKey = diagnostic.error ?
++            'error:' + diagnostic.error :
++            'state:' + (diagnostic.state || UNKNOWN_STATE);
++          instabilitySummaryCounts.set(
++            summaryKey,
++            (instabilitySummaryCounts.get(summaryKey) || ZERO) + 1,
++          );
++        }
++        this._recordPeriodicStartupWaitingStage(
++          CLUSTER_STAGE_LOAD_READINESS_WAITING,
++          {
++            attempts,
++            elapsedMs,
++          },
++          {
++            loadReadinessPhase,
++            stableWindowMs,
++            stableElapsedMs: lastResult?.stableElapsedMs ?? ZERO,
++            loadReadinessStableWindow:
+             lastResult.loadReadinessStableWindow || null,
+-          nodeDiagnostics: lastResult.nodeDiagnostics || [],
+-          snapshotCoverage: lastResult.snapshotCoverage || null,
+-          publicationConvergenceGate:
++            loadReadinessAdmissionGate:
++            lastResult.loadReadinessAdmissionGate || null,
++            nodeDiagnostics: lastResult.nodeDiagnostics || [],
++            snapshotCoverage: lastResult.snapshotCoverage || null,
++            publicationConvergenceGate:
+             lastResult.publicationConvergenceGate || null,
+-          priorityRecoveryInvariants:
++            priorityRecoveryInvariants:
+             lastResult.priorityRecoveryInvariants || null,
+-          ...buildLoadReadinessActiveGateDetails({
+-            attempts,
+-            elapsedMs,
+-            result: lastResult,
+-            progressSnapshot: readinessProgress.progressSnapshot,
+-            noProgress,
+-            blockerHistory: readinessProgress.blockerHistory,
+-          }),
+-        },
+-      );
+-      if (
+-        Number.isInteger(noProgressMaxAttempts) &&
++            ...buildLoadReadinessActiveGateDetails({
++              attempts,
++              elapsedMs,
++              result: lastResult,
++              progressSnapshot: readinessProgress.progressSnapshot,
++              noProgress,
++              blockerHistory: readinessProgress.blockerHistory,
++            }),
++          },
++        );
++        if (
++          Number.isInteger(noProgressMaxAttempts) &&
+         noProgressMaxAttempts > ZERO &&
+         readinessProgress.attemptsSinceProgress >= noProgressMaxAttempts
+-      ) {
+-        const stalledAttempts = readinessProgress.attemptsSinceProgress;
+-        const stalledProgressSnapshot =
++        ) {
++          const stalledAttempts = readinessProgress.attemptsSinceProgress;
++          const stalledProgressSnapshot =
+           selectTerminalActiveWaitProgressSnapshot({
+             currentProgressSnapshot: readinessProgress.progressSnapshot,
+             lastMeaningfulProgressSnapshot,
+             bestSnapshotCoverageProgressSnapshot,
+           });
+-        const stalledProgress = buildLoadReadinessNoProgressDetails(
+-          attempts,
+-          elapsedMs,
+-          true,
+-          stalledProgressSnapshot,
+-        );
+-        const stalledNoProgress = {
+-          ...stalledProgress,
+-          readinessFailure: buildActiveWaitReadinessFailure({
+-            mode: CLUSTER_READINESS_MODE_LOAD,
+-            noProgress: stalledProgress,
+-            attemptsSinceProgress: stalledAttempts,
+-            maxAttempts: noProgressMaxAttempts,
+-          }),
+-          reasonCode: ACTIVE_WAIT_NO_PROGRESS_REASON_CODE,
+-          stalledReason:
+-            ACTIVE_WAIT_NO_PROGRESS_REASON_CYCLES_PREFIX +
+-            String(stalledAttempts),
+-          failedNoProgress: {
+-            phase: CLUSTER_STAGE_LOAD_READINESS_WAITING,
+-            details: {
++          const stalledProgress = buildLoadReadinessNoProgressDetails(
++            attempts,
++            elapsedMs,
++            true,
++            stalledProgressSnapshot,
++          );
++          const stalledNoProgress = {
++            ...stalledProgress,
++            readinessFailure: buildActiveWaitReadinessFailure({
+               mode: CLUSTER_READINESS_MODE_LOAD,
+-              loadReadinessPhase,
+-              budgetCoordinatorCycles: noProgressMaxAttempts,
+-              budgetAttempts: noProgressMaxAttempts,
+-              attempts,
+-              elapsedMs,
++              noProgress: stalledProgress,
+               attemptsSinceProgress: stalledAttempts,
+-              coordinatorCyclesSinceProgress: stalledAttempts,
++              maxAttempts: noProgressMaxAttempts,
++            }),
++            reasonCode: ACTIVE_WAIT_NO_PROGRESS_REASON_CODE,
++            stalledReason:
++            ACTIVE_WAIT_NO_PROGRESS_REASON_CYCLES_PREFIX +
++            String(stalledAttempts),
++            failedNoProgress: {
++              phase: CLUSTER_STAGE_LOAD_READINESS_WAITING,
++              details: {
++                mode: CLUSTER_READINESS_MODE_LOAD,
++                loadReadinessPhase,
++                budgetCoordinatorCycles: noProgressMaxAttempts,
++                budgetAttempts: noProgressMaxAttempts,
++                attempts,
++                elapsedMs,
++                attemptsSinceProgress: stalledAttempts,
++                coordinatorCyclesSinceProgress: stalledAttempts,
++              },
+             },
+-          },
+-          lastMeaningfulChange:
++            lastMeaningfulChange:
+             lastMeaningfulProgressSnapshot &&
+             typeof lastMeaningfulProgressSnapshot === 'object' ?
+               {
+@@ -391,7 +705,7 @@ export async function waitForLoadReadinessStability(options = {}) {
+                 ),
+               } :
+               null,
+-          lastProgressEvent:
++            lastProgressEvent:
+             readinessProgress.progressSnapshot &&
+             typeof readinessProgress.progressSnapshot === 'object' ?
+               {
+@@ -402,40 +716,42 @@ export async function waitForLoadReadinessStability(options = {}) {
+                 ),
+               } :
+               null,
+-        };
+-        const stalledActiveGateDetails = buildLoadReadinessActiveGateDetails({
+-          state: PRIORITY_RECOVERY_ACTIVE_GATE_STATE.STALLED,
+-          attempts,
+-          elapsedMs,
+-          result: lastResult,
+-          progressSnapshot: stalledProgressSnapshot,
+-          noProgress: stalledNoProgress,
+-          readinessFailure: stalledNoProgress.readinessFailure,
+-          reasonCode: stalledNoProgress.reasonCode,
+-          stalledReason: stalledNoProgress.stalledReason,
+-          failedNoProgress: stalledNoProgress.failedNoProgress,
+-          lastMeaningfulChange: stalledNoProgress.lastMeaningfulChange,
+-          lastProgressEvent: stalledNoProgress.lastProgressEvent,
+-          blockerHistory: readinessProgress.blockerHistory,
+-        });
+-        this._recordClusterStage(CLUSTER_STAGE_LOAD_READINESS_WAITING, {
+-          loadReadinessPhase,
+-          attempts,
+-          elapsedMs,
+-          stableWindowMs,
+-          stableElapsedMs: lastResult?.stableElapsedMs ?? ZERO,
+-          loadReadinessStableWindow:
++          };
++          const stalledActiveGateDetails = buildLoadReadinessActiveGateDetails({
++            state: PRIORITY_RECOVERY_ACTIVE_GATE_STATE.STALLED,
++            attempts,
++            elapsedMs,
++            result: lastResult,
++            progressSnapshot: stalledProgressSnapshot,
++            noProgress: stalledNoProgress,
++            readinessFailure: stalledNoProgress.readinessFailure,
++            reasonCode: stalledNoProgress.reasonCode,
++            stalledReason: stalledNoProgress.stalledReason,
++            failedNoProgress: stalledNoProgress.failedNoProgress,
++            lastMeaningfulChange: stalledNoProgress.lastMeaningfulChange,
++            lastProgressEvent: stalledNoProgress.lastProgressEvent,
++            blockerHistory: readinessProgress.blockerHistory,
++          });
++          this._recordClusterStage(CLUSTER_STAGE_LOAD_READINESS_WAITING, {
++            loadReadinessPhase,
++            attempts,
++            elapsedMs,
++            stableWindowMs,
++            stableElapsedMs: lastResult?.stableElapsedMs ?? ZERO,
++            loadReadinessStableWindow:
+             lastResult.loadReadinessStableWindow || null,
+-          nodeDiagnostics: lastResult.nodeDiagnostics || [],
+-          snapshotCoverage: lastResult.snapshotCoverage || null,
+-          publicationConvergenceGate:
++            loadReadinessAdmissionGate:
++            lastResult.loadReadinessAdmissionGate || null,
++            nodeDiagnostics: lastResult.nodeDiagnostics || [],
++            snapshotCoverage: lastResult.snapshotCoverage || null,
++            publicationConvergenceGate:
+             lastResult.publicationConvergenceGate || null,
+-          priorityRecoveryInvariants:
++            priorityRecoveryInvariants:
+             lastResult.priorityRecoveryInvariants || null,
+-          ...stalledActiveGateDetails,
+-        });
+-        const stalledError = new Error(
+-          ACTIVE_WAIT_STALLED_MESSAGE_PREFIX +
++            ...stalledActiveGateDetails,
++          });
++          const stalledError = new Error(
++            ACTIVE_WAIT_STALLED_MESSAGE_PREFIX +
+             'for ' +
+             String(stalledAttempts) +
+             ' attempts (mode=' +
+@@ -445,15 +761,15 @@ export async function waitForLoadReadinessStability(options = {}) {
+               stalledProgressSnapshot,
+             ) +
+             ')',
+-        );
+-        stalledError.diagnostics = {
+-          activeGate: stalledActiveGateDetails.activeGate,
+-          noProgress: stalledNoProgress,
+-          priorityRecoveryInvariants:
++          );
++          stalledError.diagnostics = {
++            activeGate: stalledActiveGateDetails.activeGate,
++            noProgress: stalledNoProgress,
++            priorityRecoveryInvariants:
+             lastResult?.priorityRecoveryInvariants || null,
+-        };
+-        throw stalledError;
+-      }
++          };
++          throw stalledError;
++        }
+       },
+     });
+   } catch (error) {
+@@ -475,6 +791,8 @@ export async function waitForLoadReadinessStability(options = {}) {
+       stableElapsedMs: pollResult.lastResult?.stableElapsedMs ?? ZERO,
+       loadReadinessStableWindow:
+         pollResult.lastResult?.loadReadinessStableWindow || null,
++      loadReadinessAdmissionGate:
++        pollResult.lastResult?.loadReadinessAdmissionGate || null,
+       snapshotCoverage: pollResult.lastResult?.snapshotCoverage || null,
+       publicationConvergenceGate:
+         pollResult.lastResult?.publicationConvergenceGate || null,
+@@ -494,18 +812,8 @@ export async function waitForLoadReadinessStability(options = {}) {
+     pollResult.lastResult?.publicationConvergenceGate || null,
+     pollResult.lastResult,
+   );
+-  const finalProgressSnapshot =
+-    lastObservedProgressSnapshot ||
+-    buildActiveWaitProgressSnapshot(
+-      pollResult.lastResult || {},
+-      this._nodes.size,
+-      {readinessMode: CLUSTER_READINESS_MODE_LOAD},
+-    );
+-  const terminalProgressSnapshot = selectTerminalActiveWaitProgressSnapshot({
+-    currentProgressSnapshot: finalProgressSnapshot,
+-    lastMeaningfulProgressSnapshot,
+-    bestSnapshotCoverageProgressSnapshot,
+-  });
++  const terminalProgressSnapshot =
++    selectLoadReadinessTerminalProgressSnapshot(pollResult.lastResult);
+   const finalAttemptsSinceProgress = Math.max(
+     ZERO,
+     pollResult.attempts - (lastMeaningfulProgressAttempt || ZERO),
+@@ -557,6 +865,8 @@ export async function waitForLoadReadinessStability(options = {}) {
+     stableElapsedMs: pollResult.lastResult?.stableElapsedMs ?? ZERO,
+     loadReadinessStableWindow:
+       pollResult.lastResult?.loadReadinessStableWindow || null,
++    loadReadinessAdmissionGate:
++      pollResult.lastResult?.loadReadinessAdmissionGate || null,
+     nodeDiagnostics: pollResult.lastResult?.nodeDiagnostics || [],
+     snapshotCoverage: pollResult.lastResult?.snapshotCoverage || null,
+     publicationConvergenceGate:
+@@ -595,16 +905,20 @@ export async function waitForLoadReadinessStability(options = {}) {
+     loadReadinessPhase,
+     ...(stableWindowFailure ? {failure: stableWindowFailure} : {}),
+     loadReadinessStableWindow:
+-      pollResult.lastResult?.loadReadinessStableWindow || null,
++        pollResult.lastResult?.loadReadinessStableWindow || null,
++    loadReadinessAdmissionGate:
++        pollResult.lastResult?.loadReadinessAdmissionGate || null,
+     controlPlaneDiagnostics: {
+       publicationConvergenceGate:
+-        pollResult.lastResult?.publicationConvergenceGate || null,
++          pollResult.lastResult?.publicationConvergenceGate || null,
+       activeGateSnapshotCoverage:
+         pollResult.lastResult?.snapshotCoverage || null,
+       priorityRecoveryInvariants:
+         pollResult.lastResult?.priorityRecoveryInvariants || null,
+       loadReadinessStableWindow:
+         pollResult.lastResult?.loadReadinessStableWindow || null,
++      loadReadinessAdmissionGate:
++        pollResult.lastResult?.loadReadinessAdmissionGate || null,
+       activeGate: timeoutActiveGateDetails.activeGate,
+       ...timeoutActiveGateDetails,
+     },

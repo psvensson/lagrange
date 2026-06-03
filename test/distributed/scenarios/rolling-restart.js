@@ -35,6 +35,10 @@ const POST_RESTART_CONTROL_PLANE_MAX_IN_FLIGHT_COUNT = ZERO;
 const POST_RESTART_CRITICAL_SYSTEM_SPREAD_REQUIRED = true;
 const POST_RESTART_CONTROL_PLANE_QUIESCENCE_NO_PROGRESS_TIMEOUT_MS = 30000;
 const POST_RESTART_LOAD_READINESS_NO_PROGRESS_MAX_ATTEMPTS = 5;
+const PRE_LOAD_CONTROL_PLANE_MAX_IN_FLIGHT_COUNT = ZERO;
+const PRE_LOAD_CRITICAL_SYSTEM_SPREAD_REQUIRED = true;
+const PRE_LOAD_IGNORE_STALE_IN_FLIGHT_REPLICA_OPERATIONS = true;
+const PRE_LOAD_REQUIRE_ACTIVE_GATE_PROMOTION = true;
 const ROLLING_RESTART_REQUIRE_ADMIN_READY = true;
 const MIN_BENCHMARK_READY_LOAD_NODES = 2;
 const BENCHMARK_LOAD_ADMISSION_QUERY_TIMEOUT_MS = 1000;
@@ -181,6 +185,24 @@ async function buildRollingRestartLoadPlan(cluster, scenarioOptions, {
     workloadProfile: BENCHMARK_WORKLOAD_PROFILE,
     loadNodePlan,
   };
+}
+
+async function waitForPreBenchmarkBootstrapControlPlane(cluster, {
+  preLoadReadinessStableWindowMs,
+  preLoadReadinessTimeoutMs,
+}) {
+  if (typeof cluster?.waitForControlPlaneQuiescence !== 'function') {
+    return;
+  }
+  await cluster.waitForControlPlaneQuiescence({
+    timeoutMs: preLoadReadinessTimeoutMs,
+    stableWindowMs: preLoadReadinessStableWindowMs,
+    maxInFlightCount: PRE_LOAD_CONTROL_PLANE_MAX_IN_FLIGHT_COUNT,
+    ignoreStaleInFlightReplicaOperations:
+      PRE_LOAD_IGNORE_STALE_IN_FLIGHT_REPLICA_OPERATIONS,
+    requireCriticalSystemSpread:
+      PRE_LOAD_CRITICAL_SYSTEM_SPREAD_REQUIRED,
+  });
 }
 
 function escapeSql(value) {
@@ -484,24 +506,44 @@ async function run(cluster, options = {}) {
   // enough here: rolling restart load must not compete with startup priority
   // recovery for critical system partitions.
   if (typeof cluster.waitForLoadReadinessStability === 'function') {
-    const preLoadReadinessTimeoutForGate = benchmarkAdmissionSupported ?
-      Math.min(
-        preLoadReadinessTimeoutMs,
-        BENCHMARK_PRE_LOAD_READINESS_WARMUP_TIMEOUT_MS,
-      ) :
-      preLoadReadinessTimeoutMs;
+    const requireActiveGatePromotion =
+      benchmarkAdmissionSupported === true ?
+        PRE_LOAD_REQUIRE_ACTIVE_GATE_PROMOTION :
+        false;
+    const preLoadReadinessTimeoutForGate = requireActiveGatePromotion ?
+      preLoadReadinessTimeoutMs :
+      benchmarkAdmissionSupported ?
+        Math.min(
+          preLoadReadinessTimeoutMs,
+          BENCHMARK_PRE_LOAD_READINESS_WARMUP_TIMEOUT_MS,
+        ) :
+        preLoadReadinessTimeoutMs;
     try {
-      await cluster.waitForLoadReadinessStability({
+      const preLoadReadinessOptions = {
         stableWindowMs: preLoadReadinessStableWindowMs,
         timeoutMs: preLoadReadinessTimeoutForGate,
-        noProgressMaxAttempts: preLoadReadinessNoProgressMaxAttempts,
+        noProgressMaxAttempts: requireActiveGatePromotion ?
+          ZERO :
+          preLoadReadinessNoProgressMaxAttempts,
         loadReadinessPhase: LOAD_READINESS_PHASE_PRE_LOAD,
-      });
+      };
+      if (requireActiveGatePromotion) {
+        preLoadReadinessOptions.requireActiveGatePromotion =
+          PRE_LOAD_REQUIRE_ACTIVE_GATE_PROMOTION;
+      }
+      await cluster.waitForLoadReadinessStability(preLoadReadinessOptions);
     } catch (error) {
-      if (!benchmarkAdmissionSupported) {
+      if (!benchmarkAdmissionSupported || requireActiveGatePromotion) {
         throw error;
       }
     }
+  }
+
+  if (benchmarkAdmissionSupported) {
+    await waitForPreBenchmarkBootstrapControlPlane(cluster, {
+      preLoadReadinessStableWindowMs,
+      preLoadReadinessTimeoutMs,
+    });
   }
 
   // 2. Start sustained write load.

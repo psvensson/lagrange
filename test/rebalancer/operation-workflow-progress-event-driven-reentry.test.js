@@ -126,6 +126,8 @@ const TEST_CACHE_EVENT_REENTRY_TEST_NAME =
   'workflow progress';
 const TEST_TARGET_PROGRESS_REENTRY_TEST_NAME =
   'target-service terminal progress snapshots re-enter workflow progress';
+const TEST_REMOTE_TARGET_PROGRESS_REENTRY_TEST_NAME =
+  'remote target-service terminal progress snapshots wake the workflow owner';
 const TEST_DISPATCH_PENDING_TARGET_PROGRESS_REENTRY_TEST_NAME =
   'dispatch-pending active target progress snapshots re-enter workflow progress';
 const TEST_LOCAL_INITIALIZATION_RETRY_TEST_NAME =
@@ -146,6 +148,8 @@ const TEST_ASSERT_CACHE_REENTRY_TIMER =
   'cache-event re-entry should arm bounded handoff verification';
 const TEST_ASSERT_TARGET_PROGRESS_REENTRY =
   'target terminal progress should re-enter the observed-progress owner lane';
+const TEST_ASSERT_REMOTE_TARGET_PROGRESS_WAKE =
+  'remote target terminal progress should wake the remote owner';
 const TEST_ASSERT_TARGET_PROGRESS_PHASE =
   'target terminal progress fixture should preserve target creation phase';
 const TEST_ASSERT_DISPATCH_PENDING_TARGET_PROGRESS_REENTRY =
@@ -1369,6 +1373,83 @@ test(TEST_TARGET_PROGRESS_REENTRY_TEST_NAME, async (t) => {
   }
 });
 
+test(TEST_REMOTE_TARGET_PROGRESS_REENTRY_TEST_NAME, async (t) => {
+  const deliveries = [];
+  const deferredTimers = [];
+  const operation = buildEventDrivenOperation({
+    status: ReplicaStatus.CREATING,
+    workflowStep: WORKFLOW_STEP.CREATING,
+    targetNodeId: TEST_TARGET_NODE_ID,
+  });
+  const operationWithTargetProgress = Object.freeze({
+    ...operation,
+    targetServiceTerminalState:
+      PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE.TERMINAL,
+  });
+  const operationRow = buildEventDrivenOperationRow({
+    status: ReplicaStatus.CREATING,
+    workflow_step: WORKFLOW_STEP.CREATING,
+    target_node_id: TEST_TARGET_NODE_ID,
+  });
+  const coordinator = createEventDrivenCoordinator(
+    deliveries,
+    deferredTimers,
+    operationRow,
+    {
+      workflowStep: WORKFLOW_STEP.CREATING,
+      latestOperationStatus: ReplicaStatus.CREATING,
+      workflowProgressPhaseId:
+        PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.TARGET_CREATION,
+      nextRequiredAction:
+        PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
+      coordinatorOperation: operationWithTargetProgress,
+    },
+  );
+  const originalDateNow = Date.now;
+  Date.now = () => TEST_CAPTURED_AT_MS;
+
+  try {
+    coordinator.initialize();
+
+    const snapshot =
+      coordinator.workflowOwner.buildPriorityRecoveryDecisionSnapshotForOperations(
+        operation.partitionId,
+        [operationWithTargetProgress],
+        buildEventDrivenPlanningSnapshot({
+          workflowStep: WORKFLOW_STEP.CREATING,
+          latestOperationStatus: ReplicaStatus.CREATING,
+          workflowProgressPhaseId:
+            PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.TARGET_CREATION,
+          nextRequiredAction:
+            PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
+          coordinatorOperation: operationWithTargetProgress,
+        }),
+      );
+    await new Promise((resolve) => {
+      setTimeout(resolve, NUM.ZERO);
+    });
+
+    t.equal(
+      snapshot?.progress?.workflowProgressPhaseId,
+      PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.TARGET_CREATION,
+      TEST_ASSERT_TARGET_PROGRESS_PHASE,
+    );
+    t.equal(
+      deliveries.length,
+      NUM.ONE,
+      TEST_ASSERT_REMOTE_TARGET_PROGRESS_WAKE,
+    );
+    t.equal(
+      deliveries[NUM.ZERO]?.target,
+      TEST_REPLICA_DISPATCH_TARGET,
+      TEST_ASSERT_REMOTE_TARGET_PROGRESS_WAKE,
+    );
+  } finally {
+    Date.now = originalDateNow;
+    await coordinator.shutdown();
+  }
+});
+
 test(TEST_DISPATCH_PENDING_TARGET_PROGRESS_REENTRY_TEST_NAME, async (t) => {
   const deliveries = [];
   const deferredTimers = [];
@@ -1570,4 +1651,3 @@ test('event-driven rebalancer handoff waits resolve retry contract fields', asyn
     await coordinator.shutdown();
   }
 });
-

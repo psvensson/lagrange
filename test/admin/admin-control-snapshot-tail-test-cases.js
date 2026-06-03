@@ -8,7 +8,7 @@ export function registerAdminControlSnapshotTailTests({
   AdminControlSnapshot,
   CONTROL_PLANE_READINESS_DIMENSION,
 }) {
-  test('AdminControlSnapshot default snapshots recover published membership after a cache miss on a pending publication',
+  test('AdminControlSnapshot default snapshots keep published membership recovery local after a cache miss on a pending publication',
     async (t) => {
       const publishedReadOptions = [];
       const snapshot = new AdminControlSnapshot({
@@ -117,48 +117,47 @@ export function registerAdminControlSnapshotTailTests({
 
       t.same(
         result.nodes,
-        ['node-1', 'node-2'],
-        'default snapshots should keep the last published membership when a newer publication is still pending',
+        ['node-1', 'node-2', 'node-3'],
+        'default snapshots should use the locally observed open membership without authoritative recovery',
       );
       t.same(
         publishedReadOptions,
         [
           {readProfile: 'diagnostics'},
-          {preferAuthoritativeRead: true, readProfile: 'diagnostics'},
         ],
-        'default snapshots should escalate to an authoritative published-membership read after a cache miss',
+        'default snapshots should not escalate to an authoritative published-membership read after a cache miss',
       );
       t.match(
         result.controlPlaneDiagnostics.publishedMembershipObservation,
         {
-          publicationEpoch: 7,
-          status: 'PUBLISHED',
-          publishedActiveNodeIds: ['node-1', 'node-2'],
+          publicationObservation: {
+            state: 'unavailable',
+          },
         },
-        'default snapshot diagnostics should preserve the recovered published membership observation',
+        'default snapshot diagnostics should expose the unavailable durable published membership locally',
       );
       t.same(
         result.controlPlaneDiagnostics.activeNodeViews,
         {
           authoritativeSource: 'published_membership',
-          authoritativeNodeIds: ['node-1', 'node-2'],
+          authoritativeNodeIds: ['node-1', 'node-2', 'node-3'],
           projectedServingNodeIds: ['node-1', 'node-2', 'node-3'],
           locallyEligibleNodeIds: ['node-1', 'node-2', 'node-3'],
-          suspectedOrTransitioningNodeIds: ['node-3'],
+          suspectedOrTransitioningNodeIds: [],
           membershipFreeze: {
             active: false,
             reasonCode: null,
-            retainedPublishedNodeIds: ['node-1', 'node-2'],
+            retainedPublishedNodeIds: ['node-1', 'node-2', 'node-3'],
             missingProjectedNodeIds: [],
-            unconfirmedProjectedNodeIds: ['node-3'],
+            unconfirmedProjectedNodeIds: [],
           },
           effectiveSource: 'published_membership',
-          effectiveNodeIds: ['node-1', 'node-2'],
+          effectiveNodeIds: ['node-1', 'node-2', 'node-3'],
           projectedNodeIds: ['node-1', 'node-2', 'node-3'],
-          publishedNodeIds: ['node-1', 'node-2'],
+          publishedNodeIds: ['node-1', 'node-2', 'node-3'],
           publishedMembershipAvailable: true,
         },
-        'default snapshots should continue advertising published membership availability after recovery',
+        'default snapshots should advertise only local membership availability after recovery stays local',
       );
     });
 

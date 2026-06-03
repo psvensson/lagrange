@@ -1,6 +1,5 @@
 import {CLUSTER_SEGMENT_1} from './cluster-segment-1.js';
 import {
-  TYPEOF_OBJECT,
   TYPEOF_STRING,
   normalizeDistinctStringArray,
   normalizeFirstNonEmptyDistinctStringArray,
@@ -56,6 +55,16 @@ const {
 } = CLUSTER_SEGMENT_1;
 
 const ACTIVE_WAIT_BLOCKER_SIGNATURE_SEPARATOR = '|';
+const ACTIVE_GATE_OWNER_RECOVERY_SNAPSHOT_MODE = 'repair_deferred';
+const ACTIVE_GATE_OWNER_RECOVERY_SNAPSHOT_CONTRACT_STATE = 'deferred';
+const ACTIVE_GATE_OWNER_RECOVERY_SNAPSHOT_NEXT_ACTION = 'retry';
+const ACTIVE_GATE_OWNER_RECOVERY_HANDOFF_STATE_PENDING = 'pending';
+const ACTIVE_GATE_OWNER_RECOVERY_HANDOFF_REASON_OWNER_RECONCILE =
+  'owner_reconcile_pending';
+const ACTIVE_GATE_OWNER_RECOVERY_HANDOFF_NEXT_ACTION_WAIT =
+  'wait_owner_recovery';
+const ACTIVE_GATE_OWNER_RECOVERY_HANDOFF_OUTCOME_WRITE_DEFERRED =
+  'write_deferred';
 
 /**
  * Evaluate whether load-mode startup can trust published membership convergence.
@@ -299,6 +308,219 @@ function evaluateLoadPublishedConvergence(
   };
 }
 
+function normalizeNonNegativeInteger(value) {
+  return Number.isFinite(value) && value >= ZERO ?
+    Math.floor(value) :
+    ZERO;
+}
+
+function hasOwnerRecoverySnapshotCoverageMode({
+  readinessMode,
+  expectedNodeCount,
+  snapshotCoverageNodeCount,
+} = {}) {
+  if (readinessMode === CLUSTER_READINESS_MODE_LOAD) {
+    return snapshotCoverageNodeCount >= expectedNodeCount;
+  }
+  return readinessMode === CLUSTER_READINESS_MODE_STARTUP &&
+    snapshotCoverageNodeCount > ZERO;
+}
+
+function hasBoundedOwnerRecoverySnapshotCoverage({
+  readinessMode,
+  expectedNodeCount,
+  snapshotCoverageNodeCount,
+  selectedSnapshotRepairDeferred,
+  selectedSnapshotObservationMode,
+  selectedSnapshotObservationContractState,
+  selectedSnapshotObservationRefreshState,
+  selectedSnapshotObservationNextAction,
+  selectedPublishedActiveNodeIds,
+  activeGateOwnerCohortState,
+  activeGateOwnerCohortReasonCode,
+  activeGateOwnerCohortMissingPublishedCount,
+  activeGateOwnerCohortPendingRecoveryNodeIds,
+  activeGateOwnerCohortPendingRecoveryCount,
+  activeGateOwnerCohortPendingReconcileCount,
+  publicationActiveGateHandoffNextAction,
+  publicationActiveGateHandoffRuntimePromotionAllowed,
+  membershipPublicationHandoffOutcomeState,
+  membershipPublicationHandoffOutcomeReasonCode,
+  membershipPublicationHandoffOutcomeEnqueued,
+  membershipPublicationHandoffOutcomeRetryAfterMs,
+  selectedControlPlaneOwnerQueueDepth,
+} = {}) {
+  if (
+    expectedNodeCount <= ZERO ||
+    selectedPublishedActiveNodeIds.length < expectedNodeCount ||
+    hasOwnerRecoverySnapshotCoverageMode({
+      readinessMode,
+      expectedNodeCount,
+      snapshotCoverageNodeCount,
+    }) !== true
+  ) {
+    return false;
+  }
+  const pendingWrites = normalizeNonNegativeInteger(
+    selectedControlPlaneOwnerQueueDepth?.pendingWrites,
+  );
+  const pendingWriteGrowthCount = normalizeNonNegativeInteger(
+    selectedControlPlaneOwnerQueueDepth?.pendingWriteGrowthCount,
+  );
+  const selectedPublishedActiveNodeIdSet =
+    new Set(selectedPublishedActiveNodeIds);
+  const pendingRecoveryCoveredByPublishedActive =
+    activeGateOwnerCohortPendingRecoveryNodeIds.every((nodeId) =>
+      selectedPublishedActiveNodeIdSet.has(nodeId),
+    );
+  const pendingRecoveryCount = normalizeNonNegativeInteger(
+    activeGateOwnerCohortPendingRecoveryCount,
+  );
+  const pendingRecoveryDebtPresent =
+    activeGateOwnerCohortPendingRecoveryNodeIds.length > ZERO &&
+    pendingRecoveryCount >= activeGateOwnerCohortPendingRecoveryNodeIds.length;
+  return (
+    selectedSnapshotRepairDeferred === true &&
+    selectedSnapshotObservationMode === ACTIVE_GATE_OWNER_RECOVERY_SNAPSHOT_MODE &&
+    selectedSnapshotObservationContractState ===
+      ACTIVE_GATE_OWNER_RECOVERY_SNAPSHOT_CONTRACT_STATE &&
+    selectedSnapshotObservationRefreshState ===
+      ACTIVE_GATE_OWNER_RECOVERY_SNAPSHOT_CONTRACT_STATE &&
+    selectedSnapshotObservationNextAction ===
+      ACTIVE_GATE_OWNER_RECOVERY_SNAPSHOT_NEXT_ACTION &&
+    activeGateOwnerCohortState ===
+      ACTIVE_GATE_OWNER_RECOVERY_HANDOFF_STATE_PENDING &&
+    activeGateOwnerCohortReasonCode ===
+      ACTIVE_GATE_OWNER_RECOVERY_HANDOFF_REASON_OWNER_RECONCILE &&
+    activeGateOwnerCohortMissingPublishedCount === ZERO &&
+    pendingRecoveryDebtPresent === true &&
+    pendingRecoveryCoveredByPublishedActive === true &&
+    activeGateOwnerCohortPendingReconcileCount === ZERO &&
+    publicationActiveGateHandoffNextAction ===
+      ACTIVE_GATE_OWNER_RECOVERY_HANDOFF_NEXT_ACTION_WAIT &&
+    publicationActiveGateHandoffRuntimePromotionAllowed !== true &&
+    membershipPublicationHandoffOutcomeState ===
+      ACTIVE_GATE_OWNER_RECOVERY_HANDOFF_OUTCOME_WRITE_DEFERRED &&
+    membershipPublicationHandoffOutcomeReasonCode ===
+      ACTIVE_GATE_OWNER_RECOVERY_HANDOFF_REASON_OWNER_RECONCILE &&
+    membershipPublicationHandoffOutcomeEnqueued === true &&
+    normalizeNonNegativeInteger(membershipPublicationHandoffOutcomeRetryAfterMs) >
+      ZERO &&
+    pendingWrites >= Math.max(
+      pendingRecoveryCount,
+      activeGateOwnerCohortPendingRecoveryNodeIds.length,
+    ) &&
+    pendingWriteGrowthCount === ZERO
+  );
+}
+
+function isPriorityRecoveryProgressEvidenceRecord(value) {
+  return value && typeof value === 'object' && Array.isArray(value) !== true;
+}
+
+function hasPriorityRecoveryProgressEvidence(value) {
+  return (
+    isPriorityRecoveryProgressEvidenceRecord(value) &&
+    (
+      Array.isArray(value.snapshots) ||
+      Array.isArray(value.partitionSnapshots) ||
+      isPriorityRecoveryProgressEvidenceRecord(
+        value.partitionIdsBySemanticState,
+      ) ||
+      isPriorityRecoveryProgressEvidenceRecord(
+        value.blockerPartitionIdsByReason,
+      ) ||
+      isPriorityRecoveryProgressEvidenceRecord(value.partitionIdsByClass)
+    )
+  );
+}
+
+function mergePriorityRecoveryProgressEvidenceMap(target, source) {
+  if (!isPriorityRecoveryProgressEvidenceRecord(source)) {
+    return;
+  }
+  for (const [key, partitionIds] of Object.entries(source)) {
+    const normalizedKey = String(key || '').trim();
+    if (normalizedKey.length === ZERO) {
+      continue;
+    }
+    target[normalizedKey] = normalizeDistinctStringArray([
+      ...normalizeDistinctStringArray(target[normalizedKey]),
+      ...normalizeDistinctStringArray(partitionIds),
+    ]);
+  }
+}
+
+function mergePriorityRecoveryProgressEvidence(candidates = []) {
+  const evidenceRecords = candidates.filter(hasPriorityRecoveryProgressEvidence);
+  if (evidenceRecords.length === ZERO) {
+    return null;
+  }
+  const snapshots = [];
+  const partitionIdsBySemanticState = {};
+  const blockerPartitionIdsByReason = {};
+  let closureWitness = null;
+  for (const evidence of evidenceRecords) {
+    if (Array.isArray(evidence.snapshots)) {
+      snapshots.push(...evidence.snapshots);
+    }
+    if (Array.isArray(evidence.partitionSnapshots)) {
+      snapshots.push(...evidence.partitionSnapshots);
+    }
+    mergePriorityRecoveryProgressEvidenceMap(
+      partitionIdsBySemanticState,
+      evidence.partitionIdsBySemanticState,
+    );
+    mergePriorityRecoveryProgressEvidenceMap(
+      blockerPartitionIdsByReason,
+      evidence.blockerPartitionIdsByReason,
+    );
+    mergePriorityRecoveryProgressEvidenceMap(
+      blockerPartitionIdsByReason,
+      evidence.partitionIdsByClass,
+    );
+    if (!closureWitness && isPriorityRecoveryProgressEvidenceRecord(
+      evidence.closureWitness,
+    )) {
+      closureWitness = evidence.closureWitness;
+    }
+  }
+  return {
+    snapshots,
+    partitionIdsBySemanticState,
+    blockerPartitionIdsByReason,
+    ...(closureWitness ? {closureWitness} : {}),
+  };
+}
+
+function selectPriorityRecoveryProgressEvidence({
+  snapshotCoverage = null,
+  publicationConvergence = null,
+  publicationConvergenceGate = null,
+} = {}) {
+  const candidates = [
+    snapshotCoverage?.selectedPriorityRecoveryDecisionSnapshots,
+    snapshotCoverage?.priorityRecoveryDecisionSnapshots,
+    publicationConvergenceGate?.priorityRecoveryDecisionSnapshots,
+    publicationConvergence?.priorityRecoveryDecisionSnapshots,
+    snapshotCoverage?.selectedPublicationConvergenceGate
+      ?.priorityRecoveryDecisionSnapshots,
+    snapshotCoverage?.selectedPublicationConvergence
+      ?.priorityRecoveryDecisionSnapshots,
+    snapshotCoverage?.selectedPriorityRecoveryObservation
+      ?.priorityRecoveryCurrentSummary,
+    snapshotCoverage?.priorityRecoveryObservation
+      ?.priorityRecoveryCurrentSummary,
+    publicationConvergenceGate?.priorityRecoveryCurrentSummary,
+    publicationConvergence?.priorityRecoveryCurrentSummary,
+    snapshotCoverage?.selectedPublicationConvergenceGate
+      ?.priorityRecoveryCurrentSummary,
+    snapshotCoverage?.selectedPublicationConvergence
+      ?.priorityRecoveryCurrentSummary,
+  ];
+  return mergePriorityRecoveryProgressEvidence(candidates);
+}
+
 
 function buildActiveWaitProgressSnapshot(
   probeResult = {},
@@ -335,7 +557,8 @@ function buildActiveWaitProgressSnapshot(
     snapshotCoverage.bestCoverageNodeCount > ZERO ?
       snapshotCoverage.bestCoverageNodeCount :
       ZERO;
-  const snapshotCoverageComplete = snapshotCoverage?.completeCoverage === true;
+  const canonicalSnapshotCoverageComplete =
+    snapshotCoverage?.completeCoverage === true;
 
   const publicationConvergence =
     snapshotCoverage?.selectedPublicationConvergence &&
@@ -655,12 +878,11 @@ function buildActiveWaitProgressSnapshot(
     steadyPublishedSelectedMissingCount,
     startupPublicationLagSelectedMissingCount,
   );
-  const priorityRecoveryDecisionSnapshots =
-    snapshotCoverage?.selectedPriorityRecoveryDecisionSnapshots &&
-    typeof snapshotCoverage.selectedPriorityRecoveryDecisionSnapshots ===
-      'object' ?
-      snapshotCoverage.selectedPriorityRecoveryDecisionSnapshots :
-      null;
+  const priorityRecoveryDecisionSnapshots = selectPriorityRecoveryProgressEvidence({
+    snapshotCoverage,
+    publicationConvergence,
+    publicationConvergenceGate,
+  });
   const priorityRecoveryProgressClasses =
     summarizePriorityRecoveryProgressClasses(priorityRecoveryDecisionSnapshots);
   const priorityRecoveryUnresolvedClassCount =
@@ -669,6 +891,35 @@ function buildActiveWaitProgressSnapshot(
     priorityRecoveryProgressClasses.unresolvedSemanticStateCount;
   const priorityRecoveryBlockedPartitionCount =
     priorityRecoveryProgressClasses.blockedPartitionCount;
+  const ownerRecoverySnapshotCoverageComplete =
+    canonicalSnapshotCoverageComplete !== true &&
+    hasBoundedOwnerRecoverySnapshotCoverage({
+      readinessMode,
+      expectedNodeCount: normalizedExpectedNodeCount,
+      snapshotCoverageNodeCount,
+      selectedSnapshotRepairDeferred,
+      selectedSnapshotObservationMode,
+      selectedSnapshotObservationContractState,
+      selectedSnapshotObservationRefreshState,
+      selectedSnapshotObservationNextAction,
+      selectedPublishedActiveNodeIds,
+      activeGateOwnerCohortState,
+      activeGateOwnerCohortReasonCode,
+      activeGateOwnerCohortMissingPublishedCount,
+      activeGateOwnerCohortPendingRecoveryNodeIds,
+      activeGateOwnerCohortPendingRecoveryCount,
+      activeGateOwnerCohortPendingReconcileCount,
+      publicationActiveGateHandoffNextAction,
+      publicationActiveGateHandoffRuntimePromotionAllowed,
+      membershipPublicationHandoffOutcomeState,
+      membershipPublicationHandoffOutcomeReasonCode,
+      membershipPublicationHandoffOutcomeEnqueued,
+      membershipPublicationHandoffOutcomeRetryAfterMs,
+      selectedControlPlaneOwnerQueueDepth,
+    });
+  const snapshotCoverageComplete =
+    canonicalSnapshotCoverageComplete === true ||
+    ownerRecoverySnapshotCoverageComplete === true;
 
   const blockers = [];
   if (inactiveNodeCount > ZERO) {
