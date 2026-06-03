@@ -66,7 +66,7 @@ export function blockerFromEvidence(event = null) {
   };
 }
 
-function blockerLabel(blocker) {
+export function blockerLabel(blocker) {
   if (!blocker) return 'none';
   return [
     blocker.owner,
@@ -74,6 +74,56 @@ function blockerLabel(blocker) {
     blocker.dominantReason,
   ].filter(Boolean).join(' / ') || blocker.dominantReason ||
     blocker.rootCauseClass || blocker.verdict || 'unknown';
+}
+
+const UNRESOLVED_LABELS = Object.freeze(['none', 'unknown']);
+
+// Ordered, de-duplicated history of distinct blocker labels observed across all
+// measured evidence events for a frontier, plus the set of labels that were left
+// and later returned to (a revisit). This is the engine for oscillation /
+// whack-a-mole detection: a forward-only comparison cannot see a return.
+export function blockerHistory(log, frontierId = null) {
+  const labels = evidenceEvents(log, frontierId)
+    .map((event) => blockerFromEvidence(event))
+    .filter((blocker) => blocker && !blocker.invalidSample && !blocker.done)
+    .map((blocker) => blockerLabel(blocker))
+    .filter((label) => label && !UNRESOLVED_LABELS.includes(label));
+  const transitions = [];
+  for (const label of labels) {
+    if (transitions.length === 0 || transitions[transitions.length - 1] !== label) {
+      transitions.push(label);
+    }
+  }
+  const seen = new Set();
+  const revisits = new Set();
+  for (const label of transitions) {
+    if (seen.has(label)) revisits.add(label);
+    seen.add(label);
+  }
+  return {
+    labels,
+    transitions,
+    distinct: [...seen],
+    revisits: [...revisits],
+  };
+}
+
+// True when the *current* blocker is a label the frontier had already left at
+// least once before — i.e. the loop is cycling back to a previously-abandoned
+// blocker rather than converging.
+export function detectOscillation(log, frontierId = null) {
+  const {transitions, revisits} = blockerHistory(log, frontierId);
+  const current = transitions.length > 0 ? transitions[transitions.length - 1] : null;
+  const oscillating = Boolean(current && revisits.includes(current));
+  const count = current ?
+    transitions.filter((label) => label === current).length :
+    0;
+  return {
+    oscillating,
+    label: oscillating ? current : null,
+    count,
+    revisits,
+  };
 }
 
 export function classifyBlockerMovement(previous, current) {
@@ -262,6 +312,9 @@ export function buildCurrentBlocker({quest, log, state, frontierId = null}) {
     selectedTheoryStaleness(log, state, effectiveFrontierId) :
     {stale: false, theory: null, reason: null};
   const findings = latestFindingLines(log, effectiveFrontierId);
+  const oscillation = effectiveFrontierId ?
+    detectOscillation(log, effectiveFrontierId) :
+    {oscillating: false, label: null, count: 0, revisits: []};
   const noLongerCurrentBlockers = [];
   if (movement.previous &&
     movement.movement !== BLOCKER_MOVEMENT_SAME &&
@@ -288,6 +341,9 @@ export function buildCurrentBlocker({quest, log, state, frontierId = null}) {
     selectedTheory: staleness.theory?.id || null,
     selectedTheoryStale: staleness.stale,
     selectedTheoryStaleReason: staleness.reason,
+    oscillating: oscillation.oscillating,
+    oscillationLabel: oscillation.label,
+    oscillationCount: oscillation.count,
     noLongerCurrentBlockers: [...new Set(noLongerCurrentBlockers)].filter(Boolean),
   };
 }
@@ -307,6 +363,10 @@ export function renderCurrentBlocker(blocker) {
       ''
   }`);
   lines.push(`- Next move: ${blocker.nextAction}`);
+  if (blocker.oscillating) {
+    lines.push(`- Oscillation: blocker "${blocker.oscillationLabel}" revisited ` +
+      `${blocker.oscillationCount}x (whack-a-mole; change strategy)`);
+  }
   if (blocker.noLongerCurrentBlockers.length > 0) {
     lines.push('- No longer current: ' +
       blocker.noLongerCurrentBlockers.join('; '));

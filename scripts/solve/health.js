@@ -19,6 +19,7 @@ import {
 } from './current-blocker.js';
 import {analyzeScopePressure} from './scope-pressure.js';
 
+const DEFAULT_CONSECUTIVE_TARGET = 1;
 const NUM_TWO = 2;
 const NUM_THREE = 3;
 const NUM_FOUR = 4;
@@ -30,6 +31,14 @@ const SELECTABLE_THEORY_STATUSES = Object.freeze([
 function attemptEvents(log, frontierId = '') {
   return log.filter((event) =>
     event.type === EVENT_ATTEMPT && (!frontierId || event.frontier === frontierId));
+}
+
+function consecutiveTarget(doneWhen) {
+  const direct = doneWhen?.consecutive;
+  const nested = doneWhen?.args?.consecutive;
+  if (Number.isInteger(direct)) return direct;
+  if (Number.isInteger(nested)) return nested;
+  return DEFAULT_CONSECUTIVE_TARGET;
 }
 
 function attemptProgressed(event) {
@@ -223,14 +232,24 @@ export function analyzeQuestHealth(root, quest, options = {}) {
     });
   }
 
+  if (currentBlocker?.oscillating) {
+    signals.push({
+      type: 'blocker-oscillation',
+      mechanism: currentBlocker.oscillationLabel || frontier?.id || quest.id,
+      severity: 'high',
+    });
+  }
+
   const latestMetricEvent = [...log].reverse().find((e) =>
     (e.type === 'attempt' && typeof e.metricAfter === 'number') ||
     (e.type === 'evidence-ingested' && typeof e.metric === 'number')
   );
+  let metricZeroNotDone = false;
   if (latestMetricEvent) {
     const metricVal = latestMetricEvent.type === 'attempt' ? latestMetricEvent.metricAfter : latestMetricEvent.metric;
     const isDone = latestMetricEvent.done;
     if (metricVal === 0 && !isDone) {
+      metricZeroNotDone = true;
       signals.push({
         type: 'metric-zero-but-done-false',
         severity: 'high',
@@ -299,9 +318,18 @@ export function analyzeQuestHealth(root, quest, options = {}) {
 
   const rungName = frontier ? (quest.frontiers.find((item) =>
     item.id === frontier.id)?.rung || null) : null;
-  const nextAction = !frontier && cannotMeasureParked.length > 0 ?
+  const targetConsecutive = consecutiveTarget(quest.doneWhen);
+  let nextAction = !frontier && cannotMeasureParked.length > 0 ?
     `fix the measurement harness for ${cannotMeasureParked[0].id}, then reopen` :
     nextActionFor(frontier, needs);
+  // R5: a single-run metric of 0 does not satisfy a streak goal. Route the next move to
+  // proving the consecutive streak rather than selecting another theory for a flap.
+  if (metricZeroNotDone && frontier && targetConsecutive > DEFAULT_CONSECUTIVE_TARGET &&
+      !needs.systemTheoryRequired && !needs.frontierTheoryRequired &&
+      !needs.selectedTheoryStale) {
+    nextAction = `run the ${targetConsecutive}-run consecutive proof for ${frontier.id} ` +
+      'before selecting a new theory; the single-run metric is 0 but the streak is unproven';
+  }
   return {
     questId: quest.id,
     frontier: frontier ? frontier.id : null,

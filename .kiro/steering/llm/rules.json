@@ -104,12 +104,12 @@
     }
   ],
   "stats": {
-    "candidateCount": 242,
-    "dedupedRuleCount": 236,
-    "exportedRuleCount": 236,
+    "candidateCount": 244,
+    "dedupedRuleCount": 238,
+    "exportedRuleCount": 238,
     "aliasRuleCount": 0,
-    "masterRuleCount": 236,
-    "estimatedAllRulesTokens": 7914
+    "masterRuleCount": 238,
+    "estimatedAllRulesTokens": 8050
   },
   "rules": [
     {
@@ -2788,11 +2788,11 @@
       "strength": "must_not",
       "tags": [],
       "rule": "Do not revive sprint/package theory state as active authority.",
-      "score": 206,
+      "score": 205,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 231,
+          "line": 259,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
@@ -2807,7 +2807,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 293,
+          "line": 321,
           "section": "Quest Workflow > Source Change Verification"
         }
       ]
@@ -2822,7 +2822,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 304,
+          "line": 332,
           "section": "Quest Workflow > Git Handoff"
         }
       ]
@@ -2837,7 +2837,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 368,
+          "line": 396,
           "section": "Quest Workflow > Tracked Versus Regenerable"
         }
       ]
@@ -3082,11 +3082,11 @@
         "governance"
       ],
       "rule": "widen-scope: selected frontier theory required.",
-      "score": 198,
+      "score": 197,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 240,
+          "line": 268,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
@@ -3097,11 +3097,11 @@
       "strength": "must",
       "tags": [],
       "rule": "model: selected frontier theory, active system theory, and --modelRef or --modelNotApplicable required.",
-      "score": 198,
+      "score": 197,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 241,
+          "line": 269,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
@@ -3114,11 +3114,11 @@
         "testing"
       ],
       "rule": "change-approach: selected frontier theory remains required; model evidence is not required unless this rung explicitly returns to a model test.",
-      "score": 198,
+      "score": 197,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 243,
+          "line": 271,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
@@ -3133,7 +3133,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 353,
+          "line": 381,
           "section": "Quest Workflow > Terminal And Blocking Conditions"
         }
       ]
@@ -3238,13 +3238,45 @@
       "id": "GOV-0035",
       "domain": "governance",
       "strength": "must_not",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "Oscillation detection: returning the frontier to a previously-abandoned blocker (owner / boundary / dominantReason) is classified oscillating, never theory support, and is treated as a stall that climbs the ladder. Surfaced as the high-severity blocker-oscillation health signal.",
+      "score": 192,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 164,
+          "section": "Quest Workflow > Convergence Guards"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0036",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Measured promotion only: a theory is promoted exclusively by a measured post-patch evidence report; a subagent approval finding may inform but never promote. Audit flags any selected theory approved by a finding with no later measured report.",
+      "score": 192,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 178,
+          "section": "Quest Workflow > Convergence Guards"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0037",
+      "domain": "governance",
+      "strength": "must_not",
       "tags": [],
       "rule": "EXHAUSTED: every frontier is parked and no honest remaining move exists. A park is exhausted when it had at least one honestly-measured sample, or cannot_measure when every contributing sample was non-measuring (the harness never measured anything — fix the measurement infrastructure, then reopen).",
       "score": 191,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 347,
+          "line": 375,
           "section": "Quest Workflow > Terminal And Blocking Conditions"
         }
       ]
@@ -3339,7 +3371,7 @@
       ]
     },
     {
-      "id": "GOV-0036",
+      "id": "GOV-0038",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3350,13 +3382,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 281,
+          "line": 309,
           "section": "Quest Workflow > Source Change Verification"
         }
       ]
     },
     {
-      "id": "GOV-0037",
+      "id": "GOV-0039",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3365,7 +3397,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 281,
+          "line": 309,
           "section": "Quest Workflow > Source Change Verification"
         }
       ]
@@ -3488,7 +3520,7 @@
       ]
     },
     {
-      "id": "GOV-0038",
+      "id": "GOV-0040",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3503,7 +3535,7 @@
       ]
     },
     {
-      "id": "GOV-0039",
+      "id": "GOV-0041",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3515,7 +3547,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 308,
+          "line": 336,
           "section": "Quest Workflow > Git Handoff"
         }
       ]
@@ -3669,7 +3701,7 @@
       ]
     },
     {
-      "id": "GOV-0040",
+      "id": "GOV-0042",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3776,7 +3808,7 @@
       ]
     },
     {
-      "id": "GOV-0041",
+      "id": "GOV-0043",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -3785,13 +3817,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 185,
+          "line": 213,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
     },
     {
-      "id": "GOV-0042",
+      "id": "GOV-0044",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -3800,13 +3832,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 333,
+          "line": 361,
           "section": "Quest Workflow > Findings Log"
         }
       ]
     },
     {
-      "id": "GOV-0043",
+      "id": "GOV-0045",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -3821,7 +3853,7 @@
       ]
     },
     {
-      "id": "GOV-0044",
+      "id": "GOV-0046",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -3853,7 +3885,7 @@
       ]
     },
     {
-      "id": "GOV-0045",
+      "id": "GOV-0047",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -3883,7 +3915,7 @@
       ]
     },
     {
-      "id": "GOV-0046",
+      "id": "GOV-0048",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -3913,7 +3945,7 @@
       ]
     },
     {
-      "id": "GOV-0047",
+      "id": "GOV-0049",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -3930,22 +3962,22 @@
       ]
     },
     {
-      "id": "GOV-0048",
+      "id": "GOV-0050",
       "domain": "governance",
       "strength": "may",
       "tags": [],
       "rule": "The archived theory ledger may be imported only as archive memory; imported archive theories cannot be selected for implementation until fresh Quest evidence reselects a frontier theory.",
-      "score": 140,
+      "score": 139,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 231,
+          "line": 259,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
     },
     {
-      "id": "GOV-0049",
+      "id": "GOV-0051",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -3956,13 +3988,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 368,
+          "line": 396,
           "section": "Quest Workflow > Tracked Versus Regenerable"
         }
       ]
     },
     {
-      "id": "GOV-0050",
+      "id": "GOV-0052",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -3979,5 +4011,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-06-02T16:45:49.786Z"
+  "generatedAt": "2026-06-03T04:13:13.164Z"
 }

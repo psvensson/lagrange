@@ -20,7 +20,10 @@ const DEFAULT_REPORT_DIR = 'test-output/reports';
 const REPORT_EXT = '.report.json';
 const METRIC_PRIORITY = 'priority';
 const METRIC_FAILED = 'failed';
+const METRIC_DISTANCE = 'distance';
 const DEFAULT_CONSECUTIVE = 1;
+const DISTANCE_PRIORITY_WEIGHT = 100;
+const DISTANCE_SPREAD_WEIGHT = 5;
 
 function safeRead(file) {
   try {
@@ -120,6 +123,79 @@ function failedCount(data) {
   return Number.isInteger(data?.summary?.failed) ? data.summary.failed : null;
 }
 
+// Collapse all stabilityGates[*].evidence objects on a scenario entry into a single
+// flat bag so the distance metric and ratchet can read missingPublishedCount /
+// prioritySpreadPending regardless of which gate carried them.
+function stabilityEvidence(entry) {
+  const gates = entry?.stabilityGates || {};
+  const out = {};
+  for (const key of Object.keys(gates)) {
+    const ev = gates[key]?.evidence;
+    if (ev && typeof ev === 'object') Object.assign(out, ev);
+  }
+  return out;
+}
+
+// The set of sub-invariant labels a report shows as GREEN for a scenario. Drawn from
+// per-invariant pass flags plus synthetic convergence flags. This is the monotonic
+// ratchet source: once a label appears here it must keep appearing or it has regressed.
+export function extractSatisfiedInvariants(data, scenario) {
+  const entry = scenarioEntry(data, scenario);
+  if (!entry) return [];
+  const set = new Set();
+  const invariants = entry?.priorityRecoveryInvariants?.invariants;
+  if (Array.isArray(invariants)) {
+    for (const inv of invariants) {
+      const id = inv?.invariantId || inv?.id;
+      if (id && inv?.passed === true) set.add(id);
+    }
+  }
+  const ev = stabilityEvidence(entry);
+  if (ev.missingPublishedCount === 0) set.add('publication_converged');
+  if (ev.prioritySpreadPending === false) set.add('priority_spread_settled');
+  if (entry?.invariantBreaches?.totalCount === 0) set.add('no_invariant_breaches');
+  return [...set];
+}
+
+function distinctFailingInvariants(data, scenario) {
+  const entry = scenarioEntry(data, scenario);
+  const invariants = entry?.priorityRecoveryInvariants?.invariants;
+  if (!Array.isArray(invariants)) return 0;
+  return invariants.filter((inv) => inv?.passed === false).length;
+}
+
+// Composite lower-is-better distance: a weighted gradient that keeps moving even when
+// the priority count flaps 0/1. Falls back to null (non-measuring) when the base
+// priority count is unavailable, matching the priority metric's validity rule.
+export function distanceMetricFromReport(data, scenario, opts = {}) {
+  const priority = readMetric(data, METRIC_PRIORITY);
+  if (priority === null) return null;
+  const ev = stabilityEvidence(scenarioEntry(data, scenario) || {});
+  const missing = Number.isInteger(ev.missingPublishedCount) ?
+    ev.missingPublishedCount : 0;
+  const spread = ev.prioritySpreadPending === true ? DISTANCE_SPREAD_WEIGHT : 0;
+  const failing = distinctFailingInvariants(data, scenario);
+  const streakTerm = Number.isInteger(opts.streakTerm) ?
+    Math.max(0, opts.streakTerm) : 0;
+  return priority * DISTANCE_PRIORITY_WEIGHT + missing + spread + failing + streakTerm;
+}
+
+// Count of the most-recent consecutive runs that both measure and pass (a clean
+// streak), most-recent-first. Feeds the R5 streak term so distance shrinks as the
+// quest builds toward the consecutive-pass goal instead of re-hitting a single zero.
+function cleanStreak(runs, scenario, metricKind) {
+  let streak = 0;
+  for (const run of runs) {
+    if (!isInvalidMetricSample(run.data, scenario, metricKind) &&
+      scenarioPassed(run.data, scenario)) {
+      streak += 1;
+    } else {
+      break;
+    }
+  }
+  return streak;
+}
+
 function readMetric(data, kind) {
   if (kind === METRIC_FAILED) return failedCount(data);
   const items = data?.optimizationSummary?.totalPriorityItems;
@@ -149,11 +225,17 @@ export const scenarioHarnessProbe = {
     const dir = args.reportDir || DEFAULT_REPORT_DIR;
     const scenario = args.scenario;
     const consecutive = Number(args.consecutive) || DEFAULT_CONSECUTIVE;
-    const metricKind = args.metric === METRIC_FAILED ?
-      METRIC_FAILED : METRIC_PRIORITY;
+    const metricKind = args.metric === METRIC_FAILED ? METRIC_FAILED :
+      args.metric === METRIC_DISTANCE ? METRIC_DISTANCE : METRIC_PRIORITY;
     const runs = listRuns(dir, scenario);
     if (runs.length === 0) {
-      return {metric: null, done: false, evidence: null, invalidSample: true};
+      return {
+        metric: null,
+        done: false,
+        evidence: null,
+        invalidSample: true,
+        satisfiedInvariants: [],
+      };
     }
     const latest = runs[0];
     const recent = runs.slice(0, consecutive);
@@ -164,7 +246,15 @@ export const scenarioHarnessProbe = {
       recent.every((r) =>
         !isInvalidMetricSample(r.data, scenario, metricKind) &&
           scenarioPassed(r.data, scenario));
-    const rawMetric = readMetric(latest.data, metricKind);
+    let rawMetric;
+    if (metricKind === METRIC_DISTANCE) {
+      const streak = cleanStreak(runs, scenario, METRIC_PRIORITY);
+      rawMetric = distanceMetricFromReport(latest.data, scenario, {
+        streakTerm: consecutive - streak,
+      });
+    } else {
+      rawMetric = readMetric(latest.data, metricKind);
+    }
     // An incomplete run reports null metric: the honesty layer treats this as an
     // honest "no measurement" (not dishonest data) and the ladder treats it as a
     // stall, so it climbs rather than registering a false improvement.
@@ -174,6 +264,7 @@ export const scenarioHarnessProbe = {
       done,
       evidence: latest.file,
       invalidSample,
+      satisfiedInvariants: extractSatisfiedInvariants(latest.data, scenario),
       classification: classification(latest.data, scenario),
       detail: {
         runs: runs.length,

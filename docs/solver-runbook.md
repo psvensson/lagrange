@@ -377,22 +377,62 @@ and by default pushes — each Quest's own scope-clean work as it progresses, so
 single bad `git checkout` can never lose it. This happens automatically:
 
 - after a supervised `node scripts/solve.js step --id <quest> --commit` whose
-  attempt carries a resolved `diff:<path>` changeRef, and
-- on every autonomous-run terminal (`SOLVED`, and the `cannot-measure` terminal).
+  attempt carries a resolved `diff:<path>` changeRef,
+- after **every measured attempt of an autonomous `run`** (not only at the
+  terminal), so a long narrowing Quest leaves a per-attempt trail of rollback
+  points instead of stacking dozens of attempts in one dirty tree, and
+- on every autonomous-run terminal (`SOLVED`, and the `cannot-measure` terminal)
+  as a final flush.
 
 Each auto-commit obeys the same rules as `handoff`: it refuses when `audit` does
 not pass (a scope-clean commit of dishonest evidence is still dishonest), stages
 only the Quest's in-scope pathspec (never the dirty-tree shape), and carries the
-`Co-authored-by: Copilot` trailer. It is a no-op outside a git work tree.
+`Co-authored-by: Copilot` trailer. It is a no-op outside a git work tree, on a
+non-measuring sample, and when the attempt's `changeRef` does not resolve.
 
 Push is best-effort: a push failure (no remote, no auth) is non-fatal and the
 commit is kept — only a warning is surfaced. Suppress pushing for offline or CI
-use with the `--no-push` flag or the `SOLVER_NO_PUSH=1` environment variable:
+use with the `--no-push` flag or the `SOLVER_NO_PUSH=1` environment variable.
+Throttle the per-attempt volume with `--commit-every N` / `--push-every N`, or
+disable per-attempt commits entirely with `--no-commit` (the terminal flush
+still commits):
 
 ```sh
 node scripts/solve.js step --id <quest> --commit --no-push
 SOLVER_NO_PUSH=1 node scripts/solve.js run --id <quest>
+node scripts/solve.js run --id <quest> --commit-every 3 --push-every 6
+node scripts/solve.js run --id <quest> --no-commit
 ```
+
+## Convergence Guards
+
+A narrowing Quest can otherwise shuffle the same blocker between owners forever
+and call it progress. Four guards keep the loop honest and converging:
+
+- **Oscillation detection.** The blocker history is tracked frontier-wide, not
+  just last-vs-current. When an attempt returns the frontier to a
+  previously-abandoned blocker (owner / boundary / dominantReason), that revisit
+  is classified `oscillating` — never theory support — and is treated as a stall
+  that climbs the ladder (local-fix → widen → model) instead of patching the
+  same cycle again. Surfaced as the high-severity `blocker-oscillation` health
+  signal.
+- **Invariant ratchet.** Each measured report contributes its set of satisfied
+  sub-invariants to a per-frontier high-water mark. If a later measured attempt
+  drops an invariant that was previously green, the Solver records a
+  `regression` violation, the attempt does not count as progress, and the
+  offending diff stays committed so it can be bisected and reverted.
+- **Distance metric.** Beyond the binary priority count, a Quest may opt into a
+  `metric: "distance"` frontier gradient — a lower-is-better weighted sum of
+  outstanding priority items, missing publications, pending priority spread,
+  distinct failing invariants, and the remaining clean-run streak — so the
+  ladder steers on a real gradient instead of a flapping 0/1.
+- **Streak-aware next move.** When the single-run metric reaches 0 but `doneWhen`
+  still requires N consecutive clean runs, health routes the next move to running
+  the consecutive proof rather than selecting another theory for a flap.
+- **Measured promotion only.** A theory is promoted exclusively by a measured
+  post-patch evidence report. A subagent approval finding may inform but never
+  promote; audit flags any selected theory approved by a finding with no later
+  measured report.
 
 ## Autonomous Run
 

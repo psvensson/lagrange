@@ -2,9 +2,10 @@ import tap from 'tap';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import {execFileSync} from 'node:child_process';
 
 import {runLoop} from '../../scripts/solve/loop.js';
-import {appendEvent, projectState, readLog} from '../../scripts/solve/store.js';
+import {appendEvent, projectState, readLog, saveQuest} from '../../scripts/solve/store.js';
 import {makeDryExecutor} from '../../scripts/solve/executor.js';
 import {
   EVENT_ATTEMPT,
@@ -187,6 +188,88 @@ tap.test('solver loop — P0 walking skeleton', async (t) => {
     t.equal(executorCalls, 0, 'executor was not invoked');
     t.equal(attempts.length, 1, 'no extra attempt was recorded past the gate');
     t.equal(violations[violations.length - 1].scope, 'theory-gate');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+});
+
+// R1: the autonomous loop persists each measured attempt as its own scope-clean
+// commit instead of stacking attempts in one dirty tree.
+tap.test('R1 per-attempt auto-commit on the loop path', async (t) => {
+  function initGit(root) {
+    const run = (...args) => execFileSync('git', args, {cwd: root, stdio: 'ignore'});
+    run('init');
+    run('config', 'user.email', 'solver@example.com');
+    run('config', 'user.name', 'Solver');
+    run('config', 'commit.gpgsign', 'false');
+    fs.writeFileSync(path.join(root, '.gitkeep'), '');
+    run('add', '-A');
+    run('commit', '-m', 'init');
+  }
+
+  // A doc-path change artifact so the honesty source-change-verification gate does not
+  // demand a subagent finding; the loop can then auto-commit each measured attempt.
+  function docExecutor(changeDir) {
+    return {
+      name: 'doc',
+      run(task) {
+        fs.mkdirSync(changeDir, {recursive: true});
+        const file = `${changeDir}/${task.frontierDef.id}-${Date.now()}-${Math.random()}.diff`;
+        fs.writeFileSync(file, [
+          'diff --git a/docs/note.md b/docs/note.md',
+          '--- a/docs/note.md',
+          '+++ b/docs/note.md',
+          '@@ -1 +1 @@',
+          '-before',
+          '+after',
+        ].join('\n'));
+        const oracleFile = task.frontierDef.metric?.args?.file;
+        const data = JSON.parse(fs.readFileSync(oracleFile, 'utf8'));
+        data.metric = Math.max(0, data.metric - 1);
+        fs.writeFileSync(oracleFile, JSON.stringify(data));
+        return {changeRef: `diff:${file}`, summary: 'doc step -1'};
+      },
+    };
+  }
+
+  function commitCount(root) {
+    return execFileSync('git', ['rev-list', '--count', 'HEAD'],
+      {cwd: root, encoding: 'utf8'}).trim();
+  }
+
+  t.test('each measured attempt produces a commit, push suppressed', (t) => {
+    const {root, quest, changeDir} = setup({metric: 2, target: 0});
+    saveQuest(root, quest);
+    initGit(root);
+    const before = Number(commitCount(root));
+    const res = runLoop(root, quest, {
+      executor: docExecutor(changeDir),
+      push: false,
+      maxCycles: 50,
+    });
+    t.equal(res.outcome, STATUS_SOLVED, 'quest solved');
+    const after = Number(commitCount(root));
+    t.ok(after - before >= 2, 'at least one commit per measured attempt');
+    const msg = execFileSync('git', ['log', '-1', '--format=%B'],
+      {cwd: root, encoding: 'utf8'});
+    t.match(msg, /Co-authored-by: Copilot/, 'commits carry the co-author trailer');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('autoCommit:false leaves the loop committing only at the terminal flush', (t) => {
+    const {root, quest, changeDir} = setup({metric: 2, target: 0});
+    saveQuest(root, quest);
+    initGit(root);
+    const before = Number(commitCount(root));
+    runLoop(root, quest, {
+      executor: docExecutor(changeDir),
+      autoCommit: false,
+      push: false,
+      maxCycles: 50,
+    });
+    const after = Number(commitCount(root));
+    t.equal(after - before, 1, 'only the single terminal commit is made');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });

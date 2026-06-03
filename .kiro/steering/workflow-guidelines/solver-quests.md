@@ -145,12 +145,40 @@ changed.
 
 A Quest must not accumulate an unrecoverable dirty tree. The Solver commits — and
 by default pushes — each Quest's own scope-clean work as it progresses: after a
-`step --commit` whose attempt carries a resolved `diff:<path>` changeRef, and on
-every autonomous-run terminal. Each auto-commit refuses when `audit` does not
+`step --commit` whose attempt carries a resolved `diff:<path>` changeRef, after
+**every measured attempt of an autonomous `run`**, and on every autonomous-run
+terminal as a final flush. Each auto-commit refuses when `audit` does not
 pass, stages only the Quest's in-scope pathspec (never the dirty-tree shape), and
 carries the `Co-authored-by: Copilot` trailer. It is a no-op outside a git work
-tree. Push is best-effort: a failure is non-fatal and the commit is kept. Suppress
-pushing with `--no-push` or `SOLVER_NO_PUSH=1` for offline or CI use.
+tree, on a non-measuring sample, and when the changeRef does not resolve. Push is
+best-effort: a failure is non-fatal and the commit is kept. Suppress pushing with
+`--no-push` or `SOLVER_NO_PUSH=1`; throttle volume with `--commit-every N` /
+`--push-every N`; disable per-attempt commits with `--no-commit` (the terminal
+flush still commits).
+
+## Convergence Guards
+
+A narrowing Quest can shuffle the same blocker between owners forever and call it
+progress. Four guards keep the loop converging instead of oscillating:
+
+- **Oscillation detection**: returning the frontier to a previously-abandoned
+  blocker (owner / boundary / dominantReason) is classified `oscillating`, never
+  theory support, and is treated as a stall that climbs the ladder. Surfaced as
+  the high-severity `blocker-oscillation` health signal.
+- **Invariant ratchet**: each measured report feeds a per-frontier high-water
+  mark of satisfied sub-invariants. Dropping a previously-green invariant records
+  a `regression` violation, does not count as progress, and keeps the offending
+  diff committed for bisection.
+- **Distance metric**: an opt-in `metric: "distance"` frontier gradient — a
+  lower-is-better weighted sum of priority items, missing publications, pending
+  spread, distinct failing invariants, and the remaining clean-run streak — so
+  the ladder steers on a gradient, not a flapping 0/1. When the single-run metric
+  hits 0 but `doneWhen` needs N consecutive clean runs, health routes the next
+  move to the consecutive proof rather than a new theory.
+- **Measured promotion only**: a theory is promoted exclusively by a measured
+  post-patch evidence report; a subagent approval finding may inform but never
+  promote. Audit flags any selected theory approved by a finding with no later
+  measured report.
 
 ## Closure Strength
 

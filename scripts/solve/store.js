@@ -305,6 +305,28 @@ export function projectState(quest, log) {
   };
 }
 
+// Monotonic high-water mark of satisfied sub-invariants for a frontier: the union of
+// every `satisfiedInvariants` set recorded on a measured attempt or ingested-evidence
+// event. Used to detect silent regression — a later measured attempt that no longer
+// satisfies a label present here has re-broken a previously-green invariant.
+export function invariantHighWater(log, frontierId = null) {
+  const set = new Set();
+  for (const event of log) {
+    if (frontierId && event.frontier !== frontierId) continue;
+    const measured =
+      (event.type === EVENT_ATTEMPT && event.invalidSample !== true) ||
+      (event.type === EVENT_EVIDENCE_INGESTED &&
+        typeof event.metric === 'number');
+    if (!measured) continue;
+    const labels = Array.isArray(event.satisfiedInvariants) ?
+      event.satisfiedInvariants : [];
+    for (const label of labels) {
+      if (label) set.add(label);
+    }
+  }
+  return [...set];
+}
+
 export function rebuildState(root, quest) {
   const log = readLog(root, quest.id);
   const state = projectState(quest, log);

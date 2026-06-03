@@ -372,3 +372,73 @@ tap.test('evidence ingestion (P2)', async (t) => {
     t.end();
   });
 });
+
+// R2: an ingestion that returns the frontier to a previously-abandoned blocker is a
+// revisit (whack-a-mole), not theory support.
+tap.test('R2 oscillation reclassifies a revisit as falsified', async (t) => {
+  function blockerReport(ts, owner, boundary, dominantReason) {
+    return {
+      ...sampleReport,
+      timestamp: ts,
+      scenarios: [{
+        ...sampleReport.scenarios[0],
+        verdict: 'FAIL_CORE_INVARIANT',
+        verdictReason: 'core_invariant_or_safety_violation',
+        details: {
+          diagnostics: {
+            failure: {
+              rootCauseClass: 'topology',
+              dominantReason,
+              ownerContract: {
+                frontierWitnesses: [{
+                  owner,
+                  boundary,
+                  source: {nextRequiredActions: 'advance_existing_operation'},
+                }],
+              },
+            },
+          },
+        },
+      }],
+    };
+  }
+
+  const root = tmp();
+  const goal = getGoal(root);
+  saveQuest(root, goal);
+  const reportDir = path.join(root, 'test-output', 'reports');
+  fs.mkdirSync(reportDir, {recursive: true});
+  const paths = ['a', 'b', 'c'].map((n) => path.join(reportDir, `${n}.report.json`));
+  // A (owner_a/startup) -> B (owner_b/workflow) -> A again (owner_a/startup): a revisit.
+  fs.writeFileSync(paths[0], JSON.stringify(
+    blockerReport('2026-06-01T12:50:00.000Z', 'owner_a', 'startup', 'reason_a')));
+  fs.writeFileSync(paths[1], JSON.stringify(
+    blockerReport('2026-06-01T12:55:00.000Z', 'owner_b', 'workflow', 'reason_b')));
+  fs.writeFileSync(paths[2], JSON.stringify(
+    blockerReport('2026-06-01T13:00:00.000Z', 'owner_a', 'startup', 'reason_a')));
+
+  appendEvent(root, goal.id, {
+    type: 'theory-option-declared', theory: 't1',
+    frontier: 'evidence-quest-test-main', scope: 'frontier',
+    status: 'active', layer: 'ownership', mechanism: 'active_gate',
+  });
+  appendEvent(root, goal.id, {
+    type: 'theory-selected', frontier: 'evidence-quest-test-main', theory: 't1',
+  });
+
+  for (const p of paths) {
+    ingestEvidence(root, {
+      questId: goal.id, frontierId: 'evidence-quest-test-main', evidencePath: p,
+    });
+  }
+
+  const results = readLog(root, goal.id)
+    .filter((event) => event.type === 'theory-result' && event.theory === 't1');
+  const latest = results[results.length - 1];
+  t.equal(latest.theoryOutcome, 'oscillating', 'revisit is not counted as progress');
+  t.equal(latest.oscillating, true);
+  t.match(latest.oscillationLabel, /owner_a/);
+
+  fs.rmSync(root, {recursive: true, force: true});
+  t.end();
+});

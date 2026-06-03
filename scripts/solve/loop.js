@@ -31,7 +31,7 @@ import {
   OUTCOME_MAX_CYCLES,
   OUTCOME_THEORY_REQUIRED,
 } from './constants.js';
-import {appendEvent, readLog, projectState, rebuildState} from './store.js';
+import {appendEvent, readLog, projectState, rebuildState, invariantHighWater} from './store.js';
 import {frontierHasValidSample} from './sample-validity.js';
 import {autoCommitQuest} from './handoff.js';
 import {writeReportForQuest} from './report.js';
@@ -47,7 +47,7 @@ import {
   resolveAttemptTheoryRef,
   stepTheoryGateProblems,
 } from './theory.js';
-import {diagnosticMovementFor} from './current-blocker.js';
+import {diagnosticMovementFor, detectOscillation} from './current-blocker.js';
 import {detectUnrecordedEvidence} from './evidence.js';
 import {inspectChangeArtifact} from './change-artifact.js';
 
@@ -171,7 +171,8 @@ function applyAttempt(root, quest, ctx, pick, before) {
     metricHistory,
     evidencePaths,
   });
-  finalizeAttempt(root, quest, ctx, pick, before, result);
+  const outcome = finalizeAttempt(root, quest, ctx, pick, before, result);
+  maybeCommitAttempt(root, quest, ctx, pick, outcome);
   return {terminal: null};
 }
 
@@ -189,6 +190,8 @@ export function finalizeAttempt(root, quest, ctx, pick, before, result) {
   );
   const after = evaluate(pick.def.metric, ctx.probeCtx);
   const diagnosticMovement = diagnosticMovementFor(log, pick.def.id);
+  const satisfiedInvariants = Array.isArray(after.satisfiedInvariants) ?
+    after.satisfiedInvariants : [];
   const event = {
     type: EVENT_ATTEMPT,
     frontier: pick.def.id,
@@ -216,6 +219,7 @@ export function finalizeAttempt(root, quest, ctx, pick, before, result) {
     blockerAfter: diagnosticMovement.current,
     blockerMovement: diagnosticMovement.movement,
     diagnosticMovement: diagnosticMovement.summary,
+    satisfiedInvariants: satisfiedInvariants.length > 0 ? satisfiedInvariants : null,
   };
   const violations = [
     ...validateAttempt(event, ctx.honestyCtx),
@@ -234,13 +238,33 @@ export function finalizeAttempt(root, quest, ctx, pick, before, result) {
       type: EVENT_VIOLATION, frontier: pick.def.id, violations, attempt: event,
     });
   }
-  const progressed = decideAndRecord(root, quest, pick, event, after, violations);
+  // R2/R3 convergence gates: a measured attempt that returns to a previously-left
+  // blocker (oscillation) or drops a previously-satisfied invariant (regression)
+  // must not count as progress, even if the single-run metric ticked down.
+  const measured = !event.invalidSample;
+  const oscillation = detectOscillation(log, pick.def.id);
+  const highWater = invariantHighWater(log, pick.def.id);
+  const regressed = measured ?
+    highWater.filter((label) => !satisfiedInvariants.includes(label)) : [];
+  if (regressed.length > 0) {
+    appendEvent(root, quest.id, {
+      type: EVENT_VIOLATION,
+      scope: 'regression',
+      frontier: pick.def.id,
+      regressed,
+      attempt: event,
+    });
+  }
+  const forceStall = (measured && oscillation.oscillating) || regressed.length > 0;
+  const progressed = decideAndRecord(
+    root, quest, pick, event, after, violations, forceStall);
   appendTheoryResultForAttempt(root, quest, event, progressed, violations);
-  return {event, after, violations, progressed};
+  return {event, after, violations, progressed, oscillation, regressed};
 }
 
-function decideAndRecord(root, quest, pick, event, after, violations) {
-  const progressed = violations.length === 0 &&
+function decideAndRecord(root, quest, pick, event, after, violations,
+  forceStall = false) {
+  const progressed = !forceStall && violations.length === 0 &&
     after.metric !== null && event.metricBefore !== null &&
     after.metric < event.metricBefore;
   // A rung is escalated on a stall or on untrusted (violating) data. It is only kept
@@ -299,7 +323,35 @@ export function makeRunContext(options = {}) {
     negativeResultMeans: options.negativeResultMeans || null,
     modelRef: options.modelRef || null,
     modelNotApplicable: options.modelNotApplicable || null,
+    autoCommit: options.autoCommit !== false,
+    push: options.push,
+    commitEvery: Number.isInteger(options.commitEvery) && options.commitEvery > 0 ?
+      options.commitEvery : 1,
+    pushEvery: Number.isInteger(options.pushEvery) && options.pushEvery > 0 ?
+      options.pushEvery : 1,
   };
+}
+
+// R1: persist each measured attempt as its own scope-clean commit (and, on the push
+// throttle, push it) so the autonomous loop produces regular feedback and per-patch
+// rollback points instead of stacking dozens of attempts in one dirty tree. A no-op
+// outside a git work tree, on non-measuring samples, and when the change artifact does
+// not resolve, so throwaway tmpdir tests and skipped attempts never create commits.
+function maybeCommitAttempt(root, quest, ctx, pick, outcome) {
+  if (!ctx.autoCommit) return;
+  const event = outcome?.event;
+  if (!event || event.invalidSample || !event.changeRef) return;
+  const resolves = ctx.honestyCtx.inspectChangeRef ?
+    Boolean(ctx.honestyCtx.inspectChangeRef(event.changeRef)?.valid) : true;
+  if (!resolves) return;
+  const measuredCount = readLog(root, quest.id).filter((e) =>
+    e.type === EVENT_ATTEMPT &&
+    e.frontier === pick.def.id &&
+    e.invalidSample !== true).length;
+  if (measuredCount % ctx.commitEvery !== 0) return;
+  const push = ctx.push !== false && measuredCount % ctx.pushEvery === 0;
+  writeReportForQuest(root, quest);
+  return autoCommitQuest(root, quest.id, {push});
 }
 
 // Seal the goalposts on first declaration and reject any later goalpost drift. Shared

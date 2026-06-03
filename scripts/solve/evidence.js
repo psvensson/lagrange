@@ -17,8 +17,13 @@ import {
   BLOCKER_MOVEMENT_NARROWED,
   blockerFromEvidence,
   classifyBlockerMovement,
+  detectOscillation,
 } from './current-blocker.js';
 import {evaluate} from './probe.js';
+import {
+  extractSatisfiedInvariants,
+  distanceMetricFromReport,
+} from './probes/scenario-harness.js';
 import {
   appendEvent,
   appendFinding,
@@ -183,10 +188,14 @@ export function ingestEvidence(root, {questId, frontierId, evidencePath}) {
   let metric = null;
   if (metricKind === 'failed') {
     metric = Number.isInteger(data?.summary?.failed) ? data.summary.failed : null;
+  } else if (metricKind === 'distance') {
+    metric = distanceMetricFromReport(data, scenarioName);
   } else {
     const items = data?.optimizationSummary?.totalPriorityItems;
     metric = Number.isInteger(items) ? items : (Number.isInteger(data?.summary?.failed) ? data.summary.failed : (Number.isInteger(data?.metric) ? data.metric : null));
   }
+
+  const satisfiedInvariants = extractSatisfiedInvariants(data, scenarioName);
 
   const done = scenarioPassed(data, scenarioName);
   const verdict = firstVerdict(data, scenarioName);
@@ -235,6 +244,7 @@ export function ingestEvidence(root, {questId, frontierId, evidencePath}) {
     nextAction,
     mechanism: classifiedMechanism,
     selectedTheory,
+    satisfiedInvariants,
     summary,
   };
   const previousBlocker = blockerFromEvidence(previousEvidence);
@@ -262,6 +272,10 @@ export function ingestEvidence(root, {questId, frontierId, evidencePath}) {
     blockerMovement,
     diagnosticMovement,
   });
+
+  // Oscillation is history-wide: re-read the log (now including this event) so a
+  // return to a previously-abandoned blocker is visible, not just the last hop.
+  const oscillation = detectOscillation(readLog(root, questId), frontierId);
 
   // Determine finding and repeat status
   const beforeMetric = frontierState?.current ?? 'unknown';
@@ -306,8 +320,14 @@ export function ingestEvidence(root, {questId, frontierId, evidencePath}) {
         BLOCKER_MOVEMENT_MOVED_BOUNDARY,
         BLOCKER_MOVEMENT_NARROWED,
       ].includes(blockerMovement)) {
-        result = THEORY_RESULT_SUPPORTED;
-        theoryOutcome = 'partial';
+        if (oscillation.oscillating) {
+          // Returning to a previously-left blocker is whack-a-mole, not progress.
+          result = THEORY_RESULT_FALSIFIED;
+          theoryOutcome = 'oscillating';
+        } else {
+          result = THEORY_RESULT_SUPPORTED;
+          theoryOutcome = 'partial';
+        }
       } else {
         result = THEORY_RESULT_FALSIFIED;
         theoryOutcome = THEORY_RESULT_FALSIFIED;
@@ -322,6 +342,8 @@ export function ingestEvidence(root, {questId, frontierId, evidencePath}) {
       scenarioOutcome,
       theoryOutcome,
       blockerMovement,
+      oscillating: oscillation.oscillating,
+      oscillationLabel: oscillation.label,
       diagnosticMovement,
       evidence: evidencePath,
       validation: null,

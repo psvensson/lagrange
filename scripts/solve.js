@@ -125,6 +125,13 @@ function cmdRun(root, args) {
   const options = {executor};
   if (args.max !== undefined) options.maxCycles = Number(args.max);
   if (args['no-push']) options.push = false;
+  if (args['no-commit']) options.autoCommit = false;
+  if (args['commit-every'] !== undefined) {
+    options.commitEvery = Number(args['commit-every']);
+  }
+  if (args['push-every'] !== undefined) {
+    options.pushEvery = Number(args['push-every']);
+  }
   const result = runLoop(root, quest, options);
   const {file} = writeReport(root, id);
   const problems = result.problems?.length ?

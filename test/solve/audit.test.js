@@ -346,3 +346,55 @@ tap.test('Quest audit', async (t) => {
     t.end();
   });
 });
+
+// R6: a theory may only be promoted by a MEASURED post-patch report, never by an
+// approval finding alone.
+tap.test('R6 unmeasured theory promotion guard', async (t) => {
+  function seedQuest(root) {
+    const {quest} = makeQuest(root, 'r6');
+    return quest;
+  }
+
+  t.test('approval finding without a post-patch measured report is flagged', (t) => {
+    const root = tmp();
+    const quest = seedQuest(root);
+    appendEvent(root, quest.id, {
+      type: 'theory-selected', frontier: 'r6-main', theoryId: 'th-1',
+    });
+    appendEvent(root, quest.id, {
+      type: 'finding', frontier: 'r6-main',
+      evidence: 'subagent:reviewer', claim: 'approve the active-wait patch',
+    });
+    const audit = auditQuest(root, quest);
+    t.equal(audit.status, 'fail');
+    t.ok(
+      audit.problems.some((p) => /approved by a finding but never confirmed/u.test(p.message)),
+      'flags the unmeasured promotion',
+    );
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('approval followed by a measured evidence report passes the guard', (t) => {
+    const root = tmp();
+    const quest = seedQuest(root);
+    appendEvent(root, quest.id, {
+      type: 'theory-selected', frontier: 'r6-main', theoryId: 'th-1',
+    });
+    appendEvent(root, quest.id, {
+      type: 'finding', frontier: 'r6-main',
+      evidence: 'subagent:reviewer', claim: 'approve the active-wait patch',
+    });
+    appendEvent(root, quest.id, {
+      type: 'evidence-ingested', frontier: 'r6-main', metric: 0,
+      evidence: 'post-patch.report.json',
+    });
+    const audit = auditQuest(root, quest);
+    t.notOk(
+      audit.problems.some((p) => /approved by a finding but never confirmed/u.test(p.message)),
+      'a measured post-patch report clears the guard',
+    );
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+});

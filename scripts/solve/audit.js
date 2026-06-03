@@ -243,6 +243,47 @@ function closureStrengthWarnings(quest, log) {
   return [];
 }
 
+function isTheoryApprovalFinding(event, frontier) {
+  return event.type === EVENT_FINDING &&
+    event.frontier === frontier &&
+    typeof event.evidence === 'string' &&
+    event.evidence.startsWith('subagent:') &&
+    /approv|resolv|confirm|sign-?off|accept|promote/iu
+      .test(String(event.claim || ''));
+}
+
+// R6: a theory may only be promoted/resolved by a MEASURED post-patch evidence
+// report, never by an approval finding alone. Flags any frontier whose latest
+// selected theory is followed by a subagent approval finding but no later measured
+// evidence-ingested event confirming it against a real run.
+function auditUnmeasuredTheoryPromotion(log, startIndex) {
+  const selections = new Map();
+  log.forEach((event, index) => {
+    if (index < startIndex) return;
+    if (event.type === EVENT_THEORY_SELECTED && event.frontier) {
+      selections.set(event.frontier, {index, event});
+    }
+  });
+  const problems = [];
+  for (const [frontier, sel] of selections) {
+    const later = log.slice(sel.index + 1);
+    const hasApproval = later.some((e) => isTheoryApprovalFinding(e, frontier));
+    if (!hasApproval) continue;
+    const hasMeasuredEvidence = later.some((e) =>
+      e.type === EVENT_EVIDENCE_INGESTED &&
+      e.frontier === frontier &&
+      typeof e.metric === 'number');
+    if (!hasMeasuredEvidence) {
+      problems.push(problem(
+        'selected theory was approved by a finding but never confirmed by a ' +
+          'measured post-patch evidence report',
+        sel.event,
+      ));
+    }
+  }
+  return problems;
+}
+
 export function auditQuest(root, quest) {
   const log = readLog(root, quest.id);
   const state = projectState(quest, log);
@@ -254,6 +295,7 @@ export function auditQuest(root, quest) {
     ...auditSourceChangeVerification(root, quest, log, startIndex),
     ...auditModelEvidence(root, quest, log, startIndex),
     ...auditMetricZeroNeedsTheoryResult(log, startIndex),
+    ...auditUnmeasuredTheoryPromotion(log, startIndex),
     ...auditReportOrdering(root, quest, log),
   ];
   const unrecorded = detectUnrecordedEvidence(root, quest.id);

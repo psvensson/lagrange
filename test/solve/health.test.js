@@ -163,6 +163,39 @@ tap.test('Quest health', async (t) => {
     const health = analyzeQuestHealth(root, quest);
     const signalTypes = health.signals.map((s) => s.type);
     t.ok(signalTypes.includes('metric-zero-but-done-false'), 'emits metric-zero-but-done-false');
+    t.notMatch(health.nextAction, /consecutive proof/,
+      'single-run goals do not override next action');
+
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('metric zero streak goals route to consecutive proof from doneWhen args', (t) => {
+    const root = tmp();
+    const oracle = path.join(root, 'oracle.json');
+    fs.writeFileSync(oracle, JSON.stringify({metric: 1, target: 0}));
+    const quest = {
+      id: 'demo',
+      statement: 'Prove three clean runs.',
+      priority: 1,
+      doneWhen: {probe: 'oracle', args: {file: oracle, consecutive: 3}},
+      frontiers: [
+        {id: 'demo-main', priority: 1,
+          metric: {probe: 'oracle', args: {file: oracle}}},
+      ],
+    };
+    saveQuest(root, quest);
+
+    appendEvent(root, quest.id, {
+      type: 'evidence-ingested',
+      frontier: 'demo-main',
+      evidence: 'r1.json',
+      metric: 0,
+      done: false,
+    });
+
+    const health = analyzeQuestHealth(root, quest);
+    t.match(health.nextAction, /run the 3-run consecutive proof for demo-main/);
 
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
