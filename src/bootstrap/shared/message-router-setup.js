@@ -20,6 +20,7 @@ import {DependencyError} from '../bootstrap-errors.js';
 import {
   SUBSYSTEM,
 } from '../../constants/index.js';
+import {TRANSPORT_DEFAULT} from '../../constants/transport.js';
 import {
   NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE,
   resolveNodeWebSocketAddress,
@@ -132,6 +133,8 @@ class MessageRouterSetup {
       wsPort,
       identifyPayload,
       externalAdmissionEnabled,
+      outboundQueueReadinessReserve:
+        TRANSPORT_DEFAULT.PRODUCTION_OUTBOUND_QUEUE_READINESS_RESERVE,
     });
 
     // Set up resolver to extract nodeId from address pattern "${nodeId}/..."

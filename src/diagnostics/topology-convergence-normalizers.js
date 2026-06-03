@@ -505,7 +505,21 @@ export function normalizeTopologyConvergenceInput(input = {}) {
   const failureBundle = failureBundleEvidence.record;
   const controlPlane = asRecord(failureBundle.controlPlane);
   const triageSummary = asRecord(input.triageSummary || input.triage);
+  const diagnostics = asRecord(asRecord(scenario.details).diagnostics);
+  const controlPlaneDiagnostics = asRecord(diagnostics.controlPlaneDiagnostics);
   const priorityRecoveryObservation = asRecord(scenario.priorityRecoveryObservation);
+  const priorityRecoveryDecisionSnapshots =
+    collectPriorityRecoveryDecisionSnapshots(
+      scenario[SOURCE_FIELD.PRIORITY_RECOVERY_DECISION_SNAPSHOTS],
+      diagnostics[SOURCE_FIELD.PRIORITY_RECOVERY_DECISION_SNAPSHOTS],
+      controlPlaneDiagnostics[
+        SOURCE_FIELD.PRIORITY_RECOVERY_DECISION_SNAPSHOTS
+      ],
+      controlPlane[SOURCE_FIELD.PRIORITY_RECOVERY_DECISION_SNAPSHOTS],
+      priorityRecoveryObservation[
+        SOURCE_FIELD.PRIORITY_RECOVERY_DECISION_SNAPSHOTS
+      ],
+    );
   const summary = firstRecord(
     failureBundle.summary,
     triageSummary.summary,
@@ -690,6 +704,11 @@ export function normalizeTopologyConvergenceInput(input = {}) {
       ),
     ),
   );
+  const priorityRecoveryPartitionWitnesses =
+    enrichPriorityRecoveryPartitionWitnessesWithOwnerObservations(
+      priorityRecoveryPartitionWitnessesEvidence.items,
+      priorityRecoveryDecisionSnapshots,
+    );
   const readinessFailureEvidence = firstRecordWithSource(
     recordCandidate(scenario.readinessFailure, SOURCE_PATH.REPORT_SCENARIO_READINESS_FAILURE),
     recordCandidate(summary.readinessFailure, SOURCE_PATH.READINESS_FAILURE),
@@ -725,8 +744,7 @@ export function normalizeTopologyConvergenceInput(input = {}) {
     publicationActiveGateHandoff,
     progressSummary,
     topologyOperatorWitness: topologyOperatorWitnessEvidence.record,
-    priorityRecoveryPartitionWitnesses:
-      priorityRecoveryPartitionWitnessesEvidence.items,
+    priorityRecoveryPartitionWitnesses,
     readinessFailure,
     evidencePath: {
       publication: publicationEvidence.sourcePath,
@@ -754,6 +772,65 @@ export function normalizeTopologyConvergenceInput(input = {}) {
     },
     topReasons: normalizeTopReasons(firstArray(summary.topReasons, topFailures.topReasons)),
   };
+}
+
+export function collectPriorityRecoveryDecisionSnapshots(...sources) {
+  const snapshots = [];
+  for (const source of sources) {
+    if (Array.isArray(source)) {
+      snapshots.push(...source);
+      continue;
+    }
+    const snapshotRecord = asRecord(source);
+    snapshots.push(
+      ...arrayOrEmpty(snapshotRecord[SOURCE_FIELD.SNAPSHOTS]),
+    );
+  }
+  return snapshots;
+}
+
+export function enrichPriorityRecoveryPartitionWitnessesWithOwnerObservations(
+  witnesses,
+  decisionSnapshots,
+) {
+  const operationOwnerObservationByPartitionId = new Map();
+  for (const snapshotValue of arrayOrEmpty(decisionSnapshots)) {
+    const snapshot = asRecord(snapshotValue);
+    const partitionId = textOrUnknown(snapshot[SOURCE_FIELD.PARTITION_ID]);
+    const operationOwnerObservation = asRecord(
+      snapshot[SOURCE_FIELD.OPERATION_OWNER_OBSERVATION],
+    );
+    if (
+      partitionId !== UNKNOWN_VALUE &&
+      Object.keys(operationOwnerObservation).length > SOURCE_ORDER_BASE
+    ) {
+      operationOwnerObservationByPartitionId.set(
+        partitionId,
+        operationOwnerObservation,
+      );
+    }
+  }
+  if (operationOwnerObservationByPartitionId.size === SOURCE_ORDER_BASE) {
+    return arrayOrEmpty(witnesses);
+  }
+  return arrayOrEmpty(witnesses).map((witnessValue) => {
+    const witness = asRecord(witnessValue);
+    const partitionId = textOrUnknown(witness[SOURCE_FIELD.PARTITION_ID]);
+    const existingObservation = asRecord(
+      witness[SOURCE_FIELD.OPERATION_OWNER_OBSERVATION],
+    );
+    if (
+      Object.keys(existingObservation).length > SOURCE_ORDER_BASE ||
+      operationOwnerObservationByPartitionId.has(partitionId) !== true
+    ) {
+      return witness;
+    }
+    return {
+      ...witness,
+      [SOURCE_FIELD.OPERATION_OWNER_OBSERVATION]:
+        operationOwnerObservationByPartitionId.get(partitionId),
+    };
+  });
 }
 
 export function splitJoinedValues(value) {

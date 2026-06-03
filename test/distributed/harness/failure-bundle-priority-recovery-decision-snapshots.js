@@ -481,6 +481,9 @@ export function normalizePriorityRecoveryDecisionSnapshots(value) {
       progress: isRecord(snapshot.progress) ?
         cloneJsonValue(snapshot.progress) :
         null,
+      progressSummary: isRecord(snapshot.progressSummary) ?
+        cloneJsonValue(snapshot.progressSummary) :
+        null,
       admission: isRecord(snapshot.admission) ?
         cloneJsonValue(snapshot.admission) :
         null,

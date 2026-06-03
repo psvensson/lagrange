@@ -69,6 +69,7 @@ const EDGE_READINESS = 'readiness_startup_support';
 const EDGE_TOP_FAILURE_REASONS = 'top_failure_reasons';
 const OWNER_TOPOLOGY_PUBLICATION = 'topology_publication_owner';
 const BOUNDARY_WORKFLOW_PROGRESS = 'workflow_progress';
+const BOUNDARY_REBALANCER_HANDOFF = 'rebalancer_handoff';
 const ARTIFACT_PATH_20260507 =
   'test-output/reports/.playback/rolling-restart-after-bounded-retryable-seed-contact-probe-20260507T072145Z/rolling-restart/failure-bundle.json';
 const REPORT_ARTIFACT_PATH_20260507 =
@@ -126,10 +127,23 @@ const ARTIFACT_PRIORITY_RECOVERY_BOUNDARY = 'artifact_priority_boundary';
 const OWNER_STARTUP_ACTIVE_GATE = 'startup_active_gate_owner';
 const BOUNDARY_PUBLICATION_CONVERGENCE = 'publication_convergence';
 const PRIORITY_RECOVERY_WAIT_MODE_EVENT_DRIVEN = 'event_driven';
+const PRIORITY_RECOVERY_WAIT_MODE_RETRY_SCHEDULED = 'retry_scheduled';
 const PRIORITY_RECOVERY_ACTION_WAIT_FOR_OPERATION_PROGRESS =
   'wait_for_operation_progress';
+const PRIORITY_RECOVERY_ACTION_ADVANCE_EXISTING_OPERATION =
+  'advance_existing_operation';
 const PRIORITY_RECOVERY_ACTUATION_DISPATCHED_WAITING_PROGRESS =
   'dispatched_waiting_progress';
+const PRIORITY_RECOVERY_OWNER_EFFECT_COMMAND_ADVANCE =
+  'advance_existing_operation_command';
+const PRIORITY_RECOVERY_OWNER_EFFECT_EXECUTION_NOT_EXECUTED = 'not_executed';
+const PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_PENDING = 'pending';
+const PRIORITY_RECOVERY_PROGRESS_CONTRACT_NEXT_ACTION_WAIT = 'wait';
+const PRIORITY_RECOVERY_PROGRESS_CONTRACT_WAKE_SOURCE_EVENT =
+  'operation_lifecycle_event';
+const PRIORITY_RECOVERY_PROGRESS_CONTRACT_WAKE_SOURCE_REBALANCER_TIMER =
+  'rebalancer_timer';
+const PRIORITY_RECOVERY_PROGRESS_CONTRACT_RETRY_AFTER_MS = 1000;
 const TOPOLOGY_OPERATOR_TEST_ID = 'topology-operator-test';
 const TOPOLOGY_OPERATOR_TEST_KIND = 'replace';
 const TOPOLOGY_OPERATOR_TEST_TARGET_NODE_ID = 'node-target';
@@ -1305,6 +1319,305 @@ describe('TopologyConvergenceGraph', () => {
       assert.deepEqual(
         graph.nextExpectedFrontier.map((edge) => edge.id),
         [EDGE_SNAPSHOT_COVERAGE],
+      );
+      assertNoNullOrUndefined(graph);
+    });
+
+  it('prefers event-driven partition witnesses over aggregate priority classes',
+    () => {
+      const fixture = buildFixtureFailureBundle();
+      const partitionWitness = {
+        partitionId: FIXTURE_PARTITION_ID,
+        semanticStateId: FIXTURE_PRIORITY_RECOVERING_STATE,
+        currentOwner: OWNER_OPERATION_WORKFLOW,
+        blockingBoundary: BOUNDARY_WORKFLOW_PROGRESS,
+        waitMode: PRIORITY_RECOVERY_WAIT_MODE_EVENT_DRIVEN,
+        nextRequiredAction:
+          PRIORITY_RECOVERY_ACTION_ADVANCE_EXISTING_OPERATION,
+        progressContractState:
+          PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_PENDING,
+        progressNextAction: PRIORITY_RECOVERY_PROGRESS_CONTRACT_NEXT_ACTION_WAIT,
+        actuationState:
+          PRIORITY_RECOVERY_ACTUATION_DISPATCHED_WAITING_PROGRESS,
+      };
+      const graph = buildTopologyConvergenceGraphFromArtifacts({
+        failureBundle: {
+          ...fixture,
+          publicationConvergence: {
+            ...fixture.publicationConvergence,
+            activeGate: {
+              ...fixture.publicationConvergence.activeGate,
+              progress: {
+                expectedNodeCount: FIXTURE_EXPECTED_NODE_COUNT,
+                snapshotCoverageNodeCount: FIXTURE_SNAPSHOT_COVERAGE_COUNT,
+                snapshotCoverageComplete: false,
+                priorityBlockedPartitionCount: ZERO_COUNT,
+                blockers: [SNAPSHOT_COVERAGE_TWO_OF_FIVE_BLOCKER],
+                priorityRecoveryProgressClasses: {
+                  unresolvedSemanticStateIds: [
+                    FIXTURE_PRIORITY_RECOVERING_STATE,
+                  ],
+                  blockedPartitionIds: [FIXTURE_PARTITION_ID],
+                },
+              },
+            },
+            priorityRecoveryPartitionWitnesses: [partitionWitness],
+            priorityRecoveryProgressSummary: {
+              dominantWitness: partitionWitness,
+              priorityBlockedPartitionCount: ZERO_COUNT,
+            },
+          },
+        },
+      });
+      const priorityEdge = findEdge(graph.edges, EDGE_PRIORITY_RECOVERY);
+
+      assert.equal(graph.summary.firstFrontierEdgeId, EDGE_PRIORITY_RECOVERY);
+      assert.equal(
+        priorityEdge.evidencePath,
+        PRIORITY_RECOVERY_PARTITION_WITNESS_EVIDENCE_PATH,
+      );
+      assert.equal(
+        priorityEdge.source.blockedPartitionIds,
+        FIXTURE_PARTITION_ID,
+      );
+      assert.equal(
+        priorityEdge.source.waitModes,
+        PRIORITY_RECOVERY_WAIT_MODE_EVENT_DRIVEN,
+      );
+      assert.equal(
+        priorityEdge.source.progressContract.state,
+        PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_PENDING,
+      );
+      assert.equal(
+        priorityEdge.source.progressContract.nextAction,
+        PRIORITY_RECOVERY_PROGRESS_CONTRACT_NEXT_ACTION_WAIT,
+      );
+      assert.equal(
+        priorityEdge.source.progressContract.wakeSource,
+        PRIORITY_RECOVERY_PROGRESS_CONTRACT_WAKE_SOURCE_EVENT,
+      );
+      assert.deepEqual(priorityEdge.reasons, [
+        PRIORITY_RECOVERY_RETRYABLE_REASON,
+      ]);
+      assertNoNullOrUndefined(graph);
+    });
+
+  it('synthesizes retry-scheduled progress contract from partition witnesses',
+    () => {
+      const fixture = buildFixtureFailureBundle();
+      const partitionWitness = {
+        partitionId: FIXTURE_PARTITION_ID,
+        semanticStateId: FIXTURE_PRIORITY_RECOVERING_STATE,
+        currentOwner: OWNER_OPERATION_WORKFLOW,
+        blockingBoundary: BOUNDARY_REBALANCER_HANDOFF,
+        waitMode: PRIORITY_RECOVERY_WAIT_MODE_RETRY_SCHEDULED,
+        nextRequiredAction:
+          PRIORITY_RECOVERY_ACTION_WAIT_FOR_OPERATION_PROGRESS,
+        progressContractState:
+          PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_PENDING,
+        retryAfterMs: PRIORITY_RECOVERY_PROGRESS_CONTRACT_RETRY_AFTER_MS,
+        actuationState:
+          PRIORITY_RECOVERY_ACTUATION_DISPATCHED_WAITING_PROGRESS,
+      };
+      const graph = buildTopologyConvergenceGraphFromArtifacts({
+        failureBundle: {
+          ...fixture,
+          publicationConvergence: {
+            ...fixture.publicationConvergence,
+            activeGate: {
+              ...fixture.publicationConvergence.activeGate,
+              progress: {
+                expectedNodeCount: FIXTURE_EXPECTED_NODE_COUNT,
+                snapshotCoverageNodeCount: FIXTURE_SNAPSHOT_COVERAGE_COUNT,
+                snapshotCoverageComplete: false,
+                priorityBlockedPartitionCount: ZERO_COUNT,
+                blockers: [SNAPSHOT_COVERAGE_TWO_OF_FIVE_BLOCKER],
+              },
+            },
+            priorityRecoveryPartitionWitnesses: [partitionWitness],
+            priorityRecoveryProgressSummary: {
+              dominantWitness: partitionWitness,
+              priorityBlockedPartitionCount: ZERO_COUNT,
+            },
+          },
+        },
+      });
+      const priorityEdge = findEdge(graph.edges, EDGE_PRIORITY_RECOVERY);
+
+      assert.equal(graph.summary.firstFrontierEdgeId, EDGE_PRIORITY_RECOVERY);
+      assert.equal(graph.summary.firstFrontierOwner, OWNER_OPERATION_WORKFLOW);
+      assert.equal(
+        graph.summary.firstFrontierBoundary,
+        BOUNDARY_REBALANCER_HANDOFF,
+      );
+      assert.equal(
+        priorityEdge.evidencePath,
+        PRIORITY_RECOVERY_PARTITION_WITNESS_EVIDENCE_PATH,
+      );
+      assert.equal(
+        priorityEdge.source.waitModes,
+        PRIORITY_RECOVERY_WAIT_MODE_RETRY_SCHEDULED,
+      );
+      assert.equal(
+        priorityEdge.source.progressContract.state,
+        PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_PENDING,
+      );
+      assert.equal(
+        priorityEdge.source.progressContract.nextAction,
+        PRIORITY_RECOVERY_ACTION_WAIT_FOR_OPERATION_PROGRESS,
+      );
+      assert.equal(
+        priorityEdge.source.progressContract.wakeSource,
+        PRIORITY_RECOVERY_PROGRESS_CONTRACT_WAKE_SOURCE_REBALANCER_TIMER,
+      );
+      assert.equal(
+        priorityEdge.source.progressContract.retryAfterMs,
+        PRIORITY_RECOVERY_PROGRESS_CONTRACT_RETRY_AFTER_MS,
+      );
+      assert.equal(
+        priorityEdge.source.progressContract.blockingDependency,
+        BOUNDARY_REBALANCER_HANDOFF,
+      );
+      assertNoNullOrUndefined(graph);
+    });
+
+  it('surfaces unexecuted owner effect on event-driven partition witnesses',
+    () => {
+      const fixture = buildFixtureFailureBundle();
+      const partitionWitness = {
+        partitionId: FIXTURE_PARTITION_ID,
+        semanticStateId: FIXTURE_PRIORITY_RECOVERING_STATE,
+        currentOwner: OWNER_OPERATION_WORKFLOW,
+        blockingBoundary: BOUNDARY_WORKFLOW_PROGRESS,
+        waitMode: PRIORITY_RECOVERY_WAIT_MODE_EVENT_DRIVEN,
+        nextRequiredAction:
+          PRIORITY_RECOVERY_ACTION_ADVANCE_EXISTING_OPERATION,
+        actuationState:
+          PRIORITY_RECOVERY_ACTUATION_DISPATCHED_WAITING_PROGRESS,
+        operationOwnerObservation: {
+          effectCommand: PRIORITY_RECOVERY_OWNER_EFFECT_COMMAND_ADVANCE,
+          effectExecution:
+            PRIORITY_RECOVERY_OWNER_EFFECT_EXECUTION_NOT_EXECUTED,
+          requestedOwnerAction:
+            PRIORITY_RECOVERY_ACTION_ADVANCE_EXISTING_OPERATION,
+        },
+      };
+      const graph = buildTopologyConvergenceGraphFromArtifacts({
+        failureBundle: {
+          ...fixture,
+          publicationConvergence: {
+            ...fixture.publicationConvergence,
+            activeGate: {
+              ...fixture.publicationConvergence.activeGate,
+              progress: {
+                expectedNodeCount: FIXTURE_EXPECTED_NODE_COUNT,
+                snapshotCoverageNodeCount: FIXTURE_SNAPSHOT_COVERAGE_COUNT,
+                snapshotCoverageComplete: false,
+                priorityBlockedPartitionCount: ZERO_COUNT,
+                blockers: [SNAPSHOT_COVERAGE_TWO_OF_FIVE_BLOCKER],
+              },
+            },
+            priorityRecoveryPartitionWitnesses: [partitionWitness],
+            priorityRecoveryProgressSummary: {
+              dominantWitness: partitionWitness,
+              priorityBlockedPartitionCount: ZERO_COUNT,
+            },
+          },
+        },
+      });
+      const priorityEdge = findEdge(graph.edges, EDGE_PRIORITY_RECOVERY);
+
+      assert.equal(graph.summary.firstFrontierEdgeId, EDGE_PRIORITY_RECOVERY);
+      assert.equal(
+        priorityEdge.evidencePath,
+        PRIORITY_RECOVERY_PARTITION_WITNESS_EVIDENCE_PATH,
+      );
+      assert.equal(
+        priorityEdge.source.operationOwnerEffectExecutions,
+        PRIORITY_RECOVERY_OWNER_EFFECT_EXECUTION_NOT_EXECUTED,
+      );
+      assert.equal(
+        priorityEdge.source.operationOwnerEffectCommands,
+        PRIORITY_RECOVERY_OWNER_EFFECT_COMMAND_ADVANCE,
+      );
+      assert.equal(
+        priorityEdge.source.operationOwnerRequestedActions,
+        PRIORITY_RECOVERY_ACTION_ADVANCE_EXISTING_OPERATION,
+      );
+      assertNoNullOrUndefined(graph);
+    });
+
+  it('enriches partition witnesses from decision snapshot owner observation',
+    () => {
+      const fixture = buildFixtureFailureBundle();
+      const partitionWitness = {
+        partitionId: FIXTURE_PARTITION_ID,
+        semanticStateId: FIXTURE_PRIORITY_RECOVERING_STATE,
+        currentOwner: OWNER_OPERATION_WORKFLOW,
+        blockingBoundary: BOUNDARY_WORKFLOW_PROGRESS,
+        waitMode: PRIORITY_RECOVERY_WAIT_MODE_EVENT_DRIVEN,
+        nextRequiredAction:
+          PRIORITY_RECOVERY_ACTION_ADVANCE_EXISTING_OPERATION,
+        actuationState:
+          PRIORITY_RECOVERY_ACTUATION_DISPATCHED_WAITING_PROGRESS,
+      };
+      const graph = buildTopologyConvergenceGraph({
+        report: {
+          scenarios: [{
+            scenario: SCENARIO_ROLLING_RESTART,
+            summary: {
+              dominantReason: FIXTURE_DOMINANT_REASON,
+              failureClass: FIXTURE_FAILURE_CLASS,
+            },
+            publicationConvergence: {
+              ...fixture.publicationConvergence,
+              activeGate: {
+                ...fixture.publicationConvergence.activeGate,
+                progress: {
+                  expectedNodeCount: FIXTURE_EXPECTED_NODE_COUNT,
+                  snapshotCoverageNodeCount: FIXTURE_SNAPSHOT_COVERAGE_COUNT,
+                  snapshotCoverageComplete: false,
+                  priorityBlockedPartitionCount: ZERO_COUNT,
+                  blockers: [SNAPSHOT_COVERAGE_TWO_OF_FIVE_BLOCKER],
+                },
+              },
+              priorityRecoveryPartitionWitnesses: [partitionWitness],
+              priorityRecoveryProgressSummary: {
+                dominantWitness: partitionWitness,
+                priorityBlockedPartitionCount: ZERO_COUNT,
+              },
+            },
+            priorityRecoveryDecisionSnapshots: {
+              snapshots: [{
+                partitionId: FIXTURE_PARTITION_ID,
+                operationOwnerObservation: {
+                  effectCommand:
+                    PRIORITY_RECOVERY_OWNER_EFFECT_COMMAND_ADVANCE,
+                  effectExecution:
+                    PRIORITY_RECOVERY_OWNER_EFFECT_EXECUTION_NOT_EXECUTED,
+                  requestedOwnerAction:
+                    PRIORITY_RECOVERY_ACTION_ADVANCE_EXISTING_OPERATION,
+                },
+              }],
+            },
+          }],
+        },
+      });
+      const priorityEdge = findEdge(graph.edges, EDGE_PRIORITY_RECOVERY);
+
+      assert.equal(graph.summary.firstFrontierEdgeId, EDGE_PRIORITY_RECOVERY);
+      assert.equal(graph.summary.firstFrontierOwner, OWNER_OPERATION_WORKFLOW);
+      assert.equal(
+        priorityEdge.source.operationOwnerEffectExecutions,
+        PRIORITY_RECOVERY_OWNER_EFFECT_EXECUTION_NOT_EXECUTED,
+      );
+      assert.equal(
+        priorityEdge.source.operationOwnerEffectCommands,
+        PRIORITY_RECOVERY_OWNER_EFFECT_COMMAND_ADVANCE,
+      );
+      assert.equal(
+        priorityEdge.source.operationOwnerRequestedActions,
+        PRIORITY_RECOVERY_ACTION_ADVANCE_EXISTING_OPERATION,
       );
       assertNoNullOrUndefined(graph);
     });

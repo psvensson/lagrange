@@ -566,3 +566,105 @@ test('PressureGovernor rate-limits pressure metric logging',
     governor.evaluate(request);
     t.equal(logCalls.length, 2, 'emission after 1000ms should log');
   });
+
+test('PressureGovernor admits readiness reads during control-plane ' +
+  'critical-reserve pressure', async (t) => {
+  const governor = new PressureGovernor({
+    nodeId: 'node-a',
+    messageRouter: {
+      getStats() {
+        return {
+          outboundQueues: {
+            'node-b': {
+              pending: 64,
+              pendingCritical: 16,
+              pendingBackground: 0,
+              criticalReserve: 16,
+              backgroundPendingLimit: 48,
+              maxPending: 64,
+            },
+          },
+        };
+      },
+    },
+  });
+
+  const readinessDecision = governor.evaluate({
+    workClass: 'control-plane-readiness',
+    resourceKeys: ['control-plane:read'],
+    allowDegrade: true,
+    allowDefer: false,
+  });
+  const interactiveDecision = governor.evaluate({
+    workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+    resourceKeys: ['control-plane:read'],
+    allowDegrade: true,
+    allowDefer: false,
+  });
+
+  t.equal(
+    readinessDecision.action,
+    PRESSURE_GOVERNOR_ACTION.ALLOW,
+    'readiness reads should bypass control-plane backpressure',
+  );
+  t.equal(
+    readinessDecision.reason,
+    PRESSURE_GOVERNOR_REASON.READINESS_BYPASS,
+    'readiness admission should report the readiness bypass reason',
+  );
+  t.equal(
+    interactiveDecision.action,
+    PRESSURE_GOVERNOR_ACTION.DEGRADE,
+    'plain interactive reads should still degrade under the same pressure',
+  );
+  PressureGovernor.clearSharedForTests();
+});
+
+test('PressureGovernor sheds readiness reads once the readiness reserve ' +
+  'is exhausted', async (t) => {
+  const governor = new PressureGovernor({
+    nodeId: 'node-a',
+    messageRouter: {
+      getStats() {
+        return {
+          outboundQueues: {
+            'node-b': {
+              pending: 64,
+              pendingCritical: 16,
+              pendingReadiness: 8,
+              pendingBackground: 0,
+              criticalReserve: 16,
+              readinessReserve: 8,
+              backgroundPendingLimit: 48,
+              maxPending: 64,
+            },
+          },
+        };
+      },
+    },
+  });
+
+  const deferDecision = governor.evaluate({
+    workClass: PRESSURE_WORK_CLASS.READINESS,
+    resourceKeys: ['control-plane:read'],
+    allowDegrade: true,
+    allowDefer: true,
+  });
+
+  t.equal(
+    deferDecision.action,
+    PRESSURE_GOVERNOR_ACTION.DEFER,
+    'readiness reads should defer when their own reserve is exhausted',
+  );
+  t.equal(
+    deferDecision.reason,
+    PRESSURE_GOVERNOR_REASON.READINESS_RESERVE_EXHAUSTED,
+    'exhausted readiness admission should report the readiness reserve reason',
+  );
+  t.equal(
+    deferDecision.summary?.readinessReserveExhausted,
+    true,
+    'summary should surface readiness reserve exhaustion',
+  );
+  PressureGovernor.clearSharedForTests();
+});

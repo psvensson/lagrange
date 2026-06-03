@@ -61,6 +61,10 @@ const LOAD_READINESS_ACTIVE_GATE_OWNER_RECOVERY_REASON =
   'owner_reconcile_pending';
 const LOAD_READINESS_ACTIVE_GATE_OWNER_RECOVERY_HANDOFF_DEFERRED =
   'write_deferred';
+const LOAD_READINESS_OWNER_RECOVERY_SNAPSHOT_MODE = 'repair_deferred';
+const LOAD_READINESS_OWNER_RECOVERY_SNAPSHOT_STATE = 'deferred_refresh';
+const LOAD_READINESS_OWNER_RECOVERY_SNAPSHOT_CONTRACT_STATE = 'deferred';
+const LOAD_READINESS_OWNER_RECOVERY_SNAPSHOT_NEXT_ACTION = 'retry';
 const ZERO_COUNT = 0;
 
 function normalizeNonNegativeCount(value) {
@@ -123,6 +127,15 @@ function hasBoundedLoadReadinessOwnerRecoveryHandoff(progressSnapshot) {
   const pendingRecoveryNodeIds = normalizeDistinctStringArray(
     progressSnapshot?.activeGateOwnerCohortPendingRecoveryNodeIds,
   );
+  const selectedPublishedActiveNodeIds = normalizeDistinctStringArray(
+    progressSnapshot?.selectedPublishedActiveNodeIds,
+  );
+  const selectedPublishedActiveNodeIdSet =
+    new Set(selectedPublishedActiveNodeIds);
+  const pendingRecoveryCoveredByPublishedActive =
+    pendingRecoveryNodeIds.every((nodeId) =>
+      selectedPublishedActiveNodeIdSet.has(nodeId),
+    );
   const pendingWrites = normalizeNonNegativeCount(queueDepth?.pendingWrites);
   return (
     progressSnapshot?.activeGateOwnerCohortState ===
@@ -135,6 +148,10 @@ function hasBoundedLoadReadinessOwnerRecoveryHandoff(progressSnapshot) {
       true &&
     pendingRecoveryCount > ZERO_COUNT &&
     pendingRecoveryNodeIds.length > ZERO_COUNT &&
+    pendingRecoveryCoveredByPublishedActive === true &&
+    normalizeNonNegativeCount(
+      progressSnapshot?.activeGateOwnerCohortMissingPublishedCount,
+    ) === ZERO_COUNT &&
     pendingWrites >= Math.max(
       pendingRecoveryCount,
       pendingRecoveryNodeIds.length,
@@ -155,17 +172,58 @@ function hasBoundedLoadReadinessOwnerRecoveryHandoff(progressSnapshot) {
   );
 }
 
+function hasPartialLoadReadinessOwnerRecoverySnapshotCoverage(
+  progressSnapshot,
+  expectedNodeCount,
+) {
+  const snapshotCoverageNodeCount = normalizeNonNegativeCount(
+    progressSnapshot?.snapshotCoverageNodeCount,
+  );
+  return (
+    progressSnapshot?.snapshotCoverageComplete !== true &&
+    expectedNodeCount > 1 &&
+    snapshotCoverageNodeCount >= expectedNodeCount - 1 &&
+    snapshotCoverageNodeCount < expectedNodeCount &&
+    progressSnapshot?.selectedSnapshotAdminReady === true &&
+    progressSnapshot?.selectedSnapshotRepairDeferred === true &&
+    progressSnapshot?.selectedSnapshotObservationMode ===
+      LOAD_READINESS_OWNER_RECOVERY_SNAPSHOT_MODE &&
+    progressSnapshot?.selectedSnapshotObservationState ===
+      LOAD_READINESS_OWNER_RECOVERY_SNAPSHOT_STATE &&
+    progressSnapshot?.selectedSnapshotObservationContractState ===
+      LOAD_READINESS_OWNER_RECOVERY_SNAPSHOT_CONTRACT_STATE &&
+    progressSnapshot?.selectedSnapshotObservationRefreshState ===
+      LOAD_READINESS_OWNER_RECOVERY_SNAPSHOT_CONTRACT_STATE &&
+    progressSnapshot?.selectedSnapshotObservationNextAction ===
+      LOAD_READINESS_OWNER_RECOVERY_SNAPSHOT_NEXT_ACTION &&
+    normalizePositiveDurationMs(
+      progressSnapshot?.selectedSnapshotObservationRetryAfterMs,
+    ) > ZERO_COUNT
+  );
+}
+
 function hasLoadReadinessStartupSupportOwnerRecoveryWindow(progressSnapshot) {
   const expectedNodeCount = normalizeNonNegativeCount(
     progressSnapshot?.expectedNodeCount,
   );
+  const boundedOwnerRecoveryHandoff =
+    hasBoundedLoadReadinessOwnerRecoveryHandoff(progressSnapshot);
+  const snapshotCoverageReady =
+    progressSnapshot?.snapshotCoverageComplete === true ||
+    (
+      boundedOwnerRecoveryHandoff === true &&
+      hasPartialLoadReadinessOwnerRecoverySnapshotCoverage(
+        progressSnapshot,
+        expectedNodeCount,
+      ) === true
+    );
   return (
     expectedNodeCount > ZERO_COUNT &&
     normalizeNonNegativeCount(progressSnapshot?.activeNodeCount) >=
       expectedNodeCount &&
     normalizeNonNegativeCount(progressSnapshot?.inactiveNodeCount) ===
       ZERO_COUNT &&
-    progressSnapshot?.snapshotCoverageComplete === true &&
+    snapshotCoverageReady === true &&
     normalizeNonNegativeCount(progressSnapshot?.selectedPublishedActiveCount) >=
       expectedNodeCount &&
     normalizeNonNegativeCount(progressSnapshot?.missingPublishedCount) ===
@@ -173,7 +231,7 @@ function hasLoadReadinessStartupSupportOwnerRecoveryWindow(progressSnapshot) {
     normalizeNonNegativeCount(progressSnapshot?.pendingAckCount) ===
       ZERO_COUNT &&
     hasSatisfiedLoadReadinessPriorityRecovery(progressSnapshot) === true &&
-    hasBoundedLoadReadinessOwnerRecoveryHandoff(progressSnapshot) === true
+    boundedOwnerRecoveryHandoff === true
   );
 }
 

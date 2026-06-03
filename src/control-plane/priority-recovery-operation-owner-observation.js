@@ -9,6 +9,9 @@ import {
   OPERATION_WORKFLOW_PROGRESS_DECISION_KERNEL,
 } from '../rebalancer/operation-workflow-owner-constants.js';
 import {
+  attachPriorityRecoveryOperationOwnerProgressContract,
+} from './priority-recovery-operation-owner-progress-contract.js';
+import {
   OWNER_CONTRACT_NEXT_ACTION,
   OWNER_CONTRACT_STATE,
 } from './owner-contract-outcome.js';
@@ -451,7 +454,7 @@ function normalizePriorityRecoverySnapshotFromOperationOwnerOutcome(
     resolvePriorityRecoveryOperationOwnerDescriptor(ownerOutcome);
   const operationOwnerObservation =
     buildPriorityRecoveryOperationOwnerObservation(ownerOutcome, descriptor);
-  return Object.freeze({
+  const normalizedSnapshot = Object.freeze({
     ...snapshot,
     [PRIORITY_RECOVERY_OPERATION_OWNER_OUTCOME_FIELD
       .OPERATION_OWNER_OBSERVATION]: operationOwnerObservation,
@@ -474,6 +477,9 @@ function normalizePriorityRecoverySnapshotFromOperationOwnerOutcome(
       descriptor,
     ),
   });
+  return attachPriorityRecoveryOperationOwnerProgressContract(
+    normalizedSnapshot,
+  );
 }
 
 export {

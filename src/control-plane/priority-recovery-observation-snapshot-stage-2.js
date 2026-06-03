@@ -13,6 +13,13 @@ import {
 } from './priority-recovery-helpers.js';
 import {LOCAL_EMPTY_LIST, LOCAL_NUM_ONE, LOCAL_NUM_TWO, LOCAL_NUM_ZERO, LOCAL_STR_BLOCKERREASONCODES, LOCAL_STR_EMPTY, LOCAL_STR_SEMANTICSTATEIDS, PRIORITY_RECOVERY_OPERATION_ID_FIELD, PRIORITY_RECOVERY_SNAPSHOT_PROGRESS_FIELD, buildPriorityRecoveryExplicitSemanticStateByPartitionId, collectPriorityRecoveryPartitionIndexes, isRecord, normalizeDistinctStringArray, normalizeNonNegativeInteger, normalizePriorityRecoveryBlockedClassIds, normalizePriorityRecoveryObservationStateValue, normalizePriorityRecoverySemanticStatePartitions, resolvePriorityRecoverySnapshotSemanticState} from './priority-recovery-observation-snapshot-stage-1.js';
 
+function cloneJsonValue(value) {
+  if (value === null || value === undefined) {
+    return value;
+  }
+  return JSON.parse(JSON.stringify(value));
+}
+
 function resolvePriorityRecoveryWitnessPartitionIds(
   blockedClassIds,
   semanticStatePartitions,
@@ -301,6 +308,23 @@ function resolvePriorityRecoveryTopologyOperatorWitness(
   return null;
 }
 
+function resolvePriorityRecoveryOperationOwnerObservation(
+  relatedSnapshots,
+  decisionSnapshots,
+  explicitSemanticStateByPartitionId,
+) {
+  const selectedSnapshot = selectLatestPriorityRecoveryPartitionSnapshot(
+    relatedSnapshots.filter((snapshot) =>
+      isRecord(snapshot?.operationOwnerObservation),
+    ),
+    decisionSnapshots,
+    explicitSemanticStateByPartitionId,
+  );
+  return isRecord(selectedSnapshot?.operationOwnerObservation) ?
+    cloneJsonValue(selectedSnapshot.operationOwnerObservation) :
+    null;
+}
+
 function buildPriorityRecoveryPartitionSnapshot(
   partitionId,
   snapshots,
@@ -332,6 +356,12 @@ function buildPriorityRecoveryPartitionSnapshot(
   const pressureConditions = buildPriorityRecoveryPressureConditions(
     latestPartitionSnapshot?.conditions?.pressure,
   );
+  const operationOwnerObservation =
+    resolvePriorityRecoveryOperationOwnerObservation(
+      relatedSnapshots,
+      decisionSnapshots,
+      explicitSemanticStateByPartitionId,
+    );
   return Object.freeze({
     partitionId,
     semanticStateId: resolvePriorityRecoverySnapshotSemanticState(
@@ -442,6 +472,7 @@ function buildPriorityRecoveryPartitionSnapshot(
       ),
     ),
     ...(topologyOperatorWitness ? {topologyOperatorWitness} : {}),
+    ...(operationOwnerObservation ? {operationOwnerObservation} : {}),
     decisionDimension:
       normalizePriorityRecoveryObservationStateValue(
         latestPartitionSnapshot?.admission?.decisionDimension,

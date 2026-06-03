@@ -366,6 +366,18 @@ export function summarizePriorityRecoveryDecisionSnapshots(value) {
           String(left?.correlationKey || ''),
         );
       })[0] || null;
+  const selectPriorityRecoveryPartitionOperationOwnerObservation = (
+    partitionSnapshots,
+  ) => {
+    const selectedSnapshot = selectLatestPriorityRecoveryPartitionSnapshot(
+      partitionSnapshots.filter((snapshot) =>
+        isRecord(snapshot?.operationOwnerObservation),
+      ),
+    );
+    return isRecord(selectedSnapshot?.operationOwnerObservation) ?
+      cloneJsonValue(selectedSnapshot.operationOwnerObservation) :
+      null;
+  };
   const partitionWitnesses = witnessPartitionIds
     .map((partitionId) => {
       const partitionSnapshots = decisionSnapshots.snapshots.filter(
@@ -374,6 +386,10 @@ export function summarizePriorityRecoveryDecisionSnapshots(value) {
       );
       const latestPartitionSnapshot =
         selectLatestPriorityRecoveryPartitionSnapshot(partitionSnapshots);
+      const operationOwnerObservation =
+        selectPriorityRecoveryPartitionOperationOwnerObservation(
+          partitionSnapshots,
+        );
       const blockerReasons = normalizeDistinctStringArray(
         latestPartitionSnapshot?.blockerReasons,
       );
@@ -458,6 +474,7 @@ export function summarizePriorityRecoveryDecisionSnapshots(value) {
         ...buildPriorityRecoveryDecisionWitnessOwnerState(
           latestPartitionSnapshot,
         ),
+        operationOwnerObservation,
         completionState:
           String(latestPartitionSnapshot?.completion?.state || '').trim() ||
           null,

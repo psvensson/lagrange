@@ -206,6 +206,13 @@ function isRecord(value) {
   return value && typeof value === TYPEOF_OBJECT && !Array.isArray(value);
 }
 
+function cloneJsonValue(value) {
+  if (value === null || value === undefined) {
+    return value;
+  }
+  return JSON.parse(JSON.stringify(value));
+}
+
 function normalizeDistinctStringArray(values) {
   if (!Array.isArray(values)) {
     return [];
@@ -311,6 +318,15 @@ function normalizePriorityRecoveryPartitionWitnessesForDiagnostics(witnesses) {
           ...(witness.topologyOperatorWitness ??
             witness.topology_operator_witness),
         } :
+        null;
+      const operationOwnerObservation = isRecord(
+        witness?.operationOwnerObservation ??
+          witness?.operation_owner_observation,
+      ) ?
+        cloneJsonValue(
+          witness.operationOwnerObservation ??
+            witness.operation_owner_observation,
+        ) :
         null;
       const activeLearnerNodeIds = normalizeDistinctStringArray(
         witness?.activeLearnerNodeIds ?? witness?.active_learner_node_ids,
@@ -571,6 +587,7 @@ function normalizePriorityRecoveryPartitionWitnessesForDiagnostics(witnesses) {
           {progressEvidenceSourceIds} :
           {}),
         ...(topologyOperatorWitness ? {topologyOperatorWitness} : {}),
+        ...(operationOwnerObservation ? {operationOwnerObservation} : {}),
         witnessIds,
         serialWaitOperationIds,
         serialWaitPartitionIds,

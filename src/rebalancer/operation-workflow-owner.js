@@ -697,11 +697,11 @@ class OperationWorkflowOwner extends OperationWorkflowOwnerSegment7 {
         snapshot,
         operations,
       );
-    const normalizedSnapshot = normalizePriorityRecoveryDispatchPendingOwnerSnapshot(
-      this,
-      snapshot,
-      operation,
-    );
+    const normalizedSnapshot =
+      this.normalizePriorityRecoveryDispatchPendingOwnerSnapshot(
+        snapshot,
+        operation,
+      );
     this.schedulePriorityRecoveryTargetProgressReentry(
       normalizedSnapshot,
       operations,

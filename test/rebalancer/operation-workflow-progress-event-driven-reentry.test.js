@@ -25,6 +25,8 @@ import {buildPriorityRecoveryDecisionSnapshot} from
 import {
   OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES,
   OPERATION_WORKFLOW_OUTCOME_VALUES,
+  OPERATION_WORKFLOW_OWNER,
+  OPERATION_WORKFLOW_PROGRESS_DECISION_KERNEL,
 } from '../../src/rebalancer/operation-workflow-owner-constants.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {
@@ -100,6 +102,8 @@ const TEST_SERVICES_TABLE = 'services';
 const TEST_ENTITY_TYPE_PARTITION = 'partition';
 const TEST_OPERATION_OWNER_OBSERVATION_FIELD = 'operationOwnerObservation';
 const TEST_OPERATION_OWNER_EFFECT_NOT_EXECUTED = 'not_executed';
+const TEST_PROGRESS_CONTRACT_EVENT_WAKE_SOURCE = 'operation_lifecycle_event';
+const TEST_PROGRESS_CONTRACT_ELIGIBLE_ROUTE = 'eligible';
 const TEST_REENTRY_TEST_NAME =
   'event-driven dispatch-pending workflow progress re-enters through the ' +
   'operation owner outcome';
@@ -155,6 +159,15 @@ const TEST_ASSERT_TARGET_PROGRESS_PHASE =
 const TEST_ASSERT_DISPATCH_PENDING_TARGET_PROGRESS_REENTRY =
   'dispatch-pending active target progress should re-enter the ' +
   'observed-progress owner lane';
+const TEST_ASSERT_DIRECT_BUILD_PROGRESS_CONTRACT =
+  'direct decision snapshot build should retain operation workflow progress ' +
+  'contract';
+const TEST_ASSERT_DIAGNOSTIC_BUILD_PROGRESS_CONTRACT =
+  'diagnostic decision snapshot build should retain operation workflow ' +
+  'progress contract';
+const TEST_ASSERT_NON_WORKFLOW_PROGRESS_CONTRACT_ABSENT =
+  'non-workflow owner progress should not receive operation workflow progress ' +
+  'contract';
 const TEST_ASSERT_LOCAL_INITIALIZATION_RETRY_TIMER =
   'local uninitialized owner arms one bounded transition retry';
 const TEST_ASSERT_LOCAL_INITIALIZATION_RETRY_NO_DELIVERY =
@@ -936,6 +949,27 @@ test(TEST_DIAGNOSTIC_OWNER_REENTRY_TEST_NAME, async (t) => {
       TEST_OPERATION_OWNER_EFFECT_NOT_EXECUTED,
       'diagnostic snapshots should not claim the effect already executed',
     );
+    const expectedProgressContract = {
+      owner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
+      boundary: PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
+      wakeSource: TEST_PROGRESS_CONTRACT_EVENT_WAKE_SOURCE,
+      representativeRerunRoute: TEST_PROGRESS_CONTRACT_ELIGIBLE_ROUTE,
+    };
+    t.match(
+      snapshot?.progressContract,
+      expectedProgressContract,
+      TEST_ASSERT_DIAGNOSTIC_BUILD_PROGRESS_CONTRACT,
+    );
+    t.match(
+      snapshot?.progress?.progressContract,
+      expectedProgressContract,
+      TEST_ASSERT_DIAGNOSTIC_BUILD_PROGRESS_CONTRACT,
+    );
+    t.match(
+      snapshot?.progressSummary?.progressContract,
+      expectedProgressContract,
+      TEST_ASSERT_DIAGNOSTIC_BUILD_PROGRESS_CONTRACT,
+    );
     t.equal(
       coordinator.workflowOwner.schedulePriorityRecoveryDispatchPendingReentry(
         snapshot,
@@ -966,6 +1000,70 @@ test(TEST_DIAGNOSTIC_OWNER_REENTRY_TEST_NAME, async (t) => {
     await coordinator.shutdown();
   }
 });
+
+test(
+  'authoritative visibility owner progress does not receive workflow progress contract',
+  (t) => {
+    const publicationConvergence = buildEventDrivenPlanningSnapshot({
+      operationId: TEST_PUBLICATION_BACKPRESSURE_OPERATION_ID,
+      partitionId: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+      workflowStep: WORKFLOW_STEP.PENDING,
+      publicationStatus: TEST_PUBLICATION_STATUS_OPEN,
+    });
+    const snapshot = buildPriorityRecoveryDecisionSnapshot({
+      partitionId: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+      capturedAt: TEST_CAPTURED_AT_MS,
+      publicationEpoch: TEST_PUBLICATION_EPOCH,
+      publicationConvergence,
+      priorityPartitionSummary:
+        publicationConvergence.priorityPartitionSummary,
+      operationContexts: [Object.freeze({
+        operationId: TEST_PUBLICATION_BACKPRESSURE_OPERATION_ID,
+        partitionId: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+        tableName: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+        type: OperationType.REPLACE,
+        status: ReplicaStatus.PENDING,
+        workflowStep: WORKFLOW_STEP.PENDING,
+        sourceNodeId: TEST_CONTROL_PLANE_PUBLICATION_SOURCE_NODE_ID,
+        targetNodeId: TEST_CONTROL_PLANE_PUBLICATION_TARGET_NODE_ID,
+        replicaId: TEST_CONTROL_PLANE_PUBLICATION_REPLICA_ID,
+        createdAtMs: TEST_RECENT_OPERATION_UPDATED_AT_MS,
+        updatedAtMs: TEST_RECENT_OPERATION_UPDATED_AT_MS,
+        completedAtMs: TEST_UNDEFINED_VALUE,
+        stepTimeoutMs: TEST_STEP_TIMEOUT_MS,
+      })],
+      operationId: TEST_PUBLICATION_BACKPRESSURE_OPERATION_ID,
+      operationOwnerOutcome: Object.freeze({
+        owner: OPERATION_WORKFLOW_OWNER,
+        boundary: OPERATION_WORKFLOW_PROGRESS_DECISION_KERNEL,
+        outcome:
+          OPERATION_WORKFLOW_OUTCOME_VALUES.DEFER_AUTHORITATIVE_VISIBILITY,
+      }),
+    });
+
+    t.equal(
+      snapshot?.progress?.currentOwner,
+      PRIORITY_RECOVERY_PROGRESS_OWNER.AUTHORITATIVE_VISIBILITY_OWNER,
+      TEST_ASSERT_NON_WORKFLOW_PROGRESS_CONTRACT_ABSENT,
+    );
+    t.equal(
+      snapshot?.progressContract,
+      undefined,
+      TEST_ASSERT_NON_WORKFLOW_PROGRESS_CONTRACT_ABSENT,
+    );
+    t.equal(
+      snapshot?.progress?.progressContract,
+      undefined,
+      TEST_ASSERT_NON_WORKFLOW_PROGRESS_CONTRACT_ABSENT,
+    );
+    t.equal(
+      snapshot?.progressSummary,
+      undefined,
+      TEST_ASSERT_NON_WORKFLOW_PROGRESS_CONTRACT_ABSENT,
+    );
+    t.end();
+  },
+);
 
 test(TEST_SPREAD_SATISFIED_WAIT_PROGRESS_REENTRY_TEST_NAME, async (t) => {
   const deliveries = [];
@@ -1496,19 +1594,20 @@ test(TEST_DISPATCH_PENDING_TARGET_PROGRESS_REENTRY_TEST_NAME, async (t) => {
         return true;
       };
 
-    coordinator.workflowOwner.buildPriorityRecoveryDecisionSnapshotForOperations(
-      operation.partitionId,
-      [operationWithTargetProgress],
-      buildEventDrivenPlanningSnapshot({
-        workflowStep: WORKFLOW_STEP.PENDING,
-        latestOperationStatus: ReplicaStatus.PENDING,
-        workflowProgressPhaseId:
-          PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING,
-        nextRequiredAction:
-          PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
-        coordinatorOperation: operationWithTargetProgress,
-      }),
-    );
+    const snapshot =
+      coordinator.workflowOwner.buildPriorityRecoveryDecisionSnapshotForOperations(
+        operation.partitionId,
+        [operationWithTargetProgress],
+        buildEventDrivenPlanningSnapshot({
+          workflowStep: WORKFLOW_STEP.PENDING,
+          latestOperationStatus: ReplicaStatus.PENDING,
+          workflowProgressPhaseId:
+            PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING,
+          nextRequiredAction:
+            PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
+          coordinatorOperation: operationWithTargetProgress,
+        }),
+      );
     await new Promise((resolve) => {
       setTimeout(resolve, NUM.ZERO);
     });
@@ -1517,6 +1616,16 @@ test(TEST_DISPATCH_PENDING_TARGET_PROGRESS_REENTRY_TEST_NAME, async (t) => {
       observedProgressOperationIds,
       [operation.operationId],
       TEST_ASSERT_DISPATCH_PENDING_TARGET_PROGRESS_REENTRY,
+    );
+    t.match(
+      snapshot?.progress?.progressContract,
+      {
+        owner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
+        boundary: PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
+        wakeSource: TEST_PROGRESS_CONTRACT_EVENT_WAKE_SOURCE,
+        representativeRerunRoute: TEST_PROGRESS_CONTRACT_ELIGIBLE_ROUTE,
+      },
+      TEST_ASSERT_DIRECT_BUILD_PROGRESS_CONTRACT,
     );
   } finally {
     Date.now = originalDateNow;

@@ -14,8 +14,23 @@ import {
   PRIORITY_RECOVERY_NON_BLOCKING_WITNESS_SEMANTIC_STATE_SET,
   PRIORITY_RECOVERY_RETRYABLE_WITNESS_SEMANTIC_STATE_SET,
   PRIORITY_RECOVERY_WAIT_MODE_EVENT_DRIVEN,
+  PRIORITY_RECOVERY_WAIT_MODE_RETRY_SCHEDULED,
+  PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION_ADVANCE_EXISTING_OPERATION,
   PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION_WAIT_FOR_OPERATION_PROGRESS,
 } from './topology-convergence-constants.js';
+
+const PRIORITY_RECOVERY_WITNESS_PROGRESS_CONTRACT_FIELD =
+  Object.freeze({
+    STATE: 'progressContractState',
+    NEXT_ACTION: 'progressNextAction',
+    RETRY_AFTER_MS: 'retryAfterMs',
+  });
+const PRIORITY_RECOVERY_WITNESS_PROGRESS_CONTRACT_WAKE_SOURCE =
+  Object.freeze({
+    EVENT_DRIVEN: 'operation_lifecycle_event',
+    RETRY_SCHEDULED: 'rebalancer_timer',
+  });
+const PRIORITY_RECOVERY_WITNESS_PROGRESS_CONTRACT_TERMINAL_STATE = 'satisfied';
 
 import {
   asRecord,
@@ -102,10 +117,35 @@ export function buildPriorityRecoveryWitnessSelection(witnesses) {
     blockingWitnesses,
     SOURCE_FIELD.ACTUATION_STATE,
   );
+  const operationOwnerEffectExecutions = collectDistinctRecordNestedText(
+    blockingWitnesses,
+    SOURCE_FIELD.OPERATION_OWNER_OBSERVATION,
+    SOURCE_FIELD.OPERATION_OWNER_EFFECT_EXECUTION,
+  );
+  const operationOwnerEffectCommands = collectDistinctRecordNestedText(
+    blockingWitnesses,
+    SOURCE_FIELD.OPERATION_OWNER_OBSERVATION,
+    SOURCE_FIELD.OPERATION_OWNER_EFFECT_COMMAND,
+  );
+  const operationOwnerRequestedActions = collectDistinctRecordNestedText(
+    blockingWitnesses,
+    SOURCE_FIELD.OPERATION_OWNER_OBSERVATION,
+    SOURCE_FIELD.OPERATION_OWNER_REQUESTED_ACTION,
+  );
+  const eventDrivenWitnesses = blockingWitnesses.filter(
+    isPriorityRecoveryEventDrivenWaitWitness,
+  );
+  const eventDrivenSemanticStateIds = collectDistinctRecordText(
+    eventDrivenWitnesses,
+    SOURCE_FIELD.SEMANTIC_STATE_ID,
+  );
 
   return {
     witnesses: blockingWitnesses,
-    dominantWitness: blockingWitnesses[FIRST_FRONTIER_INDEX] || {},
+    dominantWitness:
+      eventDrivenWitnesses[FIRST_FRONTIER_INDEX] ||
+      blockingWitnesses[FIRST_FRONTIER_INDEX] ||
+      {},
     classes: {
       unresolvedSemanticStateIds: semanticStateIds,
       blockedPartitionIds,
@@ -113,9 +153,12 @@ export function buildPriorityRecoveryWitnessSelection(witnesses) {
     waitModes,
     nextRequiredActions,
     actuationStates,
+    operationOwnerEffectExecutions,
+    operationOwnerEffectCommands,
+    operationOwnerRequestedActions,
     eventDrivenWait: isPriorityRecoveryEventDrivenWaitWitnessSelection({
-      witnesses: normalizedWitnesses,
-      semanticStateIds,
+      witnesses: eventDrivenWitnesses,
+      semanticStateIds: eventDrivenSemanticStateIds,
     }),
   };
 }
@@ -124,6 +167,22 @@ export function collectDistinctRecordText(records, fieldName) {
   const values = new Set();
   for (const record of records) {
     const value = record[fieldName];
+    if (typeof value === TYPE_STRING && value.length > SOURCE_ORDER_BASE) {
+      values.add(value);
+    }
+  }
+  return [...values];
+}
+
+export function collectDistinctRecordNestedText(
+  records,
+  parentFieldName,
+  fieldName,
+) {
+  const values = new Set();
+  for (const record of records) {
+    const parent = asRecord(record[parentFieldName]);
+    const value = parent[fieldName];
     if (typeof value === TYPE_STRING && value.length > SOURCE_ORDER_BASE) {
       values.add(value);
     }
@@ -148,6 +207,15 @@ export function isPriorityRecoveryEventDrivenWaitWitnessSelection(selection) {
   return selection.witnesses.every(isPriorityRecoveryEventDrivenWaitWitness);
 }
 
+function isPriorityRecoveryEventDrivenWaitAction(nextRequiredAction) {
+  return (
+    nextRequiredAction ===
+      PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION_WAIT_FOR_OPERATION_PROGRESS ||
+    nextRequiredAction ===
+      PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION_ADVANCE_EXISTING_OPERATION
+  );
+}
+
 export function isPriorityRecoveryEventDrivenWaitWitness(witness) {
   return (
     textOrUnknown(witness[SOURCE_FIELD.CURRENT_OWNER]) ===
@@ -156,9 +224,30 @@ export function isPriorityRecoveryEventDrivenWaitWitness(witness) {
       BOUNDARY.WORKFLOW_PROGRESS &&
     textOrUnknown(witness[SOURCE_FIELD.WAIT_MODE]) ===
       PRIORITY_RECOVERY_WAIT_MODE_EVENT_DRIVEN &&
-    textOrUnknown(witness[SOURCE_FIELD.NEXT_REQUIRED_ACTION]) ===
-      PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION_WAIT_FOR_OPERATION_PROGRESS
+    isPriorityRecoveryEventDrivenWaitAction(
+      textOrUnknown(witness[SOURCE_FIELD.NEXT_REQUIRED_ACTION]),
+    )
   );
+}
+
+function isPriorityRecoveryRetryScheduledWaitWitness(witness) {
+  return (
+    textOrUnknown(witness[SOURCE_FIELD.CURRENT_OWNER]) ===
+      OWNER.PRIORITY_RECOVERY &&
+    PRIORITY_RECOVERY_RETRYABLE_WITNESS_SEMANTIC_STATE_SET.has(
+      textOrUnknown(witness[SOURCE_FIELD.SEMANTIC_STATE_ID]),
+    ) &&
+    textOrUnknown(witness[SOURCE_FIELD.WAIT_MODE]) ===
+      PRIORITY_RECOVERY_WAIT_MODE_RETRY_SCHEDULED &&
+    isPriorityRecoveryEventDrivenWaitAction(
+      textOrUnknown(witness[SOURCE_FIELD.NEXT_REQUIRED_ACTION]),
+    )
+  );
+}
+
+function isPriorityRecoveryProgressWaitWitness(witness) {
+  return isPriorityRecoveryEventDrivenWaitWitness(witness) ||
+    isPriorityRecoveryRetryScheduledWaitWitness(witness);
 }
 
 export function resolvePriorityRecoveryOwnerBoundary(
@@ -209,7 +298,14 @@ export function selectPriorityRecoveryClassSelection(
   progressClasses,
   witnessClasses,
   topologyOperatorWitness,
+  witnessSelection,
 ) {
+  if (hasPriorityRecoveryEventDrivenWitnessEvidence(witnessSelection)) {
+    return {
+      source: PRIORITY_RECOVERY_EVIDENCE_SOURCE_PARTITION_WITNESSES,
+      classes: witnessClasses,
+    };
+  }
   if (isTopologyOperatorWitnessPresent(topologyOperatorWitness)) {
     return {
       source: PRIORITY_RECOVERY_EVIDENCE_SOURCE_TOPOLOGY_OPERATOR_WITNESS,
@@ -257,6 +353,72 @@ export function selectPriorityRecoveryClassSelection(
   return {
     source: PRIORITY_RECOVERY_EVIDENCE_SOURCE_PROGRESS,
     classes: progressClasses,
+  };
+}
+
+function hasPriorityRecoveryEventDrivenWitnessEvidence(witnessSelection = {}) {
+  return (
+    witnessSelection.eventDrivenWait === true &&
+    hasPriorityRecoveryClassEvidence(witnessSelection.classes)
+  );
+}
+
+function buildPriorityRecoveryWitnessProgressContract(
+  witness,
+  evidencePath,
+) {
+  if (!isPriorityRecoveryProgressWaitWitness(witness)) {
+    return null;
+  }
+  return {
+    owner: firstText(
+      witness[SOURCE_FIELD.OWNER],
+      witness[SOURCE_FIELD.CURRENT_OWNER],
+      OWNER.PRIORITY_RECOVERY,
+    ),
+    boundary: firstText(
+      witness[SOURCE_FIELD.BOUNDARY],
+      witness[SOURCE_FIELD.BLOCKING_BOUNDARY],
+      BOUNDARY.WORKFLOW_PROGRESS,
+    ),
+    state: firstText(
+      witness[PRIORITY_RECOVERY_WITNESS_PROGRESS_CONTRACT_FIELD.STATE],
+      witness[SOURCE_FIELD.NEXT_REQUIRED_ACTION],
+    ),
+    reason: firstText(
+      witness[SOURCE_FIELD.NEXT_REQUIRED_ACTION],
+      PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION_WAIT_FOR_OPERATION_PROGRESS,
+    ),
+    nextAction: firstText(
+      witness[PRIORITY_RECOVERY_WITNESS_PROGRESS_CONTRACT_FIELD.NEXT_ACTION],
+      witness[SOURCE_FIELD.NEXT_ACTION],
+      witness[SOURCE_FIELD.NEXT_REQUIRED_ACTION],
+    ),
+    wakeSource:
+      textOrUnknown(witness[SOURCE_FIELD.WAIT_MODE]) ===
+        PRIORITY_RECOVERY_WAIT_MODE_EVENT_DRIVEN ?
+        PRIORITY_RECOVERY_WITNESS_PROGRESS_CONTRACT_WAKE_SOURCE.EVENT_DRIVEN :
+        PRIORITY_RECOVERY_WITNESS_PROGRESS_CONTRACT_WAKE_SOURCE
+          .RETRY_SCHEDULED,
+    retryAfterMs:
+      Number.isFinite(
+        witness[PRIORITY_RECOVERY_WITNESS_PROGRESS_CONTRACT_FIELD
+          .RETRY_AFTER_MS],
+      ) ?
+        Math.max(
+          SOURCE_ORDER_BASE,
+          Math.floor(
+            witness[PRIORITY_RECOVERY_WITNESS_PROGRESS_CONTRACT_FIELD
+              .RETRY_AFTER_MS],
+          ),
+        ) :
+        SOURCE_ORDER_BASE,
+    terminalState: PRIORITY_RECOVERY_WITNESS_PROGRESS_CONTRACT_TERMINAL_STATE,
+    evidencePath,
+    blockingDependency: firstText(
+      witness[SOURCE_FIELD.BLOCKING_BOUNDARY],
+      BOUNDARY.WORKFLOW_PROGRESS,
+    ),
   };
 }
 
@@ -341,16 +503,18 @@ export function normalizePriorityRecoveryEvidence(normalized) {
     progressClasses,
     witnessSelection.classes,
     topologyOperatorWitness,
+    witnessSelection,
+  );
+  const evidencePath = selectPriorityRecoveryEvidencePath(
+    normalized,
+    classSelection.source,
+    ownerBoundary,
   );
 
   return {
     owner: ownerBoundary.owner,
     boundary: ownerBoundary.boundary,
-    evidencePath: selectPriorityRecoveryEvidencePath(
-      normalized,
-      classSelection.source,
-      ownerBoundary,
-    ),
+    evidencePath,
     priorityBlockedPartitionCount: firstFiniteNumber(
       progressSummary.priorityBlockedPartitionCount,
       progress.priorityBlockedPartitionCount,
@@ -373,6 +537,18 @@ export function normalizePriorityRecoveryEvidence(normalized) {
       PRIORITY_RECOVERY_EVIDENCE_SOURCE_PARTITION_WITNESSES ?
       witnessSelection.actuationStates :
       [],
+    operationOwnerEffectExecutions: classSelection.source ===
+      PRIORITY_RECOVERY_EVIDENCE_SOURCE_PARTITION_WITNESSES ?
+      witnessSelection.operationOwnerEffectExecutions :
+      [],
+    operationOwnerEffectCommands: classSelection.source ===
+      PRIORITY_RECOVERY_EVIDENCE_SOURCE_PARTITION_WITNESSES ?
+      witnessSelection.operationOwnerEffectCommands :
+      [],
+    operationOwnerRequestedActions: classSelection.source ===
+      PRIORITY_RECOVERY_EVIDENCE_SOURCE_PARTITION_WITNESSES ?
+      witnessSelection.operationOwnerRequestedActions :
+      [],
     eventDrivenWait: classSelection.source ===
       PRIORITY_RECOVERY_EVIDENCE_SOURCE_PARTITION_WITNESSES &&
       witnessSelection.eventDrivenWait === true,
@@ -383,5 +559,13 @@ export function normalizePriorityRecoveryEvidence(normalized) {
       ),
     topologyOperatorWitnessNextAction:
       textOrUnknown(topologyOperatorWitness[SOURCE_FIELD.NEXT_ACTION]),
+    progressContract:
+      classSelection.source ===
+        PRIORITY_RECOVERY_EVIDENCE_SOURCE_PARTITION_WITNESSES ?
+        buildPriorityRecoveryWitnessProgressContract(
+          witnessSelection.dominantWitness,
+          evidencePath,
+        ) :
+        null,
   };
 }

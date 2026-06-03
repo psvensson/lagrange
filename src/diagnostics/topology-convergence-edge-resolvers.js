@@ -425,6 +425,18 @@ export function buildPriorityRecoveryObservationSource(evidence) {
       evidence.actuationStates,
       'actuationStates', // PRIORITY_RECOVERY_OBSERVATION_FIELD_ACTUATION_STATES
     ),
+    ...buildPriorityRecoveryObservationEntry(
+      evidence.operationOwnerEffectExecutions,
+      'operationOwnerEffectExecutions',
+    ),
+    ...buildPriorityRecoveryObservationEntry(
+      evidence.operationOwnerEffectCommands,
+      'operationOwnerEffectCommands',
+    ),
+    ...buildPriorityRecoveryObservationEntry(
+      evidence.operationOwnerRequestedActions,
+      'operationOwnerRequestedActions',
+    ),
   });
 }
 

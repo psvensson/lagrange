@@ -188,7 +188,7 @@ export function registerFailureBundleCore09Tests(context) {
   );
 
   it(
-    'preserves operation-owner observation fields in normalized decision snapshots',
+    'preserves operation owner observation on priority recovery partition witnesses',
     async () => {
       refreshState();
       const OWNER_OBSERVATION_REPORT_PATH = join(
@@ -201,6 +201,11 @@ export function registerFailureBundleCore09Tests(context) {
       const OWNER_OBSERVATION_BOUNDARY = 'workflow_progress';
       const OWNER_OBSERVATION_PHASE = 'dispatch_pending';
       const OWNER_OBSERVATION_CONTRACT_STATE = 'pending';
+      const OWNER_OBSERVATION_EFFECT_COMMAND =
+        'advance_existing_operation_command';
+      const OWNER_OBSERVATION_EFFECT_EXECUTION = 'not_executed';
+      const OWNER_OBSERVATION_REQUESTED_ACTION =
+        'advance_existing_operation';
       const writer = new ReportWriter(OWNER_OBSERVATION_REPORT_PATH);
       writer.addResult('rolling-restart', {
         passed: false,
@@ -231,10 +236,20 @@ export function registerFailureBundleCore09Tests(context) {
                     workflowProgressPhaseId: OWNER_OBSERVATION_PHASE,
                     progressContractState:
                       OWNER_OBSERVATION_CONTRACT_STATE,
+                    effectCommand: OWNER_OBSERVATION_EFFECT_COMMAND,
+                    effectExecution: OWNER_OBSERVATION_EFFECT_EXECUTION,
+                    requestedOwnerAction:
+                      OWNER_OBSERVATION_REQUESTED_ACTION,
                   },
                   progressContract: {
                     state: OWNER_OBSERVATION_CONTRACT_STATE,
                     currentOwner: OWNER_OBSERVATION_OWNER,
+                  },
+                  progressSummary: {
+                    progressContract: {
+                      state: OWNER_OBSERVATION_CONTRACT_STATE,
+                      currentOwner: OWNER_OBSERVATION_OWNER,
+                    },
                   },
                 }],
               },
@@ -263,6 +278,11 @@ export function registerFailureBundleCore09Tests(context) {
           .snapshots.find((snapshot) =>
             snapshot.partitionId === OWNER_OBSERVATION_PARTITION_ID,
           );
+      const partitionWitness =
+        scenarioBundle.publicationConvergence
+          .priorityRecoveryPartitionWitnesses.find((witness) =>
+            witness.partitionId === OWNER_OBSERVATION_PARTITION_ID,
+          );
 
       assert.equal(
         normalizedSnapshot.operationOwnerObservation.currentOwner,
@@ -289,6 +309,22 @@ export function registerFailureBundleCore09Tests(context) {
       assert.equal(
         normalizedSnapshot.progress.progressContract.state,
         OWNER_OBSERVATION_CONTRACT_STATE,
+      );
+      assert.equal(
+        normalizedSnapshot.progressSummary.progressContract.state,
+        OWNER_OBSERVATION_CONTRACT_STATE,
+      );
+      assert.equal(
+        partitionWitness.operationOwnerObservation.effectCommand,
+        OWNER_OBSERVATION_EFFECT_COMMAND,
+      );
+      assert.equal(
+        partitionWitness.operationOwnerObservation.effectExecution,
+        OWNER_OBSERVATION_EFFECT_EXECUTION,
+      );
+      assert.equal(
+        partitionWitness.operationOwnerObservation.requestedOwnerAction,
+        OWNER_OBSERVATION_REQUESTED_ACTION,
       );
     },
   );

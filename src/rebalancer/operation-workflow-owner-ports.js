@@ -7,13 +7,11 @@ import {
 } from './replica-status.js';
 import {
   NUM,
-  TIME_MS,
   WORKFLOW_STEP,
 } from '../constants/index.js';
 import {
-  PRIORITY_RECOVERY_BLOCKING_BOUNDARY,
-  PRIORITY_RECOVERY_WAIT_MODE,
-} from '../control-plane/priority-recovery-diagnostics-constants.js';
+  attachPriorityRecoveryOperationOwnerProgressContract,
+} from '../control-plane/priority-recovery-operation-owner-progress-contract.js';
 import {
   OPERATION_WORKFLOW_COMMAND_STATE,
   OPERATION_WORKFLOW_DISPATCH_STATE,
@@ -21,8 +19,6 @@ import {
   OPERATION_WORKFLOW_HISTORY_FRESHNESS_STATE,
   OPERATION_WORKFLOW_IDENTIFIER_VARIANTS,
   OPERATION_WORKFLOW_LEASE_FRESHNESS_STATE,
-  OPERATION_WORKFLOW_OUTCOME_VALUES,
-  OPERATION_WORKFLOW_OWNER,
   OPERATION_WORKFLOW_OWNER_AUTHORITY_STATE,
   OPERATION_WORKFLOW_PUBLICATION_FENCE_STATE,
   OPERATION_WORKFLOW_RETRY_BUDGET_STATE,
@@ -51,20 +47,6 @@ const OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_MODE = Object.freeze({
   COORDINATOR_CREATED_OPERATION: 'coordinator_created_operation',
   OBSERVED_PROGRESS: 'observed_progress',
   OWNER_RECONCILE: 'owner_reconcile',
-});
-const OPERATION_WORKFLOW_OWNER_PORT_PROGRESS_CONTRACT = Object.freeze({
-  DEFAULT_STATE: 'dispatch_pending',
-  EVENT_WAKE_SOURCE: 'operation_lifecycle_event',
-  REMOTE_HANDOFF_RETRY_WAKE_SOURCE: 'rebalancer_handoff_retry',
-  RETRY_WAKE_SOURCE: 'rebalancer_timer',
-  EVENT_OWNER_REENTRY_STATE: 'event_owner_reentry_observed',
-  BOUNDED_OWNER_REENTRY_STATE: 'bounded_owner_reentry_scheduled',
-  REPRESENTATIVE_RERUN_ELIGIBLE: 'eligible',
-  REPRESENTATIVE_RERUN_BLOCKED_MODEL_ROUTE: 'blocked_model_route',
-  TERMINAL_STATE: 'satisfied',
-  EVIDENCE_PATH:
-    'test-output/reports/rolling-restart-seed-contact-bounded-progress-20260527T155000Z.report.json',
-  DEFAULT_BLOCKING_DEPENDENCY: 'operation_progress',
 });
 const OPERATION_WORKFLOW_OWNER_PORT_FUNCTION_TYPE = 'function';
 const OPERATION_WORKFLOW_OWNER_PORT_OPERATION_ID_UNDERSCORE =
@@ -721,108 +703,6 @@ async function reconcileOperationWorkflowStaleProgress(
   return owner.reconcileOperationLifecycle(operation, context);
 }
 
-function isOperationWorkflowOwnerPortRemoteHandoffRetryProgress(progress) {
-  return (
-    progress?.waitMode === PRIORITY_RECOVERY_WAIT_MODE.RETRY_SCHEDULED ||
-    progress?.waitMode === PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN
-  ) &&
-    progress?.blockingBoundary ===
-      PRIORITY_RECOVERY_BLOCKING_BOUNDARY.REBALANCER_HANDOFF;
-}
-
-function resolveOperationWorkflowOwnerPortProgressContractWakeSource(
-  progress,
-) {
-  if (isOperationWorkflowOwnerPortRemoteHandoffRetryProgress(progress)) {
-    return OPERATION_WORKFLOW_OWNER_PORT_PROGRESS_CONTRACT
-      .REMOTE_HANDOFF_RETRY_WAKE_SOURCE;
-  }
-  if (progress?.waitMode !== PRIORITY_RECOVERY_WAIT_MODE.RETRY_SCHEDULED) {
-    return OPERATION_WORKFLOW_OWNER_PORT_PROGRESS_CONTRACT.EVENT_WAKE_SOURCE;
-  }
-  return OPERATION_WORKFLOW_OWNER_PORT_PROGRESS_CONTRACT.RETRY_WAKE_SOURCE;
-}
-
-function resolveOperationWorkflowOwnerPortProgressContractOwnerReentry(
-  progress,
-) {
-  return isOperationWorkflowOwnerPortRemoteHandoffRetryProgress(progress) ?
-    OPERATION_WORKFLOW_OWNER_PORT_PROGRESS_CONTRACT
-      .BOUNDED_OWNER_REENTRY_STATE :
-    OPERATION_WORKFLOW_OWNER_PORT_PROGRESS_CONTRACT
-      .EVENT_OWNER_REENTRY_STATE;
-}
-
-function resolveOperationWorkflowOwnerPortRepresentativeRerunRoute(progress) {
-  return isOperationWorkflowOwnerPortRemoteHandoffRetryProgress(progress) ?
-    OPERATION_WORKFLOW_OWNER_PORT_PROGRESS_CONTRACT
-      .REPRESENTATIVE_RERUN_BLOCKED_MODEL_ROUTE :
-    OPERATION_WORKFLOW_OWNER_PORT_PROGRESS_CONTRACT
-      .REPRESENTATIVE_RERUN_ELIGIBLE;
-}
-
-function resolveOperationWorkflowOwnerPortProgressContractRetryAfterMs(
-  progress,
-) {
-  if (
-    Number.isFinite(progress?.retryAfterMs) &&
-    progress.retryAfterMs > NUM.ZERO
-  ) {
-    return Math.max(NUM.ZERO, Math.floor(progress.retryAfterMs));
-  }
-  if (
-    progress?.waitMode === PRIORITY_RECOVERY_WAIT_MODE.RETRY_SCHEDULED ||
-    (progress?.waitMode === PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN &&
-     progress?.blockingBoundary ===
-       PRIORITY_RECOVERY_BLOCKING_BOUNDARY.REBALANCER_HANDOFF)
-  ) {
-    return TIME_MS.SECOND;
-  }
-  return NUM.ZERO;
-}
-
-function buildOperationWorkflowOwnerPortProgressContract(result) {
-  const progress = result.progress || {};
-  const operationOwnerObservation = result.operationOwnerObservation || {};
-  const boundary = normalizeOperationWorkflowOwnerPortText(
-    progress.blockingBoundary,
-    PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
-  );
-  return Object.freeze({
-    owner: OPERATION_WORKFLOW_OWNER,
-    boundary,
-    state: normalizeOperationWorkflowOwnerPortText(
-      progress.contractState || progress.nextRequiredAction,
-      OPERATION_WORKFLOW_OWNER_PORT_PROGRESS_CONTRACT.DEFAULT_STATE,
-    ),
-    reason: normalizeOperationWorkflowOwnerPortText(
-      operationOwnerObservation.outcome,
-      OPERATION_WORKFLOW_OUTCOME_VALUES.WAIT_FOR_OWNER_PROGRESS,
-    ),
-    nextAction: normalizeOperationWorkflowOwnerPortText(
-      progress.nextAction || progress.nextRequiredAction,
-      OPERATION_WORKFLOW_OWNER_PORT_PROGRESS_CONTRACT.DEFAULT_STATE,
-    ),
-    ownerReentryState:
-      resolveOperationWorkflowOwnerPortProgressContractOwnerReentry(progress),
-    wakeSource:
-      resolveOperationWorkflowOwnerPortProgressContractWakeSource(progress),
-    representativeRerunRoute:
-      resolveOperationWorkflowOwnerPortRepresentativeRerunRoute(progress),
-    retryAfterMs:
-      resolveOperationWorkflowOwnerPortProgressContractRetryAfterMs(progress),
-    terminalState:
-      OPERATION_WORKFLOW_OWNER_PORT_PROGRESS_CONTRACT.TERMINAL_STATE,
-    evidencePath:
-      OPERATION_WORKFLOW_OWNER_PORT_PROGRESS_CONTRACT.EVIDENCE_PATH,
-    blockingDependency: normalizeOperationWorkflowOwnerPortText(
-      progress.blockingBoundary,
-      OPERATION_WORKFLOW_OWNER_PORT_PROGRESS_CONTRACT
-        .DEFAULT_BLOCKING_DEPENDENCY,
-    ),
-  });
-}
-
 function createOperationWorkflowOwnerPorts(owner) {
   const originalNormalize = owner.normalizePriorityRecoveryDispatchPendingOwnerSnapshot;
   if (
@@ -831,24 +711,7 @@ function createOperationWorkflowOwnerPorts(owner) {
   ) {
     owner.normalizePriorityRecoveryDispatchPendingOwnerSnapshot = function (snapshot, operation) {
       const result = originalNormalize.call(this, snapshot, operation);
-      if (result && result.progress) {
-        const progressContract =
-          buildOperationWorkflowOwnerPortProgressContract(result);
-
-        return Object.freeze({
-          ...result,
-          progressContract,
-          progress: Object.freeze({
-            ...result.progress,
-            progressContract,
-          }),
-          progressSummary: Object.freeze({
-            ...(result.progressSummary || {}),
-            progressContract,
-          }),
-        });
-      }
-      return result;
+      return attachPriorityRecoveryOperationOwnerProgressContract(result);
     };
   }
 

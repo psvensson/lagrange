@@ -50,8 +50,11 @@ export const PRIORITY_RECOVERY_SEMANTIC_RECOVERING_IN_FLIGHT = 'recovering_in_fl
 export const PRIORITY_RECOVERY_SEMANTIC_SPREAD_SATISFIED_IN_FLIGHT =
   'spread_satisfied_in_flight';
 export const PRIORITY_RECOVERY_WAIT_MODE_EVENT_DRIVEN = 'event_driven';
+export const PRIORITY_RECOVERY_WAIT_MODE_RETRY_SCHEDULED = 'retry_scheduled';
 export const PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION_WAIT_FOR_OPERATION_PROGRESS =
   'wait_for_operation_progress';
+export const PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION_ADVANCE_EXISTING_OPERATION =
+  'advance_existing_operation';
 export const ACTIVE_GATE_STATE_TIMED_OUT = 'timed_out';
 export const ACTIVE_GATE_STATE_STALLED = 'stalled';
 export const ACTIVE_GATE_OWNER_COHORT_STATE_PENDING = 'pending';
@@ -269,6 +272,7 @@ export const SOURCE_FIELD = Object.freeze({
   DOMINANT_REASON: 'dominantReason',
   DOMINANT_WITNESS: 'dominantWitness',
   PROGRESS: 'progress',
+  PRIORITY_RECOVERY_DECISION_SNAPSHOTS: 'priorityRecoveryDecisionSnapshots',
   PRIORITY_RECOVERY_PROGRESS_CLASSES: 'priorityRecoveryProgressClasses',
   PRIORITY_RECOVERY_PROGRESS_SUMMARY: 'priorityRecoveryProgressSummary',
   PRIORITY_RECOVERY_PARTITION_WITNESSES: 'priorityRecoveryPartitionWitnesses',
@@ -290,6 +294,11 @@ export const SOURCE_FIELD = Object.freeze({
   NEXT_ACTION: 'nextAction',
   OPERATOR_ID: 'operatorId',
   OWNER: 'owner',
+  OPERATION_OWNER_OBSERVATION: 'operationOwnerObservation',
+  OPERATION_OWNER_EFFECT_COMMAND: 'effectCommand',
+  OPERATION_OWNER_EFFECT_EXECUTION: 'effectExecution',
+  OPERATION_OWNER_REQUESTED_ACTION: 'requestedOwnerAction',
+  SNAPSHOTS: 'snapshots',
   TARGET_NODE_ID: 'targetNodeId',
 });
 
