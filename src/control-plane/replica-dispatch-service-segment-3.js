@@ -85,6 +85,22 @@ class ReplicaDispatchServiceSegment3 extends ReplicaDispatchReplayHealthReadines
   }
 
   /**
+   * Normalize the maximum number of concurrently in-flight priority
+   * control-plane dispatches this node will admit before shedding/deferring
+   * further priority dispatches to bound the recovery retry fan-out.
+   * @param {*} value
+   * @return {number}
+   * @private
+   */
+  normalizePriorityControlPlaneDispatchMaxInFlight(value) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric) || numeric <= NUM.ZERO) {
+      return DISPATCH_DEFAULT.PRIORITY_CONTROL_PLANE_DISPATCH_MAX_IN_FLIGHT;
+    }
+    return Math.max(NUM.ONE, Math.floor(numeric));
+  }
+
+  /**
    * Normalize the bounded transport deadline for remote dispatch wake-ups.
    * @param {*} value
    * @return {number}

@@ -15,9 +15,20 @@ const PRESSURE_GOVERNOR_LITERAL = Object.freeze({
 });
 const PRESSURE_WORK_CLASS = Object.freeze({
   CRITICAL: 'critical',
+  READINESS: 'readiness',
   INTERACTIVE: 'interactive',
   BACKGROUND: 'background',
 });
+const PRESSURE_READINESS_WORK_CLASS_ALIASES = Object.freeze([
+  'control-plane-readiness',
+  'control-plane-planning',
+]);
+const PRESSURE_READINESS_WORK_CLASSES = Object.freeze(
+  new Set([
+    PRESSURE_WORK_CLASS.READINESS,
+    ...PRESSURE_READINESS_WORK_CLASS_ALIASES,
+  ]),
+);
 const PRESSURE_GOVERNOR_ACTION = Object.freeze({
   ALLOW: 'allow',
   DEGRADE: 'degrade',
@@ -28,6 +39,8 @@ const PRESSURE_GOVERNOR_REASON = Object.freeze({
   NONE: 'none',
   CRITICAL_BYPASS: 'critical_bypass',
   CRITICAL_RESERVE_EXHAUSTED: 'critical_reserve_exhausted',
+  READINESS_BYPASS: 'readiness_bypass',
+  READINESS_RESERVE_EXHAUSTED: 'readiness_reserve_exhausted',
   TRANSPORT_BACKPRESSURE: 'transport_backpressure',
 });
 const PRESSURE_GOVERNOR_ERROR_CODE = Object.freeze({
@@ -54,6 +67,9 @@ const TRANSPORT_RESOURCE_PREFIXES = Object.freeze([
 function normalizeWorkClass(workClass) {
   if (workClass === PRESSURE_WORK_CLASS.CRITICAL) {
     return PRESSURE_WORK_CLASS.CRITICAL;
+  }
+  if (PRESSURE_READINESS_WORK_CLASSES.has(workClass)) {
+    return PRESSURE_WORK_CLASS.READINESS;
   }
   if (workClass === PRESSURE_WORK_CLASS.BACKGROUND) {
     return PRESSURE_WORK_CLASS.BACKGROUND;
@@ -94,6 +110,7 @@ function buildNoPressureSummary(sensor = PRESSURE_GOVERNOR_LITERAL.NONE) {
     totalPendingCritical: NUM.ZERO,
     totalPendingBackground: NUM.ZERO,
     criticalReserveExhausted: false,
+    readinessReserveExhausted: false,
     maxPendingUtilization: NUM.ZERO,
   });
 }
@@ -116,6 +133,7 @@ function buildTransportPressureSummary(
       summary.totalPendingBackground :
       NUM.ZERO,
     criticalReserveExhausted: summary?.criticalReserveExhausted === true,
+    readinessReserveExhausted: summary?.readinessReserveExhausted === true,
     maxPendingUtilization: Number.isFinite(summary?.maxPendingUtilization) ?
       summary.maxPendingUtilization :
       NUM.ZERO,
@@ -188,6 +206,14 @@ function isCriticalReserveExhausted(queue = {}, capacityPartition) {
   const criticalReserve = normalizeQueueStat(queue.criticalReserve);
   return criticalReserve > NUM.ZERO && pendingCritical >= criticalReserve;
 }
+function isReadinessReserveExhausted(queue = {}, capacityPartition) {
+  if (capacityPartition !== PRESSURE_CAPACITY_PARTITION.CONTROL_PLANE) {
+    return false;
+  }
+  const pendingReadiness = normalizeQueueStat(queue.pendingReadiness);
+  const readinessReserve = normalizeQueueStat(queue.readinessReserve);
+  return readinessReserve > NUM.ZERO && pendingReadiness >= readinessReserve;
+}
 function isPartitionBackpressured(queue = {}, capacityPartition) {
   const pending = normalizeQueueStat(queue.pending);
   const maxPending = normalizeQueueStat(queue.maxPending);
@@ -222,6 +248,7 @@ function buildPartitionedTransportPressureSummary(routerStats = {}, capacityPart
   let totalPendingCritical = NUM.ZERO;
   let totalPendingBackground = NUM.ZERO;
   let criticalReserveExhausted = false;
+  let readinessReserveExhausted = false;
   let maxPendingUtilization = NUM.ZERO;
   for (const queue of Object.values(outboundQueues)) {
     const pending = normalizeQueueStat(queue.pending);
@@ -238,6 +265,9 @@ function buildPartitionedTransportPressureSummary(routerStats = {}, capacityPart
     if (queueCriticalReserveExhausted) {
       criticalReserveExhausted = true;
     }
+    if (isReadinessReserveExhausted(queue, capacityPartition)) {
+      readinessReserveExhausted = true;
+    }
     totalPending += pending;
     totalPendingCritical += pendingCritical;
     totalPendingBackground += pendingBackground;
@@ -253,6 +283,7 @@ function buildPartitionedTransportPressureSummary(routerStats = {}, capacityPart
       totalPendingCritical,
       totalPendingBackground,
       criticalReserveExhausted,
+      readinessReserveExhausted,
       maxPendingUtilization,
     },
     capacityPartition,
@@ -278,12 +309,15 @@ function buildDecision(action, reason, summary, retryAfterMs = NUM.ZERO) {
 }
 function normalizePressureAdmissionEvidence(request = {}, workClass, summary) {
   const criticalWork = workClass === PRESSURE_WORK_CLASS.CRITICAL;
+  const readinessWork = workClass === PRESSURE_WORK_CLASS.READINESS;
   return Object.freeze({
     backpressured: summary?.backpressured === true,
     criticalWork,
+    readinessWork,
     bootstrapCriticalWork:
       criticalWork && hasBootstrapControlPlaneResource(request.resourceKeys),
     criticalReserveExhausted: summary?.criticalReserveExhausted === true,
+    readinessReserveExhausted: summary?.readinessReserveExhausted === true,
     allowDegrade: request.allowDegrade !== false,
     allowDefer: request.allowDefer === true,
   });
@@ -293,6 +327,21 @@ const PRESSURE_ADMISSION_DECISION_TABLE = Object.freeze([
     matches: (evidence) => evidence.backpressured !== true,
     action: PRESSURE_GOVERNOR_ACTION.ALLOW,
     reason: PRESSURE_GOVERNOR_REASON.NONE,
+  }),
+  Object.freeze({
+    matches: (evidence) =>
+      evidence.readinessWork === true &&
+      evidence.readinessReserveExhausted !== true,
+    action: PRESSURE_GOVERNOR_ACTION.ALLOW,
+    reason: PRESSURE_GOVERNOR_REASON.READINESS_BYPASS,
+  }),
+  Object.freeze({
+    matches: (evidence) =>
+      evidence.readinessWork === true &&
+      evidence.readinessReserveExhausted === true &&
+      evidence.allowDefer === true,
+    action: PRESSURE_GOVERNOR_ACTION.DEFER,
+    reason: PRESSURE_GOVERNOR_REASON.READINESS_RESERVE_EXHAUSTED,
   }),
   Object.freeze({
     matches: (evidence) =>

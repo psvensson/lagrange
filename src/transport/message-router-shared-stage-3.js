@@ -1,9 +1,10 @@
 import {
   ROUTER_ERROR_MSG,
+  TRANSPORT_DEFAULT,
   TRANSPORT_NUM,
 } from '../constants/transport.js';
 import {EMPTY_DELIVERY_SOURCE, MESSAGE_ROUTER_LITERAL, OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE, OUTBOUND_QUEUE_BACKPRESSURE_SCOPE, OutboundDeliveryPriority, TRANSPORT_PRESSURE_SUMMARY_FIELD, createQueueWaitHistogram, normalizeIdentifier, recordQueueWaitDuration, resolvePendingReplacementKey} from './message-router-shared-stage-1.js';
-import {adjustInFlightCriticalSourceReserveCount, adjustInFlightPriorityCount, adjustInFlightSourceCount, buildPendingSourceAdmission, buildPendingSourceSummary, buildSupersededPendingResult, canDispatchPendingItem, countInFlightByPriority, countPendingByPriority, dequeueNextPendingItem, normalizeOutboundDeliveryPriority, normalizeQueuedDeliverySource, peekNextPendingItem, resolveBackgroundPendingLimit, resolveDeliverySource, takeCriticalPendingItemForSourceReserve} from './message-router-shared-stage-2.js';
+import {adjustInFlightCriticalSourceReserveCount, adjustInFlightPriorityCount, adjustInFlightSourceCount, buildPendingSourceAdmission, buildPendingSourceSummary, buildSupersededPendingResult, canDispatchPendingItem, countInFlightByPriority, countPendingByPriority, dequeueNextPendingItem, isOutboundNodeBackpressured, normalizeOutboundDeliveryPriority, normalizeQueuedDeliverySource, peekNextPendingItem, resolveBackgroundPendingLimit, resolveCriticalPendingCeiling, resolveDeliverySource, takeCriticalPendingItemForSourceReserve} from './message-router-shared-stage-2.js';
 
 function buildOutboundQueueBackpressureError(
   nodeId,
@@ -15,6 +16,10 @@ function buildOutboundQueueBackpressureError(
   );
   error.code = OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE;
   error.backpressureScope = backpressureScope;
+  // Surface a retry hint so callers (e.g. the coordinator handoff retry
+  // scheduler) back off and yield instead of re-arming at the base cadence.
+  error.retryAfterMs = TRANSPORT_DEFAULT.OUTBOUND_QUEUE_BACKPRESSURE_RETRY_AFTER_MS;
+  error.deferRetry = true;
   return error;
 }
 
@@ -35,6 +40,7 @@ class OutboundDeliveryRegistryOwner {
         maxConcurrent: this.router.outboundQueueMaxConcurrent,
         maxPending: this.router.outboundQueueMaxPending,
         criticalReserve: this.router.outboundQueueCriticalReserve,
+        readinessReserve: this.router.outboundQueueReadinessReserve,
         lastCriticalDeliverySource: EMPTY_DELIVERY_SOURCE,
         queueWaitSampleCount: TRANSPORT_NUM.ZERO,
         queueWaitTotalMs: TRANSPORT_NUM.ZERO,
@@ -99,10 +105,12 @@ class OutboundDeliveryRegistryOwner {
         deliverySource,
         deliveryPriority,
       );
-      let isNodeBackpressured =
-        deliveryPriority === OutboundDeliveryPriority.CRITICAL ?
-          queue.pending.length >= queue.maxPending :
-          pendingBackground >= backgroundPendingLimit;
+      let isNodeBackpressured = isOutboundNodeBackpressured(
+        queue,
+        deliveryPriority,
+        pendingBackground,
+        backgroundPendingLimit,
+      );
       const isSourceBackpressured =
         pendingSourceAdmission.sourceBackpressured === true;
       let criticalSourceReserveAdmission = false;
@@ -111,7 +119,8 @@ class OutboundDeliveryRegistryOwner {
         !isSourceBackpressured &&
         deliveryPriority === OutboundDeliveryPriority.CRITICAL
       ) {
-        while (queue.pending.length >= queue.maxPending) {
+        const criticalPendingCeiling = resolveCriticalPendingCeiling(queue);
+        while (queue.pending.length >= criticalPendingCeiling) {
           const preemptedItem = takeCriticalPendingItemForSourceReserve(
             queue,
             deliverySource,
@@ -161,9 +170,9 @@ class OutboundDeliveryRegistryOwner {
           );
         }
         criticalSourceReserveAdmission =
-          queue.pending.length < queue.maxPending;
+          queue.pending.length < criticalPendingCeiling;
         isNodeBackpressured =
-          queue.pending.length >= queue.maxPending;
+          queue.pending.length >= criticalPendingCeiling;
       }
       if (isNodeBackpressured || isSourceBackpressured) {
         const error = buildOutboundQueueBackpressureError(

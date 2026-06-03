@@ -27,6 +27,8 @@ const DISPATCH_LOG_MSG = Object.freeze({
     'Retrying pending replica operations for ready node',
   OPERATION_DISPATCH_DEFERRED:
     'Deferred replica operation dispatch while control-plane path recovers',
+  PRIORITY_DISPATCH_LANE_EXHAUSTED:
+    'Deferred priority replica operation dispatch: priority lane in-flight budget exhausted',
   OPERATION_DISPATCH_DEFERRED_RETRY:
     'Re-enqueued deferred replica operation dispatch',
   RETRY_READY_TRIGGER_SKIPPED:
@@ -85,6 +87,7 @@ const DISPATCH_DEFAULT = Object.freeze({
   NODE_STATE_UPDATE_RETRY_AFTER_MS: 250,
   OPERATION_DISPATCH_RETRY_AFTER_MS: 250,
   OPERATION_DISPATCH_READINESS_REFRESH_TIMEOUT_MS: 1000,
+  PRIORITY_CONTROL_PLANE_DISPATCH_MAX_IN_FLIGHT: 8,
 });
 
 const NODE_STATE_UPDATE_RETRY_CLASS = Object.freeze({

@@ -680,6 +680,13 @@ function scheduleCoordinatorCreatedRemoteHandoffFollowUp(
     operationId,
     Date.now() + delayMs,
   );
+  const targetNodeId = operation?.targetNodeId || null;
+  if (targetNodeId) {
+    owner.createdOperationHandoffRetryTargetNodeByOperationId.set(
+      operationId,
+      targetNodeId,
+    );
+  }
   return true;
 }
 export {

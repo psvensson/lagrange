@@ -53,6 +53,7 @@ const TRANSPORT_CONFIG_KEY = Object.freeze({
   OUTBOUND_QUEUE_MAX_CONCURRENT: 'transport.outboundQueueMaxConcurrent',
   OUTBOUND_QUEUE_MAX_PENDING: 'transport.outboundQueueMaxPending',
   OUTBOUND_QUEUE_CRITICAL_RESERVE: 'transport.outboundQueueCriticalReserve',
+  OUTBOUND_QUEUE_READINESS_RESERVE: 'transport.outboundQueueReadinessReserve',
   CONNECTION_POOL_TTL_MS: 'transport.connectionPoolTtlMs',
   CONNECTION_POOL_CLEANUP_INTERVAL_MS: 'transport.connectionPoolCleanupIntervalMs',
 });
@@ -72,15 +73,27 @@ const TRANSPORT_DEFAULT = Object.freeze({
   OUTBOUND_QUEUE_CONCURRENCY: 32,
   OUTBOUND_QUEUE_MAX_PENDING: 64,
   OUTBOUND_QUEUE_CRITICAL_RESERVE: NUM.SIXTEEN,
+  OUTBOUND_QUEUE_READINESS_RESERVE: NUM.ZERO,
+  // Production node routers reserve outbound headroom so readiness/publication
+  // reads survive CRITICAL recovery backpressure during rolling restart. The
+  // global default above stays 0 so isolated queue-mechanics unit tests keep
+  // their critical-capacity assumptions; production opts in explicitly via the
+  // MessageRouter constructor (see bootstrap/shared/message-router-setup.js).
+  PRODUCTION_OUTBOUND_QUEUE_READINESS_RESERVE: NUM.EIGHT,
   SHUTDOWN_WAIT_MS: 100,
   RPC_TIMEOUT_MS: 30000,
   EMPTY: STRING.EMPTY,
   CONNECTION_POOL_TTL_MS: 300000, // 5 minutes
   CONNECTION_POOL_CLEANUP_INTERVAL_MS: 60000, // 1 minute
+  // Backoff hint surfaced on outbound-queue backpressure errors so a shed
+  // CRITICAL recovery handoff yields to the readiness reserve and retries with
+  // a real delay instead of hammering the queue at the base cadence.
+  OUTBOUND_QUEUE_BACKPRESSURE_RETRY_AFTER_MS: 500,
 });
 
 const OUTBOUND_DELIVERY_PRIORITY = Object.freeze({
   CRITICAL: 'critical',
+  READINESS: 'readiness',
   BACKGROUND: 'background',
 });
 

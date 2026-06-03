@@ -74,6 +74,24 @@ function buildRetryableSkippedDispatchError(
   return error;
 }
 
+function buildPriorityDispatchLaneExhaustedError(
+  operationId,
+  targetNodeId,
+  operationDispatchRetryAfterMs,
+) {
+  const error = new Error(
+    `${REPLICA_DISPATCH_SERVICE_LITERAL.PRIORITY_DISPATCH_LANE_EXHAUSTED} ${operationId}`,
+  );
+  error.code = REPLICA_DISPATCH_SERVICE_LITERAL.PRIORITY_DISPATCH_LANE_EXHAUSTED;
+  error.reason =
+    REPLICA_DISPATCH_SERVICE_LITERAL.PRIORITY_DISPATCH_LANE_EXHAUSTED;
+  error.operationId = operationId;
+  error.targetNodeId = targetNodeId || null;
+  error.deferRetry = true;
+  error.retryAfterMs = operationDispatchRetryAfterMs;
+  return error;
+}
+
 function hasAuthoritativeReplicaOperationRowChanged(row, authoritativeRow) {
   if (!row?.operation_id || !authoritativeRow?.operation_id) {
     return false;
@@ -150,6 +168,7 @@ function buildDispatchReadinessGateError(
 
 export {
   buildDispatchReadinessGateError,
+  buildPriorityDispatchLaneExhaustedError,
   buildReplicaOperationVisibilityLagError,
   buildRetryableSkippedDispatchError,
   hasAuthoritativeReplicaOperationRowChanged,

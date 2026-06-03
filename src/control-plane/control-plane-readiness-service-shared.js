@@ -153,6 +153,7 @@ const MEMBERSHIP_PUBLICATION_READ_OPTIONS = Object.freeze({
   localReadConsistency: LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.LOCAL_LEADER,
   replicaFallbackConsistency: LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.LOCAL_LEADER,
   workClass: 'control-plane-readiness',
+  deliveryPriority: 'readiness',
 });
 const MEMBERSHIP_PUBLICATION_PLANNING_READ_OPTIONS = Object.freeze({
   authoritativeReadMode:
@@ -161,6 +162,7 @@ const MEMBERSHIP_PUBLICATION_PLANNING_READ_OPTIONS = Object.freeze({
   localReadConsistency: LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.LOCAL_LEADER,
   replicaFallbackConsistency: LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
   workClass: 'control-plane-planning',
+  deliveryPriority: 'readiness',
 });
 
 function resolveMembershipPublicationReadOptions({

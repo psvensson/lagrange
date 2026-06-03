@@ -58,6 +58,7 @@ class ReplicaDispatchService extends ReplicaDispatchServiceSegment4 {
     this.messageGroupHandlers.clear();
     this.messageGroupServices.clear();
     this.dispatchInFlight.clear();
+    this.priorityDispatchInFlight.clear();
     this.directDispatchWakeupsInFlight.clear();
     this.retryInFlightNodes.clear();
     this.nodeStateUpdateWatermarks.clear();

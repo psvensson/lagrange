@@ -1,11 +1,11 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 
 const {
-  DISPATCH_RETRY_DELAY_MS,
   NUM,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   REBALANCE_COORDINATOR_ERROR_MSG,
   REBALANCE_COORDINATOR_LOG_MSG,
+  COORDINATOR_CREATED_REMOTE_HANDOFF_MAX_ACTIVE_RETRIES_PER_TARGET,
   getControlPlaneRetryAfterMs,
   isRetryableControlPlaneError,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
@@ -129,11 +129,43 @@ function deferCoordinatorCreatedRemoteHandoffRetry(
   }
 
   const operationId = evidence.operationId;
+  const targetNodeId = operation?.targetNodeId || null;
+  const alreadyScheduled =
+    context.hasActiveCreatedOperationHandoffRetry(operationId);
+  if (
+    !alreadyScheduled &&
+    targetNodeId &&
+    context.countActiveCreatedOperationHandoffRetriesByTargetNode(
+      targetNodeId,
+    ) >= COORDINATOR_CREATED_REMOTE_HANDOFF_MAX_ACTIVE_RETRIES_PER_TARGET
+  ) {
+    context.logger.warn(
+      REBALANCE_COORDINATOR_LOG_MSG.OPERATION_DISPATCH_RETRY_SHED,
+      {
+        operationId,
+        partitionId: operation?.partitionId || null,
+        targetNodeId,
+        workflowStep: operation?.workflowStep || null,
+        activeRetriesPerTarget:
+          context.countActiveCreatedOperationHandoffRetriesByTargetNode(
+            targetNodeId,
+          ),
+        maxActiveRetriesPerTarget:
+          COORDINATOR_CREATED_REMOTE_HANDOFF_MAX_ACTIVE_RETRIES_PER_TARGET,
+        boundary:
+          OPERATION_WORKFLOW_OWNER_LITERAL.COORDINATOR_CREATED_REMOTE_HANDOFF,
+      },
+    );
+    return false;
+  }
+
   const retryAfterMs = getControlPlaneRetryAfterMs(errorLike);
-  const delayMs =
+  const delayMs = context.resolveCreatedOperationHandoffRetryDelayMs(
+    operationId,
     Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO ?
       retryAfterMs :
-      DISPATCH_RETRY_DELAY_MS;
+      NUM.ZERO,
+  );
   const errorMessage = context.normalizeErrorMessage(
     errorLike,
     REBALANCE_COORDINATOR_ERROR_MSG.MESSAGE_NOT_ACKED,

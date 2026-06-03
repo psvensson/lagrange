@@ -238,6 +238,8 @@ const REBALANCE_COORDINATOR_LOG_MSG = Object.freeze({
   OPERATION_DEFERRED_BY_SAFETY_POLICY: 'Operation deferred by safety policy',
   OPERATION_DISPATCH_RETRY_DEFERRED:
     'Deferred retryable replica operation dispatch failure',
+  OPERATION_DISPATCH_RETRY_SHED:
+    'Shed replica operation dispatch retry: per-target retry budget exhausted',
   OPERATION_DISPATCH_RETRY_FAILED:
     'Deferred replica operation dispatch retry failed',
   OPERATION_TRANSITION_RETRY_DEFERRED:

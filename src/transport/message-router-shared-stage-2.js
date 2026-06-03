@@ -196,6 +196,9 @@ function normalizeOutboundDeliveryPriority(priority, targetAddress = null) {
   if (priority === OutboundDeliveryPriority.CRITICAL) {
     return OutboundDeliveryPriority.CRITICAL;
   }
+  if (priority === OutboundDeliveryPriority.READINESS) {
+    return OutboundDeliveryPriority.READINESS;
+  }
   if (priority === OutboundDeliveryPriority.BACKGROUND) {
     return OutboundDeliveryPriority.BACKGROUND;
   }
@@ -596,6 +599,45 @@ function resolveBackgroundPendingLimit(queue) {
   return Math.max(TRANSPORT_NUM.ZERO, queue.maxPending - criticalReserve);
 }
 
+function resolveBoundedReadinessReserve(rawReserve, maxReserve) {
+  const normalizedMaxReserve =
+    Number.isFinite(maxReserve) && maxReserve > TRANSPORT_NUM.ZERO ?
+      Math.floor(maxReserve) :
+      TRANSPORT_NUM.ZERO;
+  if (normalizedMaxReserve <= TRANSPORT_NUM.ZERO) {
+    return TRANSPORT_NUM.ZERO;
+  }
+  const normalizedReserve =
+    Number.isFinite(rawReserve) && rawReserve > TRANSPORT_NUM.ZERO ?
+      Math.floor(rawReserve) :
+      TRANSPORT_NUM.ZERO;
+  return Math.min(normalizedReserve, normalizedMaxReserve);
+}
+
+function resolveCriticalPendingCeiling(queue) {
+  const maxPending = normalizeQueueMaxPending(queue);
+  const readinessReserve = resolveBoundedReadinessReserve(
+    queue?.readinessReserve,
+    maxPending,
+  );
+  return Math.max(TRANSPORT_NUM.ZERO, maxPending - readinessReserve);
+}
+
+function isOutboundNodeBackpressured(
+  queue,
+  deliveryPriority,
+  pendingBackground,
+  backgroundPendingLimit,
+) {
+  if (deliveryPriority === OutboundDeliveryPriority.CRITICAL) {
+    return queue.pending.length >= resolveCriticalPendingCeiling(queue);
+  }
+  if (deliveryPriority === OutboundDeliveryPriority.READINESS) {
+    return queue.pending.length >= normalizeQueueMaxPending(queue);
+  }
+  return pendingBackground >= backgroundPendingLimit;
+}
+
 function resolveBackgroundInFlightLimit(queue) {
   if (!queue) {
     return TRANSPORT_NUM.ZERO;
@@ -752,6 +794,7 @@ export {
   countPendingByPriority,
   countPendingBySource,
   dequeueNextPendingItem,
+  isOutboundNodeBackpressured,
   normalizeDeliveryOutcome,
   normalizeOutboundDeliveryPriority,
   normalizeQueueMaxPending,
@@ -761,7 +804,9 @@ export {
   resolveBackgroundInFlightLimit,
   resolveBackgroundPendingLimit,
   resolveBoundedCriticalReserve,
+  resolveBoundedReadinessReserve,
   resolveCriticalInFlightSourceLimit,
+  resolveCriticalPendingCeiling,
   resolveCriticalPendingSourceLimit,
   resolveDeliverySource,
   resolveNextCriticalPendingItemIndex,

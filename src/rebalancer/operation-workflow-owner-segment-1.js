@@ -9,6 +9,10 @@ const {
   OPERATION_WORKFLOW_OWNER_LITERAL,
   REPLICA_OPERATION_DISPATCH_TIMEOUT_MS,
   TYPEOF,
+  DISPATCH_RETRY_DELAY_MS,
+  DISPATCH_RETRY_MAX_DELAY_MS,
+  DISPATCH_RETRY_BACKOFF_MULTIPLIER,
+  DISPATCH_RETRY_JITTER_RATIO,
   isPriorityControlPlanePartition,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
@@ -52,6 +56,10 @@ class OperationWorkflowOwnerSegment1 {
       typeof options.clearTimeoutFn === TYPEOF.FUNCTION ?
         options.clearTimeoutFn :
         clearTimeout;
+    this.randomFn =
+      typeof options.randomFn === TYPEOF.FUNCTION ?
+        options.randomFn :
+        Math.random;
     this.lastEmptyIncompleteOperationQueryAtMs = NUM.ZERO;
     this.incompleteOperationQueryEmptyBackoffMs =
       options.incompleteOperationQueryEmptyBackoffMs || NUM.ZERO;
@@ -67,6 +75,8 @@ class OperationWorkflowOwnerSegment1 {
     this.priorityActiveReplaceRetryTimerByOperationId = new Map();
     this.createdOperationHandoffRetryTimerByOperationId = new Map();
     this.createdOperationHandoffRetryDeadlineMsByOperationId = new Map();
+    this.createdOperationHandoffRetryAttemptByOperationId = new Map();
+    this.createdOperationHandoffRetryTargetNodeByOperationId = new Map();
     this.transitionRetryTimerByOperationId = new Map();
     this.transitionRetryGraceDeadlineByOperationId = new Map();
     this.transitionRetryOperationSnapshotByOperationId = new Map();
@@ -128,6 +138,8 @@ class OperationWorkflowOwnerSegment1 {
     }
     this.createdOperationHandoffRetryTimerByOperationId.clear();
     this.createdOperationHandoffRetryDeadlineMsByOperationId.clear();
+    this.createdOperationHandoffRetryAttemptByOperationId.clear();
+    this.createdOperationHandoffRetryTargetNodeByOperationId.clear();
     for (const timerHandle of this.transitionRetryTimerByOperationId.values()) {
       this.clearTimeoutFn(timerHandle);
     }
@@ -256,11 +268,101 @@ class OperationWorkflowOwnerSegment1 {
     const timerHandle =
       this.createdOperationHandoffRetryTimerByOperationId.get(operationId);
     if (!timerHandle) {
+      this.createdOperationHandoffRetryTargetNodeByOperationId.delete(
+        operationId,
+      );
       return;
     }
     this.clearTimeoutFn(timerHandle);
     this.createdOperationHandoffRetryTimerByOperationId.delete(operationId);
     this.createdOperationHandoffRetryDeadlineMsByOperationId.delete(operationId);
+    this.createdOperationHandoffRetryTargetNodeByOperationId.delete(operationId);
+  }
+
+  /**
+   * Reset the retry backoff attempt counter for an operation. Called once a
+   * handoff is acknowledged so a future retry storm starts from the base delay.
+   * @param {string|null} operationId
+   * @private
+   */
+  resetCreatedOperationHandoffRetryAttempts(operationId) {
+    if (!operationId) {
+      return;
+    }
+    this.createdOperationHandoffRetryAttemptByOperationId.delete(operationId);
+    this.createdOperationHandoffRetryTargetNodeByOperationId.delete(operationId);
+  }
+
+  /**
+   * Compute the next capped-exponential-backoff delay for a handoff retry,
+   * floored by any explicit governor/transport retry-after hint and bounded by
+   * a maximum. The attempt counter is advanced as a side effect so successive
+   * retries grow geometrically instead of hammering at the base cadence.
+   * @param {string|null} operationId
+   * @param {number} [retryAfterFloorMs=0]
+   * @return {number}
+   * @private
+   */
+  resolveCreatedOperationHandoffRetryDelayMs(
+    operationId,
+    retryAfterFloorMs = NUM.ZERO,
+  ) {
+    const previousAttempts = operationId ?
+      Number(
+        this.createdOperationHandoffRetryAttemptByOperationId.get(operationId),
+      ) || NUM.ZERO :
+      NUM.ZERO;
+    const attempt = previousAttempts + NUM.ONE;
+    if (operationId) {
+      this.createdOperationHandoffRetryAttemptByOperationId.set(
+        operationId,
+        attempt,
+      );
+    }
+    const exponential =
+      DISPATCH_RETRY_DELAY_MS *
+      Math.pow(DISPATCH_RETRY_BACKOFF_MULTIPLIER, previousAttempts);
+    const cappedExponential = Math.min(exponential, DISPATCH_RETRY_MAX_DELAY_MS);
+    const flooredDelay = Math.max(
+      cappedExponential,
+      Number.isFinite(retryAfterFloorMs) && retryAfterFloorMs > NUM.ZERO ?
+        Math.floor(retryAfterFloorMs) :
+        NUM.ZERO,
+    );
+    const jitterSpan = flooredDelay * DISPATCH_RETRY_JITTER_RATIO;
+    const jitter = jitterSpan > NUM.ZERO ?
+      Math.floor(this.randomFn() * jitterSpan) :
+      NUM.ZERO;
+    return Math.min(
+      DISPATCH_RETRY_MAX_DELAY_MS,
+      Math.max(NUM.ONE, Math.floor(flooredDelay) + jitter),
+    );
+  }
+
+  /**
+   * Count the handoff retries currently armed against a target node so a single
+   * unreachable/backpressured node cannot accumulate an unbounded retry fan-out.
+   * @param {string|null} targetNodeId
+   * @return {number}
+   * @private
+   */
+  countActiveCreatedOperationHandoffRetriesByTargetNode(targetNodeId) {
+    if (!targetNodeId) {
+      return NUM.ZERO;
+    }
+    let count = NUM.ZERO;
+    for (const [
+      operationId,
+      retryTargetNodeId,
+    ] of this.createdOperationHandoffRetryTargetNodeByOperationId) {
+      if (
+        retryTargetNodeId === targetNodeId &&
+        this.createdOperationHandoffRetryTimerByOperationId.has(operationId)
+      ) {
+        count += NUM.ONE;
+      }
+    }
+    return count;
   }
 
   /**

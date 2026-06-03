@@ -6,7 +6,6 @@ const {
   COORDINATOR_CREATED_REMOTE_HANDOFF_VERIFICATION_DELAY_MS,
   ControlPlaneField,
   ControlPlaneMessageType,
-  NUM,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   REBALANCER_SKIP_REASON,
   REBALANCE_COORDINATOR_ERROR_MSG,
@@ -267,6 +266,7 @@ function withOwnerHandoffState(Base) {
           );
         }
 
+        this.resetCreatedOperationHandoffRetryAttempts(operation.operationId);
         this.scheduleCoordinatorCreatedRemoteHandoffFollowUp(
           operation,
           COORDINATOR_CREATED_REMOTE_HANDOFF_VERIFICATION_DELAY_MS,

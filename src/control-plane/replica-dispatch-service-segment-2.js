@@ -1,6 +1,7 @@
 import {REPLICA_DISPATCH_SERVICE_SHARED} from './replica-dispatch-service-shared.js';
 import {
   buildDispatchReadinessGateError,
+  buildPriorityDispatchLaneExhaustedError,
   buildReplicaOperationVisibilityLagError,
   buildRetryableSkippedDispatchError,
   hasAuthoritativeReplicaOperationRowChanged,
@@ -29,6 +30,7 @@ const {
   assertCritical,
   getControlPlaneErrorMessage,
   isCoordinatorOwnedOperationType,
+  isPriorityControlPlanePartition,
   wasNodeRecordReadyWhenWritten,
 } = REPLICA_DISPATCH_SERVICE_SHARED;
 
@@ -83,6 +85,85 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchReplayReadiness {
         } :
         undefined,
     );
+  }
+
+  /**
+   * Compute whether a dispatch row belongs to a priority control-plane
+   * partition class subject to the in-flight lane admission cap.
+   * @param {Object} row - Replica operation row.
+   * @param {Object} rowOperation - Operation built from the row.
+   * @return {boolean} True for priority control-plane partitions.
+   * @private
+   */
+  isPriorityControlPlaneDispatch(row, rowOperation) {
+    return isPriorityControlPlanePartition({
+      partitionId: row.partition_id || rowOperation.partitionId || null,
+    });
+  }
+
+  /**
+   * Defer a priority dispatch when its lane has no headroom, backing it off
+   * onto the owner queue with a retry hint instead of admitting it.
+   * Operations already counted in the lane are never shed by their own
+   * re-entry.
+   * @param {Object} row - Replica operation row.
+   * @param {Object} rowOperation - Operation built from the row.
+   * @param {string} operationId - Operation identifier.
+   * @param {string} targetNodeId - Target node identifier.
+   * @param {Object} options - Dispatch evidence context.
+   * @return {boolean} True when the dispatch was deferred.
+   * @private
+   */
+  deferWhenPriorityDispatchLaneExhausted(
+    row,
+    rowOperation,
+    operationId,
+    targetNodeId,
+    options,
+  ) {
+    const isLaneExhausted =
+      this.isPriorityControlPlaneDispatch(row, rowOperation) &&
+      !this.priorityDispatchInFlight.has(operationId) &&
+      this.priorityDispatchInFlight.size >=
+        this.priorityControlPlaneDispatchMaxInFlight;
+    if (!isLaneExhausted) {
+      return false;
+    }
+    const laneExhaustedError = buildPriorityDispatchLaneExhaustedError(
+      operationId,
+      targetNodeId,
+      this.operationDispatchRetryAfterMs,
+    );
+    this.logger.info(DISPATCH_LOG_MSG.PRIORITY_DISPATCH_LANE_EXHAUSTED, {
+      nodeId: this.nodeId,
+      operationId,
+      targetNodeId,
+      partitionId: row.partition_id || rowOperation.partitionId || null,
+      priorityDispatchInFlight: this.priorityDispatchInFlight.size,
+      priorityControlPlaneDispatchMaxInFlight:
+        this.priorityControlPlaneDispatchMaxInFlight,
+    });
+    this.deferOperationDispatchRetry(
+      operationId,
+      laneExhaustedError,
+      row,
+      options,
+    );
+    return true;
+  }
+
+  /**
+   * Admit a priority dispatch into the in-flight lane set so the lane cap can
+   * bound concurrent priority recovery dispatches.
+   * @param {Object} row - Replica operation row.
+   * @param {Object} rowOperation - Operation built from the row.
+   * @param {string} operationId - Operation identifier.
+   * @private
+   */
+  markPriorityDispatchInFlightIfNeeded(row, rowOperation, operationId) {
+    if (this.isPriorityControlPlaneDispatch(row, rowOperation)) {
+      this.priorityDispatchInFlight.add(operationId);
+    }
   }
 
   /**
@@ -173,7 +254,20 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchReplayReadiness {
       return;
     }
 
+    if (
+      this.deferWhenPriorityDispatchLaneExhausted(
+        row,
+        rowOperation,
+        operationId,
+        targetNodeId,
+        options,
+      )
+    ) {
+      return;
+    }
+
     this.dispatchInFlight.add(operationId);
+    this.markPriorityDispatchInFlightIfNeeded(row, rowOperation, operationId);
     try {
       let dispatchResult = null;
       if (
@@ -305,6 +399,7 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchReplayReadiness {
       throw error;
     } finally {
       this.dispatchInFlight.delete(operationId);
+      this.priorityDispatchInFlight.delete(operationId);
     }
   }
 

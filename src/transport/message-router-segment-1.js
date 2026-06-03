@@ -148,6 +148,23 @@ class MessageRouterSegment1 extends EventEmitter {
           TRANSPORT_DEFAULT.OUTBOUND_QUEUE_CRITICAL_RESERVE,
           maxCriticalReserve,
         );
+    const configuredReadinessReserve =
+      Number.isFinite(options.outboundQueueReadinessReserve) &&
+      options.outboundQueueReadinessReserve >= TRANSPORT_NUM.ZERO ?
+        options.outboundQueueReadinessReserve :
+        config.get(TRANSPORT_CONFIG_KEY.OUTBOUND_QUEUE_READINESS_RESERVE);
+    const maxReadinessReserve = Math.max(
+      TRANSPORT_NUM.ZERO,
+      this.outboundQueueMaxPending - TRANSPORT_NUM.ONE,
+    );
+    this.outboundQueueReadinessReserve =
+      Number.isFinite(configuredReadinessReserve) &&
+      configuredReadinessReserve >= TRANSPORT_NUM.ZERO ?
+        Math.min(Math.floor(configuredReadinessReserve), maxReadinessReserve) :
+        Math.min(
+          TRANSPORT_DEFAULT.OUTBOUND_QUEUE_READINESS_RESERVE,
+          maxReadinessReserve,
+        );
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
       loggingService.forSubsystem(TRANSPORT_SUBSYSTEM.ROUTER) :

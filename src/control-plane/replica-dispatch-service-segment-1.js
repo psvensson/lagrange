@@ -100,6 +100,7 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
     this.directDispatchServiceAddress = null;
     this.directDispatchServiceHandler = null;
     this.dispatchInFlight = new Set();
+    this.priorityDispatchInFlight = new Set();
     this.retryInFlightNodes = new Set();
     this.nodeStateUpdateWatermarks = new Map();
     this.nodeReadyRetryWatermarks = new Map();
@@ -137,6 +138,10 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
     this.operationDispatchRetryAfterMs =
       this.normalizeOperationDispatchRetryAfterMs(
         options.operationDispatchRetryAfterMs,
+      );
+    this.priorityControlPlaneDispatchMaxInFlight =
+      this.normalizePriorityControlPlaneDispatchMaxInFlight(
+        options.priorityControlPlaneDispatchMaxInFlight,
       );
     this.replicaOperationDispatchTimeoutMs =
       this.normalizeReplicaOperationDispatchTimeoutMs(
