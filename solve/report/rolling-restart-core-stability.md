@@ -6,7 +6,7 @@
 
 **Outcome:** IN PROGRESS (no terminal recorded)
 
-**Attempts:** 35
+**Attempts:** 36
 
 ## Current Blocker
 - Frontier: rolling-restart-core-stability-main
@@ -16,12 +16,12 @@
 - Mechanism: observation_gap
 - Movement: narrowed: control_plane_pressure -> publication_missing_active_node=8be8d30f-4499-5eed-865c-71b4d529a67a
 - Latest evidence: test-output/reports/rolling-restart-core-stability-after-remote-executor-outcome-wake-source-owner.report.json
-- Selected theory: theory-20260604-bootstrap-admission-peer-endpoint-scope
-- Next move: continue supervised step for rolling-restart-core-stability-main
-- No longer current: control_plane_pressure; Do not treat the recorded remote executor outcome owner-wake attempt as lacking post-attempt subagent verification.; Do not treat the bootstrap admission peer endpoint-scope source change as unverified before audit and git handoff.; Do not treat the recorded bootstrap admission peer endpoint-scope attempt as lacking post-attempt subagent verification.
+- Selected theory: theory-20260604-critical-aggregate-inflight-reserve-admission (stale: selected theory status is needs-rerun)
+- Next move: record or select a fresh frontier theory for rolling-restart-core-stability-main
+- No longer current: control_plane_pressure; Do not continue from the stale currentBlocker projection that points at publication_missing_active_node=8be8d30f-4499-5eed-865c-71b4d529a67a; use the latest probe and failure bundle control_plane_pressure surface.; Do not treat the aggregate critical reserve dispatch source change as unverified before the measured rolling-restart rerun.; Do not treat the recorded aggregate critical reserve dispatch attempt as lacking post-attempt subagent verification.
 
 ## Scope Pressure
-- Changed files: 104
+- Changed files: 105
 - Owner areas: .kiro, docs, scripts/solve, scripts/solve.js, src/admin, src/bootstrap, src/control-plane, src/diagnostics, src/node, src/query, src/rebalancer, src/transport, test/admin, test/bootstrap, test/control-plane, test/diagnostics, test/distributed/harness, test/distributed/scenarios, test/node, test/query, test/rebalancer, test/scripts, test/solve, test/transport
 - Categories: runtime, test, workflow
 - Signal: broad-source-scope severity=medium
@@ -30,7 +30,7 @@
 - Signal: mixed-runtime-and-harness severity=medium
 
 ## Frontiers
-- **rolling-restart-core-stability-main** [parked {exhausted}] rung 5, attempts 35, reopened 7, metric 1 -> 0 — ladder exhausted without metric movement
+- **rolling-restart-core-stability-main** [open] rung 1, attempts 36, reopened 8, metric 1 -> 0 — Latest measured attempt moved off publication_missing_active_node into discovery/control_plane_pressure with publication_converged and priority_spread_settled, while the Quest history includes non-measuring harness samples; reopen for a fresh control-plane-pressure theory rather than treating the parked ladder as terminal.
 
 ## Findings
 - **rolling-restart-core-stability-main**: Quest probe priority metric is now zero, but doneWhen remains false until three consecutive rolling-restart runs pass. (rules out: Do not claim SOLVED from metric zero without the consecutive doneWhen evidence.) [test-output/reports/rolling-restart-core-stability-after-local-mutation-gate.report.json]
@@ -134,6 +134,9 @@
 - **rolling-restart-core-stability-main**: Post-attempt source verification is satisfied: Plato's read-only review found no blocking issues in the remote executor outcome owner-wake patch, confirmed the diff artifact matches live source, and identified only non-blocking duplicate-wake/test-tightening residual risks. (rules out: Do not treat the recorded remote executor outcome owner-wake attempt as lacking post-attempt subagent verification.) [subagent:019e9306-3a40-7123-833b-ac3f5695b971]
 - **rolling-restart-core-stability-main**: Subagent verifier Curie found no blocking issues in the bootstrap admission peer endpoint-scope patch: cache-owned mesh membership only sees bootstrap endpoint rows for topologySnapshotMeta.bootstrapAdmissionPeerHintNodeIds, arbitrary bootstrap endpoints still require authoritative repair, and focused bootstrap/transport verification passed. (rules out: Do not treat the bootstrap admission peer endpoint-scope source change as unverified before audit and git handoff.) [subagent:019e9343-8795-72f2-b2c3-11575993deb2]
 - **rolling-restart-core-stability-main**: Post-attempt subagent verifier Curie found no blocking issues after the bootstrap admission peer endpoint-scope source change: explicit bootstrapAdmissionPeerHintNodeIds scope is required for cache-owned bootstrap endpoint use, arbitrary bootstrap endpoint hints still require authoritative repair, and focused bootstrap/transport checks passed. (rules out: Do not treat the recorded bootstrap admission peer endpoint-scope attempt as lacking post-attempt subagent verification.) [subagent:019e9343-8795-72f2-b2c3-11575993deb2]
+- **rolling-restart-core-stability-main**: Fresh probe after the bootstrap admission peer endpoint-scope attempt moved the live failure surface off publication_missing_active_node: publication convergence, priority spread, and invariant gates are satisfied, while quiescence is discovery/control_plane_pressure with node-scope critical outbound saturation on seed 7493b0ab-a054-5fad-a91b-5e331db29304. (rules out: Do not continue from the stale currentBlocker projection that points at publication_missing_active_node=8be8d30f-4499-5eed-865c-71b4d529a67a; use the latest probe and failure bundle control_plane_pressure surface.) [test-output/reports/rolling-restart-core-stability-after-bootstrap-admission-peer-endpoint-scope.report.json]
+- **rolling-restart-core-stability-main**: Subagent verifier Einstein found no blocking issues in the aggregate critical reserve dispatch patch after retargeting focused coverage to the production coordinator-created remote handoff source; maxConcurrent=1 semantic dispatch and target/heartbeat exclusions are covered. (rules out: Do not treat the aggregate critical reserve dispatch source change as unverified before the measured rolling-restart rerun.) [subagent:019e9359-48a8-7233-ac10-1740fc800c50]
+- **rolling-restart-core-stability-main**: Post-attempt subagent verification remains clear: Einstein found no blocking issues in the aggregate critical reserve dispatch diff, with focused coverage for production coordinator-created remote handoff, maxConcurrent=1 dispatch, and target/heartbeat exclusions. (rules out: Do not treat the recorded aggregate critical reserve dispatch attempt as lacking post-attempt subagent verification.) [subagent:019e9359-48a8-7233-ac10-1740fc800c50]
 
 ## Theories
 - **theory-20260601-rolling-restart-evidence-closure** [active] system, mechanism observation_gap, owner distributed_harness_scenario_owner / rolling_restart_evidence
@@ -183,9 +186,10 @@
 - **theory-20260604-handoff-retry-fires-stale-snapshot-without-refresh** [falsified] frontier, frontier rolling-restart-core-stability-main, layer ownership, mechanism handoff-retry-fires-stale-snapshot-without-refresh, owner operation_workflow_owner, boundary coordinator_created_remote_handoff, modelGate npm run model:contracts
 - **theory-20260604-remote-executor-outcome-wakes-source-owner** [supported] frontier, frontier rolling-restart-core-stability-main, layer ownership, mechanism remote-executor-outcome-discarded-by-nonlocal-owner, owner operation_workflow_owner, boundary executor_outcome_remote_owner_handoff, modelGate npm run model:contracts
 - **theory-20260604-bootstrap-admission-peer-endpoint-scope** [supported] frontier, frontier rolling-restart-core-stability-main, layer topology, mechanism bootstrap-admission-peer-endpoint-scope-gap, owner bootstrap_join_owner, boundary mesh_connectivity_address_resolution, modelGate npm run model:contracts
+- **theory-20260604-critical-aggregate-inflight-reserve-admission** [needs-rerun] frontier, frontier rolling-restart-core-stability-main, layer scheduling, mechanism critical-aggregate-inflight-reserve-gap, owner transport_delivery_owner, boundary outbound_node_backpressure, modelGate npm run model:contracts
 
 ## Selected Theories
-- **rolling-restart-core-stability-main**: theory-20260604-bootstrap-admission-peer-endpoint-scope
+- **rolling-restart-core-stability-main**: theory-20260604-critical-aggregate-inflight-reserve-admission
 
 ## Theory Results
 - **theory-20260601-rolling-restart-consecutive-proof**: needs-rerun [test-output/reports/rolling-restart-core-stability-after-priority-local-first.report.json]
@@ -289,6 +293,7 @@
 - **theory-20260604-remote-executor-outcome-wakes-source-owner**: supported (scenario=failed, theory=partial, movement=narrowed) [test-output/reports/rolling-restart-core-stability-after-remote-executor-outcome-wake-source-owner.report.json]
 - **theory-20260604-remote-executor-outcome-wakes-source-owner**: supported (scenario=failed, theory=partial, movement=narrowed) [test-output/reports/rolling-restart-core-stability-after-remote-executor-outcome-wake-source-owner.report.json]
 - **theory-20260604-bootstrap-admission-peer-endpoint-scope**: supported (scenario=failed, theory=supported, movement=narrowed) [test-output/reports/rolling-restart-core-stability-after-bootstrap-admission-peer-endpoint-scope.report.json]
+- **theory-20260604-critical-aggregate-inflight-reserve-admission**: needs-rerun (scenario=invalid, theory=needs-rerun, movement=narrowed) [test-output/reports/rolling-restart-core-stability-after-critical-aggregate-inflight-reserve-admission.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
@@ -328,3 +333,4 @@
 | 2026-06-04T14:56:22.085Z | rolling-restart-core-stability-main | widen-scope | 1 -> 0 | progress | same | theory-20260604-handoff-retry-fires-stale-snapshot-without-refresh | diff:solve/changes/rolling-restart-core-stability/handoff-retry-refresh-before-remote-wake.diff |
 | 2026-06-04T15:16:53.800Z | rolling-restart-core-stability-main | model | 0 -> 0 | flat | narrowed | theory-20260604-remote-executor-outcome-wakes-source-owner | diff:solve/changes/rolling-restart-core-stability/remote-executor-outcome-wake-source-owner.diff |
 | 2026-06-04T15:44:41.366Z | rolling-restart-core-stability-main | change-approach | 0 -> 0 | flat | narrowed | theory-20260604-bootstrap-admission-peer-endpoint-scope | diff:solve/changes/rolling-restart-core-stability/bootstrap-admission-peer-endpoint-scope.diff |
+| 2026-06-04T16:28:06.402Z | rolling-restart-core-stability-main | observe | 0 -> ? | flat | narrowed | theory-20260604-critical-aggregate-inflight-reserve-admission | diff:solve/changes/rolling-restart-core-stability/critical-aggregate-inflight-reserve-admission.diff |

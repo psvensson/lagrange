@@ -4,7 +4,7 @@ import {
   TRANSPORT_NUM,
 } from '../constants/transport.js';
 import {EMPTY_DELIVERY_SOURCE, MESSAGE_ROUTER_LITERAL, OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE, OUTBOUND_QUEUE_BACKPRESSURE_SCOPE, OutboundDeliveryPriority, TRANSPORT_PRESSURE_SUMMARY_FIELD, createQueueWaitHistogram, normalizeIdentifier, recordQueueWaitDuration, resolvePendingReplacementKey} from './message-router-shared-stage-1.js';
-import {adjustInFlightCriticalSourceReserveCount, adjustInFlightPriorityCount, adjustInFlightSourceCount, buildPendingSourceAdmission, buildPendingSourceSummary, buildSupersededPendingResult, canDispatchPendingItem, countInFlightByPriority, countPendingByPriority, dequeueNextPendingItem, isOutboundNodeBackpressured, normalizeOutboundDeliveryPriority, normalizeQueuedDeliverySource, peekNextPendingItem, resolveBackgroundPendingLimit, resolveCriticalPendingCeiling, resolveDeliverySource, takeCriticalPendingItemForSourceReserve} from './message-router-shared-stage-2.js';
+import {adjustInFlightCriticalSourceReserveCount, adjustInFlightPriorityCount, adjustInFlightSourceCount, buildPendingSourceAdmission, buildPendingSourceSummary, buildSupersededPendingResult, canDispatchPendingItem, countInFlightByPriority, countInFlightBySource, countPendingByPriority, dequeueNextPendingItem, isOutboundNodeBackpressured, normalizeOutboundDeliveryPriority, normalizeQueuedDeliverySource, peekNextPendingItem, resolveBackgroundPendingLimit, resolveCriticalPendingCeiling, resolveDeliverySource, takeCriticalPendingItemForSourceReserve} from './message-router-shared-stage-2.js';
 
 function buildOutboundQueueBackpressureError(
   nodeId,
@@ -21,6 +21,108 @@ function buildOutboundQueueBackpressureError(
   error.retryAfterMs = TRANSPORT_DEFAULT.OUTBOUND_QUEUE_BACKPRESSURE_RETRY_AFTER_MS;
   error.deferRetry = true;
   return error;
+}
+
+function countCriticalSourceReserveInFlight(queue) {
+  const rawCount = queue?.inFlightCriticalSourceReserve;
+  return Number.isFinite(rawCount) && rawCount > TRANSPORT_NUM.ZERO ?
+    Math.floor(rawCount) :
+    TRANSPORT_NUM.ZERO;
+}
+
+function resolveAggregateCriticalReserveInFlightLimit(queue) {
+  const maxConcurrent =
+    Number.isFinite(queue?.maxConcurrent) &&
+    queue.maxConcurrent > TRANSPORT_NUM.ZERO ?
+      Math.floor(queue.maxConcurrent) :
+      TRANSPORT_NUM.ZERO;
+  if (maxConcurrent <= TRANSPORT_NUM.ZERO) {
+    return TRANSPORT_NUM.ZERO;
+  }
+  const reserve =
+    Number.isFinite(queue?.criticalReserve) &&
+    queue.criticalReserve > TRANSPORT_NUM.ZERO ?
+      Math.floor(queue.criticalReserve) :
+      TRANSPORT_NUM.ZERO;
+  if (reserve <= TRANSPORT_NUM.ZERO) {
+    return TRANSPORT_NUM.ZERO;
+  }
+  return Math.max(
+    TRANSPORT_NUM.ONE,
+    Math.min(reserve, maxConcurrent),
+  );
+}
+
+function canUseAggregateCriticalReserve(queue) {
+  if (queue.inFlight < queue.maxConcurrent) {
+    return false;
+  }
+  if (
+    countInFlightByPriority(queue, OutboundDeliveryPriority.CRITICAL) <
+    queue.maxConcurrent
+  ) {
+    return false;
+  }
+  return countCriticalSourceReserveInFlight(queue) <
+    resolveAggregateCriticalReserveInFlightLimit(queue);
+}
+
+function isAggregateCriticalReserveCandidateSource(source) {
+  return source !== EMPTY_DELIVERY_SOURCE &&
+    source !== MESSAGE_ROUTER_LITERAL.STRING_UNKNOWN &&
+    !source.startsWith('target:');
+}
+
+function findAggregateCriticalReserveCandidateIndex(queue) {
+  if (!canUseAggregateCriticalReserve(queue)) {
+    return -TRANSPORT_NUM.ONE;
+  }
+  const sourceCounts = new Map();
+  for (const item of queue.pending) {
+    if (item?.priority !== OutboundDeliveryPriority.CRITICAL) {
+      continue;
+    }
+    const source = normalizeQueuedDeliverySource(item?.deliverySource);
+    sourceCounts.set(
+      source,
+      (sourceCounts.get(source) || TRANSPORT_NUM.ZERO) + TRANSPORT_NUM.ONE,
+    );
+  }
+  for (
+    let index = TRANSPORT_NUM.ZERO;
+    index < queue.pending.length;
+    index++
+  ) {
+    const item = queue.pending[index];
+    if (
+      item?.priority !== OutboundDeliveryPriority.CRITICAL ||
+      item?.criticalSourceReserve === true ||
+      item?.replacePendingKey
+    ) {
+      continue;
+    }
+    const source = normalizeQueuedDeliverySource(item?.deliverySource);
+    if (!isAggregateCriticalReserveCandidateSource(source)) {
+      continue;
+    }
+    if (sourceCounts.get(source) !== TRANSPORT_NUM.ONE) {
+      continue;
+    }
+    if (countInFlightBySource(queue, source) > TRANSPORT_NUM.ZERO) {
+      continue;
+    }
+    return index;
+  }
+  return -TRANSPORT_NUM.ONE;
+}
+
+function promoteAggregateCriticalReserveCandidate(queue) {
+  const candidateIndex = findAggregateCriticalReserveCandidateIndex(queue);
+  if (candidateIndex < TRANSPORT_NUM.ZERO) {
+    return false;
+  }
+  queue.pending[candidateIndex].criticalSourceReserve = true;
+  return true;
 }
 
 class OutboundDeliveryRegistryOwner {
@@ -237,6 +339,7 @@ class OutboundDeliveryRegistryOwner {
       return;
     }
     while (queue.pending.length > TRANSPORT_NUM.ZERO) {
+      promoteAggregateCriticalReserveCandidate(queue);
       const nextItem = peekNextPendingItem(queue);
       if (!canDispatchPendingItem(queue, nextItem)) {
         return;
