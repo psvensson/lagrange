@@ -54,6 +54,8 @@ import {
 import {diagnosticMovementFor, detectOscillation} from './current-blocker.js';
 import {detectUnrecordedEvidence} from './evidence.js';
 import {inspectChangeArtifact} from './change-artifact.js';
+import {analyzeScopePressure} from './scope-pressure.js';
+import {scopeTerminalStatus} from './convergence-guards.js';
 
 function defaultFileExists(p) {
   return Boolean(p) && fs.existsSync(p);
@@ -132,11 +134,14 @@ function applyAttempt(root, quest, ctx, pick, before) {
   const rungIndex = pick.state.rungIndex;
   const log = readLog(root, quest.id);
   const state = projectState(quest, log);
+  const scopeTerminal = scopeTerminalStatus(
+    analyzeScopePressure(root, quest, log)).terminal;
   const readinessProblems = stepTheoryGateProblems({
     log,
     state,
     frontierId: pick.def.id,
     rungIndex,
+    scopeTerminal,
     phase: 'begin',
   });
   if (readinessProblems.length > 0) {

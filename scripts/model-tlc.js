@@ -86,6 +86,29 @@ const CONFIGS = [
     expectedFailurePattern:
       'Invariant DeferredOutcomeHasRecoverableWake is violated',
   },
+  {
+    id: 'coupled-admission-reconciled',
+    mode: 'coupled-reconciled',
+    module: path.resolve('models', 'readiness-starvation', 'CoupledAdmission.tla'),
+    cfg: path.resolve('models', 'readiness-starvation', 'CoupledAdmission_fixed.cfg'),
+    expectConverged: true,
+    report: 'coupled-admission-tlc-reconciled.model.report.json',
+    scenario: 'rolling-restart-coupled-admission-oscillation',
+    owner: 'priority_recovery_admission_owner',
+    boundary: 'coupled_invariant_admission',
+  },
+  {
+    id: 'coupled-admission-oscillation',
+    mode: 'coupled-oscillation',
+    module: path.resolve('models', 'readiness-starvation', 'CoupledAdmission.tla'),
+    cfg: path.resolve('models', 'readiness-starvation', 'CoupledAdmission_bug.cfg'),
+    expectConverged: false,
+    report: 'coupled-admission-tlc-oscillation.model.report.json',
+    scenario: 'rolling-restart-coupled-admission-oscillation',
+    owner: 'priority_recovery_admission_owner',
+    boundary: 'coupled_invariant_admission',
+    expectedFailurePattern: 'Temporal property EventuallySteady was violated',
+  },
 ];
 
 function download(url, dest) {

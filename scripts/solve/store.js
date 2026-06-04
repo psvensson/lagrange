@@ -327,6 +327,60 @@ export function invariantHighWater(log, frontierId = null) {
   return [...set];
 }
 
+// Pure per-invariant ledger projection for a frontier, folded from the same measured
+// events the high-water mark reads (a measured attempt, or an ingested-evidence event
+// carrying a numeric metric). For every label that has ever been green it tracks whether
+// the most recent measured run still satisfies it, and contrasts the latest measured run
+// with the one before it so callers can see what just regressed or was just restored.
+// This is the shared substrate for the regression-restore gate (rr-C) and the
+// coupled-oscillation detector (rr-D); it records no policy of its own.
+//
+// Returns:
+//   greenHighWater  - every label ever satisfied (monotonic union)
+//   currentGreen    - labels satisfied by the latest measured run
+//   currentRed      - high-water labels NOT satisfied by the latest measured run
+//   regressedThisRun- labels green in the previous measured run but red in the latest
+//   restoredThisRun - labels red in the previous measured run but green in the latest
+//   history         - [{ts, green:[...], red:[...]}] one entry per measured run
+export function projectInvariantLedger(log, frontierId = null) {
+  const highWater = new Set();
+  const history = [];
+  for (const event of log) {
+    if (frontierId && event.frontier !== frontierId) continue;
+    const measured =
+      (event.type === EVENT_ATTEMPT && event.invalidSample !== true) ||
+      (event.type === EVENT_EVIDENCE_INGESTED &&
+        typeof event.metric === 'number');
+    if (!measured) continue;
+    const green = new Set(
+      (Array.isArray(event.satisfiedInvariants) ? event.satisfiedInvariants : [])
+        .filter(Boolean),
+    );
+    for (const label of green) highWater.add(label);
+    const red = [...highWater].filter((label) => !green.has(label));
+    history.push({ts: event.ts || null, green: [...green], red});
+  }
+  const latest = history.length > 0 ? history[history.length - 1] : null;
+  const previous = history.length > 1 ? history[history.length - 2] : null;
+  const currentGreen = latest ? latest.green : [];
+  const currentRed = latest ? latest.red : [];
+  const prevGreen = new Set(previous ? previous.green : []);
+  const latestGreen = new Set(currentGreen);
+  const regressedThisRun = previous ?
+    [...prevGreen].filter((label) => !latestGreen.has(label)) : [];
+  const restoredThisRun = previous ?
+    [...latestGreen].filter((label) => !prevGreen.has(label)) : [];
+  return {
+    frontier: frontierId,
+    greenHighWater: [...highWater],
+    currentGreen,
+    currentRed,
+    regressedThisRun,
+    restoredThisRun,
+    history,
+  };
+}
+
 export function rebuildState(root, quest) {
   const log = readLog(root, quest.id);
   const state = projectState(quest, log);

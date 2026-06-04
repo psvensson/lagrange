@@ -132,6 +132,51 @@ export const INVESTIGATION_BUDGET = 3;
 // the original semantics after the leading `observe` rung shifted the ladder by one.
 export const SYSTEM_THEORY_STALL_THRESHOLD = RUNG_INDEX_MODEL;
 
+// Convergence guards: generic Solver detectors that keep an autonomous Quest from
+// spinning on a coupled-invariant oscillation (one invariant family is fixed while a
+// definitionally-coupled family re-breaks, ad infinitum). Each guard keys off real
+// recorded events only, is advisory-then-terminal (it raises a health signal before it
+// gates a step), and is independently switchable here so a guard can be disabled or
+// retuned without editing detection logic. The master map is the single on/off surface;
+// the numeric thresholds below tune each guard. Flipping a flag to false fully reverts
+// that guard to the pre-guard behaviour, which keeps the change reversible.
+export const CONVERGENCE_GUARDS = Object.freeze({
+  // rr-A: per-invariant green/red ledger projection. Foundation for the gates below;
+  // when false the ledger is still computable but the gates that consume it stand down.
+  invariantLedger: true,
+  // rr-C: a measured regression pins the next move to restore-or-explain.
+  regressionRestoreGate: true,
+  // rr-D: an A/B invariant swap escalates to a whole-system theory + model discriminator.
+  coupledOscillation: true,
+  // rr-E: scope-pressure crossing the file limit becomes a terminal (gating) bound.
+  scopeTerminal: true,
+  // rr-B: a frontier may refine its search gradient (e.g. priority -> distance) without
+  // tripping the goalpost seal, as long as the sealed doneWhen closure is untouched.
+  gradientRefinement: true,
+});
+
+// rr-D tuning: the minimum number of disjoint-cluster transitions in a frontier's
+// regression history that count as a coupled oscillation. Two transitions means a full
+// A -> B -> A round trip (one invariant family re-breaks after the other was "fixed"),
+// which is the signature of a definitional coupling rather than a one-off whack-a-mole.
+export const COUPLED_OSC_SWAP_THRESHOLD = 2;
+
+// rr-E tuning: changed-file count across recorded attempts above which scope pressure is
+// treated as terminal (the Solver must split/reduce scope before more edits land). Set
+// well above the advisory large-diff signal so the terminal bound only trips on a runaway
+// blast radius, not on an ordinary multi-file fix.
+export const SCOPE_PRESSURE_FILE_LIMIT = 60;
+
+// rr-B: frontier gradient metric kinds that are interchangeable refinements of one
+// another for the SAME probe+scenario. Swapping among these sharpens the search gradient
+// without weakening the sealed closure (doneWhen stays byte-identical), so it is exempt
+// from the goalpost-immutability check when gradientRefinement is enabled.
+export const GRADIENT_REFINEMENT_METRICS = Object.freeze([
+  'priority',
+  'distance',
+  'failed',
+]);
+
 // Run-level terminal outcomes.
 export const OUTCOME_SOLVED = 'solved';
 export const OUTCOME_EXHAUSTED = 'exhausted';

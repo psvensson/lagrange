@@ -131,4 +131,48 @@ tap.test('honesty checks (the only process)', async (t) => {
       .some((e) => e.includes('doneWhen changed')));
     t.end();
   });
+
+  t.test('goalposts: refining the frontier gradient priority->distance passes', (t) => {
+    const declared = {sealed: {
+      doneWhen: {probe: 'harness', args: {scenario: 'rr', metric: 'priority'}},
+      frontierMetrics: [{probe: 'harness', args: {scenario: 'rr', metric: 'priority'}}],
+    }};
+    const quest = {
+      doneWhen: {probe: 'harness', args: {scenario: 'rr', metric: 'priority'}},
+      frontiers: [{metric: {probe: 'harness', args: {scenario: 'rr', metric: 'distance'}}}],
+    };
+    t.same(validateGoalpostsImmutable(quest, declared), [],
+      'a sharper gradient with identical probe/args and sealed doneWhen is allowed');
+    t.end();
+  });
+
+  t.test('goalposts: a refined gradient does NOT excuse a moved done_when', (t) => {
+    const declared = {sealed: {
+      doneWhen: {probe: 'harness', args: {scenario: 'rr', metric: 'priority', consecutive: 3}},
+      frontierMetrics: [{probe: 'harness', args: {scenario: 'rr', metric: 'priority'}}],
+    }};
+    const quest = {
+      doneWhen: {probe: 'harness', args: {scenario: 'rr', metric: 'priority', consecutive: 1}},
+      frontiers: [{metric: {probe: 'harness', args: {scenario: 'rr', metric: 'distance'}}}],
+    };
+    t.ok(validateGoalpostsImmutable(quest, declared)
+      .some((e) => e.includes('doneWhen changed')),
+    'closure is still sealed even when the gradient is refined');
+    t.end();
+  });
+
+  t.test('goalposts: changing a non-metric arg is still a violation', (t) => {
+    const declared = {sealed: {
+      doneWhen: {probe: 'harness', args: {scenario: 'rr', metric: 'priority'}},
+      frontierMetrics: [{probe: 'harness', args: {scenario: 'rr', metric: 'priority'}}],
+    }};
+    const quest = {
+      doneWhen: {probe: 'harness', args: {scenario: 'rr', metric: 'priority'}},
+      frontiers: [{metric: {probe: 'harness', args: {scenario: 'other', metric: 'distance'}}}],
+    };
+    t.ok(validateGoalpostsImmutable(quest, declared)
+      .some((e) => e.includes('frontier metric definitions changed')),
+    'a different scenario is goalpost movement, not a gradient refinement');
+    t.end();
+  });
 });

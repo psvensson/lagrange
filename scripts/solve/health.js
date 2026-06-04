@@ -3,6 +3,7 @@ import {
   RUNG_INDEX_WIDEN_SCOPE,
   RUNG_INDEX_MODEL,
   SYSTEM_THEORY_STALL_THRESHOLD,
+  CONVERGENCE_GUARDS,
   STATUS_PARKED,
   PARK_KIND_CANNOT_MEASURE,
   THEORY_RESULT_ACTIVE,
@@ -20,6 +21,11 @@ import {
   selectedTheoryStaleness,
 } from './current-blocker.js';
 import {analyzeScopePressure} from './scope-pressure.js';
+import {
+  detectCoupledOscillation,
+  regressionRestoreStatus,
+  scopeTerminalStatus,
+} from './convergence-guards.js';
 
 const DEFAULT_CONSECUTIVE_TARGET = 1;
 const NUM_TWO = 2;
@@ -147,13 +153,17 @@ function frontierNeeds(quest, state, log, frontier) {
   const selectedIsObservationGap = selected && (selected.mechanism === 'observation_gap' || selected.layer === 'observation');
   const localTheoryTooNarrow = namesLiveness && selectedIsObservationGap;
 
+  const coupledOscillation = CONVERGENCE_GUARDS.coupledOscillation &&
+    detectCoupledOscillation(log, frontier.id).coupled;
+
   const systemTheoryRequired =
-    (rung === RUNG_INDEX_MODEL
-      || noProgress.length >= SYSTEM_THEORY_STALL_THRESHOLD
-      || sameDominantReasonRepeat
-      || sameOwnerBoundaryRepeat
-      || localTheoryTooNarrow)
-    && activeSystemTheories(state).length === 0;
+    (rung === RUNG_INDEX_MODEL ||
+      noProgress.length >= SYSTEM_THEORY_STALL_THRESHOLD ||
+      sameDominantReasonRepeat ||
+      sameOwnerBoundaryRepeat ||
+      localTheoryTooNarrow ||
+      coupledOscillation) &&
+    activeSystemTheories(state).length === 0;
 
   const modelGuidance = modelGuidanceForQuest(quest, log);
 
@@ -323,6 +333,46 @@ export function analyzeQuestHealth(root, quest, options = {}) {
     signals.push(signal);
   }
 
+  // rr-D: surface coupled-invariant oscillation explicitly so the operator sees WHY a
+  // system theory is being demanded (it is the coupling, not generic stalling).
+  if (frontier && CONVERGENCE_GUARDS.coupledOscillation) {
+    const coupled = detectCoupledOscillation(log, frontier.id);
+    if (coupled.coupled) {
+      signals.push({
+        type: 'coupled-invariant-oscillation',
+        mechanism: coupled.clusters.map((cluster) => cluster.join('+')).join(' <-> '),
+        severity: 'high',
+      });
+    }
+  }
+
+  // rr-C: a previously-green invariant is red and unexplained; the next move owes a
+  // restore-or-explain before trading it for another family.
+  if (frontier && CONVERGENCE_GUARDS.regressionRestoreGate) {
+    const restore = regressionRestoreStatus(log, frontier.id);
+    if (restore.pending) {
+      signals.push({
+        type: 'regression-restore-required',
+        mechanism: restore.redLabels.join(', '),
+        severity: 'high',
+      });
+    }
+  }
+
+  // rr-E: scope pressure has crossed the terminal file bound (distinct from the advisory
+  // large-diff signal already emitted above).
+  let scopeTerminal = null;
+  if (CONVERGENCE_GUARDS.scopeTerminal) {
+    scopeTerminal = scopeTerminalStatus(scopePressure);
+    if (scopeTerminal.terminal) {
+      signals.push({
+        type: 'scope-pressure-terminal',
+        mechanism: `${scopeTerminal.fileCount} changed files`,
+        severity: 'high',
+      });
+    }
+  }
+
   const rungName = frontier ? (quest.frontiers.find((item) =>
     item.id === frontier.id)?.rung || null) : null;
   const targetConsecutive = consecutiveTarget(quest.doneWhen);
@@ -336,6 +386,22 @@ export function analyzeQuestHealth(root, quest, options = {}) {
       !needs.selectedTheoryStale) {
     nextAction = `run the ${targetConsecutive}-run consecutive proof for ${frontier.id} ` +
       'before selecting a new theory; the single-run metric is 0 but the streak is unproven';
+  }
+  // rr-C/rr-E next-move routing. A pending restore-or-explain and a terminal scope bound
+  // take precedence over "continue", but never over a demanded system theory (which is
+  // the deeper fix when invariants are coupled).
+  if (frontier && !needs.systemTheoryRequired && !needs.frontierTheoryRequired) {
+    if (CONVERGENCE_GUARDS.regressionRestoreGate) {
+      const restore = regressionRestoreStatus(log, frontier.id);
+      if (restore.pending) {
+        nextAction = `restore previously-green invariant(s) ${restore.redLabels.join(', ')} ` +
+          `for ${frontier.id}, or record a finding explaining why they were abandoned`;
+      }
+    }
+    if (scopeTerminal?.terminal) {
+      nextAction = `reduce change scope for ${frontier.id} ` +
+        `(${scopeTerminal.fileCount} changed files exceed the limit) before the next attempt`;
+    }
   }
   return {
     questId: quest.id,

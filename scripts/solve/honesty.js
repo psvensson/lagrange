@@ -7,6 +7,11 @@
 // Pure functions: filesystem/VCS lookups are injected via `ctx` so they can be unit
 // tested without touching disk.
 
+import {
+  CONVERGENCE_GUARDS,
+  GRADIENT_REFINEMENT_METRICS,
+} from './constants.js';
+
 export const METRIC_DIRECTION_LOWER_IS_BETTER = 'lower-is-better';
 
 function isFiniteNumber(value) {
@@ -78,8 +83,37 @@ export function validateAttempt(event, ctx) {
   ];
 }
 
+// rr-B: a frontier's metric is the SEARCH GRADIENT the scheduler climbs, not the quest
+// closure (that is doneWhen, sealed separately and checked above). Sharpening the
+// gradient — e.g. swapping the scalar `priority` count for the composite `distance` that
+// also penalises red sub-invariants — must not be punished as goalpost movement: it makes
+// the frontier strictly harder to satisfy, never easier, and the sealed doneWhen is
+// untouched. A change qualifies as a gradient refinement only when the probe and every
+// metric arg except the `metric` kind are byte-identical and both kinds are recognised
+// interchangeable gradients. Anything else (different probe, scenario, reportDir, or a
+// reworded closure) is still a goalpost violation.
+function isGradientRefinement(now, sealed) {
+  if (!CONVERGENCE_GUARDS.gradientRefinement) return false;
+  if (!now || !sealed || now.probe !== sealed.probe) return false;
+  const nowArgs = now.args || {};
+  const sealedArgs = sealed.args || {};
+  const nowKind = nowArgs.metric;
+  const sealedKind = sealedArgs.metric;
+  if (!GRADIENT_REFINEMENT_METRICS.includes(nowKind) ||
+    !GRADIENT_REFINEMENT_METRICS.includes(sealedKind)) {
+    return false;
+  }
+  const nowRest = {...nowArgs};
+  const sealedRest = {...sealedArgs};
+  delete nowRest.metric;
+  delete sealedRest.metric;
+  return JSON.stringify(nowRest) === JSON.stringify(sealedRest);
+}
+
 // Check 4: done_when and the metric definition are byte-identical to the sealed
-// declaration captured when the quest was first declared. No moving goalposts.
+// declaration captured when the quest was first declared. No moving goalposts — except a
+// frontier metric may be refined to a sharper search gradient (see isGradientRefinement),
+// which leaves the sealed closure intact.
 export function validateGoalpostsImmutable(quest, declaredEvent) {
   if (!declaredEvent || !declaredEvent.sealed) {
     return ['no sealed quest declaration to compare against'];
@@ -88,9 +122,16 @@ export function validateGoalpostsImmutable(quest, declaredEvent) {
   if (JSON.stringify(quest.doneWhen) !== JSON.stringify(declaredEvent.sealed.doneWhen)) {
     violations.push('quest.doneWhen changed after declaration');
   }
-  const metricsNow = JSON.stringify(quest.frontiers.map((f) => f.metric));
-  const metricsSealed = JSON.stringify(declaredEvent.sealed.frontierMetrics);
-  if (metricsNow !== metricsSealed) {
+  const metricsNow = quest.frontiers.map((f) => f.metric);
+  const metricsSealed = declaredEvent.sealed.frontierMetrics || [];
+  const sameLength = metricsNow.length === metricsSealed.length;
+  const allMetricsImmutableOrRefined = sameLength &&
+    metricsNow.every((metric, index) => {
+      const sealed = metricsSealed[index];
+      return JSON.stringify(metric) === JSON.stringify(sealed) ||
+        isGradientRefinement(metric, sealed);
+    });
+  if (!allMetricsImmutableOrRefined) {
     violations.push('frontier metric definitions changed after declaration');
   }
   return violations;

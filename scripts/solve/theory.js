@@ -13,6 +13,7 @@ import {
   RUNG_INDEX_WIDEN_SCOPE,
   RUNG_INDEX_MODEL,
   SYSTEM_THEORY_STALL_THRESHOLD,
+  CONVERGENCE_GUARDS,
   THEORY_LAYERS,
   THEORY_RESULT_ACTIVE,
   THEORY_RESULT_AVOIDED,
@@ -35,6 +36,10 @@ import {
 } from './current-blocker.js';
 import {modelGuidanceForQuest} from './model-guidance.js';
 import {appendEvent, loadQuest, projectState, readLog} from './store.js';
+import {
+  detectCoupledOscillation,
+  regressionRestoreStatus,
+} from './convergence-guards.js';
 import {
   extractTheoryLedgerEntries,
   THEORY_LEDGER_FIELDS,
@@ -218,6 +223,7 @@ export function stepTheoryGateProblems({
   theoryRef,
   modelRef,
   modelNotApplicable,
+  scopeTerminal = false,
   phase = 'commit',
 }) {
   const problems = [];
@@ -266,15 +272,52 @@ export function stepTheoryGateProblems({
   const selectedIsObservationGap = selected && (selected.mechanism === 'observation_gap' || selected.layer === 'observation');
   const localTheoryTooNarrow = namesLiveness && selectedIsObservationGap;
 
+  // rr-D: coupled-invariant oscillation (two disjoint invariant families bouncing green
+  // <-> red because one is defined in terms of the other) cannot be settled by another
+  // single-frontier patch. Force a whole-system theory so the next move reconciles both
+  // families at once (and the model rung, reached on escalation, supplies the
+  // discriminator). Keys off recorded regression violations only.
+  const coupledOscillation = CONVERGENCE_GUARDS.coupledOscillation &&
+    detectCoupledOscillation(log, frontierId).coupled;
+
   const systemTheoryRequired =
     rungIndex === RUNG_INDEX_MODEL ||
     noProgressAttemptCount(log, frontierId) >= SYSTEM_THEORY_STALL_THRESHOLD ||
     sameDominantReasonRepeat ||
     sameOwnerBoundaryRepeat ||
-    localTheoryTooNarrow;
+    localTheoryTooNarrow ||
+    coupledOscillation;
 
   if (systemTheoryRequired && !activeSystemTheoryExists(state)) {
-    problems.push('system theory required after repeated same-frontier stalls');
+    problems.push(coupledOscillation ?
+      'coupled-invariant oscillation: record a system theory that reconciles the ' +
+        'coupled invariant families before the next attempt' :
+      'system theory required after repeated same-frontier stalls');
+  }
+
+  // rr-C: a measured regression leaves a previously-green invariant red. Before starting
+  // another attempt, the Solver must restore it or record a finding explaining why it was
+  // abandoned — otherwise the loop is free to keep trading one invariant family for
+  // another forever. Gated at the 'begin' phase so it directs the NEXT move rather than
+  // retroactively invalidating the attempt that exposed the regression.
+  if (CONVERGENCE_GUARDS.regressionRestoreGate && phase === 'begin') {
+    const restore = regressionRestoreStatus(log, frontierId);
+    if (restore.pending) {
+      problems.push(
+        `restore previously-green invariant(s) ${restore.redLabels.join(', ')} ` +
+        'or record a finding explaining why they were abandoned',
+      );
+    }
+  }
+
+  // rr-E: scope pressure has crossed the terminal file bound. The blast radius is large
+  // enough that the next move must shrink scope (split/land commits) before more edits.
+  // The caller computes the bound (it needs change-artifact inspection); gated at 'begin'.
+  if (CONVERGENCE_GUARDS.scopeTerminal && phase === 'begin' && scopeTerminal) {
+    problems.push(
+      'scope pressure terminal: changed-file count exceeds the limit; reduce scope ' +
+      '(land or split the current changes) before the next attempt',
+    );
   }
 
   if (diagnosticProgressAttemptCount(log, frontierId) >= NUM_TWO &&

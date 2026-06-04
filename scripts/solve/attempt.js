@@ -7,6 +7,8 @@ import {makeRunContext, finalizeAttempt} from './loop.js';
 import {ingestEvidence} from './evidence.js';
 import {stepTheoryGateProblems} from './theory.js';
 import {inspectChangeArtifact} from './change-artifact.js';
+import {analyzeScopePressure} from './scope-pressure.js';
+import {scopeTerminalStatus} from './convergence-guards.js';
 
 export function runAttemptCommand(root, args) {
   const questId = args.id;
@@ -39,6 +41,8 @@ export function runAttemptCommand(root, args) {
     theoryRef: args.theoryRef || null,
     modelRef: args.modelRef || null,
     modelNotApplicable: args.modelNotApplicable || null,
+    scopeTerminal: scopeTerminalStatus(
+      analyzeScopePressure(root, quest, log)).terminal,
     phase: 'begin',
   });
   if (readinessProblems.length > 0) {
