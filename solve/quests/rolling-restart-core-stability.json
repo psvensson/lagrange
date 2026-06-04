@@ -20,7 +20,7 @@
         "args": {
           "scenario": "rolling-restart",
           "reportDir": "test-output/reports",
-          "metric": "priority"
+          "metric": "distance"
         }
       }
     }
