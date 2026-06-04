@@ -23,6 +23,7 @@ import {
   renderCurrentBlocker,
 } from './current-blocker.js';
 import {analyzeScopePressure, renderScopePressure} from './scope-pressure.js';
+import {analyzeQuestHealth} from './health.js';
 
 export function reportFilePath(root, questId) {
   return path.join(root, SOLVE_DATA_DIR, REPORT_SUBDIR,
@@ -128,6 +129,7 @@ export function buildReport(quest, log, state, root = process.cwd()) {
   const findings = findingLines(state);
   const currentBlocker = buildCurrentBlocker({quest, log, state});
   const scopePressure = analyzeScopePressure(root, quest, log);
+  const health = analyzeQuestHealth(root, quest, {state});
   const theories = [
     ...(state.theories?.system || []),
     ...(state.theories?.frontier || []),
@@ -144,6 +146,13 @@ export function buildReport(quest, log, state, root = process.cwd()) {
     `**Attempts:** ${attempts.length}`,
     '',
     ...renderCurrentBlocker(currentBlocker),
+    '',
+    '## Continuation',
+    `- Status: ${health.continuation?.status || 'allowed'}`,
+    `- Next action: ${health.nextAction}`,
+    ...(health.continuation?.problems?.length > 0 ?
+      health.continuation.problems.map((item) => `- Blocker: ${item}`) :
+      ['- Blocker: none']),
     '',
     ...renderScopePressure(scopePressure),
     '',

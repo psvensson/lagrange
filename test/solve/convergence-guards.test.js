@@ -44,6 +44,16 @@ function finding(ts) {
   return {type: 'finding', frontier: FRONTIER, claim: 'abandoned on purpose', ts};
 }
 
+function regressionFinding(ts, labels = CLUSTER_A) {
+  return {
+    ...finding(ts),
+    regressionClassification: {
+      resolution: 'abandoned',
+      labels,
+    },
+  };
+}
+
 tap.test('projectInvariantLedger tracks green high-water and current red', (t) => {
   const log = [
     measured([...CLUSTER_A]),
@@ -146,15 +156,29 @@ tap.test('regressionRestoreStatus: pending when red and no finding follows', (t)
   t.end();
 });
 
-tap.test('regressionRestoreStatus: discharged by a later finding (explain)', (t) => {
+tap.test('regressionRestoreStatus: prose-only findings do not discharge regressions',
+  (t) => {
+    const log = [
+      measured([...CLUSTER_A]),
+      regression([...CLUSTER_A], '2026-06-03T01:00:00.000Z'),
+      measured([]),
+      finding('2026-06-03T02:00:00.000Z'),
+    ];
+    const status = regressionRestoreStatus(log, FRONTIER);
+    t.equal(status.pending, true, 'a finding needs structured regression labels');
+    t.equal(status.explained, false, 'not marked explained');
+    t.end();
+  });
+
+tap.test('regressionRestoreStatus: discharged by a structured later finding (explain)', (t) => {
   const log = [
     measured([...CLUSTER_A]),
     regression([...CLUSTER_A], '2026-06-03T01:00:00.000Z'),
     measured([]),
-    finding('2026-06-03T02:00:00.000Z'),
+    regressionFinding('2026-06-03T02:00:00.000Z'),
   ];
   const status = regressionRestoreStatus(log, FRONTIER);
-  t.equal(status.pending, false, 'a finding after the regression discharges it');
+  t.equal(status.pending, false, 'a structured finding after the regression discharges it');
   t.equal(status.explained, true, 'marked explained');
   t.end();
 });
@@ -215,9 +239,9 @@ tap.test('golden replay: the real rolling-restart log trips coupled oscillation'
       'priority_recovery_readyz_closed_during_priority_recovery',
     ].sort(),
     'the latest measured run still leaves cluster B red');
-  t.equal(restore.explained, true,
-    'findings recorded after the last regression discharge the restore obligation');
-  t.equal(restore.pending, false, 'so no restore-or-explain move is owed');
+  t.equal(restore.explained, false,
+    'legacy prose findings no longer discharge the restore obligation');
+  t.equal(restore.pending, true, 'so a structured restore-or-explain move is owed');
   t.end();
 });
 

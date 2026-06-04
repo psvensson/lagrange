@@ -4,7 +4,10 @@ import {
   INITIAL_PARTITION_IDS,
   SYSTEM_TABLE_NAME,
 } from '../bootstrap/system-table-schemas-constants.js';
-import {isCriticalTransportControlPlanePartition} from
+import {
+  isCriticalTransportControlPlanePartition,
+  isPriorityControlPlanePartition,
+} from
   '../bootstrap/system-partition-classification.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
 
@@ -168,6 +171,24 @@ function resolvePriorityControlPlanePartitionId(packet = null) {
     null;
 }
 
+function resolvePriorityControlPlaneReadinessPartitionId(packet = null) {
+  const explicitTargetPartitionId = resolveExplicitTargetPartitionId(packet);
+  if (explicitTargetPartitionId) {
+    return isPriorityControlPlanePartition({
+      partitionId: explicitTargetPartitionId,
+    }) ?
+      explicitTargetPartitionId :
+      null;
+  }
+  const senderPartitionId = extractPartitionIdFromUnifiedAddress(packet?.address);
+  if (!senderPartitionId) {
+    return null;
+  }
+  return isPriorityControlPlanePartition({partitionId: senderPartitionId}) ?
+    senderPartitionId :
+    null;
+}
+
 function resolveNormalizedTargetReplicaStatus(packet = null) {
   const targetReplicaStatus = packet?.targetReplicaStatus;
   if (typeof targetReplicaStatus !== LOCAL_STR_STRING) {
@@ -260,6 +281,29 @@ function shouldUseBackgroundDeliveryForCriticalControlPlaneAppend(packet = null)
     isBackgroundControlPlaneAppendPartition(packet);
 }
 
+function isPriorityControlPlaneReadinessControlPacket(
+  packet = null,
+  packetType = null,
+) {
+  if (!resolvePriorityControlPlaneReadinessPartitionId(packet)) {
+    return false;
+  }
+  if (packetType === RAFT_PACKET_TYPE.APPEND_FAIL) {
+    return false;
+  }
+  if (
+    packetType === RAFT_PACKET_TYPE.APPEND &&
+    Array.isArray(packet?.data) &&
+    packet.data.length > LOCAL_NUM_ZERO
+  ) {
+    return false;
+  }
+  return packetType === RAFT_PACKET_TYPE.VOTE ||
+    packetType === RAFT_PACKET_TYPE.VOTED ||
+    packetType === RAFT_PACKET_TYPE.APPEND ||
+    packetType === RAFT_PACKET_TYPE.APPENDED;
+}
+
 function isMessageGroupTargetAddress(packet = null) {
   const targetAddress = resolveNormalizedTargetAddress(packet);
   return (
@@ -306,6 +350,17 @@ function resolveRaftTransportDeliveryOptions(packet = null) {
   }
   const isHeartbeatAppendPacket = isRaftHeartbeatAppendPacket(packet);
   const explicitTargetPartitionId = resolveExplicitTargetPartitionId(packet);
+  // Priority control-plane consensus packets unblock readiness and must be able
+  // to use the same protected queue reserve as message-group control traffic.
+  if (isPriorityControlPlaneReadinessControlPacket(packet, packetType)) {
+    if (isHeartbeatAppendPacket) {
+      return buildHeartbeatAppendDeliveryOptions(
+        RAFT_TRANSPORT_READINESS_DELIVERY_OPTIONS,
+        packet,
+      );
+    }
+    return RAFT_TRANSPORT_READINESS_DELIVERY_OPTIONS;
+  }
   if (resolvePriorityControlPlanePartitionId(packet)) {
     if (shouldUseBackgroundDeliveryForCriticalControlPlaneAppend(packet)) {
       return buildAppendEntriesDeliveryOptions(

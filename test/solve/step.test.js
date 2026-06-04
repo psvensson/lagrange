@@ -27,6 +27,20 @@ function makeDiff(root, name) {
   return `diff:${file}`;
 }
 
+function makeMultiDiff(root, questId, name, changedPaths) {
+  const file = path.join(root, 'solve', 'changes', questId, `${name}.diff`);
+  fs.mkdirSync(path.dirname(file), {recursive: true});
+  fs.writeFileSync(file, changedPaths.flatMap((changedPath) => [
+    `diff --git a/${changedPath} b/${changedPath}`,
+    `--- a/${changedPath}`,
+    `+++ b/${changedPath}`,
+    '@@ -1 +1 @@',
+    '-before',
+    '+after',
+  ]).join('\n'));
+  return `diff:${file}`;
+}
+
 function goalFor(oracleFile) {
   return {
     id: 'demo',
@@ -155,6 +169,78 @@ tap.test('synchronous runStep (P3)', async (t) => {
     t.equal(r.terminal, 'solved');
     const log = readLog(root, quest.id);
     t.ok(log.some((e) => e.type === EVENT_QUEST && e.status === STATUS_SOLVED), 'solved persisted');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('begin step blocks when prior scope pressure is terminal', (t) => {
+    const root = tmp();
+    const oracle = path.join(root, 'o.json');
+    fs.writeFileSync(oracle, JSON.stringify({metric: 3, target: 0}));
+    const quest = goalFor(oracle);
+    saveQuest(root, quest);
+
+    runStep(root, quest);
+    runStep(root, quest, {
+      changeRef: makeMultiDiff(
+        root,
+        quest.id,
+        'wide',
+        Array.from({length: 61}, (_, i) => `src/scope/file-${i}.js`),
+      ),
+      summary: 'wide patch',
+    });
+
+    t.throws(
+      () => runStep(root, quest),
+      /scope pressure terminal/u,
+      'manual begin cannot bypass terminal scope gate',
+    );
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('commit records a violation when before and after probe identities differ', (t) => {
+    const root = tmp();
+    const oracle = path.join(root, 'o.json');
+    fs.writeFileSync(oracle, JSON.stringify({metric: 3, target: 0}));
+    const quest = {
+      id: 'demo',
+      statement: 'Drive the oracle metric to zero.',
+      priority: 1,
+      doneWhen: {probe: 'oracle', args: {file: oracle}},
+      frontiers: [
+        {id: 'demo-main', priority: 1,
+          metric: {probe: 'oracle', args: {file: oracle, metric: 'priority'}}},
+      ],
+    };
+    saveQuest(root, quest);
+
+    runStep(root, quest);
+    fs.writeFileSync(oracle, JSON.stringify({metric: 2, target: 0}));
+    const refinedQuest = {
+      ...quest,
+      frontiers: [{
+        ...quest.frontiers[0],
+        metric: {
+          ...quest.frontiers[0].metric,
+          args: {...quest.frontiers[0].metric.args, metric: 'distance'},
+        },
+      }],
+    };
+    const result = runStep(root, refinedQuest, {
+      changeRef: makeDiff(root, 'identity-mismatch'),
+      summary: 'refine metric between before and after sample',
+    });
+
+    t.ok(
+      result.violations.some((item) => item.includes('same probe identity')),
+      'actual before/after probe identity mismatch is not hidden',
+    );
+    const attemptEvent = readLog(root, quest.id)
+      .find((event) => event.type === 'attempt');
+    t.not(attemptEvent.beforeProbeKey, attemptEvent.afterProbeKey);
+
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });

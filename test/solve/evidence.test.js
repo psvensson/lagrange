@@ -3,11 +3,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
-import {saveQuest, readLog, appendEvent} from '../../scripts/solve/store.js';
+import {saveQuest, readLog, appendEvent, projectState}
+  from '../../scripts/solve/store.js';
 import {
   detectUnrecordedEvidence,
   ingestEvidence,
 } from '../../scripts/solve/evidence.js';
+import {distanceMetricFromReport}
+  from '../../scripts/solve/probes/scenario-harness.js';
 
 function tmp() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'evidence-test-'));
@@ -113,7 +116,8 @@ tap.test('evidence ingestion (P2)', async (t) => {
     });
 
     t.equal(event.type, 'evidence-ingested');
-    t.equal(event.metric, 2);
+    t.equal(event.metric, null);
+    t.equal(event.invalidSample, true);
     t.equal(event.done, false);
     t.equal(event.verdict, 'BLOCK_EVIDENCE_INCOMPLETE');
     t.equal(event.rootCauseClass, 'topology');
@@ -323,14 +327,22 @@ tap.test('evidence ingestion (P2)', async (t) => {
     const reportDir = path.join(root, 'test-output', 'reports');
     fs.mkdirSync(reportDir, {recursive: true});
     const reportPath = path.join(reportDir, 'latest.report.json');
-    fs.writeFileSync(reportPath, JSON.stringify(sampleReport));
+    const validReport = {
+      ...sampleReport,
+      scenarios: [{
+        ...sampleReport.scenarios[0],
+        verdict: 'FAIL_CORE_INVARIANT',
+        verdictReason: 'core_invariant_or_safety_violation',
+      }],
+    };
+    fs.writeFileSync(reportPath, JSON.stringify(validReport));
 
     ingestEvidence(root, {
       questId: goal.id,
       frontierId: 'evidence-quest-test-main',
       evidencePath: reportPath,
     });
-    t.equal(detectUnrecordedEvidence(root, goal.id), null);
+    t.equal(detectUnrecordedEvidence(root, goal.id, {kind: 'frontier'}), null);
 
     fs.writeFileSync(reportPath, JSON.stringify({
       ...sampleReport,
@@ -338,7 +350,7 @@ tap.test('evidence ingestion (P2)', async (t) => {
       optimizationSummary: {totalPriorityItems: 1},
     }));
 
-    const unrecorded = detectUnrecordedEvidence(root, goal.id);
+    const unrecorded = detectUnrecordedEvidence(root, goal.id, {kind: 'frontier'});
     t.ok(unrecorded, 'same path with changed content is fresh evidence');
     t.equal(unrecorded.evidence, reportPath);
     t.type(unrecorded.evidenceFingerprint, 'string');
@@ -347,14 +359,22 @@ tap.test('evidence ingestion (P2)', async (t) => {
     t.end();
   });
 
-  t.test('treats one recorded artifact as current across doneWhen and frontier probes', (t) => {
+  t.test('keeps closure and frontier evidence freshness separate by probe identity', (t) => {
     const root = tmp();
     const goal = getGoal(root);
     saveQuest(root, goal);
     const reportDir = path.join(root, 'test-output', 'reports');
     fs.mkdirSync(reportDir, {recursive: true});
     const reportPath = path.join(reportDir, 'latest.report.json');
-    fs.writeFileSync(reportPath, JSON.stringify(sampleReport));
+    const validReport = {
+      ...sampleReport,
+      scenarios: [{
+        ...sampleReport.scenarios[0],
+        verdict: 'FAIL_CORE_INVARIANT',
+        verdictReason: 'core_invariant_or_safety_violation',
+      }],
+    };
+    fs.writeFileSync(reportPath, JSON.stringify(validReport));
 
     ingestEvidence(root, {
       questId: goal.id,
@@ -363,10 +383,109 @@ tap.test('evidence ingestion (P2)', async (t) => {
     });
 
     t.equal(
-      detectUnrecordedEvidence(root, goal.id),
+      detectUnrecordedEvidence(root, goal.id, {kind: 'frontier'}),
       null,
-      'frontier evidence identity also satisfies the doneWhen freshness check',
+      'frontier evidence identity satisfies the frontier freshness check',
     );
+    const closure = detectUnrecordedEvidence(root, goal.id, {kind: 'closure'});
+    t.ok(closure, 'closure probe with different args remains separately stale');
+    t.equal(closure.probeScope, 'doneWhen');
+    t.match(closure.command, /--probe doneWhen/);
+
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('ingests the frontier metric kind, not the doneWhen metric kind', (t) => {
+    const root = tmp();
+    const priorityGoal = getGoal(root);
+    const goal = {
+      ...priorityGoal,
+      frontiers: priorityGoal.frontiers.map((frontier) => ({
+        ...frontier,
+        metric: {
+          ...frontier.metric,
+          args: {...frontier.metric.args, metric: 'distance'},
+        },
+      })),
+    };
+    saveQuest(root, goal);
+    const reportDir = path.join(root, 'test-output', 'reports');
+    fs.mkdirSync(reportDir, {recursive: true});
+    const reportPath = path.join(reportDir, 'latest.report.json');
+    const validReport = {
+      ...sampleReport,
+      scenarios: [{
+        ...sampleReport.scenarios[0],
+        verdict: 'FAIL_CORE_INVARIANT',
+        verdictReason: 'core_invariant_or_safety_violation',
+      }],
+    };
+    fs.writeFileSync(reportPath, JSON.stringify(validReport));
+
+    const event = ingestEvidence(root, {
+      questId: goal.id,
+      frontierId: 'evidence-quest-test-main',
+      evidencePath: reportPath,
+    });
+
+    t.equal(event.metricKind, 'distance');
+    t.equal(
+      event.metric,
+      distanceMetricFromReport(validReport, 'rolling-restart') + 1,
+    );
+    t.type(event.probeKey, 'string');
+
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('closure evidence ingestion does not mutate frontier metric projection', (t) => {
+    const root = tmp();
+    const priorityGoal = getGoal(root);
+    const goal = {
+      ...priorityGoal,
+      frontiers: priorityGoal.frontiers.map((frontier) => ({
+        ...frontier,
+        metric: {
+          ...frontier.metric,
+          args: {...frontier.metric.args, metric: 'distance'},
+        },
+      })),
+    };
+    saveQuest(root, goal);
+    const reportDir = path.join(root, 'test-output', 'reports');
+    fs.mkdirSync(reportDir, {recursive: true});
+    const reportPath = path.join(reportDir, 'latest.report.json');
+    const validReport = {
+      ...sampleReport,
+      scenarios: [{
+        ...sampleReport.scenarios[0],
+        verdict: 'FAIL_CORE_INVARIANT',
+        verdictReason: 'core_invariant_or_safety_violation',
+      }],
+    };
+    fs.writeFileSync(reportPath, JSON.stringify(validReport));
+
+    const frontier = ingestEvidence(root, {
+      questId: goal.id,
+      frontierId: 'evidence-quest-test-main',
+      evidencePath: reportPath,
+    });
+    const afterFrontier = projectState(goal, readLog(root, goal.id))
+      .frontiers[0].current;
+    ingestEvidence(root, {
+      questId: goal.id,
+      frontierId: 'evidence-quest-test-main',
+      evidencePath: reportPath,
+      probeScope: 'doneWhen',
+    });
+    const afterClosure = projectState(goal, readLog(root, goal.id))
+      .frontiers[0].current;
+
+    t.equal(afterFrontier, frontier.metric);
+    t.equal(afterClosure, frontier.metric,
+      'closure priority metric does not overwrite frontier distance metric');
 
     fs.rmSync(root, {recursive: true, force: true});
     t.end();

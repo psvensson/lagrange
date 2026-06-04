@@ -7,6 +7,7 @@ import {execFileSync} from 'node:child_process';
 import {runLoop} from '../../scripts/solve/loop.js';
 import {appendEvent, projectState, readLog, saveQuest} from '../../scripts/solve/store.js';
 import {makeDryExecutor} from '../../scripts/solve/executor.js';
+import {ingestEvidence} from '../../scripts/solve/evidence.js';
 import {
   EVENT_ATTEMPT,
   EVENT_PARK,
@@ -189,6 +190,72 @@ tap.test('solver loop — P0 walking skeleton', async (t) => {
     t.equal(res.outcome, OUTCOME_THEORY_REQUIRED, 'stops at the theory gate');
     t.equal(executorCalls, 0, 'executor was not invoked');
     t.equal(attempts.length, 2, 'no extra attempt was recorded past the gate');
+    t.equal(violations[violations.length - 1].scope, 'theory-gate');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('autonomous loop stops before executor on model rung without model evidence', (t) => {
+    const {root, quest} = setup({metric: 5, target: 0});
+    quest.statement = 'lifecycle owner-boundary model contract needs proof';
+    saveQuest(root, quest);
+    ingestEvidence(root, {
+      questId: quest.id,
+      frontierId: 'f1',
+      evidencePath: quest.frontiers[0].metric.args.file,
+    });
+    appendEvent(root, quest.id, {
+      type: EVENT_ATTEMPT,
+      frontier: 'f1',
+      rung: 'model',
+      rungIndex: 3,
+      metricBefore: 5,
+      metricAfter: 5,
+      changeRef: 'diff:solve/changes/g1/model-seed.diff',
+    });
+    appendEvent(root, quest.id, {
+      type: 'theory-system-declared',
+      theory: 'system-model',
+      scope: 'system',
+      status: THEORY_RESULT_ACTIVE,
+      mechanism: 'lifecycle_model',
+    });
+    appendEvent(root, quest.id, {
+      type: EVENT_THEORY_OPTION_DECLARED,
+      theory: 'frontier-model',
+      frontier: 'f1',
+      scope: 'frontier',
+      status: THEORY_RESULT_ACTIVE,
+      layer: 'model',
+      mechanism: 'lifecycle_model',
+      intervention: 'prove lifecycle contract',
+      expectedMovement: 'metric decreases',
+      negativeResultMeans: 'model contract is not the blocker',
+      discriminator: 'npm run model:contracts',
+      promotionRule: 'model report supports contract',
+      rejectionRule: 'model report refutes contract',
+    });
+    appendEvent(root, quest.id, {
+      type: EVENT_THEORY_SELECTED,
+      frontier: 'f1',
+      theory: 'frontier-model',
+    });
+
+    let executorCalls = 0;
+    const res = runLoop(root, quest, {
+      executor: {
+        run() {
+          executorCalls += 1;
+          return {changeRef: null, summary: 'should not run'};
+        },
+      },
+      maxCycles: 1,
+    });
+    const log = readLog(root, quest.id);
+    const violations = log.filter((event) => event.type === EVENT_VIOLATION);
+    t.equal(res.outcome, OUTCOME_THEORY_REQUIRED, 'stops at model evidence gate');
+    t.equal(executorCalls, 0, 'executor was not invoked');
+    t.match(res.problems.join('; '), /model evidence required/u);
     t.equal(violations[violations.length - 1].scope, 'theory-gate');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();

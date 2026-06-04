@@ -5,6 +5,7 @@ import os from 'node:os';
 
 import {analyzeQuestHealth, renderHealth} from '../../scripts/solve/health.js';
 import {appendEvent, saveQuest} from '../../scripts/solve/store.js';
+import {ingestEvidence} from '../../scripts/solve/evidence.js';
 import {
   EVENT_ATTEMPT,
   EVENT_EVIDENCE_INGESTED,
@@ -51,6 +52,7 @@ tap.test('Quest health', async (t) => {
       health.signals.map((signal) => signal.type).sort(),
       [
         'fresh-evidence-unrecorded',
+        'fresh-closure-evidence-unrecorded',
         'frontier-theory-required',
         'live-probe-diverges-from-projection',
         'metric-zero-but-done-false',
@@ -196,6 +198,59 @@ tap.test('Quest health', async (t) => {
 
     const health = analyzeQuestHealth(root, quest);
     t.match(health.nextAction, /run the 3-run consecutive proof for demo-main/);
+
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('does not compare closure metric to a different frontier metric identity', (t) => {
+    const root = tmp();
+    const reportDir = path.join(root, 'test-output', 'reports');
+    fs.mkdirSync(reportDir, {recursive: true});
+    const report = path.join(reportDir, 'rr.report.json');
+    fs.writeFileSync(report, JSON.stringify({
+      timestamp: '2026-06-04T10:00:00.000Z',
+      summary: {total: 1, passed: 0, failed: 1},
+      optimizationSummary: {totalPriorityItems: 1},
+      scenarios: [{
+        scenario: 'rr',
+        passed: false,
+        priorityRecoveryInvariants: {
+          invariants: [{id: 'publication_converged', passed: false}],
+        },
+      }],
+    }));
+    const quest = {
+      id: 'demo',
+      statement: 'Prove three clean rr runs.',
+      priority: 1,
+      doneWhen: {
+        probe: 'scenario-harness',
+        args: {scenario: 'rr', reportDir, consecutive: 3, metric: 'priority'},
+      },
+      frontiers: [
+        {id: 'demo-main', priority: 1,
+          metric: {
+            probe: 'scenario-harness',
+            args: {scenario: 'rr', reportDir, metric: 'distance'},
+          }},
+      ],
+    };
+    saveQuest(root, quest);
+    ingestEvidence(root, {
+      questId: quest.id,
+      frontierId: 'demo-main',
+      evidencePath: report,
+    });
+
+    const health = analyzeQuestHealth(root, quest);
+    t.notOk(
+      health.signals.some((signal) =>
+        signal.type === 'live-probe-diverges-from-projection'),
+      'frontier distance projection is compared only with live distance',
+    );
+    t.equal(health.projectionFreshness.frontier.fresh, true);
+    t.equal(health.projectionFreshness.closure.fresh, false);
 
     fs.rmSync(root, {recursive: true, force: true});
     t.end();

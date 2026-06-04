@@ -51,6 +51,16 @@ tap.test('honesty checks (the only process)', async (t) => {
   t.test('a null metric WITHOUT the invalid-sample flag is still rejected', (t) => {
     const v = validateAttempt(attempt({metricAfter: null}), okCtx);
     t.ok(v.some((e) => e.includes('finite numbers')));
+    t.ok(v.some((e) => e.includes('invalidSample=true')));
+    t.end();
+  });
+
+  t.test('before and after metrics must share probe identity when recorded', (t) => {
+    const v = validateAttempt(
+      attempt({beforeProbeKey: 'probe:a', afterProbeKey: 'probe:b'}),
+      okCtx,
+    );
+    t.ok(v.some((e) => e.includes('same probe identity')));
     t.end();
   });
 

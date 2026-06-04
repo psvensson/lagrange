@@ -35,6 +35,7 @@ import {
   THEORY_SCOPE_FRONTIER,
   THEORY_SCOPE_SYSTEM,
 } from './constants.js';
+import {isFrontierProbeEvent} from './probe-spec.js';
 
 function ensureDir(dir) {
   fs.mkdirSync(dir, {recursive: true});
@@ -167,6 +168,7 @@ function applyFinding(frontier, event) {
 
 function applyEvidenceIngested(frontierState, event) {
   if (!frontierState) return;
+  if (!isFrontierProbeEvent(event)) return;
   if (event.metric !== undefined && event.metric !== null) {
     frontierState.current = event.metric;
   }
@@ -316,6 +318,7 @@ export function invariantHighWater(log, frontierId = null) {
     const measured =
       (event.type === EVENT_ATTEMPT && event.invalidSample !== true) ||
       (event.type === EVENT_EVIDENCE_INGESTED &&
+        isFrontierProbeEvent(event) &&
         typeof event.metric === 'number');
     if (!measured) continue;
     const labels = Array.isArray(event.satisfiedInvariants) ?
@@ -350,6 +353,7 @@ export function projectInvariantLedger(log, frontierId = null) {
     const measured =
       (event.type === EVENT_ATTEMPT && event.invalidSample !== true) ||
       (event.type === EVENT_EVIDENCE_INGESTED &&
+        isFrontierProbeEvent(event) &&
         typeof event.metric === 'number');
     if (!measured) continue;
     const green = new Set(
@@ -400,6 +404,7 @@ export function appendFinding(root, questId, finding) {
     claim: finding.claim,
     evidence: finding.evidence || null,
     rulesOut: finding.rulesOut || null,
+    regressionClassification: finding.regressionClassification || null,
   });
 }
 

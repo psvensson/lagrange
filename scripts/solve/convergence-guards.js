@@ -29,6 +29,55 @@ function regressionLabelSets(log, frontierId) {
     .filter((set) => set.size > 0);
 }
 
+function normalizeLabels(value) {
+  if (Array.isArray(value)) return value.map(String).filter(Boolean);
+  if (typeof value === 'string' && value.trim()) return [value.trim()];
+  return [];
+}
+
+function regressionClassification(event) {
+  return event?.regressionClassification ||
+    event?.classification?.regression ||
+    event?.regression ||
+    null;
+}
+
+function explainsRegression(event, redLabels, regressionIndex, regressionEvent) {
+  if (event.type !== EVENT_FINDING) return false;
+  const classification = regressionClassification(event);
+  if (!classification || typeof classification !== 'object') return false;
+  const resolution = String(
+    classification.resolution ||
+    classification.action ||
+    classification.status ||
+    '',
+  );
+  if (!['explained', 'abandoned', 'accepted', 'restored'].includes(resolution)) {
+    return false;
+  }
+  const labels = normalizeLabels(
+    classification.labels ||
+    classification.redLabels ||
+    classification.invariants,
+  );
+  if (labels.length === 0 ||
+    !labels.some((label) => redLabels.includes(label))) {
+    return false;
+  }
+  if (Number.isInteger(classification.regressionEventIndex) &&
+    classification.regressionEventIndex !== regressionIndex) {
+    return false;
+  }
+  const expectedFingerprint = classification.evidenceFingerprint ||
+    classification.regressionEvidenceFingerprint ||
+    null;
+  if (expectedFingerprint && regressionEvent?.evidenceFingerprint &&
+    expectedFingerprint !== regressionEvent.evidenceFingerprint) {
+    return false;
+  }
+  return true;
+}
+
 // Group an ordered run of regressed-label sets into disjoint "families" by transitive
 // intersection, returning the per-regression family index sequence plus a representative
 // label union for each family. Two regressions that share any invariant belong to the
@@ -140,11 +189,13 @@ export function regressionRestoreStatus(log, frontierId = null, ledger = null) {
     return {pending: false, redLabels: [], explained: false};
   }
   let lastRegressionIndex = -1;
+  let lastRegression = null;
   for (let i = log.length - 1; i >= 0; i -= 1) {
     const event = log[i];
     if (event.type === EVENT_VIOLATION && event.scope === REGRESSION_SCOPE &&
       (!frontierId || event.frontier === frontierId)) {
       lastRegressionIndex = i;
+      lastRegression = event;
       break;
     }
   }
@@ -152,9 +203,14 @@ export function regressionRestoreStatus(log, frontierId = null, ledger = null) {
     return {pending: false, redLabels, explained: false};
   }
   const explained = log.slice(lastRegressionIndex + 1).some((event) =>
-    event.type === EVENT_FINDING &&
-    (!frontierId || event.frontier === frontierId));
-  return {pending: !explained, redLabels, explained};
+    (!frontierId || event.frontier === frontierId) &&
+    explainsRegression(event, redLabels, lastRegressionIndex, lastRegression));
+  return {
+    pending: !explained,
+    redLabels,
+    explained,
+    regressionEventIndex: lastRegressionIndex,
+  };
 }
 
 // Whether the recorded change scope has crossed the terminal file bound. Advisory

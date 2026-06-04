@@ -7,6 +7,7 @@ import {
   THEORY_RESULT_ACTIVE,
   THEORY_RESULT_SUPPORTED,
 } from './constants.js';
+import {isFrontierProbeEvent} from './probe-spec.js';
 
 const MOVEMENT_NO_EVIDENCE = 'no_evidence';
 const MOVEMENT_NO_PREVIOUS = 'no_previous';
@@ -41,6 +42,7 @@ function eventTime(event) {
 export function evidenceEvents(log, frontierId = null) {
   return log.filter((event) =>
     event.type === EVENT_EVIDENCE_INGESTED &&
+    isFrontierProbeEvent(event) &&
     (!frontierId || event.frontier === frontierId));
 }
 

@@ -206,11 +206,29 @@ function cmdFinding(root, args) {
     throw new Error('finding: --claim "<what was learned>" is required');
   }
   loadQuest(root, id);
+  const regressionLabels = Array.isArray(args['regression-label']) ?
+    args['regression-label'] :
+    (typeof args['regression-label'] === 'string' ?
+      [args['regression-label']] :
+      []);
+  const regressionClassification = typeof args['regression-resolution'] === 'string' ?
+    {
+      resolution: args['regression-resolution'],
+      labels: regressionLabels,
+      regressionEventIndex: args['regression-event'] !== undefined ?
+        Number(args['regression-event']) :
+        null,
+      evidenceFingerprint: typeof args['regression-fingerprint'] === 'string' ?
+        args['regression-fingerprint'] :
+        null,
+    } :
+    null;
   const stamped = appendFinding(root, id, {
     frontier: args.frontier,
     claim: args.claim,
     evidence: typeof args.evidence === 'string' ? args.evidence : null,
     rulesOut: typeof args.rulesOut === 'string' ? args.rulesOut : null,
+    regressionClassification,
   });
   process.stdout.write(`recorded finding for ${args.frontier} @ ${stamped.ts}\n`);
 }
@@ -312,6 +330,7 @@ function cmdIngestEvidence(root, args) {
     questId: id,
     frontierId: frontier,
     evidencePath: evidence,
+    probeScope: args.probe === 'doneWhen' ? 'doneWhen' : 'frontier',
   });
   process.stdout.write(`Ingested evidence: ${stamped.evidence} for ${frontier}\n`);
 }

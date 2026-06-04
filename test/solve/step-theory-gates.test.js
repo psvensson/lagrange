@@ -102,17 +102,14 @@ tap.test('step theory gates', async (t) => {
     commitStep(root, quest, 'flat');
     commitStep(root, quest, 'flat2');
 
-    // step at widen-scope without theory is blocked
-    runStep(root, quest);
-    const blocked = runStep(root, quest, {
-      changeRef: makeDiff(root, 'flat3'),
-      summary: 'flat3',
-    });
+    // step at widen-scope without theory is blocked before a pending attempt is pinned
+    const blocked = runStep(root, quest);
     t.equal(blocked.terminal, 'theory-required');
     t.match(blocked.problems.join('\n'), /frontier theory required/);
 
     recordFrontierTheory(root, quest);
     // next step with theory is allowed
+    runStep(root, quest);
     const allowed = runStep(root, quest, {
       changeRef: makeDiff(root, 'with-theory'),
       summary: 'with theory',
@@ -137,13 +134,8 @@ tap.test('step theory gates', async (t) => {
       theoryRef: 'theory-frontier2',
     });
 
-    // Rung 3 (model) needs system theory
-    runStep(root, quest);
-    const needsSystem = runStep(root, quest, {
-      changeRef: makeDiff(root, 'c1'),
-      summary: 'no system theory yet',
-      theoryRef: 'theory-frontier2',
-    });
+    // Rung 3 (model) needs system theory before a pending attempt is pinned
+    const needsSystem = runStep(root, quest);
     t.equal(needsSystem.terminal, 'theory-required');
     t.match(needsSystem.problems.join('\n'), /system theory required/);
 
@@ -151,6 +143,7 @@ tap.test('step theory gates', async (t) => {
     recordFrontierTheory(root, quest, 'theory-model', 'model');
     
     // Rung 3 with system theory but without model ref throws
+    runStep(root, quest);
     t.throws(() => runStep(root, quest, {
       changeRef: makeDiff(root, 'c'),
       summary: 'model rung without model',
@@ -285,12 +278,7 @@ tap.test('step theory gates', async (t) => {
       dominantReason: 'priority_spread_pending',
     });
 
-    runStep(root, quest);
-    const blocked = runStep(root, quest, {
-      changeRef: makeDiff(root, 'stale'),
-      summary: 'old selected theory',
-      theoryRef: 'theory-snapshot',
-    });
+    const blocked = runStep(root, quest);
     t.equal(blocked.terminal, 'theory-required');
     t.match(blocked.problems.join('\n'), /stale/);
     fs.rmSync(root, {recursive: true, force: true});

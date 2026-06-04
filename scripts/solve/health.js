@@ -26,6 +26,12 @@ import {
   regressionRestoreStatus,
   scopeTerminalStatus,
 } from './convergence-guards.js';
+import {continuationFromHealth} from './continuation.js';
+import {
+  eventProbeKey,
+  isFrontierProbeEvent,
+  stableProbeKey,
+} from './probe-spec.js';
 
 const DEFAULT_CONSECUTIVE_TARGET = 1;
 const NUM_TWO = 2;
@@ -109,18 +115,40 @@ function layerPingPongSignal(theories) {
   return null;
 }
 
-function liveProbeDivergence(state, liveProbe) {
-  const currentMetrics = state.frontiers
-    .map((frontier) => frontier.current)
-    .filter((metric) => typeof metric === 'number');
-  if (typeof liveProbe.metric !== 'number' || currentMetrics.length === 0) {
+function eventMetric(event) {
+  if (!event) return null;
+  if (event.type === EVENT_ATTEMPT) return event.metricAfter;
+  if (event.type === 'evidence-ingested') return event.metric;
+  return null;
+}
+
+function latestMetricEventForProbe(log, frontierId, probeSpec) {
+  const probeKey = stableProbeKey(probeSpec);
+  let legacyFallback = null;
+  for (let index = log.length - 1; index >= 0; index -= 1) {
+    const event = log[index];
+    if (event.frontier !== frontierId) continue;
+    if (event.type !== EVENT_ATTEMPT && event.type !== 'evidence-ingested') continue;
+    if (event.type === 'evidence-ingested' && !isFrontierProbeEvent(event)) continue;
+    if (typeof eventMetric(event) !== 'number') continue;
+    const recordedKey = eventProbeKey(event);
+    if (probeKey && recordedKey === probeKey) return event;
+    if (!recordedKey && !legacyFallback) legacyFallback = event;
+  }
+  return legacyFallback;
+}
+
+function liveProbeDivergence(log, frontierId, probeSpec, liveProbe) {
+  if (typeof liveProbe?.metric !== 'number') {
     return null;
   }
-  const latest = currentMetrics[currentMetrics.length - 1];
-  if (latest !== liveProbe.metric) {
+  const latest = latestMetricEventForProbe(log, frontierId, probeSpec);
+  const projectedMetric = eventMetric(latest);
+  if (typeof projectedMetric !== 'number') return null;
+  if (projectedMetric !== liveProbe.metric) {
     return {
       type: 'live-probe-diverges-from-projection',
-      projectedMetric: latest,
+      projectedMetric,
       liveMetric: liveProbe.metric,
       severity: 'high',
     };
@@ -139,7 +167,8 @@ function frontierNeeds(quest, state, log, frontier) {
     {stale: false, reason: null};
   const noProgress = noProgressAttempts(log, frontier.id);
 
-  const evidenceEvents = log.filter((e) => e.type === 'evidence-ingested');
+  const evidenceEvents = log.filter((e) =>
+    e.type === 'evidence-ingested' && isFrontierProbeEvent(e));
   const sameDominantReasonRepeat = evidenceEvents.length >= 2 &&
     evidenceEvents[evidenceEvents.length - 1].dominantReason &&
     evidenceEvents[evidenceEvents.length - 1].dominantReason === evidenceEvents[evidenceEvents.length - 2].dominantReason;
@@ -148,7 +177,8 @@ function frontierNeeds(quest, state, log, frontier) {
     evidenceEvents[evidenceEvents.length - 1].owner === evidenceEvents[evidenceEvents.length - 2].owner &&
     evidenceEvents[evidenceEvents.length - 1].boundary === evidenceEvents[evidenceEvents.length - 2].boundary;
 
-  const latestEvidence = [...log].reverse().find((e) => e.type === 'evidence-ingested');
+  const latestEvidence = [...log].reverse().find((e) =>
+    e.type === 'evidence-ingested' && isFrontierProbeEvent(e));
   const namesLiveness = latestEvidence && (latestEvidence.owner || latestEvidence.boundary || latestEvidence.waitMode);
   const selectedIsObservationGap = selected && (selected.mechanism === 'observation_gap' || selected.layer === 'observation');
   const localTheoryTooNarrow = namesLiveness && selectedIsObservationGap;
@@ -208,6 +238,9 @@ export function analyzeQuestHealth(root, quest, options = {}) {
   const state = options.state || projectState(quest, log);
   const pick = pickFrontier(quest, state, options.scoreFn);
   const liveProbe = options.liveProbe || evaluate(quest.doneWhen, {root});
+  const frontierLiveProbe = pick ?
+    (options.frontierLiveProbe || evaluate(pick.def.metric, {root})) :
+    null;
   const frontier = pick?.state || null;
   const needs = frontier ? frontierNeeds(quest, state, log, frontier) : {};
   const theories = frontier ? lastAttemptTheories(log, state, frontier.id) : [];
@@ -216,18 +249,39 @@ export function analyzeQuestHealth(root, quest, options = {}) {
   const signals = [
     sameMechanismSignal(theories),
     layerPingPongSignal(theories),
-    liveProbeDivergence(state, liveProbe),
+    frontier ?
+      liveProbeDivergence(log, frontier.id, pick.def.metric, frontierLiveProbe) :
+      null,
   ].filter(Boolean);
 
-  const unrecorded = detectUnrecordedEvidence(root, quest.id);
-  if (unrecorded) {
+  const freshnessRequiresHistory = options.requiresMeasuredHistory !== false;
+  const frontierUnrecorded = detectUnrecordedEvidence(root, quest.id, {
+    kind: 'frontier',
+    requiresMeasuredHistory: freshnessRequiresHistory,
+  });
+  const closureUnrecorded = detectUnrecordedEvidence(root, quest.id, {
+    kind: 'closure',
+    requiresMeasuredHistory: freshnessRequiresHistory,
+  });
+  if (frontierUnrecorded) {
     signals.push({
       type: 'fresh-evidence-unrecorded',
       severity: 'high',
+      evidence: frontierUnrecorded.evidence,
+      command: frontierUnrecorded.command,
+    });
+  }
+  if (closureUnrecorded) {
+    signals.push({
+      type: 'fresh-closure-evidence-unrecorded',
+      severity: 'medium',
+      evidence: closureUnrecorded.evidence,
+      command: closureUnrecorded.command,
     });
   }
 
-  const evidenceEvents = log.filter((e) => e.type === 'evidence-ingested');
+  const evidenceEvents = log.filter((e) =>
+    e.type === 'evidence-ingested' && isFrontierProbeEvent(e));
   const sameDominantReasonRepeat = evidenceEvents.length >= 2 &&
     evidenceEvents[evidenceEvents.length - 1].dominantReason &&
     evidenceEvents[evidenceEvents.length - 1].dominantReason === evidenceEvents[evidenceEvents.length - 2].dominantReason;
@@ -259,7 +313,8 @@ export function analyzeQuestHealth(root, quest, options = {}) {
 
   const latestMetricEvent = [...log].reverse().find((e) =>
     (e.type === 'attempt' && typeof e.metricAfter === 'number') ||
-    (e.type === 'evidence-ingested' && typeof e.metric === 'number')
+    (e.type === 'evidence-ingested' && isFrontierProbeEvent(e) &&
+      typeof e.metric === 'number')
   );
   let metricZeroNotDone = false;
   if (latestMetricEvent) {
@@ -277,7 +332,8 @@ export function analyzeQuestHealth(root, quest, options = {}) {
   if (frontier) {
     const selectedId = state.theories.selectedByFrontier[frontier.id];
     const selected = selectedId ? state.theories.byId[selectedId] : null;
-    const latestEvidence = [...log].reverse().find((e) => e.type === 'evidence-ingested');
+    const latestEvidence = [...log].reverse().find((e) =>
+      e.type === 'evidence-ingested' && isFrontierProbeEvent(e));
     const namesLiveness = latestEvidence && (latestEvidence.owner || latestEvidence.boundary || latestEvidence.waitMode);
     const selectedIsObservationGap = selected && (selected.mechanism === 'observation_gap' || selected.layer === 'observation');
     if (namesLiveness && selectedIsObservationGap) {
@@ -403,8 +459,9 @@ export function analyzeQuestHealth(root, quest, options = {}) {
         `(${scopeTerminal.fileCount} changed files exceed the limit) before the next attempt`;
     }
   }
-  return {
+  const health = {
     questId: quest.id,
+    questStatus: state.questStatus || null,
     frontier: frontier ? frontier.id : null,
     rungIndex: frontier ? frontier.rungIndex : null,
     rungName: rungName || (
@@ -414,6 +471,18 @@ export function analyzeQuestHealth(root, quest, options = {}) {
     modelGuidance: needs.modelGuidance || null,
     currentBlocker,
     scopePressure,
+    projectionFreshness: {
+      frontier: {
+        fresh: !frontierUnrecorded,
+        evidence: frontierUnrecorded?.evidence || null,
+        command: frontierUnrecorded?.command || null,
+      },
+      closure: {
+        fresh: !closureUnrecorded,
+        evidence: closureUnrecorded?.evidence || null,
+        command: closureUnrecorded?.command || null,
+      },
+    },
     reopens,
     cannotMeasureParked: cannotMeasureParked.map((f) => ({
       id: f.id,
@@ -421,6 +490,13 @@ export function analyzeQuestHealth(root, quest, options = {}) {
     })),
     signals,
     nextAction,
+  };
+  return {
+    ...health,
+    continuation: continuationFromHealth(
+      health,
+      options.continuationOptions || {},
+    ),
   };
 }
 
@@ -430,12 +506,24 @@ export function renderHealth(health) {
   lines.push(`- frontier: ${health.frontier || 'none'}`);
   lines.push(`- rungIndex: ${health.rungIndex ?? 'none'}`);
   lines.push(`- reopens: ${health.reopens || 0}`);
+  lines.push(`- continuation: ${health.continuation?.status || 'allowed'}`);
   lines.push(`- nextAction: ${health.nextAction}`);
   if (health.currentBlocker) {
     lines.push(`- currentOwner: ${health.currentBlocker.owner || 'unknown'}`);
     lines.push(`- currentBoundary: ${health.currentBlocker.boundary || 'unknown'}`);
     lines.push(`- currentReason: ${health.currentBlocker.dominantReason || 'unknown'}`);
     lines.push(`- blockerMovement: ${health.currentBlocker.movement || 'unknown'}`);
+  }
+  if (health.projectionFreshness) {
+    lines.push('', '## Projection Freshness');
+    lines.push(`- frontier: ${health.projectionFreshness.frontier.fresh ? 'fresh' : 'stale'}`);
+    if (health.projectionFreshness.frontier.command) {
+      lines.push(`- frontierCommand: ${health.projectionFreshness.frontier.command}`);
+    }
+    lines.push(`- closure: ${health.projectionFreshness.closure.fresh ? 'fresh' : 'stale'}`);
+    if (health.projectionFreshness.closure.command) {
+      lines.push(`- closureCommand: ${health.projectionFreshness.closure.command}`);
+    }
   }
   lines.push('', '## Signals');
   if (health.signals.length === 0) {

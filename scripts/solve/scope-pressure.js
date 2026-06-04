@@ -5,6 +5,7 @@ import {inspectChangeArtifact} from './change-artifact.js';
 
 const BROAD_OWNER_AREA_LIMIT = 2;
 const LARGE_DIFF_FILE_LIMIT = 10;
+const SPLIT_GROUP_FILE_LIMIT = 20;
 
 function ownerAreaForPath(filePath) {
   const segments = String(filePath || '').split('/');
@@ -29,6 +30,56 @@ function attemptInspections(root, quest, log) {
       event,
       inspection: inspectChangeArtifact(root, quest, event.changeRef),
     }));
+}
+
+function summarizeAttempts(inspections) {
+  return inspections.map((entry) => {
+    const paths = entry.inspection.changedPaths || [];
+    const ownerAreas = [...new Set(paths.map(ownerAreaForPath))].sort();
+    return {
+      ts: entry.event.ts || null,
+      frontier: entry.event.frontier || null,
+      changeRef: entry.event.changeRef || null,
+      fileCount: paths.length,
+      ownerAreas,
+      categories: entry.inspection.categories || [],
+      changedPaths: paths,
+    };
+  });
+}
+
+function splitPlanFor(changedPaths) {
+  const groups = new Map();
+  for (const filePath of changedPaths) {
+    const ownerArea = ownerAreaForPath(filePath);
+    if (!groups.has(ownerArea)) groups.set(ownerArea, []);
+    groups.get(ownerArea).push(filePath);
+  }
+  return [...groups.entries()].map(([ownerArea, paths]) => ({
+    ownerArea,
+    fileCount: paths.length,
+    changedPaths: paths.sort(),
+    recommended: paths.length <= SPLIT_GROUP_FILE_LIMIT,
+  })).sort((a, b) => b.fileCount - a.fileCount ||
+    a.ownerArea.localeCompare(b.ownerArea));
+}
+
+function recommendedActions(changedPaths, ownerAreas, categories) {
+  const actions = [];
+  if (changedPaths.length > LARGE_DIFF_FILE_LIMIT) {
+    actions.push(
+      `split by owner area before the next attempt (${changedPaths.length} files)`,
+    );
+  }
+  if (ownerAreas.length > BROAD_OWNER_AREA_LIMIT) {
+    actions.push(
+      `land or separate ${ownerAreas.length} owner areas: ${ownerAreas.join(', ')}`,
+    );
+  }
+  if (categories.includes('runtime') && categories.includes('workflow')) {
+    actions.push('separate runtime changes from quest workflow changes');
+  }
+  return actions;
 }
 
 export function analyzeScopePressure(root, quest, log) {
@@ -70,6 +121,9 @@ export function analyzeScopePressure(root, quest, log) {
     changedPaths,
     ownerAreas,
     categories,
+    attempts: summarizeAttempts(inspections),
+    splitPlan: splitPlanFor(changedPaths),
+    recommendedActions: recommendedActions(changedPaths, ownerAreas, categories),
     signals,
   };
 }
@@ -79,6 +133,20 @@ export function renderScopePressure(scopePressure) {
   lines.push(`- Changed files: ${scopePressure.changedPaths.length}`);
   lines.push(`- Owner areas: ${scopePressure.ownerAreas.join(', ') || 'none'}`);
   lines.push(`- Categories: ${scopePressure.categories.join(', ') || 'none'}`);
+  if (scopePressure.recommendedActions?.length > 0) {
+    for (const action of scopePressure.recommendedActions) {
+      lines.push(`- Action: ${action}`);
+    }
+  }
+  if (scopePressure.splitPlan?.length > 0) {
+    lines.push('- Split plan:');
+    for (const group of scopePressure.splitPlan) {
+      lines.push(
+        `  - ${group.ownerArea}: ${group.fileCount} file(s)` +
+        `${group.recommended ? '' : ' (split further)'}`,
+      );
+    }
+  }
   if (scopePressure.signals.length === 0) {
     lines.push('- Signals: none');
   } else {

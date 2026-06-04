@@ -1,0 +1,2414 @@
+diff --git a/scripts/solve.js b/scripts/solve.js
+index f4f84eec..30d80dad 100644
+--- a/scripts/solve.js
++++ b/scripts/solve.js
+@@ -206,11 +206,29 @@ function cmdFinding(root, args) {
+     throw new Error('finding: --claim "<what was learned>" is required');
+   }
+   loadQuest(root, id);
++  const regressionLabels = Array.isArray(args['regression-label']) ?
++    args['regression-label'] :
++    (typeof args['regression-label'] === 'string' ?
++      [args['regression-label']] :
++      []);
++  const regressionClassification = typeof args['regression-resolution'] === 'string' ?
++    {
++      resolution: args['regression-resolution'],
++      labels: regressionLabels,
++      regressionEventIndex: args['regression-event'] !== undefined ?
++        Number(args['regression-event']) :
++        null,
++      evidenceFingerprint: typeof args['regression-fingerprint'] === 'string' ?
++        args['regression-fingerprint'] :
++        null,
++    } :
++    null;
+   const stamped = appendFinding(root, id, {
+     frontier: args.frontier,
+     claim: args.claim,
+     evidence: typeof args.evidence === 'string' ? args.evidence : null,
+     rulesOut: typeof args.rulesOut === 'string' ? args.rulesOut : null,
++    regressionClassification,
+   });
+   process.stdout.write(`recorded finding for ${args.frontier} @ ${stamped.ts}\n`);
+ }
+@@ -312,6 +330,7 @@ function cmdIngestEvidence(root, args) {
+     questId: id,
+     frontierId: frontier,
+     evidencePath: evidence,
++    probeScope: args.probe === 'doneWhen' ? 'doneWhen' : 'frontier',
+   });
+   process.stdout.write(`Ingested evidence: ${stamped.evidence} for ${frontier}\n`);
+ }
+diff --git a/scripts/solve/attempt.js b/scripts/solve/attempt.js
+index 33ad6d89..381fbd75 100644
+--- a/scripts/solve/attempt.js
++++ b/scripts/solve/attempt.js
+@@ -9,6 +9,11 @@ import {stepTheoryGateProblems} from './theory.js';
+ import {inspectChangeArtifact} from './change-artifact.js';
+ import {analyzeScopePressure} from './scope-pressure.js';
+ import {scopeTerminalStatus} from './convergence-guards.js';
++import {analyzeQuestHealth} from './health.js';
++import {
++  continuationErrorMessage,
++  continuationIsAllowed,
++} from './continuation.js';
+ 
+ export function runAttemptCommand(root, args) {
+   const questId = args.id;
+@@ -48,6 +53,15 @@ export function runAttemptCommand(root, args) {
+   if (readinessProblems.length > 0) {
+     throw new Error(`theory gate failed: ${readinessProblems.join('; ')}`);
+   }
++  const health = analyzeQuestHealth(root, quest, {
++    state,
++    continuationOptions: {
++      requireModelEvidence: !args.modelRef && !args.modelNotApplicable,
++    },
++  });
++  if (!continuationIsAllowed(health.continuation)) {
++    throw new Error(continuationErrorMessage(health.continuation));
++  }
+ 
+   const ctx = makeRunContext({
+     changeRef,
+diff --git a/scripts/solve/audit.js b/scripts/solve/audit.js
+index c4f0702d..723c6b36 100644
+--- a/scripts/solve/audit.js
++++ b/scripts/solve/audit.js
+@@ -31,6 +31,16 @@ import {
+ } from './change-artifact.js';
+ import {loadQuest, projectState, readLog} from './store.js';
+ import {questClass, closureKind, isDecisionClosure} from './closure-kind.js';
++import {analyzeQuestHealth} from './health.js';
++import {
++  CONTINUATION_BLOCKED_MEASUREMENT,
++  CONTINUATION_BLOCKED_METRIC_PROJECTION,
++  CONTINUATION_BLOCKED_REGRESSION,
++  CONTINUATION_BLOCKED_SCOPE,
++  CONTINUATION_BLOCKED_UNRECORDED_EVIDENCE,
++  continuationIsAllowed,
++} from './continuation.js';
++import {isFrontierProbeEvent} from './probe-spec.js';
+ 
+ const BLOCKED_THEORY_STATUSES = Object.freeze([
+   THEORY_RESULT_AVOIDED,
+@@ -128,7 +138,9 @@ function auditMetricZeroNeedsTheoryResult(log, startIndex) {
+   const latestMetricIndex = log.findLastIndex((event, index) =>
+     index >= startIndex &&
+     ((event.type === EVENT_ATTEMPT && typeof event.metricAfter === 'number') ||
+-    (event.type === EVENT_EVIDENCE_INGESTED && typeof event.metric === 'number')));
++    (event.type === EVENT_EVIDENCE_INGESTED &&
++      isFrontierProbeEvent(event) &&
++      typeof event.metric === 'number')));
+   if (latestMetricIndex < 0) return [];
+   const event = log[latestMetricIndex];
+   const metric = event.type === EVENT_ATTEMPT ? event.metricAfter : event.metric;
+@@ -191,6 +203,7 @@ function auditSourceChangeVerification(root, quest, log, startIndex) {
+ 
+ function isModelEvidenceFinding(event, frontier) {
+   if (event.type === EVENT_EVIDENCE_INGESTED && event.frontier === frontier) {
++    if (!isFrontierProbeEvent(event)) return false;
+     return isModelEvidenceRef(event.evidence);
+   }
+   return event.type === EVENT_FINDING &&
+@@ -272,6 +285,7 @@ function auditUnmeasuredTheoryPromotion(log, startIndex) {
+     const hasMeasuredEvidence = later.some((e) =>
+       e.type === EVENT_EVIDENCE_INGESTED &&
+       e.frontier === frontier &&
++      isFrontierProbeEvent(e) &&
+       typeof e.metric === 'number');
+     if (!hasMeasuredEvidence) {
+       problems.push(problem(
+@@ -284,6 +298,22 @@ function auditUnmeasuredTheoryPromotion(log, startIndex) {
+   return problems;
+ }
+ 
++function auditContinuation(root, quest) {
++  const health = analyzeQuestHealth(root, quest);
++  if (continuationIsAllowed(health.continuation)) return [];
++  const hardCodes = [
++    CONTINUATION_BLOCKED_UNRECORDED_EVIDENCE,
++    CONTINUATION_BLOCKED_METRIC_PROJECTION,
++    CONTINUATION_BLOCKED_REGRESSION,
++    CONTINUATION_BLOCKED_SCOPE,
++    CONTINUATION_BLOCKED_MEASUREMENT,
++  ];
++  if (!hardCodes.includes(health.continuation.status)) return [];
++  return health.continuation.problems.map((message) => problem(
++    `continuation blocked: ${message}`,
++  ));
++}
++
+ export function auditQuest(root, quest) {
+   const log = readLog(root, quest.id);
+   const state = projectState(quest, log);
+@@ -297,6 +327,7 @@ export function auditQuest(root, quest) {
+     ...auditMetricZeroNeedsTheoryResult(log, startIndex),
+     ...auditUnmeasuredTheoryPromotion(log, startIndex),
+     ...auditReportOrdering(root, quest, log),
++    ...auditContinuation(root, quest),
+   ];
+   const unrecorded = detectUnrecordedEvidence(root, quest.id);
+   if (unrecorded) {
+diff --git a/scripts/solve/continuation.js b/scripts/solve/continuation.js
+new file mode 100644
+index 00000000..c54e5104
+--- /dev/null
++++ b/scripts/solve/continuation.js
+@@ -0,0 +1,114 @@
++export const CONTINUATION_ALLOWED = 'allowed';
++export const CONTINUATION_BLOCKED_UNRECORDED_EVIDENCE =
++  'blocked-unrecorded-evidence';
++export const CONTINUATION_BLOCKED_METRIC_PROJECTION =
++  'blocked-metric-projection';
++export const CONTINUATION_BLOCKED_SCOPE = 'blocked-scope';
++export const CONTINUATION_BLOCKED_REGRESSION = 'blocked-regression';
++export const CONTINUATION_BLOCKED_THEORY = 'blocked-theory';
++export const CONTINUATION_BLOCKED_MEASUREMENT = 'blocked-measurement';
++
++const BLOCKING_SIGNAL_CODES = Object.freeze({
++  'fresh-evidence-unrecorded': CONTINUATION_BLOCKED_UNRECORDED_EVIDENCE,
++  'live-probe-diverges-from-projection': CONTINUATION_BLOCKED_METRIC_PROJECTION,
++  'scope-pressure-terminal': CONTINUATION_BLOCKED_SCOPE,
++  'regression-restore-required': CONTINUATION_BLOCKED_REGRESSION,
++  'cannot-measure': CONTINUATION_BLOCKED_MEASUREMENT,
++  'system-theory-required': CONTINUATION_BLOCKED_THEORY,
++  'frontier-theory-required': CONTINUATION_BLOCKED_THEORY,
++  'selected-theory-stale': CONTINUATION_BLOCKED_THEORY,
++  'metric-zero-but-done-false': CONTINUATION_BLOCKED_THEORY,
++});
++
++const CODE_PRECEDENCE = Object.freeze([
++  CONTINUATION_BLOCKED_UNRECORDED_EVIDENCE,
++  CONTINUATION_BLOCKED_METRIC_PROJECTION,
++  CONTINUATION_BLOCKED_REGRESSION,
++  CONTINUATION_BLOCKED_SCOPE,
++  CONTINUATION_BLOCKED_MEASUREMENT,
++  CONTINUATION_BLOCKED_THEORY,
++]);
++
++function signalMessage(signal) {
++  if (signal.type === 'fresh-evidence-unrecorded') {
++    return signal.command ?
++      `fresh frontier evidence is not recorded; run ${signal.command}` :
++      'fresh frontier evidence is not recorded';
++  }
++  if (signal.type === 'live-probe-diverges-from-projection') {
++    return `live frontier metric ${signal.liveMetric} differs from recorded ` +
++      `metric ${signal.projectedMetric}`;
++  }
++  if (signal.type === 'scope-pressure-terminal') {
++    return signal.mechanism ?
++      `scope pressure terminal: ${signal.mechanism}` :
++      'scope pressure terminal';
++  }
++  if (signal.type === 'regression-restore-required') {
++    return signal.mechanism ?
++      `regression restore required: ${signal.mechanism}` :
++      'regression restore required';
++  }
++  if (signal.type === 'frontier-theory-required') {
++    return signal.mechanism ?
++      `frontier theory required for ${signal.mechanism}` :
++      'frontier theory required';
++  }
++  if (signal.type === 'system-theory-required') {
++    return signal.mechanism ?
++      `system theory required for ${signal.mechanism}` :
++      'system theory required';
++  }
++  if (signal.type === 'selected-theory-stale') {
++    return signal.mechanism ?
++      `selected theory stale: ${signal.mechanism}` :
++      'selected theory stale';
++  }
++  if (signal.type === 'metric-zero-but-done-false') {
++    return 'theory result required when metric is 0 but done is false';
++  }
++  if (signal.type === 'model-contract-evidence-required') {
++    return signal.mechanism ?
++      `model evidence required: ${signal.mechanism}` :
++      'model evidence required';
++  }
++  return signal.mechanism ? `${signal.type}: ${signal.mechanism}` : signal.type;
++}
++
++function signalCode(signal, options) {
++  if (signal.type === 'model-contract-evidence-required' &&
++    options.requireModelEvidence === true) {
++    return CONTINUATION_BLOCKED_THEORY;
++  }
++  return BLOCKING_SIGNAL_CODES[signal.type] || null;
++}
++
++export function continuationFromHealth(health, options = {}) {
++  if (!health || health.questStatus === 'solved') {
++    return {status: CONTINUATION_ALLOWED, code: null, problems: []};
++  }
++  const grouped = new Map();
++  for (const signal of health.signals || []) {
++    const code = signalCode(signal, options);
++    if (!code) continue;
++    if (!grouped.has(code)) grouped.set(code, []);
++    grouped.get(code).push(signalMessage(signal));
++  }
++  for (const code of CODE_PRECEDENCE) {
++    const problems = grouped.get(code);
++    if (problems?.length > 0) {
++      return {status: code, code, problems};
++    }
++  }
++  return {status: CONTINUATION_ALLOWED, code: null, problems: []};
++}
++
++export function continuationIsAllowed(continuation) {
++  return !continuation || continuation.status === CONTINUATION_ALLOWED;
++}
++
++export function continuationErrorMessage(continuation) {
++  if (continuationIsAllowed(continuation)) return '';
++  return `continuation gate failed (${continuation.status}): ` +
++    continuation.problems.join('; ');
++}
+diff --git a/scripts/solve/convergence-guards.js b/scripts/solve/convergence-guards.js
+index c12df441..3e9e42ae 100644
+--- a/scripts/solve/convergence-guards.js
++++ b/scripts/solve/convergence-guards.js
+@@ -29,6 +29,55 @@ function regressionLabelSets(log, frontierId) {
+     .filter((set) => set.size > 0);
+ }
+ 
++function normalizeLabels(value) {
++  if (Array.isArray(value)) return value.map(String).filter(Boolean);
++  if (typeof value === 'string' && value.trim()) return [value.trim()];
++  return [];
++}
++
++function regressionClassification(event) {
++  return event?.regressionClassification ||
++    event?.classification?.regression ||
++    event?.regression ||
++    null;
++}
++
++function explainsRegression(event, redLabels, regressionIndex, regressionEvent) {
++  if (event.type !== EVENT_FINDING) return false;
++  const classification = regressionClassification(event);
++  if (!classification || typeof classification !== 'object') return false;
++  const resolution = String(
++    classification.resolution ||
++    classification.action ||
++    classification.status ||
++    '',
++  );
++  if (!['explained', 'abandoned', 'accepted', 'restored'].includes(resolution)) {
++    return false;
++  }
++  const labels = normalizeLabels(
++    classification.labels ||
++    classification.redLabels ||
++    classification.invariants,
++  );
++  if (labels.length === 0 ||
++    !labels.some((label) => redLabels.includes(label))) {
++    return false;
++  }
++  if (Number.isInteger(classification.regressionEventIndex) &&
++    classification.regressionEventIndex !== regressionIndex) {
++    return false;
++  }
++  const expectedFingerprint = classification.evidenceFingerprint ||
++    classification.regressionEvidenceFingerprint ||
++    null;
++  if (expectedFingerprint && regressionEvent?.evidenceFingerprint &&
++    expectedFingerprint !== regressionEvent.evidenceFingerprint) {
++    return false;
++  }
++  return true;
++}
++
+ // Group an ordered run of regressed-label sets into disjoint "families" by transitive
+ // intersection, returning the per-regression family index sequence plus a representative
+ // label union for each family. Two regressions that share any invariant belong to the
+@@ -140,11 +189,13 @@ export function regressionRestoreStatus(log, frontierId = null, ledger = null) {
+     return {pending: false, redLabels: [], explained: false};
+   }
+   let lastRegressionIndex = -1;
++  let lastRegression = null;
+   for (let i = log.length - 1; i >= 0; i -= 1) {
+     const event = log[i];
+     if (event.type === EVENT_VIOLATION && event.scope === REGRESSION_SCOPE &&
+       (!frontierId || event.frontier === frontierId)) {
+       lastRegressionIndex = i;
++      lastRegression = event;
+       break;
+     }
+   }
+@@ -152,9 +203,14 @@ export function regressionRestoreStatus(log, frontierId = null, ledger = null) {
+     return {pending: false, redLabels, explained: false};
+   }
+   const explained = log.slice(lastRegressionIndex + 1).some((event) =>
+-    event.type === EVENT_FINDING &&
+-    (!frontierId || event.frontier === frontierId));
+-  return {pending: !explained, redLabels, explained};
++    (!frontierId || event.frontier === frontierId) &&
++    explainsRegression(event, redLabels, lastRegressionIndex, lastRegression));
++  return {
++    pending: !explained,
++    redLabels,
++    explained,
++    regressionEventIndex: lastRegressionIndex,
++  };
+ }
+ 
+ // Whether the recorded change scope has crossed the terminal file bound. Advisory
+diff --git a/scripts/solve/current-blocker.js b/scripts/solve/current-blocker.js
+index 8d46a350..fe5b796c 100644
+--- a/scripts/solve/current-blocker.js
++++ b/scripts/solve/current-blocker.js
+@@ -7,6 +7,7 @@ import {
+   THEORY_RESULT_ACTIVE,
+   THEORY_RESULT_SUPPORTED,
+ } from './constants.js';
++import {isFrontierProbeEvent} from './probe-spec.js';
+ 
+ const MOVEMENT_NO_EVIDENCE = 'no_evidence';
+ const MOVEMENT_NO_PREVIOUS = 'no_previous';
+@@ -41,6 +42,7 @@ function eventTime(event) {
+ export function evidenceEvents(log, frontierId = null) {
+   return log.filter((event) =>
+     event.type === EVENT_EVIDENCE_INGESTED &&
++    isFrontierProbeEvent(event) &&
+     (!frontierId || event.frontier === frontierId));
+ }
+ 
+diff --git a/scripts/solve/evidence-identity.js b/scripts/solve/evidence-identity.js
+index b9f4f33c..5dfd5040 100644
+--- a/scripts/solve/evidence-identity.js
++++ b/scripts/solve/evidence-identity.js
+@@ -2,18 +2,14 @@ import crypto from 'node:crypto';
+ import fs from 'node:fs';
+ import path from 'node:path';
+ 
+-const HASH_ALGORITHM = 'sha256';
++import {
++  eventProbeKey,
++  probeSpecFromIdentity,
++  stableProbeKey,
++  stableStringify,
++} from './probe-spec.js';
+ 
+-function stableStringify(value) {
+-  if (Array.isArray(value)) {
+-    return `[${value.map(stableStringify).join(',')}]`;
+-  }
+-  if (value && typeof value === 'object') {
+-    return `{${Object.keys(value).sort().map((key) =>
+-      `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(',')}}`;
+-  }
+-  return JSON.stringify(value);
+-}
++const HASH_ALGORITHM = 'sha256';
+ 
+ function sha256(value) {
+   return crypto.createHash(HASH_ALGORITHM).update(value).digest('hex');
+@@ -112,11 +108,13 @@ export function eventEvidenceFingerprint(event) {
+     null;
+ }
+ 
+-export function evidenceIdentityMatchesEvent(identity, event) {
++export function evidenceIdentityMatchesEvent(identity, event, options = {}) {
+   if (!identity || !event) return false;
+   const eventFingerprint = eventEvidenceFingerprint(event);
+-  if (eventFingerprint) {
+-    return eventFingerprint === identity.fingerprint;
+-  }
+-  return false;
++  if (!eventFingerprint || eventFingerprint !== identity.fingerprint) return false;
++  if (!options.requireProbeSpec) return true;
++  const identityKey = stableProbeKey(probeSpecFromIdentity(identity));
++  const recordedKey = eventProbeKey(event);
++  if (!identityKey || !recordedKey) return options.allowLegacy !== false;
++  return identityKey === recordedKey;
+ }
+diff --git a/scripts/solve/evidence.js b/scripts/solve/evidence.js
+index 5155bf8f..bbbfcae7 100644
+--- a/scripts/solve/evidence.js
++++ b/scripts/solve/evidence.js
+@@ -2,7 +2,10 @@ import fs from 'node:fs';
+ import path from 'node:path';
+ 
+ import {
++  EVENT_ATTEMPT,
+   EVENT_EVIDENCE_INGESTED,
++  EVENT_QUEST,
++  EVENT_SOLVED,
+   EVENT_THEORY_RESULT,
+   THEORY_RESULT_FALSIFIED,
+   THEORY_RESULT_NEEDS_RERUN,
+@@ -36,6 +39,11 @@ import {
+   buildEvidenceIdentity,
+   evidenceIdentityMatchesEvent,
+ } from './evidence-identity.js';
++import {
++  isFrontierProbeEvent,
++  metricKindFromProbeSpec,
++  stableProbeKey,
++} from './probe-spec.js';
+ 
+ function parseJsonFile(filePath) {
+   try {
+@@ -49,43 +57,59 @@ export function detectUnrecordedEvidence(root, questId, options = {}) {
+   try {
+     const quest = loadQuest(root, questId);
+     const log = readLog(root, questId);
+-    const measuredEvents = log.filter(
+-      (event) => event.type === 'attempt' ||
+-        event.type === EVENT_EVIDENCE_INGESTED,
+-    );
++    const measuredEvents = log.filter((event) =>
++      event.type === EVENT_ATTEMPT ||
++      event.type === EVENT_EVIDENCE_INGESTED ||
++      event.type === EVENT_SOLVED ||
++      event.type === EVENT_QUEST);
+     if (measuredEvents.length === 0 && options.requiresMeasuredHistory) {
+       return null;
+     }
+-    for (const spec of questProbeSpecs(quest)) {
++    for (const spec of questProbeSpecs(quest, options.kind || 'all')) {
+       const probe = evaluate(spec.probeSpec, {root});
+       if (!probe.evidence || probe.evidenceIdentity?.exists !== true) continue;
+       const alreadyIngested = measuredEvents.some((event) =>
+-        evidenceIdentityMatchesEvent(probe.evidenceIdentity, event),
++        evidenceIdentityMatchesEvent(probe.evidenceIdentity, event, {
++          requireProbeSpec: true,
++        }),
+       );
+       if (alreadyIngested) continue;
++      const probeFlag = spec.scope === 'doneWhen' ? ' --probe doneWhen' : '';
+       return {
+         frontier: spec.frontier,
++        probeScope: spec.scope,
+         evidence: probe.evidence,
+         evidenceFingerprint: probe.evidenceFingerprint,
+-        command: `node scripts/solve.js ingest-evidence --id ${questId} --frontier ${spec.frontier} --evidence ${probe.evidence}`,
++        command: `node scripts/solve.js ingest-evidence --id ${questId} ` +
++          `--frontier ${spec.frontier}${probeFlag} --evidence ${probe.evidence}`,
+       };
+     }
+   } catch (err) {}
+   return null;
+ }
+ 
+-function questProbeSpecs(quest) {
++function questProbeSpecs(quest, kind = 'all') {
+   const fallbackFrontier = quest.frontiers[0]?.id || `${quest.id}-main`;
+-  return [
+-    {frontier: fallbackFrontier, probeSpec: quest.doneWhen},
+-    ...quest.frontiers.map((frontier) => ({
++  const specs = [];
++  if (kind !== 'frontier') {
++    specs.push({
++      frontier: fallbackFrontier,
++      scope: 'doneWhen',
++      probeSpec: quest.doneWhen,
++    });
++  }
++  if (kind !== 'closure') {
++    specs.push(...quest.frontiers.map((frontier) => ({
+       frontier: frontier.id,
++      scope: 'frontier',
+       probeSpec: frontier.metric,
+-    })),
+-  ].filter((entry) => entry.probeSpec);
++    })));
++  }
++  return specs.filter((entry) => entry.probeSpec);
+ }
+ 
+-function frontierProbeSpec(quest, frontierId) {
++function frontierProbeSpec(quest, frontierId, probeScope = 'frontier') {
++  if (probeScope === 'doneWhen') return quest.doneWhen;
+   const frontier = quest.frontiers.find((item) => item.id === frontierId);
+   return frontier?.metric || quest.doneWhen;
+ }
+@@ -156,12 +180,46 @@ function firstVerdictReason(data, scenario) {
+ }
+ 
+ function ownerWitness(failure) {
+-  return failure?.ownerContract?.frontierWitnesses?.find((w) => w.owner) ||
+-    failure?.ownerContract?.ownerWitnesses?.find((w) => w.owner) ||
+-    null;
++  const direct = failure?.ownerContract?.frontierWitnesses?.find((w) => w.owner) ||
++    failure?.ownerContract?.ownerWitnesses?.find((w) => w.owner);
++  if (direct) return direct;
++  return firstOwnerLike(failure);
++}
++
++function firstOwnerLike(value, depth = 0) {
++  if (!value || typeof value !== 'object' || depth > 5) return null;
++  if (typeof value.owner === 'string' ||
++    typeof value.currentOwner === 'string' ||
++    typeof value.decidingOwner === 'string') {
++    return {
++      owner: value.owner || value.currentOwner || value.decidingOwner || null,
++      boundary: value.boundary || value.blockingBoundary ||
++        value.ownerBoundary || null,
++      source: value.source || value,
++      nextAction: value.nextAction || value.nextRequiredAction ||
++        value.nextRequiredActions || null,
++    };
++  }
++  for (const child of Object.values(value)) {
++    if (Array.isArray(child)) {
++      for (const item of child) {
++        const found = firstOwnerLike(item, depth + 1);
++        if (found) return found;
++      }
++    } else {
++      const found = firstOwnerLike(child, depth + 1);
++      if (found) return found;
++    }
++  }
++  return null;
+ }
+ 
+-export function ingestEvidence(root, {questId, frontierId, evidencePath}) {
++export function ingestEvidence(root, {
++  questId,
++  frontierId,
++  evidencePath,
++  probeScope = 'frontier',
++}) {
+   const quest = loadQuest(root, questId);
+   const log = readLog(root, questId);
+   const state = projectState(quest, log);
+@@ -173,18 +231,27 @@ export function ingestEvidence(root, {questId, frontierId, evidencePath}) {
+ 
+   const data = parseJsonFile(evidencePath);
+   if (!data) throw new Error(`evidence file is not readable JSON: ${evidencePath}`);
+-  const identityProbe = frontierProbeSpec(quest, frontierId);
++  const identityProbe = frontierProbeSpec(quest, frontierId, probeScope);
+   const evidenceIdentity = buildEvidenceIdentity(root, evidencePath, {
+     probe: identityProbe?.probe || null,
+     args: identityProbe?.args || null,
+   });
++  const probeKey = stableProbeKey(identityProbe);
++  const frontierMetricEvidence = probeScope !== 'doneWhen' &&
++    probeScope !== 'closure';
++  const liveProbe = evaluate(identityProbe, {root});
++  const liveProbeMatchesEvidence =
++    liveProbe.evidenceFingerprint &&
++    liveProbe.evidenceFingerprint === evidenceIdentity.fingerprint;
+ 
+   // Scenario matching
+   const scenarioName = quest.doneWhen?.args?.scenario || questId;
+   const sc = scenarioEntry(data, scenarioName);
+ 
+   // Metric extraction
+-  const metricKind = quest.doneWhen?.args?.metric || 'priority';
++  const metricKind = metricKindFromProbeSpec(identityProbe) ||
++    quest.doneWhen?.args?.metric ||
++    'priority';
+   let metric = null;
+   if (metricKind === 'failed') {
+     metric = Number.isInteger(data?.summary?.failed) ? data.summary.failed : null;
+@@ -195,11 +262,23 @@ export function ingestEvidence(root, {questId, frontierId, evidencePath}) {
+     metric = Number.isInteger(items) ? items : (Number.isInteger(data?.summary?.failed) ? data.summary.failed : (Number.isInteger(data?.metric) ? data.metric : null));
+   }
+ 
+-  const satisfiedInvariants = extractSatisfiedInvariants(data, scenarioName);
++  let satisfiedInvariants = extractSatisfiedInvariants(data, scenarioName);
+ 
+-  const done = scenarioPassed(data, scenarioName);
++  let done = scenarioPassed(data, scenarioName);
+   const verdict = firstVerdict(data, scenarioName);
+   const verdictReason = firstVerdictReason(data, scenarioName);
++  let invalidSample = verdictReason === VERDICT_REASON_EXECUTION_INCOMPLETE ||
++    metric === null;
++  if (liveProbeMatchesEvidence) {
++    metric = liveProbe.metric;
++    done = liveProbe.done;
++    invalidSample = Boolean(liveProbe.invalidSample);
++    satisfiedInvariants = Array.isArray(liveProbe.satisfiedInvariants) ?
++      liveProbe.satisfiedInvariants :
++      satisfiedInvariants;
++  } else if (invalidSample) {
++    metric = null;
++  }
+   
+   const failure = firstFailureCandidate(data, scenarioName);
+   const rootCauseClass = firstRootCause(data, scenarioName);
+@@ -219,7 +298,9 @@ export function ingestEvidence(root, {questId, frontierId, evidencePath}) {
+ 
+   const selectedTheory = state.theories.selectedByFrontier[frontierId] || null;
+   const previousEvidence = [...log].reverse().find((event) =>
+-    event.type === EVENT_EVIDENCE_INGESTED && event.frontier === frontierId);
++    event.type === EVENT_EVIDENCE_INGESTED &&
++    event.frontier === frontierId &&
++    isFrontierProbeEvent(event));
+ 
+   const mechanismCard = buildMechanismCardFromEvidence(evidencePath);
+   const classifiedMechanism = mechanismCard.failureMechanism || 'observation_gap';
+@@ -230,8 +311,12 @@ export function ingestEvidence(root, {questId, frontierId, evidencePath}) {
+     evidence: evidencePath,
+     evidenceIdentity,
+     evidenceFingerprint: evidenceIdentity.fingerprint,
++    probeScope,
++    probeKey,
++    metricKind,
+     reportTimestamp,
+     metric,
++    invalidSample,
+     done,
+     verdict,
+     verdictReason,
+@@ -247,9 +332,15 @@ export function ingestEvidence(root, {questId, frontierId, evidencePath}) {
+     satisfiedInvariants,
+     summary,
+   };
+-  const previousBlocker = blockerFromEvidence(previousEvidence);
+-  const currentBlocker = blockerFromEvidence(newEvidenceEvent);
+-  const blockerMovement = classifyBlockerMovement(previousBlocker, currentBlocker);
++  const previousBlocker = frontierMetricEvidence ?
++    blockerFromEvidence(previousEvidence) :
++    null;
++  const currentBlocker = frontierMetricEvidence ?
++    blockerFromEvidence(newEvidenceEvent) :
++    null;
++  const blockerMovement = frontierMetricEvidence ?
++    classifyBlockerMovement(previousBlocker, currentBlocker) :
++    null;
+   const diagnosticMovement = previousBlocker ?
+     `${blockerMovement}: ${[
+       previousBlocker.owner,
+@@ -260,11 +351,12 @@ export function ingestEvidence(root, {questId, frontierId, evidencePath}) {
+       currentBlocker.boundary,
+       currentBlocker.dominantReason,
+     ].filter(Boolean).join(' / ') || 'unknown'}` :
+-    `first blocker observed: ${[
++    frontierMetricEvidence ? `first blocker observed: ${[
+       currentBlocker.owner,
+       currentBlocker.boundary,
+       currentBlocker.dominantReason,
+-    ].filter(Boolean).join(' / ') || 'unknown'}`;
++    ].filter(Boolean).join(' / ') || 'unknown'}` :
++      'closure evidence ingested';
+   const ingestedEvent = appendEvent(root, questId, {
+     ...newEvidenceEvent,
+     blockerBefore: previousBlocker,
+@@ -292,8 +384,9 @@ export function ingestEvidence(root, {questId, frontierId, evidencePath}) {
+   });
+ 
+   // Evaluate theory result if a selected theory exists
+-  if (selectedTheory) {
+-    const nonMeasuring = verdict === VERDICT_BLOCK_EVIDENCE_INCOMPLETE ||
++  if (selectedTheory && frontierMetricEvidence) {
++    const nonMeasuring = invalidSample ||
++      verdict === VERDICT_BLOCK_EVIDENCE_INCOMPLETE ||
+       verdictReason === VERDICT_REASON_EXECUTION_INCOMPLETE ||
+       metric === null;
+     let result = THEORY_RESULT_FALSIFIED;
+diff --git a/scripts/solve/health.js b/scripts/solve/health.js
+index 98877008..3d33c656 100644
+--- a/scripts/solve/health.js
++++ b/scripts/solve/health.js
+@@ -26,6 +26,12 @@ import {
+   regressionRestoreStatus,
+   scopeTerminalStatus,
+ } from './convergence-guards.js';
++import {continuationFromHealth} from './continuation.js';
++import {
++  eventProbeKey,
++  isFrontierProbeEvent,
++  stableProbeKey,
++} from './probe-spec.js';
+ 
+ const DEFAULT_CONSECUTIVE_TARGET = 1;
+ const NUM_TWO = 2;
+@@ -109,18 +115,40 @@ function layerPingPongSignal(theories) {
+   return null;
+ }
+ 
+-function liveProbeDivergence(state, liveProbe) {
+-  const currentMetrics = state.frontiers
+-    .map((frontier) => frontier.current)
+-    .filter((metric) => typeof metric === 'number');
+-  if (typeof liveProbe.metric !== 'number' || currentMetrics.length === 0) {
++function eventMetric(event) {
++  if (!event) return null;
++  if (event.type === EVENT_ATTEMPT) return event.metricAfter;
++  if (event.type === 'evidence-ingested') return event.metric;
++  return null;
++}
++
++function latestMetricEventForProbe(log, frontierId, probeSpec) {
++  const probeKey = stableProbeKey(probeSpec);
++  let legacyFallback = null;
++  for (let index = log.length - 1; index >= 0; index -= 1) {
++    const event = log[index];
++    if (event.frontier !== frontierId) continue;
++    if (event.type !== EVENT_ATTEMPT && event.type !== 'evidence-ingested') continue;
++    if (event.type === 'evidence-ingested' && !isFrontierProbeEvent(event)) continue;
++    if (typeof eventMetric(event) !== 'number') continue;
++    const recordedKey = eventProbeKey(event);
++    if (probeKey && recordedKey === probeKey) return event;
++    if (!recordedKey && !legacyFallback) legacyFallback = event;
++  }
++  return legacyFallback;
++}
++
++function liveProbeDivergence(log, frontierId, probeSpec, liveProbe) {
++  if (typeof liveProbe?.metric !== 'number') {
+     return null;
+   }
+-  const latest = currentMetrics[currentMetrics.length - 1];
+-  if (latest !== liveProbe.metric) {
++  const latest = latestMetricEventForProbe(log, frontierId, probeSpec);
++  const projectedMetric = eventMetric(latest);
++  if (typeof projectedMetric !== 'number') return null;
++  if (projectedMetric !== liveProbe.metric) {
+     return {
+       type: 'live-probe-diverges-from-projection',
+-      projectedMetric: latest,
++      projectedMetric,
+       liveMetric: liveProbe.metric,
+       severity: 'high',
+     };
+@@ -139,7 +167,8 @@ function frontierNeeds(quest, state, log, frontier) {
+     {stale: false, reason: null};
+   const noProgress = noProgressAttempts(log, frontier.id);
+ 
+-  const evidenceEvents = log.filter((e) => e.type === 'evidence-ingested');
++  const evidenceEvents = log.filter((e) =>
++    e.type === 'evidence-ingested' && isFrontierProbeEvent(e));
+   const sameDominantReasonRepeat = evidenceEvents.length >= 2 &&
+     evidenceEvents[evidenceEvents.length - 1].dominantReason &&
+     evidenceEvents[evidenceEvents.length - 1].dominantReason === evidenceEvents[evidenceEvents.length - 2].dominantReason;
+@@ -148,7 +177,8 @@ function frontierNeeds(quest, state, log, frontier) {
+     evidenceEvents[evidenceEvents.length - 1].owner === evidenceEvents[evidenceEvents.length - 2].owner &&
+     evidenceEvents[evidenceEvents.length - 1].boundary === evidenceEvents[evidenceEvents.length - 2].boundary;
+ 
+-  const latestEvidence = [...log].reverse().find((e) => e.type === 'evidence-ingested');
++  const latestEvidence = [...log].reverse().find((e) =>
++    e.type === 'evidence-ingested' && isFrontierProbeEvent(e));
+   const namesLiveness = latestEvidence && (latestEvidence.owner || latestEvidence.boundary || latestEvidence.waitMode);
+   const selectedIsObservationGap = selected && (selected.mechanism === 'observation_gap' || selected.layer === 'observation');
+   const localTheoryTooNarrow = namesLiveness && selectedIsObservationGap;
+@@ -208,6 +238,9 @@ export function analyzeQuestHealth(root, quest, options = {}) {
+   const state = options.state || projectState(quest, log);
+   const pick = pickFrontier(quest, state, options.scoreFn);
+   const liveProbe = options.liveProbe || evaluate(quest.doneWhen, {root});
++  const frontierLiveProbe = pick ?
++    (options.frontierLiveProbe || evaluate(pick.def.metric, {root})) :
++    null;
+   const frontier = pick?.state || null;
+   const needs = frontier ? frontierNeeds(quest, state, log, frontier) : {};
+   const theories = frontier ? lastAttemptTheories(log, state, frontier.id) : [];
+@@ -216,18 +249,39 @@ export function analyzeQuestHealth(root, quest, options = {}) {
+   const signals = [
+     sameMechanismSignal(theories),
+     layerPingPongSignal(theories),
+-    liveProbeDivergence(state, liveProbe),
++    frontier ?
++      liveProbeDivergence(log, frontier.id, pick.def.metric, frontierLiveProbe) :
++      null,
+   ].filter(Boolean);
+ 
+-  const unrecorded = detectUnrecordedEvidence(root, quest.id);
+-  if (unrecorded) {
++  const freshnessRequiresHistory = options.requiresMeasuredHistory !== false;
++  const frontierUnrecorded = detectUnrecordedEvidence(root, quest.id, {
++    kind: 'frontier',
++    requiresMeasuredHistory: freshnessRequiresHistory,
++  });
++  const closureUnrecorded = detectUnrecordedEvidence(root, quest.id, {
++    kind: 'closure',
++    requiresMeasuredHistory: freshnessRequiresHistory,
++  });
++  if (frontierUnrecorded) {
+     signals.push({
+       type: 'fresh-evidence-unrecorded',
+       severity: 'high',
++      evidence: frontierUnrecorded.evidence,
++      command: frontierUnrecorded.command,
++    });
++  }
++  if (closureUnrecorded) {
++    signals.push({
++      type: 'fresh-closure-evidence-unrecorded',
++      severity: 'medium',
++      evidence: closureUnrecorded.evidence,
++      command: closureUnrecorded.command,
+     });
+   }
+ 
+-  const evidenceEvents = log.filter((e) => e.type === 'evidence-ingested');
++  const evidenceEvents = log.filter((e) =>
++    e.type === 'evidence-ingested' && isFrontierProbeEvent(e));
+   const sameDominantReasonRepeat = evidenceEvents.length >= 2 &&
+     evidenceEvents[evidenceEvents.length - 1].dominantReason &&
+     evidenceEvents[evidenceEvents.length - 1].dominantReason === evidenceEvents[evidenceEvents.length - 2].dominantReason;
+@@ -259,7 +313,8 @@ export function analyzeQuestHealth(root, quest, options = {}) {
+ 
+   const latestMetricEvent = [...log].reverse().find((e) =>
+     (e.type === 'attempt' && typeof e.metricAfter === 'number') ||
+-    (e.type === 'evidence-ingested' && typeof e.metric === 'number')
++    (e.type === 'evidence-ingested' && isFrontierProbeEvent(e) &&
++      typeof e.metric === 'number')
+   );
+   let metricZeroNotDone = false;
+   if (latestMetricEvent) {
+@@ -277,7 +332,8 @@ export function analyzeQuestHealth(root, quest, options = {}) {
+   if (frontier) {
+     const selectedId = state.theories.selectedByFrontier[frontier.id];
+     const selected = selectedId ? state.theories.byId[selectedId] : null;
+-    const latestEvidence = [...log].reverse().find((e) => e.type === 'evidence-ingested');
++    const latestEvidence = [...log].reverse().find((e) =>
++      e.type === 'evidence-ingested' && isFrontierProbeEvent(e));
+     const namesLiveness = latestEvidence && (latestEvidence.owner || latestEvidence.boundary || latestEvidence.waitMode);
+     const selectedIsObservationGap = selected && (selected.mechanism === 'observation_gap' || selected.layer === 'observation');
+     if (namesLiveness && selectedIsObservationGap) {
+@@ -403,8 +459,9 @@ export function analyzeQuestHealth(root, quest, options = {}) {
+         `(${scopeTerminal.fileCount} changed files exceed the limit) before the next attempt`;
+     }
+   }
+-  return {
++  const health = {
+     questId: quest.id,
++    questStatus: state.questStatus || null,
+     frontier: frontier ? frontier.id : null,
+     rungIndex: frontier ? frontier.rungIndex : null,
+     rungName: rungName || (
+@@ -414,6 +471,18 @@ export function analyzeQuestHealth(root, quest, options = {}) {
+     modelGuidance: needs.modelGuidance || null,
+     currentBlocker,
+     scopePressure,
++    projectionFreshness: {
++      frontier: {
++        fresh: !frontierUnrecorded,
++        evidence: frontierUnrecorded?.evidence || null,
++        command: frontierUnrecorded?.command || null,
++      },
++      closure: {
++        fresh: !closureUnrecorded,
++        evidence: closureUnrecorded?.evidence || null,
++        command: closureUnrecorded?.command || null,
++      },
++    },
+     reopens,
+     cannotMeasureParked: cannotMeasureParked.map((f) => ({
+       id: f.id,
+@@ -422,6 +491,13 @@ export function analyzeQuestHealth(root, quest, options = {}) {
+     signals,
+     nextAction,
+   };
++  return {
++    ...health,
++    continuation: continuationFromHealth(
++      health,
++      options.continuationOptions || {},
++    ),
++  };
+ }
+ 
+ export function renderHealth(health) {
+@@ -430,6 +506,7 @@ export function renderHealth(health) {
+   lines.push(`- frontier: ${health.frontier || 'none'}`);
+   lines.push(`- rungIndex: ${health.rungIndex ?? 'none'}`);
+   lines.push(`- reopens: ${health.reopens || 0}`);
++  lines.push(`- continuation: ${health.continuation?.status || 'allowed'}`);
+   lines.push(`- nextAction: ${health.nextAction}`);
+   if (health.currentBlocker) {
+     lines.push(`- currentOwner: ${health.currentBlocker.owner || 'unknown'}`);
+@@ -437,6 +514,17 @@ export function renderHealth(health) {
+     lines.push(`- currentReason: ${health.currentBlocker.dominantReason || 'unknown'}`);
+     lines.push(`- blockerMovement: ${health.currentBlocker.movement || 'unknown'}`);
+   }
++  if (health.projectionFreshness) {
++    lines.push('', '## Projection Freshness');
++    lines.push(`- frontier: ${health.projectionFreshness.frontier.fresh ? 'fresh' : 'stale'}`);
++    if (health.projectionFreshness.frontier.command) {
++      lines.push(`- frontierCommand: ${health.projectionFreshness.frontier.command}`);
++    }
++    lines.push(`- closure: ${health.projectionFreshness.closure.fresh ? 'fresh' : 'stale'}`);
++    if (health.projectionFreshness.closure.command) {
++      lines.push(`- closureCommand: ${health.projectionFreshness.closure.command}`);
++    }
++  }
+   lines.push('', '## Signals');
+   if (health.signals.length === 0) {
+     lines.push('- none');
+diff --git a/scripts/solve/honesty.js b/scripts/solve/honesty.js
+index add0ecdb..6243e7ec 100644
+--- a/scripts/solve/honesty.js
++++ b/scripts/solve/honesty.js
+@@ -37,6 +37,14 @@ function checkMetricEvidence(event, ctx) {
+     !isValidMetricValue(event.metricAfter, event.invalidSample)) {
+     violations.push('metricBefore/metricAfter must be finite numbers from a probe');
+   }
++  const hasNullMetric = event.metricBefore === null || event.metricAfter === null;
++  if (hasNullMetric && event.invalidSample !== true) {
++    violations.push('null metrics require invalidSample=true');
++  }
++  if (event.beforeProbeKey && event.afterProbeKey &&
++    event.beforeProbeKey !== event.afterProbeKey) {
++    violations.push('metricBefore/metricAfter must come from the same probe identity');
++  }
+   if (event.metricDirection !== METRIC_DIRECTION_LOWER_IS_BETTER) {
+     violations.push(
+       `metricDirection must be "${METRIC_DIRECTION_LOWER_IS_BETTER}"`,
+diff --git a/scripts/solve/loop.js b/scripts/solve/loop.js
+index 5e9b2411..4cb00d86 100644
+--- a/scripts/solve/loop.js
++++ b/scripts/solve/loop.js
+@@ -56,6 +56,17 @@ import {detectUnrecordedEvidence} from './evidence.js';
+ import {inspectChangeArtifact} from './change-artifact.js';
+ import {analyzeScopePressure} from './scope-pressure.js';
+ import {scopeTerminalStatus} from './convergence-guards.js';
++import {analyzeQuestHealth} from './health.js';
++import {
++  CONTINUATION_BLOCKED_THEORY,
++  continuationErrorMessage,
++  continuationIsAllowed,
++} from './continuation.js';
++import {
++  metricKindFromProbeSpec,
++  probeSpecFromIdentity,
++  stableProbeKey,
++} from './probe-spec.js';
+ 
+ function defaultFileExists(p) {
+   return Boolean(p) && fs.existsSync(p);
+@@ -198,6 +209,13 @@ export function finalizeAttempt(root, quest, ctx, pick, before, result) {
+     result.theoryRef || ctx.theoryRef,
+   );
+   const after = evaluate(pick.def.metric, ctx.probeCtx);
++  const probeKey = stableProbeKey(pick.def.metric);
++  const beforeProbeKey =
++    stableProbeKey(probeSpecFromIdentity(before.evidenceIdentity)) ||
++    probeKey;
++  const afterProbeKey =
++    stableProbeKey(probeSpecFromIdentity(after.evidenceIdentity)) ||
++    probeKey;
+   const diagnosticMovement = diagnosticMovementFor(log, pick.def.id);
+   const satisfiedInvariants = Array.isArray(after.satisfiedInvariants) ?
+     after.satisfiedInvariants : [];
+@@ -215,8 +233,15 @@ export function finalizeAttempt(root, quest, ctx, pick, before, result) {
+     invalidSample: Boolean(before.invalidSample) || Boolean(after.invalidSample),
+     done: after.done === true,
+     evidence: after.evidence,
++    beforeEvidence: before.evidence || null,
++    beforeEvidenceIdentity: before.evidenceIdentity || null,
++    beforeEvidenceFingerprint: before.evidenceFingerprint || null,
+     evidenceIdentity: after.evidenceIdentity || null,
+     evidenceFingerprint: after.evidenceFingerprint || null,
++    probeKey: afterProbeKey || probeKey,
++    beforeProbeKey,
++    afterProbeKey,
++    metricKind: metricKindFromProbeSpec(pick.def.metric),
+     theoryRef,
+     expectedMovement: result.expectedMovement || ctx.expectedMovement || null,
+     negativeResultMeans:
+@@ -390,6 +415,7 @@ function maybeCommitAttempt(root, quest, ctx, pick, outcome) {
+   if (!ctx.autoCommit) return;
+   const event = outcome?.event;
+   if (!event || event.invalidSample || !event.changeRef) return;
++  if (outcome.violations?.length > 0) return;
+   const resolves = ctx.honestyCtx.inspectChangeRef ?
+     Boolean(ctx.honestyCtx.inspectChangeRef(event.changeRef)?.valid) : true;
+   if (!resolves) return;
+@@ -447,6 +473,7 @@ export function runLoop(root, quest, options = {}) {
+ 
+   const unrecorded = detectUnrecordedEvidence(root, quest.id, {
+     requiresMeasuredHistory: true,
++    kind: 'frontier',
+   });
+   if (unrecorded) {
+     throw new Error(
+@@ -459,6 +486,35 @@ export function runLoop(root, quest, options = {}) {
+ 
+   const maxCycles = Number.isInteger(options.maxCycles) ? options.maxCycles : 1000;
+   for (let cycle = 0; cycle < maxCycles; cycle += 1) {
++    const questDone = evaluate(quest.doneWhen, ctx.probeCtx);
++    if (!questDone.done) {
++      const executionHealth = analyzeQuestHealth(root, quest, {
++        liveProbe: questDone,
++        continuationOptions: {
++          requireModelEvidence: !ctx.modelRef && !ctx.modelNotApplicable,
++        },
++      });
++      if (!continuationIsAllowed(executionHealth.continuation)) {
++        if (executionHealth.continuation.status === CONTINUATION_BLOCKED_THEORY) {
++          appendEvent(root, quest.id, {
++            type: EVENT_VIOLATION,
++            scope: 'theory-gate',
++            frontier: executionHealth.frontier,
++            rung: Number.isInteger(executionHealth.rungIndex) ?
++              LADDER[executionHealth.rungIndex] :
++              null,
++            rungIndex: executionHealth.rungIndex,
++            violations: executionHealth.continuation.problems,
++          });
++          return {
++            ...finish(root, quest, OUTCOME_THEORY_REQUIRED, null),
++            frontier: executionHealth.frontier,
++            problems: executionHealth.continuation.problems,
++          };
++        }
++        throw new Error(continuationErrorMessage(executionHealth.continuation));
++      }
++    }
+     const {
+       terminal,
+       evidence,
+diff --git a/scripts/solve/probe-spec.js b/scripts/solve/probe-spec.js
+new file mode 100644
+index 00000000..36baf096
+--- /dev/null
++++ b/scripts/solve/probe-spec.js
+@@ -0,0 +1,58 @@
++export function stableStringify(value) {
++  if (Array.isArray(value)) {
++    return `[${value.map(stableStringify).join(',')}]`;
++  }
++  if (value && typeof value === 'object') {
++    return `{${Object.keys(value).sort().map((key) =>
++      `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(',')}}`;
++  }
++  return JSON.stringify(value);
++}
++
++export function normalizeProbeSpec(spec) {
++  if (!spec) return {probe: null, args: null};
++  return {
++    probe: spec.probe || null,
++    args: spec.args || null,
++  };
++}
++
++export function stableProbeKey(spec) {
++  const normalized = normalizeProbeSpec(spec);
++  if (!normalized.probe) return null;
++  return stableStringify(normalized);
++}
++
++export function probeSpecFromIdentity(identity) {
++  if (!identity) return null;
++  return {
++    probe: identity.probe || null,
++    args: identity.args || null,
++  };
++}
++
++export function eventProbeKey(event, side = 'after') {
++  if (!event) return null;
++  if (side === 'before' && event.beforeProbeKey) return event.beforeProbeKey;
++  if (side === 'after' && event.afterProbeKey) return event.afterProbeKey;
++  if (event.probeKey) return event.probeKey;
++  const identity = side === 'before' ?
++    event.beforeEvidenceIdentity || null :
++    event.evidenceIdentity || null;
++  return stableProbeKey(probeSpecFromIdentity(identity));
++}
++
++export function metricKindFromProbeSpec(spec) {
++  return spec?.args?.metric || null;
++}
++
++export function probeKeysMatch(left, right) {
++  const leftKey = typeof left === 'string' ? left : stableProbeKey(left);
++  const rightKey = typeof right === 'string' ? right : stableProbeKey(right);
++  return Boolean(leftKey && rightKey && leftKey === rightKey);
++}
++
++export function isFrontierProbeEvent(event) {
++  const scope = event?.probeScope || 'frontier';
++  return scope !== 'doneWhen' && scope !== 'closure';
++}
+diff --git a/scripts/solve/report.js b/scripts/solve/report.js
+index 74a328e2..88c308dd 100644
+--- a/scripts/solve/report.js
++++ b/scripts/solve/report.js
+@@ -23,6 +23,7 @@ import {
+   renderCurrentBlocker,
+ } from './current-blocker.js';
+ import {analyzeScopePressure, renderScopePressure} from './scope-pressure.js';
++import {analyzeQuestHealth} from './health.js';
+ 
+ export function reportFilePath(root, questId) {
+   return path.join(root, SOLVE_DATA_DIR, REPORT_SUBDIR,
+@@ -128,6 +129,7 @@ export function buildReport(quest, log, state, root = process.cwd()) {
+   const findings = findingLines(state);
+   const currentBlocker = buildCurrentBlocker({quest, log, state});
+   const scopePressure = analyzeScopePressure(root, quest, log);
++  const health = analyzeQuestHealth(root, quest, {state});
+   const theories = [
+     ...(state.theories?.system || []),
+     ...(state.theories?.frontier || []),
+@@ -145,6 +147,13 @@ export function buildReport(quest, log, state, root = process.cwd()) {
+     '',
+     ...renderCurrentBlocker(currentBlocker),
+     '',
++    '## Continuation',
++    `- Status: ${health.continuation?.status || 'allowed'}`,
++    `- Next action: ${health.nextAction}`,
++    ...(health.continuation?.problems?.length > 0 ?
++      health.continuation.problems.map((item) => `- Blocker: ${item}`) :
++      ['- Blocker: none']),
++    '',
+     ...renderScopePressure(scopePressure),
+     '',
+     '## Frontiers',
+diff --git a/scripts/solve/scope-pressure.js b/scripts/solve/scope-pressure.js
+index 2bd20cb5..29718868 100644
+--- a/scripts/solve/scope-pressure.js
++++ b/scripts/solve/scope-pressure.js
+@@ -5,6 +5,7 @@ import {inspectChangeArtifact} from './change-artifact.js';
+ 
+ const BROAD_OWNER_AREA_LIMIT = 2;
+ const LARGE_DIFF_FILE_LIMIT = 10;
++const SPLIT_GROUP_FILE_LIMIT = 20;
+ 
+ function ownerAreaForPath(filePath) {
+   const segments = String(filePath || '').split('/');
+@@ -31,6 +32,56 @@ function attemptInspections(root, quest, log) {
+     }));
+ }
+ 
++function summarizeAttempts(inspections) {
++  return inspections.map((entry) => {
++    const paths = entry.inspection.changedPaths || [];
++    const ownerAreas = [...new Set(paths.map(ownerAreaForPath))].sort();
++    return {
++      ts: entry.event.ts || null,
++      frontier: entry.event.frontier || null,
++      changeRef: entry.event.changeRef || null,
++      fileCount: paths.length,
++      ownerAreas,
++      categories: entry.inspection.categories || [],
++      changedPaths: paths,
++    };
++  });
++}
++
++function splitPlanFor(changedPaths) {
++  const groups = new Map();
++  for (const filePath of changedPaths) {
++    const ownerArea = ownerAreaForPath(filePath);
++    if (!groups.has(ownerArea)) groups.set(ownerArea, []);
++    groups.get(ownerArea).push(filePath);
++  }
++  return [...groups.entries()].map(([ownerArea, paths]) => ({
++    ownerArea,
++    fileCount: paths.length,
++    changedPaths: paths.sort(),
++    recommended: paths.length <= SPLIT_GROUP_FILE_LIMIT,
++  })).sort((a, b) => b.fileCount - a.fileCount ||
++    a.ownerArea.localeCompare(b.ownerArea));
++}
++
++function recommendedActions(changedPaths, ownerAreas, categories) {
++  const actions = [];
++  if (changedPaths.length > LARGE_DIFF_FILE_LIMIT) {
++    actions.push(
++      `split by owner area before the next attempt (${changedPaths.length} files)`,
++    );
++  }
++  if (ownerAreas.length > BROAD_OWNER_AREA_LIMIT) {
++    actions.push(
++      `land or separate ${ownerAreas.length} owner areas: ${ownerAreas.join(', ')}`,
++    );
++  }
++  if (categories.includes('runtime') && categories.includes('workflow')) {
++    actions.push('separate runtime changes from quest workflow changes');
++  }
++  return actions;
++}
++
+ export function analyzeScopePressure(root, quest, log) {
+   const inspections = attemptInspections(root, quest, log);
+   const changedPaths = [...new Set(inspections.flatMap((entry) =>
+@@ -70,6 +121,9 @@ export function analyzeScopePressure(root, quest, log) {
+     changedPaths,
+     ownerAreas,
+     categories,
++    attempts: summarizeAttempts(inspections),
++    splitPlan: splitPlanFor(changedPaths),
++    recommendedActions: recommendedActions(changedPaths, ownerAreas, categories),
+     signals,
+   };
+ }
+@@ -79,6 +133,20 @@ export function renderScopePressure(scopePressure) {
+   lines.push(`- Changed files: ${scopePressure.changedPaths.length}`);
+   lines.push(`- Owner areas: ${scopePressure.ownerAreas.join(', ') || 'none'}`);
+   lines.push(`- Categories: ${scopePressure.categories.join(', ') || 'none'}`);
++  if (scopePressure.recommendedActions?.length > 0) {
++    for (const action of scopePressure.recommendedActions) {
++      lines.push(`- Action: ${action}`);
++    }
++  }
++  if (scopePressure.splitPlan?.length > 0) {
++    lines.push('- Split plan:');
++    for (const group of scopePressure.splitPlan) {
++      lines.push(
++        `  - ${group.ownerArea}: ${group.fileCount} file(s)` +
++        `${group.recommended ? '' : ' (split further)'}`,
++      );
++    }
++  }
+   if (scopePressure.signals.length === 0) {
+     lines.push('- Signals: none');
+   } else {
+diff --git a/scripts/solve/step.js b/scripts/solve/step.js
+index 6f884a70..c0f9d7d3 100644
+--- a/scripts/solve/step.js
++++ b/scripts/solve/step.js
+@@ -28,6 +28,12 @@ import {
+ import {inspectChangeArtifact} from './change-artifact.js';
+ import {autoCommitQuest} from './handoff.js';
+ import {writeReport} from './report.js';
++import {analyzeQuestHealth} from './health.js';
++import {
++  CONTINUATION_BLOCKED_THEORY,
++  continuationErrorMessage,
++  continuationIsAllowed,
++} from './continuation.js';
+ 
+ export function pendingFilePath(root, questId) {
+   return path.join(
+@@ -111,8 +117,14 @@ function stepBegin(root, quest, options = {}) {
+     }
+   }
+ 
++  const state = projectState(quest, readLog(root, quest.id));
++  if (state.questStatus === STATUS_SOLVED) {
++    return {terminal: 'solved', evidence: state.questEvidence};
++  }
++
+   const unrecorded = detectUnrecordedEvidence(root, quest.id, {
+     requiresMeasuredHistory: true,
++    kind: 'frontier',
+   });
+   if (unrecorded) {
+     throw new Error(
+@@ -121,13 +133,22 @@ function stepBegin(root, quest, options = {}) {
+     );
+   }
+ 
+-  const state = projectState(quest, readLog(root, quest.id));
+-  if (state.questStatus === STATUS_SOLVED) {
+-    return {terminal: 'solved', evidence: state.questEvidence};
+-  }
+   const pick = pickFrontier(quest, state, ctx.scoreFn);
+   if (!pick) return {terminal: 'exhausted'};
+ 
++  const health = analyzeQuestHealth(root, quest, {state});
++  if (!continuationIsAllowed(health.continuation)) {
++    if (health.continuation.status === CONTINUATION_BLOCKED_THEORY) {
++      return {
++        terminal: 'theory-required',
++        frontier: pick.def.id,
++        rungIndex: pick.state.rungIndex,
++        problems: health.continuation.problems,
++      };
++    }
++    throw new Error(continuationErrorMessage(health.continuation));
++  }
++
+   const before = evaluate(pick.def.metric, ctx.probeCtx);
+   const pending = {
+     frontier: pick.def.id,
+@@ -205,7 +226,9 @@ function stepCommit(root, quest, options = {}) {
+   // Persist the Quest's own scope-clean work as it progresses (R1). Auto-commit is a
+   // no-op outside a git work tree and refuses on a failing audit, so it is safe to call
+   // unconditionally; it can be suppressed per-invocation with options.push === false.
+-  const commit = autoCommitQuest(root, quest.id, {push: options.push});
++  const commit = outcome.violations.length > 0 ?
++    {committed: false, skipped: 'attempt-violations'} :
++    autoCommitQuest(root, quest.id, {push: options.push});
+   return {
+     frontier: def.id,
+     before: pending.before.metric,
+diff --git a/scripts/solve/store.js b/scripts/solve/store.js
+index faf982c1..1ff79f91 100644
+--- a/scripts/solve/store.js
++++ b/scripts/solve/store.js
+@@ -35,6 +35,7 @@ import {
+   THEORY_SCOPE_FRONTIER,
+   THEORY_SCOPE_SYSTEM,
+ } from './constants.js';
++import {isFrontierProbeEvent} from './probe-spec.js';
+ 
+ function ensureDir(dir) {
+   fs.mkdirSync(dir, {recursive: true});
+@@ -167,6 +168,7 @@ function applyFinding(frontier, event) {
+ 
+ function applyEvidenceIngested(frontierState, event) {
+   if (!frontierState) return;
++  if (!isFrontierProbeEvent(event)) return;
+   if (event.metric !== undefined && event.metric !== null) {
+     frontierState.current = event.metric;
+   }
+@@ -316,6 +318,7 @@ export function invariantHighWater(log, frontierId = null) {
+     const measured =
+       (event.type === EVENT_ATTEMPT && event.invalidSample !== true) ||
+       (event.type === EVENT_EVIDENCE_INGESTED &&
++        isFrontierProbeEvent(event) &&
+         typeof event.metric === 'number');
+     if (!measured) continue;
+     const labels = Array.isArray(event.satisfiedInvariants) ?
+@@ -350,6 +353,7 @@ export function projectInvariantLedger(log, frontierId = null) {
+     const measured =
+       (event.type === EVENT_ATTEMPT && event.invalidSample !== true) ||
+       (event.type === EVENT_EVIDENCE_INGESTED &&
++        isFrontierProbeEvent(event) &&
+         typeof event.metric === 'number');
+     if (!measured) continue;
+     const green = new Set(
+@@ -400,6 +404,7 @@ export function appendFinding(root, questId, finding) {
+     claim: finding.claim,
+     evidence: finding.evidence || null,
+     rulesOut: finding.rulesOut || null,
++    regressionClassification: finding.regressionClassification || null,
+   });
+ }
+ 
+diff --git a/scripts/solve/theory.js b/scripts/solve/theory.js
+index daf56c4a..48d09a51 100644
+--- a/scripts/solve/theory.js
++++ b/scripts/solve/theory.js
+@@ -44,6 +44,15 @@ import {
+   extractTheoryLedgerEntries,
+   THEORY_LEDGER_FIELDS,
+ } from '../../_legacy_work/scripts/work-theory-ledger.js';
++import {analyzeQuestHealth} from './health.js';
++import {
++  CONTINUATION_BLOCKED_METRIC_PROJECTION,
++  CONTINUATION_BLOCKED_REGRESSION,
++  CONTINUATION_BLOCKED_SCOPE,
++  continuationErrorMessage,
++  continuationIsAllowed,
++} from './continuation.js';
++import {isFrontierProbeEvent} from './probe-spec.js';
+ 
+ const FLAG_ID = 'id';
+ const FLAG_THEORY = 'theory';
+@@ -258,7 +267,8 @@ export function stepTheoryGateProblems({
+   }
+ 
+   // Escalation rule 1 & 3:
+-  const evidenceEvents = log.filter((e) => e.type === 'evidence-ingested');
++  const evidenceEvents = log.filter((e) =>
++    e.type === 'evidence-ingested' && isFrontierProbeEvent(e));
+   const sameDominantReasonRepeat = evidenceEvents.length >= 2 &&
+     evidenceEvents[evidenceEvents.length - 1].dominantReason &&
+     evidenceEvents[evidenceEvents.length - 1].dominantReason === evidenceEvents[evidenceEvents.length - 2].dominantReason;
+@@ -267,7 +277,8 @@ export function stepTheoryGateProblems({
+     evidenceEvents[evidenceEvents.length - 1].owner === evidenceEvents[evidenceEvents.length - 2].owner &&
+     evidenceEvents[evidenceEvents.length - 1].boundary === evidenceEvents[evidenceEvents.length - 2].boundary;
+ 
+-  const latestEvidence = [...log].reverse().find((e) => e.type === 'evidence-ingested');
++  const latestEvidence = [...log].reverse().find((e) =>
++    e.type === 'evidence-ingested' && isFrontierProbeEvent(e));
+   const namesLiveness = latestEvidence && (latestEvidence.owner || latestEvidence.boundary || latestEvidence.waitMode);
+   const selectedIsObservationGap = selected && (selected.mechanism === 'observation_gap' || selected.layer === 'observation');
+   const localTheoryTooNarrow = namesLiveness && selectedIsObservationGap;
+@@ -339,7 +350,8 @@ export function stepTheoryGateProblems({
+   // Escalation rule 2: If metric is 0 and done=false, require a theory result before more edits
+   const latestMetricEvent = [...log].reverse().find((e) =>
+     (e.type === 'attempt' && typeof e.metricAfter === 'number') ||
+-    (e.type === 'evidence-ingested' && typeof e.metric === 'number')
++    (e.type === 'evidence-ingested' && isFrontierProbeEvent(e) &&
++      typeof e.metric === 'number')
+   );
+   if (latestMetricEvent) {
+     const metricVal = latestMetricEvent.type === 'attempt' ? latestMetricEvent.metricAfter : latestMetricEvent.metric;
+@@ -391,7 +403,9 @@ export function stepTheoryGateProblems({
+     ].map(String).join(' ').toLowerCase();
+     return LIFECYCLE_KEYWORDS.some((kw) => fields.includes(kw));
+   };
+-  const lifecycleEvents = log.filter((e) => e.type === 'evidence-ingested' && hasLifecycleLanguage(e));
++  const lifecycleEvents = log.filter((e) =>
++    e.type === 'evidence-ingested' && isFrontierProbeEvent(e) &&
++    hasLifecycleLanguage(e));
+   const hasRepeatedLifecycleEvidence = lifecycleEvents.length >= 2;
+ 
+   const modelProblem = validateModelRef(normalizeText(modelRef));
+@@ -533,6 +547,17 @@ function cmdSelect(root, args) {
+   if (!SELECTABLE_THEORY_STATUSES.includes(theory.status)) {
+     throw new Error(`theory: ${theoryId} has non-selectable status ${theory.status}`);
+   }
++  const health = analyzeQuestHealth(root, quest, {state});
++  const hardBlocks = [
++    CONTINUATION_BLOCKED_METRIC_PROJECTION,
++    CONTINUATION_BLOCKED_REGRESSION,
++    CONTINUATION_BLOCKED_SCOPE,
++  ];
++  if (!continuationIsAllowed(health.continuation) &&
++    hardBlocks.includes(health.continuation.status)) {
++    throw new Error(`theory select blocked: ${
++      continuationErrorMessage(health.continuation)}`);
++  }
+   appendEvent(root, quest.id, {
+     type: EVENT_THEORY_SELECTED,
+     frontier,
+diff --git a/test/solve/attempt.test.js b/test/solve/attempt.test.js
+index 99899a6a..b392e4f2 100644
+--- a/test/solve/attempt.test.js
++++ b/test/solve/attempt.test.js
+@@ -5,6 +5,7 @@ import os from 'node:os';
+ 
+ import {saveQuest, appendEvent, readLog} from '../../scripts/solve/store.js';
+ import {runAttemptCommand} from '../../scripts/solve/attempt.js';
++import {ingestEvidence} from '../../scripts/solve/evidence.js';
+ 
+ function tmp() {
+   return fs.mkdtempSync(path.join(os.tmpdir(), 'attempt-test-'));
+@@ -209,4 +210,83 @@ tap.test('attempt wrapper (P2)', async (t) => {
+     fs.rmSync(root, {recursive: true, force: true});
+     t.end();
+   });
++
++  t.test('blocks model-rung execution before running harness without model evidence', (t) => {
++    const root = tmp();
++    const goal = {
++      ...getGoal(root),
++      statement: 'lifecycle owner-boundary model contract needs proof.',
++    };
++    saveQuest(root, goal);
++
++    const reportDir = path.join(root, 'test-output', 'reports');
++    fs.mkdirSync(reportDir, {recursive: true});
++    const reportPath = path.join(reportDir, 'rolling-restart-core-stability-1.report.json');
++    fs.writeFileSync(reportPath, JSON.stringify({
++      timestamp: '2026-06-01T12:00:00.000Z',
++      summary: {total: 1, passed: 0, failed: 1},
++      optimizationSummary: {totalPriorityItems: 5},
++      standardSummary: {
++        scenarios: [{scenario: 'rolling-restart', current: {passed: false}}],
++      },
++      scenarios: [{scenario: 'rolling-restart', passed: false}],
++    }));
++    ingestEvidence(root, {
++      questId: goal.id,
++      frontierId: 'attempt-quest-test-main',
++      evidencePath: reportPath,
++    });
++
++    appendEvent(root, goal.id, {
++      type: 'attempt',
++      frontier: 'attempt-quest-test-main',
++      rung: 'model',
++      rungIndex: 3,
++      metricBefore: 5,
++      metricAfter: 5,
++      changeRef: makeDiff(root, goal.id, 'model-seed'),
++    });
++    appendEvent(root, goal.id, {
++      type: 'theory-system-declared',
++      theory: 'system-theory',
++      scope: 'system',
++      status: 'active',
++      mechanism: 'lifecycle_model',
++    });
++    appendEvent(root, goal.id, {
++      type: 'theory-option-declared',
++      theory: 'frontier-theory',
++      frontier: 'attempt-quest-test-main',
++      scope: 'frontier',
++      status: 'active',
++      layer: 'model',
++      mechanism: 'lifecycle_model',
++    });
++    appendEvent(root, goal.id, {
++      type: 'theory-selected',
++      frontier: 'attempt-quest-test-main',
++      theory: 'frontier-theory',
++    });
++
++    const marker = path.join(root, 'harness-ran.txt');
++    const mockHarnessScript = path.join(root, 'mock-harness.js');
++    fs.writeFileSync(mockHarnessScript, `
++      require('fs').writeFileSync(${JSON.stringify(marker)}, 'ran');
++    `);
++
++    t.throws(() => {
++      runAttemptCommand(root, {
++        id: goal.id,
++        frontier: 'attempt-quest-test-main',
++        name: 'model-block',
++        changeRef: makeDiff(root, goal.id, 'blocked'),
++        summary: 'should not run',
++        _: ['node', mockHarnessScript],
++      });
++    }, /model evidence required/u);
++    t.equal(fs.existsSync(marker), false, 'harness did not run');
++
++    fs.rmSync(root, {recursive: true, force: true});
++    t.end();
++  });
+ });
+diff --git a/test/solve/continuation.test.js b/test/solve/continuation.test.js
+new file mode 100644
+index 00000000..7d0abaf1
+--- /dev/null
++++ b/test/solve/continuation.test.js
+@@ -0,0 +1,103 @@
++import tap from 'tap';
++
++import {
++  CONTINUATION_ALLOWED,
++  CONTINUATION_BLOCKED_METRIC_PROJECTION,
++  CONTINUATION_BLOCKED_MEASUREMENT,
++  CONTINUATION_BLOCKED_SCOPE,
++  CONTINUATION_BLOCKED_THEORY,
++  continuationFromHealth,
++} from '../../scripts/solve/continuation.js';
++
++tap.test('continuation gate classification', async (t) => {
++  t.test('allows a quiet open frontier', (t) => {
++    const result = continuationFromHealth({
++      frontier: 'demo-main',
++      signals: [],
++    });
++    t.equal(result.status, CONTINUATION_ALLOWED);
++    t.same(result.problems, []);
++    t.end();
++  });
++
++  t.test('hard projection mismatch outranks theory work', (t) => {
++    const result = continuationFromHealth({
++      frontier: 'demo-main',
++      signals: [
++        {type: 'frontier-theory-required', severity: 'medium'},
++        {
++          type: 'live-probe-diverges-from-projection',
++          projectedMetric: 4,
++          liveMetric: 7,
++          severity: 'high',
++        },
++      ],
++    });
++    t.equal(result.status, CONTINUATION_BLOCKED_METRIC_PROJECTION);
++    t.match(result.problems.join('\n'), /live frontier metric 7/u);
++    t.end();
++  });
++
++  t.test('scope terminal is a hard gate', (t) => {
++    const result = continuationFromHealth({
++      frontier: 'demo-main',
++      signals: [
++        {type: 'scope-pressure-terminal', mechanism: '61 changed files'},
++      ],
++    });
++    t.equal(result.status, CONTINUATION_BLOCKED_SCOPE);
++    t.match(result.problems.join('\n'), /61 changed files/u);
++    t.end();
++  });
++
++  t.test('theory-required remains a non-terminal continuation status', (t) => {
++    const result = continuationFromHealth({
++      frontier: 'demo-main',
++      signals: [
++        {type: 'frontier-theory-required', mechanism: 'demo-main'},
++      ],
++    });
++    t.equal(result.status, CONTINUATION_BLOCKED_THEORY);
++    t.end();
++  });
++
++  t.test('model-contract evidence blocks when execution requires model evidence', (t) => {
++    const passive = continuationFromHealth({
++      frontier: 'demo-main',
++      signals: [
++        {
++          type: 'model-contract-evidence-required',
++          mechanism: 'npm run model:contracts',
++        },
++      ],
++    });
++    t.equal(passive.status, CONTINUATION_ALLOWED,
++      'manual begin can still pin a sample before commit-time model evidence');
++
++    const strict = continuationFromHealth({
++      frontier: 'demo-main',
++      signals: [
++        {
++          type: 'model-contract-evidence-required',
++          mechanism: 'npm run model:contracts',
++        },
++      ],
++    }, {requireModelEvidence: true});
++    t.equal(strict.status, CONTINUATION_BLOCKED_THEORY);
++    t.match(strict.problems.join('\n'), /model evidence required/u);
++    t.end();
++  });
++
++  t.test('cannot-measure remains blocked when no open frontier exists', (t) => {
++    const result = continuationFromHealth({
++      frontier: null,
++      questStatus: 'exhausted',
++      signals: [
++        {type: 'cannot-measure', mechanism: 'demo-main'},
++      ],
++    });
++    t.equal(result.status, CONTINUATION_BLOCKED_MEASUREMENT);
++    t.match(result.problems.join('\n'), /cannot-measure/u);
++    t.end();
++  });
++});
+diff --git a/test/solve/convergence-guards.test.js b/test/solve/convergence-guards.test.js
+index 8bbc9c38..cbc18c05 100644
+--- a/test/solve/convergence-guards.test.js
++++ b/test/solve/convergence-guards.test.js
+@@ -44,6 +44,16 @@ function finding(ts) {
+   return {type: 'finding', frontier: FRONTIER, claim: 'abandoned on purpose', ts};
+ }
+ 
++function regressionFinding(ts, labels = CLUSTER_A) {
++  return {
++    ...finding(ts),
++    regressionClassification: {
++      resolution: 'abandoned',
++      labels,
++    },
++  };
++}
++
+ tap.test('projectInvariantLedger tracks green high-water and current red', (t) => {
+   const log = [
+     measured([...CLUSTER_A]),
+@@ -146,15 +156,29 @@ tap.test('regressionRestoreStatus: pending when red and no finding follows', (t)
+   t.end();
+ });
+ 
+-tap.test('regressionRestoreStatus: discharged by a later finding (explain)', (t) => {
++tap.test('regressionRestoreStatus: prose-only findings do not discharge regressions',
++  (t) => {
++    const log = [
++      measured([...CLUSTER_A]),
++      regression([...CLUSTER_A], '2026-06-03T01:00:00.000Z'),
++      measured([]),
++      finding('2026-06-03T02:00:00.000Z'),
++    ];
++    const status = regressionRestoreStatus(log, FRONTIER);
++    t.equal(status.pending, true, 'a finding needs structured regression labels');
++    t.equal(status.explained, false, 'not marked explained');
++    t.end();
++  });
++
++tap.test('regressionRestoreStatus: discharged by a structured later finding (explain)', (t) => {
+   const log = [
+     measured([...CLUSTER_A]),
+     regression([...CLUSTER_A], '2026-06-03T01:00:00.000Z'),
+     measured([]),
+-    finding('2026-06-03T02:00:00.000Z'),
++    regressionFinding('2026-06-03T02:00:00.000Z'),
+   ];
+   const status = regressionRestoreStatus(log, FRONTIER);
+-  t.equal(status.pending, false, 'a finding after the regression discharges it');
++  t.equal(status.pending, false, 'a structured finding after the regression discharges it');
+   t.equal(status.explained, true, 'marked explained');
+   t.end();
+ });
+@@ -215,9 +239,9 @@ tap.test('golden replay: the real rolling-restart log trips coupled oscillation'
+       'priority_recovery_readyz_closed_during_priority_recovery',
+     ].sort(),
+     'the latest measured run still leaves cluster B red');
+-  t.equal(restore.explained, true,
+-    'findings recorded after the last regression discharge the restore obligation');
+-  t.equal(restore.pending, false, 'so no restore-or-explain move is owed');
++  t.equal(restore.explained, false,
++    'legacy prose findings no longer discharge the restore obligation');
++  t.equal(restore.pending, true, 'so a structured restore-or-explain move is owed');
+   t.end();
+ });
+ 
+diff --git a/test/solve/evidence.test.js b/test/solve/evidence.test.js
+index 19e9fa5f..3d318156 100644
+--- a/test/solve/evidence.test.js
++++ b/test/solve/evidence.test.js
+@@ -3,11 +3,14 @@ import fs from 'node:fs';
+ import path from 'node:path';
+ import os from 'node:os';
+ 
+-import {saveQuest, readLog, appendEvent} from '../../scripts/solve/store.js';
++import {saveQuest, readLog, appendEvent, projectState}
++  from '../../scripts/solve/store.js';
+ import {
+   detectUnrecordedEvidence,
+   ingestEvidence,
+ } from '../../scripts/solve/evidence.js';
++import {distanceMetricFromReport}
++  from '../../scripts/solve/probes/scenario-harness.js';
+ 
+ function tmp() {
+   return fs.mkdtempSync(path.join(os.tmpdir(), 'evidence-test-'));
+@@ -113,7 +116,8 @@ tap.test('evidence ingestion (P2)', async (t) => {
+     });
+ 
+     t.equal(event.type, 'evidence-ingested');
+-    t.equal(event.metric, 2);
++    t.equal(event.metric, null);
++    t.equal(event.invalidSample, true);
+     t.equal(event.done, false);
+     t.equal(event.verdict, 'BLOCK_EVIDENCE_INCOMPLETE');
+     t.equal(event.rootCauseClass, 'topology');
+@@ -323,14 +327,22 @@ tap.test('evidence ingestion (P2)', async (t) => {
+     const reportDir = path.join(root, 'test-output', 'reports');
+     fs.mkdirSync(reportDir, {recursive: true});
+     const reportPath = path.join(reportDir, 'latest.report.json');
+-    fs.writeFileSync(reportPath, JSON.stringify(sampleReport));
++    const validReport = {
++      ...sampleReport,
++      scenarios: [{
++        ...sampleReport.scenarios[0],
++        verdict: 'FAIL_CORE_INVARIANT',
++        verdictReason: 'core_invariant_or_safety_violation',
++      }],
++    };
++    fs.writeFileSync(reportPath, JSON.stringify(validReport));
+ 
+     ingestEvidence(root, {
+       questId: goal.id,
+       frontierId: 'evidence-quest-test-main',
+       evidencePath: reportPath,
+     });
+-    t.equal(detectUnrecordedEvidence(root, goal.id), null);
++    t.equal(detectUnrecordedEvidence(root, goal.id, {kind: 'frontier'}), null);
+ 
+     fs.writeFileSync(reportPath, JSON.stringify({
+       ...sampleReport,
+@@ -338,7 +350,7 @@ tap.test('evidence ingestion (P2)', async (t) => {
+       optimizationSummary: {totalPriorityItems: 1},
+     }));
+ 
+-    const unrecorded = detectUnrecordedEvidence(root, goal.id);
++    const unrecorded = detectUnrecordedEvidence(root, goal.id, {kind: 'frontier'});
+     t.ok(unrecorded, 'same path with changed content is fresh evidence');
+     t.equal(unrecorded.evidence, reportPath);
+     t.type(unrecorded.evidenceFingerprint, 'string');
+@@ -347,14 +359,22 @@ tap.test('evidence ingestion (P2)', async (t) => {
+     t.end();
+   });
+ 
+-  t.test('treats one recorded artifact as current across doneWhen and frontier probes', (t) => {
++  t.test('keeps closure and frontier evidence freshness separate by probe identity', (t) => {
+     const root = tmp();
+     const goal = getGoal(root);
+     saveQuest(root, goal);
+     const reportDir = path.join(root, 'test-output', 'reports');
+     fs.mkdirSync(reportDir, {recursive: true});
+     const reportPath = path.join(reportDir, 'latest.report.json');
+-    fs.writeFileSync(reportPath, JSON.stringify(sampleReport));
++    const validReport = {
++      ...sampleReport,
++      scenarios: [{
++        ...sampleReport.scenarios[0],
++        verdict: 'FAIL_CORE_INVARIANT',
++        verdictReason: 'core_invariant_or_safety_violation',
++      }],
++    };
++    fs.writeFileSync(reportPath, JSON.stringify(validReport));
+ 
+     ingestEvidence(root, {
+       questId: goal.id,
+@@ -363,10 +383,109 @@ tap.test('evidence ingestion (P2)', async (t) => {
+     });
+ 
+     t.equal(
+-      detectUnrecordedEvidence(root, goal.id),
++      detectUnrecordedEvidence(root, goal.id, {kind: 'frontier'}),
+       null,
+-      'frontier evidence identity also satisfies the doneWhen freshness check',
++      'frontier evidence identity satisfies the frontier freshness check',
++    );
++    const closure = detectUnrecordedEvidence(root, goal.id, {kind: 'closure'});
++    t.ok(closure, 'closure probe with different args remains separately stale');
++    t.equal(closure.probeScope, 'doneWhen');
++    t.match(closure.command, /--probe doneWhen/);
++
++    fs.rmSync(root, {recursive: true, force: true});
++    t.end();
++  });
++
++  t.test('ingests the frontier metric kind, not the doneWhen metric kind', (t) => {
++    const root = tmp();
++    const priorityGoal = getGoal(root);
++    const goal = {
++      ...priorityGoal,
++      frontiers: priorityGoal.frontiers.map((frontier) => ({
++        ...frontier,
++        metric: {
++          ...frontier.metric,
++          args: {...frontier.metric.args, metric: 'distance'},
++        },
++      })),
++    };
++    saveQuest(root, goal);
++    const reportDir = path.join(root, 'test-output', 'reports');
++    fs.mkdirSync(reportDir, {recursive: true});
++    const reportPath = path.join(reportDir, 'latest.report.json');
++    const validReport = {
++      ...sampleReport,
++      scenarios: [{
++        ...sampleReport.scenarios[0],
++        verdict: 'FAIL_CORE_INVARIANT',
++        verdictReason: 'core_invariant_or_safety_violation',
++      }],
++    };
++    fs.writeFileSync(reportPath, JSON.stringify(validReport));
++
++    const event = ingestEvidence(root, {
++      questId: goal.id,
++      frontierId: 'evidence-quest-test-main',
++      evidencePath: reportPath,
++    });
++
++    t.equal(event.metricKind, 'distance');
++    t.equal(
++      event.metric,
++      distanceMetricFromReport(validReport, 'rolling-restart') + 1,
+     );
++    t.type(event.probeKey, 'string');
++
++    fs.rmSync(root, {recursive: true, force: true});
++    t.end();
++  });
++
++  t.test('closure evidence ingestion does not mutate frontier metric projection', (t) => {
++    const root = tmp();
++    const priorityGoal = getGoal(root);
++    const goal = {
++      ...priorityGoal,
++      frontiers: priorityGoal.frontiers.map((frontier) => ({
++        ...frontier,
++        metric: {
++          ...frontier.metric,
++          args: {...frontier.metric.args, metric: 'distance'},
++        },
++      })),
++    };
++    saveQuest(root, goal);
++    const reportDir = path.join(root, 'test-output', 'reports');
++    fs.mkdirSync(reportDir, {recursive: true});
++    const reportPath = path.join(reportDir, 'latest.report.json');
++    const validReport = {
++      ...sampleReport,
++      scenarios: [{
++        ...sampleReport.scenarios[0],
++        verdict: 'FAIL_CORE_INVARIANT',
++        verdictReason: 'core_invariant_or_safety_violation',
++      }],
++    };
++    fs.writeFileSync(reportPath, JSON.stringify(validReport));
++
++    const frontier = ingestEvidence(root, {
++      questId: goal.id,
++      frontierId: 'evidence-quest-test-main',
++      evidencePath: reportPath,
++    });
++    const afterFrontier = projectState(goal, readLog(root, goal.id))
++      .frontiers[0].current;
++    ingestEvidence(root, {
++      questId: goal.id,
++      frontierId: 'evidence-quest-test-main',
++      evidencePath: reportPath,
++      probeScope: 'doneWhen',
++    });
++    const afterClosure = projectState(goal, readLog(root, goal.id))
++      .frontiers[0].current;
++
++    t.equal(afterFrontier, frontier.metric);
++    t.equal(afterClosure, frontier.metric,
++      'closure priority metric does not overwrite frontier distance metric');
+ 
+     fs.rmSync(root, {recursive: true, force: true});
+     t.end();
+diff --git a/test/solve/health.test.js b/test/solve/health.test.js
+index acd95d49..8a210c0f 100644
+--- a/test/solve/health.test.js
++++ b/test/solve/health.test.js
+@@ -5,6 +5,7 @@ import os from 'node:os';
+ 
+ import {analyzeQuestHealth, renderHealth} from '../../scripts/solve/health.js';
+ import {appendEvent, saveQuest} from '../../scripts/solve/store.js';
++import {ingestEvidence} from '../../scripts/solve/evidence.js';
+ import {
+   EVENT_ATTEMPT,
+   EVENT_EVIDENCE_INGESTED,
+@@ -51,6 +52,7 @@ tap.test('Quest health', async (t) => {
+       health.signals.map((signal) => signal.type).sort(),
+       [
+         'fresh-evidence-unrecorded',
++        'fresh-closure-evidence-unrecorded',
+         'frontier-theory-required',
+         'live-probe-diverges-from-projection',
+         'metric-zero-but-done-false',
+@@ -201,6 +203,59 @@ tap.test('Quest health', async (t) => {
+     t.end();
+   });
+ 
++  t.test('does not compare closure metric to a different frontier metric identity', (t) => {
++    const root = tmp();
++    const reportDir = path.join(root, 'test-output', 'reports');
++    fs.mkdirSync(reportDir, {recursive: true});
++    const report = path.join(reportDir, 'rr.report.json');
++    fs.writeFileSync(report, JSON.stringify({
++      timestamp: '2026-06-04T10:00:00.000Z',
++      summary: {total: 1, passed: 0, failed: 1},
++      optimizationSummary: {totalPriorityItems: 1},
++      scenarios: [{
++        scenario: 'rr',
++        passed: false,
++        priorityRecoveryInvariants: {
++          invariants: [{id: 'publication_converged', passed: false}],
++        },
++      }],
++    }));
++    const quest = {
++      id: 'demo',
++      statement: 'Prove three clean rr runs.',
++      priority: 1,
++      doneWhen: {
++        probe: 'scenario-harness',
++        args: {scenario: 'rr', reportDir, consecutive: 3, metric: 'priority'},
++      },
++      frontiers: [
++        {id: 'demo-main', priority: 1,
++          metric: {
++            probe: 'scenario-harness',
++            args: {scenario: 'rr', reportDir, metric: 'distance'},
++          }},
++      ],
++    };
++    saveQuest(root, quest);
++    ingestEvidence(root, {
++      questId: quest.id,
++      frontierId: 'demo-main',
++      evidencePath: report,
++    });
++
++    const health = analyzeQuestHealth(root, quest);
++    t.notOk(
++      health.signals.some((signal) =>
++        signal.type === 'live-probe-diverges-from-projection'),
++      'frontier distance projection is compared only with live distance',
++    );
++    t.equal(health.projectionFreshness.frontier.fresh, true);
++    t.equal(health.projectionFreshness.closure.fresh, false);
++
++    fs.rmSync(root, {recursive: true, force: true});
++    t.end();
++  });
++
+   t.test('fresh owner movement marks selected theory stale', (t) => {
+     const root = tmp();
+     const oracle = path.join(root, 'oracle.json');
+diff --git a/test/solve/honesty.test.js b/test/solve/honesty.test.js
+index e74f361f..ea8def34 100644
+--- a/test/solve/honesty.test.js
++++ b/test/solve/honesty.test.js
+@@ -51,6 +51,16 @@ tap.test('honesty checks (the only process)', async (t) => {
+   t.test('a null metric WITHOUT the invalid-sample flag is still rejected', (t) => {
+     const v = validateAttempt(attempt({metricAfter: null}), okCtx);
+     t.ok(v.some((e) => e.includes('finite numbers')));
++    t.ok(v.some((e) => e.includes('invalidSample=true')));
++    t.end();
++  });
++
++  t.test('before and after metrics must share probe identity when recorded', (t) => {
++    const v = validateAttempt(
++      attempt({beforeProbeKey: 'probe:a', afterProbeKey: 'probe:b'}),
++      okCtx,
++    );
++    t.ok(v.some((e) => e.includes('same probe identity')));
+     t.end();
+   });
+ 
+diff --git a/test/solve/loop.test.js b/test/solve/loop.test.js
+index e29baf3c..795a7b61 100644
+--- a/test/solve/loop.test.js
++++ b/test/solve/loop.test.js
+@@ -7,6 +7,7 @@ import {execFileSync} from 'node:child_process';
+ import {runLoop} from '../../scripts/solve/loop.js';
+ import {appendEvent, projectState, readLog, saveQuest} from '../../scripts/solve/store.js';
+ import {makeDryExecutor} from '../../scripts/solve/executor.js';
++import {ingestEvidence} from '../../scripts/solve/evidence.js';
+ import {
+   EVENT_ATTEMPT,
+   EVENT_PARK,
+@@ -193,6 +194,72 @@ tap.test('solver loop — P0 walking skeleton', async (t) => {
+     fs.rmSync(root, {recursive: true, force: true});
+     t.end();
+   });
++
++  t.test('autonomous loop stops before executor on model rung without model evidence', (t) => {
++    const {root, quest} = setup({metric: 5, target: 0});
++    quest.statement = 'lifecycle owner-boundary model contract needs proof';
++    saveQuest(root, quest);
++    ingestEvidence(root, {
++      questId: quest.id,
++      frontierId: 'f1',
++      evidencePath: quest.frontiers[0].metric.args.file,
++    });
++    appendEvent(root, quest.id, {
++      type: EVENT_ATTEMPT,
++      frontier: 'f1',
++      rung: 'model',
++      rungIndex: 3,
++      metricBefore: 5,
++      metricAfter: 5,
++      changeRef: 'diff:solve/changes/g1/model-seed.diff',
++    });
++    appendEvent(root, quest.id, {
++      type: 'theory-system-declared',
++      theory: 'system-model',
++      scope: 'system',
++      status: THEORY_RESULT_ACTIVE,
++      mechanism: 'lifecycle_model',
++    });
++    appendEvent(root, quest.id, {
++      type: EVENT_THEORY_OPTION_DECLARED,
++      theory: 'frontier-model',
++      frontier: 'f1',
++      scope: 'frontier',
++      status: THEORY_RESULT_ACTIVE,
++      layer: 'model',
++      mechanism: 'lifecycle_model',
++      intervention: 'prove lifecycle contract',
++      expectedMovement: 'metric decreases',
++      negativeResultMeans: 'model contract is not the blocker',
++      discriminator: 'npm run model:contracts',
++      promotionRule: 'model report supports contract',
++      rejectionRule: 'model report refutes contract',
++    });
++    appendEvent(root, quest.id, {
++      type: EVENT_THEORY_SELECTED,
++      frontier: 'f1',
++      theory: 'frontier-model',
++    });
++
++    let executorCalls = 0;
++    const res = runLoop(root, quest, {
++      executor: {
++        run() {
++          executorCalls += 1;
++          return {changeRef: null, summary: 'should not run'};
++        },
++      },
++      maxCycles: 1,
++    });
++    const log = readLog(root, quest.id);
++    const violations = log.filter((event) => event.type === EVENT_VIOLATION);
++    t.equal(res.outcome, OUTCOME_THEORY_REQUIRED, 'stops at model evidence gate');
++    t.equal(executorCalls, 0, 'executor was not invoked');
++    t.match(res.problems.join('; '), /model evidence required/u);
++    t.equal(violations[violations.length - 1].scope, 'theory-gate');
++    fs.rmSync(root, {recursive: true, force: true});
++    t.end();
++  });
+ });
+ 
+ // R1: the autonomous loop persists each measured attempt as its own scope-clean
+diff --git a/test/solve/probe-spec.test.js b/test/solve/probe-spec.test.js
+new file mode 100644
+index 00000000..778e8fe1
+--- /dev/null
++++ b/test/solve/probe-spec.test.js
+@@ -0,0 +1,39 @@
++import tap from 'tap';
++
++import {
++  eventProbeKey,
++  metricKindFromProbeSpec,
++  stableProbeKey,
++} from '../../scripts/solve/probe-spec.js';
++
++tap.test('probe spec identity', async (t) => {
++  t.test('stable key ignores object insertion order', (t) => {
++    const a = {probe: 'scenario-harness', args: {scenario: 'rr', metric: 'distance'}};
++    const b = {probe: 'scenario-harness', args: {metric: 'distance', scenario: 'rr'}};
++    t.equal(stableProbeKey(a), stableProbeKey(b));
++    t.end();
++  });
++
++  t.test('event key falls back to evidence identity', (t) => {
++    const event = {
++      evidenceIdentity: {
++        probe: 'oracle',
++        args: {file: 'oracle.json'},
++      },
++    };
++    t.equal(eventProbeKey(event), stableProbeKey({probe: 'oracle', args: {file: 'oracle.json'}}));
++    t.end();
++  });
++
++  t.test('metric kind is read from probe args', (t) => {
++    t.equal(
++      metricKindFromProbeSpec({
++        probe: 'scenario-harness',
++        args: {scenario: 'rr', metric: 'distance'},
++      }),
++      'distance',
++    );
++    t.equal(metricKindFromProbeSpec({probe: 'oracle', args: {file: 'o'}}), null);
++    t.end();
++  });
++});
+diff --git a/test/solve/scope-pressure.test.js b/test/solve/scope-pressure.test.js
+new file mode 100644
+index 00000000..f02d915c
+--- /dev/null
++++ b/test/solve/scope-pressure.test.js
+@@ -0,0 +1,83 @@
++import tap from 'tap';
++import fs from 'node:fs';
++import path from 'node:path';
++import os from 'node:os';
++
++import {analyzeScopePressure} from '../../scripts/solve/scope-pressure.js';
++import {appendEvent, saveQuest, readLog} from '../../scripts/solve/store.js';
++
++function tmp() {
++  return fs.mkdtempSync(path.join(os.tmpdir(), 'scope-pressure-'));
++}
++
++function makeQuest(root) {
++  const oracle = path.join(root, 'oracle.json');
++  fs.writeFileSync(oracle, JSON.stringify({metric: 1, target: 0}));
++  const quest = {
++    id: 'scope-demo',
++    statement: 'Drive metric to zero.',
++    priority: 1,
++    doneWhen: {probe: 'oracle', args: {file: oracle}},
++    frontiers: [
++      {id: 'scope-demo-main', priority: 1,
++        metric: {probe: 'oracle', args: {file: oracle}}},
++    ],
++  };
++  saveQuest(root, quest);
++  return quest;
++}
++
++function makeDiff(root, questId, name, paths) {
++  const file = path.join(root, 'solve', 'changes', questId, `${name}.diff`);
++  fs.mkdirSync(path.dirname(file), {recursive: true});
++  fs.writeFileSync(file, paths.flatMap((changedPath) => [
++    `diff --git a/${changedPath} b/${changedPath}`,
++    `--- a/${changedPath}`,
++    `+++ b/${changedPath}`,
++    '@@ -1 +1 @@',
++    '-before',
++    '+after',
++  ]).join('\n'));
++  return `diff:${file}`;
++}
++
++tap.test('scope pressure reports attempt contributions and split plan', (t) => {
++  const root = tmp();
++  const quest = makeQuest(root);
++  appendEvent(root, quest.id, {
++    type: 'attempt',
++    frontier: 'scope-demo-main',
++    changeRef: makeDiff(root, quest.id, 'mixed', [
++      'src/admin/a.js',
++      'src/admin/b.js',
++      'scripts/solve/step.js',
++      'test/distributed/harness/h.js',
++    ]),
++  });
++
++  const pressure = analyzeScopePressure(root, quest, readLog(root, quest.id));
++  t.same(pressure.ownerAreas.sort(), [
++    'scripts/solve',
++    'src/admin',
++    'test/distributed/harness',
++  ]);
++  t.equal(pressure.attempts.length, 1);
++  t.equal(pressure.attempts[0].fileCount, 4);
++  t.ok(
++    pressure.recommendedActions.some((action) =>
++      action.includes('land or separate 3 owner areas')),
++    'names the owner-area reduction action',
++  );
++  t.same(
++    pressure.splitPlan.map((group) => [group.ownerArea, group.fileCount]),
++    [
++      ['src/admin', 2],
++      ['scripts/solve', 1],
++      ['test/distributed/harness', 1],
++    ],
++    'split plan is grouped by owner area',
++  );
++
++  fs.rmSync(root, {recursive: true, force: true});
++  t.end();
++});
+diff --git a/test/solve/step-theory-gates.test.js b/test/solve/step-theory-gates.test.js
+index f6a66fc6..b13995f3 100644
+--- a/test/solve/step-theory-gates.test.js
++++ b/test/solve/step-theory-gates.test.js
+@@ -102,17 +102,14 @@ tap.test('step theory gates', async (t) => {
+     commitStep(root, quest, 'flat');
+     commitStep(root, quest, 'flat2');
+ 
+-    // step at widen-scope without theory is blocked
+-    runStep(root, quest);
+-    const blocked = runStep(root, quest, {
+-      changeRef: makeDiff(root, 'flat3'),
+-      summary: 'flat3',
+-    });
++    // step at widen-scope without theory is blocked before a pending attempt is pinned
++    const blocked = runStep(root, quest);
+     t.equal(blocked.terminal, 'theory-required');
+     t.match(blocked.problems.join('\n'), /frontier theory required/);
+ 
+     recordFrontierTheory(root, quest);
+     // next step with theory is allowed
++    runStep(root, quest);
+     const allowed = runStep(root, quest, {
+       changeRef: makeDiff(root, 'with-theory'),
+       summary: 'with theory',
+@@ -137,13 +134,8 @@ tap.test('step theory gates', async (t) => {
+       theoryRef: 'theory-frontier2',
+     });
+ 
+-    // Rung 3 (model) needs system theory
+-    runStep(root, quest);
+-    const needsSystem = runStep(root, quest, {
+-      changeRef: makeDiff(root, 'c1'),
+-      summary: 'no system theory yet',
+-      theoryRef: 'theory-frontier2',
+-    });
++    // Rung 3 (model) needs system theory before a pending attempt is pinned
++    const needsSystem = runStep(root, quest);
+     t.equal(needsSystem.terminal, 'theory-required');
+     t.match(needsSystem.problems.join('\n'), /system theory required/);
+ 
+@@ -151,6 +143,7 @@ tap.test('step theory gates', async (t) => {
+     recordFrontierTheory(root, quest, 'theory-model', 'model');
+     
+     // Rung 3 with system theory but without model ref throws
++    runStep(root, quest);
+     t.throws(() => runStep(root, quest, {
+       changeRef: makeDiff(root, 'c'),
+       summary: 'model rung without model',
+@@ -285,12 +278,7 @@ tap.test('step theory gates', async (t) => {
+       dominantReason: 'priority_spread_pending',
+     });
+ 
+-    runStep(root, quest);
+-    const blocked = runStep(root, quest, {
+-      changeRef: makeDiff(root, 'stale'),
+-      summary: 'old selected theory',
+-      theoryRef: 'theory-snapshot',
+-    });
++    const blocked = runStep(root, quest);
+     t.equal(blocked.terminal, 'theory-required');
+     t.match(blocked.problems.join('\n'), /stale/);
+     fs.rmSync(root, {recursive: true, force: true});
+diff --git a/test/solve/step.test.js b/test/solve/step.test.js
+index beec4b94..aa17d4f6 100644
+--- a/test/solve/step.test.js
++++ b/test/solve/step.test.js
+@@ -27,6 +27,20 @@ function makeDiff(root, name) {
+   return `diff:${file}`;
+ }
+ 
++function makeMultiDiff(root, questId, name, changedPaths) {
++  const file = path.join(root, 'solve', 'changes', questId, `${name}.diff`);
++  fs.mkdirSync(path.dirname(file), {recursive: true});
++  fs.writeFileSync(file, changedPaths.flatMap((changedPath) => [
++    `diff --git a/${changedPath} b/${changedPath}`,
++    `--- a/${changedPath}`,
++    `+++ b/${changedPath}`,
++    '@@ -1 +1 @@',
++    '-before',
++    '+after',
++  ]).join('\n'));
++  return `diff:${file}`;
++}
++
+ function goalFor(oracleFile) {
+   return {
+     id: 'demo',
+@@ -158,4 +172,76 @@ tap.test('synchronous runStep (P3)', async (t) => {
+     fs.rmSync(root, {recursive: true, force: true});
+     t.end();
+   });
++
++  t.test('begin step blocks when prior scope pressure is terminal', (t) => {
++    const root = tmp();
++    const oracle = path.join(root, 'o.json');
++    fs.writeFileSync(oracle, JSON.stringify({metric: 3, target: 0}));
++    const quest = goalFor(oracle);
++    saveQuest(root, quest);
++
++    runStep(root, quest);
++    runStep(root, quest, {
++      changeRef: makeMultiDiff(
++        root,
++        quest.id,
++        'wide',
++        Array.from({length: 61}, (_, i) => `src/scope/file-${i}.js`),
++      ),
++      summary: 'wide patch',
++    });
++
++    t.throws(
++      () => runStep(root, quest),
++      /scope pressure terminal/u,
++      'manual begin cannot bypass terminal scope gate',
++    );
++    fs.rmSync(root, {recursive: true, force: true});
++    t.end();
++  });
++
++  t.test('commit records a violation when before and after probe identities differ', (t) => {
++    const root = tmp();
++    const oracle = path.join(root, 'o.json');
++    fs.writeFileSync(oracle, JSON.stringify({metric: 3, target: 0}));
++    const quest = {
++      id: 'demo',
++      statement: 'Drive the oracle metric to zero.',
++      priority: 1,
++      doneWhen: {probe: 'oracle', args: {file: oracle}},
++      frontiers: [
++        {id: 'demo-main', priority: 1,
++          metric: {probe: 'oracle', args: {file: oracle, metric: 'priority'}}},
++      ],
++    };
++    saveQuest(root, quest);
++
++    runStep(root, quest);
++    fs.writeFileSync(oracle, JSON.stringify({metric: 2, target: 0}));
++    const refinedQuest = {
++      ...quest,
++      frontiers: [{
++        ...quest.frontiers[0],
++        metric: {
++          ...quest.frontiers[0].metric,
++          args: {...quest.frontiers[0].metric.args, metric: 'distance'},
++        },
++      }],
++    };
++    const result = runStep(root, refinedQuest, {
++      changeRef: makeDiff(root, 'identity-mismatch'),
++      summary: 'refine metric between before and after sample',
++    });
++
++    t.ok(
++      result.violations.some((item) => item.includes('same probe identity')),
++      'actual before/after probe identity mismatch is not hidden',
++    );
++    const attemptEvent = readLog(root, quest.id)
++      .find((event) => event.type === 'attempt');
++    t.not(attemptEvent.beforeProbeKey, attemptEvent.afterProbeKey);
++
++    fs.rmSync(root, {recursive: true, force: true});
++    t.end();
++  });
+ });

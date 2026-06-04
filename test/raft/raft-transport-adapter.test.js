@@ -5,6 +5,7 @@ import {
   RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS,
   RAFT_TRANSPORT_DELIVERY_OPTIONS,
 } from '../../src/raft/constants.js';
+import {OUTBOUND_DELIVERY_PRIORITY} from '../../src/constants/transport.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 
 test('RaftTransportAdapter keeps append-entry replication off the critical lane',
@@ -105,6 +106,113 @@ test('RaftTransportAdapter keeps heartbeat traffic on the critical lane',
       'heartbeat append traffic should stamp one canonical replacement key',
     );
   });
+
+test('RaftTransportAdapter routes priority control-plane heartbeat traffic to ' +
+  'the readiness lane', async (t) => {
+  let receivedMessage = null;
+  let receivedOptions = null;
+  const messageRouter = {
+    async deliver(_address, message, options) {
+      receivedMessage = message;
+      receivedOptions = options;
+      return {acknowledged: true};
+    },
+  };
+  const adapter = new RaftTransportAdapter({
+    messageRouter,
+    entityType: 'partition',
+    nodeId: 'node-1',
+  });
+  const packet = {
+    type: RAFT_PACKET_TYPE.APPEND,
+    term: 7,
+    address: 'node-1/partition/replica_operations-p1-r1',
+    state: 'leader',
+    leader: 'replica_operations-p1-r1',
+    last: {index: 12, term: 7},
+    data: [],
+    destination: 'node-2/partition/replica_operations-p1-r2',
+  };
+
+  await new Promise((resolve, reject) => {
+    adapter.write(packet, (error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve();
+    });
+  });
+
+  t.equal(
+    receivedMessage?.type,
+    'RAFT_APPEND_ENTRIES',
+    'priority heartbeat keeps the append-entries transport message mapping',
+  );
+  t.equal(
+    receivedOptions?.deliveryPriority,
+    OUTBOUND_DELIVERY_PRIORITY.READINESS,
+    'priority control-plane heartbeat traffic should use readiness',
+  );
+  t.equal(
+    receivedOptions?.deliverySource,
+    'raft:append:heartbeat',
+    'priority heartbeat traffic should stamp one canonical delivery source',
+  );
+  t.equal(
+    receivedOptions?.replacePendingKey,
+    'raft:append:heartbeat:node-2/partition/replica_operations-p1-r2',
+    'priority heartbeat traffic should stamp one canonical replacement key',
+  );
+});
+
+test('RaftTransportAdapter routes priority control-plane vote traffic to the ' +
+  'readiness lane', async (t) => {
+  let receivedMessage = null;
+  let receivedOptions = null;
+  const messageRouter = {
+    async deliver(_address, message, options) {
+      receivedMessage = message;
+      receivedOptions = options;
+      return {acknowledged: true};
+    },
+  };
+  const adapter = new RaftTransportAdapter({
+    messageRouter,
+    entityType: 'partition',
+    nodeId: 'node-1',
+  });
+  const packet = {
+    type: RAFT_PACKET_TYPE.VOTE,
+    term: 7,
+    address: 'node-1/partition/replica_operations-p1-r1',
+    state: 'candidate',
+    leader: null,
+    last: {index: 12, term: 7},
+    destination: 'node-2/partition/replica_operations-p1-r2',
+  };
+
+  await new Promise((resolve, reject) => {
+    adapter.write(packet, (error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve();
+    });
+  });
+
+  t.equal(
+    receivedMessage?.type,
+    'RAFT_REQUEST_VOTE',
+    'priority vote keeps the request-vote transport message mapping',
+  );
+  t.equal(
+    receivedOptions?.deliveryPriority,
+    OUTBOUND_DELIVERY_PRIORITY.READINESS,
+    'priority control-plane vote traffic should use readiness',
+  );
+});
 
 test('RaftTransportAdapter keeps control-plane publication append traffic critical',
   async (t) => {

@@ -2,7 +2,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {
+  EVENT_ATTEMPT,
   EVENT_EVIDENCE_INGESTED,
+  EVENT_QUEST,
+  EVENT_SOLVED,
   EVENT_THEORY_RESULT,
   THEORY_RESULT_FALSIFIED,
   THEORY_RESULT_NEEDS_RERUN,
@@ -36,6 +39,11 @@ import {
   buildEvidenceIdentity,
   evidenceIdentityMatchesEvent,
 } from './evidence-identity.js';
+import {
+  isFrontierProbeEvent,
+  metricKindFromProbeSpec,
+  stableProbeKey,
+} from './probe-spec.js';
 
 function parseJsonFile(filePath) {
   try {
@@ -49,43 +57,59 @@ export function detectUnrecordedEvidence(root, questId, options = {}) {
   try {
     const quest = loadQuest(root, questId);
     const log = readLog(root, questId);
-    const measuredEvents = log.filter(
-      (event) => event.type === 'attempt' ||
-        event.type === EVENT_EVIDENCE_INGESTED,
-    );
+    const measuredEvents = log.filter((event) =>
+      event.type === EVENT_ATTEMPT ||
+      event.type === EVENT_EVIDENCE_INGESTED ||
+      event.type === EVENT_SOLVED ||
+      event.type === EVENT_QUEST);
     if (measuredEvents.length === 0 && options.requiresMeasuredHistory) {
       return null;
     }
-    for (const spec of questProbeSpecs(quest)) {
+    for (const spec of questProbeSpecs(quest, options.kind || 'all')) {
       const probe = evaluate(spec.probeSpec, {root});
       if (!probe.evidence || probe.evidenceIdentity?.exists !== true) continue;
       const alreadyIngested = measuredEvents.some((event) =>
-        evidenceIdentityMatchesEvent(probe.evidenceIdentity, event),
+        evidenceIdentityMatchesEvent(probe.evidenceIdentity, event, {
+          requireProbeSpec: true,
+        }),
       );
       if (alreadyIngested) continue;
+      const probeFlag = spec.scope === 'doneWhen' ? ' --probe doneWhen' : '';
       return {
         frontier: spec.frontier,
+        probeScope: spec.scope,
         evidence: probe.evidence,
         evidenceFingerprint: probe.evidenceFingerprint,
-        command: `node scripts/solve.js ingest-evidence --id ${questId} --frontier ${spec.frontier} --evidence ${probe.evidence}`,
+        command: `node scripts/solve.js ingest-evidence --id ${questId} ` +
+          `--frontier ${spec.frontier}${probeFlag} --evidence ${probe.evidence}`,
       };
     }
   } catch (err) {}
   return null;
 }
 
-function questProbeSpecs(quest) {
+function questProbeSpecs(quest, kind = 'all') {
   const fallbackFrontier = quest.frontiers[0]?.id || `${quest.id}-main`;
-  return [
-    {frontier: fallbackFrontier, probeSpec: quest.doneWhen},
-    ...quest.frontiers.map((frontier) => ({
+  const specs = [];
+  if (kind !== 'frontier') {
+    specs.push({
+      frontier: fallbackFrontier,
+      scope: 'doneWhen',
+      probeSpec: quest.doneWhen,
+    });
+  }
+  if (kind !== 'closure') {
+    specs.push(...quest.frontiers.map((frontier) => ({
       frontier: frontier.id,
+      scope: 'frontier',
       probeSpec: frontier.metric,
-    })),
-  ].filter((entry) => entry.probeSpec);
+    })));
+  }
+  return specs.filter((entry) => entry.probeSpec);
 }
 
-function frontierProbeSpec(quest, frontierId) {
+function frontierProbeSpec(quest, frontierId, probeScope = 'frontier') {
+  if (probeScope === 'doneWhen') return quest.doneWhen;
   const frontier = quest.frontiers.find((item) => item.id === frontierId);
   return frontier?.metric || quest.doneWhen;
 }
@@ -156,12 +180,46 @@ function firstVerdictReason(data, scenario) {
 }
 
 function ownerWitness(failure) {
-  return failure?.ownerContract?.frontierWitnesses?.find((w) => w.owner) ||
-    failure?.ownerContract?.ownerWitnesses?.find((w) => w.owner) ||
-    null;
+  const direct = failure?.ownerContract?.frontierWitnesses?.find((w) => w.owner) ||
+    failure?.ownerContract?.ownerWitnesses?.find((w) => w.owner);
+  if (direct) return direct;
+  return firstOwnerLike(failure);
 }
 
-export function ingestEvidence(root, {questId, frontierId, evidencePath}) {
+function firstOwnerLike(value, depth = 0) {
+  if (!value || typeof value !== 'object' || depth > 5) return null;
+  if (typeof value.owner === 'string' ||
+    typeof value.currentOwner === 'string' ||
+    typeof value.decidingOwner === 'string') {
+    return {
+      owner: value.owner || value.currentOwner || value.decidingOwner || null,
+      boundary: value.boundary || value.blockingBoundary ||
+        value.ownerBoundary || null,
+      source: value.source || value,
+      nextAction: value.nextAction || value.nextRequiredAction ||
+        value.nextRequiredActions || null,
+    };
+  }
+  for (const child of Object.values(value)) {
+    if (Array.isArray(child)) {
+      for (const item of child) {
+        const found = firstOwnerLike(item, depth + 1);
+        if (found) return found;
+      }
+    } else {
+      const found = firstOwnerLike(child, depth + 1);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+export function ingestEvidence(root, {
+  questId,
+  frontierId,
+  evidencePath,
+  probeScope = 'frontier',
+}) {
   const quest = loadQuest(root, questId);
   const log = readLog(root, questId);
   const state = projectState(quest, log);
@@ -173,18 +231,27 @@ export function ingestEvidence(root, {questId, frontierId, evidencePath}) {
 
   const data = parseJsonFile(evidencePath);
   if (!data) throw new Error(`evidence file is not readable JSON: ${evidencePath}`);
-  const identityProbe = frontierProbeSpec(quest, frontierId);
+  const identityProbe = frontierProbeSpec(quest, frontierId, probeScope);
   const evidenceIdentity = buildEvidenceIdentity(root, evidencePath, {
     probe: identityProbe?.probe || null,
     args: identityProbe?.args || null,
   });
+  const probeKey = stableProbeKey(identityProbe);
+  const frontierMetricEvidence = probeScope !== 'doneWhen' &&
+    probeScope !== 'closure';
+  const liveProbe = evaluate(identityProbe, {root});
+  const liveProbeMatchesEvidence =
+    liveProbe.evidenceFingerprint &&
+    liveProbe.evidenceFingerprint === evidenceIdentity.fingerprint;
 
   // Scenario matching
   const scenarioName = quest.doneWhen?.args?.scenario || questId;
   const sc = scenarioEntry(data, scenarioName);
 
   // Metric extraction
-  const metricKind = quest.doneWhen?.args?.metric || 'priority';
+  const metricKind = metricKindFromProbeSpec(identityProbe) ||
+    quest.doneWhen?.args?.metric ||
+    'priority';
   let metric = null;
   if (metricKind === 'failed') {
     metric = Number.isInteger(data?.summary?.failed) ? data.summary.failed : null;
@@ -195,11 +262,23 @@ export function ingestEvidence(root, {questId, frontierId, evidencePath}) {
     metric = Number.isInteger(items) ? items : (Number.isInteger(data?.summary?.failed) ? data.summary.failed : (Number.isInteger(data?.metric) ? data.metric : null));
   }
 
-  const satisfiedInvariants = extractSatisfiedInvariants(data, scenarioName);
+  let satisfiedInvariants = extractSatisfiedInvariants(data, scenarioName);
 
-  const done = scenarioPassed(data, scenarioName);
+  let done = scenarioPassed(data, scenarioName);
   const verdict = firstVerdict(data, scenarioName);
   const verdictReason = firstVerdictReason(data, scenarioName);
+  let invalidSample = verdictReason === VERDICT_REASON_EXECUTION_INCOMPLETE ||
+    metric === null;
+  if (liveProbeMatchesEvidence) {
+    metric = liveProbe.metric;
+    done = liveProbe.done;
+    invalidSample = Boolean(liveProbe.invalidSample);
+    satisfiedInvariants = Array.isArray(liveProbe.satisfiedInvariants) ?
+      liveProbe.satisfiedInvariants :
+      satisfiedInvariants;
+  } else if (invalidSample) {
+    metric = null;
+  }
   
   const failure = firstFailureCandidate(data, scenarioName);
   const rootCauseClass = firstRootCause(data, scenarioName);
@@ -219,7 +298,9 @@ export function ingestEvidence(root, {questId, frontierId, evidencePath}) {
 
   const selectedTheory = state.theories.selectedByFrontier[frontierId] || null;
   const previousEvidence = [...log].reverse().find((event) =>
-    event.type === EVENT_EVIDENCE_INGESTED && event.frontier === frontierId);
+    event.type === EVENT_EVIDENCE_INGESTED &&
+    event.frontier === frontierId &&
+    isFrontierProbeEvent(event));
 
   const mechanismCard = buildMechanismCardFromEvidence(evidencePath);
   const classifiedMechanism = mechanismCard.failureMechanism || 'observation_gap';
@@ -230,8 +311,12 @@ export function ingestEvidence(root, {questId, frontierId, evidencePath}) {
     evidence: evidencePath,
     evidenceIdentity,
     evidenceFingerprint: evidenceIdentity.fingerprint,
+    probeScope,
+    probeKey,
+    metricKind,
     reportTimestamp,
     metric,
+    invalidSample,
     done,
     verdict,
     verdictReason,
@@ -247,9 +332,15 @@ export function ingestEvidence(root, {questId, frontierId, evidencePath}) {
     satisfiedInvariants,
     summary,
   };
-  const previousBlocker = blockerFromEvidence(previousEvidence);
-  const currentBlocker = blockerFromEvidence(newEvidenceEvent);
-  const blockerMovement = classifyBlockerMovement(previousBlocker, currentBlocker);
+  const previousBlocker = frontierMetricEvidence ?
+    blockerFromEvidence(previousEvidence) :
+    null;
+  const currentBlocker = frontierMetricEvidence ?
+    blockerFromEvidence(newEvidenceEvent) :
+    null;
+  const blockerMovement = frontierMetricEvidence ?
+    classifyBlockerMovement(previousBlocker, currentBlocker) :
+    null;
   const diagnosticMovement = previousBlocker ?
     `${blockerMovement}: ${[
       previousBlocker.owner,
@@ -260,11 +351,12 @@ export function ingestEvidence(root, {questId, frontierId, evidencePath}) {
       currentBlocker.boundary,
       currentBlocker.dominantReason,
     ].filter(Boolean).join(' / ') || 'unknown'}` :
-    `first blocker observed: ${[
+    frontierMetricEvidence ? `first blocker observed: ${[
       currentBlocker.owner,
       currentBlocker.boundary,
       currentBlocker.dominantReason,
-    ].filter(Boolean).join(' / ') || 'unknown'}`;
+    ].filter(Boolean).join(' / ') || 'unknown'}` :
+      'closure evidence ingested';
   const ingestedEvent = appendEvent(root, questId, {
     ...newEvidenceEvent,
     blockerBefore: previousBlocker,
@@ -292,8 +384,9 @@ export function ingestEvidence(root, {questId, frontierId, evidencePath}) {
   });
 
   // Evaluate theory result if a selected theory exists
-  if (selectedTheory) {
-    const nonMeasuring = verdict === VERDICT_BLOCK_EVIDENCE_INCOMPLETE ||
+  if (selectedTheory && frontierMetricEvidence) {
+    const nonMeasuring = invalidSample ||
+      verdict === VERDICT_BLOCK_EVIDENCE_INCOMPLETE ||
       verdictReason === VERDICT_REASON_EXECUTION_INCOMPLETE ||
       metric === null;
     let result = THEORY_RESULT_FALSIFIED;

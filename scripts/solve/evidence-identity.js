@@ -2,18 +2,14 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-const HASH_ALGORITHM = 'sha256';
+import {
+  eventProbeKey,
+  probeSpecFromIdentity,
+  stableProbeKey,
+  stableStringify,
+} from './probe-spec.js';
 
-function stableStringify(value) {
-  if (Array.isArray(value)) {
-    return `[${value.map(stableStringify).join(',')}]`;
-  }
-  if (value && typeof value === 'object') {
-    return `{${Object.keys(value).sort().map((key) =>
-      `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(',')}}`;
-  }
-  return JSON.stringify(value);
-}
+const HASH_ALGORITHM = 'sha256';
 
 function sha256(value) {
   return crypto.createHash(HASH_ALGORITHM).update(value).digest('hex');
@@ -112,11 +108,13 @@ export function eventEvidenceFingerprint(event) {
     null;
 }
 
-export function evidenceIdentityMatchesEvent(identity, event) {
+export function evidenceIdentityMatchesEvent(identity, event, options = {}) {
   if (!identity || !event) return false;
   const eventFingerprint = eventEvidenceFingerprint(event);
-  if (eventFingerprint) {
-    return eventFingerprint === identity.fingerprint;
-  }
-  return false;
+  if (!eventFingerprint || eventFingerprint !== identity.fingerprint) return false;
+  if (!options.requireProbeSpec) return true;
+  const identityKey = stableProbeKey(probeSpecFromIdentity(identity));
+  const recordedKey = eventProbeKey(event);
+  if (!identityKey || !recordedKey) return options.allowLegacy !== false;
+  return identityKey === recordedKey;
 }

@@ -37,6 +37,14 @@ function checkMetricEvidence(event, ctx) {
     !isValidMetricValue(event.metricAfter, event.invalidSample)) {
     violations.push('metricBefore/metricAfter must be finite numbers from a probe');
   }
+  const hasNullMetric = event.metricBefore === null || event.metricAfter === null;
+  if (hasNullMetric && event.invalidSample !== true) {
+    violations.push('null metrics require invalidSample=true');
+  }
+  if (event.beforeProbeKey && event.afterProbeKey &&
+    event.beforeProbeKey !== event.afterProbeKey) {
+    violations.push('metricBefore/metricAfter must come from the same probe identity');
+  }
   if (event.metricDirection !== METRIC_DIRECTION_LOWER_IS_BETTER) {
     violations.push(
       `metricDirection must be "${METRIC_DIRECTION_LOWER_IS_BETTER}"`,

@@ -56,6 +56,17 @@ import {detectUnrecordedEvidence} from './evidence.js';
 import {inspectChangeArtifact} from './change-artifact.js';
 import {analyzeScopePressure} from './scope-pressure.js';
 import {scopeTerminalStatus} from './convergence-guards.js';
+import {analyzeQuestHealth} from './health.js';
+import {
+  CONTINUATION_BLOCKED_THEORY,
+  continuationErrorMessage,
+  continuationIsAllowed,
+} from './continuation.js';
+import {
+  metricKindFromProbeSpec,
+  probeSpecFromIdentity,
+  stableProbeKey,
+} from './probe-spec.js';
 
 function defaultFileExists(p) {
   return Boolean(p) && fs.existsSync(p);
@@ -198,6 +209,13 @@ export function finalizeAttempt(root, quest, ctx, pick, before, result) {
     result.theoryRef || ctx.theoryRef,
   );
   const after = evaluate(pick.def.metric, ctx.probeCtx);
+  const probeKey = stableProbeKey(pick.def.metric);
+  const beforeProbeKey =
+    stableProbeKey(probeSpecFromIdentity(before.evidenceIdentity)) ||
+    probeKey;
+  const afterProbeKey =
+    stableProbeKey(probeSpecFromIdentity(after.evidenceIdentity)) ||
+    probeKey;
   const diagnosticMovement = diagnosticMovementFor(log, pick.def.id);
   const satisfiedInvariants = Array.isArray(after.satisfiedInvariants) ?
     after.satisfiedInvariants : [];
@@ -215,8 +233,15 @@ export function finalizeAttempt(root, quest, ctx, pick, before, result) {
     invalidSample: Boolean(before.invalidSample) || Boolean(after.invalidSample),
     done: after.done === true,
     evidence: after.evidence,
+    beforeEvidence: before.evidence || null,
+    beforeEvidenceIdentity: before.evidenceIdentity || null,
+    beforeEvidenceFingerprint: before.evidenceFingerprint || null,
     evidenceIdentity: after.evidenceIdentity || null,
     evidenceFingerprint: after.evidenceFingerprint || null,
+    probeKey: afterProbeKey || probeKey,
+    beforeProbeKey,
+    afterProbeKey,
+    metricKind: metricKindFromProbeSpec(pick.def.metric),
     theoryRef,
     expectedMovement: result.expectedMovement || ctx.expectedMovement || null,
     negativeResultMeans:
@@ -390,6 +415,7 @@ function maybeCommitAttempt(root, quest, ctx, pick, outcome) {
   if (!ctx.autoCommit) return;
   const event = outcome?.event;
   if (!event || event.invalidSample || !event.changeRef) return;
+  if (outcome.violations?.length > 0) return;
   const resolves = ctx.honestyCtx.inspectChangeRef ?
     Boolean(ctx.honestyCtx.inspectChangeRef(event.changeRef)?.valid) : true;
   if (!resolves) return;
@@ -447,6 +473,7 @@ export function runLoop(root, quest, options = {}) {
 
   const unrecorded = detectUnrecordedEvidence(root, quest.id, {
     requiresMeasuredHistory: true,
+    kind: 'frontier',
   });
   if (unrecorded) {
     throw new Error(
@@ -459,6 +486,35 @@ export function runLoop(root, quest, options = {}) {
 
   const maxCycles = Number.isInteger(options.maxCycles) ? options.maxCycles : 1000;
   for (let cycle = 0; cycle < maxCycles; cycle += 1) {
+    const questDone = evaluate(quest.doneWhen, ctx.probeCtx);
+    if (!questDone.done) {
+      const executionHealth = analyzeQuestHealth(root, quest, {
+        liveProbe: questDone,
+        continuationOptions: {
+          requireModelEvidence: !ctx.modelRef && !ctx.modelNotApplicable,
+        },
+      });
+      if (!continuationIsAllowed(executionHealth.continuation)) {
+        if (executionHealth.continuation.status === CONTINUATION_BLOCKED_THEORY) {
+          appendEvent(root, quest.id, {
+            type: EVENT_VIOLATION,
+            scope: 'theory-gate',
+            frontier: executionHealth.frontier,
+            rung: Number.isInteger(executionHealth.rungIndex) ?
+              LADDER[executionHealth.rungIndex] :
+              null,
+            rungIndex: executionHealth.rungIndex,
+            violations: executionHealth.continuation.problems,
+          });
+          return {
+            ...finish(root, quest, OUTCOME_THEORY_REQUIRED, null),
+            frontier: executionHealth.frontier,
+            problems: executionHealth.continuation.problems,
+          };
+        }
+        throw new Error(continuationErrorMessage(executionHealth.continuation));
+      }
+    }
     const {
       terminal,
       evidence,

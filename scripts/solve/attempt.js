@@ -9,6 +9,11 @@ import {stepTheoryGateProblems} from './theory.js';
 import {inspectChangeArtifact} from './change-artifact.js';
 import {analyzeScopePressure} from './scope-pressure.js';
 import {scopeTerminalStatus} from './convergence-guards.js';
+import {analyzeQuestHealth} from './health.js';
+import {
+  continuationErrorMessage,
+  continuationIsAllowed,
+} from './continuation.js';
 
 export function runAttemptCommand(root, args) {
   const questId = args.id;
@@ -47,6 +52,15 @@ export function runAttemptCommand(root, args) {
   });
   if (readinessProblems.length > 0) {
     throw new Error(`theory gate failed: ${readinessProblems.join('; ')}`);
+  }
+  const health = analyzeQuestHealth(root, quest, {
+    state,
+    continuationOptions: {
+      requireModelEvidence: !args.modelRef && !args.modelNotApplicable,
+    },
+  });
+  if (!continuationIsAllowed(health.continuation)) {
+    throw new Error(continuationErrorMessage(health.continuation));
   }
 
   const ctx = makeRunContext({

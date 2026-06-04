@@ -31,6 +31,16 @@ import {
 } from './change-artifact.js';
 import {loadQuest, projectState, readLog} from './store.js';
 import {questClass, closureKind, isDecisionClosure} from './closure-kind.js';
+import {analyzeQuestHealth} from './health.js';
+import {
+  CONTINUATION_BLOCKED_MEASUREMENT,
+  CONTINUATION_BLOCKED_METRIC_PROJECTION,
+  CONTINUATION_BLOCKED_REGRESSION,
+  CONTINUATION_BLOCKED_SCOPE,
+  CONTINUATION_BLOCKED_UNRECORDED_EVIDENCE,
+  continuationIsAllowed,
+} from './continuation.js';
+import {isFrontierProbeEvent} from './probe-spec.js';
 
 const BLOCKED_THEORY_STATUSES = Object.freeze([
   THEORY_RESULT_AVOIDED,
@@ -128,7 +138,9 @@ function auditMetricZeroNeedsTheoryResult(log, startIndex) {
   const latestMetricIndex = log.findLastIndex((event, index) =>
     index >= startIndex &&
     ((event.type === EVENT_ATTEMPT && typeof event.metricAfter === 'number') ||
-    (event.type === EVENT_EVIDENCE_INGESTED && typeof event.metric === 'number')));
+    (event.type === EVENT_EVIDENCE_INGESTED &&
+      isFrontierProbeEvent(event) &&
+      typeof event.metric === 'number')));
   if (latestMetricIndex < 0) return [];
   const event = log[latestMetricIndex];
   const metric = event.type === EVENT_ATTEMPT ? event.metricAfter : event.metric;
@@ -191,6 +203,7 @@ function auditSourceChangeVerification(root, quest, log, startIndex) {
 
 function isModelEvidenceFinding(event, frontier) {
   if (event.type === EVENT_EVIDENCE_INGESTED && event.frontier === frontier) {
+    if (!isFrontierProbeEvent(event)) return false;
     return isModelEvidenceRef(event.evidence);
   }
   return event.type === EVENT_FINDING &&
@@ -272,6 +285,7 @@ function auditUnmeasuredTheoryPromotion(log, startIndex) {
     const hasMeasuredEvidence = later.some((e) =>
       e.type === EVENT_EVIDENCE_INGESTED &&
       e.frontier === frontier &&
+      isFrontierProbeEvent(e) &&
       typeof e.metric === 'number');
     if (!hasMeasuredEvidence) {
       problems.push(problem(
@@ -282,6 +296,22 @@ function auditUnmeasuredTheoryPromotion(log, startIndex) {
     }
   }
   return problems;
+}
+
+function auditContinuation(root, quest) {
+  const health = analyzeQuestHealth(root, quest);
+  if (continuationIsAllowed(health.continuation)) return [];
+  const hardCodes = [
+    CONTINUATION_BLOCKED_UNRECORDED_EVIDENCE,
+    CONTINUATION_BLOCKED_METRIC_PROJECTION,
+    CONTINUATION_BLOCKED_REGRESSION,
+    CONTINUATION_BLOCKED_SCOPE,
+    CONTINUATION_BLOCKED_MEASUREMENT,
+  ];
+  if (!hardCodes.includes(health.continuation.status)) return [];
+  return health.continuation.problems.map((message) => problem(
+    `continuation blocked: ${message}`,
+  ));
 }
 
 export function auditQuest(root, quest) {
@@ -297,6 +327,7 @@ export function auditQuest(root, quest) {
     ...auditMetricZeroNeedsTheoryResult(log, startIndex),
     ...auditUnmeasuredTheoryPromotion(log, startIndex),
     ...auditReportOrdering(root, quest, log),
+    ...auditContinuation(root, quest),
   ];
   const unrecorded = detectUnrecordedEvidence(root, quest.id);
   if (unrecorded) {

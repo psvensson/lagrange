@@ -18,7 +18,10 @@ import {resolveRaftTransportDeliveryOptions} from '../../src/raft/constants.js';
 import {OUTBOUND_DELIVERY_PRIORITY} from '../../src/constants/transport.js';
 
 const MESSAGE_GROUP_TARGET = 'node-2/message-group/mg1-r1';
-const PRIORITY_PARTITION_TARGET = 'node-2/partition/replica_operations-p1';
+const PRIORITY_PARTITION_TARGET =
+  'node-2/partition/replica_operations-p1-r2';
+const SQL_WRITE_PRIORITY_PARTITION_TARGET =
+  'node-2/partition/sql_write_operations-p1-r2';
 const ORDINARY_PARTITION_TARGET = 'node-2/partition/users-p1';
 
 test('message-group vote is routed to the READINESS lane', async (t) => {
@@ -80,18 +83,77 @@ test('message-group data-bearing append is NOT routed to the READINESS lane', as
   t.end();
 });
 
-test('priority control-plane partition vote keeps the CRITICAL lane', async (t) => {
+test('priority control-plane partition vote is routed to the READINESS lane',
+  async (t) => {
+    const options = resolveRaftTransportDeliveryOptions({
+      type: 'vote',
+      targetAddress: PRIORITY_PARTITION_TARGET,
+    });
+    t.equal(
+      options.deliveryPriority,
+      OUTBOUND_DELIVERY_PRIORITY.READINESS,
+      'priority partition consensus control traffic must use readiness reserve',
+    );
+    t.end();
+  });
+
+test('priority control-plane heartbeat append is routed to the READINESS lane',
+  async (t) => {
+    const options = resolveRaftTransportDeliveryOptions({
+      type: 'append',
+      data: [],
+      targetAddress: PRIORITY_PARTITION_TARGET,
+    });
+    t.equal(
+      options.deliveryPriority,
+      OUTBOUND_DELIVERY_PRIORITY.READINESS,
+      'priority partition heartbeat traffic must use readiness reserve',
+    );
+    t.equal(
+      options.deliverySource,
+      'raft:append:heartbeat',
+      'priority heartbeat traffic stamps the canonical delivery source',
+    );
+    t.equal(
+      options.replacePendingKey,
+      `raft:append:heartbeat:${PRIORITY_PARTITION_TARGET}`,
+      'priority heartbeat traffic remains coalesced by target',
+    );
+    t.end();
+  });
+
+test('priority sql-write vote is routed to the READINESS lane', async (t) => {
   const options = resolveRaftTransportDeliveryOptions({
     type: 'vote',
-    targetAddress: PRIORITY_PARTITION_TARGET,
+    targetAddress: SQL_WRITE_PRIORITY_PARTITION_TARGET,
   });
   t.equal(
     options.deliveryPriority,
-    OUTBOUND_DELIVERY_PRIORITY.CRITICAL,
-    'priority partition consensus is unchanged and stays critical',
+    OUTBOUND_DELIVERY_PRIORITY.READINESS,
+    'sql_write_operations consensus control traffic must use readiness reserve',
   );
   t.end();
 });
+
+test('priority control-plane data-bearing append is NOT routed to the READINESS lane',
+  async (t) => {
+    const options = resolveRaftTransportDeliveryOptions({
+      type: 'append',
+      data: [{term: 1, index: 5}],
+      targetAddress: PRIORITY_PARTITION_TARGET,
+    });
+    t.not(
+      options.deliveryPriority,
+      OUTBOUND_DELIVERY_PRIORITY.READINESS,
+      'bulk priority control-plane replication must not consume readiness reserve',
+    );
+    t.equal(
+      options.deliveryPriority,
+      OUTBOUND_DELIVERY_PRIORITY.CRITICAL,
+      'active replica_operations append traffic remains critical',
+    );
+    t.end();
+  });
 
 test('ordinary partition vote keeps the CRITICAL lane', async (t) => {
   const options = resolveRaftTransportDeliveryOptions({

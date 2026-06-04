@@ -44,6 +44,15 @@ import {
   extractTheoryLedgerEntries,
   THEORY_LEDGER_FIELDS,
 } from '../../_legacy_work/scripts/work-theory-ledger.js';
+import {analyzeQuestHealth} from './health.js';
+import {
+  CONTINUATION_BLOCKED_METRIC_PROJECTION,
+  CONTINUATION_BLOCKED_REGRESSION,
+  CONTINUATION_BLOCKED_SCOPE,
+  continuationErrorMessage,
+  continuationIsAllowed,
+} from './continuation.js';
+import {isFrontierProbeEvent} from './probe-spec.js';
 
 const FLAG_ID = 'id';
 const FLAG_THEORY = 'theory';
@@ -258,7 +267,8 @@ export function stepTheoryGateProblems({
   }
 
   // Escalation rule 1 & 3:
-  const evidenceEvents = log.filter((e) => e.type === 'evidence-ingested');
+  const evidenceEvents = log.filter((e) =>
+    e.type === 'evidence-ingested' && isFrontierProbeEvent(e));
   const sameDominantReasonRepeat = evidenceEvents.length >= 2 &&
     evidenceEvents[evidenceEvents.length - 1].dominantReason &&
     evidenceEvents[evidenceEvents.length - 1].dominantReason === evidenceEvents[evidenceEvents.length - 2].dominantReason;
@@ -267,7 +277,8 @@ export function stepTheoryGateProblems({
     evidenceEvents[evidenceEvents.length - 1].owner === evidenceEvents[evidenceEvents.length - 2].owner &&
     evidenceEvents[evidenceEvents.length - 1].boundary === evidenceEvents[evidenceEvents.length - 2].boundary;
 
-  const latestEvidence = [...log].reverse().find((e) => e.type === 'evidence-ingested');
+  const latestEvidence = [...log].reverse().find((e) =>
+    e.type === 'evidence-ingested' && isFrontierProbeEvent(e));
   const namesLiveness = latestEvidence && (latestEvidence.owner || latestEvidence.boundary || latestEvidence.waitMode);
   const selectedIsObservationGap = selected && (selected.mechanism === 'observation_gap' || selected.layer === 'observation');
   const localTheoryTooNarrow = namesLiveness && selectedIsObservationGap;
@@ -339,7 +350,8 @@ export function stepTheoryGateProblems({
   // Escalation rule 2: If metric is 0 and done=false, require a theory result before more edits
   const latestMetricEvent = [...log].reverse().find((e) =>
     (e.type === 'attempt' && typeof e.metricAfter === 'number') ||
-    (e.type === 'evidence-ingested' && typeof e.metric === 'number')
+    (e.type === 'evidence-ingested' && isFrontierProbeEvent(e) &&
+      typeof e.metric === 'number')
   );
   if (latestMetricEvent) {
     const metricVal = latestMetricEvent.type === 'attempt' ? latestMetricEvent.metricAfter : latestMetricEvent.metric;
@@ -391,7 +403,9 @@ export function stepTheoryGateProblems({
     ].map(String).join(' ').toLowerCase();
     return LIFECYCLE_KEYWORDS.some((kw) => fields.includes(kw));
   };
-  const lifecycleEvents = log.filter((e) => e.type === 'evidence-ingested' && hasLifecycleLanguage(e));
+  const lifecycleEvents = log.filter((e) =>
+    e.type === 'evidence-ingested' && isFrontierProbeEvent(e) &&
+    hasLifecycleLanguage(e));
   const hasRepeatedLifecycleEvidence = lifecycleEvents.length >= 2;
 
   const modelProblem = validateModelRef(normalizeText(modelRef));
@@ -532,6 +546,17 @@ function cmdSelect(root, args) {
   }
   if (!SELECTABLE_THEORY_STATUSES.includes(theory.status)) {
     throw new Error(`theory: ${theoryId} has non-selectable status ${theory.status}`);
+  }
+  const health = analyzeQuestHealth(root, quest, {state});
+  const hardBlocks = [
+    CONTINUATION_BLOCKED_METRIC_PROJECTION,
+    CONTINUATION_BLOCKED_REGRESSION,
+    CONTINUATION_BLOCKED_SCOPE,
+  ];
+  if (!continuationIsAllowed(health.continuation) &&
+    hardBlocks.includes(health.continuation.status)) {
+    throw new Error(`theory select blocked: ${
+      continuationErrorMessage(health.continuation)}`);
   }
   appendEvent(root, quest.id, {
     type: EVENT_THEORY_SELECTED,

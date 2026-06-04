@@ -5,6 +5,7 @@ import os from 'node:os';
 
 import {saveQuest, appendEvent, readLog} from '../../scripts/solve/store.js';
 import {runAttemptCommand} from '../../scripts/solve/attempt.js';
+import {ingestEvidence} from '../../scripts/solve/evidence.js';
 
 function tmp() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'attempt-test-'));
@@ -205,6 +206,85 @@ tap.test('attempt wrapper (P2)', async (t) => {
         _: ['node', '-e', 'console.log()'],
       });
     }, /theory gate failed/, 'throws on missing theory at rung');
+
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('blocks model-rung execution before running harness without model evidence', (t) => {
+    const root = tmp();
+    const goal = {
+      ...getGoal(root),
+      statement: 'lifecycle owner-boundary model contract needs proof.',
+    };
+    saveQuest(root, goal);
+
+    const reportDir = path.join(root, 'test-output', 'reports');
+    fs.mkdirSync(reportDir, {recursive: true});
+    const reportPath = path.join(reportDir, 'rolling-restart-core-stability-1.report.json');
+    fs.writeFileSync(reportPath, JSON.stringify({
+      timestamp: '2026-06-01T12:00:00.000Z',
+      summary: {total: 1, passed: 0, failed: 1},
+      optimizationSummary: {totalPriorityItems: 5},
+      standardSummary: {
+        scenarios: [{scenario: 'rolling-restart', current: {passed: false}}],
+      },
+      scenarios: [{scenario: 'rolling-restart', passed: false}],
+    }));
+    ingestEvidence(root, {
+      questId: goal.id,
+      frontierId: 'attempt-quest-test-main',
+      evidencePath: reportPath,
+    });
+
+    appendEvent(root, goal.id, {
+      type: 'attempt',
+      frontier: 'attempt-quest-test-main',
+      rung: 'model',
+      rungIndex: 3,
+      metricBefore: 5,
+      metricAfter: 5,
+      changeRef: makeDiff(root, goal.id, 'model-seed'),
+    });
+    appendEvent(root, goal.id, {
+      type: 'theory-system-declared',
+      theory: 'system-theory',
+      scope: 'system',
+      status: 'active',
+      mechanism: 'lifecycle_model',
+    });
+    appendEvent(root, goal.id, {
+      type: 'theory-option-declared',
+      theory: 'frontier-theory',
+      frontier: 'attempt-quest-test-main',
+      scope: 'frontier',
+      status: 'active',
+      layer: 'model',
+      mechanism: 'lifecycle_model',
+    });
+    appendEvent(root, goal.id, {
+      type: 'theory-selected',
+      frontier: 'attempt-quest-test-main',
+      theory: 'frontier-theory',
+    });
+
+    const marker = path.join(root, 'harness-ran.txt');
+    const mockHarnessScript = path.join(root, 'mock-harness.js');
+    fs.writeFileSync(mockHarnessScript, `
+      require('fs').writeFileSync(${JSON.stringify(marker)}, 'ran');
+    `);
+
+    t.throws(() => {
+      runAttemptCommand(root, {
+        id: goal.id,
+        frontier: 'attempt-quest-test-main',
+        name: 'model-block',
+        changeRef: makeDiff(root, goal.id, 'blocked'),
+        summary: 'should not run',
+        _: ['node', mockHarnessScript],
+      });
+    }, /model evidence required/u);
+    t.equal(fs.existsSync(marker), false, 'harness did not run');
 
     fs.rmSync(root, {recursive: true, force: true});
     t.end();

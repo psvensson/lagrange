@@ -28,6 +28,12 @@ import {
 import {inspectChangeArtifact} from './change-artifact.js';
 import {autoCommitQuest} from './handoff.js';
 import {writeReport} from './report.js';
+import {analyzeQuestHealth} from './health.js';
+import {
+  CONTINUATION_BLOCKED_THEORY,
+  continuationErrorMessage,
+  continuationIsAllowed,
+} from './continuation.js';
 
 export function pendingFilePath(root, questId) {
   return path.join(
@@ -111,8 +117,14 @@ function stepBegin(root, quest, options = {}) {
     }
   }
 
+  const state = projectState(quest, readLog(root, quest.id));
+  if (state.questStatus === STATUS_SOLVED) {
+    return {terminal: 'solved', evidence: state.questEvidence};
+  }
+
   const unrecorded = detectUnrecordedEvidence(root, quest.id, {
     requiresMeasuredHistory: true,
+    kind: 'frontier',
   });
   if (unrecorded) {
     throw new Error(
@@ -121,12 +133,21 @@ function stepBegin(root, quest, options = {}) {
     );
   }
 
-  const state = projectState(quest, readLog(root, quest.id));
-  if (state.questStatus === STATUS_SOLVED) {
-    return {terminal: 'solved', evidence: state.questEvidence};
-  }
   const pick = pickFrontier(quest, state, ctx.scoreFn);
   if (!pick) return {terminal: 'exhausted'};
+
+  const health = analyzeQuestHealth(root, quest, {state});
+  if (!continuationIsAllowed(health.continuation)) {
+    if (health.continuation.status === CONTINUATION_BLOCKED_THEORY) {
+      return {
+        terminal: 'theory-required',
+        frontier: pick.def.id,
+        rungIndex: pick.state.rungIndex,
+        problems: health.continuation.problems,
+      };
+    }
+    throw new Error(continuationErrorMessage(health.continuation));
+  }
 
   const before = evaluate(pick.def.metric, ctx.probeCtx);
   const pending = {
@@ -205,7 +226,9 @@ function stepCommit(root, quest, options = {}) {
   // Persist the Quest's own scope-clean work as it progresses (R1). Auto-commit is a
   // no-op outside a git work tree and refuses on a failing audit, so it is safe to call
   // unconditionally; it can be suppressed per-invocation with options.push === false.
-  const commit = autoCommitQuest(root, quest.id, {push: options.push});
+  const commit = outcome.violations.length > 0 ?
+    {committed: false, skipped: 'attempt-violations'} :
+    autoCommitQuest(root, quest.id, {push: options.push});
   return {
     frontier: def.id,
     before: pending.before.metric,
