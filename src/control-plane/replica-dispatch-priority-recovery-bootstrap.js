@@ -25,6 +25,41 @@ const PRIORITY_RECOVERY_DISPATCH_BOOTSTRAP_ALLOWED_FAILED_DIMENSIONS = new Set([
   CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
   CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
 ]);
+const PRIORITY_RECOVERY_DISPATCH_BOOTSTRAP_REQUIRED_DIMENSIONS = Object.freeze([
+  CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE,
+  CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY,
+  CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY,
+  CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED,
+  CONTROL_PLANE_READINESS_DIMENSION.METADATA_PUBLICATION_HEALTHY,
+]);
+// A node's own priority-recovery spread dispatch is the operation that ADVANCES
+// the publication epoch and spreads the priority partitions. Requiring the node
+// to already be published before it may run that dispatch is a self-readiness
+// gate: the bootstrap operation that produces readiness must not require the
+// readiness it produces. For self-targeted dispatches we therefore drop the
+// publication-cluster preconditions and permit their pending reason codes.
+const SELF_PRIORITY_RECOVERY_DISPATCH_BOOTSTRAP_REQUIRED_DIMENSIONS = Object.freeze(
+  [
+    CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE,
+    CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY,
+    CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY,
+  ],
+);
+const SELF_PRIORITY_RECOVERY_DISPATCH_BOOTSTRAP_ALLOWED_FAILED_DIMENSIONS = new Set(
+  [
+    ...PRIORITY_RECOVERY_DISPATCH_BOOTSTRAP_ALLOWED_FAILED_DIMENSIONS,
+    CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED,
+    CONTROL_PLANE_READINESS_DIMENSION.METADATA_PUBLICATION_HEALTHY,
+  ],
+);
+const SELF_PRIORITY_RECOVERY_DISPATCH_BOOTSTRAP_ALLOWED_REASONS = new Set([
+  ...PRIORITY_RECOVERY_DISPATCH_BOOTSTRAP_ALLOWED_REASONS,
+  CONTROL_PLANE_READINESS_REASON.CONTROL_PLANE_PUBLICATION_PENDING,
+  CONTROL_PLANE_READINESS_REASON.METADATA_PUBLICATION_DEGRADED,
+  CONTROL_PLANE_READINESS_REASON.METADATA_PUBLICATION_REPAIR_ONLY,
+  CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
+  CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_SPREAD_EVIDENCE_UNAVAILABLE,
+]);
 
 function collectPriorityRecoveryDispatchBootstrapReasonCodes(readiness) {
   const reasonCodes = new Set();
@@ -63,26 +98,20 @@ function collectPriorityRecoveryDispatchBootstrapReasonCodes(readiness) {
   return reasonCodes;
 }
 
-function hasPriorityRecoveryDispatchBootstrapDimensions(readiness) {
+function hasPriorityRecoveryDispatchBootstrapDimensions(readiness, requiredDimensions) {
   const dimensions = readiness?.dimensions;
-  return (
-    dimensions &&
-    typeof dimensions === TYPEOF.OBJECT &&
-    dimensions[CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE] === true &&
-    dimensions[
-      CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY
-    ] === true &&
-    dimensions[CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY] === true &&
-    dimensions[
-      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED
-    ] === true &&
-    dimensions[
-      CONTROL_PLANE_READINESS_DIMENSION.METADATA_PUBLICATION_HEALTHY
-    ] === true
+  if (!dimensions || typeof dimensions !== TYPEOF.OBJECT) {
+    return false;
+  }
+  return requiredDimensions.every(
+    (dimension) => dimensions[dimension] === true,
   );
 }
 
-function hasOnlyPriorityRecoveryDispatchBootstrapFailedDimensions(readiness) {
+function hasOnlyPriorityRecoveryDispatchBootstrapFailedDimensions(
+  readiness,
+  allowedFailedDimensions,
+) {
   const dimensions = readiness?.dimensions;
   if (!dimensions || typeof dimensions !== TYPEOF.OBJECT) {
     return false;
@@ -96,14 +125,15 @@ function hasOnlyPriorityRecoveryDispatchBootstrapFailedDimensions(readiness) {
       CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
     ) &&
     failedDimensions.every((dimension) =>
-      PRIORITY_RECOVERY_DISPATCH_BOOTSTRAP_ALLOWED_FAILED_DIMENSIONS.has(
-        dimension,
-      ),
+      allowedFailedDimensions.has(dimension),
     )
   );
 }
 
-function hasOnlyPriorityRecoveryDispatchBootstrapReasonCodes(reasonCodes) {
+function hasOnlyPriorityRecoveryDispatchBootstrapReasonCodes(
+  reasonCodes,
+  allowedReasons,
+) {
   if (!(reasonCodes instanceof Set) || reasonCodes.size === NUM.ZERO) {
     return false;
   }
@@ -114,19 +144,37 @@ function hasOnlyPriorityRecoveryDispatchBootstrapReasonCodes(reasonCodes) {
     }
   }
   for (const reasonCode of reasonCodes) {
-    if (
-      !PRIORITY_RECOVERY_DISPATCH_BOOTSTRAP_ALLOWED_REASONS.has(reasonCode)
-    ) {
+    if (!allowedReasons.has(reasonCode)) {
       return false;
     }
   }
   return true;
 }
 
+function resolvePriorityRecoveryDispatchBootstrapPolicy(isSelfDispatch) {
+  if (isSelfDispatch) {
+    return {
+      requiredDimensions:
+        SELF_PRIORITY_RECOVERY_DISPATCH_BOOTSTRAP_REQUIRED_DIMENSIONS,
+      allowedFailedDimensions:
+        SELF_PRIORITY_RECOVERY_DISPATCH_BOOTSTRAP_ALLOWED_FAILED_DIMENSIONS,
+      allowedReasons: SELF_PRIORITY_RECOVERY_DISPATCH_BOOTSTRAP_ALLOWED_REASONS,
+    };
+  }
+  return {
+    requiredDimensions:
+      PRIORITY_RECOVERY_DISPATCH_BOOTSTRAP_REQUIRED_DIMENSIONS,
+    allowedFailedDimensions:
+      PRIORITY_RECOVERY_DISPATCH_BOOTSTRAP_ALLOWED_FAILED_DIMENSIONS,
+    allowedReasons: PRIORITY_RECOVERY_DISPATCH_BOOTSTRAP_ALLOWED_REASONS,
+  };
+}
+
 function shouldAllowPriorityRecoveryDispatchBootstrap({
   operation,
   readiness,
   decisionDimension,
+  selfNodeId = null,
 }) {
   if (
     decisionDimension !==
@@ -135,16 +183,33 @@ function shouldAllowPriorityRecoveryDispatchBootstrap({
     return false;
   }
   const partitionId = operation?.partitionId || operation?.partition_id || '';
+  if (!isPriorityControlPlanePartition({partitionId})) {
+    return false;
+  }
+  const targetNodeId = operation?.targetNodeId || operation?.target_node_id || null;
+  const isSelfDispatch =
+    typeof selfNodeId === TYPEOF.STRING &&
+    selfNodeId.length > NUM.ZERO &&
+    targetNodeId === selfNodeId;
+  const policy = resolvePriorityRecoveryDispatchBootstrapPolicy(isSelfDispatch);
   if (
-    !isPriorityControlPlanePartition({partitionId}) ||
-    !hasPriorityRecoveryDispatchBootstrapDimensions(readiness) ||
-    !hasOnlyPriorityRecoveryDispatchBootstrapFailedDimensions(readiness)
+    !hasPriorityRecoveryDispatchBootstrapDimensions(
+      readiness,
+      policy.requiredDimensions,
+    ) ||
+    !hasOnlyPriorityRecoveryDispatchBootstrapFailedDimensions(
+      readiness,
+      policy.allowedFailedDimensions,
+    )
   ) {
     return false;
   }
   const reasonCodes =
     collectPriorityRecoveryDispatchBootstrapReasonCodes(readiness);
-  return hasOnlyPriorityRecoveryDispatchBootstrapReasonCodes(reasonCodes);
+  return hasOnlyPriorityRecoveryDispatchBootstrapReasonCodes(
+    reasonCodes,
+    policy.allowedReasons,
+  );
 }
 
 export {shouldAllowPriorityRecoveryDispatchBootstrap};

@@ -88,9 +88,15 @@ const RAFT_TRANSPORT_DELIVERY_OPTIONS = Object.freeze({
   deliveryPriority: OUTBOUND_DELIVERY_PRIORITY.CRITICAL,
 });
 
+const RAFT_TRANSPORT_READINESS_DELIVERY_OPTIONS = Object.freeze({
+  deliveryPriority: OUTBOUND_DELIVERY_PRIORITY.READINESS,
+});
+
 const RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS = Object.freeze({
   deliveryPriority: OUTBOUND_DELIVERY_PRIORITY.BACKGROUND,
 });
+
+const RAFT_MESSAGE_GROUP_ADDRESS_TOKEN = '/message-group/';
 
 const RAFT_TRANSPORT_DELIVERY_SOURCE = Object.freeze({
   APPEND_ENTRIES: 'raft:append:entries',
@@ -254,10 +260,50 @@ function shouldUseBackgroundDeliveryForCriticalControlPlaneAppend(packet = null)
     isBackgroundControlPlaneAppendPartition(packet);
 }
 
+function isMessageGroupTargetAddress(packet = null) {
+  const targetAddress = resolveNormalizedTargetAddress(packet);
+  return (
+    typeof targetAddress === LOCAL_STR_STRING &&
+    targetAddress.includes(RAFT_MESSAGE_GROUP_ADDRESS_TOKEN)
+  );
+}
+
+// Break-point (a): the query message-group ingress readiness gate (routingReady)
+// only flips once the group's Raft consensus converges (leader elected, member
+// reachable). Those consensus CONTROL messages otherwise ride the CRITICAL lane
+// and are starved by the priority-recovery dispatch storm that saturates the
+// shared outbound queue. Routing the message-group control plane (votes,
+// vote/append responses, heartbeats — everything except bulk data-bearing
+// append replication) onto the protected READINESS lane reserves headroom so
+// the group can converge and ingress readiness can flip even under critical
+// saturation, without letting bulk replication consume the small reserve.
+function resolveMessageGroupReadinessDeliveryOptions(packet, packetType) {
+  const hasAppendEntries = packetType === RAFT_PACKET_TYPE.APPEND &&
+    Array.isArray(packet?.data) &&
+    packet.data.length > LOCAL_NUM_ZERO;
+  if (hasAppendEntries) {
+    return null;
+  }
+  if (isRaftHeartbeatAppendPacket(packet)) {
+    return buildHeartbeatAppendDeliveryOptions(
+      RAFT_TRANSPORT_READINESS_DELIVERY_OPTIONS,
+      packet,
+    );
+  }
+  return RAFT_TRANSPORT_READINESS_DELIVERY_OPTIONS;
+}
+
 function resolveRaftTransportDeliveryOptions(packet = null) {
   const packetType = typeof packet?.type === 'string' ?
     packet.type.toLowerCase() :
     null;
+  if (isMessageGroupTargetAddress(packet)) {
+    const messageGroupReadinessOptions =
+      resolveMessageGroupReadinessDeliveryOptions(packet, packetType);
+    if (messageGroupReadinessOptions) {
+      return messageGroupReadinessOptions;
+    }
+  }
   const isHeartbeatAppendPacket = isRaftHeartbeatAppendPacket(packet);
   const explicitTargetPartitionId = resolveExplicitTargetPartitionId(packet);
   if (resolvePriorityControlPlanePartitionId(packet)) {

@@ -531,6 +531,7 @@ class ReplicaDispatchServiceSegment4 extends ReplicaDispatchServiceSegment3 {
         operation,
         readiness,
         decisionDimension,
+        selfNodeId: this.nodeId,
       })
     );
   }
