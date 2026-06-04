@@ -168,21 +168,79 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
      * @private
      */
     async resolveControlPlaneReadinessEntries(options = {}) {
+      const readinessService = this.controlPlaneReadinessService || null;
+      if (!readinessService) {
+        return ADMIN_CACHE_DUMP.EMPTY;
+      }
+      const allowStaleOnCacheChange = options.allowStaleOnCacheChange !== false;
+      const allowAuthoritativeRefresh =
+        options.allowAuthoritativeRefresh === true;
+      const hasSyncResolution =
+        typeof readinessService.getAllNodeReadinessSync === TYPEOF.FUNCTION;
+      // The control-plane diagnostics snapshot is a read-only observability
+      // probe (the harness quiescence/snapshot lane polls it). It must always
+      // respond fast: the asynchronous getAllNodeReadiness() resolves each node
+      // through the serialized readiness-evaluation lane, which queues behind
+      // recovery work under control-plane pressure and blows the query budget.
+      // Prefer the lane-free synchronous cache resolution first, mirroring the
+      // sync-first pattern used by the membership-publication observations, and
+      // only fall through to the authoritative async path when sync yields
+      // nothing or an authoritative refresh was explicitly requested.
+      if (!allowAuthoritativeRefresh && hasSyncResolution) {
+        const syncReadiness = this.resolveControlPlaneReadinessEntriesSync({
+          allowStaleOnCacheChange,
+        });
+        if (syncReadiness.length > 0) {
+          return syncReadiness;
+        }
+      }
       if (
-        !this.controlPlaneReadinessService ||
-        typeof this.controlPlaneReadinessService.getAllNodeReadiness !==
-          TYPEOF.FUNCTION
+        typeof readinessService.getAllNodeReadiness !== TYPEOF.FUNCTION
+      ) {
+        return hasSyncResolution ?
+          this.resolveControlPlaneReadinessEntriesSync({
+            allowStaleOnCacheChange,
+          }) :
+          ADMIN_CACHE_DUMP.EMPTY;
+      }
+      try {
+        const readiness = await readinessService.getAllNodeReadiness({
+          allowAuthoritativeRefresh,
+          allowStaleOnCacheChange,
+          maxCachedAgeMs: this.readinessSnapshotCacheMaxAgeMs,
+        });
+        if (Array.isArray(readiness) && readiness.length > 0) {
+          return readiness;
+        }
+      } catch (_error) {
+        // Fall through to the lane-free sync resolution so the probe never
+        // returns blank (which would mask convergence as a harness failure).
+      }
+      return hasSyncResolution ?
+        this.resolveControlPlaneReadinessEntriesSync({
+          allowStaleOnCacheChange,
+        }) :
+        ADMIN_CACHE_DUMP.EMPTY;
+    }
+    /**
+     * Resolve readiness vectors from the lane-free synchronous cache path.
+     * @param {Object} options
+     * @return {Array<Object>}
+     * @private
+     */
+    resolveControlPlaneReadinessEntriesSync(options = {}) {
+      const readinessService = this.controlPlaneReadinessService || null;
+      if (
+        !readinessService ||
+        typeof readinessService.getAllNodeReadinessSync !== TYPEOF.FUNCTION
       ) {
         return ADMIN_CACHE_DUMP.EMPTY;
       }
       try {
-        const readiness =
-          await this.controlPlaneReadinessService.getAllNodeReadiness({
-            allowAuthoritativeRefresh:
-              options.allowAuthoritativeRefresh !== false,
-            allowStaleOnCacheChange: options.allowStaleOnCacheChange !== false,
-            maxCachedAgeMs: this.readinessSnapshotCacheMaxAgeMs,
-          });
+        const readiness = readinessService.getAllNodeReadinessSync({
+          allowStaleOnCacheChange: options.allowStaleOnCacheChange !== false,
+          maxCachedAgeMs: this.readinessSnapshotCacheMaxAgeMs,
+        });
         return Array.isArray(readiness) ? readiness : ADMIN_CACHE_DUMP.EMPTY;
       } catch (_error) {
         return ADMIN_CACHE_DUMP.EMPTY;

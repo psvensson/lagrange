@@ -528,6 +528,7 @@ class UnifiedRebalancerPriorityReadinessMethods {
       controlPlaneReadinessService: this.controlPlaneReadinessService,
       requirePublishedConvergence:
         this.shouldRequirePublishedConvergenceBeforeBackgroundMutation(),
+      allowPriorityRecoveryBypass: this.isControlPlanePriorityPartition(),
     });
   }
 

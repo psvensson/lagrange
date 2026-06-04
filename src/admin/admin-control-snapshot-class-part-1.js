@@ -388,6 +388,7 @@ class AdminControlSnapshotPart1 {
           options.allowStaleReadinessOnCacheChange,
         allowAuthoritativePublishedMembershipRecovery:
           options.allowAuthoritativePublishedMembershipRecovery === true,
+        boundedObservationProbe: options.boundedObservationProbe === true,
       });
     const nodeRows = this.systemTableCache.getAll(TABLES.NODES);
     const serviceRows = this.systemTableCache.getAll(TABLES.SERVICES);

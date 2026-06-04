@@ -458,3 +458,150 @@ test('control-plane mutation readiness does not block widenable transaction-cont
     'the blocker should still surface canonical routing-gap reasons when widening is unavailable',
   );
 });
+
+const PRIORITY_RECOVERY_BLOCKED_REASON = 'control_plane_write_unhealthy';
+
+function buildPriorityRecoveryReadiness({
+  recoveryLaneEligible,
+  priorityRecoveryActive,
+  extraDimensions = {},
+}) {
+  return {
+    dimensions: {
+      [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: false,
+      [CONTROL_PLANE_READINESS_DIMENSION.METADATA_PUBLICATION_HEALTHY]: false,
+      [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE]:
+        recoveryLaneEligible,
+      ...extraDimensions,
+    },
+    reasons: [{code: PRIORITY_RECOVERY_BLOCKED_REASON}],
+    projectionReadinessContract: {
+      state: PROJECTION_READINESS_CONTRACT_STATE.RECOVERY_OPEN,
+      ready: false,
+      publication: {ready: false},
+      priorityRecovery: {active: priorityRecoveryActive},
+    },
+  };
+}
+
+test('priority-recovery break-glass relaxes the publication-dependent write ' +
+  'dimensions when the recovery lane is open during active recovery', async (t) => {
+  const blocker = getLocalControlPlaneMutationReadinessBlocker({
+    nodeId: 'node-1',
+    allowPriorityRecoveryBypass: true,
+    controlPlaneReadinessService: {
+      getNodeReadinessSync() {
+        return buildPriorityRecoveryReadiness({
+          recoveryLaneEligible: true,
+          priorityRecoveryActive: true,
+        });
+      },
+    },
+  });
+
+  t.equal(
+    blocker,
+    null,
+    'the publication-repair write should be admitted once the recovery lane is open',
+  );
+});
+
+test('priority-recovery break-glass does nothing when the caller does not ' +
+  'opt in, preserving serve-grade writability for ordinary mutations', async (t) => {
+  const blocker = getLocalControlPlaneMutationReadinessBlocker({
+    nodeId: 'node-1',
+    controlPlaneReadinessService: {
+      getNodeReadinessSync() {
+        return buildPriorityRecoveryReadiness({
+          recoveryLaneEligible: true,
+          priorityRecoveryActive: true,
+        });
+      },
+    },
+  });
+
+  t.ok(blocker, 'without opt-in the write must remain blocked');
+  t.same(
+    blocker.failedDimensions,
+    [
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE,
+      CONTROL_PLANE_READINESS_DIMENSION.METADATA_PUBLICATION_HEALTHY,
+    ],
+    'both publication-dependent dimensions remain failed without the bypass',
+  );
+  t.equal(blocker.recoveryBypassApplied, false);
+});
+
+test('priority-recovery break-glass does not fire while the recovery lane is ' +
+  'closed, even with the opt-in flag set', async (t) => {
+  const blocker = getLocalControlPlaneMutationReadinessBlocker({
+    nodeId: 'node-1',
+    allowPriorityRecoveryBypass: true,
+    controlPlaneReadinessService: {
+      getNodeReadinessSync() {
+        return buildPriorityRecoveryReadiness({
+          recoveryLaneEligible: false,
+          priorityRecoveryActive: true,
+        });
+      },
+    },
+  });
+
+  t.ok(blocker, 'a closed recovery lane must keep the write blocked');
+  t.equal(blocker.recoveryBypassApplied, false);
+});
+
+test('priority-recovery break-glass does not fire when priority recovery is ' +
+  'not active, even if the recovery-eligible dimension is set', async (t) => {
+  const blocker = getLocalControlPlaneMutationReadinessBlocker({
+    nodeId: 'node-1',
+    allowPriorityRecoveryBypass: true,
+    controlPlaneReadinessService: {
+      getNodeReadinessSync() {
+        return buildPriorityRecoveryReadiness({
+          recoveryLaneEligible: true,
+          priorityRecoveryActive: false,
+        });
+      },
+    },
+  });
+
+  t.ok(blocker, 'the bypass must require active priority recovery');
+  t.equal(blocker.recoveryBypassApplied, false);
+});
+
+test('priority-recovery break-glass relaxes only the publication-dependent ' +
+  'dimensions and retains other failed dimensions', async (t) => {
+  const blocker = getLocalControlPlaneMutationReadinessBlocker({
+    nodeId: 'node-1',
+    allowPriorityRecoveryBypass: true,
+    requiredDimensions: [
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE,
+      CONTROL_PLANE_READINESS_DIMENSION.METADATA_PUBLICATION_HEALTHY,
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED,
+    ],
+    controlPlaneReadinessService: {
+      getNodeReadinessSync() {
+        return buildPriorityRecoveryReadiness({
+          recoveryLaneEligible: true,
+          priorityRecoveryActive: true,
+          extraDimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED]: false,
+          },
+        });
+      },
+    },
+  });
+
+  t.ok(blocker, 'a non-relaxable failed dimension must still block the write');
+  t.same(
+    blocker.failedDimensions,
+    [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED],
+    'only the publication-dependent writability dimensions are relaxed',
+  );
+  t.equal(
+    blocker.recoveryBypassApplied,
+    true,
+    'the blocker should record that the recovery bypass partially applied',
+  );
+});

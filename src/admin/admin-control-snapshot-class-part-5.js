@@ -259,6 +259,7 @@ class AdminControlSnapshotPart5 extends AdminControlSnapshotPart4 {
       options.allowAuthoritativePublishedMembershipRecovery === true ||
       options.preferAuthoritativePublicationRead === true ||
       options.reconcileAuthoritativeMembershipPublication === true;
+    const boundedObservationProbe = options.boundedObservationProbe === true;
     const observedMembershipPublication =
       await this.ensureMembershipPublicationObservation({
         preferAuthoritativeRead:
@@ -267,6 +268,7 @@ class AdminControlSnapshotPart5 extends AdminControlSnapshotPart4 {
           options.reconcileAuthoritativeMembershipPublication === true,
         publicationActiveGateHandoff:
           options.publicationActiveGateHandoff,
+        boundedObservationProbe,
       });
     let observedPublishedMembership =
       await this.ensurePublishedMembershipObservation(
@@ -274,9 +276,11 @@ class AdminControlSnapshotPart5 extends AdminControlSnapshotPart4 {
         {
           preferAuthoritativeRead:
             options.preferAuthoritativePublicationRead === true,
+          boundedObservationProbe,
         },
       );
     if (
+      !boundedObservationProbe &&
       !observedPublishedMembership &&
       allowAuthoritativePublishedMembershipRecovery === true &&
       options.preferAuthoritativePublicationRead !== true &&
@@ -295,6 +299,7 @@ class AdminControlSnapshotPart5 extends AdminControlSnapshotPart4 {
     }
     const readinessEntries = await this.resolveControlPlaneReadinessEntries({
       allowAuthoritativeRefresh:
+        !boundedObservationProbe &&
         options.allowAuthoritativeReadinessRefresh !== false,
       allowStaleOnCacheChange:
         options.allowStaleReadinessOnCacheChange !== false,

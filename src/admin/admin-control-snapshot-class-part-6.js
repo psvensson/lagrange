@@ -626,6 +626,11 @@ class AdminControlSnapshotPart6 extends AdminControlSnapshotPart5 {
     const hasMembershipPublicationService =
       isMembershipPublicationService(membershipPublicationService);
     const preferAuthoritativeRead = options.preferAuthoritativeRead === true;
+    // A bounded observability probe must never block on awaited owner/peer
+    // reads (they stall on a saturated transport during rolling restart). When
+    // set, resolve only from synchronous caches and degrade to the local
+    // system-table snapshot instead of awaiting authoritative rows.
+    const boundedObservationProbe = options.boundedObservationProbe === true;
     if (
       !preferAuthoritativeRead &&
       typeof readinessService?.getLatestMembershipPublicationRowSync ===
@@ -640,6 +645,7 @@ class AdminControlSnapshotPart6 extends AdminControlSnapshotPart5 {
       }
     }
     if (
+      !boundedObservationProbe &&
       typeof readinessService?.getLatestMembershipPublicationRow ===
       TYPEOF.FUNCTION
     ) {
@@ -665,6 +671,7 @@ class AdminControlSnapshotPart6 extends AdminControlSnapshotPart5 {
     }
     if (
       hasMembershipPublicationService &&
+      !boundedObservationProbe &&
       typeof membershipPublicationService.getLatestClusterPublication ===
         TYPEOF.FUNCTION
     ) {
@@ -718,6 +725,7 @@ class AdminControlSnapshotPart6 extends AdminControlSnapshotPart5 {
       this.resolveMembershipPublicationService();
     const hasMembershipPublicationService =
       isMembershipPublicationService(membershipPublicationService);
+    const boundedObservationProbe = options.boundedObservationProbe === true;
     if (
       options.preferAuthoritativeRead !== true &&
       typeof readinessService?.getLatestPublishedMembershipPublicationRowSync ===
@@ -732,6 +740,7 @@ class AdminControlSnapshotPart6 extends AdminControlSnapshotPart5 {
       }
     }
     if (
+      !boundedObservationProbe &&
       typeof readinessService?.getLatestPublishedMembershipPublicationRow ===
       TYPEOF.FUNCTION
     ) {
@@ -757,6 +766,7 @@ class AdminControlSnapshotPart6 extends AdminControlSnapshotPart5 {
     }
     if (
       hasMembershipPublicationService &&
+      !boundedObservationProbe &&
       typeof membershipPublicationService.getLatestPublishedClusterPublication ===
         TYPEOF.FUNCTION
     ) {

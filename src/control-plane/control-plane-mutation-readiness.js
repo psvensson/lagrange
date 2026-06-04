@@ -184,6 +184,56 @@ function isPublishedConvergencePending(readiness = null) {
   ).pending;
 }
 
+/**
+ * Dimensions the priority-recovery break-glass may relax. These are exactly the
+ * serve-grade writability signals that depend on the membership publication
+ * already being healthy. During a rolling restart the publication is *not* yet
+ * healthy precisely because the recovery write that repairs it is blocked on
+ * these dimensions, creating a circular bootstrap deadlock. The recovery lane
+ * (CONTROL_PLANE_RECOVERY_ELIGIBLE) already tolerates an unhealthy publication
+ * during active priority recovery, so when that lane is open we let the
+ * publication-repair write proceed.
+ */
+const PRIORITY_RECOVERY_BYPASS_RELAXABLE_DIMENSIONS = Object.freeze([
+  CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE,
+  CONTROL_PLANE_READINESS_DIMENSION.METADATA_PUBLICATION_HEALTHY,
+]);
+
+function isPriorityRecoveryWriteLaneOpen(readiness = null) {
+  if (!readiness || typeof readiness !== TYPEOF.OBJECT) {
+    return false;
+  }
+  const recoveryLaneEligible =
+    readiness.dimensions?.[
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE
+    ] === true;
+  if (!recoveryLaneEligible) {
+    return false;
+  }
+  return (
+    normalizePublishedConvergenceEvidence(readiness).priorityRecoveryActive ===
+    true
+  );
+}
+
+function relaxFailedDimensionsForPriorityRecovery(failedDimensions, readiness) {
+  if (
+    !Array.isArray(failedDimensions) ||
+    failedDimensions.length === NUM.ZERO ||
+    !isPriorityRecoveryWriteLaneOpen(readiness)
+  ) {
+    return {failedDimensions, recoveryBypassApplied: false};
+  }
+  const relaxable = new Set(PRIORITY_RECOVERY_BYPASS_RELAXABLE_DIMENSIONS);
+  const retained = failedDimensions.filter(
+    (dimension) => !relaxable.has(dimension),
+  );
+  return {
+    failedDimensions: retained,
+    recoveryBypassApplied: retained.length !== failedDimensions.length,
+  };
+}
+
 function getLocalControlPlaneMutationReadinessBlocker(options = {}) {
   const nodeId = String(options.nodeId || '');
   const controlPlaneReadinessService =
@@ -205,9 +255,20 @@ function getLocalControlPlaneMutationReadinessBlocker(options = {}) {
       allowStaleOnCacheChange: false,
     },
   );
-  const failedDimensions = requiredDimensions.filter((dimension) => {
+  const allowPriorityRecoveryBypass =
+    options.allowPriorityRecoveryBypass === true;
+  let failedDimensions = requiredDimensions.filter((dimension) => {
     return readiness?.dimensions?.[dimension] !== true;
   });
+  let recoveryBypassApplied = false;
+  if (allowPriorityRecoveryBypass) {
+    const relaxed = relaxFailedDimensionsForPriorityRecovery(
+      failedDimensions,
+      readiness,
+    );
+    failedDimensions = relaxed.failedDimensions;
+    recoveryBypassApplied = relaxed.recoveryBypassApplied;
+  }
   const requirePublishedConvergence =
     options.requirePublishedConvergence === true;
   if (requirePublishedConvergence && isPublishedConvergencePending(readiness)) {
@@ -220,6 +281,7 @@ function getLocalControlPlaneMutationReadinessBlocker(options = {}) {
   return Object.freeze({
     nodeId,
     readiness: readiness || null,
+    recoveryBypassApplied,
     failedDimensions: Object.freeze([...failedDimensions]),
     reasonCodes: normalizeReasonCodes(readiness, failedDimensions),
     readinessSnapshot: readiness ?

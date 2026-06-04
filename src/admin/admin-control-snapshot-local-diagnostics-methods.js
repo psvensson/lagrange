@@ -1,6 +1,32 @@
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const CONTROL_SNAPSHOT_DEFER_INLINE_OWNER_COMMAND_FIELD =
   'deferInlineOwnerCommand';
+const BOUNDED_SNAPSHOT_PROBE_DEADLINE_SENTINEL = Symbol(
+  'boundedSnapshotProbeDeadline',
+);
+const BOUNDED_SNAPSHOT_PROBE_MIN_DEADLINE_MS = 2000;
+const BOUNDED_SNAPSHOT_PROBE_DEADLINE_SAFETY_MARGIN_MS = 2000;
+
+function resolveBoundedSnapshotProbeDeadlineMs(queryTimeoutMs) {
+  if (!Number.isFinite(queryTimeoutMs) || queryTimeoutMs <= 0) {
+    return 0;
+  }
+  const flooredQueryTimeoutMs = Math.floor(queryTimeoutMs);
+  if (
+    flooredQueryTimeoutMs <=
+    BOUNDED_SNAPSHOT_PROBE_MIN_DEADLINE_MS +
+      BOUNDED_SNAPSHOT_PROBE_DEADLINE_SAFETY_MARGIN_MS
+  ) {
+    return 0;
+  }
+  const marginBoundedMs =
+    flooredQueryTimeoutMs - BOUNDED_SNAPSHOT_PROBE_DEADLINE_SAFETY_MARGIN_MS;
+  const halfBudgetMs = Math.max(
+    BOUNDED_SNAPSHOT_PROBE_MIN_DEADLINE_MS,
+    Math.floor(flooredQueryTimeoutMs / 2),
+  );
+  return Math.min(marginBoundedMs, halfBudgetMs);
+}
 
 function buildControlSnapshotResolveOptions(options = {}) {
   return {
@@ -512,9 +538,9 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
      * @return {Object}
      */
     async buildControlSnapshotQueryResult(options = {}) {
-      const snapshot = await this.resolveLocalControlSnapshot(
-        buildControlSnapshotResolveOptions(options),
-      );
+      const resolveOptions = buildControlSnapshotResolveOptions(options);
+      const snapshot =
+        await this.resolveBoundedLocalControlSnapshot(resolveOptions);
       return {
         success: true,
         rows: [snapshot],
@@ -522,6 +548,74 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
         partitions: ADMIN_CACHE_DUMP.EMPTY,
         tableName: ADMIN_CONTROL_SNAPSHOT.TABLE_NAME,
       };
+    }
+
+    async resolveBoundedLocalControlSnapshot(resolveOptions = {}) {
+      const deadlineMs = resolveBoundedSnapshotProbeDeadlineMs(
+        resolveOptions.queryTimeoutMs,
+      );
+      if (deadlineMs <= NUM.ZERO) {
+        return this.resolveLocalControlSnapshot(resolveOptions);
+      }
+      let deadlineTimer = null;
+      const resolvePromise = Promise.resolve(
+        this.resolveLocalControlSnapshot(resolveOptions),
+      );
+      resolvePromise.catch(() => {});
+      const deadlinePromise = new Promise((resolve) => {
+        deadlineTimer = setTimeout(() => {
+          resolve(BOUNDED_SNAPSHOT_PROBE_DEADLINE_SENTINEL);
+        }, deadlineMs);
+      });
+      try {
+        const raced = await Promise.race([resolvePromise, deadlinePromise]);
+        if (raced !== BOUNDED_SNAPSHOT_PROBE_DEADLINE_SENTINEL) {
+          return raced;
+        }
+        const boundedSnapshot = await this.buildLocalControlSnapshot({
+          ...resolveOptions,
+          boundedObservationProbe: true,
+        });
+        return await this.scheduleBoundedMembershipPublicationReconcile(
+          boundedSnapshot,
+          resolveOptions,
+        );
+      } finally {
+        if (deadlineTimer) {
+          clearTimeout(deadlineTimer);
+        }
+      }
+    }
+
+    // When the diagnostic probe degrades to its bounded/cache-only fallback the
+    // full resolve (which normally drives the membership-publication owner
+    // reconcile as a side effect) is abandoned. Under sustained transport
+    // saturation that side effect may never run, so the owner publishes its
+    // epoch but never reconciles the remaining active nodes into the published
+    // set -> publication_convergence_blocked / consumer_lag forever (the lost
+    // wakeup formalised in models/readiness-starvation/PublicationConvergence
+    // .tla). Drive the owner reconcile from an independent, BOUNDED
+    // owner-command instead: deferInlineOwnerCommand routes the reconcile
+    // through the non-blocking enqueue fallback, so it advances convergence
+    // even while the read probe is bounded. It is a no-op unless the bounded
+    // snapshot's diagnostics already carry the owner-reconcile signal.
+    async scheduleBoundedMembershipPublicationReconcile(
+      boundedSnapshot,
+      resolveOptions = {},
+    ) {
+      if (
+        typeof this.triggerMembershipPublicationHandoffOwnerCommand !==
+        'function'
+      ) {
+        return boundedSnapshot;
+      }
+      return await this.triggerMembershipPublicationHandoffOwnerCommand(
+        boundedSnapshot,
+        {
+          ...resolveOptions,
+          [CONTROL_SNAPSHOT_DEFER_INLINE_OWNER_COMMAND_FIELD]: true,
+        },
+      );
     }
   }
   for (const methodName of Object.getOwnPropertyNames(
