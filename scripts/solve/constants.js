@@ -39,6 +39,11 @@ export const STATUS_PARKED = 'parked';
 export const STATUS_EXHAUSTED = 'exhausted';
 
 // The finite strategy ladder. Rung index === position in this list.
+// `observe` is the first rung: before changing code, instrument the frontier and run a
+// discriminator that confirms or refutes the selected theory. A confirmed/refuted
+// discrimination is honest investigative progress (it holds the rung) even when the
+// product metric does not move — see decideAndRecord + INVESTIGATION_BUDGET below.
+export const RUNG_OBSERVE = 'observe';
 export const RUNG_LOCAL_FIX = 'local-fix';
 export const RUNG_WIDEN_SCOPE = 'widen-scope';
 export const RUNG_MODEL = 'model';
@@ -83,6 +88,7 @@ export const THEORY_RESULTS = Object.freeze([
 ]);
 
 export const LADDER = Object.freeze([
+  RUNG_OBSERVE,
   RUNG_LOCAL_FIX,
   RUNG_WIDEN_SCOPE,
   RUNG_MODEL,
@@ -92,6 +98,39 @@ export const LADDER = Object.freeze([
 
 // Index of the terminal rung (park). Reaching it parks the frontier.
 export const PARK_RUNG_INDEX = LADDER.length - 1;
+
+// Shared, renumber-safe rung indices. Computed from LADDER so inserting/reordering
+// rungs (e.g. the leading `observe` rung) never leaves a hard-coded threshold behind.
+export const RUNG_INDEX_OBSERVE = LADDER.indexOf(RUNG_OBSERVE);
+export const RUNG_INDEX_LOCAL_FIX = LADDER.indexOf(RUNG_LOCAL_FIX);
+export const RUNG_INDEX_WIDEN_SCOPE = LADDER.indexOf(RUNG_WIDEN_SCOPE);
+export const RUNG_INDEX_MODEL = LADDER.indexOf(RUNG_MODEL);
+
+// Discrimination outcomes an attempt may report. An attempt that instruments the
+// frontier and runs the selected theory's discriminator reports whether the theory was
+// confirmed or refuted; either is a real result that earns investigative progress
+// credit (see INVESTIGATION_BUDGET). `null`/none means the attempt made no
+// discrimination claim and is scored purely on the metric, as before.
+export const DISCRIMINATION_CONFIRMED = 'confirmed';
+export const DISCRIMINATION_REFUTED = 'refuted';
+export const DISCRIMINATIONS = Object.freeze([
+  DISCRIMINATION_CONFIRMED,
+  DISCRIMINATION_REFUTED,
+]);
+
+// Per-frontier ceiling on investigative-progress credits. A confirmed/refuted
+// discrimination on a not-yet-credited theory HOLDS the rung instead of climbing toward
+// park — but only this many times per frontier. Once the budget is spent, a
+// non-metric-moving attempt climbs the ladder as usual, so the loop still terminates
+// (EXHAUSTED) even if every discrimination is honest. Each credit also consumes a
+// distinct theory (a refuted theory is forced to be reselected), so investigation can
+// never farm a single hypothesis.
+export const INVESTIGATION_BUDGET = 3;
+
+// Number of same-frontier no-progress attempts that force a whole-system theory. This
+// tracks the depth of the model rung (you have stalled enough to reach it), preserving
+// the original semantics after the leading `observe` rung shifted the ladder by one.
+export const SYSTEM_THEORY_STALL_THRESHOLD = RUNG_INDEX_MODEL;
 
 // Run-level terminal outcomes.
 export const OUTCOME_SOLVED = 'solved';

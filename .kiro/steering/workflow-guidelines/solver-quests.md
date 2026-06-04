@@ -264,6 +264,7 @@ frontier theory.
 The Solver enforces theory in supervised steps and autonomous loop preflight
 only where it removes repeated local patching:
 
+- `observe`: theory optional; instrument before patching.
 - `local-fix`: theory optional.
 - `widen-scope`: selected frontier theory required.
 - `model`: selected frontier theory, active system theory, and `--modelRef` or
@@ -345,12 +346,42 @@ swept in. It is a dry run by default; `--commit` executes the printed
 Each frontier climbs a finite ladder when it stalls:
 
 ```text
-local-fix -> widen-scope -> model -> change-approach -> park
+observe -> local-fix -> widen-scope -> model -> change-approach -> park
 ```
 
 Honest measured progress keeps the current rung. A stall or honesty violation
 climbs one rung. When a frontier reaches `park`, the scheduler redirects to the
 next open frontier. A finite ladder prevents unbounded local patch loops.
+
+The ladder opens on `observe`, an instrument-before-patch rung. A frontier's
+first move is to add measurement — logging, a diagnostic counter, a probe — that
+discriminates between competing explanations, before any source is changed to
+"fix" a blocker that is not yet understood. `observe` carries no theory
+requirement, the same as `local-fix`. This rung exists so the Solver reaches the
+same instrument-first discipline a careful human applies: see the mechanism
+before patching it.
+
+### Falsification As Progress
+
+An attempt that does not move the metric is normally a stall that climbs the
+ladder. But an attempt that *discriminates a hypothesis* — confirming or refuting
+a named theory against real evidence — is genuine investigative progress, even
+when the product metric is unchanged. Such an attempt **holds** the current rung
+instead of climbing toward `park`.
+
+An attempt earns this investigative credit only when all of the following hold:
+it made no product progress, it carries no honesty violation, its sample is
+valid (it actually measured), it records a `discrimination` of `confirmed` or
+`refuted`, it names the theory it discriminated, and that theory has not already
+been credited on this frontier. Confirming or refuting a hypothesis is recorded
+as a `supported` / `falsified` theory result, so a refutation is durable
+knowledge that rules an approach out — not a wasted attempt.
+
+Credit is finite. A per-frontier investigation budget (`INVESTIGATION_BUDGET`)
+caps how many distinct theories can hold a rung before the ladder resumes
+climbing, so investigation can never become its own infinite loop. A confirmed or
+refuted discrimination is investigative progress only; it never satisfies
+`doneWhen` and never substitutes for measured product progress.
 
 ## Findings Log
 

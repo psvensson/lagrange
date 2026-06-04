@@ -13,7 +13,10 @@
 //           findings[], constraints.
 //   response (agent -> solver) JSON: { changeRef, summary, notes? }. The agent reports
 //           only WHAT IT DID, never whether it succeeded. Theory/model refs may be
-//           included to bind the attempt to the selected reasoning path.
+//           included to bind the attempt to the selected reasoning path. On the observe
+//           rung the agent may set discrimination: "confirmed" | "refuted" to report
+//           that it instrumented the frontier and ran the selected theory's
+//           discriminator; a confirmed/refuted result earns investigative progress.
 //
 // Truth comes from the probe, not the agent: after the command returns (or the
 // per-attempt timeout elapses → treated as a no-op attempt), the loop re-measures, so
@@ -106,7 +109,8 @@ function readResponse(responseFile) {
       expectedMovement: parsed.expectedMovement || null,
       negativeResultMeans: parsed.negativeResultMeans || null,
       modelRef: parsed.modelRef || null,
-      modelNotApplicable: parsed.modelNotApplicable || null};
+      modelNotApplicable: parsed.modelNotApplicable || null,
+      discrimination: parsed.discrimination || null};
   } catch (_error) {
     return null;
   }

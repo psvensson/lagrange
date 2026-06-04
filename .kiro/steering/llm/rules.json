@@ -104,12 +104,12 @@
     }
   ],
   "stats": {
-    "candidateCount": 244,
-    "dedupedRuleCount": 238,
-    "exportedRuleCount": 238,
+    "candidateCount": 246,
+    "dedupedRuleCount": 240,
+    "exportedRuleCount": 240,
     "aliasRuleCount": 0,
-    "masterRuleCount": 238,
-    "estimatedAllRulesTokens": 8050
+    "masterRuleCount": 240,
+    "estimatedAllRulesTokens": 8142
   },
   "rules": [
     {
@@ -2807,7 +2807,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 321,
+          "line": 322,
           "section": "Quest Workflow > Source Change Verification"
         }
       ]
@@ -2822,7 +2822,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 332,
+          "line": 333,
           "section": "Quest Workflow > Git Handoff"
         }
       ]
@@ -2832,12 +2832,44 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
+      "rule": "A confirmed or refuted discrimination is investigative progress only; it never satisfies doneWhen and never substitutes for measured product progress.",
+      "score": 205,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 380,
+          "section": "Quest Workflow > Strategy Ladder > Falsification As Progress"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0026",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [
+        "timeout"
+      ],
+      "rule": "A per-frontier investigation budget (INVESTIGATION_BUDGET) caps how many distinct theories can hold a rung before the ladder resumes climbing, so investigation can never become its own infinite loop.",
+      "score": 205,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 380,
+          "section": "Quest Workflow > Strategy Ladder > Falsification As Progress"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0027",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
       "rule": "Do not rely on solve/state/ as durable memory.",
       "score": 205,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 396,
+          "line": 427,
           "section": "Quest Workflow > Tracked Versus Regenerable"
         }
       ]
@@ -2858,7 +2890,7 @@
       ]
     },
     {
-      "id": "GOV-0026",
+      "id": "GOV-0028",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3060,7 +3092,7 @@
       ]
     },
     {
-      "id": "GOV-0027",
+      "id": "GOV-0029",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3075,7 +3107,7 @@
       ]
     },
     {
-      "id": "GOV-0028",
+      "id": "GOV-0030",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3086,13 +3118,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 268,
+          "line": 269,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
     },
     {
-      "id": "GOV-0029",
+      "id": "GOV-0031",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3101,13 +3133,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 269,
+          "line": 270,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
     },
     {
-      "id": "GOV-0030",
+      "id": "GOV-0032",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3118,13 +3150,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 271,
+          "line": 272,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
     },
     {
-      "id": "GOV-0031",
+      "id": "GOV-0033",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3133,7 +3165,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 381,
+          "line": 412,
           "section": "Quest Workflow > Terminal And Blocking Conditions"
         }
       ]
@@ -3173,7 +3205,7 @@
       ]
     },
     {
-      "id": "GOV-0032",
+      "id": "GOV-0034",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3190,7 +3222,7 @@
       ]
     },
     {
-      "id": "GOV-0033",
+      "id": "GOV-0035",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3205,7 +3237,7 @@
       ]
     },
     {
-      "id": "GOV-0034",
+      "id": "GOV-0036",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3235,7 +3267,7 @@
       ]
     },
     {
-      "id": "GOV-0035",
+      "id": "GOV-0037",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3252,7 +3284,7 @@
       ]
     },
     {
-      "id": "GOV-0036",
+      "id": "GOV-0038",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3267,7 +3299,7 @@
       ]
     },
     {
-      "id": "GOV-0037",
+      "id": "GOV-0039",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3276,7 +3308,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 375,
+          "line": 406,
           "section": "Quest Workflow > Terminal And Blocking Conditions"
         }
       ]
@@ -3371,7 +3403,7 @@
       ]
     },
     {
-      "id": "GOV-0038",
+      "id": "GOV-0040",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3382,13 +3414,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 309,
+          "line": 310,
           "section": "Quest Workflow > Source Change Verification"
         }
       ]
     },
     {
-      "id": "GOV-0039",
+      "id": "GOV-0041",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3397,7 +3429,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 309,
+          "line": 310,
           "section": "Quest Workflow > Source Change Verification"
         }
       ]
@@ -3520,7 +3552,7 @@
       ]
     },
     {
-      "id": "GOV-0040",
+      "id": "GOV-0042",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3535,7 +3567,7 @@
       ]
     },
     {
-      "id": "GOV-0041",
+      "id": "GOV-0043",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3547,7 +3579,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 336,
+          "line": 337,
           "section": "Quest Workflow > Git Handoff"
         }
       ]
@@ -3701,7 +3733,7 @@
       ]
     },
     {
-      "id": "GOV-0042",
+      "id": "GOV-0044",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3808,7 +3840,7 @@
       ]
     },
     {
-      "id": "GOV-0043",
+      "id": "GOV-0045",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -3823,7 +3855,7 @@
       ]
     },
     {
-      "id": "GOV-0044",
+      "id": "GOV-0046",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -3832,13 +3864,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 361,
+          "line": 392,
           "section": "Quest Workflow > Findings Log"
         }
       ]
     },
     {
-      "id": "GOV-0045",
+      "id": "GOV-0047",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -3853,7 +3885,7 @@
       ]
     },
     {
-      "id": "GOV-0046",
+      "id": "GOV-0048",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -3885,7 +3917,7 @@
       ]
     },
     {
-      "id": "GOV-0047",
+      "id": "GOV-0049",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -3915,7 +3947,7 @@
       ]
     },
     {
-      "id": "GOV-0048",
+      "id": "GOV-0050",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -3945,7 +3977,7 @@
       ]
     },
     {
-      "id": "GOV-0049",
+      "id": "GOV-0051",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -3962,7 +3994,7 @@
       ]
     },
     {
-      "id": "GOV-0050",
+      "id": "GOV-0052",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -3977,7 +4009,7 @@
       ]
     },
     {
-      "id": "GOV-0051",
+      "id": "GOV-0053",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -3988,13 +4020,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 396,
+          "line": 427,
           "section": "Quest Workflow > Tracked Versus Regenerable"
         }
       ]
     },
     {
-      "id": "GOV-0052",
+      "id": "GOV-0054",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4011,5 +4043,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-06-03T04:13:13.164Z"
+  "generatedAt": "2026-06-04T13:52:38.087Z"
 }

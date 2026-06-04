@@ -36,9 +36,9 @@ tap.test('Quest health', async (t) => {
     appendEvent(root, quest.id, {
       type: EVENT_ATTEMPT,
       frontier: 'demo-main',
-      rung: 'local-fix',
-      rungIndex: 2,
-      prevRungIndex: 1,
+      rung: 'model',
+      rungIndex: 3,
+      prevRungIndex: 2,
       metricBefore: 2,
       metricAfter: 0,
       metricDirection: 'lower-is-better',

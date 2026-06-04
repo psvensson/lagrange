@@ -182,12 +182,13 @@ tap.test('attempt wrapper (P2)', async (t) => {
       scenarios: [{scenario: 'rolling-restart', passed: false}],
     }));
 
-    // Record a flat attempt to advance the rung index to 1 (widen-scope)
+    // Record a flat attempt whose stored rungIndex advances the next attempt to
+    // rung 2 (widen-scope, where a frontier theory is required)
     appendEvent(root, goal.id, {
       type: 'attempt',
       frontier: 'attempt-quest-test-main',
-      rung: 'local-fix',
-      rungIndex: 1,
+      rung: 'widen-scope',
+      rungIndex: 2,
       metricBefore: 5,
       metricAfter: 5,
       changeRef: makeDiff(root, goal.id, 'x'),

@@ -102,7 +102,7 @@ tap.test('solver loop — P0 walking skeleton', async (t) => {
     t.end();
   });
 
-  t.test('climbs to model rung on consecutive stalls when theory is selected', (t) => {
+  t.test('climbs the ladder on consecutive stalls when theory is selected', (t) => {
     const {root, quest, changeDir} = setup({metric: 5, target: 0});
     runLoop(root, quest, {
       executor: makeDryExecutor({changeDir, stallFrontiers: ['f1']}),
@@ -114,7 +114,7 @@ tap.test('solver loop — P0 walking skeleton', async (t) => {
       maxCycles: 1,
     });
     const state = projectState(quest, readLog(root, quest.id));
-    t.equal(state.frontiers[0].rungIndex, 2, 'two stalls => rung climbed to 2');
+    t.equal(state.frontiers[0].rungIndex, 2, 'two stalls => rung climbed to 2 (widen-scope)');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });
@@ -126,7 +126,7 @@ tap.test('solver loop — P0 walking skeleton', async (t) => {
       maxCycles: 2,
     });
     const state = projectState(quest, readLog(root, quest.id));
-    t.equal(state.frontiers[0].rungIndex, 0, 'progress keeps rung at local-fix');
+    t.equal(state.frontiers[0].rungIndex, 0, 'progress keeps rung at observe');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });
@@ -166,9 +166,11 @@ tap.test('solver loop — P0 walking skeleton', async (t) => {
 
   t.test('autonomous loop stops before executor when theory gate is unmet', (t) => {
     const {root, quest, changeDir} = setup({metric: 5, target: 0});
+    // Two stalls climb observe(0) -> local-fix(1) -> widen-scope(2), where a frontier
+    // theory becomes required.
     runLoop(root, quest, {
       executor: makeDryExecutor({changeDir, stallFrontiers: ['f1']}),
-      maxCycles: 1,
+      maxCycles: 2,
     });
 
     let executorCalls = 0;
@@ -186,7 +188,7 @@ tap.test('solver loop — P0 walking skeleton', async (t) => {
     const violations = log.filter((event) => event.type === EVENT_VIOLATION);
     t.equal(res.outcome, OUTCOME_THEORY_REQUIRED, 'stops at the theory gate');
     t.equal(executorCalls, 0, 'executor was not invoked');
-    t.equal(attempts.length, 1, 'no extra attempt was recorded past the gate');
+    t.equal(attempts.length, 2, 'no extra attempt was recorded past the gate');
     t.equal(violations[violations.length - 1].scope, 'theory-gate');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();

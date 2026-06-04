@@ -98,20 +98,21 @@ function recordSystemTheory(root, quest) {
 tap.test('step theory gates', async (t) => {
   t.test('widen-scope rung requires a selected frontier theory', (t) => {
     const {root, quest} = setup();
-    // 1st flat step climbs to rung 1
+    // Flat steps climb observe(0) -> local-fix(1) -> widen-scope(2)
     commitStep(root, quest, 'flat');
+    commitStep(root, quest, 'flat2');
 
-    // 2nd step without theory is blocked
+    // step at widen-scope without theory is blocked
     runStep(root, quest);
     const blocked = runStep(root, quest, {
-      changeRef: makeDiff(root, 'flat2'),
-      summary: 'flat2',
+      changeRef: makeDiff(root, 'flat3'),
+      summary: 'flat3',
     });
     t.equal(blocked.terminal, 'theory-required');
     t.match(blocked.problems.join('\n'), /frontier theory required/);
 
     recordFrontierTheory(root, quest);
-    // 3rd step with theory is allowed
+    // next step with theory is allowed
     const allowed = runStep(root, quest, {
       changeRef: makeDiff(root, 'with-theory'),
       summary: 'with theory',
@@ -127,16 +128,21 @@ tap.test('step theory gates', async (t) => {
     // Rung 0 -> 1
     commitStep(root, quest, 'a');
     recordFrontierTheory(root, quest);
-    // Rung 1 -> 2 (model)
+    // Rung 1 -> 2 (widen-scope) then 2 -> 3 (model)
     commitStep(root, quest, 'b', {
       theoryRef: 'theory-frontier',
     });
+    recordFrontierTheory(root, quest, 'theory-frontier2');
+    commitStep(root, quest, 'b2', {
+      theoryRef: 'theory-frontier2',
+    });
 
-    // Rung 2 needs system theory
+    // Rung 3 (model) needs system theory
     runStep(root, quest);
     const needsSystem = runStep(root, quest, {
       changeRef: makeDiff(root, 'c1'),
       summary: 'no system theory yet',
+      theoryRef: 'theory-frontier2',
     });
     t.equal(needsSystem.terminal, 'theory-required');
     t.match(needsSystem.problems.join('\n'), /system theory required/);
@@ -144,14 +150,14 @@ tap.test('step theory gates', async (t) => {
     recordSystemTheory(root, quest);
     recordFrontierTheory(root, quest, 'theory-model', 'model');
     
-    // Rung 2 with system theory but without model ref throws
+    // Rung 3 with system theory but without model ref throws
     t.throws(() => runStep(root, quest, {
       changeRef: makeDiff(root, 'c'),
       summary: 'model rung without model',
       theoryRef: 'theory-model',
     }), /model evidence or modelNotApplicable/);
 
-    // Rung 2 with modelNotApplicable succeeds
+    // Rung 3 with modelNotApplicable succeeds
     const committed = runStep(root, quest, {
       changeRef: makeDiff(root, 'd'),
       summary: 'model not applicable because statechart already covers lifecycle',
@@ -171,20 +177,24 @@ tap.test('step theory gates', async (t) => {
     // Rung 0 -> 1
     commitStep(root, quest, 'a');
     recordFrontierTheory(root, quest, 'theory-wide');
-    // Rung 1 -> 2
+    // Rung 1 -> 2 -> 3
     commitStep(root, quest, 'b', {
       theoryRef: 'theory-wide',
     });
+    recordFrontierTheory(root, quest, 'theory-wide2');
+    commitStep(root, quest, 'b2', {
+      theoryRef: 'theory-wide2',
+    });
     recordSystemTheory(root, quest);
     recordFrontierTheory(root, quest, 'theory-model', 'model');
-    // Rung 2 -> 3
+    // Rung 3 -> 4
     commitStep(root, quest, 'c', {
       theoryRef: 'theory-model',
       modelNotApplicable: 'statechart already covers lifecycle',
     });
 
     recordFrontierTheory(root, quest, 'theory-change', 'ownership');
-    // Rung 3 step succeeds without model evidence
+    // Rung 4 (change-approach) step succeeds without model evidence
     runStep(root, quest);
     const committed = runStep(root, quest, {
       changeRef: makeDiff(root, 'd'),
@@ -250,7 +260,9 @@ tap.test('step theory gates', async (t) => {
 
   t.test('stale selected theory blocks widened attempts after owner movement', (t) => {
     const {root, quest} = setup();
+    // Climb observe(0) -> local-fix(1) -> widen-scope(2) where staleness is enforced.
     commitStep(root, quest, 'a');
+    commitStep(root, quest, 'a2');
     appendEvent(root, quest.id, {
       type: 'evidence-ingested',
       frontier: 'demo-main',

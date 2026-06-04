@@ -22,6 +22,10 @@ import {
   STATUS_EXHAUSTED,
   LADDER,
   PARK_RUNG_INDEX,
+  DISCRIMINATION_CONFIRMED,
+  DISCRIMINATION_REFUTED,
+  DISCRIMINATIONS,
+  INVESTIGATION_BUDGET,
   PARK_KIND_EXHAUSTED,
   PARK_KIND_CANNOT_MEASURE,
   PARK_REASON_EXHAUSTED,
@@ -220,6 +224,7 @@ export function finalizeAttempt(root, quest, ctx, pick, before, result) {
     blockerMovement: diagnosticMovement.movement,
     diagnosticMovement: diagnosticMovement.summary,
     satisfiedInvariants: satisfiedInvariants.length > 0 ? satisfiedInvariants : null,
+    discrimination: normalizeDiscrimination(result.discrimination || ctx.discrimination || null),
   };
   const violations = [
     ...validateAttempt(event, ctx.honestyCtx),
@@ -262,16 +267,54 @@ export function finalizeAttempt(root, quest, ctx, pick, before, result) {
   return {event, after, violations, progressed, oscillation, regressed};
 }
 
+function normalizeDiscrimination(value) {
+  return DISCRIMINATIONS.includes(value) ? value : null;
+}
+
+// Count prior investigative credits already spent on this frontier. Each credited
+// attempt persisted `investigative: true` on its recorded attempt event, so the budget
+// counter reads the log directly rather than re-deriving the decision.
+function investigativeCreditsSpent(log, frontierId) {
+  const credited = new Set();
+  for (const e of log) {
+    if (e.type === EVENT_ATTEMPT && e.frontier === frontierId &&
+      e.investigative === true && e.theoryRef) {
+      credited.add(e.theoryRef);
+    }
+  }
+  return credited;
+}
+
 function decideAndRecord(root, quest, pick, event, after, violations,
   forceStall = false) {
   const progressed = !forceStall && violations.length === 0 &&
     after.metric !== null && event.metricBefore !== null &&
     after.metric < event.metricBefore;
-  // A rung is escalated on a stall or on untrusted (violating) data. It is only kept
-  // when honest progress is observed.
-  const nextRung = progressed ? event.rungIndex :
+  // Falsification-as-progress: an honest, evidence-backed attempt that confirms or
+  // refutes its bound theory is real investigative progress even when the product
+  // metric does not move. Such an attempt HOLDS the rung (like metric progress) instead
+  // of climbing toward park — but only for a distinct, not-yet-credited theory and only
+  // while the per-frontier investigation budget remains. This keeps termination intact:
+  // the budget is finite and each credit consumes (falsifies/supports) a distinct
+  // theory, so once hypotheses or budget run out, non-progress climbs to park as usual.
+  const log = readLog(root, quest.id);
+  const creditedTheories = investigativeCreditsSpent(log, event.frontier);
+  const investigative = !progressed && !forceStall && violations.length === 0 &&
+    !event.invalidSample &&
+    (event.discrimination === DISCRIMINATION_CONFIRMED ||
+      event.discrimination === DISCRIMINATION_REFUTED) &&
+    Boolean(event.theoryRef) &&
+    !creditedTheories.has(event.theoryRef) &&
+    creditedTheories.size < INVESTIGATION_BUDGET;
+  // A rung is escalated on a stall or on untrusted (violating) data. It is kept on
+  // honest metric progress, and held (not climbed) on a credited discrimination.
+  const nextRung = (progressed || investigative) ? event.rungIndex :
     Math.min(event.rungIndex + 1, PARK_RUNG_INDEX);
-  appendEvent(root, quest.id, {...event, rungIndex: nextRung});
+  appendEvent(root, quest.id, {
+    ...event,
+    rungIndex: nextRung,
+    investigative: investigative || undefined,
+  });
   if (after.done) {
     appendEvent(root, quest.id, {
       type: EVENT_SOLVED,
@@ -319,6 +362,7 @@ export function makeRunContext(options = {}) {
       inspectChangeRef: options.inspectChangeRef || null,
     },
     theoryRef: options.theoryRef || null,
+    discrimination: options.discrimination || null,
     expectedMovement: options.expectedMovement || null,
     negativeResultMeans: options.negativeResultMeans || null,
     modelRef: options.modelRef || null,

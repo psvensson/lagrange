@@ -6,6 +6,7 @@
 
 import {
   LADDER,
+  RUNG_OBSERVE,
   RUNG_LOCAL_FIX,
   RUNG_WIDEN_SCOPE,
   RUNG_MODEL,
@@ -14,6 +15,11 @@ import {
 } from './constants.js';
 
 const RUNG_GUIDANCE = Object.freeze({
+  [RUNG_OBSERVE]:
+    'Do not patch yet. Instrument the frontier and run a discriminator that ' +
+    'confirms or refutes the selected theory, then report discrimination=confirmed ' +
+    'or discrimination=refuted with the evidence. A refuted theory is progress: it ' +
+    'rules out a path and frees you to select the next hypothesis.',
   [RUNG_LOCAL_FIX]:
     'Make the smallest direct change you believe moves the metric. Stay inside the ' +
     'frontier component.',

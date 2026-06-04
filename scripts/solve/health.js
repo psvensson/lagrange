@@ -1,13 +1,15 @@
 import {
   EVENT_ATTEMPT,
-  RUNG_MODEL,
-  RUNG_WIDEN_SCOPE,
+  RUNG_INDEX_WIDEN_SCOPE,
+  RUNG_INDEX_MODEL,
+  SYSTEM_THEORY_STALL_THRESHOLD,
   STATUS_PARKED,
   PARK_KIND_CANNOT_MEASURE,
   THEORY_RESULT_ACTIVE,
   THEORY_RESULT_SUPPORTED,
   THEORY_RESULT_SUPERSEDED,
 } from './constants.js';
+import {rungName as ladderRungName} from './ladder.js';
 import {evaluate} from './probe.js';
 import {pickFrontier} from './scheduler.js';
 import {projectState, readLog} from './store.js';
@@ -48,7 +50,8 @@ function attemptProgressed(event) {
 }
 
 function noProgressAttempts(log, frontierId) {
-  return attemptEvents(log, frontierId).filter((event) => !attemptProgressed(event));
+  return attemptEvents(log, frontierId)
+    .filter((event) => !attemptProgressed(event) && event.investigative !== true);
 }
 
 function activeSystemTheories(state) {
@@ -145,15 +148,19 @@ function frontierNeeds(quest, state, log, frontier) {
   const localTheoryTooNarrow = namesLiveness && selectedIsObservationGap;
 
   const systemTheoryRequired =
-    (rung === 2 || noProgress.length >= NUM_TWO || sameDominantReasonRepeat || sameOwnerBoundaryRepeat || localTheoryTooNarrow) &&
-    activeSystemTheories(state).length === 0;
+    (rung === RUNG_INDEX_MODEL
+      || noProgress.length >= SYSTEM_THEORY_STALL_THRESHOLD
+      || sameDominantReasonRepeat
+      || sameOwnerBoundaryRepeat
+      || localTheoryTooNarrow)
+    && activeSystemTheories(state).length === 0;
 
   const modelGuidance = modelGuidanceForQuest(quest, log);
 
   return {
-    frontierTheoryRequired: rung >= 1 && !selectedUsable,
+    frontierTheoryRequired: rung >= RUNG_INDEX_WIDEN_SCOPE && !selectedUsable,
     systemTheoryRequired,
-    modelEvidenceRequired: rung === 2,
+    modelEvidenceRequired: rung === RUNG_INDEX_MODEL,
     modelEvidenceRecommended: Boolean(modelGuidance),
     modelGuidance,
     selectedTheory: selected ? selected.id : null,
@@ -335,8 +342,7 @@ export function analyzeQuestHealth(root, quest, options = {}) {
     frontier: frontier ? frontier.id : null,
     rungIndex: frontier ? frontier.rungIndex : null,
     rungName: rungName || (
-      frontier?.rungIndex >= 2 ? RUNG_MODEL :
-        frontier?.rungIndex >= 1 ? RUNG_WIDEN_SCOPE : 'local-fix'
+      frontier ? ladderRungName(frontier.rungIndex) : null
     ),
     needs,
     modelGuidance: needs.modelGuidance || null,

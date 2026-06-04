@@ -33,19 +33,19 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 13. [GOV-0018] Fix the harness (or change the attempt evidence) before reopening again, so reopen and park can never oscillate forever. _(see workflow-guidelines/solver-quests.md:80)_
 14. [GOV-0020] A Quest must not accumulate an unrecoverable dirty tree. _(see workflow-guidelines/solver-quests.md:146)_
 15. [GOV-0022] Do not revive sprint/package theory state as active authority. _(see workflow-guidelines/solver-quests.md:259)_
-16. [GOV-0023] If the verifier finds issues, fix them or record a finding that explains why the Quest must continue; do not proceed to git handoff from an unresolved verifier finding. _(see workflow-guidelines/solver-quests.md:321)_
-17. [GOV-0024] Do not include unrelated dirty worktree entries from another Quest. _(see workflow-guidelines/solver-quests.md:332)_
-18. [GOV-0025] Do not rely on solve/state/ as durable memory. _(see workflow-guidelines/solver-quests.md:396)_
-19. [GOV-0027] constraints[]: optional hard limits the agent must preserve. _(see workflow-guidelines/solver-quests.md:53)_
-20. [GOV-0029] model: selected frontier theory, active system theory, and --modelRef or --modelNotApplicable required. _(see workflow-guidelines/solver-quests.md:269)_
+16. [GOV-0023] If the verifier finds issues, fix them or record a finding that explains why the Quest must continue; do not proceed to git handoff from an unresolved verifier finding. _(see workflow-guidelines/solver-quests.md:322)_
+17. [GOV-0024] Do not include unrelated dirty worktree entries from another Quest. _(see workflow-guidelines/solver-quests.md:333)_
+18. [GOV-0025] A confirmed or refuted discrimination is investigative progress only; it never satisfies doneWhen and never substitutes for measured product progress. _(see workflow-guidelines/solver-quests.md:380)_
+19. [GOV-0027] Do not rely on solve/state/ as durable memory. _(see workflow-guidelines/solver-quests.md:427)_
+20. [GOV-0029] constraints[]: optional hard limits the agent must preserve. _(see workflow-guidelines/solver-quests.md:53)_
 
 ### Ownership & Authority Policies
 
 21. [GOV-0019] Do not keep patching under a theory whose owner path is no longer current. _(see workflow-guidelines/solver-quests.md:130)_
 
-### Testing & Harness Guidelines
+### Timeouts & Budget Management
 
-22. [GOV-0030] change-approach: selected frontier theory remains required; model evidence is not required unless this rung explicitly returns to a model test. _(see workflow-guidelines/solver-quests.md:271)_
+22. [GOV-0026] A per-frontier investigation budget (INVESTIGATION_BUDGET) caps how many distinct theories can hold a rung before the ladder resumes climbing, so investigation can never become its own infinite loop. _(see workflow-guidelines/solver-quests.md:380)_
 
 ### Governance & Scope Controls
 
@@ -55,5 +55,5 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 26. [GOV-0010] The row must be in scope for this repository under ../../edition-matrix.md. _(see roadmap.md:106)_
 27. [GOV-0012] The Quest must name the roadmap row, approved maintenance scope, or explicit user request that makes it valid. _(see roadmap.md:111)_
 28. [GOV-0021] Each auto-commit refuses when audit does not pass, stages only the Quest's in-scope pathspec (never the dirty-tree shape), and carries the Co-authored-by: Copilot trailer. _(see workflow-guidelines/solver-quests.md:146)_
-29. [GOV-0026] Such examples must not define implementation tasks in this repository unless the active Quest explicitly limits the work to AGPL-owned substrate and excludes paid-only behavior, operator flows, and control surfaces. _(see roadmap.md:96)_
-30. [GOV-0028] widen-scope: selected frontier theory required. _(see workflow-guidelines/solver-quests.md:268)_
+29. [GOV-0028] Such examples must not define implementation tasks in this repository unless the active Quest explicitly limits the work to AGPL-owned substrate and excludes paid-only behavior, operator flows, and control surfaces. _(see roadmap.md:96)_
+30. [GOV-0030] widen-scope: selected frontier theory required. _(see workflow-guidelines/solver-quests.md:269)_

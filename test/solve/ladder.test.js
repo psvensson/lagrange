@@ -2,6 +2,7 @@ import tap from 'tap';
 
 import {rungName, rungPrompt} from '../../scripts/solve/ladder.js';
 import {
+  RUNG_OBSERVE,
   RUNG_LOCAL_FIX,
   RUNG_MODEL,
   RUNG_PARK,
@@ -18,8 +19,9 @@ const TASK = {
 
 tap.test('ladder dossier (P2)', async (t) => {
   t.test('rungName maps index to ladder rung and clamps to park', (t) => {
-    t.equal(rungName(0), RUNG_LOCAL_FIX);
-    t.equal(rungName(2), RUNG_MODEL);
+    t.equal(rungName(0), RUNG_OBSERVE);
+    t.equal(rungName(1), RUNG_LOCAL_FIX);
+    t.equal(rungName(3), RUNG_MODEL);
     t.equal(rungName(PARK_RUNG_INDEX), RUNG_PARK);
     t.equal(rungName(99), RUNG_PARK, 'out-of-range clamps to park');
     t.end();
@@ -29,7 +31,7 @@ tap.test('ladder dossier (P2)', async (t) => {
     const out = rungPrompt(TASK);
     t.match(out, /Goal: Pass the demo scenario/);
     t.match(out, /Frontier: demo-main/);
-    t.match(out, /Rung 0 \(local-fix\)/);
+    t.match(out, /Rung 0 \(observe\)/);
     t.match(out, /4 -> 3 -> 3/, 'shows the metric history');
     t.end();
   });

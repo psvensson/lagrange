@@ -7,9 +7,12 @@ import {
   EVENT_THEORY_SELECTED,
   EVENT_THEORY_SUPERSEDED,
   EVENT_THEORY_SYSTEM_DECLARED,
-  LADDER,
-  RUNG_MODEL,
-  RUNG_WIDEN_SCOPE,
+  DISCRIMINATION_CONFIRMED,
+  DISCRIMINATION_REFUTED,
+  DISCRIMINATIONS,
+  RUNG_INDEX_WIDEN_SCOPE,
+  RUNG_INDEX_MODEL,
+  SYSTEM_THEORY_STALL_THRESHOLD,
   THEORY_LAYERS,
   THEORY_RESULT_ACTIVE,
   THEORY_RESULT_AVOIDED,
@@ -59,8 +62,6 @@ const GENERATED_ID_WORD_LIMIT = 6;
 const DATE_SLICE_END = 10;
 const NUM_ONE = 1;
 const NUM_TWO = 2;
-const RUNG_INDEX_WIDEN_SCOPE = LADDER.indexOf(RUNG_WIDEN_SCOPE);
-const RUNG_INDEX_MODEL = LADDER.indexOf(RUNG_MODEL);
 const THEORY_OUTCOME_PARTIAL = 'partial';
 const SCENARIO_OUTCOME_FAILED = 'failed';
 const SCENARIO_OUTCOME_IMPROVED = 'improved';
@@ -69,6 +70,11 @@ const SCENARIO_OUTCOME_DONE = 'done';
 
 function normalizeText(value) {
   return String(value || '').trim();
+}
+
+function normalizeDiscrimination(value) {
+  const text = normalizeText(value);
+  return DISCRIMINATIONS.includes(text) ? text : '';
 }
 
 function repeatedFlag(args, key) {
@@ -152,6 +158,7 @@ function noProgressAttemptCount(log, frontierId) {
   return log.filter((event) =>
     event.type === 'attempt' &&
     event.frontier === frontierId &&
+    event.investigative !== true &&
     (event.metricBefore === null ||
       event.metricAfter === null ||
       event.metricAfter >= event.metricBefore)).length;
@@ -261,7 +268,7 @@ export function stepTheoryGateProblems({
 
   const systemTheoryRequired =
     rungIndex === RUNG_INDEX_MODEL ||
-    noProgressAttemptCount(log, frontierId) >= NUM_TWO ||
+    noProgressAttemptCount(log, frontierId) >= SYSTEM_THEORY_STALL_THRESHOLD ||
     sameDominantReasonRepeat ||
     sameOwnerBoundaryRepeat ||
     localTheoryTooNarrow;
@@ -368,6 +375,7 @@ export function appendTheoryResultForAttempt(root, quest, event, progressed, vio
   const invalid = event.invalidSample === true ||
     event.metricAfter === null ||
     violations.length > 0;
+  const discrimination = !invalid ? (event.discrimination || null) : null;
   const scenarioOutcome = event.done === true ?
     SCENARIO_OUTCOME_DONE :
     invalid ? SCENARIO_OUTCOME_INVALID :
@@ -376,14 +384,16 @@ export function appendTheoryResultForAttempt(root, quest, event, progressed, vio
   const movement = event.blockerMovement || null;
   const theoryOutcome =
     invalid ? THEORY_RESULT_NEEDS_RERUN :
-      progressed ? THEORY_RESULT_SUPPORTED :
-        [
-          BLOCKER_MOVEMENT_MOVED_OWNER,
-          BLOCKER_MOVEMENT_MOVED_BOUNDARY,
-          BLOCKER_MOVEMENT_NARROWED,
-        ].includes(movement) ?
-          THEORY_OUTCOME_PARTIAL :
-          THEORY_RESULT_FALSIFIED;
+      discrimination === DISCRIMINATION_CONFIRMED ? THEORY_RESULT_SUPPORTED :
+        discrimination === DISCRIMINATION_REFUTED ? THEORY_RESULT_FALSIFIED :
+          progressed ? THEORY_RESULT_SUPPORTED :
+            [
+              BLOCKER_MOVEMENT_MOVED_OWNER,
+              BLOCKER_MOVEMENT_MOVED_BOUNDARY,
+              BLOCKER_MOVEMENT_NARROWED,
+            ].includes(movement) ?
+              THEORY_OUTCOME_PARTIAL :
+              THEORY_RESULT_FALSIFIED;
   const result = theoryOutcome === THEORY_OUTCOME_PARTIAL ?
     THEORY_RESULT_SUPPORTED :
     theoryOutcome;
@@ -394,6 +404,7 @@ export function appendTheoryResultForAttempt(root, quest, event, progressed, vio
     result,
     scenarioOutcome,
     theoryOutcome,
+    discrimination,
     blockerMovement: movement,
     diagnosticMovement: event.diagnosticMovement || null,
     evidence: event.evidence || null,
@@ -642,5 +653,6 @@ export function theoryCommitArgs(args = {}) {
     negativeResultMeans: normalizeText(args.negativeResultMeans) || undefined,
     modelRef: normalizeText(args.modelRef) || undefined,
     modelNotApplicable: normalizeText(args.modelNotApplicable) || undefined,
+    discrimination: normalizeDiscrimination(args.discrimination) || undefined,
   };
 }

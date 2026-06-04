@@ -22,7 +22,7 @@ const TASK = {
   quest: {id: 'g', statement: 's', constraints: ['x']},
   frontierDef: {id: 'f', metric: {probe: 'oracle', args: {file: 'o', metric: 'priority'}}},
   frontierState: {findings: [{claim: 'Y ruled out', rulesOut: 'Y'}]},
-  rung: 'local-fix',
+  rung: 'observe',
   rungIndex: 0,
   metricHistory: [3, 2],
   evidencePaths: ['test-output/reports/a.report.json'],
@@ -50,7 +50,7 @@ tap.test('agent executor (P4)', async (t) => {
     t.match(out.changeRef, /^diff:/);
     t.equal(out.summary, 'did it');
     t.equal(seenRequest.frontier, 'f');
-    t.match(seenRequest.rungPrompt, /Rung 0 \(local-fix\)/);
+    t.match(seenRequest.rungPrompt, /Rung 0 \(observe\)/);
     t.same(seenRequest.metricHistory, [3, 2]);
     t.same(seenRequest.evidencePaths, ['test-output/reports/a.report.json']);
     t.match(seenRequest.rungPrompt, /rules out: Y/, 'findings reach the dossier');
@@ -162,8 +162,8 @@ tap.test('agent executor (P4)', async (t) => {
         metric: {probe: 'oracle', args: {file: oracle, metric: 'priority'}}}],
     };
     saveQuest(root, quest);
-    // Agent never changes anything. The first no-op climbs to widen-scope, then
-    // the loop must stop for theory before invoking the agent again.
+    // Agent never changes anything. The no-op climbs observe -> local-fix ->
+    // widen-scope, where the loop must stop for theory before invoking the agent again.
     const spawn = (cmd, args) => {
       fs.writeFileSync(args[1], JSON.stringify({changeRef: null, summary: 'no-op'}));
       return {status: 0};
@@ -174,7 +174,7 @@ tap.test('agent executor (P4)', async (t) => {
     const attempts = log.filter((event) => event.type === EVENT_ATTEMPT);
     const violations = log.filter((event) => event.type === EVENT_VIOLATION);
     t.equal(result.outcome, OUTCOME_THEORY_REQUIRED);
-    t.equal(attempts.length, 1, 'does not keep invoking no-op agent');
+    t.equal(attempts.length, 2, 'does not keep invoking no-op agent');
     t.equal(violations[violations.length - 1].scope, 'theory-gate');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();

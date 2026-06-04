@@ -197,6 +197,7 @@ function stepCommit(root, quest, options = {}) {
     negativeResultMeans: options.negativeResultMeans || null,
     modelRef: options.modelRef || null,
     modelNotApplicable: options.modelNotApplicable || null,
+    discrimination: options.discrimination || null,
   });
   const questOutcome = recordQuestSolvedIfDone(root, quest, ctx);
   clearPending(root, quest.id);
