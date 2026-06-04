@@ -6,7 +6,7 @@
 
 **Outcome:** IN PROGRESS (no terminal recorded)
 
-**Attempts:** 36
+**Attempts:** 37
 
 ## Current Blocker
 - Frontier: rolling-restart-core-stability-main
@@ -16,9 +16,9 @@
 - Mechanism: observation_gap
 - Movement: narrowed: control_plane_pressure -> publication_missing_active_node=8be8d30f-4499-5eed-865c-71b4d529a67a
 - Latest evidence: test-output/reports/rolling-restart-core-stability-after-remote-executor-outcome-wake-source-owner.report.json
-- Selected theory: theory-20260604-critical-aggregate-inflight-reserve-admission (stale: selected theory status is needs-rerun)
+- Selected theory: theory-20260604-node-state-heartbeat-replaceable-reserve-admission (stale: selected theory status is needs-rerun)
 - Next move: record or select a fresh frontier theory for rolling-restart-core-stability-main
-- No longer current: control_plane_pressure; Do not continue from the stale currentBlocker projection that points at publication_missing_active_node=8be8d30f-4499-5eed-865c-71b4d529a67a; use the latest probe and failure bundle control_plane_pressure surface.; Do not treat the aggregate critical reserve dispatch source change as unverified before the measured rolling-restart rerun.; Do not treat the recorded aggregate critical reserve dispatch attempt as lacking post-attempt subagent verification.
+- No longer current: control_plane_pressure; Do not treat the recorded aggregate critical reserve dispatch attempt as lacking post-attempt subagent verification.; Do not continue from the stale currentBlocker projection; the next theory must explain node-state publication pressure under control-plane transport saturation.; Do not treat the node-state heartbeat aggregate reserve source change as lacking post-attempt subagent verification before audit or git handoff.
 
 ## Scope Pressure
 - Changed files: 105
@@ -30,7 +30,7 @@
 - Signal: mixed-runtime-and-harness severity=medium
 
 ## Frontiers
-- **rolling-restart-core-stability-main** [open] rung 1, attempts 36, reopened 8, metric 1 -> 0 — Latest measured attempt moved off publication_missing_active_node into discovery/control_plane_pressure with publication_converged and priority_spread_settled, while the Quest history includes non-measuring harness samples; reopen for a fresh control-plane-pressure theory rather than treating the parked ladder as terminal.
+- **rolling-restart-core-stability-main** [open] rung 2, attempts 37, reopened 8, metric 1 -> 1 — Latest measured attempt moved off publication_missing_active_node into discovery/control_plane_pressure with publication_converged and priority_spread_settled, while the Quest history includes non-measuring harness samples; reopen for a fresh control-plane-pressure theory rather than treating the parked ladder as terminal.
 
 ## Findings
 - **rolling-restart-core-stability-main**: Quest probe priority metric is now zero, but doneWhen remains false until three consecutive rolling-restart runs pass. (rules out: Do not claim SOLVED from metric zero without the consecutive doneWhen evidence.) [test-output/reports/rolling-restart-core-stability-after-local-mutation-gate.report.json]
@@ -137,6 +137,8 @@
 - **rolling-restart-core-stability-main**: Fresh probe after the bootstrap admission peer endpoint-scope attempt moved the live failure surface off publication_missing_active_node: publication convergence, priority spread, and invariant gates are satisfied, while quiescence is discovery/control_plane_pressure with node-scope critical outbound saturation on seed 7493b0ab-a054-5fad-a91b-5e331db29304. (rules out: Do not continue from the stale currentBlocker projection that points at publication_missing_active_node=8be8d30f-4499-5eed-865c-71b4d529a67a; use the latest probe and failure bundle control_plane_pressure surface.) [test-output/reports/rolling-restart-core-stability-after-bootstrap-admission-peer-endpoint-scope.report.json]
 - **rolling-restart-core-stability-main**: Subagent verifier Einstein found no blocking issues in the aggregate critical reserve dispatch patch after retargeting focused coverage to the production coordinator-created remote handoff source; maxConcurrent=1 semantic dispatch and target/heartbeat exclusions are covered. (rules out: Do not treat the aggregate critical reserve dispatch source change as unverified before the measured rolling-restart rerun.) [subagent:019e9359-48a8-7233-ac10-1740fc800c50]
 - **rolling-restart-core-stability-main**: Post-attempt subagent verification remains clear: Einstein found no blocking issues in the aggregate critical reserve dispatch diff, with focused coverage for production coordinator-created remote handoff, maxConcurrent=1 dispatch, and target/heartbeat exclusions. (rules out: Do not treat the recorded aggregate critical reserve dispatch attempt as lacking post-attempt subagent verification.) [subagent:019e9359-48a8-7233-ac10-1740fc800c50]
+- **rolling-restart-core-stability-main**: Fresh probe after aggregate critical reserve dispatch shows publication and priority-spread invariants closed, but the invalid sample is now blocked by node_state_publication_pressure rather than the stale publication_missing_active_node projection. (rules out: Do not continue from the stale currentBlocker projection; the next theory must explain node-state publication pressure under control-plane transport saturation.) [test-output/reports/rolling-restart-core-stability-after-critical-aggregate-inflight-reserve-admission.report.json]
+- **rolling-restart-core-stability-main**: Post-attempt subagent verification found no blocking issues in the node-state heartbeat aggregate reserve diff; it stays inside router-owned deliverySource/replacePendingKey semantics, preserves target/arbitrary replaceable exclusions, and the failed scenario moved to valid-sample control_plane_pressure rather than node_state_publication_pressure. (rules out: Do not treat the node-state heartbeat aggregate reserve source change as lacking post-attempt subagent verification before audit or git handoff.) [subagent:019e9359-48a8-7233-ac10-1740fc800c50]
 
 ## Theories
 - **theory-20260601-rolling-restart-evidence-closure** [active] system, mechanism observation_gap, owner distributed_harness_scenario_owner / rolling_restart_evidence
@@ -187,9 +189,10 @@
 - **theory-20260604-remote-executor-outcome-wakes-source-owner** [supported] frontier, frontier rolling-restart-core-stability-main, layer ownership, mechanism remote-executor-outcome-discarded-by-nonlocal-owner, owner operation_workflow_owner, boundary executor_outcome_remote_owner_handoff, modelGate npm run model:contracts
 - **theory-20260604-bootstrap-admission-peer-endpoint-scope** [supported] frontier, frontier rolling-restart-core-stability-main, layer topology, mechanism bootstrap-admission-peer-endpoint-scope-gap, owner bootstrap_join_owner, boundary mesh_connectivity_address_resolution, modelGate npm run model:contracts
 - **theory-20260604-critical-aggregate-inflight-reserve-admission** [needs-rerun] frontier, frontier rolling-restart-core-stability-main, layer scheduling, mechanism critical-aggregate-inflight-reserve-gap, owner transport_delivery_owner, boundary outbound_node_backpressure, modelGate npm run model:contracts
+- **theory-20260604-node-state-heartbeat-replaceable-reserve-admission** [needs-rerun] frontier, frontier rolling-restart-core-stability-main, layer scheduling, mechanism replaceable-node-state-heartbeat-reserve-gap, owner transport_delivery_owner, boundary outbound_node_backpressure, modelGate npm run model:contracts
 
 ## Selected Theories
-- **rolling-restart-core-stability-main**: theory-20260604-critical-aggregate-inflight-reserve-admission
+- **rolling-restart-core-stability-main**: theory-20260604-node-state-heartbeat-replaceable-reserve-admission
 
 ## Theory Results
 - **theory-20260601-rolling-restart-consecutive-proof**: needs-rerun [test-output/reports/rolling-restart-core-stability-after-priority-local-first.report.json]
@@ -294,6 +297,7 @@
 - **theory-20260604-remote-executor-outcome-wakes-source-owner**: supported (scenario=failed, theory=partial, movement=narrowed) [test-output/reports/rolling-restart-core-stability-after-remote-executor-outcome-wake-source-owner.report.json]
 - **theory-20260604-bootstrap-admission-peer-endpoint-scope**: supported (scenario=failed, theory=supported, movement=narrowed) [test-output/reports/rolling-restart-core-stability-after-bootstrap-admission-peer-endpoint-scope.report.json]
 - **theory-20260604-critical-aggregate-inflight-reserve-admission**: needs-rerun (scenario=invalid, theory=needs-rerun, movement=narrowed) [test-output/reports/rolling-restart-core-stability-after-critical-aggregate-inflight-reserve-admission.report.json]
+- **theory-20260604-node-state-heartbeat-replaceable-reserve-admission**: needs-rerun (scenario=invalid, theory=needs-rerun, movement=narrowed) [test-output/reports/rolling-restart-core-stability-after-node-state-heartbeat-replaceable-reserve.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
@@ -334,3 +338,4 @@
 | 2026-06-04T15:16:53.800Z | rolling-restart-core-stability-main | model | 0 -> 0 | flat | narrowed | theory-20260604-remote-executor-outcome-wakes-source-owner | diff:solve/changes/rolling-restart-core-stability/remote-executor-outcome-wake-source-owner.diff |
 | 2026-06-04T15:44:41.366Z | rolling-restart-core-stability-main | change-approach | 0 -> 0 | flat | narrowed | theory-20260604-bootstrap-admission-peer-endpoint-scope | diff:solve/changes/rolling-restart-core-stability/bootstrap-admission-peer-endpoint-scope.diff |
 | 2026-06-04T16:28:06.402Z | rolling-restart-core-stability-main | observe | 0 -> ? | flat | narrowed | theory-20260604-critical-aggregate-inflight-reserve-admission | diff:solve/changes/rolling-restart-core-stability/critical-aggregate-inflight-reserve-admission.diff |
+| 2026-06-04T17:28:47.703Z | rolling-restart-core-stability-main | local-fix | ? -> 1 | flat | narrowed | theory-20260604-node-state-heartbeat-replaceable-reserve-admission | diff:solve/changes/rolling-restart-core-stability/node-state-heartbeat-replaceable-reserve.diff |

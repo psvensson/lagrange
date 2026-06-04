@@ -25,6 +25,9 @@ const TEST_TARGET_FALLBACK_TARGET_ADDRESS =
 const TEST_HOT_LABEL_PREFIX = 'hot';
 const TEST_CONTROL_PLANE_LABEL = 'control-plane';
 const TEST_TARGET_FALLBACK_LABEL = 'target-fallback';
+const TEST_REPLACEABLE_LABEL = 'replaceable';
+const TEST_REPLACEABLE_SOURCE = 'replaceable_semantic_source';
+const TEST_REPLACEABLE_KEY = 'replaceable:control-plane';
 const TEST_HEARTBEAT_LABEL = 'heartbeat';
 const TEST_ACKNOWLEDGED_KEY = 'acknowledged';
 const TEST_HEARTBEAT_ONLY_KEY = 'heartbeat_only';
@@ -452,7 +455,7 @@ t.test(
 );
 
 t.test(
-  'MessageRouter keeps aggregate reserve from target fallback and heartbeat sources',
+  'MessageRouter keeps aggregate reserve from target fallback and arbitrary replaceable sources',
   async (t) => {
     initializeTestEnvironment();
     const router = new MessageRouter({
@@ -510,6 +513,102 @@ t.test(
       allDeliveries.push(
         router.enqueueOutbound(
           TEST_REMOTE_NODE_ID,
+          buildBlockingDelivery(TEST_REPLACEABLE_LABEL),
+          {
+            deliveryPriority: 'critical',
+            deliverySource: TEST_REPLACEABLE_SOURCE,
+            replacePendingKey: TEST_REPLACEABLE_KEY,
+            targetAddress: TEST_CONTROL_PLANE_TARGET_ADDRESS,
+            message: {},
+          },
+        ),
+      );
+      await Promise.resolve();
+
+      const queue = router.getOutboundQueue(TEST_REMOTE_NODE_ID);
+      t.equal(
+        startedDeliveries.includes(TEST_TARGET_FALLBACK_LABEL),
+        false,
+        'target fallback traffic should not borrow aggregate reserve',
+      );
+      t.equal(
+        startedDeliveries.includes(TEST_REPLACEABLE_LABEL),
+        false,
+        'arbitrary replaceable traffic should not borrow aggregate reserve',
+      );
+      t.equal(
+        queue.inFlightCriticalSourceReserve,
+        0,
+        'excluded sources should leave aggregate reserve unused',
+      );
+    } finally {
+      releaseAllSends?.();
+      await Promise.allSettled(allDeliveries);
+      await router.shutdown();
+      cleanupTestEnvironment();
+    }
+  },
+);
+
+t.test(
+  'MessageRouter lets replaceable heartbeat node-state update borrow aggregate reserve',
+  async (t) => {
+    initializeTestEnvironment();
+    const router = new MessageRouter({
+      nodeId: TEST_LOCAL_NODE_ID,
+      nodeAddress: TEST_NODE_ADDRESS,
+      startServer: false,
+      outboundQueueMaxConcurrent: 1,
+      outboundQueueMaxPending: 6,
+      outboundQueueCriticalReserve: 1,
+    });
+    await router.initialize();
+
+    let releaseAllSends = null;
+    const sendGate = new Promise((resolve) => {
+      releaseAllSends = resolve;
+    });
+    const startedDeliveries = [];
+    const allDeliveries = [];
+    const buildBlockingDelivery = (label) => async () => {
+      startedDeliveries.push(label);
+      await sendGate;
+      return {
+        [TEST_ACKNOWLEDGED_KEY]: true,
+        label,
+      };
+    };
+
+    try {
+      allDeliveries.push(
+        router.enqueueOutbound(
+          TEST_REMOTE_NODE_ID,
+          buildBlockingDelivery(`${TEST_HOT_LABEL_PREFIX}-0`),
+          {
+            deliveryPriority: 'critical',
+            targetAddress: TEST_HOT_TARGET_ADDRESS,
+            message: {},
+          },
+        ),
+      );
+      await Promise.resolve();
+
+      allDeliveries.push(
+        router.enqueueOutbound(
+          TEST_REMOTE_NODE_ID,
+          buildBlockingDelivery(TEST_TARGET_FALLBACK_LABEL),
+          {
+            deliveryPriority: 'critical',
+            targetAddress: TEST_HOT_TARGET_ADDRESS,
+            message: {},
+          },
+        ),
+      );
+      await Promise.resolve();
+
+      allDeliveries.push(
+        router.enqueueOutbound(
+          TEST_REMOTE_NODE_ID,
           buildBlockingDelivery(TEST_HEARTBEAT_LABEL),
           {
             deliveryPriority: 'critical',
@@ -528,17 +627,17 @@ t.test(
       t.equal(
         startedDeliveries.includes(TEST_TARGET_FALLBACK_LABEL),
         false,
-        'target fallback traffic should not borrow aggregate reserve',
+        'target fallback traffic should remain pending behind saturation',
       );
       t.equal(
         startedDeliveries.includes(TEST_HEARTBEAT_LABEL),
-        false,
-        'replaceable heartbeat traffic should not borrow aggregate reserve',
+        true,
+        'heartbeat node-state update should borrow aggregate reserve',
       );
       t.equal(
         queue.inFlightCriticalSourceReserve,
-        0,
-        'excluded sources should leave aggregate reserve unused',
+        1,
+        'heartbeat reserve dispatch should account for the borrowed slot',
       );
     } finally {
       releaseAllSends?.();

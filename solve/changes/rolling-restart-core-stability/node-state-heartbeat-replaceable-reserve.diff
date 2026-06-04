@@ -1,0 +1,251 @@
+diff --git a/src/transport/message-router-shared-stage-3.js b/src/transport/message-router-shared-stage-3.js
+index 2f421019..5c863542 100644
+--- a/src/transport/message-router-shared-stage-3.js
++++ b/src/transport/message-router-shared-stage-3.js
+@@ -6,6 +6,13 @@ import {
+ import {EMPTY_DELIVERY_SOURCE, MESSAGE_ROUTER_LITERAL, OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE, OUTBOUND_QUEUE_BACKPRESSURE_SCOPE, OutboundDeliveryPriority, TRANSPORT_PRESSURE_SUMMARY_FIELD, createQueueWaitHistogram, normalizeIdentifier, recordQueueWaitDuration, resolvePendingReplacementKey} from './message-router-shared-stage-1.js';
+ import {adjustInFlightCriticalSourceReserveCount, adjustInFlightPriorityCount, adjustInFlightSourceCount, buildPendingSourceAdmission, buildPendingSourceSummary, buildSupersededPendingResult, canDispatchPendingItem, countInFlightByPriority, countInFlightBySource, countPendingByPriority, dequeueNextPendingItem, isOutboundNodeBackpressured, normalizeOutboundDeliveryPriority, normalizeQueuedDeliverySource, peekNextPendingItem, resolveBackgroundPendingLimit, resolveCriticalPendingCeiling, resolveDeliverySource, takeCriticalPendingItemForSourceReserve} from './message-router-shared-stage-2.js';
+ 
++const NODE_STATE_UPDATE_DELIVERY_SOURCE =
++  `${MESSAGE_ROUTER_LITERAL.STRING_MESSAGE}:` +
++  MESSAGE_ROUTER_LITERAL.STRING_NODE_STATE_UPDATE;
++
++const NODE_STATE_UPDATE_REPLACE_PENDING_KEY_PREFIX =
++  `${MESSAGE_ROUTER_LITERAL.STRING_NODE_STATE_UPDATE}:`;
++
+ function buildOutboundQueueBackpressureError(
+   nodeId,
+   queue,
+@@ -73,6 +80,63 @@ function isAggregateCriticalReserveCandidateSource(source) {
+     !source.startsWith('target:');
+ }
+ 
++function isAggregateCriticalReserveBlockingBacklogSource(source) {
++  return source !== EMPTY_DELIVERY_SOURCE &&
++    source !== MESSAGE_ROUTER_LITERAL.STRING_UNKNOWN;
++}
++
++function hasPriorInFlightSourceBacklog(queue, candidateIndex) {
++  for (
++    let index = TRANSPORT_NUM.ZERO;
++    index < candidateIndex;
++    index++
++  ) {
++    const item = queue.pending[index];
++    if (item?.priority !== OutboundDeliveryPriority.CRITICAL) {
++      continue;
++    }
++    const source = normalizeQueuedDeliverySource(item?.deliverySource);
++    if (!isAggregateCriticalReserveBlockingBacklogSource(source)) {
++      continue;
++    }
++    if (countInFlightBySource(queue, source) > TRANSPORT_NUM.ZERO) {
++      return true;
++    }
++  }
++  return false;
++}
++
++function isAggregateCriticalReserveReplaceableCandidate(
++  queue,
++  index,
++  item,
++  source,
++) {
++  const replacePendingKey = normalizeIdentifier(item?.replacePendingKey);
++  return source === NODE_STATE_UPDATE_DELIVERY_SOURCE &&
++    replacePendingKey.startsWith(
++      NODE_STATE_UPDATE_REPLACE_PENDING_KEY_PREFIX,
++    ) &&
++    hasPriorInFlightSourceBacklog(queue, index);
++}
++
++function isAggregateCriticalReserveCandidateItem(
++  queue,
++  index,
++  item,
++  source,
++) {
++  if (!item?.replacePendingKey) {
++    return true;
++  }
++  return isAggregateCriticalReserveReplaceableCandidate(
++    queue,
++    index,
++    item,
++    source,
++  );
++}
++
+ function findAggregateCriticalReserveCandidateIndex(queue) {
+   if (!canUseAggregateCriticalReserve(queue)) {
+     return -TRANSPORT_NUM.ONE;
+@@ -96,8 +160,7 @@ function findAggregateCriticalReserveCandidateIndex(queue) {
+     const item = queue.pending[index];
+     if (
+       item?.priority !== OutboundDeliveryPriority.CRITICAL ||
+-      item?.criticalSourceReserve === true ||
+-      item?.replacePendingKey
++      item?.criticalSourceReserve === true
+     ) {
+       continue;
+     }
+@@ -105,6 +168,9 @@ function findAggregateCriticalReserveCandidateIndex(queue) {
+     if (!isAggregateCriticalReserveCandidateSource(source)) {
+       continue;
+     }
++    if (!isAggregateCriticalReserveCandidateItem(queue, index, item, source)) {
++      continue;
++    }
+     if (sourceCounts.get(source) !== TRANSPORT_NUM.ONE) {
+       continue;
+     }
+diff --git a/test/transport/message-router-critical-source-reserve.test.js b/test/transport/message-router-critical-source-reserve.test.js
+index 74347856..d4b23084 100644
+--- a/test/transport/message-router-critical-source-reserve.test.js
++++ b/test/transport/message-router-critical-source-reserve.test.js
+@@ -25,6 +25,9 @@ const TEST_TARGET_FALLBACK_TARGET_ADDRESS =
+ const TEST_HOT_LABEL_PREFIX = 'hot';
+ const TEST_CONTROL_PLANE_LABEL = 'control-plane';
+ const TEST_TARGET_FALLBACK_LABEL = 'target-fallback';
++const TEST_REPLACEABLE_LABEL = 'replaceable';
++const TEST_REPLACEABLE_SOURCE = 'replaceable_semantic_source';
++const TEST_REPLACEABLE_KEY = 'replaceable:control-plane';
+ const TEST_HEARTBEAT_LABEL = 'heartbeat';
+ const TEST_ACKNOWLEDGED_KEY = 'acknowledged';
+ const TEST_HEARTBEAT_ONLY_KEY = 'heartbeat_only';
+@@ -452,7 +455,7 @@ t.test(
+ );
+ 
+ t.test(
+-  'MessageRouter keeps aggregate reserve from target fallback and heartbeat sources',
++  'MessageRouter keeps aggregate reserve from target fallback and arbitrary replaceable sources',
+   async (t) => {
+     initializeTestEnvironment();
+     const router = new MessageRouter({
+@@ -507,6 +510,102 @@ t.test(
+       );
+       await Promise.resolve();
+ 
++      allDeliveries.push(
++        router.enqueueOutbound(
++          TEST_REMOTE_NODE_ID,
++          buildBlockingDelivery(TEST_REPLACEABLE_LABEL),
++          {
++            deliveryPriority: 'critical',
++            deliverySource: TEST_REPLACEABLE_SOURCE,
++            replacePendingKey: TEST_REPLACEABLE_KEY,
++            targetAddress: TEST_CONTROL_PLANE_TARGET_ADDRESS,
++            message: {},
++          },
++        ),
++      );
++      await Promise.resolve();
++
++      const queue = router.getOutboundQueue(TEST_REMOTE_NODE_ID);
++      t.equal(
++        startedDeliveries.includes(TEST_TARGET_FALLBACK_LABEL),
++        false,
++        'target fallback traffic should not borrow aggregate reserve',
++      );
++      t.equal(
++        startedDeliveries.includes(TEST_REPLACEABLE_LABEL),
++        false,
++        'arbitrary replaceable traffic should not borrow aggregate reserve',
++      );
++      t.equal(
++        queue.inFlightCriticalSourceReserve,
++        0,
++        'excluded sources should leave aggregate reserve unused',
++      );
++    } finally {
++      releaseAllSends?.();
++      await Promise.allSettled(allDeliveries);
++      await router.shutdown();
++      cleanupTestEnvironment();
++    }
++  },
++);
++
++t.test(
++  'MessageRouter lets replaceable heartbeat node-state update borrow aggregate reserve',
++  async (t) => {
++    initializeTestEnvironment();
++    const router = new MessageRouter({
++      nodeId: TEST_LOCAL_NODE_ID,
++      nodeAddress: TEST_NODE_ADDRESS,
++      startServer: false,
++      outboundQueueMaxConcurrent: 1,
++      outboundQueueMaxPending: 6,
++      outboundQueueCriticalReserve: 1,
++    });
++    await router.initialize();
++
++    let releaseAllSends = null;
++    const sendGate = new Promise((resolve) => {
++      releaseAllSends = resolve;
++    });
++    const startedDeliveries = [];
++    const allDeliveries = [];
++    const buildBlockingDelivery = (label) => async () => {
++      startedDeliveries.push(label);
++      await sendGate;
++      return {
++        [TEST_ACKNOWLEDGED_KEY]: true,
++        label,
++      };
++    };
++
++    try {
++      allDeliveries.push(
++        router.enqueueOutbound(
++          TEST_REMOTE_NODE_ID,
++          buildBlockingDelivery(`${TEST_HOT_LABEL_PREFIX}-0`),
++          {
++            deliveryPriority: 'critical',
++            targetAddress: TEST_HOT_TARGET_ADDRESS,
++            message: {},
++          },
++        ),
++      );
++      await Promise.resolve();
++
++      allDeliveries.push(
++        router.enqueueOutbound(
++          TEST_REMOTE_NODE_ID,
++          buildBlockingDelivery(TEST_TARGET_FALLBACK_LABEL),
++          {
++            deliveryPriority: 'critical',
++            targetAddress: TEST_HOT_TARGET_ADDRESS,
++            message: {},
++          },
++        ),
++      );
++      await Promise.resolve();
++
+       allDeliveries.push(
+         router.enqueueOutbound(
+           TEST_REMOTE_NODE_ID,
+@@ -528,17 +627,17 @@ t.test(
+       t.equal(
+         startedDeliveries.includes(TEST_TARGET_FALLBACK_LABEL),
+         false,
+-        'target fallback traffic should not borrow aggregate reserve',
++        'target fallback traffic should remain pending behind saturation',
+       );
+       t.equal(
+         startedDeliveries.includes(TEST_HEARTBEAT_LABEL),
+-        false,
+-        'replaceable heartbeat traffic should not borrow aggregate reserve',
++        true,
++        'heartbeat node-state update should borrow aggregate reserve',
+       );
+       t.equal(
+         queue.inFlightCriticalSourceReserve,
+-        0,
+-        'excluded sources should leave aggregate reserve unused',
++        1,
++        'heartbeat reserve dispatch should account for the borrowed slot',
+       );
+     } finally {
+       releaseAllSends?.();
