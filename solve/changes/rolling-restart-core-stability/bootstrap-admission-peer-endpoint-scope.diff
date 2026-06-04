@@ -1,0 +1,243 @@
+diff --git a/src/bootstrap/phases/connect-websocket-phase.js b/src/bootstrap/phases/connect-websocket-phase.js
+index 98352104..c1991eda 100644
+--- a/src/bootstrap/phases/connect-websocket-phase.js
++++ b/src/bootstrap/phases/connect-websocket-phase.js
+@@ -44,6 +44,7 @@ const LOG_SEED_WS_FALLBACK =
+   '[JOIN-DEBUG] Proceeding with peer mesh after seed websocket retry exhaustion';
+ const MESH_CONNECTIVITY_NODE_SOURCE = Object.freeze({
+   BOOTSTRAP_SNAPSHOT: 'bootstrap_snapshot',
++  SYSTEM_TABLE_CACHE: 'system_table_cache',
+   SYSTEM_TABLE_CACHE_WITH_BOOTSTRAP_SUPPLEMENT:
+     'system_table_cache_with_bootstrap_supplement',
+ });
+@@ -52,18 +53,6 @@ const MESH_BOOTSTRAP_ADDRESS_SCOPE_STATE = Object.freeze({
+   NODE_IDS: 'node_ids',
+   NONE: 'none',
+ });
+-const MESH_BOOTSTRAP_ADDRESS_SCOPE_RULES = Object.freeze([
+-  Object.freeze({
+-    source: MESH_CONNECTIVITY_NODE_SOURCE.BOOTSTRAP_SNAPSHOT,
+-    state: MESH_BOOTSTRAP_ADDRESS_SCOPE_STATE.ALL,
+-  }),
+-  Object.freeze({
+-    source:
+-      MESH_CONNECTIVITY_NODE_SOURCE
+-        .SYSTEM_TABLE_CACHE_WITH_BOOTSTRAP_SUPPLEMENT,
+-    state: MESH_BOOTSTRAP_ADDRESS_SCOPE_STATE.NODE_IDS,
+-  }),
+-]);
+ const MESH_CONNECTED_OR_IN_FLIGHT_STATES = new Set([
+   CONNECTION_STATE.CONNECTED,
+   CONNECTION_STATE.CONNECTING,
+@@ -107,27 +96,76 @@ function markRetryableSeedWebSocketTimeout(error, retryAfterMs) {
+   }
+ }
+ 
++function normalizeBootstrapAddressScopeNodeIds(nodeIds = []) {
++  return Array.isArray(nodeIds) ?
++    nodeIds.filter((nodeId) =>
++      typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
++    ) :
++    [];
++}
++
++function mergeBootstrapAddressScopeNodeIds(...nodeIdLists) {
++  const mergedNodeIds = new Set();
++  for (const nodeIdList of nodeIdLists) {
++    for (const nodeId of normalizeBootstrapAddressScopeNodeIds(nodeIdList)) {
++      mergedNodeIds.add(nodeId);
++    }
++  }
++  return Array.from(mergedNodeIds);
++}
++
+ function buildBootstrapAddressScope(state, nodeIds = []) {
+   return Object.freeze({
+     state,
+-    nodeIds: new Set(nodeIds.filter((nodeId) =>
+-      typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
+-    )),
++    nodeIds: new Set(normalizeBootstrapAddressScopeNodeIds(nodeIds)),
+   });
+ }
+ 
+-function resolveBootstrapAddressScope(nodeSource, bootstrapSupplementNodeIds) {
+-  const scopeRule = MESH_BOOTSTRAP_ADDRESS_SCOPE_RULES.find((rule) =>
+-    rule.source === nodeSource,
++function resolveBootstrapAdmissionPeerHintNodeIds(bootstrapResponse) {
++  const topologySnapshotMeta = bootstrapResponse?.topologySnapshotMeta;
++  return normalizeBootstrapAddressScopeNodeIds(
++    topologySnapshotMeta?.bootstrapAdmissionPeerHintNodeIds);
++}
++
++function resolveBootstrapAddressScope(
++  nodeSource,
++  bootstrapSupplementNodeIds,
++  bootstrapAdmissionPeerHintNodeIds = [],
++) {
++  if (nodeSource === MESH_CONNECTIVITY_NODE_SOURCE.BOOTSTRAP_SNAPSHOT) {
++    return buildBootstrapAddressScope(MESH_BOOTSTRAP_ADDRESS_SCOPE_STATE.ALL);
++  }
++
++  const admissionPeerHintNodeIds = normalizeBootstrapAddressScopeNodeIds(
++    bootstrapAdmissionPeerHintNodeIds,
++  );
++  const scopedNodeIds = mergeBootstrapAddressScopeNodeIds(
++    bootstrapSupplementNodeIds,
++    admissionPeerHintNodeIds,
+   );
+-  if (!scopeRule) {
++  if (
++    nodeSource ===
++      MESH_CONNECTIVITY_NODE_SOURCE
++        .SYSTEM_TABLE_CACHE_WITH_BOOTSTRAP_SUPPLEMENT
++  ) {
++    return buildBootstrapAddressScope(
++      MESH_BOOTSTRAP_ADDRESS_SCOPE_STATE.NODE_IDS,
++      scopedNodeIds,
++    );
++  }
++
++  if (
++    nodeSource === MESH_CONNECTIVITY_NODE_SOURCE.SYSTEM_TABLE_CACHE &&
++    admissionPeerHintNodeIds.length > NUM.ZERO
++  ) {
+     return buildBootstrapAddressScope(
+-      MESH_BOOTSTRAP_ADDRESS_SCOPE_STATE.NONE,
++      MESH_BOOTSTRAP_ADDRESS_SCOPE_STATE.NODE_IDS,
++      admissionPeerHintNodeIds,
+     );
+   }
++
+   return buildBootstrapAddressScope(
+-    scopeRule.state,
+-    bootstrapSupplementNodeIds,
++    MESH_BOOTSTRAP_ADDRESS_SCOPE_STATE.NONE,
+   );
+ }
+ 
+@@ -603,6 +641,8 @@ class ConnectWebSocketPhase {
+     const messageRouter = this.delegates.getMessageRouter();
+     const bootstrapResponse =
+       this.delegates.getBootstrapResponse?.() || null;
++    const bootstrapAdmissionPeerHintNodeIds =
++      resolveBootstrapAdmissionPeerHintNodeIds(bootstrapResponse);
+     const systemTableCache =
+       this.delegates.getSystemTableCache?.() || null;
+     let attemptedAuthorityRepair = false;
+@@ -618,6 +658,7 @@ class ConnectWebSocketPhase {
+         Array.isArray(bootstrapSupplementNodeIds) ?
+           bootstrapSupplementNodeIds :
+           [],
++        bootstrapAdmissionPeerHintNodeIds,
+       );
+ 
+       if (!Array.isArray(nodesSnapshot) ||
+diff --git a/test/bootstrap/connect-websocket-phase-mesh-test-cases.js b/test/bootstrap/connect-websocket-phase-mesh-test-cases.js
+index 72a4b393..40862b1e 100644
+--- a/test/bootstrap/connect-websocket-phase-mesh-test-cases.js
++++ b/test/bootstrap/connect-websocket-phase-mesh-test-cases.js
+@@ -453,4 +453,103 @@ export function registerConnectWebSocketPhaseMeshTests({
+       );
+     },
+   );
++
++  test(
++    'ConnectWebSocketPhase uses explicitly scoped bootstrap admission peer endpoints under cache membership',
++    async () => {
++      const connectCalls = [];
++      const repairCalls = [];
++      const systemTableCache = {
++        filter() {
++          return [];
++        },
++        getAll() {
++          return [];
++        },
++      };
++      const router = {
++        nodeConnections: new Map(),
++        async connectToNode(nodeId, address) {
++          connectCalls.push({nodeId, address});
++          this.nodeConnections.set(nodeId, {state: 'connected', address});
++        },
++        getConnectionState(nodeId) {
++          return this.nodeConnections.get(nodeId)?.state || null;
++        },
++        getConnectedNodes() {
++          return Array.from(this.nodeConnections.keys());
++        },
++      };
++
++      const phase = new ConnectWebSocketPhase({
++        nodeId: 'joining-node-1',
++        delegates: {
++          getLogger: () => ({
++            info() {},
++            warn() {},
++            error(errorMessage) {
++              throw new Error(`unexpected error log: ${errorMessage}`);
++            },
++            debug() {},
++          }),
++          getMessageRouter: () => router,
++          getBootstrapResponse: () => ({
++            seedNodeId: 'seed-node',
++            seedNodeWsAddress: 'ws://seed-node:8082',
++            topologySnapshotMeta: {
++              bootstrapAdmissionPeerHintNodeIds: ['peer-admission-hint'],
++            },
++            systemTableSnapshots: {
++              node_endpoints: [{
++                endpoint_id: 'peer-admission-hint-bootstrap-ws',
++                node_id: 'peer-admission-hint',
++                transport_type: 'ws',
++                address: 'ws://peer-admission-hint:8082',
++                priority: 0,
++                status: 'active',
++              }],
++            },
++          }),
++          getSystemTableCache: () => systemTableCache,
++          resolveMeshConnectivityNodeRows: () => ({
++            source: 'system_table_cache',
++            rows: [
++              {
++                node_id: 'joining-node-1',
++                node_address: 'joining-node-1:8080',
++                status: 'active',
++              },
++              {
++                node_id: 'peer-admission-hint',
++                node_address: 'peer-admission-hint:8080',
++                status: 'active',
++              },
++            ],
++          }),
++          repairMeshConnectivityAuthorityIfNeeded: async (missingNodeIds) => {
++            repairCalls.push([...missingNodeIds]);
++            return false;
++          },
++          buildClusterMeshSignature: () => 'mesh-signature',
++          setLastClusterMeshSignature() {},
++        },
++      });
++
++      await phase.connectToClusterNodes();
++
++      assert.deepEqual(
++        repairCalls,
++        [],
++        'explicit bootstrap admission peer endpoint hints should not need cache repair before the first mesh dial',
++      );
++      assert.deepEqual(
++        connectCalls,
++        [{
++          nodeId: 'peer-admission-hint',
++          address: 'ws://peer-admission-hint:8082',
++        }],
++        'mesh reconciliation should dial the bootstrap admission peer from its scoped endpoint hint',
++      );
++    },
++  );
+ }

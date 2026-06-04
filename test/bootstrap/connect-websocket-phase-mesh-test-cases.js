@@ -453,4 +453,103 @@ export function registerConnectWebSocketPhaseMeshTests({
       );
     },
   );
+
+  test(
+    'ConnectWebSocketPhase uses explicitly scoped bootstrap admission peer endpoints under cache membership',
+    async () => {
+      const connectCalls = [];
+      const repairCalls = [];
+      const systemTableCache = {
+        filter() {
+          return [];
+        },
+        getAll() {
+          return [];
+        },
+      };
+      const router = {
+        nodeConnections: new Map(),
+        async connectToNode(nodeId, address) {
+          connectCalls.push({nodeId, address});
+          this.nodeConnections.set(nodeId, {state: 'connected', address});
+        },
+        getConnectionState(nodeId) {
+          return this.nodeConnections.get(nodeId)?.state || null;
+        },
+        getConnectedNodes() {
+          return Array.from(this.nodeConnections.keys());
+        },
+      };
+
+      const phase = new ConnectWebSocketPhase({
+        nodeId: 'joining-node-1',
+        delegates: {
+          getLogger: () => ({
+            info() {},
+            warn() {},
+            error(errorMessage) {
+              throw new Error(`unexpected error log: ${errorMessage}`);
+            },
+            debug() {},
+          }),
+          getMessageRouter: () => router,
+          getBootstrapResponse: () => ({
+            seedNodeId: 'seed-node',
+            seedNodeWsAddress: 'ws://seed-node:8082',
+            topologySnapshotMeta: {
+              bootstrapAdmissionPeerHintNodeIds: ['peer-admission-hint'],
+            },
+            systemTableSnapshots: {
+              node_endpoints: [{
+                endpoint_id: 'peer-admission-hint-bootstrap-ws',
+                node_id: 'peer-admission-hint',
+                transport_type: 'ws',
+                address: 'ws://peer-admission-hint:8082',
+                priority: 0,
+                status: 'active',
+              }],
+            },
+          }),
+          getSystemTableCache: () => systemTableCache,
+          resolveMeshConnectivityNodeRows: () => ({
+            source: 'system_table_cache',
+            rows: [
+              {
+                node_id: 'joining-node-1',
+                node_address: 'joining-node-1:8080',
+                status: 'active',
+              },
+              {
+                node_id: 'peer-admission-hint',
+                node_address: 'peer-admission-hint:8080',
+                status: 'active',
+              },
+            ],
+          }),
+          repairMeshConnectivityAuthorityIfNeeded: async (missingNodeIds) => {
+            repairCalls.push([...missingNodeIds]);
+            return false;
+          },
+          buildClusterMeshSignature: () => 'mesh-signature',
+          setLastClusterMeshSignature() {},
+        },
+      });
+
+      await phase.connectToClusterNodes();
+
+      assert.deepEqual(
+        repairCalls,
+        [],
+        'explicit bootstrap admission peer endpoint hints should not need cache repair before the first mesh dial',
+      );
+      assert.deepEqual(
+        connectCalls,
+        [{
+          nodeId: 'peer-admission-hint',
+          address: 'ws://peer-admission-hint:8082',
+        }],
+        'mesh reconciliation should dial the bootstrap admission peer from its scoped endpoint hint',
+      );
+    },
+  );
 }
