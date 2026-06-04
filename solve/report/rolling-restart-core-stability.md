@@ -6,22 +6,22 @@
 
 **Outcome:** IN PROGRESS (no terminal recorded)
 
-**Attempts:** 33
+**Attempts:** 34
 
 ## Current Blocker
 - Frontier: rolling-restart-core-stability-main
 - Owner: unknown
 - Boundary: unknown
-- Dominant reason: control_plane_pressure
-- Mechanism: transition_gap
-- Movement: same blocker remains: control_plane_pressure
-- Latest evidence: test-output/reports/rolling-restart-core-stability-after-handoff-retry-refresh-before-remote-wake.report.json
+- Dominant reason: publication_missing_active_node=8be8d30f-4499-5eed-865c-71b4d529a67a
+- Mechanism: observation_gap
+- Movement: narrowed: control_plane_pressure -> publication_missing_active_node=8be8d30f-4499-5eed-865c-71b4d529a67a
+- Latest evidence: test-output/reports/rolling-restart-core-stability-after-remote-executor-outcome-wake-source-owner.report.json
 - Selected theory: theory-20260604-remote-executor-outcome-wakes-source-owner
 - Next move: continue supervised step for rolling-restart-core-stability-main
-- No longer current: Do not treat the handoff retry refresh source change as unverified before recording the measured attempt; the next theory should focus on stale-snapshot re-deferral or deferred visibility if the same retry_scheduled witnesses remain.; Do not treat the recorded handoff retry refresh source attempt as lacking post-attempt subagent verification; continue from the measured retry_scheduled handoff witnesses.
+- No longer current: control_plane_pressure; Do not treat the remote executor outcome source change as unverified before recording the measured rolling-restart attempt.; Do not treat the recorded remote executor outcome owner-wake attempt as lacking post-attempt subagent verification.
 
 ## Scope Pressure
-- Changed files: 100
+- Changed files: 102
 - Owner areas: .kiro, docs, scripts/solve, scripts/solve.js, src/admin, src/bootstrap, src/control-plane, src/diagnostics, src/node, src/query, src/rebalancer, src/transport, test/admin, test/bootstrap, test/control-plane, test/diagnostics, test/distributed/harness, test/distributed/scenarios, test/node, test/query, test/rebalancer, test/scripts, test/solve, test/transport
 - Categories: runtime, test, workflow
 - Signal: broad-source-scope severity=medium
@@ -30,7 +30,7 @@
 - Signal: mixed-runtime-and-harness severity=medium
 
 ## Frontiers
-- **rolling-restart-core-stability-main** [open] rung 3, attempts 33, reopened 7, metric 1 -> 0 — Fresh live evidence after partition-witness owner-effect projection reclassified the parked frontier to operation_workflow_owner/rebalancer_handoff under harness-invalid control_plane_pressure; a new observation theory is selected and the next attempt measures retry_scheduled progress-contract projection rather than rerunning the exhausted prior workflow_progress theory.
+- **rolling-restart-core-stability-main** [open] rung 4, attempts 34, reopened 7, metric 1 -> 0 — Fresh live evidence after partition-witness owner-effect projection reclassified the parked frontier to operation_workflow_owner/rebalancer_handoff under harness-invalid control_plane_pressure; a new observation theory is selected and the next attempt measures retry_scheduled progress-contract projection rather than rerunning the exhausted prior workflow_progress theory.
 
 ## Findings
 - **rolling-restart-core-stability-main**: Quest probe priority metric is now zero, but doneWhen remains false until three consecutive rolling-restart runs pass. (rules out: Do not claim SOLVED from metric zero without the consecutive doneWhen evidence.) [test-output/reports/rolling-restart-core-stability-after-local-mutation-gate.report.json]
@@ -129,6 +129,9 @@
 - **rolling-restart-core-stability-main**: Subagent verifier Plato confirmed the handoff retry refresh diff artifact matches the live scoped diff and stays inside operation_workflow_owner/coordinator_created_remote_handoff; no blocking correctness issue in the main timer-fired refreshed wake path, with follow-up risk that wake failures still re-defer from the original snapshot and deferred visibility can preserve retry_deferred/PENDING witnesses under control_plane_pressure. (rules out: Do not treat the handoff retry refresh source change as unverified before recording the measured attempt; the next theory should focus on stale-snapshot re-deferral or deferred visibility if the same retry_scheduled witnesses remain.) [subagent:019e9306-3a40-7123-833b-ac3f5695b971]
 - **rolling-restart-core-stability-main**: Subagent verifier Plato reviewed the recorded handoff retry refresh source change after the measured attempt; the diff artifact matches the live scoped source/test diff, the change remains inside operation_workflow_owner/coordinator_created_remote_handoff, and the main refreshed timer-fired wake path has no blocking correctness issue; follow-up risk remains stale-snapshot re-deferral on wake failure and deferred-visibility fallback under control_plane_pressure. (rules out: Do not treat the recorded handoff retry refresh source attempt as lacking post-attempt subagent verification; continue from the measured retry_scheduled handoff witnesses.) [subagent:019e9306-3a40-7123-833b-ac3f5695b971]
 - **rolling-restart-core-stability-main**: Ingested evidence from rolling-restart-core-stability-after-handoff-retry-refresh-before-remote-wake.report.json. Metric: 0 -> 0. Verdict: BLOCK_HARNESS_INVALID (harness_connectivity_or_system_failure). Root cause: discovery. Dominant reason: control_plane_pressure. Owner: none. Ingestion outcome: changed. [test-output/reports/rolling-restart-core-stability-after-handoff-retry-refresh-before-remote-wake.report.json]
+- **rolling-restart-core-stability-main**: Subagent verifier Plato found no blocking issues in the remote executor outcome owner-wake patch: the artifact matches live source, the gate is limited to critical/priority replica create progress on dispatch-retryable non-local operations, ordinary non-local outcomes still skip, and the focused test covers source-owner dispatch without local mutation. (rules out: Do not treat the remote executor outcome source change as unverified before recording the measured rolling-restart attempt.) [subagent:019e9306-3a40-7123-833b-ac3f5695b971]
+- **rolling-restart-core-stability-main**: Ingested evidence from rolling-restart-core-stability-after-remote-executor-outcome-wake-source-owner.report.json. Metric: 0 -> 0. Verdict: BLOCK_HARNESS_INVALID (harness_connectivity_or_system_failure). Root cause: topology. Dominant reason: publication_missing_active_node=8be8d30f-4499-5eed-865c-71b4d529a67a. Owner: none. Ingestion outcome: changed. [test-output/reports/rolling-restart-core-stability-after-remote-executor-outcome-wake-source-owner.report.json]
+- **rolling-restart-core-stability-main**: Post-attempt source verification is satisfied: Plato's read-only review found no blocking issues in the remote executor outcome owner-wake patch, confirmed the diff artifact matches live source, and identified only non-blocking duplicate-wake/test-tightening residual risks. (rules out: Do not treat the recorded remote executor outcome owner-wake attempt as lacking post-attempt subagent verification.) [subagent:019e9306-3a40-7123-833b-ac3f5695b971]
 
 ## Theories
 - **theory-20260601-rolling-restart-evidence-closure** [active] system, mechanism observation_gap, owner distributed_harness_scenario_owner / rolling_restart_evidence
@@ -176,7 +179,7 @@
 - **theory-20260603-control-plane-pressure-owner-boundary-projection** [falsified] frontier, frontier rolling-restart-core-stability-main, layer observation, mechanism control-plane-pressure-owner-boundary-projection, owner operation_workflow_owner, boundary rebalancer_handoff, modelGate npm run model:contracts
 - **theory-20260603-critical-delivery-source-saturation-control-plane-pressure** [falsified] frontier, frontier rolling-restart-core-stability-main, layer scheduling, mechanism critical-delivery-source-saturation-control-plane-pressure, owner transport_delivery_owner, boundary critical_delivery_source_backpressure, modelGate npm run model:contracts
 - **theory-20260604-handoff-retry-fires-stale-snapshot-without-refresh** [falsified] frontier, frontier rolling-restart-core-stability-main, layer ownership, mechanism handoff-retry-fires-stale-snapshot-without-refresh, owner operation_workflow_owner, boundary coordinator_created_remote_handoff, modelGate npm run model:contracts
-- **theory-20260604-remote-executor-outcome-wakes-source-owner** [active] frontier, frontier rolling-restart-core-stability-main, layer ownership, mechanism remote-executor-outcome-discarded-by-nonlocal-owner, owner operation_workflow_owner, boundary executor_outcome_remote_owner_handoff, modelGate npm run model:contracts
+- **theory-20260604-remote-executor-outcome-wakes-source-owner** [supported] frontier, frontier rolling-restart-core-stability-main, layer ownership, mechanism remote-executor-outcome-discarded-by-nonlocal-owner, owner operation_workflow_owner, boundary executor_outcome_remote_owner_handoff, modelGate npm run model:contracts
 
 ## Selected Theories
 - **rolling-restart-core-stability-main**: theory-20260604-remote-executor-outcome-wakes-source-owner
@@ -280,6 +283,8 @@
 - **theory-20260603-critical-delivery-source-saturation-control-plane-pressure**: falsified (scenario=failed, theory=falsified, movement=same) [test-output/reports/rolling-restart.report.json]
 - **theory-20260604-handoff-retry-fires-stale-snapshot-without-refresh**: falsified (scenario=failed, theory=falsified, movement=same) [test-output/reports/rolling-restart-core-stability-after-handoff-retry-refresh-before-remote-wake.report.json]
 - **theory-20260604-handoff-retry-fires-stale-snapshot-without-refresh**: falsified (scenario=failed, theory=falsified, movement=same) [test-output/reports/rolling-restart-core-stability-after-handoff-retry-refresh-before-remote-wake.report.json]
+- **theory-20260604-remote-executor-outcome-wakes-source-owner**: supported (scenario=failed, theory=partial, movement=narrowed) [test-output/reports/rolling-restart-core-stability-after-remote-executor-outcome-wake-source-owner.report.json]
+- **theory-20260604-remote-executor-outcome-wakes-source-owner**: supported (scenario=failed, theory=partial, movement=narrowed) [test-output/reports/rolling-restart-core-stability-after-remote-executor-outcome-wake-source-owner.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
@@ -317,3 +322,4 @@
 | 2026-06-03T06:52:19.689Z | rolling-restart-core-stability-main | local-fix | 0 -> 0 | flat | moved_boundary | theory-20260603-retry-scheduled-partition-witness-progress-contract | diff:solve/changes/rolling-restart-core-stability/retry-scheduled-partition-witness-progress-contract.diff |
 | 2026-06-03T07:04:30.180Z | rolling-restart-core-stability-main | widen-scope | 0 -> 0 | flat | narrowed | theory-20260603-control-plane-pressure-owner-boundary-projection | diff:solve/changes/rolling-restart-core-stability/retry-scheduled-partition-witness-progress-contract.diff |
 | 2026-06-04T14:56:22.085Z | rolling-restart-core-stability-main | widen-scope | 1 -> 0 | progress | same | theory-20260604-handoff-retry-fires-stale-snapshot-without-refresh | diff:solve/changes/rolling-restart-core-stability/handoff-retry-refresh-before-remote-wake.diff |
+| 2026-06-04T15:16:53.800Z | rolling-restart-core-stability-main | model | 0 -> 0 | flat | narrowed | theory-20260604-remote-executor-outcome-wakes-source-owner | diff:solve/changes/rolling-restart-core-stability/remote-executor-outcome-wake-source-owner.diff |

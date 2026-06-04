@@ -5,7 +5,8 @@
  * Proves that:
  * - Executor outcomes are routed through runExclusive (owner-key queue)
  * - The coordinator transitions workflow state based on outcome type
- * - Terminal and non-local operations are skipped
+ * - Terminal and ordinary non-local operations are skipped
+ * - Priority recovery target progress wakes a non-local operation owner
  * - Unknown outcome types are rejected
  * - Subscription is cleaned up on shutdown
  *
@@ -29,6 +30,10 @@ import {
   REBALANCE_COORDINATOR_EVENT,
 } from '../../src/rebalancer/rebalancer-constants.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
+import {
+  ControlPlaneField,
+  ControlPlaneMessageType,
+} from '../../src/control-plane/control-plane-constants.js';
 import {
   OperationType,
   ReplicaStatus,
@@ -75,6 +80,9 @@ const TEST_REPLICA_OPERATION_UPDATE_SQL_PREFIX =
 const TEST_RETRY_PAYLOAD_WAIT_INITIAL_ATTEMPT = 0;
 const TEST_RETRY_PAYLOAD_WAIT_ATTEMPT_INCREMENT = 1;
 const TEST_RETRY_PAYLOAD_WAIT_ATTEMPT_COUNT = 4;
+const TEST_COORDINATOR_CREATED_REMOTE_HANDOFF =
+  'coordinator_created_remote_handoff';
+const TEST_CRITICAL_DELIVERY_PRIORITY = 'critical';
 
 /**
  * Build a minimal operation record for testing.
@@ -1195,6 +1203,98 @@ test('Executor outcome routing through owner-key reconcile path',
 
           t.equal(routed.length, 0,
             'non-local operation should not be routed');
+        } finally {
+          await coordinator.shutdown();
+        }
+      },
+    );
+
+    await t.test(
+      'priority recovery non-local create progress wakes operation owner',
+      async (t) => {
+        const deliveries = [];
+        const operation = buildTestOperation({
+          type: OperationType.ADD,
+          partitionId: TEST_PRIORITY_RECOVERY_PARTITION_ID,
+          entityId: TEST_PRIORITY_RECOVERY_PARTITION_ID,
+          replicaId: TEST_PRIORITY_RECOVERY_REPLICA_ID,
+          sourceNodeId: TEST_PRIORITY_RECOVERY_SOURCE_NODE_ID,
+          targetNodeId: TEST_PRIORITY_RECOVERY_TARGET_NODE_ID,
+          status: ReplicaStatus.PENDING,
+          workflowStep: WORKFLOW_STEP.PENDING,
+          stepsHistory: [
+            {
+              step: WORKFLOW_STEP.PENDING,
+              timestamp: Date.now(),
+            },
+          ],
+        });
+        const {coordinator} = createTestCoordinator({operation});
+        coordinator.messageRouter = {
+          async deliver(target, payload, options) {
+            deliveries.push({target, payload, options});
+            return {
+              acknowledged: true,
+              status: ReplicaOperationResponseStatus.INITIATED,
+            };
+          },
+        };
+        coordinator.workflowOwner.messageRouter = coordinator.messageRouter;
+
+        try {
+          const woken = await coordinator.workflowOwner.reconcileExecutorOutcome(
+            buildExecutorOutcomePayload(
+              EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_SYNCING,
+              WORKFLOW_STEP.SYNCING,
+            ),
+          );
+
+          t.equal(
+            woken,
+            true,
+            'eligible non-local progress should wake the owner',
+          );
+          t.equal(
+            deliveries.length,
+            1,
+            'non-local priority progress should issue one owner wake',
+          );
+          t.equal(
+            deliveries[0]?.target,
+            `${TEST_PRIORITY_RECOVERY_SOURCE_NODE_ID}/service/replica-dispatch`,
+            'owner wake should target the source owner dispatch service',
+          );
+          t.equal(
+            deliveries[0]?.payload?.type,
+            ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
+            'owner wake should use replica operation dispatch',
+          );
+          t.equal(
+            deliveries[0]?.payload?.[ControlPlaneField.OPERATION_ID],
+            TEST_OPERATION_ID,
+            'owner wake should carry the operation id',
+          );
+          t.equal(
+            deliveries[0]?.payload?.[ControlPlaneField.OPERATION_ROW]
+              ?.operation_id,
+            TEST_OPERATION_ID,
+            'owner wake should carry the operation row',
+          );
+          t.equal(
+            deliveries[0]?.options?.deliverySource,
+            TEST_COORDINATOR_CREATED_REMOTE_HANDOFF,
+            'owner wake should retain the remote handoff delivery source',
+          );
+          t.equal(
+            deliveries[0]?.options?.deliveryPriority,
+            TEST_CRITICAL_DELIVERY_PRIORITY,
+            'priority recovery owner wake should use critical delivery',
+          );
+          t.equal(
+            operation.workflowStep,
+            WORKFLOW_STEP.PENDING,
+            'target-side outcome should not mutate the non-local operation',
+          );
         } finally {
           await coordinator.shutdown();
         }

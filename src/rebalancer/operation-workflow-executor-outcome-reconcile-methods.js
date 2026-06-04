@@ -75,6 +75,14 @@ const EXECUTOR_OUTCOME_EMPTY_VISIBILITY_RETRYABLE_TYPES = Object.freeze(
   ]),
 );
 
+const EXECUTOR_OUTCOME_REMOTE_OWNER_WAKE_TYPES = Object.freeze(
+  new Set([
+    EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_CREATING,
+    EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_SYNCING,
+    EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
+  ]),
+);
+
 const EXECUTOR_OUTCOME_EMPTY_VISIBILITY_RETRY_WINDOW_MS =
   SHARED.TIME_MS.MINUTE;
 
@@ -203,6 +211,15 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
         entry.matches(evidence),
       )?.state ||
       EXECUTOR_FAILURE_RECONCILE_STATE.FAIL_OPERATION
+    );
+  }
+
+  shouldWakeRemoteOwnerForExecutorOutcome(operation, outcome) {
+    const outcomeType = outcome?.[EXECUTOR_OUTCOME_FIELD.OUTCOME_TYPE];
+    return (
+      EXECUTOR_OUTCOME_REMOTE_OWNER_WAKE_TYPES.has(outcomeType) &&
+      this.shouldRetryCoordinatorCreatedRemoteHandoff(operation) === true &&
+      this.isDispatchRetryableWorkflowStep(operation) === true
     );
   }
 
@@ -466,6 +483,18 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
     }
 
     if (!this.repository.isOperationLocallyOwned(operation)) {
+      if (this.shouldWakeRemoteOwnerForExecutorOutcome(operation, outcome)) {
+        const woken = await this.wakeCoordinatorCreatedRemoteOwner(operation);
+        this.logger.debug(
+          REBALANCE_COORDINATOR_LOG_MSG.OUTCOME_OPERATION_NOT_LOCAL,
+          {
+            operationId,
+            outcomeType,
+            remoteOwnerWake: woken,
+          },
+        );
+        return woken;
+      }
       this.logger.debug(
         REBALANCE_COORDINATOR_LOG_MSG.OUTCOME_OPERATION_NOT_LOCAL,
         {operationId, outcomeType},
