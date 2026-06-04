@@ -159,7 +159,13 @@ flush still commits).
 ## Convergence Guards
 
 A narrowing Quest can shuffle the same blocker between owners forever and call it
-progress. Four guards keep the loop converging instead of oscillating:
+progress. The guards below keep the loop converging instead of oscillating. Each
+detector is a pure read-model over the append-only log; the policy that turns a
+detection into a gate lives at the call site behind the master
+`CONVERGENCE_GUARDS` toggle map (`scripts/solve/constants.js`), so any single
+guard can be disabled by flag without code changes and every threshold is a named
+constant. Detectors fire only on real recorded events and never touch the sealed
+`doneWhen`.
 
 - **Oscillation detection**: returning the frontier to a previously-abandoned
   blocker (owner / boundary / dominantReason) is classified `oscillating`, never
@@ -179,6 +185,44 @@ progress. Four guards keep the loop converging instead of oscillating:
   post-patch evidence report; a subagent approval finding may inform but never
   promote. Audit flags any selected theory approved by a finding with no later
   measured report.
+- **Invariant ledger**: `projectInvariantLedger` folds the log into the live
+  per-invariant state — green high-water, currently-green, currently-red, and the
+  sets regressed or restored this run — and is the shared foundation the
+  coupled-oscillation and regression-restore guards read from.
+- **Coupled-invariant oscillation**: when regressions repeatedly bounce between
+  two or more *disjoint families* of sub-invariants (each frontier patch flips one
+  family red, e.g. cluster A `publication_converged`/`priority_spread_settled`
+  versus cluster B which is defined in terms of A), single-frontier patching can
+  whack-a-mole forever while every local metric reads 0. `detectCoupledOscillation`
+  groups `regressed` label sets into disjoint families by transitive intersection
+  and flags `coupled` once the swap count crosses `COUPLED_OSC_SWAP_THRESHOLD`.
+  This forces the **system-theory rung** (and, by keyword, the model rung) rather
+  than another frontier patch, surfaced as the `coupled-invariant-oscillation`
+  health signal. The `CoupledAdmission` TLA+ model
+  (`models/readiness-starvation/`) is the discriminator: a single shared knob makes
+  the two green-ranges overlap at exactly one value, single-frontier patches bounce
+  forever (`EventuallySteady` violated), and only an atomic reconcile that satisfies
+  both families at once converges.
+- **Regression-restore gate**: once a measured run records an invariant
+  regression, the very next *begin*-phase move is pinned to restoring (or
+  recording a finding that explains) the dropped invariant before any new theory
+  is allowed — a regression cannot be left behind as collateral while the loop
+  chases a fresh blocker. `regressionRestoreStatus` reports `pending` until a
+  later finding or a restoring measured report clears it; surfaced as
+  `regression-restore-required`.
+- **Scope-pressure terminal bound**: scope pressure is advisory until the changed
+  in-scope file count crosses `SCOPE_PRESSURE_FILE_LIMIT`, at which point the
+  begin-phase gate refuses to open a new frontier patch and routes to consolidation
+  or an honest park — a Quest cannot converge by accreting an unbounded blast
+  radius. `scopeTerminalStatus` carries the bound; surfaced as
+  `scope-pressure-terminal`.
+- **Gradient refinement of the sealed metric**: a frontier metric may be sharpened
+  from the scalar `priority` count to the composite `distance` gradient (or any
+  pair drawn from `GRADIENT_REFINEMENT_METRICS`) *without* tripping the
+  goalpost-immutability check, provided the probe and every other metric arg are
+  byte-identical. The refinement is strictly harder to satisfy and leaves the
+  sealed `doneWhen` untouched (see `isGradientRefinement`), so steering the ladder
+  on a sharper gradient is never punished as moving the goalposts.
 
 ## Closure Strength
 
