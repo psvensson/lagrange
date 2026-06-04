@@ -199,6 +199,8 @@ const REBALANCER_LOG_MSG = Object.freeze({
     'Deferring non-system rebalancing until priority control-plane partitions spread',
   WAIT_TRANSPORT_BACKPRESSURE:
     'Waiting for local transport backpressure to clear before planning',
+  PRIORITY_RECOVERY_PLANNING_GATE_DIAGNOSTIC:
+    'Priority-recovery planning-gate decision diagnostic',
   REBALANCE_ERROR: 'Error during rebalance check',
   EVALUATING_STATE: 'Evaluating rebalancing state',
   CRITICAL_STATE: 'Critical rebalancing state detected',

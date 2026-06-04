@@ -31,6 +31,8 @@ const {
   isRetryableControlPlaneError,
 } = UNIFIED_REBALANCER_SHARED;
 
+const REBALANCE_PLANNING_GATE_DIAGNOSTIC_NO_GATE = 'none';
+
 const REBALANCER_PLANNING_GATE_METHODS = {
   scheduleNextCheck(overrideDelayMs = null) {
     if (!this.isLeader || this.isShuttingDown) {
@@ -677,6 +679,63 @@ const REBALANCER_PLANNING_GATE_METHODS = {
   },
 
   /**
+   * Capture one node-log diagnostic explaining, for control-plane priority
+   * partitions, why a checkRebalance pass did or did not build the
+   * priority-recovery operation. This surfaces the planning-gate bypass state
+   * (`shouldBypass`, `operationCreationRequired`) and the sync planning-snapshot
+   * availability so the recovery-op lost-wakeup can be confirmed from run
+   * evidence instead of inferred. No-op for non-priority entities so ordinary
+   * partition logs are not polluted.
+   *
+   * @param {Object|null} decision - The winning planning-gate decision, if any.
+   * @return {Object|null} The recorded diagnostic, or null when not applicable.
+   */
+  recordPriorityRecoveryPlanningGateDecisionDiagnostic(decision) {
+    if (!this.isControlPlanePriorityPartition()) {
+      return null;
+    }
+    let bypass = null;
+    let syncPlanningSnapshotAvailable = false;
+    try {
+      bypass = this.buildPriorityRecoveryPlanningGateBypassSnapshot();
+    } catch (_bypassError) {
+      bypass = null;
+    }
+    try {
+      syncPlanningSnapshotAvailable = !!this.getPriorityRecoveryPlanningSnapshotSync(
+        {partitionId: this.entityId},
+      );
+    } catch (_snapshotError) {
+      syncPlanningSnapshotAvailable = false;
+    }
+    const operationCreationGate = bypass?.operationCreationGate || null;
+    const diagnostic = Object.freeze({
+      entityId: this.entityId,
+      nodeId: this.nodeId || null,
+      isLeader: this.isLeader === true,
+      winningGate:
+        decision?.gate || REBALANCE_PLANNING_GATE_DIAGNOSTIC_NO_GATE,
+      planningState: decision?.logContext?.planningState || null,
+      shouldBypass: bypass?.shouldBypass === true,
+      bypassState: bypass?.bypassState || null,
+      operationCreationRequired:
+        bypass?.evidence?.operationCreationRequired === true,
+      operationCreationScope:
+        operationCreationGate?.operationCreationScope || null,
+      operationCreationPartitionId:
+        operationCreationGate?.operationCreationPartitionId || null,
+      syncPlanningSnapshotAvailable,
+      observedAtMs: Date.now(),
+    });
+    this.lastPriorityRecoveryPlanningGateDiagnostic = diagnostic;
+    this.logger.info(
+      REBALANCER_LOG_MSG.PRIORITY_RECOVERY_PLANNING_GATE_DIAGNOSTIC,
+      diagnostic,
+    );
+    return diagnostic;
+  },
+
+  /**
    * Update rebalance cadence after one evaluation/execution pass.
    * @param {boolean} needsRebalance
    * @return {Promise<boolean>} Whether to force a priority retry cadence.
@@ -725,6 +784,9 @@ const REBALANCER_PLANNING_GATE_METHODS = {
     let forcePriorityRetry = false;
     try {
       const blocker = await this.getCheckRebalanceBlocker();
+      this.recordPriorityRecoveryPlanningGateDecisionDiagnostic(
+        blocker?.decision || null,
+      );
       if (blocker) {
         blocker.apply();
         return;
