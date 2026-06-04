@@ -656,16 +656,26 @@ function scheduleCoordinatorCreatedRemoteHandoffFollowUp(
     if (owner.isShuttingDown) {
       return;
     }
-    const handoffTimeoutDecision =
-      owner.buildCoordinatorCreatedRemoteHandoffTimeoutDecision(
-        operationSnapshot,
-      );
-    if (handoffTimeoutDecision.shouldStop) {
-      owner.clearCreatedOperationHandoffRetry(operationId);
-      return false;
-    }
-    return owner.wakeCoordinatorCreatedRemoteOwner(operationSnapshot)
-      .catch((retryError) => {
+    return owner.getDeferredDispatchRetryOperation(operationId, operationSnapshot)
+      .then((currentOperation) => {
+        if (
+          !currentOperation ||
+          owner.repository.isOperationTerminal(currentOperation) ||
+          !owner.shouldRetryCoordinatorCreatedRemoteHandoff(currentOperation)
+        ) {
+          owner.clearCreatedOperationHandoffRetry(operationId);
+          return false;
+        }
+        const handoffTimeoutDecision =
+          owner.buildCoordinatorCreatedRemoteHandoffTimeoutDecision(
+            currentOperation,
+          );
+        if (handoffTimeoutDecision.shouldStop) {
+          owner.clearCreatedOperationHandoffRetry(operationId);
+          return false;
+        }
+        return owner.wakeCoordinatorCreatedRemoteOwner(currentOperation);
+      }).catch((retryError) => {
         owner.handleDeferredCoordinatorCreatedRemoteHandoffRetryFailure(
           operationSnapshot,
           retryError,

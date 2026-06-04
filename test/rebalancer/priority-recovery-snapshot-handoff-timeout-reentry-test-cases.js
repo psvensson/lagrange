@@ -40,6 +40,8 @@ const TEST_REPRESENTATIVE_HANDOFF_RETRY_TEST_NAME =
 const TEST_PUBLICATION_COUNT_ONLY_HANDOFF_TEST_NAME =
   'publication count-only retry-scheduled handoff residual preserves one ' +
   'bounded remote retry per unique operation';
+const TEST_ASSERT_RETRY_DEFERRED_HANDOFF_REFRESH =
+  'timer-fired retry-deferred handoff should use the refreshed operation row';
 
 registerCase(TEST_CACHE_VISIBLE_PRIORITY_SCAN_TEST_NAME,
 async (t) => {
@@ -1315,14 +1317,29 @@ async (t) => {
       nowMs: TEST_OPERATION_CREATED_AT_MS}),
     status: TEST_RETRY_DEFERRED_STATUS,
   })));
+  const authoritativeOperationRows = [...witnessOperationRows];
   const sqlQueryEngine = {
     async executeQuery(sql, params = []) {
       const normalizedSql = String(sql);
+      if (
+        normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT) &&
+        normalizedSql.includes('WHERE operation_id = ?')
+      ) {
+        const operationId = params[NUM.ZERO];
+        const operationRow =
+          authoritativeOperationRows.find((row) =>
+            row.operation_id === operationId);
+        return {
+          success: true,
+          rows: operationRow ? [{...operationRow}] : [],
+          affectedRows: operationRow ? NUM.ONE : NUM.ZERO,
+        };
+      }
       if (normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT)) {
         return {
           success: true,
-          rows: witnessOperationRows.map((row) => ({...row})),
-          affectedRows: witnessOperationRows.length,
+          rows: authoritativeOperationRows.map((row) => ({...row})),
+          affectedRows: authoritativeOperationRows.length,
         };
       }
       if (normalizedSql.includes(TEST_QUERY_SERVICES_FRAGMENT)) {
@@ -1489,6 +1506,29 @@ async (t) => {
       coordinator.workflowOwner.operationProgressStore.listOperationProgressEvents(),
       firstEvents,
       TEST_ASSERT_RETRY_DEFERRED_HANDOFF_SHAPE,
+    );
+
+    const refreshedUpdatedAt = TEST_CAPTURED_AT_MS - NUM.ONE;
+    authoritativeOperationRows[NUM.ZERO] = Object.freeze({
+      ...authoritativeOperationRows[NUM.ZERO],
+      workflow_step: WORKFLOW_STEP.SENDING,
+      updated_at: refreshedUpdatedAt,
+    });
+    await deferredTimers[NUM.ZERO].fn();
+    t.equal(
+      deliveries.length,
+      NUM.ONE,
+      TEST_ASSERT_RETRY_DEFERRED_HANDOFF_REFRESH,
+    );
+    t.equal(
+      deliveries[NUM.ZERO]?.payload?.operationRow?.workflow_step,
+      WORKFLOW_STEP.SENDING,
+      TEST_ASSERT_RETRY_DEFERRED_HANDOFF_REFRESH,
+    );
+    t.equal(
+      deliveries[NUM.ZERO]?.payload?.operationRow?.updated_at,
+      refreshedUpdatedAt,
+      TEST_ASSERT_RETRY_DEFERRED_HANDOFF_REFRESH,
     );
   } finally {
     Date.now = originalDateNow;
