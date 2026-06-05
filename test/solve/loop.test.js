@@ -4,19 +4,23 @@ import path from 'node:path';
 import os from 'node:os';
 import {execFileSync} from 'node:child_process';
 
-import {runLoop} from '../../scripts/solve/loop.js';
+import {runLoop, finalizeAttempt, makeRunContext} from '../../scripts/solve/loop.js';
 import {appendEvent, projectState, readLog, saveQuest} from '../../scripts/solve/store.js';
 import {makeDryExecutor} from '../../scripts/solve/executor.js';
+import {registerProbe} from '../../scripts/solve/probe.js';
 import {ingestEvidence} from '../../scripts/solve/evidence.js';
 import {
   EVENT_ATTEMPT,
   EVENT_PARK,
+  EVENT_FINDING,
   EVENT_THEORY_OPTION_DECLARED,
   EVENT_THEORY_SELECTED,
   EVENT_VIOLATION,
   STATUS_SOLVED,
   STATUS_PARKED,
   STATUS_EXHAUSTED,
+  PARK_KIND_CANNOT_MEASURE,
+  CANNOT_MEASURE_RETRY_BUDGET,
   THEORY_RESULT_ACTIVE,
   OUTCOME_MAX_CYCLES,
   OUTCOME_THEORY_REQUIRED,
@@ -339,6 +343,111 @@ tap.test('R1 per-attempt auto-commit on the loop path', async (t) => {
     });
     const after = Number(commitCount(root));
     t.equal(after - before, 1, 'only the single terminal commit is made');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+});
+
+// P6 invalid-sample hygiene: a positively-classified non-measuring sample
+// (invalidSample === true) is not a stall. It must HOLD the rung and retry (emitting an
+// advisory diagnostic) rather than climb the ladder toward an `exhausted` park it never
+// earned. The retry is bounded: once CANNOT_MEASURE_RETRY_BUDGET consecutive samples fail
+// to measure, the frontier parks as cannot_measure — a harness verdict, never exhausted.
+tap.test('P6 non-measuring samples hold the rung and park as cannot_measure', async (t) => {
+  // A probe driven by an on-disk flag file: when {invalid:true} it returns a
+  // non-measuring sample (metric null, invalidSample true); otherwise a real metric.
+  registerProbe('flaky-p6', {
+    name: 'flaky-p6',
+    measure(args) {
+      const data = JSON.parse(fs.readFileSync(args.file, 'utf8'));
+      if (data.invalid) {
+        return {metric: null, done: false, invalidSample: true, evidence: args.file};
+      }
+      return {metric: data.metric, done: data.metric <= 0, evidence: args.file};
+    },
+  });
+
+  function p6setup() {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'solve-p6-'));
+    const file = path.join(root, 'flag.json');
+    fs.writeFileSync(file, JSON.stringify({metric: 5, invalid: true}));
+    const quest = {
+      id: 'p6',
+      statement: 'non-measuring hygiene',
+      priority: 100,
+      doneWhen: {probe: 'flaky-p6', args: {file}},
+      frontiers: [{id: 'f1', priority: 1, metric: {probe: 'flaky-p6', args: {file}}}],
+    };
+    saveQuest(root, quest);
+    appendEvent(root, quest.id, {type: 'quest-declared', quest});
+    return {root, quest, file};
+  }
+
+  function attempt(root, quest) {
+    const state = projectState(quest, readLog(root, quest.id));
+    const pick = {def: quest.frontiers[0], state: state.frontiers[0]};
+    const ctx = makeRunContext({
+      changeRef: 'diff:doc-only.diff',
+      changeRefResolves: () => true,
+      inspectChangeRef: () => ({valid: true, problems: []}),
+      autoCommit: false,
+    });
+    ctx.probeCtx = {root};
+    const before = {metric: 5, evidence: quest.frontiers[0].metric.args.file};
+    return finalizeAttempt(root, quest, ctx, pick, before,
+      {changeRef: 'diff:doc-only.diff', summary: 'non-measuring attempt'});
+  }
+
+  t.test('holds the rung and emits an advisory before the budget runs out', (t) => {
+    const {root, quest} = p6setup();
+    attempt(root, quest);
+    const state = projectState(quest, readLog(root, quest.id));
+    t.equal(state.frontiers[0].rungIndex, 0, 'rung held at observe (no climb)');
+    t.equal(state.frontiers[0].status, 'open', 'frontier not parked yet');
+    const findings = readLog(root, quest.id)
+      .filter((e) => e.type === EVENT_FINDING && e.frontier === 'f1');
+    t.equal(findings.length, 1, 'one advisory diagnostic recorded');
+    t.match(findings[0].claim, /non-measuring sample/u, 'advisory points at the harness');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('parks as cannot_measure once the retry budget is spent', (t) => {
+    const {root, quest} = p6setup();
+    for (let i = 0; i < CANNOT_MEASURE_RETRY_BUDGET; i++) attempt(root, quest);
+    const state = projectState(quest, readLog(root, quest.id));
+    t.equal(state.frontiers[0].status, STATUS_PARKED, 'frontier parked');
+    t.equal(state.frontiers[0].parkKind, PARK_KIND_CANNOT_MEASURE,
+      'parked as cannot_measure, never exhausted');
+    t.equal(state.frontiers[0].rungIndex, 0,
+      'never climbed the ladder on non-measuring samples');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('a measuring sample resets the non-measuring run', (t) => {
+    const {root, quest, file} = p6setup();
+    attempt(root, quest);
+    attempt(root, quest);
+    // A trustworthy sample interrupts the run; the next invalid sample starts over,
+    // so the budget never trips from samples split across a real measurement.
+    fs.writeFileSync(file, JSON.stringify({metric: 4, invalid: false}));
+    const state0 = projectState(quest, readLog(root, quest.id));
+    const pick = {def: quest.frontiers[0], state: state0.frontiers[0]};
+    const ctx = makeRunContext({
+      changeRef: 'diff:doc-only.diff',
+      changeRefResolves: () => true,
+      inspectChangeRef: () => ({valid: true, problems: []}),
+      autoCommit: false,
+    });
+    ctx.probeCtx = {root};
+    finalizeAttempt(root, quest, ctx, pick, {metric: 5},
+      {changeRef: 'diff:doc-only.diff', summary: 'measuring progress'});
+    fs.writeFileSync(file, JSON.stringify({metric: 4, invalid: true}));
+    attempt(root, quest);
+    const state = projectState(quest, readLog(root, quest.id));
+    t.equal(state.frontiers[0].status, 'open',
+      'measuring sample reset the run; one later invalid sample does not park');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });

@@ -62,13 +62,20 @@ something. A scenario-harness run whose verdict is `BLOCK_EVIDENCE_INCOMPLETE`
 (reason `execution_incomplete_or_metrics_missing`) did not validate anything, so
 the probe reports `metric: null` with `invalidSample: true` rather than a
 misleading `0`. An invalid sample is an honest no-measurement: it never counts as
-progress, never satisfies `doneWhen`, breaks the consecutive-pass streak, and
-climbs the strategy ladder like any other stall. Never treat a blocked or
-incomplete run as a metric floor.
+progress, never satisfies `doneWhen`, and breaks the consecutive-pass streak.
+Crucially, it does **not** climb the strategy ladder. Climbing a rung is a
+response to a measured stall — a trustworthy observation that the current
+strategy failed — so a sample the harness could not measure is not evidence of
+anything and must not advance the ladder toward an `exhausted` park it never
+earned. Instead the rung is **held and retried**, and an advisory diagnostic
+finding is recorded pointing at the harness. The retry is bounded by
+`CANNOT_MEASURE_RETRY_BUDGET`: once that many consecutive samples on a frontier
+fail to measure, the frontier parks as `cannot_measure` (a harness verdict),
+never as `exhausted`. A single measuring sample resets the consecutive-failure
+run. Never treat a blocked or incomplete run as a metric floor.
 
-When a frontier has already parked and its ladder climb to the park rung
-included one or more invalid samples, the `ladder exhausted without metric
-movement` verdict rests partly on untrustworthy data. Reopen it with
+When a frontier has already parked as `cannot_measure` (its samples never
+measured), the verdict rests on untrustworthy data. Reopen it with
 `node scripts/solve.js reopen --id <quest> --frontier <id> --reason "..."`. The
 reopen is evidence-gated: it is refused unless at least one contributing attempt
 re-classifies as a non-measuring sample (so an honest park is never reopened),

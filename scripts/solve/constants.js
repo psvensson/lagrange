@@ -260,6 +260,15 @@ export const NON_MEASURING_VERDICT_REASONS = Object.freeze([
 //                   bound itself so it cannot oscillate against a never-measuring park.
 export const PARK_KIND_EXHAUSTED = 'exhausted';
 export const PARK_KIND_CANNOT_MEASURE = 'cannot_measure';
+
+// Non-measuring-sample retry bound. A positively-classified non-measuring sample
+// (invalidSample === true) is not evidence of a stall: the harness produced no
+// trustworthy metric, so the rung is HELD and retried rather than climbed toward an
+// `exhausted` park it never earned. The retry is finite — once this many consecutive
+// samples on a frontier fail to measure, the frontier parks as CANNOT_MEASURE (pointing
+// the operator at the harness), never as EXHAUSTED. This preserves termination while
+// keeping a flaky harness from manufacturing a false exhaustion verdict.
+export const CANNOT_MEASURE_RETRY_BUDGET = 3;
 export const PARK_REASON_EXHAUSTED = 'ladder exhausted without metric movement';
 export const PARK_REASON_CANNOT_MEASURE =
   'measurement unavailable: no attempt produced a trustworthy sample';

@@ -18,6 +18,7 @@ import {
   EVENT_PARK,
   EVENT_QUEST,
   EVENT_VIOLATION,
+  EVENT_FINDING,
   STATUS_SOLVED,
   STATUS_EXHAUSTED,
   LADDER,
@@ -26,6 +27,7 @@ import {
   DISCRIMINATION_REFUTED,
   DISCRIMINATIONS,
   INVESTIGATION_BUDGET,
+  CANNOT_MEASURE_RETRY_BUDGET,
   PARK_KIND_EXHAUSTED,
   PARK_KIND_CANNOT_MEASURE,
   PARK_REASON_EXHAUSTED,
@@ -326,6 +328,21 @@ function investigativeCreditsSpent(log, frontierId) {
   return credited;
 }
 
+// Count consecutive non-measuring attempts at the tail of a frontier's history — the
+// run of `invalidSample === true` attempts since its last trustworthy sample. A measuring
+// attempt (or any non-attempt boundary on the frontier) resets the run. The current
+// attempt is not yet appended when this is read, so callers add 1 for the live sample.
+function trailingNonMeasuringRun(log, frontierId) {
+  let count = 0;
+  for (let i = log.length - 1; i >= 0; i--) {
+    const e = log[i];
+    if (e.type !== EVENT_ATTEMPT || e.frontier !== frontierId) continue;
+    if (e.invalidSample === true) count += 1;
+    else break;
+  }
+  return count;
+}
+
 function decideAndRecord(root, quest, pick, event, after, violations,
   forceStall = false) {
   const progressed = !forceStall && violations.length === 0 &&
@@ -347,15 +364,39 @@ function decideAndRecord(root, quest, pick, event, after, violations,
     Boolean(event.theoryRef) &&
     !creditedTheories.has(event.theoryRef) &&
     creditedTheories.size < INVESTIGATION_BUDGET;
+  // Invalid-sample hygiene: a positively-classified non-measuring sample is not a stall.
+  // A sample the harness could not trust is not evidence that the rung's strategy failed,
+  // so it must not climb the ladder toward an `exhausted` park it never earned. Instead it
+  // HOLDS the rung and retries, emitting an advisory diagnostic that points at the harness.
+  // The retry is bounded: once CANNOT_MEASURE_RETRY_BUDGET consecutive samples fail to
+  // measure, the frontier parks as cannot_measure (a harness verdict), never as exhausted.
+  const nonMeasuring = event.invalidSample === true;
+  const nonMeasuringRun = nonMeasuring ?
+    trailingNonMeasuringRun(log, event.frontier) + 1 : 0;
+  const measurementExhausted = nonMeasuring &&
+    nonMeasuringRun >= CANNOT_MEASURE_RETRY_BUDGET;
+  const holdForRetry = nonMeasuring && !measurementExhausted;
   // A rung is escalated on a stall or on untrusted (violating) data. It is kept on
-  // honest metric progress, and held (not climbed) on a credited discrimination.
-  const nextRung = (progressed || investigative) ? event.rungIndex :
+  // honest metric progress, held (not climbed) on a credited discrimination, and held on
+  // ANY non-measuring sample — climbing the ladder requires a trustworthy observation, so
+  // a sample the harness could not measure never advances (or parks via) the strategy
+  // ladder; it parks, if at all, as cannot_measure once the retry budget is spent.
+  const nextRung = (progressed || investigative || nonMeasuring) ? event.rungIndex :
     Math.min(event.rungIndex + 1, PARK_RUNG_INDEX);
   appendEvent(root, quest.id, {
     ...event,
     rungIndex: nextRung,
     investigative: investigative || undefined,
   });
+  if (holdForRetry) {
+    appendEvent(root, quest.id, {
+      type: EVENT_FINDING,
+      frontier: pick.def.id,
+      claim: `non-measuring sample (${nonMeasuringRun}/${CANNOT_MEASURE_RETRY_BUDGET}): ` +
+        'harness produced no trustworthy metric; holding the rung for retry rather than ' +
+        'climbing toward an unearned exhausted park',
+    });
+  }
   if (after.done) {
     appendEvent(root, quest.id, {
       type: EVENT_SOLVED,
@@ -364,7 +405,15 @@ function decideAndRecord(root, quest, pick, event, after, violations,
       evidenceIdentity: after.evidenceIdentity || null,
       evidenceFingerprint: after.evidenceFingerprint || null,
     });
-  } else if (!progressed && nextRung >= PARK_RUNG_INDEX) {
+  } else if (measurementExhausted) {
+    appendEvent(root, quest.id, {
+      type: EVENT_PARK,
+      frontier: pick.def.id,
+      kind: PARK_KIND_CANNOT_MEASURE,
+      reason: PARK_REASON_CANNOT_MEASURE,
+      finalMetric: after.metric,
+    });
+  } else if (!progressed && !nonMeasuring && nextRung >= PARK_RUNG_INDEX) {
     const kind = classifyParkKind(root, quest, pick.def);
     appendEvent(root, quest.id, {
       type: EVENT_PARK,
