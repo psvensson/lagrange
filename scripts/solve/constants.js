@@ -36,7 +36,16 @@ export const EVENT_EVIDENCE_INGESTED = 'evidence-ingested';
 // non-gating: it makes the previously-silent "why did the loop stop here" decision
 // auditable, and lets the explore budget (EXPLORE_BUDGET) be derived from the log.
 export const EVENT_GATE_DECISION = 'gate-decision';
-
+// Records that a driver (human or agent) consciously OVERRODE a soft, overridable guard
+// for one frontier, supplying a falsifiable reason. Append-only and auditable: it is the
+// "escape hatch for judgment the rule-author did not anticipate". An override authorizes
+// exactly ONE subsequent bypass of the named guard (it is consumed by the next matching
+// gate decision) and is reset by honest progress, so it can never silently disable a guard.
+// Only OVERRIDABLE heuristic guards (a theory/explore or scope reroute) accept an override;
+// the honesty/integrity invariants (regression, unrecorded-evidence, metric-projection,
+// measurement, and any terminal/precondition error) refuse it.
+export const EVENT_GUARD_OVERRIDE = 'guard-override';
+ 
 // Frontier / quest status values.
 export const STATUS_OPEN = 'open';
 export const STATUS_SOLVED = 'solved';

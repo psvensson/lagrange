@@ -15,6 +15,7 @@
 //   handoff compute the scope-safe git commit pathspec for one Quest
 //   upgrade establish a strict-audit baseline for an existing legacy Quest
 //   reopen  re-open a frontier parked on non-measuring samples (evidence-gated)
+//   override authorize one recorded-reason bypass of an overridable soft guard
 //
 // The CLI is a thin shell over scripts/solve/*. All Quest truth lives in the
 // append-only log; reports and state are projections.
@@ -22,7 +23,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import {loadQuest, saveQuest, readLog, projectState, appendFinding, questFilePath}
+import {loadQuest, saveQuest, readLog, projectState, appendFinding, questFilePath,
+  appendGuardOverride}
   from './solve/store.js';
 import {makeDryExecutor} from './solve/executor.js';
 import {makeAgentExecutor} from './solve/agent-executor.js';
@@ -42,6 +44,11 @@ import {runReopenCommand} from './solve/reopen.js';
 import {runPortfolioCommand} from './solve/portfolio.js';
 import {runHandoffCommand} from './solve/handoff.js';
 import {evaluate} from './solve/probe.js';
+import {
+  CONTINUATION_BLOCKED_THEORY,
+  CONTINUATION_BLOCKED_SCOPE,
+  continuationOverridable,
+} from './solve/continuation.js';
 
 function parseArgs(argv) {
   const args = {_: []};
@@ -247,6 +254,47 @@ function cmdFinding(root, args) {
   });
   process.stdout.write(`recorded finding for ${args.frontier} @ ${stamped.ts}\n`);
 }
+
+// Friendly aliases for the overridable guard codes so a driver can write `--guard theory`
+// or `--guard scope` instead of the internal continuation code.
+const OVERRIDE_GUARD_ALIASES = Object.freeze({
+  'theory': CONTINUATION_BLOCKED_THEORY,
+  'blocked-theory': CONTINUATION_BLOCKED_THEORY,
+  'scope': CONTINUATION_BLOCKED_SCOPE,
+  'blocked-scope': CONTINUATION_BLOCKED_SCOPE,
+});
+
+function cmdOverride(root, args) {
+  const id = args.id || args._[0];
+  if (!id) throw new Error('override: --id <questId> is required');
+  if (!args.frontier) throw new Error('override: --frontier <frontierId> is required');
+  const selector = typeof args.guard === 'string' ? args.guard :
+    (typeof args.code === 'string' ? args.code : null);
+  if (!selector) {
+    throw new Error('override: --guard <theory|scope> (or --code <continuation-code>) ' +
+      'is required');
+  }
+  const code = OVERRIDE_GUARD_ALIASES[selector] || selector;
+  if (!continuationOverridable({status: code, code})) {
+    throw new Error(`override: guard "${selector}" is not overridable. Only the heuristic ` +
+      'theory and scope guards accept an override; honesty/integrity invariants ' +
+      '(regression, unrecorded-evidence, metric-projection, measurement) do not.');
+  }
+  if (typeof args.reason !== 'string' || !args.reason.trim()) {
+    throw new Error('override: --reason "<falsifiable justification>" is required');
+  }
+  loadQuest(root, id);
+  const stamped = appendGuardOverride(root, id, {
+    frontier: args.frontier,
+    code,
+    problem: typeof args.problem === 'string' ? args.problem : null,
+    reason: args.reason,
+  });
+  process.stdout.write(
+    `recorded override of ${code} for ${args.frontier} @ ${stamped.ts}\n` +
+    '(authorizes one bypass of the next matching guard; reset by honest progress)\n');
+}
+
 function cmdStep(root, args) {
   const id = args.id || args._[0];
   if (!id) throw new Error('step: --id <questId> is required');
@@ -407,6 +455,7 @@ const COMMANDS = {
   'handoff': cmdHandoff,
   'probe': cmdProbe,
   'finding': cmdFinding,
+  'override': cmdOverride,
   'step': cmdStep,
   'step-pending': cmdStepPending,
   'theory': cmdTheory,

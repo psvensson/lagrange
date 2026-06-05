@@ -25,6 +25,7 @@ import {
   EVENT_THEORY_SUPERSEDED,
   EVENT_THEORY_SYSTEM_DECLARED,
   EVENT_EVIDENCE_INGESTED,
+  EVENT_GUARD_OVERRIDE,
   STATUS_OPEN,
   STATUS_SOLVED,
   STATUS_PARKED,
@@ -421,4 +422,24 @@ export function readFindings(root, questId, frontierId) {
       rulesOut: e.rulesOut || null,
       ts: e.ts || null,
     }));
+}
+
+// Record a recorded-reason override of an overridable soft guard. The reason is mandatory
+// and must be non-empty: an override without a falsifiable justification is meaningless and
+// is refused at the boundary so the log never carries a blank escape hatch.
+export function appendGuardOverride(root, questId, override) {
+  const reason = typeof override.reason === 'string' ? override.reason.trim() : '';
+  if (!reason) {
+    throw new Error('guard override requires a non-empty --reason');
+  }
+  if (typeof override.code !== 'string' || !override.code.trim()) {
+    throw new Error('guard override requires a --code (the guard being overridden)');
+  }
+  return appendEvent(root, questId, {
+    type: EVENT_GUARD_OVERRIDE,
+    frontier: override.frontier || null,
+    code: override.code,
+    problem: typeof override.problem === 'string' ? override.problem : null,
+    reason,
+  });
 }

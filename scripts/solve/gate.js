@@ -16,6 +16,7 @@
 import {
   EVENT_ATTEMPT,
   EVENT_GATE_DECISION,
+  EVENT_GUARD_OVERRIDE,
   EXPLORE_BUDGET,
   GUARD_QUORUM,
   OUTCOME_THEORY_REQUIRED,
@@ -35,6 +36,7 @@ import {
   continuationIsAllowed,
   continuationErrorMessage,
   continuationDisposition,
+  continuationOverridable,
 } from './continuation.js';
 
 // Index of the last attempt on `frontierId` whose metric strictly improved. Explore
@@ -101,11 +103,42 @@ function softAdvisoriesSpent(log, frontierId, code) {
   for (let i = since + 1; i < log.length; i += 1) {
     const event = log[i];
     if (event.type === EVENT_GATE_DECISION && event.frontier === frontierId &&
-      event.disposition === DISPOSITION_ADVISORY && event.code === code) {
+      event.disposition === DISPOSITION_ADVISORY && event.code === code &&
+      !event.override) {
       spent += 1;
     }
   }
   return spent;
+}
+
+// An unconsumed recorded-reason override for `code` on this frontier, or null. An override
+// (EVENT_GUARD_OVERRIDE) authorizes exactly ONE subsequent bypass of the named guard: the
+// bypass records an ADVISORY gate decision tagged `override`, which is counted here as a
+// consumption. Both counters reset on honest progress (lastProgressIndex), mirroring the
+// explore/soft-first budgets, so an override can never permanently disable a guard. When a
+// recorded override pins a specific `problem` substring it only matches a block whose
+// problems include it; an untargeted override matches any block of the same code.
+function activeOverride(log, frontierId, code, problems = []) {
+  const since = lastProgressIndex(log, frontierId);
+  const overrides = [];
+  let consumed = 0;
+  for (let i = since + 1; i < log.length; i += 1) {
+    const event = log[i];
+    if (event.frontier !== frontierId) continue;
+    if (event.type === EVENT_GUARD_OVERRIDE && event.code === code) {
+      if (!event.problem ||
+        problems.some((problem) => String(problem).includes(event.problem))) {
+        overrides.push(event);
+      }
+    } else if (event.type === EVENT_GATE_DECISION && event.code === code &&
+      event.override) {
+      consumed += 1;
+    }
+  }
+  if (overrides.length > consumed) {
+    return {reason: overrides[overrides.length - 1].reason};
+  }
+  return null;
 }
 
 // True when soft-first would let the run DEFER a block (continue without stopping) while it
@@ -132,7 +165,8 @@ function softAdvisoryRecordedThisCycle(log, frontierId, code) {
   for (let i = lastAttempt + 1; i < log.length; i += 1) {
     const event = log[i];
     if (event.type === EVENT_GATE_DECISION && event.frontier === frontierId &&
-      event.disposition === DISPOSITION_ADVISORY && event.code === code) {
+      event.disposition === DISPOSITION_ADVISORY && event.code === code &&
+      !event.override) {
       return true;
     }
   }
@@ -164,6 +198,43 @@ export function resolveGateDecision(root, quest, continuation, context = {}) {
   // hard failure rather than inventing a soft path for something we do not understand.
   if (disposition === DISPOSITION_TERMINAL) {
     throw new Error(continuationErrorMessage(continuation));
+  }
+
+  // Recorded-reason override escape hatch. BEFORE any soft guard is turned into a stop,
+  // honour an unconsumed operator/agent override for an OVERRIDABLE (heuristic) guard:
+  // record the bypass as an ADVISORY gate decision tagged with the override reason and let
+  // the caller continue. This is the judgement escape hatch the rule-author could not
+  // anticipate — it is single-use (consumed by this very record), reset by honest progress,
+  // and refused for the honesty/integrity invariants (continuationOverridable returns false
+  // for regression/unrecorded-evidence/metric-projection/measurement/terminal), so it can
+  // bend a process heuristic but never sign off on a dishonest move. The override is honoured
+  // in BOTH the autonomous and supervised paths — it is an explicit, recorded decision, not a
+  // soft-first delay — so it does not depend on context.softFirst.
+  if (continuationOverridable(continuation)) {
+    const override = activeOverride(log, frontier, code, problems);
+    if (override) {
+      appendEvent(root, quest.id, {
+        type: EVENT_GATE_DECISION,
+        frontier,
+        rungIndex,
+        disposition: DISPOSITION_ADVISORY,
+        code,
+        outcome: OUTCOME_CONTINUE,
+        override: override.reason,
+        problems,
+        nextCommand: null,
+      });
+      return {
+        disposition: DISPOSITION_ADVISORY,
+        code,
+        outcome: OUTCOME_CONTINUE,
+        override: override.reason,
+        problems,
+        nextCommand: null,
+        frontier,
+        rungIndex,
+      };
+    }
   }
 
   // Soft-first / quorum (P5). An inferential theory gate is not hard-escalated on its

@@ -20,6 +20,7 @@ import {
 import {
   EVENT_GATE_DECISION,
   EVENT_ATTEMPT,
+  EVENT_GUARD_OVERRIDE,
   EXPLORE_BUDGET,
   GUARD_QUORUM,
   OUTCOME_THEORY_REQUIRED,
@@ -311,6 +312,134 @@ tap.test('soft-first / quorum (P5)', async (t) => {
     t.equal(decisionContinues(null), true, 'no gate => continue');
     t.equal(decisionContinues({disposition: DISPOSITION_ADVISORY}), true, 'advisory => continue');
     t.equal(decisionContinues({disposition: DISPOSITION_EXPLORE}), false, 'explore => stop');
+    t.end();
+  });
+});
+
+tap.test('recorded-reason override escape hatch', async (t) => {
+  const FRONTIER = 'gate-main';
+  const overrideEvent = (code, reason, problem = null) => ({
+    type: EVENT_GUARD_OVERRIDE,
+    frontier: FRONTIER,
+    code,
+    problem,
+    reason,
+  });
+  const consumedAdvisory = (code) => ({
+    type: EVENT_GATE_DECISION,
+    frontier: FRONTIER,
+    code,
+    disposition: DISPOSITION_ADVISORY,
+    override: 'prior bypass',
+  });
+
+  t.test('an unconsumed override bypasses an overridable theory guard', (t) => {
+    const root = tmp();
+    const log = [overrideEvent(CONTINUATION_BLOCKED_THEORY, 'pursuing a hunch')];
+    const decision = resolveGateDecision(
+      root,
+      QUEST,
+      blocked(CONTINUATION_BLOCKED_THEORY, ['frontier theory required']),
+      {log, frontier: FRONTIER, rungIndex: 1},
+    );
+    t.equal(decision.disposition, DISPOSITION_ADVISORY, 'bypass records an advisory');
+    t.equal(decision.outcome, OUTCOME_CONTINUE, 'loop continues');
+    t.equal(decision.override, 'pursuing a hunch', 'carries the recorded reason');
+    const recorded = readLog(root, QUEST.id).filter((e) =>
+      e.type === EVENT_GATE_DECISION && e.override);
+    t.equal(recorded.length, 1, 'one override-tagged advisory is recorded');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('the override is honoured on the supervised path too', (t) => {
+    const root = tmp();
+    const log = [overrideEvent(CONTINUATION_BLOCKED_THEORY, 'operator judgement')];
+    const decision = resolveGateDecision(
+      root,
+      QUEST,
+      blocked(CONTINUATION_BLOCKED_THEORY, ['frontier theory required']),
+      {log, frontier: FRONTIER, rungIndex: 1},
+    );
+    t.equal(decision.disposition, DISPOSITION_ADVISORY, 'no softFirst needed for an override');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('an override is single-use: a consumed override no longer bypasses', (t) => {
+    const root = tmp();
+    const log = [
+      overrideEvent(CONTINUATION_BLOCKED_THEORY, 'one shot'),
+      consumedAdvisory(CONTINUATION_BLOCKED_THEORY),
+    ];
+    const decision = resolveGateDecision(
+      root,
+      QUEST,
+      blocked(CONTINUATION_BLOCKED_THEORY, ['frontier theory required']),
+      {log, frontier: FRONTIER, rungIndex: 1},
+    );
+    t.equal(decision.disposition, DISPOSITION_EXPLORE,
+      're-fires the real guard once the override is spent');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('a non-overridable invariant (measurement) ignores any override', (t) => {
+    const root = tmp();
+    const log = [overrideEvent(CONTINUATION_BLOCKED_MEASUREMENT, 'I really want to')];
+    const decision = resolveGateDecision(
+      root,
+      QUEST,
+      blocked(CONTINUATION_BLOCKED_MEASUREMENT, ['cannot measure metric']),
+      {log, frontier: FRONTIER, rungIndex: 1},
+    );
+    t.equal(decision.disposition, DISPOSITION_PARK_RESUMABLE,
+      'measurement still parks; an override cannot sign off on a non-measuring sample');
+    t.not(decision.override, 'I really want to', 'no override reason is attached');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('a problem-targeted override only matches the named block', (t) => {
+    const root = tmp();
+    const log = [overrideEvent(CONTINUATION_BLOCKED_THEORY, 'narrow', 'lifecycle_model')];
+    const matched = resolveGateDecision(
+      tmp(),
+      QUEST,
+      blocked(CONTINUATION_BLOCKED_THEORY, ['model evidence required: lifecycle_model']),
+      {log, frontier: FRONTIER, rungIndex: 1},
+    );
+    t.equal(matched.disposition, DISPOSITION_ADVISORY, 'matches the targeted problem');
+    const unmatched = resolveGateDecision(
+      root,
+      QUEST,
+      blocked(CONTINUATION_BLOCKED_THEORY, ['frontier theory required']),
+      {log, frontier: FRONTIER, rungIndex: 1},
+    );
+    t.not(unmatched.disposition, DISPOSITION_ADVISORY,
+      'an unrelated theory block is not bypassed by a targeted override');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('the override advisory is not counted toward the soft-first quorum', (t) => {
+    // An override-tagged advisory must not consume the separate soft-first budget. After one
+    // override bypass (and the progress it implies is absent), a fresh theory block on a
+    // softFirst caller still softens to its own first advisory rather than escalating early.
+    const root = tmp();
+    const log = [
+      overrideEvent(CONTINUATION_BLOCKED_THEORY, 'bypass'),
+      consumedAdvisory(CONTINUATION_BLOCKED_THEORY),
+    ];
+    const decision = resolveGateDecision(
+      root,
+      QUEST,
+      blocked(CONTINUATION_BLOCKED_THEORY, ['frontier theory required']),
+      {log, frontier: FRONTIER, rungIndex: 1, softFirst: true},
+    );
+    t.equal(decision.disposition, DISPOSITION_ADVISORY,
+      'override advisory does not spend the soft-first quorum');
+    fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });
 });

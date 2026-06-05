@@ -15,6 +15,27 @@ export const CONTINUATION_BLOCKED_REGRESSION = 'blocked-regression';
 export const CONTINUATION_BLOCKED_THEORY = 'blocked-theory';
 export const CONTINUATION_BLOCKED_MEASUREMENT = 'blocked-measurement';
 
+// Tiering for the override escape hatch (recorded-reason override of a soft guard). Only
+// HEURISTIC, process-shaping guards are overridable: a theory/explore gate (produce a
+// theory artifact, including the convergence-forcing coupled-invariant/system-theory
+// variants) and a scope reroute. These are exactly the rules whose judgement an agent may
+// legitimately need to bypass — with a falsifiable reason left in the log. The
+// honesty/integrity INVARIANTS are never overridable: a regression (restore green), an
+// unrecorded-evidence or metric-projection precondition (record the truth first), a
+// cannot-measure park (you literally cannot claim progress), and any unmapped/terminal
+// precondition error. Overriding those would let the scaffold sign off on a dishonest move,
+// which is the one thing the structure must refuse.
+const OVERRIDABLE_CODES = Object.freeze([
+  CONTINUATION_BLOCKED_THEORY,
+  CONTINUATION_BLOCKED_SCOPE,
+]);
+
+export function continuationOverridable(continuation) {
+  if (continuationIsAllowed(continuation)) return false;
+  const code = continuation.code || continuation.status;
+  return OVERRIDABLE_CODES.includes(code);
+}
+
 // Reversible mapping from a blocking continuation code to a graded disposition. Flip any
 // entry to DISPOSITION_TERMINAL to restore the original "guard -> stop" behaviour for
 // that code. BLOCKED_THEORY -> explore is the direct fix for the spurious stop: a missing
