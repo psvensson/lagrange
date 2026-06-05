@@ -32,6 +32,7 @@ const OUTCOME_EVENT_NAME = 'executorOutcome';
  * @param {string} workflowStep - The WORKFLOW_STEP the executor reached.
  * @param {Object} [options] - Optional fields.
  * @param {string} [options.replicaId] - Replica ID if applicable.
+ * @param {string} [options.partitionId] - Partition ID if applicable.
  * @param {string} [options.errorMessage] - Error message if failed.
  * @param {string} [options.errorCode] - Canonical retry/failure code.
  * @param {number} [options.retryAfterMs] - Retry hint for retryable failures.
@@ -52,6 +53,9 @@ function buildExecutorOutcome(
   };
   if (options.replicaId) {
     outcome[EXECUTOR_OUTCOME_FIELD.REPLICA_ID] = options.replicaId;
+  }
+  if (options.partitionId) {
+    outcome[EXECUTOR_OUTCOME_FIELD.PARTITION_ID] = options.partitionId;
   }
   if (options.errorMessage) {
     outcome[EXECUTOR_OUTCOME_FIELD.ERROR_MESSAGE] =

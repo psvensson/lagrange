@@ -143,6 +143,17 @@ export function resolveReconnectAddresses(
   );
 }
 
+export function resolveReconnectAddressCandidates(
+  router,
+  targetNodeId,
+  preferredAddress = null,
+) {
+  return router.connectionAuthorityOwner.resolveReconnectAddressCandidates(
+    targetNodeId,
+    preferredAddress,
+  );
+}
+
 export function ensureReconnectOwnerConnection(
   router,
   targetNodeId,
@@ -293,13 +304,45 @@ export async function ensureNodeConnection(router, targetNodeId, address) {
     return router.pendingNodeConnections.get(targetNodeId);
   }
   const connectionPromise = (async () => {
-    const reconnectAddresses = router.resolveReconnectAddresses(
+    const reconnectCandidates = router.resolveReconnectAddressCandidates(
       targetNodeId,
       address,
     );
+    const seenCandidateAddresses = new Set(
+      reconnectCandidates.map((candidate) => candidate.address),
+    );
+    const attemptedCandidateAddresses = new Set();
+    const appendFreshReconnectCandidates = () => {
+      const freshCandidates = router.resolveReconnectAddressCandidates(
+        targetNodeId,
+        address,
+      );
+      for (const candidate of freshCandidates) {
+        if (
+          attemptedCandidateAddresses.has(candidate.address) ||
+          seenCandidateAddresses.has(candidate.address)
+        ) {
+          continue;
+        }
+        reconnectCandidates.push(candidate);
+        seenCandidateAddresses.add(candidate.address);
+      }
+    };
     let lastError = null;
+    let lastReconnectAddress = null;
     try {
-      for (const reconnectAddress of reconnectAddresses) {
+      for (
+        let candidateIndex = TRANSPORT_NUM.ZERO;
+        candidateIndex < reconnectCandidates.length;
+        candidateIndex += TRANSPORT_NUM.ONE
+      ) {
+        const reconnectCandidate = reconnectCandidates[candidateIndex];
+        const reconnectAddress = reconnectCandidate.address;
+        if (attemptedCandidateAddresses.has(reconnectAddress)) {
+          continue;
+        }
+        attemptedCandidateAddresses.add(reconnectAddress);
+        lastReconnectAddress = reconnectAddress;
         try {
           await router.connectToNode(targetNodeId, reconnectAddress);
           router.clearReconnectAddressSuppression(
@@ -312,6 +355,7 @@ export async function ensureNodeConnection(router, targetNodeId, address) {
           lastError = error;
           if (router.shouldSuppressReconnectAddress(error)) {
             router.suppressReconnectAddress(targetNodeId, reconnectAddress);
+            appendFreshReconnectCandidates();
           }
           router.transportPressureMetrics[
             TRANSPORT_PRESSURE_SUMMARY_FIELD.RECONNECT_BEFORE_DELIVERY_FAILURE_COUNT
@@ -321,6 +365,10 @@ export async function ensureNodeConnection(router, targetNodeId, address) {
             {
               targetNodeId,
               address: reconnectAddress,
+              candidateSource: reconnectCandidate.candidateSource,
+              candidateSources: reconnectCandidate.candidateSources,
+              candidateIndex,
+              candidateCount: reconnectCandidates.length,
               localNodeId: router.nodeId,
               error: error?.message || String(error),
             },
@@ -333,12 +381,11 @@ export async function ensureNodeConnection(router, targetNodeId, address) {
     }
     router.armReconnectAfterConnectFailure(
       targetNodeId,
-      reconnectAddresses[reconnectAddresses.length - TRANSPORT_NUM.ONE] ||
-        address,
+      lastReconnectAddress || address,
     );
     const connection = router.nodeConnections.get(targetNodeId) || null;
     if (!connection || connection.state !== ConnectionState.CONNECTED) {
-      if (lastError && reconnectAddresses.length === TRANSPORT_NUM.ZERO) {
+      if (lastError && reconnectCandidates.length === TRANSPORT_NUM.ZERO) {
         router.transportPressureMetrics[
           TRANSPORT_PRESSURE_SUMMARY_FIELD.RECONNECT_BEFORE_DELIVERY_FAILURE_COUNT
         ] += TRANSPORT_NUM.ONE;

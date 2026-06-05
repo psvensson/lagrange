@@ -305,7 +305,7 @@ test('publication active-gate handoff waits on selected-timeout snapshot owner e
     });
   });
 
-test('publication active-gate selector maps deferred selected snapshot timeout to owner recovery wait',
+test('publication active-gate selector maps mixed deferred selected snapshot timeout to owner reconcile',
   async (t) => {
     const selected = selectPublicationActiveGateHandoffContract({
       publicationConvergence: {
@@ -358,25 +358,49 @@ test('publication active-gate selector maps deferred selected snapshot timeout t
           TEST_NODE_5,
         ],
         pendingRecoveryNodeIds: [TEST_NODE_5],
-        pendingReconcileNodeIds: [],
+        pendingReconcileNodeIds: [
+          TEST_NODE_2,
+          TEST_NODE_3,
+          TEST_NODE_4,
+        ],
         state: PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,
         reasonCode:
           PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING,
         nextAction:
-          PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.WAIT_OWNER_RECOVERY,
+          PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+            .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
         runtimePromotionAllowed: false,
       },
-      'deferred selected snapshot timeout should become owner recovery wait',
+      'mixed deferred selected snapshot timeout should keep non-recovery publication debt',
     );
     t.equal(
       target.reconcileRequired,
-      false,
-      'selected snapshot owner recovery should not schedule membership publication reconcile',
+      true,
+      'mixed selected snapshot owner debt should schedule membership publication reconcile',
     );
     t.same(
       target.pendingRecoveryNodeIds,
       [TEST_NODE_5],
       'selected snapshot timeout owner debt should stay visible on the target',
+    );
+    t.same(
+      target.pendingReconcileNodeIds,
+      [
+        TEST_NODE_2,
+        TEST_NODE_3,
+        TEST_NODE_4,
+      ],
+      'target should expose selected missing nodes that are not pending owner recovery',
+    );
+    t.same(
+      target.publishedActiveNodeIds,
+      [
+        TEST_NODE_1,
+        TEST_NODE_2,
+        TEST_NODE_3,
+        TEST_NODE_4,
+      ],
+      'owner reconcile target should widen publication to the non-recovery active cohort',
     );
     t.equal(
       hasPublicationActiveGateOwnerReconcileSignal({
@@ -384,6 +408,60 @@ test('publication active-gate selector maps deferred selected snapshot timeout t
       }),
       true,
       'selected snapshot timeout should still wake the owner handoff path',
+    );
+  });
+
+test('publication active-gate selector preserves pure deferred selected snapshot owner recovery wait',
+  async (t) => {
+    const selected = selectPublicationActiveGateHandoffContract({
+      publicationConvergence: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        status: TEST_PUBLICATION_STATUS_PUBLISHED,
+        publishedActiveNodeIds: [TEST_NODE_1],
+        activeGate: {
+          progress: {
+            selectedPublishedActiveNodeIds: [TEST_NODE_1],
+            selectedMissingPublishedNodeIds: [TEST_NODE_5],
+            selectedSnapshotNodeId: TEST_NODE_5,
+            selectedSnapshotSourceCause:
+              TEST_SELECTED_SNAPSHOT_SOURCE_TIMEOUT_REASON,
+            selectedSnapshotObservationMode:
+              TEST_SELECTED_SNAPSHOT_OBSERVATION_MODE_REPAIR_DEFERRED,
+            selectedSnapshotObservationState:
+              TEST_SELECTED_SNAPSHOT_OBSERVATION_STATE_DEFERRED_REFRESH,
+            selectedSnapshotObservationContractState:
+              TEST_SELECTED_SNAPSHOT_OBSERVATION_CONTRACT_STATE_DEFERRED,
+            selectedSnapshotObservationNextAction:
+              TEST_SELECTED_SNAPSHOT_OBSERVATION_NEXT_ACTION_RETRY,
+            selectedSnapshotObservationReasonCodes:
+              TEST_SELECTED_SNAPSHOT_TIMEOUT_REASON,
+          },
+        },
+      },
+    });
+    const target = resolvePublicationActiveGateMembershipPublicationTarget({
+      publicationActiveGateHandoff: selected,
+      publicationConvergence: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        publishedActiveNodeIds: [TEST_NODE_1],
+      },
+    });
+
+    t.match(
+      selected,
+      {
+        expectedNodeIds: [TEST_NODE_1, TEST_NODE_5],
+        pendingRecoveryNodeIds: [TEST_NODE_5],
+        pendingReconcileNodeIds: [],
+        nextAction:
+          PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.WAIT_OWNER_RECOVERY,
+      },
+      'pure selected snapshot timeout should remain owner recovery wait',
+    );
+    t.equal(
+      target.reconcileRequired,
+      false,
+      'pure selected snapshot owner recovery should not schedule membership publication reconcile',
     );
   });
 
@@ -397,12 +475,7 @@ test('publication active-gate handoff floors selected timeout owner recovery ret
         activeGate: {
           progress: {
             selectedPublishedActiveNodeIds: [TEST_NODE_1],
-            selectedMissingPublishedNodeIds: [
-              TEST_NODE_2,
-              TEST_NODE_3,
-              TEST_NODE_4,
-              TEST_NODE_5,
-            ],
+            selectedMissingPublishedNodeIds: [TEST_NODE_5],
             selectedSnapshotNodeId: TEST_NODE_5,
             selectedSnapshotSourceCause:
               TEST_SELECTED_SNAPSHOT_SOURCE_TIMEOUT_REASON,

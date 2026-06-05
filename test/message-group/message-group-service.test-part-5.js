@@ -69,6 +69,7 @@ const TEST_NON_CRITICAL_TRANSPORT_PARTITION_ADDRESS =
 const TEST_DELIVERY_PRIORITY = Object.freeze({
   BACKGROUND: 'background',
   CRITICAL: 'critical',
+  READINESS: 'readiness',
 });
 const TEST_RETRYABLE_FORWARD_RETRY_AFTER_MS = 11;
 const TEST_RETRYABLE_FORWARD_ERROR_CODE = 'ROUTER_CONNECTION_CLOSED';
@@ -447,6 +448,73 @@ test('MessageGroupService - control-plane targets default to critical router pri
       'critical',
       'critical transport targets should claim the critical router lane by default',
     );
+    t.equal(
+      deliveries[0]?.options?.deliverySource,
+      undefined,
+      'typed payloads should keep router-derived delivery source semantics',
+    );
+  });
+
+test('MessageGroupService - typeless control-plane target messages use a sender-scoped delivery source',
+  async (t) => {
+    const deliveries = [];
+    const transport = {
+      async deliver(targetService, payload, options) {
+        deliveries.push({targetService, payload, options});
+        return {
+          acknowledged: true,
+        };
+      },
+      async initialize() {},
+      async shutdown() {},
+      setServiceNodeResolver() {},
+    };
+
+    const service = new MessageGroupService({
+      groupId: 'mg-critical-target-source',
+      replicaId: 'mg-critical-target-source-r1',
+      nodeId: 'node-critical-target-source',
+      transport,
+    });
+
+    service.initialized = true;
+    service.persistToRaftLog = async () => ({success: true});
+
+    await service.sendMessage(
+      TEST_CRITICAL_TRANSPORT_PARTITION_ADDRESS,
+      {
+        correlationId: 'typeless-critical-target',
+      },
+    );
+
+    await service.sendMessage(
+      TEST_CRITICAL_TRANSPORT_PARTITION_ADDRESS,
+      {
+        correlationId: 'explicit-critical-target',
+      },
+      {
+        transportDeliveryOptions: {
+          deliverySource: 'caller:explicit-source',
+        },
+      },
+    );
+
+    t.equal(deliveries.length, 2, 'should perform both direct deliveries');
+    t.equal(
+      deliveries[0]?.options?.deliveryPriority,
+      'critical',
+      'typeless critical transport targets should stay on the critical lane',
+    );
+    t.equal(
+      deliveries[0]?.options?.deliverySource,
+      'message-group:mg-critical-target-source:mg-critical-target-source-r1:target:control_plane_publications-p1',
+      'typeless critical partition sends should carry a sender-scoped source',
+    );
+    t.equal(
+      deliveries[1]?.options?.deliverySource,
+      'caller:explicit-source',
+      'caller-provided deliverySource should remain authoritative',
+    );
   });
 
 test('MessageGroupService - non-critical initial partitions do not claim the critical router lane by default',
@@ -490,7 +558,7 @@ test('MessageGroupService - non-critical initial partitions do not claim the cri
     );
   });
 
-test('MessageGroupService - deferred raft responses use the critical router lane',
+test('MessageGroupService - deferred raft responses use the readiness router lane',
   async (t) => {
     const deliveries = [];
     const transport = {
@@ -545,8 +613,8 @@ test('MessageGroupService - deferred raft responses use the critical router lane
         'raft response delivery should still be attempted once');
       t.equal(
         deliveries[0]?.options?.deliveryPriority,
-        TEST_DELIVERY_PRIORITY.CRITICAL,
-        'raft response delivery to mg-1 should claim the critical router lane',
+        TEST_DELIVERY_PRIORITY.READINESS,
+        'raft response delivery to mg-1 should use the readiness router lane',
       );
     } finally {
       await service.shutdown();
@@ -619,7 +687,7 @@ test('MessageGroupService - raft append-entry replication uses the background ro
     }
   });
 
-test('MessageGroupService - append-fail raft responses use the background router lane',
+test('MessageGroupService - append-fail raft responses use the readiness router lane',
   async (t) => {
     const deliveries = [];
     const transport = {
@@ -687,8 +755,8 @@ test('MessageGroupService - append-fail raft responses use the background router
         'append-fail response delivery should still be attempted once');
       t.equal(
         deliveries[0]?.options?.deliveryPriority,
-        TEST_DELIVERY_PRIORITY.BACKGROUND,
-        'append-fail response delivery to mg-1 should use the shared background lane',
+        TEST_DELIVERY_PRIORITY.READINESS,
+        'append-fail response delivery to mg-1 should use the readiness router lane',
       );
     } finally {
       await service.shutdown();

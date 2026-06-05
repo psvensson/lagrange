@@ -37,7 +37,8 @@ const PRIORITY_RECOVERY_DISPATCH_BOOTSTRAP_REQUIRED_DIMENSIONS = Object.freeze([
 // to already be published before it may run that dispatch is a self-readiness
 // gate: the bootstrap operation that produces readiness must not require the
 // readiness it produces. For self-targeted dispatches we therefore drop the
-// publication-cluster preconditions and permit their pending reason codes.
+// publication-cluster and already-selected placement/provisioning preconditions
+// and permit their pending reason codes.
 const SELF_PRIORITY_RECOVERY_DISPATCH_BOOTSTRAP_REQUIRED_DIMENSIONS = Object.freeze(
   [
     CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE,
@@ -48,6 +49,8 @@ const SELF_PRIORITY_RECOVERY_DISPATCH_BOOTSTRAP_REQUIRED_DIMENSIONS = Object.fre
 const SELF_PRIORITY_RECOVERY_DISPATCH_BOOTSTRAP_ALLOWED_FAILED_DIMENSIONS = new Set(
   [
     ...PRIORITY_RECOVERY_DISPATCH_BOOTSTRAP_ALLOWED_FAILED_DIMENSIONS,
+    CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE,
+    CONTROL_PLANE_READINESS_DIMENSION.PROVISIONING_ELIGIBLE,
     CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED,
     CONTROL_PLANE_READINESS_DIMENSION.METADATA_PUBLICATION_HEALTHY,
   ],

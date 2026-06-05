@@ -11,8 +11,11 @@ const TEST_MAX_PENDING = 64;
 const TEST_CRITICAL_RESERVE = 16;
 const TEST_READINESS_RESERVE = 2;
 const TEST_TOTAL_HOT_DELIVERIES = 32;
-const TEST_EXPECTED_HOT_IN_FLIGHT_CAP = 16;
-const TEST_EXPECTED_HOT_PENDING_COUNT = 16;
+const TEST_EXPECTED_HOT_IN_FLIGHT_CAP = 8;
+const TEST_EXPECTED_HOT_PENDING_COUNT = 8;
+const TEST_MIXED_BACKGROUND_IN_FLIGHT = 13;
+const TEST_MIXED_CRITICAL_IN_FLIGHT = 19;
+const TEST_TARGET_FALLBACK_ADMISSION_KEY = 'target:critical-fallback';
 const TEST_HOT_TARGET_ADDRESS =
   'remote-node/partition/sql_transactions-p1-r4';
 const TEST_SECOND_HOT_TARGET_ADDRESS =
@@ -113,6 +116,11 @@ t.test(
         'hot critical traffic should consume only the allowed in-flight share',
       );
       t.equal(
+        queue.inFlightBySource.get(TEST_TARGET_FALLBACK_ADMISSION_KEY),
+        TEST_EXPECTED_HOT_IN_FLIGHT_CAP,
+        'target fallback traffic should stop at its normalized in-flight source cap',
+      );
+      t.equal(
         queue.pending.length,
         TEST_EXPECTED_HOT_PENDING_COUNT,
         'the remaining hot traffic should stay queued behind the protected reserve',
@@ -169,7 +177,7 @@ t.test(
     });
     const startedDeliveries = [];
     const allDeliveries = [];
-    const criticalPendingCeiling = 8 - TEST_READINESS_RESERVE;
+    const targetFallbackPendingLimit = 4;
     const buildBlockingDelivery = (label) => async () => {
       startedDeliveries.push(label);
       await sendGate;
@@ -213,8 +221,8 @@ t.test(
       const queue = router.getOutboundQueue(TEST_REMOTE_NODE_ID);
       t.equal(
         queue.pending.length,
-        criticalPendingCeiling,
-        'hot critical traffic should fill only the readiness-protected ceiling',
+        targetFallbackPendingLimit,
+        'hot target fallback traffic should stop at the aggregate source cap',
       );
 
       trackDelivery(
@@ -236,11 +244,11 @@ t.test(
       t.equal(
         startedDeliveries.includes(TEST_CONTROL_PLANE_LABEL),
         true,
-        'the distinct critical source should dispatch through reserve capacity',
+        'the distinct critical source should dispatch while fallback traffic is capped',
       );
       t.ok(
-        queue.pending.length <= criticalPendingCeiling,
-        'critical reserve admission should not consume readiness headroom',
+        queue.pending.length <= targetFallbackPendingLimit,
+        'fallback source admission should preserve readiness headroom',
       );
     } finally {
       releaseAllSends?.();
@@ -282,21 +290,22 @@ t.test(
 
     try {
       const hotTargets = [
-        TEST_HOT_TARGET_ADDRESS,
-        TEST_HOT_TARGET_ADDRESS,
-        TEST_SECOND_HOT_TARGET_ADDRESS,
-        TEST_SECOND_HOT_TARGET_ADDRESS,
-        TEST_HOT_TARGET_ADDRESS,
-        TEST_SECOND_HOT_TARGET_ADDRESS,
+        'semantic-hot-source-a',
+        'semantic-hot-source-a',
+        'semantic-hot-source-b',
+        'semantic-hot-source-b',
+        'semantic-hot-source-a',
+        'semantic-hot-source-b',
       ];
-      for (const [index, targetAddress] of hotTargets.entries()) {
+      for (const [index, deliverySource] of hotTargets.entries()) {
         allDeliveries.push(
           router.enqueueOutbound(
             TEST_REMOTE_NODE_ID,
             buildBlockingDelivery(`${TEST_HOT_LABEL_PREFIX}-${index}`),
             {
               deliveryPriority: 'critical',
-              targetAddress,
+              deliverySource,
+              targetAddress: TEST_HOT_TARGET_ADDRESS,
               message: {},
             },
           ),
@@ -308,12 +317,12 @@ t.test(
       t.equal(
         queue.inFlight,
         4,
-        'two hot critical sources should fill aggregate in-flight capacity',
+        'two semantic hot critical sources should fill aggregate in-flight capacity',
       );
       t.equal(
         queue.pending.length,
         2,
-        'hot critical sources should leave a pending backlog',
+        'semantic hot critical sources should leave a pending backlog',
       );
 
       allDeliveries.push(
@@ -341,6 +350,133 @@ t.test(
         queue.inFlightCriticalSourceReserve,
         1,
         'aggregate reserve dispatch should account for the borrowed slot',
+      );
+    } finally {
+      releaseAllSends?.();
+      await Promise.allSettled(allDeliveries);
+      await router.shutdown();
+      cleanupTestEnvironment();
+    }
+  },
+);
+
+t.test(
+  'MessageRouter uses critical reserve under mixed aggregate in-flight saturation',
+  async (t) => {
+    initializeTestEnvironment();
+    const router = new MessageRouter({
+      nodeId: TEST_LOCAL_NODE_ID,
+      nodeAddress: TEST_NODE_ADDRESS,
+      startServer: false,
+      outboundQueueMaxConcurrent: TEST_MAX_CONCURRENT,
+      outboundQueueMaxPending: TEST_MAX_PENDING,
+      outboundQueueCriticalReserve: TEST_CRITICAL_RESERVE,
+    });
+    await router.initialize();
+
+    let releaseAllSends = null;
+    const sendGate = new Promise((resolve) => {
+      releaseAllSends = resolve;
+    });
+    const startedDeliveries = [];
+    const allDeliveries = [];
+    const buildBlockingDelivery = (label) => async () => {
+      startedDeliveries.push(label);
+      await sendGate;
+      return {
+        [TEST_ACKNOWLEDGED_KEY]: true,
+        label,
+      };
+    };
+
+    try {
+      for (
+        let index = 0;
+        index < TEST_MIXED_BACKGROUND_IN_FLIGHT;
+        index++
+      ) {
+        allDeliveries.push(
+          router.enqueueOutbound(
+            TEST_REMOTE_NODE_ID,
+            buildBlockingDelivery(`background-${index}`),
+            {
+              deliveryPriority: 'background',
+              deliverySource: `background-source-${index}`,
+              targetAddress: `${TEST_HOT_TARGET_ADDRESS}/background-${index}`,
+              message: {},
+            },
+          ),
+        );
+        await Promise.resolve();
+      }
+
+      for (
+        let index = 0;
+        index < TEST_MIXED_CRITICAL_IN_FLIGHT;
+        index++
+      ) {
+        allDeliveries.push(
+          router.enqueueOutbound(
+            TEST_REMOTE_NODE_ID,
+            buildBlockingDelivery(`${TEST_HOT_LABEL_PREFIX}-${index}`),
+            {
+              deliveryPriority: 'critical',
+              deliverySource: `semantic-hot-source-${index % 2}`,
+              targetAddress: TEST_HOT_TARGET_ADDRESS,
+              message: {},
+            },
+          ),
+        );
+        await Promise.resolve();
+      }
+
+      const queue = router.getOutboundQueue(TEST_REMOTE_NODE_ID);
+      t.equal(
+        queue.inFlight,
+        TEST_MAX_CONCURRENT,
+        'mixed background and critical work should fill aggregate concurrency',
+      );
+      t.equal(
+        queue.inFlightCritical,
+        TEST_MIXED_CRITICAL_IN_FLIGHT,
+        'critical work should occupy the observed mixed-saturation share',
+      );
+      t.equal(
+        queue.inFlightBackground,
+        TEST_MIXED_BACKGROUND_IN_FLIGHT,
+        'background work should occupy the remaining normal slots',
+      );
+
+      allDeliveries.push(
+        router.enqueueOutbound(
+          TEST_REMOTE_NODE_ID,
+          buildBlockingDelivery(TEST_CONTROL_PLANE_LABEL),
+          {
+            deliveryPriority: 'critical',
+            deliverySource: TEST_HANDOFF_DELIVERY_SOURCE,
+            targetAddress: TEST_CONTROL_PLANE_TARGET_ADDRESS,
+            message: {
+              [TEST_TYPE_KEY]: TEST_REPLICA_OPERATION_DISPATCH_TYPE,
+            },
+          },
+        ),
+      );
+      await Promise.resolve();
+
+      t.equal(
+        startedDeliveries.includes(TEST_CONTROL_PLANE_LABEL),
+        true,
+        'semantic control-plane work should borrow reserve under mixed saturation',
+      );
+      t.equal(
+        queue.inFlight,
+        TEST_MAX_CONCURRENT + 1,
+        'reserve dispatch may exceed normal concurrency for one control-plane source',
+      );
+      t.equal(
+        queue.inFlightCriticalSourceReserve,
+        1,
+        'mixed-saturation reserve dispatch should account for the borrowed slot',
       );
     } finally {
       releaseAllSends?.();

@@ -594,6 +594,7 @@ assignReplicaOperationRepositoryVisibilityMethods(ReplicaOperationRepository, {
   buildReplicaOperationVisibilityReadOptions,
   getControlPlaneRetryAfterMs,
   hasPriorityRecoverySpreadGap,
+  isRetryableControlPlaneError,
   resolveIncompleteOperationVisibilitySupplementMode,
   resolveReplicaOperationVisibilityReadMode,
 });

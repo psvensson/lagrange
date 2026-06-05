@@ -147,7 +147,10 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
             EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
             operationId,
             WORKFLOW_STEP.ACTIVE,
-            {replicaId: existingReplica.replicaId},
+            {
+              replicaId: existingReplica.replicaId,
+              partitionId: existingReplica.partitionId || partitionId,
+            },
           );
           return this.buildReplicaOperationResponse(
             ReplicaOperationResponseStatus.ALREADY_EXISTS,
@@ -531,7 +534,10 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         outcome.outcomeType,
         operationId,
         outcome.workflowStep,
-        {replicaId: existingReplica.replicaId},
+        {
+          replicaId: existingReplica.replicaId,
+          partitionId: existingReplica.partitionId,
+        },
       );
       return true;
     }
@@ -660,7 +666,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_SYNCING,
           operationId,
           WORKFLOW_STEP.SYNCING,
-          {replicaId},
+          {replicaId, partitionId},
         );
         this.updateReplicaCreationProgress(progress, {
           stage: ReplicaStatus.SYNCING,
@@ -704,7 +710,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
           operationId,
           WORKFLOW_STEP.ACTIVE,
-          {replicaId},
+          {replicaId, partitionId},
         );
         if (!skipLifecycleStatusPersistence) {
           await this.persistReplicaStatusWithRetry(
@@ -768,6 +774,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         });
         const failedOutcomeOptions = {
           replicaId,
+          partitionId,
           errorMessage: error.message,
         };
         const errorCode =

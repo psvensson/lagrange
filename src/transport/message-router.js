@@ -12,6 +12,7 @@ import {MessageRouterSegment3} from './message-router-segment-3.js';
 const {
   ConnectionState,
   OutboundDeliveryPriority,
+  MESSAGE_ROUTER_LITERAL,
   ROUTER_ERROR_MSG,
   ROUTER_LOG_MSG,
   RouterMessageType,
@@ -26,6 +27,24 @@ const {
   resolveBackgroundInFlightLimit,
   resolveBackgroundPendingLimit,
 } = MESSAGE_ROUTER_SHARED;
+
+function countPendingCriticalReserveEligible(queue) {
+  if (!queue || !Array.isArray(queue.pending)) {
+    return TRANSPORT_NUM.ZERO;
+  }
+  return queue.pending.reduce((count, item) => {
+    if (item?.priority !== OutboundDeliveryPriority.CRITICAL) {
+      return count;
+    }
+    if (
+      item?.deliverySourceAdmissionKey ===
+      MESSAGE_ROUTER_LITERAL.STRING_TARGET_CRITICAL_FALLBACK
+    ) {
+      return count;
+    }
+    return count + TRANSPORT_NUM.ONE;
+  }, TRANSPORT_NUM.ZERO);
+}
 
 class MessageRouter extends MessageRouterSegment3 {
   getStats() {
@@ -52,6 +71,8 @@ class MessageRouter extends MessageRouterSegment3 {
         ),
         pending: queue.pending.length,
         pendingCritical: countPendingByPriority(queue, OutboundDeliveryPriority.CRITICAL),
+        pendingCriticalReserveEligible:
+          countPendingCriticalReserveEligible(queue),
         pendingReadiness: countPendingByPriority(queue, OutboundDeliveryPriority.READINESS),
         pendingBackground: countPendingByPriority(queue, OutboundDeliveryPriority.BACKGROUND),
         criticalReserve: queue.criticalReserve,

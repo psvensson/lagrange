@@ -108,6 +108,7 @@ function buildNoPressureSummary(sensor = PRESSURE_GOVERNOR_LITERAL.NONE) {
     saturatedNodeCount: NUM.ZERO,
     totalPending: NUM.ZERO,
     totalPendingCritical: NUM.ZERO,
+    totalPendingCriticalReserveEligible: NUM.ZERO,
     totalPendingBackground: NUM.ZERO,
     criticalReserveExhausted: false,
     readinessReserveExhausted: false,
@@ -129,6 +130,12 @@ function buildTransportPressureSummary(
     totalPendingCritical: Number.isFinite(summary?.totalPendingCritical) ?
       summary.totalPendingCritical :
       NUM.ZERO,
+    totalPendingCriticalReserveEligible:
+      Number.isFinite(summary?.totalPendingCriticalReserveEligible) ?
+        summary.totalPendingCriticalReserveEligible :
+        Number.isFinite(summary?.totalPendingCritical) ?
+          summary.totalPendingCritical :
+          NUM.ZERO,
     totalPendingBackground: Number.isFinite(summary?.totalPendingBackground) ?
       summary.totalPendingBackground :
       NUM.ZERO,
@@ -202,7 +209,9 @@ function isCriticalReserveExhausted(queue = {}, capacityPartition) {
   if (capacityPartition !== PRESSURE_CAPACITY_PARTITION.CONTROL_PLANE) {
     return false;
   }
-  const pendingCritical = normalizeQueueStat(queue.pendingCritical);
+  const pendingCritical = Number.isFinite(queue.pendingCriticalReserveEligible) ?
+    normalizeQueueStat(queue.pendingCriticalReserveEligible) :
+    normalizeQueueStat(queue.pendingCritical);
   const criticalReserve = normalizeQueueStat(queue.criticalReserve);
   return criticalReserve > NUM.ZERO && pendingCritical >= criticalReserve;
 }
@@ -246,6 +255,7 @@ function buildPartitionedTransportPressureSummary(routerStats = {}, capacityPart
   let saturatedNodeCount = NUM.ZERO;
   let totalPending = NUM.ZERO;
   let totalPendingCritical = NUM.ZERO;
+  let totalPendingCriticalReserveEligible = NUM.ZERO;
   let totalPendingBackground = NUM.ZERO;
   let criticalReserveExhausted = false;
   let readinessReserveExhausted = false;
@@ -253,6 +263,10 @@ function buildPartitionedTransportPressureSummary(routerStats = {}, capacityPart
   for (const queue of Object.values(outboundQueues)) {
     const pending = normalizeQueueStat(queue.pending);
     const pendingCritical = normalizeQueueStat(queue.pendingCritical);
+    const pendingCriticalReserveEligible =
+      Number.isFinite(queue.pendingCriticalReserveEligible) ?
+        normalizeQueueStat(queue.pendingCriticalReserveEligible) :
+        pendingCritical;
     const pendingBackground = normalizeQueueStat(queue.pendingBackground);
     const maxPending = normalizeQueueStat(queue.maxPending);
     const queueCriticalReserveExhausted = isCriticalReserveExhausted(
@@ -270,6 +284,7 @@ function buildPartitionedTransportPressureSummary(routerStats = {}, capacityPart
     }
     totalPending += pending;
     totalPendingCritical += pendingCritical;
+    totalPendingCriticalReserveEligible += pendingCriticalReserveEligible;
     totalPendingBackground += pendingBackground;
     if (maxPending > NUM.ZERO) {
       maxPendingUtilization = Math.max(maxPendingUtilization, pending / maxPending);
@@ -281,6 +296,7 @@ function buildPartitionedTransportPressureSummary(routerStats = {}, capacityPart
       saturatedNodeCount,
       totalPending,
       totalPendingCritical,
+      totalPendingCriticalReserveEligible,
       totalPendingBackground,
       criticalReserveExhausted,
       readinessReserveExhausted,
@@ -484,6 +500,8 @@ class PressureGovernor {
         saturatedNodeCount: normalizeQueueStat(summary.saturatedNodeCount),
         totalPending: normalizeQueueStat(summary.totalPending),
         totalPendingCritical: normalizeQueueStat(summary.totalPendingCritical),
+        totalPendingCriticalReserveEligible:
+          normalizeQueueStat(summary.totalPendingCriticalReserveEligible),
         totalPendingBackground: normalizeQueueStat(summary.totalPendingBackground),
         criticalReserveExhausted: summary.criticalReserveExhausted === true,
         maxPendingUtilization: Number.isFinite(summary.maxPendingUtilization) ?

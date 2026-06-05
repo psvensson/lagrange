@@ -1111,6 +1111,17 @@ class Cluster4 extends Cluster3 {
           logsTable.transportPressureBackpressured === true,
         queryPressureBackpressured:
           logsTable.queryPressureBackpressured === true,
+        ownerKey: typeof logsTable.ownerKey === TYPEOF_STRING ?
+          logsTable.ownerKey :
+          null,
+        pendingKeys: normalizeDistinctStringArray(logsTable.pendingKeys),
+        retryingKeys: normalizeDistinctStringArray(logsTable.retryingKeys),
+        inFlightKeys: normalizeDistinctStringArray(logsTable.inFlightKeys),
+        retryableDrainFailureCount: Number.isFinite(
+          logsTable.retryableDrainFailureCount,
+        ) ?
+          Math.max(ZERO, Math.floor(logsTable.retryableDrainFailureCount)) :
+          ZERO,
       } :
       null;
     const cdcReplayLag = cdcReplay ?

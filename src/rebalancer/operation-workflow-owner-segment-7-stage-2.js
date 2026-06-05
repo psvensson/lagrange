@@ -546,7 +546,7 @@ class OperationWorkflowOwnerSegment7Stage2 extends OperationWorkflowOwnerSegment
 
     const updatedAt = operation.updatedAt ?? operation.updatedAtMs;
     const elapsed = now - updatedAt;
-    const stepExceeded = elapsed >= stepTimeout;
+    const stepExceeded = this.isOperationStepTimedOut(operation, now);
     const budgetExhausted = !stepAllocation.allowed;
 
     if (stepExceeded || budgetExhausted) {

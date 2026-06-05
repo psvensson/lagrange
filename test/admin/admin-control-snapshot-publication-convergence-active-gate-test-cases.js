@@ -8,6 +8,9 @@ import {
 import {
   buildCanonicalPublicationRecoveryEvidence,
 } from '../../src/control-plane/publication-recovery-evidence.js';
+import {
+  selectPublicationActiveGateHandoffContract,
+} from '../../src/control-plane/publication-active-gate-handoff-contract.js';
 import * as ACTIVE_GATE_SNAPSHOT_TEST_STATE from './admin-control-snapshot-active-gate-fixture-state.js';
 
 const PUBLICATION_CONVERGENCE_QUERY_ENGINE_NODE_ID = 'node-1';
@@ -274,6 +277,21 @@ test('AdminControlSnapshot carries authoritative published fallback through loca
           }];
         },
         membershipPublicationService: {
+          getControlPlaneOwnerQueueDepth() {
+            return {
+              pendingWrites:
+                ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_PENDING_COUNT,
+              pendingWriteGrowthCount: 0,
+              retainedBacklogGrowthCount: 0,
+              sharedPressureBackpressured: false,
+              transportPressureBackpressured: false,
+              queryPressureBackpressured: false,
+              ownerKey: 'membership-publication:cluster_membership',
+              pendingKeys: ['membership-publication:cluster_membership'],
+              retryingKeys: [],
+              inFlightKeys: [],
+            };
+          },
           getLatestClusterPublicationSync() {
             return durablePublishedPublicationRow;
           },
@@ -309,6 +327,16 @@ test('AdminControlSnapshot carries authoritative published fallback through loca
         ?.pendingReconcileCount,
       ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_CLEARED_PENDING_COUNT,
       'active-gate handoff should not retain reconcile debt after producer diagnostics observe durable membership',
+    );
+    t.match(
+      result.controlPlaneDiagnostics.logsTable,
+      {
+        pendingWrites:
+          ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_PENDING_COUNT,
+        ownerKey: 'membership-publication:cluster_membership',
+        pendingKeys: ['membership-publication:cluster_membership'],
+      },
+      'local snapshot diagnostics should carry membership publication owner queue depth',
     );
   });
 
@@ -712,5 +740,68 @@ test('AdminControlSnapshot normalizes active-gate owner cohort budget state',
         },
       },
       'active-gate owner cohort diagnostics should normalize bounded budget fields',
+    );
+  });
+
+test('AdminControlSnapshot projects mixed selected-timeout handoff as owner reconcile',
+  async (t) => {
+    const snapshot = new AdminControlSnapshot({
+      nodeId: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID,
+      nowFn: () => ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_NOW_MS,
+    });
+    const nodeIds = [
+      ...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_NODE_IDS,
+    ];
+    const publishedNodeIds = nodeIds.slice(0, 3);
+    const missingNodeIds = nodeIds.slice(3);
+    const selectedRecoveryNodeId = publishedNodeIds[1];
+    const handoff = selectPublicationActiveGateHandoffContract({
+      publicationConvergence: {
+        publicationEpoch: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_EPOCH,
+        status: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
+        publishedActiveNodeIds: publishedNodeIds,
+        activeGate: {
+          progress: {
+            selectedPublishedActiveNodeIds: publishedNodeIds,
+            selectedMissingPublishedNodeIds: missingNodeIds,
+            selectedSnapshotNodeId: selectedRecoveryNodeId,
+            selectedSnapshotSourceCause:
+              ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_SNAPSHOT_SOURCE_TIMEOUT_REASON,
+            selectedSnapshotObservationMode:
+              ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_SNAPSHOT_REPAIR_DEFERRED_OBSERVATION_MODE,
+            selectedSnapshotObservationState:
+              ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_SNAPSHOT_REPAIR_DEFERRED_STATE,
+            selectedSnapshotObservationContractState:
+              ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_SNAPSHOT_REPAIR_DEFERRED_CONTRACT_STATE,
+            selectedSnapshotObservationNextAction:
+              ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_SNAPSHOT_REPAIR_DEFERRED_NEXT_ACTION,
+            selectedSnapshotObservationReasonCodes:
+              ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_SNAPSHOT_SELECTED_TIMEOUT_REASON,
+          },
+        },
+      },
+    });
+    const activeGateOwnerCohort =
+      snapshot.resolveActiveGateOwnerCohortSnapshot({
+        publicationActiveGateHandoff: handoff,
+        publicationConvergence: {
+          publicationEpoch: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_EPOCH,
+          status: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
+          publishedActiveNodeIds: publishedNodeIds,
+        },
+      });
+
+    t.match(
+      activeGateOwnerCohort,
+      {
+        expectedNodeIds: nodeIds,
+        publishedActiveNodeIds: publishedNodeIds,
+        missingPublishedNodeIds: missingNodeIds,
+        pendingRecoveryNodeIds: [selectedRecoveryNodeId],
+        pendingReconcileNodeIds: missingNodeIds,
+        nextAction:
+          ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_NEXT_ACTION_RECONCILE,
+      },
+      'admin active-gate owner cohort should preserve mixed selected-timeout reconcile debt',
     );
   });

@@ -266,6 +266,19 @@ function normalizeControlSnapshotRetryAfterMs(value) {
     Math.floor(numericValue) :
     null;
 }
+function selectMembershipPublicationHandoffOutcomeRetryAfterMs(outcome = null) {
+  return normalizeControlSnapshotRetryAfterMs(
+    outcome?.[
+      CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_DATA_FIELD
+        .RETRY_AFTER_MS
+    ],
+  ) ||
+    normalizeControlSnapshotRetryAfterMs(
+      outcome?.[CONTROL_SNAPSHOT_CONTROL_PLANE_CONVERGENCE_FIELD]?.[
+        CONTROL_SNAPSHOT_RETRY_AFTER_MS_FIELD
+      ],
+    );
+}
 
 function isControlSnapshotOwnerRecoveryWakeOutcome(outcome = null) {
   const controlPlaneConvergence =
@@ -302,6 +315,8 @@ function isControlSnapshotOwnerRecoveryWakeOutcome(outcome = null) {
 
 function selectMembershipPublicationHandoffRetryAfterMs(snapshot = null) {
   const outcome = selectMembershipPublicationHandoffOutcome(snapshot);
+  const retryAfterMs =
+    selectMembershipPublicationHandoffOutcomeRetryAfterMs(outcome);
   if (
     !outcome ||
     typeof outcome !== TYPEOF.OBJECT ||
@@ -316,22 +331,13 @@ function selectMembershipPublicationHandoffRetryAfterMs(snapshot = null) {
         CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_DATA_FIELD
           .ENQUEUED
       ] === true &&
-      isControlSnapshotOwnerRecoveryWakeOutcome(outcome) !== true
+      isControlSnapshotOwnerRecoveryWakeOutcome(outcome) !== true &&
+      retryAfterMs === null
     )
   ) {
     return CONTROL_SNAPSHOT_ABSENT_HANDOFF_RETRY_AFTER_MS;
   }
-  return normalizeControlSnapshotRetryAfterMs(
-    outcome[
-      CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_DATA_FIELD
-        .RETRY_AFTER_MS
-    ],
-  ) ||
-    normalizeControlSnapshotRetryAfterMs(
-      outcome[CONTROL_SNAPSHOT_CONTROL_PLANE_CONVERGENCE_FIELD]?.[
-        CONTROL_SNAPSHOT_RETRY_AFTER_MS_FIELD
-      ],
-    );
+  return retryAfterMs;
 }
 
 function buildControlSnapshotHandoffRetryOptions(

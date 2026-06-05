@@ -11,12 +11,19 @@ import {createControlPlaneRuntimeBundle} from
   '../../control-plane/control-plane-runtime-bundle.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
+  CONTROL_PLANE_MUTATION_OUTCOME,
 } from '../../control-plane/control-plane-system-table-gateway.js';
+import {
+  OWNER_CONTRACT_NEXT_ACTION,
+  OWNER_CONTRACT_STATE,
+} from '../../control-plane/owner-contract-outcome.js';
 import {JOINING_LOG_MSG} from '../node-joining-constants.js';
 import {
   COLUMN,
   ENDPOINT_STATUS,
   NUM,
+  SERVICE_STATUS,
+  STATE,
   TABLES,
   TRANSPORT_TYPE,
   TYPEOF,
@@ -35,9 +42,96 @@ import {
   LOG_META_ENDPOINT_REGISTER_FAILED,
   NODE_REGISTRATION_ERROR,
   hasFunction,
+  normalizeString,
 } from './node-registration-owner-constants.js';
 
+const LOCAL_STR_UNHEALTHY = 'unhealthy';
+const JOIN_ADMISSION_WITHDRAWAL_TARGET = Object.freeze({
+  NODE_ENDPOINT: 'failed join node endpoint withdrawal',
+  NODE_MEMBERSHIP: 'failed join node membership withdrawal',
+  SERVICE_ENDPOINT: 'failed join service endpoint withdrawal',
+});
+const LOG_FAILED_JOIN_ENDPOINT_WITHDRAWAL_FAILED =
+  'Failed join endpoint withdrawal failed after node membership withdrawal';
+const SERVICE_ENDPOINT_HEALTH_STATUS_COLUMN = 'health_status';
+
+const ACCEPTED_JOIN_ADMISSION_MUTATION_OUTCOMES = new Set([
+  CONTROL_PLANE_MUTATION_OUTCOME.APPLIED,
+  CONTROL_PLANE_MUTATION_OUTCOME.NO_OP,
+  CONTROL_PLANE_MUTATION_OUTCOME.OBSERVED_STATE_CHANGED,
+  CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY,
+]);
+
+const DEFERRED_JOIN_ADMISSION_MUTATION_OUTCOMES = new Set([
+  CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED,
+  CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY,
+  CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY,
+]);
+
+function classifyJoinAdmissionMutationAcceptance(result) {
+  const contractState = normalizeString(result?.contractState);
+  const nextAction = normalizeString(result?.nextAction);
+  const outcome = normalizeString(result?.outcome);
+  const terminal =
+    contractState === OWNER_CONTRACT_STATE.BLOCKED ||
+    contractState === OWNER_CONTRACT_STATE.FAILED ||
+    nextAction === OWNER_CONTRACT_NEXT_ACTION.STOP ||
+    outcome === CONTROL_PLANE_MUTATION_OUTCOME.REJECTED;
+  if (terminal || result === false) {
+    return {
+      accepted: false,
+      success: false,
+      withdrawalDeferred: false,
+      contractState,
+      nextAction,
+      outcome,
+    };
+  }
+
+  const pendingContract =
+    contractState === OWNER_CONTRACT_STATE.PENDING &&
+    (
+      nextAction === OWNER_CONTRACT_NEXT_ACTION.WAIT ||
+      nextAction === OWNER_CONTRACT_NEXT_ACTION.RETRY
+    );
+  const deferredContract =
+    contractState === OWNER_CONTRACT_STATE.DEFERRED &&
+    nextAction === OWNER_CONTRACT_NEXT_ACTION.RETRY;
+  const acceptedOutcome =
+    ACCEPTED_JOIN_ADMISSION_MUTATION_OUTCOMES.has(outcome);
+  const deferredOutcome =
+    DEFERRED_JOIN_ADMISSION_MUTATION_OUTCOMES.has(outcome);
+  const applied = result?.success !== false;
+  const accepted =
+    applied ||
+    acceptedOutcome ||
+    deferredOutcome ||
+    pendingContract ||
+    deferredContract;
+
+  return {
+    accepted,
+    success: applied,
+    withdrawalDeferred:
+      accepted &&
+      (
+        applied !== true ||
+        deferredOutcome ||
+        pendingContract ||
+        deferredContract
+      ),
+    contractState,
+    nextAction,
+    outcome,
+    retryAfterMs: result?.retryAfterMs ?? result?.pressureRetryAfterMs ?? null,
+  };
+}
+
 class NodeRegistrationOwnerPublicationMethods {
+  resolveNodeEndpointId() {
+    return `ep-${this.nodeId}-ws`;
+  }
+
   async registerNodeEndpoint(now) {
     const logger = this.delegates.getLogger();
 
@@ -46,7 +140,7 @@ class NodeRegistrationOwnerPublicationMethods {
       nodeAddress: this.nodeAddress,
     });
 
-    const endpointId = `ep-${this.nodeId}-ws`;
+    const endpointId = this.resolveNodeEndpointId();
     const canonicalWsAddress =
       this.resolveCanonicalWsAddress();
 
@@ -300,6 +394,146 @@ class NodeRegistrationOwnerPublicationMethods {
         sleep: (delayMs) => this.sleep(delayMs),
       },
     );
+  }
+
+  async updateJoinAdmissionSystemTableRowWithRetry(
+    tableName,
+    whereClause,
+    data,
+    options = {},
+  ) {
+    const controlPlaneSystemTableGateway =
+      this.getJoinAdmissionControlPlaneSystemTableGateway();
+    if (
+      !controlPlaneSystemTableGateway ||
+      typeof controlPlaneSystemTableGateway.updateSystemTableRow !==
+        TYPEOF.FUNCTION
+    ) {
+      throw new Error(
+        NODE_REGISTRATION_ERROR.JOIN_ADMISSION_GATEWAY_REQUIRED,
+      );
+    }
+
+    const joinTimeOptions = this.getJoinTimeUpsertOptions();
+    const queryTimeoutMs = this.getJoinAdmissionWriteRetryTimeoutMs();
+    return runRetryableControlPlaneWrite(
+      () => controlPlaneSystemTableGateway.updateSystemTableRow(
+        tableName,
+        whereClause,
+        data,
+        {
+          ...joinTimeOptions,
+          queryTimeoutMs,
+        },
+      ),
+      {
+        timeoutMs: queryTimeoutMs,
+        now: () => this.delegates.getNow()(),
+        onRetry: this.buildJoinAdmissionRetryLogger(
+          tableName,
+          options.admissionTarget || null,
+        ),
+        sleep: (delayMs) => this.sleep(delayMs),
+      },
+    );
+  }
+
+  async withdrawFailedJoinAdmission(options = {}) {
+    const registeredNodeId =
+      normalizeString(options.registeredNodeId) || this.nodeId;
+    if (registeredNodeId !== this.nodeId) {
+      return {success: false, skipped: true};
+    }
+    const now = this.delegates.getNow()();
+    const nodeResult =
+      await this.updateJoinAdmissionSystemTableRowWithRetry(
+        TABLES.NODES,
+        {[COLUMN.NODE_ID]: registeredNodeId},
+        {
+          [COLUMN.STATUS]: SERVICE_STATUS.STOPPED,
+          [COLUMN.CONNECTION_STATE]: STATE.DISCONNECTED,
+          [COLUMN.LAST_HEARTBEAT]: now,
+          [COLUMN.READY_LEASE_EXPIRES_AT]: null,
+          [COLUMN.UPDATED_AT]: now,
+        },
+        {
+          admissionTarget:
+            JOIN_ADMISSION_WITHDRAWAL_TARGET.NODE_MEMBERSHIP,
+        },
+      );
+
+    const logger = this.delegates.getLogger();
+    let nodeEndpointWithdrawn = false;
+    let metaEndpointWithdrawnCount = NUM.ZERO;
+    try {
+      await this.updateJoinAdmissionSystemTableRowWithRetry(
+        TABLES.NODE_ENDPOINTS,
+        {[COLUMN.ENDPOINT_ID]: this.resolveNodeEndpointId()},
+        {
+          [COLUMN.STATUS]: ENDPOINT_STATUS.INACTIVE,
+          [COLUMN.UPDATED_AT]: now,
+        },
+        {
+          admissionTarget:
+            JOIN_ADMISSION_WITHDRAWAL_TARGET.NODE_ENDPOINT,
+        },
+      );
+      nodeEndpointWithdrawn = true;
+    } catch (endpointError) {
+      logger.warn(LOG_FAILED_JOIN_ENDPOINT_WITHDRAWAL_FAILED, {
+        nodeId: this.nodeId,
+        tableName: TABLES.NODE_ENDPOINTS,
+        error: endpointError.message,
+      });
+    }
+
+    const metaEndpointRows = await this.readAuthoritativeMetaEndpointRows();
+    for (const metaEndpointRow of metaEndpointRows) {
+      const endpointId = normalizeString(
+        metaEndpointRow?.[COLUMN.ENDPOINT_ID],
+      );
+      if (endpointId.length === NUM.ZERO) {
+        continue;
+      }
+      try {
+        await this.updateJoinAdmissionSystemTableRowWithRetry(
+          TABLES.SERVICE_ENDPOINTS,
+          {[COLUMN.ENDPOINT_ID]: endpointId},
+          {
+            [SERVICE_ENDPOINT_HEALTH_STATUS_COLUMN]: LOCAL_STR_UNHEALTHY,
+            [COLUMN.UPDATED_AT]: now,
+          },
+          {
+            admissionTarget:
+              JOIN_ADMISSION_WITHDRAWAL_TARGET.SERVICE_ENDPOINT,
+          },
+        );
+        metaEndpointWithdrawnCount += NUM.ONE;
+      } catch (endpointError) {
+        logger.warn(LOG_FAILED_JOIN_ENDPOINT_WITHDRAWAL_FAILED, {
+          nodeId: this.nodeId,
+          tableName: TABLES.SERVICE_ENDPOINTS,
+          endpointId,
+          error: endpointError.message,
+        });
+      }
+    }
+
+    const nodeMutationAcceptance =
+      classifyJoinAdmissionMutationAcceptance(nodeResult);
+    return {
+      success: nodeMutationAcceptance.success,
+      accepted: nodeMutationAcceptance.accepted,
+      withdrawalDeferred: nodeMutationAcceptance.withdrawalDeferred,
+      registeredNodeId,
+      contractState: nodeMutationAcceptance.contractState,
+      nextAction: nodeMutationAcceptance.nextAction,
+      outcome: nodeMutationAcceptance.outcome,
+      retryAfterMs: nodeMutationAcceptance.retryAfterMs,
+      nodeEndpointWithdrawn,
+      metaEndpointCount: metaEndpointRows.length,
+      metaEndpointWithdrawnCount,
+    };
   }
 
   async upsertSystemTableRowWithRetry(

@@ -23,10 +23,10 @@ const MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR = Object.freeze({
 const SERVICE_ROW_UPDATE_OPTION = Object.freeze({
   allowCoalescing: true,
   allowPressureDefer: true,
-  deliveryPriority: 'background',
+  deliveryPriority: 'critical',
   pressureRetryAfterMs: 250,
   skipCacheWait: true,
-  workClass: 'background',
+  workClass: 'critical',
 });
 
 function assertRequiredString(value, errorMessage) {

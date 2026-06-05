@@ -1043,13 +1043,15 @@ test('AdminControlSnapshot no-attempt path still triggers publication owner comm
       result,
       {
         snapshotObservation: {
-          state: 'stale_usable',
-          contractState: 'pending',
-          nextAction: 'wait',
+          state: 'deferred_refresh',
+          contractState: 'deferred',
+          nextAction: 'retry',
+          retryAfterMs:
+            ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_OWNER_RETRY_AFTER_MS,
         },
         observationMode: 'repair_deferred',
       },
-      'the no-attempt deferred path should keep the shared-owner stale outcome',
+      'the no-attempt deferred path should keep bounded owner-reconcile retry evidence',
     );
   });
 
@@ -1351,6 +1353,8 @@ test('AdminControlSnapshot repair-deferred shared owner wakes recovery waits wit
         enqueued: true,
         reasonCode:
           TEST_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_REASON_OWNER_RECOVERY_WAIT_ENQUEUED,
+        retryAfterMs:
+          ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_OWNER_RETRY_AFTER_MS,
       },
       'the deferred snapshot should surface an actionable owner recovery wake',
     );

@@ -107,6 +107,15 @@ const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_REASON_A =
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_REASON_B =
   'ready-node-handoff-b';
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NEWER_EPOCH = 43;
+const PUBLICATION_CONVERGENCE_EXCLUDED_NODE_ID = 'node-excluded';
+const PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS = Object.freeze([
+  'node-retained-a',
+  'node-retained-b',
+]);
+const PUBLICATION_CONVERGENCE_EXCLUSION_TARGET_NODE_IDS = Object.freeze([
+  PUBLICATION_CONVERGENCE_EXCLUDED_NODE_ID,
+  ...PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS,
+].sort((left, right) => left.localeCompare(right)));
 const PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_OTHER_OWNER_KEY =
   'membership-publication:other-cluster';
 const PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_BOUND = 1;
@@ -341,6 +350,7 @@ test('enqueueClusterMembershipReconcile merges pending explicit handoff targets'
     );
 
     const mergedContext = pending.get(ownerKey)?.context;
+    const ownerQueueDepth = coordinator.getControlPlaneOwnerQueueDepth();
     t.equal(
       enqueued.length,
       2,
@@ -360,6 +370,17 @@ test('enqueueClusterMembershipReconcile merges pending explicit handoff targets'
       mergedContext?.acknowledgedNodeIds,
       [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS],
       'pending context should union explicit acknowledged nodes',
+    );
+    t.match(
+      ownerQueueDepth,
+      {
+        ownerKey,
+        pendingWrites: 1,
+        pendingKeys: [ownerKey],
+        retryingKeys: [],
+        inFlightKeys: [],
+      },
+      'owner queue depth should expose the pending membership publication reconcile',
     );
     t.equal(
       mergedContext?.latestPublicationRow?.publication_epoch,
@@ -500,6 +521,210 @@ test('enqueueClusterMembershipReconcile lets handoff-only owner wake clear stale
       mergedContext?.skipPublicationWriteReadback,
       PUBLICATION_CONVERGENCE_DEFERRED_SKIP_WRITE_READBACK,
       'handoff-only owner wake should retain deferred write readback policy',
+    );
+  });
+
+test('enqueueClusterMembershipReconcile applies explicit node exclusions to merged targets',
+  async (t) => {
+    const pending = new Map();
+    const reconcileQueue = {
+      pending,
+      has(ownerKey) {
+        return pending.has(ownerKey);
+      },
+      get size() {
+        return pending.size;
+      },
+      enqueue(ownerKey, _reason, context) {
+        const pendingEntry = pending.get(ownerKey);
+        if (pendingEntry) {
+          pendingEntry.context = context;
+          return false;
+        }
+        pending.set(ownerKey, {context});
+        return true;
+      },
+    };
+    const coordinator = new MembershipPublicationCoordinator({
+      nodeId: PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS[0],
+      reconcileQueue,
+    });
+    const ownerKey = coordinator.buildOwnerKey();
+    pending.set(ownerKey, {
+      context: {
+        publicationActiveGateHandoff: {
+          expectedNodeIds: [
+            ...PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS,
+            PUBLICATION_CONVERGENCE_EXCLUDED_NODE_ID,
+          ],
+          expectedNodeCount:
+            PUBLICATION_CONVERGENCE_EXCLUSION_TARGET_NODE_IDS.length,
+          publishedActiveNodeIds: [
+            ...PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS,
+            PUBLICATION_CONVERGENCE_EXCLUDED_NODE_ID,
+          ],
+          publishedActiveNodeCount:
+            PUBLICATION_CONVERGENCE_EXCLUSION_TARGET_NODE_IDS.length,
+          missingPublishedNodeIds: [PUBLICATION_CONVERGENCE_EXCLUDED_NODE_ID],
+          missingPublishedCount: 1,
+          pendingRecoveryNodeIds: [
+            ...PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS,
+            PUBLICATION_CONVERGENCE_EXCLUDED_NODE_ID,
+          ],
+          pendingRecoveryCount:
+            PUBLICATION_CONVERGENCE_EXCLUSION_TARGET_NODE_IDS.length,
+          pendingReconcileNodeIds: [
+            ...PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS,
+            PUBLICATION_CONVERGENCE_EXCLUDED_NODE_ID,
+          ],
+          pendingReconcileCount:
+            PUBLICATION_CONVERGENCE_EXCLUSION_TARGET_NODE_IDS.length,
+        },
+        publishedActiveNodeIds: [
+          ...PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS,
+          PUBLICATION_CONVERGENCE_EXCLUDED_NODE_ID,
+        ],
+        requiredAckNodeIds: [
+          ...PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS,
+          PUBLICATION_CONVERGENCE_EXCLUDED_NODE_ID,
+        ],
+        acknowledgedNodeIds: [
+          ...PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS,
+          PUBLICATION_CONVERGENCE_EXCLUDED_NODE_ID,
+        ],
+      },
+    });
+
+    coordinator.enqueueClusterMembershipReconcile(
+      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_REASON_B,
+      {
+        excludedNodeIds: [PUBLICATION_CONVERGENCE_EXCLUDED_NODE_ID],
+      },
+    );
+
+    const mergedContext = pending.get(ownerKey)?.context;
+    t.same(
+      mergedContext?.excludedNodeIds,
+      [PUBLICATION_CONVERGENCE_EXCLUDED_NODE_ID],
+      'merged context should retain explicit node exclusion evidence',
+    );
+    t.same(
+      mergedContext?.publishedActiveNodeIds,
+      [...PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS],
+      'excluded node should be removed from merged published targets',
+    );
+    t.same(
+      mergedContext?.requiredAckNodeIds,
+      [...PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS],
+      'excluded node should be removed from merged required ACK targets',
+    );
+    t.same(
+      mergedContext?.acknowledgedNodeIds,
+      [...PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS],
+      'excluded node should be removed from merged acknowledged targets',
+    );
+    t.same(
+      mergedContext?.publicationActiveGateHandoff?.pendingReconcileNodeIds,
+      [...PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS],
+      'excluded node should be removed from nested handoff reconcile debt',
+    );
+    t.equal(
+      mergedContext?.publicationActiveGateHandoff?.pendingReconcileCount,
+      PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS.length,
+      'nested handoff reconcile debt count should match filtered nodes',
+    );
+    t.same(
+      mergedContext?.publicationActiveGateHandoff?.pendingRecoveryNodeIds,
+      [...PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS],
+      'excluded node should be removed from nested handoff recovery debt',
+    );
+    t.equal(
+      mergedContext?.publicationActiveGateHandoff?.pendingRecoveryCount,
+      PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS.length,
+      'nested handoff recovery debt count should match filtered nodes',
+    );
+    t.same(
+      mergedContext?.publicationActiveGateHandoff?.missingPublishedNodeIds,
+      [],
+      'excluded node should be removed from nested missing publication debt',
+    );
+    t.equal(
+      mergedContext?.publicationActiveGateHandoff?.missingPublishedCount,
+      0,
+      'nested missing publication debt count should match filtered nodes',
+    );
+  });
+
+test('enqueueClusterMembershipReconcile lets fresh explicit targets clear stale exclusions',
+  async (t) => {
+    const pending = new Map();
+    const reconcileQueue = {
+      pending,
+      has(ownerKey) {
+        return pending.has(ownerKey);
+      },
+      get size() {
+        return pending.size;
+      },
+      enqueue(ownerKey, _reason, context) {
+        const pendingEntry = pending.get(ownerKey);
+        if (pendingEntry) {
+          pendingEntry.context = context;
+          return false;
+        }
+        pending.set(ownerKey, {context});
+        return true;
+      },
+    };
+    const coordinator = new MembershipPublicationCoordinator({
+      nodeId: PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS[0],
+      reconcileQueue,
+    });
+    const ownerKey = coordinator.buildOwnerKey();
+    pending.set(ownerKey, {
+      context: {
+        excludedNodeIds: [PUBLICATION_CONVERGENCE_EXCLUDED_NODE_ID],
+      },
+    });
+
+    coordinator.enqueueClusterMembershipReconcile(
+      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_REASON_B,
+      {
+        publishedActiveNodeIds: [
+          ...PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS,
+          PUBLICATION_CONVERGENCE_EXCLUDED_NODE_ID,
+        ],
+        requiredAckNodeIds: [
+          ...PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS,
+          PUBLICATION_CONVERGENCE_EXCLUDED_NODE_ID,
+        ],
+        acknowledgedNodeIds: [
+          ...PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS,
+          PUBLICATION_CONVERGENCE_EXCLUDED_NODE_ID,
+        ],
+      },
+    );
+
+    const mergedContext = pending.get(ownerKey)?.context;
+    t.equal(
+      Object.hasOwn(mergedContext, 'excludedNodeIds'),
+      false,
+      'fresh explicit target should clear stale node exclusion evidence',
+    );
+    t.same(
+      mergedContext?.publishedActiveNodeIds,
+      [...PUBLICATION_CONVERGENCE_EXCLUSION_TARGET_NODE_IDS],
+      'fresh explicit published target should survive stale exclusion',
+    );
+    t.same(
+      mergedContext?.requiredAckNodeIds,
+      [...PUBLICATION_CONVERGENCE_EXCLUSION_TARGET_NODE_IDS],
+      'fresh explicit ACK target should survive stale exclusion',
+    );
+    t.same(
+      mergedContext?.acknowledgedNodeIds,
+      [...PUBLICATION_CONVERGENCE_EXCLUSION_TARGET_NODE_IDS],
+      'fresh explicit acknowledged target should survive stale exclusion',
     );
   });
 
@@ -740,6 +965,19 @@ test('enqueueClusterMembershipReconcile preserves retryable owner drain ' +
       failureCount: PUBLICATION_CONVERGENCE_OWNER_QUEUE_RETRYING_COUNT,
     },
     'owner queue retry state should classify the distributed participant failure',
+  );
+  t.match(
+    coordinator.getControlPlaneOwnerQueueDepth(),
+    {
+      ownerKey,
+      pendingWrites: PUBLICATION_CONVERGENCE_OWNER_QUEUE_RETRYING_COUNT,
+      retainedBacklogGrowthCount:
+        PUBLICATION_CONVERGENCE_OWNER_QUEUE_RETRYING_COUNT,
+      retryingKeys: [ownerKey],
+      retryableDrainFailureCount:
+        PUBLICATION_CONVERGENCE_OWNER_QUEUE_RETRYING_COUNT,
+    },
+    'owner queue depth should expose retrying handoff reconcile work',
   );
   t.same(
     observedContexts[0]?.publishedActiveNodeIds,
@@ -1234,4 +1472,3 @@ test('deriveMembershipPublicationCandidate does not block recovery-eligible prom
       'promoted members with open recovery epochs should remain marked as catching_up until convergence closes',
     );
   });
-

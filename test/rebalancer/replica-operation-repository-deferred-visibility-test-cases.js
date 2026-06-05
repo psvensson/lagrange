@@ -333,6 +333,67 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
   );
 
   test(
+    'queryIncompleteOperations preserves deferred visibility from cached ' +
+      'operations when retryable owner reads are backpressured',
+    async (t) => {
+      const cachedRows = [
+        makeRow({
+          operation_id: 'op-cached-pressure',
+          type: OperationType.REPLACE,
+          partition_id: `${SYSTEM_TABLE_NAME.REPLICA_OPERATIONS}-p1`,
+          workflow_step: WORKFLOW_STEP.ACTIVE,
+          status: 'active',
+          source_node_id: 'node-2',
+          target_node_id: TEST_NODE_ID,
+        }),
+      ];
+      const repo = createTestRepository({
+        controlPlaneSystemTableGateway: {
+          readRows: async () => ({
+            success: false,
+            error: 'Distributed operation failed due to participant failures',
+            errorCode: 'CONTROL_PLANE_PRESSURE_DEGRADED',
+            retryAfterMs: 250,
+          }),
+          executeQuery: async () => ({success: true}),
+        },
+        systemTableCache: {
+          get: () => null,
+          getAll: () => cachedRows,
+          filter: (_table, predicate) => cachedRows.filter(predicate),
+        },
+      });
+
+      const operations = await repo.queryIncompleteOperations({
+        visibilityReadMode:
+          REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED,
+      });
+      const outcome = repo.getLastIncompleteOperationReadOutcome();
+
+      t.same(
+        operations.map((operation) => operation.operationId),
+        ['op-cached-pressure'],
+        'cached in-flight operations should remain visible under retryable read pressure',
+      );
+      t.equal(
+        outcome?.completionState,
+        PRIORITY_RECOVERY_COMPLETION_STATE.AUTHORITATIVE_OPERATION_READ_DEFERRED,
+        'retryable pressure with cached operations should preserve canonical deferred visibility',
+      );
+      t.equal(
+        outcome?.cachedOperationCount,
+        1,
+        'deferred visibility should report the reused cached operation count',
+      );
+      t.equal(
+        outcome?.retryAfterMs,
+        250,
+        'deferred visibility should retain retry guidance from the read failure',
+      );
+    },
+  );
+
+  test(
     'getOperationsByEntityAuthoritativeObservation preserves deferred ' +
       'emptiness when slow owner reads cannot yet prove the entity is clear',
     async (t) => {

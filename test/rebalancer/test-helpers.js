@@ -860,6 +860,7 @@ function createTestRebalancer(options = {}) {
     controlPlaneReadinessService,
     storageAdmissionService,
     storageAccountingService,
+    nowFn: options.nowFn,
   });
 }
 

@@ -312,6 +312,15 @@ function enqueueMembershipPublicationReconcileFallback(
     called: true,
   });
 }
+function resolveMembershipPublicationHandoffRetryAfterMs(...values) {
+  for (const value of values) {
+    const retryAfterMs = Number(value);
+    if (Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO) {
+      return Math.floor(retryAfterMs);
+    }
+  }
+  return undefined;
+}
 function isMembershipPublicationService(value) {
   return value && typeof value === TYPEOF.OBJECT;
 }
@@ -357,15 +366,19 @@ async function maybeReconcileAuthoritativeMembershipPublication(
       if (!membershipPublicationService) {
         const recoveryWaitReason =
           MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_REASON_OWNER_RECOVERY_WAIT_SERVICE_UNAVAILABLE;
+        const controlPlaneConvergence =
+          buildMembershipPublicationHandoffControlPlaneConvergence({
+            reasonCode: recoveryWaitReason,
+          });
         return buildMembershipPublicationHandoffOutcome(
           MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_STATE.WRITE_DEFERRED,
           {
             target: membershipPublicationTarget,
             reasonCode: recoveryWaitReason,
-            controlPlaneConvergence:
-              buildMembershipPublicationHandoffControlPlaneConvergence({
-                reasonCode: recoveryWaitReason,
-              }),
+            retryAfterMs: resolveMembershipPublicationHandoffRetryAfterMs(
+              controlPlaneConvergence?.retryAfterMs,
+            ),
+            controlPlaneConvergence,
           },
         );
       }
@@ -380,6 +393,9 @@ async function maybeReconcileAuthoritativeMembershipPublication(
           enqueued: enqueueOutcome.accepted,
           reasonCode: resolveOwnerRecoveryWaitHandoffReasonCode(
             enqueueOutcome,
+          ),
+          retryAfterMs: resolveMembershipPublicationHandoffRetryAfterMs(
+            enqueueOutcome.controlPlaneConvergence?.retryAfterMs,
           ),
           controlPlaneConvergence:
             enqueueOutcome.controlPlaneConvergence,
@@ -400,6 +416,8 @@ async function maybeReconcileAuthoritativeMembershipPublication(
     );
   }
   if (!membershipPublicationService) {
+    const controlPlaneConvergence =
+      buildMembershipPublicationHandoffControlPlaneConvergence();
     return membershipPublicationTarget.reconcileRequired === true ?
       buildMembershipPublicationHandoffOutcome(
         MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_STATE.WRITE_DEFERRED,
@@ -407,8 +425,10 @@ async function maybeReconcileAuthoritativeMembershipPublication(
           target: membershipPublicationTarget,
           reasonCode:
             MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_REASON_SERVICE_UNAVAILABLE,
-          controlPlaneConvergence:
-            buildMembershipPublicationHandoffControlPlaneConvergence(),
+          retryAfterMs: resolveMembershipPublicationHandoffRetryAfterMs(
+            controlPlaneConvergence?.retryAfterMs,
+          ),
+          controlPlaneConvergence,
         },
       ) :
       MEMBERSHIP_PUBLICATION_HANDOFF_ABSENT_OUTCOME;
@@ -429,6 +449,9 @@ async function maybeReconcileAuthoritativeMembershipPublication(
         target: membershipPublicationTarget,
         enqueued: enqueueOutcome.accepted,
         reasonCode: enqueueOutcome.reasonCode,
+        retryAfterMs: resolveMembershipPublicationHandoffRetryAfterMs(
+          enqueueOutcome.controlPlaneConvergence?.retryAfterMs,
+        ),
         controlPlaneConvergence:
           enqueueOutcome.controlPlaneConvergence,
       },
@@ -458,6 +481,9 @@ async function maybeReconcileAuthoritativeMembershipPublication(
         target: membershipPublicationTarget,
         enqueued: true,
         reasonCode: enqueueOutcome.reasonCode,
+        retryAfterMs: resolveMembershipPublicationHandoffRetryAfterMs(
+          enqueueOutcome.controlPlaneConvergence?.retryAfterMs,
+        ),
         controlPlaneConvergence:
           enqueueOutcome.controlPlaneConvergence,
       },

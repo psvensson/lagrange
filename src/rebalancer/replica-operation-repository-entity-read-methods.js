@@ -171,6 +171,10 @@ function assignReplicaOperationRepositoryEntityReadMethods(
           priorityRecoveryActive: this.shouldDeferIncompleteOperationReadFailure(
             result,
             planningSnapshot,
+            {
+              cachedOperations,
+              fallbackOperations,
+            },
           ),
           retryAfterMs: this.getRetryableReplicaOperationReadRetryDelayMs(result),
           cachedOperations: fallbackOperations,

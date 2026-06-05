@@ -49,8 +49,13 @@ test('MessageGroupServiceRowOwner - activateReplica updates status without rewri
     );
     t.equal(
       updates[0].options?.deliveryPriority,
-      'background',
-      'activation update should use background delivery',
+      'critical',
+      'activation update should use critical control-plane delivery',
+    );
+    t.equal(
+      updates[0].options?.workClass,
+      'critical',
+      'activation update should use critical control-plane work class',
     );
     t.equal(
       updates[0].options?.coalescingKey,

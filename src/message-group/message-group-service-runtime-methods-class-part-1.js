@@ -83,6 +83,11 @@ function createMessageGroupServiceRuntimeMethodsClassPart1(deps = {}) {
       const transportDeliveryOptions = resolveTransportDeliveryOptions(
         targetService,
         options?.transportDeliveryOptions || null,
+        {
+          payload: message,
+          sourceGroup: this.groupId,
+          sourceReplica: this.replicaId,
+        },
       );
       if (deliveryMode === MESSAGE_DELIVERY_MODE.DIRECT_ONLY) {
         return this.deliverDirectOnlyMessage(messageEnvelope, {
@@ -200,6 +205,11 @@ function createMessageGroupServiceRuntimeMethodsClassPart1(deps = {}) {
           const deliveryOptions = resolveTransportDeliveryOptions(
             targetService,
             options?.transportDeliveryOptions || null,
+            {
+              payload,
+              sourceGroup: this.groupId,
+              sourceReplica: this.replicaId,
+            },
           );
           const result = await this.transport.deliver(
             targetService,

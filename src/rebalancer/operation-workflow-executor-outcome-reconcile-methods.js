@@ -151,12 +151,14 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
     this.operationWorkflowRunExclusive(singleFlightKey, () =>
       this.reconcileExecutorOutcome(outcome),
     ).catch((error) => {
+      const retryContext =
+        this.buildExecutorOutcomeRetryContext(outcome, null);
       if (
         this.deferTransitionRetry(operationId, error, {
-          boundary: OPERATION_WORKFLOW_OWNER_LITERAL.EXECUTOR_OUTCOME,
-          workflowStep: outcome?.[EXECUTOR_OUTCOME_FIELD.WORKFLOW_STEP] ||
-            EXECUTOR_OUTCOME_VISIBILITY_ABSENCE.WORKFLOW_STEP,
-          partitionId: EXECUTOR_OUTCOME_VISIBILITY_ABSENCE.PARTITION_ID,
+          boundary: retryContext.boundary,
+          workflowStep: retryContext.workflowStep,
+          partitionId: retryContext.partitionId,
+          operationSnapshot: retryContext.operationSnapshot,
         })
       ) {
         return;
@@ -166,6 +168,8 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
         {
           operationId,
           outcomeType: outcome?.[EXECUTOR_OUTCOME_FIELD.OUTCOME_TYPE],
+          partitionId: retryContext.partitionId,
+          workflowStep: retryContext.workflowStep,
           error: error.message,
         },
       );
@@ -260,6 +264,91 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
     });
   }
 
+  getExecutorOutcomeStringField(source, field) {
+    const value = source?.[field];
+    return typeof value === TYPEOF.STRING && value.length > NUM.ZERO ?
+      value :
+      null;
+  }
+
+  buildExecutorOutcomeRetryContext(outcome, visibilityObservation = null) {
+    const operation = visibilityObservation?.operation &&
+      typeof visibilityObservation.operation === TYPEOF.OBJECT ?
+      visibilityObservation.operation :
+      null;
+    const deferredOutcome =
+      visibilityObservation?.deferredOutcome &&
+      typeof visibilityObservation.deferredOutcome === TYPEOF.OBJECT ?
+        visibilityObservation.deferredOutcome :
+        null;
+    const partitionId =
+      this.getExecutorOutcomeStringField(operation, 'partitionId') ||
+      this.getExecutorOutcomeStringField(
+        outcome,
+        EXECUTOR_OUTCOME_FIELD.PARTITION_ID,
+      ) ||
+      this.getExecutorOutcomeStringField(deferredOutcome, 'partitionId') ||
+      EXECUTOR_OUTCOME_VISIBILITY_ABSENCE.PARTITION_ID;
+    const workflowStep =
+      this.getExecutorOutcomeStringField(operation, 'workflowStep') ||
+      this.getExecutorOutcomeStringField(
+        outcome,
+        EXECUTOR_OUTCOME_FIELD.WORKFLOW_STEP,
+      ) ||
+      EXECUTOR_OUTCOME_VISIBILITY_ABSENCE.WORKFLOW_STEP;
+    return Object.freeze({
+      boundary: OPERATION_WORKFLOW_OWNER_LITERAL.EXECUTOR_OUTCOME,
+      workflowStep,
+      partitionId,
+      operationSnapshot: operation,
+      completionState:
+        this.getExecutorOutcomeStringField(deferredOutcome, 'completionState'),
+      reasonCode:
+        this.getExecutorOutcomeStringField(deferredOutcome, 'reasonCode'),
+    });
+  }
+
+  buildExecutorOutcomeRetryVisibilityObservation(
+    error,
+    priorVisibilityObservation = null,
+  ) {
+    const retryAfterMs = Number.isFinite(error?.retryAfterMs) &&
+      error.retryAfterMs > NUM.ZERO ?
+      Math.floor(error.retryAfterMs) :
+      OBSERVED_PROGRESS_RETRY_DELAY_MS;
+    const priorDeferredOutcome =
+      priorVisibilityObservation?.deferredOutcome &&
+      typeof priorVisibilityObservation.deferredOutcome === TYPEOF.OBJECT ?
+        priorVisibilityObservation.deferredOutcome :
+        null;
+    const deferredOutcome = {
+      ...(priorDeferredOutcome || {}),
+      retryAfterMs,
+    };
+    if (
+      !deferredOutcome.completionState &&
+      typeof error?.completionState === TYPEOF.STRING
+    ) {
+      deferredOutcome.completionState = error.completionState;
+    }
+    if (
+      !deferredOutcome.reasonCode &&
+      typeof error?.reasonCode === TYPEOF.STRING
+    ) {
+      deferredOutcome.reasonCode = error.reasonCode;
+    }
+    return Object.freeze({
+      state: INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED,
+      operation:
+        priorVisibilityObservation?.operation &&
+        typeof priorVisibilityObservation.operation === TYPEOF.OBJECT ?
+          priorVisibilityObservation.operation :
+          null,
+      deferredOutcome,
+      retryAfterMs,
+    });
+  }
+
   resolveExecutorOutcomeOperationVisibilityAction(
     visibilityObservation,
     outcome,
@@ -345,7 +434,48 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
     error.deferRetry = true;
     error.retryAfterMs = retryAfterMs;
     error.deferredOutcome = deferredOutcome;
+    error.completionState =
+      this.getExecutorOutcomeStringField(deferredOutcome, 'completionState');
+    error.reasonCode =
+      this.getExecutorOutcomeStringField(deferredOutcome, 'reasonCode');
+    error.partitionId =
+      this.getExecutorOutcomeStringField(deferredOutcome, 'partitionId') ||
+      this.getExecutorOutcomeStringField(
+        visibilityObservation?.operation,
+        'partitionId',
+      );
     return error;
+  }
+
+  handleDeferredExecutorOutcomeRetryFailure(
+    outcome,
+    error,
+    priorVisibilityObservation = null,
+  ) {
+    if (isRetryableControlPlaneError(error)) {
+      return this.scheduleExecutorOutcomeRetry(
+        outcome,
+        this.buildExecutorOutcomeRetryVisibilityObservation(
+          error,
+          priorVisibilityObservation,
+        ),
+      );
+    }
+    const retryContext =
+      this.buildExecutorOutcomeRetryContext(outcome, priorVisibilityObservation);
+    this.logger.error(
+      REBALANCE_COORDINATOR_LOG_MSG.OUTCOME_TRANSITION_FAILED,
+      {
+        operationId: outcome?.[EXECUTOR_OUTCOME_FIELD.OPERATION_ID],
+        outcomeType: outcome?.[EXECUTOR_OUTCOME_FIELD.OUTCOME_TYPE],
+        partitionId: retryContext.partitionId,
+        workflowStep: retryContext.workflowStep,
+        completionState: retryContext.completionState,
+        reasonCode: retryContext.reasonCode,
+        error: error.message,
+      },
+    );
+    return false;
   }
 
   scheduleExecutorOutcomeRetry(outcome, visibilityObservation) {
@@ -363,15 +493,17 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
     const retryError =
       this.buildExecutorOutcomeVisibilityRetryError(visibilityObservation);
     const delayMs = retryError.retryAfterMs;
+    const retryContext =
+      this.buildExecutorOutcomeRetryContext(selectedPayload, visibilityObservation);
     this.logger.warn(
       REBALANCE_COORDINATOR_LOG_MSG.OPERATION_TRANSITION_RETRY_DEFERRED,
       {
         operationId,
-        boundary: OPERATION_WORKFLOW_OWNER_LITERAL.EXECUTOR_OUTCOME,
-        workflowStep:
-          selectedPayload[EXECUTOR_OUTCOME_FIELD.WORKFLOW_STEP] ||
-          EXECUTOR_OUTCOME_VISIBILITY_ABSENCE.WORKFLOW_STEP,
-        partitionId: EXECUTOR_OUTCOME_VISIBILITY_ABSENCE.PARTITION_ID,
+        boundary: retryContext.boundary,
+        workflowStep: retryContext.workflowStep,
+        partitionId: retryContext.partitionId,
+        completionState: retryContext.completionState,
+        reasonCode: retryContext.reasonCode,
         delayMs,
         errorMessage: retryError.message,
       },
@@ -402,14 +534,10 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
         this.getOperationOwnerSingleFlightKey(operationId),
         () => this.reconcileExecutorOutcome(retryOutcome),
       ).catch((error) => {
-        this.logger.error(
-          REBALANCE_COORDINATOR_LOG_MSG.OUTCOME_TRANSITION_FAILED,
-          {
-            operationId,
-            outcomeType:
-              retryOutcome[EXECUTOR_OUTCOME_FIELD.OUTCOME_TYPE],
-            error: error.message,
-          },
+        this.handleDeferredExecutorOutcomeRetryFailure(
+          retryOutcome,
+          error,
+          visibilityObservation,
         );
       });
     }, delayMs);

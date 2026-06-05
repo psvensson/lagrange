@@ -1,6 +1,9 @@
 import {NUM, TYPEOF} from '../constants/index.js';
 import {ControlPlaneMessageType} from '../control-plane/control-plane-constants.js';
-import {isCriticalTransportTargetAddress} from '../bootstrap/system-partition-classification.js';
+import {
+  CRITICAL_TRANSPORT_TARGET_REASON,
+  resolveCriticalTransportTargetSnapshot,
+} from '../bootstrap/system-partition-classification.js';
 
 const MESSAGE_GROUP_SERVICE_LITERAL = Object.freeze({
   VALUE: '',
@@ -106,6 +109,99 @@ const MESSAGE_DELIVERY_MODE = Object.freeze({
   DIRECT_ONLY: 'direct_only',
   DIRECT_WITH_RAFT_DURABILITY: 'direct_with_raft_durability',
 });
+const MESSAGE_GROUP_DELIVERY_SOURCE_UNWRAP_LIMIT = NUM.FOUR;
+const MESSAGE_GROUP_DELIVERY_SOURCE_PREFIX = 'message-group';
+
+function normalizeDeliverySourceSegment(value) {
+  if (typeof value !== TYPEOF.STRING) {
+    return null;
+  }
+  const normalized = value.trim();
+  return normalized.length > NUM.ZERO ? normalized : null;
+}
+
+function resolveRouterSemanticPayload(payload) {
+  let semanticPayload = payload;
+  let unwrapCount = NUM.ZERO;
+  while (
+    semanticPayload &&
+    typeof semanticPayload === TYPEOF.OBJECT &&
+    unwrapCount < MESSAGE_GROUP_DELIVERY_SOURCE_UNWRAP_LIMIT
+  ) {
+    if (normalizeDeliverySourceSegment(semanticPayload.type)) {
+      return semanticPayload;
+    }
+    const nestedPayload = semanticPayload.payload;
+    if (
+      !nestedPayload ||
+      typeof nestedPayload !== TYPEOF.OBJECT ||
+      nestedPayload === semanticPayload
+    ) {
+      return semanticPayload;
+    }
+    semanticPayload = nestedPayload;
+    unwrapCount += NUM.ONE;
+  }
+  return semanticPayload;
+}
+
+function hasRouterVisibleDeliverySource(payload) {
+  const semanticPayload = resolveRouterSemanticPayload(payload);
+  if (!semanticPayload || typeof semanticPayload !== TYPEOF.OBJECT) {
+    return false;
+  }
+  if (normalizeDeliverySourceSegment(semanticPayload.type)) {
+    return true;
+  }
+  if (normalizeDeliverySourceSegment(semanticPayload.sql)) {
+    return true;
+  }
+  if (
+    normalizeDeliverySourceSegment(semanticPayload.tableName) &&
+    normalizeDeliverySourceSegment(semanticPayload.operation)
+  ) {
+    return true;
+  }
+  const events = Array.isArray(semanticPayload.events) ?
+    semanticPayload.events :
+    [];
+  return events.length > NUM.ZERO;
+}
+
+function buildMessageGroupDeliverySource(targetSnapshot, sourceContext = {}) {
+  const partitionId = normalizeDeliverySourceSegment(
+    targetSnapshot?.partitionId,
+  );
+  const sourceGroup = normalizeDeliverySourceSegment(
+    sourceContext?.sourceGroup,
+  );
+  const sourceReplica = normalizeDeliverySourceSegment(
+    sourceContext?.sourceReplica,
+  );
+  const sender = sourceReplica || sourceGroup;
+  if (!partitionId || !sender) {
+    return null;
+  }
+  const group = sourceGroup || sender;
+  return `${MESSAGE_GROUP_DELIVERY_SOURCE_PREFIX}:${group}:${sender}:target:${partitionId}`;
+}
+
+function shouldSynthesizeMessageGroupDeliverySource(
+  targetSnapshot,
+  overrides = null,
+  sourceContext = {},
+) {
+  if (normalizeDeliverySourceSegment(overrides?.deliverySource)) {
+    return false;
+  }
+  if (
+    targetSnapshot?.reasonCode !==
+    CRITICAL_TRANSPORT_TARGET_REASON.CRITICAL_CONTROL_PLANE_PARTITION
+  ) {
+    return false;
+  }
+  return !hasRouterVisibleDeliverySource(sourceContext?.payload);
+}
 
 function shouldDeferImmediateDeliveryRetry(result) {
   return Boolean(
@@ -202,10 +298,15 @@ function boundCdcForwardErrorDetail(detail) {
   );
 }
 
-function resolveTransportDeliveryOptions(targetService, overrides = null) {
-  const baseOptions = isCriticalTransportTargetAddress({
+function resolveTransportDeliveryOptions(
+  targetService,
+  overrides = null,
+  sourceContext = {},
+) {
+  const targetSnapshot = resolveCriticalTransportTargetSnapshot({
     targetAddress: targetService,
-  }) ?
+  });
+  const baseOptions = targetSnapshot.criticalTransport === true ?
     {deliveryPriority: MESSAGE_GROUP_SERVICE_LITERAL.CRITICAL} :
     {};
   if (Number.isFinite(overrides?.timeoutMs) && overrides.timeoutMs > NUM.ZERO) {
@@ -222,6 +323,20 @@ function resolveTransportDeliveryOptions(targetService, overrides = null) {
     overrides.deliverySource.length > NUM.ZERO
   ) {
     baseOptions.deliverySource = overrides.deliverySource;
+  } else if (
+    shouldSynthesizeMessageGroupDeliverySource(
+      targetSnapshot,
+      overrides,
+      sourceContext,
+    )
+  ) {
+    const deliverySource = buildMessageGroupDeliverySource(
+      targetSnapshot,
+      sourceContext,
+    );
+    if (deliverySource) {
+      baseOptions.deliverySource = deliverySource;
+    }
   }
   return Object.keys(baseOptions).length > NUM.ZERO ? baseOptions : undefined;
 }

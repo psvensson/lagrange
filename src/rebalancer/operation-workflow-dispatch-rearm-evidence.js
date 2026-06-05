@@ -86,7 +86,6 @@ const DISPATCH_REARM_RECONCILE_STATE_TABLE = Object.freeze([
 ]);
 const DISPATCH_REARM_RECONCILE_ALLOWED_STATES = Object.freeze(
   new Set([
-    DISPATCH_REARM_RECONCILE_STATE.CREATE_REARM_TARGET_STILL_CREATING,
     DISPATCH_REARM_RECONCILE_STATE.REARM_DISPATCH,
   ]),
 );
@@ -230,6 +229,37 @@ function buildDispatchRearmFromProgressReconcileEvidence(
       timeoutDecision.stepTimedOut !== true ||
       timeoutDecision.operationBudgetActive === true,
   });
+}
+function isProtectedCreateDispatchRetryBudgetActive(
+  owner,
+  operation,
+  now = Date.now(),
+) {
+  const operationId = operation?.operationId || null;
+  if (
+    !operationId ||
+    !owner.isCreateRearmDispatchPhase(operation) ||
+    !owner.dispatchRetryTimerByOperationId?.has(operationId)
+  ) {
+    return false;
+  }
+  const operationStartedAtMs = Number.isFinite(operation?.createdAt) ?
+    operation.createdAt :
+    Number.isFinite(operation?.createdAtMs) ?
+      operation.createdAtMs :
+      Number.isFinite(operation?.updatedAt) ?
+        operation.updatedAt :
+        Number.isFinite(operation?.updatedAtMs) ?
+          operation.updatedAtMs :
+          null;
+  if (!Number.isFinite(operationStartedAtMs)) {
+    return false;
+  }
+  return (
+    now <
+    operationStartedAtMs +
+      TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS
+  );
 }
 function resolveDispatchRearmFromProgressReconcileState(evidence) {
   return (
@@ -479,6 +509,9 @@ function isOperationStepTimedOut(owner, operation, now = Date.now()) {
   if (owner.hasActiveTransitionRetryGrace(operation.operationId, now)) {
     return false;
   }
+  if (owner.isProtectedCreateDispatchRetryBudgetActive(operation, now)) {
+    return false;
+  }
   const updatedAt = Number(operation.updatedAt ?? operation.updatedAtMs);
   if (!Number.isFinite(updatedAt)) {
     return false;
@@ -590,6 +623,7 @@ function buildCoordinatorCreatedRemoteHandoffTimeoutDecision(
         TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS :
       null;
   const operationBudgetActive =
+    owner.isProtectedCreateDispatchRetryBudgetActive(operation, now) ||
     usesOperationBudget &&
     Number.isFinite(operationBudgetDeadlineMs) &&
     now < operationBudgetDeadlineMs;
@@ -717,6 +751,7 @@ export {
   isDispatchRetryableWorkflowStep,
   isOperationDeferredRetryActive,
   isOperationStepTimedOut,
+  isProtectedCreateDispatchRetryBudgetActive,
   isRemoveInitialDispatchPhase,
   isSafetyDeferredRetryableOperation,
   resolveCoordinatorCreatedOperationOwnerNodeId,

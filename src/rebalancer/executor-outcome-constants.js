@@ -45,6 +45,7 @@ const EXECUTOR_OUTCOME_FIELD = Object.freeze({
   OUTCOME_TYPE: 'outcomeType',
   WORKFLOW_STEP: 'workflowStep',
   REPLICA_ID: 'replicaId',
+  PARTITION_ID: 'partitionId',
   ERROR_MESSAGE: 'errorMessage',
   ERROR_CODE: 'errorCode',
   RETRY_AFTER_MS: 'retryAfterMs',

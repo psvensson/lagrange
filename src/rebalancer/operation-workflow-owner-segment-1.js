@@ -294,10 +294,11 @@ class OperationWorkflowOwnerSegment1 {
   }
 
   /**
-   * Compute the next capped-exponential-backoff delay for a handoff retry,
-   * floored by any explicit governor/transport retry-after hint and bounded by
-   * a maximum. The attempt counter is advanced as a side effect so successive
-   * retries grow geometrically instead of hammering at the base cadence.
+   * Compute the next handoff retry delay. Explicit governor/transport
+   * retry-after hints are authoritative; otherwise use capped exponential
+   * backoff with jitter. The attempt counter is advanced as a side effect so
+   * successive retries grow geometrically instead of hammering at the base
+   * cadence.
    * @param {string|null} operationId
    * @param {number} [retryAfterFloorMs=0]
    * @return {number}
@@ -319,16 +320,17 @@ class OperationWorkflowOwnerSegment1 {
         attempt,
       );
     }
+    if (Number.isFinite(retryAfterFloorMs) && retryAfterFloorMs > NUM.ZERO) {
+      return Math.min(
+        DISPATCH_RETRY_MAX_DELAY_MS,
+        Math.max(NUM.ONE, Math.floor(retryAfterFloorMs)),
+      );
+    }
     const exponential =
       DISPATCH_RETRY_DELAY_MS *
       Math.pow(DISPATCH_RETRY_BACKOFF_MULTIPLIER, previousAttempts);
     const cappedExponential = Math.min(exponential, DISPATCH_RETRY_MAX_DELAY_MS);
-    const flooredDelay = Math.max(
-      cappedExponential,
-      Number.isFinite(retryAfterFloorMs) && retryAfterFloorMs > NUM.ZERO ?
-        Math.floor(retryAfterFloorMs) :
-        NUM.ZERO,
-    );
+    const flooredDelay = cappedExponential;
     const jitterSpan = flooredDelay * DISPATCH_RETRY_JITTER_RATIO;
     const jitter = jitterSpan > NUM.ZERO ?
       Math.floor(this.randomFn() * jitterSpan) :
@@ -604,6 +606,14 @@ class OperationWorkflowOwnerSegment1 {
 
   isOperationStepTimedOut(operation, now = Date.now()) {
     return DISPATCH_REARM_EVIDENCE.isOperationStepTimedOut(
+      this,
+      operation,
+      now,
+    );
+  }
+
+  isProtectedCreateDispatchRetryBudgetActive(operation, now = Date.now()) {
+    return DISPATCH_REARM_EVIDENCE.isProtectedCreateDispatchRetryBudgetActive(
       this,
       operation,
       now,

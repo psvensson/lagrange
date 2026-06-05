@@ -276,6 +276,10 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
           priorityRecoveryActive: this.shouldDeferIncompleteOperationReadFailure(
             result,
             planningSnapshot,
+            {
+              cachedOperations,
+              fallbackOperations,
+            },
           ),
           retryAfterMs: this.getRetryableIncompleteOperationReadBackoffMs(result),
           cachedOperations,

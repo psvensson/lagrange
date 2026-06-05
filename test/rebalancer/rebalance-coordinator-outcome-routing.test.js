@@ -246,11 +246,12 @@ function operationToRow(op) {
   };
 }
 
-function buildExecutorOutcomePayload(outcomeType, workflowStep) {
+function buildExecutorOutcomePayload(outcomeType, workflowStep, options = {}) {
   return Object.freeze({
     [EXECUTOR_OUTCOME_FIELD.OPERATION_ID]: TEST_OPERATION_ID,
     [EXECUTOR_OUTCOME_FIELD.OUTCOME_TYPE]: outcomeType,
     [EXECUTOR_OUTCOME_FIELD.WORKFLOW_STEP]: workflowStep,
+    ...options,
   });
 }
 
@@ -788,6 +789,115 @@ test('Executor outcome routing through owner-key reconcile path',
           t.ok(
             completedEvent.operation.completedAt,
             'retained ACTIVE outcome should not be skipped',
+          );
+        } finally {
+          await coordinator.shutdown();
+        }
+      },
+    );
+
+    await t.test(
+      'deferred visibility retry keeps executor outcome partition scope',
+      async (t) => {
+        const operation = buildTestOperation({
+          partitionId: TEST_CRITICAL_CREATE_FAILURE_PARTITION_ID,
+          entityId: TEST_CRITICAL_CREATE_FAILURE_PARTITION_ID,
+          status: ReplicaStatus.CREATING,
+          workflowStep: WORKFLOW_STEP.CREATING,
+        });
+        const scheduledTimers = [];
+        const warnings = [];
+        const errors = [];
+        const {coordinator} =
+          createTestCoordinator({
+            operation,
+            setTimeoutFn(callback, delayMs) {
+              const timerHandle = {callback, delayMs};
+              scheduledTimers.push(timerHandle);
+              return timerHandle;
+            },
+            clearTimeoutFn(timerHandle) {
+              timerHandle.cleared = true;
+            },
+          });
+        coordinator.workflowOwner.logger = {
+          debug() {},
+          info() {},
+          warn(message, payload) {
+            warnings.push({message, payload});
+          },
+          error(message, payload) {
+            errors.push({message, payload});
+          },
+        };
+        const retryableError = new Error('visibility still deferred');
+        retryableError.code = 'CONTROL_PLANE_PRESSURE_DEGRADED';
+        retryableError.errorCode = 'CONTROL_PLANE_PRESSURE_DEGRADED';
+        retryableError.deferRetry = true;
+        retryableError.retryAfterMs = TEST_DEFERRED_OUTCOME_RETRY_AFTER_MS;
+        retryableError.completionState =
+          TEST_DEFERRED_OUTCOME_COMPLETION_STATE;
+        retryableError.reasonCode = TEST_DEFERRED_OUTCOME_COMPLETION_STATE;
+        coordinator.repository.getOperationByIdVisibilityObservation =
+          async () => {
+            throw retryableError;
+          };
+
+        try {
+          const deferredVisibilityObservation = Object.freeze({
+            state: TEST_DEFERRED_OUTCOME_STATE,
+            operation: null,
+            deferredOutcome: Object.freeze({
+              completionState: TEST_DEFERRED_OUTCOME_COMPLETION_STATE,
+              reasonCode: TEST_DEFERRED_OUTCOME_COMPLETION_STATE,
+              retryAfterMs: TEST_DEFERRED_OUTCOME_RETRY_AFTER_MS,
+            }),
+            retryAfterMs: TEST_DEFERRED_OUTCOME_RETRY_AFTER_MS,
+          });
+          coordinator.workflowOwner.scheduleExecutorOutcomeRetry(
+            buildExecutorOutcomePayload(
+              EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_SYNCING,
+              WORKFLOW_STEP.SYNCING,
+              {
+                [EXECUTOR_OUTCOME_FIELD.PARTITION_ID]:
+                  TEST_CRITICAL_CREATE_FAILURE_PARTITION_ID,
+              },
+            ),
+            deferredVisibilityObservation,
+          );
+
+          t.equal(
+            warnings[0]?.payload?.partitionId,
+            TEST_CRITICAL_CREATE_FAILURE_PARTITION_ID,
+            'retry warning should keep the executor outcome partition id',
+          );
+          t.equal(
+            warnings[0]?.payload?.completionState,
+            TEST_DEFERRED_OUTCOME_COMPLETION_STATE,
+            'retry warning should keep deferred visibility completion state',
+          );
+
+          await scheduledTimers[0].callback();
+
+          t.equal(
+            scheduledTimers.length,
+            2,
+            'retryable owner-read failures during retry should re-arm the executor outcome',
+          );
+          t.equal(
+            errors.length,
+            0,
+            'retryable owner-read failures should not drop the outcome via error logging',
+          );
+          t.equal(
+            warnings[1]?.payload?.partitionId,
+            TEST_CRITICAL_CREATE_FAILURE_PARTITION_ID,
+            're-armed retry should keep the operation partition scope',
+          );
+          t.equal(
+            warnings[1]?.payload?.completionState,
+            TEST_DEFERRED_OUTCOME_COMPLETION_STATE,
+            're-armed retry should preserve deferred completion state',
           );
         } finally {
           await coordinator.shutdown();

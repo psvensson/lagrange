@@ -211,6 +211,55 @@ function selectFirstPublicationActiveGateHandoffNodeIdList(
   return PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST;
 }
 
+function resolveSelectedSnapshotTimeoutPendingReconcileNodeIds({
+  hasSelectedSnapshotTimeoutPendingRecovery,
+  pendingRecoveryNodeIds,
+  selectedMissingPublishedNodeIds,
+}) {
+  if (hasSelectedSnapshotTimeoutPendingRecovery !== true) {
+    return PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST;
+  }
+  const pendingRecoveryNodeIdSet = new Set(pendingRecoveryNodeIds);
+  return normalizePublicationActiveGateHandoffNodeIdList(
+    selectedMissingPublishedNodeIds.filter(
+      (nodeId) => !pendingRecoveryNodeIdSet.has(nodeId),
+    ),
+  );
+}
+
+function resolvePublicationActiveGateHandoffProgressNextAction({
+  hasSelectedSnapshotTimeoutPendingRecovery,
+  pendingReconcileNodeIds,
+  progress,
+}) {
+  const explicitNextAction =
+    progress[
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
+        .PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+    ];
+  const hasSelectedSnapshotTimeoutReconcileDebt =
+    hasSelectedSnapshotTimeoutPendingRecovery === true &&
+    pendingReconcileNodeIds.length > NUM.ZERO;
+  if (
+    hasSelectedSnapshotTimeoutReconcileDebt &&
+    explicitNextAction ===
+      PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.WAIT_OWNER_RECOVERY
+  ) {
+    return PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+      .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION;
+  }
+  if (typeof explicitNextAction === TYPEOF.STRING) {
+    return explicitNextAction;
+  }
+  if (hasSelectedSnapshotTimeoutReconcileDebt) {
+    return PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+      .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION;
+  }
+  return hasSelectedSnapshotTimeoutPendingRecovery ?
+    PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.WAIT_OWNER_RECOVERY :
+    undefined;
+}
+
 function selectPublicationActiveGateHandoffProgressContextRecord(
   value,
   fieldName,
@@ -335,6 +384,11 @@ function buildPublicationActiveGateHandoffContractFromProgress(
       progressContextHandoff?.[
         PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_RECONCILE_NODE_IDS
       ],
+      resolveSelectedSnapshotTimeoutPendingReconcileNodeIds({
+        hasSelectedSnapshotTimeoutPendingRecovery,
+        pendingRecoveryNodeIds,
+        selectedMissingPublishedNodeIds,
+      }),
     );
   return Object.freeze({
     schemaVersion: PUBLICATION_ACTIVE_GATE_HANDOFF_SCHEMA_VERSION,
@@ -355,13 +409,11 @@ function buildPublicationActiveGateHandoffContractFromProgress(
         PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING :
         undefined),
     nextAction:
-      progress[
-        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
-          .PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
-      ] ??
-      (hasSelectedSnapshotTimeoutPendingRecovery ?
-        PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.WAIT_OWNER_RECOVERY :
-        undefined),
+      resolvePublicationActiveGateHandoffProgressNextAction({
+        hasSelectedSnapshotTimeoutPendingRecovery,
+        pendingReconcileNodeIds,
+        progress,
+      }),
     runtimePromotionAllowed:
       progress[
         PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD

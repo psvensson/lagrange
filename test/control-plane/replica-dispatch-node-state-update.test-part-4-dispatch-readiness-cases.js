@@ -378,6 +378,8 @@ test('ReplicaDispatchService admits priority dispatch blocked by circular ' +
       [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
       [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: false,
       [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: true,
+      [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: true,
+      [CONTROL_PLANE_READINESS_DIMENSION.PROVISIONING_ELIGIBLE]: true,
       [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: false,
       [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED]: true,
       [CONTROL_PLANE_READINESS_DIMENSION
@@ -443,6 +445,118 @@ test('ReplicaDispatchService admits priority dispatch blocked by circular ' +
   }
 });
 
+test('ReplicaDispatchService admits self-target priority dispatch with ' +
+  'selected placement still closed', async (t) => {
+  initEnv();
+
+  const TARGET_NODE_ID = 'node-1';
+  const SOURCE_NODE_ID = 'node-2';
+  const OPERATION_ID = 'op-self-priority-recovery-bootstrap-dispatch-1';
+  const PARTITION_ID = 'replica_operations-p1';
+  const REPLICA_ID = 'replica_operations-p1-r4';
+  let dispatchCalls = NUM.ZERO;
+  const operationRow = {
+    operation_id: OPERATION_ID,
+    type: OperationType.REPLACE,
+    partition_id: PARTITION_ID,
+    replica_id: REPLICA_ID,
+    source_node_id: SOURCE_NODE_ID,
+    target_node_id: TARGET_NODE_ID,
+    status: 'pending',
+    workflow_step: WORKFLOW_STEP.PENDING,
+    created_at: Date.now(),
+    updated_at: Date.now(),
+    steps_history: '[]',
+  };
+  const recoveryOpenReadiness = {
+    nodeId: TARGET_NODE_ID,
+    dimensions: {
+      [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+      [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+      [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: false,
+      [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: true,
+      [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: false,
+      [CONTROL_PLANE_READINESS_DIMENSION.PROVISIONING_ELIGIBLE]: false,
+      [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: false,
+      [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED]: true,
+      [CONTROL_PLANE_READINESS_DIMENSION
+        .CONTROL_PLANE_RECOVERY_ELIGIBLE]: false,
+      [CONTROL_PLANE_READINESS_DIMENSION
+        .METADATA_PUBLICATION_HEALTHY]: true,
+      [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
+      [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
+    },
+    reasons: [
+      {
+        code: CONTROL_PLANE_READINESS_REASON
+          .LOCAL_QUERY_TRANSPORT_NOT_READY,
+      },
+      {
+        code: CONTROL_PLANE_READINESS_REASON.CONTROL_PLANE_WRITE_UNHEALTHY,
+      },
+      {
+        code: CONTROL_PLANE_READINESS_REASON
+          .PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+      },
+    ],
+    runtimeAuthority: {
+      reasonCodes: [
+        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
+        CONTROL_PLANE_PRIORITY_RECOVERY_REASON
+          .PRIORITY_PARTITIONS_NOT_SPREAD,
+      ],
+    },
+    projectionReadinessContract: {
+      priorityRecovery: {
+        reasonCodes: [
+          CONTROL_PLANE_PRIORITY_RECOVERY_REASON.CONTROL_PLANE_NOT_WRITABLE,
+        ],
+      },
+    },
+  };
+
+  const service = createService({
+    cdcIntegrationService: {
+      upsertSystemTableRow: async () => ({success: true}),
+      updateSystemTableRow: async () => ({success: true}),
+    },
+    controlPlaneReadinessService: {
+      getNodeReadinessSync() {
+        return recoveryOpenReadiness;
+      },
+      async getNodeReadiness() {
+        return recoveryOpenReadiness;
+      },
+    },
+    rebalanceCoordinator: {
+      async dispatchOperation() {
+        dispatchCalls += NUM.ONE;
+        return {success: true};
+      },
+      isOperationLocallyOwned() {
+        return true;
+      },
+    },
+  });
+
+  try {
+    await service.dispatchOperationRow(operationRow);
+
+    t.equal(
+      dispatchCalls,
+      NUM.ONE,
+      'self-target priority recovery dispatch should proceed',
+    );
+    t.equal(
+      service.operationDispatchDeferredRetries.size,
+      NUM.ZERO,
+      'self-target recovery dispatch should not arm a not-ready retry',
+    );
+  } finally {
+    service.stop();
+  }
+});
+
 test('ReplicaDispatchService keeps priority dispatch bootstrap closed for ' +
   'non-circular blockers', async (t) => {
   initEnv();
@@ -469,6 +583,8 @@ test('ReplicaDispatchService keeps priority dispatch bootstrap closed for ' +
       [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
       [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: false,
       [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: true,
+      [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: true,
+      [CONTROL_PLANE_READINESS_DIMENSION.PROVISIONING_ELIGIBLE]: true,
       [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: false,
       [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED]: true,
       [CONTROL_PLANE_READINESS_DIMENSION

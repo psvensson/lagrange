@@ -36,6 +36,20 @@ import {CONNECTION_CLOSE_DISPOSITION, ConnectionState, EMPTY_ROUTER_REASON, INLI
 import {adjustInFlightPriorityCount, buildDerivedDeliverySource, buildPendingSourceSummary, buildRetiredPendingClassification, buildServiceResponseDisposition, buildSupersededPendingResult, canDispatchPendingItem, countInFlightByPriority, countPendingByPriority, countPendingBySource, dequeueNextPendingItem, normalizeDeliveryOutcome, normalizeOutboundDeliveryPriority, normalizeRetryAfterMs, peekNextPendingItem, resolveBackgroundInFlightLimit, resolveBackgroundPendingLimit, resolveBoundedCriticalReserve, resolveDeliverySource, resolveNextPendingItemIndex, resolvePendingSourceLimit} from './message-router-shared-stage-2.js';
 import {INCOMING_CONNECTION_ADOPTION, OutboundDeliveryRegistryOwner} from './message-router-shared-stage-3.js';
 
+const RECONNECT_ADDRESS_SOURCE = Object.freeze({
+  CANONICAL: 'canonical',
+  CONFIGURED: 'configured',
+  CURRENT: 'current',
+  PREFERRED: 'preferred',
+  OBSERVED: 'observed',
+});
+
+const WEBSOCKET_CONNECTION_TIMEOUT_MESSAGE =
+  'WebSocket connection timeout';
+
+const WEBSOCKET_CLOSED_BEFORE_CONNECTION_ESTABLISHED_MESSAGE =
+  'WebSocket was closed before the connection was established';
+
 class RouterConnectionAuthorityOwner {
   constructor(router) {
     this.router = router;
@@ -248,6 +262,9 @@ class RouterConnectionAuthorityOwner {
     this.router.suppressedReconnectAddresses.delete(key);
   }
   shouldSuppressReconnectAddress(error) {
+    if (error?.code === WEBSOCKET_CONNECT_TIMEOUT_ERROR_CODE) {
+      return true;
+    }
     const errorMessage = error?.message || null;
     if (
       typeof errorMessage !== TRANSPORT_TYPEOF.STRING ||
@@ -257,42 +274,75 @@ class RouterConnectionAuthorityOwner {
     }
     return (
       errorMessage.includes(MESSAGE_ROUTER_LITERAL.STRING_ENOTFOUND) ||
-      errorMessage.includes(MESSAGE_ROUTER_LITERAL.STRING_EAI_AGAIN)
+      errorMessage.includes(MESSAGE_ROUTER_LITERAL.STRING_EAI_AGAIN) ||
+      errorMessage.includes(WEBSOCKET_CONNECTION_TIMEOUT_MESSAGE) ||
+      errorMessage.includes(
+        MESSAGE_ROUTER_LITERAL
+          .STRING_WEBSOCKET_CONNECTION_CLOSED_BEFORE_OPEN_FOR_NODE,
+      ) ||
+      errorMessage.includes(
+        WEBSOCKET_CLOSED_BEFORE_CONNECTION_ESTABLISHED_MESSAGE,
+      )
     );
   }
-  resolveReconnectAddresses(targetNodeId, preferredAddress = null) {
-    const addresses = [];
-    const pushUniqueAddress = (candidate) => {
+  normalizeReconnectCandidateAddress(candidate) {
+    return normalizeToWebSocketAddress(candidate) || candidate;
+  }
+  resolveReconnectAddressCandidates(targetNodeId, preferredAddress = null) {
+    const candidates = [];
+    const candidatesByAddress = new Map();
+    const pushUniqueCandidate = (candidate, source) => {
+      const address = this.normalizeReconnectCandidateAddress(candidate);
       if (
-        typeof candidate !== TRANSPORT_TYPEOF.STRING ||
-        candidate.length === TRANSPORT_NUM.ZERO ||
-        this.isReconnectAddressSuppressed(targetNodeId, candidate) ||
-        addresses.includes(candidate)
+        typeof address !== TRANSPORT_TYPEOF.STRING ||
+        address.length === TRANSPORT_NUM.ZERO ||
+        this.isReconnectAddressSuppressed(targetNodeId, address)
       ) {
         return;
       }
-      addresses.push(candidate);
+      const existingCandidate = candidatesByAddress.get(address);
+      if (existingCandidate) {
+        if (!existingCandidate.candidateSources.includes(source)) {
+          existingCandidate.candidateSources.push(source);
+        }
+        return;
+      }
+      const reconnectCandidate = {
+        address,
+        candidateSource: source,
+        candidateSources: [source],
+      };
+      candidatesByAddress.set(address, reconnectCandidate);
+      candidates.push(reconnectCandidate);
     };
     const existing = this.router.nodeConnections.get(targetNodeId) || null;
     const canonicalAddress = existing ?
       this.refreshReconnectAuthority(existing, preferredAddress) :
       this.resolveCanonicalReconnectAddress(targetNodeId, preferredAddress);
-    pushUniqueAddress(canonicalAddress);
-    pushUniqueAddress(
-      normalizeToWebSocketAddress(existing?.configuredAddress) ||
-        existing?.configuredAddress,
+    pushUniqueCandidate(canonicalAddress, RECONNECT_ADDRESS_SOURCE.CANONICAL);
+    pushUniqueCandidate(
+      existing?.configuredAddress,
+      RECONNECT_ADDRESS_SOURCE.CONFIGURED,
     );
-    pushUniqueAddress(
-      normalizeToWebSocketAddress(existing?.address) || existing?.address,
+    pushUniqueCandidate(
+      existing?.address,
+      RECONNECT_ADDRESS_SOURCE.CURRENT,
     );
-    pushUniqueAddress(
-      normalizeToWebSocketAddress(preferredAddress) || preferredAddress,
+    pushUniqueCandidate(
+      preferredAddress,
+      RECONNECT_ADDRESS_SOURCE.PREFERRED,
     );
-    pushUniqueAddress(
-      normalizeToWebSocketAddress(existing?.observedAddress) ||
-        existing?.observedAddress,
+    pushUniqueCandidate(
+      existing?.observedAddress,
+      RECONNECT_ADDRESS_SOURCE.OBSERVED,
     );
-    return addresses;
+    return candidates;
+  }
+  resolveReconnectAddresses(targetNodeId, preferredAddress = null) {
+    return this.resolveReconnectAddressCandidates(
+      targetNodeId,
+      preferredAddress,
+    ).map((candidate) => candidate.address);
   }
 }
 

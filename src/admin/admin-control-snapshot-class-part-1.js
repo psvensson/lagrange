@@ -95,6 +95,65 @@ const CONTROL_SNAPSHOT_OBSERVATION_STATE_DEFERRED =
   CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE.DEFERRED_REFRESH;
 const CONTROL_SNAPSHOT_OBSERVATION_STATE_FAILED =
   CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE.FAILED;
+function toControlSnapshotNonNegativeInteger(value) {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) && numericValue > NUM.ZERO ?
+    Math.floor(numericValue) :
+    NUM.ZERO;
+}
+function buildControlSnapshotMembershipOwnerQueueDiagnostics(readinessService) {
+  const membershipPublicationService =
+    readinessService?.membershipPublicationService;
+  if (
+    !membershipPublicationService ||
+    typeof membershipPublicationService.getControlPlaneOwnerQueueDepth !==
+      TYPEOF.FUNCTION
+  ) {
+    return null;
+  }
+  const ownerQueueDepth =
+    membershipPublicationService.getControlPlaneOwnerQueueDepth();
+  return ownerQueueDepth && typeof ownerQueueDepth === TYPEOF.OBJECT ?
+    ownerQueueDepth :
+    null;
+}
+function mergeControlSnapshotLogsTableDiagnostics(logsTable, ownerQueueDepth) {
+  if (!ownerQueueDepth) {
+    return logsTable;
+  }
+  const base = logsTable && typeof logsTable === TYPEOF.OBJECT ?
+    logsTable :
+    {};
+  return {
+    ...base,
+    ...ownerQueueDepth,
+    pendingWrites: Math.max(
+      toControlSnapshotNonNegativeInteger(base.pendingWrites),
+      toControlSnapshotNonNegativeInteger(ownerQueueDepth.pendingWrites),
+    ),
+    pendingWriteGrowthCount: Math.max(
+      toControlSnapshotNonNegativeInteger(base.pendingWriteGrowthCount),
+      toControlSnapshotNonNegativeInteger(
+        ownerQueueDepth.pendingWriteGrowthCount,
+      ),
+    ),
+    retainedBacklogGrowthCount: Math.max(
+      toControlSnapshotNonNegativeInteger(base.retainedBacklogGrowthCount),
+      toControlSnapshotNonNegativeInteger(
+        ownerQueueDepth.retainedBacklogGrowthCount,
+      ),
+    ),
+    sharedPressureBackpressured:
+      base.sharedPressureBackpressured === true ||
+      ownerQueueDepth.sharedPressureBackpressured === true,
+    transportPressureBackpressured:
+      base.transportPressureBackpressured === true ||
+      ownerQueueDepth.transportPressureBackpressured === true,
+    queryPressureBackpressured:
+      base.queryPressureBackpressured === true ||
+      ownerQueueDepth.queryPressureBackpressured === true,
+  };
+}
 /**
  * Normalize one arbitrary value to a non-negative integer.
  * @param {*} value
@@ -539,6 +598,13 @@ class AdminControlSnapshotPart1 {
             [CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD]:
               membershipPublicationHandoffOutcome,
           };
+          controlPlaneDiagnostics.logsTable =
+            mergeControlSnapshotLogsTableDiagnostics(
+              controlPlaneDiagnostics.logsTable,
+              buildControlSnapshotMembershipOwnerQueueDiagnostics(
+                this.controlPlaneReadinessService,
+              ),
+            );
         }
       }
       controlPlaneDiagnostics.activeNodeViews = {

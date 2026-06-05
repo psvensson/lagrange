@@ -4,7 +4,7 @@ import {
   TRANSPORT_NUM,
 } from '../constants/transport.js';
 import {EMPTY_DELIVERY_SOURCE, MESSAGE_ROUTER_LITERAL, OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE, OUTBOUND_QUEUE_BACKPRESSURE_SCOPE, OutboundDeliveryPriority, TRANSPORT_PRESSURE_SUMMARY_FIELD, createQueueWaitHistogram, normalizeIdentifier, recordQueueWaitDuration, resolvePendingReplacementKey} from './message-router-shared-stage-1.js';
-import {adjustInFlightCriticalSourceReserveCount, adjustInFlightPriorityCount, adjustInFlightSourceCount, buildPendingSourceAdmission, buildPendingSourceSummary, buildSupersededPendingResult, canDispatchPendingItem, countInFlightByPriority, countInFlightBySource, countPendingByPriority, dequeueNextPendingItem, isOutboundNodeBackpressured, normalizeOutboundDeliveryPriority, normalizeQueuedDeliverySource, peekNextPendingItem, resolveBackgroundPendingLimit, resolveCriticalPendingCeiling, resolveDeliverySource, takeCriticalPendingItemForSourceReserve} from './message-router-shared-stage-2.js';
+import {adjustInFlightCriticalSourceReserveCount, adjustInFlightPriorityCount, adjustInFlightSourceCount, buildPendingSourceAdmission, buildPendingSourceSummary, buildSupersededPendingResult, canDispatchPendingItem, countInFlightByPriority, countInFlightBySource, countPendingByPriority, dequeueNextPendingItem, isOutboundNodeBackpressured, normalizeOutboundDeliveryPriority, peekNextPendingItem, resolveBackgroundPendingLimit, resolveCriticalInFlightSourceLimit, resolveCriticalPendingCeiling, resolveDeliverySource, resolveDeliverySourceAdmissionKey, resolveQueuedDeliverySourceAdmissionKey, takeCriticalPendingItemForSourceReserve} from './message-router-shared-stage-2.js';
 
 const NODE_STATE_UPDATE_DELIVERY_SOURCE =
   `${MESSAGE_ROUTER_LITERAL.STRING_MESSAGE}:` +
@@ -64,12 +64,6 @@ function canUseAggregateCriticalReserve(queue) {
   if (queue.inFlight < queue.maxConcurrent) {
     return false;
   }
-  if (
-    countInFlightByPriority(queue, OutboundDeliveryPriority.CRITICAL) <
-    queue.maxConcurrent
-  ) {
-    return false;
-  }
   return countCriticalSourceReserveInFlight(queue) <
     resolveAggregateCriticalReserveInFlightLimit(queue);
 }
@@ -77,7 +71,7 @@ function canUseAggregateCriticalReserve(queue) {
 function isAggregateCriticalReserveCandidateSource(source) {
   return source !== EMPTY_DELIVERY_SOURCE &&
     source !== MESSAGE_ROUTER_LITERAL.STRING_UNKNOWN &&
-    !source.startsWith('target:');
+    !source.startsWith(MESSAGE_ROUTER_LITERAL.STRING_TARGET_PREFIX);
 }
 
 function isAggregateCriticalReserveBlockingBacklogSource(source) {
@@ -95,7 +89,7 @@ function hasPriorInFlightSourceBacklog(queue, candidateIndex) {
     if (item?.priority !== OutboundDeliveryPriority.CRITICAL) {
       continue;
     }
-    const source = normalizeQueuedDeliverySource(item?.deliverySource);
+    const source = resolveQueuedDeliverySourceAdmissionKey(item);
     if (!isAggregateCriticalReserveBlockingBacklogSource(source)) {
       continue;
     }
@@ -146,7 +140,7 @@ function findAggregateCriticalReserveCandidateIndex(queue) {
     if (item?.priority !== OutboundDeliveryPriority.CRITICAL) {
       continue;
     }
-    const source = normalizeQueuedDeliverySource(item?.deliverySource);
+    const source = resolveQueuedDeliverySourceAdmissionKey(item);
     sourceCounts.set(
       source,
       (sourceCounts.get(source) || TRANSPORT_NUM.ZERO) + TRANSPORT_NUM.ONE,
@@ -164,7 +158,7 @@ function findAggregateCriticalReserveCandidateIndex(queue) {
     ) {
       continue;
     }
-    const source = normalizeQueuedDeliverySource(item?.deliverySource);
+    const source = resolveQueuedDeliverySourceAdmissionKey(item);
     if (!isAggregateCriticalReserveCandidateSource(source)) {
       continue;
     }
@@ -236,6 +230,10 @@ class OutboundDeliveryRegistryOwner {
       options.message,
       options,
     );
+    const deliverySourceAdmissionKey = resolveDeliverySourceAdmissionKey(
+      deliverySource,
+      deliveryPriority,
+    );
     const replacePendingKey = resolvePendingReplacementKey(
       options.targetAddress,
       options.message,
@@ -258,6 +256,7 @@ class OutboundDeliveryRegistryOwner {
             queuedAt: Date.now(),
             priority: deliveryPriority,
             deliverySource,
+            deliverySourceAdmissionKey,
             replacePendingKey,
           };
           return;
@@ -273,6 +272,20 @@ class OutboundDeliveryRegistryOwner {
         deliverySource,
         deliveryPriority,
       );
+      const inFlightForSource =
+        deliveryPriority === OutboundDeliveryPriority.CRITICAL ?
+          countInFlightBySource(
+            queue,
+            pendingSourceAdmission.deliverySourceAdmissionKey,
+          ) :
+          TRANSPORT_NUM.ZERO;
+      const inFlightSourceLimit =
+        deliveryPriority === OutboundDeliveryPriority.CRITICAL ?
+          resolveCriticalInFlightSourceLimit(
+            queue,
+            pendingSourceAdmission.deliverySourceAdmissionKey,
+          ) :
+          TRANSPORT_NUM.ZERO;
       let isNodeBackpressured = isOutboundNodeBackpressured(
         queue,
         deliveryPriority,
@@ -333,6 +346,8 @@ class OutboundDeliveryRegistryOwner {
                 queue,
                 OutboundDeliveryPriority.BACKGROUND,
               ),
+              inFlightForSource,
+              inFlightSourceLimit,
               pendingSourceSummary: buildPendingSourceSummary(queue),
             },
           );
@@ -380,6 +395,8 @@ class OutboundDeliveryRegistryOwner {
               queue,
               OutboundDeliveryPriority.BACKGROUND,
             ),
+            inFlightForSource,
+            inFlightSourceLimit,
             pendingSourceSummary: buildPendingSourceSummary(queue),
           },
         );
@@ -393,6 +410,8 @@ class OutboundDeliveryRegistryOwner {
         queuedAt: Date.now(),
         priority: deliveryPriority,
         deliverySource,
+        deliverySourceAdmissionKey:
+          pendingSourceAdmission.deliverySourceAdmissionKey,
         replacePendingKey,
         criticalSourceReserve: criticalSourceReserveAdmission,
       });
@@ -412,16 +431,15 @@ class OutboundDeliveryRegistryOwner {
       }
       const item = dequeueNextPendingItem(queue);
       if (item?.priority === OutboundDeliveryPriority.CRITICAL) {
-        queue.lastCriticalDeliverySource = normalizeQueuedDeliverySource(
-          item?.deliverySource,
-        );
+        queue.lastCriticalDeliverySource =
+          resolveQueuedDeliverySourceAdmissionKey(item);
       }
       queue.inFlight += TRANSPORT_NUM.ONE;
       adjustInFlightPriorityCount(queue, item?.priority, TRANSPORT_NUM.ONE);
       if (item?.priority === OutboundDeliveryPriority.CRITICAL) {
         adjustInFlightSourceCount(
           queue,
-          item?.deliverySource,
+          resolveQueuedDeliverySourceAdmissionKey(item),
           TRANSPORT_NUM.ONE,
         );
       }
@@ -448,7 +466,7 @@ class OutboundDeliveryRegistryOwner {
           if (item?.priority === OutboundDeliveryPriority.CRITICAL) {
             adjustInFlightSourceCount(
               queue,
-              item?.deliverySource,
+              resolveQueuedDeliverySourceAdmissionKey(item),
               -TRANSPORT_NUM.ONE,
             );
           }
@@ -474,7 +492,7 @@ class OutboundDeliveryRegistryOwner {
           if (item?.priority === OutboundDeliveryPriority.CRITICAL) {
             adjustInFlightSourceCount(
               queue,
-              item?.deliverySource,
+              resolveQueuedDeliverySourceAdmissionKey(item),
               -TRANSPORT_NUM.ONE,
             );
           }

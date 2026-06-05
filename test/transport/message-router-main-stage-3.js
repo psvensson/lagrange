@@ -49,7 +49,7 @@ t.test('MessageRouter unit tests chunk 3', async (t) => {
     cleanupTestEnvironment();
   });
   t.test(
-    'should keep reserve-protected pending capacity for large critical recovery sources',
+    'should keep aggregate pending capacity for critical target fallback sources',
     async (t) => {
       const TEST_LOCAL_NODE_ID = 'local-node';
       const TEST_REMOTE_NODE_ID = 'remote-node';
@@ -57,8 +57,8 @@ t.test('MessageRouter unit tests chunk 3', async (t) => {
       const TEST_MAX_CONCURRENT = 1;
       const TEST_MAX_PENDING = 64;
       const TEST_CRITICAL_RESERVE = 16;
-      const TEST_ALLOWED_HOT_SOURCE_DELIVERIES = 48;
-      const TEST_PENDING_SOURCE_LIMIT = 48;
+      const TEST_ALLOWED_HOT_SOURCE_DELIVERIES = 8;
+      const TEST_PENDING_SOURCE_LIMIT = 8;
       const TEST_UNRELATED_PENDING_DELIVERIES = 1;
       const TEST_HOT_RECOVERY_TARGET_ADDRESS =
         'remote-node/partition/control_plane_publications-p1-r1';
@@ -132,13 +132,25 @@ t.test('MessageRouter unit tests chunk 3', async (t) => {
           item?.deliverySource ===
           `target:${TEST_HOT_RECOVERY_TARGET_ADDRESS}`).length,
         TEST_ALLOWED_HOT_SOURCE_DELIVERIES,
-        'large critical recovery source should stop at the reserve-protected source cap',
+        'large critical target fallback source should stop at the aggregate proportional cap',
       );
       t.equal(
         queue.pending.length,
         TEST_ALLOWED_HOT_SOURCE_DELIVERIES +
           TEST_UNRELATED_PENDING_DELIVERIES,
         'unrelated critical traffic should still keep one reserved pending slot',
+      );
+      const stats = router.getStats()?.outboundQueues?.[TEST_REMOTE_NODE_ID];
+      t.equal(
+        stats?.pendingCritical,
+        TEST_ALLOWED_HOT_SOURCE_DELIVERIES +
+          TEST_UNRELATED_PENDING_DELIVERIES,
+        'stats should keep total critical pending pressure visible',
+      );
+      t.equal(
+        stats?.pendingCriticalReserveEligible,
+        TEST_UNRELATED_PENDING_DELIVERIES,
+        'stats should exclude target fallback pending from reserve exhaustion',
       );
       await t.rejects(
         router.enqueueOutbound(
@@ -151,7 +163,7 @@ t.test('MessageRouter unit tests chunk 3', async (t) => {
           },
         ),
         /queue/i,
-        'large critical recovery source should be rejected once it reaches the reserve-protected source cap',
+        'large critical target fallback source should be rejected once it reaches the aggregate cap',
       );
 
       const saturationEntry = warnEntries.find((entry) =>
@@ -159,22 +171,22 @@ t.test('MessageRouter unit tests chunk 3', async (t) => {
         entry.context?.backpressureScope === 'delivery_source');
       t.ok(
         saturationEntry,
-        'router should emit one delivery-source saturation warning for the capped critical source',
+        'router should emit one delivery-source saturation warning for the capped fallback source',
       );
       t.equal(
         saturationEntry?.context?.attemptedDeliverySource,
         `target:${TEST_HOT_RECOVERY_TARGET_ADDRESS}`,
-        'warning should attribute the capped large critical recovery source',
+        'warning should attribute the capped large target fallback source',
       );
       t.equal(
         saturationEntry?.context?.pendingForSource,
         TEST_PENDING_SOURCE_LIMIT,
-        'warning should report the queued count at the reserve-protected cap',
+        'warning should report the queued count at the aggregate fallback cap',
       );
       t.equal(
         saturationEntry?.context?.pendingSourceLimit,
         TEST_PENDING_SOURCE_LIMIT,
-        'warning should report the reserve-protected critical source cap',
+        'warning should report the aggregate fallback source cap',
       );
       t.equal(
         saturationEntry?.context?.sourceLimitApplied,

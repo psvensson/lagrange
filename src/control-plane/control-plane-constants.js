@@ -50,6 +50,7 @@ const ControlPlaneField = Object.freeze({
 const CONTROL_PLANE_DELIVERY_PRIORITY = Object.freeze({
   BACKGROUND: 'background',
   CRITICAL: 'critical',
+  READINESS: 'readiness',
 });
 
 const CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE = Object.freeze({

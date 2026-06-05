@@ -31,6 +31,7 @@ import {
   refreshReconnectAuthority,
   resolveCanonicalReconnectAddress,
   resolveNodeAddressForDelivery,
+  resolveReconnectAddressCandidates,
   resolveReconnectAddresses,
   resolveReconnectRetryAfterMs,
   scheduleRetiredSocketTermination,
@@ -172,6 +173,14 @@ class MessageRouterSegment3 extends MessageRouterSegment2 {
 
   resolveReconnectAddresses(targetNodeId, preferredAddress = null) {
     return resolveReconnectAddresses(this, targetNodeId, preferredAddress);
+  }
+
+  resolveReconnectAddressCandidates(targetNodeId, preferredAddress = null) {
+    return resolveReconnectAddressCandidates(
+      this,
+      targetNodeId,
+      preferredAddress,
+    );
   }
 
   ensureReconnectOwnerConnection(targetNodeId, preferredAddress = null) {

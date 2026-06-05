@@ -101,6 +101,55 @@ function buildLogsTableRetentionDiagnostics() {
       stats.queryPressureBackpressured === true,
   };
 }
+function buildMembershipPublicationOwnerQueueDiagnostics(readinessService) {
+  const membershipPublicationService =
+    readinessService?.membershipPublicationService;
+  if (
+    !membershipPublicationService ||
+    typeof membershipPublicationService.getControlPlaneOwnerQueueDepth !==
+      TYPEOF.FUNCTION
+  ) {
+    return null;
+  }
+  const ownerQueueDepth =
+    membershipPublicationService.getControlPlaneOwnerQueueDepth();
+  return ownerQueueDepth && typeof ownerQueueDepth === TYPEOF.OBJECT ?
+    ownerQueueDepth :
+    null;
+}
+function mergeLogsTableOwnerQueueDiagnostics(logsTable, ownerQueueDepth) {
+  if (!ownerQueueDepth) {
+    return logsTable;
+  }
+  const base = logsTable && typeof logsTable === TYPEOF.OBJECT ?
+    logsTable :
+    {};
+  return {
+    ...base,
+    ...ownerQueueDepth,
+    pendingWrites: Math.max(
+      toNonNegativeInteger(base.pendingWrites),
+      toNonNegativeInteger(ownerQueueDepth.pendingWrites),
+    ),
+    pendingWriteGrowthCount: Math.max(
+      toNonNegativeInteger(base.pendingWriteGrowthCount),
+      toNonNegativeInteger(ownerQueueDepth.pendingWriteGrowthCount),
+    ),
+    retainedBacklogGrowthCount: Math.max(
+      toNonNegativeInteger(base.retainedBacklogGrowthCount),
+      toNonNegativeInteger(ownerQueueDepth.retainedBacklogGrowthCount),
+    ),
+    sharedPressureBackpressured:
+      base.sharedPressureBackpressured === true ||
+      ownerQueueDepth.sharedPressureBackpressured === true,
+    transportPressureBackpressured:
+      base.transportPressureBackpressured === true ||
+      ownerQueueDepth.transportPressureBackpressured === true,
+    queryPressureBackpressured:
+      base.queryPressureBackpressured === true ||
+      ownerQueueDepth.queryPressureBackpressured === true,
+  };
+}
 function buildCdcReplayRetentionDiagnostics(partitionServices) {
   if (
     !(partitionServices instanceof Map) ||
@@ -366,7 +415,12 @@ class AdminControlSnapshotPart5 extends AdminControlSnapshotPart4 {
       this.systemTableCache?.getAll(TABLES.SERVICES) || ADMIN_CACHE_DUMP.EMPTY;
     const replicaOperations =
       this.buildControlSnapshotReplicaOperationSummary(replicaOperationRows);
-    const logsTable = buildLogsTableRetentionDiagnostics();
+    const logsTable = mergeLogsTableOwnerQueueDiagnostics(
+      buildLogsTableRetentionDiagnostics(),
+      buildMembershipPublicationOwnerQueueDiagnostics(
+        this.controlPlaneReadinessService,
+      ),
+    );
     const priorityRecoveryDecisionSnapshots =
       this.buildPriorityRecoveryDecisionSnapshots({
         capturedAt,

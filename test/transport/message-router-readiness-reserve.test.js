@@ -141,8 +141,8 @@ t.test(
     };
 
     try {
-      // Saturate the queue's CRITICAL pending ceiling using distinct recovery
-      // sources so per-source reserve preemption does not collapse the backlog.
+      // Saturate the queue's CRITICAL pending ceiling using semantic recovery
+      // sources so raw target-fallback admission does not cap this fixture.
       const criticalEnqueueCount = TEST_MAX_CONCURRENT + TEST_CRITICAL_CEILING;
       for (let index = 0; index < criticalEnqueueCount; index++) {
         allDeliveries.push(
@@ -152,6 +152,7 @@ t.test(
               buildBlockingDelivery(`critical-${index}`),
               {
                 deliveryPriority: PRIORITY_CRITICAL,
+                deliverySource: `semantic-critical-${index}`,
                 targetAddress: `${TEST_CRITICAL_TARGET_PREFIX}${index}-r1`,
                 message: {},
               },
@@ -175,6 +176,7 @@ t.test(
           buildBlockingDelivery('critical-overflow'),
           {
             deliveryPriority: PRIORITY_CRITICAL,
+            deliverySource: 'semantic-critical-overflow',
             targetAddress: `${TEST_CRITICAL_TARGET_PREFIX}overflow-r1`,
             message: {},
           },

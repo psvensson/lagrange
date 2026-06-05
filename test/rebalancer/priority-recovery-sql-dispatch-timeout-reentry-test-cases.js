@@ -4,11 +4,11 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({regi
     TEST_ASSERT_SQL_PRIORITY_DEFERRED_CLAIM_DISPATCH, TEST_ASSERT_SQL_PRIORITY_DEFERRED_CLAIM_STEP, TEST_ASSERT_SQL_PRIORITY_DEFERRED_PROGRESS_RETRY, TEST_ASSERT_SQL_PRIORITY_DEFERRED_PROGRESS_RETRY_STATUS, TEST_ASSERT_SQL_PRIORITY_DEFERRED_PROGRESS_RETRY_STEP, TEST_ASSERT_SQL_PRIORITY_DEFERRED_PROGRESS_STALE_ROW, TEST_ASSERT_SQL_PRIORITY_DEFERRED_PROGRESS_TIMER, TEST_ASSERT_SQL_PRIORITY_DISPATCH,
     TEST_ASSERT_SQL_PRIORITY_DISPATCH_SOURCE, TEST_ASSERT_SQL_PRIORITY_DISPATCH_TARGET, TEST_ASSERT_SQL_PRIORITY_DISPATCH_TIMEOUT, TEST_ASSERT_SQL_PRIORITY_LOCAL_OWNER, TEST_ASSERT_SQL_PRIORITY_PENDING_WAKE_ACCEPTED_STATUS, TEST_ASSERT_SQL_PRIORITY_PENDING_WAKE_ACCEPTED_STEP, TEST_ASSERT_SQL_PRIORITY_PENDING_WAKE_NO_CREATE, TEST_ASSERT_SQL_PRIORITY_PENDING_WAKE_STATUS,
     TEST_ASSERT_SQL_PRIORITY_PENDING_WAKE_STEP, TEST_ASSERT_SQL_PRIORITY_PENDING_WAKE_SUCCESS, TEST_ASSERT_SQL_PRIORITY_REARM, TEST_ASSERT_SQL_PRIORITY_SNAPSHOT_STEP, TEST_ASSERT_SQL_PRIORITY_STALE_ROW, TEST_ASSERT_SQL_PRIORITY_STATUS, TEST_ASSERT_SQL_PRIORITY_STEP, TEST_ASSERT_SQL_PRIORITY_TRANSITIONS,
-    TEST_CAPTURED_AT_MS, TEST_DELIVERY_STATUS_INITIATED, TEST_DISTRIBUTED_PARTICIPANT_FAILURE, TEST_EMPTY_LIST, TEST_EMPTY_VALUE, TEST_ENTITY_TYPE_PARTITION, TEST_EXPECTED_WORKFLOW_STEP_PARAM_INDEX, TEST_HANDOFF_TIMEOUT_MS,
-    TEST_LOCAL_OWNER_PARTITION_ID, TEST_LOCAL_OWNER_REPLICA_ID, TEST_MIN_REPLICA_COUNT, TEST_PARTITION_ID, TEST_PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS, TEST_QUERY_OPERATION_BY_ID_FRAGMENT, TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT, TEST_QUERY_SERVICES_FRAGMENT,
+    TEST_CAPTURED_AT_MS, TEST_DEFERRED_RETRY_PENDING_REASON, TEST_DELIVERY_STATUS_INITIATED, TEST_DISTRIBUTED_PARTICIPANT_FAILURE, TEST_EMPTY_LIST, TEST_EMPTY_VALUE, TEST_ENTITY_TYPE_PARTITION, TEST_EXPECTED_WORKFLOW_STEP_PARAM_INDEX, TEST_HANDOFF_TIMEOUT_MS,
+    TEST_LOCAL_OWNER_PARTITION_ID, TEST_LOCAL_OWNER_REPLICA_ID, TEST_MIN_REPLICA_COUNT, TEST_OPERATION_CREATED_AT_MS, TEST_PARTITION_ID, TEST_PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS, TEST_QUERY_OPERATION_BY_ID_FRAGMENT, TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT, TEST_QUERY_SERVICES_FRAGMENT,
     TEST_RAFT_ROLE_FOLLOWER, TEST_REPLICA_HANDLER_DISPATCH_TARGET, TEST_REPLICA_ID, TEST_REPLICA_OPERATIONS_TABLE, TEST_REPLICA_OPERATION_DISPATCH_DELIVERY_SOURCE, TEST_REPLICA_SERVICE_ADDRESS, TEST_RETRY_AFTER_MS, TEST_SQL_PRIORITY_DEFERRED_CLAIM_DISPATCH_TEST_NAME,
     TEST_SQL_PRIORITY_DEFERRED_PROGRESS_DISPATCH_TEST_NAME, TEST_SQL_PRIORITY_PENDING_WAKE_ACCEPTED_RECONCILE_TEST_NAME, TEST_SQL_PRIORITY_PENDING_WAKE_ACTIVE_RECONCILE_TEST_NAME, TEST_SQL_PRIORITY_STALE_VISIBILITY_REDISPATCH_TEST_NAME, TEST_SQL_PRIORITY_TIMEOUT_OPERATION_ID, TEST_SQL_PRIORITY_TIMEOUT_REDISPATCH_TEST_NAME, TEST_STATUS_ACTIVE, TEST_STATUS_CREATING,
-    TEST_STATUS_PENDING, TEST_STEP_ACTIVE, TEST_STEP_CREATING, TEST_STEP_HISTORY_LAG_MS, TEST_STEP_PENDING, TEST_STEP_SENDING, TEST_TARGET_NODE_ID, TEST_TIMEOUT_OVERRUN_MS,
+    TEST_STATUS_PENDING, TEST_STEP_ACTIVE, TEST_STEP_CREATING, TEST_STEP_HISTORY_LAG_MS, TEST_STEP_PENDING, TEST_STEP_SENDING, TEST_STEP_TIMEOUT_MS, TEST_TARGET_NODE_ID, TEST_TIMEOUT_OVERRUN_MS,
     TEST_UPDATE_REPLICA_OPERATIONS_PREFIX, WORKFLOW_STEP, buildDispatchPendingReentryPlanningSnapshot, buildPendingOperationRow, buildTransactionCoordinator, createCoordinator,
   } = dependencies;
 
@@ -163,8 +163,8 @@ registerCase(TEST_SQL_PRIORITY_TIMEOUT_REDISPATCH_TEST_NAME, async (t) => {
       TEST_STATUS_CREATING,
       {now: nowMs},
     ),
-    true,
-    TEST_ASSERT_SQL_PRIORITY_REARM,
+    false,
+    'visible CREATING target progress should not replay duplicate create dispatch',
   );
 
   await coordinator.checkTimeouts();
@@ -244,6 +244,234 @@ registerCase(TEST_SQL_PRIORITY_TIMEOUT_REDISPATCH_TEST_NAME, async (t) => {
 
   await coordinator.shutdown();
 });
+
+registerCase(
+  'critical SQL CREATING dispatch retry remains rearm-eligible until the ' +
+    'operation budget closes',
+  async (t) => {
+    const deferredTimers = [];
+    const nowMs = TEST_CAPTURED_AT_MS;
+    const staleCreatingUpdatedAt =
+      nowMs - TEST_STEP_TIMEOUT_MS - TEST_TIMEOUT_OVERRUN_MS;
+    const operationRow = buildPendingOperationRow({
+      operationId: TEST_SQL_PRIORITY_TIMEOUT_OPERATION_ID,
+      partitionId: TEST_PARTITION_ID,
+      replicaId: TEST_REPLICA_ID,
+      nowMs,
+    });
+    operationRow.status = TEST_STATUS_CREATING;
+    operationRow.workflow_step = TEST_STEP_CREATING;
+    operationRow.created_at = TEST_OPERATION_CREATED_AT_MS;
+    operationRow.updated_at = staleCreatingUpdatedAt;
+    operationRow.steps_history = JSON.stringify([
+      {
+        step: TEST_STEP_CREATING,
+        timestamp: staleCreatingUpdatedAt - TEST_STEP_HISTORY_LAG_MS,
+      },
+    ]);
+
+    const coordinator = createCoordinator({
+      nodeId: TEST_TARGET_NODE_ID,
+      transactionCoordinator: buildTransactionCoordinator(),
+      systemTableCache: {
+        get() {
+          return TEST_EMPTY_VALUE;
+        },
+        getAll() {
+          return TEST_EMPTY_LIST;
+        },
+        filter() {
+          return TEST_EMPTY_LIST;
+        },
+      },
+      cdcIntegrationService: {
+        async waitForCacheUpdate() {},
+      },
+      messageRouter: {
+        async deliver() {
+          return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
+        },
+      },
+      tablePolicyService: {
+        async getPolicyForPartition() {
+          return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+        },
+      },
+      setTimeoutFn(fn, delayMs) {
+        const handle = {fn, delayMs};
+        deferredTimers.push(handle);
+        return handle;
+      },
+      clearTimeoutFn() {},
+      enableTimeouts: false,
+    });
+    coordinator.config.creatingTimeoutMs = TEST_STEP_TIMEOUT_MS;
+
+    try {
+      coordinator.initialize();
+      const operation = coordinator.repository.rowToOperation(operationRow);
+      t.equal(
+        coordinator.workflowOwner.isOperationStepTimedOut(operation, nowMs),
+        true,
+        'stale CREATING progress should still time out before dispatch retry is armed',
+      );
+
+      const retryableDispatchError = new Error('Message not acknowledged');
+      retryableDispatchError.deferRetry = true;
+      retryableDispatchError.retryAfterMs = TEST_RETRY_AFTER_MS;
+      t.equal(
+        coordinator.workflowOwner.deferDispatchRetry(
+          operation,
+          retryableDispatchError,
+        ),
+        true,
+        'retryable CREATING dispatch pressure should arm dispatch retry',
+      );
+      t.equal(
+        deferredTimers.length,
+        NUM.ONE,
+        'dispatch retry should arm exactly one timer',
+      );
+      t.equal(
+        coordinator.workflowOwner.isOperationStepTimedOut(operation, nowMs),
+        false,
+        'active dispatch retry should protect CREATING within the operation budget',
+      );
+      t.equal(
+        coordinator.workflowOwner.shouldRearmDispatchFromProgressReconcile(
+          operation,
+          TEST_ACTUAL_STATUS_ABSENT,
+          {now: nowMs},
+        ),
+        true,
+        'active dispatch retry should keep CREATING rearm-eligible within the operation budget',
+      );
+
+      const expiredBudgetOperation = {
+        ...operation,
+        createdAt: NUM.ZERO,
+        updatedAt: staleCreatingUpdatedAt,
+      };
+      t.equal(
+        coordinator.workflowOwner.isOperationStepTimedOut(
+          expiredBudgetOperation,
+          nowMs,
+        ),
+        true,
+        'CREATING dispatch retry should stop protecting once the operation budget closes',
+      );
+      t.equal(
+        coordinator.workflowOwner.shouldRearmDispatchFromProgressReconcile(
+          expiredBudgetOperation,
+          TEST_ACTUAL_STATUS_ABSENT,
+          {now: nowMs},
+        ),
+        false,
+        'expired operation budget should block further CREATING dispatch rearm',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  },
+);
+
+registerCase(
+  'critical SQL CREATING reconnect delivery arms bounded dispatch retry',
+  async (t) => {
+    const deliveries = [];
+    const deferredTimers = [];
+    const nowMs = TEST_CAPTURED_AT_MS;
+    const operationRow = buildPendingOperationRow({
+      operationId: TEST_SQL_PRIORITY_TIMEOUT_OPERATION_ID,
+      partitionId: TEST_PARTITION_ID,
+      replicaId: TEST_REPLICA_ID,
+      nowMs,
+    });
+    operationRow.status = TEST_STATUS_CREATING;
+    operationRow.workflow_step = TEST_STEP_CREATING;
+    operationRow.created_at = TEST_OPERATION_CREATED_AT_MS;
+    operationRow.updated_at = nowMs;
+    operationRow.steps_history = JSON.stringify([
+      {
+        step: TEST_STEP_CREATING,
+        timestamp: nowMs - TEST_STEP_HISTORY_LAG_MS,
+      },
+    ]);
+
+    const coordinator = createCoordinator({
+      nodeId: TEST_TARGET_NODE_ID,
+      transactionCoordinator: buildTransactionCoordinator(),
+      systemTableCache: {
+        get() {
+          return TEST_EMPTY_VALUE;
+        },
+        getAll() {
+          return TEST_EMPTY_LIST;
+        },
+        filter() {
+          return TEST_EMPTY_LIST;
+        },
+      },
+      cdcIntegrationService: {
+        async waitForCacheUpdate() {},
+      },
+      messageRouter: {
+        async deliver(target, payload, options) {
+          deliveries.push({target, payload, options});
+          return {
+            acknowledged: false,
+            error: 'Connection to node node-target closed',
+            errorCode: 'ROUTER_CONNECTION_CLOSED',
+            deferRetry: true,
+            retryAfterMs: TEST_RETRY_AFTER_MS,
+          };
+        },
+      },
+      tablePolicyService: {
+        async getPolicyForPartition() {
+          return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+        },
+      },
+      setTimeoutFn(fn, delayMs) {
+        const handle = {fn, delayMs};
+        deferredTimers.push(handle);
+        return handle;
+      },
+      clearTimeoutFn() {},
+      enableTimeouts: false,
+    });
+
+    try {
+      coordinator.initialize();
+      const operation = coordinator.repository.rowToOperation(operationRow);
+      const result =
+        await coordinator.workflowOwner.executeOperationInternal(operation);
+
+      t.equal(
+        result?.reason,
+        TEST_DEFERRED_RETRY_PENDING_REASON,
+        'reconnecting delivery should keep critical create dispatch retryable',
+      );
+      t.equal(
+        deliveries.length,
+        NUM.ONE,
+        'critical create dispatch should attempt delivery once',
+      );
+      t.equal(
+        deferredTimers.length,
+        NUM.ONE,
+        'reconnecting delivery should arm one dispatch retry',
+      );
+      t.equal(
+        deferredTimers[NUM.ZERO]?.delayMs,
+        TEST_RETRY_AFTER_MS,
+        'dispatch retry should preserve the router reconnect retry-after',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  },
+);
 
 registerCase(TEST_SQL_PRIORITY_DEFERRED_CLAIM_DISPATCH_TEST_NAME, async (t) => {
   const deliveries = [];

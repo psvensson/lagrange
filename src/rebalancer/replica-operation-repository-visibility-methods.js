@@ -32,6 +32,7 @@ function assignReplicaOperationRepositoryVisibilityMethods(
     buildReplicaOperationVisibilityReadOptions,
     getControlPlaneRetryAfterMs,
     hasPriorityRecoverySpreadGap,
+    isRetryableControlPlaneError,
     resolveIncompleteOperationVisibilitySupplementMode,
     resolveReplicaOperationVisibilityReadMode,
   } = options;
@@ -708,8 +709,31 @@ function assignReplicaOperationRepositoryVisibilityMethods(
       this.isPriorityRecoveryOwnerReadActive(planningSnapshot)
     );
   }
-  shouldDeferIncompleteOperationReadFailure(result, planningSnapshot = null) {
-    return result?.success === false && this.isPriorityRecoveryOwnerReadActive(planningSnapshot);
+  shouldDeferIncompleteOperationReadFailure(
+    result,
+    planningSnapshot = null,
+    options = {},
+  ) {
+    const cachedOperations = Array.isArray(options.cachedOperations) ?
+      options.cachedOperations :
+      [];
+    const fallbackOperations = Array.isArray(options.fallbackOperations) ?
+      options.fallbackOperations :
+      [];
+    const hasReusableOperationEvidence =
+      cachedOperations.length > NUM.ZERO ||
+      fallbackOperations.length > NUM.ZERO ||
+      this.canReuseLastIncompleteOperationObservation();
+    return (
+      result?.success === false &&
+      (
+        this.isPriorityRecoveryOwnerReadActive(planningSnapshot) ||
+        (
+          hasReusableOperationEvidence &&
+          isRetryableControlPlaneError(result)
+        )
+      )
+    );
   }
   }
 

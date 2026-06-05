@@ -626,7 +626,8 @@ export function registerAdminControlSnapshotRepairHandoffReplayOutcomeTestCases(
             state: 'deferred_refresh',
             contractState: 'deferred',
             nextAction: 'retry',
-            retryAfterMs: 12000,
+            retryAfterMs:
+              ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_OWNER_RETRY_AFTER_MS,
           },
           controlPlaneDiagnostics: {
             ordinaryRepairDeferred:

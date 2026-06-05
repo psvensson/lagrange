@@ -7,6 +7,10 @@ import {
   PRIORITY_RECOVERY_SEMANTIC_STATE,
 } from '../../src/control-plane/priority-recovery-diagnostics-constants.js';
 import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+  CONTROL_PLANE_READINESS_REASON,
+} from '../../src/control-plane/control-plane-readiness-constants.js';
+import {
   EntityType,
   ReplicaStatus,
 } from '../../src/rebalancer/unified-rebalancer.js';
@@ -43,6 +47,14 @@ const TEST_OPERATION_WORKFLOW_IN_FLIGHT = 'in_flight';
 const TEST_NODE_STATUS_ACTIVE = 'active';
 const TEST_SERVICE_TYPE_PARTITION = 'partition';
 const TEST_RAFT_ROLE_FOLLOWER = 'follower';
+const TEST_NOW_MS = 1780622700000;
+const TEST_SYNCING_STALE_AGE_MS = 360000;
+const TEST_STALE_OPERATION_UPDATED_AT_MS =
+  TEST_NOW_MS - TEST_SYNCING_STALE_AGE_MS;
+const TEST_ANCIENT_STALE_OPERATION_UPDATED_AT_MS =
+  TEST_NOW_MS - 90000000;
+const TEST_PRIORITY_RECOVERY_OPERATION_CREATION_SCOPE_CURRENT_PARTITION =
+  'current_partition';
 
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
@@ -83,6 +95,22 @@ function buildInFlightReplaceOperation() {
       {step: WORKFLOW_STEP.CREATING, status: 'creating', inFlight: true},
       {step: WORKFLOW_STEP.SYNCING, status: 'syncing', inFlight: true},
     ]),
+  });
+}
+
+function buildStaleInFlightReplaceOperation() {
+  return Object.freeze({
+    ...buildInFlightReplaceOperation(),
+    updated_at: TEST_STALE_OPERATION_UPDATED_AT_MS,
+    updatedAt: TEST_STALE_OPERATION_UPDATED_AT_MS,
+  });
+}
+
+function buildAncientStaleInFlightReplaceOperation() {
+  return Object.freeze({
+    ...buildInFlightReplaceOperation(),
+    updated_at: TEST_ANCIENT_STALE_OPERATION_UPDATED_AT_MS,
+    updatedAt: TEST_ANCIENT_STALE_OPERATION_UPDATED_AT_MS,
   });
 }
 
@@ -158,9 +186,39 @@ function createPlanningReadinessService(planningSnapshot) {
   return readinessService;
 }
 
+function createBlockedLocalServePlanningReadinessService(planningSnapshot) {
+  const readinessService = createPlanningReadinessService(planningSnapshot);
+  readinessService.getNodeReadinessSync = (nodeId) => Object.freeze({
+    nodeId,
+    dimensions: Object.freeze({
+      [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+      [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: false,
+      [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: true,
+      [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: true,
+      [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: true,
+      [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: false,
+      [CONTROL_PLANE_READINESS_DIMENSION.METADATA_PUBLICATION_HEALTHY]: true,
+      [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+      [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE]:
+        true,
+      [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
+    }),
+    reasons: Object.freeze([
+      Object.freeze({
+        code: CONTROL_PLANE_READINESS_REASON.CLUSTER_MEMBER_UNHEALTHY,
+      }),
+      Object.freeze({
+        code: CONTROL_PLANE_READINESS_REASON.CONTROL_PLANE_WRITE_UNHEALTHY,
+      }),
+    ]),
+  });
+  return readinessService;
+}
+
 function createPriorityRebalancer(options = {}) {
   const planningSnapshot = options.planningSnapshot || buildStalePlanningSnapshot();
   const readinessService =
+    options.controlPlaneReadinessService ||
     createPlanningReadinessService(planningSnapshot);
   const rebalanceCoordinator =
     options.rebalanceCoordinator || createMockCoordinator();
@@ -181,6 +239,7 @@ function createPriorityRebalancer(options = {}) {
     },
     controlPlaneReadinessService: readinessService,
     rebalanceCoordinator,
+    nowFn: options.nowFn,
   });
 }
 
@@ -443,6 +502,130 @@ test(
         operationCreationScope: null,
       }),
       'the sync planning gate should not recreate eligible_but_no_operation_created after move execution has already advanced the same partition',
+    );
+  },
+);
+
+test(
+  'UnifiedRebalancer planning-gate snapshot reopens operation creation when cache-visible replace progress is stale',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const rebalancer = createPriorityRebalancer({
+      replicaOperations: [buildStaleInFlightReplaceOperation()],
+      nowFn: () => TEST_NOW_MS,
+    });
+
+    const planningGateSnapshot =
+      rebalancer.buildPriorityRecoveryOperationCreationPlanningGateSnapshot(
+        TEST_PARTITION_ID,
+      );
+
+    t.same(
+      planningGateSnapshot,
+      Object.freeze({
+        operationCreationRequired: true,
+        operationCreationPartitionId: TEST_PARTITION_ID,
+        operationCreationScope:
+          TEST_PRIORITY_RECOVERY_OPERATION_CREATION_SCOPE_CURRENT_PARTITION,
+      }),
+      'stale in-flight progress should not suppress a fresh priority recovery operation while spread is still open',
+    );
+  },
+);
+
+test(
+  'UnifiedRebalancer ancient cache-visible stale progress also reopens priority recovery creation',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const rebalancer = createPriorityRebalancer({
+      replicaOperations: [buildAncientStaleInFlightReplaceOperation()],
+      nowFn: () => TEST_NOW_MS,
+    });
+
+    const planningGateSnapshot =
+      rebalancer.buildPriorityRecoveryOperationCreationPlanningGateSnapshot(
+        TEST_PARTITION_ID,
+      );
+
+    t.same(
+      planningGateSnapshot,
+      Object.freeze({
+        operationCreationRequired: true,
+        operationCreationPartitionId: TEST_PARTITION_ID,
+        operationCreationScope:
+          TEST_PRIORITY_RECOVERY_OPERATION_CREATION_SCOPE_CURRENT_PARTITION,
+      }),
+      'very old cache-visible progress should not remain a live context that suppresses fresh priority recovery',
+    );
+  },
+);
+
+test(
+  'UnifiedRebalancer stale priority operation progress bypasses local serve readiness for fresh recovery creation',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const planningSnapshot = buildStalePlanningSnapshot();
+    const rebalancer = createPriorityRebalancer({
+      planningSnapshot,
+      controlPlaneReadinessService:
+        createBlockedLocalServePlanningReadinessService(planningSnapshot),
+      replicaOperations: [buildStaleInFlightReplaceOperation()],
+      nowFn: () => TEST_NOW_MS,
+    });
+
+    const planningGateSnapshot =
+      rebalancer.buildPriorityRecoveryOperationCreationPlanningGateSnapshot(
+        TEST_PARTITION_ID,
+      );
+    const localServeDecision =
+      rebalancer.resolveLocalServePlanningGateDecision();
+
+    t.equal(
+      planningGateSnapshot?.operationCreationRequired,
+      true,
+      'stale operation progress should reopen the recovery operation-creation proof',
+    );
+    t.equal(
+      localServeDecision,
+      null,
+      'local serve readiness should not strand a reopened priority recovery operation',
+    );
+  },
+);
+
+test(
+  'UnifiedRebalancer live priority operation progress still defers behind local serve readiness',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const planningSnapshot = buildStalePlanningSnapshot();
+    const rebalancer = createPriorityRebalancer({
+      planningSnapshot,
+      controlPlaneReadinessService:
+        createBlockedLocalServePlanningReadinessService(planningSnapshot),
+      replicaOperations: [buildInFlightReplaceOperation()],
+      nowFn: () => TEST_NOW_MS,
+    });
+
+    const planningGateSnapshot =
+      rebalancer.buildPriorityRecoveryOperationCreationPlanningGateSnapshot(
+        TEST_PARTITION_ID,
+      );
+    const localServeDecision =
+      rebalancer.resolveLocalServePlanningGateDecision();
+
+    t.equal(
+      planningGateSnapshot?.operationCreationRequired,
+      false,
+      'live operation progress should keep duplicate creation suppressed',
+    );
+    t.equal(
+      localServeDecision?.gate,
+      'local_serve_readiness',
+      'live operation progress should not bypass local serve readiness',
     );
   },
 );

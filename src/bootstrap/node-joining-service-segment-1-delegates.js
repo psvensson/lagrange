@@ -443,6 +443,13 @@ function buildJoinCleanupDelegates() {
     },
     sendControlPlaneNodeStateUpdate: (options) =>
       self.sendControlPlaneNodeStateUpdate(options),
+    withdrawFailedJoinAdmission: (options) => {
+      const owner = self.querySystemStatePhase?.nodeRegistrationOwner;
+      if (typeof owner?.withdrawFailedJoinAdmission !== 'function') {
+        throw new Error('NodeRegistrationOwner withdrawal delegate unavailable');
+      }
+      return owner.withdrawFailedJoinAdmission(options);
+    },
     stopJoiningLifecycleOwners: () => self.stopJoiningLifecycleOwners(),
     emit: (event, data) => self.emit(event, data),
   };

@@ -37,6 +37,24 @@ const CREATE_IN_PROGRESS_OBSERVED_RECONCILE_STATUSES = Object.freeze(
 const CREATE_IN_PROGRESS_OBSERVED_RETRY_STATUSES = Object.freeze(
   new Set([ReplicaStatus.SYNCING]),
 );
+function resolveDispatchDeliveryErrorLike(response) {
+  if (!response || typeof response !== TYPEOF.OBJECT) {
+    return response;
+  }
+  const nestedError = response.error;
+  if (!nestedError || typeof nestedError !== TYPEOF.OBJECT) {
+    return response;
+  }
+  return {
+    ...response,
+    ...nestedError,
+    error:
+      typeof nestedError.message === TYPEOF.STRING ?
+        nestedError.message :
+        response.error,
+    cause: nestedError,
+  };
+}
 async function executeOperation(operation) {
   if (this.isShuttingDown || !this.isInitialized) {
     return {
@@ -414,7 +432,7 @@ async function executeOperationInternal(operation) {
     return response;
   }
   if (!isDeliveredTransportDeliveryOutcome(response)) {
-    const errorLike = response.error || response;
+    const errorLike = resolveDispatchDeliveryErrorLike(response);
     const errorMsg = this.normalizeErrorMessage(
       errorLike,
       REBALANCE_COORDINATOR_ERROR_MSG.MESSAGE_NOT_ACKED,
@@ -525,7 +543,7 @@ async function _handleDispatchResponse(operation, response, replaceRemovePhase) 
       ReplicaOperationResponseStatus.NOT_FOUND,
     );
   }
-  const errorLike = response?.error || response;
+  const errorLike = resolveDispatchDeliveryErrorLike(response);
   const errorMsg = this.normalizeErrorMessage(errorLike, 'Unknown error');
   if (this.deferDispatchRetry(operation, errorLike)) {
     return this.buildSkippedOperationResult(

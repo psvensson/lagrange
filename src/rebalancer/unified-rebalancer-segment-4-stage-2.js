@@ -26,6 +26,8 @@ const {
 
 const {buildPriorityRecoveryOperationContextFromRecord} =
   UNIFIED_REBALANCER_SHARED;
+const {isReplicaOperationStale, normalizeReplicaOperationRecord} =
+  UNIFIED_REBALANCER_SHARED;
 
 class UnifiedRebalancerSegment4Stage2 extends UnifiedRebalancerSegment4Stage1 {
   buildPriorityRecoveryFollowUpOperationContextsFromCache(partitionId) {
@@ -40,8 +42,21 @@ class UnifiedRebalancerSegment4Stage2 extends UnifiedRebalancerSegment4Stage1 {
     }
     const replicaOperationRows =
       this.systemTableCache.getAll(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) || [];
+    const nowMs = this.nowFn();
     const operationContexts = replicaOperationRows
-      .filter((operation) => this.isTrackedInFlightOperation(operation))
+      .filter((operation) => {
+        if (!this.isTrackedInFlightOperation(operation)) {
+          return false;
+        }
+        const normalizedOperation = normalizeReplicaOperationRecord(
+          operation,
+          {nowMs},
+        );
+        return !isReplicaOperationStale(normalizedOperation, {
+          nowMs,
+          staleTimeoutLookbackMs: Number.MAX_SAFE_INTEGER,
+        });
+      })
       .map((operation) =>
         buildPriorityRecoveryOperationContextFromRecord(operation),
       )

@@ -10,8 +10,9 @@
  * METADATA_PUBLICATION_HEALTHY to already be true — but those are exactly the
  * dimensions the dispatch produces, so during the wedge they are pending and the
  * exemption never fires (self-readiness gate). For self-targeted dispatches we
- * drop the publication-cluster preconditions; for peer-targeted dispatches the
- * stricter precondition is preserved.
+ * drop the publication-cluster and already-selected placement/provisioning
+ * preconditions; for peer-targeted dispatches the stricter precondition is
+ * preserved.
  */
 
 import {test} from '../../src/test-helpers/tap.js';
@@ -38,6 +39,8 @@ function buildPublicationPendingReadiness() {
       [DIM.PROCESS_ALIVE]: true,
       [DIM.CLUSTER_MEMBER_HEALTHY]: true,
       [DIM.LOAD_READY]: true,
+      [DIM.PLACEMENT_ELIGIBLE]: false,
+      [DIM.PROVISIONING_ELIGIBLE]: false,
       [DIM.CONTROL_PLANE_PUBLISHED]: false,
       [DIM.METADATA_PUBLICATION_HEALTHY]: false,
       [DIM.ROUTING_READY]: false,
@@ -67,6 +70,8 @@ function buildPublishedRecoveryPendingReadiness() {
       [DIM.PROCESS_ALIVE]: true,
       [DIM.CLUSTER_MEMBER_HEALTHY]: true,
       [DIM.LOAD_READY]: true,
+      [DIM.PLACEMENT_ELIGIBLE]: true,
+      [DIM.PROVISIONING_ELIGIBLE]: true,
       [DIM.CONTROL_PLANE_PUBLISHED]: true,
       [DIM.METADATA_PUBLICATION_HEALTHY]: true,
       [DIM.ROUTING_READY]: false,
@@ -124,6 +129,23 @@ test('peer-targeted dispatch keeps the pre-existing exemption when published', a
   t.ok(
     allowed,
     'existing published-but-recovery-pending exemption is unchanged',
+  );
+  t.end();
+});
+
+test('peer-targeted dispatch still requires provisioning eligibility', async (t) => {
+  const readiness = buildPublishedRecoveryPendingReadiness();
+  readiness.dimensions[DIM.PLACEMENT_ELIGIBLE] = false;
+  readiness.dimensions[DIM.PROVISIONING_ELIGIBLE] = false;
+  const allowed = shouldAllowPriorityRecoveryDispatchBootstrap({
+    operation: {partitionId: PRIORITY_PARTITION_ID, targetNodeId: PEER_NODE_ID},
+    readiness,
+    decisionDimension: DECISION_DIMENSION,
+    selfNodeId: SELF_NODE_ID,
+  });
+  t.notOk(
+    allowed,
+    'peer-targeted recovery dispatches must keep the provisioning gate',
   );
   t.end();
 });

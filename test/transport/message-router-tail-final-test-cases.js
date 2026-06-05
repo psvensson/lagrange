@@ -523,6 +523,145 @@ export async function registerMessageRouterTailFinalTests({
       );
     });
 
+  t.test('should suppress handshake-failed reconnect candidates and retry current authority',
+    async (t) => {
+      const staleAddress = 'ws://172.18.0.2:8082';
+      const freshAddress = 'ws://172.20.0.2:8082';
+      const cases = [
+        {
+          name: 'connect timeout',
+          code: 'WS_CONNECT_TIMEOUT',
+          message: 'WebSocket connection timeout after 25ms',
+        },
+        {
+          name: 'closed before open',
+          code: null,
+          message: 'WebSocket connection closed before open for node node-b',
+        },
+      ];
+
+      for (const testCase of cases) {
+        await t.test(testCase.name, async (t) => {
+          const router = new MessageRouter({nodeId: 'node-a'});
+          await router.initialize({startServer: false});
+          t.teardown(async () => {
+            await router.shutdown().catch(() => {});
+          });
+
+          router.setServiceNodeResolver((address) => {
+            const match = address.match(/^([^/]+)\//);
+            return match ? match[1] : null;
+          });
+          let authorityReads = 0;
+          router.setNodeAddressResolver((nodeId) => {
+            if (nodeId !== 'node-b') {
+              return null;
+            }
+            authorityReads += 1;
+            return authorityReads <= 2 ? staleAddress : freshAddress;
+          });
+
+          router.nodeConnections.set('node-b', {
+            nodeId: 'node-b',
+            nodeAddress: staleAddress,
+            connectionId: 'node-b-stale-handshake',
+            ws: null,
+            state: ConnectionState.DISCONNECTED,
+            isIncoming: false,
+            reconnectAttempts: 0,
+            reconnectTimeout: null,
+            pingInterval: null,
+            address: staleAddress,
+            configuredAddress: staleAddress,
+            observedAddress: staleAddress,
+            isSelfConnection: false,
+          });
+
+          const warnings = [];
+          router.logger.warn = (message, details) => {
+            warnings.push({message, details});
+          };
+          const connectCalls = [];
+          router.connectToNode = async (nodeId, address) => {
+            connectCalls.push(address);
+            if (address === staleAddress) {
+              const error = new Error(testCase.message);
+              if (testCase.code) {
+                error.code = testCase.code;
+              }
+              throw error;
+            }
+            router.nodeConnections.set(nodeId, {
+              nodeId,
+              nodeAddress: address,
+              connectionId: 'node-b-fresh-handshake',
+              ws: {readyState: 1, send: () => {}},
+              state: ConnectionState.CONNECTED,
+              isIncoming: false,
+              reconnectAttempts: 0,
+              reconnectTimeout: null,
+              pingInterval: null,
+              address,
+              configuredAddress: address,
+              observedAddress: null,
+              isSelfConnection: false,
+            });
+          };
+          router.sendMessage = async (
+            _connection,
+            _targetAddress,
+            messageId,
+            _payload,
+            targetNodeId,
+            correlationId,
+          ) => ({
+            messageId,
+            correlationId,
+            acknowledged: true,
+            targetNodeId,
+            recovered: true,
+          });
+
+          const result = await router.deliver(
+            'node-b/service/handshake-stale-reconnect-suppression',
+            {type: 'TEST'},
+          );
+          const staleWarning = warnings.find(
+            (entry) => entry.details?.address === staleAddress,
+          );
+
+          t.equal(result.acknowledged, true,
+            'delivery should recover through freshly resolved authority');
+          t.same(connectCalls, [staleAddress, freshAddress],
+            'delivery should suppress stale handshake failure then dial fresh authority');
+          t.equal(
+            router.isReconnectAddressSuppressed('node-b', staleAddress),
+            true,
+            'stale handshake candidate should remain suppressed',
+          );
+          t.equal(
+            router.nodeConnections.get('node-b')?.configuredAddress,
+            freshAddress,
+            'stored configured authority should be refreshed to the fresh address',
+          );
+          t.equal(
+            staleWarning?.message,
+            'Failed to reconnect target node before delivery',
+            'warning should preserve the reconnect-before-delivery event name',
+          );
+          t.equal(staleWarning?.details?.candidateSource, 'canonical',
+            'warning should identify the primary stale candidate source');
+          t.same(
+            staleWarning?.details?.candidateSources,
+            ['canonical', 'configured', 'current', 'preferred', 'observed'],
+            'warning should list every authority source for the stale candidate',
+          );
+          t.equal(staleWarning?.details?.error, testCase.message,
+            'warning should include the handshake failure message');
+        });
+      }
+    });
+
   t.test('should replace a stale configured reconnect address with the current authoritative resolver address',
     async (t) => {
       const router = new MessageRouter({

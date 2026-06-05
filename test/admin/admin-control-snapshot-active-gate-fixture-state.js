@@ -227,6 +227,8 @@ export const ACTIVE_GATE_SNAPSHOT_PARTICIPANT_CAUSE =
   'query_participant_failure';
 export const ACTIVE_GATE_SNAPSHOT_SOURCE_TIMEOUT_REASON =
   'selected_snapshot_source_timeout';
+export const ACTIVE_GATE_SNAPSHOT_SELECTED_TIMEOUT_REASON =
+  'selected_timeout';
 export const ACTIVE_GATE_SNAPSHOT_FORCED_REPAIR_TIMEOUT_REASON =
   'forced_repair_snapshot_timeout';
 export const ACTIVE_GATE_SNAPSHOT_AUTHORITATIVE_QUERY_TIMEOUT_REASON =

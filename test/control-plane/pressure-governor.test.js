@@ -224,6 +224,58 @@ test('PressureGovernor backpressures control-plane work when critical reserve ' 
   );
 });
 
+test('PressureGovernor ignores non-reserve critical fallback backlog for ' +
+  'control-plane reserve exhaustion', async (t) => {
+  const governor = new PressureGovernor({
+    nodeId: 'node-a',
+    messageRouter: {
+      getStats() {
+        return {
+          outboundQueues: {
+            'node-b': {
+              pending: 16,
+              pendingCritical: 16,
+              pendingCriticalReserveEligible: 0,
+              pendingBackground: 0,
+              criticalReserve: 16,
+              backgroundPendingLimit: 48,
+              maxPending: 64,
+            },
+          },
+        };
+      },
+    },
+  });
+
+  const decision = governor.evaluate({
+    workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+    resourceKeys: ['control-plane:write'],
+    allowDegrade: false,
+    allowDefer: true,
+  });
+
+  t.equal(
+    decision.action,
+    PRESSURE_GOVERNOR_ACTION.ALLOW,
+    'target fallback critical backlog alone should not defer control-plane work',
+  );
+  t.equal(
+    decision.summary?.criticalReserveExhausted,
+    false,
+    'summary should leave reserve exhaustion clear for non-reserve backlog',
+  );
+  t.equal(
+    decision.summary?.totalPendingCritical,
+    16,
+    'summary should still expose total critical pending pressure',
+  );
+  t.equal(
+    decision.summary?.totalPendingCriticalReserveEligible,
+    0,
+    'summary should expose the reserve-eligible critical pending subset',
+  );
+});
+
 test('PressureGovernor defers deferrable critical work when the control-plane ' +
   'critical reserve is exhausted', async (t) => {
   const governor = new PressureGovernor({

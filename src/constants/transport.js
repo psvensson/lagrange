@@ -347,6 +347,7 @@ const TRANSPORT_NUM = Object.freeze({
   FOUR: NUM.FOUR,
   FIVE: NUM.FIVE,
   SIX: NUM.SIX,
+  EIGHT: NUM.EIGHT,
 });
 
 const TRANSPORT_METRIC = Object.freeze({

@@ -667,6 +667,7 @@ test('Owner-path convergence: all progression entry points ' +
             options: {
               requireOwnerRpcRead: false,
               allowPriorityRecoveryDeferredVisibility: true,
+              allowOwnerPersistedTransitionDeferredVisibility: false,
             },
           }],
           'dispatch retry should use the repository visibility observation contract before re-entering the owner lane',
@@ -1018,6 +1019,8 @@ test('Owner-path convergence: all progression entry points ' +
         status: ReplicaStatus.SYNCING,
       });
       const serviceRow = {
+        service_id: TEST_REPLICA_ID,
+        replica_id: TEST_REPLICA_ID,
         partition_id: TEST_PARTITION_ID,
         node_id: TEST_NODE_ID,
         status: ReplicaStatus.ACTIVE,
@@ -1058,6 +1061,8 @@ test('Owner-path convergence: all progression entry points ' +
         createdAt: Date.now() - 600000,
       });
       const serviceRow = {
+        service_id: TEST_REPLICA_ID,
+        replica_id: TEST_REPLICA_ID,
         partition_id: TEST_PARTITION_ID,
         node_id: TEST_NODE_ID,
         status: ReplicaStatus.ACTIVE,

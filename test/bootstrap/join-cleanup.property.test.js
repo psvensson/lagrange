@@ -15,12 +15,15 @@
 import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
-import {JOINING_PHASE} from '../../src/bootstrap/bootstrap-constants.js';
+import {
+  CLEANUP_RESULT,
+  JOINING_PHASE,
+} from '../../src/bootstrap/bootstrap-constants.js';
 import {
   JOINING_CLEANUP_STEP,
 } from '../../src/bootstrap/node-joining-constants.js';
 import {NodeState} from '../../src/node/node-lifecycle-state-machine.js';
-import {TABLES, COLUMN, STATE} from '../../src/constants/index.js';
+import {TABLES, COLUMN} from '../../src/constants/index.js';
 import {RECONCILE_REASON} from '../../src/workflow/reconcile-queue-constants.js';
 
 /**
@@ -73,6 +76,7 @@ function createTrackedJoiningService(cleanupContext) {
   const tracking = {
     directNodeDeletes: 0,
     directServiceDeletes: 0,
+    failedJoinAdmissionWithdrawals: [],
     nodeStateUpdates: [],
     membershipPublicationReconciles: [],
     messageGroupsShutdown: new Set(),
@@ -106,9 +110,32 @@ function createTrackedJoiningService(cleanupContext) {
   };
   service.joinCleanupHandler.delegates.getRegisteredJoinNodeId = () =>
     cleanupContext.registeredNodeId;
+  service.joinCleanupHandler.delegates.withdrawFailedJoinAdmission =
+    async (options) => {
+      tracking.failedJoinAdmissionWithdrawals.push(options);
+      return {success: true};
+    };
   service.rebalanceCoordinator = {
     controlPlaneReadinessService: {
       membershipPublicationService: {
+        getLatestPublicationRowSync: () => ({
+          publication_epoch: 7,
+          published_active_node_ids: [
+            'existing-node-a',
+            'test-joining-node',
+            'existing-node-b',
+          ],
+          required_ack_node_ids: [
+            'existing-node-a',
+            'test-joining-node',
+            'existing-node-b',
+          ],
+          acknowledged_node_ids: [
+            'existing-node-a',
+            'test-joining-node',
+            'existing-node-b',
+          ],
+        }),
         enqueueClusterMembershipReconcile: (reason, context) => {
           tracking.membershipPublicationReconciles.push({
             reason,
@@ -155,12 +182,12 @@ test('Property 4: Join failure cleanup', async (t) => {
   /**
    * Property: For any valid failure phase, after cleanup, all
  * registered node membership should be withdrawn through the
- * NODE_STATE_UPDATE owner path, and cleanup should not issue
+ * join admission owner path, and cleanup should not issue
  * direct row deletions for nodes/services.
    */
-  t.test(
-    'cleanup withdraws membership without direct node/service deletes',
-    async (t) => {
+	  t.test(
+	    'cleanup withdraws membership without direct node/service deletes',
+	    async (t) => {
       await fc.assert(
         fc.asyncProperty(
           fc.constantFrom(...PHASES_WITH_QUERYING_STATE_CLEANUP),
@@ -176,37 +203,52 @@ test('Property 4: Join failure cleanup', async (t) => {
           async (failedPhase, context) => {
             const {service, tracking} =
               createTrackedJoiningService(context);
+            const expectedRegisteredNodeId =
+              context.registeredNodeId || service.nodeId;
 
             await service.cleanupFailedJoin(
               failedPhase, context,
             );
 
-            if (context.registeredNodeId) {
-              const disconnectedUpdate = tracking.nodeStateUpdates.find(
-                (update) => update?.state === STATE.DISCONNECTED,
-              );
-              if (!disconnectedUpdate) {
-                return false;
-              }
-              if (tracking.membershipPublicationReconciles.length !== 1) {
-                return false;
-              }
-              const reconcile =
-                tracking.membershipPublicationReconciles[0];
-              if (reconcile.reason !== RECONCILE_REASON.NODE_FAILED) {
-                return false;
-              }
-              if (reconcile.context?.registeredNodeId !==
-                  context.registeredNodeId) {
-                return false;
-              }
-              if (reconcile.context?.cleanupStep !==
-                  JOINING_CLEANUP_STEP.QUERYING_STATE) {
-                return false;
-              }
-            } else if (tracking.nodeStateUpdates.length > 0) {
+            if (tracking.failedJoinAdmissionWithdrawals.length !== 1) {
               return false;
-            } else if (tracking.membershipPublicationReconciles.length > 0) {
+            }
+            if (tracking.failedJoinAdmissionWithdrawals[0]
+              ?.registeredNodeId !== expectedRegisteredNodeId) {
+              return false;
+            }
+            if (tracking.nodeStateUpdates.length > 0) {
+              return false;
+            }
+            if (tracking.membershipPublicationReconciles.length !== 1) {
+              return false;
+            }
+            const reconcile =
+              tracking.membershipPublicationReconciles[0];
+            if (reconcile.reason !== RECONCILE_REASON.NODE_FAILED) {
+              return false;
+            }
+            if (reconcile.context?.registeredNodeId !==
+                expectedRegisteredNodeId) {
+              return false;
+            }
+            if (reconcile.context?.cleanupStep !==
+                JOINING_CLEANUP_STEP.QUERYING_STATE) {
+              return false;
+            }
+            if (!reconcile.context?.excludedNodeIds?.includes(
+              expectedRegisteredNodeId,
+            )) {
+              return false;
+            }
+            if (reconcile.context?.publishedActiveNodeIds?.includes(
+              expectedRegisteredNodeId,
+            )) {
+              return false;
+            }
+            if (reconcile.context?.requiredAckNodeIds?.includes(
+              expectedRegisteredNodeId,
+            )) {
               return false;
             }
 
@@ -217,14 +259,94 @@ test('Property 4: Join failure cleanup', async (t) => {
         {numRuns: 10},
       );
 
-      t.pass(
-        'cleanup withdraws membership without direct node/service deletes',
+	      t.pass(
+	        'cleanup withdraws membership without direct node/service deletes',
+	      );
+	    });
+
+  t.test(
+    'querying-state cleanup fails closed when owner withdrawal is unavailable',
+    async (t) => {
+      const context = {
+        registeredNodeId: null,
+        createdServiceIds: [],
+        createdMessageGroupIds: [],
+      };
+      const {service, tracking} = createTrackedJoiningService(context);
+      delete service.joinCleanupHandler.delegates.withdrawFailedJoinAdmission;
+
+      const result = await service.joinCleanupHandler._cleanupQueryingState(
+        context,
+      );
+
+      t.equal(
+        result,
+        CLEANUP_RESULT.ERROR,
+        'querying-state cleanup should report owner withdrawal failure',
+      );
+      t.same(
+        tracking.nodeStateUpdates,
+        [],
+        'cleanup should not fall back to legacy node-state publication',
+      );
+      t.same(
+        tracking.membershipPublicationReconciles,
+        [],
+        'cleanup should not enqueue stale publication reconcile when withdrawal fails',
       );
     });
 
-  /**
-   * Property: For phases that include MG cleanup, all message
-   * group services should be shut down.
+  t.test(
+    'querying-state cleanup enqueues exclusion after deferred owner withdrawal',
+    async (t) => {
+      const registeredNodeId = 'test-joining-node';
+      const context = {
+        registeredNodeId,
+        createdServiceIds: [],
+        createdMessageGroupIds: [],
+      };
+      const {service, tracking} = createTrackedJoiningService(context);
+      service.joinCleanupHandler.delegates.withdrawFailedJoinAdmission =
+        async (options) => {
+          tracking.failedJoinAdmissionWithdrawals.push(options);
+          return {
+            success: false,
+            accepted: true,
+            withdrawalDeferred: true,
+            contractState: 'deferred',
+            nextAction: 'retry',
+          };
+        };
+
+      const result = await service.joinCleanupHandler._cleanupQueryingState(
+        context,
+      );
+
+      t.equal(
+        result,
+        CLEANUP_RESULT.SUCCESS,
+        'accepted deferred owner withdrawal should not fail cleanup',
+      );
+      t.same(
+        tracking.nodeStateUpdates,
+        [],
+        'cleanup should not fall back to legacy node-state publication',
+      );
+      t.equal(
+        tracking.membershipPublicationReconciles.length,
+        1,
+        'cleanup should still enqueue membership publication exclusion',
+      );
+      t.same(
+        tracking.membershipPublicationReconciles[0]?.context?.excludedNodeIds,
+        [registeredNodeId],
+        'publication exclusion should target the deferred failed joiner',
+      );
+    });
+
+		  /**
+		   * Property: For phases that include MG cleanup, all message
+	   * group services should be shut down.
    */
   t.test(
     'message groups are shut down for MG-related failure phases',

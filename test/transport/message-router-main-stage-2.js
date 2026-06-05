@@ -128,8 +128,13 @@ t.test('MessageRouter unit tests chunk 2', async (t) => {
       const queue = router.getOutboundQueue('remote-node');
       t.equal(
         queue.pending.length,
-        2,
-        'one background and one critical delivery should remain queued',
+        1,
+        'background delivery should remain queued while critical work borrows reserve',
+      );
+      t.equal(
+        queue.inFlightCriticalSourceReserve,
+        1,
+        'critical delivery should borrow one reserve dispatch slot',
       );
 
       releaseFirstSend();
@@ -790,7 +795,7 @@ t.test('MessageRouter unit tests chunk 2', async (t) => {
   );
 
   t.test(
-    'should let critical recovery sources use non-reserved pending capacity',
+    'should bound aggregate critical target fallback pending capacity',
     async (t) => {
       const TEST_LOCAL_NODE_ID = 'local-node';
       const TEST_REMOTE_NODE_ID = 'remote-node';
@@ -798,11 +803,17 @@ t.test('MessageRouter unit tests chunk 2', async (t) => {
       const TEST_MAX_CONCURRENT = 1;
       const TEST_MAX_PENDING = 64;
       const TEST_CRITICAL_RESERVE = 16;
-      const TEST_ALLOWED_HOT_SOURCE_DELIVERIES = 17;
+      const TEST_ALLOWED_TARGET_FALLBACK_DELIVERIES = 8;
       const TEST_HOT_RECOVERY_TARGET_ADDRESS =
         'remote-node/partition/sql_transactions-p1-r4';
+      const TEST_SECOND_HOT_RECOVERY_TARGET_ADDRESS =
+        'remote-node/partition/sql_transaction_participants-p1-r4';
       const TEST_CONTROL_PLANE_TARGET_ADDRESS =
         'remote-node/service/control-plane';
+      const TEST_TARGET_FALLBACK_DELIVERY_SOURCES = [
+        TEST_HOT_RECOVERY_TARGET_ADDRESS,
+        TEST_SECOND_HOT_RECOVERY_TARGET_ADDRESS,
+      ];
       const router = new MessageRouter({
         nodeId: TEST_LOCAL_NODE_ID,
         nodeAddress: TEST_NODE_ADDRESS,
@@ -833,16 +844,20 @@ t.test('MessageRouter unit tests chunk 2', async (t) => {
       const criticalSourceDeliveries = [];
       for (
         let index = 0;
-        index < TEST_ALLOWED_HOT_SOURCE_DELIVERIES;
+        index < TEST_ALLOWED_TARGET_FALLBACK_DELIVERIES;
         index++
       ) {
+        const targetAddress =
+          TEST_TARGET_FALLBACK_DELIVERY_SOURCES[
+            index % TEST_TARGET_FALLBACK_DELIVERY_SOURCES.length
+          ];
         criticalSourceDeliveries.push(
           router.enqueueOutbound(
             TEST_REMOTE_NODE_ID,
             async () => ({acknowledged: true, criticalIndex: index}),
             {
               deliveryPriority: 'critical',
-              targetAddress: TEST_HOT_RECOVERY_TARGET_ADDRESS,
+              targetAddress,
               message: {},
             },
           ),
@@ -866,24 +881,80 @@ t.test('MessageRouter unit tests chunk 2', async (t) => {
       await Promise.resolve();
 
       const queue = router.getOutboundQueue(TEST_REMOTE_NODE_ID);
+      const targetFallbackPendingCount =
+        TEST_TARGET_FALLBACK_DELIVERY_SOURCES.reduce(
+          (count, targetAddress) =>
+            count + queue.pending.filter((item) =>
+              item?.deliverySource === `target:${targetAddress}`).length,
+          0,
+        );
       t.equal(
-        queue.pending.filter((item) =>
-          item?.deliverySource ===
-          `target:${TEST_HOT_RECOVERY_TARGET_ADDRESS}`).length,
-        TEST_ALLOWED_HOT_SOURCE_DELIVERIES,
-        'critical recovery source should exceed the proportional source cap',
+        targetFallbackPendingCount,
+        TEST_ALLOWED_TARGET_FALLBACK_DELIVERIES,
+        'critical target fallback traffic should stop at the aggregate proportional cap',
       );
       t.equal(
         queue.pending.length,
-        TEST_ALLOWED_HOT_SOURCE_DELIVERIES + TEST_MAX_CONCURRENT,
-        'critical recovery source should still leave reserved pending capacity',
+        TEST_ALLOWED_TARGET_FALLBACK_DELIVERIES + TEST_MAX_CONCURRENT,
+        'semantic critical traffic should still keep one pending slot',
+      );
+      await t.rejects(
+        router.enqueueOutbound(
+          TEST_REMOTE_NODE_ID,
+          async () => ({acknowledged: true, overflow: true}),
+          {
+            deliveryPriority: 'critical',
+            targetAddress: TEST_HOT_RECOVERY_TARGET_ADDRESS,
+            message: {},
+          },
+        ),
+        /queue/i,
+        'aggregate target fallback traffic should reject once the fallback cap is reached',
+      );
+      const saturationEntry = warnEntries.find((entry) =>
+        entry.message === 'Outbound queue saturated for node delivery' &&
+        entry.context?.backpressureScope === 'delivery_source');
+      t.ok(
+        saturationEntry,
+        'router should emit one delivery-source saturation warning for target fallback traffic',
       );
       t.equal(
-        warnEntries.some((entry) =>
-          entry.message === 'Outbound queue saturated for node delivery' &&
-          entry.context?.backpressureScope === 'delivery_source'),
-        false,
-        'critical recovery source should not trip the proportional source cap',
+        saturationEntry?.context?.attemptedDeliverySource,
+        `target:${TEST_HOT_RECOVERY_TARGET_ADDRESS}`,
+        'warning should keep the raw attempted target fallback source',
+      );
+      t.equal(
+        saturationEntry?.context?.pendingSourceSummary?.some((entry) =>
+          entry.source === `target:${TEST_HOT_RECOVERY_TARGET_ADDRESS}`),
+        true,
+        'warning summary should keep the first raw target fallback bucket',
+      );
+      t.equal(
+        saturationEntry?.context?.pendingSourceSummary?.some((entry) =>
+          entry.source ===
+          `target:${TEST_SECOND_HOT_RECOVERY_TARGET_ADDRESS}`),
+        true,
+        'warning summary should keep the second raw target fallback bucket',
+      );
+      t.equal(
+        saturationEntry?.context?.pendingForSource,
+        TEST_ALLOWED_TARGET_FALLBACK_DELIVERIES,
+        'warning should report the aggregate target fallback queued count',
+      );
+      t.equal(
+        saturationEntry?.context?.pendingSourceLimit,
+        TEST_ALLOWED_TARGET_FALLBACK_DELIVERIES,
+        'warning should report the aggregate target fallback source cap',
+      );
+      t.equal(
+        saturationEntry?.context?.inFlightForSource,
+        0,
+        'warning should report target fallback in-flight pressure for the admission key',
+      );
+      t.equal(
+        saturationEntry?.context?.inFlightSourceLimit,
+        TEST_MAX_CONCURRENT,
+        'warning should report target fallback in-flight source cap',
       );
 
       releaseFirstSend();

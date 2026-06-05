@@ -707,6 +707,53 @@ export function registerClusterPart6Core03Tests(context) {
     },
   );
 
+  test(
+    'Unit: _extractControlSnapshotCoverageDiagnostics preserves owner queue' +
+    ' detail fields',
+    async () => {
+      const cluster = createCluster({
+        size: 1,
+        docker: {socketPath: '/var/run/docker.sock'},
+        image: 'distributed-db:test',
+      });
+      const ownerKey = 'membership-publication:cluster_membership';
+
+      const snapshotDiagnostics = cluster._extractControlSnapshotCoverageDiagnostics({
+        rows: [{
+          controlPlaneDiagnostics: {
+            logsTable: {
+              pendingWrites: 1.9,
+              pendingWriteGrowthCount: 0,
+              retainedBacklogGrowthCount: 1,
+              sharedPressureBackpressured: false,
+              transportPressureBackpressured: false,
+              queryPressureBackpressured: false,
+              ownerKey,
+              pendingKeys: [ownerKey, ownerKey],
+              retryingKeys: [ownerKey],
+              inFlightKeys: ['membership-publication:other'],
+              retryableDrainFailureCount: 2.8,
+            },
+          },
+        }],
+      });
+
+      assert.deepEqual(snapshotDiagnostics.controlPlaneOwnerQueueDepth, {
+        pendingWrites: 1,
+        pendingWriteGrowthCount: 0,
+        retainedBacklogGrowthCount: 1,
+        sharedPressureBackpressured: false,
+        transportPressureBackpressured: false,
+        queryPressureBackpressured: false,
+        ownerKey,
+        pendingKeys: [ownerKey],
+        retryingKeys: [ownerKey],
+        inFlightKeys: ['membership-publication:other'],
+        retryableDrainFailureCount: 2,
+      });
+    },
+  );
+
   test('Unit: _waitForAllActive load mode fails directly on priority-recovery' +
   ' invariant breaches', async () => {
     const cluster = createCluster({

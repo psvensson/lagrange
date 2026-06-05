@@ -12,6 +12,9 @@ import {
   CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME,
 } from '../../src/control-plane/control-plane-error-classification.js';
 import {
+  buildControlSnapshotHandoffRetryOptions,
+} from '../../src/admin/admin-control-snapshot-publication-handoff.js';
+import {
   buildTopologyConvergenceGraph,
   buildTopologyConvergenceReplayFixture,
   replayTopologyConvergenceFixture,
@@ -37,6 +40,46 @@ const TEST_ACTIVE_GATE_HANDOFF_NEXT_ACTION_WAIT_OWNER_RECOVERY =
   'wait_owner_recovery';
 const TEST_AUTHORITATIVE_REPAIR_QUERY_TIMEOUT_DIVISOR = 2;
 const TEST_AUTHORITATIVE_REPAIR_RETRY_AFTER_MS = 16000;
+
+test('AdminControlSnapshot preserves bounded retry for accepted owner reconcile handoff',
+  (t) => {
+    const retryOptions = buildControlSnapshotHandoffRetryOptions(
+      {
+        controlPlaneDiagnostics: {
+          membershipPublicationHandoffOutcome: {
+            state:
+              ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_OUTCOME_WRITE_DEFERRED,
+            reasonCode:
+              ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_OUTCOME_ENQUEUED_REASON,
+            enqueued: true,
+            controlPlaneConvergence: {
+              retryAfterMs:
+                ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_OWNER_RETRY_AFTER_MS,
+            },
+          },
+        },
+      },
+      {
+        repair: {
+          retryAfterMs: TEST_AUTHORITATIVE_REPAIR_RETRY_AFTER_MS,
+        },
+      },
+    );
+
+    t.match(
+      retryOptions,
+      {
+        retryAfterMs:
+          ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_OWNER_RETRY_AFTER_MS,
+        repair: {
+          retryAfterMs:
+            ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_OWNER_RETRY_AFTER_MS,
+        },
+      },
+      'accepted owner-reconcile enqueue should remain a bounded handoff retry',
+    );
+    t.end();
+  });
 
 test('AdminControlSnapshot surfaces handoff owner outcome when repair is not selected',
   async (t) => {
@@ -404,6 +447,8 @@ test('AdminControlSnapshot queues handoff reconcile when awaited owner reconcile
         state: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_OUTCOME_WRITE_DEFERRED,
         reasonCode: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_OUTCOME_ENQUEUED_REASON,
         enqueued: true,
+        retryAfterMs:
+          ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_OWNER_RETRY_AFTER_MS,
       },
       'pressure-deferred fallback reconcile should return a structured queued owner outcome',
     );
@@ -498,6 +543,8 @@ test('AdminControlSnapshot queues handoff reconcile through SQL storage admissio
         state: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_OUTCOME_WRITE_DEFERRED,
         reasonCode: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_OUTCOME_ENQUEUED_REASON,
         enqueued: true,
+        retryAfterMs:
+          ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_OWNER_RETRY_AFTER_MS,
       },
       'storage-admission runtime owner fallback should return the queued handoff outcome',
     );
@@ -560,6 +607,8 @@ test('AdminControlSnapshot returns handoff service-unavailable outcome when runt
         reasonCode:
           ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_OUTCOME_SERVICE_UNAVAILABLE,
         enqueued: false,
+        retryAfterMs:
+          ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_OWNER_RETRY_AFTER_MS,
         target: {
           reconcileRequired: true,
           publishedActiveNodeIds: [

@@ -324,22 +324,22 @@ test('AdminServiceDiscovery control snapshot repair reads bypass pressure degrad
     );
     t.equal(
       readCalls.every((call) =>
-        call.workClass === 'background'),
+        call.workClass === 'interactive'),
       true,
-      'control snapshot repair should stay on the diagnostic work class',
+      'control snapshot repair should use the readiness read work class',
     );
     t.equal(
       readCalls.every((call) =>
         call.workloadClass ===
-          CONTROL_PLANE_WORKLOAD_CLASS.ADMIN_DIAGNOSTIC_READ),
+          CONTROL_PLANE_WORKLOAD_CLASS.READINESS_CRITICAL_READ),
       true,
-      'control snapshot repair should carry the shared admin diagnostic workload class',
+      'control snapshot repair should carry the readiness workload class',
     );
     t.equal(
       readCalls.every((call) =>
-        call.deliveryPriority === CONTROL_PLANE_DELIVERY_PRIORITY.BACKGROUND),
+        call.deliveryPriority === CONTROL_PLANE_DELIVERY_PRIORITY.READINESS),
       true,
-      'control snapshot repair should stay off the critical transport lane',
+      'control snapshot repair should use the transport readiness lane',
     );
     t.equal(
       readCalls.every((call) =>

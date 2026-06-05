@@ -13,6 +13,9 @@ import {
   hasPublicationActiveGateOwnerReconcileSignal,
 } from './publication-active-gate-handoff-contract.js';
 import {
+  PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD,
+} from './publication-active-gate-handoff-contract-constants.js';
+import {
   CONTROL_PLANE_CONVERGENCE_CLASS,
   CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME,
   getControlPlaneFailureSummary,
@@ -88,6 +91,7 @@ const MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD = Object.freeze({
   ALLOW_PRESSURE_DEFER: 'allowPressureDefer',
   DISABLE_NESTED_PRIORITY_RECOVERY_PLANNING:
     'disableNestedPriorityRecoveryPlanning',
+  EXCLUDED_NODE_IDS: 'excludedNodeIds',
   LATEST_PUBLICATION_ROW: 'latestPublicationRow',
   NODE_ENDPOINT_ROWS: 'nodeEndpointRows',
   NODE_ROWS: 'nodeRows',
@@ -127,6 +131,7 @@ const MEMBERSHIP_PUBLICATION_RECONCILE_HANDOFF_ROUTE_RESET_FIELDS =
     MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.PUBLISHED_ACTIVE_NODE_IDS,
     MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.REQUIRED_ACK_NODE_IDS,
     MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.ACKNOWLEDGED_NODE_IDS,
+    MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.EXCLUDED_NODE_IDS,
     MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.ALLOW_EMPTY_PRELOADED_ROWS,
     MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.NODE_ROWS,
     MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.NODE_ENDPOINT_ROWS,
@@ -135,6 +140,21 @@ const MEMBERSHIP_PUBLICATION_RECONCILE_HANDOFF_ROUTE_RESET_FIELDS =
     MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.REPLICA_OPERATION_ROWS,
     MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.READINESS_ENTRIES,
   ]);
+const MEMBERSHIP_PUBLICATION_HANDOFF_NODE_COUNT_FIELD_BY_NODE_LIST =
+  Object.freeze({
+    [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.EXPECTED_NODE_IDS]:
+      'expectedNodeCount',
+    [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLISHED_ACTIVE_NODE_IDS]:
+      'publishedActiveNodeCount',
+    [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.MISSING_PUBLISHED_NODE_IDS]:
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.MISSING_PUBLISHED_COUNT,
+    [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_ACK_NODE_IDS]:
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_ACK_COUNT,
+    [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_RECOVERY_NODE_IDS]:
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_RECOVERY_COUNT,
+    [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_RECONCILE_NODE_IDS]:
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_RECONCILE_COUNT,
+  });
 
 function normalizeCriticalConvergenceRetryAfterMs(value) {
   return Number.isFinite(value) && value > NUM.ZERO ?
@@ -212,6 +232,105 @@ function mergeMembershipPublicationReconcileNodeIds(left, right) {
     ...normalizeNodeIdList(left),
     ...normalizeNodeIdList(right),
   ]);
+}
+
+function excludeMembershipPublicationReconcileNodeIds(nodeIds, excludedNodeIds) {
+  const excluded = new Set(normalizeNodeIdList(excludedNodeIds));
+  if (excluded.size === NUM.ZERO) {
+    return normalizeNodeIdList(nodeIds);
+  }
+  return normalizeNodeIdList(nodeIds).filter((nodeId) =>
+    !excluded.has(nodeId),
+  );
+}
+
+function filterMembershipPublicationReconcileExclusions(
+  excludedNodeIds,
+  includedNodeIds,
+) {
+  const included = new Set(normalizeNodeIdList(includedNodeIds));
+  if (included.size === NUM.ZERO) {
+    return normalizeNodeIdList(excludedNodeIds);
+  }
+  return normalizeNodeIdList(excludedNodeIds).filter((nodeId) =>
+    !included.has(nodeId),
+  );
+}
+
+function hasMembershipPublicationReconcileContextField(context, fieldName) {
+  return isMembershipPublicationReconcileContext(context) &&
+    Object.hasOwn(context, fieldName);
+}
+
+function applyMembershipPublicationReconcileNodeList(
+  context,
+  fieldName,
+  nodeIds,
+  previousContext,
+  nextContext,
+) {
+  if (
+    nodeIds.length > NUM.ZERO ||
+    hasMembershipPublicationReconcileContextField(
+      previousContext,
+      fieldName,
+    ) ||
+    hasMembershipPublicationReconcileContextField(nextContext, fieldName)
+  ) {
+    context[fieldName] = nodeIds;
+    return;
+  }
+  delete context[fieldName];
+}
+
+function applyMembershipPublicationHandoffNodeList(
+  handoff,
+  fieldName,
+  excludedNodeIds,
+) {
+  if (!hasMembershipPublicationReconcileContextField(handoff, fieldName)) {
+    return;
+  }
+  const filteredNodeIds = excludeMembershipPublicationReconcileNodeIds(
+    handoff[fieldName],
+    excludedNodeIds,
+  );
+  handoff[fieldName] = filteredNodeIds;
+  const countFieldName =
+    MEMBERSHIP_PUBLICATION_HANDOFF_NODE_COUNT_FIELD_BY_NODE_LIST[fieldName];
+  if (Object.hasOwn(handoff, countFieldName)) {
+    handoff[countFieldName] = filteredNodeIds.length;
+  }
+}
+
+function filterMembershipPublicationHandoffContext(
+  handoff,
+  excludedNodeIds,
+) {
+  if (
+    !isMembershipPublicationReconcileContext(handoff) ||
+    normalizeNodeIdList(excludedNodeIds).length === NUM.ZERO
+  ) {
+    return handoff;
+  }
+  const filteredHandoff = {...handoff};
+  for (const fieldName of [
+    PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.EXPECTED_NODE_IDS,
+    PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLISHED_ACTIVE_NODE_IDS,
+    PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.REQUIRED_ACK_NODE_IDS,
+    PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.ACKNOWLEDGED_NODE_IDS,
+    PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.MISSING_PUBLISHED_NODE_IDS,
+    PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_ACK_NODE_IDS,
+    PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_RECOVERY_NODE_IDS,
+    PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_RECONCILE_NODE_IDS,
+  ]) {
+    applyMembershipPublicationHandoffNodeList(
+      filteredHandoff,
+      fieldName,
+      excludedNodeIds,
+    );
+  }
+  return filteredHandoff;
 }
 
 function resolveMembershipPublicationReconcileFlag(previousValue, nextValue) {
@@ -312,53 +431,88 @@ function mergeMembershipPublicationReconcileContext(previousContext, nextContext
   }
   const mergeRoute =
     resolveMembershipPublicationReconcileMergeRoute(nextContext);
-  const publishedActiveNodeIds = mergeMembershipPublicationReconcileNodeIds(
-    previousContext[
-      MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.PUBLISHED_ACTIVE_NODE_IDS
-    ],
+  const nextExplicitTargetNodeIds = hasExplicitMembershipPublicationTarget(
+    nextContext,
+  ) ?
+    mergeMembershipPublicationReconcileNodeIds(
+      nextContext[
+        MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.PUBLISHED_ACTIVE_NODE_IDS
+      ],
+      mergeMembershipPublicationReconcileNodeIds(
+        nextContext[
+          MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
+            .REQUIRED_ACK_NODE_IDS
+        ],
+        nextContext[
+          MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
+            .ACKNOWLEDGED_NODE_IDS
+        ],
+      ),
+    ) :
+    [];
+  const excludedNodeIds = mergeMembershipPublicationReconcileNodeIds(
+    filterMembershipPublicationReconcileExclusions(
+      previousContext[
+        MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.EXCLUDED_NODE_IDS
+      ],
+      nextExplicitTargetNodeIds,
+    ),
     nextContext[
-      MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.PUBLISHED_ACTIVE_NODE_IDS
+      MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.EXCLUDED_NODE_IDS
     ],
   );
-  const requiredAckNodeIds = mergeMembershipPublicationReconcileNodeIds(
-    previousContext[
-      MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.REQUIRED_ACK_NODE_IDS
-    ],
-    nextContext[
-      MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.REQUIRED_ACK_NODE_IDS
-    ],
+  const publishedActiveNodeIds = excludeMembershipPublicationReconcileNodeIds(
+    mergeMembershipPublicationReconcileNodeIds(
+      previousContext[
+        MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
+          .PUBLISHED_ACTIVE_NODE_IDS
+      ],
+      nextContext[
+        MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
+          .PUBLISHED_ACTIVE_NODE_IDS
+      ],
+    ),
+    excludedNodeIds,
   );
-  const acknowledgedNodeIds = mergeMembershipPublicationReconcileNodeIds(
-    previousContext[
-      MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.ACKNOWLEDGED_NODE_IDS
-    ],
-    nextContext[
-      MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.ACKNOWLEDGED_NODE_IDS
-    ],
+  const requiredAckNodeIds = excludeMembershipPublicationReconcileNodeIds(
+    mergeMembershipPublicationReconcileNodeIds(
+      previousContext[
+        MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.REQUIRED_ACK_NODE_IDS
+      ],
+      nextContext[
+        MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.REQUIRED_ACK_NODE_IDS
+      ],
+    ),
+    excludedNodeIds,
   );
+  const acknowledgedNodeIds = excludeMembershipPublicationReconcileNodeIds(
+    mergeMembershipPublicationReconcileNodeIds(
+      previousContext[
+        MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.ACKNOWLEDGED_NODE_IDS
+      ],
+      nextContext[
+        MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.ACKNOWLEDGED_NODE_IDS
+      ],
+    ),
+    excludedNodeIds,
+  );
+  const publicationActiveGateHandoff =
+    filterMembershipPublicationHandoffContext(
+      nextContext[
+        MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
+          .PUBLICATION_ACTIVE_GATE_HANDOFF
+      ] ??
+        previousContext[
+          MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
+            .PUBLICATION_ACTIVE_GATE_HANDOFF
+        ],
+      excludedNodeIds,
+    );
   const mergedContext = {
     ...previousContext,
     ...nextContext,
     [MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.LATEST_PUBLICATION_ROW]:
       selectLatestPublicationRow(previousContext, nextContext),
-    ...(publishedActiveNodeIds.length > NUM.ZERO ?
-      {
-        [MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
-          .PUBLISHED_ACTIVE_NODE_IDS]: publishedActiveNodeIds,
-      } :
-      {}),
-    ...(requiredAckNodeIds.length > NUM.ZERO ?
-      {
-        [MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
-          .REQUIRED_ACK_NODE_IDS]: requiredAckNodeIds,
-      } :
-      {}),
-    ...(acknowledgedNodeIds.length > NUM.ZERO ?
-      {
-        [MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
-          .ACKNOWLEDGED_NODE_IDS]: acknowledgedNodeIds,
-      } :
-      {}),
     [MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
       .ALLOW_PENDING_VISIBILITY]:
       resolveMembershipPublicationReconcileFlag(
@@ -393,6 +547,42 @@ function mergeMembershipPublicationReconcileContext(previousContext, nextContext
         ],
       ),
   };
+  if (publicationActiveGateHandoff) {
+    mergedContext[
+      MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
+        .PUBLICATION_ACTIVE_GATE_HANDOFF
+    ] = publicationActiveGateHandoff;
+  }
+  if (excludedNodeIds.length > NUM.ZERO) {
+    mergedContext[
+      MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.EXCLUDED_NODE_IDS
+    ] = excludedNodeIds;
+  } else {
+    delete mergedContext[
+      MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.EXCLUDED_NODE_IDS
+    ];
+  }
+  applyMembershipPublicationReconcileNodeList(
+    mergedContext,
+    MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.PUBLISHED_ACTIVE_NODE_IDS,
+    publishedActiveNodeIds,
+    previousContext,
+    nextContext,
+  );
+  applyMembershipPublicationReconcileNodeList(
+    mergedContext,
+    MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.REQUIRED_ACK_NODE_IDS,
+    requiredAckNodeIds,
+    previousContext,
+    nextContext,
+  );
+  applyMembershipPublicationReconcileNodeList(
+    mergedContext,
+    MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.ACKNOWLEDGED_NODE_IDS,
+    acknowledgedNodeIds,
+    previousContext,
+    nextContext,
+  );
   return finalizeMembershipPublicationReconcileMergedContext(
     mergedContext,
     mergeRoute,

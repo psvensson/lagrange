@@ -582,6 +582,61 @@ class MembershipPublicationCoordinatorClassStage2 extends
     );
   }
 
+  getControlPlaneOwnerQueueDepth() {
+    const ownerKey = this.buildOwnerKey();
+    const queueDiagnostics =
+      typeof this.reconcileQueue?.getDiagnostics === TYPEOF.FUNCTION ?
+        this.reconcileQueue.getDiagnostics() :
+        null;
+    const pendingKeys = Array.isArray(queueDiagnostics?.pendingKeys) ?
+      queueDiagnostics.pendingKeys.map(String) :
+      (
+        this.reconcileQueue?.pending instanceof Map ?
+          [...this.reconcileQueue.pending.keys()].map(String) :
+          []
+      );
+    const retryingKeys = Array.isArray(queueDiagnostics?.retryingKeys) ?
+      queueDiagnostics.retryingKeys.map(String) :
+      (
+        this.reconcileQueue?.retryWorkItems instanceof Map ?
+          [...this.reconcileQueue.retryWorkItems.keys()].map(String) :
+          []
+      );
+    const inFlightKeys = Array.isArray(queueDiagnostics?.inFlightKeys) ?
+      queueDiagnostics.inFlightKeys.map(String) :
+      (
+        this.reconcileQueue?.inFlight instanceof Set ?
+          [...this.reconcileQueue.inFlight].map(String) :
+          []
+      );
+    const pendingWrites = [
+      pendingKeys.includes(ownerKey),
+      retryingKeys.includes(ownerKey),
+      inFlightKeys.includes(ownerKey),
+    ].filter(Boolean).length;
+    const retryableDrainFailureCount = Number.isFinite(
+      queueDiagnostics?.retryableDrainFailureCount,
+    ) ?
+      Math.max(NUM.ZERO, Math.floor(
+        queueDiagnostics.retryableDrainFailureCount,
+      )) :
+      NUM.ZERO;
+    return Object.freeze({
+      pendingWrites,
+      pendingWriteGrowthCount: NUM.ZERO,
+      retainedBacklogGrowthCount:
+        retryingKeys.includes(ownerKey) ? NUM.ONE : NUM.ZERO,
+      sharedPressureBackpressured: false,
+      transportPressureBackpressured: false,
+      queryPressureBackpressured: false,
+      ownerKey,
+      pendingKeys,
+      retryingKeys,
+      inFlightKeys,
+      retryableDrainFailureCount,
+    });
+  }
+
   getLaneDiagnostics() {
     const inFlightExecutions =
       this.workflowCoordinator?.inFlightExecutionsByOwnerKey instanceof Map ?

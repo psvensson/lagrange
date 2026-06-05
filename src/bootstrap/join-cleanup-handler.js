@@ -14,6 +14,10 @@ import {
   JOINING_PHASE,
 } from './bootstrap-constants.js';
 import {
+  buildFailedJoinMembershipPublicationContext,
+  resolveJoinCleanupRegisteredNodeId,
+} from './join-cleanup-publication-context.js';
+import {
   JOIN_CLEANUP_LIFECYCLE_TRANSITION_ERROR,
   JOINING_CLEANUP_STEP,
   JOINING_LOG_MSG,
@@ -22,12 +26,17 @@ import {
   ADDRESS,
   ENTITY_TYPE,
   NUM,
-  STATE,
   TYPEOF,
 } from '../constants/index.js';
 import {RECONCILE_REASON} from '../workflow/reconcile-queue-constants.js';
 
 const LOCAL_STR_NODE_WITHDRAWAL = 'node withdrawal';
+const LOCAL_STR_WITHDRAWAL_NODE_ID_REQUIRED =
+  'failed join admission withdrawal requires registered node id';
+const LOCAL_STR_WITHDRAWAL_OWNER_REQUIRED =
+  'failed join admission withdrawal owner is unavailable';
+const LOCAL_STR_WITHDRAWAL_NOT_APPLIED =
+  'failed join admission withdrawal was not applied';
 const LOCAL_STR_1CO3M = 'rebalanceCoordinator.shutdown';
 const LOCAL_STR_FUNCTION = 'function';
 
@@ -58,9 +67,6 @@ const JOINING_CLEANUP_STEPS_REVERSE = Object.freeze([
   JOINING_CLEANUP_STEP.CONNECTING_WEBSOCKET,
 ]);
 
-const JOIN_CLEANUP_MEMBERSHIP_PUBLICATION_CONTEXT = Object.freeze({
-  CLEANUP_STEP: JOINING_CLEANUP_STEP.QUERYING_STATE,
-});
 const JOIN_CLEANUP_DEFAULT_LIFECYCLE_STOP_PATH = Object.freeze([
   NodeState.STOPPED,
 ]);
@@ -267,38 +273,23 @@ class JoinCleanupHandler {
   async _cleanupQueryingState(cleanupContext) {
     const logger = this.delegates.getLogger();
     try {
+      const registeredNodeId = resolveJoinCleanupRegisteredNodeId(
+        cleanupContext,
+        this.nodeId,
+      );
       logger.info(
         JOINING_LOG_MSG.FAILED_JOIN_CLEANUP_QUERYING_STATE, {
           nodeId: this.nodeId,
-          registeredNodeId: cleanupContext.registeredNodeId,
+          registeredNodeId,
           serviceCount: cleanupContext.createdServiceIds.length,
         });
 
-      // Withdraw the node through the canonical control-plane owner path
-      // instead of deleting rows directly from a half-joined node.
-      if (
-        cleanupContext.registeredNodeId &&
-        typeof this.delegates.sendControlPlaneNodeStateUpdate ===
-          TYPEOF.FUNCTION
-      ) {
-        try {
-          await this.delegates.sendControlPlaneNodeStateUpdate({
-            state: STATE.DISCONNECTED,
-            heartbeatAt: this.delegates.getNow()(),
-          });
-        } catch (nodeErr) {
-          logger.warn(
-            JOINING_LOG_MSG
-              .FAILED_JOIN_CLEANUP_QUERYING_STATE_ERROR,
-            {
-              nodeId: this.nodeId,
-              detail: LOCAL_STR_NODE_WITHDRAWAL,
-              error: nodeErr.message,
-            });
-        }
-      }
+      await this.withdrawFailedJoinAdmission(registeredNodeId, logger);
 
-      this.enqueueMembershipPublicationReconcile(cleanupContext);
+      this.enqueueMembershipPublicationReconcile({
+        ...cleanupContext,
+        registeredNodeId,
+      });
 
       logger.info(
         JOINING_LOG_MSG
@@ -315,6 +306,36 @@ class JoinCleanupHandler {
           stack: err.stack,
         });
       return CLEANUP_RESULT.ERROR;
+    }
+  }
+
+  async withdrawFailedJoinAdmission(registeredNodeId, logger) {
+    if (
+      typeof registeredNodeId !== TYPEOF.STRING ||
+      registeredNodeId.length === NUM.ZERO
+    ) {
+      throw new Error(LOCAL_STR_WITHDRAWAL_NODE_ID_REQUIRED);
+    }
+    if (typeof this.delegates.withdrawFailedJoinAdmission !== TYPEOF.FUNCTION) {
+      throw new Error(LOCAL_STR_WITHDRAWAL_OWNER_REQUIRED);
+    }
+    try {
+      const result =
+        await this.delegates.withdrawFailedJoinAdmission({registeredNodeId});
+      if (result?.accepted !== true && result?.success !== true) {
+        throw new Error(LOCAL_STR_WITHDRAWAL_NOT_APPLIED);
+      }
+      return result;
+    } catch (withdrawalErr) {
+      logger.warn(
+        JOINING_LOG_MSG
+          .FAILED_JOIN_CLEANUP_QUERYING_STATE_ERROR,
+        {
+          nodeId: this.nodeId,
+          detail: LOCAL_STR_NODE_WITHDRAWAL,
+          error: withdrawalErr.message,
+        });
+      throw withdrawalErr;
     }
   }
 
@@ -347,12 +368,11 @@ class JoinCleanupHandler {
     }
     membershipPublicationService.enqueueClusterMembershipReconcile(
       RECONCILE_REASON.NODE_FAILED,
-      {
+      buildFailedJoinMembershipPublicationContext({
+        membershipPublicationService,
         nodeId: this.nodeId,
         registeredNodeId: cleanupContext.registeredNodeId,
-        cleanupStep:
-          JOIN_CLEANUP_MEMBERSHIP_PUBLICATION_CONTEXT.CLEANUP_STEP,
-      },
+      }),
     );
     return true;
   }

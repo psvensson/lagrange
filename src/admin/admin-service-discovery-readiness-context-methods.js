@@ -466,8 +466,11 @@ function assignAdminServiceDiscoveryReadinessContextMethods(
     resolveAuthoritativeDiscoveryReadTransportProfile(
       controlSnapshotRepairRead = false,
     ) {
+      const workloadClass = controlSnapshotRepairRead ?
+        CONTROL_PLANE_WORKLOAD_CLASS.READINESS_CRITICAL_READ :
+        CONTROL_PLANE_WORKLOAD_CLASS.ADMIN_DIAGNOSTIC_READ;
       const workloadProfile = buildControlPlaneWorkloadProfile(
-        CONTROL_PLANE_WORKLOAD_CLASS.ADMIN_DIAGNOSTIC_READ,
+        workloadClass,
         {
           allowPressureDegrade: controlSnapshotRepairRead ? false : undefined,
         },
@@ -477,7 +480,9 @@ function assignAdminServiceDiscoveryReadinessContextMethods(
         workClass: workloadProfile.workClass,
         allowPressureDegrade: workloadProfile.allowPressureDegrade === true,
         allowPressureDefer: workloadProfile.allowPressureDefer === true,
-        deliveryPriority: CONTROL_PLANE_DELIVERY_PRIORITY.BACKGROUND,
+        deliveryPriority: controlSnapshotRepairRead ?
+          CONTROL_PLANE_DELIVERY_PRIORITY.READINESS :
+          CONTROL_PLANE_DELIVERY_PRIORITY.BACKGROUND,
       });
     }
 

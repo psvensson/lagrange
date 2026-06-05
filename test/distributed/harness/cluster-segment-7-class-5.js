@@ -112,6 +112,23 @@ function resolveLoadRemainingWitnessSnapshotTimeoutMs(result = null) {
     MIN_TIMEOUT_MS;
 }
 
+function resolveQuiescenceSequentialProbeTimeoutMs(
+  deadline,
+  remainingProbeCount,
+  maxTimeoutMs,
+) {
+  const fairShareTimeoutMs = resolveSequentialProbeTimeoutMs(
+    deadline,
+    remainingProbeCount,
+    maxTimeoutMs,
+  );
+  const lateProbeTimeoutFloorMs = Math.min(
+    Math.max(MIN_TIMEOUT_MS, Math.floor(maxTimeoutMs || MIN_TIMEOUT_MS)),
+    CONTROL_SNAPSHOT_LATE_PROBE_TIMEOUT_FLOOR_MS,
+  );
+  return Math.max(fairShareTimeoutMs, lateProbeTimeoutFloorMs);
+}
+
 class Cluster5 extends Cluster4 {
   async _probeControlSnapshotCoverage(
     deadline,
@@ -977,7 +994,7 @@ class Cluster5 extends Cluster4 {
     let selectedSnapshot = null;
     let lastError = null;
     for (const [index, node] of nodes.entries()) {
-      const snapshotTimeoutMs = resolveSequentialProbeTimeoutMs(
+      const snapshotTimeoutMs = resolveQuiescenceSequentialProbeTimeoutMs(
         deadline,
         nodes.length - index,
         CONTROL_SNAPSHOT_PROBE_TIMEOUT_MS,
@@ -1155,7 +1172,7 @@ class Cluster5 extends Cluster4 {
     let selectedSummary = null;
     let lastError = null;
     for (const [index, node] of nodes.entries()) {
-      const timeoutMs = resolveSequentialProbeTimeoutMs(
+      const timeoutMs = resolveQuiescenceSequentialProbeTimeoutMs(
         deadline,
         nodes.length - index,
         CONTROL_SNAPSHOT_PROBE_TIMEOUT_MS,

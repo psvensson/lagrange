@@ -331,6 +331,46 @@ export function registerClusterPart6Core05Tests(context) {
   );
 
   test(
+    'Unit: critical system spread probes preserve a late timeout floor',
+    async () => {
+      const cluster = createCluster({
+        size: 1,
+        docker: {socketPath: '/var/run/docker.sock'},
+        image: 'distributed-db:test',
+      });
+      const capturedTimeouts = [];
+      const capturedLanes = [];
+      cluster._nodes = new Map([['seed-a', {
+        id: 'seed-a',
+        role: NODE_ROLES.SEED,
+        async queryWithTimeout(sql, _params, options = {}) {
+          assert.match(
+            sql,
+            /service_discovery_local\('replica_operations'\)/,
+          );
+          capturedTimeouts.push(options.timeoutMs);
+          capturedLanes.push(options.lane);
+          return buildCriticalSystemDiscoverySnapshot(['seed-a'], Date.now());
+        },
+      }]]);
+
+      const result = await cluster._probeCriticalSystemTableDistribution(
+        Date.now() - 1,
+        'replica_operations',
+        1,
+      );
+
+      assert.equal(result.ready, true);
+      assert.equal(capturedTimeouts.length, 1);
+      assert.ok(
+        capturedTimeouts[0] >= 100,
+        'late critical spread probe should not collapse to a 1ms timeout',
+      );
+      assert.equal(capturedLanes[0], 'snapshot');
+    },
+  );
+
+  test(
     'Unit: waitForControlPlaneQuiescence timeout diagnostics include critical system spread gaps',
     async () => {
       const cluster = createCluster({

@@ -700,6 +700,7 @@ test('ReplicaHandler', async (t) => {
             workflowStep: WORKFLOW_STEP.ACTIVE,
             options: {
               replicaId: TEST_ALREADY_ACTIVE_REPLICA_ID,
+              partitionId: TEST_ALREADY_ACTIVE_PARTITION_ID,
             },
           },
         ],
@@ -831,6 +832,7 @@ test('ReplicaHandler', async (t) => {
             workflowStep: WORKFLOW_STEP.CREATING,
             options: {
               replicaId: TEST_IN_PROGRESS_REPLICA_ID,
+              partitionId: TEST_IN_PROGRESS_PARTITION_ID,
             },
           },
         ],
@@ -898,6 +900,7 @@ test('ReplicaHandler', async (t) => {
             workflowStep: WORKFLOW_STEP.CREATING,
             options: {
               replicaId: TEST_IN_PROGRESS_REPLICA_ID,
+              partitionId: TEST_IN_PROGRESS_PARTITION_ID,
             },
           },
         ],
@@ -1121,6 +1124,7 @@ test('ReplicaHandler', async (t) => {
             workflowStep: WORKFLOW_STEP.SYNCING,
             options: {
               replicaId: TEST_IN_PROGRESS_REPLICA_ID,
+              partitionId: TEST_IN_PROGRESS_PARTITION_ID,
             },
           },
         ],
