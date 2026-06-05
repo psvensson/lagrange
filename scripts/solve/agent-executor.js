@@ -116,6 +116,22 @@ function readResponse(responseFile) {
   }
 }
 
+// Read a reflection response: a single free-form note. Tolerant of either {reflection} or
+// {note}; anything else (missing/malformed) is treated as "no note" — the reflection event
+// is still recorded so the cadence resets, it simply carries no text.
+function readReflectionResponse(responseFile) {
+  if (!fs.existsSync(responseFile)) return null;
+  try {
+    const parsed = JSON.parse(fs.readFileSync(responseFile, 'utf8'));
+    if (!parsed) return null;
+    const note = typeof parsed.reflection === 'string' ? parsed.reflection :
+      (typeof parsed.note === 'string' ? parsed.note : null);
+    return {reflection: note};
+  } catch (_error) {
+    return null;
+  }
+}
+
 // A failed/timed-out/malformed agent run is a no-op attempt: a null changeRef means the
 // honesty check rejects any claimed metric movement, so the rung escalates honestly.
 function noop(reason) {
@@ -149,6 +165,39 @@ export function makeAgentExecutor(root, options = {}) {
         return noop(`exit ${result.status === null ? 'signal' : result.status}`);
       }
       return readResponse(responseFile) || noop('no valid response file');
+    },
+    // Step-back reflection turn over the same generic file contract: the request carries
+    // kind: "reflection" plus the reflection prompt and a compact health snapshot; the agent
+    // replies with { reflection: "<free-form reframing>" }. A failed/timed-out/malformed run
+    // simply yields no note (the loop still records the reflection so the cadence resets).
+    reflect(task) {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'solve-reflect-'));
+      const requestFile = path.join(dir, 'request.json');
+      const responseFile = path.join(dir, 'response.json');
+      fs.writeFileSync(requestFile, JSON.stringify({
+        kind: 'reflection',
+        questId: task.quest?.id || null,
+        statement: task.quest?.statement || null,
+        frontier: task.health?.frontier || null,
+        trigger: task.trigger || null,
+        prompt: task.prompt || null,
+        signals: task.health?.signals || [],
+        nextAction: task.health?.nextAction || null,
+        repoRoot,
+      }, null, 2));
+      const [cmd, ...args] = buildArgv(config.agentCommand, requestFile, responseFile);
+      const result = run(cmd, args, {
+        cwd: repoRoot,
+        timeout: timeoutMs,
+        env: {...process.env,
+          SOLVE_REQUEST_FILE: requestFile, SOLVE_RESPONSE_FILE: responseFile},
+        encoding: 'utf8',
+      });
+      if ((result.error && result.error.code === 'ETIMEDOUT') ||
+        result.status !== 0) {
+        return {reflection: null};
+      }
+      return readReflectionResponse(responseFile) || {reflection: null};
     },
   };
 }

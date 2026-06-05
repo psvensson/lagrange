@@ -182,3 +182,52 @@ tap.test('agent executor (P4)', async (t) => {
     t.end();
   });
 });
+
+tap.test('agent executor reflect() over the generic file contract', async (t) => {
+  const REFLECT_TASK = {
+    quest: {id: 'g', statement: 's'},
+    health: {frontier: 'f', signals: [{type: 'coupled-invariant-oscillation'}],
+      nextAction: 'reframe'},
+    trigger: 'oscillation',
+    prompt: 'Step back and reflect on quest g.',
+  };
+
+  t.test('writes a reflection request and reads back the note', (t) => {
+    const root = tmp();
+    let seenRequest = null;
+    const spawn = (cmd, args, opts) => {
+      const [reqFile, resFile] = args;
+      seenRequest = JSON.parse(fs.readFileSync(reqFile, 'utf8'));
+      t.equal(opts.cwd, root, 'reflection runs from repo root');
+      fs.writeFileSync(resFile, JSON.stringify({reflection: 'the coupling is the frontier'}));
+      return {status: 0};
+    };
+    const ex = makeAgentExecutor(root, {config: CONFIG, spawn});
+    const out = ex.reflect(REFLECT_TASK);
+    t.equal(out.reflection, 'the coupling is the frontier', 'note returned to the loop');
+    t.equal(seenRequest.kind, 'reflection', 'request is tagged as a reflection turn');
+    t.equal(seenRequest.questId, 'g', 'carries the quest id');
+    t.equal(seenRequest.trigger, 'oscillation', 'carries the trigger');
+    t.same(seenRequest.signals, [{type: 'coupled-invariant-oscillation'}],
+      'carries the health snapshot');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('a non-zero / malformed reflection run yields a null note (still recordable)', (t) => {
+    const root = tmp();
+    const failSpawn = () => ({status: 1});
+    const failOut = makeAgentExecutor(root, {config: CONFIG, spawn: failSpawn})
+      .reflect(REFLECT_TASK);
+    t.equal(failOut.reflection, null, 'a failed reflection has no note');
+    const malformedSpawn = (cmd, args) => {
+      fs.writeFileSync(args[1], 'not json');
+      return {status: 0};
+    };
+    const malformedOut = makeAgentExecutor(root, {config: CONFIG, spawn: malformedSpawn})
+      .reflect(REFLECT_TASK);
+    t.equal(malformedOut.reflection, null, 'a malformed reflection has no note');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+});

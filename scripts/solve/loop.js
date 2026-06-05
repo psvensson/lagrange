@@ -61,6 +61,11 @@ import {inspectChangeArtifact} from './change-artifact.js';
 import {analyzeScopePressure} from './scope-pressure.js';
 import {scopeTerminalStatus, coupledLocalFixBlocked} from './convergence-guards.js';
 import {analyzeQuestHealth} from './health.js';
+import {appendReflection} from './store.js';
+import {
+  reflectionDue,
+  reflectionPrompt,
+} from './reflection.js';
 import {
   CONTINUATION_BLOCKED_THEORY,
   continuationIsAllowed,
@@ -539,6 +544,36 @@ export function recordQuestSolvedIfDone(root, quest, ctx) {
   return {done: true, evidence: questDone.evidence};
 }
 
+// Run the mandatory step-back reflection turn when the executor can satisfy it. The turn is
+// pure reasoning: the reflection-capable executor reads the whole history and returns a
+// free-form reframing note, which is recorded as an append-only EVENT_REFLECTION (no gate
+// fires, no metric is read). Returns true when a reflection was recorded so the caller skips
+// this cycle's gate + attempt (the think turn stands alone). When the configured executor is
+// not reflection-capable, returns false: the loop proceeds normally and the reflection is
+// only surfaced as advice (health/CLI), so non-reflective drivers are never disturbed.
+function maybeRunReflection(root, quest, ctx, health, trigger) {
+  if (!ctx.executor || typeof ctx.executor.reflect !== 'function') return false;
+  let note = null;
+  try {
+    const out = ctx.executor.reflect({
+      quest,
+      health,
+      trigger,
+      prompt: reflectionPrompt(quest, health, trigger),
+    });
+    note = out && typeof out.reflection === 'string' ? out.reflection :
+      (out && typeof out.note === 'string' ? out.note : null);
+  } catch (_error) {
+    note = null;
+  }
+  appendReflection(root, quest.id, {
+    frontier: health.frontier || null,
+    trigger,
+    note,
+  });
+  return true;
+}
+
 export function runLoop(root, quest, options = {}) {
   const ctx = makeRunContext(options);
   ctx.probeCtx = {...ctx.probeCtx, root};
@@ -579,6 +614,21 @@ export function runLoop(root, quest, options = {}) {
           requireModelEvidence: !ctx.modelRef && !ctx.modelNotApplicable,
         },
       });
+      // Mandatory step-back reflection turn. Before resolving any gate, force a reflection
+      // when one is due (cadence, oscillation, or runaway scope). It is a pure think turn —
+      // NO gate fires during it — so when one is recorded we skip this cycle's gate + attempt
+      // and re-enter the loop fresh. Only a reflection-capable executor performs it; other
+      // drivers are unaffected (maybeRunReflection returns false and the loop proceeds).
+      const reflectTrigger = reflectionDue(readLog(root, quest.id), {
+        oscillating: (executionHealth.signals || []).some(
+          (signal) => signal.type === 'coupled-invariant-oscillation'),
+        scope: (executionHealth.signals || []).some(
+          (signal) => signal.type === 'scope-pressure-terminal'),
+      });
+      if (reflectTrigger &&
+        maybeRunReflection(root, quest, ctx, executionHealth, reflectTrigger)) {
+        continue;
+      }
       if (!continuationIsAllowed(executionHealth.continuation)) {
         // Soft-first: the pre-attempt health gate resolves the block through the graded
         // gate with softFirst enabled. A soft-eligible theory block under quorum is recorded

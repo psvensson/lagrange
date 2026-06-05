@@ -26,6 +26,8 @@ import {
   THEORY_RESULT_ACTIVE,
   OUTCOME_MAX_CYCLES,
   OUTCOME_THEORY_REQUIRED,
+  EVENT_REFLECTION,
+  REFLECTION_INTERVAL,
 } from '../../scripts/solve/constants.js';
 
 function setup({metric, target = 0, frontiers = ['f1']}) {
@@ -460,6 +462,80 @@ tap.test('P6 non-measuring samples hold the rung and park as cannot_measure', as
     const state = projectState(quest, readLog(root, quest.id));
     t.equal(state.frontiers[0].status, 'open',
       'measuring sample reset the run; one later invalid sample does not park');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+});
+
+tap.test('mandatory reflection turn (loop integration)', async (t) => {
+  // A progressing executor (step 1) on a far-from-target metric makes a real measured attempt
+  // every cycle, so REFLECTION_INTERVAL attempts accumulate and a cadence reflection becomes
+  // due — without tripping the pre-loop unrecorded-evidence gate.
+  function reflective(changeDir, onReflect) {
+    const base = makeDryExecutor({step: 1, changeDir});
+    return {
+      ...base,
+      name: 'reflective',
+      run: (task) => base.run(task),
+      reflect: (task) => onReflect(task),
+    };
+  }
+
+  t.test('a cadence reflection records a note and skips that cycle attempt', (t) => {
+    const {root, quest, changeDir} = setup({metric: 100, target: 0});
+    saveQuest(root, quest);
+    let reflectCalls = 0;
+    const note = 'reframed: the coupling, not the local fix, is the real frontier';
+    runLoop(root, quest, {
+      executor: reflective(changeDir, (task) => {
+        reflectCalls += 1;
+        t.equal(task.trigger, 'cadence', 'the executor is told why it is reflecting');
+        t.match(task.prompt, /Step back/, 'a gate-free reflection prompt is supplied');
+        return {reflection: note};
+      }),
+      maxCycles: REFLECTION_INTERVAL + 1,
+    });
+    const log = readLog(root, quest.id);
+    const reflections = log.filter((e) => e.type === EVENT_REFLECTION);
+    const attempts = log.filter((e) => e.type === EVENT_ATTEMPT);
+    t.equal(reflectCalls, 1, 'reflect() fired once, at the cadence boundary');
+    t.equal(reflections.length, 1, 'exactly one reflection note was recorded');
+    t.equal(reflections[0].note, note, 'the agent reframing is persisted');
+    t.equal(reflections[0].trigger, 'cadence', 'recorded under the cadence trigger');
+    t.equal(attempts.length, REFLECTION_INTERVAL,
+      'the reflection cycle made no attempt (pure think turn)');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('a recorded reflection resets the cadence (no back-to-back reflections)', (t) => {
+    const {root, quest, changeDir} = setup({metric: 100, target: 0});
+    saveQuest(root, quest);
+    let reflectCalls = 0;
+    // Run well past a single interval: a second reflection only becomes due after another
+    // REFLECTION_INTERVAL attempts, so the cadence cannot fire every cycle.
+    runLoop(root, quest, {
+      executor: reflective(changeDir, () => {
+        reflectCalls += 1;
+        return {reflection: 'one reframe'};
+      }),
+      maxCycles: REFLECTION_INTERVAL + REFLECTION_INTERVAL,
+    });
+    t.equal(reflectCalls, 1, 'cadence reset after the first reflection');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('a non-reflective (dry) executor is unaffected: no reflection is recorded', (t) => {
+    const {root, quest, changeDir} = setup({metric: 100, target: 0});
+    saveQuest(root, quest);
+    runLoop(root, quest, {
+      executor: makeDryExecutor({step: 1, changeDir}),
+      maxCycles: REFLECTION_INTERVAL + 2,
+    });
+    const reflections = readLog(root, quest.id).filter((e) => e.type === EVENT_REFLECTION);
+    t.equal(reflections.length, 0,
+      'a driver without reflect() never has the loop record a reflection');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });

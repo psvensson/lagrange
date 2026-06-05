@@ -543,6 +543,70 @@ real model/architecture changes need a `modelRef` or a later model-evidence
 finding). Set `GUARD_QUORUM=0` to disable soft-first entirely and restore the
 "stop on first theory gate" behaviour.
 
+## Recorded-Reason Override Escape Hatch
+
+Soft guards exist to keep the Quest honest, not to trap it. When a frontier is
+genuinely blocked by an *overridable* guard but the operator (or agent) has a
+defensible reason to proceed anyway, they may record an explicit override
+instead of being halted:
+
+```
+node scripts/solve.js override --id <id> --frontier <fid> \
+  --guard theory|scope --reason "<why proceeding is justified>"
+```
+
+Semantics:
+
+- An override authorizes **exactly one** subsequent bypass of the named guard on
+  that frontier. The gate records an `ADVISORY` decision tagged with the reason
+  and continues; the next time the same condition recurs, the guard applies
+  again unless a fresh override is recorded.
+- Overrides are **reset by honest progress**: the consumed/recorded accounting is
+  measured since `lastProgressIndex`, mirroring `EXPLORE_BUDGET` and
+  `GUARD_QUORUM`. Real movement clears the slate.
+- Only **overridable** continuation codes are accepted: `BLOCKED_THEORY` and
+  `BLOCKED_SCOPE`. The command **refuses** to override honesty/integrity
+  invariants — regression-restore, measurement, unrecorded-evidence, and
+  metric-projection guards cannot be bypassed this way.
+- Override-tagged advisories are **excluded** from soft-first quorum counting, so
+  an override never silently spends the quorum ramp.
+- A reason is **mandatory** (`--reason` non-empty); the override is itself a
+  recorded event (`guard-override`) in the append-only log, so every bypass is
+  auditable.
+
+The override changes the *response* to a recorded signal; it never mutates a
+detector verdict, threshold, or `doneWhen`.
+
+## Mandatory Step-Back Reflection Turn
+
+Long-running agents drift or oscillate. A reflection turn is a bounded, pure
+"think" cycle — no attempt, no metric movement claimed — that forces the agent
+to step back and re-read its own situation:
+
+```
+node scripts/solve.js reflect --id <id> [--frontier <fid>] [--note "<text>"]
+```
+
+In the autonomous run loop a reflection fires automatically (`reflectionDue`)
+when any of these triggers hold, at most once per attempt cycle:
+
+- **oscillation**: a `coupled-invariant-oscillation` signal is live.
+- **scope-pressure**: a `scope-pressure-terminal` signal is live.
+- **cadence**: `REFLECTION_INTERVAL` (default 5) attempts have elapsed since the
+  last reflection.
+
+When a reflection is due, the loop records an `EVENT_REFLECTION` event and
+**skips that cycle's gate and attempt** — the agent spends the turn reflecting,
+not acting. The production reflection path runs only when the executor exposes a
+`reflect()` method (the generic filesystem request/response contract, request
+`kind:'reflection'`); dry/test executors without `reflect()` are unaffected, so
+the reflection turn never perturbs the deterministic test suite. A reflection
+that times out or returns no note is still recorded (the cadence resets) — the
+event simply carries no text.
+
+Reflection is additive and reversible: it produces a recorded note and resets a
+cadence counter; it never changes a verdict, threshold, or `doneWhen`.
+
 `node scripts/solve.js report --id <id>` is the closure projection. It is a pure
 read of the event log and derived state.
 

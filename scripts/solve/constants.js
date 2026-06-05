@@ -45,7 +45,12 @@ export const EVENT_GATE_DECISION = 'gate-decision';
 // the honesty/integrity invariants (regression, unrecorded-evidence, metric-projection,
 // measurement, and any terminal/precondition error) refuse it.
 export const EVENT_GUARD_OVERRIDE = 'guard-override';
- 
+// A mandatory step-back reflection turn: the agent reads the whole history and records a
+// free-form reframing. It is a pure THINK turn — no gate may fire during it — so the loop
+// is periodically forced to re-examine its approach instead of grinding one rung. Recorded
+// append-only; it carries the trigger (cadence/oscillation/scope-pressure) and the note.
+export const EVENT_REFLECTION = 'reflection';
+
 // Frontier / quest status values.
 export const STATUS_OPEN = 'open';
 export const STATUS_SOLVED = 'solved';
@@ -258,6 +263,14 @@ export const EXPLORE_BUDGET = 3;
 // excluded so rr-C/rr-D/rr-F still pin their corrective move immediately. Reversible:
 // set to 0 to restore immediate hard escalation on the first occurrence.
 export const GUARD_QUORUM = 2;
+
+// Mandatory step-back reflection cadence: the number of measured/recorded attempts the
+// loop may take since its last reflection (or last reflection request) before a reflection
+// turn is forced. Oscillation and runaway scope pressure force a reflection immediately,
+// regardless of this cadence. Set to 0 to disable the cadence trigger (the oscillation /
+// scope triggers still fire). The reflection turn only runs when the configured executor
+// can satisfy it (exposes a reflect() entry point); otherwise it is surfaced as advice.
+export const REFLECTION_INTERVAL = 5;
 
 export const FIRST_RUNG_INDEX = 0;
 

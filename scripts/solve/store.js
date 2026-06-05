@@ -26,6 +26,7 @@ import {
   EVENT_THEORY_SYSTEM_DECLARED,
   EVENT_EVIDENCE_INGESTED,
   EVENT_GUARD_OVERRIDE,
+  EVENT_REFLECTION,
   STATUS_OPEN,
   STATUS_SOLVED,
   STATUS_PARKED,
@@ -441,5 +442,19 @@ export function appendGuardOverride(root, questId, override) {
     code: override.code,
     problem: typeof override.problem === 'string' ? override.problem : null,
     reason,
+  });
+}
+
+// Record a step-back reflection turn (a free-form reframing note). The note may be null
+// when the executor declined to produce one; the event still resets the reflection cadence
+// so the loop does not re-request a reflection every cycle.
+export function appendReflection(root, questId, reflection) {
+  return appendEvent(root, questId, {
+    type: EVENT_REFLECTION,
+    frontier: reflection.frontier || null,
+    trigger: reflection.trigger || null,
+    note: typeof reflection.note === 'string' && reflection.note.trim() ?
+      reflection.note.trim() :
+      null,
   });
 }

@@ -16,6 +16,7 @@
 //   upgrade establish a strict-audit baseline for an existing legacy Quest
 //   reopen  re-open a frontier parked on non-measuring samples (evidence-gated)
 //   override authorize one recorded-reason bypass of an overridable soft guard
+//   reflect record a step-back reflection (free-form reframing) turn
 //
 // The CLI is a thin shell over scripts/solve/*. All Quest truth lives in the
 // append-only log; reports and state are projections.
@@ -24,7 +25,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {loadQuest, saveQuest, readLog, projectState, appendFinding, questFilePath,
-  appendGuardOverride}
+  appendGuardOverride, appendReflection}
   from './solve/store.js';
 import {makeDryExecutor} from './solve/executor.js';
 import {makeAgentExecutor} from './solve/agent-executor.js';
@@ -295,6 +296,20 @@ function cmdOverride(root, args) {
     '(authorizes one bypass of the next matching guard; reset by honest progress)\n');
 }
 
+function cmdReflect(root, args) {
+  const id = args.id || args._[0];
+  if (!id) throw new Error('reflect: --id <questId> is required');
+  if (typeof args.note !== 'string' || !args.note.trim()) {
+    throw new Error('reflect: --note "<free-form reframing>" is required');
+  }
+  loadQuest(root, id);
+  const stamped = appendReflection(root, id, {
+    frontier: typeof args.frontier === 'string' ? args.frontier : null,
+    trigger: typeof args.trigger === 'string' ? args.trigger : 'manual',
+    note: args.note,
+  });
+  process.stdout.write(`recorded reflection @ ${stamped.ts}\n`);
+}
 function cmdStep(root, args) {
   const id = args.id || args._[0];
   if (!id) throw new Error('step: --id <questId> is required');
@@ -456,6 +471,7 @@ const COMMANDS = {
   'probe': cmdProbe,
   'finding': cmdFinding,
   'override': cmdOverride,
+  'reflect': cmdReflect,
   'step': cmdStep,
   'step-pending': cmdStepPending,
   'theory': cmdTheory,

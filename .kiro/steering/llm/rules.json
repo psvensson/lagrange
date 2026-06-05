@@ -104,12 +104,12 @@
     }
   ],
   "stats": {
-    "candidateCount": 256,
-    "dedupedRuleCount": 250,
-    "exportedRuleCount": 250,
+    "candidateCount": 261,
+    "dedupedRuleCount": 255,
+    "exportedRuleCount": 255,
     "aliasRuleCount": 0,
-    "masterRuleCount": 250,
-    "estimatedAllRulesTokens": 8743
+    "masterRuleCount": 255,
+    "estimatedAllRulesTokens": 8988
   },
   "rules": [
     {
@@ -1972,6 +1972,21 @@
       ]
     },
     {
+      "id": "GOV-0004",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Override-tagged advisories are excluded from soft-first quorum counting, so an override never silently spends the quorum ramp.",
+      "score": 214,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 571,
+          "section": "Quest Workflow > Recorded-Reason Override Escape Hatch"
+        }
+      ]
+    },
+    {
       "id": "ARCH-0068",
       "domain": "architecture",
       "strength": "must",
@@ -2077,7 +2092,7 @@
       ]
     },
     {
-      "id": "GOV-0004",
+      "id": "GOV-0005",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2092,7 +2107,7 @@
       ]
     },
     {
-      "id": "GOV-0005",
+      "id": "GOV-0006",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2107,7 +2122,7 @@
       ]
     },
     {
-      "id": "GOV-0006",
+      "id": "GOV-0007",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2122,7 +2137,7 @@
       ]
     },
     {
-      "id": "GOV-0007",
+      "id": "GOV-0008",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2137,7 +2152,7 @@
       ]
     },
     {
-      "id": "GOV-0008",
+      "id": "GOV-0009",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2217,7 +2232,7 @@
       ]
     },
     {
-      "id": "GOV-0009",
+      "id": "GOV-0010",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2234,7 +2249,7 @@
       ]
     },
     {
-      "id": "GOV-0010",
+      "id": "GOV-0011",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2251,7 +2266,7 @@
       ]
     },
     {
-      "id": "GOV-0011",
+      "id": "GOV-0012",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -2266,7 +2281,7 @@
       ]
     },
     {
-      "id": "GOV-0012",
+      "id": "GOV-0013",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2644,7 +2659,7 @@
       ]
     },
     {
-      "id": "GOV-0013",
+      "id": "GOV-0014",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2659,7 +2674,7 @@
       ]
     },
     {
-      "id": "GOV-0014",
+      "id": "GOV-0015",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2674,7 +2689,7 @@
       ]
     },
     {
-      "id": "GOV-0015",
+      "id": "GOV-0016",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2689,7 +2704,7 @@
       ]
     },
     {
-      "id": "GOV-0016",
+      "id": "GOV-0017",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2706,7 +2721,7 @@
       ]
     },
     {
-      "id": "GOV-0017",
+      "id": "GOV-0018",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2723,7 +2738,7 @@
       ]
     },
     {
-      "id": "GOV-0018",
+      "id": "GOV-0019",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2738,7 +2753,7 @@
       ]
     },
     {
-      "id": "GOV-0019",
+      "id": "GOV-0020",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2753,7 +2768,7 @@
       ]
     },
     {
-      "id": "GOV-0020",
+      "id": "GOV-0021",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2768,7 +2783,7 @@
       ]
     },
     {
-      "id": "GOV-0021",
+      "id": "GOV-0022",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2785,7 +2800,7 @@
       ]
     },
     {
-      "id": "GOV-0022",
+      "id": "GOV-0023",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2800,7 +2815,7 @@
       ]
     },
     {
-      "id": "GOV-0023",
+      "id": "GOV-0024",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2817,7 +2832,7 @@
       ]
     },
     {
-      "id": "GOV-0024",
+      "id": "GOV-0025",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2832,7 +2847,7 @@
       ]
     },
     {
-      "id": "GOV-0025",
+      "id": "GOV-0026",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2847,7 +2862,7 @@
       ]
     },
     {
-      "id": "GOV-0026",
+      "id": "GOV-0027",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2862,7 +2877,7 @@
       ]
     },
     {
-      "id": "GOV-0027",
+      "id": "GOV-0028",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2877,7 +2892,7 @@
       ]
     },
     {
-      "id": "GOV-0028",
+      "id": "GOV-0029",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2892,7 +2907,7 @@
       ]
     },
     {
-      "id": "GOV-0029",
+      "id": "GOV-0030",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2909,7 +2924,7 @@
       ]
     },
     {
-      "id": "GOV-0030",
+      "id": "GOV-0031",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2939,7 +2954,7 @@
       ]
     },
     {
-      "id": "GOV-0031",
+      "id": "GOV-0032",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2956,7 +2971,37 @@
       ]
     },
     {
-      "id": "GOV-0032",
+      "id": "GOV-0033",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "The override changes the response to a recorded signal; it never mutates a detector verdict, threshold, or doneWhen.",
+      "score": 204,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 577,
+          "section": "Quest Workflow > Recorded-Reason Override Escape Hatch"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0034",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Reflection is additive and reversible: it produces a recorded note and resets a cadence counter; it never changes a verdict, threshold, or doneWhen.",
+      "score": 204,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 607,
+          "section": "Quest Workflow > Mandatory Step-Back Reflection Turn"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0035",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2965,7 +3010,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 558,
+          "line": 622,
           "section": "Quest Workflow > Tracked Versus Regenerable"
         }
       ]
@@ -3156,7 +3201,7 @@
       ]
     },
     {
-      "id": "GOV-0033",
+      "id": "GOV-0036",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3171,7 +3216,7 @@
       ]
     },
     {
-      "id": "GOV-0034",
+      "id": "GOV-0037",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3188,7 +3233,7 @@
       ]
     },
     {
-      "id": "GOV-0035",
+      "id": "GOV-0038",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3203,7 +3248,7 @@
       ]
     },
     {
-      "id": "GOV-0036",
+      "id": "GOV-0039",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3220,7 +3265,7 @@
       ]
     },
     {
-      "id": "GOV-0037",
+      "id": "GOV-0040",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3269,7 +3314,7 @@
       ]
     },
     {
-      "id": "GOV-0038",
+      "id": "GOV-0041",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3286,7 +3331,7 @@
       ]
     },
     {
-      "id": "GOV-0039",
+      "id": "GOV-0042",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3301,7 +3346,7 @@
       ]
     },
     {
-      "id": "GOV-0040",
+      "id": "GOV-0043",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3331,7 +3376,7 @@
       ]
     },
     {
-      "id": "GOV-0041",
+      "id": "GOV-0044",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3348,7 +3393,7 @@
       ]
     },
     {
-      "id": "GOV-0042",
+      "id": "GOV-0045",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3363,7 +3408,7 @@
       ]
     },
     {
-      "id": "GOV-0043",
+      "id": "GOV-0046",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3378,7 +3423,7 @@
       ]
     },
     {
-      "id": "GOV-0044",
+      "id": "GOV-0047",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3393,7 +3438,7 @@
       ]
     },
     {
-      "id": "GOV-0045",
+      "id": "GOV-0048",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3499,7 +3544,7 @@
       ]
     },
     {
-      "id": "GOV-0046",
+      "id": "GOV-0049",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3516,7 +3561,7 @@
       ]
     },
     {
-      "id": "GOV-0047",
+      "id": "GOV-0050",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3648,7 +3693,7 @@
       ]
     },
     {
-      "id": "GOV-0048",
+      "id": "GOV-0051",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3663,7 +3708,7 @@
       ]
     },
     {
-      "id": "GOV-0049",
+      "id": "GOV-0052",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3678,7 +3723,7 @@
       ]
     },
     {
-      "id": "GOV-0050",
+      "id": "GOV-0053",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3692,6 +3737,23 @@
           "file": "workflow-guidelines/solver-quests.md",
           "line": 401,
           "section": "Quest Workflow > Git Handoff"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0054",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [
+        "testing"
+      ],
+      "rule": "The production reflection path runs only when the executor exposes a reflect() method (the generic filesystem request/response contract, request kind:'reflection'); dry/test executors without reflect() are unaffected, so the reflection turn never perturbs the deterministic test suite.",
+      "score": 180,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 598,
+          "section": "Quest Workflow > Mandatory Step-Back Reflection Turn"
         }
       ]
     },
@@ -3844,7 +3906,7 @@
       ]
     },
     {
-      "id": "GOV-0051",
+      "id": "GOV-0055",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3859,7 +3921,7 @@
       ]
     },
     {
-      "id": "GOV-0052",
+      "id": "GOV-0056",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3876,7 +3938,7 @@
       ]
     },
     {
-      "id": "GOV-0053",
+      "id": "GOV-0057",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3985,7 +4047,7 @@
       ]
     },
     {
-      "id": "GOV-0054",
+      "id": "GOV-0058",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4000,7 +4062,7 @@
       ]
     },
     {
-      "id": "GOV-0055",
+      "id": "GOV-0059",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4015,7 +4077,7 @@
       ]
     },
     {
-      "id": "GOV-0056",
+      "id": "GOV-0060",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4030,7 +4092,7 @@
       ]
     },
     {
-      "id": "GOV-0057",
+      "id": "GOV-0061",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4062,7 +4124,7 @@
       ]
     },
     {
-      "id": "GOV-0058",
+      "id": "GOV-0062",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4092,7 +4154,7 @@
       ]
     },
     {
-      "id": "GOV-0059",
+      "id": "GOV-0063",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4107,7 +4169,7 @@
       ]
     },
     {
-      "id": "GOV-0060",
+      "id": "GOV-0064",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4137,7 +4199,7 @@
       ]
     },
     {
-      "id": "GOV-0061",
+      "id": "GOV-0065",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4154,7 +4216,7 @@
       ]
     },
     {
-      "id": "GOV-0062",
+      "id": "GOV-0066",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4169,7 +4231,7 @@
       ]
     },
     {
-      "id": "GOV-0063",
+      "id": "GOV-0067",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4186,7 +4248,7 @@
       ]
     },
     {
-      "id": "GOV-0064",
+      "id": "GOV-0068",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4197,11 +4259,28 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 558,
+          "line": 622,
           "section": "Quest Workflow > Tracked Versus Regenerable"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0069",
+      "domain": "governance",
+      "strength": "may",
+      "tags": [
+        "governance"
+      ],
+      "rule": "Only overridable continuation codes are accepted: BLOCKEDTHEORY and BLOCKEDSCOPE. The command refuses to override honesty/integrity invariants — regression-restore, measurement, unrecorded-evidence, and metric-projection guards cannot be bypassed this way.",
+      "score": 124,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 567,
+          "section": "Quest Workflow > Recorded-Reason Override Escape Hatch"
         }
       ]
     }
   ],
-  "generatedAt": "2026-06-05T06:23:45.028Z"
+  "generatedAt": "2026-06-05T07:10:26.496Z"
 }

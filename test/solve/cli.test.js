@@ -145,3 +145,76 @@ tap.test('solve CLI smoke (P2)', async (t) => {
     t.end();
   });
 });
+
+tap.test('override + reflect CLI subcommands', async (t) => {
+  function readLogFile(root, id) {
+    const file = path.join(root, 'solve', 'log', `${id}.ndjson`);
+    if (!fs.existsSync(file)) return [];
+    return fs.readFileSync(file, 'utf8').trim().split('\n')
+      .filter(Boolean).map((line) => JSON.parse(line));
+  }
+
+  t.test('override records a guard-override event for an overridable guard', (t) => {
+    const root = tmp();
+    writeOracleGoal(root, 'demo', path.join(root, 'oracle.json'));
+    fs.writeFileSync(path.join(root, 'oracle.json'), JSON.stringify({metric: 3, target: 0}));
+    const out = run(root, ['override', '--id', 'demo', '--frontier', 'demo-main',
+      '--guard', 'theory', '--reason', 'pursuing a falsifiable hunch']);
+    t.match(out, /recorded override/, 'confirms the override');
+    const overrides = readLogFile(root, 'demo').filter((e) => e.type === 'guard-override');
+    t.equal(overrides.length, 1, 'one override event recorded');
+    t.equal(overrides[0].reason, 'pursuing a falsifiable hunch', 'reason persisted');
+    t.equal(overrides[0].code, 'blocked-theory', 'theory alias mapped to its code');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('override refuses a non-overridable invariant', (t) => {
+    const root = tmp();
+    writeOracleGoal(root, 'demo', path.join(root, 'oracle.json'));
+    t.throws(
+      () => run(root, ['override', '--id', 'demo', '--frontier', 'demo-main',
+        '--guard', 'regression', '--reason', 'I want to']),
+      /not overridable/,
+      'honesty/integrity invariants cannot be overridden');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('override requires a reason', (t) => {
+    const root = tmp();
+    writeOracleGoal(root, 'demo', path.join(root, 'oracle.json'));
+    t.throws(
+      () => run(root, ['override', '--id', 'demo', '--frontier', 'demo-main',
+        '--guard', 'theory']),
+      /--reason/,
+      'a blank escape hatch is refused');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('reflect records a reflection note', (t) => {
+    const root = tmp();
+    writeOracleGoal(root, 'demo', path.join(root, 'oracle.json'));
+    const out = run(root, ['reflect', '--id', 'demo', '--frontier', 'demo-main',
+      '--note', 'the coupling is the real frontier']);
+    t.match(out, /recorded reflection/, 'confirms the reflection');
+    const reflections = readLogFile(root, 'demo').filter((e) => e.type === 'reflection');
+    t.equal(reflections.length, 1, 'one reflection event recorded');
+    t.equal(reflections[0].note, 'the coupling is the real frontier', 'note persisted');
+    t.equal(reflections[0].trigger, 'manual', 'defaults to the manual trigger');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('reflect requires a note', (t) => {
+    const root = tmp();
+    writeOracleGoal(root, 'demo', path.join(root, 'oracle.json'));
+    t.throws(
+      () => run(root, ['reflect', '--id', 'demo']),
+      /--note/,
+      'an empty reflection is refused');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+});
