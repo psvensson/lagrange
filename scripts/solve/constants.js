@@ -153,6 +153,10 @@ export const CONVERGENCE_GUARDS = Object.freeze({
   regressionRestoreGate: true,
   // rr-D: an A/B invariant swap escalates to a whole-system theory + model discriminator.
   coupledOscillation: true,
+  // rr-F: a detected coupling pins the next move to an atomic cross-owner reconcile and
+  // denies progress credit to single-owner local fixes until every coupled family is green
+  // together (or a finding accepts the coupling). Builds on coupledOscillation's detection.
+  couplingReconcile: true,
   // rr-E: scope-pressure crossing the file limit becomes a terminal (gating) bound.
   scopeTerminal: true,
   // rr-B: a frontier may refine its search gradient (e.g. priority -> distance) without

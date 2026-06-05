@@ -33,11 +33,11 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 13. [GOV-0020] Fix the harness (or change the attempt evidence) before reopening again, so reopen and park can never oscillate forever. _(see workflow-guidelines/solver-quests.md:87)_
 14. [GOV-0022] A Quest must not accumulate an unrecoverable dirty tree. _(see workflow-guidelines/solver-quests.md:153)_
 15. [GOV-0024] Detectors fire only on real recorded events and never touch the sealed doneWhen. _(see workflow-guidelines/solver-quests.md:168)_
-16. [GOV-0025] Do not revive sprint/package theory state as active authority. _(see workflow-guidelines/solver-quests.md:310)_
-17. [GOV-0026] If the verifier finds issues, fix them or record a finding that explains why the Quest must continue; do not proceed to git handoff from an unresolved verifier finding. _(see workflow-guidelines/solver-quests.md:373)_
-18. [GOV-0027] Do not include unrelated dirty worktree entries from another Quest. _(see workflow-guidelines/solver-quests.md:384)_
-19. [GOV-0028] A confirmed or refuted discrimination is investigative progress only; it never satisfies doneWhen and never substitutes for measured product progress. _(see workflow-guidelines/solver-quests.md:431)_
-20. [GOV-0030] A guard never silently halts a run. _(see workflow-guidelines/solver-quests.md:476)_
+16. [GOV-0025] Do not revive sprint/package theory state as active authority. _(see workflow-guidelines/solver-quests.md:323)_
+17. [GOV-0026] If the verifier finds issues, fix them or record a finding that explains why the Quest must continue; do not proceed to git handoff from an unresolved verifier finding. _(see workflow-guidelines/solver-quests.md:386)_
+18. [GOV-0027] Do not include unrelated dirty worktree entries from another Quest. _(see workflow-guidelines/solver-quests.md:397)_
+19. [GOV-0028] A confirmed or refuted discrimination is investigative progress only; it never satisfies doneWhen and never substitutes for measured product progress. _(see workflow-guidelines/solver-quests.md:444)_
+20. [GOV-0030] A guard never silently halts a run. _(see workflow-guidelines/solver-quests.md:489)_
 
 ### Ownership & Authority Policies
 
@@ -50,7 +50,7 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 ### Timeouts & Budget Management
 
 23. [GOV-0016] The retry is bounded by CANNOTMEASURERETRYBUDGET: once that many consecutive samples on a frontier fail to measure, the frontier parks as cannotmeasure (a harness verdict), never as exhausted. _(see workflow-guidelines/solver-quests.md:60)_
-24. [GOV-0029] A per-frontier investigation budget (INVESTIGATION_BUDGET) caps how many distinct theories can hold a rung before the ladder resumes climbing, so investigation can never become its own infinite loop. _(see workflow-guidelines/solver-quests.md:431)_
+24. [GOV-0029] A per-frontier investigation budget (INVESTIGATION_BUDGET) caps how many distinct theories can hold a rung before the ladder resumes climbing, so investigation can never become its own infinite loop. _(see workflow-guidelines/solver-quests.md:444)_
 
 ### Governance & Scope Controls
 

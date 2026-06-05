@@ -2841,7 +2841,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 310,
+          "line": 323,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
@@ -2856,7 +2856,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 373,
+          "line": 386,
           "section": "Quest Workflow > Source Change Verification"
         }
       ]
@@ -2871,7 +2871,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 384,
+          "line": 397,
           "section": "Quest Workflow > Git Handoff"
         }
       ]
@@ -2886,7 +2886,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 431,
+          "line": 444,
           "section": "Quest Workflow > Strategy Ladder > Falsification As Progress"
         }
       ]
@@ -2903,7 +2903,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 431,
+          "line": 444,
           "section": "Quest Workflow > Strategy Ladder > Falsification As Progress"
         }
       ]
@@ -2918,7 +2918,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 476,
+          "line": 489,
           "section": "Quest Workflow > Terminal And Blocking Conditions > Graded Guard Response"
         }
       ]
@@ -2965,7 +2965,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 511,
+          "line": 524,
           "section": "Quest Workflow > Tracked Versus Regenerable"
         }
       ]
@@ -3182,7 +3182,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 320,
+          "line": 333,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
@@ -3197,7 +3197,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 321,
+          "line": 334,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
@@ -3214,7 +3214,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 323,
+          "line": 336,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
@@ -3229,7 +3229,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 466,
+          "line": 479,
           "section": "Quest Workflow > Terminal And Blocking Conditions"
         }
       ]
@@ -3372,7 +3372,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 226,
+          "line": 239,
           "section": "Quest Workflow > Convergence Guards"
         }
       ]
@@ -3387,7 +3387,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 459,
+          "line": 472,
           "section": "Quest Workflow > Terminal And Blocking Conditions"
         }
       ]
@@ -3404,7 +3404,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 469,
+          "line": 482,
           "section": "Quest Workflow > Terminal And Blocking Conditions"
         }
       ]
@@ -3510,7 +3510,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 361,
+          "line": 374,
           "section": "Quest Workflow > Source Change Verification"
         }
       ]
@@ -3525,7 +3525,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 361,
+          "line": 374,
           "section": "Quest Workflow > Source Change Verification"
         }
       ]
@@ -3690,7 +3690,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 388,
+          "line": 401,
           "section": "Quest Workflow > Git Handoff"
         }
       ]
@@ -3870,7 +3870,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 213,
+          "line": 226,
           "section": "Quest Workflow > Convergence Guards"
         }
       ]
@@ -3887,7 +3887,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 483,
+          "line": 496,
           "section": "Quest Workflow > Terminal And Blocking Conditions > Graded Guard Response"
         }
       ]
@@ -3994,7 +3994,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 264,
+          "line": 277,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
@@ -4009,7 +4009,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 443,
+          "line": 456,
           "section": "Quest Workflow > Findings Log"
         }
       ]
@@ -4097,11 +4097,11 @@
       "strength": "may",
       "tags": [],
       "rule": "terminal: reserved strictly for SOLVED and honest EXHAUSTED. An unmapped or deliberately terminal-mapped block is the only thing that may hard-fail.",
-      "score": 149,
+      "score": 148,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 491,
+          "line": 504,
           "section": "Quest Workflow > Terminal And Blocking Conditions > Graded Guard Response"
         }
       ]
@@ -4163,7 +4163,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 310,
+          "line": 323,
           "section": "Quest Workflow > Two-Layer Theory"
         }
       ]
@@ -4197,11 +4197,11 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 511,
+          "line": 524,
           "section": "Quest Workflow > Tracked Versus Regenerable"
         }
       ]
     }
   ],
-  "generatedAt": "2026-06-05T05:24:44.172Z"
+  "generatedAt": "2026-06-05T05:37:04.301Z"
 }

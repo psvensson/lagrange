@@ -5,6 +5,8 @@ import {fileURLToPath} from 'node:url';
 
 import {
   detectCoupledOscillation,
+  couplingReconcileStatus,
+  coupledLocalFixBlocked,
   regressionRestoreStatus,
   scopeTerminalStatus,
 } from '../../scripts/solve/convergence-guards.js';
@@ -305,5 +307,106 @@ tap.test('gate rr-E: a terminal scope bound blocks the next begin move', (t) => 
     {...GATE_BASE, log, state: emptyState(), phase: 'begin', scopeTerminal: false});
   t.notOk(allowed.some((p) => p.includes('scope pressure terminal')),
     'under the bound there is no scope gate');
+  t.end();
+});
+
+// rr-F: coupled-invariant reconcile obligation. A coupled oscillation that still leaves a
+// coupled family red owes an atomic cross-owner reconcile; only a single measured run that
+// greens every coupled family at once, or a finding that accepts the coupling, discharges
+// it. These fixtures pair regression events (to trip the coupling) with measured attempts
+// (to drive the invariant ledger's red set).
+function coupledPendingLog() {
+  return [
+    measured([...CLUSTER_A, ...CLUSTER_B], '2026-06-03T00:00:00.000Z'),
+    regression([...CLUSTER_A], '2026-06-03T00:01:00.000Z'),
+    regression([...CLUSTER_B], '2026-06-03T00:02:00.000Z'),
+    regression([...CLUSTER_A], '2026-06-03T00:03:00.000Z'),
+    measured([...CLUSTER_B], '2026-06-03T00:04:00.000Z'),
+  ];
+}
+
+tap.test('couplingReconcileStatus: pending while a coupled family stays red', (t) => {
+  const status = couplingReconcileStatus(coupledPendingLog(), FRONTIER);
+  t.equal(status.coupled, true, 'the A->B->A history is a coupling');
+  t.equal(status.pending, true, 'an unreconciled coupling owes a reconcile');
+  t.equal(status.reconciled, false, 'cluster A is still red in the ledger');
+  t.same(status.redCoupledLabels.sort(), [...CLUSTER_A].sort(),
+    'the red coupled labels are reported for the gate message');
+  t.end();
+});
+
+tap.test('couplingReconcileStatus: an atomic re-greening run discharges it', (t) => {
+  const log = [
+    ...coupledPendingLog(),
+    measured([...CLUSTER_A, ...CLUSTER_B], '2026-06-03T00:05:00.000Z'),
+  ];
+  const status = couplingReconcileStatus(log, FRONTIER);
+  t.equal(status.reconciled, true, 'every coupled family green together reconciles');
+  t.equal(status.pending, false, 'a reconciled coupling owes nothing');
+  t.end();
+});
+
+tap.test('couplingReconcileStatus: a structured finding accepts the coupling', (t) => {
+  const log = [
+    ...coupledPendingLog(),
+    regressionFinding('2026-06-03T00:05:00.000Z', [...CLUSTER_A]),
+  ];
+  const status = couplingReconcileStatus(log, FRONTIER);
+  t.equal(status.explained, true, 'an accepting finding explains the coupling');
+  t.equal(status.pending, false, 'an explained coupling is no longer pending');
+  t.end();
+});
+
+tap.test('couplingReconcileStatus: no coupling means no obligation', (t) => {
+  const log = [
+    measured([...CLUSTER_A], '2026-06-03T00:00:00.000Z'),
+    regression([...CLUSTER_A], '2026-06-03T00:01:00.000Z'),
+    measured([], '2026-06-03T00:02:00.000Z'),
+  ];
+  const status = couplingReconcileStatus(log, FRONTIER);
+  t.equal(status.coupled, false, 'a single regression is not a coupling');
+  t.equal(status.pending, false, 'no coupling, no reconcile obligation');
+  t.end();
+});
+
+tap.test('coupledLocalFixBlocked: denies credit to a single-owner local fix', (t) => {
+  const log = coupledPendingLog();
+  t.equal(coupledLocalFixBlocked(log, FRONTIER, [...CLUSTER_B]), true,
+    'greening only one coupled family is a local fix and earns no credit');
+  t.equal(coupledLocalFixBlocked(log, FRONTIER, [...CLUSTER_A, ...CLUSTER_B]), false,
+    'greening every coupled family at once is the atomic reconcile and is allowed');
+  t.end();
+});
+
+tap.test('coupledLocalFixBlocked: nothing blocked without a pending coupling', (t) => {
+  const log = [measured([...CLUSTER_A], '2026-06-03T00:00:00.000Z')];
+  t.equal(coupledLocalFixBlocked(log, FRONTIER, []), false,
+    'no coupling means a local fix is free to earn its credit');
+  t.end();
+});
+
+tap.test('gate rr-F: an unreconciled coupling pins the next begin move to reconcile',
+  (t) => {
+    const log = coupledPendingLog();
+    const begin = stepTheoryGateProblems(
+      {...GATE_BASE, log, state: emptyState(), phase: 'begin'});
+    t.ok(begin.some((p) => p.includes('coupled-invariant oscillation unreconciled')),
+      'the begin gate demands an atomic cross-owner reconcile');
+    const commit = stepTheoryGateProblems(
+      {...GATE_BASE, log, state: emptyState(), phase: 'commit'});
+    t.notOk(commit.some((p) => p.includes('coupled-invariant oscillation unreconciled')),
+      'the commit phase does not retroactively gate the exposing attempt');
+    t.end();
+  });
+
+tap.test('gate rr-F: a reconciled coupling lifts the begin gate', (t) => {
+  const log = [
+    ...coupledPendingLog(),
+    measured([...CLUSTER_A, ...CLUSTER_B], '2026-06-03T00:05:00.000Z'),
+  ];
+  const begin = stepTheoryGateProblems(
+    {...GATE_BASE, log, state: emptyState(), phase: 'begin'});
+  t.notOk(begin.some((p) => p.includes('coupled-invariant oscillation unreconciled')),
+    'once every coupled family is green the reconcile gate stands down');
   t.end();
 });

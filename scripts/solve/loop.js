@@ -28,6 +28,7 @@ import {
   DISCRIMINATIONS,
   INVESTIGATION_BUDGET,
   CANNOT_MEASURE_RETRY_BUDGET,
+  CONVERGENCE_GUARDS,
   PARK_KIND_EXHAUSTED,
   PARK_KIND_CANNOT_MEASURE,
   PARK_REASON_EXHAUSTED,
@@ -58,7 +59,7 @@ import {diagnosticMovementFor, detectOscillation} from './current-blocker.js';
 import {detectUnrecordedEvidence} from './evidence.js';
 import {inspectChangeArtifact} from './change-artifact.js';
 import {analyzeScopePressure} from './scope-pressure.js';
-import {scopeTerminalStatus} from './convergence-guards.js';
+import {scopeTerminalStatus, coupledLocalFixBlocked} from './convergence-guards.js';
 import {analyzeQuestHealth} from './health.js';
 import {
   CONTINUATION_BLOCKED_THEORY,
@@ -303,7 +304,16 @@ export function finalizeAttempt(root, quest, ctx, pick, before, result) {
       attempt: event,
     });
   }
-  const forceStall = (measured && oscillation.oscillating) || regressed.length > 0;
+  // rr-F: deny progress credit to a single-owner local fix while a coupled-invariant
+  // oscillation stands unreconciled. A measured patch that leaves any coupled family red
+  // has not performed the required atomic cross-owner reconcile, so it force-stalls (climbs
+  // toward the system-theory/model reconcile rung) instead of banking whack-a-mole credit.
+  // An attempt that greens every coupled family at once — or a coupling already explained
+  // by a finding — is not blocked, so the honest reconcile still earns its credit.
+  const coupledBlocked = measured && CONVERGENCE_GUARDS.couplingReconcile &&
+    coupledLocalFixBlocked(log, pick.def.id, satisfiedInvariants);
+  const forceStall = (measured && oscillation.oscillating) || regressed.length > 0 ||
+    coupledBlocked;
   const progressed = decideAndRecord(
     root, quest, pick, event, after, violations, forceStall);
   appendTheoryResultForAttempt(root, quest, event, progressed, violations);

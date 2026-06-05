@@ -213,6 +213,63 @@ export function regressionRestoreStatus(log, frontierId = null, ledger = null) {
   };
 }
 
+// Status of the coupled-invariant reconcile obligation for a frontier. Once
+// detectCoupledOscillation reports a coupling, the families are definitionally coupled
+// (one is re-broken whenever the other is "fixed"), so a single-owner local patch can
+// never honestly settle them — the obligation is to reconcile every coupled family at
+// once. The obligation is discharged only by a genuine atomic reconcile (a single
+// measured run leaving every coupled label green together, reflected in the ledger no
+// longer listing any coupled label red) or by a finding that explicitly accepts/explains
+// the coupling. Until then it is `pending`. Because detectCoupledOscillation reads the
+// whole append-only history, the coupling — and thus this obligation — persists across
+// the entire episode, not just the run that first tripped it; that durability is what
+// stops the "record a system theory, then patch one owner again, then re-break" loop.
+export function couplingReconcileStatus(log, frontierId = null, ledger = null) {
+  const osc = detectCoupledOscillation(log, frontierId);
+  if (!osc.coupled) {
+    return {
+      coupled: false,
+      pending: false,
+      reconciled: false,
+      explained: false,
+      clusters: osc.clusters,
+      coupledLabels: [],
+      redCoupledLabels: [],
+    };
+  }
+  const led = ledger || projectInvariantLedger(log, frontierId);
+  const coupledLabels = [...new Set(osc.clusters.flat())].sort();
+  const redCoupledLabels = coupledLabels.filter((label) =>
+    led.currentRed.includes(label));
+  const reconciled = redCoupledLabels.length === 0;
+  const explained = !reconciled &&
+    regressionRestoreStatus(log, frontierId, led).explained;
+  return {
+    coupled: true,
+    pending: !reconciled && !explained,
+    reconciled,
+    explained,
+    clusters: osc.clusters,
+    coupledLabels,
+    redCoupledLabels,
+  };
+}
+
+// Whether a measured local-fix attempt must be denied progress credit because an active
+// coupled-invariant oscillation is still unreconciled. A single-owner patch that leaves
+// any coupled family red has not performed the required atomic cross-owner reconcile, so
+// crediting it as progress would let the Solver climb on whack-a-mole. The attempt is only
+// allowed to earn credit when it greens EVERY coupled label in the same run (the atomic
+// reconcile) or the coupling has already been explained — both of which make the
+// obligation no longer pending. `satisfiedInvariants` are the labels green in THIS run.
+export function coupledLocalFixBlocked(log, frontierId = null, satisfiedInvariants = []) {
+  const status = couplingReconcileStatus(log, frontierId);
+  if (!status.pending) return false;
+  const greened = new Set(
+    (Array.isArray(satisfiedInvariants) ? satisfiedInvariants : []).filter(Boolean));
+  return status.coupledLabels.some((label) => !greened.has(label));
+}
+
 // Whether the recorded change scope has crossed the terminal file bound. Advisory
 // scope-pressure signals already fire well below this; crossing the limit means the blast
 // radius is large enough that the Solver must split or shrink scope before more edits.

@@ -210,6 +210,19 @@ constant. Detectors fire only on real recorded events and never touch the sealed
   the two green-ranges overlap at exactly one value, single-frontier patches bounce
   forever (`EventuallySteady` violated), and only an atomic reconcile that satisfies
   both families at once converges.
+- **Coupled-reconcile gate (rr-F)**: detecting the coupling above is not enough —
+  the rr-D escalation is discharged the moment a system theory merely *exists*, after
+  which the Solver could patch a single owner again and let the partner family
+  re-break. rr-F closes that hole. Once a coupling is detected and a coupled family is
+  still red in the invariant ledger, `couplingReconcileStatus` reports `pending` and
+  the next *begin*-phase move is pinned to an **atomic cross-owner reconcile**: a
+  single measured run that leaves **every** coupled family green together, or a finding
+  that explicitly accepts the coupling. A single-owner local fix that greens only one
+  family is denied progress credit (`coupledLocalFixBlocked` force-stalls it so it
+  climbs toward the system-theory/model rung instead of banking whack-a-mole). Because
+  the detector reads the whole append-only history, the obligation persists across the
+  entire coupling episode, not just the run that first tripped it. Switchable via
+  `CONVERGENCE_GUARDS.couplingReconcile`.
 - **Regression-restore gate**: once a measured run records an invariant
   regression, the very next *begin*-phase move is pinned to restoring (or
   recording a finding that explains) the dropped invariant before any new theory

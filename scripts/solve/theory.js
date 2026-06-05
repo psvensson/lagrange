@@ -38,6 +38,7 @@ import {modelGuidanceForQuest} from './model-guidance.js';
 import {appendEvent, loadQuest, projectState, readLog} from './store.js';
 import {
   detectCoupledOscillation,
+  couplingReconcileStatus,
   regressionRestoreStatus,
 } from './convergence-guards.js';
 import {
@@ -317,6 +318,26 @@ export function stepTheoryGateProblems({
       problems.push(
         `restore previously-green invariant(s) ${restore.redLabels.join(', ')} ` +
         'or record a finding explaining why they were abandoned',
+      );
+    }
+  }
+
+  // rr-F: coupled-invariant reconcile. The rr-D gate above is discharged as soon as a
+  // system theory *exists*, after which the Solver could patch a single owner again and let
+  // the partner family re-break. rr-F closes that hole: at the 'begin' phase it pins the
+  // next move to an atomic cross-owner reconcile — leave every coupled family green in one
+  // measured run — or an explicit finding that accepts the coupling. It persists across the
+  // whole coupling episode (the detector reads all history), so local-fix credit cannot
+  // discharge it. Pairs with loop.js's coupledLocalFixBlocked, which denies the credit.
+  if (CONVERGENCE_GUARDS.couplingReconcile && phase === 'begin') {
+    const reconcile = couplingReconcileStatus(log, frontierId);
+    if (reconcile.pending) {
+      problems.push(
+        'coupled-invariant oscillation unreconciled: reconcile coupled invariant ' +
+        `families ${reconcile.redCoupledLabels.join(', ')} in a single atomic ` +
+        'cross-owner move (leave them green together in one measured run) or record a ' +
+        'finding explaining the accepted coupling — a single-owner local fix does not ' +
+        'discharge this',
       );
     }
   }
