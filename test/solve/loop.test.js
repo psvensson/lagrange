@@ -17,7 +17,6 @@ import {
   EVENT_GATE_DECISION,
   EVENT_THEORY_OPTION_DECLARED,
   EVENT_THEORY_SELECTED,
-  EVENT_VIOLATION,
   DISPOSITION_ADVISORY,
   STATUS_SOLVED,
   STATUS_PARKED,
@@ -207,7 +206,8 @@ tap.test('solver loop — P0 walking skeleton', async (t) => {
     t.end();
   });
 
-  t.test('autonomous loop stops before executor on model rung without model evidence', (t) => {
+  t.test('autonomous loop takes a soft-first exploratory attempt on the model rung ' +
+    'before escalating for model evidence', (t) => {
     const {root, quest} = setup({metric: 5, target: 0});
     quest.statement = 'lifecycle owner-boundary model contract needs proof';
     saveQuest(root, quest);
@@ -258,17 +258,21 @@ tap.test('solver loop — P0 walking skeleton', async (t) => {
       executor: {
         run() {
           executorCalls += 1;
-          return {changeRef: null, summary: 'should not run'};
+          return {changeRef: null, summary: 'model attempt'};
         },
       },
       maxCycles: 1,
     });
-    const log = readLog(root, quest.id);
-    const violations = log.filter((event) => event.type === EVENT_VIOLATION);
-    t.equal(res.outcome, OUTCOME_THEORY_REQUIRED, 'stops at model evidence gate');
-    t.equal(executorCalls, 0, 'executor was not invoked');
-    t.match(res.problems.join('; '), /model evidence required/u);
-    t.equal(violations[violations.length - 1].scope, 'theory-gate');
+    const advisories = readLog(root, quest.id).filter((event) =>
+      event.type === EVENT_GATE_DECISION &&
+      event.disposition === DISPOSITION_ADVISORY &&
+      event.code === CONTINUATION_BLOCKED_THEORY);
+    // P5b: model evidence is over-eager as an immediate stop. Soft-first now grants the
+    // model rung a bounded exploratory attempt to PRODUCE evidence; the hard requirement
+    // is still enforced at commit time by auditModelEvidence.
+    t.not(res.outcome, OUTCOME_THEORY_REQUIRED, 'model evidence does not hard-stop on first sight');
+    t.equal(executorCalls, 1, 'executor was invoked under the soft-first advisory');
+    t.equal(advisories.length, 1, 'one model-evidence advisory recorded for the cycle');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });

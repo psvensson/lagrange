@@ -523,17 +523,24 @@ progress, mirroring `EXPLORE_BUDGET`).
 
 This applies **only** to the autonomous loop (callers opt in via
 `context.softFirst`); a supervised single `step`/`attempt` still reports the gate
-to its operator immediately. Within one autonomous cycle the readiness gate that
-immediately precedes the harness is the **sole** advisory recorder; the
-pre-attempt health gate merely *defers* (via `softFirstWouldDefer`, which records
-nothing) so a single missing-theory condition is never counted twice per cycle.
+to its operator immediately. Within one autonomous cycle the same condition can be
+seen by both the pre-attempt health gate and the readiness gate that precedes the
+harness. Exactly **one** advisory is recorded per cycle: whichever gate fires first
+records it, and the second observes that advisory
+(`softAdvisoryRecordedThisCycle`) and reuses it without double-counting toward the
+quorum. The health gate is what records the advisory for a model-evidence block,
+because the begin-phase readiness gate does not check model evidence.
 
 Soft-first is **excluded** for convergence-forcing problems so they still pin
 their corrective move on first sight: coupled-invariant oscillation /
-system-theory-after-stall (rr-D), coupled-invariant reconcile (rr-F), and the
-model-contract evidence requirement. Every non-theory code
-(regression/scope/measurement/data-integrity) also keeps its immediate
-disposition. Set `GUARD_QUORUM=0` to disable soft-first entirely and restore the
+system-theory-after-stall (rr-D) and coupled-invariant reconcile (rr-F). Every
+non-theory code (regression/scope/measurement/data-integrity) also keeps its
+immediate disposition. The model-contract evidence nudge is **not** excluded
+(P5b): it is soft-eligible so the model rung gets the same bounded ramp to attempt
+to PRODUCE model evidence instead of stopping on first sight — the hard
+requirement is still enforced at commit time by the audit (`auditModelEvidence`:
+real model/architecture changes need a `modelRef` or a later model-evidence
+finding). Set `GUARD_QUORUM=0` to disable soft-first entirely and restore the
 "stop on first theory gate" behaviour.
 
 `node scripts/solve.js report --id <id>` is the closure projection. It is a pure

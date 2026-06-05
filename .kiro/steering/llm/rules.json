@@ -104,12 +104,12 @@
     }
   ],
   "stats": {
-    "candidateCount": 257,
-    "dedupedRuleCount": 251,
-    "exportedRuleCount": 251,
+    "candidateCount": 256,
+    "dedupedRuleCount": 250,
+    "exportedRuleCount": 250,
     "aliasRuleCount": 0,
-    "masterRuleCount": 251,
-    "estimatedAllRulesTokens": 8814
+    "masterRuleCount": 250,
+    "estimatedAllRulesTokens": 8743
   },
   "rules": [
     {
@@ -2965,7 +2965,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 551,
+          "line": 558,
           "section": "Quest Workflow > Tracked Versus Regenerable"
         }
       ]
@@ -3696,23 +3696,6 @@
       ]
     },
     {
-      "id": "GOV-0051",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [
-        "readiness"
-      ],
-      "rule": "Within one autonomous cycle the readiness gate that immediately precedes the harness is the sole advisory recorder; the pre-attempt health gate merely defers (via softFirstWouldDefer, which records nothing) so a single missing-theory condition is never counted twice per cycle.",
-      "score": 180,
-      "sources": [
-        {
-          "file": "workflow-guidelines/solver-quests.md",
-          "line": 524,
-          "section": "Quest Workflow > Terminal And Blocking Conditions > Soft-first / quorum before escalation"
-        }
-      ]
-    },
-    {
       "id": "ARCH-0095",
       "domain": "architecture",
       "strength": "may",
@@ -3861,7 +3844,7 @@
       ]
     },
     {
-      "id": "GOV-0052",
+      "id": "GOV-0051",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3876,7 +3859,7 @@
       ]
     },
     {
-      "id": "GOV-0053",
+      "id": "GOV-0052",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3893,7 +3876,7 @@
       ]
     },
     {
-      "id": "GOV-0054",
+      "id": "GOV-0053",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4002,7 +3985,7 @@
       ]
     },
     {
-      "id": "GOV-0055",
+      "id": "GOV-0054",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4017,7 +4000,7 @@
       ]
     },
     {
-      "id": "GOV-0056",
+      "id": "GOV-0055",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4032,7 +4015,7 @@
       ]
     },
     {
-      "id": "GOV-0057",
+      "id": "GOV-0056",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4047,7 +4030,7 @@
       ]
     },
     {
-      "id": "GOV-0058",
+      "id": "GOV-0057",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4079,7 +4062,7 @@
       ]
     },
     {
-      "id": "GOV-0059",
+      "id": "GOV-0058",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4109,7 +4092,7 @@
       ]
     },
     {
-      "id": "GOV-0060",
+      "id": "GOV-0059",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4124,7 +4107,7 @@
       ]
     },
     {
-      "id": "GOV-0061",
+      "id": "GOV-0060",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4154,7 +4137,7 @@
       ]
     },
     {
-      "id": "GOV-0062",
+      "id": "GOV-0061",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4171,7 +4154,7 @@
       ]
     },
     {
-      "id": "GOV-0063",
+      "id": "GOV-0062",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4186,7 +4169,7 @@
       ]
     },
     {
-      "id": "GOV-0064",
+      "id": "GOV-0063",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4203,7 +4186,7 @@
       ]
     },
     {
-      "id": "GOV-0065",
+      "id": "GOV-0064",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4214,11 +4197,11 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 551,
+          "line": 558,
           "section": "Quest Workflow > Tracked Versus Regenerable"
         }
       ]
     }
   ],
-  "generatedAt": "2026-06-05T06:05:02.365Z"
+  "generatedAt": "2026-06-05T06:23:45.028Z"
 }

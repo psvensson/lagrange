@@ -67,14 +67,17 @@ export function exploreBudgetRemaining(log, frontierId) {
   return EXPLORE_BUDGET - spent;
 }
 
-// Convergence-FORCING / precondition theory problems that must never be softened: rr-D
-// coupled-invariant oscillation / system-theory-after-stall, rr-F coupled-invariant
-// reconcile, and the model-contract evidence requirement (its over-eagerness is a separate
-// concern, tracked as P5b, not a soft-first candidate). These gates exist to pin a specific
-// corrective move, so deferring them as advisory would reopen the holes they close. Matched
-// on the recorded problem text.
+// Convergence-FORCING theory problems that must never be softened: rr-D coupled-invariant
+// oscillation / system-theory-after-stall and rr-F coupled-invariant reconcile. These
+// gates exist to pin a specific corrective move (record a system theory, perform an atomic
+// cross-owner reconcile), so deferring them as advisory would reopen the very oscillation
+// holes rr-D/rr-F close. The model-contract evidence nudge is deliberately NOT excluded
+// (P5b): it is soft-eligible so the model rung gets the same bounded ramp to PRODUCE model
+// evidence instead of stopping on first sight — the hard requirement is still enforced at
+// commit time by the audit (auditModelEvidence: real model/architecture changes need a
+// modelRef or a later model-evidence finding). Matched on the recorded problem text.
 const SOFT_FIRST_EXCLUDED_PROBLEM =
-  /coupled[- ]invariant|system theory required|model evidence required/i;
+  /coupled[- ]invariant|system theory required/i;
 
 // Soft-first eligibility (P5). Only the INFERENTIAL "produce a theory artifact" family of
 // theory gates is eligible for a soft-first advisory ramp: a plain frontier/selected-stale/
@@ -105,13 +108,35 @@ function softAdvisoriesSpent(log, frontierId, code) {
   return spent;
 }
 
-// True when soft-first would let the run DEFER a block (continue without stopping) without
-// itself recording an advisory — used by the autonomous loop's pre-attempt health gate so
-// the single soft-first advisory is recorded once per cycle by the readiness gate that
-// immediately precedes the harness call, never double-counted across both gates.
+// True when soft-first would let the run DEFER a block (continue without stopping) while it
+// is still under quorum. Non-recording predicate: callers that only need to know whether the
+// run may keep going (without producing a gate-decision event) use this.
 export function softFirstWouldDefer(log, continuation, frontierId) {
   if (!softFirstEligible(continuation)) return false;
   return softAdvisoriesSpent(log, frontierId, continuation.code) < GUARD_QUORUM;
+}
+
+// True when a soft-first ADVISORY for `code` on this frontier has already been recorded in
+// the CURRENT cycle, i.e. after the frontier's most recent attempt. Within one autonomous
+// cycle both the pre-attempt health gate and the readiness gate can see the same missing-
+// theory condition; the first to fire records the single advisory and the second observes
+// this and does not double-count. A new attempt closes the cycle and resets the window.
+function softAdvisoryRecordedThisCycle(log, frontierId, code) {
+  let lastAttempt = -1;
+  for (let i = 0; i < log.length; i += 1) {
+    const event = log[i];
+    if (event.type === EVENT_ATTEMPT && event.frontier === frontierId) {
+      lastAttempt = i;
+    }
+  }
+  for (let i = lastAttempt + 1; i < log.length; i += 1) {
+    const event = log[i];
+    if (event.type === EVENT_GATE_DECISION && event.frontier === frontierId &&
+      event.disposition === DISPOSITION_ADVISORY && event.code === code) {
+      return true;
+    }
+  }
+  return false;
 }
 
 // True when a gate decision permits the caller to keep working without stopping: either no
@@ -146,23 +171,29 @@ export function resolveGateDecision(root, quest, continuation, context = {}) {
   // autonomous run loop does, so a missing theory does not stop the run on sight; a
   // supervised single `step`/`attempt` does NOT, so it still reports the gate to its
   // operator. While fewer than GUARD_QUORUM advisories have been recorded for this code
-  // since the last progress, record one more ADVISORY gate decision and let the loop
-  // continue (run the harness / make a real attempt). Once the quorum is reached the call
-  // falls through to the real disposition below. The convergence-forcing theory problems
-  // are excluded (see softFirstEligible), so rr-D/rr-F still pin their corrective move
-  // immediately, and an honest improvement resets the ramp (counter keys off lastProgress).
+  // since the last progress, let the loop continue (run the harness / make a real attempt)
+  // and record one ADVISORY gate decision per CYCLE. Both the pre-attempt health gate and
+  // the readiness gate can observe the same condition in one cycle; the first to fire
+  // records the advisory and the second reuses it (softAdvisoryRecordedThisCycle) so a
+  // single missing-theory condition is never double-counted toward the quorum. Once the
+  // quorum is reached the call falls through to the real disposition below. The convergence-
+  // forcing theory problems are excluded (see softFirstEligible), so rr-D/rr-F still pin
+  // their corrective move immediately, and an honest improvement resets the ramp (the
+  // quorum counter keys off lastProgress).
   if (softFirst && softFirstEligible(continuation) &&
     softAdvisoriesSpent(log, frontier, code) < GUARD_QUORUM) {
-    appendEvent(root, quest.id, {
-      type: EVENT_GATE_DECISION,
-      frontier,
-      rungIndex,
-      disposition: DISPOSITION_ADVISORY,
-      code,
-      outcome: OUTCOME_CONTINUE,
-      problems,
-      nextCommand: null,
-    });
+    if (!softAdvisoryRecordedThisCycle(log, frontier, code)) {
+      appendEvent(root, quest.id, {
+        type: EVENT_GATE_DECISION,
+        frontier,
+        rungIndex,
+        disposition: DISPOSITION_ADVISORY,
+        code,
+        outcome: OUTCOME_CONTINUE,
+        problems,
+        nextCommand: null,
+      });
+    }
     return {
       disposition: DISPOSITION_ADVISORY,
       code,

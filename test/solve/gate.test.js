@@ -257,7 +257,6 @@ tap.test('soft-first / quorum (P5)', async (t) => {
     for (const problem of [
       'coupled-invariant oscillation across owners',
       'system theory required after stall',
-      'model evidence required: prove lifecycle contract',
     ]) {
       const decision = resolveGateDecision(
         root,
@@ -267,6 +266,19 @@ tap.test('soft-first / quorum (P5)', async (t) => {
       );
       t.not(decision.disposition, DISPOSITION_ADVISORY, `not softened: ${problem}`);
     }
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('model-evidence is soft-first eligible (P5b): bounded ramp, not an immediate stop', (t) => {
+    const root = tmp();
+    const decision = resolveGateDecision(
+      root,
+      QUEST,
+      blocked(CONTINUATION_BLOCKED_THEORY, ['model evidence required: lifecycle_model']),
+      {log: [], frontier: FRONTIER, rungIndex: 3, softFirst: true},
+    );
+    t.equal(decision.disposition, DISPOSITION_ADVISORY, 'model evidence softens on first sight');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });
