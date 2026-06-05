@@ -610,6 +610,34 @@ cadence counter; it never changes a verdict, threshold, or `doneWhen`.
 `node scripts/solve.js report --id <id>` is the closure projection. It is a pure
 read of the event log and derived state.
 
+## Workflow Advisories For Supervised Drivers
+
+The autonomous run loop *acts* on the conditions above: it runs the reflection
+turn and honors a recorded override. A supervised driver — a human, or any agent
+that drives the Solver through individual subcommands rather than `run` — never
+goes through that loop, so without help those features only ever benefit a
+single autonomous run, and an agent's out-of-band work (source edits, harness
+runs) is lost at restart because it was never written to the append-only log.
+
+To keep that progress in quest memory, the read-only diagnostic commands
+`status`, `step`, `health`, and `report` surface non-blocking **advisories** (see
+`scripts/solve/advisories.js`). Each names a move that is available and the exact
+command to take it; recording the move stays an explicit operator action.
+
+- **evidence-unrecorded**: a fresh probe/harness measurement is newer than quest
+  memory. Run the printed `ingest-evidence` command so the measurement becomes
+  durable quest memory rather than living only in source changes.
+- **reflection-due**: a step-back reflection is due (same `oscillation` /
+  `scope-pressure` / `cadence` triggers as the loop). Run the printed `reflect`
+  command to record a falsifiable reframing.
+- **override-available**: the current block is a soft, overridable guard (theory
+  or scope). If there is a falsifiable reason to proceed, run the printed
+  `override` command to authorize one recorded-reason bypass.
+
+Advisories are read-only and never block; they fire on the same conditions the
+autonomous loop acts on, so supervised and autonomous drivers converge on the
+same recorded memory.
+
 ## Tracked Versus Regenerable
 
 Track authored Quest files under `solve/quests/`.

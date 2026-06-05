@@ -104,12 +104,12 @@
     }
   ],
   "stats": {
-    "candidateCount": 261,
-    "dedupedRuleCount": 255,
-    "exportedRuleCount": 255,
+    "candidateCount": 263,
+    "dedupedRuleCount": 257,
+    "exportedRuleCount": 257,
     "aliasRuleCount": 0,
-    "masterRuleCount": 255,
-    "estimatedAllRulesTokens": 8988
+    "masterRuleCount": 257,
+    "estimatedAllRulesTokens": 9125
   },
   "rules": [
     {
@@ -3005,12 +3005,27 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
+      "rule": "Advisories are read-only and never block; they fire on the same conditions the autonomous loop acts on, so supervised and autonomous drivers converge on the same recorded memory.",
+      "score": 204,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 637,
+          "section": "Quest Workflow > Workflow Advisories For Supervised Drivers"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0036",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
       "rule": "Do not rely on solve/state/ as durable memory.",
       "score": 204,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 622,
+          "line": 650,
           "section": "Quest Workflow > Tracked Versus Regenerable"
         }
       ]
@@ -3201,7 +3216,7 @@
       ]
     },
     {
-      "id": "GOV-0036",
+      "id": "GOV-0037",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3216,7 +3231,7 @@
       ]
     },
     {
-      "id": "GOV-0037",
+      "id": "GOV-0038",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3233,7 +3248,7 @@
       ]
     },
     {
-      "id": "GOV-0038",
+      "id": "GOV-0039",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3248,7 +3263,7 @@
       ]
     },
     {
-      "id": "GOV-0039",
+      "id": "GOV-0040",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3265,7 +3280,7 @@
       ]
     },
     {
-      "id": "GOV-0040",
+      "id": "GOV-0041",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3314,7 +3329,7 @@
       ]
     },
     {
-      "id": "GOV-0041",
+      "id": "GOV-0042",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3331,7 +3346,7 @@
       ]
     },
     {
-      "id": "GOV-0042",
+      "id": "GOV-0043",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3346,7 +3361,7 @@
       ]
     },
     {
-      "id": "GOV-0043",
+      "id": "GOV-0044",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3376,7 +3391,7 @@
       ]
     },
     {
-      "id": "GOV-0044",
+      "id": "GOV-0045",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3393,7 +3408,7 @@
       ]
     },
     {
-      "id": "GOV-0045",
+      "id": "GOV-0046",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3408,7 +3423,7 @@
       ]
     },
     {
-      "id": "GOV-0046",
+      "id": "GOV-0047",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3423,7 +3438,7 @@
       ]
     },
     {
-      "id": "GOV-0047",
+      "id": "GOV-0048",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3438,7 +3453,7 @@
       ]
     },
     {
-      "id": "GOV-0048",
+      "id": "GOV-0049",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3544,7 +3559,7 @@
       ]
     },
     {
-      "id": "GOV-0049",
+      "id": "GOV-0050",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3561,7 +3576,7 @@
       ]
     },
     {
-      "id": "GOV-0050",
+      "id": "GOV-0051",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3693,7 +3708,7 @@
       ]
     },
     {
-      "id": "GOV-0051",
+      "id": "GOV-0052",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3708,7 +3723,7 @@
       ]
     },
     {
-      "id": "GOV-0052",
+      "id": "GOV-0053",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3723,7 +3738,7 @@
       ]
     },
     {
-      "id": "GOV-0053",
+      "id": "GOV-0054",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3741,7 +3756,7 @@
       ]
     },
     {
-      "id": "GOV-0054",
+      "id": "GOV-0055",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3754,6 +3769,21 @@
           "file": "workflow-guidelines/solver-quests.md",
           "line": 598,
           "section": "Quest Workflow > Mandatory Step-Back Reflection Turn"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0056",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "A supervised driver — a human, or any agent that drives the Solver through individual subcommands rather than run — never goes through that loop, so without help those features only ever benefit a single autonomous run, and an agent's out-of-band work (source edits, harness runs) is lost at restart because it was never written to the append-only log.",
+      "score": 180,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 615,
+          "section": "Quest Workflow > Workflow Advisories For Supervised Drivers"
         }
       ]
     },
@@ -3906,7 +3936,7 @@
       ]
     },
     {
-      "id": "GOV-0055",
+      "id": "GOV-0057",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3921,7 +3951,7 @@
       ]
     },
     {
-      "id": "GOV-0056",
+      "id": "GOV-0058",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3938,7 +3968,7 @@
       ]
     },
     {
-      "id": "GOV-0057",
+      "id": "GOV-0059",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4047,7 +4077,7 @@
       ]
     },
     {
-      "id": "GOV-0058",
+      "id": "GOV-0060",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4062,7 +4092,7 @@
       ]
     },
     {
-      "id": "GOV-0059",
+      "id": "GOV-0061",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4077,7 +4107,7 @@
       ]
     },
     {
-      "id": "GOV-0060",
+      "id": "GOV-0062",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4092,7 +4122,7 @@
       ]
     },
     {
-      "id": "GOV-0061",
+      "id": "GOV-0063",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4124,7 +4154,7 @@
       ]
     },
     {
-      "id": "GOV-0062",
+      "id": "GOV-0064",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -4154,7 +4184,7 @@
       ]
     },
     {
-      "id": "GOV-0063",
+      "id": "GOV-0065",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4169,7 +4199,7 @@
       ]
     },
     {
-      "id": "GOV-0064",
+      "id": "GOV-0066",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4199,7 +4229,7 @@
       ]
     },
     {
-      "id": "GOV-0065",
+      "id": "GOV-0067",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4216,7 +4246,7 @@
       ]
     },
     {
-      "id": "GOV-0066",
+      "id": "GOV-0068",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4231,7 +4261,7 @@
       ]
     },
     {
-      "id": "GOV-0067",
+      "id": "GOV-0069",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4248,7 +4278,7 @@
       ]
     },
     {
-      "id": "GOV-0068",
+      "id": "GOV-0070",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4259,13 +4289,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 622,
+          "line": 650,
           "section": "Quest Workflow > Tracked Versus Regenerable"
         }
       ]
     },
     {
-      "id": "GOV-0069",
+      "id": "GOV-0071",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4282,5 +4312,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-06-05T07:10:26.496Z"
+  "generatedAt": "2026-06-05T08:49:51.746Z"
 }

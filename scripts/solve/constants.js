@@ -269,7 +269,9 @@ export const GUARD_QUORUM = 2;
 // turn is forced. Oscillation and runaway scope pressure force a reflection immediately,
 // regardless of this cadence. Set to 0 to disable the cadence trigger (the oscillation /
 // scope triggers still fire). The reflection turn only runs when the configured executor
-// can satisfy it (exposes a reflect() entry point); otherwise it is surfaced as advice.
+// can satisfy it (exposes a reflect() entry point); otherwise it is surfaced as advice via
+// the status/step/report/health advisories (see solve/advisories.js) so a supervised driver
+// is still nudged to take the reflection turn.
 export const REFLECTION_INTERVAL = 5;
 
 export const FIRST_RUNG_INDEX = 0;

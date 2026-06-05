@@ -35,6 +35,7 @@ import {runStep, stepAbort, stepPending} from './solve/step.js';
 import {SOLVE_DATA_DIR} from './solve/constants.js';
 import {runTheoryCommand, theoryCommitArgs} from './solve/theory.js';
 import {analyzeQuestHealth, renderHealth} from './solve/health.js';
+import {buildAdvisories, renderAdvisoryLines} from './solve/advisories.js';
 import {buildCurrentBlocker} from './solve/current-blocker.js';
 import {analyzeScopePressure} from './solve/scope-pressure.js';
 import {detectUnrecordedEvidence, ingestEvidence} from './solve/evidence.js';
@@ -176,6 +177,19 @@ function buildExecutor(root, id, args) {
   throw new Error(`run: unknown executor "${kind}" (use dry|agent)`);
 }
 
+function questAdvisories(root, quest, log) {
+  const health = analyzeQuestHealth(root, quest);
+  return buildAdvisories(quest, health, log || readLog(root, quest.id));
+}
+
+// Print the workflow advisories (reflection-due / override-available) for a quest, so a
+// supervised driver sees the same nudges the autonomous loop would act on. No-op when none.
+function emitAdvisories(root, quest) {
+  const advisories = questAdvisories(root, quest);
+  if (advisories.length === 0) return;
+  process.stdout.write(`${renderAdvisoryLines(advisories).join('\n')}\n`);
+}
+
 function cmdStatus(root, args) {
   const id = args.id || args._[0];
   if (!id) throw new Error('status: --id <questId> is required');
@@ -186,6 +200,7 @@ function cmdStatus(root, args) {
     ...state,
     currentBlocker: buildCurrentBlocker({quest, log, state}),
     scopePressure: analyzeScopePressure(root, quest, log),
+    advisories: questAdvisories(root, quest, log),
   };
   process.stdout.write(`${JSON.stringify(status, null, 2)}\n`);
 }
@@ -198,7 +213,11 @@ function cmdReport(root, args) {
   const warning = unrecorded ?
     `\nWARNING: fresh probe evidence is not recorded. Run:\n  ${unrecorded.command}\n` :
     '';
-  process.stdout.write(`${md}${warning}\n(written to ${file})\n`);
+  const advisories = questAdvisories(root, loadQuest(root, id));
+  const advisoryText = advisories.length ?
+    `\n${renderAdvisoryLines(advisories).join('\n')}\n` :
+    '';
+  process.stdout.write(`${md}${warning}${advisoryText}\n(written to ${file})\n`);
 }
 
 function cmdProbe(root, args) {
@@ -343,6 +362,7 @@ function cmdStep(root, args) {
       `${header}\n` +
       `${(r.problems || []).map((problem) => `- ${problem}`).join('\n')}` +
       `${next}\n`);
+    emitAdvisories(root, quest);
     return;
   }
   if (r.terminal === 'solved') {
@@ -360,6 +380,7 @@ function cmdStep(root, args) {
       `next: node scripts/solve.js step --id ${id} --commit ` +
       '--changeRef diff:<path> --summary "<what changed>"\n',
     );
+    emitAdvisories(root, quest);
     return;
   }
   const moved = r.progressed ? 'PROGRESS' : 'flat';
@@ -367,6 +388,7 @@ function cmdStep(root, args) {
   process.stdout.write(
     `recorded attempt on ${r.frontier}: metric ${r.before} -> ${r.after} ` +
     `(${moved})${r.done ? ' DONE' : ''}${viol}\n${commitLine(r.commit)}`);
+  emitAdvisories(root, quest);
 }
 
 // One-line human summary of the auto commit+push outcome (R1), printed after a step.
@@ -389,10 +411,14 @@ function cmdHealth(root, args) {
   if (!id) throw new Error('health: --id <questId> is required');
   const quest = loadQuest(root, id);
   const health = analyzeQuestHealth(root, quest);
+  const advisories = buildAdvisories(quest, health, readLog(root, id));
   if (args.json) {
-    process.stdout.write(`${JSON.stringify(health, null, 2)}\n`);
+    process.stdout.write(`${JSON.stringify({...health, advisories}, null, 2)}\n`);
   } else {
     process.stdout.write(renderHealth(health));
+    if (advisories.length) {
+      process.stdout.write(`\n${renderAdvisoryLines(advisories).join('\n')}\n`);
+    }
   }
 }
 
