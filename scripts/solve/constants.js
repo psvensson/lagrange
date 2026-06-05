@@ -31,6 +31,11 @@ export const EVENT_THEORY_SELECTED = 'theory-selected';
 export const EVENT_THEORY_RESULT = 'theory-result';
 export const EVENT_THEORY_SUPERSEDED = 'theory-superseded';
 export const EVENT_EVIDENCE_INGESTED = 'evidence-ingested';
+// Records the graded decision a guard/continuation gate took (advisory/reroute/explore/
+// park-resumable/terminal) together with the actionable next command. Append-only and
+// non-gating: it makes the previously-silent "why did the loop stop here" decision
+// auditable, and lets the explore budget (EXPLORE_BUDGET) be derived from the log.
+export const EVENT_GATE_DECISION = 'gate-decision';
 
 // Frontier / quest status values.
 export const STATUS_OPEN = 'open';
@@ -182,6 +187,46 @@ export const OUTCOME_SOLVED = 'solved';
 export const OUTCOME_EXHAUSTED = 'exhausted';
 export const OUTCOME_MAX_CYCLES = 'max-cycles';
 export const OUTCOME_THEORY_REQUIRED = 'theory-required';
+// A recoverable gate (scope/regression/measurement/unrecorded-evidence/metric-projection)
+// asked the loop to stop and take a concrete next action. Like THEORY_REQUIRED it is a
+// NON-terminal stop: the quest stays resumable and is never closed by it. It replaces the
+// old behaviour where these gates threw and crashed an autonomous run.
+export const OUTCOME_BLOCKED = 'blocked';
+
+// Graded guard-response dispositions, softest -> hardest. Every blocked continuation or
+// theory gate resolves to exactly one of these. Only `terminal` may CLOSE a quest, and
+// (per the two-terminal contract in AGENTS.md) only as SOLVED or honest EXHAUSTED.
+//   advisory       annotate (finding/health signal) and continue.
+//   reroute        force a specific kind of next move (reduce scope, restore invariant,
+//                  ingest evidence) and continue.
+//   explore        open a bounded free-explore rung: lift the metric-movement
+//                  requirement but exit only on an artifact (a falsifiable theory, a
+//                  confirmed/refuted discrimination, or a cross-owner reconcile plan).
+//   park-resumable park ONE frontier (e.g. cannot-measure); the quest stays resumable and
+//                  auto-reopens on fresh evidence; it NEVER counts as exhaustion.
+//   terminal       reserved for solved / honestly exhausted only.
+// The continuation-code -> disposition mapping lives in continuation.js
+// (CONTINUATION_DISPOSITIONS) and is reversible: flip any code back to `terminal` to
+// restore the pre-graded "guard -> stop" behaviour for that code.
+export const DISPOSITION_ADVISORY = 'advisory';
+export const DISPOSITION_REROUTE = 'reroute';
+export const DISPOSITION_EXPLORE = 'explore';
+export const DISPOSITION_PARK_RESUMABLE = 'park-resumable';
+export const DISPOSITION_TERMINAL = 'terminal';
+export const DISPOSITIONS = Object.freeze([
+  DISPOSITION_ADVISORY,
+  DISPOSITION_REROUTE,
+  DISPOSITION_EXPLORE,
+  DISPOSITION_PARK_RESUMABLE,
+  DISPOSITION_TERMINAL,
+]);
+
+// Per-frontier ceiling on bounded free-explore rungs opened by a theory/explore gate.
+// While a frontier still has explore budget, a theory-required gate keeps the quest in an
+// explore disposition (think unconstrained, but boxed: it must produce an artifact). Once
+// the budget is spent the gate parks that single frontier as resumable instead of looping
+// forever, so the quest still converges without ever silently terminating.
+export const EXPLORE_BUDGET = 3;
 
 export const FIRST_RUNG_INDEX = 0;
 

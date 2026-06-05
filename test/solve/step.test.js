@@ -191,11 +191,10 @@ tap.test('synchronous runStep (P3)', async (t) => {
       summary: 'wide patch',
     });
 
-    t.throws(
-      () => runStep(root, quest),
-      /scope pressure terminal/u,
-      'manual begin cannot bypass terminal scope gate',
-    );
+    const gated = runStep(root, quest);
+    t.equal(gated.terminal, 'blocked', 'terminal scope gate is a non-terminal block');
+    t.equal(gated.disposition, 'reroute', 'scope pressure reroutes the approach');
+    t.match(gated.problems.join('\n'), /scope pressure terminal/u);
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });

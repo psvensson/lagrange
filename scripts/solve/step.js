@@ -30,10 +30,11 @@ import {autoCommitQuest} from './handoff.js';
 import {writeReport} from './report.js';
 import {analyzeQuestHealth} from './health.js';
 import {
-  CONTINUATION_BLOCKED_THEORY,
-  continuationErrorMessage,
-  continuationIsAllowed,
-} from './continuation.js';
+  resolveGateDecision,
+  gateDecisionToStepResult,
+  theoryGateContinuation,
+} from './gate.js';
+import {unrecordedEvidenceContinuation} from './continuation.js';
 
 export function pendingFilePath(root, questId) {
   return path.join(
@@ -74,24 +75,14 @@ function clearPending(root, questId) {
   if (fs.existsSync(file)) fs.rmSync(file);
 }
 
-function theoryGateResult(problems, pick) {
-  if (problems.length === 0) return null;
-  if (problems.some((item) =>
-    item.includes('theory required') ||
-    item.includes('frontier theory required') ||
-    item.includes('system theory required') ||
-    item.includes('fresh frontier theory') ||
-    item.includes('fresh theory selection required') ||
-    item.includes('theory result required') ||
-    item.includes('theory result update required'))) {
-    return {
-      terminal: 'theory-required',
-      frontier: pick.def.id,
-      rungIndex: pick.state.rungIndex,
-      problems,
-    };
-  }
-  throw new Error(`theory gate failed: ${problems.join('; ')}`);
+function theoryGateResult(root, quest, log, problems, pick) {
+  const continuation = theoryGateContinuation(problems);
+  const decision = resolveGateDecision(root, quest, continuation, {
+    log,
+    frontier: pick.def.id,
+    rungIndex: pick.state.rungIndex,
+  });
+  return decision ? gateDecisionToStepResult(decision) : null;
 }
 
 export function stepPending(root, questId) {
@@ -117,7 +108,8 @@ function stepBegin(root, quest, options = {}) {
     }
   }
 
-  const state = projectState(quest, readLog(root, quest.id));
+  const log = readLog(root, quest.id);
+  const state = projectState(quest, log);
   if (state.questStatus === STATUS_SOLVED) {
     return {terminal: 'solved', evidence: state.questEvidence};
   }
@@ -127,27 +119,25 @@ function stepBegin(root, quest, options = {}) {
     kind: 'frontier',
   });
   if (unrecorded) {
-    throw new Error(
-      'UNRECORDED_EVIDENCE: latest probe evidence is newer than Quest memory. ' +
-      `Ingest it first:\n  ${unrecorded.command}`,
+    const decision = resolveGateDecision(
+      root,
+      quest,
+      unrecordedEvidenceContinuation(unrecorded),
+      {log, frontier: unrecorded.frontier},
     );
+    if (decision) return gateDecisionToStepResult(decision);
   }
 
   const pick = pickFrontier(quest, state, ctx.scoreFn);
   if (!pick) return {terminal: 'exhausted'};
 
   const health = analyzeQuestHealth(root, quest, {state});
-  if (!continuationIsAllowed(health.continuation)) {
-    if (health.continuation.status === CONTINUATION_BLOCKED_THEORY) {
-      return {
-        terminal: 'theory-required',
-        frontier: pick.def.id,
-        rungIndex: pick.state.rungIndex,
-        problems: health.continuation.problems,
-      };
-    }
-    throw new Error(continuationErrorMessage(health.continuation));
-  }
+  const gateDecision = resolveGateDecision(root, quest, health.continuation, {
+    log,
+    frontier: pick.def.id,
+    rungIndex: pick.state.rungIndex,
+  });
+  if (gateDecision) return gateDecisionToStepResult(gateDecision);
 
   const before = evaluate(pick.def.metric, ctx.probeCtx);
   const pending = {
@@ -207,7 +197,7 @@ function stepCommit(root, quest, options = {}) {
     modelNotApplicable: options.modelNotApplicable,
     phase: 'commit',
   });
-  const gateResult = theoryGateResult(readinessProblems, pick);
+  const gateResult = theoryGateResult(root, quest, log, readinessProblems, pick);
   if (gateResult) return gateResult;
 
   const outcome = finalizeAttempt(root, quest, ctx, pick, pending.before, {

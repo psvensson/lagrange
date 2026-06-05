@@ -1,0 +1,37 @@
+diff --git a/src/message-group/message-group-service-row-owner.js b/src/message-group/message-group-service-row-owner.js
+index cf32fc8b..cc685a46 100644
+--- a/src/message-group/message-group-service-row-owner.js
++++ b/src/message-group/message-group-service-row-owner.js
+@@ -23,10 +23,10 @@ const MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR = Object.freeze({
+ const SERVICE_ROW_UPDATE_OPTION = Object.freeze({
+   allowCoalescing: true,
+   allowPressureDefer: true,
+-  deliveryPriority: 'background',
++  deliveryPriority: 'critical',
+   pressureRetryAfterMs: 250,
+   skipCacheWait: true,
+-  workClass: 'background',
++  workClass: 'critical',
+ });
+ 
+ function assertRequiredString(value, errorMessage) {
+diff --git a/test/message-group/message-group-service-row-owner.test.js b/test/message-group/message-group-service-row-owner.test.js
+index 0db34916..08480fec 100644
+--- a/test/message-group/message-group-service-row-owner.test.js
++++ b/test/message-group/message-group-service-row-owner.test.js
+@@ -49,8 +49,13 @@ test('MessageGroupServiceRowOwner - activateReplica updates status without rewri
+     );
+     t.equal(
+       updates[0].options?.deliveryPriority,
+-      'background',
+-      'activation update should use background delivery',
++      'critical',
++      'activation update should use critical control-plane delivery',
++    );
++    t.equal(
++      updates[0].options?.workClass,
++      'critical',
++      'activation update should use critical control-plane work class',
+     );
+     t.equal(
+       updates[0].options?.coalescingKey,

@@ -109,6 +109,45 @@ const CONFIGS = [
     boundary: 'coupled_invariant_admission',
     expectedFailurePattern: 'Temporal property EventuallySteady was violated',
   },
+  {
+    id: 'publication-convergence-reconciled',
+    mode: 'publication-convergence-reconciled',
+    module: path.resolve(
+      'models',
+      'readiness-starvation',
+      'PublicationConvergence.tla',
+    ),
+    cfg: path.resolve(
+      'models',
+      'readiness-starvation',
+      'PublicationConvergence_fixed.cfg',
+    ),
+    expectConverged: true,
+    report: 'publication-convergence-tlc-reconciled.model.report.json',
+    scenario: 'rolling-restart-publication-convergence',
+    owner: 'membership_publication_owner',
+    boundary: 'publication_convergence',
+  },
+  {
+    id: 'publication-convergence-lost-wake',
+    mode: 'publication-convergence-lost-wake',
+    module: path.resolve(
+      'models',
+      'readiness-starvation',
+      'PublicationConvergence.tla',
+    ),
+    cfg: path.resolve(
+      'models',
+      'readiness-starvation',
+      'PublicationConvergence_bug.cfg',
+    ),
+    expectConverged: false,
+    report: 'publication-convergence-tlc-lost-wake.model.report.json',
+    scenario: 'rolling-restart-publication-convergence',
+    owner: 'membership_publication_owner',
+    boundary: 'publication_convergence',
+    expectedFailurePattern: 'Temporal property EventuallySteady was violated',
+  },
 ];
 
 function download(url, dest) {

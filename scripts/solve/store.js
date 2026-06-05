@@ -162,6 +162,8 @@ function applyFinding(frontier, event) {
     claim: event.claim || null,
     evidence: event.evidence || null,
     rulesOut: event.rulesOut || null,
+    regressionClassification: event.regressionClassification || null,
+    scopePressureClassification: event.scopePressureClassification || null,
     ts: event.ts || null,
   });
 }
@@ -405,6 +407,7 @@ export function appendFinding(root, questId, finding) {
     evidence: finding.evidence || null,
     rulesOut: finding.rulesOut || null,
     regressionClassification: finding.regressionClassification || null,
+    scopePressureClassification: finding.scopePressureClassification || null,
   });
 }
 

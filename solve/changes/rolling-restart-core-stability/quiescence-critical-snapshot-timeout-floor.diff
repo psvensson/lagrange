@@ -1,0 +1,97 @@
+diff --git a/test/distributed/harness/__tests__/cluster-part-6-core-05-test-cases.js b/test/distributed/harness/__tests__/cluster-part-6-core-05-test-cases.js
+index 230fa957..b3bc82dd 100644
+--- a/test/distributed/harness/__tests__/cluster-part-6-core-05-test-cases.js
++++ b/test/distributed/harness/__tests__/cluster-part-6-core-05-test-cases.js
+@@ -330,6 +330,46 @@ export function registerClusterPart6Core05Tests(context) {
+     },
+   );
+ 
++  test(
++    'Unit: critical system spread probes preserve a late timeout floor',
++    async () => {
++      const cluster = createCluster({
++        size: 1,
++        docker: {socketPath: '/var/run/docker.sock'},
++        image: 'distributed-db:test',
++      });
++      const capturedTimeouts = [];
++      const capturedLanes = [];
++      cluster._nodes = new Map([['seed-a', {
++        id: 'seed-a',
++        role: NODE_ROLES.SEED,
++        async queryWithTimeout(sql, _params, options = {}) {
++          assert.match(
++            sql,
++            /service_discovery_local\('replica_operations'\)/,
++          );
++          capturedTimeouts.push(options.timeoutMs);
++          capturedLanes.push(options.lane);
++          return buildCriticalSystemDiscoverySnapshot(['seed-a'], Date.now());
++        },
++      }]]);
++
++      const result = await cluster._probeCriticalSystemTableDistribution(
++        Date.now() - 1,
++        'replica_operations',
++        1,
++      );
++
++      assert.equal(result.ready, true);
++      assert.equal(capturedTimeouts.length, 1);
++      assert.ok(
++        capturedTimeouts[0] >= 100,
++        'late critical spread probe should not collapse to a 1ms timeout',
++      );
++      assert.equal(capturedLanes[0], 'snapshot');
++    },
++  );
++
+   test(
+     'Unit: waitForControlPlaneQuiescence timeout diagnostics include critical system spread gaps',
+     async () => {
+diff --git a/test/distributed/harness/cluster-segment-7-class-5.js b/test/distributed/harness/cluster-segment-7-class-5.js
+index 70648229..bb68e1a2 100644
+--- a/test/distributed/harness/cluster-segment-7-class-5.js
++++ b/test/distributed/harness/cluster-segment-7-class-5.js
+@@ -112,6 +112,23 @@ function resolveLoadRemainingWitnessSnapshotTimeoutMs(result = null) {
+     MIN_TIMEOUT_MS;
+ }
+ 
++function resolveQuiescenceSequentialProbeTimeoutMs(
++  deadline,
++  remainingProbeCount,
++  maxTimeoutMs,
++) {
++  const fairShareTimeoutMs = resolveSequentialProbeTimeoutMs(
++    deadline,
++    remainingProbeCount,
++    maxTimeoutMs,
++  );
++  const lateProbeTimeoutFloorMs = Math.min(
++    Math.max(MIN_TIMEOUT_MS, Math.floor(maxTimeoutMs || MIN_TIMEOUT_MS)),
++    CONTROL_SNAPSHOT_LATE_PROBE_TIMEOUT_FLOOR_MS,
++  );
++  return Math.max(fairShareTimeoutMs, lateProbeTimeoutFloorMs);
++}
++
+ class Cluster5 extends Cluster4 {
+   async _probeControlSnapshotCoverage(
+     deadline,
+@@ -977,7 +994,7 @@ class Cluster5 extends Cluster4 {
+     let selectedSnapshot = null;
+     let lastError = null;
+     for (const [index, node] of nodes.entries()) {
+-      const snapshotTimeoutMs = resolveSequentialProbeTimeoutMs(
++      const snapshotTimeoutMs = resolveQuiescenceSequentialProbeTimeoutMs(
+         deadline,
+         nodes.length - index,
+         CONTROL_SNAPSHOT_PROBE_TIMEOUT_MS,
+@@ -1155,7 +1172,7 @@ class Cluster5 extends Cluster4 {
+     let selectedSummary = null;
+     let lastError = null;
+     for (const [index, node] of nodes.entries()) {
+-      const timeoutMs = resolveSequentialProbeTimeoutMs(
++      const timeoutMs = resolveQuiescenceSequentialProbeTimeoutMs(
+         deadline,
+         nodes.length - index,
+         CONTROL_SNAPSHOT_PROBE_TIMEOUT_MS,

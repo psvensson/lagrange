@@ -1,0 +1,73 @@
+diff --git a/src/admin/admin-service-discovery-readiness-context-methods.js b/src/admin/admin-service-discovery-readiness-context-methods.js
+index 5f3e0261..fee6fcee 100644
+--- a/src/admin/admin-service-discovery-readiness-context-methods.js
++++ b/src/admin/admin-service-discovery-readiness-context-methods.js
+@@ -466,8 +466,11 @@ function assignAdminServiceDiscoveryReadinessContextMethods(
+     resolveAuthoritativeDiscoveryReadTransportProfile(
+       controlSnapshotRepairRead = false,
+     ) {
++      const workloadClass = controlSnapshotRepairRead ?
++        CONTROL_PLANE_WORKLOAD_CLASS.READINESS_CRITICAL_READ :
++        CONTROL_PLANE_WORKLOAD_CLASS.ADMIN_DIAGNOSTIC_READ;
+       const workloadProfile = buildControlPlaneWorkloadProfile(
+-        CONTROL_PLANE_WORKLOAD_CLASS.ADMIN_DIAGNOSTIC_READ,
++        workloadClass,
+         {
+           allowPressureDegrade: controlSnapshotRepairRead ? false : undefined,
+         },
+@@ -477,7 +480,9 @@ function assignAdminServiceDiscoveryReadinessContextMethods(
+         workClass: workloadProfile.workClass,
+         allowPressureDegrade: workloadProfile.allowPressureDegrade === true,
+         allowPressureDefer: workloadProfile.allowPressureDefer === true,
+-        deliveryPriority: CONTROL_PLANE_DELIVERY_PRIORITY.BACKGROUND,
++        deliveryPriority: controlSnapshotRepairRead ?
++          CONTROL_PLANE_DELIVERY_PRIORITY.READINESS :
++          CONTROL_PLANE_DELIVERY_PRIORITY.BACKGROUND,
+       });
+     }
+ 
+diff --git a/src/control-plane/control-plane-constants.js b/src/control-plane/control-plane-constants.js
+index 482958b2..15deef27 100644
+--- a/src/control-plane/control-plane-constants.js
++++ b/src/control-plane/control-plane-constants.js
+@@ -50,6 +50,7 @@ const ControlPlaneField = Object.freeze({
+ const CONTROL_PLANE_DELIVERY_PRIORITY = Object.freeze({
+   BACKGROUND: 'background',
+   CRITICAL: 'critical',
++  READINESS: 'readiness',
+ });
+ 
+ const CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE = Object.freeze({
+diff --git a/test/admin/admin-service-discovery.test.js b/test/admin/admin-service-discovery.test.js
+index ed51bd14..5c8b1beb 100644
+--- a/test/admin/admin-service-discovery.test.js
++++ b/test/admin/admin-service-discovery.test.js
+@@ -324,22 +324,22 @@ test('AdminServiceDiscovery control snapshot repair reads bypass pressure degrad
+     );
+     t.equal(
+       readCalls.every((call) =>
+-        call.workClass === 'background'),
++        call.workClass === 'interactive'),
+       true,
+-      'control snapshot repair should stay on the diagnostic work class',
++      'control snapshot repair should use the readiness read work class',
+     );
+     t.equal(
+       readCalls.every((call) =>
+         call.workloadClass ===
+-          CONTROL_PLANE_WORKLOAD_CLASS.ADMIN_DIAGNOSTIC_READ),
++          CONTROL_PLANE_WORKLOAD_CLASS.READINESS_CRITICAL_READ),
+       true,
+-      'control snapshot repair should carry the shared admin diagnostic workload class',
++      'control snapshot repair should carry the readiness workload class',
+     );
+     t.equal(
+       readCalls.every((call) =>
+-        call.deliveryPriority === CONTROL_PLANE_DELIVERY_PRIORITY.BACKGROUND),
++        call.deliveryPriority === CONTROL_PLANE_DELIVERY_PRIORITY.READINESS),
+       true,
+-      'control snapshot repair should stay off the critical transport lane',
++      'control snapshot repair should use the transport readiness lane',
+     );
+     t.equal(
+       readCalls.every((call) =>

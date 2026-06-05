@@ -37,8 +37,8 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 17. [GOV-0024] If the verifier finds issues, fix them or record a finding that explains why the Quest must continue; do not proceed to git handoff from an unresolved verifier finding. _(see workflow-guidelines/solver-quests.md:366)_
 18. [GOV-0025] Do not include unrelated dirty worktree entries from another Quest. _(see workflow-guidelines/solver-quests.md:377)_
 19. [GOV-0026] A confirmed or refuted discrimination is investigative progress only; it never satisfies doneWhen and never substitutes for measured product progress. _(see workflow-guidelines/solver-quests.md:424)_
-20. [GOV-0028] Do not rely on solve/state/ as durable memory. _(see workflow-guidelines/solver-quests.md:471)_
-21. [GOV-0030] constraints[]: optional hard limits the agent must preserve. _(see workflow-guidelines/solver-quests.md:53)_
+20. [GOV-0028] A guard never silently halts a run. _(see workflow-guidelines/solver-quests.md:469)_
+21. [GOV-0030] Do not rely on solve/state/ as durable memory. _(see workflow-guidelines/solver-quests.md:504)_
 
 ### Ownership & Authority Policies
 

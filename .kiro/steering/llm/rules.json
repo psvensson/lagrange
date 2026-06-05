@@ -104,12 +104,12 @@
     }
   ],
   "stats": {
-    "candidateCount": 249,
-    "dedupedRuleCount": 243,
-    "exportedRuleCount": 243,
+    "candidateCount": 253,
+    "dedupedRuleCount": 247,
+    "exportedRuleCount": 247,
     "aliasRuleCount": 0,
-    "masterRuleCount": 243,
-    "estimatedAllRulesTokens": 8412
+    "masterRuleCount": 247,
+    "estimatedAllRulesTokens": 8605
   },
   "rules": [
     {
@@ -2879,13 +2879,13 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "Do not rely on solve/state/ as durable memory.",
+      "rule": "A guard never silently halts a run.",
       "score": 205,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 471,
-          "section": "Quest Workflow > Tracked Versus Regenerable"
+          "line": 469,
+          "section": "Quest Workflow > Terminal And Blocking Conditions > Graded Guard Response"
         }
       ]
     },
@@ -2918,6 +2918,21 @@
           "file": "roadmap.md",
           "line": 96,
           "section": "Roadmap Steering Pointer > AGPL Preparatory Work"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0030",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Do not rely on solve/state/ as durable memory.",
+      "score": 204,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 504,
+          "section": "Quest Workflow > Tracked Versus Regenerable"
         }
       ]
     },
@@ -3107,7 +3122,7 @@
       ]
     },
     {
-      "id": "GOV-0030",
+      "id": "GOV-0031",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3122,7 +3137,7 @@
       ]
     },
     {
-      "id": "GOV-0031",
+      "id": "GOV-0032",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3139,7 +3154,7 @@
       ]
     },
     {
-      "id": "GOV-0032",
+      "id": "GOV-0033",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3154,7 +3169,7 @@
       ]
     },
     {
-      "id": "GOV-0033",
+      "id": "GOV-0034",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3171,16 +3186,16 @@
       ]
     },
     {
-      "id": "GOV-0034",
+      "id": "GOV-0035",
       "domain": "governance",
       "strength": "must",
       "tags": [],
-      "rule": "THEORY_REQUIRED: the selected rung needs system or frontier theory before another attempt; record the theory and resume instead of patching through it.",
+      "rule": "THEORY_REQUIRED (non-terminal): the selected rung needs system or frontier theory before another attempt; record the theory and resume instead of patching through it.",
       "score": 197,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 456,
+          "line": 459,
           "section": "Quest Workflow > Terminal And Blocking Conditions"
         }
       ]
@@ -3220,7 +3235,7 @@
       ]
     },
     {
-      "id": "GOV-0035",
+      "id": "GOV-0036",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3237,7 +3252,7 @@
       ]
     },
     {
-      "id": "GOV-0036",
+      "id": "GOV-0037",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3252,7 +3267,7 @@
       ]
     },
     {
-      "id": "GOV-0037",
+      "id": "GOV-0038",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3282,7 +3297,7 @@
       ]
     },
     {
-      "id": "GOV-0038",
+      "id": "GOV-0039",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3299,7 +3314,7 @@
       ]
     },
     {
-      "id": "GOV-0039",
+      "id": "GOV-0040",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3314,7 +3329,7 @@
       ]
     },
     {
-      "id": "GOV-0040",
+      "id": "GOV-0041",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3329,16 +3344,33 @@
       ]
     },
     {
-      "id": "GOV-0041",
+      "id": "GOV-0042",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "EXHAUSTED: every frontier is parked and no honest remaining move exists. A park is exhausted when it had at least one honestly-measured sample, or cannot_measure when every contributing sample was non-measuring (the harness never measured anything — fix the measurement infrastructure, then reopen).",
+      "rule": "EXHAUSTED (terminal): every frontier is parked and no honest remaining move exists. A park is exhausted when it had at least one honestly-measured sample, or cannot_measure when every contributing sample was non-measuring (the harness never measured anything — fix the measurement infrastructure, then reopen).",
       "score": 191,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 450,
+          "line": 452,
+          "section": "Quest Workflow > Terminal And Blocking Conditions"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0043",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [
+        "governance"
+      ],
+      "rule": "BLOCKED (non-terminal): a recoverable precondition gate (scope pressure, regression-restore, measurement gap, unrecorded/divergent evidence) stopped the current move. The stop is recorded and carries an actionable next command; it never closes the Quest.",
+      "score": 191,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 462,
           "section": "Quest Workflow > Terminal And Blocking Conditions"
         }
       ]
@@ -3433,7 +3465,7 @@
       ]
     },
     {
-      "id": "GOV-0042",
+      "id": "GOV-0044",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3450,7 +3482,7 @@
       ]
     },
     {
-      "id": "GOV-0043",
+      "id": "GOV-0045",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3582,7 +3614,7 @@
       ]
     },
     {
-      "id": "GOV-0044",
+      "id": "GOV-0046",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3597,7 +3629,7 @@
       ]
     },
     {
-      "id": "GOV-0045",
+      "id": "GOV-0047",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3763,7 +3795,7 @@
       ]
     },
     {
-      "id": "GOV-0046",
+      "id": "GOV-0048",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3778,7 +3810,7 @@
       ]
     },
     {
-      "id": "GOV-0047",
+      "id": "GOV-0049",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3791,6 +3823,23 @@
           "file": "workflow-guidelines/solver-quests.md",
           "line": 206,
           "section": "Quest Workflow > Convergence Guards"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0050",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [
+        "timeout"
+      ],
+      "rule": "explore: open a bounded free-explore rung. A missing theory maps here: the run keeps thinking but must exit on an artifact (a falsifiable theory), not on metric movement. Bounded by EXPLORE_BUDGET distinct explore gate-decisions since the frontier last made progress.",
+      "score": 173,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 476,
+          "section": "Quest Workflow > Terminal And Blocking Conditions > Graded Guard Response"
         }
       ]
     },
@@ -3887,7 +3936,7 @@
       ]
     },
     {
-      "id": "GOV-0048",
+      "id": "GOV-0051",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -3902,7 +3951,7 @@
       ]
     },
     {
-      "id": "GOV-0049",
+      "id": "GOV-0052",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -3917,7 +3966,7 @@
       ]
     },
     {
-      "id": "GOV-0050",
+      "id": "GOV-0053",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -3932,7 +3981,7 @@
       ]
     },
     {
-      "id": "GOV-0051",
+      "id": "GOV-0054",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -3964,7 +4013,7 @@
       ]
     },
     {
-      "id": "GOV-0052",
+      "id": "GOV-0055",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -3994,7 +4043,22 @@
       ]
     },
     {
-      "id": "GOV-0053",
+      "id": "GOV-0056",
+      "domain": "governance",
+      "strength": "may",
+      "tags": [],
+      "rule": "terminal: reserved strictly for SOLVED and honest EXHAUSTED. An unmapped or deliberately terminal-mapped block is the only thing that may hard-fail.",
+      "score": 149,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 484,
+          "section": "Quest Workflow > Terminal And Blocking Conditions > Graded Guard Response"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0057",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4024,7 +4088,7 @@
       ]
     },
     {
-      "id": "GOV-0054",
+      "id": "GOV-0058",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4041,7 +4105,7 @@
       ]
     },
     {
-      "id": "GOV-0055",
+      "id": "GOV-0059",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -4056,24 +4120,7 @@
       ]
     },
     {
-      "id": "GOV-0056",
-      "domain": "governance",
-      "strength": "may",
-      "tags": [
-        "cache"
-      ],
-      "rule": "Projected state under solve/state/ is local cache and may be rebuilt from the Quest plus append-only log.",
-      "score": 139,
-      "sources": [
-        {
-          "file": "workflow-guidelines/solver-quests.md",
-          "line": 471,
-          "section": "Quest Workflow > Tracked Versus Regenerable"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0057",
+      "id": "GOV-0060",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -4088,7 +4135,24 @@
           "section": "Roadmap Steering Pointer > AGPL Preparatory Work"
         }
       ]
+    },
+    {
+      "id": "GOV-0061",
+      "domain": "governance",
+      "strength": "may",
+      "tags": [
+        "cache"
+      ],
+      "rule": "Projected state under solve/state/ is local cache and may be rebuilt from the Quest plus append-only log.",
+      "score": 138,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 504,
+          "section": "Quest Workflow > Tracked Versus Regenerable"
+        }
+      ]
     }
   ],
-  "generatedAt": "2026-06-04T16:57:33.323Z"
+  "generatedAt": "2026-06-05T04:57:38.314Z"
 }

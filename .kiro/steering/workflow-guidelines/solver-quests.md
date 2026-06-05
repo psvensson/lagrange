@@ -444,17 +444,50 @@ still narrow the next move.
 
 ## Terminal And Blocking Conditions
 
-A Quest run can end in one terminal result or stop at a non-terminal gate:
+A Quest run can end in one terminal result or stop at a non-terminal gate. Only
+two results are TRUE terminals that close a Quest; every other stop is a
+recoverable gate that leaves the Quest open and resumable:
 
-- **SOLVED**: `doneWhen` is satisfied against live evidence.
-- **EXHAUSTED**: every frontier is parked and no honest remaining move exists.
-  A park is `exhausted` when it had at least one honestly-measured sample, or
-  `cannot_measure` when every contributing sample was non-measuring (the harness
-  never measured anything — fix the measurement infrastructure, then reopen).
-- **MAX_CYCLES**: the configured safety bound stopped the loop; treat this as a
-  runner configuration problem, not a Quest result.
-- **THEORY_REQUIRED**: the selected rung needs system or frontier theory before
-  another attempt; record the theory and resume instead of patching through it.
+- **SOLVED** (terminal): `doneWhen` is satisfied against live evidence.
+- **EXHAUSTED** (terminal): every frontier is parked and no honest remaining move
+  exists. A park is `exhausted` when it had at least one honestly-measured
+  sample, or `cannot_measure` when every contributing sample was non-measuring
+  (the harness never measured anything — fix the measurement infrastructure, then
+  reopen).
+- **MAX_CYCLES** (non-terminal): the configured safety bound stopped the loop;
+  treat this as a runner configuration problem, not a Quest result.
+- **THEORY_REQUIRED** (non-terminal): the selected rung needs system or frontier
+  theory before another attempt; record the theory and resume instead of patching
+  through it.
+- **BLOCKED** (non-terminal): a recoverable precondition gate (scope pressure,
+  regression-restore, measurement gap, unrecorded/divergent evidence) stopped the
+  current move. The stop is recorded and carries an actionable next command; it
+  never closes the Quest.
+
+### Graded Guard Response
+
+A guard never silently halts a run. Every blocking continuation is mapped,
+through a reversible config table, to one of five graded dispositions (softest to
+hardest) and the decision is recorded as a `gate-decision` event:
+
+- **advisory**: annotate (finding/health signal) and continue.
+- **reroute**: force a specific next move (e.g. change-approach for scope
+  pressure, restore-or-explain for a regression) and continue.
+- **explore**: open a bounded free-explore rung. A missing theory maps here:
+  the run keeps thinking but must exit on an artifact (a falsifiable theory),
+  not on metric movement. Bounded by `EXPLORE_BUDGET` distinct explore
+  gate-decisions since the frontier last made progress.
+- **park-resumable**: park a single frontier; the Quest stays resumable and other
+  frontiers continue; it auto-reopens on fresh evidence. An explore rung whose
+  budget is spent downgrades to park-resumable so the loop converges instead of
+  re-stopping forever.
+- **terminal**: reserved strictly for SOLVED and honest EXHAUSTED. An unmapped or
+  deliberately terminal-mapped block is the only thing that may hard-fail.
+
+Flip any continuation-code mapping to `terminal` to restore the original
+"guard → stop" behaviour for that code. The mapping lives in
+`scripts/solve/continuation.js` (`CONTINUATION_DISPOSITIONS`) and is resolved by
+`scripts/solve/gate.js`.
 
 `node scripts/solve.js report --id <id>` is the closure projection. It is a pure
 read of the event log and derived state.

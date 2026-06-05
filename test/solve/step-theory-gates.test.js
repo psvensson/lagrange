@@ -142,13 +142,15 @@ tap.test('step theory gates', async (t) => {
     recordSystemTheory(root, quest);
     recordFrontierTheory(root, quest, 'theory-model', 'model');
     
-    // Rung 3 with system theory but without model ref throws
+    // Rung 3 with system theory but without model ref gates (explore), not crash
     runStep(root, quest);
-    t.throws(() => runStep(root, quest, {
+    const needsModel = runStep(root, quest, {
       changeRef: makeDiff(root, 'c'),
       summary: 'model rung without model',
       theoryRef: 'theory-model',
-    }), /model evidence or modelNotApplicable/);
+    });
+    t.equal(needsModel.terminal, 'theory-required');
+    t.match(needsModel.problems.join('\n'), /model evidence or modelNotApplicable/);
 
     // Rung 3 with modelNotApplicable succeeds
     const committed = runStep(root, quest, {
@@ -225,14 +227,17 @@ tap.test('step theory gates', async (t) => {
     recordSystemTheory(root, quest);
     recordFrontierTheory(root, quest, 'theory-model', 'model');
 
-    // Running step without modelRef throws
-    t.throws(() => {
-      runStep(root, quest, {
-        changeRef: makeDiff(root, 'e'),
-        summary: 'retry edits',
-        theoryRef: 'theory-model',
-      });
-    }, /model reference is required when repeated evidence has lifecycle language/);
+    // Running step without modelRef gates (explore) instead of crashing
+    const needsModelRef = runStep(root, quest, {
+      changeRef: makeDiff(root, 'e'),
+      summary: 'retry edits',
+      theoryRef: 'theory-model',
+    });
+    t.equal(needsModelRef.terminal, 'theory-required');
+    t.match(
+      needsModelRef.problems.join('\n'),
+      /model reference is required when repeated evidence has lifecycle language/,
+    );
 
     // Create a mock tla model file
     const modelFile = path.join(root, 'tla.tla');

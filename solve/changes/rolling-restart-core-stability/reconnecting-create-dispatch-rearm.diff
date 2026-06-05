@@ -1,0 +1,490 @@
+diff --git a/src/rebalancer/operation-workflow-dispatch-rearm-evidence.js b/src/rebalancer/operation-workflow-dispatch-rearm-evidence.js
+index 8766d152..71ae2cd5 100644
+--- a/src/rebalancer/operation-workflow-dispatch-rearm-evidence.js
++++ b/src/rebalancer/operation-workflow-dispatch-rearm-evidence.js
+@@ -86,7 +86,6 @@ const DISPATCH_REARM_RECONCILE_STATE_TABLE = Object.freeze([
+ ]);
+ const DISPATCH_REARM_RECONCILE_ALLOWED_STATES = Object.freeze(
+   new Set([
+-    DISPATCH_REARM_RECONCILE_STATE.CREATE_REARM_TARGET_STILL_CREATING,
+     DISPATCH_REARM_RECONCILE_STATE.REARM_DISPATCH,
+   ]),
+ );
+@@ -231,6 +230,37 @@ function buildDispatchRearmFromProgressReconcileEvidence(
+       timeoutDecision.operationBudgetActive === true,
+   });
+ }
++function isProtectedCreateDispatchRetryBudgetActive(
++  owner,
++  operation,
++  now = Date.now(),
++) {
++  const operationId = operation?.operationId || null;
++  if (
++    !operationId ||
++    !owner.isCreateRearmDispatchPhase(operation) ||
++    !owner.dispatchRetryTimerByOperationId?.has(operationId)
++  ) {
++    return false;
++  }
++  const operationStartedAtMs = Number.isFinite(operation?.createdAt) ?
++    operation.createdAt :
++    Number.isFinite(operation?.createdAtMs) ?
++      operation.createdAtMs :
++      Number.isFinite(operation?.updatedAt) ?
++        operation.updatedAt :
++        Number.isFinite(operation?.updatedAtMs) ?
++          operation.updatedAtMs :
++          null;
++  if (!Number.isFinite(operationStartedAtMs)) {
++    return false;
++  }
++  return (
++    now <
++    operationStartedAtMs +
++      TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS
++  );
++}
+ function resolveDispatchRearmFromProgressReconcileState(evidence) {
+   return (
+     DISPATCH_REARM_RECONCILE_STATE_TABLE.find((entry) =>
+@@ -479,6 +509,9 @@ function isOperationStepTimedOut(owner, operation, now = Date.now()) {
+   if (owner.hasActiveTransitionRetryGrace(operation.operationId, now)) {
+     return false;
+   }
++  if (owner.isProtectedCreateDispatchRetryBudgetActive(operation, now)) {
++    return false;
++  }
+   const updatedAt = Number(operation.updatedAt ?? operation.updatedAtMs);
+   if (!Number.isFinite(updatedAt)) {
+     return false;
+@@ -590,6 +623,7 @@ function buildCoordinatorCreatedRemoteHandoffTimeoutDecision(
+         TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS :
+       null;
+   const operationBudgetActive =
++    owner.isProtectedCreateDispatchRetryBudgetActive(operation, now) ||
+     usesOperationBudget &&
+     Number.isFinite(operationBudgetDeadlineMs) &&
+     now < operationBudgetDeadlineMs;
+@@ -717,6 +751,7 @@ export {
+   isDispatchRetryableWorkflowStep,
+   isOperationDeferredRetryActive,
+   isOperationStepTimedOut,
++  isProtectedCreateDispatchRetryBudgetActive,
+   isRemoveInitialDispatchPhase,
+   isSafetyDeferredRetryableOperation,
+   resolveCoordinatorCreatedOperationOwnerNodeId,
+diff --git a/src/rebalancer/operation-workflow-dispatch-response-reconcile.js b/src/rebalancer/operation-workflow-dispatch-response-reconcile.js
+index f1fe2280..ac84c95a 100644
+--- a/src/rebalancer/operation-workflow-dispatch-response-reconcile.js
++++ b/src/rebalancer/operation-workflow-dispatch-response-reconcile.js
+@@ -37,6 +37,24 @@ const CREATE_IN_PROGRESS_OBSERVED_RECONCILE_STATUSES = Object.freeze(
+ const CREATE_IN_PROGRESS_OBSERVED_RETRY_STATUSES = Object.freeze(
+   new Set([ReplicaStatus.SYNCING]),
+ );
++function resolveDispatchDeliveryErrorLike(response) {
++  if (!response || typeof response !== TYPEOF.OBJECT) {
++    return response;
++  }
++  const nestedError = response.error;
++  if (!nestedError || typeof nestedError !== TYPEOF.OBJECT) {
++    return response;
++  }
++  return {
++    ...response,
++    ...nestedError,
++    error:
++      typeof nestedError.message === TYPEOF.STRING ?
++        nestedError.message :
++        response.error,
++    cause: nestedError,
++  };
++}
+ async function executeOperation(operation) {
+   if (this.isShuttingDown || !this.isInitialized) {
+     return {
+@@ -414,7 +432,7 @@ async function executeOperationInternal(operation) {
+     return response;
+   }
+   if (!isDeliveredTransportDeliveryOutcome(response)) {
+-    const errorLike = response.error || response;
++    const errorLike = resolveDispatchDeliveryErrorLike(response);
+     const errorMsg = this.normalizeErrorMessage(
+       errorLike,
+       REBALANCE_COORDINATOR_ERROR_MSG.MESSAGE_NOT_ACKED,
+@@ -525,7 +543,7 @@ async function _handleDispatchResponse(operation, response, replaceRemovePhase)
+       ReplicaOperationResponseStatus.NOT_FOUND,
+     );
+   }
+-  const errorLike = response?.error || response;
++  const errorLike = resolveDispatchDeliveryErrorLike(response);
+   const errorMsg = this.normalizeErrorMessage(errorLike, 'Unknown error');
+   if (this.deferDispatchRetry(operation, errorLike)) {
+     return this.buildSkippedOperationResult(
+diff --git a/src/rebalancer/operation-workflow-owner-segment-1.js b/src/rebalancer/operation-workflow-owner-segment-1.js
+index 45023ed3..4bcc9771 100644
+--- a/src/rebalancer/operation-workflow-owner-segment-1.js
++++ b/src/rebalancer/operation-workflow-owner-segment-1.js
+@@ -294,10 +294,11 @@ class OperationWorkflowOwnerSegment1 {
+   }
+ 
+   /**
+-   * Compute the next capped-exponential-backoff delay for a handoff retry,
+-   * floored by any explicit governor/transport retry-after hint and bounded by
+-   * a maximum. The attempt counter is advanced as a side effect so successive
+-   * retries grow geometrically instead of hammering at the base cadence.
++   * Compute the next handoff retry delay. Explicit governor/transport
++   * retry-after hints are authoritative; otherwise use capped exponential
++   * backoff with jitter. The attempt counter is advanced as a side effect so
++   * successive retries grow geometrically instead of hammering at the base
++   * cadence.
+    * @param {string|null} operationId
+    * @param {number} [retryAfterFloorMs=0]
+    * @return {number}
+@@ -319,16 +320,17 @@ class OperationWorkflowOwnerSegment1 {
+         attempt,
+       );
+     }
++    if (Number.isFinite(retryAfterFloorMs) && retryAfterFloorMs > NUM.ZERO) {
++      return Math.min(
++        DISPATCH_RETRY_MAX_DELAY_MS,
++        Math.max(NUM.ONE, Math.floor(retryAfterFloorMs)),
++      );
++    }
+     const exponential =
+       DISPATCH_RETRY_DELAY_MS *
+       Math.pow(DISPATCH_RETRY_BACKOFF_MULTIPLIER, previousAttempts);
+     const cappedExponential = Math.min(exponential, DISPATCH_RETRY_MAX_DELAY_MS);
+-    const flooredDelay = Math.max(
+-      cappedExponential,
+-      Number.isFinite(retryAfterFloorMs) && retryAfterFloorMs > NUM.ZERO ?
+-        Math.floor(retryAfterFloorMs) :
+-        NUM.ZERO,
+-    );
++    const flooredDelay = cappedExponential;
+     const jitterSpan = flooredDelay * DISPATCH_RETRY_JITTER_RATIO;
+     const jitter = jitterSpan > NUM.ZERO ?
+       Math.floor(this.randomFn() * jitterSpan) :
+@@ -610,6 +612,14 @@ class OperationWorkflowOwnerSegment1 {
+     );
+   }
+ 
++  isProtectedCreateDispatchRetryBudgetActive(operation, now = Date.now()) {
++    return DISPATCH_REARM_EVIDENCE.isProtectedCreateDispatchRetryBudgetActive(
++      this,
++      operation,
++      now,
++    );
++  }
++
+   async resumeDeferredTransitionOperation(operationId) {
+     return DISPATCH_REARM_EVIDENCE.resumeDeferredTransitionOperation(
+       this,
+diff --git a/src/rebalancer/operation-workflow-owner-segment-7-stage-2.js b/src/rebalancer/operation-workflow-owner-segment-7-stage-2.js
+index 520a8337..8524cfbf 100644
+--- a/src/rebalancer/operation-workflow-owner-segment-7-stage-2.js
++++ b/src/rebalancer/operation-workflow-owner-segment-7-stage-2.js
+@@ -546,7 +546,7 @@ class OperationWorkflowOwnerSegment7Stage2 extends OperationWorkflowOwnerSegment
+ 
+     const updatedAt = operation.updatedAt ?? operation.updatedAtMs;
+     const elapsed = now - updatedAt;
+-    const stepExceeded = elapsed >= stepTimeout;
++    const stepExceeded = this.isOperationStepTimedOut(operation, now);
+     const budgetExhausted = !stepAllocation.allowed;
+ 
+     if (stepExceeded || budgetExhausted) {
+diff --git a/test/rebalancer/priority-recovery-sql-dispatch-timeout-reentry-test-cases.js b/test/rebalancer/priority-recovery-sql-dispatch-timeout-reentry-test-cases.js
+index 505c0e3d..2782f057 100644
+--- a/test/rebalancer/priority-recovery-sql-dispatch-timeout-reentry-test-cases.js
++++ b/test/rebalancer/priority-recovery-sql-dispatch-timeout-reentry-test-cases.js
+@@ -4,11 +4,11 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({regi
+     TEST_ASSERT_SQL_PRIORITY_DEFERRED_CLAIM_DISPATCH, TEST_ASSERT_SQL_PRIORITY_DEFERRED_CLAIM_STEP, TEST_ASSERT_SQL_PRIORITY_DEFERRED_PROGRESS_RETRY, TEST_ASSERT_SQL_PRIORITY_DEFERRED_PROGRESS_RETRY_STATUS, TEST_ASSERT_SQL_PRIORITY_DEFERRED_PROGRESS_RETRY_STEP, TEST_ASSERT_SQL_PRIORITY_DEFERRED_PROGRESS_STALE_ROW, TEST_ASSERT_SQL_PRIORITY_DEFERRED_PROGRESS_TIMER, TEST_ASSERT_SQL_PRIORITY_DISPATCH,
+     TEST_ASSERT_SQL_PRIORITY_DISPATCH_SOURCE, TEST_ASSERT_SQL_PRIORITY_DISPATCH_TARGET, TEST_ASSERT_SQL_PRIORITY_DISPATCH_TIMEOUT, TEST_ASSERT_SQL_PRIORITY_LOCAL_OWNER, TEST_ASSERT_SQL_PRIORITY_PENDING_WAKE_ACCEPTED_STATUS, TEST_ASSERT_SQL_PRIORITY_PENDING_WAKE_ACCEPTED_STEP, TEST_ASSERT_SQL_PRIORITY_PENDING_WAKE_NO_CREATE, TEST_ASSERT_SQL_PRIORITY_PENDING_WAKE_STATUS,
+     TEST_ASSERT_SQL_PRIORITY_PENDING_WAKE_STEP, TEST_ASSERT_SQL_PRIORITY_PENDING_WAKE_SUCCESS, TEST_ASSERT_SQL_PRIORITY_REARM, TEST_ASSERT_SQL_PRIORITY_SNAPSHOT_STEP, TEST_ASSERT_SQL_PRIORITY_STALE_ROW, TEST_ASSERT_SQL_PRIORITY_STATUS, TEST_ASSERT_SQL_PRIORITY_STEP, TEST_ASSERT_SQL_PRIORITY_TRANSITIONS,
+-    TEST_CAPTURED_AT_MS, TEST_DELIVERY_STATUS_INITIATED, TEST_DISTRIBUTED_PARTICIPANT_FAILURE, TEST_EMPTY_LIST, TEST_EMPTY_VALUE, TEST_ENTITY_TYPE_PARTITION, TEST_EXPECTED_WORKFLOW_STEP_PARAM_INDEX, TEST_HANDOFF_TIMEOUT_MS,
+-    TEST_LOCAL_OWNER_PARTITION_ID, TEST_LOCAL_OWNER_REPLICA_ID, TEST_MIN_REPLICA_COUNT, TEST_PARTITION_ID, TEST_PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS, TEST_QUERY_OPERATION_BY_ID_FRAGMENT, TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT, TEST_QUERY_SERVICES_FRAGMENT,
++    TEST_CAPTURED_AT_MS, TEST_DEFERRED_RETRY_PENDING_REASON, TEST_DELIVERY_STATUS_INITIATED, TEST_DISTRIBUTED_PARTICIPANT_FAILURE, TEST_EMPTY_LIST, TEST_EMPTY_VALUE, TEST_ENTITY_TYPE_PARTITION, TEST_EXPECTED_WORKFLOW_STEP_PARAM_INDEX, TEST_HANDOFF_TIMEOUT_MS,
++    TEST_LOCAL_OWNER_PARTITION_ID, TEST_LOCAL_OWNER_REPLICA_ID, TEST_MIN_REPLICA_COUNT, TEST_OPERATION_CREATED_AT_MS, TEST_PARTITION_ID, TEST_PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS, TEST_QUERY_OPERATION_BY_ID_FRAGMENT, TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT, TEST_QUERY_SERVICES_FRAGMENT,
+     TEST_RAFT_ROLE_FOLLOWER, TEST_REPLICA_HANDLER_DISPATCH_TARGET, TEST_REPLICA_ID, TEST_REPLICA_OPERATIONS_TABLE, TEST_REPLICA_OPERATION_DISPATCH_DELIVERY_SOURCE, TEST_REPLICA_SERVICE_ADDRESS, TEST_RETRY_AFTER_MS, TEST_SQL_PRIORITY_DEFERRED_CLAIM_DISPATCH_TEST_NAME,
+     TEST_SQL_PRIORITY_DEFERRED_PROGRESS_DISPATCH_TEST_NAME, TEST_SQL_PRIORITY_PENDING_WAKE_ACCEPTED_RECONCILE_TEST_NAME, TEST_SQL_PRIORITY_PENDING_WAKE_ACTIVE_RECONCILE_TEST_NAME, TEST_SQL_PRIORITY_STALE_VISIBILITY_REDISPATCH_TEST_NAME, TEST_SQL_PRIORITY_TIMEOUT_OPERATION_ID, TEST_SQL_PRIORITY_TIMEOUT_REDISPATCH_TEST_NAME, TEST_STATUS_ACTIVE, TEST_STATUS_CREATING,
+-    TEST_STATUS_PENDING, TEST_STEP_ACTIVE, TEST_STEP_CREATING, TEST_STEP_HISTORY_LAG_MS, TEST_STEP_PENDING, TEST_STEP_SENDING, TEST_TARGET_NODE_ID, TEST_TIMEOUT_OVERRUN_MS,
++    TEST_STATUS_PENDING, TEST_STEP_ACTIVE, TEST_STEP_CREATING, TEST_STEP_HISTORY_LAG_MS, TEST_STEP_PENDING, TEST_STEP_SENDING, TEST_STEP_TIMEOUT_MS, TEST_TARGET_NODE_ID, TEST_TIMEOUT_OVERRUN_MS,
+     TEST_UPDATE_REPLICA_OPERATIONS_PREFIX, WORKFLOW_STEP, buildDispatchPendingReentryPlanningSnapshot, buildPendingOperationRow, buildTransactionCoordinator, createCoordinator,
+   } = dependencies;
+ 
+@@ -163,8 +163,8 @@ registerCase(TEST_SQL_PRIORITY_TIMEOUT_REDISPATCH_TEST_NAME, async (t) => {
+       TEST_STATUS_CREATING,
+       {now: nowMs},
+     ),
+-    true,
+-    TEST_ASSERT_SQL_PRIORITY_REARM,
++    false,
++    'visible CREATING target progress should not replay duplicate create dispatch',
+   );
+ 
+   await coordinator.checkTimeouts();
+@@ -245,6 +245,234 @@ registerCase(TEST_SQL_PRIORITY_TIMEOUT_REDISPATCH_TEST_NAME, async (t) => {
+   await coordinator.shutdown();
+ });
+ 
++registerCase(
++  'critical SQL CREATING dispatch retry remains rearm-eligible until the ' +
++    'operation budget closes',
++  async (t) => {
++    const deferredTimers = [];
++    const nowMs = TEST_CAPTURED_AT_MS;
++    const staleCreatingUpdatedAt =
++      nowMs - TEST_STEP_TIMEOUT_MS - TEST_TIMEOUT_OVERRUN_MS;
++    const operationRow = buildPendingOperationRow({
++      operationId: TEST_SQL_PRIORITY_TIMEOUT_OPERATION_ID,
++      partitionId: TEST_PARTITION_ID,
++      replicaId: TEST_REPLICA_ID,
++      nowMs,
++    });
++    operationRow.status = TEST_STATUS_CREATING;
++    operationRow.workflow_step = TEST_STEP_CREATING;
++    operationRow.created_at = TEST_OPERATION_CREATED_AT_MS;
++    operationRow.updated_at = staleCreatingUpdatedAt;
++    operationRow.steps_history = JSON.stringify([
++      {
++        step: TEST_STEP_CREATING,
++        timestamp: staleCreatingUpdatedAt - TEST_STEP_HISTORY_LAG_MS,
++      },
++    ]);
++
++    const coordinator = createCoordinator({
++      nodeId: TEST_TARGET_NODE_ID,
++      transactionCoordinator: buildTransactionCoordinator(),
++      systemTableCache: {
++        get() {
++          return TEST_EMPTY_VALUE;
++        },
++        getAll() {
++          return TEST_EMPTY_LIST;
++        },
++        filter() {
++          return TEST_EMPTY_LIST;
++        },
++      },
++      cdcIntegrationService: {
++        async waitForCacheUpdate() {},
++      },
++      messageRouter: {
++        async deliver() {
++          return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
++        },
++      },
++      tablePolicyService: {
++        async getPolicyForPartition() {
++          return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
++        },
++      },
++      setTimeoutFn(fn, delayMs) {
++        const handle = {fn, delayMs};
++        deferredTimers.push(handle);
++        return handle;
++      },
++      clearTimeoutFn() {},
++      enableTimeouts: false,
++    });
++    coordinator.config.creatingTimeoutMs = TEST_STEP_TIMEOUT_MS;
++
++    try {
++      coordinator.initialize();
++      const operation = coordinator.repository.rowToOperation(operationRow);
++      t.equal(
++        coordinator.workflowOwner.isOperationStepTimedOut(operation, nowMs),
++        true,
++        'stale CREATING progress should still time out before dispatch retry is armed',
++      );
++
++      const retryableDispatchError = new Error('Message not acknowledged');
++      retryableDispatchError.deferRetry = true;
++      retryableDispatchError.retryAfterMs = TEST_RETRY_AFTER_MS;
++      t.equal(
++        coordinator.workflowOwner.deferDispatchRetry(
++          operation,
++          retryableDispatchError,
++        ),
++        true,
++        'retryable CREATING dispatch pressure should arm dispatch retry',
++      );
++      t.equal(
++        deferredTimers.length,
++        NUM.ONE,
++        'dispatch retry should arm exactly one timer',
++      );
++      t.equal(
++        coordinator.workflowOwner.isOperationStepTimedOut(operation, nowMs),
++        false,
++        'active dispatch retry should protect CREATING within the operation budget',
++      );
++      t.equal(
++        coordinator.workflowOwner.shouldRearmDispatchFromProgressReconcile(
++          operation,
++          TEST_ACTUAL_STATUS_ABSENT,
++          {now: nowMs},
++        ),
++        true,
++        'active dispatch retry should keep CREATING rearm-eligible within the operation budget',
++      );
++
++      const expiredBudgetOperation = {
++        ...operation,
++        createdAt: NUM.ZERO,
++        updatedAt: staleCreatingUpdatedAt,
++      };
++      t.equal(
++        coordinator.workflowOwner.isOperationStepTimedOut(
++          expiredBudgetOperation,
++          nowMs,
++        ),
++        true,
++        'CREATING dispatch retry should stop protecting once the operation budget closes',
++      );
++      t.equal(
++        coordinator.workflowOwner.shouldRearmDispatchFromProgressReconcile(
++          expiredBudgetOperation,
++          TEST_ACTUAL_STATUS_ABSENT,
++          {now: nowMs},
++        ),
++        false,
++        'expired operation budget should block further CREATING dispatch rearm',
++      );
++    } finally {
++      await coordinator.shutdown();
++    }
++  },
++);
++
++registerCase(
++  'critical SQL CREATING reconnect delivery arms bounded dispatch retry',
++  async (t) => {
++    const deliveries = [];
++    const deferredTimers = [];
++    const nowMs = TEST_CAPTURED_AT_MS;
++    const operationRow = buildPendingOperationRow({
++      operationId: TEST_SQL_PRIORITY_TIMEOUT_OPERATION_ID,
++      partitionId: TEST_PARTITION_ID,
++      replicaId: TEST_REPLICA_ID,
++      nowMs,
++    });
++    operationRow.status = TEST_STATUS_CREATING;
++    operationRow.workflow_step = TEST_STEP_CREATING;
++    operationRow.created_at = TEST_OPERATION_CREATED_AT_MS;
++    operationRow.updated_at = nowMs;
++    operationRow.steps_history = JSON.stringify([
++      {
++        step: TEST_STEP_CREATING,
++        timestamp: nowMs - TEST_STEP_HISTORY_LAG_MS,
++      },
++    ]);
++
++    const coordinator = createCoordinator({
++      nodeId: TEST_TARGET_NODE_ID,
++      transactionCoordinator: buildTransactionCoordinator(),
++      systemTableCache: {
++        get() {
++          return TEST_EMPTY_VALUE;
++        },
++        getAll() {
++          return TEST_EMPTY_LIST;
++        },
++        filter() {
++          return TEST_EMPTY_LIST;
++        },
++      },
++      cdcIntegrationService: {
++        async waitForCacheUpdate() {},
++      },
++      messageRouter: {
++        async deliver(target, payload, options) {
++          deliveries.push({target, payload, options});
++          return {
++            acknowledged: false,
++            error: 'Connection to node node-target closed',
++            errorCode: 'ROUTER_CONNECTION_CLOSED',
++            deferRetry: true,
++            retryAfterMs: TEST_RETRY_AFTER_MS,
++          };
++        },
++      },
++      tablePolicyService: {
++        async getPolicyForPartition() {
++          return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
++        },
++      },
++      setTimeoutFn(fn, delayMs) {
++        const handle = {fn, delayMs};
++        deferredTimers.push(handle);
++        return handle;
++      },
++      clearTimeoutFn() {},
++      enableTimeouts: false,
++    });
++
++    try {
++      coordinator.initialize();
++      const operation = coordinator.repository.rowToOperation(operationRow);
++      const result =
++        await coordinator.workflowOwner.executeOperationInternal(operation);
++
++      t.equal(
++        result?.reason,
++        TEST_DEFERRED_RETRY_PENDING_REASON,
++        'reconnecting delivery should keep critical create dispatch retryable',
++      );
++      t.equal(
++        deliveries.length,
++        NUM.ONE,
++        'critical create dispatch should attempt delivery once',
++      );
++      t.equal(
++        deferredTimers.length,
++        NUM.ONE,
++        'reconnecting delivery should arm one dispatch retry',
++      );
++      t.equal(
++        deferredTimers[NUM.ZERO]?.delayMs,
++        TEST_RETRY_AFTER_MS,
++        'dispatch retry should preserve the router reconnect retry-after',
++      );
++    } finally {
++      await coordinator.shutdown();
++    }
++  },
++);
++
+ registerCase(TEST_SQL_PRIORITY_DEFERRED_CLAIM_DISPATCH_TEST_NAME, async (t) => {
+   const deliveries = [];
+   const updateParams = [];
+diff --git a/test/rebalancer/rebalance-coordinator-owner-path-convergence.test.js b/test/rebalancer/rebalance-coordinator-owner-path-convergence.test.js
+index 7c37d662..968d91f4 100644
+--- a/test/rebalancer/rebalance-coordinator-owner-path-convergence.test.js
++++ b/test/rebalancer/rebalance-coordinator-owner-path-convergence.test.js
+@@ -667,6 +667,7 @@ test('Owner-path convergence: all progression entry points ' +
+             options: {
+               requireOwnerRpcRead: false,
+               allowPriorityRecoveryDeferredVisibility: true,
++              allowOwnerPersistedTransitionDeferredVisibility: false,
+             },
+           }],
+           'dispatch retry should use the repository visibility observation contract before re-entering the owner lane',
+@@ -1018,6 +1019,8 @@ test('Owner-path convergence: all progression entry points ' +
+         status: ReplicaStatus.SYNCING,
+       });
+       const serviceRow = {
++        service_id: TEST_REPLICA_ID,
++        replica_id: TEST_REPLICA_ID,
+         partition_id: TEST_PARTITION_ID,
+         node_id: TEST_NODE_ID,
+         status: ReplicaStatus.ACTIVE,
+@@ -1058,6 +1061,8 @@ test('Owner-path convergence: all progression entry points ' +
+         createdAt: Date.now() - 600000,
+       });
+       const serviceRow = {
++        service_id: TEST_REPLICA_ID,
++        replica_id: TEST_REPLICA_ID,
+         partition_id: TEST_PARTITION_ID,
+         node_id: TEST_NODE_ID,
+         status: ReplicaStatus.ACTIVE,

@@ -1,0 +1,1413 @@
+diff --git a/src/constants/transport.js b/src/constants/transport.js
+index f6ad5572..cea53805 100644
+--- a/src/constants/transport.js
++++ b/src/constants/transport.js
+@@ -347,6 +347,7 @@ const TRANSPORT_NUM = Object.freeze({
+   FOUR: NUM.FOUR,
+   FIVE: NUM.FIVE,
+   SIX: NUM.SIX,
++  EIGHT: NUM.EIGHT,
+ });
+ 
+ const TRANSPORT_METRIC = Object.freeze({
+diff --git a/src/transport/message-router-delivery-source-admission.js b/src/transport/message-router-delivery-source-admission.js
+new file mode 100644
+index 00000000..aca89300
+--- /dev/null
++++ b/src/transport/message-router-delivery-source-admission.js
+@@ -0,0 +1,307 @@
++import {TRANSPORT_NUM} from '../constants/transport.js';
++import {
++  MESSAGE_ROUTER_LITERAL,
++  OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_DIVISOR,
++  OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_MINIMUM,
++  OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_STATE,
++  OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_STATE_TABLE,
++  OUTBOUND_QUEUE_TARGET_FALLBACK_PENDING_SOURCE_LIMIT_DIVISOR,
++  OutboundDeliveryPriority,
++  normalizeIdentifier,
++} from './message-router-shared-stage-1.js';
++
++function normalizeQueueMaxPending(queue) {
++  const maxPending =
++    Number.isFinite(queue?.maxPending) &&
++    queue.maxPending > TRANSPORT_NUM.ZERO ?
++      Math.floor(queue.maxPending) :
++      TRANSPORT_NUM.ZERO;
++  return maxPending;
++}
++
++function normalizeQueuedDeliverySource(deliverySource) {
++  return (
++    normalizeIdentifier(deliverySource) ||
++    MESSAGE_ROUTER_LITERAL.STRING_UNKNOWN
++  );
++}
++
++function isCriticalTargetFallbackDeliverySource(
++  deliverySource,
++  deliveryPriority,
++) {
++  return deliveryPriority === OutboundDeliveryPriority.CRITICAL &&
++    normalizeQueuedDeliverySource(deliverySource)
++      .startsWith(MESSAGE_ROUTER_LITERAL.STRING_TARGET_PREFIX);
++}
++
++function resolveDeliverySourceAdmissionKey(
++  deliverySource,
++  deliveryPriority,
++) {
++  const normalizedDeliverySource = normalizeQueuedDeliverySource(
++    deliverySource,
++  );
++  if (
++    isCriticalTargetFallbackDeliverySource(
++      normalizedDeliverySource,
++      deliveryPriority,
++    )
++  ) {
++    return MESSAGE_ROUTER_LITERAL.STRING_TARGET_CRITICAL_FALLBACK;
++  }
++  return normalizedDeliverySource;
++}
++
++function resolveQueuedDeliverySourceAdmissionKey(item) {
++  const storedAdmissionKey = normalizeIdentifier(
++    item?.deliverySourceAdmissionKey,
++  );
++  if (storedAdmissionKey) {
++    return storedAdmissionKey;
++  }
++  return resolveDeliverySourceAdmissionKey(
++    item?.deliverySource,
++    item?.priority,
++  );
++}
++
++function countPendingBySource(queue, deliverySource) {
++  if (!queue || !Array.isArray(queue.pending)) {
++    return TRANSPORT_NUM.ZERO;
++  }
++  const normalizedDeliverySource =
++    normalizeIdentifier(deliverySource) ||
++    MESSAGE_ROUTER_LITERAL.STRING_UNKNOWN;
++  return queue.pending.reduce((count, item) => {
++    const pendingSource =
++      normalizeIdentifier(item?.deliverySource) ||
++      MESSAGE_ROUTER_LITERAL.STRING_UNKNOWN;
++    return pendingSource === normalizedDeliverySource ?
++      count + TRANSPORT_NUM.ONE :
++      count;
++  }, TRANSPORT_NUM.ZERO);
++}
++
++function countPendingByAdmissionSource(
++  queue,
++  deliverySource,
++  deliveryPriority,
++) {
++  if (!queue || !Array.isArray(queue.pending)) {
++    return TRANSPORT_NUM.ZERO;
++  }
++  const admissionKey = resolveDeliverySourceAdmissionKey(
++    deliverySource,
++    deliveryPriority,
++  );
++  return queue.pending.reduce((count, item) => {
++    return resolveQueuedDeliverySourceAdmissionKey(item) === admissionKey ?
++      count + TRANSPORT_NUM.ONE :
++      count;
++  }, TRANSPORT_NUM.ZERO);
++}
++
++function countCriticalPendingBySource(queue, deliverySource) {
++  if (!queue || !Array.isArray(queue.pending)) {
++    return TRANSPORT_NUM.ZERO;
++  }
++  const normalizedDeliverySource = normalizeQueuedDeliverySource(
++    deliverySource,
++  );
++  return queue.pending.reduce((count, item) => {
++    if (item?.priority !== OutboundDeliveryPriority.CRITICAL) {
++      return count;
++    }
++    return normalizeQueuedDeliverySource(item?.deliverySource) ===
++      normalizedDeliverySource ?
++      count + TRANSPORT_NUM.ONE :
++      count;
++  }, TRANSPORT_NUM.ZERO);
++}
++
++function countCriticalPendingByAdmissionSource(queue, deliverySource) {
++  if (!queue || !Array.isArray(queue.pending)) {
++    return TRANSPORT_NUM.ZERO;
++  }
++  const admissionKey = resolveDeliverySourceAdmissionKey(
++    deliverySource,
++    OutboundDeliveryPriority.CRITICAL,
++  );
++  return queue.pending.reduce((count, item) => {
++    if (item?.priority !== OutboundDeliveryPriority.CRITICAL) {
++      return count;
++    }
++    return resolveQueuedDeliverySourceAdmissionKey(item) === admissionKey ?
++      count + TRANSPORT_NUM.ONE :
++      count;
++  }, TRANSPORT_NUM.ZERO);
++}
++
++function buildPendingSourceAdmission(queue, deliverySource, deliveryPriority) {
++  const deliverySourceAdmissionKey = resolveDeliverySourceAdmissionKey(
++    deliverySource,
++    deliveryPriority,
++  );
++  const pendingForSource = countPendingByAdmissionSource(
++    queue,
++    deliverySource,
++    deliveryPriority,
++  );
++  const pendingSourceLimit = resolvePendingSourceLimit(
++    queue,
++    deliveryPriority,
++    deliverySource,
++  );
++  const applySourceLimit = pendingSourceLimit > TRANSPORT_NUM.ZERO;
++  return Object.freeze({
++    deliverySourceAdmissionKey,
++    pendingForSource,
++    pendingSourceLimit,
++    applySourceLimit,
++    sourceBackpressured:
++      applySourceLimit &&
++      pendingSourceLimit > TRANSPORT_NUM.ZERO &&
++      pendingForSource >= pendingSourceLimit,
++  });
++}
++
++function resolveProportionalPendingSourceLimit(maxPending) {
++  const proportionalLimit = Math.floor(
++    maxPending / OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_DIVISOR,
++  );
++  return Math.min(
++    maxPending,
++    Math.max(OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_MINIMUM, proportionalLimit),
++  );
++}
++
++function resolveTargetFallbackPendingSourceLimit(maxPending) {
++  const proportionalLimit = Math.floor(
++    maxPending / OUTBOUND_QUEUE_TARGET_FALLBACK_PENDING_SOURCE_LIMIT_DIVISOR,
++  );
++  return Math.min(
++    maxPending,
++    Math.max(OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_MINIMUM, proportionalLimit),
++  );
++}
++
++function buildPendingSourceLimitEvidence(
++  queue,
++  maxPending,
++  deliveryPriority,
++  deliverySource,
++) {
++  const deliverySourceAdmissionKey = resolveDeliverySourceAdmissionKey(
++    deliverySource,
++    deliveryPriority,
++  );
++  return Object.freeze({
++    maxPending,
++    deliveryPriority,
++    deliverySourceAdmissionKey,
++    targetFallbackSource:
++      deliverySourceAdmissionKey ===
++      MESSAGE_ROUTER_LITERAL.STRING_TARGET_CRITICAL_FALLBACK,
++  });
++}
++
++function resolveBoundedCriticalReserve(rawReserve, maxReserve) {
++  const normalizedMaxReserve =
++    Number.isFinite(maxReserve) && maxReserve > TRANSPORT_NUM.ZERO ?
++      Math.floor(maxReserve) :
++      TRANSPORT_NUM.ZERO;
++  if (normalizedMaxReserve <= TRANSPORT_NUM.ZERO) {
++    return TRANSPORT_NUM.ZERO;
++  }
++  const normalizedReserve =
++    Number.isFinite(rawReserve) && rawReserve > TRANSPORT_NUM.ZERO ?
++      Math.floor(rawReserve) :
++      TRANSPORT_NUM.ZERO;
++  return Math.min(normalizedReserve, normalizedMaxReserve);
++}
++
++function resolveBoundedReadinessReserve(rawReserve, maxReserve) {
++  const normalizedMaxReserve =
++    Number.isFinite(maxReserve) && maxReserve > TRANSPORT_NUM.ZERO ?
++      Math.floor(maxReserve) :
++      TRANSPORT_NUM.ZERO;
++  if (normalizedMaxReserve <= TRANSPORT_NUM.ZERO) {
++    return TRANSPORT_NUM.ZERO;
++  }
++  const normalizedReserve =
++    Number.isFinite(rawReserve) && rawReserve > TRANSPORT_NUM.ZERO ?
++      Math.floor(rawReserve) :
++      TRANSPORT_NUM.ZERO;
++  return Math.min(normalizedReserve, normalizedMaxReserve);
++}
++
++function resolveCriticalPendingSourceLimit(queue, maxPending) {
++  const criticalReserve = resolveBoundedCriticalReserve(
++    queue?.criticalReserve,
++    maxPending,
++  );
++  const reserveProtectedLimit = Math.max(
++    TRANSPORT_NUM.ZERO,
++    maxPending - criticalReserve,
++  );
++  return Math.min(
++    maxPending,
++    Math.max(
++      OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_MINIMUM,
++      reserveProtectedLimit,
++    ),
++  );
++}
++
++function resolvePendingSourceLimit(
++  queue,
++  deliveryPriority,
++  deliverySource,
++) {
++  const maxPending = normalizeQueueMaxPending(queue);
++  const evidence = buildPendingSourceLimitEvidence(
++    queue,
++    maxPending,
++    deliveryPriority,
++    deliverySource,
++  );
++  const limitState =
++    OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_STATE_TABLE.find((entry) =>
++      entry.matches(evidence),
++    )?.state ||
++    OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_STATE.PROPORTIONAL;
++  if (limitState === OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_STATE.DISABLED) {
++    return TRANSPORT_NUM.ZERO;
++  }
++  if (evidence.targetFallbackSource === true) {
++    return resolveTargetFallbackPendingSourceLimit(maxPending);
++  }
++  if (
++    limitState ===
++    OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_STATE.CRITICAL_RESERVE_PROTECTED
++  ) {
++    return resolveCriticalPendingSourceLimit(queue, maxPending);
++  }
++  return resolveProportionalPendingSourceLimit(maxPending);
++}
++
++export {
++  buildPendingSourceAdmission,
++  buildPendingSourceLimitEvidence,
++  countCriticalPendingByAdmissionSource,
++  countCriticalPendingBySource,
++  countPendingByAdmissionSource,
++  countPendingBySource,
++  isCriticalTargetFallbackDeliverySource,
++  normalizeQueueMaxPending,
++  normalizeQueuedDeliverySource,
++  resolveBoundedCriticalReserve,
++  resolveBoundedReadinessReserve,
++  resolveCriticalPendingSourceLimit,
++  resolveDeliverySourceAdmissionKey,
++  resolvePendingSourceLimit,
++  resolveProportionalPendingSourceLimit,
++  resolveQueuedDeliverySourceAdmissionKey,
++  resolveTargetFallbackPendingSourceLimit,
++};
+diff --git a/src/transport/message-router-shared-stage-1.js b/src/transport/message-router-shared-stage-1.js
+index 18bec95c..ffcf6547 100644
+--- a/src/transport/message-router-shared-stage-1.js
++++ b/src/transport/message-router-shared-stage-1.js
+@@ -41,6 +41,8 @@ const MESSAGE_ROUTER_LITERAL = Object.freeze({
+   STRING_LATE_AFTER_RETIRED_WAITER: 'late_after_retired_waiter',
+   STRING_RESULT: 'result',
+   STRING_QUEUEWAITMS: 'queueWaitMs',
++  STRING_TARGET_PREFIX: 'target:',
++  STRING_TARGET_CRITICAL_FALLBACK: 'target:critical-fallback',
+   STRING_FUNCTION: 'function',
+   STRING_INVALID_WSPORT_FOR_IN_PROCESS_SERVER:
+     'Invalid wsPort for in-process server',
+@@ -160,6 +162,12 @@ const OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE =
+ 
+ const OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_DIVISOR = TRANSPORT_NUM.FOUR;
+ 
++const OUTBOUND_QUEUE_TARGET_FALLBACK_PENDING_SOURCE_LIMIT_DIVISOR =
++  TRANSPORT_NUM.EIGHT;
++
++const OUTBOUND_QUEUE_TARGET_FALLBACK_IN_FLIGHT_SOURCE_LIMIT_DIVISOR =
++  TRANSPORT_NUM.FOUR;
++
+ const OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_MINIMUM = TRANSPORT_NUM.FOUR;
+ 
+ const OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_STATE = Object.freeze({
+@@ -180,6 +188,12 @@ const OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_STATE_TABLE = Object.freeze([
+     state: OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_STATE.DISABLED,
+     matches: (evidence) => evidence.maxPending <= TRANSPORT_NUM.ZERO,
+   }),
++  Object.freeze({
++    state: OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_STATE.PROPORTIONAL,
++    matches: (evidence) =>
++      evidence.deliveryPriority === OutboundDeliveryPriority.CRITICAL &&
++      evidence.targetFallbackSource === true,
++  }),
+   Object.freeze({
+     state: OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_STATE.CRITICAL_RESERVE_PROTECTED,
+     matches: (evidence) =>
+@@ -586,6 +600,8 @@ export {
+   OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_MINIMUM,
+   OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_STATE,
+   OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_STATE_TABLE,
++  OUTBOUND_QUEUE_TARGET_FALLBACK_IN_FLIGHT_SOURCE_LIMIT_DIVISOR,
++  OUTBOUND_QUEUE_TARGET_FALLBACK_PENDING_SOURCE_LIMIT_DIVISOR,
+   OutboundDeliveryPriority,
+   QUERY_DATA_PLANE_MESSAGE_TYPE,
+   QUERY_TRANSPORT_DELIVERY_STATE,
+diff --git a/src/transport/message-router-shared-stage-2.js b/src/transport/message-router-shared-stage-2.js
+index 80efdb44..d1247f10 100644
+--- a/src/transport/message-router-shared-stage-2.js
++++ b/src/transport/message-router-shared-stage-2.js
+@@ -3,8 +3,9 @@ import {
+   TRANSPORT_TYPEOF,
+ } from '../constants/transport.js';
+ import {buildTransportDeliveryOutcome} from './transport-semantic-outcome.js';
+-import {DELIVERY_SOURCE_MESSAGE_UNWRAP_LIMIT, EMPTY_DELIVERY_SOURCE, LOCAL_NUM_ONE, MESSAGE_ROUTER_LITERAL, OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_DIVISOR, OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_MINIMUM, OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_STATE, OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_STATE_TABLE, OutboundDeliveryPriority, QUERY_DATA_PLANE_MESSAGE_TYPE, RETIRED_PENDING_RESPONSE_REASON, SERVICE_RESPONSE_DISPOSITION_KIND, buildTypelessCdcDeliverySource, buildTypelessQueryDeliverySource, extractSqlOperationKind, extractSqlTableName, isSupersedableRaftHeartbeatAppend, normalizeIdentifier, summarizeRaftAppendCommand} from './message-router-shared-stage-1.js';
++import {DELIVERY_SOURCE_MESSAGE_UNWRAP_LIMIT, EMPTY_DELIVERY_SOURCE, LOCAL_NUM_ONE, MESSAGE_ROUTER_LITERAL, OUTBOUND_QUEUE_TARGET_FALLBACK_IN_FLIGHT_SOURCE_LIMIT_DIVISOR, OutboundDeliveryPriority, QUERY_DATA_PLANE_MESSAGE_TYPE, RETIRED_PENDING_RESPONSE_REASON, SERVICE_RESPONSE_DISPOSITION_KIND, buildTypelessCdcDeliverySource, buildTypelessQueryDeliverySource, extractSqlOperationKind, extractSqlTableName, isSupersedableRaftHeartbeatAppend, normalizeIdentifier, summarizeRaftAppendCommand} from './message-router-shared-stage-1.js';
+ import {isCriticalTransportTargetAddress} from '../bootstrap/system-partition-classification.js';
++import {buildPendingSourceAdmission, buildPendingSourceLimitEvidence, countCriticalPendingByAdmissionSource, countCriticalPendingBySource, countPendingBySource, normalizeQueueMaxPending, normalizeQueuedDeliverySource, resolveBoundedCriticalReserve, resolveBoundedReadinessReserve, resolveCriticalPendingSourceLimit, resolveDeliverySourceAdmissionKey, resolvePendingSourceLimit, resolveProportionalPendingSourceLimit, resolveQueuedDeliverySourceAdmissionKey} from './message-router-delivery-source-admission.js';
+ 
+ function resolveSemanticDeliverySourceMessage(message) {
+   let semanticMessage = message;
+@@ -64,7 +65,7 @@ function buildDerivedDeliverySource(targetAddress, message) {
+   }
+   const normalizedTarget = normalizeIdentifier(targetAddress);
+   if (normalizedTarget) {
+-    return `target:${normalizedTarget}`;
++    return `${MESSAGE_ROUTER_LITERAL.STRING_TARGET_PREFIX}${normalizedTarget}`;
+   }
+   return MESSAGE_ROUTER_LITERAL.STRING_UNKNOWN;
+ }
+@@ -221,134 +222,6 @@ function countPendingByPriority(queue, priority) {
+   }, TRANSPORT_NUM.ZERO);
+ }
+ 
+-function countPendingBySource(queue, deliverySource) {
+-  if (!queue || !Array.isArray(queue.pending)) {
+-    return TRANSPORT_NUM.ZERO;
+-  }
+-  const normalizedDeliverySource =
+-    normalizeIdentifier(deliverySource) ||
+-    MESSAGE_ROUTER_LITERAL.STRING_UNKNOWN;
+-  return queue.pending.reduce((count, item) => {
+-    const pendingSource =
+-      normalizeIdentifier(item?.deliverySource) ||
+-      MESSAGE_ROUTER_LITERAL.STRING_UNKNOWN;
+-    return pendingSource === normalizedDeliverySource ?
+-      count + TRANSPORT_NUM.ONE :
+-      count;
+-  }, TRANSPORT_NUM.ZERO);
+-}
+-
+-function countCriticalPendingBySource(queue, deliverySource) {
+-  if (!queue || !Array.isArray(queue.pending)) {
+-    return TRANSPORT_NUM.ZERO;
+-  }
+-  const normalizedDeliverySource = normalizeQueuedDeliverySource(
+-    deliverySource,
+-  );
+-  return queue.pending.reduce((count, item) => {
+-    if (item?.priority !== OutboundDeliveryPriority.CRITICAL) {
+-      return count;
+-    }
+-    return normalizeQueuedDeliverySource(item?.deliverySource) ===
+-      normalizedDeliverySource ?
+-      count + TRANSPORT_NUM.ONE :
+-      count;
+-  }, TRANSPORT_NUM.ZERO);
+-}
+-
+-function buildPendingSourceAdmission(queue, deliverySource, deliveryPriority) {
+-  const pendingForSource = countPendingBySource(queue, deliverySource);
+-  const pendingSourceLimit = resolvePendingSourceLimit(
+-    queue,
+-    deliveryPriority,
+-  );
+-  const applySourceLimit = pendingSourceLimit > TRANSPORT_NUM.ZERO;
+-  return Object.freeze({
+-    pendingForSource,
+-    pendingSourceLimit,
+-    applySourceLimit,
+-    sourceBackpressured:
+-      applySourceLimit &&
+-      pendingSourceLimit > TRANSPORT_NUM.ZERO &&
+-      pendingForSource >= pendingSourceLimit,
+-  });
+-}
+-
+-function normalizeQueueMaxPending(queue) {
+-  const maxPending =
+-    Number.isFinite(queue?.maxPending) &&
+-    queue.maxPending > TRANSPORT_NUM.ZERO ?
+-      Math.floor(queue.maxPending) :
+-      TRANSPORT_NUM.ZERO;
+-  return maxPending;
+-}
+-
+-function resolveProportionalPendingSourceLimit(maxPending) {
+-  const proportionalLimit = Math.floor(
+-    maxPending / OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_DIVISOR,
+-  );
+-  return Math.min(
+-    maxPending,
+-    Math.max(OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_MINIMUM, proportionalLimit),
+-  );
+-}
+-
+-function buildPendingSourceLimitEvidence(queue, maxPending, deliveryPriority) {
+-  return Object.freeze({
+-    maxPending,
+-    deliveryPriority,
+-  });
+-}
+-
+-function resolveCriticalPendingSourceLimit(queue, maxPending) {
+-  const criticalReserve = resolveBoundedCriticalReserve(
+-    queue?.criticalReserve,
+-    maxPending,
+-  );
+-  const reserveProtectedLimit = Math.max(
+-    TRANSPORT_NUM.ZERO,
+-    maxPending - criticalReserve,
+-  );
+-  return Math.min(
+-    maxPending,
+-    Math.max(
+-      OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_MINIMUM,
+-      reserveProtectedLimit,
+-    ),
+-  );
+-}
+-
+-function resolvePendingSourceLimit(queue, deliveryPriority) {
+-  const maxPending = normalizeQueueMaxPending(queue);
+-  const evidence = buildPendingSourceLimitEvidence(
+-    queue,
+-    maxPending,
+-    deliveryPriority,
+-  );
+-  const limitState =
+-    OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_STATE_TABLE.find((entry) =>
+-      entry.matches(evidence),
+-    )?.state ||
+-    OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_STATE.PROPORTIONAL;
+-  if (limitState === OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_STATE.DISABLED) {
+-    return TRANSPORT_NUM.ZERO;
+-  }
+-  if (
+-    limitState ===
+-    OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_STATE.CRITICAL_RESERVE_PROTECTED
+-  ) {
+-    return resolveCriticalPendingSourceLimit(queue, maxPending);
+-  }
+-  return resolveProportionalPendingSourceLimit(maxPending);
+-}
+-
+-function normalizeQueuedDeliverySource(deliverySource) {
+-  return (
+-    normalizeIdentifier(deliverySource) ||
+-    MESSAGE_ROUTER_LITERAL.STRING_UNKNOWN
+-  );
+-}
+-
+ function selectCriticalPendingSourcePreemptionCandidateIndex(
+   queue,
+   incomingDeliverySource,
+@@ -360,8 +233,14 @@ function selectCriticalPendingSourcePreemptionCandidateIndex(
+   ) {
+     return -LOCAL_NUM_ONE;
+   }
+-  const incomingSource = normalizeQueuedDeliverySource(incomingDeliverySource);
+-  if (countCriticalPendingBySource(queue, incomingSource) > TRANSPORT_NUM.ZERO) {
++  const incomingSource = resolveDeliverySourceAdmissionKey(
++    incomingDeliverySource,
++    OutboundDeliveryPriority.CRITICAL,
++  );
++  if (
++    countCriticalPendingByAdmissionSource(queue, incomingSource) >
++    TRANSPORT_NUM.ZERO
++  ) {
+     return -LOCAL_NUM_ONE;
+   }
+   const sourceCounts = new Map();
+@@ -369,7 +248,7 @@ function selectCriticalPendingSourcePreemptionCandidateIndex(
+     if (item?.priority !== OutboundDeliveryPriority.CRITICAL) {
+       continue;
+     }
+-    const source = normalizeQueuedDeliverySource(item?.deliverySource);
++    const source = resolveQueuedDeliverySourceAdmissionKey(item);
+     if (source === incomingSource) {
+       continue;
+     }
+@@ -397,7 +276,7 @@ function selectCriticalPendingSourcePreemptionCandidateIndex(
+     const item = queue.pending[index];
+     if (
+       item?.priority === OutboundDeliveryPriority.CRITICAL &&
+-      normalizeQueuedDeliverySource(item?.deliverySource) === selectedSource
++      resolveQueuedDeliverySourceAdmissionKey(item) === selectedSource
+     ) {
+       return index;
+     }
+@@ -448,8 +327,7 @@ function resolveNextCriticalPendingItemIndex(queue) {
+   const alternateCriticalIndex = queue.pending.findIndex((item) => {
+     return (
+       item?.priority === OutboundDeliveryPriority.CRITICAL &&
+-      normalizeQueuedDeliverySource(item?.deliverySource) !==
+-        lastCriticalDeliverySource
++      resolveQueuedDeliverySourceAdmissionKey(item) !== lastCriticalDeliverySource
+     );
+   });
+   return alternateCriticalIndex >= TRANSPORT_NUM.ZERO ?
+@@ -490,7 +368,7 @@ function countInFlightCriticalSourceReserve(queue) {
+     TRANSPORT_NUM.ZERO;
+ }
+ 
+-function resolveCriticalInFlightSourceLimit(queue) {
++function resolveNormalizedQueueMaxConcurrent(queue) {
+   if (!queue) {
+     return TRANSPORT_NUM.ZERO;
+   }
+@@ -499,6 +377,31 @@ function resolveCriticalInFlightSourceLimit(queue) {
+     queue.maxConcurrent > TRANSPORT_NUM.ZERO ?
+       Math.floor(queue.maxConcurrent) :
+       TRANSPORT_NUM.ZERO;
++  return maxConcurrent;
++}
++
++function resolveTargetFallbackInFlightSourceLimit(queue) {
++  const maxConcurrent = resolveNormalizedQueueMaxConcurrent(queue);
++  if (maxConcurrent <= TRANSPORT_NUM.ZERO) {
++    return TRANSPORT_NUM.ZERO;
++  }
++  const proportionalLimit = Math.floor(
++    maxConcurrent /
++      OUTBOUND_QUEUE_TARGET_FALLBACK_IN_FLIGHT_SOURCE_LIMIT_DIVISOR,
++  );
++  return Math.min(
++    maxConcurrent,
++    Math.max(TRANSPORT_NUM.ONE, proportionalLimit),
++  );
++}
++
++function isTargetFallbackCriticalAdmissionSource(deliverySource) {
++  return normalizeQueuedDeliverySource(deliverySource) ===
++    MESSAGE_ROUTER_LITERAL.STRING_TARGET_CRITICAL_FALLBACK;
++}
++
++function resolveCriticalInFlightSourceLimit(queue, deliverySource) {
++  const maxConcurrent = resolveNormalizedQueueMaxConcurrent(queue);
+   if (maxConcurrent <= TRANSPORT_NUM.ZERO) {
+     return TRANSPORT_NUM.ZERO;
+   }
+@@ -513,10 +416,17 @@ function resolveCriticalInFlightSourceLimit(queue) {
+       maxReservedConcurrent,
+     ),
+   );
+-  return Math.max(
++  const reserveProtectedLimit = Math.max(
+     TRANSPORT_NUM.ONE,
+     maxConcurrent - effectiveCriticalReserve,
+   );
++  if (isTargetFallbackCriticalAdmissionSource(deliverySource)) {
++    return Math.min(
++      reserveProtectedLimit,
++      resolveTargetFallbackInFlightSourceLimit(queue),
++    );
++  }
++  return reserveProtectedLimit;
+ }
+ 
+ function resolveCriticalSourceReserveInFlightLimit(queue) {
+@@ -573,21 +483,6 @@ function adjustInFlightCriticalSourceReserveCount(queue, delta) {
+   );
+ }
+ 
+-function resolveBoundedCriticalReserve(rawReserve, maxReserve) {
+-  const normalizedMaxReserve =
+-    Number.isFinite(maxReserve) && maxReserve > TRANSPORT_NUM.ZERO ?
+-      Math.floor(maxReserve) :
+-      TRANSPORT_NUM.ZERO;
+-  if (normalizedMaxReserve <= TRANSPORT_NUM.ZERO) {
+-    return TRANSPORT_NUM.ZERO;
+-  }
+-  const normalizedReserve =
+-    Number.isFinite(rawReserve) && rawReserve > TRANSPORT_NUM.ZERO ?
+-      Math.floor(rawReserve) :
+-      TRANSPORT_NUM.ZERO;
+-  return Math.min(normalizedReserve, normalizedMaxReserve);
+-}
+-
+ function resolveBackgroundPendingLimit(queue) {
+   if (!queue) {
+     return TRANSPORT_NUM.ZERO;
+@@ -599,21 +494,6 @@ function resolveBackgroundPendingLimit(queue) {
+   return Math.max(TRANSPORT_NUM.ZERO, queue.maxPending - criticalReserve);
+ }
+ 
+-function resolveBoundedReadinessReserve(rawReserve, maxReserve) {
+-  const normalizedMaxReserve =
+-    Number.isFinite(maxReserve) && maxReserve > TRANSPORT_NUM.ZERO ?
+-      Math.floor(maxReserve) :
+-      TRANSPORT_NUM.ZERO;
+-  if (normalizedMaxReserve <= TRANSPORT_NUM.ZERO) {
+-    return TRANSPORT_NUM.ZERO;
+-  }
+-  const normalizedReserve =
+-    Number.isFinite(rawReserve) && rawReserve > TRANSPORT_NUM.ZERO ?
+-      Math.floor(rawReserve) :
+-      TRANSPORT_NUM.ZERO;
+-  return Math.min(normalizedReserve, normalizedMaxReserve);
+-}
+-
+ function resolveCriticalPendingCeiling(queue) {
+   const maxPending = normalizeQueueMaxPending(queue);
+   const readinessReserve = resolveBoundedReadinessReserve(
+@@ -728,6 +608,8 @@ function canDispatchPendingItem(queue, item) {
+   }
+   const queueAtConcurrentLimit = queue.inFlight >= queue.maxConcurrent;
+   if (item.priority === OutboundDeliveryPriority.CRITICAL) {
++    const deliverySourceAdmissionKey =
++      resolveQueuedDeliverySourceAdmissionKey(item);
+     if (
+       queueAtConcurrentLimit &&
+       item?.criticalSourceReserve !== true
+@@ -742,8 +624,11 @@ function canDispatchPendingItem(queue, item) {
+       return false;
+     }
+     return (
+-      countInFlightBySource(queue, item?.deliverySource) <
+-      resolveCriticalInFlightSourceLimit(queue)
++      countInFlightBySource(
++        queue,
++        deliverySourceAdmissionKey,
++      ) <
++      resolveCriticalInFlightSourceLimit(queue, deliverySourceAdmissionKey)
+     );
+   }
+   if (queueAtConcurrentLimit) {
+@@ -809,10 +694,13 @@ export {
+   resolveCriticalPendingCeiling,
+   resolveCriticalPendingSourceLimit,
+   resolveDeliverySource,
++  resolveDeliverySourceAdmissionKey,
+   resolveNextCriticalPendingItemIndex,
+   resolveNextPendingItemIndex,
+   resolvePendingSourceLimit,
+   resolveProportionalPendingSourceLimit,
++  resolveQueuedDeliverySourceAdmissionKey,
++  resolveTargetFallbackInFlightSourceLimit,
+   resolveSemanticDeliverySourceMessage,
+   selectCriticalPendingSourcePreemptionCandidateIndex,
+   takeCriticalPendingItemForSourceReserve,
+diff --git a/src/transport/message-router-shared-stage-3.js b/src/transport/message-router-shared-stage-3.js
+index 5c863542..484b3e02 100644
+--- a/src/transport/message-router-shared-stage-3.js
++++ b/src/transport/message-router-shared-stage-3.js
+@@ -4,7 +4,7 @@ import {
+   TRANSPORT_NUM,
+ } from '../constants/transport.js';
+ import {EMPTY_DELIVERY_SOURCE, MESSAGE_ROUTER_LITERAL, OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE, OUTBOUND_QUEUE_BACKPRESSURE_SCOPE, OutboundDeliveryPriority, TRANSPORT_PRESSURE_SUMMARY_FIELD, createQueueWaitHistogram, normalizeIdentifier, recordQueueWaitDuration, resolvePendingReplacementKey} from './message-router-shared-stage-1.js';
+-import {adjustInFlightCriticalSourceReserveCount, adjustInFlightPriorityCount, adjustInFlightSourceCount, buildPendingSourceAdmission, buildPendingSourceSummary, buildSupersededPendingResult, canDispatchPendingItem, countInFlightByPriority, countInFlightBySource, countPendingByPriority, dequeueNextPendingItem, isOutboundNodeBackpressured, normalizeOutboundDeliveryPriority, normalizeQueuedDeliverySource, peekNextPendingItem, resolveBackgroundPendingLimit, resolveCriticalPendingCeiling, resolveDeliverySource, takeCriticalPendingItemForSourceReserve} from './message-router-shared-stage-2.js';
++import {adjustInFlightCriticalSourceReserveCount, adjustInFlightPriorityCount, adjustInFlightSourceCount, buildPendingSourceAdmission, buildPendingSourceSummary, buildSupersededPendingResult, canDispatchPendingItem, countInFlightByPriority, countInFlightBySource, countPendingByPriority, dequeueNextPendingItem, isOutboundNodeBackpressured, normalizeOutboundDeliveryPriority, peekNextPendingItem, resolveBackgroundPendingLimit, resolveCriticalInFlightSourceLimit, resolveCriticalPendingCeiling, resolveDeliverySource, resolveDeliverySourceAdmissionKey, resolveQueuedDeliverySourceAdmissionKey, takeCriticalPendingItemForSourceReserve} from './message-router-shared-stage-2.js';
+ 
+ const NODE_STATE_UPDATE_DELIVERY_SOURCE =
+   `${MESSAGE_ROUTER_LITERAL.STRING_MESSAGE}:` +
+@@ -64,12 +64,6 @@ function canUseAggregateCriticalReserve(queue) {
+   if (queue.inFlight < queue.maxConcurrent) {
+     return false;
+   }
+-  if (
+-    countInFlightByPriority(queue, OutboundDeliveryPriority.CRITICAL) <
+-    queue.maxConcurrent
+-  ) {
+-    return false;
+-  }
+   return countCriticalSourceReserveInFlight(queue) <
+     resolveAggregateCriticalReserveInFlightLimit(queue);
+ }
+@@ -77,7 +71,7 @@ function canUseAggregateCriticalReserve(queue) {
+ function isAggregateCriticalReserveCandidateSource(source) {
+   return source !== EMPTY_DELIVERY_SOURCE &&
+     source !== MESSAGE_ROUTER_LITERAL.STRING_UNKNOWN &&
+-    !source.startsWith('target:');
++    !source.startsWith(MESSAGE_ROUTER_LITERAL.STRING_TARGET_PREFIX);
+ }
+ 
+ function isAggregateCriticalReserveBlockingBacklogSource(source) {
+@@ -95,7 +89,7 @@ function hasPriorInFlightSourceBacklog(queue, candidateIndex) {
+     if (item?.priority !== OutboundDeliveryPriority.CRITICAL) {
+       continue;
+     }
+-    const source = normalizeQueuedDeliverySource(item?.deliverySource);
++    const source = resolveQueuedDeliverySourceAdmissionKey(item);
+     if (!isAggregateCriticalReserveBlockingBacklogSource(source)) {
+       continue;
+     }
+@@ -146,7 +140,7 @@ function findAggregateCriticalReserveCandidateIndex(queue) {
+     if (item?.priority !== OutboundDeliveryPriority.CRITICAL) {
+       continue;
+     }
+-    const source = normalizeQueuedDeliverySource(item?.deliverySource);
++    const source = resolveQueuedDeliverySourceAdmissionKey(item);
+     sourceCounts.set(
+       source,
+       (sourceCounts.get(source) || TRANSPORT_NUM.ZERO) + TRANSPORT_NUM.ONE,
+@@ -164,7 +158,7 @@ function findAggregateCriticalReserveCandidateIndex(queue) {
+     ) {
+       continue;
+     }
+-    const source = normalizeQueuedDeliverySource(item?.deliverySource);
++    const source = resolveQueuedDeliverySourceAdmissionKey(item);
+     if (!isAggregateCriticalReserveCandidateSource(source)) {
+       continue;
+     }
+@@ -236,6 +230,10 @@ class OutboundDeliveryRegistryOwner {
+       options.message,
+       options,
+     );
++    const deliverySourceAdmissionKey = resolveDeliverySourceAdmissionKey(
++      deliverySource,
++      deliveryPriority,
++    );
+     const replacePendingKey = resolvePendingReplacementKey(
+       options.targetAddress,
+       options.message,
+@@ -258,6 +256,7 @@ class OutboundDeliveryRegistryOwner {
+             queuedAt: Date.now(),
+             priority: deliveryPriority,
+             deliverySource,
++            deliverySourceAdmissionKey,
+             replacePendingKey,
+           };
+           return;
+@@ -273,6 +272,20 @@ class OutboundDeliveryRegistryOwner {
+         deliverySource,
+         deliveryPriority,
+       );
++      const inFlightForSource =
++        deliveryPriority === OutboundDeliveryPriority.CRITICAL ?
++          countInFlightBySource(
++            queue,
++            pendingSourceAdmission.deliverySourceAdmissionKey,
++          ) :
++          TRANSPORT_NUM.ZERO;
++      const inFlightSourceLimit =
++        deliveryPriority === OutboundDeliveryPriority.CRITICAL ?
++          resolveCriticalInFlightSourceLimit(
++            queue,
++            pendingSourceAdmission.deliverySourceAdmissionKey,
++          ) :
++          TRANSPORT_NUM.ZERO;
+       let isNodeBackpressured = isOutboundNodeBackpressured(
+         queue,
+         deliveryPriority,
+@@ -333,6 +346,8 @@ class OutboundDeliveryRegistryOwner {
+                 queue,
+                 OutboundDeliveryPriority.BACKGROUND,
+               ),
++              inFlightForSource,
++              inFlightSourceLimit,
+               pendingSourceSummary: buildPendingSourceSummary(queue),
+             },
+           );
+@@ -380,6 +395,8 @@ class OutboundDeliveryRegistryOwner {
+               queue,
+               OutboundDeliveryPriority.BACKGROUND,
+             ),
++            inFlightForSource,
++            inFlightSourceLimit,
+             pendingSourceSummary: buildPendingSourceSummary(queue),
+           },
+         );
+@@ -393,6 +410,8 @@ class OutboundDeliveryRegistryOwner {
+         queuedAt: Date.now(),
+         priority: deliveryPriority,
+         deliverySource,
++        deliverySourceAdmissionKey:
++          pendingSourceAdmission.deliverySourceAdmissionKey,
+         replacePendingKey,
+         criticalSourceReserve: criticalSourceReserveAdmission,
+       });
+@@ -412,16 +431,15 @@ class OutboundDeliveryRegistryOwner {
+       }
+       const item = dequeueNextPendingItem(queue);
+       if (item?.priority === OutboundDeliveryPriority.CRITICAL) {
+-        queue.lastCriticalDeliverySource = normalizeQueuedDeliverySource(
+-          item?.deliverySource,
+-        );
++        queue.lastCriticalDeliverySource =
++          resolveQueuedDeliverySourceAdmissionKey(item);
+       }
+       queue.inFlight += TRANSPORT_NUM.ONE;
+       adjustInFlightPriorityCount(queue, item?.priority, TRANSPORT_NUM.ONE);
+       if (item?.priority === OutboundDeliveryPriority.CRITICAL) {
+         adjustInFlightSourceCount(
+           queue,
+-          item?.deliverySource,
++          resolveQueuedDeliverySourceAdmissionKey(item),
+           TRANSPORT_NUM.ONE,
+         );
+       }
+@@ -448,7 +466,7 @@ class OutboundDeliveryRegistryOwner {
+           if (item?.priority === OutboundDeliveryPriority.CRITICAL) {
+             adjustInFlightSourceCount(
+               queue,
+-              item?.deliverySource,
++              resolveQueuedDeliverySourceAdmissionKey(item),
+               -TRANSPORT_NUM.ONE,
+             );
+           }
+@@ -474,7 +492,7 @@ class OutboundDeliveryRegistryOwner {
+           if (item?.priority === OutboundDeliveryPriority.CRITICAL) {
+             adjustInFlightSourceCount(
+               queue,
+-              item?.deliverySource,
++              resolveQueuedDeliverySourceAdmissionKey(item),
+               -TRANSPORT_NUM.ONE,
+             );
+           }
+diff --git a/test/transport/message-router-critical-source-reserve.test.js b/test/transport/message-router-critical-source-reserve.test.js
+index d4b23084..05cfe361 100644
+--- a/test/transport/message-router-critical-source-reserve.test.js
++++ b/test/transport/message-router-critical-source-reserve.test.js
+@@ -11,8 +11,11 @@ const TEST_MAX_PENDING = 64;
+ const TEST_CRITICAL_RESERVE = 16;
+ const TEST_READINESS_RESERVE = 2;
+ const TEST_TOTAL_HOT_DELIVERIES = 32;
+-const TEST_EXPECTED_HOT_IN_FLIGHT_CAP = 16;
+-const TEST_EXPECTED_HOT_PENDING_COUNT = 16;
++const TEST_EXPECTED_HOT_IN_FLIGHT_CAP = 8;
++const TEST_EXPECTED_HOT_PENDING_COUNT = 8;
++const TEST_MIXED_BACKGROUND_IN_FLIGHT = 13;
++const TEST_MIXED_CRITICAL_IN_FLIGHT = 19;
++const TEST_TARGET_FALLBACK_ADMISSION_KEY = 'target:critical-fallback';
+ const TEST_HOT_TARGET_ADDRESS =
+   'remote-node/partition/sql_transactions-p1-r4';
+ const TEST_SECOND_HOT_TARGET_ADDRESS =
+@@ -112,6 +115,11 @@ t.test(
+         TEST_EXPECTED_HOT_IN_FLIGHT_CAP,
+         'hot critical traffic should consume only the allowed in-flight share',
+       );
++      t.equal(
++        queue.inFlightBySource.get(TEST_TARGET_FALLBACK_ADMISSION_KEY),
++        TEST_EXPECTED_HOT_IN_FLIGHT_CAP,
++        'target fallback traffic should stop at its normalized in-flight source cap',
++      );
+       t.equal(
+         queue.pending.length,
+         TEST_EXPECTED_HOT_PENDING_COUNT,
+@@ -169,7 +177,7 @@ t.test(
+     });
+     const startedDeliveries = [];
+     const allDeliveries = [];
+-    const criticalPendingCeiling = 8 - TEST_READINESS_RESERVE;
++    const targetFallbackPendingLimit = 4;
+     const buildBlockingDelivery = (label) => async () => {
+       startedDeliveries.push(label);
+       await sendGate;
+@@ -213,8 +221,8 @@ t.test(
+       const queue = router.getOutboundQueue(TEST_REMOTE_NODE_ID);
+       t.equal(
+         queue.pending.length,
+-        criticalPendingCeiling,
+-        'hot critical traffic should fill only the readiness-protected ceiling',
++        targetFallbackPendingLimit,
++        'hot target fallback traffic should stop at the aggregate source cap',
+       );
+ 
+       trackDelivery(
+@@ -236,11 +244,11 @@ t.test(
+       t.equal(
+         startedDeliveries.includes(TEST_CONTROL_PLANE_LABEL),
+         true,
+-        'the distinct critical source should dispatch through reserve capacity',
++        'the distinct critical source should dispatch while fallback traffic is capped',
+       );
+       t.ok(
+-        queue.pending.length <= criticalPendingCeiling,
+-        'critical reserve admission should not consume readiness headroom',
++        queue.pending.length <= targetFallbackPendingLimit,
++        'fallback source admission should preserve readiness headroom',
+       );
+     } finally {
+       releaseAllSends?.();
+@@ -282,21 +290,22 @@ t.test(
+ 
+     try {
+       const hotTargets = [
+-        TEST_HOT_TARGET_ADDRESS,
+-        TEST_HOT_TARGET_ADDRESS,
+-        TEST_SECOND_HOT_TARGET_ADDRESS,
+-        TEST_SECOND_HOT_TARGET_ADDRESS,
+-        TEST_HOT_TARGET_ADDRESS,
+-        TEST_SECOND_HOT_TARGET_ADDRESS,
++        'semantic-hot-source-a',
++        'semantic-hot-source-a',
++        'semantic-hot-source-b',
++        'semantic-hot-source-b',
++        'semantic-hot-source-a',
++        'semantic-hot-source-b',
+       ];
+-      for (const [index, targetAddress] of hotTargets.entries()) {
++      for (const [index, deliverySource] of hotTargets.entries()) {
+         allDeliveries.push(
+           router.enqueueOutbound(
+             TEST_REMOTE_NODE_ID,
+             buildBlockingDelivery(`${TEST_HOT_LABEL_PREFIX}-${index}`),
+             {
+               deliveryPriority: 'critical',
+-              targetAddress,
++              deliverySource,
++              targetAddress: TEST_HOT_TARGET_ADDRESS,
+               message: {},
+             },
+           ),
+@@ -308,12 +317,12 @@ t.test(
+       t.equal(
+         queue.inFlight,
+         4,
+-        'two hot critical sources should fill aggregate in-flight capacity',
++        'two semantic hot critical sources should fill aggregate in-flight capacity',
+       );
+       t.equal(
+         queue.pending.length,
+         2,
+-        'hot critical sources should leave a pending backlog',
++        'semantic hot critical sources should leave a pending backlog',
+       );
+ 
+       allDeliveries.push(
+@@ -351,6 +360,133 @@ t.test(
+   },
+ );
+ 
++t.test(
++  'MessageRouter uses critical reserve under mixed aggregate in-flight saturation',
++  async (t) => {
++    initializeTestEnvironment();
++    const router = new MessageRouter({
++      nodeId: TEST_LOCAL_NODE_ID,
++      nodeAddress: TEST_NODE_ADDRESS,
++      startServer: false,
++      outboundQueueMaxConcurrent: TEST_MAX_CONCURRENT,
++      outboundQueueMaxPending: TEST_MAX_PENDING,
++      outboundQueueCriticalReserve: TEST_CRITICAL_RESERVE,
++    });
++    await router.initialize();
++
++    let releaseAllSends = null;
++    const sendGate = new Promise((resolve) => {
++      releaseAllSends = resolve;
++    });
++    const startedDeliveries = [];
++    const allDeliveries = [];
++    const buildBlockingDelivery = (label) => async () => {
++      startedDeliveries.push(label);
++      await sendGate;
++      return {
++        [TEST_ACKNOWLEDGED_KEY]: true,
++        label,
++      };
++    };
++
++    try {
++      for (
++        let index = 0;
++        index < TEST_MIXED_BACKGROUND_IN_FLIGHT;
++        index++
++      ) {
++        allDeliveries.push(
++          router.enqueueOutbound(
++            TEST_REMOTE_NODE_ID,
++            buildBlockingDelivery(`background-${index}`),
++            {
++              deliveryPriority: 'background',
++              deliverySource: `background-source-${index}`,
++              targetAddress: `${TEST_HOT_TARGET_ADDRESS}/background-${index}`,
++              message: {},
++            },
++          ),
++        );
++        await Promise.resolve();
++      }
++
++      for (
++        let index = 0;
++        index < TEST_MIXED_CRITICAL_IN_FLIGHT;
++        index++
++      ) {
++        allDeliveries.push(
++          router.enqueueOutbound(
++            TEST_REMOTE_NODE_ID,
++            buildBlockingDelivery(`${TEST_HOT_LABEL_PREFIX}-${index}`),
++            {
++              deliveryPriority: 'critical',
++              deliverySource: `semantic-hot-source-${index % 2}`,
++              targetAddress: TEST_HOT_TARGET_ADDRESS,
++              message: {},
++            },
++          ),
++        );
++        await Promise.resolve();
++      }
++
++      const queue = router.getOutboundQueue(TEST_REMOTE_NODE_ID);
++      t.equal(
++        queue.inFlight,
++        TEST_MAX_CONCURRENT,
++        'mixed background and critical work should fill aggregate concurrency',
++      );
++      t.equal(
++        queue.inFlightCritical,
++        TEST_MIXED_CRITICAL_IN_FLIGHT,
++        'critical work should occupy the observed mixed-saturation share',
++      );
++      t.equal(
++        queue.inFlightBackground,
++        TEST_MIXED_BACKGROUND_IN_FLIGHT,
++        'background work should occupy the remaining normal slots',
++      );
++
++      allDeliveries.push(
++        router.enqueueOutbound(
++          TEST_REMOTE_NODE_ID,
++          buildBlockingDelivery(TEST_CONTROL_PLANE_LABEL),
++          {
++            deliveryPriority: 'critical',
++            deliverySource: TEST_HANDOFF_DELIVERY_SOURCE,
++            targetAddress: TEST_CONTROL_PLANE_TARGET_ADDRESS,
++            message: {
++              [TEST_TYPE_KEY]: TEST_REPLICA_OPERATION_DISPATCH_TYPE,
++            },
++          },
++        ),
++      );
++      await Promise.resolve();
++
++      t.equal(
++        startedDeliveries.includes(TEST_CONTROL_PLANE_LABEL),
++        true,
++        'semantic control-plane work should borrow reserve under mixed saturation',
++      );
++      t.equal(
++        queue.inFlight,
++        TEST_MAX_CONCURRENT + 1,
++        'reserve dispatch may exceed normal concurrency for one control-plane source',
++      );
++      t.equal(
++        queue.inFlightCriticalSourceReserve,
++        1,
++        'mixed-saturation reserve dispatch should account for the borrowed slot',
++      );
++    } finally {
++      releaseAllSends?.();
++      await Promise.allSettled(allDeliveries);
++      await router.shutdown();
++      cleanupTestEnvironment();
++    }
++  },
++);
++
+ t.test(
+   'MessageRouter admits semantic critical reserve source with one normal slot',
+   async (t) => {
+diff --git a/test/transport/message-router-main-stage-2.js b/test/transport/message-router-main-stage-2.js
+index f7accadc..6ca8c1c3 100644
+--- a/test/transport/message-router-main-stage-2.js
++++ b/test/transport/message-router-main-stage-2.js
+@@ -128,8 +128,13 @@ t.test('MessageRouter unit tests chunk 2', async (t) => {
+       const queue = router.getOutboundQueue('remote-node');
+       t.equal(
+         queue.pending.length,
+-        2,
+-        'one background and one critical delivery should remain queued',
++        1,
++        'background delivery should remain queued while critical work borrows reserve',
++      );
++      t.equal(
++        queue.inFlightCriticalSourceReserve,
++        1,
++        'critical delivery should borrow one reserve dispatch slot',
+       );
+ 
+       releaseFirstSend();
+@@ -790,7 +795,7 @@ t.test('MessageRouter unit tests chunk 2', async (t) => {
+   );
+ 
+   t.test(
+-    'should let critical recovery sources use non-reserved pending capacity',
++    'should bound aggregate critical target fallback pending capacity',
+     async (t) => {
+       const TEST_LOCAL_NODE_ID = 'local-node';
+       const TEST_REMOTE_NODE_ID = 'remote-node';
+@@ -798,11 +803,17 @@ t.test('MessageRouter unit tests chunk 2', async (t) => {
+       const TEST_MAX_CONCURRENT = 1;
+       const TEST_MAX_PENDING = 64;
+       const TEST_CRITICAL_RESERVE = 16;
+-      const TEST_ALLOWED_HOT_SOURCE_DELIVERIES = 17;
++      const TEST_ALLOWED_TARGET_FALLBACK_DELIVERIES = 8;
+       const TEST_HOT_RECOVERY_TARGET_ADDRESS =
+         'remote-node/partition/sql_transactions-p1-r4';
++      const TEST_SECOND_HOT_RECOVERY_TARGET_ADDRESS =
++        'remote-node/partition/sql_transaction_participants-p1-r4';
+       const TEST_CONTROL_PLANE_TARGET_ADDRESS =
+         'remote-node/service/control-plane';
++      const TEST_TARGET_FALLBACK_DELIVERY_SOURCES = [
++        TEST_HOT_RECOVERY_TARGET_ADDRESS,
++        TEST_SECOND_HOT_RECOVERY_TARGET_ADDRESS,
++      ];
+       const router = new MessageRouter({
+         nodeId: TEST_LOCAL_NODE_ID,
+         nodeAddress: TEST_NODE_ADDRESS,
+@@ -833,16 +844,20 @@ t.test('MessageRouter unit tests chunk 2', async (t) => {
+       const criticalSourceDeliveries = [];
+       for (
+         let index = 0;
+-        index < TEST_ALLOWED_HOT_SOURCE_DELIVERIES;
++        index < TEST_ALLOWED_TARGET_FALLBACK_DELIVERIES;
+         index++
+       ) {
++        const targetAddress =
++          TEST_TARGET_FALLBACK_DELIVERY_SOURCES[
++            index % TEST_TARGET_FALLBACK_DELIVERY_SOURCES.length
++          ];
+         criticalSourceDeliveries.push(
+           router.enqueueOutbound(
+             TEST_REMOTE_NODE_ID,
+             async () => ({acknowledged: true, criticalIndex: index}),
+             {
+               deliveryPriority: 'critical',
+-              targetAddress: TEST_HOT_RECOVERY_TARGET_ADDRESS,
++              targetAddress,
+               message: {},
+             },
+           ),
+@@ -866,24 +881,80 @@ t.test('MessageRouter unit tests chunk 2', async (t) => {
+       await Promise.resolve();
+ 
+       const queue = router.getOutboundQueue(TEST_REMOTE_NODE_ID);
++      const targetFallbackPendingCount =
++        TEST_TARGET_FALLBACK_DELIVERY_SOURCES.reduce(
++          (count, targetAddress) =>
++            count + queue.pending.filter((item) =>
++              item?.deliverySource === `target:${targetAddress}`).length,
++          0,
++        );
+       t.equal(
+-        queue.pending.filter((item) =>
+-          item?.deliverySource ===
+-          `target:${TEST_HOT_RECOVERY_TARGET_ADDRESS}`).length,
+-        TEST_ALLOWED_HOT_SOURCE_DELIVERIES,
+-        'critical recovery source should exceed the proportional source cap',
++        targetFallbackPendingCount,
++        TEST_ALLOWED_TARGET_FALLBACK_DELIVERIES,
++        'critical target fallback traffic should stop at the aggregate proportional cap',
+       );
+       t.equal(
+         queue.pending.length,
+-        TEST_ALLOWED_HOT_SOURCE_DELIVERIES + TEST_MAX_CONCURRENT,
+-        'critical recovery source should still leave reserved pending capacity',
++        TEST_ALLOWED_TARGET_FALLBACK_DELIVERIES + TEST_MAX_CONCURRENT,
++        'semantic critical traffic should still keep one pending slot',
++      );
++      await t.rejects(
++        router.enqueueOutbound(
++          TEST_REMOTE_NODE_ID,
++          async () => ({acknowledged: true, overflow: true}),
++          {
++            deliveryPriority: 'critical',
++            targetAddress: TEST_HOT_RECOVERY_TARGET_ADDRESS,
++            message: {},
++          },
++        ),
++        /queue/i,
++        'aggregate target fallback traffic should reject once the fallback cap is reached',
++      );
++      const saturationEntry = warnEntries.find((entry) =>
++        entry.message === 'Outbound queue saturated for node delivery' &&
++        entry.context?.backpressureScope === 'delivery_source');
++      t.ok(
++        saturationEntry,
++        'router should emit one delivery-source saturation warning for target fallback traffic',
+       );
+       t.equal(
+-        warnEntries.some((entry) =>
+-          entry.message === 'Outbound queue saturated for node delivery' &&
+-          entry.context?.backpressureScope === 'delivery_source'),
+-        false,
+-        'critical recovery source should not trip the proportional source cap',
++        saturationEntry?.context?.attemptedDeliverySource,
++        `target:${TEST_HOT_RECOVERY_TARGET_ADDRESS}`,
++        'warning should keep the raw attempted target fallback source',
++      );
++      t.equal(
++        saturationEntry?.context?.pendingSourceSummary?.some((entry) =>
++          entry.source === `target:${TEST_HOT_RECOVERY_TARGET_ADDRESS}`),
++        true,
++        'warning summary should keep the first raw target fallback bucket',
++      );
++      t.equal(
++        saturationEntry?.context?.pendingSourceSummary?.some((entry) =>
++          entry.source ===
++          `target:${TEST_SECOND_HOT_RECOVERY_TARGET_ADDRESS}`),
++        true,
++        'warning summary should keep the second raw target fallback bucket',
++      );
++      t.equal(
++        saturationEntry?.context?.pendingForSource,
++        TEST_ALLOWED_TARGET_FALLBACK_DELIVERIES,
++        'warning should report the aggregate target fallback queued count',
++      );
++      t.equal(
++        saturationEntry?.context?.pendingSourceLimit,
++        TEST_ALLOWED_TARGET_FALLBACK_DELIVERIES,
++        'warning should report the aggregate target fallback source cap',
++      );
++      t.equal(
++        saturationEntry?.context?.inFlightForSource,
++        0,
++        'warning should report target fallback in-flight pressure for the admission key',
++      );
++      t.equal(
++        saturationEntry?.context?.inFlightSourceLimit,
++        TEST_MAX_CONCURRENT,
++        'warning should report target fallback in-flight source cap',
+       );
+ 
+       releaseFirstSend();
+diff --git a/test/transport/message-router-main-stage-3.js b/test/transport/message-router-main-stage-3.js
+index c41d5e7e..547860ba 100644
+--- a/test/transport/message-router-main-stage-3.js
++++ b/test/transport/message-router-main-stage-3.js
+@@ -49,7 +49,7 @@ t.test('MessageRouter unit tests chunk 3', async (t) => {
+     cleanupTestEnvironment();
+   });
+   t.test(
+-    'should keep reserve-protected pending capacity for large critical recovery sources',
++    'should keep aggregate pending capacity for critical target fallback sources',
+     async (t) => {
+       const TEST_LOCAL_NODE_ID = 'local-node';
+       const TEST_REMOTE_NODE_ID = 'remote-node';
+@@ -57,8 +57,8 @@ t.test('MessageRouter unit tests chunk 3', async (t) => {
+       const TEST_MAX_CONCURRENT = 1;
+       const TEST_MAX_PENDING = 64;
+       const TEST_CRITICAL_RESERVE = 16;
+-      const TEST_ALLOWED_HOT_SOURCE_DELIVERIES = 48;
+-      const TEST_PENDING_SOURCE_LIMIT = 48;
++      const TEST_ALLOWED_HOT_SOURCE_DELIVERIES = 8;
++      const TEST_PENDING_SOURCE_LIMIT = 8;
+       const TEST_UNRELATED_PENDING_DELIVERIES = 1;
+       const TEST_HOT_RECOVERY_TARGET_ADDRESS =
+         'remote-node/partition/control_plane_publications-p1-r1';
+@@ -132,7 +132,7 @@ t.test('MessageRouter unit tests chunk 3', async (t) => {
+           item?.deliverySource ===
+           `target:${TEST_HOT_RECOVERY_TARGET_ADDRESS}`).length,
+         TEST_ALLOWED_HOT_SOURCE_DELIVERIES,
+-        'large critical recovery source should stop at the reserve-protected source cap',
++        'large critical target fallback source should stop at the aggregate proportional cap',
+       );
+       t.equal(
+         queue.pending.length,
+@@ -140,6 +140,18 @@ t.test('MessageRouter unit tests chunk 3', async (t) => {
+           TEST_UNRELATED_PENDING_DELIVERIES,
+         'unrelated critical traffic should still keep one reserved pending slot',
+       );
++      const stats = router.getStats()?.outboundQueues?.[TEST_REMOTE_NODE_ID];
++      t.equal(
++        stats?.pendingCritical,
++        TEST_ALLOWED_HOT_SOURCE_DELIVERIES +
++          TEST_UNRELATED_PENDING_DELIVERIES,
++        'stats should keep total critical pending pressure visible',
++      );
++      t.equal(
++        stats?.pendingCriticalReserveEligible,
++        TEST_UNRELATED_PENDING_DELIVERIES,
++        'stats should exclude target fallback pending from reserve exhaustion',
++      );
+       await t.rejects(
+         router.enqueueOutbound(
+           TEST_REMOTE_NODE_ID,
+@@ -151,7 +163,7 @@ t.test('MessageRouter unit tests chunk 3', async (t) => {
+           },
+         ),
+         /queue/i,
+-        'large critical recovery source should be rejected once it reaches the reserve-protected source cap',
++        'large critical target fallback source should be rejected once it reaches the aggregate cap',
+       );
+ 
+       const saturationEntry = warnEntries.find((entry) =>
+@@ -159,22 +171,22 @@ t.test('MessageRouter unit tests chunk 3', async (t) => {
+         entry.context?.backpressureScope === 'delivery_source');
+       t.ok(
+         saturationEntry,
+-        'router should emit one delivery-source saturation warning for the capped critical source',
++        'router should emit one delivery-source saturation warning for the capped fallback source',
+       );
+       t.equal(
+         saturationEntry?.context?.attemptedDeliverySource,
+         `target:${TEST_HOT_RECOVERY_TARGET_ADDRESS}`,
+-        'warning should attribute the capped large critical recovery source',
++        'warning should attribute the capped large target fallback source',
+       );
+       t.equal(
+         saturationEntry?.context?.pendingForSource,
+         TEST_PENDING_SOURCE_LIMIT,
+-        'warning should report the queued count at the reserve-protected cap',
++        'warning should report the queued count at the aggregate fallback cap',
+       );
+       t.equal(
+         saturationEntry?.context?.pendingSourceLimit,
+         TEST_PENDING_SOURCE_LIMIT,
+-        'warning should report the reserve-protected critical source cap',
++        'warning should report the aggregate fallback source cap',
+       );
+       t.equal(
+         saturationEntry?.context?.sourceLimitApplied,
+diff --git a/test/transport/message-router-readiness-reserve.test.js b/test/transport/message-router-readiness-reserve.test.js
+index 085e3adf..5f2738cc 100644
+--- a/test/transport/message-router-readiness-reserve.test.js
++++ b/test/transport/message-router-readiness-reserve.test.js
+@@ -141,8 +141,8 @@ t.test(
+     };
+ 
+     try {
+-      // Saturate the queue's CRITICAL pending ceiling using distinct recovery
+-      // sources so per-source reserve preemption does not collapse the backlog.
++      // Saturate the queue's CRITICAL pending ceiling using semantic recovery
++      // sources so raw target-fallback admission does not cap this fixture.
+       const criticalEnqueueCount = TEST_MAX_CONCURRENT + TEST_CRITICAL_CEILING;
+       for (let index = 0; index < criticalEnqueueCount; index++) {
+         allDeliveries.push(
+@@ -152,6 +152,7 @@ t.test(
+               buildBlockingDelivery(`critical-${index}`),
+               {
+                 deliveryPriority: PRIORITY_CRITICAL,
++                deliverySource: `semantic-critical-${index}`,
+                 targetAddress: `${TEST_CRITICAL_TARGET_PREFIX}${index}-r1`,
+                 message: {},
+               },
+@@ -175,6 +176,7 @@ t.test(
+           buildBlockingDelivery('critical-overflow'),
+           {
+             deliveryPriority: PRIORITY_CRITICAL,
++            deliverySource: 'semantic-critical-overflow',
+             targetAddress: `${TEST_CRITICAL_TARGET_PREFIX}overflow-r1`,
+             message: {},
+           },

@@ -137,9 +137,14 @@ function cmdRun(root, args) {
   const problems = result.problems?.length ?
     `problems:\n${result.problems.map((problem) => `- ${problem}`).join('\n')}\n` :
     '';
+  const disposition = result.disposition ?
+    `disposition: ${result.disposition}\n` : '';
+  const next = result.nextCommand ? `next: ${result.nextCommand}\n` : '';
   process.stdout.write(
     `terminal: ${result.outcome}\nevidence: ${result.evidence || '(none)'}\n` +
+    disposition +
     problems +
+    next +
     commitLine(result.commit) +
     `report: ${file}\n`);
 }
@@ -223,12 +228,22 @@ function cmdFinding(root, args) {
         null,
     } :
     null;
+  const scopePressureClassification =
+    typeof args['scope-pressure-resolution'] === 'string' ?
+      {
+        resolution: args['scope-pressure-resolution'],
+        changeRef: typeof args['scope-pressure-change-ref'] === 'string' ?
+          args['scope-pressure-change-ref'] :
+          null,
+      } :
+      null;
   const stamped = appendFinding(root, id, {
     frontier: args.frontier,
     claim: args.claim,
     evidence: typeof args.evidence === 'string' ? args.evidence : null,
     rulesOut: typeof args.rulesOut === 'string' ? args.rulesOut : null,
     regressionClassification,
+    scopePressureClassification,
   });
   process.stdout.write(`recorded finding for ${args.frontier} @ ${stamped.ts}\n`);
 }
@@ -255,10 +270,16 @@ function cmdStep(root, args) {
     push: args['no-push'] ? false : undefined,
     ...theoryCommitArgs(args),
   });
-  if (r.terminal === 'theory-required') {
+  if (r.terminal === 'theory-required' || r.terminal === 'blocked') {
+    const header = r.terminal === 'theory-required' ?
+      `THEORY REQUIRED — ${r.frontier} rung ${r.rungIndex}` :
+      `BLOCKED (${r.disposition || 'recoverable'}) — ${r.frontier} ` +
+      `rung ${r.rungIndex}`;
+    const next = r.nextCommand ? `\nnext: ${r.nextCommand}` : '';
     process.stdout.write(
-      `THEORY REQUIRED — ${r.frontier} rung ${r.rungIndex}\n` +
-      `${r.problems.map((problem) => `- ${problem}`).join('\n')}\n`);
+      `${header}\n` +
+      `${(r.problems || []).map((problem) => `- ${problem}`).join('\n')}` +
+      `${next}\n`);
     return;
   }
   if (r.terminal === 'solved') {
@@ -336,10 +357,22 @@ function cmdIngestEvidence(root, args) {
 }
 
 function cmdAttempt(root, args) {
-  runAttemptCommand(root, {
+  const result = runAttemptCommand(root, {
     ...args,
     ...theoryCommitArgs(args),
   });
+  if (result && result.blocked) {
+    const header = result.terminal === 'theory-required' ?
+      `THEORY REQUIRED — ${result.frontier} rung ${result.rungIndex}` :
+      `BLOCKED (${result.disposition || 'recoverable'}) — ` +
+      `${result.frontier} rung ${result.rungIndex}`;
+    const next = result.nextCommand ? `\nnext: ${result.nextCommand}` : '';
+    process.stdout.write(
+      `${header}\n` +
+      `${(result.problems || []).map((problem) => `- ${problem}`).join('\n')}` +
+      `${next}\n`);
+    return;
+  }
   process.stdout.write('Harness execution attempt complete and recorded.\n');
 }
 

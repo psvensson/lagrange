@@ -81,3 +81,45 @@ tap.test('scope pressure reports attempt contributions and split plan', (t) => {
   fs.rmSync(root, {recursive: true, force: true});
   t.end();
 });
+
+tap.test('scope pressure baseline ignores historical attempts but counts new attempts', (t) => {
+  const root = tmp();
+  const quest = makeQuest(root);
+  appendEvent(root, quest.id, {
+    type: 'attempt',
+    frontier: 'scope-demo-main',
+    changeRef: makeDiff(root, quest.id, 'historical', [
+      'src/admin/a.js',
+      'src/bootstrap/b.js',
+      'src/query/c.js',
+    ]),
+  });
+  appendEvent(root, quest.id, {
+    type: 'finding',
+    frontier: 'scope-demo-main',
+    claim: 'Historical scope was split and landed.',
+    evidence: 'commit:abc123',
+    scopePressureClassification: {
+      resolution: 'baselined',
+    },
+  });
+  appendEvent(root, quest.id, {
+    type: 'attempt',
+    frontier: 'scope-demo-main',
+    changeRef: makeDiff(root, quest.id, 'current', [
+      'src/transport/router.js',
+      'test/transport/router.test.js',
+    ]),
+  });
+
+  const pressure = analyzeScopePressure(root, quest, readLog(root, quest.id));
+  t.same(pressure.changedPaths.sort(), [
+    'src/transport/router.js',
+    'test/transport/router.test.js',
+  ]);
+  t.equal(pressure.attempts.length, 1, 'only post-baseline attempts are counted');
+  t.same(pressure.ownerAreas.sort(), ['src/transport', 'test/transport']);
+
+  fs.rmSync(root, {recursive: true, force: true});
+  t.end();
+});

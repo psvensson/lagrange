@@ -239,9 +239,9 @@ tap.test('golden replay: the real rolling-restart log trips coupled oscillation'
       'priority_recovery_readyz_closed_during_priority_recovery',
     ].sort(),
     'the latest measured run still leaves cluster B red');
-  t.equal(restore.explained, false,
-    'legacy prose findings no longer discharge the restore obligation');
-  t.equal(restore.pending, true, 'so a structured restore-or-explain move is owed');
+  t.equal(restore.explained, true,
+    'the structured regression finding discharges the restore obligation');
+  t.equal(restore.pending, false, 'so the real Quest can restart');
   t.end();
 });
 

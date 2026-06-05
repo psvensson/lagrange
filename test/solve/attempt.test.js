@@ -195,17 +195,20 @@ tap.test('attempt wrapper (P2)', async (t) => {
       changeRef: makeDiff(root, goal.id, 'x'),
     });
 
-    // We do NOT declare/select a theory for the widen-scope rung, so it must throw!
-    t.throws(() => {
-      runAttemptCommand(root, {
-        id: goal.id,
-        frontier: 'attempt-quest-test-main',
-        name: 'test-attempt',
-        changeRef: makeDiff(root, goal.id, 'a'),
-        summary: 'hypothesis check',
-        _: ['node', '-e', 'console.log()'],
-      });
-    }, /theory gate failed/, 'throws on missing theory at rung');
+    // We do NOT declare/select a theory for the widen-scope rung, so it must gate
+    // (graded: a missing theory opens a bounded explore rung, not a crash).
+    const blocked = runAttemptCommand(root, {
+      id: goal.id,
+      frontier: 'attempt-quest-test-main',
+      name: 'test-attempt',
+      changeRef: makeDiff(root, goal.id, 'a'),
+      summary: 'hypothesis check',
+      _: ['node', '-e', 'console.log()'],
+    });
+    t.equal(blocked.blocked, true, 'returns a non-terminal blocked result');
+    t.equal(blocked.terminal, 'theory-required', 'theory gate -> theory-required');
+    t.equal(blocked.disposition, 'explore', 'missing theory maps to explore');
+    t.ok(blocked.nextCommand, 'carries an actionable next command');
 
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
@@ -274,16 +277,16 @@ tap.test('attempt wrapper (P2)', async (t) => {
       require('fs').writeFileSync(${JSON.stringify(marker)}, 'ran');
     `);
 
-    t.throws(() => {
-      runAttemptCommand(root, {
-        id: goal.id,
-        frontier: 'attempt-quest-test-main',
-        name: 'model-block',
-        changeRef: makeDiff(root, goal.id, 'blocked'),
-        summary: 'should not run',
-        _: ['node', mockHarnessScript],
-      });
-    }, /model evidence required/u);
+    const modelBlocked = runAttemptCommand(root, {
+      id: goal.id,
+      frontier: 'attempt-quest-test-main',
+      name: 'model-block',
+      changeRef: makeDiff(root, goal.id, 'blocked'),
+      summary: 'should not run',
+      _: ['node', mockHarnessScript],
+    });
+    t.equal(modelBlocked.blocked, true, 'model rung gates before running harness');
+    t.equal(modelBlocked.terminal, 'theory-required', 'model evidence -> explore gate');
     t.equal(fs.existsSync(marker), false, 'harness did not run');
 
     fs.rmSync(root, {recursive: true, force: true});

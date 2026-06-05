@@ -1,0 +1,1665 @@
+diff --git a/src/bootstrap/join-cleanup-handler.js b/src/bootstrap/join-cleanup-handler.js
+index 1417b549..69b97d7a 100644
+--- a/src/bootstrap/join-cleanup-handler.js
++++ b/src/bootstrap/join-cleanup-handler.js
+@@ -13,6 +13,10 @@ import {
+   CLEANUP_RESULT,
+   JOINING_PHASE,
+ } from './bootstrap-constants.js';
++import {
++  buildFailedJoinMembershipPublicationContext,
++  resolveJoinCleanupRegisteredNodeId,
++} from './join-cleanup-publication-context.js';
+ import {
+   JOIN_CLEANUP_LIFECYCLE_TRANSITION_ERROR,
+   JOINING_CLEANUP_STEP,
+@@ -22,12 +26,17 @@ import {
+   ADDRESS,
+   ENTITY_TYPE,
+   NUM,
+-  STATE,
+   TYPEOF,
+ } from '../constants/index.js';
+ import {RECONCILE_REASON} from '../workflow/reconcile-queue-constants.js';
+ 
+ const LOCAL_STR_NODE_WITHDRAWAL = 'node withdrawal';
++const LOCAL_STR_WITHDRAWAL_NODE_ID_REQUIRED =
++  'failed join admission withdrawal requires registered node id';
++const LOCAL_STR_WITHDRAWAL_OWNER_REQUIRED =
++  'failed join admission withdrawal owner is unavailable';
++const LOCAL_STR_WITHDRAWAL_NOT_APPLIED =
++  'failed join admission withdrawal was not applied';
+ const LOCAL_STR_1CO3M = 'rebalanceCoordinator.shutdown';
+ const LOCAL_STR_FUNCTION = 'function';
+ 
+@@ -58,9 +67,6 @@ const JOINING_CLEANUP_STEPS_REVERSE = Object.freeze([
+   JOINING_CLEANUP_STEP.CONNECTING_WEBSOCKET,
+ ]);
+ 
+-const JOIN_CLEANUP_MEMBERSHIP_PUBLICATION_CONTEXT = Object.freeze({
+-  CLEANUP_STEP: JOINING_CLEANUP_STEP.QUERYING_STATE,
+-});
+ const JOIN_CLEANUP_DEFAULT_LIFECYCLE_STOP_PATH = Object.freeze([
+   NodeState.STOPPED,
+ ]);
+@@ -267,38 +273,23 @@ class JoinCleanupHandler {
+   async _cleanupQueryingState(cleanupContext) {
+     const logger = this.delegates.getLogger();
+     try {
++      const registeredNodeId = resolveJoinCleanupRegisteredNodeId(
++        cleanupContext,
++        this.nodeId,
++      );
+       logger.info(
+         JOINING_LOG_MSG.FAILED_JOIN_CLEANUP_QUERYING_STATE, {
+           nodeId: this.nodeId,
+-          registeredNodeId: cleanupContext.registeredNodeId,
++          registeredNodeId,
+           serviceCount: cleanupContext.createdServiceIds.length,
+         });
+ 
+-      // Withdraw the node through the canonical control-plane owner path
+-      // instead of deleting rows directly from a half-joined node.
+-      if (
+-        cleanupContext.registeredNodeId &&
+-        typeof this.delegates.sendControlPlaneNodeStateUpdate ===
+-          TYPEOF.FUNCTION
+-      ) {
+-        try {
+-          await this.delegates.sendControlPlaneNodeStateUpdate({
+-            state: STATE.DISCONNECTED,
+-            heartbeatAt: this.delegates.getNow()(),
+-          });
+-        } catch (nodeErr) {
+-          logger.warn(
+-            JOINING_LOG_MSG
+-              .FAILED_JOIN_CLEANUP_QUERYING_STATE_ERROR,
+-            {
+-              nodeId: this.nodeId,
+-              detail: LOCAL_STR_NODE_WITHDRAWAL,
+-              error: nodeErr.message,
+-            });
+-        }
+-      }
++      await this.withdrawFailedJoinAdmission(registeredNodeId, logger);
+ 
+-      this.enqueueMembershipPublicationReconcile(cleanupContext);
++      this.enqueueMembershipPublicationReconcile({
++        ...cleanupContext,
++        registeredNodeId,
++      });
+ 
+       logger.info(
+         JOINING_LOG_MSG
+@@ -318,6 +309,36 @@ class JoinCleanupHandler {
+     }
+   }
+ 
++  async withdrawFailedJoinAdmission(registeredNodeId, logger) {
++    if (
++      typeof registeredNodeId !== TYPEOF.STRING ||
++      registeredNodeId.length === NUM.ZERO
++    ) {
++      throw new Error(LOCAL_STR_WITHDRAWAL_NODE_ID_REQUIRED);
++    }
++    if (typeof this.delegates.withdrawFailedJoinAdmission !== TYPEOF.FUNCTION) {
++      throw new Error(LOCAL_STR_WITHDRAWAL_OWNER_REQUIRED);
++    }
++    try {
++      const result =
++        await this.delegates.withdrawFailedJoinAdmission({registeredNodeId});
++      if (result?.accepted !== true && result?.success !== true) {
++        throw new Error(LOCAL_STR_WITHDRAWAL_NOT_APPLIED);
++      }
++      return result;
++    } catch (withdrawalErr) {
++      logger.warn(
++        JOINING_LOG_MSG
++          .FAILED_JOIN_CLEANUP_QUERYING_STATE_ERROR,
++        {
++          nodeId: this.nodeId,
++          detail: LOCAL_STR_NODE_WITHDRAWAL,
++          error: withdrawalErr.message,
++        });
++      throw withdrawalErr;
++    }
++  }
++
+   resolveMembershipPublicationService() {
+     if (typeof this.delegates.getRebalanceCoordinator !== TYPEOF.FUNCTION) {
+       return null;
+@@ -347,12 +368,11 @@ class JoinCleanupHandler {
+     }
+     membershipPublicationService.enqueueClusterMembershipReconcile(
+       RECONCILE_REASON.NODE_FAILED,
+-      {
++      buildFailedJoinMembershipPublicationContext({
++        membershipPublicationService,
+         nodeId: this.nodeId,
+         registeredNodeId: cleanupContext.registeredNodeId,
+-        cleanupStep:
+-          JOIN_CLEANUP_MEMBERSHIP_PUBLICATION_CONTEXT.CLEANUP_STEP,
+-      },
++      }),
+     );
+     return true;
+   }
+diff --git a/src/bootstrap/node-joining-service-segment-1-delegates.js b/src/bootstrap/node-joining-service-segment-1-delegates.js
+index 9a5987a4..7755d017 100644
+--- a/src/bootstrap/node-joining-service-segment-1-delegates.js
++++ b/src/bootstrap/node-joining-service-segment-1-delegates.js
+@@ -443,6 +443,13 @@ function buildJoinCleanupDelegates() {
+     },
+     sendControlPlaneNodeStateUpdate: (options) =>
+       self.sendControlPlaneNodeStateUpdate(options),
++    withdrawFailedJoinAdmission: (options) => {
++      const owner = self.querySystemStatePhase?.nodeRegistrationOwner;
++      if (typeof owner?.withdrawFailedJoinAdmission !== 'function') {
++        throw new Error('NodeRegistrationOwner withdrawal delegate unavailable');
++      }
++      return owner.withdrawFailedJoinAdmission(options);
++    },
+     stopJoiningLifecycleOwners: () => self.stopJoiningLifecycleOwners(),
+     emit: (event, data) => self.emit(event, data),
+   };
+diff --git a/src/bootstrap/shared/node-registration-owner-publication-methods.js b/src/bootstrap/shared/node-registration-owner-publication-methods.js
+index a00fddcb..d3c6d561 100644
+--- a/src/bootstrap/shared/node-registration-owner-publication-methods.js
++++ b/src/bootstrap/shared/node-registration-owner-publication-methods.js
+@@ -11,12 +11,19 @@ import {createControlPlaneRuntimeBundle} from
+   '../../control-plane/control-plane-runtime-bundle.js';
+ import {
+   CONTROL_PLANE_MUTATION_OPERATION,
++  CONTROL_PLANE_MUTATION_OUTCOME,
+ } from '../../control-plane/control-plane-system-table-gateway.js';
++import {
++  OWNER_CONTRACT_NEXT_ACTION,
++  OWNER_CONTRACT_STATE,
++} from '../../control-plane/owner-contract-outcome.js';
+ import {JOINING_LOG_MSG} from '../node-joining-constants.js';
+ import {
+   COLUMN,
+   ENDPOINT_STATUS,
+   NUM,
++  SERVICE_STATUS,
++  STATE,
+   TABLES,
+   TRANSPORT_TYPE,
+   TYPEOF,
+@@ -35,9 +42,96 @@ import {
+   LOG_META_ENDPOINT_REGISTER_FAILED,
+   NODE_REGISTRATION_ERROR,
+   hasFunction,
++  normalizeString,
+ } from './node-registration-owner-constants.js';
+ 
++const LOCAL_STR_UNHEALTHY = 'unhealthy';
++const JOIN_ADMISSION_WITHDRAWAL_TARGET = Object.freeze({
++  NODE_ENDPOINT: 'failed join node endpoint withdrawal',
++  NODE_MEMBERSHIP: 'failed join node membership withdrawal',
++  SERVICE_ENDPOINT: 'failed join service endpoint withdrawal',
++});
++const LOG_FAILED_JOIN_ENDPOINT_WITHDRAWAL_FAILED =
++  'Failed join endpoint withdrawal failed after node membership withdrawal';
++const SERVICE_ENDPOINT_HEALTH_STATUS_COLUMN = 'health_status';
++
++const ACCEPTED_JOIN_ADMISSION_MUTATION_OUTCOMES = new Set([
++  CONTROL_PLANE_MUTATION_OUTCOME.APPLIED,
++  CONTROL_PLANE_MUTATION_OUTCOME.NO_OP,
++  CONTROL_PLANE_MUTATION_OUTCOME.OBSERVED_STATE_CHANGED,
++  CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY,
++]);
++
++const DEFERRED_JOIN_ADMISSION_MUTATION_OUTCOMES = new Set([
++  CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED,
++  CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY,
++  CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY,
++]);
++
++function classifyJoinAdmissionMutationAcceptance(result) {
++  const contractState = normalizeString(result?.contractState);
++  const nextAction = normalizeString(result?.nextAction);
++  const outcome = normalizeString(result?.outcome);
++  const terminal =
++    contractState === OWNER_CONTRACT_STATE.BLOCKED ||
++    contractState === OWNER_CONTRACT_STATE.FAILED ||
++    nextAction === OWNER_CONTRACT_NEXT_ACTION.STOP ||
++    outcome === CONTROL_PLANE_MUTATION_OUTCOME.REJECTED;
++  if (terminal || result === false) {
++    return {
++      accepted: false,
++      success: false,
++      withdrawalDeferred: false,
++      contractState,
++      nextAction,
++      outcome,
++    };
++  }
++
++  const pendingContract =
++    contractState === OWNER_CONTRACT_STATE.PENDING &&
++    (
++      nextAction === OWNER_CONTRACT_NEXT_ACTION.WAIT ||
++      nextAction === OWNER_CONTRACT_NEXT_ACTION.RETRY
++    );
++  const deferredContract =
++    contractState === OWNER_CONTRACT_STATE.DEFERRED &&
++    nextAction === OWNER_CONTRACT_NEXT_ACTION.RETRY;
++  const acceptedOutcome =
++    ACCEPTED_JOIN_ADMISSION_MUTATION_OUTCOMES.has(outcome);
++  const deferredOutcome =
++    DEFERRED_JOIN_ADMISSION_MUTATION_OUTCOMES.has(outcome);
++  const applied = result?.success !== false;
++  const accepted =
++    applied ||
++    acceptedOutcome ||
++    deferredOutcome ||
++    pendingContract ||
++    deferredContract;
++
++  return {
++    accepted,
++    success: applied,
++    withdrawalDeferred:
++      accepted &&
++      (
++        applied !== true ||
++        deferredOutcome ||
++        pendingContract ||
++        deferredContract
++      ),
++    contractState,
++    nextAction,
++    outcome,
++    retryAfterMs: result?.retryAfterMs ?? result?.pressureRetryAfterMs ?? null,
++  };
++}
++
+ class NodeRegistrationOwnerPublicationMethods {
++  resolveNodeEndpointId() {
++    return `ep-${this.nodeId}-ws`;
++  }
++
+   async registerNodeEndpoint(now) {
+     const logger = this.delegates.getLogger();
+ 
+@@ -46,7 +140,7 @@ class NodeRegistrationOwnerPublicationMethods {
+       nodeAddress: this.nodeAddress,
+     });
+ 
+-    const endpointId = `ep-${this.nodeId}-ws`;
++    const endpointId = this.resolveNodeEndpointId();
+     const canonicalWsAddress =
+       this.resolveCanonicalWsAddress();
+ 
+@@ -302,6 +396,146 @@ class NodeRegistrationOwnerPublicationMethods {
+     );
+   }
+ 
++  async updateJoinAdmissionSystemTableRowWithRetry(
++    tableName,
++    whereClause,
++    data,
++    options = {},
++  ) {
++    const controlPlaneSystemTableGateway =
++      this.getJoinAdmissionControlPlaneSystemTableGateway();
++    if (
++      !controlPlaneSystemTableGateway ||
++      typeof controlPlaneSystemTableGateway.updateSystemTableRow !==
++        TYPEOF.FUNCTION
++    ) {
++      throw new Error(
++        NODE_REGISTRATION_ERROR.JOIN_ADMISSION_GATEWAY_REQUIRED,
++      );
++    }
++
++    const joinTimeOptions = this.getJoinTimeUpsertOptions();
++    const queryTimeoutMs = this.getJoinAdmissionWriteRetryTimeoutMs();
++    return runRetryableControlPlaneWrite(
++      () => controlPlaneSystemTableGateway.updateSystemTableRow(
++        tableName,
++        whereClause,
++        data,
++        {
++          ...joinTimeOptions,
++          queryTimeoutMs,
++        },
++      ),
++      {
++        timeoutMs: queryTimeoutMs,
++        now: () => this.delegates.getNow()(),
++        onRetry: this.buildJoinAdmissionRetryLogger(
++          tableName,
++          options.admissionTarget || null,
++        ),
++        sleep: (delayMs) => this.sleep(delayMs),
++      },
++    );
++  }
++
++  async withdrawFailedJoinAdmission(options = {}) {
++    const registeredNodeId =
++      normalizeString(options.registeredNodeId) || this.nodeId;
++    if (registeredNodeId !== this.nodeId) {
++      return {success: false, skipped: true};
++    }
++    const now = this.delegates.getNow()();
++    const nodeResult =
++      await this.updateJoinAdmissionSystemTableRowWithRetry(
++        TABLES.NODES,
++        {[COLUMN.NODE_ID]: registeredNodeId},
++        {
++          [COLUMN.STATUS]: SERVICE_STATUS.STOPPED,
++          [COLUMN.CONNECTION_STATE]: STATE.DISCONNECTED,
++          [COLUMN.LAST_HEARTBEAT]: now,
++          [COLUMN.READY_LEASE_EXPIRES_AT]: null,
++          [COLUMN.UPDATED_AT]: now,
++        },
++        {
++          admissionTarget:
++            JOIN_ADMISSION_WITHDRAWAL_TARGET.NODE_MEMBERSHIP,
++        },
++      );
++
++    const logger = this.delegates.getLogger();
++    let nodeEndpointWithdrawn = false;
++    let metaEndpointWithdrawnCount = NUM.ZERO;
++    try {
++      await this.updateJoinAdmissionSystemTableRowWithRetry(
++        TABLES.NODE_ENDPOINTS,
++        {[COLUMN.ENDPOINT_ID]: this.resolveNodeEndpointId()},
++        {
++          [COLUMN.STATUS]: ENDPOINT_STATUS.INACTIVE,
++          [COLUMN.UPDATED_AT]: now,
++        },
++        {
++          admissionTarget:
++            JOIN_ADMISSION_WITHDRAWAL_TARGET.NODE_ENDPOINT,
++        },
++      );
++      nodeEndpointWithdrawn = true;
++    } catch (endpointError) {
++      logger.warn(LOG_FAILED_JOIN_ENDPOINT_WITHDRAWAL_FAILED, {
++        nodeId: this.nodeId,
++        tableName: TABLES.NODE_ENDPOINTS,
++        error: endpointError.message,
++      });
++    }
++
++    const metaEndpointRows = await this.readAuthoritativeMetaEndpointRows();
++    for (const metaEndpointRow of metaEndpointRows) {
++      const endpointId = normalizeString(
++        metaEndpointRow?.[COLUMN.ENDPOINT_ID],
++      );
++      if (endpointId.length === NUM.ZERO) {
++        continue;
++      }
++      try {
++        await this.updateJoinAdmissionSystemTableRowWithRetry(
++          TABLES.SERVICE_ENDPOINTS,
++          {[COLUMN.ENDPOINT_ID]: endpointId},
++          {
++            [SERVICE_ENDPOINT_HEALTH_STATUS_COLUMN]: LOCAL_STR_UNHEALTHY,
++            [COLUMN.UPDATED_AT]: now,
++          },
++          {
++            admissionTarget:
++              JOIN_ADMISSION_WITHDRAWAL_TARGET.SERVICE_ENDPOINT,
++          },
++        );
++        metaEndpointWithdrawnCount += NUM.ONE;
++      } catch (endpointError) {
++        logger.warn(LOG_FAILED_JOIN_ENDPOINT_WITHDRAWAL_FAILED, {
++          nodeId: this.nodeId,
++          tableName: TABLES.SERVICE_ENDPOINTS,
++          endpointId,
++          error: endpointError.message,
++        });
++      }
++    }
++
++    const nodeMutationAcceptance =
++      classifyJoinAdmissionMutationAcceptance(nodeResult);
++    return {
++      success: nodeMutationAcceptance.success,
++      accepted: nodeMutationAcceptance.accepted,
++      withdrawalDeferred: nodeMutationAcceptance.withdrawalDeferred,
++      registeredNodeId,
++      contractState: nodeMutationAcceptance.contractState,
++      nextAction: nodeMutationAcceptance.nextAction,
++      outcome: nodeMutationAcceptance.outcome,
++      retryAfterMs: nodeMutationAcceptance.retryAfterMs,
++      nodeEndpointWithdrawn,
++      metaEndpointCount: metaEndpointRows.length,
++      metaEndpointWithdrawnCount,
++    };
++  }
++
+   async upsertSystemTableRowWithRetry(
+     tableName,
+     rowData,
+diff --git a/src/control-plane/membership-publication-coordinator-class-stage-3.js b/src/control-plane/membership-publication-coordinator-class-stage-3.js
+index 3c84aed2..3eecc814 100644
+--- a/src/control-plane/membership-publication-coordinator-class-stage-3.js
++++ b/src/control-plane/membership-publication-coordinator-class-stage-3.js
+@@ -12,6 +12,9 @@ import {
+ import {
+   hasPublicationActiveGateOwnerReconcileSignal,
+ } from './publication-active-gate-handoff-contract.js';
++import {
++  PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD,
++} from './publication-active-gate-handoff-contract-constants.js';
+ import {
+   CONTROL_PLANE_CONVERGENCE_CLASS,
+   CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME,
+@@ -88,6 +91,7 @@ const MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD = Object.freeze({
+   ALLOW_PRESSURE_DEFER: 'allowPressureDefer',
+   DISABLE_NESTED_PRIORITY_RECOVERY_PLANNING:
+     'disableNestedPriorityRecoveryPlanning',
++  EXCLUDED_NODE_IDS: 'excludedNodeIds',
+   LATEST_PUBLICATION_ROW: 'latestPublicationRow',
+   NODE_ENDPOINT_ROWS: 'nodeEndpointRows',
+   NODE_ROWS: 'nodeRows',
+@@ -127,6 +131,7 @@ const MEMBERSHIP_PUBLICATION_RECONCILE_HANDOFF_ROUTE_RESET_FIELDS =
+     MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.PUBLISHED_ACTIVE_NODE_IDS,
+     MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.REQUIRED_ACK_NODE_IDS,
+     MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.ACKNOWLEDGED_NODE_IDS,
++    MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.EXCLUDED_NODE_IDS,
+     MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.ALLOW_EMPTY_PRELOADED_ROWS,
+     MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.NODE_ROWS,
+     MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.NODE_ENDPOINT_ROWS,
+@@ -135,6 +140,21 @@ const MEMBERSHIP_PUBLICATION_RECONCILE_HANDOFF_ROUTE_RESET_FIELDS =
+     MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.REPLICA_OPERATION_ROWS,
+     MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.READINESS_ENTRIES,
+   ]);
++const MEMBERSHIP_PUBLICATION_HANDOFF_NODE_COUNT_FIELD_BY_NODE_LIST =
++  Object.freeze({
++    [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.EXPECTED_NODE_IDS]:
++      'expectedNodeCount',
++    [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLISHED_ACTIVE_NODE_IDS]:
++      'publishedActiveNodeCount',
++    [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.MISSING_PUBLISHED_NODE_IDS]:
++      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.MISSING_PUBLISHED_COUNT,
++    [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_ACK_NODE_IDS]:
++      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_ACK_COUNT,
++    [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_RECOVERY_NODE_IDS]:
++      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_RECOVERY_COUNT,
++    [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_RECONCILE_NODE_IDS]:
++      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_RECONCILE_COUNT,
++  });
+ 
+ function normalizeCriticalConvergenceRetryAfterMs(value) {
+   return Number.isFinite(value) && value > NUM.ZERO ?
+@@ -214,6 +234,105 @@ function mergeMembershipPublicationReconcileNodeIds(left, right) {
+   ]);
+ }
+ 
++function excludeMembershipPublicationReconcileNodeIds(nodeIds, excludedNodeIds) {
++  const excluded = new Set(normalizeNodeIdList(excludedNodeIds));
++  if (excluded.size === NUM.ZERO) {
++    return normalizeNodeIdList(nodeIds);
++  }
++  return normalizeNodeIdList(nodeIds).filter((nodeId) =>
++    !excluded.has(nodeId),
++  );
++}
++
++function filterMembershipPublicationReconcileExclusions(
++  excludedNodeIds,
++  includedNodeIds,
++) {
++  const included = new Set(normalizeNodeIdList(includedNodeIds));
++  if (included.size === NUM.ZERO) {
++    return normalizeNodeIdList(excludedNodeIds);
++  }
++  return normalizeNodeIdList(excludedNodeIds).filter((nodeId) =>
++    !included.has(nodeId),
++  );
++}
++
++function hasMembershipPublicationReconcileContextField(context, fieldName) {
++  return isMembershipPublicationReconcileContext(context) &&
++    Object.hasOwn(context, fieldName);
++}
++
++function applyMembershipPublicationReconcileNodeList(
++  context,
++  fieldName,
++  nodeIds,
++  previousContext,
++  nextContext,
++) {
++  if (
++    nodeIds.length > NUM.ZERO ||
++    hasMembershipPublicationReconcileContextField(
++      previousContext,
++      fieldName,
++    ) ||
++    hasMembershipPublicationReconcileContextField(nextContext, fieldName)
++  ) {
++    context[fieldName] = nodeIds;
++    return;
++  }
++  delete context[fieldName];
++}
++
++function applyMembershipPublicationHandoffNodeList(
++  handoff,
++  fieldName,
++  excludedNodeIds,
++) {
++  if (!hasMembershipPublicationReconcileContextField(handoff, fieldName)) {
++    return;
++  }
++  const filteredNodeIds = excludeMembershipPublicationReconcileNodeIds(
++    handoff[fieldName],
++    excludedNodeIds,
++  );
++  handoff[fieldName] = filteredNodeIds;
++  const countFieldName =
++    MEMBERSHIP_PUBLICATION_HANDOFF_NODE_COUNT_FIELD_BY_NODE_LIST[fieldName];
++  if (Object.hasOwn(handoff, countFieldName)) {
++    handoff[countFieldName] = filteredNodeIds.length;
++  }
++}
++
++function filterMembershipPublicationHandoffContext(
++  handoff,
++  excludedNodeIds,
++) {
++  if (
++    !isMembershipPublicationReconcileContext(handoff) ||
++    normalizeNodeIdList(excludedNodeIds).length === NUM.ZERO
++  ) {
++    return handoff;
++  }
++  const filteredHandoff = {...handoff};
++  for (const fieldName of [
++    PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.EXPECTED_NODE_IDS,
++    PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLISHED_ACTIVE_NODE_IDS,
++    PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.REQUIRED_ACK_NODE_IDS,
++    PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.ACKNOWLEDGED_NODE_IDS,
++    PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.MISSING_PUBLISHED_NODE_IDS,
++    PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_ACK_NODE_IDS,
++    PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_RECOVERY_NODE_IDS,
++    PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_RECONCILE_NODE_IDS,
++  ]) {
++    applyMembershipPublicationHandoffNodeList(
++      filteredHandoff,
++      fieldName,
++      excludedNodeIds,
++    );
++  }
++  return filteredHandoff;
++}
++
+ function resolveMembershipPublicationReconcileFlag(previousValue, nextValue) {
+   if (previousValue === false || nextValue === false) {
+     return false;
+@@ -312,53 +431,88 @@ function mergeMembershipPublicationReconcileContext(previousContext, nextContext
+   }
+   const mergeRoute =
+     resolveMembershipPublicationReconcileMergeRoute(nextContext);
+-  const publishedActiveNodeIds = mergeMembershipPublicationReconcileNodeIds(
+-    previousContext[
+-      MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.PUBLISHED_ACTIVE_NODE_IDS
+-    ],
++  const nextExplicitTargetNodeIds = hasExplicitMembershipPublicationTarget(
++    nextContext,
++  ) ?
++    mergeMembershipPublicationReconcileNodeIds(
++      nextContext[
++        MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.PUBLISHED_ACTIVE_NODE_IDS
++      ],
++      mergeMembershipPublicationReconcileNodeIds(
++        nextContext[
++          MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
++            .REQUIRED_ACK_NODE_IDS
++        ],
++        nextContext[
++          MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
++            .ACKNOWLEDGED_NODE_IDS
++        ],
++      ),
++    ) :
++    [];
++  const excludedNodeIds = mergeMembershipPublicationReconcileNodeIds(
++    filterMembershipPublicationReconcileExclusions(
++      previousContext[
++        MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.EXCLUDED_NODE_IDS
++      ],
++      nextExplicitTargetNodeIds,
++    ),
+     nextContext[
+-      MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.PUBLISHED_ACTIVE_NODE_IDS
++      MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.EXCLUDED_NODE_IDS
+     ],
+   );
+-  const requiredAckNodeIds = mergeMembershipPublicationReconcileNodeIds(
+-    previousContext[
+-      MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.REQUIRED_ACK_NODE_IDS
+-    ],
+-    nextContext[
+-      MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.REQUIRED_ACK_NODE_IDS
+-    ],
++  const publishedActiveNodeIds = excludeMembershipPublicationReconcileNodeIds(
++    mergeMembershipPublicationReconcileNodeIds(
++      previousContext[
++        MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
++          .PUBLISHED_ACTIVE_NODE_IDS
++      ],
++      nextContext[
++        MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
++          .PUBLISHED_ACTIVE_NODE_IDS
++      ],
++    ),
++    excludedNodeIds,
+   );
+-  const acknowledgedNodeIds = mergeMembershipPublicationReconcileNodeIds(
+-    previousContext[
+-      MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.ACKNOWLEDGED_NODE_IDS
+-    ],
+-    nextContext[
+-      MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.ACKNOWLEDGED_NODE_IDS
+-    ],
++  const requiredAckNodeIds = excludeMembershipPublicationReconcileNodeIds(
++    mergeMembershipPublicationReconcileNodeIds(
++      previousContext[
++        MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.REQUIRED_ACK_NODE_IDS
++      ],
++      nextContext[
++        MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.REQUIRED_ACK_NODE_IDS
++      ],
++    ),
++    excludedNodeIds,
+   );
++  const acknowledgedNodeIds = excludeMembershipPublicationReconcileNodeIds(
++    mergeMembershipPublicationReconcileNodeIds(
++      previousContext[
++        MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.ACKNOWLEDGED_NODE_IDS
++      ],
++      nextContext[
++        MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.ACKNOWLEDGED_NODE_IDS
++      ],
++    ),
++    excludedNodeIds,
++  );
++  const publicationActiveGateHandoff =
++    filterMembershipPublicationHandoffContext(
++      nextContext[
++        MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
++          .PUBLICATION_ACTIVE_GATE_HANDOFF
++      ] ??
++        previousContext[
++          MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
++            .PUBLICATION_ACTIVE_GATE_HANDOFF
++        ],
++      excludedNodeIds,
++    );
+   const mergedContext = {
+     ...previousContext,
+     ...nextContext,
+     [MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.LATEST_PUBLICATION_ROW]:
+       selectLatestPublicationRow(previousContext, nextContext),
+-    ...(publishedActiveNodeIds.length > NUM.ZERO ?
+-      {
+-        [MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
+-          .PUBLISHED_ACTIVE_NODE_IDS]: publishedActiveNodeIds,
+-      } :
+-      {}),
+-    ...(requiredAckNodeIds.length > NUM.ZERO ?
+-      {
+-        [MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
+-          .REQUIRED_ACK_NODE_IDS]: requiredAckNodeIds,
+-      } :
+-      {}),
+-    ...(acknowledgedNodeIds.length > NUM.ZERO ?
+-      {
+-        [MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
+-          .ACKNOWLEDGED_NODE_IDS]: acknowledgedNodeIds,
+-      } :
+-      {}),
+     [MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
+       .ALLOW_PENDING_VISIBILITY]:
+       resolveMembershipPublicationReconcileFlag(
+@@ -393,6 +547,42 @@ function mergeMembershipPublicationReconcileContext(previousContext, nextContext
+         ],
+       ),
+   };
++  if (publicationActiveGateHandoff) {
++    mergedContext[
++      MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
++        .PUBLICATION_ACTIVE_GATE_HANDOFF
++    ] = publicationActiveGateHandoff;
++  }
++  if (excludedNodeIds.length > NUM.ZERO) {
++    mergedContext[
++      MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.EXCLUDED_NODE_IDS
++    ] = excludedNodeIds;
++  } else {
++    delete mergedContext[
++      MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.EXCLUDED_NODE_IDS
++    ];
++  }
++  applyMembershipPublicationReconcileNodeList(
++    mergedContext,
++    MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.PUBLISHED_ACTIVE_NODE_IDS,
++    publishedActiveNodeIds,
++    previousContext,
++    nextContext,
++  );
++  applyMembershipPublicationReconcileNodeList(
++    mergedContext,
++    MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.REQUIRED_ACK_NODE_IDS,
++    requiredAckNodeIds,
++    previousContext,
++    nextContext,
++  );
++  applyMembershipPublicationReconcileNodeList(
++    mergedContext,
++    MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.ACKNOWLEDGED_NODE_IDS,
++    acknowledgedNodeIds,
++    previousContext,
++    nextContext,
++  );
+   return finalizeMembershipPublicationReconcileMergedContext(
+     mergedContext,
+     mergeRoute,
+diff --git a/test/bootstrap/join-cleanup.property.test.js b/test/bootstrap/join-cleanup.property.test.js
+index 2a5e0bf3..9a99f18f 100644
+--- a/test/bootstrap/join-cleanup.property.test.js
++++ b/test/bootstrap/join-cleanup.property.test.js
+@@ -15,12 +15,15 @@
+ import {test} from '../../src/test-helpers/tap.js';
+ import fc from 'fast-check';
+ import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
+-import {JOINING_PHASE} from '../../src/bootstrap/bootstrap-constants.js';
++import {
++  CLEANUP_RESULT,
++  JOINING_PHASE,
++} from '../../src/bootstrap/bootstrap-constants.js';
+ import {
+   JOINING_CLEANUP_STEP,
+ } from '../../src/bootstrap/node-joining-constants.js';
+ import {NodeState} from '../../src/node/node-lifecycle-state-machine.js';
+-import {TABLES, COLUMN, STATE} from '../../src/constants/index.js';
++import {TABLES, COLUMN} from '../../src/constants/index.js';
+ import {RECONCILE_REASON} from '../../src/workflow/reconcile-queue-constants.js';
+ 
+ /**
+@@ -73,6 +76,7 @@ function createTrackedJoiningService(cleanupContext) {
+   const tracking = {
+     directNodeDeletes: 0,
+     directServiceDeletes: 0,
++    failedJoinAdmissionWithdrawals: [],
+     nodeStateUpdates: [],
+     membershipPublicationReconciles: [],
+     messageGroupsShutdown: new Set(),
+@@ -106,9 +110,32 @@ function createTrackedJoiningService(cleanupContext) {
+   };
+   service.joinCleanupHandler.delegates.getRegisteredJoinNodeId = () =>
+     cleanupContext.registeredNodeId;
++  service.joinCleanupHandler.delegates.withdrawFailedJoinAdmission =
++    async (options) => {
++      tracking.failedJoinAdmissionWithdrawals.push(options);
++      return {success: true};
++    };
+   service.rebalanceCoordinator = {
+     controlPlaneReadinessService: {
+       membershipPublicationService: {
++        getLatestPublicationRowSync: () => ({
++          publication_epoch: 7,
++          published_active_node_ids: [
++            'existing-node-a',
++            'test-joining-node',
++            'existing-node-b',
++          ],
++          required_ack_node_ids: [
++            'existing-node-a',
++            'test-joining-node',
++            'existing-node-b',
++          ],
++          acknowledged_node_ids: [
++            'existing-node-a',
++            'test-joining-node',
++            'existing-node-b',
++          ],
++        }),
+         enqueueClusterMembershipReconcile: (reason, context) => {
+           tracking.membershipPublicationReconciles.push({
+             reason,
+@@ -155,12 +182,12 @@ test('Property 4: Join failure cleanup', async (t) => {
+   /**
+    * Property: For any valid failure phase, after cleanup, all
+  * registered node membership should be withdrawn through the
+- * NODE_STATE_UPDATE owner path, and cleanup should not issue
++ * join admission owner path, and cleanup should not issue
+  * direct row deletions for nodes/services.
+    */
+-  t.test(
+-    'cleanup withdraws membership without direct node/service deletes',
+-    async (t) => {
++	  t.test(
++	    'cleanup withdraws membership without direct node/service deletes',
++	    async (t) => {
+       await fc.assert(
+         fc.asyncProperty(
+           fc.constantFrom(...PHASES_WITH_QUERYING_STATE_CLEANUP),
+@@ -176,37 +203,52 @@ test('Property 4: Join failure cleanup', async (t) => {
+           async (failedPhase, context) => {
+             const {service, tracking} =
+               createTrackedJoiningService(context);
++            const expectedRegisteredNodeId =
++              context.registeredNodeId || service.nodeId;
+ 
+             await service.cleanupFailedJoin(
+               failedPhase, context,
+             );
+ 
+-            if (context.registeredNodeId) {
+-              const disconnectedUpdate = tracking.nodeStateUpdates.find(
+-                (update) => update?.state === STATE.DISCONNECTED,
+-              );
+-              if (!disconnectedUpdate) {
+-                return false;
+-              }
+-              if (tracking.membershipPublicationReconciles.length !== 1) {
+-                return false;
+-              }
+-              const reconcile =
+-                tracking.membershipPublicationReconciles[0];
+-              if (reconcile.reason !== RECONCILE_REASON.NODE_FAILED) {
+-                return false;
+-              }
+-              if (reconcile.context?.registeredNodeId !==
+-                  context.registeredNodeId) {
+-                return false;
+-              }
+-              if (reconcile.context?.cleanupStep !==
+-                  JOINING_CLEANUP_STEP.QUERYING_STATE) {
+-                return false;
+-              }
+-            } else if (tracking.nodeStateUpdates.length > 0) {
++            if (tracking.failedJoinAdmissionWithdrawals.length !== 1) {
++              return false;
++            }
++            if (tracking.failedJoinAdmissionWithdrawals[0]
++              ?.registeredNodeId !== expectedRegisteredNodeId) {
++              return false;
++            }
++            if (tracking.nodeStateUpdates.length > 0) {
++              return false;
++            }
++            if (tracking.membershipPublicationReconciles.length !== 1) {
++              return false;
++            }
++            const reconcile =
++              tracking.membershipPublicationReconciles[0];
++            if (reconcile.reason !== RECONCILE_REASON.NODE_FAILED) {
++              return false;
++            }
++            if (reconcile.context?.registeredNodeId !==
++                expectedRegisteredNodeId) {
++              return false;
++            }
++            if (reconcile.context?.cleanupStep !==
++                JOINING_CLEANUP_STEP.QUERYING_STATE) {
+               return false;
+-            } else if (tracking.membershipPublicationReconciles.length > 0) {
++            }
++            if (!reconcile.context?.excludedNodeIds?.includes(
++              expectedRegisteredNodeId,
++            )) {
++              return false;
++            }
++            if (reconcile.context?.publishedActiveNodeIds?.includes(
++              expectedRegisteredNodeId,
++            )) {
++              return false;
++            }
++            if (reconcile.context?.requiredAckNodeIds?.includes(
++              expectedRegisteredNodeId,
++            )) {
+               return false;
+             }
+ 
+@@ -217,14 +259,94 @@ test('Property 4: Join failure cleanup', async (t) => {
+         {numRuns: 10},
+       );
+ 
+-      t.pass(
+-        'cleanup withdraws membership without direct node/service deletes',
++	      t.pass(
++	        'cleanup withdraws membership without direct node/service deletes',
++	      );
++	    });
++
++  t.test(
++    'querying-state cleanup fails closed when owner withdrawal is unavailable',
++    async (t) => {
++      const context = {
++        registeredNodeId: null,
++        createdServiceIds: [],
++        createdMessageGroupIds: [],
++      };
++      const {service, tracking} = createTrackedJoiningService(context);
++      delete service.joinCleanupHandler.delegates.withdrawFailedJoinAdmission;
++
++      const result = await service.joinCleanupHandler._cleanupQueryingState(
++        context,
++      );
++
++      t.equal(
++        result,
++        CLEANUP_RESULT.ERROR,
++        'querying-state cleanup should report owner withdrawal failure',
++      );
++      t.same(
++        tracking.nodeStateUpdates,
++        [],
++        'cleanup should not fall back to legacy node-state publication',
++      );
++      t.same(
++        tracking.membershipPublicationReconciles,
++        [],
++        'cleanup should not enqueue stale publication reconcile when withdrawal fails',
+       );
+     });
+ 
+-  /**
+-   * Property: For phases that include MG cleanup, all message
+-   * group services should be shut down.
++  t.test(
++    'querying-state cleanup enqueues exclusion after deferred owner withdrawal',
++    async (t) => {
++      const registeredNodeId = 'test-joining-node';
++      const context = {
++        registeredNodeId,
++        createdServiceIds: [],
++        createdMessageGroupIds: [],
++      };
++      const {service, tracking} = createTrackedJoiningService(context);
++      service.joinCleanupHandler.delegates.withdrawFailedJoinAdmission =
++        async (options) => {
++          tracking.failedJoinAdmissionWithdrawals.push(options);
++          return {
++            success: false,
++            accepted: true,
++            withdrawalDeferred: true,
++            contractState: 'deferred',
++            nextAction: 'retry',
++          };
++        };
++
++      const result = await service.joinCleanupHandler._cleanupQueryingState(
++        context,
++      );
++
++      t.equal(
++        result,
++        CLEANUP_RESULT.SUCCESS,
++        'accepted deferred owner withdrawal should not fail cleanup',
++      );
++      t.same(
++        tracking.nodeStateUpdates,
++        [],
++        'cleanup should not fall back to legacy node-state publication',
++      );
++      t.equal(
++        tracking.membershipPublicationReconciles.length,
++        1,
++        'cleanup should still enqueue membership publication exclusion',
++      );
++      t.same(
++        tracking.membershipPublicationReconciles[0]?.context?.excludedNodeIds,
++        [registeredNodeId],
++        'publication exclusion should target the deferred failed joiner',
++      );
++    });
++
++		  /**
++		   * Property: For phases that include MG cleanup, all message
++	   * group services should be shut down.
+    */
+   t.test(
+     'message groups are shut down for MG-related failure phases',
+diff --git a/test/bootstrap/node-registration-owner.test.js b/test/bootstrap/node-registration-owner.test.js
+index 464b39b2..4737c23a 100644
+--- a/test/bootstrap/node-registration-owner.test.js
++++ b/test/bootstrap/node-registration-owner.test.js
+@@ -1,13 +1,19 @@
+ import {test} from '../../src/test-helpers/tap.js';
+ import {NodeRegistrationOwner} from
+   '../../src/bootstrap/shared/node-registration-owner.js';
+-import {CONTROL_PLANE_PHASE_SCOPE} from
++import {
++  CONTROL_PLANE_MUTATION_OUTCOME,
++  CONTROL_PLANE_PHASE_SCOPE,
++} from
+   '../../src/control-plane/control-plane-system-table-gateway.js';
+ import {
+   COLUMN,
++  ENDPOINT_STATUS,
+   NUM,
++  SERVICE_STATUS,
+   STATE,
+   TIME_MS,
++  TABLES,
+ } from '../../src/constants/index.js';
+ import {
+   MEMBERSHIP_LIFECYCLE_INTENT,
+@@ -22,6 +28,7 @@ const TEST_LOGGER = {
+   warn: () => {},
+   error: () => {},
+ };
++const TEST_SERVICE_ENDPOINT_UNHEALTHY = 'unhealthy';
+ const TEST_NODE_CAPABILITIES = Object.freeze([]);
+ const TEST_CLUSTER_INCARNATION_FENCE_BLOCKED = Object.freeze({
+   state: 'identity_mismatch',
+@@ -285,3 +292,110 @@ test(
+     );
+   },
+ );
++
++test(
++  'NodeRegistrationOwner withdraws failed join admission with primary-keyed ' +
++  'control-plane updates',
++  async (t) => {
++    const updateCalls = [];
++    const owner = new NodeRegistrationOwner({
++      nodeId: TEST_NODE_ID,
++      nodeAddress: TEST_NODE_ADDRESS,
++      delegates: createDelegates(),
++    });
++    owner.getJoinAdmissionControlPlaneSystemTableGateway = () => ({
++      updateSystemTableRow: async (tableName, whereClause, data, options) => {
++        updateCalls.push({tableName, whereClause, data, options});
++        return {partitionResult: {affectedRows: NUM.ONE}};
++      },
++    });
++    owner.readAuthoritativeMetaEndpointRows = async () => ([{
++      [COLUMN.ENDPOINT_ID]: 'meta-endpoint-1',
++      [COLUMN.NODE_ID]: TEST_NODE_ID,
++    }]);
++
++    const result = await owner.withdrawFailedJoinAdmission({
++      registeredNodeId: TEST_NODE_ID,
++    });
++
++    t.equal(result.success, true, 'withdrawal should report success');
++    t.equal(updateCalls.length, NUM.THREE,
++      'withdrawal should update node, node endpoint, and service endpoint');
++    t.match(updateCalls[NUM.ZERO], {
++      tableName: TABLES.NODES,
++      whereClause: {[COLUMN.NODE_ID]: TEST_NODE_ID},
++      data: {
++        [COLUMN.STATUS]: SERVICE_STATUS.STOPPED,
++        [COLUMN.CONNECTION_STATE]: STATE.DISCONNECTED,
++        [COLUMN.READY_LEASE_EXPIRES_AT]: null,
++      },
++    });
++    t.match(updateCalls[NUM.ONE], {
++      tableName: TABLES.NODE_ENDPOINTS,
++      whereClause: {[COLUMN.ENDPOINT_ID]: `ep-${TEST_NODE_ID}-ws`},
++      data: {
++        [COLUMN.STATUS]: ENDPOINT_STATUS.INACTIVE,
++      },
++    });
++    t.match(updateCalls[NUM.TWO], {
++      tableName: TABLES.SERVICE_ENDPOINTS,
++      whereClause: {[COLUMN.ENDPOINT_ID]: 'meta-endpoint-1'},
++      data: {
++        health_status: TEST_SERVICE_ENDPOINT_UNHEALTHY,
++      },
++    });
++    t.ok(
++      updateCalls.every((call) =>
++        call.options?.phaseScope === CONTROL_PLANE_PHASE_SCOPE.JOIN &&
++        call.options?.skipCacheWait === true,
++      ),
++      'withdrawal writes should keep join phase control-plane options',
++    );
++  },
++);
++
++test(
++  'NodeRegistrationOwner preserves deferred failed-join withdrawal contract',
++  async (t) => {
++    const updateCalls = [];
++    const owner = new NodeRegistrationOwner({
++      nodeId: TEST_NODE_ID,
++      nodeAddress: TEST_NODE_ADDRESS,
++      delegates: createDelegates(),
++    });
++    owner.getJoinAdmissionWriteRetryTimeoutMs = () => NUM.ZERO;
++    owner.getJoinAdmissionControlPlaneSystemTableGateway = () => ({
++      updateSystemTableRow: async (tableName, whereClause, data, options) => {
++        updateCalls.push({tableName, whereClause, data, options});
++        if (tableName === TABLES.NODES) {
++          return {
++            success: false,
++            outcome: CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY,
++            contractState: 'deferred',
++            nextAction: 'retry',
++            retryAfterMs: TIME_MS.SECOND,
++          };
++        }
++        return {success: true};
++      },
++    });
++    owner.readAuthoritativeMetaEndpointRows = async () => [];
++
++    const result = await owner.withdrawFailedJoinAdmission({
++      registeredNodeId: TEST_NODE_ID,
++    });
++
++    t.equal(result.success, false,
++      'deferred withdrawal should preserve raw mutation success');
++    t.equal(result.accepted, true,
++      'deferred owner contract should still be accepted');
++    t.equal(result.withdrawalDeferred, true,
++      'deferred owner contract should stay visible to diagnostics');
++    t.equal(result.contractState, 'deferred');
++    t.equal(result.nextAction, 'retry');
++    t.equal(result.outcome, CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY);
++    t.equal(result.retryAfterMs, TIME_MS.SECOND);
++    t.equal(updateCalls.length, NUM.TWO,
++      'best-effort endpoint withdrawal can still run after deferred node write');
++  },
++);
+diff --git a/test/control-plane/membership-publication-coordinator-main-stage-2b.js b/test/control-plane/membership-publication-coordinator-main-stage-2b.js
+index ee773702..96c97b96 100644
+--- a/test/control-plane/membership-publication-coordinator-main-stage-2b.js
++++ b/test/control-plane/membership-publication-coordinator-main-stage-2b.js
+@@ -107,6 +107,15 @@ const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_REASON_A =
+ const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_REASON_B =
+   'ready-node-handoff-b';
+ const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NEWER_EPOCH = 43;
++const PUBLICATION_CONVERGENCE_EXCLUDED_NODE_ID = 'node-excluded';
++const PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS = Object.freeze([
++  'node-retained-a',
++  'node-retained-b',
++]);
++const PUBLICATION_CONVERGENCE_EXCLUSION_TARGET_NODE_IDS = Object.freeze([
++  PUBLICATION_CONVERGENCE_EXCLUDED_NODE_ID,
++  ...PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS,
++].sort((left, right) => left.localeCompare(right)));
+ const PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_OTHER_OWNER_KEY =
+   'membership-publication:other-cluster';
+ const PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_BOUND = 1;
+@@ -341,6 +350,7 @@ test('enqueueClusterMembershipReconcile merges pending explicit handoff targets'
+     );
+ 
+     const mergedContext = pending.get(ownerKey)?.context;
++    const ownerQueueDepth = coordinator.getControlPlaneOwnerQueueDepth();
+     t.equal(
+       enqueued.length,
+       2,
+@@ -361,6 +371,17 @@ test('enqueueClusterMembershipReconcile merges pending explicit handoff targets'
+       [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS],
+       'pending context should union explicit acknowledged nodes',
+     );
++    t.match(
++      ownerQueueDepth,
++      {
++        ownerKey,
++        pendingWrites: 1,
++        pendingKeys: [ownerKey],
++        retryingKeys: [],
++        inFlightKeys: [],
++      },
++      'owner queue depth should expose the pending membership publication reconcile',
++    );
+     t.equal(
+       mergedContext?.latestPublicationRow?.publication_epoch,
+       PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NEWER_EPOCH,
+@@ -503,6 +524,210 @@ test('enqueueClusterMembershipReconcile lets handoff-only owner wake clear stale
+     );
+   });
+ 
++test('enqueueClusterMembershipReconcile applies explicit node exclusions to merged targets',
++  async (t) => {
++    const pending = new Map();
++    const reconcileQueue = {
++      pending,
++      has(ownerKey) {
++        return pending.has(ownerKey);
++      },
++      get size() {
++        return pending.size;
++      },
++      enqueue(ownerKey, _reason, context) {
++        const pendingEntry = pending.get(ownerKey);
++        if (pendingEntry) {
++          pendingEntry.context = context;
++          return false;
++        }
++        pending.set(ownerKey, {context});
++        return true;
++      },
++    };
++    const coordinator = new MembershipPublicationCoordinator({
++      nodeId: PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS[0],
++      reconcileQueue,
++    });
++    const ownerKey = coordinator.buildOwnerKey();
++    pending.set(ownerKey, {
++      context: {
++        publicationActiveGateHandoff: {
++          expectedNodeIds: [
++            ...PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS,
++            PUBLICATION_CONVERGENCE_EXCLUDED_NODE_ID,
++          ],
++          expectedNodeCount:
++            PUBLICATION_CONVERGENCE_EXCLUSION_TARGET_NODE_IDS.length,
++          publishedActiveNodeIds: [
++            ...PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS,
++            PUBLICATION_CONVERGENCE_EXCLUDED_NODE_ID,
++          ],
++          publishedActiveNodeCount:
++            PUBLICATION_CONVERGENCE_EXCLUSION_TARGET_NODE_IDS.length,
++          missingPublishedNodeIds: [PUBLICATION_CONVERGENCE_EXCLUDED_NODE_ID],
++          missingPublishedCount: 1,
++          pendingRecoveryNodeIds: [
++            ...PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS,
++            PUBLICATION_CONVERGENCE_EXCLUDED_NODE_ID,
++          ],
++          pendingRecoveryCount:
++            PUBLICATION_CONVERGENCE_EXCLUSION_TARGET_NODE_IDS.length,
++          pendingReconcileNodeIds: [
++            ...PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS,
++            PUBLICATION_CONVERGENCE_EXCLUDED_NODE_ID,
++          ],
++          pendingReconcileCount:
++            PUBLICATION_CONVERGENCE_EXCLUSION_TARGET_NODE_IDS.length,
++        },
++        publishedActiveNodeIds: [
++          ...PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS,
++          PUBLICATION_CONVERGENCE_EXCLUDED_NODE_ID,
++        ],
++        requiredAckNodeIds: [
++          ...PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS,
++          PUBLICATION_CONVERGENCE_EXCLUDED_NODE_ID,
++        ],
++        acknowledgedNodeIds: [
++          ...PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS,
++          PUBLICATION_CONVERGENCE_EXCLUDED_NODE_ID,
++        ],
++      },
++    });
++
++    coordinator.enqueueClusterMembershipReconcile(
++      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_REASON_B,
++      {
++        excludedNodeIds: [PUBLICATION_CONVERGENCE_EXCLUDED_NODE_ID],
++      },
++    );
++
++    const mergedContext = pending.get(ownerKey)?.context;
++    t.same(
++      mergedContext?.excludedNodeIds,
++      [PUBLICATION_CONVERGENCE_EXCLUDED_NODE_ID],
++      'merged context should retain explicit node exclusion evidence',
++    );
++    t.same(
++      mergedContext?.publishedActiveNodeIds,
++      [...PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS],
++      'excluded node should be removed from merged published targets',
++    );
++    t.same(
++      mergedContext?.requiredAckNodeIds,
++      [...PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS],
++      'excluded node should be removed from merged required ACK targets',
++    );
++    t.same(
++      mergedContext?.acknowledgedNodeIds,
++      [...PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS],
++      'excluded node should be removed from merged acknowledged targets',
++    );
++    t.same(
++      mergedContext?.publicationActiveGateHandoff?.pendingReconcileNodeIds,
++      [...PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS],
++      'excluded node should be removed from nested handoff reconcile debt',
++    );
++    t.equal(
++      mergedContext?.publicationActiveGateHandoff?.pendingReconcileCount,
++      PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS.length,
++      'nested handoff reconcile debt count should match filtered nodes',
++    );
++    t.same(
++      mergedContext?.publicationActiveGateHandoff?.pendingRecoveryNodeIds,
++      [...PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS],
++      'excluded node should be removed from nested handoff recovery debt',
++    );
++    t.equal(
++      mergedContext?.publicationActiveGateHandoff?.pendingRecoveryCount,
++      PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS.length,
++      'nested handoff recovery debt count should match filtered nodes',
++    );
++    t.same(
++      mergedContext?.publicationActiveGateHandoff?.missingPublishedNodeIds,
++      [],
++      'excluded node should be removed from nested missing publication debt',
++    );
++    t.equal(
++      mergedContext?.publicationActiveGateHandoff?.missingPublishedCount,
++      0,
++      'nested missing publication debt count should match filtered nodes',
++    );
++  });
++
++test('enqueueClusterMembershipReconcile lets fresh explicit targets clear stale exclusions',
++  async (t) => {
++    const pending = new Map();
++    const reconcileQueue = {
++      pending,
++      has(ownerKey) {
++        return pending.has(ownerKey);
++      },
++      get size() {
++        return pending.size;
++      },
++      enqueue(ownerKey, _reason, context) {
++        const pendingEntry = pending.get(ownerKey);
++        if (pendingEntry) {
++          pendingEntry.context = context;
++          return false;
++        }
++        pending.set(ownerKey, {context});
++        return true;
++      },
++    };
++    const coordinator = new MembershipPublicationCoordinator({
++      nodeId: PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS[0],
++      reconcileQueue,
++    });
++    const ownerKey = coordinator.buildOwnerKey();
++    pending.set(ownerKey, {
++      context: {
++        excludedNodeIds: [PUBLICATION_CONVERGENCE_EXCLUDED_NODE_ID],
++      },
++    });
++
++    coordinator.enqueueClusterMembershipReconcile(
++      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_REASON_B,
++      {
++        publishedActiveNodeIds: [
++          ...PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS,
++          PUBLICATION_CONVERGENCE_EXCLUDED_NODE_ID,
++        ],
++        requiredAckNodeIds: [
++          ...PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS,
++          PUBLICATION_CONVERGENCE_EXCLUDED_NODE_ID,
++        ],
++        acknowledgedNodeIds: [
++          ...PUBLICATION_CONVERGENCE_EXCLUSION_RETAINED_NODE_IDS,
++          PUBLICATION_CONVERGENCE_EXCLUDED_NODE_ID,
++        ],
++      },
++    );
++
++    const mergedContext = pending.get(ownerKey)?.context;
++    t.equal(
++      Object.hasOwn(mergedContext, 'excludedNodeIds'),
++      false,
++      'fresh explicit target should clear stale node exclusion evidence',
++    );
++    t.same(
++      mergedContext?.publishedActiveNodeIds,
++      [...PUBLICATION_CONVERGENCE_EXCLUSION_TARGET_NODE_IDS],
++      'fresh explicit published target should survive stale exclusion',
++    );
++    t.same(
++      mergedContext?.requiredAckNodeIds,
++      [...PUBLICATION_CONVERGENCE_EXCLUSION_TARGET_NODE_IDS],
++      'fresh explicit ACK target should survive stale exclusion',
++    );
++    t.same(
++      mergedContext?.acknowledgedNodeIds,
++      [...PUBLICATION_CONVERGENCE_EXCLUSION_TARGET_NODE_IDS],
++      'fresh explicit acknowledged target should survive stale exclusion',
++    );
++  });
++
+ test('enqueueClusterMembershipReconcile merges retrying explicit handoff targets',
+   async (t) => {
+     const pending = new Map();
+@@ -741,6 +966,19 @@ test('enqueueClusterMembershipReconcile preserves retryable owner drain ' +
+     },
+     'owner queue retry state should classify the distributed participant failure',
+   );
++  t.match(
++    coordinator.getControlPlaneOwnerQueueDepth(),
++    {
++      ownerKey,
++      pendingWrites: PUBLICATION_CONVERGENCE_OWNER_QUEUE_RETRYING_COUNT,
++      retainedBacklogGrowthCount:
++        PUBLICATION_CONVERGENCE_OWNER_QUEUE_RETRYING_COUNT,
++      retryingKeys: [ownerKey],
++      retryableDrainFailureCount:
++        PUBLICATION_CONVERGENCE_OWNER_QUEUE_RETRYING_COUNT,
++    },
++    'owner queue depth should expose retrying handoff reconcile work',
++  );
+   t.same(
+     observedContexts[0]?.publishedActiveNodeIds,
+     [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS],
+@@ -1234,4 +1472,3 @@ test('deriveMembershipPublicationCandidate does not block recovery-eligible prom
+       'promoted members with open recovery epochs should remain marked as catching_up until convergence closes',
+     );
+   });
+-
+diff --git a/test/distributed/harness/__tests__/cluster-part-6-core-05-test-cases.js b/test/distributed/harness/__tests__/cluster-part-6-core-05-test-cases.js
+index 230fa957..b3bc82dd 100644
+--- a/test/distributed/harness/__tests__/cluster-part-6-core-05-test-cases.js
++++ b/test/distributed/harness/__tests__/cluster-part-6-core-05-test-cases.js
+@@ -330,6 +330,46 @@ export function registerClusterPart6Core05Tests(context) {
+     },
+   );
+ 
++  test(
++    'Unit: critical system spread probes preserve a late timeout floor',
++    async () => {
++      const cluster = createCluster({
++        size: 1,
++        docker: {socketPath: '/var/run/docker.sock'},
++        image: 'distributed-db:test',
++      });
++      const capturedTimeouts = [];
++      const capturedLanes = [];
++      cluster._nodes = new Map([['seed-a', {
++        id: 'seed-a',
++        role: NODE_ROLES.SEED,
++        async queryWithTimeout(sql, _params, options = {}) {
++          assert.match(
++            sql,
++            /service_discovery_local\('replica_operations'\)/,
++          );
++          capturedTimeouts.push(options.timeoutMs);
++          capturedLanes.push(options.lane);
++          return buildCriticalSystemDiscoverySnapshot(['seed-a'], Date.now());
++        },
++      }]]);
++
++      const result = await cluster._probeCriticalSystemTableDistribution(
++        Date.now() - 1,
++        'replica_operations',
++        1,
++      );
++
++      assert.equal(result.ready, true);
++      assert.equal(capturedTimeouts.length, 1);
++      assert.ok(
++        capturedTimeouts[0] >= 100,
++        'late critical spread probe should not collapse to a 1ms timeout',
++      );
++      assert.equal(capturedLanes[0], 'snapshot');
++    },
++  );
++
+   test(
+     'Unit: waitForControlPlaneQuiescence timeout diagnostics include critical system spread gaps',
+     async () => {
+diff --git a/test/distributed/harness/cluster-segment-7-class-5.js b/test/distributed/harness/cluster-segment-7-class-5.js
+index 70648229..bb68e1a2 100644
+--- a/test/distributed/harness/cluster-segment-7-class-5.js
++++ b/test/distributed/harness/cluster-segment-7-class-5.js
+@@ -112,6 +112,23 @@ function resolveLoadRemainingWitnessSnapshotTimeoutMs(result = null) {
+     MIN_TIMEOUT_MS;
+ }
+ 
++function resolveQuiescenceSequentialProbeTimeoutMs(
++  deadline,
++  remainingProbeCount,
++  maxTimeoutMs,
++) {
++  const fairShareTimeoutMs = resolveSequentialProbeTimeoutMs(
++    deadline,
++    remainingProbeCount,
++    maxTimeoutMs,
++  );
++  const lateProbeTimeoutFloorMs = Math.min(
++    Math.max(MIN_TIMEOUT_MS, Math.floor(maxTimeoutMs || MIN_TIMEOUT_MS)),
++    CONTROL_SNAPSHOT_LATE_PROBE_TIMEOUT_FLOOR_MS,
++  );
++  return Math.max(fairShareTimeoutMs, lateProbeTimeoutFloorMs);
++}
++
+ class Cluster5 extends Cluster4 {
+   async _probeControlSnapshotCoverage(
+     deadline,
+@@ -977,7 +994,7 @@ class Cluster5 extends Cluster4 {
+     let selectedSnapshot = null;
+     let lastError = null;
+     for (const [index, node] of nodes.entries()) {
+-      const snapshotTimeoutMs = resolveSequentialProbeTimeoutMs(
++      const snapshotTimeoutMs = resolveQuiescenceSequentialProbeTimeoutMs(
+         deadline,
+         nodes.length - index,
+         CONTROL_SNAPSHOT_PROBE_TIMEOUT_MS,
+@@ -1155,7 +1172,7 @@ class Cluster5 extends Cluster4 {
+     let selectedSummary = null;
+     let lastError = null;
+     for (const [index, node] of nodes.entries()) {
+-      const timeoutMs = resolveSequentialProbeTimeoutMs(
++      const timeoutMs = resolveQuiescenceSequentialProbeTimeoutMs(
+         deadline,
+         nodes.length - index,
+         CONTROL_SNAPSHOT_PROBE_TIMEOUT_MS,
+diff --git a/src/bootstrap/join-cleanup-publication-context.js b/src/bootstrap/join-cleanup-publication-context.js
+new file mode 100644
+index 00000000..623b599f
+--- /dev/null
++++ b/src/bootstrap/join-cleanup-publication-context.js
+@@ -0,0 +1,110 @@
++import {NUM, TYPEOF} from '../constants/index.js';
++import {
++  JOINING_CLEANUP_STEP,
++} from './node-joining-constants.js';
++
++const JOIN_CLEANUP_MEMBERSHIP_PUBLICATION_CONTEXT = Object.freeze({
++  ACKNOWLEDGED_NODE_IDS: 'acknowledgedNodeIds',
++  CLEANUP_STEP: JOINING_CLEANUP_STEP.QUERYING_STATE,
++  EXCLUDED_NODE_IDS: 'excludedNodeIds',
++  LATEST_PUBLICATION_ROW: 'latestPublicationRow',
++  PUBLISHED_ACTIVE_NODE_IDS: 'publishedActiveNodeIds',
++  REQUIRED_ACK_NODE_IDS: 'requiredAckNodeIds',
++});
++
++function resolveJoinCleanupRegisteredNodeId(cleanupContext, nodeId) {
++  if (
++    typeof cleanupContext?.registeredNodeId === TYPEOF.STRING &&
++    cleanupContext.registeredNodeId.length > NUM.ZERO
++  ) {
++    return cleanupContext.registeredNodeId;
++  }
++  return typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO ?
++    nodeId :
++    null;
++}
++
++function normalizeCleanupNodeIdList(value) {
++  return [...new Set((Array.isArray(value) ? value : [])
++    .filter((nodeId) =>
++      typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
++    ))].sort();
++}
++
++function resolvePublicationRowNodeIds(publicationRow, fieldName) {
++  if (!publicationRow || typeof publicationRow !== TYPEOF.OBJECT) {
++    return [];
++  }
++  const snakeFieldName = fieldName.replace(
++    /[A-Z]/g,
++    (match) => `_${match.toLowerCase()}`,
++  );
++  return normalizeCleanupNodeIdList(
++    Array.isArray(publicationRow[fieldName]) ?
++      publicationRow[fieldName] :
++      publicationRow[snakeFieldName],
++  );
++}
++
++function resolveLatestMembershipPublicationRow(membershipPublicationService) {
++  if (
++    typeof membershipPublicationService?.getLatestPublicationRowSync ===
++      TYPEOF.FUNCTION
++  ) {
++    return membershipPublicationService.getLatestPublicationRowSync();
++  }
++  if (
++    typeof membershipPublicationService?.getLatestClusterPublicationSync ===
++      TYPEOF.FUNCTION
++  ) {
++    return membershipPublicationService.getLatestClusterPublicationSync();
++  }
++  return null;
++}
++
++function buildFailedJoinMembershipPublicationContext(options = {}) {
++  const latestPublicationRow =
++    resolveLatestMembershipPublicationRow(options.membershipPublicationService);
++  const registeredNodeId = options.registeredNodeId;
++  const publishedActiveNodeIds =
++    resolvePublicationRowNodeIds(
++      latestPublicationRow,
++      JOIN_CLEANUP_MEMBERSHIP_PUBLICATION_CONTEXT
++        .PUBLISHED_ACTIVE_NODE_IDS,
++    ).filter((nodeId) => nodeId !== registeredNodeId);
++  const acknowledgedNodeIds =
++    resolvePublicationRowNodeIds(
++      latestPublicationRow,
++      JOIN_CLEANUP_MEMBERSHIP_PUBLICATION_CONTEXT
++        .ACKNOWLEDGED_NODE_IDS,
++    ).filter((nodeId) => nodeId !== registeredNodeId);
++  const targetContext = {
++    nodeId: options.nodeId,
++    registeredNodeId,
++    cleanupStep:
++      JOIN_CLEANUP_MEMBERSHIP_PUBLICATION_CONTEXT.CLEANUP_STEP,
++    [JOIN_CLEANUP_MEMBERSHIP_PUBLICATION_CONTEXT.EXCLUDED_NODE_IDS]:
++      [registeredNodeId],
++  };
++  if (publishedActiveNodeIds.length === NUM.ZERO) {
++    return targetContext;
++  }
++  return {
++    ...targetContext,
++    [JOIN_CLEANUP_MEMBERSHIP_PUBLICATION_CONTEXT.LATEST_PUBLICATION_ROW]:
++      latestPublicationRow,
++    [JOIN_CLEANUP_MEMBERSHIP_PUBLICATION_CONTEXT.PUBLISHED_ACTIVE_NODE_IDS]:
++      publishedActiveNodeIds,
++    [JOIN_CLEANUP_MEMBERSHIP_PUBLICATION_CONTEXT.REQUIRED_ACK_NODE_IDS]:
++      publishedActiveNodeIds,
++    [JOIN_CLEANUP_MEMBERSHIP_PUBLICATION_CONTEXT.ACKNOWLEDGED_NODE_IDS]:
++      acknowledgedNodeIds.length > NUM.ZERO ?
++        acknowledgedNodeIds :
++        publishedActiveNodeIds,
++  };
++}
++
++export {
++  buildFailedJoinMembershipPublicationContext,
++  resolveJoinCleanupRegisteredNodeId,
++};

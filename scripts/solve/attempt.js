@@ -10,10 +10,12 @@ import {inspectChangeArtifact} from './change-artifact.js';
 import {analyzeScopePressure} from './scope-pressure.js';
 import {scopeTerminalStatus} from './convergence-guards.js';
 import {analyzeQuestHealth} from './health.js';
+import {continuationIsAllowed} from './continuation.js';
 import {
-  continuationErrorMessage,
-  continuationIsAllowed,
-} from './continuation.js';
+  resolveGateDecision,
+  gateDecisionToStepResult,
+  theoryGateContinuation,
+} from './gate.js';
 
 export function runAttemptCommand(root, args) {
   const questId = args.id;
@@ -51,7 +53,13 @@ export function runAttemptCommand(root, args) {
     phase: 'begin',
   });
   if (readinessProblems.length > 0) {
-    throw new Error(`theory gate failed: ${readinessProblems.join('; ')}`);
+    const decision = resolveGateDecision(
+      root,
+      quest,
+      theoryGateContinuation(readinessProblems),
+      {log, frontier: frontierId, rungIndex: fState.rungIndex},
+    );
+    return {...gateDecisionToStepResult(decision), blocked: true};
   }
   const health = analyzeQuestHealth(root, quest, {
     state,
@@ -60,7 +68,12 @@ export function runAttemptCommand(root, args) {
     },
   });
   if (!continuationIsAllowed(health.continuation)) {
-    throw new Error(continuationErrorMessage(health.continuation));
+    const decision = resolveGateDecision(root, quest, health.continuation, {
+      log,
+      frontier: frontierId,
+      rungIndex: fState.rungIndex,
+    });
+    return {...gateDecisionToStepResult(decision), blocked: true};
   }
 
   const ctx = makeRunContext({

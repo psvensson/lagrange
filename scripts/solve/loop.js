@@ -34,6 +34,7 @@ import {
   OUTCOME_EXHAUSTED,
   OUTCOME_MAX_CYCLES,
   OUTCOME_THEORY_REQUIRED,
+  OUTCOME_BLOCKED,
 } from './constants.js';
 import {appendEvent, readLog, projectState, rebuildState, invariantHighWater} from './store.js';
 import {frontierHasValidSample} from './sample-validity.js';
@@ -59,9 +60,10 @@ import {scopeTerminalStatus} from './convergence-guards.js';
 import {analyzeQuestHealth} from './health.js';
 import {
   CONTINUATION_BLOCKED_THEORY,
-  continuationErrorMessage,
   continuationIsAllowed,
+  unrecordedEvidenceContinuation,
 } from './continuation.js';
+import {resolveGateDecision, theoryGateContinuation} from './gate.js';
 import {
   metricKindFromProbeSpec,
   probeSpecFromIdentity,
@@ -96,6 +98,7 @@ function ensureDeclared(root, quest) {
 const NON_TERMINAL_STOPS = Object.freeze([
   OUTCOME_MAX_CYCLES,
   OUTCOME_THEORY_REQUIRED,
+  OUTCOME_BLOCKED,
 ]);
 
 function finish(root, quest, outcome, evidence, evidenceIdentity = null,
@@ -164,11 +167,19 @@ function applyAttempt(root, quest, ctx, pick, before) {
       rungIndex,
       violations: readinessProblems,
     });
+    const decision = resolveGateDecision(
+      root,
+      quest,
+      theoryGateContinuation(readinessProblems),
+      {log, frontier: pick.def.id, rungIndex},
+    );
     return {
-      terminal: OUTCOME_THEORY_REQUIRED,
+      terminal: decision.outcome,
       evidence: null,
       frontier: pick.def.id,
       problems: readinessProblems,
+      disposition: decision.disposition,
+      nextCommand: decision.nextCommand,
     };
   }
   const priorAttempts = log.filter((e) =>
@@ -476,12 +487,19 @@ export function runLoop(root, quest, options = {}) {
     kind: 'frontier',
   });
   if (unrecorded) {
-    throw new Error(
-      'UNRECORDED_EVIDENCE: latest probe evidence is newer than Quest memory. ' +
-      'Ingest it first:\n' +
-      `  node scripts/solve.js ingest-evidence --id ${quest.id} ` +
-      `--frontier ${unrecorded.frontier} --evidence ${unrecorded.evidence}`,
+    const decision = resolveGateDecision(
+      root,
+      quest,
+      unrecordedEvidenceContinuation(unrecorded),
+      {log: readLog(root, quest.id), frontier: unrecorded.frontier},
     );
+    return {
+      ...finish(root, quest, decision.outcome, null),
+      frontier: unrecorded.frontier,
+      problems: decision.problems,
+      disposition: decision.disposition,
+      nextCommand: decision.nextCommand,
+    };
   }
 
   const maxCycles = Number.isInteger(options.maxCycles) ? options.maxCycles : 1000;
@@ -506,13 +524,24 @@ export function runLoop(root, quest, options = {}) {
             rungIndex: executionHealth.rungIndex,
             violations: executionHealth.continuation.problems,
           });
-          return {
-            ...finish(root, quest, OUTCOME_THEORY_REQUIRED, null),
-            frontier: executionHealth.frontier,
-            problems: executionHealth.continuation.problems,
-          };
         }
-        throw new Error(continuationErrorMessage(executionHealth.continuation));
+        const decision = resolveGateDecision(
+          root,
+          quest,
+          executionHealth.continuation,
+          {
+            log: readLog(root, quest.id),
+            frontier: executionHealth.frontier,
+            rungIndex: executionHealth.rungIndex,
+          },
+        );
+        return {
+          ...finish(root, quest, decision.outcome, null),
+          frontier: executionHealth.frontier,
+          problems: executionHealth.continuation.problems,
+          disposition: decision.disposition,
+          nextCommand: decision.nextCommand,
+        };
       }
     }
     const {
@@ -522,6 +551,8 @@ export function runLoop(root, quest, options = {}) {
       evidenceFingerprint,
       problems,
       frontier,
+      disposition,
+      nextCommand,
     } = runOneCycle(root, quest, ctx);
     if (terminal === OUTCOME_SOLVED) {
       const result = finish(
@@ -542,11 +573,13 @@ export function runLoop(root, quest, options = {}) {
       result.commit = autoCommitQuest(root, quest.id, {push: options.push});
       return result;
     }
-    if (terminal === OUTCOME_THEORY_REQUIRED) {
+    if (terminal === OUTCOME_THEORY_REQUIRED || terminal === OUTCOME_BLOCKED) {
       return {
-        ...finish(root, quest, OUTCOME_THEORY_REQUIRED, evidence),
+        ...finish(root, quest, terminal, evidence),
         frontier,
         problems,
+        disposition,
+        nextCommand,
       };
     }
   }

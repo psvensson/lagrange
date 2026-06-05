@@ -1,0 +1,290 @@
+diff --git a/src/admin/admin-control-snapshot-class-part-6.js b/src/admin/admin-control-snapshot-class-part-6.js
+index d5e31226..e119ad88 100644
+--- a/src/admin/admin-control-snapshot-class-part-6.js
++++ b/src/admin/admin-control-snapshot-class-part-6.js
+@@ -312,6 +312,15 @@ function enqueueMembershipPublicationReconcileFallback(
+     called: true,
+   });
+ }
++function resolveMembershipPublicationHandoffRetryAfterMs(...values) {
++  for (const value of values) {
++    const retryAfterMs = Number(value);
++    if (Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO) {
++      return Math.floor(retryAfterMs);
++    }
++  }
++  return undefined;
++}
+ function isMembershipPublicationService(value) {
+   return value && typeof value === TYPEOF.OBJECT;
+ }
+@@ -357,15 +366,19 @@ async function maybeReconcileAuthoritativeMembershipPublication(
+       if (!membershipPublicationService) {
+         const recoveryWaitReason =
+           MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_REASON_OWNER_RECOVERY_WAIT_SERVICE_UNAVAILABLE;
++        const controlPlaneConvergence =
++          buildMembershipPublicationHandoffControlPlaneConvergence({
++            reasonCode: recoveryWaitReason,
++          });
+         return buildMembershipPublicationHandoffOutcome(
+           MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_STATE.WRITE_DEFERRED,
+           {
+             target: membershipPublicationTarget,
+             reasonCode: recoveryWaitReason,
+-            controlPlaneConvergence:
+-              buildMembershipPublicationHandoffControlPlaneConvergence({
+-                reasonCode: recoveryWaitReason,
+-              }),
++            retryAfterMs: resolveMembershipPublicationHandoffRetryAfterMs(
++              controlPlaneConvergence?.retryAfterMs,
++            ),
++            controlPlaneConvergence,
+           },
+         );
+       }
+@@ -381,6 +394,9 @@ async function maybeReconcileAuthoritativeMembershipPublication(
+           reasonCode: resolveOwnerRecoveryWaitHandoffReasonCode(
+             enqueueOutcome,
+           ),
++          retryAfterMs: resolveMembershipPublicationHandoffRetryAfterMs(
++            enqueueOutcome.controlPlaneConvergence?.retryAfterMs,
++          ),
+           controlPlaneConvergence:
+             enqueueOutcome.controlPlaneConvergence,
+         },
+@@ -400,6 +416,8 @@ async function maybeReconcileAuthoritativeMembershipPublication(
+     );
+   }
+   if (!membershipPublicationService) {
++    const controlPlaneConvergence =
++      buildMembershipPublicationHandoffControlPlaneConvergence();
+     return membershipPublicationTarget.reconcileRequired === true ?
+       buildMembershipPublicationHandoffOutcome(
+         MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_STATE.WRITE_DEFERRED,
+@@ -407,8 +425,10 @@ async function maybeReconcileAuthoritativeMembershipPublication(
+           target: membershipPublicationTarget,
+           reasonCode:
+             MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_REASON_SERVICE_UNAVAILABLE,
+-          controlPlaneConvergence:
+-            buildMembershipPublicationHandoffControlPlaneConvergence(),
++          retryAfterMs: resolveMembershipPublicationHandoffRetryAfterMs(
++            controlPlaneConvergence?.retryAfterMs,
++          ),
++          controlPlaneConvergence,
+         },
+       ) :
+       MEMBERSHIP_PUBLICATION_HANDOFF_ABSENT_OUTCOME;
+@@ -429,6 +449,9 @@ async function maybeReconcileAuthoritativeMembershipPublication(
+         target: membershipPublicationTarget,
+         enqueued: enqueueOutcome.accepted,
+         reasonCode: enqueueOutcome.reasonCode,
++        retryAfterMs: resolveMembershipPublicationHandoffRetryAfterMs(
++          enqueueOutcome.controlPlaneConvergence?.retryAfterMs,
++        ),
+         controlPlaneConvergence:
+           enqueueOutcome.controlPlaneConvergence,
+       },
+@@ -458,6 +481,9 @@ async function maybeReconcileAuthoritativeMembershipPublication(
+         target: membershipPublicationTarget,
+         enqueued: true,
+         reasonCode: enqueueOutcome.reasonCode,
++        retryAfterMs: resolveMembershipPublicationHandoffRetryAfterMs(
++          enqueueOutcome.controlPlaneConvergence?.retryAfterMs,
++        ),
+         controlPlaneConvergence:
+           enqueueOutcome.controlPlaneConvergence,
+       },
+diff --git a/src/admin/admin-control-snapshot-publication-handoff.js b/src/admin/admin-control-snapshot-publication-handoff.js
+index 14e55013..9229c3a9 100644
+--- a/src/admin/admin-control-snapshot-publication-handoff.js
++++ b/src/admin/admin-control-snapshot-publication-handoff.js
+@@ -266,6 +266,19 @@ function normalizeControlSnapshotRetryAfterMs(value) {
+     Math.floor(numericValue) :
+     null;
+ }
++function selectMembershipPublicationHandoffOutcomeRetryAfterMs(outcome = null) {
++  return normalizeControlSnapshotRetryAfterMs(
++    outcome?.[
++      CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_DATA_FIELD
++        .RETRY_AFTER_MS
++    ],
++  ) ||
++    normalizeControlSnapshotRetryAfterMs(
++      outcome?.[CONTROL_SNAPSHOT_CONTROL_PLANE_CONVERGENCE_FIELD]?.[
++        CONTROL_SNAPSHOT_RETRY_AFTER_MS_FIELD
++      ],
++    );
++}
+ 
+ function isControlSnapshotOwnerRecoveryWakeOutcome(outcome = null) {
+   const controlPlaneConvergence =
+@@ -302,6 +315,8 @@ function isControlSnapshotOwnerRecoveryWakeOutcome(outcome = null) {
+ 
+ function selectMembershipPublicationHandoffRetryAfterMs(snapshot = null) {
+   const outcome = selectMembershipPublicationHandoffOutcome(snapshot);
++  const retryAfterMs =
++    selectMembershipPublicationHandoffOutcomeRetryAfterMs(outcome);
+   if (
+     !outcome ||
+     typeof outcome !== TYPEOF.OBJECT ||
+@@ -316,22 +331,13 @@ function selectMembershipPublicationHandoffRetryAfterMs(snapshot = null) {
+         CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_DATA_FIELD
+           .ENQUEUED
+       ] === true &&
+-      isControlSnapshotOwnerRecoveryWakeOutcome(outcome) !== true
++      isControlSnapshotOwnerRecoveryWakeOutcome(outcome) !== true &&
++      retryAfterMs === null
+     )
+   ) {
+     return CONTROL_SNAPSHOT_ABSENT_HANDOFF_RETRY_AFTER_MS;
+   }
+-  return normalizeControlSnapshotRetryAfterMs(
+-    outcome[
+-      CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_DATA_FIELD
+-        .RETRY_AFTER_MS
+-    ],
+-  ) ||
+-    normalizeControlSnapshotRetryAfterMs(
+-      outcome[CONTROL_SNAPSHOT_CONTROL_PLANE_CONVERGENCE_FIELD]?.[
+-        CONTROL_SNAPSHOT_RETRY_AFTER_MS_FIELD
+-      ],
+-    );
++  return retryAfterMs;
+ }
+ 
+ function buildControlSnapshotHandoffRetryOptions(
+diff --git a/test/admin/admin-control-snapshot-deferred-refresh-membership-observation-test-cases.js b/test/admin/admin-control-snapshot-deferred-refresh-membership-observation-test-cases.js
+index 128b7d13..d3d3e7a9 100644
+--- a/test/admin/admin-control-snapshot-deferred-refresh-membership-observation-test-cases.js
++++ b/test/admin/admin-control-snapshot-deferred-refresh-membership-observation-test-cases.js
+@@ -1043,13 +1043,15 @@ test('AdminControlSnapshot no-attempt path still triggers publication owner comm
+       result,
+       {
+         snapshotObservation: {
+-          state: 'stale_usable',
+-          contractState: 'pending',
+-          nextAction: 'wait',
++          state: 'deferred_refresh',
++          contractState: 'deferred',
++          nextAction: 'retry',
++          retryAfterMs:
++            ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_OWNER_RETRY_AFTER_MS,
+         },
+         observationMode: 'repair_deferred',
+       },
+-      'the no-attempt deferred path should keep the shared-owner stale outcome',
++      'the no-attempt deferred path should keep bounded owner-reconcile retry evidence',
+     );
+   });
+ 
+@@ -1351,6 +1353,8 @@ test('AdminControlSnapshot repair-deferred shared owner wakes recovery waits wit
+         enqueued: true,
+         reasonCode:
+           TEST_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_REASON_OWNER_RECOVERY_WAIT_ENQUEUED,
++        retryAfterMs:
++          ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_OWNER_RETRY_AFTER_MS,
+       },
+       'the deferred snapshot should surface an actionable owner recovery wake',
+     );
+diff --git a/test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js b/test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js
+index d13c3812..93992425 100644
+--- a/test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js
++++ b/test/admin/admin-control-snapshot-repair-handoff-outcome-test-cases.js
+@@ -11,6 +11,9 @@ import {
+   CONTROL_PLANE_CONVERGENCE_CLASS,
+   CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME,
+ } from '../../src/control-plane/control-plane-error-classification.js';
++import {
++  buildControlSnapshotHandoffRetryOptions,
++} from '../../src/admin/admin-control-snapshot-publication-handoff.js';
+ import {
+   buildTopologyConvergenceGraph,
+   buildTopologyConvergenceReplayFixture,
+@@ -38,6 +41,46 @@ const TEST_ACTIVE_GATE_HANDOFF_NEXT_ACTION_WAIT_OWNER_RECOVERY =
+ const TEST_AUTHORITATIVE_REPAIR_QUERY_TIMEOUT_DIVISOR = 2;
+ const TEST_AUTHORITATIVE_REPAIR_RETRY_AFTER_MS = 16000;
+ 
++test('AdminControlSnapshot preserves bounded retry for accepted owner reconcile handoff',
++  (t) => {
++    const retryOptions = buildControlSnapshotHandoffRetryOptions(
++      {
++        controlPlaneDiagnostics: {
++          membershipPublicationHandoffOutcome: {
++            state:
++              ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_OUTCOME_WRITE_DEFERRED,
++            reasonCode:
++              ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_OUTCOME_ENQUEUED_REASON,
++            enqueued: true,
++            controlPlaneConvergence: {
++              retryAfterMs:
++                ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_OWNER_RETRY_AFTER_MS,
++            },
++          },
++        },
++      },
++      {
++        repair: {
++          retryAfterMs: TEST_AUTHORITATIVE_REPAIR_RETRY_AFTER_MS,
++        },
++      },
++    );
++
++    t.match(
++      retryOptions,
++      {
++        retryAfterMs:
++          ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_OWNER_RETRY_AFTER_MS,
++        repair: {
++          retryAfterMs:
++            ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_OWNER_RETRY_AFTER_MS,
++        },
++      },
++      'accepted owner-reconcile enqueue should remain a bounded handoff retry',
++    );
++    t.end();
++  });
++
+ test('AdminControlSnapshot surfaces handoff owner outcome when repair is not selected',
+   async (t) => {
+     let observedHandoff = null;
+@@ -404,6 +447,8 @@ test('AdminControlSnapshot queues handoff reconcile when awaited owner reconcile
+         state: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_OUTCOME_WRITE_DEFERRED,
+         reasonCode: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_OUTCOME_ENQUEUED_REASON,
+         enqueued: true,
++        retryAfterMs:
++          ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_OWNER_RETRY_AFTER_MS,
+       },
+       'pressure-deferred fallback reconcile should return a structured queued owner outcome',
+     );
+@@ -498,6 +543,8 @@ test('AdminControlSnapshot queues handoff reconcile through SQL storage admissio
+         state: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_OUTCOME_WRITE_DEFERRED,
+         reasonCode: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_OUTCOME_ENQUEUED_REASON,
+         enqueued: true,
++        retryAfterMs:
++          ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_OWNER_RETRY_AFTER_MS,
+       },
+       'storage-admission runtime owner fallback should return the queued handoff outcome',
+     );
+@@ -560,6 +607,8 @@ test('AdminControlSnapshot returns handoff service-unavailable outcome when runt
+         reasonCode:
+           ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_OUTCOME_SERVICE_UNAVAILABLE,
+         enqueued: false,
++        retryAfterMs:
++          ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_OWNER_RETRY_AFTER_MS,
+         target: {
+           reconcileRequired: true,
+           publishedActiveNodeIds: [
+diff --git a/test/admin/admin-control-snapshot-repair-handoff-replay-outcome-test-cases.js b/test/admin/admin-control-snapshot-repair-handoff-replay-outcome-test-cases.js
+index 65410d76..27e35c54 100644
+--- a/test/admin/admin-control-snapshot-repair-handoff-replay-outcome-test-cases.js
++++ b/test/admin/admin-control-snapshot-repair-handoff-replay-outcome-test-cases.js
+@@ -626,7 +626,8 @@ export function registerAdminControlSnapshotRepairHandoffReplayOutcomeTestCases(
+             state: 'deferred_refresh',
+             contractState: 'deferred',
+             nextAction: 'retry',
+-            retryAfterMs: 12000,
++            retryAfterMs:
++              ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_OWNER_RETRY_AFTER_MS,
+           },
+           controlPlaneDiagnostics: {
+             ordinaryRepairDeferred:

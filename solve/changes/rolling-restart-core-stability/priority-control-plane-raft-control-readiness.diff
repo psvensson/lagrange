@@ -1,0 +1,314 @@
+diff --git a/src/raft/constants.js b/src/raft/constants.js
+index 32b5c2d0..83810069 100644
+--- a/src/raft/constants.js
++++ b/src/raft/constants.js
+@@ -4,7 +4,10 @@ import {
+   INITIAL_PARTITION_IDS,
+   SYSTEM_TABLE_NAME,
+ } from '../bootstrap/system-table-schemas-constants.js';
+-import {isCriticalTransportControlPlanePartition} from
++import {
++  isCriticalTransportControlPlanePartition,
++  isPriorityControlPlanePartition,
++} from
+   '../bootstrap/system-partition-classification.js';
+ import {ReplicaStatus} from '../rebalancer/replica-status.js';
+ 
+@@ -168,6 +171,24 @@ function resolvePriorityControlPlanePartitionId(packet = null) {
+     null;
+ }
+ 
++function resolvePriorityControlPlaneReadinessPartitionId(packet = null) {
++  const explicitTargetPartitionId = resolveExplicitTargetPartitionId(packet);
++  if (explicitTargetPartitionId) {
++    return isPriorityControlPlanePartition({
++      partitionId: explicitTargetPartitionId,
++    }) ?
++      explicitTargetPartitionId :
++      null;
++  }
++  const senderPartitionId = extractPartitionIdFromUnifiedAddress(packet?.address);
++  if (!senderPartitionId) {
++    return null;
++  }
++  return isPriorityControlPlanePartition({partitionId: senderPartitionId}) ?
++    senderPartitionId :
++    null;
++}
++
+ function resolveNormalizedTargetReplicaStatus(packet = null) {
+   const targetReplicaStatus = packet?.targetReplicaStatus;
+   if (typeof targetReplicaStatus !== LOCAL_STR_STRING) {
+@@ -260,6 +281,29 @@ function shouldUseBackgroundDeliveryForCriticalControlPlaneAppend(packet = null)
+     isBackgroundControlPlaneAppendPartition(packet);
+ }
+ 
++function isPriorityControlPlaneReadinessControlPacket(
++  packet = null,
++  packetType = null,
++) {
++  if (!resolvePriorityControlPlaneReadinessPartitionId(packet)) {
++    return false;
++  }
++  if (packetType === RAFT_PACKET_TYPE.APPEND_FAIL) {
++    return false;
++  }
++  if (
++    packetType === RAFT_PACKET_TYPE.APPEND &&
++    Array.isArray(packet?.data) &&
++    packet.data.length > LOCAL_NUM_ZERO
++  ) {
++    return false;
++  }
++  return packetType === RAFT_PACKET_TYPE.VOTE ||
++    packetType === RAFT_PACKET_TYPE.VOTED ||
++    packetType === RAFT_PACKET_TYPE.APPEND ||
++    packetType === RAFT_PACKET_TYPE.APPENDED;
++}
++
+ function isMessageGroupTargetAddress(packet = null) {
+   const targetAddress = resolveNormalizedTargetAddress(packet);
+   return (
+@@ -306,6 +350,17 @@ function resolveRaftTransportDeliveryOptions(packet = null) {
+   }
+   const isHeartbeatAppendPacket = isRaftHeartbeatAppendPacket(packet);
+   const explicitTargetPartitionId = resolveExplicitTargetPartitionId(packet);
++  // Priority control-plane consensus packets unblock readiness and must be able
++  // to use the same protected queue reserve as message-group control traffic.
++  if (isPriorityControlPlaneReadinessControlPacket(packet, packetType)) {
++    if (isHeartbeatAppendPacket) {
++      return buildHeartbeatAppendDeliveryOptions(
++        RAFT_TRANSPORT_READINESS_DELIVERY_OPTIONS,
++        packet,
++      );
++    }
++    return RAFT_TRANSPORT_READINESS_DELIVERY_OPTIONS;
++  }
+   if (resolvePriorityControlPlanePartitionId(packet)) {
+     if (shouldUseBackgroundDeliveryForCriticalControlPlaneAppend(packet)) {
+       return buildAppendEntriesDeliveryOptions(
+diff --git a/test/raft/message-group-readiness-delivery-priority.test.js b/test/raft/message-group-readiness-delivery-priority.test.js
+index 96365a30..a2241f6c 100644
+--- a/test/raft/message-group-readiness-delivery-priority.test.js
++++ b/test/raft/message-group-readiness-delivery-priority.test.js
+@@ -18,7 +18,10 @@ import {resolveRaftTransportDeliveryOptions} from '../../src/raft/constants.js';
+ import {OUTBOUND_DELIVERY_PRIORITY} from '../../src/constants/transport.js';
+ 
+ const MESSAGE_GROUP_TARGET = 'node-2/message-group/mg1-r1';
+-const PRIORITY_PARTITION_TARGET = 'node-2/partition/replica_operations-p1';
++const PRIORITY_PARTITION_TARGET =
++  'node-2/partition/replica_operations-p1-r2';
++const SQL_WRITE_PRIORITY_PARTITION_TARGET =
++  'node-2/partition/sql_write_operations-p1-r2';
+ const ORDINARY_PARTITION_TARGET = 'node-2/partition/users-p1';
+ 
+ test('message-group vote is routed to the READINESS lane', async (t) => {
+@@ -80,19 +83,78 @@ test('message-group data-bearing append is NOT routed to the READINESS lane', as
+   t.end();
+ });
+ 
+-test('priority control-plane partition vote keeps the CRITICAL lane', async (t) => {
++test('priority control-plane partition vote is routed to the READINESS lane',
++  async (t) => {
++    const options = resolveRaftTransportDeliveryOptions({
++      type: 'vote',
++      targetAddress: PRIORITY_PARTITION_TARGET,
++    });
++    t.equal(
++      options.deliveryPriority,
++      OUTBOUND_DELIVERY_PRIORITY.READINESS,
++      'priority partition consensus control traffic must use readiness reserve',
++    );
++    t.end();
++  });
++
++test('priority control-plane heartbeat append is routed to the READINESS lane',
++  async (t) => {
++    const options = resolveRaftTransportDeliveryOptions({
++      type: 'append',
++      data: [],
++      targetAddress: PRIORITY_PARTITION_TARGET,
++    });
++    t.equal(
++      options.deliveryPriority,
++      OUTBOUND_DELIVERY_PRIORITY.READINESS,
++      'priority partition heartbeat traffic must use readiness reserve',
++    );
++    t.equal(
++      options.deliverySource,
++      'raft:append:heartbeat',
++      'priority heartbeat traffic stamps the canonical delivery source',
++    );
++    t.equal(
++      options.replacePendingKey,
++      `raft:append:heartbeat:${PRIORITY_PARTITION_TARGET}`,
++      'priority heartbeat traffic remains coalesced by target',
++    );
++    t.end();
++  });
++
++test('priority sql-write vote is routed to the READINESS lane', async (t) => {
+   const options = resolveRaftTransportDeliveryOptions({
+     type: 'vote',
+-    targetAddress: PRIORITY_PARTITION_TARGET,
++    targetAddress: SQL_WRITE_PRIORITY_PARTITION_TARGET,
+   });
+   t.equal(
+     options.deliveryPriority,
+-    OUTBOUND_DELIVERY_PRIORITY.CRITICAL,
+-    'priority partition consensus is unchanged and stays critical',
++    OUTBOUND_DELIVERY_PRIORITY.READINESS,
++    'sql_write_operations consensus control traffic must use readiness reserve',
+   );
+   t.end();
+ });
+ 
++test('priority control-plane data-bearing append is NOT routed to the READINESS lane',
++  async (t) => {
++    const options = resolveRaftTransportDeliveryOptions({
++      type: 'append',
++      data: [{term: 1, index: 5}],
++      targetAddress: PRIORITY_PARTITION_TARGET,
++    });
++    t.not(
++      options.deliveryPriority,
++      OUTBOUND_DELIVERY_PRIORITY.READINESS,
++      'bulk priority control-plane replication must not consume readiness reserve',
++    );
++    t.equal(
++      options.deliveryPriority,
++      OUTBOUND_DELIVERY_PRIORITY.CRITICAL,
++      'active replica_operations append traffic remains critical',
++    );
++    t.end();
++  });
++
+ test('ordinary partition vote keeps the CRITICAL lane', async (t) => {
+   const options = resolveRaftTransportDeliveryOptions({
+     type: 'vote',
+diff --git a/test/raft/raft-transport-adapter.test.js b/test/raft/raft-transport-adapter.test.js
+index 02e4e61f..8a43cc2f 100644
+--- a/test/raft/raft-transport-adapter.test.js
++++ b/test/raft/raft-transport-adapter.test.js
+@@ -5,6 +5,7 @@ import {
+   RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS,
+   RAFT_TRANSPORT_DELIVERY_OPTIONS,
+ } from '../../src/raft/constants.js';
++import {OUTBOUND_DELIVERY_PRIORITY} from '../../src/constants/transport.js';
+ import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+ 
+ test('RaftTransportAdapter keeps append-entry replication off the critical lane',
+@@ -106,6 +107,113 @@ test('RaftTransportAdapter keeps heartbeat traffic on the critical lane',
+     );
+   });
+ 
++test('RaftTransportAdapter routes priority control-plane heartbeat traffic to ' +
++  'the readiness lane', async (t) => {
++  let receivedMessage = null;
++  let receivedOptions = null;
++  const messageRouter = {
++    async deliver(_address, message, options) {
++      receivedMessage = message;
++      receivedOptions = options;
++      return {acknowledged: true};
++    },
++  };
++  const adapter = new RaftTransportAdapter({
++    messageRouter,
++    entityType: 'partition',
++    nodeId: 'node-1',
++  });
++  const packet = {
++    type: RAFT_PACKET_TYPE.APPEND,
++    term: 7,
++    address: 'node-1/partition/replica_operations-p1-r1',
++    state: 'leader',
++    leader: 'replica_operations-p1-r1',
++    last: {index: 12, term: 7},
++    data: [],
++    destination: 'node-2/partition/replica_operations-p1-r2',
++  };
++
++  await new Promise((resolve, reject) => {
++    adapter.write(packet, (error) => {
++      if (error) {
++        reject(error);
++        return;
++      }
++      resolve();
++    });
++  });
++
++  t.equal(
++    receivedMessage?.type,
++    'RAFT_APPEND_ENTRIES',
++    'priority heartbeat keeps the append-entries transport message mapping',
++  );
++  t.equal(
++    receivedOptions?.deliveryPriority,
++    OUTBOUND_DELIVERY_PRIORITY.READINESS,
++    'priority control-plane heartbeat traffic should use readiness',
++  );
++  t.equal(
++    receivedOptions?.deliverySource,
++    'raft:append:heartbeat',
++    'priority heartbeat traffic should stamp one canonical delivery source',
++  );
++  t.equal(
++    receivedOptions?.replacePendingKey,
++    'raft:append:heartbeat:node-2/partition/replica_operations-p1-r2',
++    'priority heartbeat traffic should stamp one canonical replacement key',
++  );
++});
++
++test('RaftTransportAdapter routes priority control-plane vote traffic to the ' +
++  'readiness lane', async (t) => {
++  let receivedMessage = null;
++  let receivedOptions = null;
++  const messageRouter = {
++    async deliver(_address, message, options) {
++      receivedMessage = message;
++      receivedOptions = options;
++      return {acknowledged: true};
++    },
++  };
++  const adapter = new RaftTransportAdapter({
++    messageRouter,
++    entityType: 'partition',
++    nodeId: 'node-1',
++  });
++  const packet = {
++    type: RAFT_PACKET_TYPE.VOTE,
++    term: 7,
++    address: 'node-1/partition/replica_operations-p1-r1',
++    state: 'candidate',
++    leader: null,
++    last: {index: 12, term: 7},
++    destination: 'node-2/partition/replica_operations-p1-r2',
++  };
++
++  await new Promise((resolve, reject) => {
++    adapter.write(packet, (error) => {
++      if (error) {
++        reject(error);
++        return;
++      }
++      resolve();
++    });
++  });
++
++  t.equal(
++    receivedMessage?.type,
++    'RAFT_REQUEST_VOTE',
++    'priority vote keeps the request-vote transport message mapping',
++  );
++  t.equal(
++    receivedOptions?.deliveryPriority,
++    OUTBOUND_DELIVERY_PRIORITY.READINESS,
++    'priority control-plane vote traffic should use readiness',
++  );
++});
++
+ test('RaftTransportAdapter keeps control-plane publication append traffic critical',
+   async (t) => {
+     let receivedOptions = null;

@@ -1,3 +1,10 @@
+import {
+  DISPOSITION_REROUTE,
+  DISPOSITION_EXPLORE,
+  DISPOSITION_PARK_RESUMABLE,
+  DISPOSITION_TERMINAL,
+} from './constants.js';
+
 export const CONTINUATION_ALLOWED = 'allowed';
 export const CONTINUATION_BLOCKED_UNRECORDED_EVIDENCE =
   'blocked-unrecorded-evidence';
@@ -7,6 +14,22 @@ export const CONTINUATION_BLOCKED_SCOPE = 'blocked-scope';
 export const CONTINUATION_BLOCKED_REGRESSION = 'blocked-regression';
 export const CONTINUATION_BLOCKED_THEORY = 'blocked-theory';
 export const CONTINUATION_BLOCKED_MEASUREMENT = 'blocked-measurement';
+
+// Reversible mapping from a blocking continuation code to a graded disposition. Flip any
+// entry to DISPOSITION_TERMINAL to restore the original "guard -> stop" behaviour for
+// that code. BLOCKED_THEORY -> explore is the direct fix for the spurious stop: a missing
+// theory opens a bounded free-explore rung instead of halting the run. The recoverable
+// preconditions (scope/regression/unrecorded/projection) reroute to a concrete next move;
+// a measurement gate parks the single frontier as resumable (never exhaustion).
+export const CONTINUATION_DISPOSITIONS = Object.freeze({
+  [CONTINUATION_BLOCKED_THEORY]: DISPOSITION_EXPLORE,
+  [CONTINUATION_BLOCKED_SCOPE]: DISPOSITION_REROUTE,
+  [CONTINUATION_BLOCKED_REGRESSION]: DISPOSITION_REROUTE,
+  [CONTINUATION_BLOCKED_MEASUREMENT]: DISPOSITION_PARK_RESUMABLE,
+  [CONTINUATION_BLOCKED_UNRECORDED_EVIDENCE]: DISPOSITION_REROUTE,
+  [CONTINUATION_BLOCKED_METRIC_PROJECTION]: DISPOSITION_REROUTE,
+});
+
 
 const BLOCKING_SIGNAL_CODES = Object.freeze({
   'fresh-evidence-unrecorded': CONTINUATION_BLOCKED_UNRECORDED_EVIDENCE,
@@ -111,4 +134,90 @@ export function continuationErrorMessage(continuation) {
   if (continuationIsAllowed(continuation)) return '';
   return `continuation gate failed (${continuation.status}): ` +
     continuation.problems.join('; ');
+}
+
+// The graded disposition for a (possibly blocked) continuation. Returns null when the
+// continuation is allowed. Unmapped codes fall back to DISPOSITION_TERMINAL so a new,
+// unclassified block can never be silently downgraded to "keep going".
+export function dispositionForContinuation(continuation) {
+  if (continuationIsAllowed(continuation)) return null;
+  return CONTINUATION_DISPOSITIONS[continuation.status] || DISPOSITION_TERMINAL;
+}
+
+// Build a blocked continuation for an unrecorded-evidence precondition so it routes through
+// the graded gate (reroute) instead of crashing the driver. The ingest command is embedded
+// in the problem string so continuationNextCommand surfaces it verbatim as the next move.
+export function unrecordedEvidenceContinuation(unrecorded) {
+  const command = unrecorded?.command || '';
+  const problem = command ?
+    `latest probe evidence is newer than Quest memory; ingest it first: ${command}` :
+    'latest probe evidence is newer than Quest memory; ingest it first';
+  return {
+    status: CONTINUATION_BLOCKED_UNRECORDED_EVIDENCE,
+    code: CONTINUATION_BLOCKED_UNRECORDED_EVIDENCE,
+    problems: [problem],
+  };
+}
+
+function embeddedCommand(problems) {
+  for (const problem of problems || []) {
+    const match = /(node scripts\/solve\.js [^\n]+)/.exec(problem || '');
+    if (match) return match[1].trim();
+  }
+  return null;
+}
+
+// A concrete, copy-pasteable next command for a blocked continuation, so a driver (human
+// or agent) is told exactly how to unblock the quest instead of being left at a silent
+// stop. Prefers a command already embedded in a problem message (e.g. ingest-evidence).
+export function continuationNextCommand(continuation, context = {}) {
+  if (continuationIsAllowed(continuation)) return null;
+  const {questId, frontier} = context;
+  const problems = continuation.problems || [];
+  const embedded = embeddedCommand(problems);
+  if (embedded) return embedded;
+  const id = questId ? ` --id ${questId}` : '';
+  const f = frontier ? ` --frontier ${frontier}` : '';
+  switch (continuation.code || continuation.status) {
+    case CONTINUATION_BLOCKED_THEORY: {
+      const wantsSystem = problems.some((p) => /system theory/.test(p));
+      if (wantsSystem) {
+        return `node scripts/solve.js theory system${id} ` +
+          '--problem <...> --mechanism <...> --owner <...> --evidence <path> ' +
+          '--success <...> --discriminator <...> --missing-edge <...>';
+      }
+      return `node scripts/solve.js theory option${id}${f} ` +
+        '--layer <...> --mechanism <...> --intervention <...> ' +
+        '--expected-movement <...> --negative-result <...> --discriminator <...> ' +
+        '--promotion <...> --rejection <...>';
+    }
+    case CONTINUATION_BLOCKED_SCOPE:
+      return `node scripts/solve.js status${id} ` +
+        '# land or split the current changes to reduce scope before the next attempt';
+    case CONTINUATION_BLOCKED_REGRESSION:
+      return `node scripts/solve.js finding${id}${f} ` +
+        '--note <restore the regressed invariant or explain why it was abandoned>';
+    case CONTINUATION_BLOCKED_MEASUREMENT:
+      return `# fix the measurement harness for ${frontier || 'the frontier'}, ` +
+        `then: node scripts/solve.js reopen${id}${f} --reason "harness fixed"`;
+    case CONTINUATION_BLOCKED_METRIC_PROJECTION:
+      return `node scripts/solve.js ingest-evidence${id}${f} --evidence <fresh report>`;
+    default:
+      return null;
+  }
+}
+
+// One-shot graded decision for a blocked continuation: its disposition, the originating
+// code/problems, and an actionable next command. Callers route on `disposition` and
+// surface `nextCommand` so a stop is never silent.
+export function continuationDisposition(continuation, context = {}) {
+  const disposition = dispositionForContinuation(continuation);
+  return {
+    disposition,
+    code: continuation?.code || continuation?.status || null,
+    problems: continuation?.problems || [],
+    nextCommand: disposition ?
+      continuationNextCommand(continuation, context) :
+      null,
+  };
 }

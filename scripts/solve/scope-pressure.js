@@ -1,5 +1,6 @@
 import {
   EVENT_ATTEMPT,
+  EVENT_FINDING,
 } from './constants.js';
 import {inspectChangeArtifact} from './change-artifact.js';
 
@@ -24,9 +25,45 @@ function ownerAreaForPath(filePath) {
   return segments[0] || 'unknown';
 }
 
+const SCOPE_BASELINE_RESOLUTIONS = Object.freeze([
+  'baselined',
+  'landed',
+  'split',
+  'accepted',
+]);
+
+function scopePressureClassification(event) {
+  return event?.scopePressureClassification ||
+    event?.classification?.scopePressure ||
+    event?.scopePressure ||
+    null;
+}
+
+function latestScopeBaselineIndex(log) {
+  for (let index = log.length - 1; index >= 0; index -= 1) {
+    const event = log[index];
+    if (event.type !== EVENT_FINDING) continue;
+    const classification = scopePressureClassification(event);
+    const resolution = String(
+      classification?.resolution ||
+      classification?.action ||
+      classification?.status ||
+      '',
+    );
+    if (SCOPE_BASELINE_RESOLUTIONS.includes(resolution)) return index;
+  }
+  return -1;
+}
+
 function attemptInspections(root, quest, log) {
-  return log.filter((event) => event.type === EVENT_ATTEMPT && event.changeRef)
-    .map((event) => ({
+  const baselineIndex = latestScopeBaselineIndex(log);
+  return log
+    .map((event, index) => ({event, index}))
+    .filter(({event, index}) =>
+      event.type === EVENT_ATTEMPT &&
+      event.changeRef &&
+      index > baselineIndex)
+    .map(({event}) => ({
       event,
       inspection: inspectChangeArtifact(root, quest, event.changeRef),
     }));
