@@ -6,6 +6,7 @@ import {execFileSync} from 'node:child_process';
 
 import {runLoop, finalizeAttempt, makeRunContext} from '../../scripts/solve/loop.js';
 import {appendEvent, projectState, readLog, saveQuest} from '../../scripts/solve/store.js';
+import {CONTINUATION_BLOCKED_THEORY} from '../../scripts/solve/continuation.js';
 import {makeDryExecutor} from '../../scripts/solve/executor.js';
 import {registerProbe} from '../../scripts/solve/probe.js';
 import {ingestEvidence} from '../../scripts/solve/evidence.js';
@@ -13,9 +14,11 @@ import {
   EVENT_ATTEMPT,
   EVENT_PARK,
   EVENT_FINDING,
+  EVENT_GATE_DECISION,
   EVENT_THEORY_OPTION_DECLARED,
   EVENT_THEORY_SELECTED,
   EVENT_VIOLATION,
+  DISPOSITION_ADVISORY,
   STATUS_SOLVED,
   STATUS_PARKED,
   STATUS_EXHAUSTED,
@@ -169,32 +172,37 @@ tap.test('solver loop — P0 walking skeleton', async (t) => {
     t.end();
   });
 
-  t.test('autonomous loop stops before executor when theory gate is unmet', (t) => {
+  t.test('autonomous loop takes a soft-first exploratory attempt instead of stopping on ' +
+    'the first theory gate', (t) => {
     const {root, quest, changeDir} = setup({metric: 5, target: 0});
     // Two stalls climb observe(0) -> local-fix(1) -> widen-scope(2), where a frontier
-    // theory becomes required.
+    // theory becomes required but none is recorded — a soft-eligible theory gate.
     runLoop(root, quest, {
       executor: makeDryExecutor({changeDir, stallFrontiers: ['f1']}),
       maxCycles: 2,
     });
 
+    const inner = makeDryExecutor({changeDir, stallFrontiers: ['f1']});
     let executorCalls = 0;
     const res = runLoop(root, quest, {
       executor: {
-        run() {
+        run(task) {
           executorCalls += 1;
-          return {changeRef: null, summary: 'should not run'};
+          return inner.run(task);
         },
       },
       maxCycles: 1,
     });
     const log = readLog(root, quest.id);
-    const attempts = log.filter((event) => event.type === EVENT_ATTEMPT);
-    const violations = log.filter((event) => event.type === EVENT_VIOLATION);
-    t.equal(res.outcome, OUTCOME_THEORY_REQUIRED, 'stops at the theory gate');
-    t.equal(executorCalls, 0, 'executor was not invoked');
-    t.equal(attempts.length, 2, 'no extra attempt was recorded past the gate');
-    t.equal(violations[violations.length - 1].scope, 'theory-gate');
+    const advisories = log.filter((event) =>
+      event.type === EVENT_GATE_DECISION &&
+      event.disposition === DISPOSITION_ADVISORY &&
+      event.code === CONTINUATION_BLOCKED_THEORY);
+    // Soft-first: the missing theory does NOT stop the run on sight. The loop records one
+    // advisory and makes a real (executor-backed) attempt this cycle instead.
+    t.not(res.outcome, OUTCOME_THEORY_REQUIRED, 'soft-first does not hard-stop on first gate');
+    t.equal(executorCalls, 1, 'executor was invoked under the soft-first advisory');
+    t.equal(advisories.length, 1, 'exactly one advisory recorded for the cycle (no double-count)');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });

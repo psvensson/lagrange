@@ -8,6 +8,8 @@ import {
   exploreBudgetRemaining,
   gateDecisionToStepResult,
   theoryGateContinuation,
+  softFirstWouldDefer,
+  decisionContinues,
 } from '../../scripts/solve/gate.js';
 import {
   CONTINUATION_ALLOWED,
@@ -19,8 +21,11 @@ import {
   EVENT_GATE_DECISION,
   EVENT_ATTEMPT,
   EXPLORE_BUDGET,
+  GUARD_QUORUM,
   OUTCOME_THEORY_REQUIRED,
   OUTCOME_BLOCKED,
+  OUTCOME_CONTINUE,
+  DISPOSITION_ADVISORY,
   DISPOSITION_EXPLORE,
   DISPOSITION_REROUTE,
   DISPOSITION_PARK_RESUMABLE,
@@ -172,6 +177,128 @@ tap.test('graded gate decisions', async (t) => {
       gateDecisionToStepResult({outcome: OUTCOME_BLOCKED}).terminal,
       'blocked',
     );
+    t.end();
+  });
+});
+
+tap.test('soft-first / quorum (P5)', async (t) => {
+  const FRONTIER = 'gate-main';
+  const advisory = () => ({
+    type: EVENT_GATE_DECISION,
+    frontier: FRONTIER,
+    disposition: DISPOSITION_ADVISORY,
+    code: CONTINUATION_BLOCKED_THEORY,
+  });
+  const progress = () => ({type: EVENT_ATTEMPT, frontier: FRONTIER, progressed: true});
+
+  t.test('first theory gate is softened to a recorded advisory when caller opts in', (t) => {
+    const root = tmp();
+    const decision = resolveGateDecision(
+      root,
+      QUEST,
+      blocked(CONTINUATION_BLOCKED_THEORY, ['frontier theory required']),
+      {log: [], frontier: FRONTIER, rungIndex: 1, softFirst: true},
+    );
+    t.equal(decision.disposition, DISPOSITION_ADVISORY, 'advisory, not a stop');
+    t.equal(decision.outcome, OUTCOME_CONTINUE, 'outcome continues the loop');
+    const recorded = readLog(root, QUEST.id).filter((e) =>
+      e.type === EVENT_GATE_DECISION && e.disposition === DISPOSITION_ADVISORY);
+    t.equal(recorded.length, 1, 'one advisory gate-decision recorded');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('a supervised caller (no softFirst) is never softened', (t) => {
+    const root = tmp();
+    const decision = resolveGateDecision(
+      root,
+      QUEST,
+      blocked(CONTINUATION_BLOCKED_THEORY, ['frontier theory required']),
+      {log: [], frontier: FRONTIER, rungIndex: 1},
+    );
+    t.equal(decision.disposition, DISPOSITION_EXPLORE, 'hard explore gate for supervised path');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('soft-first escalates to the real disposition once the quorum is spent', (t) => {
+    const root = tmp();
+    const log = [];
+    for (let i = 0; i < GUARD_QUORUM; i += 1) log.push(advisory());
+    const decision = resolveGateDecision(
+      root,
+      QUEST,
+      blocked(CONTINUATION_BLOCKED_THEORY, ['frontier theory required']),
+      {log, frontier: FRONTIER, rungIndex: 1, softFirst: true},
+    );
+    t.equal(decision.disposition, DISPOSITION_EXPLORE, 'escalates after GUARD_QUORUM advisories');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('an honest progress resets the soft-first ramp', (t) => {
+    const root = tmp();
+    const log = [];
+    for (let i = 0; i < GUARD_QUORUM; i += 1) log.push(advisory());
+    log.push(progress());
+    const decision = resolveGateDecision(
+      root,
+      QUEST,
+      blocked(CONTINUATION_BLOCKED_THEORY, ['frontier theory required']),
+      {log, frontier: FRONTIER, rungIndex: 1, softFirst: true},
+    );
+    t.equal(decision.disposition, DISPOSITION_ADVISORY, 'advisory again after progress resets count');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('convergence-forcing theory problems are excluded from soft-first', (t) => {
+    const root = tmp();
+    for (const problem of [
+      'coupled-invariant oscillation across owners',
+      'system theory required after stall',
+      'model evidence required: prove lifecycle contract',
+    ]) {
+      const decision = resolveGateDecision(
+        root,
+        QUEST,
+        blocked(CONTINUATION_BLOCKED_THEORY, [problem]),
+        {log: [], frontier: FRONTIER, rungIndex: 1, softFirst: true},
+      );
+      t.not(decision.disposition, DISPOSITION_ADVISORY, `not softened: ${problem}`);
+    }
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('non-theory codes keep their immediate disposition under softFirst', (t) => {
+    const root = tmp();
+    const decision = resolveGateDecision(
+      root,
+      QUEST,
+      blocked(CONTINUATION_BLOCKED_SCOPE, ['scope pressure terminal: 80 files']),
+      {log: [], frontier: FRONTIER, rungIndex: 1, softFirst: true},
+    );
+    t.equal(decision.disposition, DISPOSITION_REROUTE, 'scope still reroutes immediately');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('softFirstWouldDefer mirrors eligibility and the quorum budget', (t) => {
+    const eligible = blocked(CONTINUATION_BLOCKED_THEORY, ['frontier theory required']);
+    t.equal(softFirstWouldDefer([], eligible, FRONTIER), true, 'defers on first encounter');
+    const spent = [];
+    for (let i = 0; i < GUARD_QUORUM; i += 1) spent.push(advisory());
+    t.equal(softFirstWouldDefer(spent, eligible, FRONTIER), false, 'stops deferring after quorum');
+    const excluded = blocked(CONTINUATION_BLOCKED_THEORY, ['coupled-invariant oscillation']);
+    t.equal(softFirstWouldDefer([], excluded, FRONTIER), false, 'never defers an excluded problem');
+    t.end();
+  });
+
+  t.test('decisionContinues treats null and advisory as continue', (t) => {
+    t.equal(decisionContinues(null), true, 'no gate => continue');
+    t.equal(decisionContinues({disposition: DISPOSITION_ADVISORY}), true, 'advisory => continue');
+    t.equal(decisionContinues({disposition: DISPOSITION_EXPLORE}), false, 'explore => stop');
     t.end();
   });
 });

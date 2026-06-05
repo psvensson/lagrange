@@ -33,6 +33,7 @@ import {
   resolveGateDecision,
   gateDecisionToStepResult,
   theoryGateContinuation,
+  decisionContinues,
 } from './gate.js';
 import {unrecordedEvidenceContinuation} from './continuation.js';
 
@@ -82,7 +83,7 @@ function theoryGateResult(root, quest, log, problems, pick) {
     frontier: pick.def.id,
     rungIndex: pick.state.rungIndex,
   });
-  return decision ? gateDecisionToStepResult(decision) : null;
+  return decisionContinues(decision) ? null : gateDecisionToStepResult(decision);
 }
 
 export function stepPending(root, questId) {
@@ -137,7 +138,9 @@ function stepBegin(root, quest, options = {}) {
     frontier: pick.def.id,
     rungIndex: pick.state.rungIndex,
   });
-  if (gateDecision) return gateDecisionToStepResult(gateDecision);
+  if (gateDecision && !decisionContinues(gateDecision)) {
+    return gateDecisionToStepResult(gateDecision);
+  }
 
   const before = evaluate(pick.def.metric, ctx.probeCtx);
   const pending = {

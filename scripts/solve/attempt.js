@@ -15,6 +15,7 @@ import {
   resolveGateDecision,
   gateDecisionToStepResult,
   theoryGateContinuation,
+  decisionContinues,
 } from './gate.js';
 
 export function runAttemptCommand(root, args) {
@@ -59,7 +60,10 @@ export function runAttemptCommand(root, args) {
       theoryGateContinuation(readinessProblems),
       {log, frontier: frontierId, rungIndex: fState.rungIndex},
     );
-    return {...gateDecisionToStepResult(decision), blocked: true};
+    // Soft-first: an advisory downgrade proceeds to run the harness this attempt.
+    if (!decisionContinues(decision)) {
+      return {...gateDecisionToStepResult(decision), blocked: true};
+    }
   }
   const health = analyzeQuestHealth(root, quest, {
     state,
@@ -73,7 +77,9 @@ export function runAttemptCommand(root, args) {
       frontier: frontierId,
       rungIndex: fState.rungIndex,
     });
-    return {...gateDecisionToStepResult(decision), blocked: true};
+    if (!decisionContinues(decision)) {
+      return {...gateDecisionToStepResult(decision), blocked: true};
+    }
   }
 
   const ctx = makeRunContext({

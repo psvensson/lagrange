@@ -509,6 +509,33 @@ Flip any continuation-code mapping to `terminal` to restore the original
 `scripts/solve/continuation.js` (`CONTINUATION_DISPOSITIONS`) and is resolved by
 `scripts/solve/gate.js`.
 
+### Soft-first / quorum before escalation
+
+An inferential theory gate (a plain "produce a falsifiable theory" block) is not
+hard-escalated on its first corroborating occurrence inside the **autonomous run
+loop**. While fewer than `GUARD_QUORUM` advisories have been recorded for that
+gate's continuation code since the frontier last made progress, the gate is
+softened to an `advisory` `gate-decision` and the loop makes a real,
+executor-backed attempt instead of stopping on sight. Once the quorum is reached
+the gate resolves to its real disposition (`explore`, then `park-resumable`).
+An honest metric improvement resets the ramp (the counter keys off the last
+progress, mirroring `EXPLORE_BUDGET`).
+
+This applies **only** to the autonomous loop (callers opt in via
+`context.softFirst`); a supervised single `step`/`attempt` still reports the gate
+to its operator immediately. Within one autonomous cycle the readiness gate that
+immediately precedes the harness is the **sole** advisory recorder; the
+pre-attempt health gate merely *defers* (via `softFirstWouldDefer`, which records
+nothing) so a single missing-theory condition is never counted twice per cycle.
+
+Soft-first is **excluded** for convergence-forcing problems so they still pin
+their corrective move on first sight: coupled-invariant oscillation /
+system-theory-after-stall (rr-D), coupled-invariant reconcile (rr-F), and the
+model-contract evidence requirement. Every non-theory code
+(regression/scope/measurement/data-integrity) also keeps its immediate
+disposition. Set `GUARD_QUORUM=0` to disable soft-first entirely and restore the
+"stop on first theory gate" behaviour.
+
 `node scripts/solve.js report --id <id>` is the closure projection. It is a pure
 read of the event log and derived state.
 

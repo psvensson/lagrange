@@ -66,7 +66,12 @@ import {
   continuationIsAllowed,
   unrecordedEvidenceContinuation,
 } from './continuation.js';
-import {resolveGateDecision, theoryGateContinuation} from './gate.js';
+import {
+  resolveGateDecision,
+  theoryGateContinuation,
+  decisionContinues,
+  softFirstWouldDefer,
+} from './gate.js';
 import {
   metricKindFromProbeSpec,
   probeSpecFromIdentity,
@@ -162,28 +167,32 @@ function applyAttempt(root, quest, ctx, pick, before) {
     phase: 'begin',
   });
   if (readinessProblems.length > 0) {
-    appendEvent(root, quest.id, {
-      type: EVENT_VIOLATION,
-      scope: 'theory-gate',
-      frontier: pick.def.id,
-      rung: LADDER[rungIndex],
-      rungIndex,
-      violations: readinessProblems,
-    });
     const decision = resolveGateDecision(
       root,
       quest,
       theoryGateContinuation(readinessProblems),
-      {log, frontier: pick.def.id, rungIndex},
+      {log, frontier: pick.def.id, rungIndex, softFirst: true},
     );
-    return {
-      terminal: decision.outcome,
-      evidence: null,
-      frontier: pick.def.id,
-      problems: readinessProblems,
-      disposition: decision.disposition,
-      nextCommand: decision.nextCommand,
-    };
+    // Soft-first: an advisory downgrade keeps the cycle running — fall through and run the
+    // harness this attempt instead of stopping. A hard gate records the violation and stops.
+    if (!decisionContinues(decision)) {
+      appendEvent(root, quest.id, {
+        type: EVENT_VIOLATION,
+        scope: 'theory-gate',
+        frontier: pick.def.id,
+        rung: LADDER[rungIndex],
+        rungIndex,
+        violations: readinessProblems,
+      });
+      return {
+        terminal: decision.outcome,
+        evidence: null,
+        frontier: pick.def.id,
+        problems: readinessProblems,
+        disposition: decision.disposition,
+        nextCommand: decision.nextCommand,
+      };
+    }
   }
   const priorAttempts = log.filter((e) =>
     e.type === EVENT_ATTEMPT && e.frontier === pick.def.id);
@@ -572,35 +581,48 @@ export function runLoop(root, quest, options = {}) {
         },
       });
       if (!continuationIsAllowed(executionHealth.continuation)) {
-        if (executionHealth.continuation.status === CONTINUATION_BLOCKED_THEORY) {
-          appendEvent(root, quest.id, {
-            type: EVENT_VIOLATION,
-            scope: 'theory-gate',
-            frontier: executionHealth.frontier,
-            rung: Number.isInteger(executionHealth.rungIndex) ?
-              LADDER[executionHealth.rungIndex] :
-              null,
-            rungIndex: executionHealth.rungIndex,
-            violations: executionHealth.continuation.problems,
-          });
-        }
-        const decision = resolveGateDecision(
-          root,
-          quest,
+        // Soft-first: defer a soft-eligible theory block to the readiness gate (which runs
+        // the harness this cycle and records the single advisory), rather than stopping the
+        // run on sight. Once the quorum is reached softFirstWouldDefer is false and the gate
+        // resolves to its real disposition and stops.
+        const deferred = softFirstWouldDefer(
+          readLog(root, quest.id),
           executionHealth.continuation,
-          {
-            log: readLog(root, quest.id),
-            frontier: executionHealth.frontier,
-            rungIndex: executionHealth.rungIndex,
-          },
+          executionHealth.frontier,
         );
-        return {
-          ...finish(root, quest, decision.outcome, null),
-          frontier: executionHealth.frontier,
-          problems: executionHealth.continuation.problems,
-          disposition: decision.disposition,
-          nextCommand: decision.nextCommand,
-        };
+        if (!deferred) {
+          const decision = resolveGateDecision(
+            root,
+            quest,
+            executionHealth.continuation,
+            {
+              log: readLog(root, quest.id),
+              frontier: executionHealth.frontier,
+              rungIndex: executionHealth.rungIndex,
+            },
+          );
+          if (!decisionContinues(decision)) {
+            if (executionHealth.continuation.status === CONTINUATION_BLOCKED_THEORY) {
+              appendEvent(root, quest.id, {
+                type: EVENT_VIOLATION,
+                scope: 'theory-gate',
+                frontier: executionHealth.frontier,
+                rung: Number.isInteger(executionHealth.rungIndex) ?
+                  LADDER[executionHealth.rungIndex] :
+                  null,
+                rungIndex: executionHealth.rungIndex,
+                violations: executionHealth.continuation.problems,
+              });
+            }
+            return {
+              ...finish(root, quest, decision.outcome, null),
+              frontier: executionHealth.frontier,
+              problems: executionHealth.continuation.problems,
+              disposition: decision.disposition,
+              nextCommand: decision.nextCommand,
+            };
+          }
+        }
       }
     }
     const {

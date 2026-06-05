@@ -163,7 +163,9 @@ tap.test('agent executor (P4)', async (t) => {
     };
     saveQuest(root, quest);
     // Agent never changes anything. The no-op climbs observe -> local-fix ->
-    // widen-scope, where the loop must stop for theory before invoking the agent again.
+    // widen-scope, where soft-first grants ONE exploratory attempt; that no-op stall
+    // climbs into the model rung, whose model/system theory gate is excluded from
+    // soft-first and hard-stops before invoking the agent again.
     const spawn = (cmd, args) => {
       fs.writeFileSync(args[1], JSON.stringify({changeRef: null, summary: 'no-op'}));
       return {status: 0};
@@ -174,7 +176,7 @@ tap.test('agent executor (P4)', async (t) => {
     const attempts = log.filter((event) => event.type === EVENT_ATTEMPT);
     const violations = log.filter((event) => event.type === EVENT_VIOLATION);
     t.equal(result.outcome, OUTCOME_THEORY_REQUIRED);
-    t.equal(attempts.length, 2, 'does not keep invoking no-op agent');
+    t.equal(attempts.length, 3, 'soft-first bounds the no-op agent (1 exploratory attempt)');
     t.equal(violations[violations.length - 1].scope, 'theory-gate');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();

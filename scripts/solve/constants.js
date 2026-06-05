@@ -196,6 +196,12 @@ export const OUTCOME_THEORY_REQUIRED = 'theory-required';
 // NON-terminal stop: the quest stays resumable and is never closed by it. It replaces the
 // old behaviour where these gates threw and crashed an autonomous run.
 export const OUTCOME_BLOCKED = 'blocked';
+// Soft-first (P5): a recoverable inferential gate that, on its first corroborating
+// occurrence(s), was downgraded to an ADVISORY annotation rather than a stop. The loop
+// keeps working (runs the harness / makes an attempt) and only escalates to the real
+// disposition once a quorum of advisories has accrued. Never a terminal; callers treat it
+// as "continue".
+export const OUTCOME_CONTINUE = 'continue';
 
 // Graded guard-response dispositions, softest -> hardest. Every blocked continuation or
 // theory gate resolves to exactly one of these. Only `terminal` may CLOSE a quest, and
@@ -231,6 +237,18 @@ export const DISPOSITIONS = Object.freeze([
 // the budget is spent the gate parks that single frontier as resumable instead of looping
 // forever, so the quest still converges without ever silently terminating.
 export const EXPLORE_BUDGET = 3;
+
+// Soft-first / quorum (P5): how many corroborating occurrences of an INFERENTIAL theory
+// gate (a plain "produce a theory artifact" block) are absorbed as ADVISORY — recorded,
+// and the loop keeps working (runs the harness / makes a real attempt) — before the gate
+// escalates to its hard (explore) disposition. Counted per frontier since the last metric
+// progress, so an honest improvement resets the ramp. This is strictly a soft-first DELAY
+// in front of the existing explore->park ladder: it never closes a quest and never defers
+// a CONVERGENCE-FORCING gate (coupled-invariant oscillation/reconcile, system-theory-
+// after-stall, regression-restore, scope, measurement, data-integrity) — those are
+// excluded so rr-C/rr-D/rr-F still pin their corrective move immediately. Reversible:
+// set to 0 to restore immediate hard escalation on the first occurrence.
+export const GUARD_QUORUM = 2;
 
 export const FIRST_RUNG_INDEX = 0;
 

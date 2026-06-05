@@ -17,8 +17,11 @@ import {
   EVENT_ATTEMPT,
   EVENT_GATE_DECISION,
   EXPLORE_BUDGET,
+  GUARD_QUORUM,
   OUTCOME_THEORY_REQUIRED,
   OUTCOME_BLOCKED,
+  OUTCOME_CONTINUE,
+  DISPOSITION_ADVISORY,
   DISPOSITION_EXPLORE,
   DISPOSITION_PARK_RESUMABLE,
   DISPOSITION_TERMINAL,
@@ -64,12 +67,66 @@ export function exploreBudgetRemaining(log, frontierId) {
   return EXPLORE_BUDGET - spent;
 }
 
+// Convergence-FORCING / precondition theory problems that must never be softened: rr-D
+// coupled-invariant oscillation / system-theory-after-stall, rr-F coupled-invariant
+// reconcile, and the model-contract evidence requirement (its over-eagerness is a separate
+// concern, tracked as P5b, not a soft-first candidate). These gates exist to pin a specific
+// corrective move, so deferring them as advisory would reopen the holes they close. Matched
+// on the recorded problem text.
+const SOFT_FIRST_EXCLUDED_PROBLEM =
+  /coupled[- ]invariant|system theory required|model evidence required/i;
+
+// Soft-first eligibility (P5). Only the INFERENTIAL "produce a theory artifact" family of
+// theory gates is eligible for a soft-first advisory ramp: a plain frontier/selected-stale/
+// metric-zero/model-evidence theory block. The convergence-forcing problems above are
+// excluded, as are every non-theory code (regression/scope/measurement/data-integrity),
+// which keep their immediate disposition. GUARD_QUORUM=0 disables soft-first entirely.
+function softFirstEligible(continuation) {
+  if (GUARD_QUORUM <= 0) return false;
+  if (continuation.code !== CONTINUATION_BLOCKED_THEORY) return false;
+  const problems = continuation.problems || [];
+  if (problems.length === 0) return false;
+  return !problems.some((problem) => SOFT_FIRST_EXCLUDED_PROBLEM.test(problem));
+}
+
+// Advisory gate-decisions already recorded for `code` on this frontier since the last
+// metric progress. Mirrors exploreBudgetRemaining's "count since lastProgressIndex"
+// pattern so an honest improvement resets the soft-first ramp.
+function softAdvisoriesSpent(log, frontierId, code) {
+  const since = lastProgressIndex(log, frontierId);
+  let spent = 0;
+  for (let i = since + 1; i < log.length; i += 1) {
+    const event = log[i];
+    if (event.type === EVENT_GATE_DECISION && event.frontier === frontierId &&
+      event.disposition === DISPOSITION_ADVISORY && event.code === code) {
+      spent += 1;
+    }
+  }
+  return spent;
+}
+
+// True when soft-first would let the run DEFER a block (continue without stopping) without
+// itself recording an advisory — used by the autonomous loop's pre-attempt health gate so
+// the single soft-first advisory is recorded once per cycle by the readiness gate that
+// immediately precedes the harness call, never double-counted across both gates.
+export function softFirstWouldDefer(log, continuation, frontierId) {
+  if (!softFirstEligible(continuation)) return false;
+  return softAdvisoriesSpent(log, frontierId, continuation.code) < GUARD_QUORUM;
+}
+
+// True when a gate decision permits the caller to keep working without stopping: either no
+// gate fired (null) or the gate was softened to an ADVISORY (soft-first) annotation. Every
+// caller that turns a decision into a stop must first check this so an advisory continues.
+export function decisionContinues(decision) {
+  return !decision || decision.disposition === DISPOSITION_ADVISORY;
+}
+
 // Map a blocked continuation to a recorded, actionable gate decision. Returns null when
 // the continuation is allowed (no gate). The returned object is the single source of
 // truth callers convert into a run/step result.
 export function resolveGateDecision(root, quest, continuation, context = {}) {
   if (continuationIsAllowed(continuation)) return null;
-  const {log = [], frontier = null, rungIndex = null} = context;
+  const {log = [], frontier = null, rungIndex = null, softFirst = false} = context;
   const decided = continuationDisposition(continuation, {
     questId: quest.id,
     frontier,
@@ -82,6 +139,39 @@ export function resolveGateDecision(root, quest, continuation, context = {}) {
   // hard failure rather than inventing a soft path for something we do not understand.
   if (disposition === DISPOSITION_TERMINAL) {
     throw new Error(continuationErrorMessage(continuation));
+  }
+
+  // Soft-first / quorum (P5). An inferential theory gate is not hard-escalated on its
+  // first corroborating occurrence(s) when the CALLER opted in (context.softFirst) — the
+  // autonomous run loop does, so a missing theory does not stop the run on sight; a
+  // supervised single `step`/`attempt` does NOT, so it still reports the gate to its
+  // operator. While fewer than GUARD_QUORUM advisories have been recorded for this code
+  // since the last progress, record one more ADVISORY gate decision and let the loop
+  // continue (run the harness / make a real attempt). Once the quorum is reached the call
+  // falls through to the real disposition below. The convergence-forcing theory problems
+  // are excluded (see softFirstEligible), so rr-D/rr-F still pin their corrective move
+  // immediately, and an honest improvement resets the ramp (counter keys off lastProgress).
+  if (softFirst && softFirstEligible(continuation) &&
+    softAdvisoriesSpent(log, frontier, code) < GUARD_QUORUM) {
+    appendEvent(root, quest.id, {
+      type: EVENT_GATE_DECISION,
+      frontier,
+      rungIndex,
+      disposition: DISPOSITION_ADVISORY,
+      code,
+      outcome: OUTCOME_CONTINUE,
+      problems,
+      nextCommand: null,
+    });
+    return {
+      disposition: DISPOSITION_ADVISORY,
+      code,
+      outcome: OUTCOME_CONTINUE,
+      problems,
+      nextCommand: null,
+      frontier,
+      rungIndex,
+    };
   }
 
   // Bounded explore: once the frontier has spent its explore budget without progress,
