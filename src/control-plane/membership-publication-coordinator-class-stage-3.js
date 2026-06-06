@@ -227,6 +227,24 @@ function isMembershipPublicationReconcileContext(value) {
   return value && typeof value === TYPEOF.OBJECT;
 }
 
+function hasActiveGateOwnerReconcileMembershipPublicationContext(context) {
+  return isMembershipPublicationReconcileContext(context) &&
+    hasPublicationActiveGateOwnerReconcileSignal(
+      context[
+        MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
+          .PUBLICATION_ACTIVE_GATE_HANDOFF
+      ],
+    ) === true;
+}
+
+function resolveCriticalConvergenceQueueRetryAfterMs(error, context) {
+  const retryAfterMs = getControlPlaneRetryAfterMs(error);
+  if (!hasActiveGateOwnerReconcileMembershipPublicationContext(context)) {
+    return retryAfterMs;
+  }
+  return CONTROL_PLANE_CRITICAL_CONVERGENCE_RETRY_AFTER_MS;
+}
+
 function mergeMembershipPublicationReconcileNodeIds(left, right) {
   return normalizeNodeIdList([
     ...normalizeNodeIdList(left),
@@ -619,7 +637,7 @@ class MembershipPublicationCoordinatorClassStage3 extends
     ) {
       this.reconcileQueue.configureRetryPolicy({
         isRetryableError: isRetryableControlPlaneError,
-        getRetryAfterMs: getControlPlaneRetryAfterMs,
+        getRetryAfterMs: resolveCriticalConvergenceQueueRetryAfterMs,
         getFailureReason: resolveCriticalConvergenceQueueFailureReason,
       });
     }

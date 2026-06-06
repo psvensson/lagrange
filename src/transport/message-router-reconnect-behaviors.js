@@ -14,6 +14,8 @@ const {
   uuidv4,
 } = MESSAGE_ROUTER_SHARED;
 
+const AD_HOC_RECONNECT_COOLDOWN_MS = 10000;
+
 export function resolveNodeAddressForDelivery(router, targetNodeId) {
   return router.connectionAuthorityOwner.resolveNodeAddressForDelivery(
     targetNodeId,
@@ -81,7 +83,10 @@ export function buildReconnectInProgressFailure(
   correlationId,
 ) {
   const connection = router.nodeConnections.get(targetNodeId) || null;
-  if (!router.hasScheduledReconnect(connection)) {
+  const reconnectPending =
+    connection?.state !== ConnectionState.CONNECTED &&
+    router.pendingNodeConnections.has(targetNodeId);
+  if (!router.hasScheduledReconnect(connection) && !reconnectPending) {
     return null;
   }
   return router.buildDeferredDeliveryFailure(
@@ -302,6 +307,14 @@ export async function ensureNodeConnection(router, targetNodeId, address) {
   }
   if (router.pendingNodeConnections.has(targetNodeId)) {
     return router.pendingNodeConnections.get(targetNodeId);
+  }
+  if (existing && existing.reconnectAttempts >= router.reconnectMaxAttempts) {
+    const lastAttempt = existing.lastAdHocAttemptAtMs || TRANSPORT_NUM.ZERO;
+    const nowMs = Date.now();
+    if (nowMs - lastAttempt < AD_HOC_RECONNECT_COOLDOWN_MS) {
+      return null;
+    }
+    existing.lastAdHocAttemptAtMs = nowMs;
   }
   const connectionPromise = (async () => {
     const reconnectCandidates = router.resolveReconnectAddressCandidates(
@@ -530,7 +543,7 @@ export function quarantineConnectionAfterAckTimeout(
     activeConnection.ackTimeoutStreak < router.ackTimeoutQuarantineThreshold
   ) {
     router.logger.debug(
-              MESSAGE_ROUTER_LITERAL.STRING_OBSERVED_ACK_TIMEOUT_BELOW_QUARANTINE_THRESHOLD,
+      MESSAGE_ROUTER_LITERAL.STRING_OBSERVED_ACK_TIMEOUT_BELOW_QUARANTINE_THRESHOLD,
       {
         messageId,
         targetAddress,

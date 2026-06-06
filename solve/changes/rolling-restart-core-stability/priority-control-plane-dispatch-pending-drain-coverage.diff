@@ -1,0 +1,65 @@
+diff --git a/src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js b/src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js
+--- a/src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js
++++ b/src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js
+@@ -101,9 +101,11 @@ const PRIORITY_RECOVERY_DISPATCH_PENDING_DRAIN_PARTITION_IDS =
+     new Set([
+       INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS],
+       INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.REPLICA_OPERATIONS],
++      INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SQL_TRANSACTIONS],
+       INITIAL_PARTITION_IDS[
+         SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS
+       ],
++      INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS],
+     ]),
+   );
+ 
+diff --git a/test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js b/test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js
+--- a/test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js
++++ b/test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js
+@@ -53,6 +53,8 @@ const TEST_REPLICA_OPERATIONS_OPERATION_ID =
+   'event-driven-replica-operations-operation';
+ const TEST_SQL_TRANSACTION_PARTICIPANTS_OPERATION_ID =
+   'event-driven-sql-transaction-participants-operation';
++const TEST_SQL_WRITE_OPERATION_ID =
++  'event-driven-sql-write-operation';
+ const TEST_REPLICA_ID = 'sql_transactions-p1-r4';
+ const TEST_SQL_WRITE_REPLICA_ID = 'sql_write_operations-p1-r4';
+ const TEST_CONTROL_PLANE_PUBLICATION_REPLICA_ID =
+@@ -215,6 +217,20 @@ const TEST_SPREAD_SATISFIED_DRAIN_WITNESSES = Object.freeze([
+     sourceNodeId: TEST_SQL_TRANSACTION_PARTICIPANTS_SOURCE_NODE_ID,
+     targetNodeId: TEST_SQL_TRANSACTION_PARTICIPANTS_TARGET_NODE_ID,
+   }),
++  Object.freeze({
++    operationId: TEST_OPERATION_ID,
++    partitionId: TEST_PARTITION_ID,
++    replicaId: TEST_REPLICA_ID,
++    sourceNodeId: TEST_SOURCE_NODE_ID,
++    targetNodeId: TEST_TARGET_NODE_ID,
++  }),
++  Object.freeze({
++    operationId: TEST_SQL_WRITE_OPERATION_ID,
++    partitionId: TEST_SQL_WRITE_PARTITION_ID,
++    replicaId: TEST_SQL_WRITE_REPLICA_ID,
++    sourceNodeId: TEST_SOURCE_NODE_ID,
++    targetNodeId: TEST_TARGET_NODE_ID,
++  }),
+ ]);
+ 
+ function buildEventDrivenOperation(overrides = {}) {
+@@ -1263,7 +1279,15 @@ test(TEST_DIRECT_BUILD_REENTRY_TEST_NAME, async (t) => {
+       coordinator.workflowOwner.buildPriorityRecoveryDecisionSnapshotForOperations(
+         operation.partitionId,
+         [operation],
+-        buildEventDrivenPlanningSnapshot(),
++        buildEventDrivenPlanningSnapshot({
++          partitionId: TEST_SQL_WRITE_PARTITION_ID,
++          operationId: operation.operationId,
++          workflowStep: WORKFLOW_STEP.SENDING,
++          actuationState:
++            PRIORITY_RECOVERY_ACTUATION_STATE.DISPATCHED_WAITING_PROGRESS,
++          completionState: 'blocked',
++          spreadGap: TEST_READY_DISTINCT_NODE_COUNT,
++        }),
+       );
+     await new Promise((resolve) => {
+       setTimeout(resolve, NUM.ZERO);

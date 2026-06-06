@@ -53,6 +53,8 @@ const TEST_REPLICA_OPERATIONS_OPERATION_ID =
   'event-driven-replica-operations-operation';
 const TEST_SQL_TRANSACTION_PARTICIPANTS_OPERATION_ID =
   'event-driven-sql-transaction-participants-operation';
+const TEST_SQL_WRITE_OPERATION_ID =
+  'event-driven-sql-write-operation';
 const TEST_REPLICA_ID = 'sql_transactions-p1-r4';
 const TEST_SQL_WRITE_REPLICA_ID = 'sql_write_operations-p1-r4';
 const TEST_CONTROL_PLANE_PUBLICATION_REPLICA_ID =
@@ -214,6 +216,20 @@ const TEST_SPREAD_SATISFIED_DRAIN_WITNESSES = Object.freeze([
     replicaId: TEST_SQL_TRANSACTION_PARTICIPANTS_REPLICA_ID,
     sourceNodeId: TEST_SQL_TRANSACTION_PARTICIPANTS_SOURCE_NODE_ID,
     targetNodeId: TEST_SQL_TRANSACTION_PARTICIPANTS_TARGET_NODE_ID,
+  }),
+  Object.freeze({
+    operationId: TEST_OPERATION_ID,
+    partitionId: TEST_PARTITION_ID,
+    replicaId: TEST_REPLICA_ID,
+    sourceNodeId: TEST_SOURCE_NODE_ID,
+    targetNodeId: TEST_TARGET_NODE_ID,
+  }),
+  Object.freeze({
+    operationId: TEST_SQL_WRITE_OPERATION_ID,
+    partitionId: TEST_SQL_WRITE_PARTITION_ID,
+    replicaId: TEST_SQL_WRITE_REPLICA_ID,
+    sourceNodeId: TEST_SOURCE_NODE_ID,
+    targetNodeId: TEST_TARGET_NODE_ID,
   }),
 ]);
 
@@ -504,8 +520,8 @@ test(TEST_REENTRY_TEST_NAME, async (t) => {
 
     t.equal(
       snapshot?.operationOwnerObservation?.outcome,
-      OPERATION_WORKFLOW_OUTCOME_VALUES.RECONCILE_STALE_PROGRESS,
-      TEST_ASSERT_TIMEOUT_RECONCILE_OWNER_OUTCOME,
+      OPERATION_WORKFLOW_OUTCOME_VALUES.WAKE_REMOTE_OWNER,
+      'the focused PENDING witness should wake the dispatch owner',
     );
     t.equal(
       snapshot?.operationOwnerObservation?.requestedOwnerAction,
@@ -514,8 +530,8 @@ test(TEST_REENTRY_TEST_NAME, async (t) => {
     );
     t.equal(
       snapshot?.operationOwnerObservation?.effectCommand,
-      OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES.RECONCILE_STALE_PROGRESS_COMMAND,
-      TEST_ASSERT_TIMEOUT_RECONCILE_EFFECT,
+      OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES.WAKE_REMOTE_OWNER_COMMAND,
+      'the focused PENDING witness should use the remote owner wake command',
     );
     t.equal(
       snapshot?.actuation?.state,
@@ -698,8 +714,8 @@ test(TEST_PENDING_REENTRY_TEST_NAME, async (t) => {
     );
     t.equal(
       snapshot?.operationOwnerObservation?.outcome,
-      OPERATION_WORKFLOW_OUTCOME_VALUES.RECONCILE_STALE_PROGRESS,
-      TEST_ASSERT_TIMEOUT_RECONCILE_OWNER_OUTCOME,
+      OPERATION_WORKFLOW_OUTCOME_VALUES.WAKE_REMOTE_OWNER,
+      'the focused PENDING witness should wake the dispatch owner',
     );
     t.equal(
       snapshot?.operationOwnerObservation?.requestedOwnerAction,
@@ -708,8 +724,8 @@ test(TEST_PENDING_REENTRY_TEST_NAME, async (t) => {
     );
     t.equal(
       snapshot?.operationOwnerObservation?.effectCommand,
-      OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES.RECONCILE_STALE_PROGRESS_COMMAND,
-      TEST_ASSERT_TIMEOUT_RECONCILE_EFFECT,
+      OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES.WAKE_REMOTE_OWNER_COMMAND,
+      'the focused PENDING witness should use the remote owner wake command',
     );
     t.equal(
       deliveries.length,
@@ -1002,6 +1018,132 @@ test(TEST_DIAGNOSTIC_OWNER_REENTRY_TEST_NAME, async (t) => {
 });
 
 test(
+  'first-timeout diagnostic owner re-entry refreshes active remote handoff retry',
+  async (t) => {
+    const deliveries = [];
+    const deferredTimers = [];
+    const operation = buildEventDrivenOperation({
+      operationId: TEST_PUBLICATION_BACKPRESSURE_OPERATION_ID,
+      partitionId: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+      entityId: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+      replicaId: TEST_CONTROL_PLANE_PUBLICATION_REPLICA_ID,
+      sourceNodeId: TEST_CONTROL_PLANE_PUBLICATION_SOURCE_NODE_ID,
+      targetNodeId: TEST_CONTROL_PLANE_PUBLICATION_TARGET_NODE_ID,
+      workflowStep: WORKFLOW_STEP.PENDING,
+      createdAt: TEST_RECENT_OPERATION_UPDATED_AT_MS,
+      updatedAt: TEST_RECENT_OPERATION_UPDATED_AT_MS,
+    });
+    const operationRow = buildEventDrivenOperationRow({
+      operation_id: TEST_PUBLICATION_BACKPRESSURE_OPERATION_ID,
+      partition_id: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+      entity_id: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+      replica_id: TEST_CONTROL_PLANE_PUBLICATION_REPLICA_ID,
+      source_node_id: TEST_CONTROL_PLANE_PUBLICATION_SOURCE_NODE_ID,
+      target_node_id: TEST_CONTROL_PLANE_PUBLICATION_TARGET_NODE_ID,
+      workflow_step: WORKFLOW_STEP.PENDING,
+      created_at: TEST_RECENT_OPERATION_UPDATED_AT_MS,
+      updated_at: TEST_RECENT_OPERATION_UPDATED_AT_MS,
+    });
+    const coordinator = createEventDrivenCoordinator(
+      deliveries,
+      deferredTimers,
+      operationRow,
+    );
+    const publicationConvergence = buildEventDrivenPlanningSnapshot({
+      operationId: TEST_PUBLICATION_BACKPRESSURE_OPERATION_ID,
+      partitionId: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+      workflowStep: WORKFLOW_STEP.PENDING,
+      publicationStatus: TEST_PUBLICATION_STATUS_OPEN,
+    });
+    const snapshot = buildPriorityRecoveryDecisionSnapshot({
+      partitionId: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+      capturedAt: TEST_CAPTURED_AT_MS,
+      publicationEpoch: TEST_PUBLICATION_EPOCH,
+      publicationConvergence,
+      priorityPartitionSummary:
+        publicationConvergence.priorityPartitionSummary,
+      operationContexts: [Object.freeze({
+        operationId: TEST_PUBLICATION_BACKPRESSURE_OPERATION_ID,
+        partitionId: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+        tableName: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
+        type: OperationType.REPLACE,
+        status: ReplicaStatus.PENDING,
+        workflowStep: WORKFLOW_STEP.PENDING,
+        sourceNodeId: TEST_CONTROL_PLANE_PUBLICATION_SOURCE_NODE_ID,
+        targetNodeId: TEST_CONTROL_PLANE_PUBLICATION_TARGET_NODE_ID,
+        replicaId: TEST_CONTROL_PLANE_PUBLICATION_REPLICA_ID,
+        createdAtMs: TEST_RECENT_OPERATION_UPDATED_AT_MS,
+        updatedAtMs: TEST_RECENT_OPERATION_UPDATED_AT_MS,
+        completedAtMs: TEST_UNDEFINED_VALUE,
+        stepTimeoutMs: TEST_STEP_TIMEOUT_MS,
+        targetVisibilityState:
+          PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.ABSENT,
+        targetServiceTerminalState:
+          PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE.UNKNOWN,
+      })],
+      operationId: TEST_PUBLICATION_BACKPRESSURE_OPERATION_ID,
+      stepTimeoutMsByWorkflowStep: {
+        [WORKFLOW_STEP.PENDING]: TEST_STEP_TIMEOUT_MS,
+      },
+    });
+    const firstTimeoutStepAgeMs = TEST_STEP_TIMEOUT_MS;
+    const firstTimeoutSnapshot = Object.freeze({
+      ...snapshot,
+      actuation: Object.freeze({
+        ...snapshot.actuation,
+        timeoutReconcileDue: true,
+        stepAgeMs: firstTimeoutStepAgeMs,
+        stepTimeoutMs: TEST_STEP_TIMEOUT_MS,
+      }),
+      progress: Object.freeze({
+        ...snapshot.progress,
+        stepAgeMs: firstTimeoutStepAgeMs,
+        stepTimeoutMs: TEST_STEP_TIMEOUT_MS,
+      }),
+    });
+
+    try {
+      coordinator.initialize();
+      t.equal(
+        coordinator.workflowOwner.schedulePriorityRecoveryDispatchPendingReentry(
+          snapshot,
+          [snapshot.coordinator.operation],
+        ),
+        true,
+        'baseline diagnostic re-entry should arm the first remote retry',
+      );
+      await new Promise((resolve) => {
+        setTimeout(resolve, NUM.ZERO);
+      });
+      t.same(
+        [deliveries.length, deferredTimers.length],
+        [NUM.ONE, NUM.ONE],
+        'baseline diagnostic re-entry should have one wake and retry',
+      );
+
+      t.equal(
+        coordinator.workflowOwner.schedulePriorityRecoveryDispatchPendingReentry(
+          firstTimeoutSnapshot,
+          [firstTimeoutSnapshot.coordinator.operation],
+        ),
+        true,
+        'first-timeout diagnostics should refresh the remote retry',
+      );
+      await new Promise((resolve) => {
+        setTimeout(resolve, NUM.ZERO);
+      });
+      t.same(
+        [deliveries.length, deferredTimers.length],
+        [NUM.TWO, NUM.TWO],
+        'first-timeout diagnostics should wake and re-arm verification',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  },
+);
+
+test(
   'authoritative visibility owner progress does not receive workflow progress contract',
   (t) => {
     const publicationConvergence = buildEventDrivenPlanningSnapshot({
@@ -1263,7 +1405,15 @@ test(TEST_DIRECT_BUILD_REENTRY_TEST_NAME, async (t) => {
       coordinator.workflowOwner.buildPriorityRecoveryDecisionSnapshotForOperations(
         operation.partitionId,
         [operation],
-        buildEventDrivenPlanningSnapshot(),
+        buildEventDrivenPlanningSnapshot({
+          partitionId: TEST_SQL_WRITE_PARTITION_ID,
+          operationId: operation.operationId,
+          workflowStep: WORKFLOW_STEP.SENDING,
+          actuationState:
+            PRIORITY_RECOVERY_ACTUATION_STATE.DISPATCHED_WAITING_PROGRESS,
+          completionState: 'blocked',
+          spreadGap: TEST_READY_DISTINCT_NODE_COUNT,
+        }),
       );
     await new Promise((resolve) => {
       setTimeout(resolve, NUM.ZERO);
@@ -1276,8 +1426,8 @@ test(TEST_DIRECT_BUILD_REENTRY_TEST_NAME, async (t) => {
     );
     t.equal(
       snapshot?.operationOwnerObservation?.outcome,
-      OPERATION_WORKFLOW_OUTCOME_VALUES.RECONCILE_STALE_PROGRESS,
-      TEST_ASSERT_TIMEOUT_RECONCILE_OWNER_OUTCOME,
+      OPERATION_WORKFLOW_OUTCOME_VALUES.WAKE_REMOTE_OWNER,
+      'direct owner snapshots should wake the dispatch owner',
     );
     t.equal(
       snapshot?.operationOwnerObservation?.requestedOwnerAction,

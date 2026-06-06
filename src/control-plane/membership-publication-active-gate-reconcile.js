@@ -425,6 +425,22 @@ function buildActiveGateMembershipPublicationReconcileOutcome(
       {}),
   });
 }
+function resolveActiveGateMembershipPublicationHandoffRetryAfterMs(
+  error,
+  controlPlaneConvergence,
+) {
+  if (
+    Number.isFinite(controlPlaneConvergence?.retryAfterMs) &&
+    controlPlaneConvergence.retryAfterMs > NUM.ZERO
+  ) {
+    return normalizeControlPlaneConvergenceRetryAfterMs(
+      controlPlaneConvergence.retryAfterMs,
+    );
+  }
+  return normalizeControlPlaneConvergenceRetryAfterMs(
+    getControlPlaneRetryAfterMs(error),
+  );
+}
 function buildActiveGateMembershipPublicationDeferredContext(
   context,
   reconcileOutcome = ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_OUTCOME,
@@ -875,8 +891,9 @@ async function reconcileActiveGateMembershipPublication(
             target,
             controlPlaneConvergence,
           ),
-        retryAfterMs: normalizeControlPlaneConvergenceRetryAfterMs(
-          getControlPlaneRetryAfterMs(error),
+        retryAfterMs: resolveActiveGateMembershipPublicationHandoffRetryAfterMs(
+          error,
+          controlPlaneConvergence,
         ),
         controlPlaneConvergence,
       },

@@ -1,0 +1,399 @@
+diff --git a/src/rebalancer/operation-lifecycle-event-resolution.js b/src/rebalancer/operation-lifecycle-event-resolution.js
+index d0059e8e..502f7117 100644
+--- a/src/rebalancer/operation-lifecycle-event-resolution.js
++++ b/src/rebalancer/operation-lifecycle-event-resolution.js
+@@ -102,6 +102,8 @@ function createOperationLifecycleEventResolver({outcomeByEvent}) {
+           OPERATION_WORKFLOW_COMMAND_STATE.IDLE &&
+         evidence.dispatchObservation.commandState ===
+           OPERATION_WORKFLOW_COMMAND_STATE.IDLE &&
++        evidence.durableOperation.dispatchState !==
++          OPERATION_WORKFLOW_DISPATCH_STATE.NOT_OBSERVED &&
+         OPERATION_WORKFLOW_KNOWN_OWNER_AUTHORITY_STATES.has(
+           evidence.ownerLease.authorityState,
+         )
+diff --git a/src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js b/src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js
+index 4667c5d2..ee09eba4 100644
+--- a/src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js
++++ b/src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js
+@@ -235,6 +235,17 @@ function applyPriorityRecoveryDispatchPendingAdvanceExistingOperationEffect(
+   if (owner.repository.isOperationLocallyOwned(operation) === true) {
+     return owner.armCoordinatorCreatedOperation(operation);
+   }
++  const operationId =
++    operation?.operationId || OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING;
++  if (
++    owner.shouldRefreshPriorityRecoveryDispatchPendingRemoteRetry(
++      operation,
++      decisionSnapshot,
++    ) &&
++    owner.hasActiveCreatedOperationHandoffRetry(operationId)
++  ) {
++    owner.clearCreatedOperationHandoffRetry(operationId);
++  }
+   const capturedAtMs =
+     resolvePriorityRecoveryDispatchPendingDecisionSnapshotCapturedAt(
+       decisionSnapshot,
+@@ -378,6 +389,11 @@ function buildPriorityRecoveryDispatchPendingReentryEvidence(
+   const operationId = String(
+     operation?.operationId || OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
+   ).trim();
++  const remoteRetryRefreshDue =
++    owner.shouldRefreshPriorityRecoveryDispatchPendingRemoteRetry(
++      operation,
++      snapshot,
++    );
+   return Object.freeze({
+     operationAvailable:
+       operation &&
+@@ -409,8 +425,10 @@ function buildPriorityRecoveryDispatchPendingReentryEvidence(
+     ownerLaneHeld: owner.isOperationOwnerLaneHeld(operationId),
+     ownerLaneRetryAllowed: options.allowOwnerLaneRetry === true,
+     remoteRetryActive:
++      remoteRetryRefreshDue !== true &&
+       !owner.repository.isOperationLocallyOwned(operation) &&
+       owner.hasActiveCreatedOperationHandoffRetry(operationId),
++    remoteRetryRefreshDue,
+   });
+ }
+ 
+@@ -617,6 +635,51 @@ function shouldReconcilePriorityRecoveryDispatchPendingDrain(
+   );
+ }
+ 
++function shouldRefreshPriorityRecoveryDispatchPendingRemoteRetry(
++  owner,
++  operation,
++  decisionSnapshot,
++) {
++  if (
++    !operation?.operationId ||
++    owner.repository.isOperationLocallyOwned(operation) === true
++  ) {
++    return false;
++  }
++  const operationOwnerObservation =
++    decisionSnapshot?.operationOwnerObservation;
++  const stepAgeMs = Number(
++    decisionSnapshot?.progress?.stepAgeMs ??
++      decisionSnapshot?.actuation?.stepAgeMs,
++  );
++  const stepTimeoutMs = Number(
++    decisionSnapshot?.progress?.stepTimeoutMs ??
++      decisionSnapshot?.actuation?.stepTimeoutMs,
++  );
++  return (
++    operationOwnerObservation?.effectExecution ===
++      PRIORITY_RECOVERY_OPERATION_OWNER_EFFECT_EXECUTION.NOT_EXECUTED &&
++    operationOwnerObservation?.effectCommand ===
++      PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_COMMAND
++        .ADVANCE_EXISTING_OPERATION &&
++    decisionSnapshot?.actuation?.timeoutReconcileDue === true &&
++    decisionSnapshot?.progress?.nextRequiredAction ===
++      PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION &&
++    decisionSnapshot?.progress?.blockingBoundary ===
++      PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS &&
++    decisionSnapshot?.progress?.waitMode ===
++      PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN &&
++    decisionSnapshot?.actuation?.workflowProgressPhaseId ===
++      PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING &&
++    decisionSnapshot?.progress?.workflowProgressPhaseId ===
++      PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING &&
++    Number.isFinite(stepAgeMs) &&
++    Number.isFinite(stepTimeoutMs) &&
++    stepTimeoutMs > NUM.ZERO &&
++    stepAgeMs >= stepTimeoutMs
++  );
++}
++
+ function buildPriorityRecoveryDispatchPendingDrainContext(decisionSnapshot) {
+   return Object.freeze({
+     decisionSnapshot,
+@@ -888,5 +951,6 @@ export {
+   resolvePriorityRecoveryDispatchPendingReentryState,
+   schedulePriorityRecoveryDispatchPendingReentry,
+   selectPriorityRecoveryDispatchPendingReentryOperation,
++  shouldRefreshPriorityRecoveryDispatchPendingRemoteRetry,
+   shouldReconcilePriorityRecoveryDispatchPendingDrain,
+ };
+diff --git a/src/rebalancer/operation-workflow-recovery-reconcile.js b/src/rebalancer/operation-workflow-recovery-reconcile.js
+index 4a8878c1..283e77c8 100644
+--- a/src/rebalancer/operation-workflow-recovery-reconcile.js
++++ b/src/rebalancer/operation-workflow-recovery-reconcile.js
+@@ -12,6 +12,7 @@ import {
+   resolvePriorityRecoveryDispatchPendingReentryState,
+   schedulePriorityRecoveryDispatchPendingReentry,
+   selectPriorityRecoveryDispatchPendingReentryOperation,
++  shouldRefreshPriorityRecoveryDispatchPendingRemoteRetry,
+   shouldReconcilePriorityRecoveryDispatchPendingDrain,
+ } from './operation-workflow-recovery-reconcile-dispatch-pending.js';
+ 
+@@ -98,6 +99,17 @@ class OperationWorkflowOwnerSegment7Stage5 extends OperationWorkflowOwnerSegment
+     );
+   }
+ 
++  shouldRefreshPriorityRecoveryDispatchPendingRemoteRetry(
++    operation,
++    decisionSnapshot,
++  ) {
++    return shouldRefreshPriorityRecoveryDispatchPendingRemoteRetry(
++      this,
++      operation,
++      decisionSnapshot,
++    );
++  }
++
+   applyPriorityRecoveryDispatchPendingReentryAction(
+     operation,
+     action,
+diff --git a/test/rebalancer/operation-workflow-owner-adapter.test.js b/test/rebalancer/operation-workflow-owner-adapter.test.js
+index 7dee3725..f96f9af0 100644
+--- a/test/rebalancer/operation-workflow-owner-adapter.test.js
++++ b/test/rebalancer/operation-workflow-owner-adapter.test.js
+@@ -455,3 +455,55 @@ test('operation workflow owner reconcile routes persisted pending ' +
+     'persisted PENDING re-entry should not fall through to transition advancement',
+   );
+ });
++
++test('operation workflow owner reconcile routes remote stale pending ' +
++  'dispatch through the wake owner path', async (t) => {
++  const harness = buildAdapterHarness();
++  const result = await harness.adapter.run(
++    buildOperation({
++      status: ReplicaStatus.PENDING,
++      workflowStep: WORKFLOW_STEP.PENDING,
++      updatedAt: TEST_SOURCE_REVISION,
++    }),
++    {
++      mode: OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_MODE.OWNER_RECONCILE,
++      evidence: buildEvidence({
++        durableOperation: buildDurableOperation({
++          dispatchState: OPERATION_WORKFLOW_DISPATCH_STATE.NOT_OBSERVED,
++        }),
++        workflowHistory: buildWorkflowHistory({
++          freshnessState: OPERATION_WORKFLOW_HISTORY_FRESHNESS_STATE.STALE,
++        }),
++        ownerLease: buildOwnerLease({
++          authorityState:
++            OPERATION_WORKFLOW_OWNER_AUTHORITY_STATE.REMOTE_AUTHORITATIVE,
++        }),
++        timeoutBudget: buildTimeoutBudget({
++          timeoutState: OPERATION_WORKFLOW_TIMEOUT_STATE.EXPIRED,
++          staleProgressState:
++            OPERATION_WORKFLOW_STALE_PROGRESS_STATE.PROVEN,
++        }),
++        dispatchObservation: buildDispatchObservation({
++          dispatchState: OPERATION_WORKFLOW_DISPATCH_STATE.NOT_OBSERVED,
++          wakeState: OPERATION_WORKFLOW_WAKE_STATE.REQUIRED,
++        }),
++      }),
++    },
++  );
++
++  t.equal(
++    result.outcome.outcome,
++    OPERATION_WORKFLOW_OUTCOME_VALUES.WAKE_REMOTE_OWNER,
++    'remote stale PENDING/pending owner reconcile should wake dispatch owner',
++  );
++  t.equal(
++    result.command.effectCommand,
++    OPERATION_WORKFLOW_EFFECT_COMMANDS.WAKE_REMOTE_OWNER_COMMAND,
++    'remote stale PENDING re-entry should use the canonical wake command',
++  );
++  t.same(
++    harness.calls,
++    [OPERATION_WORKFLOW_EFFECT_COMMANDS.WAKE_REMOTE_OWNER_COMMAND],
++    'remote stale PENDING re-entry should not retain publication for retry',
++  );
++});
+diff --git a/test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js b/test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js
+index 4cf6f1e5..5cc7cf49 100644
+--- a/test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js
++++ b/test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js
+@@ -504,8 +504,8 @@ test(TEST_REENTRY_TEST_NAME, async (t) => {
+ 
+     t.equal(
+       snapshot?.operationOwnerObservation?.outcome,
+-      OPERATION_WORKFLOW_OUTCOME_VALUES.RECONCILE_STALE_PROGRESS,
+-      TEST_ASSERT_TIMEOUT_RECONCILE_OWNER_OUTCOME,
++      OPERATION_WORKFLOW_OUTCOME_VALUES.WAKE_REMOTE_OWNER,
++      'the focused PENDING witness should wake the dispatch owner',
+     );
+     t.equal(
+       snapshot?.operationOwnerObservation?.requestedOwnerAction,
+@@ -514,8 +514,8 @@ test(TEST_REENTRY_TEST_NAME, async (t) => {
+     );
+     t.equal(
+       snapshot?.operationOwnerObservation?.effectCommand,
+-      OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES.RECONCILE_STALE_PROGRESS_COMMAND,
+-      TEST_ASSERT_TIMEOUT_RECONCILE_EFFECT,
++      OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES.WAKE_REMOTE_OWNER_COMMAND,
++      'the focused PENDING witness should use the remote owner wake command',
+     );
+     t.equal(
+       snapshot?.actuation?.state,
+@@ -698,8 +698,8 @@ test(TEST_PENDING_REENTRY_TEST_NAME, async (t) => {
+     );
+     t.equal(
+       snapshot?.operationOwnerObservation?.outcome,
+-      OPERATION_WORKFLOW_OUTCOME_VALUES.RECONCILE_STALE_PROGRESS,
+-      TEST_ASSERT_TIMEOUT_RECONCILE_OWNER_OUTCOME,
++      OPERATION_WORKFLOW_OUTCOME_VALUES.WAKE_REMOTE_OWNER,
++      'the focused PENDING witness should wake the dispatch owner',
+     );
+     t.equal(
+       snapshot?.operationOwnerObservation?.requestedOwnerAction,
+@@ -708,8 +708,8 @@ test(TEST_PENDING_REENTRY_TEST_NAME, async (t) => {
+     );
+     t.equal(
+       snapshot?.operationOwnerObservation?.effectCommand,
+-      OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES.RECONCILE_STALE_PROGRESS_COMMAND,
+-      TEST_ASSERT_TIMEOUT_RECONCILE_EFFECT,
++      OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES.WAKE_REMOTE_OWNER_COMMAND,
++      'the focused PENDING witness should use the remote owner wake command',
+     );
+     t.equal(
+       deliveries.length,
+@@ -1001,6 +1001,132 @@ test(TEST_DIAGNOSTIC_OWNER_REENTRY_TEST_NAME, async (t) => {
+   }
+ });
+ 
++test(
++  'first-timeout diagnostic owner re-entry refreshes active remote handoff retry',
++  async (t) => {
++    const deliveries = [];
++    const deferredTimers = [];
++    const operation = buildEventDrivenOperation({
++      operationId: TEST_PUBLICATION_BACKPRESSURE_OPERATION_ID,
++      partitionId: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
++      entityId: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
++      replicaId: TEST_CONTROL_PLANE_PUBLICATION_REPLICA_ID,
++      sourceNodeId: TEST_CONTROL_PLANE_PUBLICATION_SOURCE_NODE_ID,
++      targetNodeId: TEST_CONTROL_PLANE_PUBLICATION_TARGET_NODE_ID,
++      workflowStep: WORKFLOW_STEP.PENDING,
++      createdAt: TEST_RECENT_OPERATION_UPDATED_AT_MS,
++      updatedAt: TEST_RECENT_OPERATION_UPDATED_AT_MS,
++    });
++    const operationRow = buildEventDrivenOperationRow({
++      operation_id: TEST_PUBLICATION_BACKPRESSURE_OPERATION_ID,
++      partition_id: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
++      entity_id: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
++      replica_id: TEST_CONTROL_PLANE_PUBLICATION_REPLICA_ID,
++      source_node_id: TEST_CONTROL_PLANE_PUBLICATION_SOURCE_NODE_ID,
++      target_node_id: TEST_CONTROL_PLANE_PUBLICATION_TARGET_NODE_ID,
++      workflow_step: WORKFLOW_STEP.PENDING,
++      created_at: TEST_RECENT_OPERATION_UPDATED_AT_MS,
++      updated_at: TEST_RECENT_OPERATION_UPDATED_AT_MS,
++    });
++    const coordinator = createEventDrivenCoordinator(
++      deliveries,
++      deferredTimers,
++      operationRow,
++    );
++    const publicationConvergence = buildEventDrivenPlanningSnapshot({
++      operationId: TEST_PUBLICATION_BACKPRESSURE_OPERATION_ID,
++      partitionId: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
++      workflowStep: WORKFLOW_STEP.PENDING,
++      publicationStatus: TEST_PUBLICATION_STATUS_OPEN,
++    });
++    const snapshot = buildPriorityRecoveryDecisionSnapshot({
++      partitionId: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
++      capturedAt: TEST_CAPTURED_AT_MS,
++      publicationEpoch: TEST_PUBLICATION_EPOCH,
++      publicationConvergence,
++      priorityPartitionSummary:
++        publicationConvergence.priorityPartitionSummary,
++      operationContexts: [Object.freeze({
++        operationId: TEST_PUBLICATION_BACKPRESSURE_OPERATION_ID,
++        partitionId: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
++        tableName: TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID,
++        type: OperationType.REPLACE,
++        status: ReplicaStatus.PENDING,
++        workflowStep: WORKFLOW_STEP.PENDING,
++        sourceNodeId: TEST_CONTROL_PLANE_PUBLICATION_SOURCE_NODE_ID,
++        targetNodeId: TEST_CONTROL_PLANE_PUBLICATION_TARGET_NODE_ID,
++        replicaId: TEST_CONTROL_PLANE_PUBLICATION_REPLICA_ID,
++        createdAtMs: TEST_RECENT_OPERATION_UPDATED_AT_MS,
++        updatedAtMs: TEST_RECENT_OPERATION_UPDATED_AT_MS,
++        completedAtMs: TEST_UNDEFINED_VALUE,
++        stepTimeoutMs: TEST_STEP_TIMEOUT_MS,
++        targetVisibilityState:
++          PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.ABSENT,
++        targetServiceTerminalState:
++          PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE.UNKNOWN,
++      })],
++      operationId: TEST_PUBLICATION_BACKPRESSURE_OPERATION_ID,
++      stepTimeoutMsByWorkflowStep: {
++        [WORKFLOW_STEP.PENDING]: TEST_STEP_TIMEOUT_MS,
++      },
++    });
++    const firstTimeoutStepAgeMs = TEST_STEP_TIMEOUT_MS;
++    const firstTimeoutSnapshot = Object.freeze({
++      ...snapshot,
++      actuation: Object.freeze({
++        ...snapshot.actuation,
++        timeoutReconcileDue: true,
++        stepAgeMs: firstTimeoutStepAgeMs,
++        stepTimeoutMs: TEST_STEP_TIMEOUT_MS,
++      }),
++      progress: Object.freeze({
++        ...snapshot.progress,
++        stepAgeMs: firstTimeoutStepAgeMs,
++        stepTimeoutMs: TEST_STEP_TIMEOUT_MS,
++      }),
++    });
++
++    try {
++      coordinator.initialize();
++      t.equal(
++        coordinator.workflowOwner.schedulePriorityRecoveryDispatchPendingReentry(
++          snapshot,
++          [snapshot.coordinator.operation],
++        ),
++        true,
++        'baseline diagnostic re-entry should arm the first remote retry',
++      );
++      await new Promise((resolve) => {
++        setTimeout(resolve, NUM.ZERO);
++      });
++      t.same(
++        [deliveries.length, deferredTimers.length],
++        [NUM.ONE, NUM.ONE],
++        'baseline diagnostic re-entry should have one wake and retry',
++      );
++
++      t.equal(
++        coordinator.workflowOwner.schedulePriorityRecoveryDispatchPendingReentry(
++          firstTimeoutSnapshot,
++          [firstTimeoutSnapshot.coordinator.operation],
++        ),
++        true,
++        'first-timeout diagnostics should refresh the remote retry',
++      );
++      await new Promise((resolve) => {
++        setTimeout(resolve, NUM.ZERO);
++      });
++      t.same(
++        [deliveries.length, deferredTimers.length],
++        [NUM.TWO, NUM.TWO],
++        'first-timeout diagnostics should wake and re-arm verification',
++      );
++    } finally {
++      await coordinator.shutdown();
++    }
++  },
++);
++
+ test(
+   'authoritative visibility owner progress does not receive workflow progress contract',
+   (t) => {
+@@ -1276,8 +1402,8 @@ test(TEST_DIRECT_BUILD_REENTRY_TEST_NAME, async (t) => {
+     );
+     t.equal(
+       snapshot?.operationOwnerObservation?.outcome,
+-      OPERATION_WORKFLOW_OUTCOME_VALUES.RECONCILE_STALE_PROGRESS,
+-      TEST_ASSERT_TIMEOUT_RECONCILE_OWNER_OUTCOME,
++      OPERATION_WORKFLOW_OUTCOME_VALUES.WAKE_REMOTE_OWNER,
++      'direct owner snapshots should wake the dispatch owner',
+     );
+     t.equal(
+       snapshot?.operationOwnerObservation?.requestedOwnerAction,

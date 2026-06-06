@@ -777,6 +777,9 @@ test('handleNodeJoinedCDC - connects to new node (Req 3.6)', async (t) => {
   };
 
   const result = await handler.handleNodeJoinedCDC(cdcEvent);
+  if (result.connectPromise) {
+    await result.connectPromise.catch(() => {});
+  }
 
   t.equal(result.processed, true, 'should process event');
   t.equal(result.nodeId, 'new-node', 'should return node ID');
@@ -871,6 +874,9 @@ test('handleNodeJoinedCDC - reconnects when existing entry is disconnected', asy
   };
 
   const result = await handler.handleNodeJoinedCDC(cdcEvent);
+  if (result.connectPromise) {
+    await result.connectPromise.catch(() => {});
+  }
 
   t.equal(result.processed, true, 'should process event');
   t.equal(result.connected, true, 'should reconnect disconnected entry');
@@ -1054,10 +1060,17 @@ test('handleNodeJoinedCDC - handles connection failure gracefully', async (t) =>
   };
 
   const result = await handler.handleNodeJoinedCDC(cdcEvent);
+  let error = null;
+  if (result.connectPromise) {
+    const connectResult = await result.connectPromise;
+    if (!connectResult.success) {
+      error = connectResult.error;
+    }
+  }
 
-  t.equal(result.processed, false, 'should not process on failure');
+  t.equal(result.processed, true, 'should process event and initiate connection');
   t.equal(result.nodeId, 'new-node', 'should return node ID');
-  t.ok(result.error.includes('Connection refused'), 'should have error message');
+  t.ok(error && error.message.includes('Connection refused'), 'should propagate connection error');
   t.equal(context.events.length, 0, 'should not emit events on failure');
   t.end();
 });

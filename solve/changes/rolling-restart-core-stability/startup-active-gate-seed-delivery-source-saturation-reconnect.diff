@@ -1,0 +1,562 @@
+diff --git a/src/transport/message-router-connection-lifecycle-methods.js b/src/transport/message-router-connection-lifecycle-methods.js
+index 0872da77..2c6a9e76 100644
+--- a/src/transport/message-router-connection-lifecycle-methods.js
++++ b/src/transport/message-router-connection-lifecycle-methods.js
+@@ -257,7 +257,14 @@ class MessageRouterConnectionLifecycleMethods {
+       createdAt: Date.now(),
+     };
+     this.nodeConnections.set(nodeId, connectionInfo);
+-    await this.establishConnection(connectionInfo);
++    try {
++      await this.establishConnection(connectionInfo);
++    } catch (error) {
++      if (options.autoReconnect !== false) {
++        this.handleConnectionClose(nodeId, connectionInfo.connectionId);
++      }
++      throw error;
++    }
+   }
+   /**
+    * Establish WebSocket connection to a remote node.
+@@ -293,7 +300,7 @@ class MessageRouterConnectionLifecycleMethods {
+         const attempts = connectionInfo.reconnectAttempts || TRANSPORT_NUM.ZERO;
+         const currentConnectTimeoutMs = Math.min(
+           30000,
+-          this.connectTimeoutMs + attempts * 5000
++          this.connectTimeoutMs + attempts * 5000,
+         );
+         let connectTimeout = setTimeout(() => {
+           const error = new Error(
+@@ -484,8 +491,11 @@ class MessageRouterConnectionLifecycleMethods {
+ 
+ function createMessageRouterConnectionLifecycleMethods() {
+   return Object.fromEntries(
+-    Object.entries(Object.getOwnPropertyDescriptors(MessageRouterConnectionLifecycleMethods.prototype))
+-      .filter(([name]) => name !== 'constructor'),
++    Object.entries(
++      Object.getOwnPropertyDescriptors(
++        MessageRouterConnectionLifecycleMethods.prototype,
++      ),
++    ).filter(([name]) => name !== 'constructor'),
+   );
+ }
+ 
+diff --git a/src/transport/message-router-delivery-behaviors.js b/src/transport/message-router-delivery-behaviors.js
+index 23eb65ec..f589dabc 100644
+--- a/src/transport/message-router-delivery-behaviors.js
++++ b/src/transport/message-router-delivery-behaviors.js
+@@ -250,6 +250,17 @@ export async function deliverRemote(
+     options.timeoutMs > TRANSPORT_NUM.ZERO ?
+       Math.floor(options.timeoutMs) :
+       router.messageTimeoutMs;
++  const reconnectInProgress = router.buildReconnectInProgressFailure(
++    targetNodeId,
++    messageId,
++    correlationId,
++  );
++  if (reconnectInProgress) {
++    return {
++      result: reconnectInProgress,
++      queueWaitMs: TRANSPORT_NUM.ZERO,
++    };
++  }
+   const responsePromise = router.registerPendingResponse(messageId, targetNodeId, {
+     deliverySource: resolveDeliverySource(targetAddress, payload, options),
+   });
+diff --git a/src/transport/message-router-delivery-source-admission.js b/src/transport/message-router-delivery-source-admission.js
+index aca89300..914636d8 100644
+--- a/src/transport/message-router-delivery-source-admission.js
++++ b/src/transport/message-router-delivery-source-admission.js
+@@ -10,6 +10,13 @@ import {
+   normalizeIdentifier,
+ } from './message-router-shared-stage-1.js';
+ 
++const PRIORITY_SYSTEM_TARGET_TABLE_IDS = Object.freeze([
++  'control_plane_publications',
++  'sql_write_operations',
++]);
++const TARGET_SOURCE_PARTITION_PATTERN =
++  /^target:[^/]+\/partition\/(.+)-p\d+(?:-r\d+)?$/u;
++
+ function normalizeQueueMaxPending(queue) {
+   const maxPending =
+     Number.isFinite(queue?.maxPending) &&
+@@ -35,6 +42,19 @@ function isCriticalTargetFallbackDeliverySource(
+       .startsWith(MESSAGE_ROUTER_LITERAL.STRING_TARGET_PREFIX);
+ }
+ 
++function isPrioritySystemTargetDeliverySource(deliverySource) {
++  const normalizedDeliverySource = normalizeQueuedDeliverySource(
++    deliverySource,
++  );
++  const partitionMatch = normalizedDeliverySource.match(
++    TARGET_SOURCE_PARTITION_PATTERN,
++  );
++  if (!partitionMatch) {
++    return false;
++  }
++  return PRIORITY_SYSTEM_TARGET_TABLE_IDS.includes(partitionMatch[1]);
++}
++
+ function resolveDeliverySourceAdmissionKey(
+   deliverySource,
+   deliveryPriority,
+@@ -42,6 +62,12 @@ function resolveDeliverySourceAdmissionKey(
+   const normalizedDeliverySource = normalizeQueuedDeliverySource(
+     deliverySource,
+   );
++  if (
++    deliveryPriority === OutboundDeliveryPriority.CRITICAL &&
++    isPrioritySystemTargetDeliverySource(normalizedDeliverySource)
++  ) {
++    return normalizedDeliverySource;
++  }
+   if (
+     isCriticalTargetFallbackDeliverySource(
+       normalizedDeliverySource,
+@@ -294,6 +320,7 @@ export {
+   countPendingByAdmissionSource,
+   countPendingBySource,
+   isCriticalTargetFallbackDeliverySource,
++  isPrioritySystemTargetDeliverySource,
+   normalizeQueueMaxPending,
+   normalizeQueuedDeliverySource,
+   resolveBoundedCriticalReserve,
+diff --git a/src/transport/message-router-reconnect-behaviors.js b/src/transport/message-router-reconnect-behaviors.js
+index 2fae4143..ec4a50ae 100644
+--- a/src/transport/message-router-reconnect-behaviors.js
++++ b/src/transport/message-router-reconnect-behaviors.js
+@@ -14,6 +14,8 @@ const {
+   uuidv4,
+ } = MESSAGE_ROUTER_SHARED;
+ 
++const AD_HOC_RECONNECT_COOLDOWN_MS = 10000;
++
+ export function resolveNodeAddressForDelivery(router, targetNodeId) {
+   return router.connectionAuthorityOwner.resolveNodeAddressForDelivery(
+     targetNodeId,
+@@ -81,7 +83,10 @@ export function buildReconnectInProgressFailure(
+   correlationId,
+ ) {
+   const connection = router.nodeConnections.get(targetNodeId) || null;
+-  if (!router.hasScheduledReconnect(connection)) {
++  const reconnectPending =
++    connection?.state !== ConnectionState.CONNECTED &&
++    router.pendingNodeConnections.has(targetNodeId);
++  if (!router.hasScheduledReconnect(connection) && !reconnectPending) {
+     return null;
+   }
+   return router.buildDeferredDeliveryFailure(
+@@ -303,6 +308,14 @@ export async function ensureNodeConnection(router, targetNodeId, address) {
+   if (router.pendingNodeConnections.has(targetNodeId)) {
+     return router.pendingNodeConnections.get(targetNodeId);
+   }
++  if (existing && existing.reconnectAttempts >= router.reconnectMaxAttempts) {
++    const lastAttempt = existing.lastAdHocAttemptAtMs || TRANSPORT_NUM.ZERO;
++    const nowMs = Date.now();
++    if (nowMs - lastAttempt < AD_HOC_RECONNECT_COOLDOWN_MS) {
++      return null;
++    }
++    existing.lastAdHocAttemptAtMs = nowMs;
++  }
+   const connectionPromise = (async () => {
+     const reconnectCandidates = router.resolveReconnectAddressCandidates(
+       targetNodeId,
+@@ -530,7 +543,7 @@ export function quarantineConnectionAfterAckTimeout(
+     activeConnection.ackTimeoutStreak < router.ackTimeoutQuarantineThreshold
+   ) {
+     router.logger.debug(
+-              MESSAGE_ROUTER_LITERAL.STRING_OBSERVED_ACK_TIMEOUT_BELOW_QUARANTINE_THRESHOLD,
++      MESSAGE_ROUTER_LITERAL.STRING_OBSERVED_ACK_TIMEOUT_BELOW_QUARANTINE_THRESHOLD,
+       {
+         messageId,
+         targetAddress,
+diff --git a/src/transport/message-router-segment-2.js b/src/transport/message-router-segment-2.js
+index 9d622d42..3880e562 100644
+--- a/src/transport/message-router-segment-2.js
++++ b/src/transport/message-router-segment-2.js
+@@ -572,7 +572,7 @@ class MessageRouterSegment2 extends MessageRouterSegment1 {
+       attempt: connectionInfo.reconnectAttempts,
+       delayMs: delay,
+     });
+-    connectionInfo.reconnectTimeout = setTimeout(async () => {
++    connectionInfo.reconnectTimeout = setTimeout(() => {
+       connectionInfo.reconnectTimeout = null;
+       connectionInfo.reconnectDueAt = null;
+       if (connectionInfo.retired || !this.isCurrentConnection(connectionInfo)) {
+@@ -580,30 +580,36 @@ class MessageRouterSegment2 extends MessageRouterSegment1 {
+         connectionInfo.state = ConnectionState.CLOSED;
+         return;
+       }
+-      try {
+-        this.refreshReconnectAuthority(
+-          connectionInfo,
+-          connectionInfo.address || connectionInfo.configuredAddress,
+-        );
+-        if (
+-          (!connectionInfo.address ||
+-            connectionInfo.address.length === TRANSPORT_NUM.ZERO) &&
+-          typeof connectionInfo.configuredAddress === TRANSPORT_TYPEOF.STRING &&
+-          connectionInfo.configuredAddress.length > TRANSPORT_NUM.ZERO
+-        ) {
+-          connectionInfo.address = connectionInfo.configuredAddress;
++      const connectionPromise = (async () => {
++        try {
++          this.refreshReconnectAuthority(
++            connectionInfo,
++            connectionInfo.address || connectionInfo.configuredAddress,
++          );
++          if ((!connectionInfo.address || connectionInfo.address.length === TRANSPORT_NUM.ZERO) &&
++              typeof connectionInfo.configuredAddress === TRANSPORT_TYPEOF.STRING &&
++              connectionInfo.configuredAddress.length > TRANSPORT_NUM.ZERO) {
++            connectionInfo.address = connectionInfo.configuredAddress;
++          }
++          await this.establishConnection(connectionInfo);
++          return connectionInfo.state === ConnectionState.CONNECTED ? connectionInfo : null;
++        } catch (error) {
++          this.logger.error(ROUTER_LOG_MSG.RECONNECT_FAILED, {
++            nodeId: connectionInfo.nodeId,
++            error: error.message,
++          });
++          if (this.isShuttingDown) {
++            return null;
++          }
++          this.scheduleReconnect(connectionInfo);
++          return null;
++        } finally {
++          this.pendingNodeConnections.delete(connectionInfo.nodeId);
++          this.recordPendingNodeConnectionSnapshot();
+         }
+-        await this.establishConnection(connectionInfo);
+-      } catch (error) {
+-        this.logger.error(ROUTER_LOG_MSG.RECONNECT_FAILED, {
+-          nodeId: connectionInfo.nodeId,
+-          error: error.message,
+-        });
+-        if (this.isShuttingDown) {
+-          return;
+-        }
+-        this.scheduleReconnect(connectionInfo);
+-      }
++      })();
++      this.pendingNodeConnections.set(connectionInfo.nodeId, connectionPromise);
++      this.recordPendingNodeConnectionSnapshot();
+     }, delay);
+     if (
+       typeof connectionInfo.reconnectTimeout?.unref ===
+diff --git a/test/transport/message-router-critical-source-reserve.test.js b/test/transport/message-router-critical-source-reserve.test.js
+index 05cfe361..9444e6f9 100644
+--- a/test/transport/message-router-critical-source-reserve.test.js
++++ b/test/transport/message-router-critical-source-reserve.test.js
+@@ -24,7 +24,7 @@ const TEST_CONTROL_PLANE_TARGET_ADDRESS =
+   'remote-node/service/control-plane';
+ const TEST_HANDOFF_DELIVERY_SOURCE = 'coordinator_created_remote_handoff';
+ const TEST_TARGET_FALLBACK_TARGET_ADDRESS =
+-  'remote-node/partition/control_plane_publications-p1-r4';
++  'remote-node/partition/sql_transactions-p1-r4';
+ const TEST_HOT_LABEL_PREFIX = 'hot';
+ const TEST_CONTROL_PLANE_LABEL = 'control-plane';
+ const TEST_TARGET_FALLBACK_LABEL = 'target-fallback';
+diff --git a/test/transport/message-router-main-stage-2.js b/test/transport/message-router-main-stage-2.js
+index 6ca8c1c3..da11cb27 100644
+--- a/test/transport/message-router-main-stage-2.js
++++ b/test/transport/message-router-main-stage-2.js
+@@ -699,7 +699,7 @@ t.test('MessageRouter unit tests chunk 2', async (t) => {
+       await Promise.resolve();
+ 
+       const hotRecoveryTargetAddress =
+-        'remote-node/partition/control_plane_publications-p1-r4';
++        'remote-node/partition/sql_transactions-p1-r4';
+       const criticalSourceDeliveries = [];
+       for (let index = 0; index < 4; index++) {
+         criticalSourceDeliveries.push(
+@@ -794,6 +794,263 @@ t.test('MessageRouter unit tests chunk 2', async (t) => {
+     },
+   );
+ 
++  t.test(
++    'should defer scheduled reconnect deliveries before outbound queue admission',
++    async (t) => {
++      const router = new MessageRouter({
++        nodeId: 'local-node',
++        nodeAddress: 'ws://local-node:7000',
++        startServer: false,
++        outboundQueueMaxConcurrent: 1,
++        outboundQueueMaxPending: 2,
++        outboundQueueCriticalReserve: 1,
++      });
++      await router.initialize();
++
++      let registeredPendingResponse = false;
++      router.registerPendingResponse = () => {
++        registeredPendingResponse = true;
++        return new Promise(() => {});
++      };
++
++      const reconnectTimeout = setTimeout(() => {}, 30000);
++      if (typeof reconnectTimeout.unref === 'function') {
++        reconnectTimeout.unref();
++      }
++      router.nodeConnections.set('remote-node', {
++        nodeId: 'remote-node',
++        address: 'ws://remote-node:9999',
++        configuredAddress: 'ws://remote-node:9999',
++        observedAddress: null,
++        state: ConnectionState.RECONNECTING,
++        ws: null,
++        isIncoming: false,
++        isSelfConnection: false,
++        reconnectTimeout,
++        reconnectDueAt: Date.now() + 250,
++      });
++
++      const result = await router.deliver(
++        'remote-node/partition/control_plane_publications-p1-r4',
++        {type: 'TEST_MESSAGE', messageId: 'scheduled-reconnect-msg'},
++        {deliveryPriority: 'critical'},
++      );
++
++      const queue = router.getOutboundQueue('remote-node');
++      t.equal(
++        result.acknowledged,
++        false,
++        'scheduled reconnect delivery should be deferred as retryable',
++      );
++      t.equal(
++        result.errorCode,
++        'ROUTER_CONNECTION_CLOSED',
++        'scheduled reconnect failure should keep the connection-closed code',
++      );
++      t.equal(
++        registeredPendingResponse,
++        false,
++        'scheduled reconnect fast-defer should not register a service waiter',
++      );
++      t.equal(
++        queue.pending.length,
++        0,
++        'scheduled reconnect fast-defer should not occupy pending queue slots',
++      );
++      t.equal(
++        queue.inFlight,
++        0,
++        'scheduled reconnect fast-defer should not occupy in-flight slots',
++      );
++
++      clearTimeout(reconnectTimeout);
++      await router.shutdown();
++    },
++  );
++
++  t.test(
++    'should defer pending reconnect attempts before outbound queue admission',
++    async (t) => {
++      const router = new MessageRouter({
++        nodeId: 'local-node',
++        nodeAddress: 'ws://local-node:7000',
++        startServer: false,
++        outboundQueueMaxConcurrent: 1,
++        outboundQueueMaxPending: 2,
++        outboundQueueCriticalReserve: 1,
++      });
++      await router.initialize();
++
++      let registeredPendingResponseCount = 0;
++      router.registerPendingResponse = () => {
++        registeredPendingResponseCount += 1;
++        return new Promise(() => {});
++      };
++      router.nodeConnections.set('remote-node', {
++        nodeId: 'remote-node',
++        address: 'ws://remote-node:9999',
++        configuredAddress: 'ws://remote-node:9999',
++        observedAddress: null,
++        state: ConnectionState.RECONNECTING,
++        ws: null,
++        isIncoming: false,
++        isSelfConnection: false,
++        reconnectTimeout: null,
++        reconnectDueAt: null,
++      });
++      router.pendingNodeConnections.set(
++        'remote-node',
++        new Promise(() => {}),
++      );
++
++      const attempts = [];
++      for (let index = 0; index < 4; index++) {
++        attempts.push(router.deliver(
++          'remote-node/partition/control_plane_publications-p1-r4',
++          {type: 'TEST_MESSAGE', messageId: `pending-reconnect-msg-${index}`},
++          {deliveryPriority: 'critical'},
++        ));
++      }
++      const results = await Promise.all(attempts);
++
++      const queue = router.getOutboundQueue('remote-node');
++      t.equal(
++        results.every((result) =>
++          result?.acknowledged === false &&
++          result?.errorCode === 'ROUTER_CONNECTION_CLOSED'),
++        true,
++        'pending reconnect deliveries should all be deferred as retryable',
++      );
++      t.equal(
++        registeredPendingResponseCount,
++        0,
++        'pending reconnect fast-defer should not register service waiters',
++      );
++      t.equal(
++        queue.pending.length,
++        0,
++        'pending reconnect fast-defer should not fill pending queue slots',
++      );
++      t.equal(
++        queue.inFlight,
++        0,
++        'pending reconnect fast-defer should not fill in-flight source slots',
++      );
++
++      router.pendingNodeConnections.delete('remote-node');
++      await router.shutdown();
++    },
++  );
++
++  t.test(
++    'should keep priority system targets out of aggregate fallback admission',
++    async (t) => {
++      const TEST_LOCAL_NODE_ID = 'local-node';
++      const TEST_REMOTE_NODE_ID = 'remote-node';
++      const TEST_NODE_ADDRESS = 'ws://local-node:7000';
++      const TEST_MAX_CONCURRENT = 1;
++      const TEST_MAX_PENDING = 64;
++      const TEST_CRITICAL_RESERVE = 16;
++      const TEST_ALLOWED_TARGET_FALLBACK_DELIVERIES = 8;
++      const TEST_GENERIC_TARGET_ADDRESS =
++        'remote-node/partition/user_orders-p1-r4';
++      const TEST_PUBLICATION_TARGET_ADDRESS =
++        'remote-node/partition/control_plane_publications-p1-r4';
++      const TEST_WRITE_TARGET_ADDRESS =
++        'remote-node/partition/sql_write_operations-p1-r4';
++      const router = new MessageRouter({
++        nodeId: TEST_LOCAL_NODE_ID,
++        nodeAddress: TEST_NODE_ADDRESS,
++        startServer: false,
++        outboundQueueMaxConcurrent: TEST_MAX_CONCURRENT,
++        outboundQueueMaxPending: TEST_MAX_PENDING,
++        outboundQueueCriticalReserve: TEST_CRITICAL_RESERVE,
++      });
++      await router.initialize();
++
++      let releaseFirstSend = null;
++      const firstDelivery = router.enqueueOutbound(
++        TEST_REMOTE_NODE_ID,
++        () => new Promise((resolve) => {
++          releaseFirstSend = () => resolve({acknowledged: true});
++        }),
++        {deliveryPriority: 'critical'},
++      );
++      await Promise.resolve();
++
++      const genericFallbackDeliveries = [];
++      for (
++        let index = 0;
++        index < TEST_ALLOWED_TARGET_FALLBACK_DELIVERIES;
++        index++
++      ) {
++        genericFallbackDeliveries.push(
++          router.enqueueOutbound(
++            TEST_REMOTE_NODE_ID,
++            async () => ({acknowledged: true, genericIndex: index}),
++            {
++              deliveryPriority: 'critical',
++              targetAddress: TEST_GENERIC_TARGET_ADDRESS,
++              message: {},
++            },
++          ),
++        );
++        await Promise.resolve();
++      }
++
++      const publicationDelivery = router.enqueueOutbound(
++        TEST_REMOTE_NODE_ID,
++        async () => ({acknowledged: true, publication: true}),
++        {
++          deliveryPriority: 'critical',
++          targetAddress: TEST_PUBLICATION_TARGET_ADDRESS,
++          message: {},
++        },
++      );
++      await Promise.resolve();
++      const writeDelivery = router.enqueueOutbound(
++        TEST_REMOTE_NODE_ID,
++        async () => ({acknowledged: true, write: true}),
++        {
++          deliveryPriority: 'critical',
++          targetAddress: TEST_WRITE_TARGET_ADDRESS,
++          message: {},
++        },
++      );
++      await Promise.resolve();
++
++      const queue = router.getOutboundQueue(TEST_REMOTE_NODE_ID);
++      const publicationSource = `target:${TEST_PUBLICATION_TARGET_ADDRESS}`;
++      const writeSource = `target:${TEST_WRITE_TARGET_ADDRESS}`;
++      t.equal(
++        queue.pending.some((item) =>
++          item?.deliverySourceAdmissionKey === publicationSource),
++        true,
++        'publication targets should keep their raw target admission key',
++      );
++      t.equal(
++        queue.pending.some((item) =>
++          item?.deliverySourceAdmissionKey === writeSource),
++        true,
++        'sql write targets should keep their raw target admission key',
++      );
++      t.equal(
++        queue.pending.filter((item) =>
++          item?.deliverySourceAdmissionKey === 'target:critical-fallback')
++          .length,
++        TEST_ALLOWED_TARGET_FALLBACK_DELIVERIES,
++        'generic target fallback traffic should still occupy the aggregate bucket',
++      );
++
++      releaseFirstSend();
++      await firstDelivery;
++      await Promise.all(genericFallbackDeliveries);
++      await publicationDelivery;
++      await writeDelivery;
++      await router.shutdown();
++    },
++  );
++
+   t.test(
+     'should bound aggregate critical target fallback pending capacity',
+     async (t) => {
+diff --git a/test/transport/message-router-main-stage-3.js b/test/transport/message-router-main-stage-3.js
+index 547860ba..d1a44c8b 100644
+--- a/test/transport/message-router-main-stage-3.js
++++ b/test/transport/message-router-main-stage-3.js
+@@ -61,7 +61,7 @@ t.test('MessageRouter unit tests chunk 3', async (t) => {
+       const TEST_PENDING_SOURCE_LIMIT = 8;
+       const TEST_UNRELATED_PENDING_DELIVERIES = 1;
+       const TEST_HOT_RECOVERY_TARGET_ADDRESS =
+-        'remote-node/partition/control_plane_publications-p1-r1';
++        'remote-node/partition/sql_transactions-p1-r1';
+       const TEST_CONTROL_PLANE_TARGET_ADDRESS =
+         'remote-node/service/control-plane';
+       const router = new MessageRouter({
+diff --git a/test/transport/message-router-tail-test-cases.js b/test/transport/message-router-tail-test-cases.js
+index 7de24571..efa37efa 100644
+--- a/test/transport/message-router-tail-test-cases.js
++++ b/test/transport/message-router-tail-test-cases.js
+@@ -482,7 +482,7 @@ export async function registerMessageRouterTailTests({
+     });
+ 
+     const outcome = await Promise.race([
+-      router.connectToNode('slow-node', `ws://127.0.0.1:${port}`)
++      router.connectToNode('slow-node', `ws://127.0.0.1:${port}`, { autoReconnect: false })
+         .then(() => 'connected')
+         .catch((error) => error),
+       new Promise((resolve) => setTimeout(() => resolve('timed_out'), 1100)),

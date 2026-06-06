@@ -101,9 +101,11 @@ const PRIORITY_RECOVERY_DISPATCH_PENDING_DRAIN_PARTITION_IDS =
     new Set([
       INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS],
       INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.REPLICA_OPERATIONS],
+      INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SQL_TRANSACTIONS],
       INITIAL_PARTITION_IDS[
         SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS
       ],
+      INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS],
     ]),
   );
 
@@ -234,6 +236,17 @@ function applyPriorityRecoveryDispatchPendingAdvanceExistingOperationEffect(
 ) {
   if (owner.repository.isOperationLocallyOwned(operation) === true) {
     return owner.armCoordinatorCreatedOperation(operation);
+  }
+  const operationId =
+    operation?.operationId || OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING;
+  if (
+    owner.shouldRefreshPriorityRecoveryDispatchPendingRemoteRetry(
+      operation,
+      decisionSnapshot,
+    ) &&
+    owner.hasActiveCreatedOperationHandoffRetry(operationId)
+  ) {
+    owner.clearCreatedOperationHandoffRetry(operationId);
   }
   const capturedAtMs =
     resolvePriorityRecoveryDispatchPendingDecisionSnapshotCapturedAt(
@@ -378,6 +391,11 @@ function buildPriorityRecoveryDispatchPendingReentryEvidence(
   const operationId = String(
     operation?.operationId || OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
   ).trim();
+  const remoteRetryRefreshDue =
+    owner.shouldRefreshPriorityRecoveryDispatchPendingRemoteRetry(
+      operation,
+      snapshot,
+    );
   return Object.freeze({
     operationAvailable:
       operation &&
@@ -409,8 +427,10 @@ function buildPriorityRecoveryDispatchPendingReentryEvidence(
     ownerLaneHeld: owner.isOperationOwnerLaneHeld(operationId),
     ownerLaneRetryAllowed: options.allowOwnerLaneRetry === true,
     remoteRetryActive:
+      remoteRetryRefreshDue !== true &&
       !owner.repository.isOperationLocallyOwned(operation) &&
       owner.hasActiveCreatedOperationHandoffRetry(operationId),
+    remoteRetryRefreshDue,
   });
 }
 
@@ -614,6 +634,51 @@ function shouldReconcilePriorityRecoveryDispatchPendingDrain(
     evidence.ownerProgressRequested === true &&
     evidence.workflowProgressBoundary === true &&
     evidence.priorityDrainPartition === true
+  );
+}
+
+function shouldRefreshPriorityRecoveryDispatchPendingRemoteRetry(
+  owner,
+  operation,
+  decisionSnapshot,
+) {
+  if (
+    !operation?.operationId ||
+    owner.repository.isOperationLocallyOwned(operation) === true
+  ) {
+    return false;
+  }
+  const operationOwnerObservation =
+    decisionSnapshot?.operationOwnerObservation;
+  const stepAgeMs = Number(
+    decisionSnapshot?.progress?.stepAgeMs ??
+      decisionSnapshot?.actuation?.stepAgeMs,
+  );
+  const stepTimeoutMs = Number(
+    decisionSnapshot?.progress?.stepTimeoutMs ??
+      decisionSnapshot?.actuation?.stepTimeoutMs,
+  );
+  return (
+    operationOwnerObservation?.effectExecution ===
+      PRIORITY_RECOVERY_OPERATION_OWNER_EFFECT_EXECUTION.NOT_EXECUTED &&
+    operationOwnerObservation?.effectCommand ===
+      PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_COMMAND
+        .ADVANCE_EXISTING_OPERATION &&
+    decisionSnapshot?.actuation?.timeoutReconcileDue === true &&
+    decisionSnapshot?.progress?.nextRequiredAction ===
+      PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION &&
+    decisionSnapshot?.progress?.blockingBoundary ===
+      PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS &&
+    decisionSnapshot?.progress?.waitMode ===
+      PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN &&
+    decisionSnapshot?.actuation?.workflowProgressPhaseId ===
+      PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING &&
+    decisionSnapshot?.progress?.workflowProgressPhaseId ===
+      PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING &&
+    Number.isFinite(stepAgeMs) &&
+    Number.isFinite(stepTimeoutMs) &&
+    stepTimeoutMs > NUM.ZERO &&
+    stepAgeMs >= stepTimeoutMs
   );
 }
 
@@ -888,5 +953,6 @@ export {
   resolvePriorityRecoveryDispatchPendingReentryState,
   schedulePriorityRecoveryDispatchPendingReentry,
   selectPriorityRecoveryDispatchPendingReentryOperation,
+  shouldRefreshPriorityRecoveryDispatchPendingRemoteRetry,
   shouldReconcilePriorityRecoveryDispatchPendingDrain,
 };

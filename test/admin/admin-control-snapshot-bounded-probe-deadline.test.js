@@ -52,6 +52,29 @@ test('buildControlSnapshotQueryResult degrades to a bounded cache-only snapshot 
       'the fallback forces the bounded, side-effect-free observation probe');
   });
 
+test('buildControlSnapshotQueryResult arms the bounded fallback for short snapshot budgets',
+  async (t) => {
+    const snapshot = buildSnapshot();
+    let boundedFallbackOptions = null;
+    snapshot.resolveLocalControlSnapshot = () =>
+      new Promise(() => {});
+    snapshot.buildLocalControlSnapshot = async (options) => {
+      boundedFallbackOptions = options;
+      return CACHE_SNAPSHOT;
+    };
+
+    const result = await snapshot.buildControlSnapshotQueryResult({
+      queryTimeoutMs: 6,
+    });
+
+    t.same(result.rows, [CACHE_SNAPSHOT],
+      'a stalled short-budget snapshot lane returns the bounded snapshot');
+    t.ok(boundedFallbackOptions,
+      'the bounded fallback is still armed below the normal minimum deadline');
+    t.equal(boundedFallbackOptions.boundedObservationProbe, true,
+      'the short-budget fallback uses the bounded observation probe');
+  });
+
 test('a stalled lane drives the membership-publication reconcile through the bounded enqueue path',
   async (t) => {
     const snapshot = buildSnapshot();

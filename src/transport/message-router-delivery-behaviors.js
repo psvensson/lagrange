@@ -250,6 +250,17 @@ export async function deliverRemote(
     options.timeoutMs > TRANSPORT_NUM.ZERO ?
       Math.floor(options.timeoutMs) :
       router.messageTimeoutMs;
+  const reconnectInProgress = router.buildReconnectInProgressFailure(
+    targetNodeId,
+    messageId,
+    correlationId,
+  );
+  if (reconnectInProgress) {
+    return {
+      result: reconnectInProgress,
+      queueWaitMs: TRANSPORT_NUM.ZERO,
+    };
+  }
   const responsePromise = router.registerPendingResponse(messageId, targetNodeId, {
     deliverySource: resolveDeliverySource(targetAddress, payload, options),
   });

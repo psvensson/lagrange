@@ -396,8 +396,13 @@ function resolveTargetFallbackInFlightSourceLimit(queue) {
 }
 
 function isTargetFallbackCriticalAdmissionSource(deliverySource) {
-  return normalizeQueuedDeliverySource(deliverySource) ===
-    MESSAGE_ROUTER_LITERAL.STRING_TARGET_CRITICAL_FALLBACK;
+  const normalizedDeliverySource = normalizeQueuedDeliverySource(
+    deliverySource,
+  );
+  return normalizedDeliverySource ===
+    MESSAGE_ROUTER_LITERAL.STRING_TARGET_CRITICAL_FALLBACK ||
+    normalizedDeliverySource ===
+      MESSAGE_ROUTER_LITERAL.STRING_TARGET_PRIORITY_CONTROL_PLANE;
 }
 
 function resolveCriticalInFlightSourceLimit(queue, deliverySource) {

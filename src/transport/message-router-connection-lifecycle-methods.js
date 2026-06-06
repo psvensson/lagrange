@@ -257,7 +257,14 @@ class MessageRouterConnectionLifecycleMethods {
       createdAt: Date.now(),
     };
     this.nodeConnections.set(nodeId, connectionInfo);
-    await this.establishConnection(connectionInfo);
+    try {
+      await this.establishConnection(connectionInfo);
+    } catch (error) {
+      if (options.autoReconnect !== false) {
+        this.handleConnectionClose(nodeId, connectionInfo.connectionId);
+      }
+      throw error;
+    }
   }
   /**
    * Establish WebSocket connection to a remote node.
@@ -293,7 +300,7 @@ class MessageRouterConnectionLifecycleMethods {
         const attempts = connectionInfo.reconnectAttempts || TRANSPORT_NUM.ZERO;
         const currentConnectTimeoutMs = Math.min(
           30000,
-          this.connectTimeoutMs + attempts * 5000
+          this.connectTimeoutMs + attempts * 5000,
         );
         let connectTimeout = setTimeout(() => {
           const error = new Error(
@@ -484,8 +491,11 @@ class MessageRouterConnectionLifecycleMethods {
 
 function createMessageRouterConnectionLifecycleMethods() {
   return Object.fromEntries(
-    Object.entries(Object.getOwnPropertyDescriptors(MessageRouterConnectionLifecycleMethods.prototype))
-      .filter(([name]) => name !== 'constructor'),
+    Object.entries(
+      Object.getOwnPropertyDescriptors(
+        MessageRouterConnectionLifecycleMethods.prototype,
+      ),
+    ).filter(([name]) => name !== 'constructor'),
   );
 }
 

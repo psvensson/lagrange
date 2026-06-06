@@ -368,6 +368,9 @@ class OwnerKeyReconcileQueue extends EventEmitter {
                 queue: this.name,
                 ownerKey,
               });
+            if (this.pending.size > LOCAL_NUM_ZERO && !this.stopped) {
+              this.scheduleDrain();
+            }
           }
         }
 
@@ -381,10 +384,17 @@ class OwnerKeyReconcileQueue extends EventEmitter {
       }
     } finally {
       this.draining = false;
-      // If deferred items remain, schedule another drain so they
-      // are picked up after the in-flight reconciles complete.
       if (this.pending.size > LOCAL_NUM_ZERO && !this.stopped) {
-        this.scheduleDrain();
+        let hasNonInFlight = false;
+        for (const key of this.pending.keys()) {
+          if (!this.inFlight.has(key)) {
+            hasNonInFlight = true;
+            break;
+          }
+        }
+        if (hasNonInFlight) {
+          this.scheduleDrain();
+        }
       }
     }
   }

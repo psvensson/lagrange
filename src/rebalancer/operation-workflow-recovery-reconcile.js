@@ -12,6 +12,7 @@ import {
   resolvePriorityRecoveryDispatchPendingReentryState,
   schedulePriorityRecoveryDispatchPendingReentry,
   selectPriorityRecoveryDispatchPendingReentryOperation,
+  shouldRefreshPriorityRecoveryDispatchPendingRemoteRetry,
   shouldReconcilePriorityRecoveryDispatchPendingDrain,
 } from './operation-workflow-recovery-reconcile-dispatch-pending.js';
 
@@ -95,6 +96,17 @@ class OperationWorkflowOwnerSegment7Stage5 extends OperationWorkflowOwnerSegment
       snapshot,
       operation,
       options,
+    );
+  }
+
+  shouldRefreshPriorityRecoveryDispatchPendingRemoteRetry(
+    operation,
+    decisionSnapshot,
+  ) {
+    return shouldRefreshPriorityRecoveryDispatchPendingRemoteRetry(
+      this,
+      operation,
+      decisionSnapshot,
     );
   }
 

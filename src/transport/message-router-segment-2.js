@@ -572,7 +572,7 @@ class MessageRouterSegment2 extends MessageRouterSegment1 {
       attempt: connectionInfo.reconnectAttempts,
       delayMs: delay,
     });
-    connectionInfo.reconnectTimeout = setTimeout(async () => {
+    connectionInfo.reconnectTimeout = setTimeout(() => {
       connectionInfo.reconnectTimeout = null;
       connectionInfo.reconnectDueAt = null;
       if (connectionInfo.retired || !this.isCurrentConnection(connectionInfo)) {
@@ -580,30 +580,36 @@ class MessageRouterSegment2 extends MessageRouterSegment1 {
         connectionInfo.state = ConnectionState.CLOSED;
         return;
       }
-      try {
-        this.refreshReconnectAuthority(
-          connectionInfo,
-          connectionInfo.address || connectionInfo.configuredAddress,
-        );
-        if (
-          (!connectionInfo.address ||
-            connectionInfo.address.length === TRANSPORT_NUM.ZERO) &&
-          typeof connectionInfo.configuredAddress === TRANSPORT_TYPEOF.STRING &&
-          connectionInfo.configuredAddress.length > TRANSPORT_NUM.ZERO
-        ) {
-          connectionInfo.address = connectionInfo.configuredAddress;
+      const connectionPromise = (async () => {
+        try {
+          this.refreshReconnectAuthority(
+            connectionInfo,
+            connectionInfo.address || connectionInfo.configuredAddress,
+          );
+          if ((!connectionInfo.address || connectionInfo.address.length === TRANSPORT_NUM.ZERO) &&
+              typeof connectionInfo.configuredAddress === TRANSPORT_TYPEOF.STRING &&
+              connectionInfo.configuredAddress.length > TRANSPORT_NUM.ZERO) {
+            connectionInfo.address = connectionInfo.configuredAddress;
+          }
+          await this.establishConnection(connectionInfo);
+          return connectionInfo.state === ConnectionState.CONNECTED ? connectionInfo : null;
+        } catch (error) {
+          this.logger.error(ROUTER_LOG_MSG.RECONNECT_FAILED, {
+            nodeId: connectionInfo.nodeId,
+            error: error.message,
+          });
+          if (this.isShuttingDown) {
+            return null;
+          }
+          this.scheduleReconnect(connectionInfo);
+          return null;
+        } finally {
+          this.pendingNodeConnections.delete(connectionInfo.nodeId);
+          this.recordPendingNodeConnectionSnapshot();
         }
-        await this.establishConnection(connectionInfo);
-      } catch (error) {
-        this.logger.error(ROUTER_LOG_MSG.RECONNECT_FAILED, {
-          nodeId: connectionInfo.nodeId,
-          error: error.message,
-        });
-        if (this.isShuttingDown) {
-          return;
-        }
-        this.scheduleReconnect(connectionInfo);
-      }
+      })();
+      this.pendingNodeConnections.set(connectionInfo.nodeId, connectionPromise);
+      this.recordPendingNodeConnectionSnapshot();
     }, delay);
     if (
       typeof connectionInfo.reconnectTimeout?.unref ===

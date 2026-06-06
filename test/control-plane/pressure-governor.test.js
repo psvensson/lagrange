@@ -1,14 +1,36 @@
 import {test} from '../../src/test-helpers/tap.js';
+import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   PRESSURE_GOVERNOR_ACTION,
   PRESSURE_GOVERNOR_REASON,
   PRESSURE_WORK_CLASS,
   PressureGovernor,
 } from '../../src/control-plane/pressure-governor.js';
+import {MessageRouter} from '../../src/transport/message-router.js';
 import {
   buildControlPlaneWorkloadProfile,
   CONTROL_PLANE_WORKLOAD_CLASS,
 } from '../../src/control-plane/control-plane-workload-profile.js';
+
+function initializeMessageRouterTestEnvironment() {
+  ConfigurationManager.resetInstance();
+  LoggingService.resetInstance();
+
+  const config = ConfigurationManager.getInstance();
+  config.initialize({
+    node: {id: 'node-a'},
+    logging: {level: 'error'},
+  });
+
+  const logging = LoggingService.getInstance();
+  logging.initialize({level: 'error'});
+}
+
+function cleanupMessageRouterTestEnvironment() {
+  ConfigurationManager.resetInstance();
+  LoggingService.resetInstance();
+}
 
 test('PressureGovernor allows critical work during transport pressure',
   async (t) => {
@@ -274,6 +296,87 @@ test('PressureGovernor ignores non-reserve critical fallback backlog for ' +
     0,
     'summary should expose the reserve-eligible critical pending subset',
   );
+});
+
+test('PressureGovernor consumes live router stats without treating target ' +
+  'backlog as reserve exhaustion', async (t) => {
+  initializeMessageRouterTestEnvironment();
+
+  const remoteNodeId = 'node-b';
+  const criticalReserve = 16;
+  const router = new MessageRouter({
+    nodeId: 'node-a',
+    nodeAddress: 'ws://node-a:7000',
+    outboundQueueMaxConcurrent: 1,
+    outboundQueueMaxPending: 64,
+    outboundQueueCriticalReserve: criticalReserve,
+  });
+  await router.initialize();
+
+  let releaseFirstDelivery = null;
+  const firstDelivery = router.enqueueOutbound(
+    remoteNodeId,
+    () => new Promise((resolve) => {
+      releaseFirstDelivery = () => resolve({acknowledged: true});
+    }),
+    {deliveryPriority: 'critical'},
+  );
+  await Promise.resolve();
+
+  const targetDeliveries = [];
+  for (let index = 0; index < criticalReserve; index++) {
+    targetDeliveries.push(
+      router.enqueueOutbound(
+        remoteNodeId,
+        async () => ({acknowledged: true, index}),
+        {
+          deliveryPriority: 'critical',
+          targetAddress:
+            `node-b/partition/sql_transactions-p${index + 1}-r4`,
+          message: {},
+        },
+      ),
+    );
+    await Promise.resolve();
+  }
+
+  const governor = new PressureGovernor({
+    nodeId: 'node-a',
+    messageRouter: router,
+  });
+  const decision = governor.evaluate({
+    workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+    resourceKeys: ['control-plane:write'],
+    allowDegrade: false,
+    allowDefer: true,
+  });
+
+  t.equal(
+    decision.action,
+    PRESSURE_GOVERNOR_ACTION.ALLOW,
+    'live target-address backlog should not defer control-plane writes',
+  );
+  t.equal(
+    decision.summary?.totalPendingCritical,
+    criticalReserve,
+    'summary should still expose pending target-address critical pressure',
+  );
+  t.equal(
+    decision.summary?.totalPendingCriticalReserveEligible,
+    0,
+    'summary should exclude target-address backlog from reserve accounting',
+  );
+  t.equal(
+    decision.summary?.criticalReserveExhausted,
+    false,
+    'target-address backlog should not exhaust the aggregate critical reserve',
+  );
+
+  releaseFirstDelivery();
+  await firstDelivery;
+  await Promise.all(targetDeliveries);
+  await router.shutdown();
+  cleanupMessageRouterTestEnvironment();
 });
 
 test('PressureGovernor defers deferrable critical work when the control-plane ' +

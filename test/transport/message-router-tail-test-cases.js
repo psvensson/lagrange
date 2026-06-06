@@ -482,7 +482,7 @@ export async function registerMessageRouterTailTests({
     });
 
     const outcome = await Promise.race([
-      router.connectToNode('slow-node', `ws://127.0.0.1:${port}`)
+      router.connectToNode('slow-node', `ws://127.0.0.1:${port}`, { autoReconnect: false })
         .then(() => 'connected')
         .catch((error) => error),
       new Promise((resolve) => setTimeout(() => resolve('timed_out'), 1100)),

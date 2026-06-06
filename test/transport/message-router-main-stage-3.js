@@ -61,7 +61,7 @@ t.test('MessageRouter unit tests chunk 3', async (t) => {
       const TEST_PENDING_SOURCE_LIMIT = 8;
       const TEST_UNRELATED_PENDING_DELIVERIES = 1;
       const TEST_HOT_RECOVERY_TARGET_ADDRESS =
-        'remote-node/partition/control_plane_publications-p1-r1';
+        'remote-node/partition/user_orders-p1-r1';
       const TEST_CONTROL_PLANE_TARGET_ADDRESS =
         'remote-node/service/control-plane';
       const router = new MessageRouter({

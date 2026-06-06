@@ -6,18 +6,29 @@ const BOUNDED_SNAPSHOT_PROBE_DEADLINE_SENTINEL = Symbol(
 );
 const BOUNDED_SNAPSHOT_PROBE_MIN_DEADLINE_MS = 2000;
 const BOUNDED_SNAPSHOT_PROBE_DEADLINE_SAFETY_MARGIN_MS = 2000;
+const BOUNDED_SNAPSHOT_PROBE_SHORT_BUDGET_DIVISOR = 2;
+const BOUNDED_SNAPSHOT_PROBE_MIN_SHORT_DEADLINE_MS = 1;
 
 function resolveBoundedSnapshotProbeDeadlineMs(queryTimeoutMs) {
   if (!Number.isFinite(queryTimeoutMs) || queryTimeoutMs <= 0) {
     return 0;
   }
   const flooredQueryTimeoutMs = Math.floor(queryTimeoutMs);
+  if (flooredQueryTimeoutMs <= 0) {
+    return 0;
+  }
   if (
     flooredQueryTimeoutMs <=
     BOUNDED_SNAPSHOT_PROBE_MIN_DEADLINE_MS +
       BOUNDED_SNAPSHOT_PROBE_DEADLINE_SAFETY_MARGIN_MS
   ) {
-    return 0;
+    return Math.max(
+      BOUNDED_SNAPSHOT_PROBE_MIN_SHORT_DEADLINE_MS,
+      Math.floor(
+        flooredQueryTimeoutMs /
+          BOUNDED_SNAPSHOT_PROBE_SHORT_BUDGET_DIVISOR,
+      ),
+    );
   }
   const marginBoundedMs =
     flooredQueryTimeoutMs - BOUNDED_SNAPSHOT_PROBE_DEADLINE_SAFETY_MARGIN_MS;

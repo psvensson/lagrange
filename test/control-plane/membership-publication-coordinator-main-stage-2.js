@@ -111,6 +111,8 @@ const PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_OTHER_OWNER_KEY =
   'membership-publication:other-cluster';
 const PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_BOUND = 1;
 const PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_RETRY_AFTER_MS = 1000;
+const PUBLICATION_CONVERGENCE_SHORT_RETRY_AFTER_MS = 37;
+const PUBLICATION_CONVERGENCE_LONG_RETRY_AFTER_MS = 1023525;
 const PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_EMPTY_ENQUEUE_COUNT = 0;
 const PUBLICATION_CONVERGENCE_DEFERRED_SKIP_WRITE_READBACK = true;
 const PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_OUTCOME_ENQUEUED =
@@ -1079,6 +1081,181 @@ test('reconcileActiveGateMembershipPublication defers stale durable readback',
     );
   });
 
+test('MembershipPublicationCoordinator bounds active-gate owner retry policy delay',
+  async (t) => {
+    let capturedRetryPolicy = null;
+    const pending = new Map();
+    const coordinator = new MembershipPublicationCoordinator({
+      nodeId:
+        PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[
+          PUBLICATION_CONVERGENCE_HANDOFF_TARGET_FIRST_NODE_INDEX
+        ],
+      reconcileQueue: {
+        pending,
+        get size() {
+          return pending.size;
+        },
+        has(ownerKey) {
+          return pending.has(ownerKey);
+        },
+        enqueue() {
+          return true;
+        },
+        configureRetryPolicy(policy) {
+          capturedRetryPolicy = policy;
+        },
+      },
+    });
+    const retryableError = new Error('retryable publication write failed');
+    retryableError.retryAfterMs = PUBLICATION_CONVERGENCE_LONG_RETRY_AFTER_MS;
+    retryableError.deferRetry = true;
+    const shortRetryableError = new Error('short retryable publication write');
+    shortRetryableError.retryAfterMs =
+      PUBLICATION_CONVERGENCE_SHORT_RETRY_AFTER_MS;
+    shortRetryableError.deferRetry = true;
+    const activeGateContext = {
+      publicationActiveGateHandoff: {
+        publicationEpoch: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EPOCH,
+        nextAction:
+          PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+            .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+        pendingReconcileNodeIds: [
+          PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PENDING_NODE_IDS[
+            PUBLICATION_CONVERGENCE_HANDOFF_TARGET_FIRST_PERSISTED_INDEX
+          ],
+        ],
+        pendingReconcileCount:
+          PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PENDING_NODE_IDS.length,
+      },
+    };
+
+    t.equal(
+      capturedRetryPolicy?.getRetryAfterMs(
+        retryableError,
+        activeGateContext,
+        {ownerKey: coordinator.buildOwnerKey()},
+      ),
+      PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_RETRY_AFTER_MS,
+      'active-gate owner retry should use the bounded critical wake cadence',
+    );
+    t.equal(
+      capturedRetryPolicy?.getRetryAfterMs(
+        shortRetryableError,
+        activeGateContext,
+        {ownerKey: coordinator.buildOwnerKey()},
+      ),
+      PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_RETRY_AFTER_MS,
+      'active-gate owner retry should not spin below the critical wake cadence',
+    );
+    t.equal(
+      capturedRetryPolicy?.getRetryAfterMs(
+        shortRetryableError,
+        {},
+        {ownerKey: coordinator.buildOwnerKey()},
+      ),
+      PUBLICATION_CONVERGENCE_SHORT_RETRY_AFTER_MS,
+      'ordinary retryable control-plane errors should keep their retry-after',
+    );
+  });
+
+test('reconcileActiveGateMembershipPublication bounds retryable write failure delay',
+  async (t) => {
+    const latestPublicationRow = {
+      publication_id: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLICATION_ID,
+      publication_kind: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_KIND,
+      publication_epoch: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EPOCH,
+      status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      published_active_node_ids: [
+        ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
+      ],
+      required_ack_node_ids: [
+        ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
+      ],
+      acknowledged_node_ids: [
+        ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
+      ],
+    };
+    const pending = new Map();
+    const enqueued = [];
+    const retryableError = new Error('DISTRIBUTED_PARTICIPANT_FAILURE');
+    retryableError.retryAfterMs = PUBLICATION_CONVERGENCE_LONG_RETRY_AFTER_MS;
+    retryableError.deferRetry = true;
+    const coordinator = new MembershipPublicationCoordinator({
+      nodeId:
+        PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[
+          PUBLICATION_CONVERGENCE_HANDOFF_TARGET_FIRST_NODE_INDEX
+        ],
+      reconcileQueue: {
+        pending,
+        get size() {
+          return pending.size;
+        },
+        has(ownerKey) {
+          return pending.has(ownerKey);
+        },
+        enqueue(ownerKey, reason, context, options) {
+          enqueued.push({ownerKey, reason, context, options});
+          pending.set(ownerKey, {context});
+          return true;
+        },
+      },
+      controlPlanePublicationsOwner: {
+        async listPublications() {
+          return {rows: [latestPublicationRow]};
+        },
+        async getPublication() {
+          return latestPublicationRow;
+        },
+        async upsertPublication() {
+          throw retryableError;
+        },
+      },
+      systemTableCache: {
+        getAll(tableName) {
+          if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
+            return [latestPublicationRow];
+          }
+          return [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EMPTY_ROWS];
+        },
+      },
+      now: () => PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NOW_MS,
+    });
+
+    const outcome =
+      await coordinator.reconcileActiveGateMembershipPublication({
+        publicationEpoch: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EPOCH,
+        expectedNodeIds: [
+          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS,
+        ],
+        publishedActiveNodeIds: [
+          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
+        ],
+        pendingReconcileNodeIds:
+          PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS.slice(
+            PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PENDING_START_INDEX,
+          ),
+        nextAction:
+          PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+            .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
+      });
+
+    t.equal(
+      outcome.retryAfterMs,
+      PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_RETRY_AFTER_MS,
+      'accepted active-gate retry should project the bounded owner wake delay',
+    );
+    t.equal(
+      outcome.controlPlaneConvergence?.retryAfterMs,
+      PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_RETRY_AFTER_MS,
+      'critical convergence diagnostics should carry the bounded retry delay',
+    );
+    t.equal(
+      enqueued.length,
+      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_MERGED_ENQUEUE_COUNT,
+      'retryable write failure should enqueue one owner recovery wake',
+    );
+  });
+
 test(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_MERGED_TEST_NAME,
   async (t) => {
     const latestPublicationRow = {
@@ -1226,4 +1403,3 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_MERGED_TEST_NAME,
       PUBLICATION_CONVERGENCE_HANDOFF_TARGET_MERGED_ROW_MESSAGE,
     );
   });
-

@@ -102,6 +102,8 @@ function createOperationLifecycleEventResolver({outcomeByEvent}) {
           OPERATION_WORKFLOW_COMMAND_STATE.IDLE &&
         evidence.dispatchObservation.commandState ===
           OPERATION_WORKFLOW_COMMAND_STATE.IDLE &&
+        evidence.durableOperation.dispatchState !==
+          OPERATION_WORKFLOW_DISPATCH_STATE.NOT_OBSERVED &&
         OPERATION_WORKFLOW_KNOWN_OWNER_AUTHORITY_STATES.has(
           evidence.ownerLease.authorityState,
         )

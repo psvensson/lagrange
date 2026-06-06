@@ -36,10 +36,11 @@ function countPendingCriticalReserveEligible(queue) {
     if (item?.priority !== OutboundDeliveryPriority.CRITICAL) {
       return count;
     }
-    if (
-      item?.deliverySourceAdmissionKey ===
-      MESSAGE_ROUTER_LITERAL.STRING_TARGET_CRITICAL_FALLBACK
-    ) {
+    const admissionKey =
+      typeof item?.deliverySourceAdmissionKey === TRANSPORT_TYPEOF.STRING ?
+        item.deliverySourceAdmissionKey :
+        MESSAGE_ROUTER_LITERAL.STRING_UNKNOWN;
+    if (admissionKey.startsWith(MESSAGE_ROUTER_LITERAL.STRING_TARGET_PREFIX)) {
       return count;
     }
     return count + TRANSPORT_NUM.ONE;

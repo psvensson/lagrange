@@ -9,6 +9,13 @@ import {
   MessageRouter,
   ConnectionState,
 } from '../../src/transport/message-router.js';
+import {
+  countCriticalPendingByAdmissionSource,
+  resolveDeliverySourceAdmissionKey,
+} from '../../src/transport/message-router-delivery-source-admission.js';
+import {
+  selectCriticalPendingSourcePreemptionCandidateIndex,
+} from '../../src/transport/message-router-shared-stage-2.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 /**
@@ -699,7 +706,7 @@ t.test('MessageRouter unit tests chunk 2', async (t) => {
       await Promise.resolve();
 
       const hotRecoveryTargetAddress =
-        'remote-node/partition/control_plane_publications-p1-r4';
+        'remote-node/partition/sql_transactions-p1-r4';
       const criticalSourceDeliveries = [];
       for (let index = 0; index < 4; index++) {
         criticalSourceDeliveries.push(
@@ -795,6 +802,386 @@ t.test('MessageRouter unit tests chunk 2', async (t) => {
   );
 
   t.test(
+    'should defer scheduled reconnect deliveries before outbound queue admission',
+    async (t) => {
+      const router = new MessageRouter({
+        nodeId: 'local-node',
+        nodeAddress: 'ws://local-node:7000',
+        startServer: false,
+        outboundQueueMaxConcurrent: 1,
+        outboundQueueMaxPending: 2,
+        outboundQueueCriticalReserve: 1,
+      });
+      await router.initialize();
+
+      let registeredPendingResponse = false;
+      router.registerPendingResponse = () => {
+        registeredPendingResponse = true;
+        return new Promise(() => {});
+      };
+
+      const reconnectTimeout = setTimeout(() => {}, 30000);
+      if (typeof reconnectTimeout.unref === 'function') {
+        reconnectTimeout.unref();
+      }
+      router.nodeConnections.set('remote-node', {
+        nodeId: 'remote-node',
+        address: 'ws://remote-node:9999',
+        configuredAddress: 'ws://remote-node:9999',
+        observedAddress: null,
+        state: ConnectionState.RECONNECTING,
+        ws: null,
+        isIncoming: false,
+        isSelfConnection: false,
+        reconnectTimeout,
+        reconnectDueAt: Date.now() + 250,
+      });
+
+      const result = await router.deliver(
+        'remote-node/partition/control_plane_publications-p1-r4',
+        {type: 'TEST_MESSAGE', messageId: 'scheduled-reconnect-msg'},
+        {deliveryPriority: 'critical'},
+      );
+
+      const queue = router.getOutboundQueue('remote-node');
+      t.equal(
+        result.acknowledged,
+        false,
+        'scheduled reconnect delivery should be deferred as retryable',
+      );
+      t.equal(
+        result.errorCode,
+        'ROUTER_CONNECTION_CLOSED',
+        'scheduled reconnect failure should keep the connection-closed code',
+      );
+      t.equal(
+        registeredPendingResponse,
+        false,
+        'scheduled reconnect fast-defer should not register a service waiter',
+      );
+      t.equal(
+        queue.pending.length,
+        0,
+        'scheduled reconnect fast-defer should not occupy pending queue slots',
+      );
+      t.equal(
+        queue.inFlight,
+        0,
+        'scheduled reconnect fast-defer should not occupy in-flight slots',
+      );
+
+      clearTimeout(reconnectTimeout);
+      await router.shutdown();
+    },
+  );
+
+  t.test(
+    'should defer pending reconnect attempts before outbound queue admission',
+    async (t) => {
+      const router = new MessageRouter({
+        nodeId: 'local-node',
+        nodeAddress: 'ws://local-node:7000',
+        startServer: false,
+        outboundQueueMaxConcurrent: 1,
+        outboundQueueMaxPending: 2,
+        outboundQueueCriticalReserve: 1,
+      });
+      await router.initialize();
+
+      let registeredPendingResponseCount = 0;
+      router.registerPendingResponse = () => {
+        registeredPendingResponseCount += 1;
+        return new Promise(() => {});
+      };
+      router.nodeConnections.set('remote-node', {
+        nodeId: 'remote-node',
+        address: 'ws://remote-node:9999',
+        configuredAddress: 'ws://remote-node:9999',
+        observedAddress: null,
+        state: ConnectionState.RECONNECTING,
+        ws: null,
+        isIncoming: false,
+        isSelfConnection: false,
+        reconnectTimeout: null,
+        reconnectDueAt: null,
+      });
+      router.pendingNodeConnections.set(
+        'remote-node',
+        new Promise(() => {}),
+      );
+
+      const attempts = [];
+      for (let index = 0; index < 4; index++) {
+        attempts.push(router.deliver(
+          'remote-node/partition/control_plane_publications-p1-r4',
+          {type: 'TEST_MESSAGE', messageId: `pending-reconnect-msg-${index}`},
+          {deliveryPriority: 'critical'},
+        ));
+      }
+      const results = await Promise.all(attempts);
+
+      const queue = router.getOutboundQueue('remote-node');
+      t.equal(
+        results.every((result) =>
+          result?.acknowledged === false &&
+          result?.errorCode === 'ROUTER_CONNECTION_CLOSED'),
+        true,
+        'pending reconnect deliveries should all be deferred as retryable',
+      );
+      t.equal(
+        registeredPendingResponseCount,
+        0,
+        'pending reconnect fast-defer should not register service waiters',
+      );
+      t.equal(
+        queue.pending.length,
+        0,
+        'pending reconnect fast-defer should not fill pending queue slots',
+      );
+      t.equal(
+        queue.inFlight,
+        0,
+        'pending reconnect fast-defer should not fill in-flight source slots',
+      );
+
+      router.pendingNodeConnections.delete('remote-node');
+      await router.shutdown();
+    },
+  );
+
+  t.test(
+    'should aggregate priority system targets outside generic fallback admission',
+    async (t) => {
+      const TEST_LOCAL_NODE_ID = 'local-node';
+      const TEST_REMOTE_NODE_ID = 'remote-node';
+      const TEST_NODE_ADDRESS = 'ws://local-node:7000';
+      const TEST_MAX_CONCURRENT = 1;
+      const TEST_MAX_PENDING = 64;
+      const TEST_CRITICAL_RESERVE = 16;
+      const TEST_ALLOWED_TARGET_FALLBACK_DELIVERIES = 8;
+      const TEST_PRIORITY_CONTROL_PLANE_TARGET_ADMISSION_KEY =
+        'target:priority-control-plane';
+      const TEST_GENERIC_TARGET_ADDRESS =
+        'remote-node/partition/user_orders-p1-r4';
+      const TEST_PRIORITY_TARGET_ADDRESSES = Object.freeze([
+        'remote-node/partition/control_plane_publications-p1-r4',
+        'remote-node/partition/replica_operations-p1-r4',
+        'remote-node/partition/sql_transaction_participants-p1-r4',
+        'remote-node/partition/sql_transactions-p1-r4',
+        'remote-node/partition/sql_write_operations-p1-r4',
+      ]);
+      const router = new MessageRouter({
+        nodeId: TEST_LOCAL_NODE_ID,
+        nodeAddress: TEST_NODE_ADDRESS,
+        startServer: false,
+        outboundQueueMaxConcurrent: TEST_MAX_CONCURRENT,
+        outboundQueueMaxPending: TEST_MAX_PENDING,
+        outboundQueueCriticalReserve: TEST_CRITICAL_RESERVE,
+      });
+      await router.initialize();
+
+      let releaseFirstSend = null;
+      const firstDelivery = router.enqueueOutbound(
+        TEST_REMOTE_NODE_ID,
+        () => new Promise((resolve) => {
+          releaseFirstSend = () => resolve({acknowledged: true});
+        }),
+        {deliveryPriority: 'critical'},
+      );
+      await Promise.resolve();
+
+      const genericFallbackDeliveries = [];
+      for (
+        let index = 0;
+        index < TEST_ALLOWED_TARGET_FALLBACK_DELIVERIES;
+        index++
+      ) {
+        genericFallbackDeliveries.push(
+          router.enqueueOutbound(
+            TEST_REMOTE_NODE_ID,
+            async () => ({acknowledged: true, genericIndex: index}),
+            {
+              deliveryPriority: 'critical',
+              targetAddress: TEST_GENERIC_TARGET_ADDRESS,
+              message: {},
+            },
+          ),
+        );
+        await Promise.resolve();
+      }
+
+      const priorityDeliveries = [];
+      for (const targetAddress of TEST_PRIORITY_TARGET_ADDRESSES) {
+        priorityDeliveries.push(
+          router.enqueueOutbound(
+            TEST_REMOTE_NODE_ID,
+            async () => ({acknowledged: true, targetAddress}),
+            {
+              deliveryPriority: 'critical',
+              targetAddress,
+              message: {},
+            },
+          ),
+        );
+        await Promise.resolve();
+      }
+
+      const queue = router.getOutboundQueue(TEST_REMOTE_NODE_ID);
+      const priorityTargetItems = queue.pending.filter((item) =>
+        item?.deliverySourceAdmissionKey ===
+        TEST_PRIORITY_CONTROL_PLANE_TARGET_ADMISSION_KEY);
+      t.equal(
+        priorityTargetItems.length,
+        TEST_PRIORITY_TARGET_ADDRESSES.length,
+        'priority system target traffic should share one admission key',
+      );
+      for (const targetAddress of TEST_PRIORITY_TARGET_ADDRESSES) {
+        const prioritySource = `target:${targetAddress}`;
+        t.equal(
+          queue.pending.some((item) =>
+            item?.deliverySourceAdmissionKey === prioritySource),
+          false,
+          `${targetAddress} should not keep a raw target admission key`,
+        );
+      }
+      t.equal(
+        queue.pending.filter((item) =>
+          item?.deliverySourceAdmissionKey === 'target:critical-fallback')
+          .length,
+        TEST_ALLOWED_TARGET_FALLBACK_DELIVERIES,
+        'generic target fallback traffic should still occupy the aggregate bucket',
+      );
+      const stats = router.getStats()?.outboundQueues?.[TEST_REMOTE_NODE_ID];
+      t.equal(
+        stats?.pendingCriticalReserveEligible,
+        0,
+        'target-address backlog should not count as aggregate reserve eligible',
+      );
+
+      releaseFirstSend();
+      await firstDelivery;
+      await Promise.all(genericFallbackDeliveries);
+      await Promise.all(priorityDeliveries);
+      await router.shutdown();
+    },
+  );
+
+  t.test(
+    'should cap combined priority system target pending admission',
+    async (t) => {
+      const TEST_LOCAL_NODE_ID = 'local-node';
+      const TEST_REMOTE_NODE_ID = 'remote-node';
+      const TEST_NODE_ADDRESS = 'ws://local-node:7000';
+      const TEST_MAX_CONCURRENT = 1;
+      const TEST_MAX_PENDING = 12;
+      const TEST_CRITICAL_RESERVE = 4;
+      const TEST_EXPECTED_PRIORITY_TARGET_PENDING_LIMIT = 8;
+      const TEST_PRIORITY_TARGET_ADDRESSES = Object.freeze([
+        'remote-node/partition/sql_transactions-p1-r5',
+        'remote-node/partition/sql_transaction_participants-p1-r4',
+      ]);
+      const router = new MessageRouter({
+        nodeId: TEST_LOCAL_NODE_ID,
+        nodeAddress: TEST_NODE_ADDRESS,
+        startServer: false,
+        outboundQueueMaxConcurrent: TEST_MAX_CONCURRENT,
+        outboundQueueMaxPending: TEST_MAX_PENDING,
+        outboundQueueCriticalReserve: TEST_CRITICAL_RESERVE,
+      });
+      await router.initialize();
+
+      let releaseFirstSend = null;
+      const firstDelivery = router.enqueueOutbound(
+        TEST_REMOTE_NODE_ID,
+        () => new Promise((resolve) => {
+          releaseFirstSend = () => resolve({acknowledged: true});
+        }),
+        {deliveryPriority: 'critical'},
+      );
+      await Promise.resolve();
+
+      const admittedDeliveries = [];
+      for (
+        let index = 0;
+        index < TEST_EXPECTED_PRIORITY_TARGET_PENDING_LIMIT;
+        index++
+      ) {
+        const targetAddress =
+          TEST_PRIORITY_TARGET_ADDRESSES[
+            index % TEST_PRIORITY_TARGET_ADDRESSES.length
+          ];
+        admittedDeliveries.push(
+          router.enqueueOutbound(
+            TEST_REMOTE_NODE_ID,
+            async () => ({acknowledged: true, index}),
+            {
+              deliveryPriority: 'critical',
+              targetAddress,
+              message: {},
+            },
+          ),
+        );
+        await Promise.resolve();
+      }
+
+      const queue = router.getOutboundQueue(TEST_REMOTE_NODE_ID);
+      t.equal(
+        queue.pending.length,
+        TEST_EXPECTED_PRIORITY_TARGET_PENDING_LIMIT,
+        'combined priority system target backlog should reach the shared cap',
+      );
+      t.equal(
+        resolveDeliverySourceAdmissionKey(
+          'target:priority-control-plane',
+          'critical',
+        ),
+        'target:priority-control-plane',
+        'priority system target admission key should be idempotent',
+      );
+      t.equal(
+        countCriticalPendingByAdmissionSource(
+          queue,
+          'target:priority-control-plane',
+        ),
+        TEST_EXPECTED_PRIORITY_TARGET_PENDING_LIMIT,
+        'shared priority target key should count existing aggregate backlog',
+      );
+      t.equal(
+        selectCriticalPendingSourcePreemptionCandidateIndex(
+          queue,
+          'target:priority-control-plane',
+        ),
+        -1,
+        'shared priority target key should not preempt its own backlog',
+      );
+      await t.rejects(
+        router.enqueueOutbound(
+          TEST_REMOTE_NODE_ID,
+          async () => ({acknowledged: true, overflow: true}),
+          {
+            deliveryPriority: 'critical',
+            targetAddress: TEST_PRIORITY_TARGET_ADDRESSES[0],
+            message: {},
+          },
+        ),
+        /queue/i,
+        'combined priority system target backlog should reject at the shared source cap',
+      );
+      const stats = router.getStats()?.outboundQueues?.[TEST_REMOTE_NODE_ID];
+      t.equal(
+        stats?.pendingCriticalReserveEligible,
+        0,
+        'shared priority target backlog should stay out of reserve accounting',
+      );
+
+      releaseFirstSend();
+      await firstDelivery;
+      await Promise.all(admittedDeliveries);
+      await router.shutdown();
+    },
+  );
+
+  t.test(
     'should bound aggregate critical target fallback pending capacity',
     async (t) => {
       const TEST_LOCAL_NODE_ID = 'local-node';
@@ -805,9 +1192,9 @@ t.test('MessageRouter unit tests chunk 2', async (t) => {
       const TEST_CRITICAL_RESERVE = 16;
       const TEST_ALLOWED_TARGET_FALLBACK_DELIVERIES = 8;
       const TEST_HOT_RECOVERY_TARGET_ADDRESS =
-        'remote-node/partition/sql_transactions-p1-r4';
+        'remote-node/partition/user_orders-p1-r4';
       const TEST_SECOND_HOT_RECOVERY_TARGET_ADDRESS =
-        'remote-node/partition/sql_transaction_participants-p1-r4';
+        'remote-node/partition/user_payments-p1-r4';
       const TEST_CONTROL_PLANE_TARGET_ADDRESS =
         'remote-node/service/control-plane';
       const TEST_TARGET_FALLBACK_DELIVERY_SOURCES = [

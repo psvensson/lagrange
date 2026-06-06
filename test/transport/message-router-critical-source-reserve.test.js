@@ -17,14 +17,14 @@ const TEST_MIXED_BACKGROUND_IN_FLIGHT = 13;
 const TEST_MIXED_CRITICAL_IN_FLIGHT = 19;
 const TEST_TARGET_FALLBACK_ADMISSION_KEY = 'target:critical-fallback';
 const TEST_HOT_TARGET_ADDRESS =
-  'remote-node/partition/sql_transactions-p1-r4';
+  'remote-node/partition/user_orders-p1-r4';
 const TEST_SECOND_HOT_TARGET_ADDRESS =
-  'remote-node/partition/sql_transaction_participants-p1-r4';
+  'remote-node/partition/user_payments-p1-r4';
 const TEST_CONTROL_PLANE_TARGET_ADDRESS =
   'remote-node/service/control-plane';
 const TEST_HANDOFF_DELIVERY_SOURCE = 'coordinator_created_remote_handoff';
 const TEST_TARGET_FALLBACK_TARGET_ADDRESS =
-  'remote-node/partition/control_plane_publications-p1-r4';
+  'remote-node/partition/user_orders-p1-r4';
 const TEST_HOT_LABEL_PREFIX = 'hot';
 const TEST_CONTROL_PLANE_LABEL = 'control-plane';
 const TEST_TARGET_FALLBACK_LABEL = 'target-fallback';

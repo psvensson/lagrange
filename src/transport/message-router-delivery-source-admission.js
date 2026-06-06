@@ -1,4 +1,6 @@
 import {TRANSPORT_NUM} from '../constants/transport.js';
+import {PRIORITY_CONTROL_PLANE_TABLE_IDS} from
+  '../bootstrap/system-partition-classification.js';
 import {
   MESSAGE_ROUTER_LITERAL,
   OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_DIVISOR,
@@ -9,6 +11,9 @@ import {
   OutboundDeliveryPriority,
   normalizeIdentifier,
 } from './message-router-shared-stage-1.js';
+
+const TARGET_SOURCE_PARTITION_PATTERN =
+  /^target:[^/]+\/partition\/(.+)-p\d+(?:-r\d+)?$/u;
 
 function normalizeQueueMaxPending(queue) {
   const maxPending =
@@ -35,6 +40,19 @@ function isCriticalTargetFallbackDeliverySource(
       .startsWith(MESSAGE_ROUTER_LITERAL.STRING_TARGET_PREFIX);
 }
 
+function isPrioritySystemTargetDeliverySource(deliverySource) {
+  const normalizedDeliverySource = normalizeQueuedDeliverySource(
+    deliverySource,
+  );
+  const partitionMatch = normalizedDeliverySource.match(
+    TARGET_SOURCE_PARTITION_PATTERN,
+  );
+  if (!partitionMatch) {
+    return false;
+  }
+  return PRIORITY_CONTROL_PLANE_TABLE_IDS.has(partitionMatch[1]);
+}
+
 function resolveDeliverySourceAdmissionKey(
   deliverySource,
   deliveryPriority,
@@ -42,6 +60,23 @@ function resolveDeliverySourceAdmissionKey(
   const normalizedDeliverySource = normalizeQueuedDeliverySource(
     deliverySource,
   );
+  if (
+    deliveryPriority === OutboundDeliveryPriority.CRITICAL &&
+    (
+      normalizedDeliverySource ===
+        MESSAGE_ROUTER_LITERAL.STRING_TARGET_CRITICAL_FALLBACK ||
+      normalizedDeliverySource ===
+        MESSAGE_ROUTER_LITERAL.STRING_TARGET_PRIORITY_CONTROL_PLANE
+    )
+  ) {
+    return normalizedDeliverySource;
+  }
+  if (
+    deliveryPriority === OutboundDeliveryPriority.CRITICAL &&
+    isPrioritySystemTargetDeliverySource(normalizedDeliverySource)
+  ) {
+    return MESSAGE_ROUTER_LITERAL.STRING_TARGET_PRIORITY_CONTROL_PLANE;
+  }
   if (
     isCriticalTargetFallbackDeliverySource(
       normalizedDeliverySource,
@@ -294,6 +329,7 @@ export {
   countPendingByAdmissionSource,
   countPendingBySource,
   isCriticalTargetFallbackDeliverySource,
+  isPrioritySystemTargetDeliverySource,
   normalizeQueueMaxPending,
   normalizeQueuedDeliverySource,
   resolveBoundedCriticalReserve,

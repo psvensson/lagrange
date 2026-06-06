@@ -163,42 +163,43 @@ export async function handleNodeJoinedCDC(context, cdcEvent) {
     wsAddress,
   });
 
-  // Establish connection to the new node
-  try {
-    await context.messageRouter.connectToNode(targetNodeId, wsAddress);
-    context.logger.info(CDC_LOG_MSG.NEW_NODE_CONNECTED, {
-      nodeId: context.nodeId,
-      targetNodeId,
-      wsAddress,
+  // Establish connection to the new node asynchronously
+  const connectPromise = context.messageRouter.connectToNode(targetNodeId, wsAddress)
+    .then(() => {
+      context.logger.info(CDC_LOG_MSG.NEW_NODE_CONNECTED, {
+        nodeId: context.nodeId,
+        targetNodeId,
+        wsAddress,
+      });
+
+      // Emit nodeJoined event
+      context.emit(CDC_EVENT.NODE_JOINED, {
+        nodeId: targetNodeId,
+        nodeAddress,
+        wsAddress,
+        timestamp: Date.now(),
+        source: CDC_SOURCE.CDC,
+      });
+      return {success: true};
+    })
+    .catch((connectError) => {
+      // Log but don't fail - the node might be temporarily unavailable
+      // Raft will handle retries and leader election
+      context.logger.warn(CDC_LOG_MSG.NEW_NODE_CONNECT_FAILED, {
+        nodeId: context.nodeId,
+        targetNodeId,
+        wsAddress,
+        error: connectError.message,
+      });
+      return {success: false, error: connectError};
     });
 
-    // Emit nodeJoined event
-    context.emit(CDC_EVENT.NODE_JOINED, {
-      nodeId: targetNodeId,
-      nodeAddress,
-      wsAddress,
-      timestamp: Date.now(),
-      source: CDC_SOURCE.CDC,
-    });
-    return buildCDCNodeJoinedResult({
-      processed: true,
-      nodeId: targetNodeId,
-      connected: true,
-      wsAddress,
-    });
-  } catch (connectError) {
-    // Log but don't fail - the node might be temporarily unavailable
-    // Raft will handle retries and leader election
-    context.logger.warn(CDC_LOG_MSG.NEW_NODE_CONNECT_FAILED, {
-      nodeId: context.nodeId,
-      targetNodeId,
-      wsAddress,
-      error: connectError.message,
-    });
-    return buildCDCNodeJoinedResult({
-      processed: false,
-      nodeId: targetNodeId,
-      error: connectError.message,
-    });
-  }
+  const result = buildCDCNodeJoinedResult({
+    processed: true,
+    nodeId: targetNodeId,
+    connected: true,
+    wsAddress,
+  });
+  result.connectPromise = connectPromise;
+  return result;
 }

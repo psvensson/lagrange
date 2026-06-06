@@ -455,3 +455,55 @@ test('operation workflow owner reconcile routes persisted pending ' +
     'persisted PENDING re-entry should not fall through to transition advancement',
   );
 });
+
+test('operation workflow owner reconcile routes remote stale pending ' +
+  'dispatch through the wake owner path', async (t) => {
+  const harness = buildAdapterHarness();
+  const result = await harness.adapter.run(
+    buildOperation({
+      status: ReplicaStatus.PENDING,
+      workflowStep: WORKFLOW_STEP.PENDING,
+      updatedAt: TEST_SOURCE_REVISION,
+    }),
+    {
+      mode: OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_MODE.OWNER_RECONCILE,
+      evidence: buildEvidence({
+        durableOperation: buildDurableOperation({
+          dispatchState: OPERATION_WORKFLOW_DISPATCH_STATE.NOT_OBSERVED,
+        }),
+        workflowHistory: buildWorkflowHistory({
+          freshnessState: OPERATION_WORKFLOW_HISTORY_FRESHNESS_STATE.STALE,
+        }),
+        ownerLease: buildOwnerLease({
+          authorityState:
+            OPERATION_WORKFLOW_OWNER_AUTHORITY_STATE.REMOTE_AUTHORITATIVE,
+        }),
+        timeoutBudget: buildTimeoutBudget({
+          timeoutState: OPERATION_WORKFLOW_TIMEOUT_STATE.EXPIRED,
+          staleProgressState:
+            OPERATION_WORKFLOW_STALE_PROGRESS_STATE.PROVEN,
+        }),
+        dispatchObservation: buildDispatchObservation({
+          dispatchState: OPERATION_WORKFLOW_DISPATCH_STATE.NOT_OBSERVED,
+          wakeState: OPERATION_WORKFLOW_WAKE_STATE.REQUIRED,
+        }),
+      }),
+    },
+  );
+
+  t.equal(
+    result.outcome.outcome,
+    OPERATION_WORKFLOW_OUTCOME_VALUES.WAKE_REMOTE_OWNER,
+    'remote stale PENDING/pending owner reconcile should wake dispatch owner',
+  );
+  t.equal(
+    result.command.effectCommand,
+    OPERATION_WORKFLOW_EFFECT_COMMANDS.WAKE_REMOTE_OWNER_COMMAND,
+    'remote stale PENDING re-entry should use the canonical wake command',
+  );
+  t.same(
+    harness.calls,
+    [OPERATION_WORKFLOW_EFFECT_COMMANDS.WAKE_REMOTE_OWNER_COMMAND],
+    'remote stale PENDING re-entry should not retain publication for retry',
+  );
+});

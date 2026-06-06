@@ -43,6 +43,7 @@ const MESSAGE_ROUTER_LITERAL = Object.freeze({
   STRING_QUEUEWAITMS: 'queueWaitMs',
   STRING_TARGET_PREFIX: 'target:',
   STRING_TARGET_CRITICAL_FALLBACK: 'target:critical-fallback',
+  STRING_TARGET_PRIORITY_CONTROL_PLANE: 'target:priority-control-plane',
   STRING_FUNCTION: 'function',
   STRING_INVALID_WSPORT_FOR_IN_PROCESS_SERVER:
     'Invalid wsPort for in-process server',
