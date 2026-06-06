@@ -29,7 +29,7 @@ import {loadQuest, saveQuest, readLog, projectState, appendFinding, questFilePat
   from './solve/store.js';
 import {makeDryExecutor} from './solve/executor.js';
 import {makeAgentExecutor} from './solve/agent-executor.js';
-import {runLoop} from './solve/loop.js';
+import {runLoop, runSupervised} from './solve/loop.js';
 import {writeReport} from './solve/report.js';
 import {runStep, stepAbort, stepPending} from './solve/step.js';
 import {SOLVE_DATA_DIR} from './solve/constants.js';
@@ -126,10 +126,7 @@ function cmdNew(root, args) {
   process.stdout.write(`created ${written}\nEdit it, then: solve run --id ${id}\n`);
 }
 
-function cmdRun(root, args) {
-  const id = args.id || args._[0];
-  if (!id) throw new Error('run: --id <questId> is required');
-  const quest = loadQuest(root, id);
+function buildRunOptions(root, id, args) {
   const executor = buildExecutor(root, id, args);
   const options = {executor};
   if (args.max !== undefined) options.maxCycles = Number(args.max);
@@ -141,7 +138,10 @@ function cmdRun(root, args) {
   if (args['push-every'] !== undefined) {
     options.pushEvery = Number(args['push-every']);
   }
-  const result = runLoop(root, quest, options);
+  return options;
+}
+
+function writeRunOutcome(root, id, result) {
   const {file} = writeReport(root, id);
   const problems = result.problems?.length ?
     `problems:\n${result.problems.map((problem) => `- ${problem}`).join('\n')}\n` :
@@ -149,13 +149,39 @@ function cmdRun(root, args) {
   const disposition = result.disposition ?
     `disposition: ${result.disposition}\n` : '';
   const next = result.nextCommand ? `next: ${result.nextCommand}\n` : '';
+  const supervisor = result.supervisor ?
+    `supervisor: ${result.supervisor.stop} ` +
+    `(restarts: ${result.supervisor.restarts}` +
+    (result.supervisor.innerOutcome ?
+      `, inner: ${result.supervisor.innerOutcome}` : '') + ')\n' : '';
   process.stdout.write(
     `terminal: ${result.outcome}\nevidence: ${result.evidence || '(none)'}\n` +
+    supervisor +
     disposition +
     problems +
     next +
     commitLine(result.commit) +
     `report: ${file}\n`);
+}
+
+function cmdRun(root, args) {
+  const id = args.id || args._[0];
+  if (!id) throw new Error('run: --id <questId> is required');
+  const quest = loadQuest(root, id);
+  const options = buildRunOptions(root, id, args);
+  if (args['keep-alive']) {
+    if (args['max-restarts'] !== undefined) {
+      options.maxRestarts = Number(args['max-restarts']);
+    }
+    if (args['stall-window'] !== undefined) {
+      options.stallWindow = Number(args['stall-window']);
+    }
+    options.onRestart = ({restarts, innerOutcome}) => process.stderr.write(
+      `supervisor: restart ${restarts} after ${innerOutcome}\n`);
+    writeRunOutcome(root, id, runSupervised(root, quest, options));
+    return;
+  }
+  writeRunOutcome(root, id, runLoop(root, quest, options));
 }
 
 function buildExecutor(root, id, args) {

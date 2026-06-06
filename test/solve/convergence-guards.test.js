@@ -9,9 +9,13 @@ import {
   coupledLocalFixBlocked,
   regressionRestoreStatus,
   scopeTerminalStatus,
+  harnessNotMeasuringStatus,
 } from '../../scripts/solve/convergence-guards.js';
 import {projectInvariantLedger} from '../../scripts/solve/store.js';
-import {SCOPE_PRESSURE_FILE_LIMIT} from '../../scripts/solve/constants.js';
+import {
+  SCOPE_PRESSURE_FILE_LIMIT,
+  HARNESS_NONMEASURING_PARK_THRESHOLD,
+} from '../../scripts/solve/constants.js';
 import {stepTheoryGateProblems} from '../../scripts/solve/theory.js';
 
 const FRONTIER = 'f-main';
@@ -214,6 +218,80 @@ tap.test('scopeTerminalStatus: crosses the file bound', (t) => {
 tap.test('scopeTerminalStatus: tolerates a missing scope-pressure object', (t) => {
   t.same(scopeTerminalStatus(null), {terminal: false, fileCount: 0}, 'null is safe');
   t.same(scopeTerminalStatus({}), {terminal: false, fileCount: 0}, 'empty is safe');
+  t.end();
+});
+
+tap.test('rr-G harnessNotMeasuringStatus: trailing non-measuring run', (t) => {
+  const invalid = (n) => ({
+    type: 'attempt', frontier: FRONTIER, invalidSample: true,
+    metricBefore: null, metricAfter: null, seq: n,
+  });
+  const measured = (metric, n) => ({
+    type: 'attempt', frontier: FRONTIER, invalidSample: false,
+    metricBefore: metric, metricAfter: metric, seq: n,
+  });
+
+  t.equal(
+    harnessNotMeasuringStatus([], FRONTIER).consecutive, 0, 'empty log measures nothing');
+
+  const belowThreshold = [
+    measured(3, 0),
+    ...Array.from({length: HARNESS_NONMEASURING_PARK_THRESHOLD - 1}, (_, i) => invalid(i + 1)),
+  ];
+  const below = harnessNotMeasuringStatus(belowThreshold, FRONTIER);
+  t.equal(below.consecutive, HARNESS_NONMEASURING_PARK_THRESHOLD - 1, 'counts the run');
+  t.equal(below.notMeasuring, false, 'one short of the threshold does not park');
+
+  const atThreshold = [
+    measured(3, 0),
+    ...Array.from({length: HARNESS_NONMEASURING_PARK_THRESHOLD}, (_, i) => invalid(i + 1)),
+  ];
+  const at = harnessNotMeasuringStatus(atThreshold, FRONTIER);
+  t.equal(at.consecutive, HARNESS_NONMEASURING_PARK_THRESHOLD, 'counts the full run');
+  t.equal(at.notMeasuring, true, 'the threshold parks the frontier');
+
+  const recovered = [...atThreshold, measured(2, 99)];
+  t.equal(
+    harnessNotMeasuringStatus(recovered, FRONTIER).consecutive, 0,
+    'a fresh measured sample resets the run');
+  t.equal(
+    harnessNotMeasuringStatus(recovered, FRONTIER).notMeasuring, false,
+    'and clears the park condition');
+  t.end();
+});
+
+tap.test('rr-G harnessNotMeasuringStatus: only the named frontier counts', (t) => {
+  const invalid = (frontier, n) => ({
+    type: 'attempt', frontier, invalidSample: true,
+    metricBefore: null, metricAfter: null, seq: n,
+  });
+  const log = Array.from(
+    {length: HARNESS_NONMEASURING_PARK_THRESHOLD}, (_, i) => invalid('other', i));
+  t.equal(
+    harnessNotMeasuringStatus(log, FRONTIER).consecutive, 0,
+    'samples on a different frontier are ignored');
+  t.end();
+});
+
+tap.test('rr-G harnessNotMeasuringStatus: self-heals on mis-recorded legacy samples', (t) => {
+  // Before the verdict-reason classification fix, harness-connectivity failures were
+  // recorded as invalidSample:false with a phantom numeric metric. The detector must still
+  // recognise them as non-measuring via verdictReason, so a tail of such legacy samples
+  // parks on restart instead of masquerading as a measured streak.
+  const legacy = (metric) => ({
+    type: 'evidence-ingested', frontier: FRONTIER, probeKey: undefined,
+    invalidSample: false, metric, verdictReason: 'harness_connectivity_or_system_failure',
+  });
+  const log = [legacy(0), legacy(105), legacy(6), legacy(0)];
+  const status = harnessNotMeasuringStatus(log, FRONTIER);
+  t.equal(status.consecutive, 4, 'counts mis-recorded non-measuring samples by verdictReason');
+  t.equal(status.notMeasuring, true, 'parks despite the phantom invalidSample:false flag');
+
+  const healed = [...log, {
+    type: 'evidence-ingested', frontier: FRONTIER, invalidSample: false, metric: 2,
+  }];
+  t.equal(harnessNotMeasuringStatus(healed, FRONTIER).consecutive, 0,
+    'a genuine measured sample (no non-measuring verdict) resets the run');
   t.end();
 });
 

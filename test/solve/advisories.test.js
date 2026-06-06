@@ -162,6 +162,40 @@ tap.test('buildAdvisories evidence-unrecorded', (t) => {
   t.end();
 });
 
+tap.test('buildAdvisories harness-invalid', (t) => {
+  t.test('a non-measuring cannot-measure signal surfaces a fix-harness advisory', (t) => {
+    const advisories = buildAdvisories(
+      quest,
+      health({signals: [{
+        type: 'cannot-measure',
+        mechanism: 'f: 3 consecutive non-measuring runs (harness connectivity)',
+        severity: 'high',
+      }]}),
+      []);
+    const harness = advisories.find((a) => a.kind === 'harness-invalid');
+    t.ok(harness, 'harness-invalid advisory present');
+    t.match(harness.message, /harness has stopped measuring/);
+    t.match(harness.command, /status --id q1/);
+    t.end();
+  });
+
+  t.test('a parked-frontier cannot-measure signal does not surface it', (t) => {
+    const advisories = buildAdvisories(
+      quest,
+      health({signals: [{
+        type: 'cannot-measure',
+        mechanism: 'demo-main',
+        severity: 'high',
+      }]}),
+      []);
+    t.notOk(advisories.find((a) => a.kind === 'harness-invalid'),
+      'plain parked cannot-measure (no non-measuring run) is not a harness advisory');
+    t.end();
+  });
+
+  t.end();
+});
+
 tap.test('renderAdvisoryLines', (t) => {
   t.same(renderAdvisoryLines([]), [], 'empty advisories render no lines');
   const lines = renderAdvisoryLines([

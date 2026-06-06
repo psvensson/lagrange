@@ -176,6 +176,10 @@ export const CONVERGENCE_GUARDS = Object.freeze({
   // rr-B: a frontier may refine its search gradient (e.g. priority -> distance) without
   // tripping the goalpost seal, as long as the sealed doneWhen closure is untouched.
   gradientRefinement: true,
+  // rr-G: a run of consecutive non-measuring samples (dead/disconnected harness) routes the
+  // frontier to a resumable measurement park ("fix the harness") instead of chasing the
+  // noise those runs emit. Stands down when false (the detector still computes).
+  harnessMeasurementGate: true,
 });
 
 // rr-D tuning: the minimum number of disjoint-cluster transitions in a frontier's
@@ -217,7 +221,25 @@ export const OUTCOME_BLOCKED = 'blocked';
 // as "continue".
 export const OUTCOME_CONTINUE = 'continue';
 
-// Graded guard-response dispositions, softest -> hardest. Every blocked continuation or
+// Supervisor (keep-alive) outcomes. runSupervised wraps runLoop and re-invokes it across
+// NON-terminal stops so an autonomous quest keeps contributing to its append-only memory
+// instead of dying when one driver session ends. These outcomes are all NON-terminal — they
+// never close a quest (only SOLVED / honest EXHAUSTED do) — and exist so the operator/agent
+// can see WHY the supervisor stepped back rather than silently looping.
+//   supervisor-paused-measurement a measurement gate (dead/disconnected harness) was hit;
+//                                 re-running cannot help until the harness is repaired.
+//   supervisor-stalled            restarts stopped producing durable progress (a hot spin
+//                                 guard); a human/agent should reassess.
+//   supervisor-budget             the supervisor's own restart/cycle budget was exhausted.
+export const OUTCOME_SUPERVISOR_PAUSED_MEASUREMENT = 'supervisor-paused-measurement';
+export const OUTCOME_SUPERVISOR_STALLED = 'supervisor-stalled';
+export const OUTCOME_SUPERVISOR_BUDGET = 'supervisor-budget';
+
+// runSupervised bounds: at most this many runLoop restarts, and a stall window of this many
+// consecutive restarts with no new durable-progress event before it steps back. Conservative
+// so a transient blip does not end the supervisor while genuine slow progress continues.
+export const SUPERVISOR_MAX_RESTARTS = 100;
+export const SUPERVISOR_STALL_WINDOW = 3;
 // theory gate resolves to exactly one of these. Only `terminal` may CLOSE a quest, and
 // (per the two-terminal contract in AGENTS.md) only as SOLVED or honest EXHAUSTED.
 //   advisory       annotate (finding/health signal) and continue.
@@ -285,6 +307,14 @@ export const FIRST_RUNG_INDEX = 0;
 export const VERDICT_BLOCK_EVIDENCE_INCOMPLETE = 'BLOCK_EVIDENCE_INCOMPLETE';
 export const VERDICT_REASON_EXECUTION_INCOMPLETE =
   'execution_incomplete_or_metrics_missing';
+// A run whose harness could not connect to / reach the cluster (admin API timeouts,
+// EHOSTUNREACH, WebSocket closed before established, cluster readiness never stabilized)
+// did not measure the scenario at all: any metric it emits is an artifact of a broken
+// harness, not of the system under test. It must be treated exactly like an incomplete
+// run — invalid sample, metric null — so a dead harness can never be read as progress and
+// the frontier is honestly routed to "fix the harness" instead of chasing the noise.
+export const VERDICT_REASON_HARNESS_CONNECTIVITY =
+  'harness_connectivity_or_system_failure';
 
 // The precise discriminator for an invalid metric sample is the reason code (the
 // metric itself is missing/untrustworthy), not the verdict alone: a completed-but-
@@ -292,7 +322,15 @@ export const VERDICT_REASON_EXECUTION_INCOMPLETE =
 // outstanding-item count.
 export const NON_MEASURING_VERDICT_REASONS = Object.freeze([
   VERDICT_REASON_EXECUTION_INCOMPLETE,
+  VERDICT_REASON_HARNESS_CONNECTIVITY,
 ]);
+
+// rr-G: how many consecutive trailing non-measuring frontier samples mark the harness
+// itself (not the system under test) as broken. At/after this many, the frontier is routed
+// to a resumable measurement park ("fix the harness") instead of crediting or chasing the
+// noise those runs emit. Three keeps a single transient connectivity blip from parking the
+// frontier while catching a genuinely dead harness quickly.
+export const HARNESS_NONMEASURING_PARK_THRESHOLD = 3;
 
 // Park provenance — WHY a frontier reached the terminal park rung.
 //   EXHAUSTED:      the frontier was genuinely measured and the finite ladder ran out

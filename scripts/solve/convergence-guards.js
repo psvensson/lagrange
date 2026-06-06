@@ -8,10 +8,15 @@
 import {
   EVENT_VIOLATION,
   EVENT_FINDING,
+  EVENT_ATTEMPT,
+  EVENT_EVIDENCE_INGESTED,
   COUPLED_OSC_SWAP_THRESHOLD,
   SCOPE_PRESSURE_FILE_LIMIT,
+  HARNESS_NONMEASURING_PARK_THRESHOLD,
+  NON_MEASURING_VERDICT_REASONS,
 } from './constants.js';
 import {projectInvariantLedger} from './store.js';
+import {isFrontierProbeEvent} from './probe-spec.js';
 
 const REGRESSION_SCOPE = 'regression';
 
@@ -277,4 +282,47 @@ export function scopeTerminalStatus(scopePressure) {
   const fileCount = Array.isArray(scopePressure?.changedPaths) ?
     scopePressure.changedPaths.length : 0;
   return {terminal: fileCount > SCOPE_PRESSURE_FILE_LIMIT, fileCount};
+}
+
+// rr-G: the harness has stopped measuring. A run that did not measure the system under
+// test (harness connectivity/system failure, or an otherwise incomplete run) is recorded
+// as an invalid sample with a null metric. When the most recent frontier samples are a run
+// of such invalid samples, the harness — not the system — is the thing that is broken, and
+// continuing to edit source only chases noise. This counts the trailing run of consecutive
+// non-measuring frontier samples (newest-first, stopping at the first valid measurement)
+// so the call site can route to "fix the harness" once it crosses the park threshold.
+//
+// A sample is non-measuring if it is flagged invalidSample, carries no real metric, OR its
+// verdictReason is a known non-measuring reason. The last clause makes the detector
+// self-healing: samples mis-recorded as valid before the verdict-reason classification fix
+// (invalidSample:false with a phantom metric but a harness-connectivity verdictReason) are
+// still recognised as non-measuring, so a tail of such legacy samples parks on restart
+// instead of masquerading as a measured result.
+//
+// Returns:
+//   consecutive - number of trailing non-measuring frontier samples
+//   notMeasuring- true once that run reaches HARNESS_NONMEASURING_PARK_THRESHOLD
+export function harnessNotMeasuringStatus(log, frontierId = null) {
+  let consecutive = 0;
+  for (let i = log.length - 1; i >= 0; i -= 1) {
+    const event = log[i];
+    if (frontierId && event.frontier !== frontierId) continue;
+    const isFrontierSample =
+      event.type === EVENT_ATTEMPT ||
+      (event.type === EVENT_EVIDENCE_INGESTED && isFrontierProbeEvent(event));
+    if (!isFrontierSample) continue;
+    const verdictReason = event.verdictReason ||
+      (event.current && event.current.verdictReason) || null;
+    const nonMeasuringVerdict = NON_MEASURING_VERDICT_REASONS.includes(verdictReason);
+    const measuring = !nonMeasuringVerdict &&
+      event.invalidSample !== true && event.metric !== null &&
+      !(event.type === EVENT_ATTEMPT && event.metricAfter === null &&
+        event.metricBefore === null);
+    if (measuring) break;
+    consecutive += 1;
+  }
+  return {
+    consecutive,
+    notMeasuring: consecutive >= HARNESS_NONMEASURING_PARK_THRESHOLD,
+  };
 }

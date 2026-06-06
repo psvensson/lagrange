@@ -372,4 +372,41 @@ tap.test('Quest health', async (t) => {
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });
+
+  t.test('rr-G: a run of non-measuring samples parks via blocked-measurement', (t) => {
+    const root = tmp();
+    const oracle = path.join(root, 'oracle.json');
+    fs.writeFileSync(oracle, JSON.stringify({metric: 1, target: 0}));
+    const quest = {
+      id: 'demo',
+      statement: 'Drive metric to zero.',
+      priority: 1,
+      doneWhen: {probe: 'oracle', args: {file: oracle}},
+      frontiers: [
+        {id: 'demo-main', priority: 1,
+          metric: {probe: 'oracle', args: {file: oracle}}},
+      ],
+    };
+    saveQuest(root, quest);
+    for (let i = 0; i < 3; i += 1) {
+      appendEvent(root, quest.id, {
+        type: EVENT_ATTEMPT,
+        frontier: 'demo-main',
+        invalidSample: true,
+        metricBefore: null,
+        metricAfter: null,
+        verdictReason: 'harness_connectivity_or_system_failure',
+        changeRef: 'diff:x',
+      });
+    }
+
+    const health = analyzeQuestHealth(root, quest);
+    const cannotMeasure = health.signals.find(
+      (signal) => signal.type === 'cannot-measure');
+    t.ok(cannotMeasure, 'emits a cannot-measure signal');
+    t.match(cannotMeasure.mechanism, /non-measuring/, 'mechanism names the cause');
+    t.match(health.nextAction, /fix the measurement harness/, 'next action says fix harness');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
 });

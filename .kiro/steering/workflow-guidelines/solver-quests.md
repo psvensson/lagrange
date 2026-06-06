@@ -243,6 +243,19 @@ constant. Detectors fire only on real recorded events and never touch the sealed
   byte-identical. The refinement is strictly harder to satisfy and leaves the
   sealed `doneWhen` untouched (see `isGradientRefinement`), so steering the ladder
   on a sharper gradient is never punished as moving the goalposts.
+- **Harness-not-measuring gate (rr-G)**: a run that did not measure the system under
+  test — a dead or disconnected harness, recorded as an invalid sample with a null
+  metric — is noise, not evidence. When the trailing frontier samples are a run of such
+  non-measuring samples, the measurement *apparatus*, not the system, is broken, and
+  continuing to edit source only chases that noise. `harnessNotMeasuringStatus` counts the
+  trailing run of consecutive non-measuring frontier samples (newest-first, stopping at the
+  first real measurement); once it reaches `HARNESS_NONMEASURING_PARK_THRESHOLD` health
+  emits the existing `cannot-measure` signal, which routes through
+  `CONTINUATION_BLOCKED_MEASUREMENT` to a **resumable measurement park** (never exhaustion;
+  auto-reopens on a fresh measured sample). Its next-move text *outranks* a theory demand —
+  you cannot form or falsify a theory without measurement — mirroring `CODE_PRECEDENCE`
+  where measurement precedes theory. Switchable via
+  `CONVERGENCE_GUARDS.harnessMeasurementGate`.
 
 ## Closure Strength
 
@@ -633,10 +646,55 @@ command to take it; recording the move stays an explicit operator action.
 - **override-available**: the current block is a soft, overridable guard (theory
   or scope). If there is a falsifiable reason to proceed, run the printed
   `override` command to authorize one recorded-reason bypass.
+- **harness-invalid**: the harness has stopped measuring (a run of consecutive
+  non-measuring samples — see rr-G). The measurement apparatus, not the system, is
+  broken; fix the harness before crediting or chasing these runs. The park is
+  resumable and auto-reopens on a fresh measured sample.
 
 Advisories are read-only and never block; they fire on the same conditions the
 autonomous loop acts on, so supervised and autonomous drivers converge on the
 same recorded memory.
+
+## Keep-Alive Supervisor
+
+A long-running quest used to die when one driver session ended: an external agent
+that drives the Solver through individual subcommands in a single chat loses all
+momentum when that chat ends, and `run` itself returns on every NON-terminal stop
+(`MAX_CYCLES`, `THEORY_REQUIRED`, a recoverable `BLOCKED`). `run --keep-alive`
+wraps the loop in `runSupervised` (`scripts/solve/loop.js`) so the quest keeps
+contributing to its append-only memory across those boundaries. It is
+decision-aware, never a blind retry:
+
+- **SOLVED / EXHAUSTED**: the honest two-terminal contract — stop and report.
+- **measurement park (rr-G / cannot-measure)**: a dead harness cannot self-heal by
+  re-running, so the supervisor steps back immediately with
+  `supervisor-paused-measurement` and surfaces the harness repair.
+- **MAX_CYCLES / THEORY_REQUIRED / recoverable BLOCKED**: the executor can act on
+  these, so the loop is restarted.
+
+Two bounds prevent a hot spin: a restart cap (`SUPERVISOR_MAX_RESTARTS`, outcome
+`supervisor-budget`) and a stall guard. The stall guard tracks a **durable-progress
+cursor** (`durableProgressCount`) that counts only events which change quest state
+or add knowledge — a measured attempt, a measuring evidence sample, a finding, any
+theory move, a reflection, a park, a reopen — and deliberately excludes the
+`gate-decision` noise a hard block appends every cycle. If no durable progress
+accrues across `SUPERVISOR_STALL_WINDOW` consecutive restarts it steps back with
+`supervisor-stalled`. Every supervisor outcome is NON-terminal: the supervisor
+never closes a quest, only honest SOLVED / EXHAUSTED do. It is model/CLI-agnostic —
+it only re-invokes the same executor through the generic file contract.
+
+## Known System-Theory Hypothesis (rolling-restart)
+
+For the rolling-restart core-stability quest, repeated coupled-invariant
+oscillation (rr-D) between the `publication_converged` / `priority_spread_settled`
+family and the families defined in terms of it points to a single shared
+admission/readiness knob: the `CoupledAdmission` model shows the two green-ranges
+overlap at exactly one value, so single-owner patches bounce forever and only an
+atomic cross-owner reconcile converges. This remains a **hypothesis to validate**,
+not a settled result: it can only be confirmed once the harness measures again
+(the rr-G park exists precisely because a long stretch of samples were
+non-measuring). Frame the next system theory around that shared knob, and confirm
+it against a measured run rather than the non-measuring noise that motivated it.
 
 ## Tracked Versus Regenerable
 

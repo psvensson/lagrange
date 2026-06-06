@@ -38,6 +38,19 @@ import {
   OUTCOME_MAX_CYCLES,
   OUTCOME_THEORY_REQUIRED,
   OUTCOME_BLOCKED,
+  OUTCOME_SUPERVISOR_PAUSED_MEASUREMENT,
+  OUTCOME_SUPERVISOR_STALLED,
+  OUTCOME_SUPERVISOR_BUDGET,
+  SUPERVISOR_MAX_RESTARTS,
+  SUPERVISOR_STALL_WINDOW,
+  DISPOSITION_PARK_RESUMABLE,
+  EVENT_THEORY_SYSTEM_DECLARED,
+  EVENT_THEORY_OPTION_DECLARED,
+  EVENT_THEORY_SELECTED,
+  EVENT_THEORY_RESULT,
+  EVENT_FRONTIER_REOPENED,
+  EVENT_REFLECTION,
+  EVENT_EVIDENCE_INGESTED,
 } from './constants.js';
 import {appendEvent, readLog, projectState, rebuildState, invariantHighWater} from './store.js';
 import {frontierHasValidSample} from './sample-validity.js';
@@ -713,4 +726,98 @@ export function runLoop(root, quest, options = {}) {
     }
   }
   return finish(root, quest, OUTCOME_MAX_CYCLES, null);
+}
+
+// Durable-progress cursor: the count of events that change quest state or add durable
+// knowledge — a MEASURED attempt, a measuring ingested-evidence sample, a finding, any
+// theory move, a reflection, a park, or a frontier reopen. It deliberately EXCLUDES
+// gate-decision and violation records, which a hard block appends on every cycle; counting
+// those would make a hot spin look like progress and defeat the supervisor's stall guard.
+export function durableProgressCount(log) {
+  const always = new Set([
+    EVENT_FINDING,
+    EVENT_THEORY_SYSTEM_DECLARED,
+    EVENT_THEORY_OPTION_DECLARED,
+    EVENT_THEORY_SELECTED,
+    EVENT_THEORY_RESULT,
+    EVENT_REFLECTION,
+    EVENT_PARK,
+    EVENT_FRONTIER_REOPENED,
+    EVENT_SOLVED,
+  ]);
+  let count = 0;
+  for (const event of log || []) {
+    if (always.has(event.type)) {
+      count += 1;
+    } else if (event.type === EVENT_ATTEMPT && event.invalidSample !== true) {
+      count += 1;
+    } else if (event.type === EVENT_EVIDENCE_INGESTED &&
+      event.invalidSample !== true && event.metric !== null) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+// Keep-alive supervisor. Wraps runLoop and re-invokes it across NON-terminal stops so the
+// autonomous quest keeps contributing to its append-only memory instead of dying when one
+// driver session ends. It is decision-aware, NOT a blind retry loop:
+//   - SOLVED / EXHAUSTED            honest terminal -> stop and pass the result through.
+//   - park-resumable (measurement)  a dead/disconnected harness -> stop immediately; re-running
+//                                   cannot help until a human repairs the harness.
+//   - MAX_CYCLES / THEORY_REQUIRED / other BLOCKED (reroute/explore) -> a recoverable stop the
+//                                   executor can act on -> restart runLoop.
+// Two bounds prevent a hot spin: a restart cap (SUPERVISOR_MAX_RESTARTS) and a stall guard —
+// if no new durable-progress event is appended across SUPERVISOR_STALL_WINDOW consecutive
+// restarts, it steps back with OUTCOME_SUPERVISOR_STALLED. The two-terminal contract is
+// preserved: every supervisor-specific outcome is NON-terminal and never closes a quest.
+export function runSupervised(root, quest, options = {}) {
+  const maxRestarts = Number.isInteger(options.maxRestarts) ?
+    options.maxRestarts : SUPERVISOR_MAX_RESTARTS;
+  const stallWindow = Number.isInteger(options.stallWindow) ?
+    options.stallWindow : SUPERVISOR_STALL_WINDOW;
+  const onRestart = typeof options.onRestart === 'function' ? options.onRestart : null;
+  // The runner is injectable so the supervisor's decision policy can be unit-tested in
+  // isolation; production always uses the real runLoop.
+  const runner = typeof options.runner === 'function' ? options.runner : runLoop;
+
+  let restarts = 0;
+  let staleRestarts = 0;
+  let lastProgress = durableProgressCount(readLog(root, quest.id));
+  let result = runner(root, quest, options);
+
+  for (;;) {
+    if (result.outcome === STATUS_SOLVED || result.outcome === STATUS_EXHAUSTED) {
+      return {...result, supervisor: {restarts, stop: result.outcome}};
+    }
+    // A measurement gate means the apparatus, not the system, is broken. Re-running the same
+    // loop cannot produce a measurement, so step back and surface the harness repair.
+    if (result.disposition === DISPOSITION_PARK_RESUMABLE) {
+      return {
+        ...result,
+        outcome: OUTCOME_SUPERVISOR_PAUSED_MEASUREMENT,
+        supervisor: {restarts, stop: 'measurement', innerOutcome: result.outcome},
+      };
+    }
+    if (restarts >= maxRestarts) {
+      return {
+        ...result,
+        outcome: OUTCOME_SUPERVISOR_BUDGET,
+        supervisor: {restarts, stop: 'budget', innerOutcome: result.outcome},
+      };
+    }
+    const progress = durableProgressCount(readLog(root, quest.id));
+    staleRestarts = progress > lastProgress ? 0 : staleRestarts + 1;
+    lastProgress = progress;
+    if (staleRestarts >= stallWindow) {
+      return {
+        ...result,
+        outcome: OUTCOME_SUPERVISOR_STALLED,
+        supervisor: {restarts, stop: 'stalled', innerOutcome: result.outcome},
+      };
+    }
+    restarts += 1;
+    if (onRestart) onRestart({restarts, innerOutcome: result.outcome, progress});
+    result = runner(root, quest, options);
+  }
 }

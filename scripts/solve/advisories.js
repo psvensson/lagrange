@@ -78,6 +78,22 @@ export function buildAdvisories(quest, health, log) {
         '--note "<falsifiable reframing>"',
     });
   }
+  for (const signal of (health && health.signals) || []) {
+    if (signal.type !== 'cannot-measure') continue;
+    if (!/non-measuring/.test(signal.mechanism || '')) continue;
+    advisories.push({
+      kind: 'harness-invalid',
+      severity: 'advisory',
+      message:
+        'the harness has stopped measuring (consecutive non-measuring runs); the ' +
+        'measurement apparatus — not the system under test — is broken, so fix the ' +
+        'harness before crediting or chasing these runs',
+      command:
+        `node scripts/solve.js status --id ${quest.id}  # harness park is resumable; ` +
+        'it auto-reopens on a fresh measured sample',
+    });
+    break;
+  }
   const continuation = health && health.continuation;
   if (!continuationIsAllowed(continuation) && continuationOverridable(continuation)) {
     const code = continuation.code || continuation.status;

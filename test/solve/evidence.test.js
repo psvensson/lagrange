@@ -136,6 +136,43 @@ tap.test('evidence ingestion (P2)', async (t) => {
     t.end();
   });
 
+  t.test('a harness-connectivity failure with a numeric metric is invalid', (t) => {
+    // Reproduces the dead-harness bug: BLOCK_HARNESS_INVALID
+    // (harness_connectivity_or_system_failure) leaked a numeric priority count, but the
+    // harness never reached the cluster, so the sample must be invalid / metric null.
+    const root = tmp();
+    const goal = getGoal(root);
+    saveQuest(root, goal);
+    const reportDir = path.join(root, 'test-output', 'reports');
+    fs.mkdirSync(reportDir, {recursive: true});
+    const reportPath = path.join(reportDir, 'dead-harness.report.json');
+    fs.writeFileSync(reportPath, JSON.stringify({
+      timestamp: '2026-06-05T14:19:38.000Z',
+      summary: {total: 1, passed: 0, failed: 1},
+      optimizationSummary: {totalPriorityItems: 6},
+      scenarios: [{
+        scenario: 'rolling-restart',
+        passed: false,
+        verdict: 'BLOCK_HARNESS_INVALID',
+        verdictReason: 'harness_connectivity_or_system_failure',
+      }],
+    }));
+
+    const event = ingestEvidence(root, {
+      questId: goal.id,
+      frontierId: 'evidence-quest-test-main',
+      evidencePath: reportPath,
+    });
+
+    t.equal(event.invalidSample, true, 'dead-harness run flagged invalid');
+    t.equal(event.metric, null, 'numeric metric from a dead harness is nulled');
+    t.equal(event.done, false, 'a non-measuring run can never be done');
+    t.equal(event.verdict, 'BLOCK_HARNESS_INVALID');
+
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
   t.test('updates selected theory result correctly', (t) => {
     const root = tmp();
     const goal = getGoal(root);

@@ -104,6 +104,21 @@ tap.test('continuation gate classification', async (t) => {
     t.match(result.problems.join('\n'), /cannot-measure/u);
     t.end();
   });
+
+  t.test('rr-G: a non-measuring harness outranks a theory demand', (t) => {
+    const result = continuationFromHealth({
+      frontier: 'demo-main',
+      questStatus: 'open',
+      signals: [
+        {type: 'system-theory-required', mechanism: 'demo-main'},
+        {type: 'cannot-measure',
+          mechanism: 'demo-main: 3 consecutive non-measuring runs'},
+      ],
+    });
+    t.equal(result.status, CONTINUATION_BLOCKED_MEASUREMENT,
+      'measurement park wins over the theory gate');
+    t.end();
+  });
 });
 
 tap.test('unrecorded-evidence routes through the graded gate, not a hard throw', async (t) => {

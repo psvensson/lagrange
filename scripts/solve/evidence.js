@@ -11,7 +11,7 @@ import {
   THEORY_RESULT_NEEDS_RERUN,
   THEORY_RESULT_SUPPORTED,
   VERDICT_BLOCK_EVIDENCE_INCOMPLETE,
-  VERDICT_REASON_EXECUTION_INCOMPLETE,
+  NON_MEASURING_VERDICT_REASONS,
 } from './constants.js';
 import {buildMechanismCardFromEvidence} from './mechanism-card.js';
 import {
@@ -267,7 +267,7 @@ export function ingestEvidence(root, {
   let done = scenarioPassed(data, scenarioName);
   const verdict = firstVerdict(data, scenarioName);
   const verdictReason = firstVerdictReason(data, scenarioName);
-  let invalidSample = verdictReason === VERDICT_REASON_EXECUTION_INCOMPLETE ||
+  let invalidSample = NON_MEASURING_VERDICT_REASONS.includes(verdictReason) ||
     metric === null;
   if (liveProbeMatchesEvidence) {
     metric = liveProbe.metric;
@@ -387,7 +387,7 @@ export function ingestEvidence(root, {
   if (selectedTheory && frontierMetricEvidence) {
     const nonMeasuring = invalidSample ||
       verdict === VERDICT_BLOCK_EVIDENCE_INCOMPLETE ||
-      verdictReason === VERDICT_REASON_EXECUTION_INCOMPLETE ||
+      NON_MEASURING_VERDICT_REASONS.includes(verdictReason) ||
       metric === null;
     let result = THEORY_RESULT_FALSIFIED;
     let theoryOutcome = THEORY_RESULT_FALSIFIED;

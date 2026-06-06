@@ -149,6 +149,38 @@ tap.test('scenario-harness probe (P1)', async (t) => {
     t.end();
   });
 
+  t.test('a harness-connectivity failure is an invalid sample => null metric', (t) => {
+    const dir = tmp();
+    // The harness could not reach the cluster (EHOSTUNREACH / admin API timeout). Any
+    // metric it emits is noise from a broken harness, never a real measurement.
+    writeReport(dir, 'dead-harness', {ts: '2026-06-01T01:00:00Z', scenario: SC,
+      passed: false, priorityItems: 0, failed: 0,
+      verdictReason: 'harness_connectivity_or_system_failure'});
+    const r = scenarioHarnessProbe.measure({scenario: SC, reportDir: dir});
+    t.equal(r.metric, null, 'dead-harness run does not read as metric 0');
+    t.equal(r.invalidSample, true, 'flagged as an invalid sample');
+    t.equal(r.done, false, 'a non-measuring run can never be done');
+    fs.rmSync(dir, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('a harness-connectivity failure breaks the consecutive-green streak', (t) => {
+    const dir = tmp();
+    writeReport(dir, 'r1', {ts: '2026-06-01T01:00:00Z', scenario: SC,
+      passed: true, priorityItems: 0, failed: 0});
+    writeReport(dir, 'r2', {ts: '2026-06-01T02:00:00Z', scenario: SC,
+      passed: true, priorityItems: 0, failed: 0});
+    // newest run claims metric 0 but the harness never connected: it did not measure.
+    writeReport(dir, 'r3', {ts: '2026-06-01T03:00:00Z', scenario: SC,
+      passed: true, priorityItems: 0, failed: 0,
+      verdictReason: 'harness_connectivity_or_system_failure'});
+    const r = scenarioHarnessProbe.measure(
+      {scenario: SC, reportDir: dir, consecutive: 3});
+    t.equal(r.done, false, 'a dead-harness run within the window blocks done');
+    fs.rmSync(dir, {recursive: true, force: true});
+    t.end();
+  });
+
   t.test('a structurally missing metric breaks the consecutive-green streak', (t) => {
     const dir = tmp();
     writeReport(dir, 'r1', {ts: '2026-06-01T01:00:00Z', scenario: SC,

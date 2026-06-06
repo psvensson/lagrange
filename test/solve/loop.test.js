@@ -4,7 +4,13 @@ import path from 'node:path';
 import os from 'node:os';
 import {execFileSync} from 'node:child_process';
 
-import {runLoop, finalizeAttempt, makeRunContext} from '../../scripts/solve/loop.js';
+import {
+  runLoop,
+  runSupervised,
+  durableProgressCount,
+  finalizeAttempt,
+  makeRunContext,
+} from '../../scripts/solve/loop.js';
 import {appendEvent, projectState, readLog, saveQuest} from '../../scripts/solve/store.js';
 import {CONTINUATION_BLOCKED_THEORY} from '../../scripts/solve/continuation.js';
 import {makeDryExecutor} from '../../scripts/solve/executor.js';
@@ -28,6 +34,14 @@ import {
   OUTCOME_THEORY_REQUIRED,
   EVENT_REFLECTION,
   REFLECTION_INTERVAL,
+  EVENT_THEORY_RESULT,
+  EVENT_EVIDENCE_INGESTED,
+  DISPOSITION_PARK_RESUMABLE,
+  DISPOSITION_EXPLORE,
+  OUTCOME_BLOCKED,
+  OUTCOME_SUPERVISOR_PAUSED_MEASUREMENT,
+  OUTCOME_SUPERVISOR_STALLED,
+  OUTCOME_SUPERVISOR_BUDGET,
 } from '../../scripts/solve/constants.js';
 
 function setup({metric, target = 0, frontiers = ['f1']}) {
@@ -539,4 +553,101 @@ tap.test('mandatory reflection turn (loop integration)', async (t) => {
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });
+});
+
+tap.test('durableProgressCount counts durable knowledge, not gate noise', (t) => {
+  t.equal(durableProgressCount([]), 0, 'empty log has no progress');
+  t.equal(durableProgressCount(null), 0, 'null log is safe');
+  const log = [
+    {type: EVENT_ATTEMPT, invalidSample: false, metricAfter: 2},
+    {type: EVENT_ATTEMPT, invalidSample: true},
+    {type: EVENT_EVIDENCE_INGESTED, invalidSample: false, metric: 1},
+    {type: EVENT_EVIDENCE_INGESTED, invalidSample: false, metric: null},
+    {type: EVENT_FINDING},
+    {type: EVENT_THEORY_RESULT},
+    {type: EVENT_REFLECTION},
+    {type: EVENT_PARK},
+    {type: EVENT_GATE_DECISION},
+    {type: EVENT_GATE_DECISION},
+  ];
+  t.equal(durableProgressCount(log), 6,
+    'measured attempt + measuring evidence + finding + theory-result + reflection + park; ' +
+    'invalid samples and gate-decisions excluded');
+  t.end();
+});
+
+tap.test('runSupervised (P-keepalive) keeps the quest alive across non-terminal stops', (t) => {
+  const quest = {id: 'sup', frontiers: [{id: 'f1'}]};
+
+  t.test('restarts on MAX_CYCLES and passes a SOLVED terminal through', (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sup-'));
+    // Each runner call appends one measured attempt (durable progress) and returns
+    // MAX_CYCLES twice, then SOLVED. The supervisor must restart through the two
+    // non-terminal stops and report the honest terminal.
+    const outcomes = [OUTCOME_MAX_CYCLES, OUTCOME_MAX_CYCLES, STATUS_SOLVED];
+    let calls = 0;
+    const runner = (r, q) => {
+      appendEvent(r, q.id, {type: EVENT_ATTEMPT, frontier: 'f1', invalidSample: false,
+        metricAfter: 2 - calls});
+      return {outcome: outcomes[calls++], evidence: null};
+    };
+    const res = runSupervised(root, quest, {runner});
+    t.equal(res.outcome, STATUS_SOLVED, 'reports the honest terminal');
+    t.equal(calls, 3, 'restarted twice before solving');
+    t.equal(res.supervisor.restarts, 2, 'records the restart count');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('a measurement park steps back immediately (a dead harness cannot self-heal)', (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sup-'));
+    let calls = 0;
+    const runner = () => {
+      calls++;
+      return {outcome: OUTCOME_BLOCKED, disposition: DISPOSITION_PARK_RESUMABLE,
+        frontier: 'f1', evidence: null};
+    };
+    const res = runSupervised(root, quest, {runner});
+    t.equal(res.outcome, OUTCOME_SUPERVISOR_PAUSED_MEASUREMENT, 'pauses on measurement');
+    t.equal(calls, 1, 'does not restart a dead harness');
+    t.equal(res.supervisor.innerOutcome, OUTCOME_BLOCKED, 'preserves the inner outcome');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('stalls out when restarts stop producing durable progress', (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sup-'));
+    let calls = 0;
+    // A recoverable explore stop that only ever appends gate-decision noise: no durable
+    // progress accrues, so the stall guard must step back rather than spin forever.
+    const runner = (r, q) => {
+      calls++;
+      appendEvent(r, q.id, {type: EVENT_GATE_DECISION, frontier: 'f1'});
+      return {outcome: OUTCOME_BLOCKED, disposition: DISPOSITION_EXPLORE,
+        frontier: 'f1', evidence: null};
+    };
+    const res = runSupervised(root, quest, {runner, stallWindow: 3});
+    t.equal(res.outcome, OUTCOME_SUPERVISOR_STALLED, 'steps back on a hot spin');
+    t.equal(calls, 3, 'one initial run + two stale restarts before the window trips');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('honors the restart budget', (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sup-'));
+    let calls = 0;
+    // Each restart makes durable progress (so the stall guard never fires) but never
+    // terminates; the restart budget is the backstop.
+    const runner = (r, q) => {
+      appendEvent(r, q.id, {type: EVENT_FINDING, frontier: 'f1', n: calls++});
+      return {outcome: OUTCOME_MAX_CYCLES, evidence: null};
+    };
+    const res = runSupervised(root, quest, {runner, maxRestarts: 5});
+    t.equal(res.outcome, OUTCOME_SUPERVISOR_BUDGET, 'stops at the restart budget');
+    t.equal(res.supervisor.restarts, 5, 'used the full budget');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.end();
 });

@@ -25,6 +25,7 @@ import {
   detectCoupledOscillation,
   regressionRestoreStatus,
   scopeTerminalStatus,
+  harnessNotMeasuringStatus,
 } from './convergence-guards.js';
 import {continuationFromHealth} from './continuation.js';
 import {
@@ -429,6 +430,23 @@ export function analyzeQuestHealth(root, quest, options = {}) {
     }
   }
 
+  // rr-G: the harness has stopped measuring. A run of trailing non-measuring frontier
+  // samples means the measurement apparatus — not the system under test — is broken, so the
+  // frontier is routed to a resumable measurement park ("fix the harness") rather than
+  // crediting or chasing the noise. Reuses the cannot-measure continuation routing.
+  let harnessNotMeasuring = null;
+  if (frontier && CONVERGENCE_GUARDS.harnessMeasurementGate) {
+    harnessNotMeasuring = harnessNotMeasuringStatus(log, frontier.id);
+    if (harnessNotMeasuring.notMeasuring) {
+      signals.push({
+        type: 'cannot-measure',
+        mechanism: `${frontier.id}: ${harnessNotMeasuring.consecutive} ` +
+          'consecutive non-measuring runs (harness connectivity/system failure)',
+        severity: 'high',
+      });
+    }
+  }
+
   const rungName = frontier ? (quest.frontiers.find((item) =>
     item.id === frontier.id)?.rung || null) : null;
   const targetConsecutive = consecutiveTarget(quest.doneWhen);
@@ -458,6 +476,14 @@ export function analyzeQuestHealth(root, quest, options = {}) {
       nextAction = `reduce change scope for ${frontier.id} ` +
         `(${scopeTerminal.fileCount} changed files exceed the limit) before the next attempt`;
     }
+  }
+  // rr-G: a dead harness outranks a theory demand for the next move — you cannot form or
+  // falsify a theory without measurement, so "fix the harness" wins even when a theory is
+  // owed (mirrors CONTINUATION_BLOCKED_MEASUREMENT outranking BLOCKED_THEORY).
+  if (frontier && harnessNotMeasuring?.notMeasuring) {
+    nextAction = `fix the measurement harness for ${frontier.id} ` +
+      `(${harnessNotMeasuring.consecutive} consecutive non-measuring runs); ` +
+      'park is resumable and auto-reopens on a fresh measured sample';
   }
   const health = {
     questId: quest.id,
