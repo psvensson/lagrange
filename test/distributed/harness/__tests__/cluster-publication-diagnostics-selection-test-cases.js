@@ -796,6 +796,7 @@ test('Unit: _probeControlSnapshotCoverage surfaces stringified publication diagn
         snapshotObservationReasonCodes: [],
         snapshotObservationRetryAfterMs: null,
         snapshotRepairDeferred: false,
+        snapshotTimeoutEncountered: false,
         activeGateOwnerCohort: null,
         publicationEpoch: 18,
         publicationStatus: 'OPEN',
@@ -1039,4 +1040,3 @@ test('Unit: _probeControlSnapshotCoverage prefers the strongest publication ' +
     ['node-c'],
   );
 });
-

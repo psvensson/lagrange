@@ -24,6 +24,7 @@ import {
   checkReadinessDimensionCorrectness,
   checkSnapshotCoverageMonotonic,
   checkTransactionAvailability,
+  checkPublicationDrainDeterministic,
 } from './invariant-engine-progress-checks.js';
 import {buildInvariantResult} from './invariant-engine-result.js';
 import {
@@ -566,6 +567,7 @@ function evaluateInvariants(state) {
     checkOperationProgressBoundedSteps(snapshot),
     checkPublicationVisibleOrRetained(snapshot),
     checkSnapshotCoverageMonotonic(snapshot),
+    checkPublicationDrainDeterministic(snapshot),
   ]);
 }
 
@@ -586,6 +588,7 @@ export {
   checkSnapshotCoverageMonotonic,
   checkSplitResumeCompleteness,
   checkTransactionAvailability,
+  checkPublicationDrainDeterministic,
   evaluateInvariants,
   isBackwardStep,
 };

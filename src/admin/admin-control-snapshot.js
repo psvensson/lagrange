@@ -13,6 +13,7 @@
 import {COLUMN, NUM, TABLES, TIME_MS, TYPEOF} from '../constants/index.js';
 import {PARTITION_TRANSITION_METADATA_FIELD} from '../partition/partition-constants.js';
 import {CONTROL_PLANE_READINESS_DIMENSION} from '../control-plane/control-plane-readiness-constants.js';
+import {CONTROL_PLANE_DELIVERY_PRIORITY} from '../control-plane/control-plane-constants.js';
 import {AUTHORITATIVE_REPAIR_TRIGGER} from './admin-authoritative-repair-policy.js';
 import {
   ADMIN_CACHE_DUMP,
@@ -156,6 +157,7 @@ function buildMembershipPublicationReadOptions(options = {}) {
     {
       preferAuthoritativeRead: true,
       readProfile: MEMBERSHIP_PUBLICATION_READ_PROFILE_DIAGNOSTICS,
+      deliveryPriority: CONTROL_PLANE_DELIVERY_PRIORITY.READINESS,
     } :
     {readProfile: MEMBERSHIP_PUBLICATION_READ_PROFILE_DIAGNOSTICS};
 }

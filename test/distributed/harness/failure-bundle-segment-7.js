@@ -1,6 +1,7 @@
 import {mkdir, rm, writeFile} from 'node:fs/promises';
 import {join, resolve} from 'node:path';
 import {FAILURE_BUNDLE_SEGMENT_6} from './failure-bundle-segment-6.js';
+import {classifyScenarioVerdict} from './validation-matrix.js';
 const {
   FAILURE_BUNDLE_SCHEMA_VERSION,
   FAILURE_BUNDLE_RUN_DIRNAME,
@@ -220,6 +221,15 @@ function ensureScenarioDiagnostics(entry) {
   return entry.details.diagnostics;
 }
 
+function refreshScenarioVerdict(entry) {
+  if (!isRecord(entry)) {
+    return;
+  }
+  const verdict = classifyScenarioVerdict(entry);
+  entry.verdict = verdict.verdict;
+  entry.verdictReason = verdict.reason;
+}
+
 function applyBundleDiagnosticsToScenarioEntry(entry, bundleJson) {
   const diagnostics = ensureScenarioDiagnostics(entry);
   if (!diagnostics || !isRecord(bundleJson)) {
@@ -331,6 +341,8 @@ function applyBundleDiagnosticsToScenarioEntry(entry, bundleJson) {
     diagnostics.failedPhase.artifacts.nodeReasonsByNodeId =
       bundleJson.readiness.nodeReasonsByNodeId;
   }
+
+  refreshScenarioVerdict(entry);
 }
 
 const SCENARIO_FAILURE_ARTIFACT_FILENAMES = Object.freeze([

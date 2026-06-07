@@ -135,6 +135,8 @@ class MessageRouterSetup {
       externalAdmissionEnabled,
       outboundQueueReadinessReserve:
         TRANSPORT_DEFAULT.PRODUCTION_OUTBOUND_QUEUE_READINESS_RESERVE,
+      outboundQueueReadinessInflightReserve:
+        TRANSPORT_DEFAULT.PRODUCTION_OUTBOUND_QUEUE_READINESS_INFLIGHT_RESERVE,
     });
 
     // Set up resolver to extract nodeId from address pattern "${nodeId}/..."

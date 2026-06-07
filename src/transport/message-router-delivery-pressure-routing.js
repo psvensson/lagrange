@@ -372,8 +372,11 @@ const MESSAGE_ROUTER_DELIVERY_PRESSURE_ROUTING_METHODS = Object.freeze({
     return this.outboundDeliveryRegistryOwner.getOutboundQueue(nodeId);
   },
 
-  isOutboundQueueAvailable(nodeId) {
-    return this.outboundDeliveryRegistryOwner.isOutboundQueueAvailable(nodeId);
+  isOutboundQueueAvailable(nodeId, deliveryPriority = null) {
+    return this.outboundDeliveryRegistryOwner.isOutboundQueueAvailable(
+      nodeId,
+      deliveryPriority,
+    );
   },
 
   enqueueOutbound(nodeId, deliverFn, options = {}) {

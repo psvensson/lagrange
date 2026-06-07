@@ -66,6 +66,7 @@ const FAILURE_CLASS_INVARIANT_MAP = Object.freeze({
   [FAILURE_CLASS.ORPHAN_OPERATION]: INVARIANT_ID.ORPHAN_IN_FLIGHT,
   [FAILURE_CLASS.TIMEOUT_BOUNDARY]: INVARIANT_ID.MONOTONIC_STEPS,
   [FAILURE_CLASS.CDC_DIVERGENCE]: INVARIANT_ID.LEADER_UNIQUENESS,
+  [FAILURE_CLASS.PUBLICATION_DRAIN_DETERMINISM]: INVARIANT_ID.PUBLICATION_DRAIN_DETERMINISTIC,
 });
 
 // ── State snapshot builders per failure class ──────────────────────
@@ -178,6 +179,14 @@ function buildCdcDivergenceState() {
   };
 }
 
+function buildPublicationDrainDeterminismState() {
+  return {
+    isPublicationOwner: true,
+    missingPublishedCount: 1,
+    scheduledReconcileObligationEnabled: false,
+  };
+}
+
 const STATE_BUILDERS = Object.freeze({
   [FAILURE_CLASS.DUAL_LEADER]: buildDualLeaderState,
   [FAILURE_CLASS.BACKWARD_STEP]: buildBackwardStepState,
@@ -185,6 +194,7 @@ const STATE_BUILDERS = Object.freeze({
   [FAILURE_CLASS.ORPHAN_OPERATION]: buildOrphanOperationState,
   [FAILURE_CLASS.TIMEOUT_BOUNDARY]: buildTimeoutBoundaryState,
   [FAILURE_CLASS.CDC_DIVERGENCE]: buildCdcDivergenceState,
+  [FAILURE_CLASS.PUBLICATION_DRAIN_DETERMINISM]: buildPublicationDrainDeterminismState,
 });
 
 // ── Descriptions per failure class ─────────────────────────────────
@@ -201,6 +211,8 @@ const FAILURE_CLASS_DESCRIPTIONS = Object.freeze({
     'Timeout boundary hit causes backward retry step',
   [FAILURE_CLASS.CDC_DIVERGENCE]:
     'CDC propagation lag causes dual leader visibility',
+  [FAILURE_CLASS.PUBLICATION_DRAIN_DETERMINISM]:
+    'Publication owner missingPublishedCount > 0 without active scheduled reconcile tick',
 });
 
 // ═══════════════════════════════════════════════════════════════════
@@ -214,6 +226,7 @@ const HARD_FAILURE_CLASSES = Object.freeze([
   FAILURE_CLASS.STALE_CLAIM,
   FAILURE_CLASS.TIMEOUT_BOUNDARY,
   FAILURE_CLASS.CDC_DIVERGENCE,
+  FAILURE_CLASS.PUBLICATION_DRAIN_DETERMINISM,
 ]);
 
 // Soft invariant failure classes: gate must NOT throw.

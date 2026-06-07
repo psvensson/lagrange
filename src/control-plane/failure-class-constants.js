@@ -19,6 +19,7 @@ const FAILURE_CLASS = Object.freeze({
   ORPHAN_OPERATION: 'orphan_operation',
   TIMEOUT_BOUNDARY: 'timeout_boundary',
   CDC_DIVERGENCE: 'cdc_divergence',
+  PUBLICATION_DRAIN_DETERMINISM: 'publication_drain_determinism',
 });
 
 /**

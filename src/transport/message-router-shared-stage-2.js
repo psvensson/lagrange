@@ -368,6 +368,34 @@ function countInFlightCriticalSourceReserve(queue) {
     TRANSPORT_NUM.ZERO;
 }
 
+function countInFlightReadinessReserve(queue) {
+  const rawCount = queue?.inFlightReadinessReserve;
+  return Number.isFinite(rawCount) && rawCount > TRANSPORT_NUM.ZERO ?
+    Math.floor(rawCount) :
+    TRANSPORT_NUM.ZERO;
+}
+
+function resolveReadinessReserveInFlightLimit(queue) {
+  if (!queue) {
+    return TRANSPORT_NUM.ZERO;
+  }
+  const maxConcurrent = resolveNormalizedQueueMaxConcurrent(queue);
+  if (maxConcurrent <= TRANSPORT_NUM.ZERO) {
+    return TRANSPORT_NUM.ZERO;
+  }
+  const configuredReserve = queue.readinessInflightReserve;
+  if (
+    !Number.isFinite(configuredReserve) ||
+    configuredReserve <= TRANSPORT_NUM.ZERO
+  ) {
+    return TRANSPORT_NUM.ZERO;
+  }
+  return Math.max(
+    TRANSPORT_NUM.ONE,
+    Math.min(Math.floor(configuredReserve), maxConcurrent),
+  );
+}
+
 function resolveNormalizedQueueMaxConcurrent(queue) {
   if (!queue) {
     return TRANSPORT_NUM.ZERO;
@@ -488,6 +516,18 @@ function adjustInFlightCriticalSourceReserveCount(queue, delta) {
   );
 }
 
+function adjustInFlightReadinessReserveCount(queue, delta) {
+  if (!queue || !Number.isFinite(delta) || delta === TRANSPORT_NUM.ZERO) {
+    return;
+  }
+  const normalizedDelta =
+    delta > TRANSPORT_NUM.ZERO ? TRANSPORT_NUM.ONE : -TRANSPORT_NUM.ONE;
+  queue.inFlightReadinessReserve = Math.max(
+    TRANSPORT_NUM.ZERO,
+    countInFlightReadinessReserve(queue) + normalizedDelta,
+  );
+}
+
 function resolveBackgroundPendingLimit(queue) {
   if (!queue) {
     return TRANSPORT_NUM.ZERO;
@@ -555,13 +595,7 @@ function resolveNextPendingItemIndex(queue) {
     return -LOCAL_NUM_ONE;
   }
 
-  const preferredIndex = (() => {
-    const criticalIndex = resolveNextCriticalPendingItemIndex(queue);
-    if (criticalIndex >= TRANSPORT_NUM.ZERO) {
-      return criticalIndex;
-    }
-    return TRANSPORT_NUM.ZERO;
-  })();
+  const preferredIndex = resolveNextCriticalPendingItemIndex(queue);
 
   if (preferredIndex >= TRANSPORT_NUM.ZERO && preferredIndex < queue.pending.length) {
     const preferredItem = queue.pending[preferredIndex];
@@ -580,10 +614,24 @@ function resolveNextPendingItemIndex(queue) {
     }
   }
 
-  // Scan BACKGROUND items if no CRITICAL items can be dispatched
+  // Scan READINESS items ahead of BACKGROUND so convergence/publication reads
+  // are not starved by best-effort background traffic.
   for (let i = 0; i < queue.pending.length; i++) {
     const item = queue.pending[i];
-    if (item?.priority !== OutboundDeliveryPriority.CRITICAL && i !== preferredIndex) {
+    if (item?.priority === OutboundDeliveryPriority.READINESS) {
+      if (canDispatchPendingItem(queue, item)) {
+        return i;
+      }
+    }
+  }
+
+  // Scan BACKGROUND items last.
+  for (let i = 0; i < queue.pending.length; i++) {
+    const item = queue.pending[i];
+    if (
+      item?.priority !== OutboundDeliveryPriority.CRITICAL &&
+      item?.priority !== OutboundDeliveryPriority.READINESS
+    ) {
       if (canDispatchPendingItem(queue, item)) {
         return i;
       }
@@ -636,6 +684,18 @@ function canDispatchPendingItem(queue, item) {
       resolveCriticalInFlightSourceLimit(queue, deliverySourceAdmissionKey)
     );
   }
+  if (item.priority === OutboundDeliveryPriority.READINESS) {
+    if (queueAtConcurrentLimit) {
+      return (
+        countInFlightReadinessReserve(queue) <
+        resolveReadinessReserveInFlightLimit(queue)
+      );
+    }
+    return (
+      countInFlightByPriority(queue, OutboundDeliveryPriority.BACKGROUND) <
+      resolveBackgroundInFlightLimit(queue)
+    );
+  }
   if (queueAtConcurrentLimit) {
     return false;
   }
@@ -669,6 +729,7 @@ function adjustInFlightPriorityCount(queue, priority, delta) {
 export {
   adjustInFlightCriticalSourceReserveCount,
   adjustInFlightPriorityCount,
+  adjustInFlightReadinessReserveCount,
   adjustInFlightSourceCount,
   buildDerivedDeliverySource,
   buildPendingSourceAdmission,
@@ -681,6 +742,7 @@ export {
   countCriticalPendingBySource,
   countInFlightByPriority,
   countInFlightBySource,
+  countInFlightReadinessReserve,
   countPendingByPriority,
   countPendingBySource,
   dequeueNextPendingItem,
@@ -705,6 +767,7 @@ export {
   resolvePendingSourceLimit,
   resolveProportionalPendingSourceLimit,
   resolveQueuedDeliverySourceAdmissionKey,
+  resolveReadinessReserveInFlightLimit,
   resolveTargetFallbackInFlightSourceLimit,
   resolveSemanticDeliverySourceMessage,
   selectCriticalPendingSourcePreemptionCandidateIndex,

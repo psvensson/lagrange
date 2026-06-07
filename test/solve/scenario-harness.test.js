@@ -5,7 +5,11 @@ import os from 'node:os';
 
 import {scenarioHarnessProbe} from '../../scripts/solve/probes/scenario-harness.js';
 
-function writeReport(dir, name, {ts, scenario, passed, priorityItems, failed, verdictReason}) {
+function writeReport(
+  dir,
+  name,
+  {ts, scenario, passed, priorityItems, failed, verdict, verdictReason},
+) {
   fs.writeFileSync(
     path.join(dir, `${name}.report.json`),
     JSON.stringify({
@@ -17,7 +21,7 @@ function writeReport(dir, name, {ts, scenario, passed, priorityItems, failed, ve
           scenario,
           current: {
             passed,
-            verdict: passed ? 'PASS' : 'BLOCK_EVIDENCE_INCOMPLETE',
+            verdict: passed ? 'PASS' : (verdict || 'BLOCK_EVIDENCE_INCOMPLETE'),
             ...(verdictReason ? {verdictReason} : {}),
           },
         }],
@@ -160,6 +164,20 @@ tap.test('scenario-harness probe (P1)', async (t) => {
     t.equal(r.metric, null, 'dead-harness run does not read as metric 0');
     t.equal(r.invalidSample, true, 'flagged as an invalid sample');
     t.equal(r.done, false, 'a non-measuring run can never be done');
+    fs.rmSync(dir, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('a topology convergence block with a numeric metric is measured', (t) => {
+    const dir = tmp();
+    writeReport(dir, 'topology-blocked', {ts: '2026-06-01T01:00:00Z', scenario: SC,
+      passed: false, priorityItems: 2, failed: 1,
+      verdict: 'BLOCK_TOPOLOGY_CONVERGENCE',
+      verdictReason: 'topology_progress_blocked'});
+    const r = scenarioHarnessProbe.measure({scenario: SC, reportDir: dir});
+    t.equal(r.metric, 2, 'topology block keeps the priority metric');
+    t.equal(r.invalidSample, false, 'topology block is a measured sample');
+    t.equal(r.done, false, 'a measured topology block still does not satisfy done');
     fs.rmSync(dir, {recursive: true, force: true});
     t.end();
   });

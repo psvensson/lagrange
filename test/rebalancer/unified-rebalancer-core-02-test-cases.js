@@ -221,8 +221,8 @@ export function registerUnifiedRebalancerCore02Tests(context) {
       }
     });
 
-  test('UnifiedRebalancer defers priority operation creation behind local ' +
-  'mutation readiness', async (t) => {
+  test('UnifiedRebalancer lets priority operation creation use the local ' +
+  'mutation create lane', async (t) => {
     initializeTestEnvironment();
 
     const priorityPartitionSummary = {
@@ -349,8 +349,8 @@ export function registerUnifiedRebalancerCore02Tests(context) {
 
       t.equal(
         gateSnapshot.shouldDefer,
-        true,
-        'local mutation readiness should defer required priority creation',
+        false,
+        'local mutation readiness should allow required priority creation',
       );
       t.equal(
         gateSnapshot.priorityRecoveryOperationCreationRequired,
@@ -364,8 +364,8 @@ export function registerUnifiedRebalancerCore02Tests(context) {
       );
       t.equal(
         evaluateCalls,
-        NO_GLOBAL_IN_FLIGHT_OPERATIONS,
-        'priority operation creation should not evaluate while local mutation readiness is unhealthy',
+        ONE_REBALANCE_EVALUATE_CALL,
+        'priority operation creation should evaluate through the local mutation create lane',
       );
     } finally {
       rebalancer.shutdown();

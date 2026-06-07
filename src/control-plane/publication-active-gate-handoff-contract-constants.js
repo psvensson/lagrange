@@ -31,6 +31,7 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_REASON = Object.freeze({
   OWNER_RECONCILE_PENDING: 'owner_reconcile_pending',
   PUBLISHED_ACTIVE_COVERAGE_INCOMPLETE:
     'published_active_coverage_incomplete',
+  PUBLICATION_EPOCH_UNOBSERVED: 'publication_epoch_unobserved',
 });
 
 const PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION = Object.freeze({

@@ -12,6 +12,7 @@
  */
 import {NUM, TABLES, TYPEOF} from '../constants/index.js';
 import {normalizeControlPlanePublicationRow} from '../control-plane/system-row-normalizers.js';
+import {CONTROL_PLANE_DELIVERY_PRIORITY} from '../control-plane/control-plane-constants.js';
 import {
   PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION,
   PUBLICATION_ACTIVE_GATE_HANDOFF_STATE,
@@ -110,6 +111,7 @@ function buildMembershipPublicationReadOptions(options = {}) {
     {
       preferAuthoritativeRead: true,
       readProfile: MEMBERSHIP_PUBLICATION_READ_PROFILE_DIAGNOSTICS,
+      deliveryPriority: CONTROL_PLANE_DELIVERY_PRIORITY.READINESS,
     } :
     {readProfile: MEMBERSHIP_PUBLICATION_READ_PROFILE_DIAGNOSTICS};
 }

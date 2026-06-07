@@ -76,6 +76,7 @@ test('AdminControlSnapshot auto-repaired snapshots use authoritative membership 
       {
         preferAuthoritativeRead: true,
         readProfile: 'diagnostics',
+        deliveryPriority: 'readiness',
       },
       'post-repair control snapshots should bypass stale cached publication observations before acknowledging',
     );
@@ -305,6 +306,7 @@ test('AdminControlSnapshot prefers authoritative published membership when cache
       {
         preferAuthoritativeRead: true,
         readProfile: 'diagnostics',
+        deliveryPriority: 'readiness',
       },
       'published membership recovery should request authoritative publication history explicitly',
     );

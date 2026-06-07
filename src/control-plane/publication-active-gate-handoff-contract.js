@@ -21,6 +21,7 @@ import {
 import {
   isPublicationActiveGateHandoffRecord,
   normalizePublicationActiveGateHandoffNodeIdList,
+  resolvePublicationActiveGateHandoffPublicationEpoch,
 } from './publication-active-gate-handoff-contract-helpers.js';
 import {
   buildPublicationActiveGateCrossOwnerHandoffContract,
@@ -35,6 +36,7 @@ import {
 import {
   buildPublicationOperationWorkflowHandoff,
 } from './publication-active-gate-handoff-contract-workflow.js';
+import {assertProjectionFresh} from './projection-freshness-guard.js';
 import {
   resolvePublicationActiveGateHandoffExpectedNodeIds,
   resolvePublicationActiveGateHandoffMissingPublishedNodeIds,
@@ -251,35 +253,57 @@ function buildPublicationActiveGateHandoffContract(options = {}) {
     handoffContract: options,
     decision,
   });
-  const publicationEpoch =
-    options.publicationConvergence?.[
-      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLICATION_EPOCH
-    ] ?? PUBLICATION_ACTIVE_GATE_HANDOFF_UNKNOWN_EPOCH;
+  const publicationEpoch = resolvePublicationActiveGateHandoffPublicationEpoch(
+    options.publicationConvergence,
+  );
+  const projectionFreshness = assertProjectionFresh({
+    observedEpoch: publicationEpoch,
+    freshness: resolvePublicationActiveGateOwnerOutcomeFreshness({
+      state: decision.state,
+    }),
+    unknownEpoch: PUBLICATION_ACTIVE_GATE_HANDOFF_UNKNOWN_EPOCH,
+  });
+  const promotionFreshnessSatisfied =
+    projectionFreshness.projectionFresh === true;
   const runtimePromotionAllowed =
     decision.runtimePromotionAllowed === true &&
-    activeGateCatchupFence.promotionAllowed === true;
+    activeGateCatchupFence.promotionAllowed === true &&
+    promotionFreshnessSatisfied;
   const selectedRetryAfterMs =
     resolvePublicationActiveGateHandoffRetryAfterMs(options);
   const promotionDeniedByFence =
     decision.runtimePromotionAllowed === true &&
-    runtimePromotionAllowed !== true;
-  const contractState = promotionDeniedByFence ?
+    activeGateCatchupFence.promotionAllowed !== true;
+  const promotionDeniedByFreshness =
+    decision.runtimePromotionAllowed === true &&
+    activeGateCatchupFence.promotionAllowed === true &&
+    promotionFreshnessSatisfied !== true;
+  const promotionDenied = promotionDeniedByFence || promotionDeniedByFreshness;
+  const contractState = promotionDenied ?
     PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.DEGRADED :
     decision.state;
-  const contractReasonCode = promotionDeniedByFence ?
-    PUBLICATION_ACTIVE_GATE_HANDOFF_REASON
-      .PUBLISHED_ACTIVE_COVERAGE_INCOMPLETE :
-    decision.reasonCode;
-  const contractNextAction = promotionDeniedByFence ?
+  const contractReasonCode = promotionDeniedByFreshness ?
+    PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.PUBLICATION_EPOCH_UNOBSERVED :
+    (promotionDeniedByFence ?
+      PUBLICATION_ACTIVE_GATE_HANDOFF_REASON
+        .PUBLISHED_ACTIVE_COVERAGE_INCOMPLETE :
+      decision.reasonCode);
+  const contractNextAction = promotionDenied ?
     PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.OBSERVE_OWNER_HANDOFF :
     decision.nextAction;
-  const retryAfterMs = resolvePublicationActiveGateOwnerRecoveryRetryAfterMs(
+  const baseRetryAfterMs = resolvePublicationActiveGateOwnerRecoveryRetryAfterMs(
     {
       nextAction: contractNextAction,
       pendingRecoveryNodeIds,
     },
     selectedRetryAfterMs,
   );
+  const retryAfterMs = promotionDeniedByFreshness ?
+    Math.max(
+      baseRetryAfterMs,
+      PUBLICATION_ACTIVE_GATE_OWNER_RECOVERY_RETRY_AFTER_MS,
+    ) :
+    baseRetryAfterMs;
   const crossOwnerHandoffContract =
     applyPublicationActiveGateCrossOwnerRetryAfterMs(
       buildPublicationActiveGateCrossOwnerHandoffContract({

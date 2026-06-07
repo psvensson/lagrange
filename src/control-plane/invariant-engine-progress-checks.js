@@ -392,10 +392,44 @@ function checkSnapshotCoverageMonotonic(state) {
   });
 }
 
+/**
+ * IV-PUB-2: missingPublishedCount > 0 with a publication owner => scheduled reconcile obligation is enabled.
+ *
+ * @param {Object} state - State snapshot.
+ * @return {Object} Frozen invariant result.
+ */
+function checkPublicationDrainDeterministic(state) {
+  const isOwner = state?.isPublicationOwner === true;
+  const missingCount = Number.isFinite(state?.missingPublishedCount) ? state.missingPublishedCount : 0;
+  const obligationEnabled = state?.scheduledReconcileObligationEnabled === true;
+
+  if (isOwner && missingCount > 0 && !obligationEnabled) {
+    return buildInvariantResult({
+      invariantId: INVARIANT_ID.PUBLICATION_DRAIN_DETERMINISTIC,
+      severity: INVARIANT_OUTCOME_SEVERITY.HARD,
+      passed: false,
+      reason: INVARIANT_REASON.PUBLICATION_DRAIN_UNDETERMINISTIC,
+      context: {
+        missingPublishedCount: missingCount,
+        isPublicationOwner: isOwner,
+        scheduledReconcileObligationEnabled: obligationEnabled,
+      },
+    });
+  }
+
+  return buildInvariantResult({
+    invariantId: INVARIANT_ID.PUBLICATION_DRAIN_DETERMINISTIC,
+    severity: INVARIANT_OUTCOME_SEVERITY.HARD,
+    passed: true,
+    reason: INVARIANT_REASON.PUBLICATION_DRAIN_DETERMINISTIC,
+  });
+}
+
 export {
   checkOperationProgressBoundedSteps,
   checkPublicationVisibleOrRetained,
   checkReadinessDimensionCorrectness,
   checkSnapshotCoverageMonotonic,
   checkTransactionAvailability,
+  checkPublicationDrainDeterministic,
 };

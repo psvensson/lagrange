@@ -1,6 +1,8 @@
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {NUM, SERVICE_STATUS, STATE, STRING, TYPEOF} from '../constants/index.js';
+import {TABLES} from '../constants/tables.js';
+import {buildPublicationActiveGateHandoffContract} from './publication-active-gate-handoff-contract.js';
 import {TRANSPORT_CONFIG_KEY, TRANSPORT_DEFAULT} from '../constants/transport.js';
 import {assertCritical} from '../utils/assert.js';
 import {
@@ -248,6 +250,14 @@ class HeartbeatServiceLifecycleMethods {
         if (attempt.timedOut) {
           return;
         }
+        try {
+          await this.runScheduledMembershipPublicationReconcileTick();
+        } catch (reconcileError) {
+          this.logger.error('Error during scheduled membership publication reconcile tick', reconcileError);
+        }
+        if (attempt.timedOut) {
+          return;
+        }
         this.heartbeatCount++;
         if (this.heartbeatConsecutiveFailures > NUM.ZERO) {
           this.logger.info(HEARTBEAT_LOG_MSG.HEARTBEAT_RECOVERED, {
@@ -273,8 +283,85 @@ class HeartbeatServiceLifecycleMethods {
     this.logger.info(HEARTBEAT_LOG_MSG.STARTED, {nodeId: this.nodeId});
   }
   /**
+   * Run one scheduled membership publication reconcile tick.
+   * If local node is publication owner and missingPublishedCount > 0,
+   * drives the owner reconcile directly.
+   * @return {Promise<void>}
+   */
+  async runScheduledMembershipPublicationReconcileTick() {
+    if (!this.membershipPublicationService) {
+      this.scheduledReconcileObligationEnabled = false;
+      return;
+    }
+    if (this.scheduledReconcileTickInFlight === true) {
+      return;
+    }
+    this.scheduledReconcileTickInFlight = true;
+    try {
+      const partitions = this.systemTableCache?.getAll(TABLES.PARTITIONS) || [];
+      const pubPartition = partitions.find(
+        (p) => p.table_id === TABLES.CONTROL_PLANE_PUBLICATIONS ||
+          p.table_name === TABLES.CONTROL_PLANE_PUBLICATIONS,
+      );
+      const isOwner = pubPartition?.leader_node_id === this.nodeId;
+
+      if (!isOwner) {
+        this.scheduledReconcileObligationEnabled = false;
+        return;
+      }
+
+      const planningSnapshot =
+        await this.membershipPublicationService.readPublicationPlanningSnapshot({
+          preferAuthoritativeRead: true,
+        });
+
+      if (!planningSnapshot) {
+        return;
+      }
+
+      const latestPublishedRow = planningSnapshot.latestPublishedPublicationRow;
+      const latestRow = planningSnapshot.latestPublicationRow;
+      const publicationEpoch =
+        latestPublishedRow?.publicationEpoch ??
+        latestRow?.publicationEpoch ??
+        0;
+      const publishedActiveNodeIds =
+        latestPublishedRow?.publishedActiveNodeIds ??
+        latestRow?.publishedActiveNodeIds ??
+        [];
+
+      const handoffContract = buildPublicationActiveGateHandoffContract({
+        nodeRows: planningSnapshot.nodeRows,
+        readinessByNodeId: planningSnapshot.readinessByNodeId,
+        publicationConvergence: {
+          publicationEpoch,
+          publishedActiveNodeIds,
+        },
+      });
+
+      const missingCount = handoffContract?.missingPublishedCount ?? 0;
+      if (missingCount > 0) {
+        this.scheduledReconcileObligationEnabled = true;
+        await this.membershipPublicationService.reconcileActiveGateMembershipPublication(
+          handoffContract,
+          {reconcileAuthoritativeMembershipPublication: true},
+        );
+      } else {
+        this.scheduledReconcileObligationEnabled = false;
+      }
+    } catch (error) {
+      this.logger.error('Error in scheduled membership publication reconcile tick', {
+        message: error?.message,
+        stack: error?.stack,
+      });
+    } finally {
+      this.scheduledReconcileTickInFlight = false;
+    }
+  }
+  /**
    * Stop periodic heartbeats.
    * Transitions: RUNNING → STOPPED
+   * @return {void}
    */ stop() {
     if (this.heartbeatTimer) {
       this.clearIntervalFn(this.heartbeatTimer);

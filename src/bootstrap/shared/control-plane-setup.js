@@ -383,6 +383,7 @@ class ControlPlaneSetup {
       systemTableCache,
       controlPlaneSystemTableGateway,
       verifyReporterVisibilityOnSuccess: true,
+      membershipPublicationService: membershipPublicationService || null,
     });
     heartbeatService.initialize();
     controlPlaneReadinessService.heartbeatService = heartbeatService;

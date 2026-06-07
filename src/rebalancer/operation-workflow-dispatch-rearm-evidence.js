@@ -230,6 +230,34 @@ function buildDispatchRearmFromProgressReconcileEvidence(
       timeoutDecision.operationBudgetActive === true,
   });
 }
+function resolveOperationStartedAtMs(operation) {
+  if (Number.isFinite(operation?.createdAt)) {
+    return operation.createdAt;
+  }
+  if (Number.isFinite(operation?.createdAtMs)) {
+    return operation.createdAtMs;
+  }
+  if (Number.isFinite(operation?.updatedAt)) {
+    return operation.updatedAt;
+  }
+  if (Number.isFinite(operation?.updatedAtMs)) {
+    return operation.updatedAtMs;
+  }
+  return null;
+}
+
+function isOperationWithinRetryBudget(operation, now = Date.now()) {
+  const operationStartedAtMs = resolveOperationStartedAtMs(operation);
+  if (!Number.isFinite(operationStartedAtMs)) {
+    return false;
+  }
+  return (
+    now <
+    operationStartedAtMs +
+      TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS
+  );
+}
+
 function isProtectedCreateDispatchRetryBudgetActive(
   owner,
   operation,
@@ -243,23 +271,52 @@ function isProtectedCreateDispatchRetryBudgetActive(
   ) {
     return false;
   }
-  const operationStartedAtMs = Number.isFinite(operation?.createdAt) ?
-    operation.createdAt :
-    Number.isFinite(operation?.createdAtMs) ?
-      operation.createdAtMs :
-      Number.isFinite(operation?.updatedAt) ?
-        operation.updatedAt :
-        Number.isFinite(operation?.updatedAtMs) ?
-          operation.updatedAtMs :
-          null;
-  if (!Number.isFinite(operationStartedAtMs)) {
+  return isOperationWithinRetryBudget(operation, now);
+}
+
+// When a deferred owner retry timer fires during a transient uninitialized
+// window (e.g. mid rolling-restart re-init) the node is not shutting down, so
+// the deferred work must not be dropped. Re-arm the timer (bounded by the
+// operation budget) instead of silently aborting, mirroring the transition-retry
+// precedent (operation-workflow-transition-retry.js). A genuine shutdown is
+// still aborted by the caller before reaching these helpers.
+function logDeferredRetryRearmDropped(owner, operation, retryKind) {
+  owner.logger.warn(
+    REBALANCE_COORDINATOR_LOG_MSG.OPERATION_DISPATCH_RETRY_REARM_DROPPED,
+    {
+      operationId: operation?.operationId || null,
+      partitionId: operation?.partitionId || null,
+      workflowStep: operation?.workflowStep || null,
+      retryKind,
+    },
+  );
+}
+
+function rearmDispatchRetryWhileUninitialized(owner, operation, errorLike) {
+  if (
+    owner.isDispatchRetryableWorkflowStep(operation) !== true ||
+    !isOperationWithinRetryBudget(operation)
+  ) {
+    logDeferredRetryRearmDropped(owner, operation, 'dispatch_retry');
     return false;
   }
-  return (
-    now <
-    operationStartedAtMs +
-      TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS
-  );
+  return owner.deferDispatchRetry(operation, errorLike);
+}
+
+function rearmSafetyDeferredRetryWhileUninitialized(
+  owner,
+  operation,
+  deferReason,
+  errorMessage,
+) {
+  if (
+    owner.isSafetyDeferredRetryableOperation(operation) !== true ||
+    !isOperationWithinRetryBudget(operation)
+  ) {
+    logDeferredRetryRearmDropped(owner, operation, 'safety_retry');
+    return false;
+  }
+  return owner.scheduleDeferredSafetyRetry(operation, deferReason, errorMessage);
 }
 function resolveDispatchRearmFromProgressReconcileState(evidence) {
   return (
@@ -321,7 +378,11 @@ function deferDispatchRetry(owner, operation, errorLike) {
   );
   const timerHandle = owner.setTimeoutFn(() => {
     owner.dispatchRetryTimerByOperationId.delete(operationId);
-    if (owner.isShuttingDown || !owner.isInitialized) {
+    if (owner.isShuttingDown) {
+      return;
+    }
+    if (!owner.isInitialized) {
+      rearmDispatchRetryWhileUninitialized(owner, operation, errorLike);
       return;
     }
     return owner.operationWorkflowRunExclusive(
@@ -436,7 +497,16 @@ function scheduleDeferredSafetyRetry(owner, operation, deferReason, errorMessage
   );
   const timerHandle = owner.setTimeoutFn(() => {
     owner.safetyDeferredRetryTimerByOperationId.delete(operationId);
-    if (owner.isShuttingDown || !owner.isInitialized) {
+    if (owner.isShuttingDown) {
+      return;
+    }
+    if (!owner.isInitialized) {
+      rearmSafetyDeferredRetryWhileUninitialized(
+        owner,
+        operation,
+        deferReason,
+        errorMessage,
+      );
       return;
     }
     return owner.operationWorkflowRunExclusive(

@@ -243,6 +243,7 @@ test('AdminControlSnapshot repair-deferred trigger refreshes after visible owner
           ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_AUTHORITATIVE_READ,
         readProfile:
           ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_READ_PROFILE,
+        deliveryPriority: 'readiness',
       },
       'the bounded rebuild should use authoritative publication reads',
     );

@@ -1265,6 +1265,50 @@ test('publication active-gate handoff completes only when durable publication co
     });
   });
 
+test('publication active-gate handoff denies promotion when the publication epoch is unobserved even though the catch-up fence is satisfied',
+  async (t) => {
+    const contract = buildPublicationActiveGateHandoffContract({
+      expectedNodeIds: [TEST_NODE_1, TEST_NODE_2],
+      activeNodeViews: {
+        effectiveActiveNodeIds: [TEST_NODE_1, TEST_NODE_2],
+        snapshotCoverageRevision: TEST_SNAPSHOT_COVERAGE_REVISION,
+      },
+      publicationConvergence: {
+        status: TEST_PUBLICATION_STATUS_PUBLISHED,
+        publicationRevision: TEST_PUBLICATION_REVISION,
+        publishedActiveNodeIds: [TEST_NODE_1, TEST_NODE_2],
+        missingPublishedNodeIds: [],
+      },
+    });
+
+    t.match(contract, {
+      runtimePromotionAllowed: false,
+      state: PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.DEGRADED,
+      reasonCode:
+        PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.PUBLICATION_EPOCH_UNOBSERVED,
+      nextAction:
+        PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.OBSERVE_OWNER_HANDOFF,
+      activeGateCatchupFence: {
+        promotionAllowed: true,
+      },
+    },
+    'an unobserved publication epoch must block promotion through the freshness gate, not the coverage fence');
+    t.ok(
+      contract.retryAfterMs > 0,
+      'freshness-denied promotion must schedule a positive re-observation wake',
+    );
+    t.match(
+      contract[TEST_CROSS_OWNER_HANDOFF_CONTRACT_FIELD]
+        .freshnessRevisionRequirement,
+      {
+        revisionObserved: false,
+        requirementSatisfied: false,
+      },
+      'the cross-owner contract should report the revision requirement unsatisfied',
+    );
+  });
+
+
 test('publication active-gate catch-up fence keeps seed-only publication pending while active targets are present',
   async (t) => {
     const contract = buildPublicationActiveGateHandoffContract({

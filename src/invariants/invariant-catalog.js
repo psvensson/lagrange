@@ -65,6 +65,7 @@ const INVARIANT_ID = Object.freeze({
   OPERATION_PROGRESS_BOUNDED_STEPS: 'IV-OP-1',
   PUBLICATION_VISIBLE_OR_RETAINED: 'IV-PUB-1',
   SNAPSHOT_COVERAGE_MONOTONIC: 'IV-COV-1',
+  PUBLICATION_DRAIN_DETERMINISTIC: 'IV-PUB-2',
 });
 
 function freezeDefinition(definition) {
@@ -331,6 +332,17 @@ const INVARIANT_CATALOG = Object.freeze({
       condition:
         'snapshot coverage monotonically advances while no failure is ' +
         'declared',
+    },
+  }),
+  [INVARIANT_ID.PUBLICATION_DRAIN_DETERMINISTIC]: freezeDefinition({
+    id: INVARIANT_ID.PUBLICATION_DRAIN_DETERMINISTIC,
+    severity: INVARIANT_SEVERITY.CRITICAL,
+    scope: INVARIANT_SCOPE.CLUSTER,
+    owningSubsystem: 'startup-active-gate-owner',
+    defaultReasonCode: 'publication_drain_undeterministic',
+    expected: {
+      condition:
+        'If missingPublishedCount > 0 and the local node is the publication owner, then a scheduled reconcile obligation is enabled.',
     },
   }),
 });

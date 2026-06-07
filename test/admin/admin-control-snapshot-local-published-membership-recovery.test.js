@@ -168,6 +168,7 @@ test(
         {
           preferAuthoritativeRead: true,
           readProfile: 'diagnostics',
+          deliveryPriority: 'readiness',
         },
       ],
       'explicit recovery should retain the authoritative published-membership fallback',

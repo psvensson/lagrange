@@ -4,7 +4,7 @@ import {
   TRANSPORT_NUM,
 } from '../constants/transport.js';
 import {EMPTY_DELIVERY_SOURCE, MESSAGE_ROUTER_LITERAL, OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE, OUTBOUND_QUEUE_BACKPRESSURE_SCOPE, OutboundDeliveryPriority, TRANSPORT_PRESSURE_SUMMARY_FIELD, createQueueWaitHistogram, normalizeIdentifier, recordQueueWaitDuration, resolvePendingReplacementKey} from './message-router-shared-stage-1.js';
-import {adjustInFlightCriticalSourceReserveCount, adjustInFlightPriorityCount, adjustInFlightSourceCount, buildPendingSourceAdmission, buildPendingSourceSummary, buildSupersededPendingResult, canDispatchPendingItem, countInFlightByPriority, countInFlightBySource, countPendingByPriority, dequeueNextPendingItem, isOutboundNodeBackpressured, normalizeOutboundDeliveryPriority, peekNextPendingItem, resolveBackgroundPendingLimit, resolveCriticalInFlightSourceLimit, resolveCriticalPendingCeiling, resolveDeliverySource, resolveDeliverySourceAdmissionKey, resolveQueuedDeliverySourceAdmissionKey, takeCriticalPendingItemForSourceReserve} from './message-router-shared-stage-2.js';
+import {adjustInFlightCriticalSourceReserveCount, adjustInFlightPriorityCount, adjustInFlightReadinessReserveCount, adjustInFlightSourceCount, buildPendingSourceAdmission, buildPendingSourceSummary, buildSupersededPendingResult, canDispatchPendingItem, countInFlightByPriority, countInFlightBySource, countInFlightReadinessReserve, countPendingByPriority, dequeueNextPendingItem, isOutboundNodeBackpressured, normalizeOutboundDeliveryPriority, peekNextPendingItem, resolveBackgroundPendingLimit, resolveCriticalInFlightSourceLimit, resolveCriticalPendingCeiling, resolveDeliverySource, resolveDeliverySourceAdmissionKey, resolveQueuedDeliverySourceAdmissionKey, resolveReadinessReserveInFlightLimit, takeCriticalPendingItemForSourceReserve} from './message-router-shared-stage-2.js';
 
 const NODE_STATE_UPDATE_DELIVERY_SOURCE =
   `${MESSAGE_ROUTER_LITERAL.STRING_MESSAGE}:` +
@@ -197,12 +197,15 @@ class OutboundDeliveryRegistryOwner {
         inFlightCritical: TRANSPORT_NUM.ZERO,
         inFlightBackground: TRANSPORT_NUM.ZERO,
         inFlightCriticalSourceReserve: TRANSPORT_NUM.ZERO,
+        inFlightReadinessReserve: TRANSPORT_NUM.ZERO,
         inFlightBySource: new Map(),
         pending: [],
         maxConcurrent: this.router.outboundQueueMaxConcurrent,
         maxPending: this.router.outboundQueueMaxPending,
         criticalReserve: this.router.outboundQueueCriticalReserve,
         readinessReserve: this.router.outboundQueueReadinessReserve,
+        readinessInflightReserve:
+          this.router.outboundQueueReadinessInflightReserve,
         lastCriticalDeliverySource: EMPTY_DELIVERY_SOURCE,
         queueWaitSampleCount: TRANSPORT_NUM.ZERO,
         queueWaitTotalMs: TRANSPORT_NUM.ZERO,
@@ -212,12 +215,21 @@ class OutboundDeliveryRegistryOwner {
     }
     return this.router.outboundQueues.get(nodeId);
   }
-  isOutboundQueueAvailable(nodeId) {
+  isOutboundQueueAvailable(nodeId, deliveryPriority = null) {
     const queue = this.router.outboundQueues.get(nodeId);
     if (!queue) {
       return true;
     }
-    return queue.inFlight < queue.maxConcurrent;
+    if (queue.inFlight < queue.maxConcurrent) {
+      return true;
+    }
+    if (deliveryPriority === OutboundDeliveryPriority.READINESS) {
+      return (
+        countInFlightReadinessReserve(queue) <
+        resolveReadinessReserveInFlightLimit(queue)
+      );
+    }
+    return false;
   }
   enqueue(nodeId, deliverFn, options = {}) {
     const queue = this.getOutboundQueue(nodeId);
@@ -434,6 +446,12 @@ class OutboundDeliveryRegistryOwner {
         queue.lastCriticalDeliverySource =
           resolveQueuedDeliverySourceAdmissionKey(item);
       }
+      if (
+        item?.priority === OutboundDeliveryPriority.READINESS &&
+        queue.inFlight >= queue.maxConcurrent
+      ) {
+        item.readinessReserveInFlight = true;
+      }
       queue.inFlight += TRANSPORT_NUM.ONE;
       adjustInFlightPriorityCount(queue, item?.priority, TRANSPORT_NUM.ONE);
       if (item?.priority === OutboundDeliveryPriority.CRITICAL) {
@@ -448,6 +466,9 @@ class OutboundDeliveryRegistryOwner {
           queue,
           TRANSPORT_NUM.ONE,
         );
+      }
+      if (item?.readinessReserveInFlight === true) {
+        adjustInFlightReadinessReserveCount(queue, TRANSPORT_NUM.ONE);
       }
       const queueWaitMs = Math.max(
         TRANSPORT_NUM.ZERO,
@@ -476,6 +497,9 @@ class OutboundDeliveryRegistryOwner {
               -TRANSPORT_NUM.ONE,
             );
           }
+          if (item?.readinessReserveInFlight === true) {
+            adjustInFlightReadinessReserveCount(queue, -TRANSPORT_NUM.ONE);
+          }
           item.resolve({
             result,
             queueWaitMs,
@@ -501,6 +525,9 @@ class OutboundDeliveryRegistryOwner {
               queue,
               -TRANSPORT_NUM.ONE,
             );
+          }
+          if (item?.readinessReserveInFlight === true) {
+            adjustInFlightReadinessReserveCount(queue, -TRANSPORT_NUM.ONE);
           }
           item.reject(error);
           this.process(nodeId);

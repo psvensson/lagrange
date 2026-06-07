@@ -1,0 +1,453 @@
+diff --git a/test/distributed/harness/__tests__/cluster-publication-diagnostics-selection-test-cases.js b/test/distributed/harness/__tests__/cluster-publication-diagnostics-selection-test-cases.js
+index d971cd43..c9c11b87 100644
+--- a/test/distributed/harness/__tests__/cluster-publication-diagnostics-selection-test-cases.js
++++ b/test/distributed/harness/__tests__/cluster-publication-diagnostics-selection-test-cases.js
+@@ -796,6 +796,7 @@ test('Unit: _probeControlSnapshotCoverage surfaces stringified publication diagn
+         snapshotObservationReasonCodes: [],
+         snapshotObservationRetryAfterMs: null,
+         snapshotRepairDeferred: false,
++        snapshotTimeoutEncountered: false,
+         activeGateOwnerCohort: null,
+         publicationEpoch: 18,
+         publicationStatus: 'OPEN',
+@@ -1039,4 +1040,3 @@ test('Unit: _probeControlSnapshotCoverage prefers the strongest publication ' +
+     ['node-c'],
+   );
+ });
+-
+diff --git a/test/distributed/harness/__tests__/cluster-reachability-admin-proof-gate-test-cases.js b/test/distributed/harness/__tests__/cluster-reachability-admin-proof-gate-test-cases.js
+index 73f7dc6c..de8ca125 100644
+--- a/test/distributed/harness/__tests__/cluster-reachability-admin-proof-gate-test-cases.js
++++ b/test/distributed/harness/__tests__/cluster-reachability-admin-proof-gate-test-cases.js
+@@ -439,8 +439,8 @@ const ACTIVE_GATE_STRONG_ADMISSION_SELECTED_ERROR =
+   ' on lane snapshot after ' +
+   ACTIVE_GATE_STRONG_ADMISSION_QUERY_TIMEOUT_MS +
+   'ms';
+-const ACTIVE_GATE_TIMEOUT_MESSAGE =
+-  'Not all nodes reached ACTIVE state within';
++const ACTIVE_GATE_STALLED_MESSAGE =
++  'Cluster ACTIVE wait stalled with no meaningful progress';
+ const ACTIVE_GATE_STRONG_ADMISSION_TIMEOUT_ASSERTION =
+   'startup snapshot timeout should timeout until active admission is strong';
+ const ACTIVE_GATE_STRONG_ADMIN_PROOF_TIMEOUT_ASSERTION =
+@@ -542,7 +542,7 @@ test(ACTIVE_GATE_STRONG_ADMISSION_TEST_NAME,
+       (error) => {
+         timeoutError = error;
+         return typeof error?.message === TYPEOF.STRING &&
+-          error.message.includes(ACTIVE_GATE_TIMEOUT_MESSAGE);
++          error.message.includes(ACTIVE_GATE_STALLED_MESSAGE);
+       },
+       ACTIVE_GATE_STRONG_ADMISSION_TIMEOUT_ASSERTION,
+     );
+@@ -828,7 +828,7 @@ test(ACTIVE_GATE_STRONG_ADMIN_PROOF_TEST_NAME,
+       (error) => {
+         timeoutError = error;
+         return typeof error?.message === TYPEOF.STRING &&
+-          error.message.includes(ACTIVE_GATE_TIMEOUT_MESSAGE);
++          error.message.includes(ACTIVE_GATE_STALLED_MESSAGE);
+       },
+       ACTIVE_GATE_STRONG_ADMIN_PROOF_TIMEOUT_ASSERTION,
+     );
+diff --git a/test/distributed/harness/__tests__/report-writer.test.js b/test/distributed/harness/__tests__/report-writer.test.js
+index 56adff15..ba8fa772 100644
+--- a/test/distributed/harness/__tests__/report-writer.test.js
++++ b/test/distributed/harness/__tests__/report-writer.test.js
+@@ -11,6 +11,7 @@ import {
+   computeStandardSummary,
+   JSON_INDENT,
+ } from '../report-writer.js';
++import {writeFailureBundlesForReport} from '../failure-bundle.js';
+ 
+ const JSON_INDENT_EXPECTED = 2;
+ describe('ReportWriter', () => {
+@@ -566,6 +567,60 @@ describe('ReportWriter', () => {
+       assert.equal(report.summary.duration, 3500);
+     });
+ 
++    it('refreshes verdict after failure-bundle topology diagnostics are attached',
++      async () => {
++        const writer = new ReportWriter(outputPath);
++        writer.addResult('rolling-restart', {
++          passed: false,
++          duration: 1000,
++          error: 'Cluster load readiness did not stabilize within 300000ms: ' +
++            'Node readiness probe timed out',
++        });
++        const scenario = writer.scenarios[0];
++        scenario.verdict = 'BLOCK_HARNESS_INVALID';
++        scenario.verdictReason = 'harness_connectivity_or_system_failure';
++        scenario.rootCauseClass = 'topology';
++        scenario.dominantReason = 'publication_missing_active_node=node-a';
++        scenario.failureClassification = {
++          failureClass: 'publication_convergence_blocked',
++          rootCauseClass: 'topology',
++          dominantReason: 'publication_missing_active_node=node-a',
++          signals: ['missingPublishedCount=1'],
++        };
++        scenario.publicationConvergence = {
++          publicationStatus: 'PUBLISHED',
++          missingPublishedNodeIds: ['node-a'],
++          missingPublishedCount: 1,
++          activeGate: {state: 'timed_out'},
++        };
++        scenario.stabilityGates = {
++          convergence: {
++            status: 'open',
++            evidence: {missingPublishedCount: 1},
++          },
++        };
++        scenario.details = {
++          diagnostics: {
++            activeGate: {state: 'timed_out'},
++          },
++        };
++
++        await writeFailureBundlesForReport({
++          scenarios: writer.scenarios,
++          reportOutputPath: outputPath,
++          outputDir: tempDir,
++          reportSummary: computeSummary(writer.scenarios),
++          standardSummary: computeStandardSummary(writer.scenarios, []),
++          benchmarkRegressionGate: {status: 'skipped'},
++        });
++
++        assert.equal(
++          scenario.verdict,
++          'BLOCK_TOPOLOGY_CONVERGENCE',
++        );
++        assert.equal(scenario.verdictReason, 'topology_progress_blocked');
++      });
++
+     it('creates parent directories if they do not exist', async () => {
+       const nestedPath = join(tempDir, 'a', 'b', 'report.json');
+       const writer = new ReportWriter(nestedPath);
+diff --git a/test/distributed/harness/__tests__/validation-matrix.test.js b/test/distributed/harness/__tests__/validation-matrix.test.js
+index 44b2587d..83590282 100644
+--- a/test/distributed/harness/__tests__/validation-matrix.test.js
++++ b/test/distributed/harness/__tests__/validation-matrix.test.js
+@@ -236,17 +236,69 @@ describe('validation-matrix helpers', () => {
+       HARNESS_VERDICTS.BLOCK_HARNESS_INVALID,
+     );
+ 
+-    // 3. BLOCK_HARNESS_INVALID (ECONNREFUSED)
++    // 3. BLOCK_TOPOLOGY_CONVERGENCE (readiness timeout with measured topology evidence)
++    const topologyResult = {
++      passed: false,
++      error: 'Cluster load readiness did not stabilize within 300000ms: ' +
++        'Node readiness probe timed out',
++      rootCauseClass: 'topology',
++      dominantReason: 'publication_missing_active_node=node-a',
++      publicationConvergence: {
++        publicationStatus: 'PUBLISHED',
++        missingPublishedNodeIds: ['node-a'],
++      },
++      details: {
++        diagnostics: {
++          activeGate: {
++            mode: 'load',
++            state: 'timed_out',
++          },
++        },
++      },
++    };
++    const topologyVerdict = classifyScenarioVerdict(topologyResult);
++    assert.equal(
++      topologyVerdict.verdict,
++      HARNESS_VERDICTS.BLOCK_TOPOLOGY_CONVERGENCE,
++    );
++    assert.equal(topologyVerdict.reason, 'topology_progress_blocked');
++
++    // 4. BLOCK_HARNESS_INVALID (connectivity-shaped failure without topology evidence)
+     const harnessResult2 = {
+       passed: false,
+       error: 'connect ECONNREFUSED 172.20.0.3:8081',
++      rootCauseClass: 'topology',
++      dominantReason: 'publication_missing_active_node=node-a',
++      publicationConvergence: {},
++      stabilityGates: {},
++      details: {
++        diagnostics: {
++          activeGate: {
++            snapshotTimeoutEncountered: false,
++          },
++        },
++      },
+     };
+     assert.equal(
+       classifyScenarioVerdict(harnessResult2).verdict,
+       HARNESS_VERDICTS.BLOCK_HARNESS_INVALID,
+     );
+ 
+-    // 4. FAIL_CORE_INVARIANT (invariant breaches)
++    const harnessResultWithFalseArrayLeaves = {
++      ...harnessResult2,
++      publicationConvergence: {
++        missingPublishedNodeIds: [false],
++      },
++      stabilityGates: {
++        priorityItems: [0],
++      },
++    };
++    assert.equal(
++      classifyScenarioVerdict(harnessResultWithFalseArrayLeaves).verdict,
++      HARNESS_VERDICTS.BLOCK_HARNESS_INVALID,
++    );
++
++    // 5. FAIL_CORE_INVARIANT (invariant breaches)
+     const invariantResult = {
+       passed: false,
+       invariantBreaches: [{name: 'safety_breach'}],
+@@ -256,7 +308,7 @@ describe('validation-matrix helpers', () => {
+       HARNESS_VERDICTS.FAIL_CORE_INVARIANT,
+     );
+ 
+-    // 5. BLOCK_PERFORMANCE_REGRESSION (queue delay exceeded)
++    // 6. BLOCK_PERFORMANCE_REGRESSION (queue delay exceeded)
+     const perfResult = {
+       passed: false,
+       loadMetrics: {
+@@ -269,7 +321,7 @@ describe('validation-matrix helpers', () => {
+       HARNESS_VERDICTS.BLOCK_PERFORMANCE_REGRESSION,
+     );
+ 
+-    // 6. BLOCK_EVIDENCE_INCOMPLETE (timeout / no metrics)
++    // 7. BLOCK_EVIDENCE_INCOMPLETE (timeout / no metrics)
+     const incompleteResult = {
+       passed: false,
+       error: 'Operation timeout',
+diff --git a/test/distributed/harness/failure-bundle-segment-7.js b/test/distributed/harness/failure-bundle-segment-7.js
+index 86268a77..3e5cc829 100644
+--- a/test/distributed/harness/failure-bundle-segment-7.js
++++ b/test/distributed/harness/failure-bundle-segment-7.js
+@@ -1,6 +1,7 @@
+ import {mkdir, rm, writeFile} from 'node:fs/promises';
+ import {join, resolve} from 'node:path';
+ import {FAILURE_BUNDLE_SEGMENT_6} from './failure-bundle-segment-6.js';
++import {classifyScenarioVerdict} from './validation-matrix.js';
+ const {
+   FAILURE_BUNDLE_SCHEMA_VERSION,
+   FAILURE_BUNDLE_RUN_DIRNAME,
+@@ -220,6 +221,15 @@ function ensureScenarioDiagnostics(entry) {
+   return entry.details.diagnostics;
+ }
+ 
++function refreshScenarioVerdict(entry) {
++  if (!isRecord(entry)) {
++    return;
++  }
++  const verdict = classifyScenarioVerdict(entry);
++  entry.verdict = verdict.verdict;
++  entry.verdictReason = verdict.reason;
++}
++
+ function applyBundleDiagnosticsToScenarioEntry(entry, bundleJson) {
+   const diagnostics = ensureScenarioDiagnostics(entry);
+   if (!diagnostics || !isRecord(bundleJson)) {
+@@ -331,6 +341,8 @@ function applyBundleDiagnosticsToScenarioEntry(entry, bundleJson) {
+     diagnostics.failedPhase.artifacts.nodeReasonsByNodeId =
+       bundleJson.readiness.nodeReasonsByNodeId;
+   }
++
++  refreshScenarioVerdict(entry);
+ }
+ 
+ const SCENARIO_FAILURE_ARTIFACT_FILENAMES = Object.freeze([
+diff --git a/test/distributed/harness/validation-matrix.js b/test/distributed/harness/validation-matrix.js
+index d82a217b..2eab0ae5 100644
+--- a/test/distributed/harness/validation-matrix.js
++++ b/test/distributed/harness/validation-matrix.js
+@@ -314,6 +314,7 @@ const HARNESS_VERDICTS = Object.freeze({
+   FAIL_CORE_INVARIANT: 'FAIL_CORE_INVARIANT',
+   BLOCK_EVIDENCE_INCOMPLETE: 'BLOCK_EVIDENCE_INCOMPLETE',
+   BLOCK_HARNESS_INVALID: 'BLOCK_HARNESS_INVALID',
++  BLOCK_TOPOLOGY_CONVERGENCE: 'BLOCK_TOPOLOGY_CONVERGENCE',
+   BLOCK_PERFORMANCE_REGRESSION: 'BLOCK_PERFORMANCE_REGRESSION',
+   BLOCK_PERFORMANCE_INVALID: 'BLOCK_PERFORMANCE_INVALID',
+ });
+@@ -353,6 +354,32 @@ function hasMetricObject(value) {
+   return value && typeof value === 'object' && !Array.isArray(value);
+ }
+ 
++function hasConcreteTopologyEvidenceValue(value) {
++  if (value === null || value === undefined) return false;
++  if (Array.isArray(value)) {
++    return value.some(hasConcreteTopologyEvidenceValue);
++  }
++  if (typeof value === 'object') {
++    return Object.values(value).some(hasConcreteTopologyEvidenceValue);
++  }
++  if (typeof value === 'string') return value.length > 0;
++  if (typeof value === 'number') return Number.isFinite(value) && value !== 0;
++  if (typeof value === 'boolean') return value === true;
++  return false;
++}
++
++function hasMeasuredTopologyEvidence(result) {
++  const rootCauseClass =
++    result?.rootCauseClass ||
++    result?.failureClassification?.rootCauseClass ||
++    null;
++  return rootCauseClass === 'topology' && (
++    hasConcreteTopologyEvidenceValue(result?.publicationConvergence) ||
++    hasConcreteTopologyEvidenceValue(result?.stabilityGates) ||
++    hasConcreteTopologyEvidenceValue(result?.details?.diagnostics?.activeGate)
++  );
++}
++
+ function exceedsNumericLimit(observedValue, thresholdValue) {
+   const observed = normalizeFiniteNumber(observedValue);
+   const threshold = normalizeFiniteNumber(thresholdValue);
+@@ -384,6 +411,7 @@ function buildScenarioVerdictEvidence(result) {
+       message,
+       SCENARIO_HARNESS_INVALID_PATTERNS,
+     ),
++    hasMeasuredTopologySignal: hasMeasuredTopologyEvidence(result),
+     hasCoreInvariantSignal:
+       hasInvariantBreach ||
+       failedOperations > ZERO ||
+@@ -420,13 +448,20 @@ const SCENARIO_VERDICT_RULES = Object.freeze([
+   {
+     verdict: HARNESS_VERDICTS.BLOCK_HARNESS_INVALID,
+     reason: 'harness_connectivity_or_system_failure',
+-    matches: (evidence) => evidence.hasHarnessFailureSignal,
++    matches: (evidence) =>
++      evidence.hasHarnessFailureSignal &&
++      evidence.hasMeasuredTopologySignal !== true,
+   },
+   {
+     verdict: HARNESS_VERDICTS.FAIL_CORE_INVARIANT,
+     reason: 'core_invariant_or_safety_violation',
+     matches: (evidence) => evidence.hasCoreInvariantSignal,
+   },
++  {
++    verdict: HARNESS_VERDICTS.BLOCK_TOPOLOGY_CONVERGENCE,
++    reason: 'topology_progress_blocked',
++    matches: (evidence) => evidence.hasMeasuredTopologySignal,
++  },
+   {
+     verdict: HARNESS_VERDICTS.BLOCK_PERFORMANCE_REGRESSION,
+     reason: 'performance_metric_exceeded_limits',
+diff --git a/test/solve/evidence.test.js b/test/solve/evidence.test.js
+index 165c4410..4f89ea1f 100644
+--- a/test/solve/evidence.test.js
++++ b/test/solve/evidence.test.js
+@@ -173,6 +173,43 @@ tap.test('evidence ingestion (P2)', async (t) => {
+     t.end();
+   });
+ 
++  t.test('a topology convergence block with a numeric metric is measured', (t) => {
++    const root = tmp();
++    const goal = getGoal(root);
++    saveQuest(root, goal);
++    const reportDir = path.join(root, 'test-output', 'reports');
++    fs.mkdirSync(reportDir, {recursive: true});
++    const reportPath = path.join(reportDir, 'topology-blocked.report.json');
++    fs.writeFileSync(reportPath, JSON.stringify({
++      timestamp: '2026-06-05T14:29:38.000Z',
++      summary: {total: 1, passed: 0, failed: 1},
++      optimizationSummary: {totalPriorityItems: 4},
++      scenarios: [{
++        scenario: 'rolling-restart',
++        passed: false,
++        verdict: 'BLOCK_TOPOLOGY_CONVERGENCE',
++        verdictReason: 'topology_progress_blocked',
++        rootCauseClass: 'topology',
++        dominantReason: 'publication_missing_active_node=node-a',
++      }],
++    }));
++
++    const event = ingestEvidence(root, {
++      questId: goal.id,
++      frontierId: 'evidence-quest-test-main',
++      evidencePath: reportPath,
++    });
++
++    t.equal(event.invalidSample, false, 'topology block remains measured');
++    t.equal(event.metric, 4, 'numeric priority metric is preserved');
++    t.equal(event.done, false, 'a measured topology block is still failing');
++    t.equal(event.verdict, 'BLOCK_TOPOLOGY_CONVERGENCE');
++    t.equal(event.verdictReason, 'topology_progress_blocked');
++
++    fs.rmSync(root, {recursive: true, force: true});
++    t.end();
++  });
++
+   t.test('updates selected theory result correctly', (t) => {
+     const root = tmp();
+     const goal = getGoal(root);
+diff --git a/test/solve/sample-validity.test.js b/test/solve/sample-validity.test.js
+index 62912865..5deac714 100644
+--- a/test/solve/sample-validity.test.js
++++ b/test/solve/sample-validity.test.js
+@@ -11,6 +11,7 @@ import {
+ 
+ const SC = 'rolling-restart';
+ const INCOMPLETE_REASON = 'execution_incomplete_or_metrics_missing';
++const TOPOLOGY_BLOCKED_REASON = 'topology_progress_blocked';
+ 
+ function tmp() {
+   return fs.mkdtempSync(path.join(os.tmpdir(), 'solve-sv-'));
+@@ -79,6 +80,16 @@ tap.test('sample-validity classifier', async (t) => {
+     t.end();
+   });
+ 
++  t.test('a topology convergence block with a metric is a valid sample', (t) => {
++    const root = tmp();
++    const ev = writeReport(root, 'reports/topology-blocked.report.json', {
++      passed: false, priorityItems: 2, failed: 1,
++      verdictReason: TOPOLOGY_BLOCKED_REASON});
++    t.equal(attemptIsNonMeasuring(root, {evidence: ev}, HARNESS_DEF), false);
++    fs.rmSync(root, {recursive: true, force: true});
++    t.end();
++  });
++
+   t.test('frontierHasValidSample is false only when every attempt is invalid', (t) => {
+     const root = tmp();
+     const bad = writeReport(root, 'reports/bad.report.json', {
+diff --git a/test/solve/scenario-harness.test.js b/test/solve/scenario-harness.test.js
+index 1c017ef2..b0ea927b 100644
+--- a/test/solve/scenario-harness.test.js
++++ b/test/solve/scenario-harness.test.js
+@@ -5,7 +5,11 @@ import os from 'node:os';
+ 
+ import {scenarioHarnessProbe} from '../../scripts/solve/probes/scenario-harness.js';
+ 
+-function writeReport(dir, name, {ts, scenario, passed, priorityItems, failed, verdictReason}) {
++function writeReport(
++  dir,
++  name,
++  {ts, scenario, passed, priorityItems, failed, verdict, verdictReason},
++) {
+   fs.writeFileSync(
+     path.join(dir, `${name}.report.json`),
+     JSON.stringify({
+@@ -17,7 +21,7 @@ function writeReport(dir, name, {ts, scenario, passed, priorityItems, failed, ve
+           scenario,
+           current: {
+             passed,
+-            verdict: passed ? 'PASS' : 'BLOCK_EVIDENCE_INCOMPLETE',
++            verdict: passed ? 'PASS' : (verdict || 'BLOCK_EVIDENCE_INCOMPLETE'),
+             ...(verdictReason ? {verdictReason} : {}),
+           },
+         }],
+@@ -164,6 +168,20 @@ tap.test('scenario-harness probe (P1)', async (t) => {
+     t.end();
+   });
+ 
++  t.test('a topology convergence block with a numeric metric is measured', (t) => {
++    const dir = tmp();
++    writeReport(dir, 'topology-blocked', {ts: '2026-06-01T01:00:00Z', scenario: SC,
++      passed: false, priorityItems: 2, failed: 1,
++      verdict: 'BLOCK_TOPOLOGY_CONVERGENCE',
++      verdictReason: 'topology_progress_blocked'});
++    const r = scenarioHarnessProbe.measure({scenario: SC, reportDir: dir});
++    t.equal(r.metric, 2, 'topology block keeps the priority metric');
++    t.equal(r.invalidSample, false, 'topology block is a measured sample');
++    t.equal(r.done, false, 'a measured topology block still does not satisfy done');
++    fs.rmSync(dir, {recursive: true, force: true});
++    t.end();
++  });
++
+   t.test('a harness-connectivity failure breaks the consecutive-green streak', (t) => {
+     const dir = tmp();
+     writeReport(dir, 'r1', {ts: '2026-06-01T01:00:00Z', scenario: SC,

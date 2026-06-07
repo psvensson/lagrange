@@ -62,6 +62,18 @@ Phase 5: Cache Hydration
 8. Ready -> Node is ready to serve queries
 ```
 
+> **Risky path — join starves on undrained membership publication.** Step 4
+> (and the `querying_state` phase generally) blocks on control-plane readiness,
+> which depends on every reconciled active node being *published*. If the
+> membership-publication drain strands a reconciled-but-unpublished node, the
+> join cannot satisfy readiness and exhausts `retryableFailureResumeMaxElapsedMs`
+> (`src/bootstrap/node-joining-admission-readiness.js`), logging `Join retryable
+> resume budget exhausted`. The join timeout is a *downstream symptom*; the owner
+> defect is the publication drain. See the
+> [Active Gate Convergence Contract](contracts/active-gate-convergence.md)
+> ("Membership Publication Drain") for the full failure class and regression
+> guards.
+
 ## Data Flow
 
 ### Query Routing Flow

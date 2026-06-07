@@ -1,0 +1,261 @@
+diff --git a/src/control-plane/membership-publication-coordinator-class-stage-1.js b/src/control-plane/membership-publication-coordinator-class-stage-1.js
+index 0595d687..e608e66b 100644
+--- a/src/control-plane/membership-publication-coordinator-class-stage-1.js
++++ b/src/control-plane/membership-publication-coordinator-class-stage-1.js
+@@ -9,6 +9,9 @@ import {shouldUseAuthoritativePriorityRecoveryRediscovery} from './priority-reco
+ import {
+   buildPublicationOwnerStreamState,
+ } from './publication-owner-state.js';
++import {
++  hasPublicationActiveGateOwnerReconcileSignal,
++} from './publication-active-gate-handoff-contract.js';
+ import {DurableWorkflowCoordinator} from '../workflow/durable-workflow-coordinator.js';
+ import {OwnerKeyReconcileQueue} from '../workflow/owner-key-reconcile-queue.js';
+ import {OperationLane} from '../workflow/operation-lane.js';
+@@ -44,6 +47,73 @@ import {
+   shouldMergePlanningEvidenceRows,
+ } from './membership-publication-coordinator-stage-2.js';
+ 
++const ACTIVE_GATE_OWNER_RECONCILE_QUEUE_TIMEOUT_MS = NUM.THOUSAND;
++const ACTIVE_GATE_OWNER_RECONCILE_QUEUE_TIMEOUT_CODE =
++  'ACTIVE_GATE_OWNER_RECONCILE_TIMEOUT';
++const ACTIVE_GATE_OWNER_RECONCILE_QUEUE_TIMEOUT_MESSAGE =
++  'active_gate_owner_reconcile_timeout';
++const ACTIVE_GATE_OWNER_RECONCILE_QUEUE_CONTEXT_FIELD = Object.freeze({
++  CONTROL_PLANE_CONVERGENCE: 'controlPlaneConvergence',
++  PUBLICATION_ACTIVE_GATE_HANDOFF: 'publicationActiveGateHandoff',
++  RETRY_AFTER_MS: 'retryAfterMs',
++});
++
++function normalizeActiveGateOwnerReconcileQueueTimeoutMs(value) {
++  return Number.isFinite(value) && value > NUM.ZERO ?
++    Math.floor(value) :
++    ACTIVE_GATE_OWNER_RECONCILE_QUEUE_TIMEOUT_MS;
++}
++
++function resolveActiveGateOwnerReconcileQueueTimeoutMs(context) {
++  const handoff =
++    context?.[
++      ACTIVE_GATE_OWNER_RECONCILE_QUEUE_CONTEXT_FIELD
++        .PUBLICATION_ACTIVE_GATE_HANDOFF
++    ];
++  return normalizeActiveGateOwnerReconcileQueueTimeoutMs(
++    handoff?.[ACTIVE_GATE_OWNER_RECONCILE_QUEUE_CONTEXT_FIELD.RETRY_AFTER_MS] ??
++      context?.[ACTIVE_GATE_OWNER_RECONCILE_QUEUE_CONTEXT_FIELD.RETRY_AFTER_MS] ??
++      context?.[
++        ACTIVE_GATE_OWNER_RECONCILE_QUEUE_CONTEXT_FIELD
++          .CONTROL_PLANE_CONVERGENCE
++      ]?.[ACTIVE_GATE_OWNER_RECONCILE_QUEUE_CONTEXT_FIELD.RETRY_AFTER_MS],
++  );
++}
++
++function hasActiveGateOwnerReconcileQueueContext(context) {
++  return context &&
++    typeof context === TYPEOF.OBJECT &&
++    hasPublicationActiveGateOwnerReconcileSignal(
++      context[
++        ACTIVE_GATE_OWNER_RECONCILE_QUEUE_CONTEXT_FIELD
++          .PUBLICATION_ACTIVE_GATE_HANDOFF
++      ],
++    ) === true;
++}
++
++function buildActiveGateOwnerReconcileQueueTimeoutError(timeoutMs) {
++  const error = new Error(
++    `${ACTIVE_GATE_OWNER_RECONCILE_QUEUE_TIMEOUT_MESSAGE}:${timeoutMs}`,
++  );
++  error.code = ACTIVE_GATE_OWNER_RECONCILE_QUEUE_TIMEOUT_CODE;
++  error.deferRetry = true;
++  error.retryAfterMs = timeoutMs;
++  return error;
++}
++
++function withActiveGateOwnerReconcileQueueTimeout(work, timeoutMs) {
++  let timer;
++  const timeout = new Promise((_resolve, reject) => {
++    timer = setTimeout(
++      () => reject(
++        buildActiveGateOwnerReconcileQueueTimeoutError(timeoutMs),
++      ),
++      timeoutMs,
++    );
++  });
++  return Promise.race([work, timeout]).finally(() => clearTimeout(timer));
++}
++
+ class MembershipPublicationCoordinatorClassStage1 {
+   constructor(options = {}) {
+     this.nodeId = options.nodeId || null;
+@@ -78,10 +148,21 @@ class MembershipPublicationCoordinatorClassStage1 {
+       new OwnerKeyReconcileQueue({
+         name: MEMBERSHIP_PUBLICATION_OWNER_KEY,
+         reconcileFn: async (_ownerKey, _reasons, context) =>
+-          this.reconcileClusterMembership(context || {}),
++          this.reconcileQueuedClusterMembership(context || {}),
+       });
+   }
+ 
++  async reconcileQueuedClusterMembership(context = {}) {
++    const work = this.reconcileClusterMembership(context || {});
++    if (!hasActiveGateOwnerReconcileQueueContext(context)) {
++      return work;
++    }
++    return withActiveGateOwnerReconcileQueueTimeout(
++      work,
++      resolveActiveGateOwnerReconcileQueueTimeoutMs(context),
++    );
++  }
++
+   buildOwnerKey(publicationKind = MEMBERSHIP_PUBLICATION_KIND) {
+     return `membership-publication:${publicationKind}`;
+   }
+diff --git a/test/control-plane/membership-publication-coordinator-main-stage-2b.js b/test/control-plane/membership-publication-coordinator-main-stage-2b.js
+index 96c97b96..d77cd1bd 100644
+--- a/test/control-plane/membership-publication-coordinator-main-stage-2b.js
++++ b/test/control-plane/membership-publication-coordinator-main-stage-2b.js
+@@ -961,7 +961,7 @@ test('enqueueClusterMembershipReconcile preserves retryable owner drain ' +
+       type: PUBLICATION_CONVERGENCE_OWNER_QUEUE_RETRYABLE_DRAIN_FAILURE,
+       ownerKey,
+       failureReason: PUBLICATION_CONVERGENCE_OWNER_QUEUE_DISTRIBUTED_FAILURE,
+-      retryAfterMs: PUBLICATION_CONVERGENCE_OWNER_QUEUE_RETRY_AFTER_MS,
++      retryAfterMs: PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_RETRY_AFTER_MS,
+       failureCount: PUBLICATION_CONVERGENCE_OWNER_QUEUE_RETRYING_COUNT,
+     },
+     'owner queue retry state should classify the distributed participant failure',
+diff --git a/test/control-plane/membership-publication-coordinator-main-stage-2c.js b/test/control-plane/membership-publication-coordinator-main-stage-2c.js
+index ebe4cb31..8b453193 100644
+--- a/test/control-plane/membership-publication-coordinator-main-stage-2c.js
++++ b/test/control-plane/membership-publication-coordinator-main-stage-2c.js
+@@ -155,8 +155,14 @@ const PUBLICATION_CONVERGENCE_OWNER_QUEUE_DISTRIBUTED_FAILURE_CODE =
+ const PUBLICATION_CONVERGENCE_OWNER_QUEUE_DISTRIBUTED_FAILURE_MESSAGE =
+   'Distributed operation failed due to participant failures';
+ const PUBLICATION_CONVERGENCE_OWNER_QUEUE_RETRY_AFTER_MS = 37;
++const PUBLICATION_CONVERGENCE_OWNER_QUEUE_TIMEOUT_RETRY_AFTER_MS = 25;
+ const PUBLICATION_CONVERGENCE_OWNER_QUEUE_RETRYING_COUNT = 1;
+ const PUBLICATION_CONVERGENCE_OWNER_QUEUE_FIRST_CALL_COUNT = 1;
++const PUBLICATION_CONVERGENCE_OWNER_QUEUE_PENDING_IN_FLIGHT_COUNT = 2;
++const PUBLICATION_CONVERGENCE_OWNER_QUEUE_RETRYABLE_DRAIN_DEFERRED_EVENT =
++  'retryable_drain_deferred';
++const PUBLICATION_CONVERGENCE_OWNER_QUEUE_TIMEOUT_CODE =
++  'ACTIVE_GATE_OWNER_RECONCILE_TIMEOUT';
+ const PUBLICATION_CONVERGENCE_HANDOFF_REPLAY_UNKNOWN_EPOCH = 0;
+ const PUBLICATION_CONVERGENCE_HANDOFF_REPLAY_UNPUBLISHED_OBSERVATION =
+   'unpublished_observation';
+@@ -1318,3 +1324,117 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_READBACK_FAILURE_TEST_NAME,
+       PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DEFERRED_CONTEXT_MESSAGE,
+     );
+   });
++
++test('enqueueClusterMembershipReconcile bounds pending active-gate owner ' +
++  'handoff behind in-flight drain', async (t) => {
++    const coordinator = new MembershipPublicationCoordinator({
++      nodeId:
++        PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS[
++          PUBLICATION_CONVERGENCE_HANDOFF_TARGET_FIRST_NODE_INDEX
++        ],
++    });
++    const ownerKey = coordinator.buildOwnerKey();
++    let firstDrainStartedResolve;
++    const firstDrainStarted = new Promise((resolve) => {
++      firstDrainStartedResolve = resolve;
++    });
++    const observedContexts = [];
++    coordinator.reconcileActiveGateMembershipPublication = async (
++      _publicationActiveGateHandoff,
++      context,
++    ) => {
++      observedContexts.push(context);
++      firstDrainStartedResolve();
++      return new Promise(() => {});
++    };
++    const retryDeferred = new Promise((resolve) => {
++      coordinator.reconcileQueue.once(
++        PUBLICATION_CONVERGENCE_OWNER_QUEUE_RETRYABLE_DRAIN_DEFERRED_EVENT,
++        (retryState) => {
++          coordinator.reconcileQueue.stopped = true;
++          resolve(retryState);
++        },
++      );
++    });
++
++    const handoff = {
++      publicationEpoch: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EPOCH,
++      expectedNodeIds: [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS],
++      publishedActiveNodeIds: [
++        ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
++      ],
++      pendingReconcileNodeIds: [
++        ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PENDING_NODE_IDS,
++      ],
++      retryAfterMs: PUBLICATION_CONVERGENCE_OWNER_QUEUE_TIMEOUT_RETRY_AFTER_MS,
++      nextAction:
++        PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
++          .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
++    };
++    const firstAccepted = coordinator.enqueueClusterMembershipReconcile(
++      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_REASON_A,
++      {publicationActiveGateHandoff: handoff},
++    );
++    await firstDrainStarted;
++
++    const secondAccepted = coordinator.enqueueClusterMembershipReconcile(
++      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_REASON_B,
++      {
++        publicationActiveGateHandoff: handoff,
++        skipPublicationWriteReadback:
++          PUBLICATION_CONVERGENCE_DEFERRED_SKIP_WRITE_READBACK,
++      },
++    );
++    const pendingDiagnostics = coordinator.reconcileQueue.getDiagnostics();
++    t.equal(firstAccepted, true,
++      'first owner handoff should start the queue drain');
++    t.equal(secondAccepted, true,
++      'second owner handoff should queue behind the in-flight owner key');
++    t.equal(
++      observedContexts.length,
++      PUBLICATION_CONVERGENCE_OWNER_QUEUE_FIRST_CALL_COUNT,
++      'duplicate handoff should wait while the owner key is in flight',
++    );
++    t.match(
++      coordinator.getControlPlaneOwnerQueueDepth(),
++      {
++        pendingWrites:
++          PUBLICATION_CONVERGENCE_OWNER_QUEUE_PENDING_IN_FLIGHT_COUNT,
++        pendingKeys: [ownerKey],
++        inFlightKeys: [ownerKey],
++      },
++      'owner queue depth should expose the measured pending plus in-flight shape',
++    );
++    t.same(
++      pendingDiagnostics.pendingKeys,
++      [ownerKey],
++      'duplicate handoff should remain pending behind the in-flight owner key',
++    );
++    t.equal(
++      coordinator.reconcileQueue.pending.get(ownerKey)?.context
++        ?.skipPublicationWriteReadback,
++      PUBLICATION_CONVERGENCE_DEFERRED_SKIP_WRITE_READBACK,
++      'pending duplicate should retain the deferred write-readback policy',
++    );
++    t.equal(
++      coordinator.reconcileQueue.pending.get(ownerKey)?.context
++        ?.publicationActiveGateHandoff?.nextAction,
++      PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
++        .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
++      'pending duplicate should retain the active-gate handoff signal',
++    );
++
++    const retryState = await retryDeferred;
++    t.match(
++      retryState,
++      {
++        ownerKey,
++        errorCode: PUBLICATION_CONVERGENCE_OWNER_QUEUE_TIMEOUT_CODE,
++        retryAfterMs: PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_RETRY_AFTER_MS,
++        failureCount: PUBLICATION_CONVERGENCE_OWNER_QUEUE_RETRYING_COUNT,
++      },
++      'timeout should release the stuck owner handoff into retry state',
++    );
++
++    coordinator.reconcileQueue.shutdown();
++  });

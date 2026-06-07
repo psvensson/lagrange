@@ -957,6 +957,7 @@ test('AdminControlSnapshot prefers the authoritative latest publication when con
       {
         preferAuthoritativeRead: true,
         readProfile: 'diagnostics',
+        deliveryPriority: 'readiness',
       },
       'authoritative control snapshots should bypass the synchronous cache publication read',
     );
@@ -1070,6 +1071,7 @@ test('AdminControlSnapshot authoritative membership observation stays read-only 
               {
                 preferAuthoritativeRead: true,
                 readProfile: 'diagnostics',
+                deliveryPriority: 'readiness',
               },
               'authoritative snapshot reads should request an authoritative publication read before reconciling',
             );

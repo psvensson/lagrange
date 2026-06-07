@@ -384,6 +384,31 @@ async function executeReplicaOperationsRead(coordinator, sql, params = []) {
   return coordinator.repository.executeReplicaOperationsRead(sql, params);
 }
 
+async function resolveAuthoritativeAddAdmission(
+  coordinator,
+  options,
+  concurrentAddLimit,
+) {
+  const authoritativeCount = await getConcurrentAddCount(coordinator, {
+    partitionId: options.partitionId,
+    visibilityReadMode:
+      REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED,
+  });
+  const authoritativeObservation =
+    coordinator.getIncompleteOperationObservation();
+  coordinator.reconcileIncompleteOperationEmptyQueryDelay(
+    authoritativeObservation,
+  );
+  if (
+    coordinator.shouldBlockOperationAdmissionOnIncompleteOperationObservation(
+      authoritativeObservation,
+    )
+  ) {
+    return false;
+  }
+  return authoritativeCount < concurrentAddLimit;
+}
+
 async function canStartAddOperation(coordinator, options = {}) {
   if (coordinator.shouldPauseAdmissionReadForLocalRouterPressure(options)) {
     return false;
@@ -391,6 +416,19 @@ async function canStartAddOperation(coordinator, options = {}) {
   const concurrentAddLimit = coordinator.getConcurrentAddBudgetLimit(options);
   if (concurrentAddLimit <= NUM.ZERO) {
     return false;
+  }
+  // When a priority-recovery slot is reserved, the reservation is already
+  // subtracted from concurrentAddLimit. A stale cached undercount must not let
+  // a normal add consume the last reserved slot, so confirm normal-add
+  // admission against an authoritative owner read (the same discipline already
+  // applied to priority-control-plane partition adds). The cached fast-paths
+  // below are only safe when no slot is reserved.
+  if (coordinator.getReservedPriorityRecoveryAddSlots(options) > NUM.ZERO) {
+    return resolveAuthoritativeAddAdmission(
+      coordinator,
+      options,
+      concurrentAddLimit,
+    );
   }
   const cachedIncompleteOperations =
     await coordinator.queryCachedIncompleteOperations();
@@ -431,23 +469,11 @@ async function canStartAddOperation(coordinator, options = {}) {
     ) {
       return false;
     }
-    const authoritativeCount = await getConcurrentAddCount(coordinator, {
-      partitionId: options.partitionId,
-      visibilityReadMode:
-        REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED,
-    });
-    const authoritativeObservation = coordinator.getIncompleteOperationObservation();
-    coordinator.reconcileIncompleteOperationEmptyQueryDelay(
-      authoritativeObservation,
+    return resolveAuthoritativeAddAdmission(
+      coordinator,
+      options,
+      concurrentAddLimit,
     );
-    if (
-      coordinator.shouldBlockOperationAdmissionOnIncompleteOperationObservation(
-        authoritativeObservation,
-      )
-    ) {
-      return false;
-    }
-    return authoritativeCount < concurrentAddLimit;
   }
   const bypassEmptyQueryDelay =
     options?.bypassEmptyQueryDelay === true ||

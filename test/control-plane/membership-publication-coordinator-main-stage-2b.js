@@ -961,7 +961,7 @@ test('enqueueClusterMembershipReconcile preserves retryable owner drain ' +
       type: PUBLICATION_CONVERGENCE_OWNER_QUEUE_RETRYABLE_DRAIN_FAILURE,
       ownerKey,
       failureReason: PUBLICATION_CONVERGENCE_OWNER_QUEUE_DISTRIBUTED_FAILURE,
-      retryAfterMs: PUBLICATION_CONVERGENCE_OWNER_QUEUE_RETRY_AFTER_MS,
+      retryAfterMs: PUBLICATION_CONVERGENCE_CRITICAL_QUEUE_RETRY_AFTER_MS,
       failureCount: PUBLICATION_CONVERGENCE_OWNER_QUEUE_RETRYING_COUNT,
     },
     'owner queue retry state should classify the distributed participant failure',

@@ -11,6 +11,7 @@ import {
 
 const SC = 'rolling-restart';
 const INCOMPLETE_REASON = 'execution_incomplete_or_metrics_missing';
+const TOPOLOGY_BLOCKED_REASON = 'topology_progress_blocked';
 
 function tmp() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'solve-sv-'));
@@ -74,6 +75,16 @@ tap.test('sample-validity classifier', async (t) => {
     const root = tmp();
     const ev = writeReport(root, 'reports/measured.report.json', {
       passed: false, priorityItems: 2, failed: 1});
+    t.equal(attemptIsNonMeasuring(root, {evidence: ev}, HARNESS_DEF), false);
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('a topology convergence block with a metric is a valid sample', (t) => {
+    const root = tmp();
+    const ev = writeReport(root, 'reports/topology-blocked.report.json', {
+      passed: false, priorityItems: 2, failed: 1,
+      verdictReason: TOPOLOGY_BLOCKED_REASON});
     t.equal(attemptIsNonMeasuring(root, {evidence: ev}, HARNESS_DEF), false);
     fs.rmSync(root, {recursive: true, force: true});
     t.end();

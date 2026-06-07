@@ -244,6 +244,9 @@ const REBALANCE_COORDINATOR_LOG_MSG = Object.freeze({
     'Shed replica operation dispatch retry: per-target retry budget exhausted',
   OPERATION_DISPATCH_RETRY_FAILED:
     'Deferred replica operation dispatch retry failed',
+  OPERATION_DISPATCH_RETRY_REARM_DROPPED:
+    'Dropped deferred replica operation retry: not re-armed while ' +
+    'uninitialized after operation budget exhausted',
   OPERATION_TRANSITION_RETRY_DEFERRED:
     'Deferred retryable replica operation transition failure',
   OPERATION_TRANSITION_RETRY_FAILED:

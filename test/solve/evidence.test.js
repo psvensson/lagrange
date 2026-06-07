@@ -173,6 +173,43 @@ tap.test('evidence ingestion (P2)', async (t) => {
     t.end();
   });
 
+  t.test('a topology convergence block with a numeric metric is measured', (t) => {
+    const root = tmp();
+    const goal = getGoal(root);
+    saveQuest(root, goal);
+    const reportDir = path.join(root, 'test-output', 'reports');
+    fs.mkdirSync(reportDir, {recursive: true});
+    const reportPath = path.join(reportDir, 'topology-blocked.report.json');
+    fs.writeFileSync(reportPath, JSON.stringify({
+      timestamp: '2026-06-05T14:29:38.000Z',
+      summary: {total: 1, passed: 0, failed: 1},
+      optimizationSummary: {totalPriorityItems: 4},
+      scenarios: [{
+        scenario: 'rolling-restart',
+        passed: false,
+        verdict: 'BLOCK_TOPOLOGY_CONVERGENCE',
+        verdictReason: 'topology_progress_blocked',
+        rootCauseClass: 'topology',
+        dominantReason: 'publication_missing_active_node=node-a',
+      }],
+    }));
+
+    const event = ingestEvidence(root, {
+      questId: goal.id,
+      frontierId: 'evidence-quest-test-main',
+      evidencePath: reportPath,
+    });
+
+    t.equal(event.invalidSample, false, 'topology block remains measured');
+    t.equal(event.metric, 4, 'numeric priority metric is preserved');
+    t.equal(event.done, false, 'a measured topology block is still failing');
+    t.equal(event.verdict, 'BLOCK_TOPOLOGY_CONVERGENCE');
+    t.equal(event.verdictReason, 'topology_progress_blocked');
+
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
   t.test('updates selected theory result correctly', (t) => {
     const root = tmp();
     const goal = getGoal(root);

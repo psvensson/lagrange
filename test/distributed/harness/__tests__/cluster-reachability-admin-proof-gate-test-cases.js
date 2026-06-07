@@ -439,8 +439,8 @@ const ACTIVE_GATE_STRONG_ADMISSION_SELECTED_ERROR =
   ' on lane snapshot after ' +
   ACTIVE_GATE_STRONG_ADMISSION_QUERY_TIMEOUT_MS +
   'ms';
-const ACTIVE_GATE_TIMEOUT_MESSAGE =
-  'Not all nodes reached ACTIVE state within';
+const ACTIVE_GATE_STALLED_MESSAGE =
+  'Cluster ACTIVE wait stalled with no meaningful progress';
 const ACTIVE_GATE_STRONG_ADMISSION_TIMEOUT_ASSERTION =
   'startup snapshot timeout should timeout until active admission is strong';
 const ACTIVE_GATE_STRONG_ADMIN_PROOF_TIMEOUT_ASSERTION =
@@ -542,7 +542,7 @@ test(ACTIVE_GATE_STRONG_ADMISSION_TEST_NAME,
       (error) => {
         timeoutError = error;
         return typeof error?.message === TYPEOF.STRING &&
-          error.message.includes(ACTIVE_GATE_TIMEOUT_MESSAGE);
+          error.message.includes(ACTIVE_GATE_STALLED_MESSAGE);
       },
       ACTIVE_GATE_STRONG_ADMISSION_TIMEOUT_ASSERTION,
     );
@@ -828,7 +828,7 @@ test(ACTIVE_GATE_STRONG_ADMIN_PROOF_TEST_NAME,
       (error) => {
         timeoutError = error;
         return typeof error?.message === TYPEOF.STRING &&
-          error.message.includes(ACTIVE_GATE_TIMEOUT_MESSAGE);
+          error.message.includes(ACTIVE_GATE_STALLED_MESSAGE);
       },
       ACTIVE_GATE_STRONG_ADMIN_PROOF_TIMEOUT_ASSERTION,
     );

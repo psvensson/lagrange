@@ -11,6 +11,7 @@ import {
   computeStandardSummary,
   JSON_INDENT,
 } from '../report-writer.js';
+import {writeFailureBundlesForReport} from '../failure-bundle.js';
 
 const JSON_INDENT_EXPECTED = 2;
 describe('ReportWriter', () => {
@@ -565,6 +566,60 @@ describe('ReportWriter', () => {
       assert.equal(report.summary.failed, 1);
       assert.equal(report.summary.duration, 3500);
     });
+
+    it('refreshes verdict after failure-bundle topology diagnostics are attached',
+      async () => {
+        const writer = new ReportWriter(outputPath);
+        writer.addResult('rolling-restart', {
+          passed: false,
+          duration: 1000,
+          error: 'Cluster load readiness did not stabilize within 300000ms: ' +
+            'Node readiness probe timed out',
+        });
+        const scenario = writer.scenarios[0];
+        scenario.verdict = 'BLOCK_HARNESS_INVALID';
+        scenario.verdictReason = 'harness_connectivity_or_system_failure';
+        scenario.rootCauseClass = 'topology';
+        scenario.dominantReason = 'publication_missing_active_node=node-a';
+        scenario.failureClassification = {
+          failureClass: 'publication_convergence_blocked',
+          rootCauseClass: 'topology',
+          dominantReason: 'publication_missing_active_node=node-a',
+          signals: ['missingPublishedCount=1'],
+        };
+        scenario.publicationConvergence = {
+          publicationStatus: 'PUBLISHED',
+          missingPublishedNodeIds: ['node-a'],
+          missingPublishedCount: 1,
+          activeGate: {state: 'timed_out'},
+        };
+        scenario.stabilityGates = {
+          convergence: {
+            status: 'open',
+            evidence: {missingPublishedCount: 1},
+          },
+        };
+        scenario.details = {
+          diagnostics: {
+            activeGate: {state: 'timed_out'},
+          },
+        };
+
+        await writeFailureBundlesForReport({
+          scenarios: writer.scenarios,
+          reportOutputPath: outputPath,
+          outputDir: tempDir,
+          reportSummary: computeSummary(writer.scenarios),
+          standardSummary: computeStandardSummary(writer.scenarios, []),
+          benchmarkRegressionGate: {status: 'skipped'},
+        });
+
+        assert.equal(
+          scenario.verdict,
+          'BLOCK_TOPOLOGY_CONVERGENCE',
+        );
+        assert.equal(scenario.verdictReason, 'topology_progress_blocked');
+      });
 
     it('creates parent directories if they do not exist', async () => {
       const nestedPath = join(tempDir, 'a', 'b', 'report.json');

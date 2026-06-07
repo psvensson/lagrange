@@ -167,6 +167,9 @@ class HeartbeatService extends EventEmitter {
         HEARTBEAT_MEMORY_TREND.WARNING_COOLDOWN_MS;
     this.memoryTrendSamples = [];
     this.lastMemoryTrendWarningAt = ZERO;
+    this.membershipPublicationService = options.membershipPublicationService || null;
+    this.scheduledReconcileObligationEnabled = false;
+    this.scheduledReconcileTickInFlight = false;
   }
 }
 

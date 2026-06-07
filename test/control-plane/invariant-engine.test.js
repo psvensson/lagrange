@@ -15,6 +15,7 @@ import {
   checkSnapshotCoverageMonotonic,
   checkSplitResumeCompleteness,
   checkTransactionAvailability,
+  checkPublicationDrainDeterministic,
   evaluateInvariants,
   isBackwardStep,
 } from '../../src/control-plane/invariant-engine.js';
@@ -810,7 +811,7 @@ test('evaluateInvariants returns the full invariant set on ' +
   'valid state', async (t) => {
   const results = evaluateInvariants(buildValidInvariantState());
 
-  t.equal(results.length, 12);
+  t.equal(results.length, 13);
   t.ok(Object.isFrozen(results));
 
   const ids = results.map((r) => r.invariantId);
@@ -830,6 +831,7 @@ test('evaluateInvariants returns the full invariant set on ' +
   t.ok(ids.includes(INVARIANT_ID.OPERATION_PROGRESS_BOUNDED_STEPS));
   t.ok(ids.includes(INVARIANT_ID.PUBLICATION_VISIBLE_OR_RETAINED));
   t.ok(ids.includes(INVARIANT_ID.SNAPSHOT_COVERAGE_MONOTONIC));
+  t.ok(ids.includes(INVARIANT_ID.PUBLICATION_DRAIN_DETERMINISTIC));
 
   for (const result of results) {
     t.equal(result.passed, true, `${result.invariantId} should pass`);
@@ -916,17 +918,20 @@ test('evaluateInvariants detects multiple violations in one call',
           coverageNodeCount: 3,
         },
       ],
+      isPublicationOwner: true,
+      missingPublishedCount: 1,
+      scheduledReconcileObligationEnabled: false,
     }));
 
-    t.equal(results.length, 12);
+    t.equal(results.length, 13);
     const failed = results.filter((r) => !r.passed);
-    t.equal(failed.length, 12, 'all invariants should fail');
+    t.equal(failed.length, 13, 'all invariants should fail');
   });
 
 test('evaluateInvariants handles null/undefined state gracefully',
   async (t) => {
     const results = evaluateInvariants(null);
-    t.equal(results.length, 12);
+    t.equal(results.length, 13);
     for (const result of results) {
       t.equal(result.passed, true);
     }
@@ -946,13 +951,13 @@ test('buildInvariantDiagnosticsBundle summarizes all-passing results',
     const bundle = buildInvariantDiagnosticsBundle(results);
 
     t.ok(Object.isFrozen(bundle));
-    t.equal(bundle.summary.total, 12);
-    t.equal(bundle.summary.passed, 12);
+    t.equal(bundle.summary.total, 13);
+    t.equal(bundle.summary.passed, 13);
     t.equal(bundle.summary.failed, 0);
     t.equal(bundle.summary.hardFailures, 0);
     t.equal(bundle.summary.softFailures, 0);
-    t.equal(bundle.breaches.length, 0);
-    t.equal(bundle.artifactRecords.length, 12);
+    t.ok(bundle.breaches.length === 0);
+    t.equal(bundle.artifactRecords.length, 13);
     t.ok(Object.isFrozen(bundle.breaches));
     t.ok(Object.isFrozen(bundle.artifactRecords));
     t.ok(typeof bundle.timestamp === 'number');
@@ -973,8 +978,8 @@ test('buildInvariantDiagnosticsBundle separates hard and soft failures',
 
     const bundle = buildInvariantDiagnosticsBundle(results);
 
-    t.equal(bundle.summary.total, 12);
-    t.equal(bundle.summary.passed, 10);
+    t.equal(bundle.summary.total, 13);
+    t.equal(bundle.summary.passed, 11);
     t.equal(bundle.summary.failed, 2);
     t.equal(bundle.summary.hardFailures, 1);
     t.equal(bundle.summary.softFailures, 1);
@@ -1052,7 +1057,7 @@ test('buildInvariantArtifactRecords produce catalog-shaped entries ' +
   const artifactRecords = buildInvariantArtifactRecords(results);
   const summary = summarizeInvariantBreaches(artifactRecords);
 
-  t.equal(artifactRecords.length, 12);
+  t.equal(artifactRecords.length, 13);
   t.equal(summary.totalCount, 1);
   t.equal(summary.hardCount, 1);
   t.equal(
@@ -1388,4 +1393,51 @@ test('assertInvariantGate error includes diagnostics bundle with ' +
       'bundle has numeric timestamp',
     );
   }
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// 16. Publication Drain Determinism
+// ═══════════════════════════════════════════════════════════════════
+
+test('checkPublicationDrainDeterministic passes when not owner or missingCount is 0 or obligationEnabled is true', async (t) => {
+  // Case 1: not owner
+  t.match(
+    checkPublicationDrainDeterministic({
+      isPublicationOwner: false,
+      missingPublishedCount: 5,
+      scheduledReconcileObligationEnabled: false,
+    }),
+    {passed: true, reason: INVARIANT_REASON.PUBLICATION_DRAIN_DETERMINISTIC}
+  );
+
+  // Case 2: missingCount is 0
+  t.match(
+    checkPublicationDrainDeterministic({
+      isPublicationOwner: true,
+      missingPublishedCount: 0,
+      scheduledReconcileObligationEnabled: false,
+    }),
+    {passed: true, reason: INVARIANT_REASON.PUBLICATION_DRAIN_DETERMINISTIC}
+  );
+
+  // Case 3: obligationEnabled is true
+  t.match(
+    checkPublicationDrainDeterministic({
+      isPublicationOwner: true,
+      missingPublishedCount: 5,
+      scheduledReconcileObligationEnabled: true,
+    }),
+    {passed: true, reason: INVARIANT_REASON.PUBLICATION_DRAIN_DETERMINISTIC}
+  );
+});
+
+test('checkPublicationDrainDeterministic fails when owner and missingCount > 0 but obligationEnabled is false', async (t) => {
+  t.match(
+    checkPublicationDrainDeterministic({
+      isPublicationOwner: true,
+      missingPublishedCount: 3,
+      scheduledReconcileObligationEnabled: false,
+    }),
+    {passed: false, reason: INVARIANT_REASON.PUBLICATION_DRAIN_UNDETERMINISTIC}
+  );
 });

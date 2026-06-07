@@ -314,6 +314,7 @@ const HARNESS_VERDICTS = Object.freeze({
   FAIL_CORE_INVARIANT: 'FAIL_CORE_INVARIANT',
   BLOCK_EVIDENCE_INCOMPLETE: 'BLOCK_EVIDENCE_INCOMPLETE',
   BLOCK_HARNESS_INVALID: 'BLOCK_HARNESS_INVALID',
+  BLOCK_TOPOLOGY_CONVERGENCE: 'BLOCK_TOPOLOGY_CONVERGENCE',
   BLOCK_PERFORMANCE_REGRESSION: 'BLOCK_PERFORMANCE_REGRESSION',
   BLOCK_PERFORMANCE_INVALID: 'BLOCK_PERFORMANCE_INVALID',
 });
@@ -345,12 +346,115 @@ const READINESS_HARNESS_INVALID_PATTERNS = Object.freeze([
   'refused',
 ]);
 
+// Product root-cause classes the harness emits (root-cause-constants.js). None
+// of these is an infrastructure/harness class, so a run carrying a known,
+// non-unknown product classification with concrete evidence has measured a real
+// product failure even when its error text contains a connectivity-shaped
+// substring (e.g. "query timed out" as a symptom of control_plane_pressure).
+const KNOWN_PRODUCT_ROOT_CAUSE_CLASSES = Object.freeze(new Set([
+  'startup',
+  'discovery',
+  'topology',
+  'load',
+  'verify',
+  'leadership',
+  'transport',
+  'cdc',
+  'cache',
+]));
+
+// Convergence/liveness classes routed to BLOCK_TOPOLOGY_CONVERGENCE (a measured,
+// gradeable verdict) rather than discarded as harness-invalid.
+const CONVERGENCE_ROOT_CAUSE_CLASSES = Object.freeze(new Set([
+  'topology',
+  'discovery',
+  'startup',
+  'leadership',
+]));
+
 function messageMatchesAnyPattern(message, patterns) {
   return patterns.some((pattern) => message.includes(pattern));
 }
 
 function hasMetricObject(value) {
   return value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function hasConcreteTopologyEvidenceValue(value) {
+  if (value === null || value === undefined) return false;
+  if (Array.isArray(value)) {
+    return value.some(hasConcreteTopologyEvidenceValue);
+  }
+  if (typeof value === 'object') {
+    return Object.values(value).some(hasConcreteTopologyEvidenceValue);
+  }
+  if (typeof value === 'string') return value.length > 0;
+  if (typeof value === 'number') return Number.isFinite(value) && value !== 0;
+  if (typeof value === 'boolean') return value === true;
+  return false;
+}
+
+function resolveResultRootCauseClass(result) {
+  return result?.rootCauseClass ||
+    result?.failureClassification?.rootCauseClass ||
+    null;
+}
+
+// Concrete, structured evidence that the cluster actually ran and was measured:
+// the harness emitted classification signals or populated convergence/stability/
+// priority-recovery/active-gate diagnostics. Genuine harness-infra crashes lack
+// all of these.
+function hasConcreteStructuredFailureEvidence(result) {
+  const signals = result?.failureClassification?.signals;
+  const priorityRecoveryObservation =
+    result?.priorityRecoveryObservation ||
+    result?.details?.diagnostics?.controlPlaneDiagnostics
+      ?.priorityRecoveryObservation ||
+    result?.details?.diagnostics?.priorityRecoveryObservation ||
+    null;
+  return (Array.isArray(signals) && signals.length > ZERO) ||
+    hasConcreteTopologyEvidenceValue(result?.publicationConvergence) ||
+    hasConcreteTopologyEvidenceValue(result?.stabilityGates) ||
+    hasConcreteTopologyEvidenceValue(priorityRecoveryObservation) ||
+    hasConcreteTopologyEvidenceValue(result?.details?.diagnostics?.activeGate);
+}
+
+// Convergence/liveness product failure measured with concrete evidence. Routed
+// to BLOCK_TOPOLOGY_CONVERGENCE so control-plane non-quiescence / discovery /
+// startup stalls become gradeable instead of discarded as harness-invalid.
+function hasMeasuredConvergenceEvidence(result) {
+  const rootCauseClass = resolveResultRootCauseClass(result);
+  if (!CONVERGENCE_ROOT_CAUSE_CLASSES.has(rootCauseClass)) {
+    return false;
+  }
+  return hasConcreteStructuredFailureEvidence(result);
+}
+
+// Any non-unknown product failure carrying a non-unknown structured
+// failureClass plus concrete evidence. Used only to SUPPRESS the
+// harness-invalid verdict so load/verify/cdc/cache product failures whose error
+// text contains a connectivity-shaped substring are not nulled out as infra
+// noise. The non-unknown failureClass requirement keeps genuine infra crashes
+// (which carry no structured classification) classified as harness-invalid.
+function hasStructuredProductFailureEvidence(result) {
+  const rootCauseClass = resolveResultRootCauseClass(result);
+  if (!KNOWN_PRODUCT_ROOT_CAUSE_CLASSES.has(rootCauseClass)) {
+    return false;
+  }
+  const failureClass = result?.failureClassification?.failureClass;
+  const failureClassKnown =
+    typeof failureClass === 'string' &&
+    failureClass.length > ZERO &&
+    failureClass !== 'unknown';
+  return failureClassKnown && hasConcreteStructuredFailureEvidence(result);
+}
+
+// Measured product evidence of any kind (convergence-class concrete evidence or
+// a strong structured classification) that should outrank connectivity-shaped
+// error substrings when deciding harness-invalid.
+function hasMeasuredProductEvidence(result) {
+  return hasMeasuredConvergenceEvidence(result) ||
+    hasStructuredProductFailureEvidence(result);
 }
 
 function exceedsNumericLimit(observedValue, thresholdValue) {
@@ -384,6 +488,8 @@ function buildScenarioVerdictEvidence(result) {
       message,
       SCENARIO_HARNESS_INVALID_PATTERNS,
     ),
+    hasMeasuredConvergenceSignal: hasMeasuredConvergenceEvidence(result),
+    hasMeasuredProductEvidence: hasMeasuredProductEvidence(result),
     hasCoreInvariantSignal:
       hasInvariantBreach ||
       failedOperations > ZERO ||
@@ -420,12 +526,19 @@ const SCENARIO_VERDICT_RULES = Object.freeze([
   {
     verdict: HARNESS_VERDICTS.BLOCK_HARNESS_INVALID,
     reason: 'harness_connectivity_or_system_failure',
-    matches: (evidence) => evidence.hasHarnessFailureSignal,
+    matches: (evidence) =>
+      evidence.hasHarnessFailureSignal &&
+      evidence.hasMeasuredProductEvidence !== true,
   },
   {
     verdict: HARNESS_VERDICTS.FAIL_CORE_INVARIANT,
     reason: 'core_invariant_or_safety_violation',
     matches: (evidence) => evidence.hasCoreInvariantSignal,
+  },
+  {
+    verdict: HARNESS_VERDICTS.BLOCK_TOPOLOGY_CONVERGENCE,
+    reason: 'topology_progress_blocked',
+    matches: (evidence) => evidence.hasMeasuredConvergenceSignal,
   },
   {
     verdict: HARNESS_VERDICTS.BLOCK_PERFORMANCE_REGRESSION,

@@ -236,17 +236,69 @@ describe('validation-matrix helpers', () => {
       HARNESS_VERDICTS.BLOCK_HARNESS_INVALID,
     );
 
-    // 3. BLOCK_HARNESS_INVALID (ECONNREFUSED)
+    // 3. BLOCK_TOPOLOGY_CONVERGENCE (readiness timeout with measured topology evidence)
+    const topologyResult = {
+      passed: false,
+      error: 'Cluster load readiness did not stabilize within 300000ms: ' +
+        'Node readiness probe timed out',
+      rootCauseClass: 'topology',
+      dominantReason: 'publication_missing_active_node=node-a',
+      publicationConvergence: {
+        publicationStatus: 'PUBLISHED',
+        missingPublishedNodeIds: ['node-a'],
+      },
+      details: {
+        diagnostics: {
+          activeGate: {
+            mode: 'load',
+            state: 'timed_out',
+          },
+        },
+      },
+    };
+    const topologyVerdict = classifyScenarioVerdict(topologyResult);
+    assert.equal(
+      topologyVerdict.verdict,
+      HARNESS_VERDICTS.BLOCK_TOPOLOGY_CONVERGENCE,
+    );
+    assert.equal(topologyVerdict.reason, 'topology_progress_blocked');
+
+    // 4. BLOCK_HARNESS_INVALID (connectivity-shaped failure without topology evidence)
     const harnessResult2 = {
       passed: false,
       error: 'connect ECONNREFUSED 172.20.0.3:8081',
+      rootCauseClass: 'topology',
+      dominantReason: 'publication_missing_active_node=node-a',
+      publicationConvergence: {},
+      stabilityGates: {},
+      details: {
+        diagnostics: {
+          activeGate: {
+            snapshotTimeoutEncountered: false,
+          },
+        },
+      },
     };
     assert.equal(
       classifyScenarioVerdict(harnessResult2).verdict,
       HARNESS_VERDICTS.BLOCK_HARNESS_INVALID,
     );
 
-    // 4. FAIL_CORE_INVARIANT (invariant breaches)
+    const harnessResultWithFalseArrayLeaves = {
+      ...harnessResult2,
+      publicationConvergence: {
+        missingPublishedNodeIds: [false],
+      },
+      stabilityGates: {
+        priorityItems: [0],
+      },
+    };
+    assert.equal(
+      classifyScenarioVerdict(harnessResultWithFalseArrayLeaves).verdict,
+      HARNESS_VERDICTS.BLOCK_HARNESS_INVALID,
+    );
+
+    // 5. FAIL_CORE_INVARIANT (invariant breaches)
     const invariantResult = {
       passed: false,
       invariantBreaches: [{name: 'safety_breach'}],
@@ -256,7 +308,7 @@ describe('validation-matrix helpers', () => {
       HARNESS_VERDICTS.FAIL_CORE_INVARIANT,
     );
 
-    // 5. BLOCK_PERFORMANCE_REGRESSION (queue delay exceeded)
+    // 6. BLOCK_PERFORMANCE_REGRESSION (queue delay exceeded)
     const perfResult = {
       passed: false,
       loadMetrics: {
@@ -269,7 +321,7 @@ describe('validation-matrix helpers', () => {
       HARNESS_VERDICTS.BLOCK_PERFORMANCE_REGRESSION,
     );
 
-    // 6. BLOCK_EVIDENCE_INCOMPLETE (timeout / no metrics)
+    // 7. BLOCK_EVIDENCE_INCOMPLETE (timeout / no metrics)
     const incompleteResult = {
       passed: false,
       error: 'Operation timeout',
@@ -277,6 +329,105 @@ describe('validation-matrix helpers', () => {
     assert.equal(
       classifyScenarioVerdict(incompleteResult).verdict,
       HARNESS_VERDICTS.BLOCK_EVIDENCE_INCOMPLETE,
+    );
+  });
+
+  it('grades measured product failures instead of discarding them as ' +
+    'harness-invalid when the error text is connectivity-shaped', () => {
+    // Real-world regression: control-plane non-quiescence whose error text
+    // contains "query timed out" (a SYMPTOM of control_plane_pressure) must be
+    // graded as measured convergence progress blocked, not nulled out as a
+    // harness connectivity failure.
+    const controlPlanePressureRun = {
+      passed: false,
+      error: 'Control plane did not quiesce within 300000ms ' +
+        '(quiescenceState=control_plane_pressure, ' +
+        'control_plane_pressure=Admin API query timed out for node abc ' +
+        'on lane snapshot after 590ms)',
+      rootCauseClass: 'discovery',
+      dominantReason: 'control_plane_pressure',
+      failureClassification: {
+        failureClass: 'discovery_unavailable',
+        rootCauseClass: 'discovery',
+        dominantReason: 'control_plane_pressure',
+        signals: [
+          'quiescenceState=control_plane_pressure',
+          'quiescenceBlocker=control_plane_pressure',
+        ],
+      },
+      loadMetrics: null,
+    };
+    const verdict = classifyScenarioVerdict(controlPlanePressureRun);
+    assert.equal(verdict.verdict, HARNESS_VERDICTS.BLOCK_TOPOLOGY_CONVERGENCE);
+    assert.equal(verdict.reason, 'topology_progress_blocked');
+
+    // A startup-class liveness stall with concrete diagnostics and a
+    // connectivity-shaped error is likewise graded, not discarded.
+    const startupStallRun = {
+      passed: false,
+      error: 'Node readiness probe timed out',
+      rootCauseClass: 'startup',
+      failureClassification: {
+        failureClass: 'startup_recovery_blocked',
+        rootCauseClass: 'startup',
+        signals: ['quiescenceState=control_plane_pressure'],
+      },
+    };
+    assert.equal(
+      classifyScenarioVerdict(startupStallRun).verdict,
+      HARNESS_VERDICTS.BLOCK_TOPOLOGY_CONVERGENCE,
+    );
+
+    // A non-convergence product failure (load) with a connectivity-shaped
+    // substring is no longer discarded as harness-invalid; it is suppressed and
+    // graded by the downstream rules (failed operations => core invariant).
+    const loadFailureRun = {
+      passed: false,
+      error: 'Admin API query timed out during load phase',
+      rootCauseClass: 'load',
+      failureClassification: {
+        failureClass: 'load_admission_saturated',
+        rootCauseClass: 'load',
+        signals: ['undispatchedRatio=0.4'],
+      },
+      loadMetrics: {total: 100, failed: 5},
+    };
+    assert.equal(
+      classifyScenarioVerdict(loadFailureRun).verdict,
+      HARNESS_VERDICTS.FAIL_CORE_INVARIANT,
+    );
+
+    // Genuine harness/infra failure: connectivity-shaped error, NO structured
+    // failure classification and no concrete diagnostics => stays harness-invalid.
+    const infraRun = {
+      passed: false,
+      error: 'connect ECONNREFUSED 172.20.0.3:8081',
+      rootCauseClass: 'discovery',
+      publicationConvergence: {},
+      stabilityGates: {},
+    };
+    assert.equal(
+      classifyScenarioVerdict(infraRun).verdict,
+      HARNESS_VERDICTS.BLOCK_HARNESS_INVALID,
+    );
+
+    // Infra failure that guessed a convergence rootCauseClass but carries only
+    // an 'unknown' failureClass and no concrete evidence stays harness-invalid.
+    const infraUnknownClassRun = {
+      passed: false,
+      error: 'socket error: connection closed before response',
+      rootCauseClass: 'topology',
+      failureClassification: {
+        failureClass: 'unknown',
+        rootCauseClass: 'topology',
+        signals: [],
+      },
+      publicationConvergence: {},
+      stabilityGates: {},
+    };
+    assert.equal(
+      classifyScenarioVerdict(infraUnknownClassRun).verdict,
+      HARNESS_VERDICTS.BLOCK_HARNESS_INVALID,
     );
   });
 

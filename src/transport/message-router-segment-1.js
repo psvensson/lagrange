@@ -165,6 +165,28 @@ class MessageRouterSegment1 extends EventEmitter {
           TRANSPORT_DEFAULT.OUTBOUND_QUEUE_READINESS_RESERVE,
           maxReadinessReserve,
         );
+    const configuredReadinessInflightReserve =
+      Number.isFinite(options.outboundQueueReadinessInflightReserve) &&
+      options.outboundQueueReadinessInflightReserve >= TRANSPORT_NUM.ZERO ?
+        options.outboundQueueReadinessInflightReserve :
+        config.get(
+          TRANSPORT_CONFIG_KEY.OUTBOUND_QUEUE_READINESS_INFLIGHT_RESERVE,
+        );
+    const maxReadinessInflightReserve = Math.max(
+      TRANSPORT_NUM.ZERO,
+      this.outboundQueueMaxConcurrent,
+    );
+    this.outboundQueueReadinessInflightReserve =
+      Number.isFinite(configuredReadinessInflightReserve) &&
+      configuredReadinessInflightReserve >= TRANSPORT_NUM.ZERO ?
+        Math.min(
+          Math.floor(configuredReadinessInflightReserve),
+          maxReadinessInflightReserve,
+        ) :
+        Math.min(
+          TRANSPORT_DEFAULT.OUTBOUND_QUEUE_READINESS_INFLIGHT_RESERVE,
+          maxReadinessInflightReserve,
+        );
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
       loggingService.forSubsystem(TRANSPORT_SUBSYSTEM.ROUTER) :

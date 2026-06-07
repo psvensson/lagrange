@@ -23,9 +23,11 @@ const {
   WebSocket,
   buildQueueWaitSummary,
   countInFlightByPriority,
+  countInFlightReadinessReserve,
   countPendingByPriority,
   resolveBackgroundInFlightLimit,
   resolveBackgroundPendingLimit,
+  resolveReadinessReserveInFlightLimit,
 } = MESSAGE_ROUTER_SHARED;
 
 function countPendingCriticalReserveEligible(queue) {
@@ -70,6 +72,7 @@ class MessageRouter extends MessageRouterSegment3 {
           queue,
           OutboundDeliveryPriority.BACKGROUND,
         ),
+        inFlightReadinessReserve: countInFlightReadinessReserve(queue),
         pending: queue.pending.length,
         pendingCritical: countPendingByPriority(queue, OutboundDeliveryPriority.CRITICAL),
         pendingCriticalReserveEligible:
@@ -78,6 +81,9 @@ class MessageRouter extends MessageRouterSegment3 {
         pendingBackground: countPendingByPriority(queue, OutboundDeliveryPriority.BACKGROUND),
         criticalReserve: queue.criticalReserve,
         readinessReserve: queue.readinessReserve,
+        readinessInflightReserve: queue.readinessInflightReserve,
+        readinessInflightReserveLimit:
+          resolveReadinessReserveInFlightLimit(queue),
         backgroundPendingLimit: resolveBackgroundPendingLimit(queue),
         backgroundMaxConcurrent: resolveBackgroundInFlightLimit(queue),
         maxConcurrent: queue.maxConcurrent,

@@ -6,45 +6,46 @@
 
 **Outcome:** IN PROGRESS (no terminal recorded)
 
-**Attempts:** 60
+**Attempts:** 62
 
 ## Current Blocker
 - Frontier: rolling-restart-core-stability-main
-- Owner: rebalancer_leader
-- Boundary: operation_scheduling
-- Dominant reason: priority_partitions_not_spread
-- Mechanism: observation_gap
-- Movement: moved_owner: startup_active_gate_owner / snapshot_coverage / publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72 -> rebalancer_leader / operation_scheduling / priority_partitions_not_spread
-- Latest evidence: test-output/reports/rolling-restart-core-stability-after-priority-control-plane-target-source-aggregate.report.json
-- Selected theory: theory-20260605-priority-recovery-local-mutation-readiness-create-lane
-- Next move: rolling-restart-core-stability-main: wait_for_priority_recovery
-- No longer current: startup_active_gate_owner / snapshot_coverage / publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72; Do not continue treating the current blocker as raw per-replica priority target source saturation; the old pendingSourceSummary/backpressureScope signature is absent in the new failure bundle.; Do not treat priority_spread_settled as optional, and do not continue on transport target-source saturation as the current blocker.
+- Owner: startup_active_gate_owner
+- Boundary: snapshot_coverage
+- Dominant reason: readiness_probe_timeout=Node readiness probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304
+- Mechanism: transition_gap
+- Movement: narrowed: startup_active_gate_owner / snapshot_coverage / publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72 -> startup_active_gate_owner / snapshot_coverage / readiness_probe_timeout=Node readiness probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304
+- Latest evidence: test-output/reports/rolling-restart-local-20260607T075548Z.report.json
+- Selected theory: theory-20260606-active-gate-owner-reconcile-queue-drain
+- Next move: rolling-restart-core-stability-main: retry
+- Oscillation: blocker "startup_active_gate_owner / snapshot_coverage / readiness_probe_timeout=Node readiness probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304" revisited 2x (whack-a-mole; change strategy)
+- No longer current: startup_active_gate_owner / snapshot_coverage / publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72; Do not trade publication_converged for another invariant family before measuring the active-gate owner-reconcile queue-drain patch; the next evidence must restore or falsify that publication convergence target.
 
 ## Continuation
 - Status: allowed
-- Next action: continue supervised step for rolling-restart-core-stability-main
+- Next action: continue rolling-restart-core-stability-main with modelRef or modelNotApplicable evidence
 - Blocker: none
 
 ## Scope Pressure
-- Changed files: 21
+- Changed files: 26
 - Owner areas: src/admin, src/control-plane, src/rebalancer, src/transport, test/admin, test/control-plane, test/rebalancer, test/transport
 - Categories: runtime, test
-- Action: split by owner area before the next attempt (21 files)
+- Action: split by owner area before the next attempt (26 files)
 - Action: land or separate 8 owner areas: src/admin, src/control-plane, src/rebalancer, src/transport, test/admin, test/control-plane, test/rebalancer, test/transport
 - Split plan:
   - src/transport: 6 file(s)
+  - src/rebalancer: 4 file(s)
+  - test/control-plane: 4 file(s)
   - test/transport: 4 file(s)
-  - src/rebalancer: 3 file(s)
-  - src/control-plane: 2 file(s)
-  - test/control-plane: 2 file(s)
-  - test/rebalancer: 2 file(s)
+  - src/control-plane: 3 file(s)
+  - test/rebalancer: 3 file(s)
   - src/admin: 1 file(s)
   - test/admin: 1 file(s)
 - Signal: broad-source-scope severity=medium
 - Signal: large-diff-stack severity=medium
 
 ## Frontiers
-- **rolling-restart-core-stability-main** [open] rung 2, attempts 60, reopened 12, metric 1 -> 6 — Fresh owner-bound transport theory and source changes target the latest measured mixed transport/control-plane pressure evidence after the frontier parked; reopen to measure the new classifier/reserve-accounting patch without changing doneWhen.
+- **rolling-restart-core-stability-main** [open] rung 3, attempts 62, reopened 12, metric 1 -> 101 — Fresh owner-bound transport theory and source changes target the latest measured mixed transport/control-plane pressure evidence after the frontier parked; reopen to measure the new classifier/reserve-accounting patch without changing doneWhen.
 
 ## Findings
 - **rolling-restart-core-stability-main**: Quest probe priority metric is now zero, but doneWhen remains false until three consecutive rolling-restart runs pass. (rules out: Do not claim SOLVED from metric zero without the consecutive doneWhen evidence.) [test-output/reports/rolling-restart-core-stability-after-local-mutation-gate.report.json]
@@ -286,6 +287,18 @@
 - **rolling-restart-core-stability-main**: Priority control-plane target source aggregation was measured against diff:solve/changes/rolling-restart-core-stability/priority-control-plane-target-source-aggregate.diff: focused transport/control-plane/model checks passed, the verifier found no blocking issue, and rolling-restart moved off the prior node/source backpressure signature to a later rebalancer_leader operation_scheduling gap where priority partitions are eligible but no recovery operation is visible. (rules out: Do not continue treating the current blocker as raw per-replica priority target source saturation; the old pendingSourceSummary/backpressureScope signature is absent in the new failure bundle.) [test-output/reports/rolling-restart-core-stability-after-priority-control-plane-target-source-aggregate.report.json; test-output/reports/.playback/rolling-restart-core-stability-after-priority-control-plane-target-source-aggregate/rolling-restart/failure-bundle.json; subagent:019e9812-f3a2-7f42-91e6-4c2a2bd4e4b6; changeRef:diff:solve/changes/rolling-restart-core-stability/priority-control-plane-target-source-aggregate.diff]
 - **rolling-restart-core-stability-main**: The fresh run regressed the previously-green priority_spread_settled invariant, but the invariant is not being abandoned: the patch removed the transport-source saturation blocker and exposed a rebalancer_leader operation_scheduling gap where all five priority partitions are eligible/needs_operation and require create_recovery_operation. The next Quest move must restore priority spread through that owner path. (rules out: Do not treat priority_spread_settled as optional, and do not continue on transport target-source saturation as the current blocker.) [test-output/reports/rolling-restart-core-stability-after-priority-control-plane-target-source-aggregate.report.json; test-output/reports/.playback/rolling-restart-core-stability-after-priority-control-plane-target-source-aggregate/rolling-restart/failure-bundle.json]
 - **rolling-restart-core-stability-main**: Ingested evidence from rolling-restart-core-stability-after-priority-control-plane-target-source-aggregate.report.json. Metric: 6 -> 0. Verdict: BLOCK_HARNESS_INVALID (harness_connectivity_or_system_failure). Root cause: topology. Dominant reason: priority_partitions_not_spread. Owner: rebalancer_leader. Ingestion outcome: changed. [test-output/reports/rolling-restart-core-stability-after-priority-control-plane-target-source-aggregate.report.json]
+- **rolling-restart-core-stability-main**: Subagent verifier Sagan found no blocking issues in the priority recovery local mutation create-lane diff; ordinary/background local mutation deferral remains mapped to DEFER_PLANNING, the priority carve-out only matches operationCreationRequired evidence, and adjacent priority recovery gates already allow the same create-operation condition. (rules out: Do not treat the priority recovery local mutation create-lane source change as unverified before committing this supervised attempt.) [subagent:019e9bd7-749d-7fb0-a845-a1a3f77c970b]
+- **rolling-restart-core-stability-main**: non-measuring sample (1/3): harness produced no trustworthy metric; holding the rung for retry rather than climbing toward an unearned exhausted park
+- **rolling-restart-core-stability-main**: Ingested evidence from rolling-restart-core-stability-after-priority-recovery-local-mutation-readiness-create-lane.report.json. Metric: 6 -> null. Verdict: BLOCK_HARNESS_INVALID (harness_connectivity_or_system_failure). Root cause: topology. Dominant reason: publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72. Owner: startup_active_gate_owner. Ingestion outcome: changed. [test-output/reports/rolling-restart-core-stability-after-priority-recovery-local-mutation-readiness-create-lane.report.json]
+- **rolling-restart-core-stability-main**: Focused harness discriminator check is already red before the next patch: test/distributed/harness/__tests__/cluster.test-part-5.js passed 52/55 and failed active-gate/publication witness assertions around snapshotTimeoutEncountered and CL-004/CL-006 strong-admin-proof rejection, while validation-matrix.test.js passed 7/7. This supports moving the next theory to startup active-gate measurement/owner-reconcile observation instead of more rebalancer scheduling. (rules out: Do not assume the active-gate harness discriminator suite is green or continue from stale rebalancer scheduling without repairing the measurement path.) [node test/distributed/harness/__tests__/cluster.test-part-5.js; node test/distributed/harness/__tests__/validation-matrix.test.js]
+- **rolling-restart-core-stability-main**: Verified harness measurement repair: BLOCK_TOPOLOGY_CONVERGENCE/topology_progress_blocked now requires topology root cause plus concrete structured topology evidence; dominantReason-only ECONNREFUSED stays BLOCK_HARNESS_INVALID; Solver sample-validity/evidence/probe paths keep topology_progress_blocked measuring and harness_connectivity_or_system_failure non-measuring. (rules out: Do not treat the active-gate harness measurement classification source change as unverified before rerunning or reopening the measurement park.) [subagent:019e9bfe-95e8-7653-8c84-567b48cc414d]
+- **rolling-restart-core-stability-main**: Verified complete harness measurement repair: topology_progress_blocked requires concrete positive topology evidence; false, zero, null, undefined, empty strings, empty containers, and containers containing only those values stay non-concrete; pure harness/connectivity failures stay BLOCK_HARNESS_INVALID; failure-bundle report enrichment refreshes stale verdicts before write; and Solver probe/evidence/sample-validity paths treat topology_progress_blocked as measuring. (rules out: Do not treat the active-gate harness measurement/report-writer classification source change as unverified before rerunning rolling-restart.) [subagent:019e9c15-ba23-7181-ab11-ac31ae587467]
+- **rolling-restart-core-stability-main**: Ingested evidence from rolling-restart-core-stability-after-active-gate-harness-measurement-witness-contract-rerun.report.json. Metric: 6 -> 1. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72. Owner: startup_active_gate_owner. Ingestion outcome: changed. [test-output/reports/rolling-restart-core-stability-after-active-gate-harness-measurement-witness-contract-rerun.report.json]
+- **rolling-restart-core-stability-main**: Ingested evidence from rolling-restart-core-stability-after-active-gate-harness-measurement-witness-contract-rerun.report.json. Metric: 6 -> 105. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72. Owner: startup_active_gate_owner. Ingestion outcome: changed. [test-output/reports/rolling-restart-core-stability-after-active-gate-harness-measurement-witness-contract-rerun.report.json]
+- **rolling-restart-core-stability-main**: Verified active-gate owner-reconcile queue drain patch: the production timeout wrapper is scoped to queued active-gate owner-reconcile handoff contexts only, non-active queue work remains on the original reconcileClusterMembership path, and the focused regression now reproduces the measured pending+inFlight owner-key shape with pendingWrites=2 before the stuck handoff releases into retryable timeout state via the existing OwnerKeyReconcileQueue retry policy. (rules out: Do not treat the active-gate owner-reconcile queue drain source change as unverified before committing the supervised attempt or rerunning rolling-restart.) [subagent:019e9c38-15bc-7031-a1c2-4274f7f4244c]
+- **rolling-restart-core-stability-main**: publication_converged is not being abandoned after the active-gate owner-reconcile queue-drain attempt; it is the selected theory's explicit restoration target. The current red label is accepted as the live invariant debt until a fresh measured rolling-restart report proves it restored or falsifies the queue-drain theory with unchanged owner_reconcile_pending/write_deferred evidence. (rules out: Do not trade publication_converged for another invariant family before measuring the active-gate owner-reconcile queue-drain patch; the next evidence must restore or falsify that publication convergence target.) [solve/changes/rolling-restart-core-stability/active-gate-owner-reconcile-queue-drain.diff]
+- **rolling-restart-core-stability-main**: Ingested evidence from rolling-restart-local-20260607T075548Z.report.json. Metric: 105 -> 101. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: startup. Dominant reason: readiness_probe_timeout=Node readiness probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304. Owner: startup_active_gate_owner. Ingestion outcome: changed. [test-output/reports/rolling-restart-local-20260607T075548Z.report.json]
+- **rolling-restart-core-stability-main**: Ingested evidence from rolling-restart-local-20260607T075548Z.report.json. Metric: 101 -> 1. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: startup. Dominant reason: readiness_probe_timeout=Node readiness probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304. Owner: startup_active_gate_owner. Ingestion outcome: changed. [test-output/reports/rolling-restart-local-20260607T075548Z.report.json]
 
 ## Theories
 - **theory-20260601-rolling-restart-evidence-closure** [active] system, mechanism observation_gap, owner distributed_harness_scenario_owner / rolling_restart_evidence
@@ -373,10 +386,12 @@
 - **theory-20260605-dispatch-pending-drain-before-owner-effect** [active] frontier, frontier rolling-restart-core-stability-main, layer ownership, mechanism dispatch_pending_normalized_owner_effect_reentry_preempts_spread_satisfied_drain_by_acquiring_the_operation_reentry_lock_before_the_non_executing_drain_schedule_runs, owner operation_workflow_owner, boundary workflow_progress, modelGate npm run model:contracts
 - **theory-20260605-active-gate-drain-before-owner-effect** [active] frontier, frontier rolling-restart-core-stability-main, layer ownership, mechanism startup_active_gate_snapshot_coverage_waits_on_priority_recovery_closure_because_dispatch_pending_normalized_owner_effect_reentry_preempts_spread_satisfied_operation_drain, owner startup_active_gate_owner, boundary snapshot_coverage, modelGate npm run model:contracts
 - **theory-20260605-priority-control-plane-target-source-aggregate** [supported] frontier, frontier rolling-restart-core-stability-main, layer scheduling, mechanism startup_active_gate_snapshot_coverage_blocked_by_priority_control_plane_target_sources_using_per_replica_raw_admission_keys_so_multiple_hot_system_targets_jointly_saturate_node_queue_before_source_backpressure, owner startup_active_gate_owner, boundary snapshot_coverage, modelGate npm run model:contracts
-- **theory-20260605-priority-recovery-local-mutation-readiness-create-lane** [active] frontier, frontier rolling-restart-core-stability-main, layer scheduling, mechanism rebalancer_leader_operation_scheduling_leaves_priority_partitions_needs_operation_because_local_mutation_readiness_defer_blocks_priority_recovery_operation_creation_while_publication_is_already_published_and_priority_spread_is_pending, owner rebalancer_leader, boundary operation_scheduling, modelGate npm run model:contracts
+- **theory-20260605-priority-recovery-local-mutation-readiness-create-lane** [needs-rerun] frontier, frontier rolling-restart-core-stability-main, layer scheduling, mechanism rebalancer_leader_operation_scheduling_leaves_priority_partitions_needs_operation_because_local_mutation_readiness_defer_blocks_priority_recovery_operation_creation_while_publication_is_already_published_and_priority_spread_is_pending, owner rebalancer_leader, boundary operation_scheduling, modelGate npm run model:contracts
+- **theory-20260606-active-gate-measurement-owner-reconcile-closure** [falsified] frontier, frontier rolling-restart-core-stability-main, layer observation, mechanism rolling-restart stops measuring after priority recovery settles because startup active-gate snapshot coverage and publication handoff remain pending on owner_reconcile for published active members, so the harness classifies the sample as harness_connectivity_or_system_failure instead of producing a measured active-gate/publication blocker, owner startup_active_gate_owner, boundary snapshot_coverage, modelGate npm run model:contracts
+- **theory-20260606-active-gate-owner-reconcile-queue-drain** [supported] frontier, frontier rolling-restart-core-stability-main, layer ownership, mechanism startup active-gate snapshot coverage keeps revisiting publication_missing_active_node because the membership-publication owner-reconcile handoff is enqueued/write_deferred for published active members but does not drain or publish those members before the load-readiness deadline, owner startup_active_gate_owner, boundary snapshot_coverage, modelGate npm run model:contracts
 
 ## Selected Theories
-- **rolling-restart-core-stability-main**: theory-20260605-priority-recovery-local-mutation-readiness-create-lane
+- **rolling-restart-core-stability-main**: theory-20260606-active-gate-owner-reconcile-queue-drain
 
 ## Theory Results
 - **theory-20260601-rolling-restart-consecutive-proof**: needs-rerun [test-output/reports/rolling-restart-core-stability-after-priority-local-first.report.json]
@@ -537,6 +552,10 @@
 - **theory-20260605-priority-control-plane-dispatch-pending-drain-coverage**: falsified (scenario=failed, theory=oscillating, movement=narrowed) [test-output/reports/rolling-restart-core-stability-after-priority-control-plane-dispatch-pending-drain-coverage.report.json]
 - **theory-20260605-priority-control-plane-target-source-aggregate**: supported (scenario=improved, theory=supported, movement=moved_owner) [test-output/reports/rolling-restart-core-stability-after-priority-control-plane-target-source-aggregate.report.json]
 - **theory-20260605-priority-control-plane-target-source-aggregate**: supported (scenario=improved, theory=supported, movement=moved_owner) [test-output/reports/rolling-restart-core-stability-after-priority-control-plane-target-source-aggregate.report.json]
+- **theory-20260605-priority-recovery-local-mutation-readiness-create-lane**: needs-rerun (scenario=invalid, theory=needs-rerun, movement=moved_owner) [test-output/reports/rolling-restart-core-stability-after-priority-recovery-local-mutation-readiness-create-lane.report.json]
+- **theory-20260606-active-gate-measurement-owner-reconcile-closure**: falsified (scenario=failed, theory=oscillating, movement=moved_owner) [test-output/reports/rolling-restart-core-stability-after-active-gate-harness-measurement-witness-contract-rerun.report.json]
+- **theory-20260606-active-gate-owner-reconcile-queue-drain**: supported (scenario=failed, theory=partial, movement=moved_owner) [test-output/reports/rolling-restart-core-stability-after-active-gate-harness-measurement-witness-contract-rerun.report.json]
+- **theory-20260606-active-gate-owner-reconcile-queue-drain**: supported (scenario=improved, theory=supported, movement=narrowed) [test-output/reports/rolling-restart-local-20260607T075548Z.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
@@ -601,3 +620,5 @@
 | 2026-06-05T12:39:34.619Z | rolling-restart-core-stability-main | change-approach | 5 -> 5 | flat | narrowed | theory-20260605-startup-active-gate-operation-workflow-dispatch-pending-first-timeout-reentry | diff:solve/changes/rolling-restart-core-stability/startup-active-gate-operation-workflow-dispatch-pending-first-timeout-reentry.diff |
 | 2026-06-05T13:06:39.395Z | rolling-restart-core-stability-main | observe | 5 -> 3 | progress | narrowed | theory-20260605-startup-active-gate-priority-target-admission-reserve-accounting | diff:solve/changes/rolling-restart-core-stability/startup-active-gate-priority-target-admission-reserve-accounting.diff |
 | 2026-06-05T13:42:01.894Z | rolling-restart-core-stability-main | local-fix | 3 -> 105 | flat | narrowed | theory-20260605-priority-control-plane-dispatch-pending-drain-coverage | diff:solve/changes/rolling-restart-core-stability/priority-control-plane-dispatch-pending-drain-coverage.diff |
+| 2026-06-06T07:40:05.824Z | rolling-restart-core-stability-main | widen-scope | ? -> ? | flat | moved_owner | theory-20260605-priority-recovery-local-mutation-readiness-create-lane | diff:solve/changes/rolling-restart-core-stability/priority-recovery-local-mutation-readiness-create-lane.diff |
+| 2026-06-06T09:19:34.785Z | rolling-restart-core-stability-main | widen-scope | 105 -> 105 | flat | moved_owner | theory-20260606-active-gate-owner-reconcile-queue-drain | diff:solve/changes/rolling-restart-core-stability/active-gate-owner-reconcile-queue-drain.diff |

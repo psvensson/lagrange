@@ -17,7 +17,9 @@
   ],
   "failureClasses": [
     "snapshot coverage and rebalancer handoff can move as coupled invariants",
-    "fixing one owner boundary can leave the representative frontier unchanged because the paired invariant still blocks progress"
+    "fixing one owner boundary can leave the representative frontier unchanged because the paired invariant still blocks progress",
+    "a reconciled active node can stay unpublished when the membership-publication drain pass no-ops without rescheduling, so missingPublishedCount never reaches zero",
+    "the same undrained publication surfaces as correlated downstream symptoms (publication_missing_active_node, readiness_probe_timeout, and join retryable-resume budget exhaustion) that look like distinct bugs but share one root"
   ],
   "stateVariables": [
     "activeGateState",
@@ -43,6 +45,10 @@
     {
       "id": "covered-disjoint-pending",
       "statement": "A node with accepted snapshot coverage has already been reconciled by the owner; covered and pending never intersect."
+    },
+    {
+      "id": "published-reflects-durable-visibility",
+      "statement": "A reconciled active node is reported published only after its publication row is read back as durably visible for the target; an absent or non-visible readback must not be counted as published."
     }
   ],
   "livenessExpectations": [
@@ -53,6 +59,10 @@
     {
       "id": "active-gate-eventually-converged",
       "statement": "Under weak fairness of the progress actions and bounded owner re-entry, every node eventually reaches published with a fresh quorum snapshot, so the active gate eventually goes green."
+    },
+    {
+      "id": "publication-drain-deterministic",
+      "statement": "Whenever missingPublishedCount > 0 with reconciled active nodes, a drain or wake action stays enabled until those nodes publish; the active-gate reconcile deferral branch must reschedule (enqueue/drain) rather than return a silent NO_CHANGE or TARGET_BLOCKED that strands the residual."
     }
   ],
   "knownResiduals": [
@@ -94,6 +104,18 @@
       "owner": "operation_workflow_owner",
       "boundary": "rebalancer_handoff",
       "transition": "handoff retry progress must not weaken active-gate snapshot coverage"
+    },
+    {
+      "path": "src/control-plane/membership-publication-active-gate-reconcile.js",
+      "owner": "startup_active_gate_owner",
+      "boundary": "snapshot_coverage",
+      "transition": "reconcileActiveGateMembershipPublication drains the publication snapshot queue, reads back the publication row as durably visible, and on the deferral branch must reschedule (drain/enqueue) instead of stranding a reconciled-but-unpublished node"
+    },
+    {
+      "path": "src/control-plane/publication-active-gate-handoff-contract-evidence.js",
+      "owner": "startup_active_gate_owner",
+      "boundary": "snapshot_coverage",
+      "transition": "resolvePublicationActiveGateHandoffMissingPublishedNodeIds derives the missingPublished residual (expected minus published) that the drain must drive to zero"
     }
   ],
   "modelBindings": [
@@ -101,6 +123,11 @@
       "kind": "tla-spec",
       "artifact": "models/active-gate/ActiveGate.tla",
       "properties": "safety and liveness properties for active-gate convergence"
+    },
+    {
+      "kind": "tla-spec",
+      "artifact": "models/readiness-starvation/PublicationConvergence.tla",
+      "properties": "a reconciled active node cannot remain unpublished indefinitely while a drain/wake action stays enabled (publication-drain-deterministic)"
     },
     {
       "kind": "property-test",
@@ -124,7 +151,8 @@
     }
   ],
   "questRefs": [
-    "solve/quests/rolling-restart-core-stability.json"
+    "solve/quests/rolling-restart-core-stability.json",
+    "solve/quests/membership-publication-drain-determinism.json"
   ],
   "theoryLedgerRefs": [
     "theory-20260529-rolling-restart-active-gate-priority-recovery-coupled-invariants"
@@ -175,7 +203,70 @@ bindings.
 
 The high-resolution model remains `models/active-gate/ActiveGate.tla`, backed
 by the fast-check model under `test/model/active-gate/`. The action manifest is
-the drift guard between the two surfaces.
+the drift guard between the two surfaces. The membership-publication drain
+liveness (a reconciled active node cannot stay unpublished while a drain/wake
+action remains enabled) is bound to
+`models/readiness-starvation/PublicationConvergence.tla`.
+
+## Membership Publication Drain (Reconciled-But-Unpublished Residual)
+
+This is the dominant blocker behind the chronic `rolling-restart` failures. It
+is a refinement of the convergence oscillation above: active nodes are
+reconciled but never *published*, so `missingPublishedCount` stays above zero and
+the active gate never goes green. Empirically, three back-to-back fast-local
+runs all graded `BLOCK_TOPOLOGY_CONVERGENCE` — runs surfaced
+`publication_missing_active_node` (`missingPublishedCount = 4`) and the
+correlated `readiness_probe_timeout`. The verdict *class* was 100% stable while
+the dominant *reason* alternated between these correlated facets: this is **one
+systemic defect**, not many small bugs.
+
+Downstream, an undrained publication starves node join: the joining node spins in
+the `querying_state` phase until `retryableFailureResumeMaxElapsedMs` is exhausted
+and logs `Join retryable resume budget exhausted`
+(`src/bootstrap/node-joining-admission-readiness.js` timeout check; the source
+default is three minutes, while the failing harness ran with an effective policy
+of 300000 ms). The join timeout is a *downstream consumer*, not the owner of the
+defect.
+
+Owner path: `startup_active_gate_owner / snapshot_coverage`. The drain lives in
+`src/control-plane/membership-publication-active-gate-reconcile.js`
+(`drainActiveGateMembershipPublicationSnapshotQueue` and
+`reconcileActiveGateMembershipPublication`); the residual is derived by
+`resolvePublicationActiveGateHandoffMissingPublishedNodeIds` in
+`src/control-plane/publication-active-gate-handoff-contract-evidence.js`.
+
+### Risky Paths (regression hot spots)
+
+1. **Deferral branch that only drains under owner-recovery wait.** When
+   `target.reconcileRequired !== true`, the reconcile path drains the snapshot
+   queue *only* if the target is an owner-recovery-wait target; otherwise it
+   returns `NO_CHANGE` / `TARGET_BLOCKED`. A reconciled-but-unpublished node that
+   is not in that wait shape can be stranded without a reschedule.
+2. **Drain returns a boolean, not a guarantee.**
+   `drainActiveGateMembershipPublicationSnapshotQueue` returns true when queue
+   pressure is detected *or* `drainedCount > 0`. A pass that neither drains nor
+   re-arms a follow-up leaves the residual in place with no enabled wake.
+3. **Silent absent/non-visible readback.** The publication-row readback returns
+   an `ABSENT_ROW` sentinel when the durable row is missing or fails the
+   target-visibility check. A candidate may be "published" in intent but never
+   counted as published, with no error surfaced — the residual persists
+   indefinitely (invariant `published-reflects-durable-visibility`).
+4. **Owner-not-local / epoch-fence short-circuits.** Handoff-contract decisions
+   that gate on owner locality or epoch freshness can defer the drain across an
+   ownership change, orphaning the publication.
+
+### Regression Guard
+
+Prose alone will not prevent recurrence. The binding executable guards are the
+`publication-drain-deterministic` liveness property in
+`models/readiness-starvation/PublicationConvergence.tla` and a deterministic-drain
+reschedule regression test for the reconcile deferral branch (asserting it
+enqueues/drains rather than returning a silent `NO_CHANGE` / `TARGET_BLOCKED`
+while a reconciled active node is still unpublished). These are the `doneWhen`
+deliverables of the narrowly scoped Quest
+`solve/quests/membership-publication-drain-determinism.json`; the
+3-consecutive rolling-restart harness pass remains the integration gate of
+`solve/quests/rolling-restart-core-stability.json`.
 
 ## Operational Analysis
 

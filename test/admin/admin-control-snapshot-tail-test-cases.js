@@ -187,6 +187,7 @@ export function registerAdminControlSnapshotTailTests({
                 {
                   preferAuthoritativeRead: true,
                   readProfile: 'diagnostics',
+                  deliveryPriority: 'readiness',
                 },
                 'authoritative published membership should request an authoritative history read',
               );
@@ -296,6 +297,7 @@ export function registerAdminControlSnapshotTailTests({
                 {
                   preferAuthoritativeRead: true,
                   readProfile: 'diagnostics',
+                  deliveryPriority: 'readiness',
                 },
                 'forced repair should still request an authoritative publication read',
               );
@@ -316,6 +318,7 @@ export function registerAdminControlSnapshotTailTests({
                 {
                   preferAuthoritativeRead: true,
                   readProfile: 'diagnostics',
+                  deliveryPriority: 'readiness',
                 },
                 'forced repair should request authoritative published membership history',
               );
@@ -497,6 +500,7 @@ export function registerAdminControlSnapshotTailTests({
                 {
                   preferAuthoritativeRead: true,
                   readProfile: 'diagnostics',
+                  deliveryPriority: 'readiness',
                 },
                 'forced repair should retry authoritative membership publication reads',
               );

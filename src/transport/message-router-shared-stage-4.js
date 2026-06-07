@@ -33,7 +33,7 @@ import {
   buildQueryTransportSemanticOutcome,
 } from './transport-semantic-outcome.js';
 import {CONNECTION_CLOSE_DISPOSITION, ConnectionState, EMPTY_ROUTER_REASON, INLINE_ACK_PASSTHROUGH_KEYS, INLINE_ACK_RESULT_FIELD, INPROC, IPV6_ANY_HOST, IPV6_HOST_PREFIX, IPV6_HOST_SUFFIX, InProcWebSocket, MESSAGE_ROUTER_LITERAL, OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE, OUTBOUND_QUEUE_BACKPRESSURE_SCOPE, OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_DIVISOR, OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_MINIMUM, OutboundDeliveryPriority, QUERY_DATA_PLANE_MESSAGE_TYPE, QUERY_TRANSPORT_DELIVERY_STATE, QUERY_TRANSPORT_SELECTION, QUEUE_WAIT_BUCKETS, QUEUE_WAIT_BUCKET_OVERFLOW, RECONNECT_ADDRESS_SUPPRESSION_DEFAULT_MS, RECONNECT_DISPOSITION, RETIRED_PENDING_RESPONSE_REASON, ROUTER_CONNECTION_CLOSED_ERROR_CODE, ROUTER_MESSAGE_TIMEOUT_ERROR_CODE, ROUTER_NO_CONNECTION_ERROR_CODE, RouterMessageType, SERVICE_RESPONSE_DISPOSITION_KIND, TRANSPORT_PRESSURE_SUMMARY_FIELD, UNMATCHED_SERVICE_RESPONSE_WARN_INTERVAL_MS, WEBSOCKET_CONNECT_TIMEOUT_CONFIG_KEY, WEBSOCKET_CONNECT_TIMEOUT_ERROR_CODE, buildQueueWaitSummary, createInProcWebSocketPair, createQueueWaitHistogram, extractSqlOperationKind, extractSqlTableName, isSupersedableHeartbeatNodeStateUpdate, isSupersedableRaftAppendFail, isSupersedableRaftHeartbeatAppend, normalizeIdentifier, queueMicrotaskFn, recordQueueWaitDuration, resolveNodeStateUpdateReplacementNodeId, resolveOperationIdFromMessage, resolvePendingReplacementKey, resolveQueueWaitBucket, resolveRequestIdFromMessage, summarizeRaftAppendCommand} from './message-router-shared-stage-1.js';
-import {adjustInFlightPriorityCount, buildDerivedDeliverySource, buildPendingSourceSummary, buildRetiredPendingClassification, buildServiceResponseDisposition, buildSupersededPendingResult, canDispatchPendingItem, countInFlightByPriority, countPendingByPriority, countPendingBySource, dequeueNextPendingItem, normalizeDeliveryOutcome, normalizeOutboundDeliveryPriority, normalizeRetryAfterMs, peekNextPendingItem, resolveBackgroundInFlightLimit, resolveBackgroundPendingLimit, resolveBoundedCriticalReserve, resolveDeliverySource, resolveNextPendingItemIndex, resolvePendingSourceLimit} from './message-router-shared-stage-2.js';
+import {adjustInFlightPriorityCount, buildDerivedDeliverySource, buildPendingSourceSummary, buildRetiredPendingClassification, buildServiceResponseDisposition, buildSupersededPendingResult, canDispatchPendingItem, countInFlightByPriority, countInFlightReadinessReserve, countPendingByPriority, countPendingBySource, dequeueNextPendingItem, normalizeDeliveryOutcome, normalizeOutboundDeliveryPriority, normalizeRetryAfterMs, peekNextPendingItem, resolveBackgroundInFlightLimit, resolveBackgroundPendingLimit, resolveBoundedCriticalReserve, resolveDeliverySource, resolveNextPendingItemIndex, resolvePendingSourceLimit, resolveReadinessReserveInFlightLimit} from './message-router-shared-stage-2.js';
 import {INCOMING_CONNECTION_ADOPTION, OutboundDeliveryRegistryOwner} from './message-router-shared-stage-3.js';
 
 const RECONNECT_ADDRESS_SOURCE = Object.freeze({
@@ -421,6 +421,7 @@ const MESSAGE_ROUTER_SHARED = {
   buildTransportDeliveryOutcome,
   canDispatchPendingItem,
   countInFlightByPriority,
+  countInFlightReadinessReserve,
   countPendingByPriority,
   countPendingBySource,
   createInProcWebSocketPair,
@@ -450,6 +451,7 @@ const MESSAGE_ROUTER_SHARED = {
   resolvePendingReplacementKey,
   resolvePendingSourceLimit,
   resolveQueueWaitBucket,
+  resolveReadinessReserveInFlightLimit,
   resolveRequestIdFromMessage,
   summarizeRaftAppendCommand,
   uuidv4,

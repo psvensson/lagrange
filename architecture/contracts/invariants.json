@@ -197,6 +197,16 @@
       "formalPredicate": "<>Terminal",
       "modelRef": "models/readiness-handoff/ReadinessHandoff.tla",
       "contractRef": "architecture/contracts/readiness-handoff-liveness.md"
+    },
+    {
+      "id": "publication-drain-deterministic",
+      "owner": "startup_active_gate_owner",
+      "boundary": "membership_publication_drain",
+      "kind": "safety",
+      "statement": "If missingPublishedCount > 0 and the local node is the publication owner, then a scheduled reconcile obligation is enabled.",
+      "formalPredicate": "missingPublishedCount > 0 /\\ isPublicationOwner => scheduledReconcileObligationEnabled",
+      "modelRef": "models/readiness-starvation/PublicationConvergence.tla",
+      "contractRef": "architecture/contracts/active-gate-convergence.md"
     }
   ]
 }

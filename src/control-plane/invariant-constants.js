@@ -91,6 +91,13 @@ const INVARIANT_REASON = Object.freeze({
   /** Snapshot coverage: coverage monotonically advanced. */
   SNAPSHOT_COVERAGE_MONOTONIC:
     'snapshot_coverage_monotonic',
+
+  /** Publication drain: scheduled obligation missing when owner has pending nodes. */
+  PUBLICATION_DRAIN_UNDETERMINISTIC:
+    'publication_drain_undeterministic',
+  /** Publication drain: scheduled obligation enabled when owner has pending nodes. */
+  PUBLICATION_DRAIN_DETERMINISTIC:
+    'publication_drain_deterministic',
 });
 
 /**

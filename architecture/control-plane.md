@@ -25,6 +25,21 @@ is the single progression entry for dispatch, rebalance, and split.
 
 Single-Path Contract items 4 and 8 reference this queue.
 
+### Membership Publication Drain (Risky Path)
+
+Membership publication moves reconciled active nodes to *published* by draining a
+snapshot queue through `reconcileActiveGateMembershipPublication`
+(`src/control-plane/membership-publication-active-gate-reconcile.js`). This drain
+is the dominant chronic blocker for the `rolling-restart` scenario: a reconciled
+node can stay unpublished (`missingPublishedCount > 0`) when a drain pass no-ops
+without rescheduling, when a publication-row readback returns the `ABSENT_ROW`
+sentinel silently, or when an owner-not-local / epoch-fence short-circuit defers
+the drain across an ownership change. The invariant is
+`publication-drain-deterministic`: while reconciled active nodes remain
+unpublished, a drain or wake action must stay enabled. Full failure class,
+risky-path list, and the model/test regression guards live in the
+[Active Gate Convergence Contract](contracts/active-gate-convergence.md).
+
 ### Invariant Engine
 
 `InvariantEngine` (`src/control-plane/invariant-engine.js`) evaluates
