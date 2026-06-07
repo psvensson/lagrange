@@ -150,7 +150,7 @@ class MembershipPublicationCoordinatorClassStage2 extends
         this.controlPlaneReadinessService.messageRouter.getConnectedNodes() :
         [];
     const priorityRecoveryPlanningSnapshot =
-      options.disableNestedPriorityRecoveryPlanning === true ?
+      options.deferNestedPriorityRecoveryPlanning === true ?
         null :
         this.controlPlaneReadinessService &&
             typeof this.controlPlaneReadinessService

@@ -137,11 +137,18 @@ describe('live query startup wiring', () => {
   });
 
   it('entrypoint wires live query manager in both startup branches', () => {
-    const source = readFileSync('src/index.js', 'utf8');
-    const startupWiringCalls = source.match(/createLiveQueryStartupWiring\(/g) || [];
+    const indexSource = readFileSync('src/index.js', 'utf8');
+    const compositionSource = readFileSync(
+      'src/entrypoint-runtime-admin-composition.js',
+      'utf8',
+    );
+    const startupWiringCalls =
+      compositionSource.match(/createLiveQueryStartupWiring\(/g) || [];
     const adminCompositionCalls =
-      source.match(/startAdminRuntimeComposition\(/g) || [];
-    const managerOptions = source.match(/liveQueryManager\s*[:,]/g) || [];
+      indexSource.match(/startAdminRuntimeComposition\(/g) || [];
+    const managerOptions =
+      `${indexSource}\n${compositionSource}`.match(/liveQueryManager\s*[:,]/g) ||
+      [];
 
     assert.equal(startupWiringCalls.length, 1);
     assert.ok(adminCompositionCalls.length >= 2);

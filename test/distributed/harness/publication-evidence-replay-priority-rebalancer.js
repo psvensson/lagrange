@@ -4,6 +4,14 @@ import {
 } from '../../../src/control-plane/priority-recovery-diagnostics-constants.js';
 import {NUM, TYPEOF} from '../../../src/constants/index.js';
 import {
+  REBALANCE_COORDINATOR_LOG_MSG,
+  REBALANCER_LOG_MSG,
+  REBALANCER_SKIP_REASON,
+} from '../../../src/rebalancer/rebalancer-constants.js';
+import {
+  STORAGE_CAPACITY_LOG_MSG,
+} from '../../../src/rebalancer/storage-capacity-constants.js';
+import {
   PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY,
   PUBLICATION_EVIDENCE_REPLAY_CLOSURE_WITNESS_CLASSIFICATION,
   PUBLICATION_EVIDENCE_REPLAY_CLOSURE_WITNESS_FIELD,

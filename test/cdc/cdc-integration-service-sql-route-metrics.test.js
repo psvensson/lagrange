@@ -169,7 +169,9 @@ test('executeSQL sql_route metric reflects retry attempt on transient',
         if (callCount === 1) {
           return {
             success: false,
-            error: 'No leader available for write operation',
+            error: 'control plane pressure degraded',
+            deferRetry: true,
+            retryAfterMs: 1,
           };
         }
         return {success: true, affectedRows: 1};

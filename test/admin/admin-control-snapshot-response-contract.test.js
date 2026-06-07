@@ -187,6 +187,12 @@ test('AdminControlSnapshot exposes explicit publication response state when unav
     t.same(
       diagnostics,
       {
+        queryEngineAvailable: false,
+        queryEngineAvailability: {
+          state: 'unavailable',
+          reasonCode: 'sql_query_engine_unavailable',
+          queryEngineAvailable: false,
+        },
         publicationObservation: {
           state: 'unavailable',
         },

@@ -137,7 +137,7 @@ export function extractInsertDataFromSQL(sql, tableName, db, logger) {
   const valuesMatch = sql.match(/VALUES\s*\(([^)]+)\)/i);
 
   if (!columnsMatch || !valuesMatch) {
-    logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_INSERT_FAILED, {
+    logger?.warn?.(PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_INSERT_FAILED, {
       sql: sql.substring(
         NUM.ZERO,
         PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
@@ -155,7 +155,7 @@ export function extractInsertDataFromSQL(sql, tableName, db, logger) {
   const values = parseValuesFromSQL(valuesStr);
 
   if (columns.length !== values.length) {
-    logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_INSERT_MISMATCH, {
+    logger?.warn?.(PARTITION_SERVICE_ERROR_MSG.CDC_INSERT_MISMATCH, {
       columns: columns.length,
       values: values.length,
     });
@@ -173,7 +173,7 @@ export function extractInsertDataFromSQL(sql, tableName, db, logger) {
   const pkColumn = columns[NUM.ZERO];
   const pkValue = values[NUM.ZERO];
 
-  if (pkValue !== null && pkValue !== undefined) {
+  if (db && pkValue !== null && pkValue !== undefined) {
     try {
       const stmt = db.prepare(
         `SELECT * FROM ${tableName} WHERE ${pkColumn} = ?`,
@@ -181,7 +181,7 @@ export function extractInsertDataFromSQL(sql, tableName, db, logger) {
       const row = stmt.get(pkValue);
       if (row) {
         if (shouldEmitCdcRowFetchInfoLog(tableName)) {
-          logger.info(PARTITION_SERVICE_LOG_MSG.FETCHED_INSERT_ROW, {
+          logger?.info?.(PARTITION_SERVICE_LOG_MSG.FETCHED_INSERT_ROW, {
             tableName,
             rowKeys: Object.keys(row),
           });
@@ -189,7 +189,7 @@ export function extractInsertDataFromSQL(sql, tableName, db, logger) {
         return row;
       }
     } catch (err) {
-      logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_FETCH_INSERT_FAILED, {
+      logger?.warn?.(PARTITION_SERVICE_ERROR_MSG.CDC_FETCH_INSERT_FAILED, {
         tableName,
         error: err.message,
       });
@@ -215,12 +215,16 @@ export function extractUpdateDataFromSQL(sql, tableName, db, logger) {
     const keyColumn = whereMatch[NUM.ONE];
     const keyValue = whereMatch[NUM.TWO];
     if (shouldEmitCdcRowFetchInfoLog(tableName)) {
-      logger.info(PARTITION_SERVICE_LOG_MSG.FETCHING_UPDATE_ROW, {
+      logger?.info?.(PARTITION_SERVICE_LOG_MSG.FETCHING_UPDATE_ROW, {
         tableName,
         keyColumn,
         keyValue,
       });
     }
+    if (!db) {
+      return {[keyColumn]: keyValue};
+    }
+
     // Query the updated row to get full data for CDC
     try {
       const stmt = db.prepare(
@@ -229,28 +233,28 @@ export function extractUpdateDataFromSQL(sql, tableName, db, logger) {
       const row = stmt.get(keyValue);
       if (row) {
         if (shouldEmitCdcRowFetchInfoLog(tableName)) {
-          logger.info(PARTITION_SERVICE_LOG_MSG.FETCHED_UPDATE_ROW, {
+          logger?.info?.(PARTITION_SERVICE_LOG_MSG.FETCHED_UPDATE_ROW, {
             tableName,
             rowKeys: Object.keys(row),
           });
         }
         return row;
       } else {
-        logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_NO_ROW_UPDATE, {
+        logger?.warn?.(PARTITION_SERVICE_ERROR_MSG.CDC_NO_ROW_UPDATE, {
           tableName,
           keyColumn,
           keyValue,
         });
       }
     } catch (err) {
-      logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_FETCH_UPDATE_FAILED, {
+      logger?.warn?.(PARTITION_SERVICE_ERROR_MSG.CDC_FETCH_UPDATE_FAILED, {
         tableName,
         error: err.message,
       });
       throw err;
     }
   } else {
-    logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_EXTRACT_UPDATE_WHERE_FAILED, {
+    logger?.warn?.(PARTITION_SERVICE_ERROR_MSG.CDC_EXTRACT_UPDATE_WHERE_FAILED, {
       sql: sql.substring(
         NUM.ZERO,
         PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
@@ -274,7 +278,7 @@ export function extractDeleteDataFromSQL(sql, logger) {
     const keyValue = whereMatch[NUM.TWO];
     return {[keyColumn]: keyValue};
   }
-  logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_EXTRACT_DELETE_WHERE_FAILED, {
+  logger?.warn?.(PARTITION_SERVICE_ERROR_MSG.CDC_EXTRACT_DELETE_WHERE_FAILED, {
     sql: sql.substring(
       NUM.ZERO,
       PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
@@ -306,7 +310,7 @@ export function extractDataFromParameterizedSQL(
       /INSERT\s+(?:OR\s+(?:REPLACE|IGNORE)\s+)?INTO\s+\w+\s*\(([^)]+)\)/i,
     );
     if (!columnsMatch) {
-      logger.warn(
+      logger?.warn?.(
         PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_PARAM_INSERT_COLUMNS_FAILED, {
           sql: sql.substring(
             NUM.ZERO,
@@ -321,7 +325,7 @@ export function extractDataFromParameterizedSQL(
       PARTITION_SERVICE_SQL_FRAGMENT.COMMA,
     ).map((c) => c.trim());
     if (columns.length !== params.length) {
-      logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_PARAM_INSERT_MISMATCH, {
+      logger?.warn?.(PARTITION_SERVICE_ERROR_MSG.CDC_PARAM_INSERT_MISMATCH, {
         columns: columns.length,
         params: params.length,
       });
@@ -334,7 +338,7 @@ export function extractDataFromParameterizedSQL(
       data[columns[i]] = params[i];
     }
 
-    logger.debug(PARTITION_SERVICE_LOG_MSG.EXTRACTED_PARAM_INSERT, {
+    logger?.debug?.(PARTITION_SERVICE_LOG_MSG.EXTRACTED_PARAM_INSERT, {
       tableName,
       dataKeys: Object.keys(data),
     });
@@ -349,7 +353,7 @@ export function extractDataFromParameterizedSQL(
     const whereMatch = sql.match(/\bWHERE\s+([\s\S]+)$/i);
 
     if (!setMatch) {
-      logger.warn(
+      logger?.warn?.(
         PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_PARAM_UPDATE_SET_FAILED, {
           sql: sql.substring(
             NUM.ZERO,
@@ -376,7 +380,7 @@ export function extractDataFromParameterizedSQL(
 
     const allColumns = [...setColumns, ...whereColumns];
     if (allColumns.length !== params.length) {
-      logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_PARAM_UPDATE_MISMATCH, {
+      logger?.warn?.(PARTITION_SERVICE_ERROR_MSG.CDC_PARAM_UPDATE_MISMATCH, {
         columns: allColumns.length,
         params: params.length,
       });
@@ -399,7 +403,7 @@ export function extractDataFromParameterizedSQL(
       }
     }
 
-    logger.debug(PARTITION_SERVICE_LOG_MSG.EXTRACTED_PARAM_UPDATE, {
+    logger?.debug?.(PARTITION_SERVICE_LOG_MSG.EXTRACTED_PARAM_UPDATE, {
       tableName,
       dataKeys: Object.keys(data),
     });
@@ -412,7 +416,7 @@ export function extractDataFromParameterizedSQL(
     // Use [\s\S] for multiline predicates.
     const whereMatch = sql.match(/\bWHERE\s+([\s\S]+)$/i);
     if (!whereMatch) {
-      logger.warn(
+      logger?.warn?.(
         PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_PARAM_DELETE_WHERE_FAILED, {
           sql: sql.substring(
             NUM.ZERO,
@@ -427,7 +431,7 @@ export function extractDataFromParameterizedSQL(
     const whereColumns = extractConjunctiveWhereColumns(whereContent);
 
     if (whereColumns.length !== params.length) {
-      logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_PARAM_DELETE_MISMATCH, {
+      logger?.warn?.(PARTITION_SERVICE_ERROR_MSG.CDC_PARAM_DELETE_MISMATCH, {
         columns: whereColumns.length,
         params: params.length,
         whereContent,
@@ -440,7 +444,7 @@ export function extractDataFromParameterizedSQL(
       data[whereColumns[i]] = params[i];
     }
 
-    logger.debug(PARTITION_SERVICE_LOG_MSG.EXTRACTED_PARAM_DELETE, {
+    logger?.debug?.(PARTITION_SERVICE_LOG_MSG.EXTRACTED_PARAM_DELETE, {
       tableName,
       dataKeys: Object.keys(data),
     });

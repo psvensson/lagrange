@@ -105,29 +105,52 @@ test('Property 80: Pending Move Tracking', async (t) => {
   });
 
   t.test('terminal statuses are excluded from in-flight operations', async (t) => {
-    const terminalStatuses = [
-      ReplicaStatus.ACTIVE,
-      ReplicaStatus.REMOVED,
-      ReplicaStatus.FAILED,
+    const terminalRows = [
+      {
+        type: OperationType.ADD,
+        status: ReplicaStatus.ACTIVE,
+        workflowStep: WORKFLOW_STEP.ACTIVE,
+      },
+      {
+        type: OperationType.ADD,
+        status: ReplicaStatus.FAILED,
+        workflowStep: WORKFLOW_STEP.FAILED,
+      },
+      {
+        type: OperationType.REMOVE,
+        status: ReplicaStatus.REMOVED,
+        workflowStep: WORKFLOW_STEP.REMOVED,
+      },
+      {
+        type: OperationType.REMOVE,
+        status: ReplicaStatus.FAILED,
+        workflowStep: WORKFLOW_STEP.FAILED,
+      },
+      {
+        type: OperationType.REPLACE,
+        status: ReplicaStatus.REMOVED,
+        workflowStep: WORKFLOW_STEP.REMOVED,
+      },
+      {
+        type: OperationType.REPLACE,
+        status: ReplicaStatus.FAILED,
+        workflowStep: WORKFLOW_STEP.FAILED,
+      },
     ];
 
     await fc.assert(
       fc.asyncProperty(
         fc.uuid(),
         fc.uuid(),
-        fc.constantFrom(...terminalStatuses),
-        async (partitionId, replicaId, status) => {
-          const workflowStep = status === ReplicaStatus.REMOVED ?
-            WORKFLOW_STEP.REMOVED :
-            status === ReplicaStatus.FAILED ?
-              WORKFLOW_STEP.FAILED :
-              WORKFLOW_STEP.ACTIVE;
+        fc.constantFrom(...terminalRows),
+        async (partitionId, replicaId, terminalRow) => {
           const operation = createOperation({
             operationId: 'op-1',
+            type: terminalRow.type,
             partitionId,
             replicaId,
-            status,
-            workflowStep,
+            status: terminalRow.status,
+            workflowStep: terminalRow.workflowStep,
           });
 
           const mockCache = createMockCache({

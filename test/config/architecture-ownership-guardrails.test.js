@@ -215,6 +215,7 @@ test('Ownership guardrails: runtime startup wiring creation is constrained', asy
   const allowedFiles = new Set([
     'bootstrap/bootstrap-service.js',
     'bootstrap/node-joining-service.js',
+    'bootstrap/node-joining-service-segment-1.js',
     'runtime/runtime-startup-wiring.js',
   ]);
 

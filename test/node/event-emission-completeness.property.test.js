@@ -59,12 +59,12 @@ test('Property 8: Event Emission Completeness', async (t) => {
    * new_state, timestamp, trigger_reason.
    */
   t.test('events contain all required fields', async (t) => {
-    fc.assert(
-      fc.property(
+    await fc.assert(
+      fc.asyncProperty(
         fc.uuid(),
         fc.uuid(),
         fc.string({minLength: 1, maxLength: 50}),
-        (replicaId, partitionId, reason) => {
+        async (replicaId, partitionId, reason) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
@@ -76,7 +76,7 @@ test('Property 8: Event Emission Completeness', async (t) => {
           });
 
           // Transition to pending state
-          stateMachine.transition(replicaId, ReplicaState.PENDING, {
+          await stateMachine.transition(replicaId, ReplicaState.PENDING, {
             partitionId,
             reason,
           });
@@ -105,54 +105,60 @@ test('Property 8: Event Emission Completeness', async (t) => {
   });
 
   /**
-   * Property: Events are emitted synchronously before transition completes.
+   * Property: Events are emitted before the transition promise resolves.
    */
-  t.test('events emitted synchronously', async (t) => {
-    fc.assert(
-      fc.property(
+  t.test('events emitted before transition promise resolves', async (t) => {
+    await fc.assert(
+      fc.asyncProperty(
         fc.uuid(),
         fc.uuid(),
-        (replicaId, partitionId) => {
+        async (replicaId, partitionId) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
           });
 
-          let eventEmittedBeforeReturn = false;
-          let transitionReturned = false;
+          let eventEmittedBeforeResolution = false;
+          let transitionResolved = false;
 
           stateMachine.on('stateTransition', () => {
-            // Event should be emitted before transition returns
-            eventEmittedBeforeReturn = !transitionReturned;
+            eventEmittedBeforeResolution = !transitionResolved;
           });
 
-          stateMachine.transition(replicaId, ReplicaState.PENDING, {
-            partitionId,
-            reason: 'test',
+          const transitionPromise = stateMachine.transition(
+            replicaId,
+            ReplicaState.PENDING,
+            {
+              partitionId,
+              reason: 'test',
+            },
+          ).then((result) => {
+            transitionResolved = true;
+            return result;
           });
-          transitionReturned = true;
+          await transitionPromise;
 
           stateMachine.clear();
 
-          return eventEmittedBeforeReturn === true;
+          return eventEmittedBeforeResolution === true;
         },
       ),
       {numRuns: 10},
     );
 
-    t.pass('events emitted synchronously');
+    t.pass('events emitted before transition promise resolves');
   });
 
   /**
    * Property: For transitions to failed state, error_message is included.
    */
   t.test('failed transitions include error message', async (t) => {
-    fc.assert(
-      fc.property(
+    await fc.assert(
+      fc.asyncProperty(
         fc.uuid(),
         fc.uuid(),
         fc.string({minLength: 1, maxLength: 100}),
-        (replicaId, partitionId, errorMessage) => {
+        async (replicaId, partitionId, errorMessage) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
@@ -164,13 +170,13 @@ test('Property 8: Event Emission Completeness', async (t) => {
           });
 
           // First transition to pending
-          stateMachine.transition(replicaId, ReplicaState.PENDING, {
+          await stateMachine.transition(replicaId, ReplicaState.PENDING, {
             partitionId,
             reason: 'setup',
           });
 
           // Then transition to failed with error message
-          stateMachine.transition(replicaId, ReplicaState.FAILED, {
+          await stateMachine.transition(replicaId, ReplicaState.FAILED, {
             partitionId,
             reason: 'error occurred',
             errorMessage,
@@ -196,12 +202,12 @@ test('Property 8: Event Emission Completeness', async (t) => {
    * Property: Multiple observers receive the same event.
    */
   t.test('multiple observers receive events', async (t) => {
-    fc.assert(
-      fc.property(
+    await fc.assert(
+      fc.asyncProperty(
         fc.uuid(),
         fc.uuid(),
         fc.integer({min: 2, max: 5}),
-        (replicaId, partitionId, observerCount) => {
+        async (replicaId, partitionId, observerCount) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
@@ -214,7 +220,7 @@ test('Property 8: Event Emission Completeness', async (t) => {
             });
           }
 
-          stateMachine.transition(replicaId, ReplicaState.PENDING, {
+          await stateMachine.transition(replicaId, ReplicaState.PENDING, {
             partitionId,
             reason: 'test',
           });
@@ -241,11 +247,11 @@ test('Property 8: Event Emission Completeness', async (t) => {
    * Property: timeInPreviousState is calculated correctly.
    */
   t.test('timeInPreviousState calculated correctly', async (t) => {
-    fc.assert(
-      fc.property(
+    await fc.assert(
+      fc.asyncProperty(
         fc.uuid(),
         fc.uuid(),
-        (replicaId, partitionId) => {
+        async (replicaId, partitionId) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
@@ -257,13 +263,13 @@ test('Property 8: Event Emission Completeness', async (t) => {
           });
 
           // First transition - timeInPreviousState should be 0
-          stateMachine.transition(replicaId, ReplicaState.PENDING, {
+          await stateMachine.transition(replicaId, ReplicaState.PENDING, {
             partitionId,
             reason: 'test',
           });
 
           // Second transition - timeInPreviousState should be >= 0
-          stateMachine.transition(replicaId, ReplicaState.CREATING, {
+          await stateMachine.transition(replicaId, ReplicaState.CREATING, {
             partitionId,
             reason: 'test',
           });
@@ -287,11 +293,11 @@ test('Property 8: Event Emission Completeness', async (t) => {
    * Property: Each transition through a path emits an event.
    */
   t.test('each transition emits an event', async (t) => {
-    fc.assert(
-      fc.property(
+    await fc.assert(
+      fc.asyncProperty(
         fc.uuid(),
         fc.uuid(),
-        (replicaId, partitionId) => {
+        async (replicaId, partitionId) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
@@ -311,7 +317,7 @@ test('Property 8: Event Emission Completeness', async (t) => {
           ];
 
           for (const state of path) {
-            stateMachine.transition(replicaId, state, {
+            await stateMachine.transition(replicaId, state, {
               partitionId,
               reason: 'test',
             });

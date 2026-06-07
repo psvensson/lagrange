@@ -37,8 +37,26 @@
       "unresolvedSemanticStateIds": "operation_stalled,recovering_in_flight",
       "blockedPartitionIds": "control_plane_publications-p1,replica_operations-p1,sql_transaction_participants-p1",
       "dominantReason": "priority_recovery_workflow_timeout_transition_deferred",
-      "failureClass": "priority_recovery_progress_blocked"
+      "failureClass": "priority_recovery_progress_blocked",
+      "progressContract": {
+        "owner": "operation_workflow_owner",
+        "boundary": "workflow_timeout",
+        "state": "absent",
+        "reason": "absent",
+        "nextAction": "absent",
+        "wakeSource": "absent",
+        "retryAfterMs": 0,
+        "terminalState": "absent",
+        "evidencePath": "report.scenarios[0].publicationConvergence.activeGate.progress.priorityRecoveryProgressClasses",
+        "blockingDependency": "absent"
+      }
     },
-    "rootCauseClass": "topology"
+    "rootCauseClass": "topology",
+    "reason": "priority_recovery_progress_blocked",
+    "nextAction": "wait_for_priority_recovery",
+    "wakeSource": "absent",
+    "retryAfterMs": 0,
+    "terminalState": "absent",
+    "blockingDependency": "publication_ack_convergence"
   }
 }

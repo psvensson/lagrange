@@ -1,125 +1,17 @@
 import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import {classifyFailures} from '../../src/diagnostics/failure-class-taxonomy.js';
 import {FAILURE_CLASS, RESOLUTION_STRATEGY} from '../../src/diagnostics/causal-analysis-schema.js';
+import {
+  buildPassedRollingRestartReport,
+  buildSelectedSnapshotTimeoutReport,
+  readActivePriorityBackpressureReport,
+  readPriorityBackpressureReport,
+  readPublicationAckReport,
+} from './causal-analysis-fixtures.js';
 
-const ACTIVE_REPORT_PATH = 'test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability.report.json';
-const ACTIVE_ARTIFACT_PATH = 'test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability/rolling-restart/failure-bundle.json';
-const ACTIVE_GATE_NO_PROGRESS_REPORT_PATH =
-  'test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json';
-const CURRENT_STARTUP_READINESS_SUPPORT_REPORT_PATH =
-  'test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json';
-const CURRENT_PUBLICATION_PROJECTION_REPORT_PATH =
-  'test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json';
-const PASSED_REPORT_PATH = 'test-output/reports/canary-rolling-restart-local-latest.report.json';
-const JSON_ENCODING_UTF8 = 'utf8';
-const SCENARIO_ROLLING_RESTART = 'rolling-restart';
-const REPORT_COUNT_FAILED = 1;
-const REPORT_COUNT_PASSED = 0;
-const ACTIVE_GATE_STATE_STALLED = 'stalled';
-const PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
-const PUBLICATION_PROTOCOL_STEADY_PUBLISHED = 'steady_published';
-const READINESS_CLASS_SNAPSHOT_TIMEOUT = 'snapshot_timeout';
-const READINESS_RECOVERABILITY_RECOVERABLE = 'recoverable';
-const READINESS_SOURCE_SELECTED_SNAPSHOT_ERROR = 'selectedSnapshotError';
-const READINESS_CAUSE_SNAPSHOT_TIMEOUT = 'snapshot_timeout';
-const SNAPSHOT_COVERAGE_COUNT = 0;
-const EXPECTED_NODE_COUNT = 5;
-const SELECTED_SNAPSHOT_SOURCE_NODE_ID =
-  '11601fe0-72d6-5853-8590-ec2881853e72';
-const SELECTED_SNAPSHOT_TIMEOUT_MS = 3000;
-const SELECTED_SNAPSHOT_TIMEOUT_ERROR =
-  'Admin API query timed out for node ' +
-  SELECTED_SNAPSHOT_SOURCE_NODE_ID +
-  ' on lane snapshot after ' +
-  String(SELECTED_SNAPSHOT_TIMEOUT_MS) +
-  'ms';
-const READINESS_PROGRESS_ATTEMPTS_SINCE_PROGRESS = 8;
-const READINESS_PROGRESS_MAX_ATTEMPTS = 8;
-const READINESS_PROGRESS_STALLED = true;
-const BLOCKER_SNAPSHOT_COVERAGE_ZERO_OF_FIVE = 'snapshot_coverage=0/5';
 const NULL_VALUE = null;
 const UNDEFINED_VALUE = undefined;
-
-function readActiveArtifact() {
-  return JSON.parse(fs.readFileSync(ACTIVE_ARTIFACT_PATH, JSON_ENCODING_UTF8));
-}
-
-function readActiveReport() {
-  return JSON.parse(fs.readFileSync(ACTIVE_REPORT_PATH, JSON_ENCODING_UTF8));
-}
-
-function readPassedReport() {
-  return JSON.parse(fs.readFileSync(PASSED_REPORT_PATH, JSON_ENCODING_UTF8));
-}
-
-function readActiveGateNoProgressReport() {
-  return JSON.parse(fs.readFileSync(ACTIVE_GATE_NO_PROGRESS_REPORT_PATH, JSON_ENCODING_UTF8));
-}
-
-function readCurrentStartupReadinessSupportReport() {
-  return JSON.parse(
-    fs.readFileSync(CURRENT_STARTUP_READINESS_SUPPORT_REPORT_PATH, JSON_ENCODING_UTF8),
-  );
-}
-
-function readCurrentPublicationProjectionReport() {
-  return JSON.parse(
-    fs.readFileSync(CURRENT_PUBLICATION_PROJECTION_REPORT_PATH, JSON_ENCODING_UTF8),
-  );
-}
-
-function buildSelectedSnapshotTimeoutReport() {
-  return {
-    summary: {
-      passed: REPORT_COUNT_PASSED,
-      failed: REPORT_COUNT_FAILED,
-    },
-    scenarios: [
-      {
-        scenario: SCENARIO_ROLLING_RESTART,
-        passed: false,
-        readinessFailure: {
-          classCode: READINESS_CLASS_SNAPSHOT_TIMEOUT,
-          recoverability: READINESS_RECOVERABILITY_RECOVERABLE,
-          progressSignal: {
-            attemptsSinceProgress: READINESS_PROGRESS_ATTEMPTS_SINCE_PROGRESS,
-            maxAttempts: READINESS_PROGRESS_MAX_ATTEMPTS,
-            stalled: READINESS_PROGRESS_STALLED,
-          },
-          source: READINESS_SOURCE_SELECTED_SNAPSHOT_ERROR,
-          cause: READINESS_CAUSE_SNAPSHOT_TIMEOUT,
-          error: SELECTED_SNAPSHOT_TIMEOUT_ERROR,
-        },
-        publicationConvergence: {
-          publicationStatus: PUBLICATION_STATUS_PUBLISHED,
-          pendingAckCount: REPORT_COUNT_PASSED,
-          blockedNodeCount: REPORT_COUNT_PASSED,
-          missingPublishedCount: REPORT_COUNT_PASSED,
-          recoveryProtocolState: PUBLICATION_PROTOCOL_STEADY_PUBLISHED,
-          activeGate: {
-            state: ACTIVE_GATE_STATE_STALLED,
-            ready: false,
-            progress: {
-              expectedNodeCount: EXPECTED_NODE_COUNT,
-              snapshotCoverageNodeCount: SNAPSHOT_COVERAGE_COUNT,
-              snapshotCoverageComplete: false,
-              selectedSnapshotNodeId: SELECTED_SNAPSHOT_SOURCE_NODE_ID,
-              selectedSnapshotTimeoutMs: SELECTED_SNAPSHOT_TIMEOUT_MS,
-              selectedSnapshotError: SELECTED_SNAPSHOT_TIMEOUT_ERROR,
-              priorityRecoveryProgressClasses: {
-                unresolvedSemanticStateIds: [],
-                blockedPartitionIds: [],
-              },
-              blockers: [BLOCKER_SNAPSHOT_COVERAGE_ZERO_OF_FIVE],
-            },
-          },
-        },
-      },
-    ],
-  };
-}
 
 function assertNoNullOrUndefined(value) {
   assert.notEqual(value, NULL_VALUE);
@@ -139,7 +31,7 @@ function assertNoNullOrUndefined(value) {
 
 describe('FailureClassTaxonomy', () => {
   it('normalizes weak active-gate no-progress evidence into causal failure classes', () => {
-    const taxonomy = classifyFailures(readActiveArtifact());
+    const taxonomy = classifyFailures(readActivePriorityBackpressureReport());
     const failureClasses = taxonomy.classes.map((entry) => entry.failureClass);
 
     assert.ok(failureClasses.includes(FAILURE_CLASS.PRIORITY_RECOVERY_EVENT_WAIT));
@@ -149,8 +41,8 @@ describe('FailureClassTaxonomy', () => {
   });
 
   it('contracts report and failure-bundle weak readiness evidence consistently', () => {
-    const reportTaxonomy = classifyFailures(readActiveReport());
-    const artifactTaxonomy = classifyFailures(readActiveArtifact());
+    const reportTaxonomy = classifyFailures(readActivePriorityBackpressureReport());
+    const artifactTaxonomy = classifyFailures(readPriorityBackpressureReport());
     const reportClasses = reportTaxonomy.classes.map((entry) => entry.failureClass);
     const artifactClasses = artifactTaxonomy.classes.map((entry) => entry.failureClass);
 
@@ -161,7 +53,7 @@ describe('FailureClassTaxonomy', () => {
   });
 
   it('migrates active-gate no-progress behind in-flight priority recovery', () => {
-    const taxonomy = classifyFailures(readActiveGateNoProgressReport());
+    const taxonomy = classifyFailures(readActivePriorityBackpressureReport());
     const failureClasses = taxonomy.classes.map((entry) => entry.failureClass);
 
     assert.ok(failureClasses.includes(FAILURE_CLASS.PRIORITY_RECOVERY_EVENT_WAIT));
@@ -175,7 +67,7 @@ describe('FailureClassTaxonomy', () => {
   });
 
   it('treats weak zero-attempt startup readiness no-progress as inherited active-gate evidence', () => {
-    const taxonomy = classifyFailures(readCurrentStartupReadinessSupportReport());
+    const taxonomy = classifyFailures(readPriorityBackpressureReport());
     const failureClasses = taxonomy.classes.map((entry) => entry.failureClass);
 
     assert.ok(failureClasses.includes(FAILURE_CLASS.PRIORITY_RECOVERY_EVENT_WAIT));
@@ -199,7 +91,7 @@ describe('FailureClassTaxonomy', () => {
   });
 
   it('classifies deferred publication ACK frontier as a local publication blocker', () => {
-    const taxonomy = classifyFailures(readCurrentPublicationProjectionReport());
+    const taxonomy = classifyFailures(readPublicationAckReport());
     const failureClasses = taxonomy.classes.map((entry) => entry.failureClass);
 
     assert.ok(failureClasses.includes(FAILURE_CLASS.PUBLICATION_ACK_BLOCKED));
@@ -209,7 +101,7 @@ describe('FailureClassTaxonomy', () => {
   });
 
   it('classifies a passed rolling-restart report without blockers as healthy', () => {
-    const taxonomy = classifyFailures(readPassedReport());
+    const taxonomy = classifyFailures(buildPassedRollingRestartReport());
 
     assert.equal(taxonomy.dominantFailureClass, FAILURE_CLASS.HEALTHY);
     assert.equal(taxonomy.resolutionStrategy, RESOLUTION_STRATEGY.NO_ACTION);

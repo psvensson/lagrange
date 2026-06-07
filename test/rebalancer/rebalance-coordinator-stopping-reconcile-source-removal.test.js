@@ -199,7 +199,7 @@ test('RebalanceCoordinator completes ACTIVE REPLACE when source removal is alrea
         await coordinator.getOperation(operation.operationId);
 
     t.equal(
-      reconcileResult?.applied,
+      reconcileResult,
       true,
       'ACTIVE replace reconciliation should consume already-visible source removal',
     );
@@ -270,7 +270,7 @@ test('RebalanceCoordinator completes non-ADD target REMOVED status during ' +
       await coordinator.getOperation(TEST_OPERATION_ID);
 
     t.equal(
-      reconcileResult?.applied,
+      reconcileResult,
       true,
       'reconcileOperationProgress should consume authoritative REMOVED state for REPLACE',
     );
@@ -341,7 +341,7 @@ test('RebalanceCoordinator fails ADD target REMOVED status during ' +
       await coordinator.getOperation(TEST_OPERATION_ID);
 
     t.equal(
-      reconcileResult?.applied,
+      reconcileResult,
       true,
       'reconcileOperationProgress should fail ADD on authoritative REMOVED status',
     );

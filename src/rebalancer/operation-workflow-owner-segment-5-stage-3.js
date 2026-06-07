@@ -105,6 +105,10 @@ class OperationWorkflowOwnerSegment5Stage3 extends OperationWorkflowOwnerSegment
     const partitionLeaderMovedAwayFromSource =
       partitionLeaderNodeId !== null &&
       (sourceNodeId === null || partitionLeaderNodeId !== sourceNodeId);
+    const partitionLeaderStillSource =
+      partitionLeaderNodeId !== null &&
+      sourceNodeId !== null &&
+      partitionLeaderNodeId === sourceNodeId;
     const replacementLeaderOwnershipObserved =
       replacementRoleState === PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.LEADER ||
       (replacementNodeId !== null &&
@@ -131,6 +135,7 @@ class OperationWorkflowOwnerSegment5Stage3 extends OperationWorkflowOwnerSegment
             operation,
             replacementReplicaRow,
           ),
+        partitionLeaderStillSource,
         sourceLeadershipReleaseObserved,
       }));
     const priorityRecoveryFollowerSourceRemovalSafe =

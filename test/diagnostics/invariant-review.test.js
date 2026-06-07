@@ -1,31 +1,19 @@
 import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import {reviewInvariants} from '../../src/diagnostics/invariant-review.js';
 import {
   ZERO_COUNT,
   INVARIANT_KIND,
   INVARIANT_STATE,
 } from '../../src/diagnostics/causal-analysis-schema.js';
+import {
+  buildPassedRollingRestartReport,
+  readActivePriorityBackpressureArtifact,
+  readActivePriorityBackpressureReport,
+} from './causal-analysis-fixtures.js';
 
-const ACTIVE_REPORT_PATH = 'test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability.report.json';
-const ACTIVE_ARTIFACT_PATH = 'test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability/rolling-restart/failure-bundle.json';
-const PASSED_REPORT_PATH = 'test-output/reports/canary-rolling-restart-local-latest.report.json';
-const JSON_ENCODING_UTF8 = 'utf8';
 const NULL_VALUE = null;
 const UNDEFINED_VALUE = undefined;
-
-function readActiveArtifact() {
-  return JSON.parse(fs.readFileSync(ACTIVE_ARTIFACT_PATH, JSON_ENCODING_UTF8));
-}
-
-function readActiveReport() {
-  return JSON.parse(fs.readFileSync(ACTIVE_REPORT_PATH, JSON_ENCODING_UTF8));
-}
-
-function readPassedReport() {
-  return JSON.parse(fs.readFileSync(PASSED_REPORT_PATH, JSON_ENCODING_UTF8));
-}
 
 function findInvariant(review, kind) {
   return review.invariants.find((invariant) => invariant.kind === kind);
@@ -49,7 +37,7 @@ function assertNoNullOrUndefined(value) {
 
 describe('InvariantReview', () => {
   it('keeps structural invariants separate from classified budget ownership', () => {
-    const review = reviewInvariants(readActiveArtifact());
+    const review = reviewInvariants(readActivePriorityBackpressureArtifact());
 
     assert.equal(
       findInvariant(review, INVARIANT_KIND.NODE_COUNT_BOUNDS).state,
@@ -63,8 +51,8 @@ describe('InvariantReview', () => {
   });
 
   it('keeps report and failure-bundle readiness invariant summaries consistent', () => {
-    const reportReview = reviewInvariants(readActiveReport());
-    const artifactReview = reviewInvariants(readActiveArtifact());
+    const reportReview = reviewInvariants(readActivePriorityBackpressureReport());
+    const artifactReview = reviewInvariants(readActivePriorityBackpressureArtifact());
 
     assert.deepEqual(reportReview.summary, artifactReview.summary);
     assert.equal(
@@ -76,7 +64,7 @@ describe('InvariantReview', () => {
   });
 
   it('treats absent readiness blockers as passed evidence for a passed report', () => {
-    const review = reviewInvariants(readPassedReport());
+    const review = reviewInvariants(buildPassedRollingRestartReport());
 
     assert.equal(review.summary.failedCount, ZERO_COUNT);
     assert.equal(review.summary.unknownCount, ZERO_COUNT);

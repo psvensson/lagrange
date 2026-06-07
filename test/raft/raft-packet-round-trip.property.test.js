@@ -195,7 +195,10 @@ test('Property: Raft packet round-trip preserves all fields via PartitionRaftNod
           if (receivedAddress !== destAddress) return false;
 
           if (JSON.stringify(receivedOptions) !== JSON.stringify(
-            resolveRaftTransportDeliveryOptions(originalPacket),
+            resolveRaftTransportDeliveryOptions({
+              ...originalPacket,
+              targetAddress: destAddress,
+            }),
           )) {
             return false;
           }
@@ -307,7 +310,10 @@ test('Property: PartitionRaftNode.write() preserves packet type unchanged',
           return receivedPayload !== null &&
           receivedPayload.type === packetType &&
           JSON.stringify(receivedOptions) === JSON.stringify(
-            resolveRaftTransportDeliveryOptions(packet),
+            resolveRaftTransportDeliveryOptions({
+              ...packet,
+              targetAddress: destAddress,
+            }),
           );
         },
       ),

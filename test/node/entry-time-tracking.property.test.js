@@ -55,11 +55,11 @@ test('Property 9: Entry Time Tracking', async (t) => {
    */
   t.test('transitional states record entry time', async (t) => {
     await fc.assert(
-      fc.property(
+      fc.asyncProperty(
         fc.constantFrom(...TRANSITIONAL_STATES),
         fc.uuid(),
         fc.uuid(),
-        (targetState, replicaId, partitionId) => {
+        async (targetState, replicaId, partitionId) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
@@ -70,7 +70,7 @@ test('Property 9: Entry Time Tracking', async (t) => {
           // Get to the target transitional state
           const path = getPathToState(targetState);
           for (const state of path) {
-            stateMachine.transition(replicaId, state, {
+            await stateMachine.transition(replicaId, state, {
               partitionId,
               reason: 'test',
             });
@@ -103,17 +103,17 @@ test('Property 9: Entry Time Tracking', async (t) => {
    */
   t.test('entry time updates on each transition', async (t) => {
     await fc.assert(
-      fc.property(
+      fc.asyncProperty(
         fc.uuid(),
         fc.uuid(),
-        (replicaId, partitionId) => {
+        async (replicaId, partitionId) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
           });
 
           // Transition to pending
-          stateMachine.transition(replicaId, ReplicaState.PENDING, {
+          await stateMachine.transition(replicaId, ReplicaState.PENDING, {
             partitionId,
             reason: 'test',
           });
@@ -122,7 +122,7 @@ test('Property 9: Entry Time Tracking', async (t) => {
           const pendingEntryTime = pendingState.stateEnteredAt;
 
           // Transition to creating
-          stateMachine.transition(replicaId, ReplicaState.CREATING, {
+          await stateMachine.transition(replicaId, ReplicaState.CREATING, {
             partitionId,
             reason: 'test',
           });
@@ -148,9 +148,9 @@ test('Property 9: Entry Time Tracking', async (t) => {
    */
   t.test('getTransitionalReplicas returns correct replicas', async (t) => {
     await fc.assert(
-      fc.property(
+      fc.asyncProperty(
         fc.array(fc.uuid(), {minLength: 1, maxLength: 5}),
-        (replicaIds) => {
+        async (replicaIds) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
@@ -160,7 +160,7 @@ test('Property 9: Entry Time Tracking', async (t) => {
 
           // Put all replicas in pending state (transitional)
           for (const replicaId of replicaIds) {
-            stateMachine.transition(replicaId, ReplicaState.PENDING, {
+            await stateMachine.transition(replicaId, ReplicaState.PENDING, {
               partitionId: 'test-partition',
               reason: 'test',
             });
@@ -196,10 +196,10 @@ test('Property 9: Entry Time Tracking', async (t) => {
   t.test('non-transitional states excluded from getTransitionalReplicas',
     async (t) => {
       await fc.assert(
-        fc.property(
+        fc.asyncProperty(
           fc.uuid(),
           fc.uuid(),
-          (replicaId, partitionId) => {
+          async (replicaId, partitionId) => {
             const stateMachine = new ReplicaStateMachine({
               nodeId: 'test-node',
               cdcIntegrationService: createMockCDCService(),
@@ -208,7 +208,7 @@ test('Property 9: Entry Time Tracking', async (t) => {
             // Get replica to active state (non-transitional)
             const path = getPathToState(ReplicaState.ACTIVE);
             for (const state of path) {
-              stateMachine.transition(replicaId, state, {
+              await stateMachine.transition(replicaId, state, {
                 partitionId,
                 reason: 'test',
               });
@@ -233,22 +233,22 @@ test('Property 9: Entry Time Tracking', async (t) => {
    */
   t.test('previous state tracked for debugging', async (t) => {
     await fc.assert(
-      fc.property(
+      fc.asyncProperty(
         fc.uuid(),
         fc.uuid(),
-        (replicaId, partitionId) => {
+        async (replicaId, partitionId) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
           });
 
           // Transition through states
-          stateMachine.transition(replicaId, ReplicaState.PENDING, {
+          await stateMachine.transition(replicaId, ReplicaState.PENDING, {
             partitionId,
             reason: 'test',
           });
 
-          stateMachine.transition(replicaId, ReplicaState.CREATING, {
+          await stateMachine.transition(replicaId, ReplicaState.CREATING, {
             partitionId,
             reason: 'test',
           });

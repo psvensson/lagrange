@@ -35,8 +35,26 @@
       "unresolvedSemanticStateIds": "eligible_but_no_operation_created",
       "blockedPartitionIds": "sql_write_operations-p1",
       "dominantReason": "priority_recovery_operation_scheduling_event_driven",
-      "failureClass": "topology_convergence_timeout"
+      "failureClass": "topology_convergence_timeout",
+      "progressContract": {
+        "owner": "operation_workflow_owner",
+        "boundary": "workflow_progress",
+        "state": "absent",
+        "reason": "absent",
+        "nextAction": "absent",
+        "wakeSource": "absent",
+        "retryAfterMs": 0,
+        "terminalState": "absent",
+        "evidencePath": "triageSummary.publicationConvergence.activeGate.progress.priorityRecoveryProgressClasses",
+        "blockingDependency": "absent"
+      }
     },
-    "rootCauseClass": "topology"
+    "rootCauseClass": "topology",
+    "reason": "priority_recovery_progress_blocked",
+    "nextAction": "wait_for_priority_recovery",
+    "wakeSource": "absent",
+    "retryAfterMs": 0,
+    "terminalState": "absent",
+    "blockingDependency": "publication_ack_convergence"
   }
 }

@@ -10,7 +10,7 @@ const srcRoot = path.join(__dirname, '..', '..', 'src');
 
 const REGISTRY_READ_ALLOWLIST = new Set([
   'admin/admin-service-discovery.js',
-  'admin/admin-websocket-api.js',
+  'admin/admin-websocket-api-segment-1.js',
   'control-plane/control-plane-gateway-registry.js',
 ]);
 

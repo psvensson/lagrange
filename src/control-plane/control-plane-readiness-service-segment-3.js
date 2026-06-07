@@ -68,7 +68,6 @@ class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceS
               if (hasTransportGrace) {
                 return Object.freeze({
                   ...state,
-                  active: false,
                   inGracePeriod: true,
                 });
               }
@@ -687,7 +686,7 @@ class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceS
       typeof service.deriveClusterMembershipCandidate === TYPEOF.FUNCTION
     ) {
       const candidate = await service.deriveClusterMembershipCandidate({
-        disableNestedPriorityRecoveryPlanning: true,
+        deferNestedPriorityRecoveryPlanning: true,
         publisherNodeId: nodeId || this.nodeId,
         nowMs: observedAt,
       });
@@ -714,7 +713,7 @@ class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceS
       typeof service.deriveClusterMembershipCandidateSync === TYPEOF.FUNCTION
     ) {
       const candidate = service.deriveClusterMembershipCandidateSync({
-        disableNestedPriorityRecoveryPlanning: true,
+        deferNestedPriorityRecoveryPlanning: true,
         publisherNodeId: nodeId || this.nodeId,
         nowMs: observedAt,
       });

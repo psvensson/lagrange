@@ -89,8 +89,8 @@ const MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD = Object.freeze({
   ALLOW_EMPTY_PRELOADED_ROWS: 'allowEmptyPreloadedRows',
   ALLOW_PENDING_VISIBILITY: 'allowPendingVisibility',
   ALLOW_PRESSURE_DEFER: 'allowPressureDefer',
-  DISABLE_NESTED_PRIORITY_RECOVERY_PLANNING:
-    'disableNestedPriorityRecoveryPlanning',
+  DEFER_NESTED_PRIORITY_RECOVERY_PLANNING:
+    'deferNestedPriorityRecoveryPlanning',
   EXCLUDED_NODE_IDS: 'excludedNodeIds',
   LATEST_PUBLICATION_ROW: 'latestPublicationRow',
   NODE_ENDPOINT_ROWS: 'nodeEndpointRows',

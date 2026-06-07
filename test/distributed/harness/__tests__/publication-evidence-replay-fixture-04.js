@@ -142,13 +142,14 @@ export function buildPublicationEvidenceReplayFixture04(context) {
     REPLAY_TEST_145246Z_REBALANCER_REPLICA_ID,
     REPLAY_TEST_145246Z_REBALANCER_STEP_AGE_MS,
     REPLAY_TEST_145246Z_REBALANCER_STEP_TIMEOUT_MS,
-    REPLAY_TEST_145246Z_REPLAY_SPREAD_GAP,
     REPLAY_TEST_145246Z_REPLAYED_BLOCKED_PARTITION_IDS,
     REPLAY_TEST_145246Z_REPLICA_OPERATIONS_PARTITION_ID,
     REPLAY_TEST_145246Z_REQUIRED_DISTINCT_NODE_COUNT,
     REPLAY_TEST_145246Z_SCHEDULE_FOLLOWUP_REBALANCE,
     REPLAY_TEST_145246Z_SEED_REPLICA_ORDINALS,
     REPLAY_TEST_145246Z_SERVICE_STATUS_SYNCING,
+    REPLAY_TEST_145246Z_SQL_TRANSACTION_PARTICIPANTS_PARTITION_ID,
+    REPLAY_TEST_145246Z_SQL_TRANSACTIONS_PARTITION_ID,
     REPLAY_TEST_145246Z_STALLED_WAIT_MODE,
     REPLAY_TEST_145246Z_TERMINAL_FAILED,
     REPLAY_TEST_145246Z_TERMINAL_PHASE,
@@ -721,14 +722,24 @@ export function buildPublicationEvidenceReplayFixture04(context) {
   }
 
   function build145246ZBlockedPartition(partitionId) {
+    const replayRequiredDistinctNodeCount =
+      REPLAY_TEST_145246Z_REQUIRED_DISTINCT_NODE_COUNT + NUM.ONE;
+    const highReadyPartitionIds = new Set([
+      REPLAY_TEST_145246Z_SQL_TRANSACTION_PARTICIPANTS_PARTITION_ID,
+      REPLAY_TEST_145246Z_SQL_TRANSACTIONS_PARTITION_ID,
+    ]);
+    const readyDistinctNodeCount =
+      REPLAY_TEST_145246Z_READY_DISTINCT_NODE_COUNT +
+      (highReadyPartitionIds.has(partitionId) ? NUM.ONE : NUM.ZERO);
+    const readyReplicaCount =
+      REPLAY_TEST_145246Z_READY_REPLICA_COUNT +
+      (highReadyPartitionIds.has(partitionId) ? NUM.ONE : NUM.ZERO);
     return {
       partitionId,
-      requiredDistinctNodeCount:
-      REPLAY_TEST_145246Z_REQUIRED_DISTINCT_NODE_COUNT,
-      readyDistinctNodeCount:
-      REPLAY_TEST_145246Z_READY_DISTINCT_NODE_COUNT,
-      readyReplicaCount: REPLAY_TEST_145246Z_READY_REPLICA_COUNT,
-      spreadGap: REPLAY_TEST_145246Z_REPLAY_SPREAD_GAP,
+      requiredDistinctNodeCount: replayRequiredDistinctNodeCount,
+      readyDistinctNodeCount,
+      readyReplicaCount,
+      spreadGap: replayRequiredDistinctNodeCount - readyDistinctNodeCount,
     };
   }
 

@@ -1,4 +1,5 @@
 import {NodeService} from '../../src/node/node-service.js';
+import assert from 'node:assert/strict';
 import {
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {

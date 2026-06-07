@@ -111,7 +111,7 @@ test('RebalanceCoordinator dispatches source handoff instead of draining a ' +
       await coordinator.getOperation(TEST_OPERATION_ID);
 
     t.equal(
-      reconcileResult?.applied,
+      reconcileResult,
       true,
       'source-present priority recovery drain should continue lifecycle work',
     );
@@ -253,7 +253,7 @@ test('RebalanceCoordinator uses observed active target cache state to ' +
       await coordinator.getOperation(TEST_OPERATION_ID);
 
     t.equal(
-      reconcileResult?.applied,
+      reconcileResult,
       true,
       'observed active target cache state should continue source removal',
     );
@@ -401,7 +401,7 @@ test('RebalanceCoordinator prefers observed active target cache over stale ' +
       await coordinator.getOperation(TEST_OPERATION_ID);
 
     t.equal(
-      reconcileResult?.applied,
+      reconcileResult,
       true,
       'stale authoritative target state should still continue source removal',
     );

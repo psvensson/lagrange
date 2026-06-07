@@ -1,18 +1,18 @@
 import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import {buildCausalGraph} from '../../src/diagnostics/causal-graph-builder.js';
 import {DEPENDENCY_KIND} from '../../src/diagnostics/causal-analysis-schema.js';
+import {
+  buildPassedRollingRestartReport,
+  readActiveGateLocalBlockerReport,
+  readActivePriorityBackpressureArtifact,
+  readActivePriorityBackpressureReport,
+} from './causal-analysis-fixtures.js';
 
-const ACTIVE_REPORT_PATH = 'test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability.report.json';
-const ACTIVE_ARTIFACT_PATH = 'test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability/rolling-restart/failure-bundle.json';
-const PASSED_CANARY_REPORT_PATH = 'test-output/reports/canary-rolling-restart-local-latest.report.json';
-const JSON_ENCODING_UTF8 = 'utf8';
 const SCENARIO_ROLLING_RESTART = 'rolling-restart';
 const EXPECTED_NODE_COUNT = 5;
 const SNAPSHOT_EDGE = 'topology:active_gate_snapshot_coverage';
 const MEMBER_PREFIX = 'member:';
-const NODE_ROLE_MISSING_PUBLICATION = 'missing_publication';
 const NODE_ROLE_READINESS_BLOCKED = 'readiness_blocked';
 const MIN_SUSPECT_COUNT = 1;
 const NULL_VALUE = null;
@@ -26,18 +26,6 @@ const EDGE_TOP_FAILURE_REASONS = 'top_failure_reasons';
 const SOURCE_REPORT = 'report';
 const SOURCE_FAILURE_BUNDLE = 'failure_bundle';
 const SOURCE_ABSENT = 'absent';
-
-function readActiveArtifact() {
-  return JSON.parse(fs.readFileSync(ACTIVE_ARTIFACT_PATH, JSON_ENCODING_UTF8));
-}
-
-function readActiveReport() {
-  return JSON.parse(fs.readFileSync(ACTIVE_REPORT_PATH, JSON_ENCODING_UTF8));
-}
-
-function readPassedCanaryReport() {
-  return JSON.parse(fs.readFileSync(PASSED_CANARY_REPORT_PATH, JSON_ENCODING_UTF8));
-}
 
 function assertNoNullOrUndefined(value) {
   assert.notEqual(value, NULL_VALUE);
@@ -66,20 +54,20 @@ function findTopologyDependency(graph, dependencyId, edgeId) {
 
 describe('CausalGraphBuilder', () => {
   it('builds a cross-node graph from the active rolling-restart artifact', () => {
-    const graph = buildCausalGraph(readActiveArtifact());
+    const graph = buildCausalGraph(readActivePriorityBackpressureArtifact());
 
     assert.equal(graph.scenario, SCENARIO_ROLLING_RESTART);
     assert.equal(graph.phaseModel.length, EXPECTED_NODE_COUNT + EXPECTED_NODE_COUNT);
     assert.ok(graph.nodes.some((node) => node.id === SNAPSHOT_EDGE));
     assert.ok(graph.nodes.some((node) =>
-      node.id.startsWith(MEMBER_PREFIX) && node.role === NODE_ROLE_MISSING_PUBLICATION,
+      node.id.startsWith(MEMBER_PREFIX) && node.role === NODE_ROLE_READINESS_BLOCKED,
     ));
     assert.ok(graph.suspectNodes.length >= MIN_SUSPECT_COUNT);
     assertNoNullOrUndefined(graph);
   });
 
   it('normalizes report readiness failure evidence into blocked member nodes', () => {
-    const graph = buildCausalGraph(readActiveReport());
+    const graph = buildCausalGraph(readActiveGateLocalBlockerReport());
 
     assert.ok(graph.nodes.some((node) =>
       node.id.startsWith(MEMBER_PREFIX) && node.role === NODE_ROLE_READINESS_BLOCKED,
@@ -89,7 +77,7 @@ describe('CausalGraphBuilder', () => {
   });
 
   it('does not claim failure-bundle provenance for report-only passed canary input', () => {
-    const graph = buildCausalGraph(readPassedCanaryReport());
+    const graph = buildCausalGraph(buildPassedRollingRestartReport());
 
     assert.equal(graph.generatedFrom.report, SOURCE_REPORT);
     assert.equal(graph.generatedFrom.failureBundle, SOURCE_ABSENT);
@@ -97,7 +85,7 @@ describe('CausalGraphBuilder', () => {
   });
 
   it('preserves failure-bundle provenance for direct failure-bundle input', () => {
-    const graph = buildCausalGraph(readActiveArtifact());
+    const graph = buildCausalGraph(readActivePriorityBackpressureArtifact());
 
     assert.equal(graph.generatedFrom.report, SOURCE_ABSENT);
     assert.equal(graph.generatedFrom.failureBundle, SOURCE_FAILURE_BUNDLE);
@@ -106,10 +94,10 @@ describe('CausalGraphBuilder', () => {
   });
 
   it('preserves active failed report causal output provenance and blockers', () => {
-    const graph = buildCausalGraph(readActiveReport());
+    const graph = buildCausalGraph(readActivePriorityBackpressureReport());
 
     assert.equal(graph.generatedFrom.report, SOURCE_REPORT);
-    assert.equal(graph.generatedFrom.failureBundle, SOURCE_FAILURE_BUNDLE);
+    assert.equal(graph.generatedFrom.failureBundle, SOURCE_ABSENT);
     assert.ok(graph.nodes.some((node) =>
       node.id.startsWith(MEMBER_PREFIX) && node.role === NODE_ROLE_READINESS_BLOCKED,
     ));
@@ -118,7 +106,7 @@ describe('CausalGraphBuilder', () => {
   });
 
   it('emits semantic topology dependency kinds for the causal chain', () => {
-    const graph = buildCausalGraph(readActiveArtifact());
+    const graph = buildCausalGraph(readActivePriorityBackpressureArtifact());
 
     assert.equal(
       findTopologyDependency(

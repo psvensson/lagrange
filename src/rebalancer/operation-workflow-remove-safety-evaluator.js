@@ -18,22 +18,37 @@ const PRIORITY_OPERATION_VISIBILITY_DEFERRED_SAFE_REMOVAL_SUFFIX =
   ' operation visibility is deferred for safe removal';
 
 /**
- * Checks if priority publication minimum replica count should be preserved.
+ * Resolve the effective post-removal voter-ready count for priority recovery.
+ * @param {Object} context - Segment/Class context instance.
  * @param {Object} operation
- * @param {number} projectedVoterReadyCount
- * @param {number} minReplicaCount
- * @returns {boolean}
+ * @param {Object[]} projectedVoterReadyRows
+ * @returns {Promise<number>}
  */
-function shouldPreservePriorityPublicationMinimumReplicaCount(
+async function resolvePriorityRecoveryProjectedVoterReadyCount(
+  context,
   operation,
-  projectedVoterReadyCount,
-  minReplicaCount,
+  projectedVoterReadyRows,
 ) {
-  return (
-    isPriorityControlPlanePartition({
-      partitionId: operation?.partitionId,
-    }) &&
-    projectedVoterReadyCount < minReplicaCount
+  const projectedVoterReadyCount = projectedVoterReadyRows.length;
+  const planningSnapshot =
+    await context.getPriorityRecoveryPlanningSnapshot(operation);
+  if (!planningSnapshot || typeof planningSnapshot !== TYPEOF.OBJECT) {
+    return projectedVoterReadyCount;
+  }
+  const priorityRecoveryContext =
+    context.buildPriorityRecoveryAssessmentContextForOperation(
+      operation,
+      planningSnapshot,
+    );
+  const membershipSnapshot =
+    context.resolvePriorityRemoveSafetyMembershipSnapshot(
+      planningSnapshot,
+      priorityRecoveryContext,
+      projectedVoterReadyRows,
+    );
+  return Math.max(
+    projectedVoterReadyCount,
+    membershipSnapshot.recoveryProjectionNodeIds.length,
   );
 }
 
@@ -468,18 +483,24 @@ async function evaluateRemoveSafety(context, operation) {
     priorityPublicationLeaderRemoveSafetyEvaluation?.classification ===
       REMOVE_SAFETY_EVALUATION_CLASSIFICATION.SAFE &&
     priorityRecoveryCompletionSafe &&
-    shouldPreservePriorityPublicationMinimumReplicaCount(
-      operation,
-      projectedVoterReadyCount,
-      minReplicaCount,
-    )
+    isPriorityControlPlanePartition({
+      partitionId: operation?.partitionId,
+    })
   ) {
-    return context.buildDeferredRemoveSafetyEvaluationForOperation(
-      operation,
-      `Critical partition ${operation.partitionId}` +
-        OPERATION_WORKFLOW_OWNER_LITERAL.WOULD_DROP_VOTER_DASH_READY_REPLICAS_BELOW_MINIMUM +
-        ` (${projectedVoterReadyCount}/${minReplicaCount})`,
-    );
+    const effectiveProjectedVoterReadyCount =
+      await resolvePriorityRecoveryProjectedVoterReadyCount(
+        context,
+        operation,
+        projectedVoterReadyRows,
+      );
+    if (effectiveProjectedVoterReadyCount < minReplicaCount) {
+      return context.buildDeferredRemoveSafetyEvaluationForOperation(
+        operation,
+        `Critical partition ${operation.partitionId}` +
+          OPERATION_WORKFLOW_OWNER_LITERAL.WOULD_DROP_VOTER_DASH_READY_REPLICAS_BELOW_MINIMUM +
+          ` (${effectiveProjectedVoterReadyCount}/${minReplicaCount})`,
+      );
+    }
   }
   if (priorityPublicationLeaderRemoveSafetyEvaluation &&
       priorityPublicationLeaderRemoveSafetyEvaluation.classification !==

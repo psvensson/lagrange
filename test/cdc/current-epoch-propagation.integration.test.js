@@ -73,11 +73,12 @@ test('Current epoch durability and propagation integration', {timeout: 30000}, a
     });
 
     let bootstrapResult;
+    let seedSqlQueryEngine;
     try {
       bootstrapResult = await bootstrapService.bootstrap();
       t.equal(bootstrapResult.success, true, 'seed bootstrap should succeed');
 
-      const seedSqlQueryEngine = new SQLQueryEngine({
+      seedSqlQueryEngine = new SQLQueryEngine({
         systemCache: NodeService.getInstance().getSystemTableCache(),
         messageRouter: bootstrapResult.messageRouter,
         nodeId: seedNodeId,
@@ -91,6 +92,7 @@ test('Current epoch durability and propagation integration', {timeout: 30000}, a
       t.equal(epochData?.epoch, 0, 'initial persisted epoch should be 0');
       t.equal(epochData?.proposedBy, seedNodeId, 'initial epoch should be proposed by seed node');
     } finally {
+      await seedSqlQueryEngine?.shutdown?.().catch(() => {});
       await bootstrapService.shutdown().catch(() => {});
       await bootstrapResult?.messageRouter?.shutdown?.().catch(() => {});
     }
@@ -108,12 +110,13 @@ test('Current epoch durability and propagation integration', {timeout: 30000}, a
     });
 
     let bootstrapResult;
+    let seedSqlQueryEngine;
     try {
       bootstrapResult = await bootstrapService.bootstrap();
       t.equal(bootstrapResult.success, true, 'seed bootstrap should succeed');
 
       const systemCache = NodeService.getInstance().getSystemTableCache();
-      const seedSqlQueryEngine = new SQLQueryEngine({
+      seedSqlQueryEngine = new SQLQueryEngine({
         systemCache: systemCache,
         messageRouter: bootstrapResult.messageRouter,
         nodeId: seedNodeId,
@@ -137,6 +140,7 @@ test('Current epoch durability and propagation integration', {timeout: 30000}, a
         'epoch manager state should match persisted epoch',
       );
     } finally {
+      await seedSqlQueryEngine?.shutdown?.().catch(() => {});
       await bootstrapService.shutdown().catch(() => {});
       await bootstrapResult?.messageRouter?.shutdown?.().catch(() => {});
     }

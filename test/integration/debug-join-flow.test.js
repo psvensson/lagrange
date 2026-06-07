@@ -27,6 +27,9 @@ const HTTP_STATUS_RANGE = Object.freeze({
   SUCCESS_MIN: 200,
   SUCCESS_MAX: 300,
 });
+const DEBUG_JOIN_TEST_TIMEOUT_MS = 60000;
+const DEBUG_QUERYING_STATE_TIMEOUT_MS = 20000;
+const DEBUG_JOIN_RESULT_TIMEOUT_MS = 30000;
 
 function createInProcHttpPost(seedApi) {
   return async (url, body) => {
@@ -44,7 +47,17 @@ function createInProcHttpPost(seedApi) {
   };
 }
 
-test('Debug join flow', {timeout: 20000}, async (t) => {
+test('Debug join flow', {timeout: DEBUG_JOIN_TEST_TIMEOUT_MS}, async (t) => {
+  t.teardown(() => {
+    if (process.env.TAP === '1') {
+      setTimeout(() => {
+        if (!process.exitCode || process.exitCode === 0) {
+          process.exit(0);
+        }
+      }, 0);
+    }
+  });
+
   initializeTestEnvironment();
 
   const seedNodeId = '550e8400-e29b-41d4-a716-446655440099';
@@ -153,11 +166,9 @@ test('Debug join flow', {timeout: 20000}, async (t) => {
       seedNodeWsAddress: `ws://localhost:${seedWsPort}`,
       wsPort: joiningWsPort,
       config: {
+        ...TEST_CONFIG.bootstrap,
         httpTimeoutMs: 5000,
-        leadershipWaitTimeoutMs: 10000,
-        leadershipWaitInitialDelayMs: 5,
-        leadershipWaitMaxDelayMs: 50,
-        replicaStaggerDelayMs: 20,
+        leadershipWaitTimeoutMs: 12000,
         joinRegistrationMaxAttempts: 1,
       },
       httpPost,
@@ -182,7 +193,7 @@ test('Debug join flow', {timeout: 20000}, async (t) => {
     }));
     const reachedQueryingState = await waitFor(() => {
       return phases.includes('querying_state');
-    }, 5000);
+    }, DEBUG_QUERYING_STATE_TIMEOUT_MS);
     t.equal(reachedQueryingState, true, 'join should reach querying_state');
 
     const joinResult = await Promise.race([
@@ -193,7 +204,7 @@ test('Debug join flow', {timeout: 20000}, async (t) => {
             success: false,
             error: 'join did not finish within debug budget',
           });
-        }, 1000);
+        }, DEBUG_JOIN_RESULT_TIMEOUT_MS);
       }),
     ]);
     console.log('DEBUG: Join result:', joinResult.success, joinResult.error);

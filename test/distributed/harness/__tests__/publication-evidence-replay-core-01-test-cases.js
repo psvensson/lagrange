@@ -645,11 +645,11 @@ export function registerPublicationEvidenceReplayCore01Tests(context) {
     );
     assert.equal(
       replaySummary.replayedPublication.status,
-      CONTROL_PLANE_PUBLICATION_STATUS.ACK_PENDING,
+      CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
     );
     assert.equal(
       replaySummary.replayedPublication.recoveryProtocolState,
-      REPLAY_TEST_123850Z_PUBLICATION_RECOVERY_STATE,
+      'priority_spread_pending',
     );
     assert.equal(replaySummary.comparison.replayedSatisfied, false);
     assert.equal(

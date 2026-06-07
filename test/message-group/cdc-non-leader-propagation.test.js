@@ -186,8 +186,8 @@ test(
       );
       assert.equal(
         forwarded.options?.deliveryPriority,
-        'critical',
-        'Non-leader CDC forwarding must use critical router priority',
+        'background',
+        'Generic non-leader CDC forwarding should use background router priority',
       );
 
       // Restore deliver for cleanup

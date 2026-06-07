@@ -143,18 +143,18 @@ test('Property 13: Idempotent Operations', async (t) => {
           });
 
           // Also register in state machine
-          stateMachine.transition(replicaId, ReplicaState.PENDING, {
+          await stateMachine.transition(replicaId, ReplicaState.PENDING, {
             partitionId,
             nodeId: 'test-node',
             reason: 'test setup',
           });
-          stateMachine.transition(replicaId, ReplicaState.CREATING, {
+          await stateMachine.transition(replicaId, ReplicaState.CREATING, {
             reason: 'test setup',
           });
-          stateMachine.transition(replicaId, ReplicaState.SYNCING, {
+          await stateMachine.transition(replicaId, ReplicaState.SYNCING, {
             reason: 'test setup',
           });
-          stateMachine.transition(replicaId, ReplicaState.ACTIVE, {
+          await stateMachine.transition(replicaId, ReplicaState.ACTIVE, {
             reason: 'test setup',
           });
 
@@ -238,16 +238,16 @@ test('Property 13: Idempotent Operations', async (t) => {
           });
 
           // Set up state machine to match
-          stateMachine.transition(replicaId, ReplicaState.PENDING, {
+          await stateMachine.transition(replicaId, ReplicaState.PENDING, {
             partitionId,
             nodeId: 'test-node',
             reason: 'test setup',
           });
-          stateMachine.transition(replicaId, ReplicaState.CREATING, {
+          await stateMachine.transition(replicaId, ReplicaState.CREATING, {
             reason: 'test setup',
           });
           if (stateConfig.smState === ReplicaState.SYNCING) {
-            stateMachine.transition(replicaId, ReplicaState.SYNCING, {
+            await stateMachine.transition(replicaId, ReplicaState.SYNCING, {
               reason: 'test setup',
             });
           }
@@ -327,12 +327,18 @@ test('Property 13: Idempotent Operations', async (t) => {
           };
 
           const ack = await manager.handleRemoveReplica(message);
+          const cleanupDeletes = mockCDC.operations.filter((operation) =>
+            operation.type === 'delete' &&
+            operation.tableName === 'services' &&
+            operation.whereClause?.service_id === replicaId &&
+            operation.whereClause?.partition_id === partitionId,
+          );
 
           manager.shutdown();
           stateMachine.clear();
 
           return ack.status === AckStatus.NOT_FOUND &&
-            mockCDC.operations.length === 0;
+            cleanupDeletes.length === mockCDC.operations.length;
         },
       ),
       {numRuns: 10},
@@ -385,21 +391,21 @@ test('Property 13: Idempotent Operations', async (t) => {
           });
 
           // Set up state machine to REMOVING state
-          stateMachine.transition(replicaId, ReplicaState.PENDING, {
+          await stateMachine.transition(replicaId, ReplicaState.PENDING, {
             partitionId,
             nodeId: 'test-node',
             reason: 'test setup',
           });
-          stateMachine.transition(replicaId, ReplicaState.CREATING, {
+          await stateMachine.transition(replicaId, ReplicaState.CREATING, {
             reason: 'test setup',
           });
-          stateMachine.transition(replicaId, ReplicaState.SYNCING, {
+          await stateMachine.transition(replicaId, ReplicaState.SYNCING, {
             reason: 'test setup',
           });
-          stateMachine.transition(replicaId, ReplicaState.ACTIVE, {
+          await stateMachine.transition(replicaId, ReplicaState.ACTIVE, {
             reason: 'test setup',
           });
-          stateMachine.transition(replicaId, ReplicaState.REMOVING, {
+          await stateMachine.transition(replicaId, ReplicaState.REMOVING, {
             reason: 'test setup',
           });
 

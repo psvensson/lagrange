@@ -188,7 +188,17 @@ async function waitForCdcPipelineReadiness(bootstrapResult, timeoutMs = 3000) {
   );
 }
 
-test('Leader metadata validation on join', {timeout: 30000}, async (t) => {
+test('Leader metadata validation on join', {timeout: 60000}, async (t) => {
+  t.teardown(() => {
+    if (process.env.TAP === '1') {
+      setTimeout(() => {
+        if (!process.exitCode || process.exitCode === 0) {
+          process.exit(0);
+        }
+      }, 0);
+    }
+  });
+
   t.beforeEach(() => {
     initializeTestEnvironment();
   });

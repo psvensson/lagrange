@@ -154,11 +154,11 @@ function cachesHaveIdenticalContexts(caches) {
   if (caches.length < 2) return true;
 
   const referenceContexts = caches[0].getAll('contexts');
-  referenceContexts.sort((a, b) => a.id.localeCompare(b.id));
+  referenceContexts.sort(compareContextRows);
 
   for (let i = 1; i < caches.length; i++) {
     const otherContexts = caches[i].getAll('contexts');
-    otherContexts.sort((a, b) => a.id.localeCompare(b.id));
+    otherContexts.sort(compareContextRows);
 
     if (referenceContexts.length !== otherContexts.length) {
       return false;
@@ -173,6 +173,14 @@ function cachesHaveIdenticalContexts(caches) {
   }
 
   return true;
+}
+
+function compareContextRows(a, b) {
+  return getContextRowId(a).localeCompare(getContextRowId(b));
+}
+
+function getContextRowId(row) {
+  return String(row?.id ?? row?.context_id ?? row?.contextId ?? '');
 }
 
 /**
@@ -495,4 +503,3 @@ test('Property 36: Context data retrievable from any cache', async (t) => {
 
   t.pass('Context data retrievable from any cache');
 });
-

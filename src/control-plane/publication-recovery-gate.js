@@ -120,9 +120,11 @@ function resolvePublicationPending(options = {}) {
   const recoveryProtocolState = normalizeOptionalString(
     options.recoveryProtocolState,
   );
+  if (recoveryProtocolState === RECOVERY_PROTOCOL_STATE.UNPUBLISHED_OBSERVATION) {
+    return false;
+  }
   if (
-    recoveryProtocolState === RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING ||
-    recoveryProtocolState === RECOVERY_PROTOCOL_STATE.UNPUBLISHED_OBSERVATION
+    recoveryProtocolState === RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING
   ) {
     return ackClosureSatisfied !== true;
   }

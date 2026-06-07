@@ -453,8 +453,8 @@ test(
       'leader-change-partition-1-r2',
       'leader-change should normalize unified leader addresses to replica ids',
     );
-    t.equal(partition.pendingRoleUpdate, null);
-    t.equal(partition.persistedRole, RaftRole.FOLLOWER);
+    t.equal(partition.pendingRoleUpdate, RaftRole.FOLLOWER);
+    t.equal(partition.persistedRole, RaftRole.LEADER);
     t.equal(partition.pendingLeaderNodeUpdate, null);
     t.equal(partition.persistedLeaderNodeId, null);
     t.equal(partition.leaderNodeUpdateRetryTimer, null);

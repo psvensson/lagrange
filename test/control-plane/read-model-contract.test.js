@@ -209,8 +209,8 @@ test('RebalanceCoordinator.getEntityInFlightReplicaIds remains compatible ' +
 
     t.equal(
       sqlQueryCalled,
-      true,
-      'getEntityInFlightReplicaIds should still reach authoritative SQL',
+      false,
+      'getEntityInFlightReplicaIds should stay on the cache-aware owner path',
     );
     t.ok(
       cacheAccessCount > 0,

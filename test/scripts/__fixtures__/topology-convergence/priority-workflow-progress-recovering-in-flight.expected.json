@@ -35,8 +35,26 @@
       "unresolvedSemanticStateIds": "recovering_in_flight",
       "blockedPartitionIds": "control_plane_publications-p1,replica_operations-p1,sql_transaction_participants-p1,sql_transactions-p1,sql_write_operations-p1",
       "dominantReason": "BOOTSTRAP_PHASE_INCOMPLETE",
-      "failureClass": "startup_recovery_blocked"
+      "failureClass": "startup_recovery_blocked",
+      "progressContract": {
+        "owner": "operation_workflow_owner",
+        "boundary": "workflow_progress",
+        "state": "absent",
+        "reason": "absent",
+        "nextAction": "absent",
+        "wakeSource": "absent",
+        "retryAfterMs": 0,
+        "terminalState": "absent",
+        "evidencePath": "report.scenarios[0].publicationConvergence.activeGate.progress.priorityRecoveryProgressClasses",
+        "blockingDependency": "absent"
+      }
     },
-    "rootCauseClass": "topology"
+    "rootCauseClass": "topology",
+    "reason": "priority_recovery_event_driven_wait",
+    "nextAction": "wait_for_priority_recovery",
+    "wakeSource": "absent",
+    "retryAfterMs": 0,
+    "terminalState": "absent",
+    "blockingDependency": "publication_ack_convergence"
   }
 }

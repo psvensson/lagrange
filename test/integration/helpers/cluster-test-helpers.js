@@ -107,6 +107,7 @@ export function resetPortCounter(startPort = 18000) {
  * @param {Object} options.raft - Raft configuration overrides
  * @param {Object} options.rebalancer - Rebalancer configuration overrides
  * @param {Object} options.replicaHandler - ReplicaHandler configuration overrides
+ * @param {Object} options.timeout - Timeout configuration overrides
  */
 export function initializeTestEnvironment(options = {}) {
   const {
@@ -114,6 +115,7 @@ export function initializeTestEnvironment(options = {}) {
     raft = {},
     rebalancer = {},
     replicaHandler = {},
+    timeout = {},
   } = options;
 
   // Reset all singletons to ensure clean state
@@ -146,6 +148,9 @@ export function initializeTestEnvironment(options = {}) {
     replicaHandler: {
       syncTimeoutMs: 10000,
       ...replicaHandler,
+    },
+    timeout: {
+      ...timeout,
     },
   });
 

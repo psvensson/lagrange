@@ -33,6 +33,16 @@ class ControlPlaneReadinessServiceSegment4Stage3 extends
     if (!directPlanningSnapshot) {
       return providedPlanningSnapshot;
     }
+    if (
+      this.shouldUseProvidedReadyGateForMembershipPublicationPlanningMerge(
+        directPlanningSnapshot,
+        providedPlanningSnapshot,
+      )
+    ) {
+      return this.buildPriorityRecoveryPlanningProjection(
+        providedPlanningSnapshot,
+      );
+    }
     const preferDirectReadyGate =
       this.shouldUseDirectReadyGateForMembershipPublicationPlanningMerge(
         directPlanningSnapshot,
@@ -139,6 +149,26 @@ class ControlPlaneReadinessServiceSegment4Stage3 extends
           pendingAckEvidenceState:
             PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
               .REQUIRED_ACK_NODE_LIST,
+          publicationRecoveryGate: {
+            ...(providedPlanningSnapshot.publicationRecoveryGate ||
+              directPlanningSnapshot.publicationRecoveryGate ||
+              {}),
+            requiredAckNodeIds: providedPlanningSnapshot.requiredAckNodeIds,
+            acknowledgedNodeIds: Array.isArray(
+              providedPlanningSnapshot.acknowledgedNodeIds,
+            ) ?
+              providedPlanningSnapshot.acknowledgedNodeIds :
+              directPlanningSnapshot.acknowledgedNodeIds,
+            pendingAckNodeIds: Array.isArray(
+              providedPlanningSnapshot.pendingAckNodeIds,
+            ) ?
+              providedPlanningSnapshot.pendingAckNodeIds :
+              directPlanningSnapshot.pendingAckNodeIds,
+            pendingAckCount: providedPendingAckCount,
+            pendingAckEvidenceState:
+              PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
+                .REQUIRED_ACK_NODE_LIST,
+          },
         } :
         shouldUseProvidedCountOnlyAckDebt ?
           {

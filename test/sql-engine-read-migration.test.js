@@ -173,11 +173,18 @@ test('DynamicConfigService uses SQL engine for getConfigFromTable',
       return {rows: []};
     });
 
+    const service = new DynamicConfigService({
+      sqlQueryEngine: engine,
+    });
+    await service.initialize();
+    const config = await service.getConfigFromTable('answer');
 
     t.ok(engine.queries.length >= 1,
       'Should make at least 1 SQL query');
     t.match(engine.queries[0].sql, /FROM config/,
       'Should query config table');
+    t.equal(config.config_value, '42',
+      'Should return config row from SQL');
   });
 
 test('DynamicConfigService uses SQL engine for getAll',

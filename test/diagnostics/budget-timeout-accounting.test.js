@@ -1,6 +1,5 @@
 import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import {accountBudgets} from '../../src/diagnostics/budget-timeout-accounting.js';
 import {
   BOUNDARY,
@@ -9,26 +8,23 @@ import {
   BUDGET_STATE,
   OWNER,
 } from '../../src/diagnostics/causal-analysis-schema.js';
+import {
+  CURRENT_ACTIVE_GATE_ATTEMPTS,
+  CURRENT_ACTIVE_GATE_ELAPSED_MS,
+  CURRENT_ACTIVE_GATE_MAX_ATTEMPTS,
+  CURRENT_WORKFLOW_RETRY_AFTER_MS,
+  DIRECT_STALLED_ACTIVE_GATE_ELAPSED_MS,
+  buildCurrentActiveGateBudgetReport,
+  buildCurrentTimeoutCascadeReport,
+  buildDirectStalledActiveGateReport,
+  buildTerminalBudgetReport,
+} from './causal-analysis-fixtures.js';
 
-const ACTIVE_REPORT_PATH =
-  'test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability.report.json';
-const ACTIVE_FAILURE_BUNDLE_PATH =
-  'test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability/rolling-restart/failure-bundle.json';
-const CURRENT_REPORT_PATH =
-  'test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json';
-const CURRENT_ACTIVE_GATE_BUDGET_REPORT_PATH =
-  'test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json';
-const JSON_ENCODING_UTF8 = 'utf8';
 const ZERO_COUNT = 0;
 const ONE_COUNT = 1;
 const TWO_COUNT = 2;
 const THREE_COUNT = 3;
-const CURRENT_ACTIVE_GATE_ELAPSED_MS = 87249;
-const CURRENT_ACTIVE_GATE_ATTEMPTS = 9;
-const CURRENT_ACTIVE_GATE_MAX_ATTEMPTS = 8;
-const DIRECT_STALLED_ACTIVE_GATE_ELAPSED_MS = 250;
-const DIRECT_STALLED_ACTIVE_GATE_ATTEMPTS = 1;
-const CURRENT_WORKFLOW_RETRY_AFTER_MS = 1000;
+const FOUR_COUNT = 4;
 const NULL_VALUE = null;
 const UNDEFINED_VALUE = undefined;
 const PROGRESS_STATE_BOUNDED = 'bounded_progress';
@@ -40,24 +36,10 @@ const PROGRESS_MECHANISM_TERMINAL_CLASSIFICATION =
   'terminal_classification';
 const TERMINAL_STATE_DEGRADED = 'terminal_degraded';
 const TERMINAL_STATE_NON_TERMINAL = 'non_terminal';
-const ACTIVE_GATE_STATE_STALLED = 'stalled';
 const REASON_ACTIVE_GATE_TERMINAL = 'active_gate_timeout_terminal';
 const REASON_LIMIT_UNKNOWN = 'limit_unknown';
 const REASON_READINESS_TERMINAL = 'readiness_terminal';
 const REASON_RETRY_SCHEDULED = 'retry_scheduled';
-const DIRECT_STALLED_ACTIVE_GATE_REPORT = Object.freeze({
-  publicationConvergence: Object.freeze({
-    activeGate: Object.freeze({
-      state: ACTIVE_GATE_STATE_STALLED,
-      elapsedMs: DIRECT_STALLED_ACTIVE_GATE_ELAPSED_MS,
-      attempts: DIRECT_STALLED_ACTIVE_GATE_ATTEMPTS,
-    }),
-  }),
-});
-
-function readArtifact(artifactPath) {
-  return JSON.parse(fs.readFileSync(artifactPath, JSON_ENCODING_UTF8));
-}
 
 function findBudget(accounting, kind) {
   return accounting.budgets.find((budget) => budget.kind === kind);
@@ -81,7 +63,7 @@ function assertNoNullOrUndefined(value) {
 
 describe('BudgetTimeoutAccounting', () => {
   it('accounts terminal attempts and bounded cascades explicitly', () => {
-    const accounting = accountBudgets(readArtifact(ACTIVE_FAILURE_BUNDLE_PATH));
+    const accounting = accountBudgets(buildTerminalBudgetReport());
     const attemptBudget = findBudget(accounting, BUDGET_KIND.ACTIVE_GATE_ATTEMPTS);
 
     assert.equal(
@@ -103,8 +85,19 @@ describe('BudgetTimeoutAccounting', () => {
   });
 
   it('accounts failure-bundle report summary duration like report scenario duration', () => {
-    const reportAccounting = accountBudgets(readArtifact(ACTIVE_REPORT_PATH));
-    const failureBundleAccounting = accountBudgets(readArtifact(ACTIVE_FAILURE_BUNDLE_PATH));
+    const terminalReport = buildTerminalBudgetReport();
+    const reportAccounting = accountBudgets({
+      scenarios: [
+        {
+          ...terminalReport,
+          readinessFailure: terminalReport.summary.readinessFailure,
+        },
+      ],
+      summary: {
+        duration: CURRENT_ACTIVE_GATE_ELAPSED_MS,
+      },
+    });
+    const failureBundleAccounting = accountBudgets(terminalReport);
 
     assert.equal(
       findBudget(reportAccounting, BUDGET_KIND.SCENARIO_DURATION).state,
@@ -121,7 +114,7 @@ describe('BudgetTimeoutAccounting', () => {
   });
 
   it('classifies budget ownership for the current timeout cascade frontier', () => {
-    const accounting = accountBudgets(readArtifact(CURRENT_REPORT_PATH));
+    const accounting = accountBudgets(buildCurrentTimeoutCascadeReport());
     const attemptBudget = findBudget(accounting, BUDGET_KIND.ACTIVE_GATE_ATTEMPTS);
     const workflowBudget = findBudget(accounting, BUDGET_KIND.WORKFLOW_STEP_TIMEOUT);
     const readinessBudget = findBudget(accounting, BUDGET_KIND.READINESS_RETRY_WINDOW);
@@ -159,7 +152,7 @@ describe('BudgetTimeoutAccounting', () => {
   });
 
   it('uses stalled active-gate snapshot evidence as bounded terminal timeout accounting', () => {
-    const accounting = accountBudgets(readArtifact(CURRENT_ACTIVE_GATE_BUDGET_REPORT_PATH));
+    const accounting = accountBudgets(buildCurrentActiveGateBudgetReport());
     const timeoutBudget = findBudget(accounting, BUDGET_KIND.ACTIVE_GATE_TIMEOUT);
     const attemptBudget = findBudget(accounting, BUDGET_KIND.ACTIVE_GATE_ATTEMPTS);
 
@@ -187,7 +180,7 @@ describe('BudgetTimeoutAccounting', () => {
   });
 
   it('does not treat stalled active-gate state alone as terminal budget proof', () => {
-    const accounting = accountBudgets(DIRECT_STALLED_ACTIVE_GATE_REPORT);
+    const accounting = accountBudgets(buildDirectStalledActiveGateReport());
     const timeoutBudget = findBudget(accounting, BUDGET_KIND.ACTIVE_GATE_TIMEOUT);
 
     assert.equal(timeoutBudget.state, BUDGET_STATE.UNBOUNDED);
@@ -199,7 +192,7 @@ describe('BudgetTimeoutAccounting', () => {
   });
 
   it('keeps observed workflow limits as bounded progress evidence', () => {
-    const accounting = accountBudgets(readArtifact(ACTIVE_FAILURE_BUNDLE_PATH));
+    const accounting = accountBudgets(buildTerminalBudgetReport());
     const workflowBudget = findBudget(accounting, BUDGET_KIND.WORKFLOW_STEP_TIMEOUT);
 
     assert.equal(workflowBudget.state, BUDGET_STATE.EXHAUSTED);
@@ -208,8 +201,8 @@ describe('BudgetTimeoutAccounting', () => {
       workflowBudget.progressMechanism,
       PROGRESS_MECHANISM_OBSERVED_LIMIT,
     );
-    assert.equal(accounting.summary.boundedProgressCount, THREE_COUNT);
-    assert.equal(accounting.summary.terminalProgressCount, TWO_COUNT);
+    assert.equal(accounting.summary.boundedProgressCount, FOUR_COUNT);
+    assert.equal(accounting.summary.terminalProgressCount, ONE_COUNT);
     assert.equal(accounting.cascades.length, ONE_COUNT);
   });
 });

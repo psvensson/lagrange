@@ -69,7 +69,7 @@ test('RebalanceCoordinator retires stale priority REPLACE SENDING when ' +
       await coordinator.getOperation(TEST_OPERATION_ID);
 
     t.equal(
-      reconcileResult?.applied,
+      reconcileResult,
       true,
       'converged priority recovery evidence should retire the stale accepted row',
     );
@@ -460,7 +460,7 @@ test('RebalanceCoordinator fails remote-owned stale priority REPLACE ' +
       await coordinator.getOperation(TEST_OPERATION_ID);
 
     t.equal(
-      reconcileResult?.applied,
+      reconcileResult,
       true,
       'remote superseded priority recovery row should reconcile',
     );
@@ -652,7 +652,7 @@ test('RebalanceCoordinator preserves pre-sync priority REPLACE progress ' +
       await coordinator.getOperation(TEST_OPERATION_ID);
 
     t.equal(
-      reconcileResult?.applied,
+      reconcileResult,
       false,
       'materialized superseded target should remain in pre-sync progress rather than fail terminally',
     );

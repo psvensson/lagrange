@@ -3,8 +3,10 @@ import {CONTROL_PLANE_READINESS_SERVICE_SEGMENT_4_STAGE_SHARED as SHARED} from '
 
 const {
   CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
+  CONTROL_PLANE_PUBLICATION_STATUS,
   NUM,
   PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE,
+  RECOVERY_PROTOCOL_STATE,
   STARTUP_AUTHORITY_ADMISSION_STATE,
   TYPEOF,
   buildPublicationRecoveryGateSnapshot,
@@ -210,6 +212,97 @@ class ControlPlaneReadinessServiceSegment4Stage1 extends ControlPlaneReadinessSe
       return true;
     }
     return directPublicationEpoch >= providedPublicationEpoch;
+  }
+
+  shouldUseProvidedReadyGateForMembershipPublicationPlanningMerge(
+    directPlanningSnapshot = null,
+    providedPlanningSnapshot = null,
+  ) {
+    const directPriorityRecoveryProjection =
+      this.buildPriorityRecoveryPlanningProjection(directPlanningSnapshot);
+    const providedPriorityRecoveryProjection =
+      this.buildPriorityRecoveryPlanningProjection(providedPlanningSnapshot);
+    const directPublicationRecoveryGate =
+      directPriorityRecoveryProjection?.publicationRecoveryGate || null;
+    const providedPublicationRecoveryGate =
+      providedPriorityRecoveryProjection?.publicationRecoveryGate || null;
+    if (providedPublicationRecoveryGate?.ready !== true) {
+      return false;
+    }
+    const hasAckDebtEvidence = (planningSnapshot = null) => {
+      const publicationRecoveryGate =
+        planningSnapshot?.publicationRecoveryGate || null;
+      const pendingAckCount = Number(
+        planningSnapshot?.pendingAckCount ??
+        publicationRecoveryGate?.pendingAckCount ??
+        NUM.ZERO,
+      );
+      return (
+        (Number.isFinite(pendingAckCount) && pendingAckCount > NUM.ZERO) ||
+        (
+          Array.isArray(planningSnapshot?.requiredAckNodeIds) &&
+          planningSnapshot.requiredAckNodeIds.length > NUM.ZERO
+        ) ||
+        (
+          Array.isArray(publicationRecoveryGate?.requiredAckNodeIds) &&
+          publicationRecoveryGate.requiredAckNodeIds.length > NUM.ZERO
+        ) ||
+        (
+          Array.isArray(planningSnapshot?.pendingAckNodeIds) &&
+          planningSnapshot.pendingAckNodeIds.length > NUM.ZERO
+        ) ||
+        (
+          Array.isArray(publicationRecoveryGate?.pendingAckNodeIds) &&
+          publicationRecoveryGate.pendingAckNodeIds.length > NUM.ZERO
+        )
+      );
+    };
+    if (
+      hasAckDebtEvidence(directPriorityRecoveryProjection) ||
+      hasAckDebtEvidence(providedPriorityRecoveryProjection)
+    ) {
+      return false;
+    }
+    const directPublicationStatus =
+      directPriorityRecoveryProjection?.publicationStatus ||
+      directPriorityRecoveryProjection?.status ||
+      null;
+    const providedPublicationStatus =
+      providedPriorityRecoveryProjection?.publicationStatus ||
+      providedPriorityRecoveryProjection?.status ||
+      providedPublicationRecoveryGate?.publicationStatus ||
+      null;
+    if (
+      String(directPublicationStatus || '').toUpperCase() !==
+      CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED
+    ) {
+      return false;
+    }
+    if (
+      String(providedPublicationStatus || '').toUpperCase() !==
+      CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED
+    ) {
+      return false;
+    }
+    if (
+      directPriorityRecoveryProjection?.recoveryProtocolState !==
+      RECOVERY_PROTOCOL_STATE.UNPUBLISHED_OBSERVATION
+    ) {
+      return false;
+    }
+    const directPublicationEpoch =
+      this.getPriorityRecoveryPlanningPublicationEpoch(
+        directPriorityRecoveryProjection,
+      );
+    const providedPublicationEpoch =
+      this.getPriorityRecoveryPlanningPublicationEpoch(
+        providedPriorityRecoveryProjection,
+      );
+    if (!Number.isInteger(providedPublicationEpoch)) {
+      return false;
+    }
+    return !Number.isInteger(directPublicationEpoch) ||
+      providedPublicationEpoch >= directPublicationEpoch;
   }
 
   shouldPreferDirectPublicationStatusForMembershipPublicationPlanningMerge(

@@ -283,8 +283,18 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
       );
     }
 
-    this.enqueueCachedReadyNodeRetriesOnInitialize();
-    this.enqueueCachedReplicaOperationRetriesOnInitialize();
+    this.enqueueCachedReadyNodeRetriesOnInitialize().catch((error) => {
+      this.logger.warn(DISPATCH_LOG_MSG.DISPATCH_FAILED, {
+        error: error?.message || String(error),
+        source: REPLICA_DISPATCH_SERVICE_LITERAL.INITIALIZE,
+      });
+    });
+    this.enqueueCachedReplicaOperationRetriesOnInitialize().catch((error) => {
+      this.logger.warn(DISPATCH_LOG_MSG.DISPATCH_FAILED, {
+        error: error?.message || String(error),
+        source: REPLICA_DISPATCH_SERVICE_LITERAL.INITIALIZE,
+      });
+    });
   }
 
   /**
@@ -294,8 +304,8 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
    * unrelated later heartbeat or cache update.
    * @private
    */
-  enqueueCachedReadyNodeRetriesOnInitialize() {
-    const nodeRows = this.getSystemTableRowsFromCache(
+  async enqueueCachedReadyNodeRetriesOnInitialize() {
+    const nodeRows = await this.getOwnerBackedSystemTableRowsFromCache(
       SYSTEM_TABLE_NAME.NODES,
     );
     for (const nodeRow of nodeRows) {
@@ -323,8 +333,8 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
    * already cache-visible.
    * @private
    */
-  enqueueCachedReplicaOperationRetriesOnInitialize() {
-    const operationRows = this.getSystemTableRowsFromCache(
+  async enqueueCachedReplicaOperationRetriesOnInitialize() {
+    const operationRows = await this.getOwnerBackedSystemTableRowsFromCache(
       SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
     );
     for (const operationRow of operationRows) {
@@ -577,9 +587,6 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
       this.scheduleLocalReadyNodeMembershipPublicationAdvance(
         RECONCILE_REASON.CONTROL_PLANE_PUBLICATION_CDC_UPDATE,
         event?.data,
-      );
-      this.enqueueLocalReadyNodeDispatchRetry(
-        RECONCILE_REASON.CONTROL_PLANE_PUBLICATION_CDC_UPDATE,
       );
       return;
     }

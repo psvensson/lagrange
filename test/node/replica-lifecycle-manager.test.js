@@ -281,6 +281,7 @@ test('ReplicaLifecycleManager', async (t) => {
       replicaId: 'replica-1',
       partitionId: 'partition-1',
       status: ReplicaStatus.ACTIVE,
+      service: {async shutdown() {}, async syncFromLeader() {}},
     });
 
     const message = {

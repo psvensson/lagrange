@@ -817,7 +817,9 @@ function registerSqlQueryEngineExecutionTestCases({
         ...pressureSummary,
         totalPendingCritical: 0,
         totalPendingBackground: 0,
+        totalPendingCriticalReserveEligible: 0,
         criticalReserveExhausted: false,
+        readinessReserveExhausted: false,
       }, `${testCase.name}: query ingress should expose the shared pressure summary shape`);
     }
   });

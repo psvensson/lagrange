@@ -68,9 +68,9 @@ test('Property 11: State Count Accuracy', async (t) => {
    */
   t.test('state counts match actual replica counts', async (t) => {
     await fc.assert(
-      fc.property(
+      fc.asyncProperty(
         fc.array(fc.uuid(), {minLength: 1, maxLength: 10}),
-        (replicaIds) => {
+        async (replicaIds) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
@@ -78,7 +78,7 @@ test('Property 11: State Count Accuracy', async (t) => {
 
           // Transition each replica through various states
           for (const replicaId of replicaIds) {
-            stateMachine.transition(replicaId, ReplicaState.PENDING, {
+            await stateMachine.transition(replicaId, ReplicaState.PENDING, {
               partitionId: 'test-partition',
               reason: 'test',
             });
@@ -104,10 +104,10 @@ test('Property 11: State Count Accuracy', async (t) => {
    */
   t.test('state counts accurate after mixed transitions', async (t) => {
     await fc.assert(
-      fc.property(
+      fc.asyncProperty(
         fc.array(fc.uuid(), {minLength: 2, maxLength: 8}),
         fc.integer({min: 0, max: 3}),
-        (replicaIds, transitionDepth) => {
+        async (replicaIds, transitionDepth) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
@@ -119,7 +119,7 @@ test('Property 11: State Count Accuracy', async (t) => {
             const path = getPathToDepth(depth);
 
             for (const state of path) {
-              stateMachine.transition(replicaIds[i], state, {
+              await stateMachine.transition(replicaIds[i], state, {
                 partitionId: `partition-${i}`,
                 reason: 'test',
               });
@@ -146,9 +146,9 @@ test('Property 11: State Count Accuracy', async (t) => {
    */
   t.test('state counts sum equals total replicas', async (t) => {
     await fc.assert(
-      fc.property(
+      fc.asyncProperty(
         fc.array(fc.uuid(), {minLength: 0, maxLength: 10}),
-        (replicaIds) => {
+        async (replicaIds) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
@@ -156,7 +156,7 @@ test('Property 11: State Count Accuracy', async (t) => {
 
           // Transition replicas to pending
           for (const replicaId of replicaIds) {
-            stateMachine.transition(replicaId, ReplicaState.PENDING, {
+            await stateMachine.transition(replicaId, ReplicaState.PENDING, {
               partitionId: 'test-partition',
               reason: 'test',
             });
@@ -181,13 +181,13 @@ test('Property 11: State Count Accuracy', async (t) => {
    */
   t.test('add transitional counts accurate', async (t) => {
     await fc.assert(
-      fc.property(
+      fc.asyncProperty(
         fc.array(fc.uuid(), {minLength: 1, maxLength: 6}),
         fc.array(
           fc.constantFrom(...ADD_TRANSITIONAL_STATES),
           {minLength: 1, maxLength: 6},
         ),
-        (replicaIds, targetStates) => {
+        async (replicaIds, targetStates) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
@@ -199,7 +199,7 @@ test('Property 11: State Count Accuracy', async (t) => {
             const path = getPathToState(targetState);
 
             for (const state of path) {
-              stateMachine.transition(replicaIds[i], state, {
+              await stateMachine.transition(replicaIds[i], state, {
                 partitionId: `partition-${i}`,
                 reason: 'test',
               });
@@ -234,10 +234,10 @@ test('Property 11: State Count Accuracy', async (t) => {
    */
   t.test('remove transitional count accurate', async (t) => {
     await fc.assert(
-      fc.property(
+      fc.asyncProperty(
         fc.array(fc.uuid(), {minLength: 1, maxLength: 6}),
         fc.integer({min: 0, max: 5}),
-        (replicaIds, numToRemove) => {
+        async (replicaIds, numToRemove) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
@@ -247,7 +247,7 @@ test('Property 11: State Count Accuracy', async (t) => {
           for (const replicaId of replicaIds) {
             const path = getPathToState(ReplicaState.ACTIVE);
             for (const state of path) {
-              stateMachine.transition(replicaId, state, {
+              await stateMachine.transition(replicaId, state, {
                 partitionId: 'test-partition',
                 reason: 'test',
               });
@@ -257,7 +257,7 @@ test('Property 11: State Count Accuracy', async (t) => {
           // Transition some to removing
           const toRemove = Math.min(numToRemove, replicaIds.length);
           for (let i = 0; i < toRemove; i++) {
-            stateMachine.transition(replicaIds[i], ReplicaState.REMOVING, {
+            await stateMachine.transition(replicaIds[i], ReplicaState.REMOVING, {
               partitionId: 'test-partition',
               reason: 'test removal',
             });

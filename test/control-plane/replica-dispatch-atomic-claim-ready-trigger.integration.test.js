@@ -93,13 +93,14 @@ test(
     const readyNodeRow = {
       node_id: 'node-2',
       status: SERVICE_STATUS.ACTIVE,
-      connection_state: STATE.READY,
-      ready_lease_expires_at: now + 30000,
+      connection_state: STATE.CONNECTED,
+      ready_lease_expires_at: null,
       last_heartbeat: now,
     };
 
     let executeCount = 0;
     let pendingReadCount = 0;
+    let exposeOperationRows = false;
     const service = new ReplicaDispatchService({
       nodeId: 'node-1',
       messageRouter: {
@@ -167,7 +168,8 @@ test(
         getAll: (tableName) => {
           if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
             pendingReadCount += 1;
-            return operationRow.workflow_step === WORKFLOW_STEP.PENDING ?
+            return exposeOperationRows &&
+              operationRow.workflow_step === WORKFLOW_STEP.PENDING ?
               [operationRow] :
               [];
           }
@@ -199,6 +201,9 @@ test(
       },
     });
     service.initialize();
+    await waitForRetryDrain(service);
+    pendingReadCount = 0;
+    exposeOperationRows = true;
 
     const leaderMessageGroup = {
       isLeaderReplica: () => true,
@@ -260,13 +265,14 @@ test(
     const readyNodeRow = {
       node_id: 'node-2',
       status: SERVICE_STATUS.ACTIVE,
-      connection_state: STATE.READY,
-      ready_lease_expires_at: now + 30000,
+      connection_state: STATE.CONNECTED,
+      ready_lease_expires_at: null,
       last_heartbeat: now,
     };
 
     let executeCount = 0;
     let pendingReadCount = 0;
+    let exposeOperationRows = false;
     const service = new ReplicaDispatchService({
       nodeId: 'node-1',
       messageRouter: {
@@ -334,7 +340,8 @@ test(
         getAll: (tableName) => {
           if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
             pendingReadCount += 1;
-            return operationRow.workflow_step === WORKFLOW_STEP.PENDING ?
+            return exposeOperationRows &&
+              operationRow.workflow_step === WORKFLOW_STEP.PENDING ?
               [operationRow] :
               [];
           }
@@ -366,6 +373,9 @@ test(
       },
     });
     service.initialize();
+    await waitForRetryDrain(service);
+    pendingReadCount = 0;
+    exposeOperationRows = true;
 
     try {
       await service.handleNodeStateUpdate({
@@ -439,13 +449,14 @@ test(
     nodeStore.set('node-2', {
       node_id: 'node-2',
       status: SERVICE_STATUS.ACTIVE,
-      connection_state: STATE.READY,
-      ready_lease_expires_at: now + 30000,
+      connection_state: STATE.CONNECTED,
+      ready_lease_expires_at: null,
       last_heartbeat: now,
     });
 
     let claimAttemptCount = 0;
     let executeCount = 0;
+    let exposeOperationRows = false;
     const service = new ReplicaDispatchService({
       nodeId: 'node-1',
       messageRouter: {
@@ -511,7 +522,7 @@ test(
         },
         getAll: (tableName) => {
           if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
-            return [operationRow];
+            return exposeOperationRows ? [operationRow] : [];
           }
           if (tableName === SYSTEM_TABLE_NAME.SERVICES) {
             return [{
@@ -547,6 +558,9 @@ test(
       },
     });
     service.initialize();
+    await waitForRetryDrain(service);
+    claimAttemptCount = 0;
+    exposeOperationRows = true;
 
     const leaderMessageGroup = {
       isLeaderReplica: () => true,

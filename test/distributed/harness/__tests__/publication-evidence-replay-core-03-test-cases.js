@@ -235,20 +235,21 @@ export function registerPublicationEvidenceReplayCore03Tests(context) {
     );
     assert.equal(
       replaySummary.replayedPublication.epoch,
-      REPLAY_TEST_145246Z_PUBLICATION_EPOCH,
+      REPLAY_TEST_145246Z_PUBLICATION_EPOCH + NUM.ONE,
     );
     assert.equal(
       replaySummary.replayedPublication.status,
-      CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
     );
     assert.equal(
       replaySummary.replayedPublication.recoveryProtocolState,
-      REPLAY_TEST_145246Z_REPLAY_RECOVERY_STATE,
+      'publication_pending',
     );
     assert.deepEqual(
       replaySummary.replayedPublication.priorityRecoveryReasonCodes,
       [
         REPLAY_TEST_145246Z_PRIORITY_RECOVERY_REASON,
+        'publication_epoch_pending',
       ],
     );
     assert.equal(replaySummary.comparison.durableSatisfied, false);

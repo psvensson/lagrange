@@ -56,12 +56,12 @@ test('Property 5: Cleanup Moves for Failed Replicas', async (t) => {
           });
 
           // Set up replica in failed state (via pending -> failed)
-          stateMachine.transition(replicaId, ReplicaState.PENDING, {
+          await stateMachine.transition(replicaId, ReplicaState.PENDING, {
             partitionId,
             nodeId,
             reason: 'test setup',
           });
-          stateMachine.transition(replicaId, ReplicaState.FAILED, {
+          await stateMachine.transition(replicaId, ReplicaState.FAILED, {
             partitionId,
             nodeId,
             reason: 'operation failed',
@@ -138,11 +138,11 @@ test('Property 5: Cleanup Moves for Failed Replicas', async (t) => {
    */
   t.test('state machine identifies failed replicas', async (t) => {
     await fc.assert(
-      fc.property(
+      fc.asyncProperty(
         fc.uuid(), // partition_id
         fc.uuid(), // node_id
-        fc.array(fc.uuid(), {minLength: 1, maxLength: 3}), // replica_ids
-        (partitionId, nodeId, replicaIds) => {
+        fc.uniqueArray(fc.uuid(), {minLength: 1, maxLength: 3}), // replica_ids
+        async (partitionId, nodeId, replicaIds) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCdcService(),
@@ -150,12 +150,12 @@ test('Property 5: Cleanup Moves for Failed Replicas', async (t) => {
 
           // Set up replicas in failed state
           for (const replicaId of replicaIds) {
-            stateMachine.transition(replicaId, ReplicaState.PENDING, {
+            await stateMachine.transition(replicaId, ReplicaState.PENDING, {
               partitionId,
               nodeId,
               reason: 'test setup',
             });
-            stateMachine.transition(replicaId, ReplicaState.FAILED, {
+            await stateMachine.transition(replicaId, ReplicaState.FAILED, {
               partitionId,
               nodeId,
               reason: 'operation failed',

@@ -72,6 +72,44 @@ function attachSqlRuntimeToStartupOwner(options) {
     }
   }
 
+  const rebalanceCoordinator = owner.rebalanceCoordinator || null;
+  if (
+    rebalanceCoordinator &&
+    typeof rebalanceCoordinator.syncOwnerDependencies === LOCAL_STR_FUNCTION
+  ) {
+    rebalanceCoordinator.syncOwnerDependencies({
+      systemTableCache: options.systemTableCache,
+      cdcIntegrationService,
+      messageRouter: options.messageRouter || null,
+      tablePolicyService: owner.tablePolicyService || null,
+      sqlQueryEngine,
+    });
+  }
+
+  const partitionServices = owner.partitionServices || null;
+  if (partitionServices && typeof partitionServices.values === LOCAL_STR_FUNCTION) {
+    for (const partitionService of partitionServices.values()) {
+      if (typeof partitionService?.setSqlQueryEngine === LOCAL_STR_FUNCTION) {
+        partitionService.setSqlQueryEngine(sqlQueryEngine);
+        continue;
+      }
+      partitionService.sqlQueryEngine = sqlQueryEngine;
+      if (
+        partitionService.rebalanceCoordinator &&
+        typeof partitionService.rebalanceCoordinator.syncOwnerDependencies ===
+          LOCAL_STR_FUNCTION
+      ) {
+        partitionService.rebalanceCoordinator.syncOwnerDependencies({
+          systemTableCache: options.systemTableCache,
+          cdcIntegrationService,
+          messageRouter: options.messageRouter || null,
+          tablePolicyService: owner.tablePolicyService || null,
+          sqlQueryEngine,
+        });
+      }
+    }
+  }
+
   const backgroundWritersActive =
     typeof owner.hasActiveControlPlaneBackgroundWriters === 'function' &&
     owner.hasActiveControlPlaneBackgroundWriters() === true;

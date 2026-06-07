@@ -1,0 +1,15 @@
+{
+  "scenario": "rolling-restart",
+  "publicationConvergence": {
+    "activeGate": {
+      "progress": {
+        "activeGateOwnerCohortPendingRecoveryNodeIds": "11601fe0-72d6-5853-8590-ec2881853e72",
+        "activeGateOwnerCohortPendingRecoveryCount": 1,
+        "priorityRecoveryProgressClasses": {
+          "dominantReason": "PRIORITY_CONTROL_PLANE_RECOVERY_PENDING"
+        }
+      }
+    },
+    "priorityRecoveryPartitionWitnesses": []
+  }
+}

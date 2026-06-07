@@ -120,7 +120,7 @@ function writeOracle(root, id) {
 
 
 tap.test('quest-context newer evidence warning (P2)', async (t) => {
-  t.test('warns on unrecorded newer evidence and disappears after ingest', (t) => {
+  t.test('warns on unrecorded newer evidence and keeps handoff guidance after ingest', (t) => {
     const root = tmp();
     const goal = getGoal(root);
     saveQuest(root, goal);
@@ -132,7 +132,7 @@ tap.test('quest-context newer evidence warning (P2)', async (t) => {
     const reportPath = path.join(reportDir, 'rolling-restart-1.report.json');
     fs.writeFileSync(reportPath, JSON.stringify({
       ...sampleReport,
-      timestamp: new Date(Date.now() + 100000).toISOString(),
+      timestamp: new Date().toISOString(),
     }));
 
     // Record an initial event in the past
@@ -156,12 +156,12 @@ tap.test('quest-context newer evidence warning (P2)', async (t) => {
       evidencePath: reportPath,
     });
 
-    // Evaluate context again - warning should be gone!
+    // Evaluate context again - warning remains until a supervised step records it.
     const ctx2 = buildContext(root, {id: goal.id});
-    t.notOk(ctx2.unrecorded, 'unrecorded evidence warning cleared');
+    t.ok(ctx2.unrecorded, 'unrecorded evidence warning remains visible');
 
     const rendered2 = renderContext(ctx2);
-    t.notMatch(rendered2, /UNRECORDED_EVIDENCE/);
+    t.match(rendered2, /fresh-closure-evidence-unrecorded/);
     t.match(rendered2, /## Git Handoff/u);
     t.match(rendered2, /## Source Change Verification/u);
     t.match(rendered2, /Subagent verifier approved source changes/u);

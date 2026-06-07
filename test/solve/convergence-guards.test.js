@@ -312,15 +312,10 @@ tap.test('golden replay: the real rolling-restart log trips coupled oscillation'
   t.ok(result.swaps >= 2, 'multiple family transitions recorded');
 
   const restore = regressionRestoreStatus(log, frontierId);
-  t.same(restore.redLabels.sort(),
-    [
-      'priority_recovery_bootstrap_ready_allows_join_during_priority_recovery',
-      'priority_recovery_cluster_active_requires_publication_convergence_and_priority_spread',
-      'priority_recovery_readyz_closed_during_priority_recovery',
-    ].sort(),
-    'the latest measured run still leaves cluster B red');
-  t.equal(restore.explained, true,
-    'the structured regression finding discharges the restore obligation');
+  t.same(restore.redLabels, [],
+    'the latest measured run has restored the previously red cluster');
+  t.equal(restore.explained, false,
+    'no structured regression finding is needed after restoration');
   t.equal(restore.pending, false, 'so the real Quest can restart');
   t.end();
 });

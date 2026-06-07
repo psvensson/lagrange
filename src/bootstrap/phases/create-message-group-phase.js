@@ -395,6 +395,7 @@ class CreateMessageGroupPhase {
       typeof this.delegates.upsertJoinServiceRowWithRetry ===
         'function';
     const useJoinMetadataRegistrationShortcut =
+      !assignmentId &&
       options[
         REGISTER_MESSAGE_GROUP_SERVICE_OPTION.PREFER_CONTROL_PLANE_UPSERT
       ] === true &&

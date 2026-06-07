@@ -113,6 +113,7 @@ const REPLICA_DISPATCH_SERVICE_LITERAL = Object.freeze({
   ERROR: 'error',
   FAILED_TO_FORWARD_WRITE_TO_LEADER: 'Failed to forward write to leader',
   FOUR: 4,
+  INITIALIZE: 'initialize',
   MEMBERSHIP_PUBLICATION_OWNER_DISPATCH_RETRY:
     'membership_publication_owner_dispatch_retry',
   MESSAGE_DASH_GROUP_INGRESS_READINESS_UNAVAILABLE:

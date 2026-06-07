@@ -294,6 +294,11 @@ function hasStaleGenericPublicationEpochClosure({
 }
 
 function resolvePendingRequiredAckNodeIds(pendingAckSource = null) {
+  if (Array.isArray(pendingAckSource?.pendingRequiredAckNodeIds)) {
+    return normalizeDistinctStringArray(
+      pendingAckSource.pendingRequiredAckNodeIds,
+    );
+  }
   if (
     !Array.isArray(pendingAckSource?.requiredAckNodeIds) ||
     !Array.isArray(pendingAckSource?.acknowledgedNodeIds)
@@ -383,26 +388,55 @@ function resolveCurrentPendingAckNodeIds({
     priorityRecoveryObservation,
     progress,
   ];
-  for (const pendingAckSource of pendingAckNodeIdSources) {
-    if (!Array.isArray(pendingAckSource?.pendingAckNodeIds)) {
-      continue;
-    }
-    const pendingAckNodeIds = normalizeDistinctStringArray(
-      pendingAckSource.pendingAckNodeIds,
-    );
-    if (pendingAckNodeIds.length > PUBLICATION_EVIDENCE_ZERO) {
+  const pendingAckEvidenceSources = pendingAckNodeIdSources.map(
+    (pendingAckSource) => {
+      const hasExplicitPendingAckNodeIds =
+        Array.isArray(pendingAckSource?.pendingAckNodeIds);
+      return {
+        pendingAckSource,
+        hasExplicitPendingAckNodeIds,
+        pendingAckNodeIds: hasExplicitPendingAckNodeIds ?
+          normalizeDistinctStringArray(pendingAckSource.pendingAckNodeIds) :
+          null,
+        pendingRequiredAckNodeIds:
+          resolvePendingRequiredAckNodeIds(pendingAckSource),
+      };
+    },
+  );
+  for (const {
+    pendingAckNodeIds,
+    pendingRequiredAckNodeIds,
+  } of pendingAckEvidenceSources) {
+    if (
+      pendingAckNodeIds !== null &&
+      pendingAckNodeIds.length > PUBLICATION_EVIDENCE_ZERO
+    ) {
       return pendingAckNodeIds;
+    }
+    if (
+      pendingRequiredAckNodeIds !== null &&
+      pendingRequiredAckNodeIds.length > PUBLICATION_EVIDENCE_ZERO
+    ) {
+      return pendingRequiredAckNodeIds;
+    }
+  }
+  for (const {
+    pendingAckSource,
+    hasExplicitPendingAckNodeIds,
+    pendingAckNodeIds,
+    pendingRequiredAckNodeIds,
+  } of pendingAckEvidenceSources) {
+    if (pendingRequiredAckNodeIds !== null) {
+      return pendingRequiredAckNodeIds;
+    }
+    if (!hasExplicitPendingAckNodeIds) {
+      continue;
     }
     if (hasPublishedPendingAckNodeListClosure(pendingAckSource)) {
       return pendingAckNodeIds;
     }
     if (hasPendingAckNodeListClosure(pendingAckSource)) {
       return pendingAckNodeIds;
-    }
-    const pendingRequiredAckNodeIds =
-      resolvePendingRequiredAckNodeIds(pendingAckSource);
-    if (pendingRequiredAckNodeIds !== null) {
-      return pendingRequiredAckNodeIds;
     }
   }
   return null;

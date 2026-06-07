@@ -53,13 +53,25 @@ async function shutdownOrFail(t, promise, label) {
 }
 
 function createAlwaysReadyControlPlaneReadinessService() {
+  const dimensions = {
+    [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+    [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+    [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: true,
+    [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: true,
+    [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: true,
+    [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: true,
+    [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
+    [CONTROL_PLANE_READINESS_DIMENSION.METADATA_PUBLICATION_HEALTHY]: true,
+    [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+    [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
+  };
   return {
-    getNodeReadinessSync: () => ({
+    getNodeReadinessSync: (_nodeId, options = {}) => ({
       dimensions: {
-        [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
-        [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
-        [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: true,
-        [CONTROL_PLANE_READINESS_DIMENSION.METADATA_PUBLICATION_HEALTHY]: true,
+        ...dimensions,
+        ...(options.decisionDimension ?
+          {[options.decisionDimension]: true} :
+          {}),
       },
     }),
   };
@@ -266,6 +278,13 @@ test('Node joining rebalancing integration', async (t) => {
       // Disable automatic scheduling for controlled testing
       rebalancer.scheduleNextCheck = () => {};
 
+      const resolveStabilizationPlanningGateDecision =
+        rebalancer.resolveStabilizationPlanningGateDecision.bind(rebalancer);
+      rebalancer.collectRebalancePlanningGateDecisions = async () => {
+        const decision = resolveStabilizationPlanningGateDecision();
+        return decision ? [decision] : [];
+      };
+
       // Initially not leader - should not rebalance
       rebalancer.isLeader = false;
 
@@ -294,6 +313,7 @@ test('Node joining rebalancing integration', async (t) => {
       // Simulate stabilization period elapsed
       rebalancer.lastStateChangeTime = Date.now() -
         rebalancer.getStabilizationPeriodMs() - 1;
+      rebalancer.lastCheckAtMs = Date.now() - 5001;
 
       // Now checkRebalance should proceed past stabilization and call evaluateState
       await rebalancer.checkRebalance();

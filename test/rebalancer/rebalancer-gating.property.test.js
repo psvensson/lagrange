@@ -93,6 +93,10 @@ function createMockMessageRouter() {
   };
 }
 
+function allowImmediateReadinessRecheck(rebalancer) {
+  rebalancer.lastCheckAtMs = 0;
+}
+
 function createMockCoordinator() {
   return {
     getMoveSafetyError: () => null,
@@ -186,6 +190,7 @@ test(
                 // Phase 1: not-ready checks — planning must be deferred
                 for (let i = 0; i < notReadyCount; i++) {
                   rebalancer.cancelScheduledCheck();
+                  allowImmediateReadinessRecheck(rebalancer);
                   await rebalancer.checkRebalance();
                   if (rebalancer.clusterReadinessConfirmed) {
                     return false;
@@ -196,6 +201,7 @@ test(
                 // confirm readiness and proceed past the gate
                 if (becomesReady) {
                   rebalancer.cancelScheduledCheck();
+                  allowImmediateReadinessRecheck(rebalancer);
                   // Ensure stabilization passes so planning proceeds
                   rebalancer.lastStateChangeTime = Date.now() - 20000;
                   await rebalancer.checkRebalance();
@@ -207,6 +213,7 @@ test(
                   // Signal should not be evaluated again on next check
                   const evalCountBefore = evaluateCount;
                   rebalancer.cancelScheduledCheck();
+                  allowImmediateReadinessRecheck(rebalancer);
                   await rebalancer.checkRebalance();
                   if (evaluateCount !== evalCountBefore) {
                     return false;
@@ -254,6 +261,7 @@ test(
                 // Force the start time past the timeout
                 rebalancer.clusterReadinessStartMs =
                   Date.now() - CLUSTER_READINESS_TIMEOUT_MS - 1;
+                allowImmediateReadinessRecheck(rebalancer);
                 rebalancer.lastStateChangeTime = Date.now() - 20000;
                 await rebalancer.checkRebalance();
 

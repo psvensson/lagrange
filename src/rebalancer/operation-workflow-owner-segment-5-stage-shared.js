@@ -110,6 +110,7 @@ const PRIORITY_PUBLICATION_FOLLOWER_SOURCE_REMOVAL_SAFETY_TABLE =
         evidence.priorityRecoveryCompletionSafe === true &&
         evidence.sourceLeadershipReleaseObserved === true &&
         evidence.replacementTopologyVoterSufficient === true &&
+        evidence.partitionLeaderStillSource !== true &&
         evidence.publicationPartition !== true,
     }),
     Object.freeze({

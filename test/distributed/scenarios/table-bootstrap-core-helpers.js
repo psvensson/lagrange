@@ -294,7 +294,7 @@ function resolveMutationVisibilityWarning(options = {}) {
 }
 
 function shouldAdvanceTimedOutCreateMutationPrimary(options = {}) {
-  if (!isTableBootstrapCreatePrimaryAdvanceError(options.lastCreateError)) {
+  if (!isTimeoutShapedError(options.lastCreateError)) {
     return false;
   }
   if (
@@ -381,7 +381,7 @@ function shouldDeferTableBootstrapRepairForUnavailableCreate(options = {}) {
 }
 
 function shouldUseUnattemptedTableBootstrapVisibilityNodes(options = {}) {
-  if (!isTableBootstrapCreatePrimaryAdvanceError(options.lastCreateError)) {
+  if (!isTimeoutShapedError(options.lastCreateError)) {
     return false;
   }
   if (
@@ -413,6 +413,24 @@ function resolveTableBootstrapVisibilityQueryContext(
       [seedNode];
 
   if (!shouldUseUnattemptedTableBootstrapVisibilityNodes(options)) {
+    if (
+      isTableBootstrapCandidateUnavailableError(options.lastCreateError) &&
+      Number.isInteger(options.createPrimaryNodeIndex) &&
+      options.tableVisibilityRepairAttempted !== true &&
+      options?.bootstrapVisibilitySnapshot?.state ===
+        TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE
+    ) {
+      const primaryVisNode =
+        queryNodes[options.createPrimaryNodeIndex] || seedNode;
+      return {
+        seedNode: primaryVisNode,
+        options: {
+          ...(options.baseOptions || {}),
+          queryNodes: [primaryVisNode],
+          fallbackNodes: [primaryVisNode],
+        },
+      };
+    }
     const resolvedNodes = [
       seedNode,
       ...queryNodes.filter((node) => node?.id !== seedNode?.id),

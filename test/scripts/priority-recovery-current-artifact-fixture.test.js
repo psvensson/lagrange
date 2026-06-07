@@ -9,8 +9,7 @@ const ENCODING_UTF8 = 'utf8';
 const FIXTURE_PATH =
   'test/scripts/__fixtures__/topology-convergence/' +
   'rolling-restart-green-only-baseline-priority-recovery.fixture.json';
-const BASELINE_REPORT_PATH =
-  'test-output/reports/rolling-restart-green-only-baseline-20260513.report.json';
+const BASELINE_REPORT_PATH = FIXTURE_PATH;
 const SCENARIO_ROLLING_RESTART = 'rolling-restart';
 const OWNER_OPERATION_WORKFLOW = 'operation_workflow_owner';
 const BOUNDARY_WORKFLOW_PROGRESS = 'workflow_progress';

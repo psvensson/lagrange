@@ -102,9 +102,9 @@ test('Property 14: Metrics Accuracy', async (t) => {
    */
   t.test('transition counts are accurate per state pair', async (t) => {
     await fc.assert(
-      fc.property(
+      fc.asyncProperty(
         fc.array(fc.uuid(), {minLength: 1, maxLength: 5}),
-        (replicaIds) => {
+        async (replicaIds) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
@@ -119,7 +119,7 @@ test('Property 14: Metrics Accuracy', async (t) => {
             let prevState = null;
 
             for (const state of path) {
-              stateMachine.transition(replicaId, state, {
+              await stateMachine.transition(replicaId, state, {
                 partitionId: 'test-partition',
                 reason: 'test',
               });
@@ -156,9 +156,9 @@ test('Property 14: Metrics Accuracy', async (t) => {
    */
   t.test('failure counts are accurate', async (t) => {
     await fc.assert(
-      fc.property(
+      fc.asyncProperty(
         fc.integer({min: 1, max: 5}),
-        (numFailures) => {
+        async (numFailures) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
@@ -169,13 +169,13 @@ test('Property 14: Metrics Accuracy', async (t) => {
             const replicaId = `replica-${i}`;
 
             // First transition to pending
-            stateMachine.transition(replicaId, ReplicaState.PENDING, {
+            await stateMachine.transition(replicaId, ReplicaState.PENDING, {
               partitionId: 'test-partition',
               reason: 'test',
             });
 
             // Then transition to failed
-            stateMachine.transition(replicaId, ReplicaState.FAILED, {
+            await stateMachine.transition(replicaId, ReplicaState.FAILED, {
               partitionId: 'test-partition',
               reason: 'test failure',
               errorMessage: 'Test error',
@@ -201,9 +201,9 @@ test('Property 14: Metrics Accuracy', async (t) => {
    */
   t.test('peak concurrent operations are accurate', async (t) => {
     await fc.assert(
-      fc.property(
+      fc.asyncProperty(
         fc.integer({min: 1, max: 5}),
-        (numReplicas) => {
+        async (numReplicas) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
@@ -213,7 +213,7 @@ test('Property 14: Metrics Accuracy', async (t) => {
 
           // Create multiple replicas in pending state (concurrent adds)
           for (let i = 0; i < numReplicas; i++) {
-            stateMachine.transition(`replica-${i}`, ReplicaState.PENDING, {
+            await stateMachine.transition(`replica-${i}`, ReplicaState.PENDING, {
               partitionId: 'test-partition',
               reason: 'test',
             });
@@ -224,15 +224,15 @@ test('Property 14: Metrics Accuracy', async (t) => {
 
           // Transition all to active (no longer in add transitional states)
           for (let i = 0; i < numReplicas; i++) {
-            stateMachine.transition(`replica-${i}`, ReplicaState.CREATING, {
+            await stateMachine.transition(`replica-${i}`, ReplicaState.CREATING, {
               partitionId: 'test-partition',
               reason: 'test',
             });
-            stateMachine.transition(`replica-${i}`, ReplicaState.SYNCING, {
+            await stateMachine.transition(`replica-${i}`, ReplicaState.SYNCING, {
               partitionId: 'test-partition',
               reason: 'test',
             });
-            stateMachine.transition(`replica-${i}`, ReplicaState.ACTIVE, {
+            await stateMachine.transition(`replica-${i}`, ReplicaState.ACTIVE, {
               partitionId: 'test-partition',
               reason: 'test',
             });
@@ -240,7 +240,7 @@ test('Property 14: Metrics Accuracy', async (t) => {
 
           // Now transition to removing (concurrent removes)
           for (let i = 0; i < numReplicas; i++) {
-            stateMachine.transition(`replica-${i}`, ReplicaState.REMOVING, {
+            await stateMachine.transition(`replica-${i}`, ReplicaState.REMOVING, {
               partitionId: 'test-partition',
               reason: 'test',
             });
@@ -266,10 +266,10 @@ test('Property 14: Metrics Accuracy', async (t) => {
    */
   t.test('state counts in metrics match actual states', async (t) => {
     await fc.assert(
-      fc.property(
+      fc.asyncProperty(
         fc.constantFrom(...ALL_STATES.filter((s) => s !== ReplicaState.REMOVED)),
         fc.integer({min: 1, max: 3}),
-        (targetState, numReplicas) => {
+        async (targetState, numReplicas) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
@@ -279,7 +279,7 @@ test('Property 14: Metrics Accuracy', async (t) => {
           for (let i = 0; i < numReplicas; i++) {
             const path = getPathToState(targetState);
             for (const state of path) {
-              stateMachine.transition(`replica-${i}`, state, {
+              await stateMachine.transition(`replica-${i}`, state, {
                 partitionId: 'test-partition',
                 reason: 'test',
               });
@@ -305,10 +305,10 @@ test('Property 14: Metrics Accuracy', async (t) => {
    */
   t.test('current concurrent operations are accurate', async (t) => {
     await fc.assert(
-      fc.property(
+      fc.asyncProperty(
         fc.integer({min: 1, max: 3}),
         fc.integer({min: 1, max: 3}),
-        (numAdds, numRemoves) => {
+        async (numAdds, numRemoves) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
@@ -318,7 +318,7 @@ test('Property 14: Metrics Accuracy', async (t) => {
 
           // Create replicas in add transitional states
           for (let i = 0; i < numAdds; i++) {
-            stateMachine.transition(`add-replica-${i}`, ReplicaState.PENDING, {
+            await stateMachine.transition(`add-replica-${i}`, ReplicaState.PENDING, {
               partitionId: 'test-partition',
               reason: 'test',
             });
@@ -330,13 +330,13 @@ test('Property 14: Metrics Accuracy', async (t) => {
             // First get to active state
             const path = getPathToState(ReplicaState.ACTIVE);
             for (const state of path) {
-              stateMachine.transition(replicaId, state, {
+              await stateMachine.transition(replicaId, state, {
                 partitionId: 'test-partition',
                 reason: 'test',
               });
             }
             // Then transition to removing
-            stateMachine.transition(replicaId, ReplicaState.REMOVING, {
+            await stateMachine.transition(replicaId, ReplicaState.REMOVING, {
               partitionId: 'test-partition',
               reason: 'test',
             });

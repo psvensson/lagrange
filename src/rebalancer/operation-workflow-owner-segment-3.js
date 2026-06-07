@@ -130,7 +130,10 @@ class OperationWorkflowOwnerSegment3
         );
 
         const mutationBudget =
-          this.buildPriorityDispatchTransitionMutationBudget(now);
+          this.buildPriorityDispatchTransitionMutationBudget(
+            operation,
+            operation.createdAt ?? now,
+          );
         let transitionCommitted;
         try {
           transitionCommitted =

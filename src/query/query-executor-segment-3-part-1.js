@@ -16,7 +16,12 @@ const {
 
 class QueryExecutorSegment3Part1 extends QueryExecutorSegment2 {
   async delay(delayMs) {
-    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    await new Promise((resolve) => {
+      const timer = setTimeout(resolve, delayMs);
+      if (this.unrefRetryDelayTimers === true) {
+        timer.unref?.();
+      }
+    });
   }
 
   /**

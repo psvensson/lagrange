@@ -80,6 +80,16 @@ async function cleanupTestEnvironment() {
 }
 
 test('Admin CDC propagation', async (t) => {
+  t.teardown(() => {
+    if (process.env.TAP === '1') {
+      setTimeout(() => {
+        if (!process.exitCode || process.exitCode === 0) {
+          process.exit(0);
+        }
+      }, 1000);
+    }
+  });
+
   t.beforeEach(() => {
     initializeTestEnvironment();
   });

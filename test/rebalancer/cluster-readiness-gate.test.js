@@ -86,6 +86,10 @@ function createMockMessageRouter() {
   };
 }
 
+function allowImmediateReadinessRecheck(rebalancer) {
+  rebalancer.lastCheckAtMs = 0;
+}
+
 function createMockCoordinator() {
   return {
     getMoveSafetyError: () => null,
@@ -211,6 +215,7 @@ test('UnifiedRebalancer - Cluster Readiness Gate', async (t) => {
       t.equal(rebalancer.clusterReadinessConfirmed, false);
 
       // Second check — ready, confirms
+      allowImmediateReadinessRecheck(rebalancer);
       rebalancer.lastStateChangeTime = Date.now() - 20000;
       await rebalancer.checkRebalance();
       t.equal(rebalancer.clusterReadinessConfirmed, true);
@@ -238,6 +243,7 @@ test('UnifiedRebalancer - Cluster Readiness Gate', async (t) => {
       // Force the start time to be past the timeout
       rebalancer.clusterReadinessStartMs =
         Date.now() - CLUSTER_READINESS_TIMEOUT_MS - 1;
+      allowImmediateReadinessRecheck(rebalancer);
       rebalancer.lastStateChangeTime = Date.now() - 20000;
       await rebalancer.checkRebalance();
 

@@ -140,6 +140,71 @@ describe('startup-sql-runtime-handoff', () => {
       assert.strictEqual(cdcIntegrationService.sqlQueryEngine, sqlQueryEngine);
     });
 
+  it('syncs rebalance owner dependencies to the final runtime SQL engine',
+    () => {
+      const systemTableCache = {
+        get() {
+          return null;
+        },
+        has() {
+          return false;
+        },
+        filter() {
+          return [];
+        },
+        onCacheChange() {},
+        offCacheChange() {},
+      };
+      const messageRouter = {register() {}};
+      const cdcIntegrationService = CDCIntegrationSetup.createForBootstrap({
+        nodeId: 'joining-node',
+        messageRouter,
+      });
+      const sqlQueryEngine = {
+        setCDCIntegrationService() {},
+      };
+      const tablePolicyService = {};
+      let coordinatorSync = null;
+      let partitionSync = null;
+      const rebalanceCoordinator = {
+        syncOwnerDependencies(options) {
+          coordinatorSync = options;
+        },
+      };
+      const partitionRebalanceCoordinator = {
+        syncOwnerDependencies(options) {
+          partitionSync = options;
+        },
+      };
+      const partitionService = {
+        rebalanceCoordinator: partitionRebalanceCoordinator,
+      };
+      const owner = {
+        cdcIntegrationService,
+        rebalanceCoordinator,
+        tablePolicyService,
+        partitionServices: new Map([
+          ['replica-1', partitionService],
+        ]),
+      };
+
+      attachSqlRuntimeToStartupOwner({
+        owner,
+        sqlQueryEngine,
+        systemTableCache,
+        messageRouter,
+      });
+
+      assert.strictEqual(coordinatorSync.sqlQueryEngine, sqlQueryEngine);
+      assert.strictEqual(coordinatorSync.cdcIntegrationService, cdcIntegrationService);
+      assert.strictEqual(coordinatorSync.systemTableCache, systemTableCache);
+      assert.strictEqual(coordinatorSync.messageRouter, messageRouter);
+      assert.strictEqual(coordinatorSync.tablePolicyService, tablePolicyService);
+      assert.strictEqual(partitionService.sqlQueryEngine, sqlQueryEngine);
+      assert.strictEqual(partitionSync.sqlQueryEngine, sqlQueryEngine);
+      assert.strictEqual(partitionSync.cdcIntegrationService, cdcIntegrationService);
+    });
+
   it('seeds bootstrap leader routing bridges onto the final runtime engine during handoff',
     () => {
       const bootstrapTopologySnapshotOwner = {

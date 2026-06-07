@@ -1,5 +1,4 @@
 import {REPLICA_DISPATCH_SERVICE_SHARED} from './replica-dispatch-service-shared.js';
-import {ReplicaDispatchServiceSegment3} from './replica-dispatch-service-segment-3.js';
 import {MESSAGE_GROUP_SERVICE_HANDLER_ADDRESS} from '../node/message-group-service-handler-constants.js';
 import {REPLICA_HANDLER_ADDRESS} from '../node/replica-handler-constants.js';
 import {RUNTIME_SERVICE_HANDLER_ADDRESS} from '../node/runtime-service-handler-constants.js';
@@ -7,33 +6,17 @@ import {UNIFIED_SERVICE_TYPE} from '../constants/index.js';
 
 const {
   COLUMN,
-  CONTROL_PLANE_READINESS_DIMENSION,
-  ControlPlaneField,
-  ControlPlaneReadinessService,
   DISPATCH_ERROR_MSG,
   DISPATCH_EVENT,
   DISPATCH_LOG_MSG,
-  DISPATCH_QUEUE_NAME,
   DISPATCH_READINESS_ERROR_REASON,
-  DISPATCH_READINESS_MESSAGE,
-  DISPATCH_READINESS_REASON,
   DISPATCH_SUBSYSTEM,
-  NUM,
-  OPERATION_METADATA_KEY,
   REPLICA_DISPATCH_SERVICE_LITERAL,
-  ReplicaOperationField,
   SERVICE_STATUS,
   SERVICE_TYPE,
-  STRING,
   SYSTEM_TABLE_NAME,
   TYPEOF,
-  getOperationMetadataObject,
-  getOperationMetadataString,
-  getOperationMetadataStringArray,
-  isSystemTablePartition,
-  isRetryableControlPlaneError,
   unwrapRowReadResult,
-  wasNodeRecordReadyWhenWritten,
 } = REPLICA_DISPATCH_SERVICE_SHARED;
 
 const LOCAL_DISPATCH_HANDLER_ADDRESS = Object.freeze({
@@ -50,12 +33,6 @@ const LOCAL_DISPATCH_HANDLER_ADDRESS = Object.freeze({
     handlerId: RUNTIME_SERVICE_HANDLER_ADDRESS.HANDLER_ID,
   }),
 });
-const DISPATCH_RETRY_READY_NODE_DIMENSIONS = Object.freeze([
-  CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
-  CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-]);
-
-
 class ReplicaDispatchServiceDispatchObservationMethods {
   /**
    * Emit one dispatch failure diagnostic and dedupe exact repeats.
@@ -519,11 +496,67 @@ class ReplicaDispatchServiceDispatchObservationMethods {
     return Array.isArray(rows) ? rows : [];
   }
 
+  /**
+   * Read all rows through injected metadata owners when available, falling back
+   * to direct cache scans only when this dispatch service owns no row reader.
+   * @param {string} tableName - System table name.
+   * @return {Promise<Array<Object>>} Cached rows.
+   * @private
+   */
+  async getOwnerBackedSystemTableRowsFromCache(tableName) {
+    if (
+      tableName === SYSTEM_TABLE_NAME.NODES &&
+      this.nodesOwner &&
+      typeof this.nodesOwner.listNodesFromCache === TYPEOF.FUNCTION
+    ) {
+      const result = await this.nodesOwner.listNodesFromCache();
+      return Array.isArray(result?.rows) ? result.rows : [];
+    }
+    if (
+      tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
+      this.replicaOperationsOwner &&
+      typeof this.replicaOperationsOwner.listReplicaOperationsFromCache ===
+        TYPEOF.FUNCTION
+    ) {
+      const result =
+        await this.replicaOperationsOwner.listReplicaOperationsFromCache();
+      return Array.isArray(result?.rows) ? result.rows : [];
+    }
+    if (
+      tableName === SYSTEM_TABLE_NAME.SERVICES &&
+      this.servicesOwner &&
+      typeof this.servicesOwner.listServicesFromCache === TYPEOF.FUNCTION
+    ) {
+      const result = await this.servicesOwner.listServicesFromCache();
+      return Array.isArray(result?.rows) ? result.rows : [];
+    }
+    if (
+      (
+        tableName === SYSTEM_TABLE_NAME.NODES &&
+        this.nodesOwner
+      ) ||
+      (
+        tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
+        this.replicaOperationsOwner
+      ) ||
+      (
+        tableName === SYSTEM_TABLE_NAME.SERVICES &&
+        this.servicesOwner
+      )
+    ) {
+      return [];
+    }
+    return this.getSystemTableRowsFromCache(tableName);
+  }
 }
 
 function createReplicaDispatchServiceDispatchObservationMethods() {
   return Object.fromEntries(
-    Object.entries(Object.getOwnPropertyDescriptors(ReplicaDispatchServiceDispatchObservationMethods.prototype))
+    Object.entries(
+      Object.getOwnPropertyDescriptors(
+        ReplicaDispatchServiceDispatchObservationMethods.prototype,
+      ),
+    )
       .filter(([name]) => name !== 'constructor'),
   );
 }

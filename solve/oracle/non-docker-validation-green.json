@@ -1,0 +1,7 @@
+{
+  "metric": 1,
+  "target": 0,
+  "done": false,
+  "classification": "validation_pending",
+  "detail": "Pending live validation: npm run test:sharded:all, npm run test:pgwire, npm run test:static, npm run lint, and npm run audit:file-size. Excluded: distributed Docker harness scenario scripts."
+}

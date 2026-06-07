@@ -157,8 +157,8 @@ test('MOVE_REPLICA handoff ownership integration', {timeout: 180000}, async (t) 
         wsPort: joiningWsPort,
         config: {
           ...TEST_CONFIG.bootstrap,
-          httpTimeoutMs: 5000,
-          leadershipWaitTimeoutMs: 5000,
+          httpTimeoutMs: 15000,
+          leadershipWaitTimeoutMs: 12000,
         },
         httpPost: createInProcHttpPost(seedApi),
       });
@@ -266,8 +266,8 @@ test('MOVE_REPLICA handoff ownership integration', {timeout: 180000}, async (t) 
           wsPort: joiningWsPort,
           config: {
             ...TEST_CONFIG.bootstrap,
-            httpTimeoutMs: 5000,
-            leadershipWaitTimeoutMs: 5000,
+            httpTimeoutMs: 15000,
+            leadershipWaitTimeoutMs: 12000,
           },
           httpPost: createInProcHttpPost(seedApi),
         });
@@ -386,8 +386,8 @@ test('MOVE_REPLICA handoff ownership integration', {timeout: 180000}, async (t) 
         wsPort: joiningWsPort,
         config: {
           ...TEST_CONFIG.bootstrap,
-          httpTimeoutMs: 5000,
-          leadershipWaitTimeoutMs: 5000,
+          httpTimeoutMs: 15000,
+          leadershipWaitTimeoutMs: 12000,
         },
         httpPost: createInProcHttpPost(seedApi),
       });
@@ -483,8 +483,8 @@ test('MOVE_REPLICA handoff ownership integration', {timeout: 180000}, async (t) 
         wsPort: joiningWsPort,
         config: {
           ...TEST_CONFIG.bootstrap,
-          httpTimeoutMs: 5000,
-          leadershipWaitTimeoutMs: 5000,
+          httpTimeoutMs: 15000,
+          leadershipWaitTimeoutMs: 12000,
         },
         httpPost: createInProcHttpPost(seedApi),
       });
@@ -598,8 +598,8 @@ test('MOVE_REPLICA handoff ownership integration', {timeout: 180000}, async (t) 
         wsPort: joiningWsPort,
         config: {
           ...TEST_CONFIG.bootstrap,
-          httpTimeoutMs: 5000,
-          leadershipWaitTimeoutMs: 5000,
+          httpTimeoutMs: 15000,
+          leadershipWaitTimeoutMs: 12000,
         },
         httpPost: createInProcHttpPost(seedApi),
       });

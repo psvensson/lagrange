@@ -806,6 +806,44 @@ test('dependency bundle — buildRebalancerDependencyBundle returns ' +
   await shutdownPartitionService(ps);
 });
 
+test('dependency bundle — setSqlQueryEngine syncs coordinator before ' +
+  'rebalancer exists', async (t) => {
+  const cache = createMockCache();
+  const cdc = createMockCdcService();
+  const policy = createMockPolicyService();
+  const router = createMockMessageRouter();
+  const sql = createMockSqlEngine();
+  const coordinator = createMockCoordinator();
+
+  const ps = createPartitionService();
+  ps.metadataPublicationReadinessState = createMockReadinessState(true);
+  ps.messageRouter = router;
+  ps.isLeader = false;
+  ps.setSystemTableCache(cache);
+  ps.setCdcIntegrationService(cdc);
+  ps.setTablePolicyService(policy);
+  ps.setRebalanceCoordinator(coordinator);
+
+  t.equal(ps.rebalancer, null,
+    'rebalancer is not created before leader/background gates open');
+
+  ps.setSqlQueryEngine(sql);
+
+  t.equal(ps.rebalancer, null,
+    'setSqlQueryEngine does not bypass rebalancer creation gates');
+  t.equal(coordinator.systemTableCache, cache,
+    'coordinator cache synced from complete bundle');
+  t.equal(coordinator.cdcIntegrationService, cdc,
+    'coordinator cdcIntegrationService synced from complete bundle');
+  t.equal(coordinator.tablePolicyService, policy,
+    'coordinator tablePolicyService synced from complete bundle');
+  t.equal(coordinator.messageRouter, router,
+    'coordinator messageRouter synced from complete bundle');
+  t.equal(coordinator.sqlQueryEngine, sql,
+    'coordinator sqlQueryEngine synced from complete bundle');
+  await shutdownPartitionService(ps);
+});
+
 test('dependency bundle — applyRebalancerDependencies updates ' +
   'existing rebalancer via bundle (single wiring path)', async (t) => {
   const ps = createPartitionService();

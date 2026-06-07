@@ -47,10 +47,10 @@ test('Property 12: Concurrent Operation Limits', async (t) => {
    */
   t.test('add operations blocked when limit exceeded', async (t) => {
     await fc.assert(
-      fc.property(
+      fc.asyncProperty(
         fc.integer({min: 1, max: 5}),
         fc.integer({min: 0, max: 3}),
-        (limit, extraReplicas) => {
+        async (limit, extraReplicas) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
@@ -59,7 +59,7 @@ test('Property 12: Concurrent Operation Limits', async (t) => {
 
           // Add replicas up to the limit
           for (let i = 0; i < limit; i++) {
-            stateMachine.transition(`replica-${i}`, ReplicaState.PENDING, {
+            await stateMachine.transition(`replica-${i}`, ReplicaState.PENDING, {
               partitionId: `partition-${i}`,
               reason: 'test',
             });
@@ -70,7 +70,7 @@ test('Property 12: Concurrent Operation Limits', async (t) => {
 
           // Add more replicas beyond limit
           for (let i = 0; i < extraReplicas; i++) {
-            stateMachine.transition(
+            await stateMachine.transition(
               `extra-replica-${i}`,
               ReplicaState.PENDING,
               {
@@ -99,10 +99,10 @@ test('Property 12: Concurrent Operation Limits', async (t) => {
    */
   t.test('add operations allowed when below limit', async (t) => {
     await fc.assert(
-      fc.property(
+      fc.asyncProperty(
         fc.integer({min: 2, max: 10}),
         fc.integer({min: 0, max: 5}),
-        (limit, numReplicas) => {
+        async (limit, numReplicas) => {
           const belowLimit = Math.min(numReplicas, limit - 1);
 
           const stateMachine = new ReplicaStateMachine({
@@ -113,7 +113,7 @@ test('Property 12: Concurrent Operation Limits', async (t) => {
 
           // Add replicas below the limit
           for (let i = 0; i < belowLimit; i++) {
-            stateMachine.transition(`replica-${i}`, ReplicaState.PENDING, {
+            await stateMachine.transition(`replica-${i}`, ReplicaState.PENDING, {
               partitionId: `partition-${i}`,
               reason: 'test',
             });
@@ -139,10 +139,10 @@ test('Property 12: Concurrent Operation Limits', async (t) => {
    */
   t.test('remove operations blocked when limit exceeded', async (t) => {
     await fc.assert(
-      fc.property(
+      fc.asyncProperty(
         fc.integer({min: 1, max: 5}),
         fc.integer({min: 0, max: 3}),
-        (limit, extraReplicas) => {
+        async (limit, extraReplicas) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
@@ -153,7 +153,7 @@ test('Property 12: Concurrent Operation Limits', async (t) => {
           for (let i = 0; i < limit + extraReplicas; i++) {
             const path = getPathToState(ReplicaState.ACTIVE);
             for (const state of path) {
-              stateMachine.transition(`replica-${i}`, state, {
+              await stateMachine.transition(`replica-${i}`, state, {
                 partitionId: `partition-${i}`,
                 reason: 'test',
               });
@@ -162,7 +162,7 @@ test('Property 12: Concurrent Operation Limits', async (t) => {
 
           // Transition to removing up to limit
           for (let i = 0; i < limit; i++) {
-            stateMachine.transition(`replica-${i}`, ReplicaState.REMOVING, {
+            await stateMachine.transition(`replica-${i}`, ReplicaState.REMOVING, {
               partitionId: `partition-${i}`,
               reason: 'test removal',
             });
@@ -173,7 +173,7 @@ test('Property 12: Concurrent Operation Limits', async (t) => {
 
           // Add more to removing beyond limit
           for (let i = limit; i < limit + extraReplicas; i++) {
-            stateMachine.transition(`replica-${i}`, ReplicaState.REMOVING, {
+            await stateMachine.transition(`replica-${i}`, ReplicaState.REMOVING, {
               partitionId: `partition-${i}`,
               reason: 'test removal',
             });
@@ -198,10 +198,10 @@ test('Property 12: Concurrent Operation Limits', async (t) => {
    */
   t.test('remove operations allowed when below limit', async (t) => {
     await fc.assert(
-      fc.property(
+      fc.asyncProperty(
         fc.integer({min: 2, max: 10}),
         fc.integer({min: 0, max: 5}),
-        (limit, numReplicas) => {
+        async (limit, numReplicas) => {
           const belowLimit = Math.min(numReplicas, limit - 1);
 
           const stateMachine = new ReplicaStateMachine({
@@ -214,7 +214,7 @@ test('Property 12: Concurrent Operation Limits', async (t) => {
           for (let i = 0; i < belowLimit; i++) {
             const path = getPathToState(ReplicaState.ACTIVE);
             for (const state of path) {
-              stateMachine.transition(`replica-${i}`, state, {
+              await stateMachine.transition(`replica-${i}`, state, {
                 partitionId: `partition-${i}`,
                 reason: 'test',
               });
@@ -223,7 +223,7 @@ test('Property 12: Concurrent Operation Limits', async (t) => {
 
           // Transition to removing
           for (let i = 0; i < belowLimit; i++) {
-            stateMachine.transition(`replica-${i}`, ReplicaState.REMOVING, {
+            await stateMachine.transition(`replica-${i}`, ReplicaState.REMOVING, {
               partitionId: `partition-${i}`,
               reason: 'test removal',
             });
@@ -248,9 +248,9 @@ test('Property 12: Concurrent Operation Limits', async (t) => {
    */
   t.test('add limit considers all add transitional states', async (t) => {
     await fc.assert(
-      fc.property(
+      fc.asyncProperty(
         fc.integer({min: 3, max: 6}),
-        (limit) => {
+        async (limit) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
@@ -259,29 +259,29 @@ test('Property 12: Concurrent Operation Limits', async (t) => {
 
           // Distribute replicas across pending, creating, syncing
           // One in each state
-          stateMachine.transition('replica-pending', ReplicaState.PENDING, {
+          await stateMachine.transition('replica-pending', ReplicaState.PENDING, {
             partitionId: 'p1',
             reason: 'test',
           });
 
-          stateMachine.transition('replica-creating', ReplicaState.PENDING, {
+          await stateMachine.transition('replica-creating', ReplicaState.PENDING, {
             partitionId: 'p2',
             reason: 'test',
           });
-          stateMachine.transition('replica-creating', ReplicaState.CREATING, {
+          await stateMachine.transition('replica-creating', ReplicaState.CREATING, {
             partitionId: 'p2',
             reason: 'test',
           });
 
-          stateMachine.transition('replica-syncing', ReplicaState.PENDING, {
+          await stateMachine.transition('replica-syncing', ReplicaState.PENDING, {
             partitionId: 'p3',
             reason: 'test',
           });
-          stateMachine.transition('replica-syncing', ReplicaState.CREATING, {
+          await stateMachine.transition('replica-syncing', ReplicaState.CREATING, {
             partitionId: 'p3',
             reason: 'test',
           });
-          stateMachine.transition('replica-syncing', ReplicaState.SYNCING, {
+          await stateMachine.transition('replica-syncing', ReplicaState.SYNCING, {
             partitionId: 'p3',
             reason: 'test',
           });

@@ -493,7 +493,6 @@ test('NodeReintegrationService - skips stale reintegration completion overwrite'
         node_id: 'node-1',
         status: NodeStatus.RECOVERING,
         last_heartbeat: node.last_heartbeat,
-        recovered_at: node.recovered_at,
       },
       'reintegration guard should target the observed recovering node snapshot',
     );

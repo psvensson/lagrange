@@ -434,8 +434,8 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
           'replica_operations',
           concurrentOp.operationId,
           {
-            status: 'active',
-            workflow_step: WORKFLOW_STEP.ACTIVE,
+            status: 'creating',
+            workflow_step: WORKFLOW_STEP.CREATING,
           },
         );
 

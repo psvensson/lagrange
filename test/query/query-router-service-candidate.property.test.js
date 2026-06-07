@@ -29,13 +29,23 @@ logger.initialize({level: 'error'});
 /**
  * Create a mock system cache with configurable services.
  * @param {Array<Object>} services - Array of service objects to return
+ * @param {Array<Object>} partitions - Array of partition objects to return
  * @return {Object} Mock system cache
  */
-function createMockSystemCache(services) {
+function createMockSystemCache(services, partitions = []) {
   return {
+    get: (tableName, id) => {
+      if (tableName === TABLES.PARTITIONS) {
+        return partitions.find((partition) => partition.partition_id === id);
+      }
+      return null;
+    },
     filter: (tableName, predicate) => {
       if (tableName === TABLES.SERVICES) {
         return services.filter(predicate);
+      }
+      if (tableName === TABLES.PARTITIONS) {
+        return partitions.filter(predicate);
       }
       return [];
     },
@@ -267,7 +277,11 @@ test('Property 3: QueryRouter Service Candidate Discovery', async (t) => {
             ),
           );
 
-          const systemCache = createMockSystemCache(services);
+          const partitions = [{
+            partition_id: partitionId,
+            leader_node_id: leaderConfig.nodeId,
+          }];
+          const systemCache = createMockSystemCache(services, partitions);
           const messageRouter = createMockMessageRouter();
 
           const router = new QueryRouter({

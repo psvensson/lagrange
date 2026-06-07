@@ -865,9 +865,6 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchReplayReadiness {
         RECONCILE_REASON.CONTROL_PLANE_PUBLICATION_CACHE_UPDATE,
         record,
       );
-      this.enqueueLocalReadyNodeDispatchRetry(
-        RECONCILE_REASON.CONTROL_PLANE_PUBLICATION_CACHE_UPDATE,
-      );
       return;
     }
 

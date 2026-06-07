@@ -1,0 +1,30 @@
+{
+  "id": "non-docker-validation-green",
+  "statement": "All requested non-Docker-harness validation passes: TAP tests excluding distributed Docker harness scenarios, lint, static analysis, runtime grammar, and file-size audit are green.",
+  "priority": 1,
+  "class": "product",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/non-docker-validation-green.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "non-docker-validation-green-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/non-docker-validation-green.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

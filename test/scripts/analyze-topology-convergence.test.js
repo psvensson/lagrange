@@ -76,12 +76,12 @@ const WORKFLOW_PROGRESS_BOUNDARY = 'workflow_progress';
 const REBALANCER_LEADER_OWNER = 'rebalancer_leader';
 const OPERATION_SCHEDULING_BOUNDARY = 'operation_scheduling';
 const GLOSSARY_REASON = 'priority_recovery_progress_blocked';
-const GLOSSARY_SEMANTIC_STATE = 'recovering_in_flight';
 const PACKAGE_EVIDENCE_HEADING = '## Generated Owner Evidence Block';
 const OWNER_DOMINANT_REASON = 'priority_recovery_progress_blocked';
 const EDGE_STATE_BLOCKED = 'blocked';
 const EDGE_STATE_DEFERRED = 'deferred';
 const EDGE_STATE_RETRYABLE = 'retryable';
+const EDGE_STATE_SATISFIED = 'satisfied';
 const BLOCKED_REASONS = ['priority_recovery_progress_blocked'];
 const PRIORITY_RECOVERY_PROGRESS_CLASSES_PATH =
   'report.scenarios[0].publicationConvergence.activeGate.progress.priorityRecoveryProgressClasses';
@@ -373,8 +373,8 @@ describe('analyze-topology-convergence CLI', () => {
       glossary.reasons.some((entry) => entry.value === GLOSSARY_REASON),
     );
     assert.ok(
-      glossary.semanticStates.some((entry) =>
-        entry.value === GLOSSARY_SEMANTIC_STATE),
+      glossary.sourceFields.some((entry) =>
+        entry.value === 'semanticStateId'),
     );
   });
 
@@ -519,7 +519,7 @@ describe('analyze-topology-convergence CLI', () => {
     assert.equal(output.producer.edge, PUBLICATION_EDGE_ID);
     assert.equal(output.producer.owner, TOPOLOGY_PUBLICATION_OWNER);
     assert.equal(output.producer.boundary, PUBLICATION_CONVERGENCE_BOUNDARY);
-    assert.equal(output.producer.state, EDGE_STATE_BLOCKED);
+    assert.equal(output.producer.state, EDGE_STATE_SATISFIED);
     assert.deepEqual(output.producer.reasons, [PUBLICATION_PENDING_REASON]);
     assert.equal(output.operationWorkflow.edge, PRIORITY_EDGE_ID);
     assert.equal(output.operationWorkflow.owner, OPERATION_WORKFLOW_OWNER);
@@ -931,7 +931,7 @@ describe('analyze-topology-convergence CLI', () => {
       assert.equal(output.consumer.edge, ACTIVE_GATE_EDGE_ID);
       assert.equal(output.consumer.owner, STARTUP_ACTIVE_GATE_OWNER);
       assert.equal(output.consumer.boundary, SNAPSHOT_COVERAGE_BOUNDARY);
-      assert.equal(output.consumer.state, EDGE_STATE_BLOCKED);
+    assert.equal(output.consumer.state, EDGE_STATE_DEFERRED);
       assert.deepEqual(output.handoffContract, {
         state: ACTIVE_GATE_OWNER_COHORT_STATE_PENDING,
         reasonCode: OWNER_RECONCILE_PENDING_REASON,
@@ -1134,6 +1134,7 @@ function buildConnectionClosedActiveGateFixture() {
               expectedNodeCount: EXPECTED_NODE_COUNT,
               snapshotCoverageNodeCount: SNAPSHOT_COVERAGE_ZERO_OF_FIVE,
               snapshotCoverageComplete: false,
+              selectedSnapshotNodeId: ACTIVE_GATE_SELECTED_SNAPSHOT_SOURCE,
               selectedSnapshotError:
                 ACTIVE_GATE_CONNECTION_CLOSED_SELECTED_SNAPSHOT_ERROR,
               readinessDelay: {

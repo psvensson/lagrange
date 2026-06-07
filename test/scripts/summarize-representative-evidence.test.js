@@ -20,7 +20,7 @@ const PRIORITY_RECOVERY_EDGE = 'priority_recovery_partition_progress';
 const ACTIVE_GATE_SNAPSHOT_EDGE = 'active_gate_snapshot_coverage';
 const OPERATION_WORKFLOW_OWNER = 'operation_workflow_owner';
 const STARTUP_ACTIVE_GATE_OWNER = 'startup_active_gate_owner';
-const REBALANCER_HANDOFF_BOUNDARY = 'rebalancer_handoff';
+const WORKFLOW_PROGRESS_BOUNDARY = 'workflow_progress';
 const SNAPSHOT_COVERAGE_BOUNDARY = 'snapshot_coverage';
 const CLASSIFIED_BACKPRESSURE_OUTCOME = 'accept_classified_backpressure';
 const PRIORITY_RECOVERY_FAILURE_CLASS = 'priority_recovery_event_wait';
@@ -53,7 +53,7 @@ describe('representative evidence summary', () => {
     assert.equal(summary.schemaVersion, SUMMARY_SCHEMA);
     assert.equal(summary.topology.firstFrontierEdgeId, PRIORITY_RECOVERY_EDGE);
     assert.equal(summary.topology.dominantWitness.owner, OPERATION_WORKFLOW_OWNER);
-    assert.equal(summary.topology.dominantWitness.boundary, REBALANCER_HANDOFF_BOUNDARY);
+    assert.equal(summary.topology.dominantWitness.boundary, WORKFLOW_PROGRESS_BOUNDARY);
     assert.equal(summary.causal.outcome, CLASSIFIED_BACKPRESSURE_OUTCOME);
     assert.equal(summary.causal.dominantFailureClass, PRIORITY_RECOVERY_FAILURE_CLASS);
     assert.equal(summary.causal.criticalPath[0].edgeId, PRIORITY_RECOVERY_EDGE);

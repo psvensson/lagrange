@@ -25,7 +25,7 @@
     "model:contracts": "npm run model:contract-records && npm run model:invariants && npm run model:decision-tables && npm run model:statecharts && npm run model:owner-traces && npm run model:alloy && npm run model:check",
     "pretest": "npm run audit:state-machine-pressure",
     "test": "tap",
-    "test:fast": "tap $(find test -type f -name '*.test.js' ! -path 'test/integration/*' ! -path 'test/bootstrap/*' | sort)",
+    "test:fast": "find test -type f -name '*.test.js' ! -path 'test/integration/*' ! -path 'test/bootstrap/*' -print0 | sort -z | xargs -0 -r -n 100 tap",
     "test:integration:1": "tap $(cat test/shards/integration-1.txt)",
     "test:integration:2": "tap $(cat test/shards/integration-2.txt)",
     "test:integration:3": "tap $(cat test/shards/integration-3.txt)",
@@ -127,7 +127,7 @@
     "solve:health": "node scripts/solve.js health",
     "quest:context": "node scripts/quest-context.js",
     "hooks:install": "node scripts/install-git-hooks.js",
-    "test:unit": "tap $(find test -type f -name '*.test.js' ! -name '*.integration.test.js' ! -path 'test/integration/*' ! -path 'test/bootstrap/*' | sort)",
+    "test:unit": "find test -type f -name '*.test.js' ! -name '*.integration.test.js' ! -path 'test/integration/*' ! -path 'test/bootstrap/*' -print0 | sort -z | xargs -0 -r -n 100 tap",
     "test:distributed:boundary:transition": "node test/distributed/harness/__tests__/boundary-transition-scenarios.test.js",
     "test:distributed:checkpoint:7node:transaction-recovery": "node test/distributed/run.js --config test/distributed/config/local-benchmark-7node.json --scenario seven-node-read-write-load-transaction-recovery",
     "analyze:causal-model": "node scripts/analyze-causal-model.js"

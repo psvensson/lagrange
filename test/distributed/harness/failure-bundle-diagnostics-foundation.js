@@ -320,7 +320,8 @@ export const PUBLICATION_MISSING_PUBLISHED_EVIDENCE_RULES = Object.freeze([
       evidence.activeGateSnapshotCoveragePending === true &&
       evidence.activeGatePriorityRecoveryActuationEvidenceOpen === true &&
       evidence.hasExplicitPriorityRecoveryObservation === true &&
-      evidence.hasCoverageCanonicalMissingActiveNodeGateDebt !== true,
+      evidence.hasCoverageCanonicalMissingActiveNodeGateDebt !== true &&
+      evidence.hasCanonicalMissingPublishedPublicationDebt !== true,
     select: () => Object.freeze({
       nodeIds: [],
       count: ZERO,

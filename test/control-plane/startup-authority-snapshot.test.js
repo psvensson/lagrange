@@ -69,7 +69,7 @@ test('ControlPlaneReadinessService builds recovery-pending startup authority sna
     'startup authority should preserve the shared recovery-gate reasons',
   );
   t.match(snapshot.publicationRecoveryGate, {
-    state: 'ack_pending',
+    state: 'publication_pending',
     pendingAckCount: 0,
   });
   t.end();

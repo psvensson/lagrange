@@ -560,4 +560,7 @@ export {
   readFirstAvailableRecord,
   readFirstRecord,
   readRecordField,
+  readSelectedSnapshotObservationFromFailureBundle,
+  summarizeOwnerRpcCacheRepairDeferrals,
+  summarizeSelectedSnapshotRepairEvidenceRecovery,
 };

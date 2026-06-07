@@ -5,6 +5,7 @@ const {
   AUTHORITATIVE_TRANSITION_RECOVERY_STATUS,
   ControlPlaneReadinessService,
   DISPATCH_RETRY_DELAY_MS,
+  INITIAL_PARTITION_IDS,
   NUM,
   OPERATION_METADATA_KEY,
   OPERATION_TRANSITION_REASON,
@@ -16,6 +17,7 @@ const {
   RECOVERABLE_TRANSITION_ROLLBACK_STATUS,
   REPLICA_OPERATION_DISPATCH_TIMEOUT_MS,
   SYSTEM_TABLE_NAME,
+  TIMEOUT_BUDGET_DEFAULT,
   TRANSITION_RECOVERY_READ_OPTIONS,
   TRANSITION_RECOVERY_SQL,
   TRANSITION_STEP_OPTIONS,
@@ -31,7 +33,7 @@ const {
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
 const PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS =
-  REPLICA_OPERATION_DISPATCH_TIMEOUT_MS;
+  TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS;
 const PRIORITY_DISPATCH_TRANSITION_MUTATION_STEPS = new Set([
   WORKFLOW_STEP.SENDING,
   WORKFLOW_STEP.CREATING,
@@ -459,7 +461,10 @@ class OperationWorkflowTransitionOrchestration
           {
             ...persistOptions,
             timeoutBudget:
-              this.buildPriorityDispatchTransitionMutationBudget(now),
+              this.buildPriorityDispatchTransitionMutationBudget(
+                operation,
+                operation.createdAt ?? now,
+              ),
           } :
           persistOptions;
       const expectedWorkflowStep =
@@ -698,15 +703,36 @@ class OperationWorkflowTransitionOrchestration
   /**
    * Build the per-attempt mutation budget for priority dispatch transitions.
    *
+   * @param {Object|null} operation
    * @param {number} startedAtMs
    * @return {Object}
    * @private
    */
-  buildPriorityDispatchTransitionMutationBudget(startedAtMs) {
+  buildPriorityDispatchTransitionMutationBudget(operation, startedAtMs) {
+    const normalizedStartedAtMs = Number(startedAtMs);
     return createTopLevelOperationBudget({
-      configuredBudgetMs: PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS,
-      startedAtMs,
+      configuredBudgetMs:
+        this.resolvePriorityDispatchTransitionMutationBudgetMs(operation),
+      startedAtMs: Number.isFinite(normalizedStartedAtMs) ?
+        normalizedStartedAtMs :
+        Date.now(),
     });
+  }
+
+  /**
+   * SQL write-operation dispatch owns the short per-attempt repair lane; other
+   * priority control-plane claims spend the operation-level budget.
+   *
+   * @param {Object|null} operation
+   * @return {number}
+   * @private
+   */
+  resolvePriorityDispatchTransitionMutationBudgetMs(operation) {
+    const partitionId = String(operation?.partitionId || '').trim();
+    return partitionId ===
+      INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS] ?
+      REPLICA_OPERATION_DISPATCH_TIMEOUT_MS :
+      PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS;
   }
 
   /**

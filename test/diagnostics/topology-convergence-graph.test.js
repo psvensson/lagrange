@@ -56,6 +56,7 @@ const ACTIVE_GATE_STATE_READY = 'ready';
 const PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
 const RECOVERY_PROTOCOL_PRIORITY_SPREAD_PENDING = 'priority_spread_pending';
 const PUBLICATION_OWNER_ACK_STATE_ACKNOWLEDGED = 'acknowledged';
+const PUBLICATION_OWNER_ACK_STATE_UNAVAILABLE = 'unavailable';
 const PUBLICATION_OWNER_FRESHNESS_FENCE_CONSUMER_LAG = 'consumer_lag';
 const PUBLICATION_OWNER_RECOVERY_OUTCOME_WAITING_FOR_CONSUMER =
   'waiting_for_consumer';
@@ -70,25 +71,20 @@ const EDGE_TOP_FAILURE_REASONS = 'top_failure_reasons';
 const OWNER_TOPOLOGY_PUBLICATION = 'topology_publication_owner';
 const BOUNDARY_WORKFLOW_PROGRESS = 'workflow_progress';
 const BOUNDARY_REBALANCER_HANDOFF = 'rebalancer_handoff';
-const ARTIFACT_PATH_20260507 =
-  'test-output/reports/.playback/rolling-restart-after-bounded-retryable-seed-contact-probe-20260507T072145Z/rolling-restart/failure-bundle.json';
-const REPORT_ARTIFACT_PATH_20260507 =
-  'test-output/reports/rolling-restart-after-bounded-retryable-seed-contact-probe-20260507T072145Z.report.json';
-const REPORT_ARTIFACT_PATH_PUBLICATION_ACK_FRONTIER =
-  'test-output/reports/rolling-restart-spec-led-runtime-modularization-final.report.json';
-const REPORT_ARTIFACT_PATH_PUBLICATION_ACK_REDUCED =
-  'test-output/reports/rolling-restart-spec-led-runtime-modularization-publication-ack.report.json';
-const REPORT_ARTIFACT_PATH_PUBLICATION_COUNT_ONLY_ACK =
-  'test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-workflow-timeout.report.json';
-const REPORT_ARTIFACT_PATH_PUBLICATION_LAG =
-  'test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-publication-lag.report.json';
-const REPORT_ARTIFACT_PATH_CURRENT_READINESS_SUPPORT =
-  'test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-direct-chain-owner-proof.report.json';
-const REPORT_ARTIFACT_PATH_ACTIVE_GATE_OWNER_TRUTH =
-  'test-output/reports/rolling-restart-green-gate-after-active-gate-owner-truth.report.json';
-const REPORT_ARTIFACT_PATH_PUBLICATION_PROJECTION_RECONCILIATION =
-  'test-output/reports/rolling-restart-green-gate-after-priority-recovery-workflow-progress-after-snapshot-coverage.report.json';
-const REPORT_ARTIFACT_PATH_NETWORK_PARTITION = 'test-output/report.json';
+const TOPOLOGY_CONVERGENCE_FIXTURE_DIR =
+  'test/scripts/__fixtures__/topology-convergence';
+const ACTIVE_GATE_SNAPSHOT_FIXTURE_PATH =
+  `${TOPOLOGY_CONVERGENCE_FIXTURE_DIR}/active-gate-snapshot.fixture.json`;
+const ACTIVE_GATE_SNAPSHOT_PARTIAL_RESIDUAL_FIXTURE_PATH =
+  `${TOPOLOGY_CONVERGENCE_FIXTURE_DIR}/active-gate-snapshot-partial-residual.fixture.json`;
+const PUBLICATION_ACTIVE_GATE_REDUCED_HANDOFF_FIXTURE_PATH =
+  `${TOPOLOGY_CONVERGENCE_FIXTURE_DIR}/publication-active-gate-reduced-handoff.fixture.json`;
+const PUBLICATION_OPERATION_ACTIVE_GATE_HANDOFF_FIXTURE_PATH =
+  `${TOPOLOGY_CONVERGENCE_FIXTURE_DIR}/publication-operation-active-gate-handoff.fixture.json`;
+const PUBLICATION_COUNT_ONLY_ACK_FIXTURE_PATH =
+  `${TOPOLOGY_CONVERGENCE_FIXTURE_DIR}/publication-count-only-ack.fixture.json`;
+const RETRYABLE_PRIORITY_RECOVERY_FIXTURE_PATH =
+  `${TOPOLOGY_CONVERGENCE_FIXTURE_DIR}/priority-workflow-progress-recovering-in-flight.fixture.json`;
 const PUBLICATION_ACK_PENDING_STATUS = 'ACK_PENDING';
 const PUBLICATION_UNKNOWN_STATUS = 'UNKNOWN';
 const PUBLICATION_PENDING_REASON = 'publication_pending';
@@ -297,6 +293,85 @@ function buildAckPendingPublicationFixtureFailureBundle() {
   };
 }
 
+function readJsonArtifact(artifactPath) {
+  return JSON.parse(fs.readFileSync(artifactPath, JSON_ENCODING_UTF8));
+}
+
+function buildPublicationAckFrontierReport() {
+  const fixture = buildAckPendingPublicationFixtureFailureBundle();
+
+  return {
+    scenarios: [
+      {
+        ...fixture,
+        publicationConvergence: {
+          ...fixture.publicationConvergence,
+          pendingAckNodeIds: [PUBLICATION_ACK_FRONTIER_PENDING_NODE_ID],
+          missingPublishedNodeIds: [
+            ...PUBLICATION_ACK_FRONTIER_MISSING_NODE_IDS,
+          ],
+          missingPublishedCount:
+            PUBLICATION_ACK_FRONTIER_MISSING_NODE_IDS.length,
+        },
+      },
+    ],
+  };
+}
+
+function buildReducedPublicationAckReport() {
+  const report = readJsonArtifact(ACTIVE_GATE_SNAPSHOT_FIXTURE_PATH);
+  const scenario = report.scenarios[0];
+  const publicationConvergence = scenario.publicationConvergence;
+  const activeGate = publicationConvergence.activeGate;
+  const progress = activeGate.progress;
+
+  return {
+    scenarios: [
+      {
+        ...scenario,
+        publicationConvergence: {
+          ...publicationConvergence,
+          activeGate: {
+            ...activeGate,
+            progress: {
+              ...progress,
+              selectedSnapshotError:
+                ACTIVE_GATE_SELECTED_SNAPSHOT_SOURCE_TIMEOUT_ERROR,
+              readinessDelay: {
+                ...progress.readinessDelay,
+                error: ACTIVE_GATE_SELECTED_SNAPSHOT_SOURCE_TIMEOUT_ERROR,
+              },
+            },
+          },
+        },
+      },
+    ],
+  };
+}
+
+function buildPublicationProjectionReconciliationReport() {
+  const report = readJsonArtifact(
+    PUBLICATION_ACTIVE_GATE_REDUCED_HANDOFF_FIXTURE_PATH,
+  );
+  const scenario = report.scenarios[0];
+  const publicationConvergence = scenario.publicationConvergence;
+
+  return {
+    scenarios: [
+      {
+        ...scenario,
+        publicationConvergence: {
+          ...publicationConvergence,
+          publicationOwnerStream: {
+            ...publicationConvergence.publicationOwnerStream,
+            ackState: PUBLICATION_OWNER_ACK_STATE_UNAVAILABLE,
+          },
+        },
+      },
+    ],
+  };
+}
+
 function findEdge(edges, edgeId) {
   return edges.find((edge) => edge.id === edgeId);
 }
@@ -502,9 +577,7 @@ describe('TopologyConvergenceGraph', () => {
   });
 
   it('normalizes active-gate no-progress readiness evidence as inherited support evidence', () => {
-    const report = JSON.parse(
-      fs.readFileSync(REPORT_ARTIFACT_PATH_PUBLICATION_LAG, JSON_ENCODING_UTF8),
-    );
+    const report = readJsonArtifact(ACTIVE_GATE_SNAPSHOT_FIXTURE_PATH);
     const graph = buildTopologyConvergenceGraph(report);
     const readinessEdge = findEdge(graph.edges, EDGE_READINESS);
 
@@ -521,9 +594,7 @@ describe('TopologyConvergenceGraph', () => {
   });
 
   it('contracts current zero-attempt startup readiness no-progress to inherited support evidence', () => {
-    const report = JSON.parse(
-      fs.readFileSync(REPORT_ARTIFACT_PATH_CURRENT_READINESS_SUPPORT, JSON_ENCODING_UTF8),
-    );
+    const report = readJsonArtifact(ACTIVE_GATE_SNAPSHOT_FIXTURE_PATH);
     const graph = buildTopologyConvergenceGraph(report);
     const readinessEdge = findEdge(graph.edges, EDGE_READINESS);
 
@@ -539,11 +610,8 @@ describe('TopologyConvergenceGraph', () => {
   });
 
   it('contracts stalled active-gate no-progress readiness to inherited support evidence', () => {
-    const report = JSON.parse(
-      fs.readFileSync(
-        REPORT_ARTIFACT_PATH_ACTIVE_GATE_OWNER_TRUTH,
-        JSON_ENCODING_UTF8,
-      ),
+    const report = readJsonArtifact(
+      PUBLICATION_OPERATION_ACTIVE_GATE_HANDOFF_FIXTURE_PATH,
     );
     const graph = buildTopologyConvergenceGraph(report);
     const readinessEdge = findEdge(graph.edges, EDGE_READINESS);
@@ -621,12 +689,7 @@ describe('TopologyConvergenceGraph', () => {
 
   it('keeps report-derived publication ACK debt ahead of startup and missing-publication evidence',
     () => {
-      const artifact = JSON.parse(
-        fs.readFileSync(
-          REPORT_ARTIFACT_PATH_PUBLICATION_ACK_FRONTIER,
-          JSON_ENCODING_UTF8,
-        ),
-      );
+      const artifact = buildPublicationAckFrontierReport();
       const graph = buildTopologyConvergenceGraph(artifact);
       const presentation = buildTopologyConvergenceOwnerPresentation(graph);
       const dominantWitness = selectTopologyConvergenceDominantWitness(
@@ -668,12 +731,7 @@ describe('TopologyConvergenceGraph', () => {
 
   it('keeps count-only publication ACK debt ahead of missing-publication evidence',
     () => {
-      const artifact = JSON.parse(
-        fs.readFileSync(
-          REPORT_ARTIFACT_PATH_PUBLICATION_COUNT_ONLY_ACK,
-          JSON_ENCODING_UTF8,
-        ),
-      );
+      const artifact = readJsonArtifact(PUBLICATION_COUNT_ONLY_ACK_FIXTURE_PATH);
       const graph = buildTopologyConvergenceGraph(artifact);
       const presentation = buildTopologyConvergenceOwnerPresentation(graph);
       const dominantWitness = selectTopologyConvergenceDominantWitness(
@@ -704,12 +762,7 @@ describe('TopologyConvergenceGraph', () => {
 
   it('moves the frontier to snapshot coverage when publication ACK debt is reduced',
     () => {
-      const artifact = JSON.parse(
-        fs.readFileSync(
-          REPORT_ARTIFACT_PATH_PUBLICATION_ACK_REDUCED,
-          JSON_ENCODING_UTF8,
-        ),
-      );
+      const artifact = buildReducedPublicationAckReport();
       const graph = buildTopologyConvergenceGraph(artifact);
       const publicationWitness = graph.ownerWitnesses.find((witness) =>
         witness.edgeId === EDGE_PUBLICATION_ACK_CONVERGENCE,
@@ -1102,9 +1155,11 @@ describe('TopologyConvergenceGraph', () => {
 
   it('surfaces selected snapshot admin readiness and alternative witness state in handoff probe',
     () => {
-      const output = runHandoffProbe(REPORT_ARTIFACT_PATH_NETWORK_PARTITION);
+      const output = runHandoffProbe(
+        ACTIVE_GATE_SNAPSHOT_PARTIAL_RESIDUAL_FIXTURE_PATH,
+      );
       const progress = selectArtifactSnapshotProgress(
-        REPORT_ARTIFACT_PATH_NETWORK_PARTITION,
+        ACTIVE_GATE_SNAPSHOT_PARTIAL_RESIDUAL_FIXTURE_PATH,
         output.scenario,
       );
 
@@ -1127,12 +1182,7 @@ describe('TopologyConvergenceGraph', () => {
 
   it('projects current steady-published missing active nodes under the publication owner',
     () => {
-      const artifact = JSON.parse(
-        fs.readFileSync(
-          REPORT_ARTIFACT_PATH_PUBLICATION_PROJECTION_RECONCILIATION,
-          JSON_ENCODING_UTF8,
-        ),
-      );
+      const artifact = buildPublicationProjectionReconciliationReport();
       const graph = buildTopologyConvergenceGraph(artifact);
       const publicationWitness = graph.ownerWitnesses.find((witness) =>
         witness.edgeId === EDGE_PUBLICATION_ACK_CONVERGENCE,
@@ -1854,9 +1904,13 @@ describe('TopologyConvergenceGraph', () => {
     assertNoNullOrUndefined(graph);
   });
 
-  it('builds a graph for the 20260507 playback failure bundle artifact', () => {
-    const artifact = JSON.parse(fs.readFileSync(ARTIFACT_PATH_20260507, JSON_ENCODING_UTF8));
-    const graph = buildTopologyConvergenceGraphFromArtifacts({failureBundle: artifact});
+  it('builds a graph for a retryable priority recovery failure bundle artifact', () => {
+    const artifact = JSON.parse(
+      fs.readFileSync(RETRYABLE_PRIORITY_RECOVERY_FIXTURE_PATH, JSON_ENCODING_UTF8),
+    );
+    const graph = buildTopologyConvergenceGraphFromArtifacts({
+      failureBundle: artifact.scenarios[0],
+    });
     const priorityEdge = findEdge(graph.edges, EDGE_PRIORITY_RECOVERY);
 
     assert.equal(graph.scenario, SCENARIO_ROLLING_RESTART);
@@ -1867,9 +1921,9 @@ describe('TopologyConvergenceGraph', () => {
     assertNoNullOrUndefined(graph);
   });
 
-  it('uses scenario evidence from the direct 20260507 report artifact', () => {
+  it('uses scenario evidence from a retryable priority recovery report artifact', () => {
     const artifact = JSON.parse(
-      fs.readFileSync(REPORT_ARTIFACT_PATH_20260507, JSON_ENCODING_UTF8),
+      fs.readFileSync(RETRYABLE_PRIORITY_RECOVERY_FIXTURE_PATH, JSON_ENCODING_UTF8),
     );
     const graph = buildTopologyConvergenceGraph(artifact);
 

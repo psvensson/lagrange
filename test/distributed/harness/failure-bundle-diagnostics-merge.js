@@ -740,6 +740,7 @@ export function resolveActiveGateDominantBlockerReason(publicationConvergence) {
 export function resolveDominantReasonOverride({
   existingDominantReason,
   publicationConvergence,
+  progressDominantReason = null,
 }) {
   const currentPublicationBlockedReason =
     resolvePublicationBlockedDominantReason(publicationConvergence);
@@ -749,18 +750,30 @@ export function resolveDominantReasonOverride({
   ) {
     return currentPublicationBlockedReason;
   }
+  const normalizedExistingDominantReason = String(
+    existingDominantReason || '',
+  ).trim();
+  const existingReasonOwnsPriorityRecoveryProgress =
+    progressDominantReason &&
+    normalizedExistingDominantReason === progressDominantReason;
   const missingActiveNodeReason = resolvePublicationMissingActiveNodeReason(
     publicationConvergence,
   );
-  if (missingActiveNodeReason) {
+  if (
+    missingActiveNodeReason &&
+    existingReasonOwnsPriorityRecoveryProgress !== true
+  ) {
     return missingActiveNodeReason;
+  }
+  if (
+    currentPublicationBlockedReason &&
+    existingReasonOwnsPriorityRecoveryProgress === true
+  ) {
+    return null;
   }
   if (currentPublicationBlockedReason) {
     return currentPublicationBlockedReason;
   }
-  const normalizedExistingDominantReason = String(
-    existingDominantReason || '',
-  ).trim();
   if (
     !FAILURE_ARTIFACT_STALE_PUBLICATION_REASON_SET.has(
       normalizedExistingDominantReason,

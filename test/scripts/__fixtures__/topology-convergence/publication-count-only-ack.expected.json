@@ -56,8 +56,26 @@
       "publicationOwnerFreshnessFence": "unknown",
       "publicationOwnerRecoveryOutcome": "unknown",
       "publicationOwnerRevisionState": "unknown",
-      "publicationOwnerStreamOutcome": "unknown"
+      "publicationOwnerStreamOutcome": "unknown",
+      "progressContract": {
+        "owner": "topology_publication_owner",
+        "boundary": "publication_convergence",
+        "state": "absent",
+        "reason": "absent",
+        "nextAction": "absent",
+        "wakeSource": "absent",
+        "retryAfterMs": 0,
+        "terminalState": "absent",
+        "evidencePath": "report.scenarios[0].publicationConvergence",
+        "blockingDependency": "absent"
+      }
     },
-    "rootCauseClass": "topology"
+    "rootCauseClass": "topology",
+    "reason": "pending_acks_present",
+    "nextAction": "wait_for_publication_ack",
+    "wakeSource": "absent",
+    "retryAfterMs": 0,
+    "terminalState": "absent",
+    "blockingDependency": "absent"
   }
 }

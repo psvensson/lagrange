@@ -4,17 +4,17 @@
     "firstFrontierEdgeId": "priority_recovery_partition_progress",
     "firstFrontierState": "retryable",
     "firstFrontierOwner": "operation_workflow_owner",
-    "firstFrontierBoundary": "rebalancer_handoff",
-    "firstFrontierReason": "priority_recovery_event_driven_wait"
+    "firstFrontierBoundary": "workflow_progress",
+    "firstFrontierReason": "advance_existing_operation"
   },
   "frontier": [
     {
       "id": "priority_recovery_partition_progress",
       "state": "retryable",
       "owner": "operation_workflow_owner",
-      "boundary": "rebalancer_handoff",
+      "boundary": "workflow_progress",
       "dominantReason": "unknown",
-      "evidencePath": "report.scenarios[0].publicationConvergence.activeGate.progress.priorityRecoveryProgressClasses",
+      "evidencePath": "report.scenarios[0].publicationConvergence.priorityRecoveryPartitionWitnesses",
       "reasons": [
         "priority_recovery_event_driven_wait"
       ]
@@ -23,20 +23,41 @@
   "dominantWitness": {
     "edgeId": "priority_recovery_partition_progress",
     "owner": "operation_workflow_owner",
-    "boundary": "rebalancer_handoff",
-    "state": "retryable",
-    "frontierState": "retryable",
-    "dominantReason": "priority_recovery_event_driven_wait",
+    "boundary": "workflow_progress",
+    "state": "pending",
+    "frontierState": "pending",
+    "dominantReason": "advance_existing_operation",
     "reasons": [
       "priority_recovery_event_driven_wait"
     ],
-    "evidencePath": "report.scenarios[0].publicationConvergence.activeGate.progress.priorityRecoveryProgressClasses",
+    "evidencePath": "report.scenarios[0].publicationConvergence.priorityRecoveryPartitionWitnesses",
     "source": {
       "unresolvedSemanticStateIds": "recovering_in_flight",
       "blockedPartitionIds": "control_plane_publications-p1,sql_transaction_participants-p1,sql_transactions-p1",
       "dominantReason": "unknown",
-      "failureClass": "unknown"
+      "failureClass": "unknown",
+      "waitModes": "event_driven,retry_scheduled",
+      "nextRequiredActions": "advance_existing_operation,wait_for_operation_progress",
+      "actuationStates": "dispatched_waiting_progress,persisted_not_dispatched",
+      "progressContract": {
+        "owner": "operation_workflow_owner",
+        "boundary": "workflow_progress",
+        "state": "pending",
+        "reason": "advance_existing_operation",
+        "nextAction": "wait",
+        "wakeSource": "operation_lifecycle_event",
+        "retryAfterMs": 0,
+        "terminalState": "satisfied",
+        "evidencePath": "report.scenarios[0].publicationConvergence.priorityRecoveryPartitionWitnesses",
+        "blockingDependency": "workflow_progress"
+      }
     },
-    "rootCauseClass": "topology"
+    "rootCauseClass": "topology",
+    "reason": "advance_existing_operation",
+    "nextAction": "wait",
+    "wakeSource": "operation_lifecycle_event",
+    "retryAfterMs": 0,
+    "terminalState": "satisfied",
+    "blockingDependency": "workflow_progress"
   }
 }

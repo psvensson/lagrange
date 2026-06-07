@@ -11,7 +11,8 @@ const NODE_BIN = process.execPath;
 const SCRIPT_PATH = 'scripts/analyze-priority-recovery-residuals.js';
 const ENCODING_UTF8 = 'utf8';
 const ARG_MARKDOWN = '--markdown';
-const FIXTURE_PATH = 'test-output/reports/rolling-restart-rerun-2.report.json';
+const FIXTURE_PATH =
+  'test/scripts/__fixtures__/priority-recovery-residual-low-confidence.fixture.json';
 const SUMMARY_SCHEMA = 'priority-recovery-residuals-v1';
 
 function readJson(filePath) {

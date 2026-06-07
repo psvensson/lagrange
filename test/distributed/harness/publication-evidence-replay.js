@@ -63,6 +63,9 @@ import {
   readFirstAvailableRecord,
   readFirstRecord,
   readRecordField,
+  readSelectedSnapshotObservationFromFailureBundle,
+  summarizeOwnerRpcCacheRepairDeferrals,
+  summarizeSelectedSnapshotRepairEvidenceRecovery,
 } from './publication-evidence-replay-shared.js';
 import {
   buildMissingPriorityRecoveryWitness,

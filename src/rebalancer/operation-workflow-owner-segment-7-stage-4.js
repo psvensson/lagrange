@@ -347,13 +347,6 @@ class OperationWorkflowOwnerSegment7Stage4 extends OperationWorkflowOwnerSegment
       return PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE.LOCAL_OWNER;
     }
     if (
-      this.shouldRetryCoordinatorCreatedRemoteHandoff(operation) &&
-      this.isDispatchRetryableWorkflowStep(operation)
-    ) {
-      return PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE
-        .REMOTE_REARM_REQUIRED;
-    }
-    if (
       drainAction ===
         OPERATION_LIFECYCLE_ACTION.COMPLETE_PRIORITY_RECOVERY_DRAIN ||
       drainAction ===
@@ -362,6 +355,13 @@ class OperationWorkflowOwnerSegment7Stage4 extends OperationWorkflowOwnerSegment
       return (
         PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE.REMOTE_SETTLE_ALLOWED
       );
+    }
+    if (
+      this.shouldRetryCoordinatorCreatedRemoteHandoff(operation) &&
+      this.isDispatchRetryableWorkflowStep(operation)
+    ) {
+      return PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE
+        .REMOTE_REARM_REQUIRED;
     }
     return PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE.REMOTE_OWNER_REQUIRED;
   }

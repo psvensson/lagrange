@@ -187,6 +187,9 @@ class UnifiedRebalancerSegment4Stage4 extends UnifiedRebalancerSegment4Stage3 {
   }
 
   shouldRequireMoveTargetReadiness(move = {}) {
+    if (move?.type === MoveType.REMOVE) {
+      return false;
+    }
     return this.resolveMoveTargetReadinessMode(move) ===
       REBALANCER_TARGET_READINESS_MODE.REQUIRE_READY;
   }

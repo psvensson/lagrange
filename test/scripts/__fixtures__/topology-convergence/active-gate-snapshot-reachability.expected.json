@@ -45,10 +45,28 @@
       "selectedSnapshotObservationRefreshState": "unknown",
       "selectedSnapshotObservationNextAction": "unknown",
       "selectedSnapshotObservationReasonCodes": "absent",
-      "selectedSnapshotRepairDeferred": "unknown",
+      "selectedSnapshotRepairDeferred": "false",
       "readinessDelayCause": "snapshot_reachability_timeout",
-      "blockers": "inactive_nodes=3,snapshot_coverage=3/5"
+      "blockers": "inactive_nodes=3,snapshot_coverage=3/5",
+      "progressContract": {
+        "owner": "startup_active_gate_owner",
+        "boundary": "snapshot_coverage",
+        "state": "blocked",
+        "reason": "active_gate_timed_out",
+        "nextAction": "unknown",
+        "wakeSource": "active-gate",
+        "retryAfterMs": 1000,
+        "terminalState": "satisfied",
+        "evidencePath": "report.scenarios[0].publicationConvergence.activeGate.progress",
+        "blockingDependency": "none"
+      }
     },
-    "rootCauseClass": "startup"
+    "rootCauseClass": "startup",
+    "reason": "active_gate_timed_out",
+    "nextAction": "unknown",
+    "wakeSource": "active-gate",
+    "retryAfterMs": 1000,
+    "terminalState": "satisfied",
+    "blockingDependency": "none"
   }
 }

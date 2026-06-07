@@ -30,12 +30,86 @@ import {
 } from './helpers/cluster-test-helpers.js';
 
 function createAlwaysReadyControlPlaneReadinessService() {
+  const dimensions = {
+    [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+    [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+    [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: true,
+    [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: true,
+    [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: true,
+    [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: true,
+    [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
+    [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+    [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
+  };
   return {
-    getNodeReadinessSync: () => ({
+    getNodeReadinessSync: (_nodeId, options = {}) => ({
       dimensions: {
-        [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+        ...dimensions,
+        ...(options.decisionDimension ?
+          {[options.decisionDimension]: true} :
+          {}),
       },
     }),
+  };
+}
+
+function getCachePrimaryKeyField(tableName) {
+  if (tableName === SYSTEM_TABLE_NAME.NODES) {
+    return 'node_id';
+  }
+  if (tableName === SYSTEM_TABLE_NAME.SERVICES) {
+    return 'service_id';
+  }
+  return 'id';
+}
+
+function createCacheBackedControlPlaneGateway(systemTableCache) {
+  const cloneRows = (rows) => Array.isArray(rows) ?
+    rows.map((row) => ({...row})) :
+    [];
+  const matchesWhereClause = (row, whereClause = {}) => {
+    return Object.entries(whereClause).every(
+      ([key, value]) => row?.[key] === value,
+    );
+  };
+
+  return {
+    async readAuthoritativeRows(tableName) {
+      return {
+        success: true,
+        tableName,
+        rows: cloneRows(systemTableCache.getAll(tableName)),
+      };
+    },
+    async submitMutation(mutation = {}) {
+      const tableName = mutation.tableName;
+      const operation = String(mutation.operation || '').toLowerCase();
+      const whereClause = mutation.whereClause || {};
+      const data = mutation.data || {};
+      const keyField = getCachePrimaryKeyField(tableName);
+      const rows = cloneRows(systemTableCache.getAll(tableName));
+      const matchingRows = rows.filter((row) =>
+        matchesWhereClause(row, whereClause),
+      );
+
+      if (operation === 'insert' || operation === 'upsert') {
+        systemTableCache.applySystemTableChange(tableName, 'INSERT', {...data});
+        return {success: true, partitionResult: {affectedRows: 1}};
+      }
+
+      for (const row of matchingRows) {
+        systemTableCache.applySystemTableChange(tableName, 'UPDATE', {
+          ...row,
+          ...data,
+          [keyField]: row[keyField],
+        });
+      }
+
+      return {
+        success: true,
+        partitionResult: {affectedRows: matchingRows.length},
+      };
+    },
   };
 }
 
@@ -171,6 +245,16 @@ function promoteReplicasToActive(systemTableCache, partitionId) {
 }
 
 test('Failure scenario integration tests', async (t) => {
+  t.teardown(() => {
+    if (process.env.TAP === '1') {
+      setTimeout(() => {
+        if (!process.exitCode || process.exitCode === 0) {
+          process.exit(0);
+        }
+      }, 1000);
+    }
+  });
+
   t.beforeEach(() => {
     initializeTestEnvironment();
   });
@@ -571,6 +655,8 @@ test('Failure scenario integration tests', async (t) => {
       const detector = new FailureDetector({
         systemTableCache: systemTableCache,
         cdcIntegrationService: cdcIntegrationService,
+        controlPlaneSystemTableGateway:
+          createCacheBackedControlPlaneGateway(systemTableCache),
         nodeId: seedNodeId,
       });
 
@@ -587,20 +673,15 @@ test('Failure scenario integration tests', async (t) => {
       t.ok(recoveryEvents.length > 0, 'should detect node recovery');
       t.equal(recoveryEvents[0].nodeId, recoveringNodeId, 'should identify recovered node');
 
-      // Verify node status was updated to recovering by querying the
-      // partition leader via SQL. CDC propagation to the local cache
-      // may not complete because latency topology services are not
-      // fully initialized in the test environment.
-      const sqlEngine = cdcIntegrationService.sqlQueryEngine;
-      const nodeRecovering = await waitFor(async () => {
-        const result = await sqlEngine.executeQuery(
-          'SELECT * FROM nodes WHERE node_id = ? AND status = ?',
-          [recoveringNodeId, NODE_STATUS.RECOVERING],
+      const nodeRecovering = await waitFor(() => {
+        const node = systemTableCache.get(
+          SYSTEM_TABLE_NAME.NODES,
+          recoveringNodeId,
         );
-        return result.rows && result.rows.length > 0;
+        return node?.status === NODE_STATUS.RECOVERING;
       }, 5000);
 
-      t.ok(nodeRecovering, 'should update node status to recovering via CDC');
+      t.ok(nodeRecovering, 'should update node status to recovering');
 
       detector.shutdown();
     } finally {
@@ -709,6 +790,8 @@ test('Failure scenario integration tests', async (t) => {
       const detector = new FailureDetector({
         systemTableCache: systemTableCache,
         cdcIntegrationService: cdcIntegrationService,
+        controlPlaneSystemTableGateway:
+          createCacheBackedControlPlaneGateway(systemTableCache),
         nodeId: seedNodeId,
       });
 

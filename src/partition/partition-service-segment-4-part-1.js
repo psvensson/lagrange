@@ -771,6 +771,14 @@ class PartitionServiceSegment4Part1 extends PartitionServiceSegment3 {
     this.sqlQueryEngine = sqlQueryEngine;
     if (this.rebalanceCoordinator) {
       this.rebalanceCoordinator.sqlQueryEngine = sqlQueryEngine;
+      const bundle = this.buildRebalancerDependencyBundle();
+      if (
+        bundle &&
+        typeof this.rebalanceCoordinator.syncOwnerDependencies ===
+          PARTITION_SERVICE_TYPE.FUNCTION
+      ) {
+        this.rebalanceCoordinator.syncOwnerDependencies(bundle);
+      }
     }
     this.maybeInitializeRebalancer();
   }
