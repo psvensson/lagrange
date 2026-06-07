@@ -626,6 +626,35 @@ export function getConnectionState(router, nodeId) {
   return connection ? connection.state : null;
 }
 
+/**
+ * Snapshot the local router's view of its connection to a peer, for
+ * diagnostics on why a coordinator handoff to that peer is not being
+ * acknowledged (no connection vs ack-timeout streak / quarantine churn).
+ * @param {Object} router - Message router instance.
+ * @param {string} nodeId - Peer node id.
+ * @return {Object} Flat connection diagnostics snapshot.
+ */
+export function getConnectionHandoffDiagnostics(router, nodeId) {
+  const connection = router.nodeConnections.get(nodeId);
+  if (!connection) {
+    return {present: false};
+  }
+  return {
+    present: true,
+    state: connection.state ?? null,
+    isIncoming: connection.isIncoming === true,
+    address: connection.address ?? null,
+    connectionId: connection.connectionId ?? null,
+    hasAddress:
+      typeof connection.address === 'string' && connection.address.length > 0,
+    hasScheduledReconnect: Boolean(connection.reconnectTimeout),
+    reconnectAttempts: connection.reconnectAttempts ?? TRANSPORT_NUM.ZERO,
+    ackTimeoutStreak: connection.ackTimeoutStreak ?? TRANSPORT_NUM.ZERO,
+    lastAckAt: connection.lastAckAt ?? null,
+    lastAckTimeoutAt: connection.lastAckTimeoutAt ?? null,
+  };
+}
+
 export async function pingNode(router, nodeId, timeoutMs = null) {
   const connection = router.nodeConnections.get(nodeId);
   if (

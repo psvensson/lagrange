@@ -5,6 +5,7 @@ import {
   deliverRemote,
   getConnectedNodes,
   getConnectionState,
+  getConnectionHandoffDiagnostics,
   hasSelfConnection,
   isRegistered,
   getRegisteredAddresses,
@@ -303,6 +304,10 @@ class MessageRouterSegment3 extends MessageRouterSegment2 {
 
   getConnectionState(nodeId) {
     return getConnectionState(this, nodeId);
+  }
+
+  getConnectionHandoffDiagnostics(nodeId) {
+    return getConnectionHandoffDiagnostics(this, nodeId);
   }
 
   async pingNode(nodeId, timeoutMs = null) {

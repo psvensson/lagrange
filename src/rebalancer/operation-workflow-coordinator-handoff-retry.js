@@ -6,6 +6,7 @@ const {
   REBALANCE_COORDINATOR_ERROR_MSG,
   REBALANCE_COORDINATOR_LOG_MSG,
   COORDINATOR_CREATED_REMOTE_HANDOFF_MAX_ACTIVE_RETRIES_PER_TARGET,
+  buildHandoffDeferralTransportDiagnostics,
   getControlPlaneRetryAfterMs,
   isRetryableControlPlaneError,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
@@ -154,6 +155,11 @@ function deferCoordinatorCreatedRemoteHandoffRetry(
           COORDINATOR_CREATED_REMOTE_HANDOFF_MAX_ACTIVE_RETRIES_PER_TARGET,
         boundary:
           OPERATION_WORKFLOW_OWNER_LITERAL.COORDINATOR_CREATED_REMOTE_HANDOFF,
+        ...buildHandoffDeferralTransportDiagnostics(
+          context,
+          operation,
+          errorLike,
+        ),
       },
     );
     return false;
@@ -182,6 +188,11 @@ function deferCoordinatorCreatedRemoteHandoffRetry(
       errorMessage,
       boundary:
         OPERATION_WORKFLOW_OWNER_LITERAL.COORDINATOR_CREATED_REMOTE_HANDOFF,
+      ...buildHandoffDeferralTransportDiagnostics(
+        context,
+        operation,
+        errorLike,
+      ),
     },
   );
 

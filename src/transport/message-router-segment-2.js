@@ -507,6 +507,12 @@ class MessageRouterSegment2 extends MessageRouterSegment1 {
         return;
       }
       if (closeDisposition.kind === CONNECTION_CLOSE_DISPOSITION.RECONNECT) {
+        if (connection.isIncoming === true) {
+          // A re-established connection is an outbound dial to the peer's
+          // remembered address, so this record is now an outbound reconnect
+          // owner rather than an inbound connection.
+          connection.isIncoming = false;
+        }
         this.scheduleReconnect(connection);
       }
     }
@@ -521,7 +527,14 @@ class MessageRouterSegment2 extends MessageRouterSegment1 {
       state = ConnectionState.CLOSED;
     } else if (connection.isSelfConnection) {
       kind = CONNECTION_CLOSE_DISPOSITION.SELF_DISCONNECT;
-    } else if (!connection.isIncoming && connection.address) {
+    } else if (connection.address) {
+      // Schedule a reconnect on close for any non-self peer with a remembered
+      // dial address — including a closed INBOUND connection. Otherwise an
+      // inbound-only record (e.g. after a rolling restart) closes into a
+      // lingering DISCONNECTED state with no reconnect, control-plane handoffs
+      // to that node time out forever, and publication never drains. The
+      // deterministic resolveIncomingConnectionAdoption tie-break dedups if the
+      // peer also dials in.
       kind = CONNECTION_CLOSE_DISPOSITION.RECONNECT;
     }
     return {

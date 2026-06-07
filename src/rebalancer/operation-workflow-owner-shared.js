@@ -514,6 +514,59 @@ function resolvePriorityRecoveryPreSyncReplaceTargetStateFromEvidence(
 }
 
 /**
+ * Build transport-layer diagnostics for an operation-dispatch deferral so the
+ * failure bundle can distinguish WHY a coordinator handoff to the target node
+ * is not acknowledged: no connection vs ack-timeout streak / quarantine churn,
+ * plus the classified transport delivery/reason code when available.
+ * @param {Object} owner - Owner with an injected messageRouter.
+ * @param {Object|null} operation - Operation carrying the targetNodeId.
+ * @param {Error|Object|null} errorLike - Transport delivery outcome or error.
+ * @return {Object} Flat diagnostics fields to spread into the deferral log.
+ */
+function buildHandoffDeferralTransportDiagnostics(
+  owner,
+  operation,
+  errorLike = null,
+) {
+  const diagnostics = {};
+  if (errorLike && typeof errorLike === TYPEOF.OBJECT) {
+    if (typeof errorLike.deliveryState === TYPEOF.STRING) {
+      diagnostics.transportDeliveryState = errorLike.deliveryState;
+    }
+    const reasonCode =
+      errorLike.errorCode ?? errorLike.reasonCode ?? errorLike.code ?? null;
+    if (reasonCode !== null && reasonCode !== undefined) {
+      diagnostics.transportReasonCode = reasonCode;
+    }
+  }
+  const targetNodeId = operation?.targetNodeId || null;
+  const router = owner?.messageRouter || null;
+  if (
+    targetNodeId &&
+    router &&
+    typeof router.getConnectionHandoffDiagnostics === TYPEOF.FUNCTION
+  ) {
+    const connection = router.getConnectionHandoffDiagnostics(targetNodeId);
+    diagnostics.targetConnectionPresent = connection?.present === true;
+    if (connection?.present === true) {
+      diagnostics.targetConnectionState = connection.state ?? null;
+      diagnostics.targetConnectionIsIncoming = connection.isIncoming === true;
+      diagnostics.targetConnectionAddress = connection.address ?? null;
+      diagnostics.targetConnectionId = connection.connectionId ?? null;
+      diagnostics.targetConnectionHasAddress = connection.hasAddress === true;
+      diagnostics.targetConnectionHasScheduledReconnect =
+        connection.hasScheduledReconnect === true;
+      diagnostics.targetAckTimeoutStreak = connection.ackTimeoutStreak ?? null;
+      diagnostics.targetReconnectAttempts =
+        connection.reconnectAttempts ?? null;
+      diagnostics.targetLastAckAt = connection.lastAckAt ?? null;
+      diagnostics.targetLastAckTimeoutAt = connection.lastAckTimeoutAt ?? null;
+    }
+  }
+  return diagnostics;
+}
+
+/**
  * Owns single-flight owner-key execution, workflow step advancement,
  * claim/dispatch progression, and observed-progress reconciliation.
  *
@@ -619,6 +672,7 @@ export const OPERATION_WORKFLOW_OWNER_SHARED = {
   WORKFLOW_STEP,
   WORKFLOW_STEP_TO_STATUS,
   buildControlPlaneQueryOptions,
+  buildHandoffDeferralTransportDiagnostics,
   buildPriorityRecoveryBlockedPartitionIds,
   buildPriorityRecoveryCompletion,
   buildPriorityRecoveryDecisionSnapshot,

@@ -22,6 +22,7 @@ const {
   TIMEOUT_BUDGET_DEFAULT,
   TYPEOF,
   WORKFLOW_STEP,
+  buildHandoffDeferralTransportDiagnostics,
   getControlPlaneRetryAfterMs,
   isPriorityControlPlanePartition,
   isRetryableControlPlaneError,
@@ -374,6 +375,7 @@ function deferDispatchRetry(owner, operation, errorLike) {
       workflowStep: operation.workflowStep,
       delayMs,
       errorMessage,
+      ...buildHandoffDeferralTransportDiagnostics(owner, operation, errorLike),
     },
   );
   const timerHandle = owner.setTimeoutFn(() => {
@@ -493,6 +495,7 @@ function scheduleDeferredSafetyRetry(owner, operation, deferReason, errorMessage
       delayMs: SAFETY_DEFERRED_RETRY_DELAY_MS,
       deferReason,
       errorMessage,
+      ...buildHandoffDeferralTransportDiagnostics(owner, operation, null),
     },
   );
   const timerHandle = owner.setTimeoutFn(() => {

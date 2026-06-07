@@ -918,7 +918,7 @@ export async function registerMessageRouterTailTests({
       await router.shutdown();
     });
 
-  t.test('should mark a rekeyed incoming connection disconnected when its socket closes',
+  t.test('should re-dial a rekeyed incoming connection when its socket closes',
     async (t) => {
       const router = new MessageRouter({nodeId: 'z-local-node'});
       await router.initialize({startServer: false});
@@ -951,10 +951,20 @@ export async function registerMessageRouterTailTests({
 
       ws.emit('close');
 
+      const reconnectingEntry = router.nodeConnections.get('a-remote-node');
       t.equal(
-        router.nodeConnections.get('a-remote-node')?.state,
-        ConnectionState.DISCONNECTED,
-        'closing a rekeyed incoming socket should update the live node entry',
+        reconnectingEntry?.state,
+        ConnectionState.RECONNECTING,
+        'closing a rekeyed incoming socket should schedule a reconnect (not strand it disconnected)',
+      );
+      t.equal(
+        reconnectingEntry?.isIncoming,
+        false,
+        'the re-established record should become an outbound reconnect owner',
+      );
+      t.ok(
+        reconnectingEntry?.reconnectTimeout,
+        'a reconnect should be armed for the peer after the inbound socket closes',
       );
       t.same(
         closedEvents,

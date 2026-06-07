@@ -23,6 +23,7 @@ const {
   TRANSPORT_ERROR_MSG,
   TYPEOF,
   WORKFLOW_STEP,
+  buildHandoffDeferralTransportDiagnostics,
   classifyTransportDeliveryOutcome,
   isDeliveredTransportDeliveryOutcome,
   isPriorityControlPlanePartition,
@@ -627,6 +628,7 @@ function ensurePriorityActiveReplaceRetryArmed(operation) {
       delayMs: DISPATCH_RETRY_DELAY_MS,
       boundary:
         OPERATION_WORKFLOW_OWNER_LITERAL.PRIORITY_ACTIVE_REPLACE_RESUME,
+      ...buildHandoffDeferralTransportDiagnostics(this, operation, null),
     },
   );
   const timerHandle = this.setTimeoutFn(() => {

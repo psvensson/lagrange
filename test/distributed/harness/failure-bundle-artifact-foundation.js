@@ -196,6 +196,22 @@ export const DECISION_ARTIFACT_FIELD = Object.freeze({
   SUB_PHASE: 'subPhase',
   TARGET_NODE_ID: 'targetNodeId',
   WORKFLOW_STEP: 'workflowStep',
+  TRANSPORT_DELIVERY_STATE: 'transportDeliveryState',
+  TRANSPORT_REASON_CODE: 'transportReasonCode',
+  TARGET_CONNECTION_PRESENT: 'targetConnectionPresent',
+  TARGET_CONNECTION_STATE: 'targetConnectionState',
+  TARGET_CONNECTION_IS_INCOMING: 'targetConnectionIsIncoming',
+  TARGET_CONNECTION_ADDRESS: 'targetConnectionAddress',
+  TARGET_CONNECTION_ID: 'targetConnectionId',
+  TARGET_CONNECTION_HAS_ADDRESS: 'targetConnectionHasAddress',
+  TARGET_CONNECTION_HAS_SCHEDULED_RECONNECT:
+    'targetConnectionHasScheduledReconnect',
+  TARGET_ACK_TIMEOUT_STREAK: 'targetAckTimeoutStreak',
+  TARGET_RECONNECT_ATTEMPTS: 'targetReconnectAttempts',
+  TARGET_LAST_ACK_AT: 'targetLastAckAt',
+  TARGET_LAST_ACK_TIMEOUT_AT: 'targetLastAckTimeoutAt',
+  ACTIVE_RETRIES_PER_TARGET: 'activeRetriesPerTarget',
+  MAX_ACTIVE_RETRIES_PER_TARGET: 'maxActiveRetriesPerTarget',
 });
 export const AUTO_REJOIN_DECISION_ARTIFACT_FIELDS = Object.freeze([
   DECISION_ARTIFACT_FIELD.NODE_ID,
@@ -244,6 +260,42 @@ export const OPERATION_DISPATCH_RETRY_DEFERRAL_ARTIFACT_FIELDS = Object.freeze([
   DECISION_ARTIFACT_FIELD.DELAY_MS,
   DECISION_ARTIFACT_FIELD.ERROR_MESSAGE,
   DECISION_ARTIFACT_FIELD.BOUNDARY,
+  DECISION_ARTIFACT_FIELD.TRANSPORT_DELIVERY_STATE,
+  DECISION_ARTIFACT_FIELD.TRANSPORT_REASON_CODE,
+  DECISION_ARTIFACT_FIELD.TARGET_CONNECTION_PRESENT,
+  DECISION_ARTIFACT_FIELD.TARGET_CONNECTION_STATE,
+  DECISION_ARTIFACT_FIELD.TARGET_CONNECTION_IS_INCOMING,
+  DECISION_ARTIFACT_FIELD.TARGET_CONNECTION_ADDRESS,
+  DECISION_ARTIFACT_FIELD.TARGET_CONNECTION_ID,
+  DECISION_ARTIFACT_FIELD.TARGET_CONNECTION_HAS_ADDRESS,
+  DECISION_ARTIFACT_FIELD.TARGET_CONNECTION_HAS_SCHEDULED_RECONNECT,
+  DECISION_ARTIFACT_FIELD.TARGET_ACK_TIMEOUT_STREAK,
+  DECISION_ARTIFACT_FIELD.TARGET_RECONNECT_ATTEMPTS,
+  DECISION_ARTIFACT_FIELD.TARGET_LAST_ACK_AT,
+  DECISION_ARTIFACT_FIELD.TARGET_LAST_ACK_TIMEOUT_AT,
+]);
+
+export const OPERATION_DISPATCH_RETRY_SHED_ARTIFACT_FIELDS = Object.freeze([
+  DECISION_ARTIFACT_FIELD.OPERATION_ID,
+  DECISION_ARTIFACT_FIELD.PARTITION_ID,
+  DECISION_ARTIFACT_FIELD.TARGET_NODE_ID,
+  DECISION_ARTIFACT_FIELD.WORKFLOW_STEP,
+  DECISION_ARTIFACT_FIELD.BOUNDARY,
+  DECISION_ARTIFACT_FIELD.ACTIVE_RETRIES_PER_TARGET,
+  DECISION_ARTIFACT_FIELD.MAX_ACTIVE_RETRIES_PER_TARGET,
+  DECISION_ARTIFACT_FIELD.TRANSPORT_DELIVERY_STATE,
+  DECISION_ARTIFACT_FIELD.TRANSPORT_REASON_CODE,
+  DECISION_ARTIFACT_FIELD.TARGET_CONNECTION_PRESENT,
+  DECISION_ARTIFACT_FIELD.TARGET_CONNECTION_STATE,
+  DECISION_ARTIFACT_FIELD.TARGET_CONNECTION_IS_INCOMING,
+  DECISION_ARTIFACT_FIELD.TARGET_CONNECTION_ADDRESS,
+  DECISION_ARTIFACT_FIELD.TARGET_CONNECTION_ID,
+  DECISION_ARTIFACT_FIELD.TARGET_CONNECTION_HAS_ADDRESS,
+  DECISION_ARTIFACT_FIELD.TARGET_CONNECTION_HAS_SCHEDULED_RECONNECT,
+  DECISION_ARTIFACT_FIELD.TARGET_ACK_TIMEOUT_STREAK,
+  DECISION_ARTIFACT_FIELD.TARGET_RECONNECT_ATTEMPTS,
+  DECISION_ARTIFACT_FIELD.TARGET_LAST_ACK_AT,
+  DECISION_ARTIFACT_FIELD.TARGET_LAST_ACK_TIMEOUT_AT,
 ]);
 
 export const LOAD_WAIT_REASON_KEYS = Object.freeze([
@@ -377,6 +429,7 @@ export function extractDecisionArtifactsFromLogContent(content) {
   const startupFailures = [];
   const retryableJoinResumes = [];
   const operationDispatchRetryDeferrals = [];
+  const operationDispatchRetrySheds = [];
   const lines = String(content || '').split('\n');
   for (const line of lines) {
     const parsed = parseStructuredLogLine(line);
@@ -438,6 +491,17 @@ export function extractDecisionArtifactsFromLogContent(content) {
           OPERATION_DISPATCH_RETRY_DEFERRAL_ARTIFACT_FIELDS,
         ),
       );
+      continue;
+    }
+    if (
+      message === REBALANCE_COORDINATOR_LOG_MSG.OPERATION_DISPATCH_RETRY_SHED
+    ) {
+      operationDispatchRetrySheds.push(
+        sanitizeStructuredDecisionArtifact(
+          parsed,
+          OPERATION_DISPATCH_RETRY_SHED_ARTIFACT_FIELDS,
+        ),
+      );
     }
   }
   if (
@@ -445,7 +509,8 @@ export function extractDecisionArtifactsFromLogContent(content) {
     runtimeHandoffs.length === ZERO &&
     startupFailures.length === ZERO &&
     retryableJoinResumes.length === ZERO &&
-    operationDispatchRetryDeferrals.length === ZERO
+    operationDispatchRetryDeferrals.length === ZERO &&
+    operationDispatchRetrySheds.length === ZERO
   ) {
     return null;
   }
@@ -453,6 +518,8 @@ export function extractDecisionArtifactsFromLogContent(content) {
   const normalizedRuntimeHandoffs = runtimeHandoffs.filter(Boolean);
   const normalizedOperationDispatchRetryDeferrals =
     operationDispatchRetryDeferrals.filter(Boolean);
+  const normalizedOperationDispatchRetrySheds =
+    operationDispatchRetrySheds.filter(Boolean);
   const latestStartupDecision = resolveLatestDecisionArtifact(
     normalizedStartupDecisions,
   );
@@ -471,6 +538,7 @@ export function extractDecisionArtifactsFromLogContent(content) {
     retryableJoinResumes: currentRetryableJoinResumes,
     operationDispatchRetryDeferrals:
       normalizedOperationDispatchRetryDeferrals,
+    operationDispatchRetrySheds: normalizedOperationDispatchRetrySheds,
     latestStartupDecision,
     latestRuntimeHandoff: resolveLatestDecisionArtifact(
       normalizedRuntimeHandoffs,
@@ -481,6 +549,9 @@ export function extractDecisionArtifactsFromLogContent(content) {
     ),
     latestOperationDispatchRetryDeferral: resolveLatestDecisionArtifact(
       normalizedOperationDispatchRetryDeferrals,
+    ),
+    latestOperationDispatchRetryShed: resolveLatestDecisionArtifact(
+      normalizedOperationDispatchRetrySheds,
     ),
   };
 }

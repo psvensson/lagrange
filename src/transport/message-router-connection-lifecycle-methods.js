@@ -328,17 +328,37 @@ class MessageRouterConnectionLifecycleMethods {
             !connectionInfo.isSelfConnection &&
             !this.isCurrentConnection(connectionInfo)
           ) {
-            settled = true;
-            clearConnectTimeout();
-            connectionInfo.state = ConnectionState.CLOSED;
-            connectionInfo.ws = null;
-            try {
-              ws.terminate();
-            } catch (_error) {
-              void _error;
+            const current =
+              this.nodeConnections.get(connectionInfo.nodeId) || null;
+            const currentIsLive = Boolean(
+              current &&
+                current.state === ConnectionState.CONNECTED &&
+                current.ws,
+            );
+            if (currentIsLive) {
+              // A healthy connection already won this peer slot; drop this
+              // redundant dial rather than flapping the live connection.
+              settled = true;
+              clearConnectTimeout();
+              connectionInfo.state = ConnectionState.CLOSED;
+              connectionInfo.ws = null;
+              try {
+                ws.terminate();
+              } catch (_error) {
+                void _error;
+              }
+              resolve();
+              return;
             }
-            resolve();
-            return;
+            // The current record is dead/non-connected (e.g. a stalled inbound
+            // or reconnecting owner). Let this freshly-opened outbound take over
+            // so an inbound/outbound establish race cannot strand the peer with
+            // no live connection. resolveIncomingConnectionAdoption still dedups
+            // deterministically once a side is CONNECTED.
+            if (current && current !== connectionInfo) {
+              this.retireConnection(current);
+            }
+            this.nodeConnections.set(connectionInfo.nodeId, connectionInfo);
           }
           settled = true;
           connectionEstablished = true;
