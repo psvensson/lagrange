@@ -37,3 +37,4 @@ Use this index to choose the narrowest architecture domain file before reading i
 
 - [Activation-Cost-Aware Placement](future/activation-cost-aware-placement.md) - Planned placement-cost architecture.
 - [Native Artifact Store](future/native-artifact-store.md) - Planned native artifact store architecture.
+- [Metastable Convergence Resilience](future/metastable-convergence-resilience.md) - Rolling-restart non-convergence reframed as metastable failure; three resilience directions + measurement gate.
