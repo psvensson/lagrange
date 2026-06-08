@@ -59,6 +59,7 @@ import {NodeService} from '../../node/node-service.js';
 import {LoggingService} from '../../logging/logging-service.js';
 import {DependencyError} from '../bootstrap-errors.js';
 import {SUBSYSTEM} from '../../constants/index.js';
+import {TABLES} from '../../constants/tables.js';
 
 /**
  * Subsystem identifier for logging.
@@ -355,6 +356,13 @@ class ControlPlaneSetup {
         replicaOperationRepository:
           rebalanceCoordinator?.repository || null,
         membershipPublicationRuntimeOwner,
+        // Phase 4: this node is the membership write-leader iff it can write the
+        // control_plane_publications system table locally (it is the local
+        // partition LEADER). Gates leader-driven membership reconcile.
+        resolveIsControlPlanePublicationsWriteLeader: () =>
+          cdcIntegrationService?.canWriteSystemTableLocally?.(
+            TABLES.CONTROL_PLANE_PUBLICATIONS,
+          ) === true,
       });
     if (!controlPlaneReadinessService.nodesOwner) {
       controlPlaneReadinessService.nodesOwner = systemMetadataOwners.nodesOwner;
