@@ -3,6 +3,7 @@ import {
   MESSAGE_ROUTER_DELIVERY_PRESSURE_ROUTING_METHODS,
 } from './message-router-delivery-pressure-routing.js';
 import {MessageRouterSegment1} from './message-router-segment-1.js';
+import {applyBoundedJitter} from '../utils/retry-jitter.js';
 
 const LOCAL_NUM_ZERO = 0;
 
@@ -573,12 +574,13 @@ class MessageRouterSegment2 extends MessageRouterSegment1 {
       return;
     }
     connectionInfo.reconnectAttempts += TRANSPORT_NUM.ONE;
-    const delay =
+    const delay = applyBoundedJitter(
       this.reconnectIntervalMs *
-      Math.pow(
-        this.reconnectBackoffMultiplier,
-        connectionInfo.reconnectAttempts - TRANSPORT_NUM.ONE,
-      );
+        Math.pow(
+          this.reconnectBackoffMultiplier,
+          connectionInfo.reconnectAttempts - TRANSPORT_NUM.ONE,
+        ),
+    );
     connectionInfo.reconnectDueAt = Date.now() + delay;
     this.logger.debug(ROUTER_LOG_MSG.SCHEDULING_RECONNECT, {
       nodeId: connectionInfo.nodeId,
