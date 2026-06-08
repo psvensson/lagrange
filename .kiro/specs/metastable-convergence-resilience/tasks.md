@@ -65,8 +65,48 @@ default-off and accepted only against the Phase-0 statistical gate.
   to `spreadGap`/`readyDistinctNodeCount`.
 - [ ] 3.3 Gate via config flag; validate against Phase-0 distribution.
 
+## Phase 4 — Leader-driven recovery establishment (the recovery-bootstrap) ★ primary
+
+The deterministic root cause (see memory `rolling-restart-publication-nonconvergence-root`
+and `recovery-as-second-bootstrap-impossibility`): membership publication is driven
+by a *rejoiner* (non-authority) that must make a synchronous network hop to the
+saturated seed-leader to propose a multi-partition quorum write — that hop times
+out (`ROUTER_MESSAGE_TIMEOUT`) and the reconcile retries forever → STALL. It's the
+same chicken-and-egg as cold-start bootstrap (the quorum it needs is what's being
+recovered).
+
+Fix shape: **keep Raft quorum commit (durability), change WHO drives the write** —
+the membership-partition Raft leader (the stable seed) publishes membership for all
+observed-active nodes from its LOCAL replica via `AuthoritativeRowMutationHelper`,
+eliminating the congested remote-writer→leader hop. NOT async replication (that
+would lose quorum durability on leader crash — verified via the sql-routed write
+path, `partition-service-segment-3-part-1.js:608-715`).
+
+- [ ] 4.0 VERIFY before building: (a) during the rolling restart, is a write
+  quorum actually available (seed + ≥1 stable node), or do too many nodes go down
+  at once? (b) does the membership-partition leader also lead the other partitions
+  the reconcile touches (e.g. `replica_operations-p1`), so its reads/writes are
+  local? (c) exactly what the multi-partition `DISTRIBUTED_PARTICIPANT_FAILURE`
+  (all-participants) op needs vs. a leader-local equivalent.
+- [ ] 4.1 Pin/forward the `membership-publication:cluster_membership` reconcile to
+  the membership-partition Raft leader (today it is queue-assigned, NOT
+  leader-pinned — the core gap). Owner-key should track partition leadership.
+- [ ] 4.2 Leader publishes membership for all observed-active nodes (it already has
+  them via snapshot coverage) through an `AuthoritativeRowMutationHelper` wired for
+  `control_plane_publications` (table-agnostic, same gateway/fence — confirmed
+  composable, cf. `partition-service-segment-1-part-1.js:542-604`).
+- [ ] 4.3 Fence: only the current Raft leader + current membership epoch
+  (`CURRENT`/`STALE`/`FUTURE`) writes; deposed-leader writes fenced out → no
+  split-brain. KEEP Raft quorum commit (no async).
+- [ ] 4.4 Gate via config flag (default off); validate against the deterministic
+  3-node reproducer + the correctness/progress gate. Win = STALLED→CONVERGED,
+  corruptCount stays 0, invariants clean.
+
 ## Done-when
 
-- Phase 0 produces a one-command distribution summary.
-- The rolling-restart `missingPublishedCount` distribution shifts toward 0 with
-  reduced variance, measured statistically — the acceptance for the whole effort.
+- Phase 0 produces a one-command distribution summary (correctness-first, then
+  progress: CORRUPT/CONVERGED/SLOW/STALLED).
+- The deterministic 3-node reproducer goes STALLED→CONVERGED with 0 corruption,
+  then the 5-node distribution shifts to converged-or-slow (never STALLED, never
+  CORRUPT) — the acceptance for the whole effort. Per the principle: slow is a
+  pass, gave-up/corrupt is a fail.
