@@ -2,7 +2,6 @@ import {ConfigurationManager} from '../config/configuration-manager.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {NUM, SERVICE_STATUS, STATE, STRING, TYPEOF} from '../constants/index.js';
 import {TABLES} from '../constants/tables.js';
-import {isControlPlanePublicationsWriteLeader} from './control-plane-publications-leadership.js';
 import {buildPublicationActiveGateHandoffContract} from './publication-active-gate-handoff-contract.js';
 import {TRANSPORT_CONFIG_KEY, TRANSPORT_DEFAULT} from '../constants/transport.js';
 import {assertCritical} from '../utils/assert.js';
@@ -28,9 +27,6 @@ import {HEARTBEAT_SERVICE_LITERAL, ONE, ZERO} from './heartbeat-service-runtime-
 // write-leader enqueues a membership reconcile (idempotent — a no-op once
 // converged), so the authority always drives the cluster-wide publication to
 // completion. Flag-gated; default off.
-const LEADER_PERIODIC_RECONCILE_REASON = 'leader_periodic_membership_drive';
-const MEMBERSHIP_WRITE_LEADER_STATE_MSG =
-  'Leader-driven membership: control_plane_publications write-leader state';
 // Diagnostics for the EXISTING leader-driven reconcile tick (research, not a new
 // mechanism): why does runScheduledMembershipPublicationReconcileTick not drive
 // publication during the stall? Transition-logged at warn so it lands in bundles.
@@ -40,51 +36,6 @@ const SCHEDULED_RECONCILE_DIAG_MSG =
   'Scheduled membership reconcile tick: owner/leadership state';
 
 class HeartbeatServiceLifecycleMethods {
-  /**
-   * When leader-driven membership mode is enabled and THIS node is the
-   * control_plane_publications write-leader, enqueue a membership reconcile.
-   * Fail-safe: returns false and never throws on any missing dependency.
-   * @return {boolean} whether a reconcile was enqueued.
-   * @private
-   */
-  maybeDriveLeaderMembershipReconcile() {
-    if (process.env.LAGRANGE_MEMBERSHIP_LEADER_DRIVEN !== 'true') {
-      return false;
-    }
-    const publicationService = this.membershipPublicationService;
-    if (
-      !publicationService ||
-      typeof publicationService.enqueueClusterMembershipReconcile !==
-        TYPEOF.FUNCTION
-    ) {
-      return false;
-    }
-    const isWriteLeader = isControlPlanePublicationsWriteLeader(
-      this.systemTableCache,
-      this.nodeId,
-    );
-    // Diagnostic: log only on transition so we can see, per node, whether the
-    // steady-state leadership predicate identifies it as the publications leader
-    // (without spamming every heartbeat tick).
-    if (this.membershipWriteLeaderStateLogged !== isWriteLeader) {
-      this.membershipWriteLeaderStateLogged = isWriteLeader;
-      this.logger?.info?.(MEMBERSHIP_WRITE_LEADER_STATE_MSG, {
-        nodeId: this.nodeId,
-        isControlPlanePublicationsWriteLeader: isWriteLeader,
-      });
-    }
-    if (!isWriteLeader) {
-      return false;
-    }
-    try {
-      publicationService.enqueueClusterMembershipReconcile(
-        LEADER_PERIODIC_RECONCILE_REASON,
-      );
-      return true;
-    } catch {
-      return false;
-    }
-  }
   /**
    * Initialize the heartbeat service.
    * Transitions: CREATED → INITIALIZED
@@ -341,7 +292,14 @@ class HeartbeatServiceLifecycleMethods {
     };
     const heartbeatTick = () => {
       sendHeartbeat();
-      this.maybeDriveLeaderMembershipReconcile();
+      // The existing leader-driven reconcile (runScheduledMembershipPublicationReconcileTick)
+      // is otherwise reached only AFTER a successful heartbeat send (~line 311);
+      // during the stall the send returns early, so the recovery action never
+      // runs. Drive it here, DECOUPLED from the heartbeat-send outcome (it has its
+      // own in-flight guard + owner check). Flag-gated until validated.
+      if (process.env.LAGRANGE_MEMBERSHIP_LEADER_DRIVEN === 'true') {
+        this.runScheduledMembershipPublicationReconcileTick();
+      }
     };
     this.heartbeatTimer = this.setIntervalFn(heartbeatTick, this.heartbeatIntervalMs);
     if (typeof this.heartbeatTimer?.unref === TYPEOF.FUNCTION) {
