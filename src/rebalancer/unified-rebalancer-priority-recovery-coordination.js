@@ -2,6 +2,15 @@ import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
 import {
   buildPriorityRecoveryVisibilityRebalanceDecision,
 } from './priority-recovery-visibility-decision.js';
+import {
+  isControlPlanePublicationsWriteLeader,
+  CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+} from '../control-plane/control-plane-publications-leadership.js';
+import {TABLES} from '../constants/tables.js';
+import {COLUMN} from '../constants/columns.js';
+
+const PUBLICATIONS_WRITE_LEADER_DIAG_MSG =
+  'DIAG publications write-leader resolution (seed-driven membership)';
 
 const {
   REBALANCE_COORDINATOR_EVENT,
@@ -262,6 +271,41 @@ class UnifiedRebalancerPriorityRecoveryCoordination {
    * @private
    */
   enqueueMembershipPublicationReconcile(reason) {
+    // DIAGNOSTIC (runs on the seed when priority-recovery progresses): does the
+    // leadership predicate recognize THIS node as the control_plane_publications
+    // write-leader, and via which source? Compares the helper result against the
+    // raw Tier-1 (partitions row leader_node_id) and the live rebalancer isLeader.
+    // Transition-logged at warn so it lands in bundles.
+    try {
+      let tier1LeaderNodeId = null;
+      try {
+        tier1LeaderNodeId =
+          this.systemTableCache?.get?.(
+            TABLES.PARTITIONS,
+            CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+          )?.[COLUMN.LEADER_NODE_ID] || null;
+      } catch {
+        tier1LeaderNodeId = null;
+      }
+      const helperResult = isControlPlanePublicationsWriteLeader(
+        this.systemTableCache,
+        this.nodeId,
+      );
+      const snapshot =
+        `helper=${helperResult} tier1=${tier1LeaderNodeId || 'none'} ` +
+        `liveIsLeader=${this.isLeader === true}`;
+      if (this.publicationsWriteLeaderDiagSnapshot !== snapshot) {
+        this.publicationsWriteLeaderDiagSnapshot = snapshot;
+        this.logger?.warn?.(PUBLICATIONS_WRITE_LEADER_DIAG_MSG, {
+          nodeId: this.nodeId,
+          helperSaysWriteLeader: helperResult,
+          tier1PartitionsLeaderNodeId: tier1LeaderNodeId,
+          liveRebalancerIsLeader: this.isLeader === true,
+        });
+      }
+    } catch {
+      // diagnostic must never affect behavior
+    }
     const publicationService =
       this.controlPlaneReadinessService?.membershipPublicationService;
     if (
