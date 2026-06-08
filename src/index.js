@@ -85,6 +85,15 @@ const JOIN_REATTEMPT_MAX_ATTEMPTS =
     Math.floor(Number(process.env.LAGRANGE_JOIN_REATTEMPT_MAX_ATTEMPTS)) :
     4;
 const JOIN_REATTEMPT_BASE_DELAY_MS = 2000;
+// "Never break, only slow": when enabled, a retryable join failure NEVER exits
+// the node — it re-attempts indefinitely with exponential, capped backoff (slows
+// down so it does not hammer a saturated seed, but never abandons). Only a
+// non-retryable (fatal) failure exits. Default off until validated against the
+// statistical convergence gate.
+const JOIN_NEVER_ABANDON_ON_RETRYABLE =
+  process.env.LAGRANGE_JOIN_NEVER_ABANDON === 'true';
+const JOIN_REATTEMPT_MAX_DELAY_MS = 30000;
+const JOIN_REATTEMPT_BACKOFF_CAP_EXP = 10;
 
 // Re-export modules for external use
 export * from './query/index.js';
@@ -289,25 +298,36 @@ async function startJoinNode(options) {
       attempt: joinAttempt,
     });
     await bootstrapAPI.shutdown();
-    if (
+    // Never abandon on a transient: when JOIN_NEVER_ABANDON_ON_RETRYABLE is set,
+    // a retryable failure re-attempts forever (only a non-retryable failure
+    // exits). Otherwise fall back to the bounded re-attempt count.
+    const reattemptAllowed =
       joinResult.retryable === true &&
-      joinAttempt + LOCAL_NUM_ONE < JOIN_REATTEMPT_MAX_ATTEMPTS
-    ) {
-      // Jitter the re-attempt so rejoining nodes do not re-storm the seed in
-      // lockstep during a rolling restart (decorrelate; opt-in via
-      // LAGRANGE_RETRY_JITTER, identity when off).
+      (JOIN_NEVER_ABANDON_ON_RETRYABLE ||
+        joinAttempt + LOCAL_NUM_ONE < JOIN_REATTEMPT_MAX_ATTEMPTS);
+    if (reattemptAllowed) {
+      // Exponential, capped backoff so a persistently-failing join SLOWS DOWN
+      // (does not hammer a saturated seed) but never gives up. Jittered to
+      // decorrelate rejoiners (opt-in via LAGRANGE_RETRY_JITTER).
+      const cappedExp = Math.min(joinAttempt, JOIN_REATTEMPT_BACKOFF_CAP_EXP);
+      const backoffMs = Math.min(
+        JOIN_REATTEMPT_MAX_DELAY_MS,
+        JOIN_REATTEMPT_BASE_DELAY_MS * Math.pow(2, cappedExp),
+      );
       const delayMs = applyBoundedJitter(
         Math.max(
           Number.isFinite(joinResult.retryAfterMs) ?
             joinResult.retryAfterMs :
             0,
-          JOIN_REATTEMPT_BASE_DELAY_MS,
+          backoffMs,
         ),
       );
       mainLogger.warn(LOCAL_STR_REATTEMPT_JOIN, {
         nodeId,
         attempt: joinAttempt + LOCAL_NUM_ONE,
-        maxAttempts: JOIN_REATTEMPT_MAX_ATTEMPTS,
+        maxAttempts: JOIN_NEVER_ABANDON_ON_RETRYABLE ?
+          'unbounded' :
+          JOIN_REATTEMPT_MAX_ATTEMPTS,
         delayMs,
       });
       await new Promise((resolve) => setTimeout(resolve, delayMs));
