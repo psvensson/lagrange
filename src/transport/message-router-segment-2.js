@@ -427,6 +427,7 @@ class MessageRouterSegment2 extends MessageRouterSegment1 {
           connection.ackTimeoutStreak = TRANSPORT_NUM.ZERO;
           connection.lastAckAt = Date.now();
           connection.lastAckTimeoutAt = null;
+          this.ownerCircuitBreaker?.recordSuccess?.(pending.targetNodeId);
         }
         const resolved = {
           messageId,

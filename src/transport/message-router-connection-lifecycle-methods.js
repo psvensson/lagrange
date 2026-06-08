@@ -367,6 +367,7 @@ class MessageRouterConnectionLifecycleMethods {
           connectionInfo.state = ConnectionState.CONNECTED;
           connectionInfo.reconnectAttempts = TRANSPORT_NUM.ZERO;
           connectionInfo.reconnectDueAt = null;
+          this.ownerCircuitBreaker?.recordSuccess?.(connectionInfo.nodeId);
           connectionInfo.ackTimeoutStreak = TRANSPORT_NUM.ZERO;
           connectionInfo.lastAckTimeoutAt = null;
           this.rememberReconnectAddress(
