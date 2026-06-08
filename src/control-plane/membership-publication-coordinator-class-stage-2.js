@@ -45,6 +45,18 @@ import {
   CONTROL_PLANE_CRITICAL_CONVERGENCE_OPERATION,
   buildCriticalControlPlaneConvergenceOptions,
 } from './membership-publication-control-plane-convergence.js';
+import {buildPublicationActiveGateHandoffContract} from './publication-active-gate-handoff-contract.js';
+import {isControlPlanePublicationsWriteLeader} from './control-plane-publications-leadership.js';
+
+// Owner-driven membership liveness (Workstream A). A dedicated always-on interval
+// — started UNCONDITIONALLY, independent of metadata-publication readiness so it
+// cannot be gated behind the very progress it exists to create — drives the
+// membership reconcile on the partition leader. Each drive is timeout-bounded so a
+// slow/doomed reconcile can never wedge the in-flight guard.
+const OWNER_MEMBERSHIP_DRIVER_INTERVAL_MS = 5000;
+const OWNER_MEMBERSHIP_RECONCILE_TIMEOUT_MS = 15000;
+const OWNER_MEMBERSHIP_DRIVER_ERROR_MSG =
+  'Owner-driven membership reconcile error';
 
 const MEMBERSHIP_RECONCILE_DEFERRED_NOT_WRITE_LEADER_MSG =
   'Membership reconcile deferred: not the control_plane_publications write-leader';
@@ -690,6 +702,110 @@ class MembershipPublicationCoordinatorClassStage2 extends
         ).length,
       }),
     });
+  }
+
+  /**
+   * Owner-driven membership reconcile (Workstream A). When this node is the
+   * control_plane_publications write-leader and active nodes are unpublished,
+   * drive the authoritative reconcile locally (Raft-quorum-committed). Timeout-
+   * bounded so a slow/doomed reconcile can never wedge the in-flight guard.
+   * @return {Promise<boolean>} whether a reconcile was driven.
+   */
+  async driveOwnerMembershipReconcile() {
+    if (this.ownerMembershipReconcileInFlight === true) {
+      return false;
+    }
+    if (
+      !isControlPlanePublicationsWriteLeader(this.systemTableCache, this.nodeId)
+    ) {
+      return false;
+    }
+    this.ownerMembershipReconcileInFlight = true;
+    try {
+      const planningSnapshot = await this.readPublicationPlanningSnapshot({
+        preferAuthoritativeRead: true,
+      });
+      if (!planningSnapshot) {
+        return false;
+      }
+      const latestPublishedRow = planningSnapshot.latestPublishedPublicationRow;
+      const latestRow = planningSnapshot.latestPublicationRow;
+      const publicationEpoch =
+        latestPublishedRow?.publicationEpoch ??
+        latestRow?.publicationEpoch ??
+        0;
+      const publishedActiveNodeIds =
+        latestPublishedRow?.publishedActiveNodeIds ??
+        latestRow?.publishedActiveNodeIds ??
+        [];
+      const handoffContract = buildPublicationActiveGateHandoffContract({
+        nodeRows: planningSnapshot.nodeRows,
+        readinessByNodeId: planningSnapshot.readinessByNodeId,
+        publicationConvergence: {publicationEpoch, publishedActiveNodeIds},
+      });
+      const missingCount = handoffContract?.missingPublishedCount ?? 0;
+      if (missingCount <= 0) {
+        return false;
+      }
+      let timer = null;
+      await Promise.race([
+        this.reconcileActiveGateMembershipPublication(handoffContract, {
+          reconcileAuthoritativeMembershipPublication: true,
+        }),
+        new Promise((resolve) => {
+          timer = setTimeout(resolve, OWNER_MEMBERSHIP_RECONCILE_TIMEOUT_MS);
+        }),
+      ]);
+      if (timer) {
+        clearTimeout(timer);
+      }
+      return true;
+    } catch (error) {
+      this.logger?.error?.(OWNER_MEMBERSHIP_DRIVER_ERROR_MSG, {
+        nodeId: this.nodeId,
+        message: error?.message,
+      });
+      return false;
+    } finally {
+      this.ownerMembershipReconcileInFlight = false;
+    }
+  }
+
+  /**
+   * Start the always-on owner-membership driver. MUST be called UNCONDITIONALLY
+   * at node startup — never behind metadata-publication readiness, or it can be
+   * gated behind the very progress it exists to create. No-op unless leader-driven
+   * mode is enabled.
+   */
+  startOwnerMembershipDriver(options = {}) {
+    if (this.ownerMembershipDriverTimer) {
+      return;
+    }
+    const enabled =
+      options.enabled ??
+      process.env.LAGRANGE_MEMBERSHIP_LEADER_DRIVEN === 'true';
+    if (!enabled) {
+      return;
+    }
+    const intervalMs =
+      options.intervalMs || OWNER_MEMBERSHIP_DRIVER_INTERVAL_MS;
+    const setIntervalFn =
+      typeof options.setIntervalFn === TYPEOF.FUNCTION ?
+        options.setIntervalFn :
+        setInterval;
+    this.ownerMembershipDriverTimer = setIntervalFn(() => {
+      this.driveOwnerMembershipReconcile().catch(() => {});
+    }, intervalMs);
+    if (typeof this.ownerMembershipDriverTimer?.unref === TYPEOF.FUNCTION) {
+      this.ownerMembershipDriverTimer.unref();
+    }
+  }
+
+  stopOwnerMembershipDriver() {
+    if (this.ownerMembershipDriverTimer) {
+      clearInterval(this.ownerMembershipDriverTimer);
+      this.ownerMembershipDriverTimer = null;
+    }
   }
 }
 

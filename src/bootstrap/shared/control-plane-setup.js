@@ -363,6 +363,11 @@ class ControlPlaneSetup {
         resolveIsControlPlanePublicationsWriteLeader: () =>
           isControlPlanePublicationsWriteLeader(systemTableCache, nodeId),
       });
+    // Workstream A: start the always-on owner-membership driver UNCONDITIONALLY
+    // here at setup — NOT in the readiness-gated startup handoff — so it cannot be
+    // gated behind the metadata-publication readiness it exists to drive. Self-
+    // gates on the LAGRANGE_MEMBERSHIP_LEADER_DRIVEN flag and the owner predicate.
+    membershipPublicationService.startOwnerMembershipDriver();
     if (!controlPlaneReadinessService.nodesOwner) {
       controlPlaneReadinessService.nodesOwner = systemMetadataOwners.nodesOwner;
     }
