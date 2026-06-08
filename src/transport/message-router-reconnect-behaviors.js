@@ -316,6 +316,16 @@ export async function ensureNodeConnection(router, targetNodeId, address) {
     }
     existing.lastAdHocAttemptAtMs = nowMs;
   }
+  // Rate-limit delivery-triggered reconnect attempts toward a single owner so a
+  // saturated seed is not hammered by an unbounded storm; defer (return null,
+  // caller backs off) when the per-owner budget is exhausted. Default-off.
+  if (
+    router.ownerRetryBudget &&
+    typeof router.ownerRetryBudget.tryConsume === TRANSPORT_TYPEOF.FUNCTION &&
+    !router.ownerRetryBudget.tryConsume(targetNodeId)
+  ) {
+    return null;
+  }
   const connectionPromise = (async () => {
     const reconnectCandidates = router.resolveReconnectAddressCandidates(
       targetNodeId,

@@ -25,8 +25,10 @@ default-off and accepted only against the Phase-0 statistical gate.
   `resolveCreatedOperationHandoffRetryDelayMs` (rebalancer retry paths).
 - [ ] 1.4 Apply jitter at `owner-key-reconcile-queue.js` retry drain +
   `membership-publication-control-plane-convergence` retryAfterMs.
-- [ ] 1.5 Per-target-owner retry-rate token bucket in the delivery layer (reuse
-  `message-router-delivery-source-admission.js`); bound aggregate retries.
+- [x] 1.5 Per-target-owner retry-rate token bucket (`src/transport/owner-retry-budget.js`)
+  gating delivery-triggered reconnects in `ensureNodeConnection`; bounds each
+  node's reconnect-attempt rate toward a saturated owner. Default-off
+  (LAGRANGE_OWNER_RETRY_BUDGET).
 - [ ] 1.6 Promote ack-timeout quarantine
   (`message-router-reconnect-behaviors.js`) into a circuit breaker with a
   half-open probe.

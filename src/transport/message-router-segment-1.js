@@ -1,5 +1,6 @@
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
 import {createMessageRouterConnectionLifecycleMethods} from './message-router-connection-lifecycle-methods.js';
+import {OwnerRetryBudget} from './owner-retry-budget.js';
 
 const {
   ConfigurationManager,
@@ -218,6 +219,10 @@ class MessageRouterSegment1 extends EventEmitter {
     this.resolveQueryMessageGroupService =
       options.resolveQueryMessageGroupService || null;
     this.pendingNodeConnections = /* @__PURE__ */ new Map();
+    // Bounds the rate of delivery-triggered reconnect attempts toward a single
+    // owner so a saturated seed is not hammered (opt-in, default off).
+    this.ownerRetryBudget =
+      options.ownerRetryBudget || new OwnerRetryBudget();
     this.transportPressureMetrics = {
       reconnectBeforeDeliveryFailureCount: TRANSPORT_NUM.ZERO,
       maxObservedPendingNodeConnectionCount: TRANSPORT_NUM.ZERO,
