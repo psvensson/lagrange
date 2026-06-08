@@ -73,6 +73,18 @@ Phase 5: Cache Hydration
 > [Active Gate Convergence Contract](contracts/active-gate-convergence.md)
 > ("Membership Publication Drain") for the full failure class and regression
 > guards.
+>
+> **Two amplifiers make the symptom worse than the root.** (1) The drain itself
+> is often blocked even deeper up: the rejoin's system-table upserts fail with
+> `ROUTER_CONNECTION_CLOSED` because the peer's WebSocket reconnect to the
+> (saturated, sole-published) owner **times out at connect** — see
+> [Active Gate Convergence Contract → Upstream Transport / Owner-Handshake
+> Root](contracts/active-gate-convergence.md). (2) On budget exhaustion the
+> failed-join cleanup previously *stopped the router and exited the process* with
+> no auto-rejoin, converting a transient transport problem into a permanently
+> unreachable node. `src/index.js` now re-composes a fresh join on
+> `joinResult.retryable` (bounded via `LAGRANGE_JOIN_REATTEMPT_MAX_ATTEMPTS`,
+> default 4) instead of exiting — robustness/defense-in-depth, not the root fix.
 
 ## Data Flow
 

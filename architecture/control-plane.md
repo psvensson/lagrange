@@ -40,6 +40,69 @@ unpublished, a drain or wake action must stay enabled. Full failure class,
 risky-path list, and the model/test regression guards live in the
 [Active Gate Convergence Contract](contracts/active-gate-convergence.md).
 
+### Convergence Liveness Across Layers (Rolling-Restart Root)
+
+The publication drain is the *most downstream* layer of a longer convergence
+chain, and during `rolling-restart` it is frequently blocked from deeper up.
+Convergence of a restarted node is emergent across an (implicit) precondition
+ladder — `connected → joined → control-plane-writable → snapshot-covered →
+published` — owned by separate subsystems with separate diagnostic
+vocabularies. **No single component owns the end-to-end liveness property "every
+active node eventually reaches `publishedActiveNodeIds`";** it is the side
+effect of every layer not refusing progress.
+
+Observed root chain (fast-local 5-node, instrumented 2026-06):
+
+1. The surviving seed is often the *sole* published node and is saturated by the
+   cluster's control-plane re-init burst (dozens of replica-leadership
+   acquisitions, coordinator rebinds, service-lifecycle ops in the first ~60s).
+2. Rejoining peers' outbound WebSocket reconnects to the seed then **time out at
+   connect** (`WebSocket connection timeout after 10000–30000ms`,
+   `establishConnection` in
+   `src/transport/message-router-connection-lifecycle-methods.js`) while dialing
+   a *correct, stable* address — the socket is not closed mid-handshake and the
+   address is not stale; the saturated owner does not complete the upgrade in
+   time.
+3. Convergence-critical writes then fail `ROUTER_CONNECTION_CLOSED` (the
+   delivery-deferred-while-reconnecting signal), the rejoin's `services` /
+   `control_plane_publications` upserts cannot land, and the publication never
+   drains those nodes.
+
+Two findings rule out tempting culprits and narrow the search:
+
+- **Priority is already carried end-to-end for convergence writes** — *not* a
+  gap. Join admission (`JOIN_ADMISSION_DELIVERY_PRIORITY='critical'`), join
+  publication (`JOIN_PUBLICATION_DELIVERY_PRIORITY='critical'`), and
+  `control_plane_publications` mutation (workload class `PUBLICATION_MUTATION` →
+  `PRESSURE_WORK_CLASS.CRITICAL`) all ride the protected critical reserve lane.
+  The high-volume `Outbound queue saturated` events are the deliberately
+  background `NODE_STATE_PUBLICATION_BACKGROUND` path and cannot starve the
+  critical lane. Backpressure/priority is not the convergence blocker.
+- **The join give-up makes a transient transport problem permanent.** On `Join
+  retryable resume budget exhausted` the node previously ran failed-join cleanup
+  that stopped its router and exited with no auto-rejoin. `src/index.js` now
+  re-attempts a fresh join on `joinResult.retryable` (bounded via
+  `LAGRANGE_JOIN_REATTEMPT_MAX_ATTEMPTS`); robustness, not the root fix.
+
+The architectural gap is that the blockers are all *local* safety/throttle
+owners (connection-direction tie-break, incoming-close disposition, per-source
+delivery caps, join retry budget, publication `WAIT_OWNER_RECOVERY`) with no
+*liveness* owner composing the chain, surfacing the single binding blocker, and
+escalating it. The building blocks for that composed convergence contract
+already exist and should be wired, not rebuilt: `owner-outcome-contract.js`
+(envelope, already generalized into cross-owner handoff contracts); the
+`control-plane-readiness-constants.js` dimensions + `ControlPlaneReadinessService`
+(precondition ladder; ordering currently implicit); the
+`projection-readiness-decision.js` ordered `{reason, matches}` first-match
+binding-blocker idiom; and the `OutboundDeliveryPriority` / `pressure-governor.js`
+reserve lanes (a model to imitate). The genuinely missing piece is a thin
+convergence/liveness owner — a natural host is the Invariant Engine — carrying
+an eventually-converge liveness invariant plus a composed binding-blocker
+readout. Transport mitigations landed so far (reconnect-on-incoming-close and
+adopt-over-dead-on-open in `src/transport/message-router-segment-2.js` /
+`message-router-connection-lifecycle-methods.js`) reduce connection stranding
+but do not by themselves stabilize convergence under owner saturation.
+
 ### Invariant Engine
 
 `InvariantEngine` (`src/control-plane/invariant-engine.js`) evaluates

@@ -235,6 +235,88 @@ Owner path: `startup_active_gate_owner / snapshot_coverage`. The drain lives in
 `resolvePublicationActiveGateHandoffMissingPublishedNodeIds` in
 `src/control-plane/publication-active-gate-handoff-contract-evidence.js`.
 
+### Upstream Transport / Owner-Handshake Root (often deeper than the drain)
+
+Instrumented fast-local 5-node runs (2026-06) show the residual is frequently
+*not* a drain-local defect at all but a transport/owner-stability one upstream
+of it. The convergence-critical control-plane writes that the drain depends on
+(`services`, `control_plane_publications` upserts) fail with
+`ROUTER_CONNECTION_CLOSED` because the rejoining peer's outbound WebSocket
+reconnect to the owner **times out at connect** (`WebSocket connection timeout
+after 10000–30000ms`, `establishConnection`), dialing a correct, stable address.
+Most consistent reading: the surviving seed is the *sole* published node and is
+saturated by the cluster's control-plane re-init burst, so it cannot complete
+rejoining peers' WS handshakes in time. Ruled out by evidence: stale address
+(address is correct), mid-handshake close (it is a connect timeout, no OPEN),
+admission rejection (no "external admission is closed" rejections), and
+priority/backpressure starvation (convergence writes already carry `critical`
+delivery priority and ride the protected reserve lane; the high-volume
+`Outbound queue saturated` events are the deliberately-background
+`NODE_STATE_PUBLICATION_BACKGROUND` path, which cannot starve the critical
+lane). Diagnosis support: dispatch-deferral records now carry transport
+diagnostics (`transportReasonCode`, `targetConnectionState`/`IsIncoming`/
+`Address`/`Id`, `targetAckTimeoutStreak`, `targetReconnectAttempts`) via
+`buildHandoffDeferralTransportDiagnostics`
+(`src/rebalancer/operation-workflow-owner-shared.js`) +
+`messageRouter.getConnectionHandoffDiagnostics`, surfaced into
+`decisionArtifactsByNodeId` in the failure bundle. Partial transport mitigations
+landed (reconnect-on-incoming-close, adopt-over-dead-on-open) but do not
+stabilize convergence under owner saturation; see
+[control-plane.md → Convergence Liveness Across Layers](../control-plane.md).
+
+**Candidate direction — admission gated on control-plane distribution.** Because
+the binding constraint is owner saturation (the seed as sole-published node
+cannot service the rejoin storm), the highest-leverage fix is admission control,
+not more transport patching. The seed already runs an admit-or-*defer* gate at
+`/bootstrap` (`evaluateBootstrapRequestAdmissionDecision` /
+`getBootstrapJoinAdmissionSnapshot` in
+`src/bootstrap/owners/bootstrap-request-owner-handler.js`; rejoin admission
+states in `src/control-plane/rejoin-reconciliation-contract.js`), and a
+first-class distribution signal exists (`prioritySpreadPending` /
+`PRIORITY_SPREAD_SATISFIED`, the rebalancer's priority-spread of control-plane
+partitions). Wiring distribution-sufficiency + owner headroom into the admission
+decision — defer (re)joins while the join-critical control-plane services are
+still concentrated on a saturated owner, admit as spread catches up — breaks the
+cycle (seed-overload ← no-spread ← spread-needs-transport ← transport-needs-seed-
+headroom) by limiting inflow so the owner has headroom to distribute. Design
+constraints: it must be a *rate/headroom throttle keyed on current distributed
+capacity*, not an absolute "fully distributed or no joins" (distribution
+requires members, so some joins must be admitted to bootstrap spread — otherwise
+deadlock), and it must stagger the simultaneous rejoin storm. This is the
+natural action-arm of the missing convergence/liveness owner.
+
+The measurement and throttle for this already exist and need only be wired into
+the gate:
+
+- **Per-partition distributed-capacity view (the headroom signal).**
+  `buildDerivedPriorityPartitionSummary`
+  (`src/control-plane/membership-publication-priority-partition-summary.js`)
+  computes, per priority control-plane partition, the count of *distinct
+  readiness-promotable nodes hosting a ready replica* (`readyDistinctNodeCount`)
+  vs `requiredDistinctNodeCount = min(PRIORITY_SPREAD_REQUIRED_DISTINCT_NODE_COUNT
+  (=3), eligibleNodeCount)`, yielding `spreadGap`, `blockedPartitions[]`,
+  `satisfied`, `readyEligibleNodeCount`. It is a *direct structural count* from
+  the `services`/`partitions`/`readiness` rows — trustworthy where the
+  `prioritySpreadPending` flag can itself wedge under transport churn — and the
+  `min(target, eligibleNodeCount)` term auto-scales the requirement to cluster
+  size, so it never demands impossible spread (the anti-deadlock guard). It is
+  already on `planningSnapshot.priorityPartitionSummary` and consumed by the
+  rebalancer (`unified-rebalancer-priority-readiness.js`,
+  `operation-workflow-priority-recovery-superseded-target-decision.js`) — but not
+  by the bootstrap admission gate.
+- **Stagger throttle.** The seed already tracks `inFlightBootstrapRequestCount`
+  against `maxConcurrentBootstrapRequests` (`src/bootstrap/bootstrap-api.js`,
+  enforced in `bootstrap-request-owner-handler.js`). Making that limit a
+  function of the per-partition headroom (low/zero `readyDistinctNodeCount` on a
+  join-critical partition ⇒ smaller concurrent-join budget; rising ⇒ larger)
+  gives a concurrency throttle that admits enough joins to *build* spread while
+  deferring the excess that would only pile load on a saturated owner.
+
+So the wiring is: read `priorityPartitionSummary` (or its per-partition
+`readyDistinctNodeCount`) in `getBootstrapJoinAdmissionSnapshot` /
+`evaluateBootstrapRequestAdmissionDecision`, and scale
+`maxConcurrentBootstrapRequests` by it. No new measurement infrastructure.
+
 ### Risky Paths (regression hot spots)
 
 1. **Deferral branch that only drains under owner-recovery wait.** When
