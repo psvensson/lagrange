@@ -29,10 +29,9 @@ default-off and accepted only against the Phase-0 statistical gate.
   gating delivery-triggered reconnects in `ensureNodeConnection`; bounds each
   node's reconnect-attempt rate toward a saturated owner. Default-off
   (LAGRANGE_OWNER_RETRY_BUDGET).
-- [x] 1.6 Per-owner circuit breaker (`src/transport/owner-circuit-breaker.js`):
-  OPEN on sustained ack-timeout/reconnect failures, half-open probe after
-  cool-down, CLOSE on success; gated in `ensureNodeConnection` alongside the
-  retry budget. Default-off (LAGRANGE_OWNER_CIRCUIT_BREAKER).
+- [ ] 1.6 Promote ack-timeout quarantine
+  (`message-router-reconnect-behaviors.js`) into a circuit breaker with a
+  half-open probe.
 - [x] 1.7a `index.js` join re-attempt delay is jittered (decorrelate rejoin
   storms); the permanent `process.exit` self-destruct is already mitigated by the
   bounded re-attempt (`e61deebc`).

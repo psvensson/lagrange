@@ -1,7 +1,6 @@
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
 import {createMessageRouterConnectionLifecycleMethods} from './message-router-connection-lifecycle-methods.js';
 import {OwnerRetryBudget} from './owner-retry-budget.js';
-import {OwnerCircuitBreaker} from './owner-circuit-breaker.js';
 
 const {
   ConfigurationManager,
@@ -224,10 +223,6 @@ class MessageRouterSegment1 extends EventEmitter {
     // owner so a saturated seed is not hammered (opt-in, default off).
     this.ownerRetryBudget =
       options.ownerRetryBudget || new OwnerRetryBudget();
-    // Stops re-attempting a confirmed-dead owner (sustained ack-timeouts /
-    // reconnect failures) so it can drain; half-open probe after a cool-down.
-    this.ownerCircuitBreaker =
-      options.ownerCircuitBreaker || new OwnerCircuitBreaker();
     this.transportPressureMetrics = {
       reconnectBeforeDeliveryFailureCount: TRANSPORT_NUM.ZERO,
       maxObservedPendingNodeConnectionCount: TRANSPORT_NUM.ZERO,

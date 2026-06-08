@@ -316,15 +316,6 @@ export async function ensureNodeConnection(router, targetNodeId, address) {
     }
     existing.lastAdHocAttemptAtMs = nowMs;
   }
-  // Circuit breaker: if the owner is confirmed-dead (sustained failures), defer
-  // immediately so it can drain — except for the single half-open probe.
-  if (
-    router.ownerCircuitBreaker &&
-    typeof router.ownerCircuitBreaker.allowRequest === TRANSPORT_TYPEOF.FUNCTION &&
-    !router.ownerCircuitBreaker.allowRequest(targetNodeId)
-  ) {
-    return null;
-  }
   // Rate-limit delivery-triggered reconnect attempts toward a single owner so a
   // saturated seed is not hammered by an unbounded storm; defer (return null,
   // caller backs off) when the per-owner budget is exhausted. Default-off.
@@ -558,7 +549,6 @@ export function quarantineConnectionAfterAckTimeout(
     (activeConnection.ackTimeoutStreak || TRANSPORT_NUM.ZERO) +
     TRANSPORT_NUM.ONE;
   activeConnection.lastAckTimeoutAt = Date.now();
-  router.ownerCircuitBreaker?.recordFailure?.(targetNodeId);
   if (
     activeConnection.ackTimeoutStreak < router.ackTimeoutQuarantineThreshold
   ) {
