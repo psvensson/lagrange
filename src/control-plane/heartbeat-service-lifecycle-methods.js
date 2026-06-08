@@ -31,6 +31,13 @@ import {HEARTBEAT_SERVICE_LITERAL, ONE, ZERO} from './heartbeat-service-runtime-
 const LEADER_PERIODIC_RECONCILE_REASON = 'leader_periodic_membership_drive';
 const MEMBERSHIP_WRITE_LEADER_STATE_MSG =
   'Leader-driven membership: control_plane_publications write-leader state';
+// Diagnostics for the EXISTING leader-driven reconcile tick (research, not a new
+// mechanism): why does runScheduledMembershipPublicationReconcileTick not drive
+// publication during the stall? Transition-logged at warn so it lands in bundles.
+const SCHEDULED_RECONCILE_NO_SERVICE_MSG =
+  'Scheduled membership reconcile tick: no membershipPublicationService';
+const SCHEDULED_RECONCILE_DIAG_MSG =
+  'Scheduled membership reconcile tick: owner/leadership state';
 
 class HeartbeatServiceLifecycleMethods {
   /**
@@ -351,6 +358,12 @@ class HeartbeatServiceLifecycleMethods {
    */
   async runScheduledMembershipPublicationReconcileTick() {
     if (!this.membershipPublicationService) {
+      if (this.scheduledReconcileNoServiceLogged !== true) {
+        this.scheduledReconcileNoServiceLogged = true;
+        this.logger?.warn?.(SCHEDULED_RECONCILE_NO_SERVICE_MSG, {
+          nodeId: this.nodeId,
+        });
+      }
       this.scheduledReconcileObligationEnabled = false;
       return;
     }
@@ -365,6 +378,20 @@ class HeartbeatServiceLifecycleMethods {
           p.table_name === TABLES.CONTROL_PLANE_PUBLICATIONS,
       );
       const isOwner = pubPartition?.leader_node_id === this.nodeId;
+
+      const reconcileDiagSnapshot =
+        `found=${!!pubPartition} owner=${isOwner} ` +
+        `leader=${pubPartition?.leader_node_id || 'none'}`;
+      if (this.scheduledReconcileDiagSnapshot !== reconcileDiagSnapshot) {
+        this.scheduledReconcileDiagSnapshot = reconcileDiagSnapshot;
+        this.logger?.warn?.(SCHEDULED_RECONCILE_DIAG_MSG, {
+          nodeId: this.nodeId,
+          isOwner,
+          pubPartitionFound: !!pubPartition,
+          pubPartitionLeaderNodeId: pubPartition?.leader_node_id || null,
+          partitionRowCount: partitions.length,
+        });
+      }
 
       if (!isOwner) {
         this.scheduledReconcileObligationEnabled = false;
