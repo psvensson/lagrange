@@ -88,9 +88,21 @@ path, `partition-service-segment-3-part-1.js:608-715`).
   the reconcile touches (e.g. `replica_operations-p1`), so its reads/writes are
   local? (c) exactly what the multi-partition `DISTRIBUTED_PARTICIPANT_FAILURE`
   (all-participants) op needs vs. a leader-local equivalent.
-- [ ] 4.1 Pin/forward the `membership-publication:cluster_membership` reconcile to
-  the membership-partition Raft leader (today it is queue-assigned, NOT
-  leader-pinned — the core gap). Owner-key should track partition leadership.
+- [x] 4.0 VERIFIED against the deterministic 3-node reproducer (run3): (a) seed
+  published ITSELF while rejoiners did not → the SAME control_plane_publications
+  write succeeds seed-driven, fails rejoiner-driven (quorum writes work; only the
+  driver is wrong); (b) the seed is `isLeader:true` for ALL relevant partitions
+  (control_plane_publications-p1, replica_operations-p1, sql_*-p1) → leader-driven
+  serves the whole multi-partition op locally; (c) seed reaches followers
+  (readinessState:ready). Design GREEN.
+- [ ] 4.1 Route the membership reconcile to the `control_plane_publications` OWNER
+  (`membershipPublicationRuntimeOwner.getControlPlanePublicationsOwner()`,
+  membership-publication-coordinator-stage-2.js:138-141) instead of whoever's
+  reconcile-queue claims it. ENCOURAGING: the candidate is ALREADY cluster-wide
+  (`deriveMembershipPublicationCandidate` builds `publishedActiveNodeIds` as a list
+  of all active nodes), so no target-selection rework — only the DRIVER and the
+  WRITE path change. `reconcileClusterMembership` (stage-2:412) has NO leadership
+  gate today — that is the gap to add.
 - [ ] 4.2 Leader publishes membership for all observed-active nodes (it already has
   them via snapshot coverage) through an `AuthoritativeRowMutationHelper` wired for
   `control_plane_publications` (table-agnostic, same gateway/fence — confirmed
