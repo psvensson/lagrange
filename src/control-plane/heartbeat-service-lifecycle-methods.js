@@ -20,7 +20,56 @@ import {
 } from './heartbeat-service-write-coalescing.js';
 import {HEARTBEAT_SERVICE_LITERAL, ONE, ZERO} from './heartbeat-service-runtime-state.js';
 
+// Phase 4 (4.1c): the membership-publication reconcile is only ever triggered on
+// recovering nodes, never on the stable leader — so when those nodes defer to the
+// leader (4.1a/b) nothing drives publication. This periodic leader-side driver
+// closes that gap: on each heartbeat tick the control_plane_publications
+// write-leader enqueues a membership reconcile (idempotent — a no-op once
+// converged), so the authority always drives the cluster-wide publication to
+// completion. Flag-gated; default off.
+const LEADER_PERIODIC_RECONCILE_REASON = 'leader_periodic_membership_drive';
+
 class HeartbeatServiceLifecycleMethods {
+  /**
+   * When leader-driven membership mode is enabled and THIS node is the
+   * control_plane_publications write-leader, enqueue a membership reconcile.
+   * Fail-safe: returns false and never throws on any missing dependency.
+   * @return {boolean} whether a reconcile was enqueued.
+   * @private
+   */
+  maybeDriveLeaderMembershipReconcile() {
+    if (process.env.LAGRANGE_MEMBERSHIP_LEADER_DRIVEN !== 'true') {
+      return false;
+    }
+    const publicationService = this.membershipPublicationService;
+    if (
+      !publicationService ||
+      typeof publicationService.enqueueClusterMembershipReconcile !==
+        TYPEOF.FUNCTION
+    ) {
+      return false;
+    }
+    let isWriteLeader = false;
+    try {
+      isWriteLeader =
+        this.cdcIntegrationService?.canWriteSystemTableLocally?.(
+          TABLES.CONTROL_PLANE_PUBLICATIONS,
+        ) === true;
+    } catch {
+      return false;
+    }
+    if (!isWriteLeader) {
+      return false;
+    }
+    try {
+      publicationService.enqueueClusterMembershipReconcile(
+        LEADER_PERIODIC_RECONCILE_REASON,
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
   /**
    * Initialize the heartbeat service.
    * Transitions: CREATED → INITIALIZED
@@ -275,11 +324,15 @@ class HeartbeatServiceLifecycleMethods {
         this.completeHeartbeatAttempt(attempt);
       }
     };
-    this.heartbeatTimer = this.setIntervalFn(sendHeartbeat, this.heartbeatIntervalMs);
+    const heartbeatTick = () => {
+      sendHeartbeat();
+      this.maybeDriveLeaderMembershipReconcile();
+    };
+    this.heartbeatTimer = this.setIntervalFn(heartbeatTick, this.heartbeatIntervalMs);
     if (typeof this.heartbeatTimer?.unref === TYPEOF.FUNCTION) {
       this.heartbeatTimer.unref();
     }
-    sendHeartbeat();
+    heartbeatTick();
     this.logger.info(HEARTBEAT_LOG_MSG.STARTED, {nodeId: this.nodeId});
   }
   /**
