@@ -12,10 +12,6 @@ import {
 import {NODE_STATE} from '../../constants/node-state.js';
 import {CONNECTION_STATE} from '../../constants/transport.js';
 import {
-  extractPriorityPartitionSummary,
-  resolveJoinAdmissionConcurrencyBudget,
-} from '../join-admission-distribution-budget.js';
-import {
   BOOTSTRAP_PHASE,
   BOOTSTRAP_PIPELINE_ERROR_CODE,
 } from '../bootstrap-constants.js';
@@ -172,32 +168,6 @@ class BootstrapRequestOwner {
 
   getMaxConcurrentBootstrapRequests() {
     return this.delegates.getMaxConcurrentBootstrapRequests?.() || NUM.ZERO;
-  }
-
-  isJoinDistributionAdmissionEnabled() {
-    return this.delegates.isJoinDistributionAdmissionEnabled?.() === true;
-  }
-
-  /**
-   * Narrow the configured concurrent-join cap by current control-plane
-   * distribution headroom (distinct ready host nodes of join-critical priority
-   * partitions). Defers excess (re)joins while the join-critical control plane
-   * is still concentrated on a saturated owner, admitting enough to build
-   * spread. No-op (returns the configured cap) unless gating is opt-in enabled.
-   * @param {Object|null} admissionSnapshot - bootstrap-join readiness snapshot.
-   * @return {number}
-   */
-  getEffectiveMaxConcurrentBootstrapRequests(admissionSnapshot = null) {
-    const configuredMax = this.getMaxConcurrentBootstrapRequests();
-    if (!this.isJoinDistributionAdmissionEnabled()) {
-      return configuredMax;
-    }
-    return resolveJoinAdmissionConcurrencyBudget({
-      configuredMax,
-      priorityPartitionSummary:
-        extractPriorityPartitionSummary(admissionSnapshot),
-      enabled: true,
-    });
   }
 
   getBootstrapAdmissionRetryAfterMs() {

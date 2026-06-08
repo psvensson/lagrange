@@ -260,15 +260,8 @@ async function handleBootstrapRequest(request, reply) {
   this.expireStaleBootstrapAdmissions(
     admissionBoundaryDeadlineSnapshot.observedAtMs,
   );
-  // Effective budget narrows the configured concurrent-join cap by current
-  // control-plane distribution headroom when distribution-aware admission is
-  // enabled; otherwise it equals the configured cap (no behavior change).
-  const effectiveMaxConcurrentBootstrapRequests =
-    this.getEffectiveMaxConcurrentBootstrapRequests(
-      bootstrapJoinAdmissionSnapshot,
-    );
   if (this.getInFlightBootstrapRequestCount() >=
-      effectiveMaxConcurrentBootstrapRequests) {
+      this.getMaxConcurrentBootstrapRequests()) {
     const retryAfterMs = this.getBootstrapAdmissionRetryAfterMs();
     this.getLogger().warn(BOOTSTRAP_API_LOG_MSG.BOOTSTRAP_ADMISSION_DEFERRED, {
       nodeId,
@@ -277,7 +270,6 @@ async function handleBootstrapRequest(request, reply) {
       inFlightBootstrapRequests: this.getInFlightBootstrapRequestCount(),
       maxConcurrentBootstrapRequests:
         this.getMaxConcurrentBootstrapRequests(),
-      effectiveMaxConcurrentBootstrapRequests,
       retryAfterMs,
     });
     this.logBootstrapRequestDeferred({
