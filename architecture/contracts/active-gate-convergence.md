@@ -317,6 +317,20 @@ So the wiring is: read `priorityPartitionSummary` (or its per-partition
 `evaluateBootstrapRequestAdmissionDecision`, and scale
 `maxConcurrentBootstrapRequests` by it. No new measurement infrastructure.
 
+**Empirical caveat (2026-06): the concurrent-`/bootstrap` lever is the wrong
+enforcement point for this scenario.** An opt-in draft of exactly this wiring (a
+`join-admission-distribution-budget` helper gated by
+`LAGRANGE_JOIN_DISTRIBUTION_ADMISSION`, **since reverted**) was harness-tested and
+**never engaged**: a rolling restart serializes rejoins, so concurrent
+`/bootstrap` HTTP load stays ≤1 and `inFlightBootstrapRequestCount` never reaches
+the budget. The seed overload is sustained post-join control-plane *work* +
+background node-state publication, not concurrent bootstrap admission. A
+controlled fresh-vs-reused / flag-on-vs-off matrix showed `missingPublishedCount`
+swinging 0–4 with no reproducible effect from the throttle — i.e. high
+run-to-run variance dominates. The *idea* (gate joins on distribution headroom)
+stands, but the enforcement point must meter sustained join/control-plane work
+(or pace redistribution between restarts), not bootstrap-request concurrency.
+
 ### Risky Paths (regression hot spots)
 
 1. **Deferral branch that only drains under owner-recovery wait.** When

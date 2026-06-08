@@ -327,6 +327,19 @@ class Cluster1 {
         partitionConfig.evaluationIntervalMs,
       );
     }
+    // Forward opt-in LAGRANGE_* feature-flag env vars from the host so per-run
+    // flag experiments (e.g. LAGRANGE_JOIN_DISTRIBUTION_ADMISSION) reach the node
+    // containers. Scoped to the LAGRANGE_ prefix; changing these recreates the
+    // reusable container via _shouldRecreateReusableContainer.
+    for (const [key, value] of Object.entries(process.env)) {
+      if (
+        key.startsWith('LAGRANGE_') &&
+        typeof value === 'string' &&
+        value.length > ZERO
+      ) {
+        env[key] = value;
+      }
+    }
     return env;
   }
 
