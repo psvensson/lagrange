@@ -59,7 +59,7 @@ import {NodeService} from '../../node/node-service.js';
 import {LoggingService} from '../../logging/logging-service.js';
 import {DependencyError} from '../bootstrap-errors.js';
 import {SUBSYSTEM} from '../../constants/index.js';
-import {TABLES} from '../../constants/tables.js';
+import {isControlPlanePublicationsWriteLeader} from '../../control-plane/control-plane-publications-leadership.js';
 
 /**
  * Subsystem identifier for logging.
@@ -356,13 +356,12 @@ class ControlPlaneSetup {
         replicaOperationRepository:
           rebalanceCoordinator?.repository || null,
         membershipPublicationRuntimeOwner,
-        // Phase 4: this node is the membership write-leader iff it can write the
-        // control_plane_publications system table locally (it is the local
-        // partition LEADER). Gates leader-driven membership reconcile.
+        // Phase 4: this node is the membership write-leader iff it is the
+        // control_plane_publications partition LEADER (steady-state check via the
+        // PARTITIONS row leader_node_id / live SERVICES raft_role witness). Gates
+        // the leader-driven membership reconcile.
         resolveIsControlPlanePublicationsWriteLeader: () =>
-          cdcIntegrationService?.canWriteSystemTableLocally?.(
-            TABLES.CONTROL_PLANE_PUBLICATIONS,
-          ) === true,
+          isControlPlanePublicationsWriteLeader(systemTableCache, nodeId),
       });
     if (!controlPlaneReadinessService.nodesOwner) {
       controlPlaneReadinessService.nodesOwner = systemMetadataOwners.nodesOwner;

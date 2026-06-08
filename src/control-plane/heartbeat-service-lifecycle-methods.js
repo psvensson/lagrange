@@ -2,6 +2,7 @@ import {ConfigurationManager} from '../config/configuration-manager.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {NUM, SERVICE_STATUS, STATE, STRING, TYPEOF} from '../constants/index.js';
 import {TABLES} from '../constants/tables.js';
+import {isControlPlanePublicationsWriteLeader} from './control-plane-publications-leadership.js';
 import {buildPublicationActiveGateHandoffContract} from './publication-active-gate-handoff-contract.js';
 import {TRANSPORT_CONFIG_KEY, TRANSPORT_DEFAULT} from '../constants/transport.js';
 import {assertCritical} from '../utils/assert.js';
@@ -28,6 +29,8 @@ import {HEARTBEAT_SERVICE_LITERAL, ONE, ZERO} from './heartbeat-service-runtime-
 // converged), so the authority always drives the cluster-wide publication to
 // completion. Flag-gated; default off.
 const LEADER_PERIODIC_RECONCILE_REASON = 'leader_periodic_membership_drive';
+const MEMBERSHIP_WRITE_LEADER_STATE_MSG =
+  'Leader-driven membership: control_plane_publications write-leader state';
 
 class HeartbeatServiceLifecycleMethods {
   /**
@@ -49,14 +52,19 @@ class HeartbeatServiceLifecycleMethods {
     ) {
       return false;
     }
-    let isWriteLeader = false;
-    try {
-      isWriteLeader =
-        this.cdcIntegrationService?.canWriteSystemTableLocally?.(
-          TABLES.CONTROL_PLANE_PUBLICATIONS,
-        ) === true;
-    } catch {
-      return false;
+    const isWriteLeader = isControlPlanePublicationsWriteLeader(
+      this.systemTableCache,
+      this.nodeId,
+    );
+    // Diagnostic: log only on transition so we can see, per node, whether the
+    // steady-state leadership predicate identifies it as the publications leader
+    // (without spamming every heartbeat tick).
+    if (this.membershipWriteLeaderStateLogged !== isWriteLeader) {
+      this.membershipWriteLeaderStateLogged = isWriteLeader;
+      this.logger?.info?.(MEMBERSHIP_WRITE_LEADER_STATE_MSG, {
+        nodeId: this.nodeId,
+        isControlPlanePublicationsWriteLeader: isWriteLeader,
+      });
     }
     if (!isWriteLeader) {
       return false;

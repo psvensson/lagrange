@@ -2,23 +2,28 @@ import t from 'tap';
 import {HeartbeatService} from '../../src/control-plane/heartbeat-service.js';
 
 // Phase 4 (4.1c): the write-leader's heartbeat tick drives the membership
-// reconcile. Test the driver predicate directly via the prototype method.
+// reconcile. Leadership is resolved via the steady-state predicate
+// (control_plane_publications partition leader), NOT the bootstrap-only check.
 const driver =
   HeartbeatService.prototype.maybeDriveLeaderMembershipReconcile;
 
-function makeCtx({writeLeader, enqueueSpy, throwOnLeaderCheck = false}) {
+function leaderCache(nodeId) {
   return {
+    get: (table, key) =>
+      table === 'partitions' && key === 'control_plane_publications-p1' ?
+        {leader_node_id: nodeId} :
+        null,
+    find: () => null,
+  };
+}
+
+function makeCtx({cache, enqueueSpy, nodeId = 'seed'}) {
+  return {
+    nodeId,
     membershipPublicationService: {
       enqueueClusterMembershipReconcile: enqueueSpy,
     },
-    cdcIntegrationService: {
-      canWriteSystemTableLocally: () => {
-        if (throwOnLeaderCheck) {
-          throw new Error('leadership unknown');
-        }
-        return writeLeader;
-      },
-    },
+    systemTableCache: cache,
   };
 }
 
@@ -28,34 +33,38 @@ t.beforeEach(() => {
 
 t.test('flag off -> never drives (default unchanged)', async (t) => {
   let calls = 0;
-  const ctx = makeCtx({writeLeader: true, enqueueSpy: () => {calls += 1;}});
+  const ctx = makeCtx({cache: leaderCache('seed'), enqueueSpy: () => {calls += 1;}});
   t.equal(driver.call(ctx), false);
   t.equal(calls, 0);
 });
 
-t.test('flag on + write-leader -> enqueues reconcile', async (t) => {
+t.test('flag on + this node is partition leader -> enqueues', async (t) => {
   process.env.LAGRANGE_MEMBERSHIP_LEADER_DRIVEN = 'true';
   let reason = null;
-  const ctx = makeCtx({writeLeader: true, enqueueSpy: (r) => {reason = r;}});
+  const ctx = makeCtx({cache: leaderCache('seed'), enqueueSpy: (r) => {reason = r;}});
   t.equal(driver.call(ctx), true);
   t.equal(reason, 'leader_periodic_membership_drive');
 });
 
-t.test('flag on + NOT write-leader -> does not enqueue', async (t) => {
+t.test('flag on + NOT partition leader -> does not enqueue', async (t) => {
   process.env.LAGRANGE_MEMBERSHIP_LEADER_DRIVEN = 'true';
   let calls = 0;
-  const ctx = makeCtx({writeLeader: false, enqueueSpy: () => {calls += 1;}});
+  // cache says the leader is 'seed' but this node is a rejoiner
+  const ctx = makeCtx({
+    cache: leaderCache('seed'),
+    nodeId: 'rejoiner',
+    enqueueSpy: () => {calls += 1;},
+  });
   t.equal(driver.call(ctx), false);
   t.equal(calls, 0);
 });
 
-t.test('flag on + throwing leader check -> fail-safe false', async (t) => {
+t.test('flag on + throwing cache -> fail-safe false', async (t) => {
   process.env.LAGRANGE_MEMBERSHIP_LEADER_DRIVEN = 'true';
   let calls = 0;
   const ctx = makeCtx({
-    writeLeader: true,
+    cache: {get: () => {throw new Error('cache miss');}, find: () => null},
     enqueueSpy: () => {calls += 1;},
-    throwOnLeaderCheck: true,
   });
   t.equal(driver.call(ctx), false);
   t.equal(calls, 0);
@@ -64,7 +73,11 @@ t.test('flag on + throwing leader check -> fail-safe false', async (t) => {
 t.test('flag on, no publication service -> false', async (t) => {
   process.env.LAGRANGE_MEMBERSHIP_LEADER_DRIVEN = 'true';
   t.equal(
-    driver.call({membershipPublicationService: null, cdcIntegrationService: {}}),
+    driver.call({
+      nodeId: 'seed',
+      membershipPublicationService: null,
+      systemTableCache: leaderCache('seed'),
+    }),
     false,
   );
 });
