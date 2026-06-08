@@ -51,24 +51,32 @@ for i in $(seq 1 "${N}"); do
   wall_s=$(( end_s - start_s ))
 
   if [ -f "${RUN_REPORT}" ]; then
-    passed=$(jq -r '.scenarios[0].passed // null' "${RUN_REPORT}" 2>/dev/null || echo null)
-    missing=$(jq -r '.scenarios[0].publicationConvergence.missingPublishedCount // null' "${RUN_REPORT}" 2>/dev/null || echo null)
-    reason=$(jq -r '.scenarios[0].dominantReason // "none"' "${RUN_REPORT}" 2>/dev/null || echo none)
-    duration=$(jq -r '.scenarios[0].duration // null' "${RUN_REPORT}" 2>/dev/null || echo null)
+    # Per the 'never break, only slow' gate: classify each run by CORRECTNESS
+    # (hard invariant breaches) FIRST, then PROGRESS (deficit decreasing vs
+    # frozen). A converged-but-corrupt run is the worst outcome; a slow run that
+    # is still making progress is a pass, a frozen (stalled) run is a fail.
+    rec=$(jq -c '.scenarios[0] as $sc
+      | ($sc.invariantBreaches.hardCount // 0) as $hard
+      | ($sc.publicationConvergence.missingPublishedCount) as $missing
+      | ($sc.details.diagnostics.activeGate.failedNoProgress) as $fnp
+      | ($sc.details.diagnostics.activeGate.coordinatorCyclesSinceProgress // 0) as $cyc
+      | {passed:($sc.passed // null), missing:$missing, hardBreaches:$hard,
+         cyclesNoProgress:$cyc, failedNoProgress:$fnp,
+         reason:($sc.dominantReason // "none"), duration:($sc.duration // null),
+         class:(if $hard>0 then "CORRUPT"
+                elif $missing==0 then "CONVERGED"
+                elif ($fnp==true or $cyc>=10) then "STALLED"
+                else "SLOW" end)}' "${RUN_REPORT}" 2>/dev/null)
   else
-    passed=null; missing=null; reason="no_report"; duration=null
+    rec=""
   fi
-  echo "run ${i}: passed=${passed} missing=${missing} reason=${reason} wall=${wall_s}s"
-  jq -cn \
-    --argjson run "${i}" \
-    --argjson passed "${passed:-null}" \
-    --argjson missing "${missing:-null}" \
-    --arg reason "${reason}" \
-    --argjson duration "${duration:-null}" \
-    --argjson wall "${wall_s}" \
-    '{run:$run, passed:$passed, missing:$missing, reason:$reason, duration:$duration, wallSeconds:$wall}' \
-    >> "${TMP_NDJSON}" 2>/dev/null || \
-    echo "{\"run\":${i},\"passed\":null,\"missing\":null,\"reason\":\"parse_error\",\"duration\":null,\"wallSeconds\":${wall_s}}" >> "${TMP_NDJSON}"
+  [ -z "${rec}" ] && rec='{"passed":null,"missing":null,"hardBreaches":null,"cyclesNoProgress":null,"failedNoProgress":null,"reason":"no_report","duration":null,"class":"NO_REPORT"}'
+  class=$(echo "${rec}" | jq -r '.class')
+  missing=$(echo "${rec}" | jq -r '.missing')
+  hard=$(echo "${rec}" | jq -r '.hardBreaches')
+  echo "run ${i}: class=${class} missing=${missing} hardBreaches=${hard} wall=${wall_s}s"
+  echo "${rec}" | jq -c --argjson run "${i}" --argjson wall "${wall_s}" \
+    '. + {run:$run, wallSeconds:$wall}' >> "${TMP_NDJSON}"
 done
 
 # Aggregate.
@@ -77,9 +85,13 @@ jq -s '
   {
     timestamp: "'"${TS}"'", config: "'"${CONFIG}"'", scenario: "'"${SCENARIO}"'",
     runs: length,
+    classTally: ( [.[].class] | group_by(.) | map({(.[0]|tostring): length}) | add ),
+    corruptCount: ([.[] | select(.class=="CORRUPT")] | length),
+    convergeRate: ( (([.[] | select(.missing==0)] | length) ) / (length) ),
+    stallRate: ( (([.[] | select(.class=="STALLED")] | length) ) / (length) ),
+    healthyRate: ( (([.[] | select(.class=="CONVERGED" or .class=="SLOW")] | length) ) / (length) ),
     converged: ([.[] | select(.missing==0)] | length),
     passRate: ( (([.[] | select(.passed==true)] | length) ) / (length) ),
-    convergeRate: ( (([.[] | select(.missing==0)] | length) ) / (length) ),
     missingHistogram: ( [.[].missing] | group_by(.) | map({(.[0]|tostring): length}) | add ),
     dominantReasonTally: ( [.[].reason] | group_by(.) | map({(.[0]|tostring): length}) | add ),
     wallSeconds: { p50: ([.[].wallSeconds]|pct(0.5)), p95: ([.[].wallSeconds]|pct(0.95)) },
@@ -94,9 +106,14 @@ jq -s '
   echo
   jq -r '
     "- runs: \(.runs)",
-    "- converged (missing=0): \(.converged)/\(.runs)  (rate \(.convergeRate))",
-    "- passRate: \(.passRate)",
+    "- **CORRUPT (hard invariant breach — must be 0): \(.corruptCount)**",
+    "- stallRate (frozen / gave up): \(.stallRate)",
+    "- healthyRate (converged or progressing): \(.healthyRate)",
+    "- convergeRate (missing=0): \(.convergeRate)",
     "- wallSeconds p50/p95: \(.wallSeconds.p50) / \(.wallSeconds.p95)",
+    "",
+    "## classification (correctness-first, then progress)",
+    (.classTally | to_entries[] | "- \(.key): \(.value)"),
     "",
     "## missingPublishedCount histogram",
     (.missingHistogram | to_entries[] | "- missing=\(.key): \(.value)"),
