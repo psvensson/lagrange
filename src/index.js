@@ -35,6 +35,7 @@ import {
   ENTRYPOINT_VERSION,
 } from './constants/entrypoint.js';
 import {assertCritical} from './utils/assert.js';
+import {applyBoundedJitter} from './utils/retry-jitter.js';
 import {
   MembershipLifecycleController,
 } from './control-plane/membership-lifecycle-controller.js';
@@ -292,11 +293,16 @@ async function startJoinNode(options) {
       joinResult.retryable === true &&
       joinAttempt + LOCAL_NUM_ONE < JOIN_REATTEMPT_MAX_ATTEMPTS
     ) {
-      const delayMs = Math.max(
-        Number.isFinite(joinResult.retryAfterMs) ?
-          joinResult.retryAfterMs :
-          0,
-        JOIN_REATTEMPT_BASE_DELAY_MS,
+      // Jitter the re-attempt so rejoining nodes do not re-storm the seed in
+      // lockstep during a rolling restart (decorrelate; opt-in via
+      // LAGRANGE_RETRY_JITTER, identity when off).
+      const delayMs = applyBoundedJitter(
+        Math.max(
+          Number.isFinite(joinResult.retryAfterMs) ?
+            joinResult.retryAfterMs :
+            0,
+          JOIN_REATTEMPT_BASE_DELAY_MS,
+        ),
       );
       mainLogger.warn(LOCAL_STR_REATTEMPT_JOIN, {
         nodeId,

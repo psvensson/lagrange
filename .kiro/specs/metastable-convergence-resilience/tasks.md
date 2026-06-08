@@ -30,9 +30,18 @@ default-off and accepted only against the Phase-0 statistical gate.
 - [ ] 1.6 Promote ack-timeout quarantine
   (`message-router-reconnect-behaviors.js`) into a circuit breaker with a
   half-open probe.
-- [ ] 1.7 `handleJoiningFailure` (`join-cleanup-handler.js`): keep the router
-  alive on retryable failure; back off (jittered + budgeted) instead of
-  `process.exit`. Fold in the existing `index.js` re-attempt.
+- [x] 1.7a `index.js` join re-attempt delay is jittered (decorrelate rejoin
+  storms); the permanent `process.exit` self-destruct is already mitigated by the
+  bounded re-attempt (`e61deebc`).
+- [ ] 1.7b Keep the message router ALIVE on a retryable failed join (skip
+  `messageRouter.shutdown()` in `_cleanupConnectingWebSocket`,
+  `join-cleanup-handler.js`) so the node stays reachable across the retry gap.
+  CONSTRAINT: this conflicts with the current re-compose retry (a fresh
+  `startJoinNode` builds a new router → same-port bind conflict) and the join
+  lifecycle machine is STOPPED-terminal after cleanup. Requires a *reuse-retry*
+  path that re-drives the join on the existing router/runtime instead of
+  re-composing — a larger lifecycle change, flag-gated, measured against the
+  Phase-0 gate. Scope separately from 1.7a.
 - [ ] 1.8 Audit all retry budgets for "give up → self-destruct"; convert hard
   give-ups to "back off long, stay alive, keep probing".
 - [ ] 1.9 Gate via config flag; validate against Phase-0 distribution.
