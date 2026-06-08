@@ -72,6 +72,18 @@ const LOCAL_NUM_ONE = 1;
 const LOCAL_STR_JOIN = 'join';
 const LOCAL_STR_SEED = 'seed';
 const LOCAL_STR_PY3S1 = 'Configuration loaded';
+const LOCAL_STR_REATTEMPT_JOIN =
+  'Re-attempting cluster join after retryable failure';
+// A retryable join failure (e.g. transient transport/participant unavailability
+// during a rolling restart) should re-compose a fresh join rather than exiting
+// the node permanently. Bounded so a genuinely non-joinable node still fails
+// fast. Override via env; set to <=1 to restore exit-on-first-failure.
+const JOIN_REATTEMPT_MAX_ATTEMPTS =
+  Number.isFinite(Number(process.env.LAGRANGE_JOIN_REATTEMPT_MAX_ATTEMPTS)) &&
+  Number(process.env.LAGRANGE_JOIN_REATTEMPT_MAX_ATTEMPTS) >= LOCAL_NUM_ONE ?
+    Math.floor(Number(process.env.LAGRANGE_JOIN_REATTEMPT_MAX_ATTEMPTS)) :
+    4;
+const JOIN_REATTEMPT_BASE_DELAY_MS = 2000;
 
 // Re-export modules for external use
 export * from './query/index.js';
@@ -266,11 +278,38 @@ async function startJoinNode(options) {
   const joinResult = await nodeJoiningService.join();
 
   if (!joinResult.success) {
+    const joinAttempt = Number.isInteger(options._joinAttempt) ?
+      options._joinAttempt :
+      0;
     mainLogger.error(ENTRYPOINT_LOG_MSG.FAILED_JOIN, {
       error: joinResult.error,
       phase: joinResult.phase,
+      retryable: joinResult.retryable === true,
+      attempt: joinAttempt,
     });
     await bootstrapAPI.shutdown();
+    if (
+      joinResult.retryable === true &&
+      joinAttempt + LOCAL_NUM_ONE < JOIN_REATTEMPT_MAX_ATTEMPTS
+    ) {
+      const delayMs = Math.max(
+        Number.isFinite(joinResult.retryAfterMs) ?
+          joinResult.retryAfterMs :
+          0,
+        JOIN_REATTEMPT_BASE_DELAY_MS,
+      );
+      mainLogger.warn(LOCAL_STR_REATTEMPT_JOIN, {
+        nodeId,
+        attempt: joinAttempt + LOCAL_NUM_ONE,
+        maxAttempts: JOIN_REATTEMPT_MAX_ATTEMPTS,
+        delayMs,
+      });
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      return startJoinNode({
+        ...options,
+        _joinAttempt: joinAttempt + LOCAL_NUM_ONE,
+      });
+    }
     process.exit(LOCAL_NUM_ONE);
   }
 
