@@ -23,6 +23,55 @@ saturated by a re-init burst; rejoining peers' WebSocket handshakes time out and
 their control-plane writes fail; some nodes exhaust a join retry budget and tear
 their own router down, turning a transient transport problem permanent.
 
+## Guiding principle (overriding)
+
+**The system as a whole must never break — it may only become slower when
+necessary. Failing willingly because of a transient condition is not allowed.**
+
+This is the invariant that subsumes the directions below. A metastable failure is
+precisely a *willful* failure: a transient (seed saturation) trips a give-up
+mechanism (a join budget exhausts → the node tears down its router and exits; a
+reconnect hits max-attempts → the connection goes dead; a quarantine retires a
+connection), and that abandonment is what makes the transient permanent. If no
+component ever abandoned — only slowed (longer backoff, deferred *low-priority*
+work, bounded queues) — the system could not get *stuck*; it would always
+eventually reconverge once the owner drains.
+
+Consequences:
+
+- **Keep the "slower" levers** (jitter, retry-rate token bucket, backpressure
+  caps, longer backoffs, deferring low-priority work). They slow without
+  abandoning anything.
+- **Remove every "fail willingly" point** — convert each to *bounded slowdown,
+  never abandon*: cap the retry *delay*, never the retry *attempts*. The
+  fail-fast circuit breaker (an earlier draft) was reverted for violating this.
+- **Reconcile with the literature:** load-shedding / breakers *reject* work to
+  protect the system; this invariant forbids rejecting the *convergence* goal.
+  The reconciliation: rate-limit and shed only *low-priority* work, slow
+  everything, but never abandon convergence — slow + persistent = graceful
+  degradation that always eventually converges.
+
+### Give-up inventory (the audit target)
+
+Every willful-failure point to convert to bounded-slowdown-never-abandon:
+
+| give-up point | location | convert to |
+| --- | --- | --- |
+| join budget exhaustion → `process.exit` / router teardown | `index.js`, `join-cleanup-handler.js` (`_cleanupConnectingWebSocket`) | keep router alive; reuse-retry the join indefinitely with capped backoff |
+| `reconnectMaxAttempts` → connection dead | `scheduleReconnect` (`message-router-segment-2.js`) MAX_ATTEMPTS_REACHED | cap reconnect *delay*, retry forever |
+| ack-timeout quarantine → retire connection | `message-router-reconnect-behaviors.js` | back off the connection, do not retire it dead |
+| publication abandon (vs defer) | active-gate reconcile / drain paths | always reschedule a wake while unconverged |
+
+### Low-load-first calibration (test methodology)
+
+Calibrate the *reasonable* convergence time for the given hardware/network at
+**low load first** (3-node rolling restart — the happy path that already passes),
+establishing a reference time budget. Only once the happy path is reliably green
+do we **crank up the load** (5+ nodes) and measure how convergence *time grows*.
+Under the principle the higher-load runs must still converge — just *slower* —
+never break. The gate (below) is what distinguishes "slow" (pass) from "gave up"
+(fail).
+
 Prior single-layer fixes (transport reconnect, join re-attempt) and an
 admission-concurrency throttle did **not** move the outcome. The variance is the
 diagnostic: a deterministic deadlock gives a fixed result; a load/timing race
@@ -100,11 +149,22 @@ rebalancing **rate adaptive to the post-restart spike**, not a fixed cap.
 ## Measurement gate (prerequisite for all three)
 
 A flaky liveness property cannot be fixed against single-run pass/fail. Turn it
-into a measurable gate:
+into a measurable gate that, per the guiding principle, **distinguishes "slow"
+(pass) from "gave up" (fail)**:
 
+- **Eventual-convergence, not in-window pass/fail.** With a generous time budget,
+  every run must *eventually* converge (target 100%). A node still trying at the
+  deadline is **passing** (slow); a node that exited / tore down its router /
+  marked a peer dead is **failing** (gave up). Today the fixed ~8-min scenario
+  window conflates these (a 170s give-up and a 776s slow-converge both look like
+  "didn't pass").
+- **Calibrate at low load first.** Establish the reference convergence-time
+  distribution at 3 nodes (happy path), then crank up; higher load may only push
+  the *time* distribution out, never the converge *rate* down.
 - **Statistical gate.** Track the *distribution* of `missingPublishedCount` and
-  convergence time over N rolling-restart runs (pass-rate + percentiles), not one
-  pass/fail. A fix is accepted only if it shifts the distribution.
+  convergence time over N runs (converge-rate + percentiles), not one pass/fail.
+  A fix is accepted only if it improves the distribution (rate up and/or — once
+  give-ups are removed — time bounded).
 - **Deterministic simulation testing (DST).** WarpStream, Antithesis, and the
   FoundationDB/TigerBeetle lineage run the system on a deterministic scheduler
   with injected faults and a fixed seed, making races reproducible and
