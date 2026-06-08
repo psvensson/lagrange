@@ -178,6 +178,12 @@ class BootstrapAPI {
         options.bootstrapRequestExecutionBudgetMs > NUM.ZERO ?
         Math.floor(options.bootstrapRequestExecutionBudgetMs) :
         BOOTSTRAP_API_DEFAULT.BOOTSTRAP_REQUEST_EXECUTION_BUDGET_MS;
+    // Opt-in: narrow the concurrent-join cap by control-plane distribution
+    // headroom so the seed isn't overwhelmed as the sole published node during a
+    // rolling restart. Default off — preserves the configured cap exactly.
+    this.joinDistributionAdmissionEnabled =
+      options.joinDistributionAdmissionEnabled === true ||
+      process.env.LAGRANGE_JOIN_DISTRIBUTION_ADMISSION === 'true';
     this.inFlightBootstrapRequestCount = NUM.ZERO;
     this.bootstrapAdmissionLeases = new Map();
     this.bootstrapAdmissionPeerHints = new Map();
@@ -449,6 +455,8 @@ class BootstrapAPI {
             this.getBootstrapJoinAdmissionSnapshot(),
           getMaxConcurrentBootstrapRequests: () =>
             this.maxConcurrentBootstrapRequests,
+          isJoinDistributionAdmissionEnabled: () =>
+            this.joinDistributionAdmissionEnabled === true,
           getBootstrapAdmissionRetryAfterMs: () =>
             this.bootstrapAdmissionRetryAfterMs,
           getBootstrapRequestExecutionBudgetMs: () =>
