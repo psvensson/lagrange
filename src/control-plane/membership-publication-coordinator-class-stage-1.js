@@ -52,6 +52,20 @@ class MembershipPublicationCoordinatorClassStage1 {
     this.authoritativeControlPlaneView = options.authoritativeControlPlaneView || null;
     this.membershipPublicationRuntimeOwner = options.membershipPublicationRuntimeOwner || null;
     this.controlPlanePublicationsOwner = resolveControlPlanePublicationsOwner(options);
+    // Phase 4 (leader-driven recovery establishment): when enabled, only the
+    // control_plane_publications partition WRITE-LEADER drives the cluster-wide
+    // membership reconcile (it writes locally + Raft-quorum-commits), so a
+    // rejoiner does not drive a doomed synchronous write to the saturated leader.
+    // Injectable predicate (default absent => no gating => unchanged behavior).
+    // Default off via env until validated against the deterministic reproducer.
+    this.membershipLeaderDrivenEnabled =
+      options.membershipLeaderDrivenEnabled ??
+      process.env.LAGRANGE_MEMBERSHIP_LEADER_DRIVEN === 'true';
+    this.resolveIsControlPlanePublicationsWriteLeader =
+      typeof options.resolveIsControlPlanePublicationsWriteLeader ===
+      TYPEOF.FUNCTION ?
+        options.resolveIsControlPlanePublicationsWriteLeader :
+        null;
     this.controlPlaneReadinessService = options.controlPlaneReadinessService || null;
     this.replicaOperationRepository = options.replicaOperationRepository || null;
     this.logger = options.logger || this.controlPlaneReadinessService?.logger || console;

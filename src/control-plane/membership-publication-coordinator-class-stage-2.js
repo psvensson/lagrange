@@ -46,6 +46,31 @@ import {
   buildCriticalControlPlaneConvergenceOptions,
 } from './membership-publication-control-plane-convergence.js';
 
+const MEMBERSHIP_RECONCILE_DEFERRED_NOT_WRITE_LEADER_MSG =
+  'Membership reconcile deferred: not the control_plane_publications write-leader';
+const NOT_PUBLICATIONS_WRITE_LEADER_REASON = 'not_publications_write_leader';
+
+// Phase 4: defer the membership reconcile when leader-driven mode is enabled and
+// this node is NOT the control_plane_publications write-leader. Fail OPEN — never
+// block a reconcile on a missing/throwing predicate or when the flag is off, so
+// default behavior is unchanged.
+function shouldDeferMembershipReconcileToWriteLeader(coordinator) {
+  if (coordinator.membershipLeaderDrivenEnabled !== true) {
+    return false;
+  }
+  if (
+    typeof coordinator.resolveIsControlPlanePublicationsWriteLeader !==
+    TYPEOF.FUNCTION
+  ) {
+    return false;
+  }
+  try {
+    return coordinator.resolveIsControlPlanePublicationsWriteLeader() !== true;
+  } catch {
+    return false;
+  }
+}
+
 function hasCandidateAcknowledgementRefresh(latestPublicationRow, candidate = {}) {
   const normalizedLatestPublication =
     normalizeControlPlanePublicationRow(latestPublicationRow);
@@ -411,6 +436,17 @@ class MembershipPublicationCoordinatorClassStage2 extends
 
   async reconcileClusterMembership(options = {}) {
     const ownerKey = this.buildOwnerKey();
+    if (shouldDeferMembershipReconcileToWriteLeader(this)) {
+      this.logger?.info?.(
+        MEMBERSHIP_RECONCILE_DEFERRED_NOT_WRITE_LEADER_MSG,
+        {nodeId: this.nodeId, ownerKey},
+      );
+      return {
+        deferred: true,
+        reason: NOT_PUBLICATIONS_WRITE_LEADER_REASON,
+        ownerKey,
+      };
+    }
     const convergenceOptions = buildCriticalControlPlaneConvergenceOptions(
       options,
       {
@@ -660,4 +696,6 @@ class MembershipPublicationCoordinatorClassStage2 extends
 export {
   ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME,
   MembershipPublicationCoordinatorClassStage2,
+  shouldDeferMembershipReconcileToWriteLeader,
+  NOT_PUBLICATIONS_WRITE_LEADER_REASON,
 };
