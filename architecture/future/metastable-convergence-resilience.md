@@ -28,6 +28,30 @@ their own router down, turning a transient transport problem permanent.
 **The system as a whole must never break — it may only become slower when
 necessary. Failing willingly because of a transient condition is not allowed.**
 
+**Why (the real stake is correctness, not availability).** This is a distributed
+*database*. If a transient overload of one node is allowed to drive the cluster
+into a corrupt or permanently-inconsistent state — split ownership, a lost or
+duplicated write, a half-applied membership change, divergent replicas — the
+*whole* database can become permanently corrupt, and then nothing else matters.
+So the ordering is **safety first, liveness second, speed last**:
+
+1. **Safety is inviolable.** The correctness invariants
+   (`LEADER_UNIQUENESS`, `CLAIM_EXCLUSIVITY`,
+   `CONTROL_PLANE_REPLICA_OPERATIONS_SINGLE_WRITER`, `MONOTONIC_STEPS`,
+   `SNAPSHOT_COVERAGE_MONOTONIC`, incarnation fences, assignment tokens) must
+   hold at *all* times, including under overload. Never trade correctness for
+   convergence.
+2. **Liveness by never permanently abandoning — but SAFELY.** Convert give-ups to
+   *safe* bounded-slowdown: a retry that never gives up must be **idempotent and
+   fenced** (epoch/incarnation/assignment-token guarded) so retrying forever can
+   never duplicate, split, or corrupt. "Never abandon" ≠ "retry recklessly."
+3. **Many give-ups are correctness guards, not bugs.** Mechanisms that *defer
+   rather than risk* (publication `WAIT_OWNER_RECOVERY`, owner-locality / epoch
+   short-circuits, single-writer fences) exist to protect safety. The audit must
+   **preserve the guard's safety intent while removing only the permanent
+   abandonment** — convert "abandon" → "safely defer and keep checking", never
+   delete the guard to gain liveness.
+
 This is the invariant that subsumes the directions below. A metastable failure is
 precisely a *willful* failure: a transient (seed saturation) trips a give-up
 mechanism (a join budget exhausts → the node tears down its router and exits; a
@@ -150,7 +174,15 @@ rebalancing **rate adaptive to the post-restart spike**, not a fixed cap.
 
 A flaky liveness property cannot be fixed against single-run pass/fail. Turn it
 into a measurable gate that, per the guiding principle, **distinguishes "slow"
-(pass) from "gave up" (fail)**:
+(pass) from "gave up" (fail)** — and, above all, **asserts correctness**:
+
+- **Correctness gates the result first.** Every run must pass the safety
+  invariants (`InvariantEngine`: leader uniqueness, claim exclusivity,
+  single-writer, monotonic steps, snapshot-coverage monotonicity) and any
+  Jepsen-style consistency check. A run that *converged fast but violated an
+  invariant is the WORST outcome* — strictly worse than a slow one — and fails
+  the gate hard. Speed/convergence are only evaluated among correctness-clean
+  runs.
 
 - **Eventual-convergence, not in-window pass/fail.** With a generous time budget,
   every run must *eventually* converge (target 100%). A node still trying at the
