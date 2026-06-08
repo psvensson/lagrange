@@ -118,7 +118,7 @@ make them scale-safe — not to build from scratch.
   Default split trigger is `10GB` / `1000 qpm` (`partition-constants.js:367-368`),
   reachable for a hot control-plane table. Replica placement/rebalancing are
   independent of split eligibility, so this is low-risk.
-- [ ] **B2 — Resolve the actual membership partition (reuse existing routing).**
+- [x] **B2 — SATISFIED BY B1+B4 (no separate code).** The `.find()` first-match
   Fix the heartbeat tick's `.find()` first-match
   (`heartbeat-service-lifecycle-methods.js:334-337`) to resolve the partition that
   owns `publication_id='cluster_membership'` via the existing key-range routing

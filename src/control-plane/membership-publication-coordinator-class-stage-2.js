@@ -57,6 +57,13 @@ const OWNER_MEMBERSHIP_DRIVER_INTERVAL_MS = 5000;
 const OWNER_MEMBERSHIP_RECONCILE_TIMEOUT_MS = 15000;
 const OWNER_MEMBERSHIP_DRIVER_ERROR_MSG =
   'Owner-driven membership reconcile error';
+// B4 tripwire: owner-driven membership assumes control_plane_publications is a
+// single partition (one Raft leader = one authoritative writer = single source of
+// truth). B1 enforces non-splittable, but if that ever regressed this surfaces it
+// loudly instead of silently splitting the brain across fragments.
+const MEMBERSHIP_MULTI_PARTITION_MSG =
+  'CRITICAL: control_plane_publications has >1 partition — membership ' +
+  'single-source-of-truth assumption violated (see B1 non-split policy)';
 
 const MEMBERSHIP_RECONCILE_DEFERRED_NOT_WRITE_LEADER_MSG =
   'Membership reconcile deferred: not the control_plane_publications write-leader';
@@ -720,6 +727,7 @@ class MembershipPublicationCoordinatorClassStage2 extends
     ) {
       return false;
     }
+    this.assertSingleMembershipPartition();
     this.ownerMembershipReconcileInFlight = true;
     try {
       const planningSnapshot = await this.readPublicationPlanningSnapshot({
@@ -768,6 +776,38 @@ class MembershipPublicationCoordinatorClassStage2 extends
       return false;
     } finally {
       this.ownerMembershipReconcileInFlight = false;
+    }
+  }
+
+  /**
+   * B4 tripwire: assert control_plane_publications resolves to a single partition.
+   * One-time (until violated). Never throws / never affects behavior.
+   * @private
+   */
+  assertSingleMembershipPartition() {
+    if (this.membershipSinglePartitionAsserted === true) {
+      return;
+    }
+    try {
+      const partitions = this.systemTableCache?.getAll?.(TABLES.PARTITIONS) || [];
+      const pubPartitions = partitions.filter(
+        (p) =>
+          p.table_id === TABLES.CONTROL_PLANE_PUBLICATIONS ||
+          p.table_name === TABLES.CONTROL_PLANE_PUBLICATIONS,
+      );
+      if (pubPartitions.length > 1) {
+        this.logger?.error?.(MEMBERSHIP_MULTI_PARTITION_MSG, {
+          nodeId: this.nodeId,
+          partitionCount: pubPartitions.length,
+          partitionIds: pubPartitions.map((p) => p.partition_id),
+        });
+        return;
+      }
+      if (pubPartitions.length === 1) {
+        this.membershipSinglePartitionAsserted = true;
+      }
+    } catch {
+      // tripwire must never affect behavior
     }
   }
 

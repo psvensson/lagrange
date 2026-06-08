@@ -55,11 +55,40 @@ t.test('drive: leader passes the gate and reads the planning snapshot', async (t
     systemTableCache: leaderCache('seed'),
     readPublicationPlanningSnapshot: async () => {planningCalls += 1; return null;},
     reconcileActiveGateMembershipPublication: async () => {},
+    assertSingleMembershipPartition: () => {},
     logger: {},
   };
   t.equal(await drive.call(ctx), false, 'null snapshot -> false');
   t.equal(planningCalls, 1, 'leader proceeds past the gate');
   t.equal(ctx.ownerMembershipReconcileInFlight, false, 'in-flight reset in finally');
+});
+
+t.test('B4 tripwire: assertSingleMembershipPartition', async (t) => {
+  const assertFn =
+    MembershipPublicationCoordinatorClassStage2.prototype.assertSingleMembershipPartition;
+  // single partition -> no error, asserted latches true
+  let errors = 0;
+  const single = {
+    nodeId: 'seed',
+    logger: {error: () => {errors += 1;}},
+    systemTableCache: {getAll: () => [{table_id: 'control_plane_publications', partition_id: 'control_plane_publications-p1'}]},
+  };
+  assertFn.call(single);
+  t.equal(errors, 0, 'single partition -> no critical log');
+  t.equal(single.membershipSinglePartitionAsserted, true, 'latched');
+  // multi partition -> critical error
+  let multiErrors = 0;
+  const multi = {
+    nodeId: 'seed',
+    logger: {error: () => {multiErrors += 1;}},
+    systemTableCache: {getAll: () => [
+      {table_id: 'control_plane_publications', partition_id: 'control_plane_publications-p1'},
+      {table_id: 'control_plane_publications', partition_id: 'control_plane_publications-p2'},
+    ]},
+  };
+  assertFn.call(multi);
+  t.equal(multiErrors, 1, 'multi partition -> critical log');
+  t.notOk(multi.membershipSinglePartitionAsserted, 'not latched while violated');
 });
 
 t.test('start: no-op when leader-driven mode is disabled', async (t) => {

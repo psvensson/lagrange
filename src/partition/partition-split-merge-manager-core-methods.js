@@ -1,5 +1,6 @@
 import {NUM, SERVICE_TYPE} from '../constants/index.js';
 import {ADMISSION_DECISION} from '../rebalancer/storage-capacity-constants.js';
+import {isPriorityControlPlanePartition} from '../bootstrap/system-partition-classification.js';
 import {
   PRESSURE_WORK_CLASS,
   PressureGovernor,
@@ -466,6 +467,14 @@ class PartitionSplitMergeManagerCoreMethods {
    * @return {boolean} True if partition should be split.
    */
   evaluateSplitCriteria(partitionId, metrics, policy = {}) {
+    // B1 (scale-safety): priority control-plane partitions (e.g.
+    // control_plane_publications, which holds the cluster_membership row) must
+    // never split — their single-owner / single-Raft-leader semantics are the
+    // basis for owner-driven membership being a single source of truth. A split
+    // would create a second "owner" for a fragment and break that invariant.
+    if (isPriorityControlPlanePartition({partitionId})) {
+      return false;
+    }
     const storageThreshold = policy.splitStorageThreshold || this.splitStorageThreshold;
     const trafficThreshold = policy.splitTrafficThreshold || this.splitTrafficThreshold;
 
