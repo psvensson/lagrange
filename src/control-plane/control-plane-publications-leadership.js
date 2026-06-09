@@ -22,7 +22,28 @@ const CONTROL_PLANE_PUBLICATIONS_PARTITION_ID =
   INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS];
 const RAFT_ROLE_LEADER = 'leader';
 
-function isControlPlanePublicationsWriteLeader(systemTableCache, nodeId) {
+function isControlPlanePublicationsWriteLeader(
+  systemTableCache,
+  nodeId,
+  cdcIntegrationService = null,
+) {
+  // Tier-0 (authoritative, never lags): the LIVE in-memory Raft role of this
+  // node's local control_plane_publications partition service. canWriteSystemTableLocally
+  // resolves via partitionServicesProvider() (steady-state) → resolveLeaderRole
+  // (reads partitionService.isLeader / getRole). This is the reliable source; the
+  // cache tiers below lag and can be withheld by the very stall we are recovering
+  // from, which is why cache-only resolution converged only intermittently.
+  try {
+    if (
+      cdcIntegrationService?.canWriteSystemTableLocally?.(
+        TABLES.CONTROL_PLANE_PUBLICATIONS,
+      ) === true
+    ) {
+      return true;
+    }
+  } catch {
+    // fall through to the cache tiers
+  }
   if (!systemTableCache || !nodeId) {
     return false;
   }

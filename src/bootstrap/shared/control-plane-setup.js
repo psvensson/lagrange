@@ -361,7 +361,11 @@ class ControlPlaneSetup {
         // PARTITIONS row leader_node_id / live SERVICES raft_role witness). Gates
         // the leader-driven membership reconcile.
         resolveIsControlPlanePublicationsWriteLeader: () =>
-          isControlPlanePublicationsWriteLeader(systemTableCache, nodeId),
+          isControlPlanePublicationsWriteLeader(
+            systemTableCache,
+            nodeId,
+            cdcIntegrationService,
+          ),
       });
     // Workstream A: start the always-on owner-membership driver UNCONDITIONALLY
     // here at setup — NOT in the readiness-gated startup handoff — so it cannot be

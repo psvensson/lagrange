@@ -8,6 +8,33 @@ t.test('partition id resolves', async (t) => {
   t.equal(CONTROL_PLANE_PUBLICATIONS_PARTITION_ID, 'control_plane_publications-p1');
 });
 
+t.test('tier 0: live in-memory role via canWriteSystemTableLocally (never lags)', async (t) => {
+  const emptyCache = {get: () => null, find: () => null};
+  const cdcLeader = {
+    canWriteSystemTableLocally: (table) => table === 'control_plane_publications',
+  };
+  // Tier-0 wins even when the cache is empty (the stall case that defeated cache-only)
+  t.equal(
+    isControlPlanePublicationsWriteLeader(emptyCache, 'seed', cdcLeader),
+    true,
+    'in-memory leader recognized despite empty cache',
+  );
+  t.equal(
+    isControlPlanePublicationsWriteLeader(emptyCache, 'seed', {
+      canWriteSystemTableLocally: () => false,
+    }),
+    false,
+    'in-memory non-leader -> false (falls to empty cache)',
+  );
+  // throwing cdc -> fall through to cache tiers, fail-safe
+  t.equal(
+    isControlPlanePublicationsWriteLeader(emptyCache, 'seed', {
+      canWriteSystemTableLocally: () => {throw new Error('x');},
+    }),
+    false,
+  );
+});
+
 t.test('tier 1: partitions row leader_node_id', async (t) => {
   const cache = {
     get: (table, key) =>

@@ -723,7 +723,11 @@ class MembershipPublicationCoordinatorClassStage2 extends
       return false;
     }
     if (
-      !isControlPlanePublicationsWriteLeader(this.systemTableCache, this.nodeId)
+      !isControlPlanePublicationsWriteLeader(
+        this.systemTableCache,
+        this.nodeId,
+        this.cdcIntegrationService,
+      )
     ) {
       return false;
     }
