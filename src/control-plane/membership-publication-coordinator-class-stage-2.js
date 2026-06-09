@@ -57,6 +57,8 @@ const OWNER_MEMBERSHIP_DRIVER_INTERVAL_MS = 5000;
 const OWNER_MEMBERSHIP_RECONCILE_TIMEOUT_MS = 15000;
 const OWNER_MEMBERSHIP_DRIVER_ERROR_MSG =
   'Owner-driven membership reconcile error';
+const OWNER_MEMBERSHIP_DRIVER_RAN_MSG =
+  'DIAG owner-membership driver ran as leader (predicate true)';
 // B4 tripwire: owner-driven membership assumes control_plane_publications is a
 // single partition (one Raft leader = one authoritative writer = single source of
 // truth). B1 enforces non-splittable, but if that ever regressed this surfaces it
@@ -760,9 +762,12 @@ class MembershipPublicationCoordinatorClassStage2 extends
         return false;
       }
       let timer = null;
+      let timedOut = true;
       await Promise.race([
         this.reconcileActiveGateMembershipPublication(handoffContract, {
           reconcileAuthoritativeMembershipPublication: true,
+        }).then(() => {
+          timedOut = false;
         }),
         new Promise((resolve) => {
           timer = setTimeout(resolve, OWNER_MEMBERSHIP_RECONCILE_TIMEOUT_MS);
@@ -770,6 +775,18 @@ class MembershipPublicationCoordinatorClassStage2 extends
       ]);
       if (timer) {
         clearTimeout(timer);
+      }
+      // Diagnostic: the driver IS acting as owner (Tier-0 fired) with a deficit.
+      // timedOut distinguishes "predicate fixed but write can't commit (quorum)"
+      // from "write commits". Transition-logged at warn.
+      const ownerDriverDiag = `missing=${missingCount} timedOut=${timedOut}`;
+      if (this.ownerDriverDiagSnapshot !== ownerDriverDiag) {
+        this.ownerDriverDiagSnapshot = ownerDriverDiag;
+        this.logger?.warn?.(OWNER_MEMBERSHIP_DRIVER_RAN_MSG, {
+          nodeId: this.nodeId,
+          missingCount,
+          reconcileTimedOut: timedOut,
+        });
       }
       return true;
     } catch (error) {
