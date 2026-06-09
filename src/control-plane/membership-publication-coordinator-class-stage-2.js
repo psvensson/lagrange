@@ -872,6 +872,11 @@ class MembershipPublicationCoordinatorClassStage2 extends
     const enabled =
       options.enabled ??
       process.env.LAGRANGE_MEMBERSHIP_LEADER_DRIVEN === 'true';
+    this.logger?.warn?.('DIAG startOwnerMembershipDriver called', {
+      nodeId: this.nodeId,
+      enabled,
+      flag: process.env.LAGRANGE_MEMBERSHIP_LEADER_DRIVEN,
+    });
     if (!enabled) {
       return;
     }
