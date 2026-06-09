@@ -46,7 +46,9 @@ import {
   buildCriticalControlPlaneConvergenceOptions,
 } from './membership-publication-control-plane-convergence.js';
 import {buildPublicationActiveGateHandoffContract} from './publication-active-gate-handoff-contract.js';
-import {isControlPlanePublicationsWriteLeader} from './control-plane-publications-leadership.js';
+import {
+  resolveControlPlanePublicationsLeadership,
+} from './control-plane-publications-leadership.js';
 
 // Owner-driven membership liveness (Workstream A). A dedicated always-on interval
 // — started UNCONDITIONALLY, independent of metadata-publication readiness so it
@@ -74,6 +76,37 @@ const MEMBERSHIP_MULTI_PARTITION_MSG =
 const MEMBERSHIP_RECONCILE_DEFERRED_NOT_WRITE_LEADER_MSG =
   'Membership reconcile deferred: not the control_plane_publications write-leader';
 const NOT_PUBLICATIONS_WRITE_LEADER_REASON = 'not_publications_write_leader';
+
+// Per-tick convergence decision trace. Console-only + debug-level BY DESIGN (see
+// LoggingService.logConsoleOnly): the owner driver fires every
+// OWNER_MEMBERSHIP_DRIVER_INTERVAL_MS on the very distributed write path a
+// publication stall blocks, so persisting a per-tick trace to the logs table
+// would add load to the stall it is meant to observe. It is therefore emitted to
+// stdout only (retrieved via the harness full-log capture under --debug-logs) and
+// dropped entirely at the default info level. This formalizes the ad-hoc DIAG
+// warns: one structured event per tick recording who the node thinks owns the
+// publication, by which leadership tier, the deficit, the decision, and outcome.
+const CONVERGENCE_DECISION_TRACE_MSG = 'convergence decision trace';
+const CONVERGENCE_TRACE_LEVEL = 'debug';
+const CONVERGENCE_DECISION = Object.freeze({
+  DRIVE: 'drive',
+  SKIP: 'skip',
+  DEFER: 'defer',
+});
+const CONVERGENCE_REASON = Object.freeze({
+  NOT_OWNER: 'not-owner',
+  NO_SNAPSHOT: 'no-snapshot',
+  NO_DEFICIT: 'no-deficit',
+  DRIVEN: 'driven',
+  IN_FLIGHT: 'reconcile-in-flight',
+  ERROR: 'error',
+  NOT_WRITE_LEADER: 'not-publications-write-leader',
+});
+const CONVERGENCE_OUTCOME = Object.freeze({
+  RECONCILE_COMMITTED: 'reconcile-committed',
+  RECONCILE_TIMED_OUT: 'reconcile-timed-out',
+  NONE: 'none',
+});
 
 // Phase 4: defer the membership reconcile when leader-driven mode is enabled and
 // this node is NOT the control_plane_publications write-leader. Fail OPEN — never
@@ -466,6 +499,11 @@ class MembershipPublicationCoordinatorClassStage2 extends
         MEMBERSHIP_RECONCILE_DEFERRED_NOT_WRITE_LEADER_MSG,
         {nodeId: this.nodeId, ownerKey},
       );
+      this._emitConvergenceDecisionTrace({
+        decision: CONVERGENCE_DECISION.DEFER,
+        reason: CONVERGENCE_REASON.NOT_WRITE_LEADER,
+        ownerKey,
+      });
       return {
         deferred: true,
         reason: NOT_PUBLICATIONS_WRITE_LEADER_REASON,
@@ -724,15 +762,32 @@ class MembershipPublicationCoordinatorClassStage2 extends
    * bounded so a slow/doomed reconcile can never wedge the in-flight guard.
    * @return {Promise<boolean>} whether a reconcile was driven.
    */
+  // Emit one structured per-tick convergence decision-trace event. Console-only
+  // + debug-level (never persisted) — see CONVERGENCE_DECISION_TRACE_MSG. Guarded
+  // with optional chaining so a mock/legacy logger without logConsoleOnly is a
+  // no-op rather than a crash.
+  _emitConvergenceDecisionTrace(fields) {
+    this.logger?.logConsoleOnly?.(
+      CONVERGENCE_TRACE_LEVEL,
+      CONVERGENCE_DECISION_TRACE_MSG,
+      {nodeId: this.nodeId, ...fields},
+    );
+  }
+
   async driveOwnerMembershipReconcile() {
     if (this.ownerMembershipReconcileInFlight === true) {
+      this._emitConvergenceDecisionTrace({
+        decision: CONVERGENCE_DECISION.SKIP,
+        reason: CONVERGENCE_REASON.IN_FLIGHT,
+      });
       return false;
     }
-    const isLeader = isControlPlanePublicationsWriteLeader(
+    const leadership = resolveControlPlanePublicationsLeadership(
       this.systemTableCache,
       this.nodeId,
       this.cdcIntegrationService,
     );
+    const isLeader = leadership.isLeader;
     // DIAG: the interval IS firing; log the predicate result on transition so we
     // can see whether this node ever resolves as the owner at all.
     if (this.ownerDriverPredicateSnapshot !== isLeader) {
@@ -743,6 +798,11 @@ class MembershipPublicationCoordinatorClassStage2 extends
       });
     }
     if (!isLeader) {
+      this._emitConvergenceDecisionTrace({
+        decision: CONVERGENCE_DECISION.SKIP,
+        reason: CONVERGENCE_REASON.NOT_OWNER,
+        leadershipTier: leadership.tier,
+      });
       return false;
     }
     this.assertSingleMembershipPartition();
@@ -767,6 +827,11 @@ class MembershipPublicationCoordinatorClassStage2 extends
         });
       }
       if (!planningSnapshot) {
+        this._emitConvergenceDecisionTrace({
+          decision: CONVERGENCE_DECISION.SKIP,
+          reason: CONVERGENCE_REASON.NO_SNAPSHOT,
+          leadershipTier: leadership.tier,
+        });
         return false;
       }
       const latestPublishedRow = planningSnapshot.latestPublishedPublicationRow;
@@ -786,6 +851,13 @@ class MembershipPublicationCoordinatorClassStage2 extends
       });
       const missingCount = handoffContract?.missingPublishedCount ?? 0;
       if (missingCount <= 0) {
+        this._emitConvergenceDecisionTrace({
+          decision: CONVERGENCE_DECISION.SKIP,
+          reason: CONVERGENCE_REASON.NO_DEFICIT,
+          leadershipTier: leadership.tier,
+          missingPublishedCount: missingCount,
+          publicationEpoch,
+        });
         return false;
       }
       let timer = null;
@@ -815,11 +887,28 @@ class MembershipPublicationCoordinatorClassStage2 extends
           reconcileTimedOut: timedOut,
         });
       }
+      this._emitConvergenceDecisionTrace({
+        decision: CONVERGENCE_DECISION.DRIVE,
+        reason: CONVERGENCE_REASON.DRIVEN,
+        leadershipTier: leadership.tier,
+        missingPublishedCount: missingCount,
+        publicationEpoch,
+        outcome: timedOut ?
+          CONVERGENCE_OUTCOME.RECONCILE_TIMED_OUT :
+          CONVERGENCE_OUTCOME.RECONCILE_COMMITTED,
+      });
       return true;
     } catch (error) {
       this.logger?.error?.(OWNER_MEMBERSHIP_DRIVER_ERROR_MSG, {
         nodeId: this.nodeId,
         message: error?.message,
+      });
+      this._emitConvergenceDecisionTrace({
+        decision: CONVERGENCE_DECISION.DRIVE,
+        reason: CONVERGENCE_REASON.ERROR,
+        leadershipTier: leadership.tier,
+        outcome: CONVERGENCE_OUTCOME.NONE,
+        error: error?.message,
       });
       return false;
     } finally {

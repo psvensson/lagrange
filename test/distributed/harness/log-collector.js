@@ -496,4 +496,9 @@ function decodeDockerLogFrames(payload) {
   return Buffer.concat(chunks).toString(ENCODING_UTF8);
 }
 
-export {LogCollector, formatLogEntry, compareTimestamps};
+export {
+  LogCollector,
+  formatLogEntry,
+  compareTimestamps,
+  extractContainerLogLines,
+};

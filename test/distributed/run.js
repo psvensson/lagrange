@@ -15,6 +15,10 @@ import {fileURLToPath, pathToFileURL} from 'node:url';
 import {basename, dirname, extname, join, resolve} from 'node:path';
 import {execFile} from 'node:child_process';
 import {mkdir, readdir, readFile, writeFile} from 'node:fs/promises';
+import {
+  computeSourceFingerprint,
+  SOURCE_FINGERPRINT_ALGORITHM,
+} from '../../src/diagnostics/source-fingerprint.js';
 import {parseConfig} from './harness/config-parser.js';
 import {
   discoverScenarios,
@@ -416,7 +420,7 @@ function buildFastLocalSourceBind(cwd = process.cwd()) {
     FAST_LOCAL_BIND_READ_ONLY_SUFFIX;
 }
 
-function applyFastLocalConfig(config, cwd = process.cwd()) {
+async function applyFastLocalConfig(config, cwd = process.cwd()) {
   const dockerConfig = (config && typeof config.docker === 'object') ?
     config.docker :
     {};
@@ -429,6 +433,14 @@ function applyFastLocalConfig(config, cwd = process.cwd()) {
     existingBinds :
     [...existingBinds, sourceBind];
 
+  // Content-fingerprint the exact src/ tree we bind-mount live into the reused
+  // containers. Threaded into the node env so a changed fingerprint forces a
+  // container recreate (fresh process → fresh import), defeating the stale-code
+  // trap; unchanged keeps the fast warm-reuse path. Only meaningful in fast-local
+  // (image mode bakes src in and is covered by the git-hash image label).
+  const hostSourcePath = resolve(cwd, FAST_LOCAL_SOURCE_RELATIVE_PATH);
+  const srcFingerprint = await computeSourceFingerprint(hostSourcePath);
+
   return {
     ...config,
     docker: {
@@ -437,6 +449,8 @@ function applyFastLocalConfig(config, cwd = process.cwd()) {
       reuseContainers: true,
       keepRunningContainers: true,
       binds: mergedBinds,
+      srcFingerprint,
+      srcFingerprintAlgo: SOURCE_FINGERPRINT_ALGORITHM,
     },
   };
 }
@@ -1155,6 +1169,13 @@ function evaluateBenchmarkRegressionGate(reportPayload, historyReports, config) 
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
+  // --debug-logs is delivered to node containers via the LAGRANGE_* env
+  // auto-forward in the cluster's node-env builder. Setting it here (rather than
+  // threading a flag through cluster construction) also lets an operator opt in
+  // by exporting the env var directly, with identical effect.
+  if (args.debugLogs) {
+    process.env[CLI.DEBUG_LOGS_ENV_VAR] = 'true';
+  }
   let runStatusContext = null;
   const writeRunnerStatus = async (status, fields = {}) => {
     if (!runStatusContext) {
@@ -1183,7 +1204,7 @@ async function main() {
       outputDir,
     };
     if (resolveFastLocalMode(args, runConfig)) {
-      runConfig = applyFastLocalConfig(runConfig);
+      runConfig = await applyFastLocalConfig(runConfig);
       if (args.verbose) {
         process.stdout.write(FAST_LOCAL_LOG_PREFIX);
       }
@@ -1245,8 +1266,9 @@ async function main() {
 
     // Build Docker image before running scenarios
     const dockerOperationSink = createDockerOperationSink(args.verbose);
+    let imageResult = null;
     try {
-      await buildImage(runConfig, args.verbose, dockerOperationSink);
+      imageResult = await buildImage(runConfig, args.verbose, dockerOperationSink);
     } catch (err) {
       runStatusContext.milestones.failedAt = new Date().toISOString();
       await writeRunnerStatus(RUN_STATUS_STATE_FATAL_ERROR, {
@@ -1286,6 +1308,15 @@ async function main() {
       raftProvider: resolveRunRaftProvider(runConfig),
       scenarioCount: scenarios.length,
       scenarioNames: scenarios.map((scenario) => scenario.name),
+      // Provenance of the code under test: git hash/dirtiness (image mode) plus
+      // the live src fingerprint (fast-local). Stamped together so "which code
+      // did this run actually execute?" is answerable from run-status alone.
+      gitHash: imageResult?.gitHash || null,
+      gitDirty: typeof imageResult?.gitDirty === 'boolean' ?
+        imageResult.gitDirty :
+        null,
+      srcFingerprint: runConfig?.docker?.srcFingerprint || null,
+      srcFingerprintAlgo: runConfig?.docker?.srcFingerprintAlgo || null,
     };
     await writeRunnerStatus(RUN_STATUS_STATE_RUNNING);
 

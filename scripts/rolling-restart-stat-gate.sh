@@ -13,14 +13,22 @@
 #   bash scripts/rolling-restart-stat-gate.sh            # N=10 (default)
 #   bash scripts/rolling-restart-stat-gate.sh 5          # N=5
 #   N=3 CONFIG=test/distributed/config/local.json bash scripts/rolling-restart-stat-gate.sh
+#   DEBUG_LOGS=1 bash scripts/rolling-restart-stat-gate.sh 3   # capture decision trace
 #
 # Output: test-output/reports/stat-gate-<ts>.{json,md}
+#
+# Freshness: each run cleans reuse containers first (clean_containers), AND the
+# harness now forces a container recreate whenever the src fingerprint changes
+# (SRC_FINGERPRINT env), so a code edit can never be measured against a stale
+# process. The working-tree fingerprint is stamped into the report below so every
+# gate result is attributable to an exact source tree.
 
 set -uo pipefail
 
 N="${1:-${N:-10}}"
 CONFIG="${CONFIG:-test/distributed/config/local.json}"
 SCENARIO="${SCENARIO:-rolling-restart}"
+DEBUG_LOGS="${DEBUG_LOGS:-}"
 TS="$(date -u +%Y%m%dT%H%M%SZ)"
 REPORT_DIR="test-output/reports"
 TMP_NDJSON="$(mktemp)"
@@ -34,8 +42,21 @@ clean_containers() {
   docker network ls --format '{{.Name}}' 2>/dev/null | grep '^ddb-test-net-reuse-local-' | xargs -r docker network rm >/dev/null 2>&1 || true
 }
 
-echo "stat-gate: N=${N} config=${CONFIG} scenario=${SCENARIO} ts=${TS}"
+# Working-tree source fingerprint — the exact code these N runs measure.
+SRC_FP="$(node --input-type=module -e \
+  'import {computeSourceFingerprint} from "./src/diagnostics/source-fingerprint.js"; process.stdout.write(await computeSourceFingerprint("src"));' \
+  2>/dev/null || echo unknown)"
 
+DEBUG_LOGS_ARGS=()
+DEBUG_LOGS_JSON="false"
+if [ -n "${DEBUG_LOGS}" ]; then
+  DEBUG_LOGS_ARGS=(--debug-logs)
+  DEBUG_LOGS_JSON="true"
+fi
+
+echo "stat-gate: N=${N} config=${CONFIG} scenario=${SCENARIO} ts=${TS} srcFingerprint=${SRC_FP} debugLogs=${DEBUG_LOGS:-0}"
+
+stale_runs=0
 for i in $(seq 1 "${N}"); do
   echo "--- run ${i}/${N}: cleaning containers + launching ---"
   clean_containers
@@ -46,9 +67,17 @@ for i in $(seq 1 "${N}"); do
     --config "${CONFIG}" \
     --scenario "${SCENARIO}" \
     --output "${RUN_REPORT}" \
+    "${DEBUG_LOGS_ARGS[@]}" \
     --verbose > "${RUN_LOG}" 2>&1 || true
   end_s=$(date +%s)
   wall_s=$(( end_s - start_s ))
+
+  # Surface the harness stale-code warning loudly — a measurement against stale
+  # code is worthless and must never be silently folded into the distribution.
+  if grep -q "Stale source detected" "${RUN_LOG}" 2>/dev/null; then
+    stale_runs=$(( stale_runs + 1 ))
+    echo "run ${i}: !!! STALE SOURCE DETECTED — this run executed old code, result is untrustworthy (see ${RUN_LOG})"
+  fi
 
   if [ -f "${RUN_REPORT}" ]; then
     # Per the 'never break, only slow' gate: classify each run by CORRECTNESS
@@ -84,6 +113,9 @@ jq -s '
   def pct(p): (sort | if length==0 then null else .[((length-1)*p)|floor] end);
   {
     timestamp: "'"${TS}"'", config: "'"${CONFIG}"'", scenario: "'"${SCENARIO}"'",
+    srcFingerprint: "'"${SRC_FP}"'",
+    debugLogs: '"${DEBUG_LOGS_JSON}"',
+    staleSourceRuns: '"${stale_runs}"',
     runs: length,
     classTally: ( [.[].class] | group_by(.) | map({(.[0]|tostring): length}) | add ),
     corruptCount: ([.[] | select(.class=="CORRUPT")] | length),
@@ -106,6 +138,8 @@ jq -s '
   echo
   jq -r '
     "- runs: \(.runs)",
+    "- srcFingerprint: \(.srcFingerprint) (debugLogs: \(.debugLogs))",
+    "- **staleSourceRuns (untrustworthy — must be 0): \(.staleSourceRuns)**",
     "- **CORRUPT (hard invariant breach — must be 0): \(.corruptCount)**",
     "- stallRate (frozen / gave up): \(.stallRate)",
     "- healthyRate (converged or progressing): \(.healthyRate)",

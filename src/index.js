@@ -2,6 +2,12 @@
  * Distributed Database System - Main Entry Point
  */
 
+import {dirname} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {
+  computeSourceFingerprint,
+  SOURCE_FINGERPRINT_ENV_VAR,
+} from './diagnostics/source-fingerprint.js';
 import {ConfigurationManager} from './config/configuration-manager.js';
 import {CONFIG_KEY} from './config/config-constants.js';
 import {LoggingService} from './logging/logging-service.js';
@@ -689,6 +695,29 @@ async function startSeedNode(options) {
   registerShutdownSignalHandlers(handleShutdownSignal);
 }
 
+// Self-verify the source the node actually booted from. The harness injects the
+// working-tree fingerprint via SOURCE_FINGERPRINT_ENV_VAR; here we independently
+// recompute the fingerprint of the directory this entrypoint module was loaded
+// from (e.g. /app/src under the fast-local bind mount). A mismatch is proof the
+// running process imported stale code — the trap this guards against. Best
+// effort: a fingerprint error must never block or fail startup.
+async function resolveBootSourceProvenance() {
+  const expectedSrcFingerprint =
+    process.env[SOURCE_FINGERPRINT_ENV_VAR] || null;
+  let bootedSrcFingerprint = null;
+  try {
+    const sourceDir = dirname(fileURLToPath(import.meta.url));
+    bootedSrcFingerprint = await computeSourceFingerprint(sourceDir);
+  } catch {
+    bootedSrcFingerprint = null;
+  }
+  const srcFingerprintMatches =
+    expectedSrcFingerprint && bootedSrcFingerprint ?
+      expectedSrcFingerprint === bootedSrcFingerprint :
+      null;
+  return {expectedSrcFingerprint, bootedSrcFingerprint, srcFingerprintMatches};
+}
+
 /**
  * Main application entry point.
  */
@@ -714,11 +743,20 @@ async function main() {
   const config = ConfigurationManager.getInstance();
   config.initialize(overrides);
 
-  // Initialize logging
+  // Initialize logging. LAGRANGE_DEBUG_LOGS raises the CONSOLE level to debug so
+  // investigation detail (incl. the per-tick convergence decision trace) reaches
+  // stdout — captured in full by the harness — while persistence stays at the
+  // configured level so the logs table (a distributed write path that can itself
+  // stall) is never flooded with debug volume.
+  const debugLogsEnabled = process.env.LAGRANGE_DEBUG_LOGS === 'true';
+  const configuredLogLevel = config.get(CONFIG_KEY.LOGGING_LEVEL);
   const loggingService = LoggingService.getInstance();
   loggingService.initialize({
     nodeId: config.get(CONFIG_KEY.NODE_ID),
-    level: config.get(CONFIG_KEY.LOGGING_LEVEL),
+    level: debugLogsEnabled ? 'debug' : configuredLogLevel,
+    persistLevel: debugLogsEnabled ?
+      (configuredLogLevel || 'info') :
+      undefined,
     prettyPrint: config.get(CONFIG_KEY.LOGGING_PRETTY_PRINT),
   });
 
@@ -750,12 +788,23 @@ async function main() {
     maxLogicalCounter: config.get(CONFIG_KEY.HLC_MAX_LOGICAL_COUNTER),
   });
 
+  const bootProvenance = await resolveBootSourceProvenance();
   mainLogger.info(ENTRYPOINT_LOG_MSG.STARTING, {
     nodeId: config.get(CONFIG_KEY.NODE_ID),
     version: VERSION,
     dataDir: dataDirectoryManager.getDataDir(),
     hlcTimestamp: hlcClock.now().toString(),
+    bootedSrcFingerprint: bootProvenance.bootedSrcFingerprint,
+    expectedSrcFingerprint: bootProvenance.expectedSrcFingerprint,
+    srcFingerprintMatches: bootProvenance.srcFingerprintMatches,
   });
+  if (bootProvenance.srcFingerprintMatches === false) {
+    mainLogger.warn(ENTRYPOINT_LOG_MSG.STALE_SOURCE_DETECTED, {
+      nodeId: config.get(CONFIG_KEY.NODE_ID),
+      bootedSrcFingerprint: bootProvenance.bootedSrcFingerprint,
+      expectedSrcFingerprint: bootProvenance.expectedSrcFingerprint,
+    });
+  }
 
   if (cliArgs.dryRun) {
     mainLogger.info(ENTRYPOINT_LOG_MSG.DRY_RUN_COMPLETED, {

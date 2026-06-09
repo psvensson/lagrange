@@ -747,6 +747,11 @@ const ARG_FAST_LOCAL = '--fast-local';
 const ARG_NO_FAST_LOCAL = '--no-fast-local';
 const ARG_DETERMINISTIC_DEBUG = '--deterministic-debug';
 const ARG_NO_DETERMINISTIC_DEBUG = '--no-deterministic-debug';
+const ARG_DEBUG_LOGS = '--debug-logs';
+// Env var forwarded to node containers (LAGRANGE_ prefix → auto-forwarded by the
+// cluster) telling them to raise the console log level to debug for full stdout
+// capture while keeping logs-table persistence at the configured level.
+const DEBUG_LOGS_ENV_VAR = 'LAGRANGE_DEBUG_LOGS';
 
 const CLI = Object.freeze({
   DEFAULT_CONFIG: DEFAULT_CONFIG_PATH,
@@ -759,6 +764,8 @@ const CLI = Object.freeze({
   ARG_NO_FAST_LOCAL,
   ARG_DETERMINISTIC_DEBUG,
   ARG_NO_DETERMINISTIC_DEBUG,
+  ARG_DEBUG_LOGS,
+  DEBUG_LOGS_ENV_VAR,
 });
 
 // --- Exit Codes ---

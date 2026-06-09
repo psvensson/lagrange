@@ -61,6 +61,8 @@ class LoggingService {
     this.metricsLastEmissionByTag = new Map();
     this.level = LOGGING_DEFAULT.LEVEL;
     this.levelPriority = this.getLogLevelPriority(LOGGING_DEFAULT.LEVEL);
+    this.persistLevel = LOGGING_DEFAULT.LEVEL;
+    this.persistLevelPriority = this.getLogLevelPriority(LOGGING_DEFAULT.LEVEL);
     this.diagnostics = this.createDiagnosticsState();
   }
 
@@ -108,6 +110,12 @@ class LoggingService {
       options.level || config.get(CONFIG_KEY.LOGGING_LEVEL) || LOGGING_DEFAULT.LEVEL;
     this.level = this.normalizeLogLevel(configuredLevel);
     this.levelPriority = this.getLogLevelPriority(this.level);
+    // Persistence threshold defaults to the console level (unchanged behavior).
+    // When given separately (e.g. --debug-logs sets console=debug, persist=info)
+    // debug detail reaches stdout without flooding the logs table.
+    const configuredPersistLevel = options.persistLevel || this.level;
+    this.persistLevel = this.normalizeLogLevel(configuredPersistLevel);
+    this.persistLevelPriority = this.getLogLevelPriority(this.persistLevel);
     const prettyPrint =
       options.prettyPrint ?? config.get(CONFIG_KEY.LOGGING_PRETTY_PRINT) ??
       LOGGING_DEFAULT.PRETTY_PRINT;
@@ -144,7 +152,20 @@ class LoggingService {
       timestamp: pino.stdTimeFunctions.isoTime,
     };
 
-    if (prettyPrint) {
+    // Optional file destination (LAGRANGE_LOG_FILE) for observable runs. Writing
+    // to a local FILE — not stdout — removes the observer effect where heavy
+    // debug volume backs up the stdout pipe to the Docker daemon and stalls/hangs
+    // the node (the very failure such runs try to observe). sync:true is correct
+    // here: a synchronous write to a local file is fast and consumer-independent
+    // (no pipe backpressure to block on), and unlike async buffering it loses no
+    // tail if the node then hangs — which is exactly when the last lines matter.
+    const logFilePath = options.logFile || process.env.LAGRANGE_LOG_FILE;
+    if (logFilePath) {
+      this.logger = pino(
+        pinoOptions,
+        pino.destination({dest: logFilePath, sync: true, mkdir: true}),
+      );
+    } else if (prettyPrint) {
       this.logger = pino(pinoOptions, pino.transport({
         target: LOGGING_PRETTY.TARGET,
         options: {
@@ -203,7 +224,7 @@ class LoggingService {
     const shouldWriteToConsole = isLevelEnabled &&
       (!isMetricsMessage ||
         (this.showMetricsInConsole && metricsPolicy.shouldEmit));
-    const shouldPersist = isLevelEnabled &&
+    const shouldPersist = this.isPersistLevelEnabled(normalizedLevel) &&
       (!isMetricsMessage ||
         (this.persistMetricsLogs && metricsPolicy.shouldEmit));
 
@@ -248,6 +269,32 @@ class LoggingService {
       // Write to logs table
       this.flushCallback(entry);
     }
+  }
+
+  /**
+   * Console-only log: writes to the pino/stdout sink but NEVER to the logs table.
+   * For high-frequency diagnostic traces (e.g. the per-tick convergence decision
+   * trace) that must be retrievable from captured stdout WITHOUT adding write
+   * load to the logs table — which matters acutely when the subsystem under
+   * observation is itself a stalled distributed write path that the logs table
+   * rides on. Still gated by the configured level, so it is silent unless the
+   * level (e.g. raised by the harness --debug-logs switch) admits it.
+   * @param {string} level - Log level.
+   * @param {string} message - Log message.
+   * @param {Object} context - Additional context.
+   */
+  logConsoleOnly(level, message, context = {}) {
+    const normalizedLevel = this.normalizeLogLevel(level);
+    if (!this.isLogLevelEnabled(normalizedLevel)) {
+      return;
+    }
+    if (!this.initialized) {
+      console.log(
+        JSON.stringify({level: normalizedLevel, message, ...context}),
+      );
+      return;
+    }
+    this.logger[normalizedLevel]({...context, nodeId: this.nodeId}, message);
   }
 
   /**
@@ -320,6 +367,8 @@ class LoggingService {
       warn: (msg, ctx = {}) => parent.warn(msg, {...childContext, ...ctx}),
       error: (msg, ctx = {}) => parent.error(msg, {...childContext, ...ctx}),
       fatal: (msg, ctx = {}) => parent.fatal(msg, {...childContext, ...ctx}),
+      logConsoleOnly: (level, msg, ctx = {}) =>
+        parent.logConsoleOnly(level, msg, {...childContext, ...ctx}),
       child: (moreBindings) => parent.child({...childContext, ...moreBindings}),
     };
   }

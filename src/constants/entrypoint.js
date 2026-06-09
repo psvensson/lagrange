@@ -52,6 +52,9 @@ const ENTRYPOINT_SUBSYSTEM = Object.freeze({
 
 const ENTRYPOINT_LOG_MSG = Object.freeze({
   STARTING: 'Distributed Database System starting',
+  STALE_SOURCE_DETECTED:
+    'Booted source fingerprint does not match the harness-injected fingerprint ' +
+    '(stale code may be running)',
   DRY_RUN_COMPLETED: 'Dry run completed',
   JOINING_CLUSTER: 'Joining existing cluster',
   AUTO_REJOINING_CLUSTER: 'Restarting node will auto-rejoin existing cluster',

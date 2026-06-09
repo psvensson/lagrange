@@ -13,6 +13,7 @@ export function createDistributedRunArgHelpers({CLI}) {
     let verbose = false;
     let fastLocal = null;
     let deterministicDebug = null;
+    let debugLogs = false;
     let contract = null;
 
     for (let i = 0; i < argv.length; i++) {
@@ -33,6 +34,8 @@ export function createDistributedRunArgHelpers({CLI}) {
         deterministicDebug = true;
       } else if (arg === CLI.ARG_NO_DETERMINISTIC_DEBUG) {
         deterministicDebug = false;
+      } else if (arg === CLI.ARG_DEBUG_LOGS) {
+        debugLogs = true;
       } else if (arg === '--contract' && i + 1 < argv.length) {
         contract = argv[++i];
       }
@@ -45,6 +48,7 @@ export function createDistributedRunArgHelpers({CLI}) {
       verbose,
       fastLocal,
       deterministicDebug,
+      debugLogs,
       contract,
     };
   }

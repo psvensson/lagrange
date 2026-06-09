@@ -852,6 +852,10 @@ class Cluster3 extends Cluster2 {
     if (reuseContainers) {
       dockerBinds.push(this._getReusableControlBind(containerName));
     }
+    if (this._isFileLoggingEnabled()) {
+      // Bind a host dir for the node's file-based log (non-perturbing capture).
+      dockerBinds.push(this._buildFileLoggingBind(nodeId));
+    }
     const hostConfigExtras =
       dockerBinds.length > 0 ?
         {[DOCKER_HOST_CONFIG_BINDS_KEY]: dockerBinds} :

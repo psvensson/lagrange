@@ -6,6 +6,7 @@
  */
 
 import Docker from 'dockerode';
+import {Writable} from 'node:stream';
 import {
   PORTS,
   TIMEOUTS,
@@ -719,6 +720,110 @@ class DockerProvider {
     return {
       stop: () => {
         stopped = true;
+        if (stream) {
+          stream.destroy();
+        }
+      },
+    };
+  }
+
+  /**
+   * Follow a container's logs as a demultiplexed, line-oriented stream with
+   * Docker-side timestamps. Unlike the one-shot getContainerLogs (which can only
+   * return what the json-file driver retained — and that driver stalls under a
+   * busy writer), a live follower continuously DRAINS the container's stdout pipe,
+   * which is what prevents the daemon-side stall that silently truncates busy
+   * nodes. timestamps:true prefixes every line with an RFC3339Nano time, giving
+   * the caller both a `since` cursor for clean re-attach (across container
+   * restarts) and a last-activity signal for completeness checks.
+   *
+   * @param {string} containerId
+   * @param {Object} opts
+   * @param {string} [opts.since] RFC3339/unix `since` cursor (re-attach point).
+   * @param {(rfc3339: string, payload: string) => void} opts.onLine Per decoded
+   *   line: the leading Docker timestamp and the remaining payload (the raw app
+   *   log line, e.g. a pino JSON object).
+   * @param {() => void} [opts.onEnd] Stream ended (container stopped/restarted).
+   * @param {(err: Error) => void} [opts.onError]
+   * @return {{stop: () => void}}
+   */
+  followContainerLogStream(containerId, opts = {}) {
+    const container = this._docker.getContainer(containerId);
+    const onLine = typeof opts.onLine === 'function' ? opts.onLine : () => {};
+    let stream = null;
+    let stopped = false;
+    let pending = '';
+
+    const emitLine = (rawLine) => {
+      if (rawLine.length === 0) {
+        return;
+      }
+      const spaceIdx = rawLine.indexOf(' ');
+      if (spaceIdx <= 0) {
+        onLine('', rawLine);
+        return;
+      }
+      onLine(rawLine.slice(0, spaceIdx), rawLine.slice(spaceIdx + 1));
+    };
+    const sink = new Writable({
+      write(chunk, _enc, cb) {
+        pending += chunk.toString('utf8');
+        let nlIdx = pending.indexOf('\n');
+        while (nlIdx !== -1) {
+          emitLine(pending.slice(0, nlIdx));
+          pending = pending.slice(nlIdx + 1);
+          nlIdx = pending.indexOf('\n');
+        }
+        cb();
+      },
+    });
+    const flushPending = () => {
+      if (pending.length > 0) {
+        emitLine(pending);
+        pending = '';
+      }
+    };
+
+    const logOpts = {
+      follow: true,
+      stdout: true,
+      stderr: true,
+      timestamps: true,
+    };
+    if (opts.since) {
+      logOpts.since = opts.since;
+    }
+    container
+      .logs(logOpts)
+      .then((s) => {
+        if (stopped) {
+          s.destroy();
+          return;
+        }
+        stream = s;
+        this._docker.modem.demuxStream(stream, sink, sink);
+        stream.on('end', () => {
+          flushPending();
+          if (!stopped && typeof opts.onEnd === 'function') {
+            opts.onEnd();
+          }
+        });
+        stream.on('error', (err) => {
+          if (!stopped && typeof opts.onError === 'function') {
+            opts.onError(err);
+          }
+        });
+      })
+      .catch((err) => {
+        if (!stopped && typeof opts.onError === 'function') {
+          opts.onError(err);
+        }
+      });
+
+    return {
+      stop: () => {
+        stopped = true;
+        flushPending();
         if (stream) {
           stream.destroy();
         }

@@ -27,6 +27,12 @@ const PROCESS_EXIT_SIGNAL_PERMISSION_SENTINEL = ZERO;
 
 let processCleanupHandlersRegistered = false;
 
+// Full per-node logs are captured CONTINUOUSLY during the run by per-node
+// streamers (see cluster `_beginNodeLogStream`), which write incrementally to
+// disk. On crash/signal cleanup we therefore do NOT re-capture here: a one-shot
+// `docker logs` would be stall-prone (the very daemon stall streaming avoids) and
+// would CLOBBER the better, continuously-streamed file. The partial streamed file
+// is the crash record.
 async function bestEffortCleanup(provider, clusterId) {
   try {
     const containers = await provider.listContainers({

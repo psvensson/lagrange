@@ -1,6 +1,8 @@
 import t from 'tap';
 import {
   isControlPlanePublicationsWriteLeader,
+  resolveControlPlanePublicationsLeadership,
+  LEADERSHIP_TIER,
   CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
 } from '../../src/control-plane/control-plane-publications-leadership.js';
 
@@ -74,4 +76,88 @@ t.test('fail-safe: null cache / nodeId / throwing cache -> false', async (t) => 
     ),
     false,
   );
+});
+
+t.test('resolveLeadership reports the deciding tier', async (t) => {
+  const emptyCache = {get: () => null, find: () => null};
+  t.strictSame(
+    resolveControlPlanePublicationsLeadership(emptyCache, 'seed', {
+      canWriteSystemTableLocally: () => true,
+    }),
+    {isLeader: true, tier: LEADERSHIP_TIER.RAFT_LIVE},
+  );
+  t.strictSame(
+    resolveControlPlanePublicationsLeadership(
+      {get: () => ({leader_node_id: 'seed'}), find: () => null},
+      'seed',
+    ),
+    {isLeader: true, tier: LEADERSHIP_TIER.PARTITION_ROW},
+  );
+  t.strictSame(
+    resolveControlPlanePublicationsLeadership(
+      {get: () => null, find: () => ({})},
+      'seed',
+    ),
+    {isLeader: true, tier: LEADERSHIP_TIER.SERVICES_WITNESS},
+  );
+  t.strictSame(
+    resolveControlPlanePublicationsLeadership(emptyCache, 'seed'),
+    {isLeader: false, tier: LEADERSHIP_TIER.NONE},
+  );
+});
+
+// The boolean predicate MUST stay exactly resolveLeadership().isLeader across
+// every branch — this predicate has been wrong twice, so the delegation is
+// guarded against drift here.
+t.test('predicate equals resolveLeadership().isLeader for all branches', async (t) => {
+  const cdcTrue = {canWriteSystemTableLocally: () => true};
+  const cdcFalse = {canWriteSystemTableLocally: () => false};
+  const cdcThrows = {canWriteSystemTableLocally: () => {
+    throw new Error('x');
+  }};
+  const partitionLeaderCache = {
+    get: (table, key) =>
+      table === 'partitions' && key === CONTROL_PLANE_PUBLICATIONS_PARTITION_ID ?
+        {leader_node_id: 'seed'} :
+        null,
+    find: () => null,
+  };
+  const witnessCache = {
+    get: () => null,
+    find: (table, predicate) =>
+      table === 'services' &&
+      predicate({
+        partition_id: CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+        node_id: 'seed',
+        raft_role: 'leader',
+      }) ?
+        {} :
+        null,
+  };
+  const throwingCache = {
+    get: () => {
+      throw new Error('x');
+    },
+    find: () => {
+      throw new Error('y');
+    },
+  };
+  const cases = [
+    [null, 'seed', null],
+    [{get: () => null, find: () => null}, null, cdcFalse],
+    [{get: () => null, find: () => null}, 'seed', cdcTrue],
+    [{get: () => null, find: () => null}, 'seed', cdcThrows],
+    [partitionLeaderCache, 'seed', cdcFalse],
+    [partitionLeaderCache, 'other', cdcFalse],
+    [witnessCache, 'seed', cdcFalse],
+    [witnessCache, 'other', cdcFalse],
+    [throwingCache, 'seed', cdcFalse],
+  ];
+  for (const [cache, nodeId, cdc] of cases) {
+    t.equal(
+      isControlPlanePublicationsWriteLeader(cache, nodeId, cdc),
+      resolveControlPlanePublicationsLeadership(cache, nodeId, cdc).isLeader,
+      'predicate matches resolver for a branch',
+    );
+  }
 });

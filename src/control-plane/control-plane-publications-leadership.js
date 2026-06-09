@@ -22,7 +22,24 @@ const CONTROL_PLANE_PUBLICATIONS_PARTITION_ID =
   INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS];
 const RAFT_ROLE_LEADER = 'leader';
 
-function isControlPlanePublicationsWriteLeader(
+// Which source established (or failed to establish) write-leadership this call.
+// Diagnostic only — used by the convergence decision trace to attribute WHY a
+// node believed it was/wasn't the owner, without the trace re-deriving the tiers.
+const LEADERSHIP_TIER = Object.freeze({
+  RAFT_LIVE: 'tier0-raft-live',
+  PARTITION_ROW: 'tier1-partition-row',
+  SERVICES_WITNESS: 'tier2-services-witness',
+  NONE: 'none',
+});
+
+// Single source of truth for control_plane_publications write-leadership. Returns
+// both the boolean and the tier that decided it. isControlPlanePublicationsWriteLeader
+// is exactly `.isLeader` of this — the tier annotation never changes the verdict.
+// The branch order and per-tier try/catch boundaries are preserved verbatim from
+// the original predicate (which had been wrong twice before settling on Tier-0
+// first): Tier-0 live Raft role, then the `!cache || !nodeId` guard, then the
+// durable PARTITIONS row, then the live SERVICES witness; fail-safe to NONE.
+function resolveControlPlanePublicationsLeadership(
   systemTableCache,
   nodeId,
   cdcIntegrationService = null,
@@ -39,13 +56,13 @@ function isControlPlanePublicationsWriteLeader(
         TABLES.CONTROL_PLANE_PUBLICATIONS,
       ) === true
     ) {
-      return true;
+      return {isLeader: true, tier: LEADERSHIP_TIER.RAFT_LIVE};
     }
   } catch {
     // fall through to the cache tiers
   }
   if (!systemTableCache || !nodeId) {
-    return false;
+    return {isLeader: false, tier: LEADERSHIP_TIER.NONE};
   }
   try {
     const partitionRow = systemTableCache.get?.(
@@ -53,7 +70,7 @@ function isControlPlanePublicationsWriteLeader(
       CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
     );
     if (partitionRow && partitionRow[COLUMN.LEADER_NODE_ID] === nodeId) {
-      return true;
+      return {isLeader: true, tier: LEADERSHIP_TIER.PARTITION_ROW};
     }
   } catch {
     // fall through to the live witness
@@ -68,15 +85,29 @@ function isControlPlanePublicationsWriteLeader(
         String(row[COLUMN.RAFT_ROLE] || '').toLowerCase() === RAFT_ROLE_LEADER,
     );
     if (witness) {
-      return true;
+      return {isLeader: true, tier: LEADERSHIP_TIER.SERVICES_WITNESS};
     }
   } catch {
     // fail-safe
   }
-  return false;
+  return {isLeader: false, tier: LEADERSHIP_TIER.NONE};
+}
+
+function isControlPlanePublicationsWriteLeader(
+  systemTableCache,
+  nodeId,
+  cdcIntegrationService = null,
+) {
+  return resolveControlPlanePublicationsLeadership(
+    systemTableCache,
+    nodeId,
+    cdcIntegrationService,
+  ).isLeader;
 }
 
 export {
   isControlPlanePublicationsWriteLeader,
+  resolveControlPlanePublicationsLeadership,
+  LEADERSHIP_TIER,
   CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
 };

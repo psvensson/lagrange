@@ -233,6 +233,26 @@ const LOGGING_SERVICE_METRICS_DIAGNOSTICS_METHODS = {
   },
 
   /**
+   * Check whether a level is enabled for PERSISTENCE to the logs table. Separate
+   * from console gating so an investigation run can raise the console level (e.g.
+   * to debug, capturing the per-tick decision trace in stdout) WITHOUT lowering
+   * the persistence threshold and flooding the logs table — which matters when
+   * that table rides a distributed write path that may itself be stalled.
+   * Defaults to the console threshold when no separate persist level is set, so
+   * existing single-level behavior is unchanged.
+   * @param {string} level
+   * @return {boolean}
+   * @private
+   */
+  isPersistLevelEnabled(level) {
+    const persistPriority =
+      typeof this.persistLevelPriority === 'number' ?
+        this.persistLevelPriority :
+        this.levelPriority;
+    return this.getLogLevelPriority(level) >= persistPriority;
+  },
+
+  /**
    * Record diagnostics counters for a log invocation.
    * @param {Object} options
    * @param {boolean} options.isLevelEnabled

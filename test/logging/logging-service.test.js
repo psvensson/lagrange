@@ -84,6 +84,55 @@ test('LoggingService flush on logs table ready', async (t) => {
   LoggingService.resetInstance();
 });
 
+test('logConsoleOnly never persists to the logs table', async (t) => {
+  LoggingService.resetInstance();
+  const logger = LoggingService.getInstance();
+  logger.initialize({nodeId: 'test-node', level: 'debug'});
+
+  const persisted = [];
+  await logger.onLogsTableReady((entry) => {
+    persisted.push(entry);
+  });
+  // onLogsTableReady itself logs a "logs table ready" info that persists; ignore
+  // that setup artifact by baselining here.
+  persisted.length = 0;
+
+  // Console-only write at an enabled level: reaches stdout, never the table.
+  logger.logConsoleOnly('debug', 'trace tick', {missingPublishedCount: 3});
+  t.equal(persisted.length, 0, 'console-only log must not persist');
+
+  // A normal log at the same level DOES persist — proving the table path works
+  // and that logConsoleOnly is specifically bypassing it.
+  logger.info('normal message');
+  t.equal(persisted.length, 1, 'normal log persists via flushCallback');
+
+  LoggingService.resetInstance();
+});
+
+test('logConsoleOnly is silent below the configured level', async (t) => {
+  LoggingService.resetInstance();
+  const logger = LoggingService.getInstance();
+  logger.initialize({nodeId: 'test-node', level: 'info'});
+
+  const persisted = [];
+  await logger.onLogsTableReady((entry) => {
+    persisted.push(entry);
+  });
+  persisted.length = 0;
+
+  // debug < info → dropped entirely (no console, no persist).
+  logger.logConsoleOnly('debug', 'suppressed tick');
+  t.equal(persisted.length, 0, 'debug console-only is dropped at info level');
+
+  // Child/subsystem loggers expose the same console-only path.
+  const subsystem = logger.forSubsystem('convergence');
+  t.equal(typeof subsystem.logConsoleOnly, 'function', 'child has logConsoleOnly');
+  subsystem.logConsoleOnly('debug', 'still suppressed');
+  t.equal(persisted.length, 0, 'child console-only also non-persisting/gated');
+
+  LoggingService.resetInstance();
+});
+
 test('LoggingService can flush buffered logs in background chunks', async (t) => {
   LoggingService.resetInstance();
   const logger = LoggingService.getInstance();

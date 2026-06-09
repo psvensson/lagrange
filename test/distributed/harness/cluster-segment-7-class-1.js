@@ -1,5 +1,25 @@
 import {CLUSTER_SEGMENT_7_CLASS_SHARED} from './cluster-segment-7-class-shared.js';
 import {acquireReusableClusterLease, isReusableClusterLeaseTimeoutError, registerClusterCleanup} from './cluster-runtime-helpers.js';
+import {SOURCE_FINGERPRINT_ENV_VAR} from '../../../src/diagnostics/source-fingerprint.js';
+import {
+  createNodeLogStreamer,
+  assessCaptureCompleteness,
+  finalizeFileBasedCapture,
+  fullLogDestPath,
+  nodeLogHostDir,
+  nodeLogContainerFilePath,
+  NODE_LOG_FILE_ENV_VAR,
+  NODE_LOG_DIR_CONTAINER,
+} from './full-node-log-capture.js';
+import {createReadStream, mkdirSync} from 'node:fs';
+import {createGunzip} from 'node:zlib';
+import {createInterface} from 'node:readline';
+
+// Container target of the fast-local live-src bind mount (run.js
+// FAST_LOCAL_SOURCE_CONTAINER_PATH). Used only to detect, defensively, that a
+// reuse run is bind-mounting live src yet lacks the fingerprint that protects it
+// from the stale-code trap.
+const FAST_LOCAL_SOURCE_BIND_TARGET = '/app/src';
 
 const {
   ACTIVE_POLL_INTERVAL_MS,
@@ -99,6 +119,7 @@ class Cluster1 {
     this._networkId = null;
     this._networkName = null;
     this._nodes = new Map();
+    this._nodeLogStreamers = new Map();
     this._started = false;
     this._chaos = null;
     this._logCollector = new LogCollector(config.outputDir);
@@ -247,6 +268,13 @@ class Cluster1 {
     env[CONTAINER_ENV_KEYS.DATA_DIR] = DATA_DIR_PATH;
     env[CONTAINER_ENV_KEYS.NODE_ADDRESS] = containerName + ':' + PORTS.REST;
     env[WS_HOST_ENV_KEY] = WS_BIND_ALL_HOST;
+    this._applySourceFingerprintEnv(env);
+    if (this._isFileLoggingEnabled()) {
+      // Route node logs to a bind-mounted file instead of stdout — see
+      // _isFileLoggingEnabled. Setting this env also changes the container env,
+      // which forces the reuse recreate so the matching bind is picked up.
+      env[NODE_LOG_FILE_ENV_VAR] = nodeLogContainerFilePath();
+    }
     env[RAFT_PROVIDER_ENV_KEY] = String(
       this._config.raftProvider || RAFT_PROVIDER_DEFAULTS.provider,
     );
@@ -341,6 +369,69 @@ class Cluster1 {
       }
     }
     return env;
+  }
+
+  _hasLiveSourceBind() {
+    const binds = Array.isArray(this._config?.docker?.binds) ?
+      this._config.docker.binds :
+      [];
+    return binds.some(
+      (entry) =>
+        typeof entry === 'string' &&
+        entry.includes(':' + FAST_LOCAL_SOURCE_BIND_TARGET),
+    );
+  }
+
+  // Carry the harness-computed src fingerprint into the node env. Because the
+  // fingerprint is one of the env entries _shouldRecreateReusableContainer
+  // compares, a changed src forces a container recreate (fresh process → fresh
+  // import) while unchanged src keeps the fast warm-reuse path. Fail loud if a
+  // live-src reuse run lacks the fingerprint — that silently reopens the
+  // stale-code trap, and a silent regression here is exactly what cost the
+  // original investigation days.
+  _applySourceFingerprintEnv(env) {
+    const srcFingerprint = this._config?.docker?.srcFingerprint;
+    if (srcFingerprint) {
+      env[SOURCE_FINGERPRINT_ENV_VAR] = String(srcFingerprint);
+      return;
+    }
+    if (this._isContainerReuseEnabled() && this._hasLiveSourceBind()) {
+      this._srcFingerprintMissingWarning =
+        'Container reuse is bind-mounting live src but no src fingerprint was ' +
+        'computed — stale code may run silently. Expected ' +
+        'runConfig.docker.srcFingerprint from applyFastLocalConfig.';
+      process.stderr.write(
+        '[harness] WARNING: ' + this._srcFingerprintMissingWarning + '\n',
+      );
+    }
+  }
+
+  // File-based logging is enabled for observable (--debug-logs) reuse/local runs.
+  // High debug volume over stdout backs up the pipe to the Docker daemon and can
+  // stall/hang a busy node — the very failure such runs try to observe. Writing
+  // to a bind-mounted file instead removes that observer effect. Gated to local
+  // reuse (where the bind reaches the harness host) and to runs that actually
+  // turn the volume up.
+  _isFileLoggingEnabled() {
+    return (
+      process.env.LAGRANGE_DEBUG_LOGS === 'true' &&
+      this._isContainerReuseEnabled() &&
+      Boolean(this._config?.outputDir)
+    );
+  }
+
+  // Bind for file-based logging: host {outputDir}/.full-logs/{scenario}/{nodeId}
+  // → container /harness-logs. mkdir'd here (mode 0777 so the container's uid can
+  // write regardless of host/container uid mismatch, as the reuse-control bind
+  // already relies on).
+  _buildFileLoggingBind(nodeId) {
+    // Docker requires an ABSOLUTE host path for a bind source; outputDir is
+    // typically relative (test-output/...), so resolve it.
+    const hostDir = resolvePath(
+      nodeLogHostDir(this._config.outputDir, this._scenarioName, nodeId),
+    );
+    mkdirSync(hostDir, {recursive: true, mode: 0o777});
+    return hostDir + ':' + NODE_LOG_DIR_CONTAINER;
   }
 
   _shouldRecreateReusableContainer(inspect, expectedEnv = {}) {
@@ -526,6 +617,7 @@ class Cluster1 {
     });
     const seedNode = await this._startNode(seedId, NODE_ROLES.SEED, null, 0);
     this._nodes.set(seedId, seedNode);
+    this._beginNodeLogStream(seedId, seedNode);
     this._recordPlaybackEvent(
       PLAYBACK_EVENT_TYPE.NODE_CREATED,
       PLAYBACK_SCOPE_NODE,
@@ -561,6 +653,7 @@ class Cluster1 {
         i,
       );
       this._nodes.set(joinerId, joinerNode);
+      this._beginNodeLogStream(joinerId, joinerNode);
       this._recordPlaybackEvent(
         PLAYBACK_EVENT_TYPE.NODE_CREATED,
         PLAYBACK_SCOPE_NODE,
@@ -704,6 +797,11 @@ class Cluster1 {
       const teardownNodes = Array.from(this._nodes.entries());
       this._closeNodeQueryConnectionsForTeardown(teardownNodes);
       await this._stopNodeContainersForTeardown(teardownNodes, errors);
+      // Finalize the per-node log STREAMS (started at node startup, draining the
+      // pipe continuously to avoid the daemon stall). Done AFTER stopping the
+      // containers so the streamers capture shutdown-log lines as they flow, then
+      // flush/close and assess completeness — before the conditional removal.
+      await this._finalizeFullNodeLogStreams(teardownNodes, errors);
       if (!reuseContainers) {
         await this._removeNodeContainersForTeardown(teardownNodes, errors);
       }
@@ -815,6 +913,173 @@ class Cluster1 {
         }
       }),
     );
+  }
+
+  // Start continuously streaming a node's logs to its gzip file. Draining the
+  // pipe for the node's whole life is what keeps the Docker json-file driver from
+  // stalling on a busy node and silently truncating its log. Best-effort: a
+  // streamer that fails to start must never block node startup. No-op without an
+  // outputDir (unit-test clusters).
+  _beginNodeLogStream(nodeId, node) {
+    const outputDir = this._config?.outputDir;
+    if (!outputDir || !node?._dockerProvider || !node?.containerId) {
+      return;
+    }
+    // In file-logging mode the node writes pino directly to the bind-mounted
+    // host file (its stdout is empty), so there is no docker-logs stream to
+    // follow — finalize reads the file instead.
+    if (this._isFileLoggingEnabled()) {
+      return;
+    }
+    if (this._nodeLogStreamers.has(nodeId)) {
+      return;
+    }
+    try {
+      const streamer = createNodeLogStreamer({
+        provider: node._dockerProvider,
+        containerId: node.containerId,
+        destPath: fullLogDestPath(outputDir, this._scenarioName, nodeId),
+      });
+      this._nodeLogStreamers.set(nodeId, streamer);
+    } catch (_err) {
+      // Best-effort: capture must never break the run.
+    }
+  }
+
+  // Stop all per-node log streamers and assess whether each capture is complete.
+  // Replaces the old one-shot `docker logs` at teardown (which could only return
+  // what the stalled daemon retained). Surfaces TWO loud warnings: stale source
+  // (node booted code != working tree) and incomplete capture (node went quiet
+  // long before teardown — the streaming reader stopped draining). A measurement
+  // run that drew on incomplete logs is exactly the trap this guards.
+  async _finalizeFullNodeLogStreams(nodes, errors) {
+    const outputDir = this._config?.outputDir;
+    const fileLogging = this._isFileLoggingEnabled();
+    if (!outputDir || (!fileLogging && this._nodeLogStreamers.size === ZERO)) {
+      return;
+    }
+    const teardownWallMs = Date.now();
+    const staleNodeIds = [];
+    const incompleteNodes = [];
+    await Promise.all(
+      nodes.map(async ([nodeId]) => {
+        try {
+          const finalized = fileLogging ?
+            await this._finalizeFileLoggedNode(nodeId, outputDir, teardownWallMs) :
+            await this._finalizeStreamedNode(nodeId, outputDir, teardownWallMs);
+          if (!finalized) {
+            return;
+          }
+          if (!finalized.completeness.complete) {
+            incompleteNodes.push(
+              nodeId + ' (' + finalized.completeness.reason + ')',
+            );
+          }
+          if (finalized.provenance?.srcFingerprintMatches === false) {
+            staleNodeIds.push(nodeId);
+          }
+        } catch (err) {
+          errors.push(
+            'Failed to finalize full log for ' +
+              nodeId +
+              ': ' +
+              String(err?.message || err),
+          );
+        }
+      }),
+    );
+    this._nodeLogStreamers.clear();
+    if (staleNodeIds.length > ZERO) {
+      this._staleSourceWarning =
+        'Stale source detected: node(s) ' +
+        staleNodeIds.join(', ') +
+        ' booted a source fingerprint that does not match the harness ' +
+        'working tree. This run executed STALE CODE — do not trust its results.';
+      process.stderr.write('[harness] WARNING: ' + this._staleSourceWarning + '\n');
+    }
+    if (incompleteNodes.length > ZERO) {
+      this._incompleteCaptureWarning =
+        'Incomplete log capture for node(s) ' +
+        incompleteNodes.join(', ') +
+        '. The capture stopped draining before teardown — DO NOT trust ' +
+        'attribution from these logs (they may be silently truncated).';
+      process.stderr.write(
+        '[harness] WARNING: ' + this._incompleteCaptureWarning + '\n',
+      );
+    }
+  }
+
+  // File-logging mode: the node wrote NDJSON directly to the bind-mounted host
+  // file; gzip it to the standard dest and assess completeness against the app's
+  // own timestamps (no docker-receipt lag blind spot).
+  async _finalizeFileLoggedNode(nodeId, outputDir, teardownWallMs) {
+    const result = await finalizeFileBasedCapture({
+      hostFilePath: nodeLogHostFile(outputDir, this._scenarioName, nodeId),
+      destGzPath: fullLogDestPath(outputDir, this._scenarioName, nodeId),
+      teardownWallMs,
+    });
+    return {
+      completeness: result.completeness,
+      provenance: result.bootSourceProvenance,
+    };
+  }
+
+  // Streaming mode: stop the per-node follow streamer, assess completeness from
+  // its status, and scan the gz it wrote for boot provenance.
+  async _finalizeStreamedNode(nodeId, outputDir, teardownWallMs) {
+    const streamer = this._nodeLogStreamers.get(nodeId);
+    if (!streamer) {
+      return null;
+    }
+    const status = await streamer.stop();
+    return {
+      completeness: assessCaptureCompleteness({
+        lastLineWallMs: status.lastLineWallMs,
+        teardownWallMs,
+        lineCount: status.lineCount,
+      }),
+      provenance: await this._scanBootProvenance(
+        fullLogDestPath(outputDir, this._scenarioName, nodeId),
+      ),
+    };
+  }
+
+  // Stream a gzipped node log line-by-line (O(1) memory) and return the LAST
+  // boot-provenance record (the running incarnation after any restart).
+  async _scanBootProvenance(gzPath) {
+    let provenance = null;
+    const source = createReadStream(gzPath);
+    const rl = createInterface({
+      input: source.pipe(createGunzip()),
+      crlfDelay: Infinity,
+    });
+    try {
+      for await (const line of rl) {
+        let parsed = null;
+        try {
+          parsed = JSON.parse(line);
+        } catch {
+          continue;
+        }
+        if (
+          parsed &&
+          typeof parsed === 'object' &&
+          Object.prototype.hasOwnProperty.call(parsed, 'srcFingerprintMatches')
+        ) {
+          provenance = {
+            srcFingerprintMatches: parsed.srcFingerprintMatches,
+            bootedSrcFingerprint: parsed.bootedSrcFingerprint ?? null,
+            expectedSrcFingerprint: parsed.expectedSrcFingerprint ?? null,
+          };
+        }
+      }
+    } catch {
+      // Partial/corrupt gz (e.g. an incomplete capture) — return what we found.
+    } finally {
+      rl.close();
+      source.destroy();
+    }
+    return provenance;
   }
 
   async _removeNodeContainersForTeardown(nodes, errors) {
@@ -988,6 +1253,7 @@ class Cluster1 {
       nodeIndex,
     );
     this._nodes.set(joinerId, joinerNode);
+    this._beginNodeLogStream(joinerId, joinerNode);
     this._recordPlaybackEvent(
       PLAYBACK_EVENT_TYPE.NODE_CREATED,
       PLAYBACK_SCOPE_NODE,
