@@ -59,6 +59,10 @@ const OWNER_MEMBERSHIP_DRIVER_ERROR_MSG =
   'Owner-driven membership reconcile error';
 const OWNER_MEMBERSHIP_DRIVER_RAN_MSG =
   'DIAG owner-membership driver ran as leader (predicate true)';
+const OWNER_MEMBERSHIP_DRIVER_PREDICATE_MSG =
+  'DIAG owner-membership driver predicate (am I the owner?)';
+const OWNER_MEMBERSHIP_DRIVER_SNAP_MSG =
+  'DIAG owner-membership driver planning snapshot';
 // B4 tripwire: owner-driven membership assumes control_plane_publications is a
 // single partition (one Raft leader = one authoritative writer = single source of
 // truth). B1 enforces non-splittable, but if that ever regressed this surfaces it
@@ -724,13 +728,21 @@ class MembershipPublicationCoordinatorClassStage2 extends
     if (this.ownerMembershipReconcileInFlight === true) {
       return false;
     }
-    if (
-      !isControlPlanePublicationsWriteLeader(
-        this.systemTableCache,
-        this.nodeId,
-        this.cdcIntegrationService,
-      )
-    ) {
+    const isLeader = isControlPlanePublicationsWriteLeader(
+      this.systemTableCache,
+      this.nodeId,
+      this.cdcIntegrationService,
+    );
+    // DIAG: the interval IS firing; log the predicate result on transition so we
+    // can see whether this node ever resolves as the owner at all.
+    if (this.ownerDriverPredicateSnapshot !== isLeader) {
+      this.ownerDriverPredicateSnapshot = isLeader;
+      this.logger?.warn?.(OWNER_MEMBERSHIP_DRIVER_PREDICATE_MSG, {
+        nodeId: this.nodeId,
+        isLeader,
+      });
+    }
+    if (!isLeader) {
       return false;
     }
     this.assertSingleMembershipPartition();
@@ -739,6 +751,21 @@ class MembershipPublicationCoordinatorClassStage2 extends
       const planningSnapshot = await this.readPublicationPlanningSnapshot({
         preferAuthoritativeRead: true,
       });
+      // DIAG: on the owner — does the planning snapshot exist and what is its
+      // own missingPublishedCount view (vs the harness convergence check)?
+      const snapMissing =
+        planningSnapshot ?
+          (planningSnapshot.latestPublishedPublicationRow?.publishedActiveNodeIds
+            ?.length ?? 'n/a') :
+          'no-snapshot';
+      if (this.ownerDriverSnapSnapshot !== String(snapMissing)) {
+        this.ownerDriverSnapSnapshot = String(snapMissing);
+        this.logger?.warn?.(OWNER_MEMBERSHIP_DRIVER_SNAP_MSG, {
+          nodeId: this.nodeId,
+          hasSnapshot: !!planningSnapshot,
+          publishedCount: snapMissing,
+        });
+      }
       if (!planningSnapshot) {
         return false;
       }
