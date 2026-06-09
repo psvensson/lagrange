@@ -1176,6 +1176,12 @@ async function main() {
   if (args.debugLogs) {
     process.env[CLI.DEBUG_LOGS_ENV_VAR] = 'true';
   }
+  // Non-perturbing capture at normal (info) volume — file-based logging without
+  // the --debug-logs firehose. Forwarded to containers via the LAGRANGE_* env
+  // auto-forward; an operator can also export it directly.
+  if (args.captureLogs) {
+    process.env[CLI.CAPTURE_LOGS_ENV_VAR] = 'true';
+  }
   let runStatusContext = null;
   const writeRunnerStatus = async (status, fields = {}) => {
     if (!runStatusContext) {

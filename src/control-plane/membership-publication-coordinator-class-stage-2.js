@@ -87,7 +87,13 @@ const NOT_PUBLICATIONS_WRITE_LEADER_REASON = 'not_publications_write_leader';
 // warns: one structured event per tick recording who the node thinks owns the
 // publication, by which leadership tier, the deficit, the decision, and outcome.
 const CONVERGENCE_DECISION_TRACE_MSG = 'convergence decision trace';
-const CONVERGENCE_TRACE_LEVEL = 'debug';
+// INFO (not debug) so the trace is captured WITHOUT raising the whole console to
+// debug — full --debug-logs emits ~10k lines/sec on a busy leader and PERTURBS the
+// timing-sensitive convergence it tries to observe. At info this is ~one line per
+// owner-driver tick (low volume), and still console-only (logConsoleOnly never
+// persists to the logs table), so it adds no DB/Raft load to the subsystem it
+// observes.
+const CONVERGENCE_TRACE_LEVEL = 'info';
 const CONVERGENCE_DECISION = Object.freeze({
   DRIVE: 'drive',
   SKIP: 'skip',
@@ -774,6 +780,38 @@ class MembershipPublicationCoordinatorClassStage2 extends
     );
   }
 
+  // Formation-blocker diagnostic fields for the convergence decision trace: WHY
+  // the publication-active gate / priority-control-plane spread is (not) ready.
+  // Pulled from the handoff contract (known fields) + the priority-recovery
+  // planning snapshot (best-effort, optional-chained so a missing/changed shape is
+  // null, never a throw). Surfaces the exact unmet sub-condition that blocks
+  // initial formation (priority_control_plane_spread_pending / missing-active /
+  // pending-recovery) so it can be read from a low-volume --capture-logs run.
+  _buildPublicationReadinessTraceFields(handoffContract, planningSnapshot) {
+    const prs = planningSnapshot?.priorityRecoveryPlanningSnapshot || null;
+    return {
+      contractState: handoffContract?.state ?? null,
+      contractReason: handoffContract?.reasonCode ?? null,
+      contractNextAction: handoffContract?.nextAction ?? null,
+      expectedNodeCount: handoffContract?.expectedNodeCount ?? null,
+      publishedActiveNodeCount: handoffContract?.publishedActiveNodeCount ?? null,
+      pendingRecoveryCount: handoffContract?.pendingRecoveryCount ?? null,
+      pendingReconcileCount: handoffContract?.pendingReconcileCount ?? null,
+      // The priority-recovery projection nests the gate snapshot under
+      // publicationRecoveryGate; prioritySpreadPending (the formation blocker) +
+      // reasonCodes live THERE, not at the top level. Top level exposes the
+      // renamed priorityRecoveryReasonCodes. (Verified field paths.)
+      prioritySpreadPending:
+        prs?.publicationRecoveryGate?.prioritySpreadPending ?? null,
+      priorityRecoveryReasonCodes: Array.isArray(
+        prs?.priorityRecoveryReasonCodes,
+      ) ?
+        prs.priorityRecoveryReasonCodes :
+        (prs?.publicationRecoveryGate?.reasonCodes ?? null),
+      recoveryProtocolState: prs?.recoveryProtocolState ?? null,
+    };
+  }
+
   async driveOwnerMembershipReconcile() {
     if (this.ownerMembershipReconcileInFlight === true) {
       this._emitConvergenceDecisionTrace({
@@ -857,6 +895,10 @@ class MembershipPublicationCoordinatorClassStage2 extends
           leadershipTier: leadership.tier,
           missingPublishedCount: missingCount,
           publicationEpoch,
+          ...this._buildPublicationReadinessTraceFields(
+            handoffContract,
+            planningSnapshot,
+          ),
         });
         return false;
       }
@@ -896,6 +938,10 @@ class MembershipPublicationCoordinatorClassStage2 extends
         outcome: timedOut ?
           CONVERGENCE_OUTCOME.RECONCILE_TIMED_OUT :
           CONVERGENCE_OUTCOME.RECONCILE_COMMITTED,
+        ...this._buildPublicationReadinessTraceFields(
+          handoffContract,
+          planningSnapshot,
+        ),
       });
       return true;
     } catch (error) {

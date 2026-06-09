@@ -752,6 +752,12 @@ const ARG_DEBUG_LOGS = '--debug-logs';
 // cluster) telling them to raise the console log level to debug for full stdout
 // capture while keeping logs-table persistence at the configured level.
 const DEBUG_LOGS_ENV_VAR = 'LAGRANGE_DEBUG_LOGS';
+// Enable file-based (non-perturbing) log capture WITHOUT raising the log level —
+// i.e. capture at the normal info volume. Orthogonal to --debug-logs (which is the
+// volume knob); use this for attribution runs that must observe the real,
+// unperturbed behavior.
+const ARG_CAPTURE_LOGS = '--capture-logs';
+const CAPTURE_LOGS_ENV_VAR = 'LAGRANGE_CAPTURE_LOGS';
 
 const CLI = Object.freeze({
   DEFAULT_CONFIG: DEFAULT_CONFIG_PATH,
@@ -766,6 +772,8 @@ const CLI = Object.freeze({
   ARG_NO_DETERMINISTIC_DEBUG,
   ARG_DEBUG_LOGS,
   DEBUG_LOGS_ENV_VAR,
+  ARG_CAPTURE_LOGS,
+  CAPTURE_LOGS_ENV_VAR,
 });
 
 // --- Exit Codes ---

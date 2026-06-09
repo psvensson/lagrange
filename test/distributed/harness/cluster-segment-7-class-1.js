@@ -413,8 +413,11 @@ class Cluster1 {
   // reuse (where the bind reaches the harness host) and to runs that actually
   // turn the volume up.
   _isFileLoggingEnabled() {
+    const requested =
+      process.env.LAGRANGE_DEBUG_LOGS === 'true' ||
+      process.env.LAGRANGE_CAPTURE_LOGS === 'true';
     return (
-      process.env.LAGRANGE_DEBUG_LOGS === 'true' &&
+      requested &&
       this._isContainerReuseEnabled() &&
       Boolean(this._config?.outputDir)
     );
