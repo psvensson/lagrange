@@ -593,6 +593,27 @@ Each record below represents one violated invariant.
    isRetryableControlPlaneError already honors — the phase classifiers
    had always treated the same message as retryable in-phase; the verdict
    was dropped at the phase boundary. Gate round 2 pending.
+7. GATE VALIDATION ROUND 2 (stat-gate-20260610T180803Z, 4 runs, post
+   da8a5d53): 1 SLOW / 3 STALLED by the publication classifier, 0 corrupt.
+   MECHANISM-LEVEL VERDICT: the join-failure cascade is CLOSED — across
+   all 8 post-fix runs the reconnect storms are gone (max ~150 failures
+   vs 15-22k pre-fix), preserved resumes engage on the marked error
+   classes, destructive cleanup is reserved for terminal failures, and
+   the resume budgets fire correctly (run 2: 6 preserved, 4 terminal,
+   2 budget-exhausted). The deferRetry widening was checked for resume-
+   loop pathology and exonerated: round-2 runs 1 and 4 stalled with ZERO
+   join failures of any kind (no resumes, no cleanups, no storms) — a
+   DIFFERENT, pre-existing stall mode: joins alive but creeping, single
+   registration steps in-flight for 4.5+ min under explicit control-plane
+   pressure (run-1 witness: node 11601fe0 stuck at "Registering node
+   endpoint in cluster" from 18:11:03 to run end while all nodes kept
+   ticking; seed busy with partition/CDC work). Topline classifier rates
+   at N=4 sample a MIXTURE of stall modes and bounce accordingly
+   (round 1: 2C/1S/1St; round 2: 1S/3St) — no topline regression or
+   improvement claim is statistically honest; the mechanism claims are.
+   The no-failure pressure-creep mode is the next first-violated
+   invariant and belongs to CL-001 (publication/registration progress
+   under pressure), not this record.
 
 ### Exit Criteria
 
