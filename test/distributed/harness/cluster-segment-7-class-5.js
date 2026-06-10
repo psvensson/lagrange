@@ -1331,6 +1331,37 @@ class Cluster5 extends Cluster4 {
     );
   }
 
+  /**
+   * Resolve the TIME-based no-progress budget for active waits. Unlike the
+   * attempts-based budget above, this is robust to probe latency: attempts
+   * take ~1s on a healthy cluster but ~16s when probes time out, so an
+   * attempts threshold either misfires on healthy quiet (the reason the
+   * scenario disables it for the promotion gate) or never fires under
+   * failure. Elapsed wall time since the last strictly-better progress
+   * snapshot has one meaning in both regimes. Disabled (null) unless
+   * configured — no default budget.
+   * @param {Object} options
+   * @return {number|null}
+   * @private
+   */
+  _resolveActiveWaitNoProgressMaxElapsedMs(options = {}) {
+    if (Number.isFinite(options.noProgressMaxElapsedMs)) {
+      return options.noProgressMaxElapsedMs > ZERO ?
+        Math.floor(options.noProgressMaxElapsedMs) :
+        null;
+    }
+    if (
+      Number.isFinite(
+        this._config?.timeouts?.activeWaitNoProgressMaxElapsedMs,
+      )
+    ) {
+      return this._config.timeouts.activeWaitNoProgressMaxElapsedMs > ZERO ?
+        Math.floor(this._config.timeouts.activeWaitNoProgressMaxElapsedMs) :
+        null;
+    }
+    return null;
+  }
+
   _resolveLoadReadinessStableWindowMs(options = {}) {
     if (Number.isFinite(options.stableWindowMs)) {
       return Math.max(ZERO, Math.floor(options.stableWindowMs));

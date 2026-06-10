@@ -24,6 +24,7 @@ const {
   ACTIVE_POLL_INTERVAL_MS,
   ACTIVE_WAIT_NO_PROGRESS_REASON_CODE,
   ACTIVE_WAIT_NO_PROGRESS_REASON_CYCLES_PREFIX,
+  ACTIVE_WAIT_NO_PROGRESS_REASON_ELAPSED_PREFIX,
   ACTIVE_WAIT_STALLED_MESSAGE_PREFIX,
   CLUSTER_READINESS_MODE_LOAD,
   CLUSTER_STAGE_LOAD_READINESS_STABLE,
@@ -385,6 +386,8 @@ export async function waitForLoadReadinessStability(options = {}) {
   );
   const noProgressMaxAttempts =
     this._resolveActiveWaitNoProgressMaxAttempts(options, timeoutMs);
+  const noProgressMaxElapsedMs =
+    this._resolveActiveWaitNoProgressMaxElapsedMs(options);
   let stableWindowStartedAt = LOAD_READINESS_STABLE_WINDOW_NO_TIMESTAMP;
   let stableWindowStartedSource =
     LOAD_READINESS_STABLE_WINDOW_SOURCE_NONE;
@@ -709,10 +712,21 @@ export async function waitForLoadReadinessStability(options = {}) {
             }),
           },
         );
-        if (
+        const elapsedSinceMeaningfulProgressMs = Math.max(
+          ZERO,
+          elapsedMs - (lastMeaningfulProgressElapsedMs || ZERO),
+        );
+        const noProgressAttemptsBudgetExceeded =
           Number.isInteger(noProgressMaxAttempts) &&
-        noProgressMaxAttempts > ZERO &&
-        readinessProgress.attemptsSinceProgress >= noProgressMaxAttempts
+          noProgressMaxAttempts > ZERO &&
+          readinessProgress.attemptsSinceProgress >= noProgressMaxAttempts;
+        const noProgressElapsedBudgetExceeded =
+          Number.isFinite(noProgressMaxElapsedMs) &&
+          noProgressMaxElapsedMs > ZERO &&
+          elapsedSinceMeaningfulProgressMs >= noProgressMaxElapsedMs;
+        if (
+          noProgressAttemptsBudgetExceeded ||
+          noProgressElapsedBudgetExceeded
         ) {
           const stalledAttempts = readinessProgress.attemptsSinceProgress;
           const stalledProgressSnapshot =
@@ -736,9 +750,14 @@ export async function waitForLoadReadinessStability(options = {}) {
               maxAttempts: noProgressMaxAttempts,
             }),
             reasonCode: ACTIVE_WAIT_NO_PROGRESS_REASON_CODE,
-            stalledReason:
-            ACTIVE_WAIT_NO_PROGRESS_REASON_CYCLES_PREFIX +
-            String(stalledAttempts),
+            stalledReason: noProgressElapsedBudgetExceeded ?
+              ACTIVE_WAIT_NO_PROGRESS_REASON_ELAPSED_PREFIX +
+              String(elapsedSinceMeaningfulProgressMs) :
+              ACTIVE_WAIT_NO_PROGRESS_REASON_CYCLES_PREFIX +
+              String(stalledAttempts),
+            noProgressTrigger: noProgressElapsedBudgetExceeded ?
+              'elapsed' :
+              'attempts',
             failedNoProgress: {
               phase: CLUSTER_STAGE_LOAD_READINESS_WAITING,
               details: {
@@ -746,6 +765,8 @@ export async function waitForLoadReadinessStability(options = {}) {
                 loadReadinessPhase,
                 budgetCoordinatorCycles: noProgressMaxAttempts,
                 budgetAttempts: noProgressMaxAttempts,
+                budgetNoProgressMaxElapsedMs: noProgressMaxElapsedMs,
+                elapsedSinceMeaningfulProgressMs,
                 attempts,
                 elapsedMs,
                 attemptsSinceProgress: stalledAttempts,

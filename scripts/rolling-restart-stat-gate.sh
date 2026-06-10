@@ -54,7 +54,26 @@ if [ -n "${DEBUG_LOGS}" ]; then
   DEBUG_LOGS_JSON="true"
 fi
 
-echo "stat-gate: N=${N} config=${CONFIG} scenario=${SCENARIO} ts=${TS} srcFingerprint=${SRC_FP} debugLogs=${DEBUG_LOGS:-0}"
+# TIME-based no-progress early exit for the active waits (frozen-run cut).
+# A run whose readiness gate makes ZERO strictly-better progress for this
+# long is frozen by the gate's own definition and is classified STALLED —
+# the wait just stops burning the rest of its budget on a determined
+# outcome. Progressing (SLOW) runs reset the clock on every improvement and
+# are never cut. Set NO_PROGRESS_MAX_ELAPSED_MS=0 to disable (full budgets,
+# pre-change behavior).
+NO_PROGRESS_MAX_ELAPSED_MS="${NO_PROGRESS_MAX_ELAPSED_MS:-150000}"
+EFFECTIVE_CONFIG="${CONFIG}"
+TMP_CONFIG=""
+if [ "${NO_PROGRESS_MAX_ELAPSED_MS}" != "0" ]; then
+  TMP_CONFIG="$(mktemp --suffix=.stat-gate-config.json)"
+  jq --argjson ms "${NO_PROGRESS_MAX_ELAPSED_MS}" \
+    '.timeouts = (.timeouts // {}) + {activeWaitNoProgressMaxElapsedMs: $ms}' \
+    "${CONFIG}" > "${TMP_CONFIG}"
+  EFFECTIVE_CONFIG="${TMP_CONFIG}"
+fi
+trap '[ -n "${TMP_CONFIG}" ] && rm -f "${TMP_CONFIG}"; rm -f "${TMP_NDJSON}"' EXIT
+
+echo "stat-gate: N=${N} config=${CONFIG} scenario=${SCENARIO} ts=${TS} srcFingerprint=${SRC_FP} debugLogs=${DEBUG_LOGS:-0} noProgressMaxElapsedMs=${NO_PROGRESS_MAX_ELAPSED_MS}"
 
 stale_runs=0
 for i in $(seq 1 "${N}"); do
@@ -64,7 +83,7 @@ for i in $(seq 1 "${N}"); do
   RUN_LOG="/tmp/stat-gate-${TS}-run${i}.log"
   start_s=$(date +%s)
   node test/distributed/run.js \
-    --config "${CONFIG}" \
+    --config "${EFFECTIVE_CONFIG}" \
     --scenario "${SCENARIO}" \
     --output "${RUN_REPORT}" \
     "${DEBUG_LOGS_ARGS[@]}" \
@@ -89,12 +108,13 @@ for i in $(seq 1 "${N}"); do
       | ($sc.publicationConvergence.missingPublishedCount) as $missing
       | ($sc.details.diagnostics.activeGate.failedNoProgress) as $fnp
       | ($sc.details.diagnostics.activeGate.coordinatorCyclesSinceProgress // 0) as $cyc
+      | ($sc.details.diagnostics.activeGate.state // "") as $gstate
       | {passed:($sc.passed // null), missing:$missing, hardBreaches:$hard,
-         cyclesNoProgress:$cyc, failedNoProgress:$fnp,
+         cyclesNoProgress:$cyc, failedNoProgress:$fnp, gateState:$gstate,
          reason:($sc.dominantReason // "none"), duration:($sc.duration // null),
          class:(if $hard>0 then "CORRUPT"
                 elif $missing==0 then "CONVERGED"
-                elif ($fnp==true or $cyc>=10) then "STALLED"
+                elif ($fnp==true or $cyc>=10 or $gstate=="stalled") then "STALLED"
                 else "SLOW" end)}' "${RUN_REPORT}" 2>/dev/null)
   else
     rec=""
@@ -115,6 +135,7 @@ jq -s '
     timestamp: "'"${TS}"'", config: "'"${CONFIG}"'", scenario: "'"${SCENARIO}"'",
     srcFingerprint: "'"${SRC_FP}"'",
     debugLogs: '"${DEBUG_LOGS_JSON}"',
+    noProgressMaxElapsedMs: '"${NO_PROGRESS_MAX_ELAPSED_MS}"',
     staleSourceRuns: '"${stale_runs}"',
     runs: length,
     classTally: ( [.[].class] | group_by(.) | map({(.[0]|tostring): length}) | add ),
