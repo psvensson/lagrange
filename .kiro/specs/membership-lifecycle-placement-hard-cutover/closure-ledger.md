@@ -18,7 +18,7 @@ Each record below represents one violated invariant.
 | CL-004 | narrowed | readiness-projection | Benchmark load-lane admission must become serve-eligible for at least one admitted writer shortly after benchmark table bootstrap and join handoff. |
 | CL-005 | narrowed | readiness-projection | Partitioning pre-load bootstrap must expose the required replica-bearing quorum and at least one benchmark-ready replica-bearing node before scenario load startup begins. |
 | CL-006 | guarded | membership-join-lifecycle | A retryable failure of a checkpointed join step must not regress durable join progress (destroy join infrastructure or withdraw registered membership rows); only terminal failures may run destructive cleanup. |
-| CL-007 | open | transport-liveness | The ACK-timeout quarantine may sever a connection only on evidence the peer is dead (no inbound traffic within the liveness window) — never for a peer that is demonstrably alive but slow. |
+| CL-007 | guarded | transport-liveness | The ACK-timeout quarantine may sever a connection only on evidence the peer is dead (no inbound traffic within the liveness window) — never for a peer that is demonstrably alive but slow. |
 
 ## CL-001 Published Membership Convergence Under Restart Churn
 
@@ -638,7 +638,7 @@ Each record below represents one violated invariant.
 
 ## CL-007 Transport Quarantine Must Not Sever An Alive Critical Path
 
-- Status: open
+- Status: guarded
 - Concern: transport-liveness
 - Failure Class: formation-livelock
 - First Violated Invariant: The ACK-timeout quarantine may sever a connection
@@ -732,6 +732,18 @@ Each record below represents one violated invariant.
 
 1. Opened 2026-06-10 from the two-agent investigation (artifact mining +
    priority-path code trace) after CL-006 closed the join-failure cascade.
+2. GATE VALIDATION (stat-gate-20260610T192851Z, 4 runs, post b1ec2466):
+   guard engaged 200-476 times/run (alive-but-slow preserved) vs only 4-7
+   real quarantines; reconnect failures 16-1069 vs 15-22k pre-fix; join
+   failures 0-1/run. Exit criteria 1+3 met. Topline 1 CONVERGED / 3 STALLED
+   (0 corrupt): the residual stall re-pins per exit criterion 4 to the seed
+   EVENT-LOOP SATURATION layer — the seed still takes >5s to ACK for
+   minutes (each skip event = one 5s ACK timeout) while executing
+   formation-time rebalancing (321 move executions; planning gate parked at
+   "stabilization"; replica ops to joiners dying at PENDING). Next record
+   should ask WHY the rebalancer executes hundreds of moves during initial
+   formation and what the seed event loop is actually blocked in
+   (CL-003-adjacent).
    The seed event-loop saturation itself (what the seed is busy WITH:
    321 rebalancing-move executions during formation, planning gate parked
    at "stabilization") remains a separate concern — likely CL-003-adjacent
