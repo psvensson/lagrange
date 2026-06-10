@@ -17,6 +17,7 @@ Each record below represents one violated invariant.
 | CL-003 | guarded | placement-priority-spread | Priority control-plane partitions must recover to required distinct-node spread before non-priority closure is considered complete. |
 | CL-004 | narrowed | readiness-projection | Benchmark load-lane admission must become serve-eligible for at least one admitted writer shortly after benchmark table bootstrap and join handoff. |
 | CL-005 | narrowed | readiness-projection | Partitioning pre-load bootstrap must expose the required replica-bearing quorum and at least one benchmark-ready replica-bearing node before scenario load startup begins. |
+| CL-006 | open | membership-join-lifecycle | A retryable failure of a checkpointed join step must not regress durable join progress (destroy join infrastructure or withdraw registered membership rows); only terminal failures may run destructive cleanup. |
 
 ## CL-001 Published Membership Convergence Under Restart Churn
 
@@ -484,3 +485,109 @@ Each record below represents one violated invariant.
 2. When `seven-node-table-partition-distribution` goes red with this helper
    timeout, it should map here even if the currently archived exact reproducer
    comes from a sibling partitioning scenario.
+
+## CL-006 Retryable Join-Step Failure Must Not Regress Durable Join Progress
+
+- Status: open
+- Concern: membership-join-lifecycle
+- Failure Class: formation-livelock
+- First Violated Invariant: A RETRYABLE failure of a checkpointed join step
+  must not regress durable join progress — it must not destroy join
+  infrastructure (router, message group, control-plane services) nor withdraw
+  already-registered membership rows. Only a TERMINAL failure (resume budget
+  exhausted, non-retryable error) may run the destructive cleanup.
+- Authoritative Owner: join lifecycle — `JoinCoordinator` +
+  `JoinSessionStore` checkpoints (src/bootstrap/join-coordinator.js,
+  join-session-store.js), with `Membership_Lifecycle_Controller` intents
+  (`JOIN_ADMISSION` / `RESTART_REENTRY`; `REMOVAL` is a separate deliberate
+  intent, not a failure path —
+  src/control-plane/membership-lifecycle-controller.js:46-51).
+- Authoritative State: the durable join-session checkpoint sequence
+  SESSION_CREATED → SEED_CONTACTED → JOIN_INFRASTRUCTURE_READY →
+  MEMBERSHIP_WRITTEN → READY_LEASE_ASSIGNED → FINALIZED
+  (join-session-store.js:8-24; CHECKPOINT_REGRESSION is already a defined
+  store error).
+- Allowed Evidence: join-session checkpoint records, joining-phase logs,
+  registration write outcomes, failed-join cleanup step results, peer
+  transport evidence bounded to the cleanup window.
+- Forbidden Promotion Inputs: transport storm volume as a root cause (it is
+  a downstream symptom), gate-side publication labels without scenario-phase
+  context.
+- Convergence Trigger: retryable-resume re-entry at the failed checkpoint
+  segment with infrastructure intact.
+- Stable Witness: per-attempt join checkpoint reached + whether cleanup ran +
+  external-admission open/closed at resume + peer reconnect-failure rate.
+- Entry Gate: `scenario.load-readiness` during initial formation.
+- Current Symptom (stat-gate-20260610T155735Z runs 2+3, identical signature
+  on different joiner pairs; full logs preserved): two joiners fail the
+  MEMBERSHIP_WRITTEN step simultaneously at +115s ("Distributed operation
+  failed due to participant failures" — already classified RETRYABLE by
+  control-plane-error-classification.js:16), then `handleJoiningFailure`
+  (node-joining-admission-readiness.js:450) runs the FULL destructive
+  cleanup BEFORE `resolveRetryableJoinResumeDecision` is consulted:
+  `cleanupFailedJoin` (join-cleanup-handler.js:104-160) withdraws node and
+  service entries (~2min of pressured distributed deletes), stops the
+  router (peers detonate 15k reconnect failures in 10s — symptom), and
+  drives the lifecycle machine to STOPPED. The resume loop then re-enters
+  with `allowResumeLatest`, but `JOIN_INFRASTRUCTURE_READY.shouldRerun =
+  !hasJoinInfrastructureReady()` (node-joining-admission-readiness.js:327)
+  now reruns everything from scratch with external admission closed again
+  (connect-websocket-phase.js:229) — a formation livelock of period ~4min
+  against a 300s gate budget.
+- Scope: 5-node initial formation under the rolling-restart scenario's
+  load-readiness gate; restart churn likely shares the path via
+  RESTART_REENTRY.
+- Next Falsification Step: prove the counteraction directly — instrument or
+  unit-test that a retryable MEMBERSHIP-step failure currently destroys the
+  JOIN_INFRASTRUCTURE_READY checkpoint's effects and re-opens the
+  closed-admission window; then make cleanup severity-aware (retryable →
+  preserve infrastructure + registered rows, resume re-enters at the failed
+  segment; terminal/budget-exhausted → existing full cleanup) and show the
+  targeted repro goes green.
+- Required Guard: a regression test that a retryable failure injected into
+  the MEMBERSHIP segment (a) leaves the router accepting connections,
+  (b) leaves registered service rows in place, (c) resumes at
+  MEMBERSHIP_WRITTEN without rerunning earlier segments, and (d) full
+  cleanup still runs when the resume budget is exhausted
+  (RETRYABLE_FAILURE_RESUME_EXHAUSTED,
+  node-joining-admission-readiness.js:640).
+
+### Evidence
+
+1. CL-001 evidence item 6 holds the timestamped run-2 chain (16:08:08.8
+   simultaneous registration failures → 16:08:08-16:10:08 entry-withdrawal
+   deletes → 16:10:08-19 router stops → 16:10:10 peer reconnect burst →
+   16:10:20 resume from zero with admission closed → budget expiry).
+2. The error is in RETRYABLE_CONTROL_PLANE_ERROR_FRAGMENTS
+   (control-plane-error-classification.js:16) and the resume loop itself
+   labels it "Resuming join session after retryable control-plane failure"
+   — the system already KNOWS the failure is retryable when it destroys
+   the state a retry needs.
+3. The checkpoint store defines CHECKPOINT_REGRESSION as an error
+   (join-session-store.js:43-44) while the cleanup handler regresses the
+   checkpointed reality unconditionally (join-cleanup-handler.js:104 runs
+   before the resume decision at node-joining-admission-readiness.js:451-457).
+4. The cutover owner model already designates removal as a deliberate
+   lifecycle intent (MEMBERSHIP_LIFECYCLE_INTENT.REMOVAL) distinct from
+   join/restart re-entry — failed-join entry withdrawal is the legacy
+   node-joining layer acting as a second, conflicting owner of removal.
+
+### Exit Criteria
+
+1. A retryable MEMBERSHIP-step failure resumes at the failed segment with
+   infrastructure and registered rows intact (targeted repro green).
+2. Peer reconnect-failure bursts during formation drop to backoff-bounded
+   rates (no 10s detonations) in the stat-gate runs.
+3. The formation load-readiness gate passes within budget in the
+   rolling-restart scenario so the restart phase is actually exercised.
+4. Terminal failures still withdraw entries exactly once (no zombie rows).
+
+### Notes
+
+1. Opened 2026-06-10 from stat-gate-20260610T155735Z artifact verification.
+   The transport storm and seed probe timeouts previously attributed to
+   rejoin overload are downstream symptoms of this record's invariant.
+2. Do NOT build a new retry/preservation layer: the checkpointed resume
+   (JoinCoordinator/JoinSessionStore), the retryable classification, and
+   the lifecycle-controller intents already exist — the fix is to stop the
+   legacy cleanup from counteracting them.
