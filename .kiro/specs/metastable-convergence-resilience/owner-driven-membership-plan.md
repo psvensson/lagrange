@@ -100,6 +100,15 @@ make them scale-safe — not to build from scratch.
 - [ ] **A5 — Validate** against the deterministic 3-node reproducer + the
   correctness/progress gate: STALLED→CONVERGED, corruptCount stays 0, no
   `PUBLICATION_DRAIN_DETERMINISTIC` invariant breach.
+  - PARTIAL (stat-gate-20260610T155735Z, 4 runs, flag ON, clean containers):
+    2 CONVERGED / 2 STALLED, **0 corrupt, 0 stale-source**. The A-workstream
+    MECHANICS are validated: driver alive on all 5 nodes (243-371 ticks),
+    seed leader-resolved `tier0-raft-live`, owner view correct
+    (`missingPublishedCount=0` — rejoiners genuinely not observed-active).
+    The remaining stalls are NOT the driver: the causal-model analyzer pins
+    `publication_ack_closed` (CL-001, rejoiner re-entry under seed overload;
+    seed probe-timeout, driver tick gaps 20-80s). A5 stays open until the
+    rejoin-layer stall class is closed; do not re-validate the driver.
 
 ## Workstream B — Single-partition guarantee for the membership row (scale-safety)
 

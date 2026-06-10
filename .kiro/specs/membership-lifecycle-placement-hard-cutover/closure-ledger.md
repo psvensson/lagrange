@@ -66,6 +66,27 @@ Each record below represents one violated invariant.
   reach a stronger earlier witness with publication epoch `2`, published
   status `PUBLISHED`, selected snapshot coverage `5/5`, and zero missing
   published nodes before the scenario later timed out.
+6. Stat-gate `stat-gate-20260610T155735Z` (4 runs, owner-driven flag ON, clean
+  containers, srcFingerprint 85565ecae3a130c4): 2 CONVERGED / 2 STALLED,
+  0 corrupt, 0 stale-source. In STALLED run 2 the causal-model analyzer named
+  exactly ONE failed invariant — `publication_ack_closed`
+  (class `publication_ack_blocked`, owner `topology_publication_owner`) —
+  while `priority_recovery_classified` PASSED, i.e. the first violated
+  invariant was THIS record, not CL-003. Witness of the owner-vs-gate
+  divergence captured live: the seed's convergence decision trace held
+  `leadershipTier=tier0-raft-live, missingPublishedCount=0, decision=skip
+  (no-deficit)` for the entire stall while the gate reported
+  `missingPublished=3..4` and `publishedActiveNodeIds=[seed only]`; the
+  seed's driver tick gaps degraded from ~5-6s to 20-80s (event-loop delay
+  under overload) and the harness probe timed out against the seed on all
+  18 attempts (`readiness_probe_timeout`, admin lane reset). Full per-node
+  logs preserved under
+  `test-output/reports/.playback/stat-gate-20260610T155735Z-run{2,3}/.full-logs/`.
+  Reading: the owner driver is alive, leader-resolved, and correct by its
+  own observation (rejoiners never became observed-active, so there was no
+  deficit for it to drive); the violation is rejoiners failing to RE-ENTER
+  observed-active against an overloaded seed — rejoin liveness, not
+  owner-write liveness.
 
 ### Exit Criteria
 
@@ -220,6 +241,22 @@ Each record below represents one violated invariant.
   canonical bootstrap topology with the retiring source replica excluded, and
   that both rebalance create dispatch and durable rejoin restore planning read
   the same shared replicated-service topology helper.
+9. CANDIDATE LEAD (2026-06-10, code-read verified, load-bearing status NOT yet
+  proven): `MovePlanner.analyzePrioritySpread`
+  (src/rebalancer/move-planner-state-methods.js:402-404) still derives
+  `requiredDistinctNodeCount = min(3, readyNodes.length)` from
+  ready/available nodes only — the same self-defeating ready-only
+  denominator that 14bbe56a fixed in
+  `getControlPlanePrioritySpreadBlocker` (cohort denominator). With
+  readyNodes=1 the planner reports `satisfied=true` and plans no spread
+  move. `getAvailableNodes` (unified-rebalancer-segment-2.js:332)
+  additionally filters by readiness dimension AND published membership, so
+  rejoined-but-not-yet-eligible nodes are excluded both as a denominator
+  and as targets. Falsify by checking, in a CL-003 red run, whether the
+  planner ever planned a spread move for the gap partition; if it planned
+  and created one, the lead shifts to target eligibility
+  (CONTROL_PLANE_RECOVERY_ELIGIBLE,
+  control-plane-readiness-service-segment-2.js:440-470) / op completion.
 
 ### Exit Criteria
 
