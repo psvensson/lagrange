@@ -101,14 +101,20 @@ make them scale-safe — not to build from scratch.
   correctness/progress gate: STALLED→CONVERGED, corruptCount stays 0, no
   `PUBLICATION_DRAIN_DETERMINISTIC` invariant breach.
   - PARTIAL (stat-gate-20260610T155735Z, 4 runs, flag ON, clean containers):
-    2 CONVERGED / 2 STALLED, **0 corrupt, 0 stale-source**. The A-workstream
-    MECHANICS are validated: driver alive on all 5 nodes (243-371 ticks),
-    seed leader-resolved `tier0-raft-live`, owner view correct
-    (`missingPublishedCount=0` — rejoiners genuinely not observed-active).
-    The remaining stalls are NOT the driver: the causal-model analyzer pins
-    `publication_ack_closed` (CL-001, rejoiner re-entry under seed overload;
-    seed probe-timeout, driver tick gaps 20-80s). A5 stays open until the
-    rejoin-layer stall class is closed; do not re-validate the driver.
+    2 CONVERGED / 2 STALLED by the publication-only classifier, **0 corrupt,
+    0 stale-source**. The A-workstream MECHANICS are validated: driver alive
+    on all 5 nodes (seed: 15 real ticks, gaps degrading 5s→20-80s under
+    event-loop load; non-leader high trace counts are mostly the ~6/s
+    defer path, not driver ticks), seed leader-resolved `tier0-raft-live`,
+    owner view correct (`missingPublishedCount=0` — the missing nodes
+    genuinely never completed registration). CORRECTED 2026-06-10: all 4
+    runs failed the scenario at load-readiness during INITIAL FORMATION —
+    no run reached the restart phase. The stall class is the join-failure
+    cascade (simultaneous multi-participant registration failure → full
+    failed-join cleanup removes entries + stops router → peer reconnect
+    burst → re-join from zero past the gate budget) — see CL-001 ledger
+    evidence 6 for the timestamped chain. A5 cannot pass until formation
+    closes; do not re-validate the driver.
 
 ## Workstream B — Single-partition guarantee for the membership row (scale-safety)
 

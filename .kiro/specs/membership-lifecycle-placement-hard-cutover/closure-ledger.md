@@ -67,26 +67,48 @@ Each record below represents one violated invariant.
   status `PUBLISHED`, selected snapshot coverage `5/5`, and zero missing
   published nodes before the scenario later timed out.
 6. Stat-gate `stat-gate-20260610T155735Z` (4 runs, owner-driven flag ON, clean
-  containers, srcFingerprint 85565ecae3a130c4): 2 CONVERGED / 2 STALLED,
-  0 corrupt, 0 stale-source. In STALLED run 2 the causal-model analyzer named
-  exactly ONE failed invariant — `publication_ack_closed`
-  (class `publication_ack_blocked`, owner `topology_publication_owner`) —
-  while `priority_recovery_classified` PASSED, i.e. the first violated
-  invariant was THIS record, not CL-003. Witness of the owner-vs-gate
-  divergence captured live: the seed's convergence decision trace held
-  `leadershipTier=tier0-raft-live, missingPublishedCount=0, decision=skip
-  (no-deficit)` for the entire stall while the gate reported
-  `missingPublished=3..4` and `publishedActiveNodeIds=[seed only]`; the
-  seed's driver tick gaps degraded from ~5-6s to 20-80s (event-loop delay
-  under overload) and the harness probe timed out against the seed on all
-  18 attempts (`readiness_probe_timeout`, admin lane reset). Full per-node
-  logs preserved under
-  `test-output/reports/.playback/stat-gate-20260610T155735Z-run{2,3}/.full-logs/`.
-  Reading: the owner driver is alive, leader-resolved, and correct by its
-  own observation (rejoiners never became observed-active, so there was no
-  deficit for it to drive); the violation is rejoiners failing to RE-ENTER
-  observed-active against an overloaded seed — rejoin liveness, not
-  owner-write liveness.
+  containers, srcFingerprint 85565ecae3a130c4): 2 CONVERGED / 2 STALLED by the
+  gate's publication-only classifier, 0 corrupt, 0 stale-source. CORRECTED
+  READING (2026-06-10, verified against stage timelines + per-node full logs):
+  **all four runs failed the scenario at `scenario.load-readiness` during
+  INITIAL formation — no run ever reached the rolling-restart phase**, so the
+  CONVERGED/STALLED labels describe publication convergence only, and the
+  earlier "rejoiner re-entry" framing of this evidence was wrong (no node ever
+  restarted). The verified run-2 causal chain, all timestamps from
+  `test-output/reports/.playback/stat-gate-20260610T155735Z-run{2,3}/.full-logs/`:
+  (a) joiners start 16:06:12; two of four (8be8d30f, ebc4aa0b) fail their
+  join SIMULTANEOUSLY at 16:08:08.8 — "Message group service registration
+  returned non-success: Distributed operation failed due to participant
+  failures" — the join-time registration is a multi-participant distributed
+  write whose participants include the OTHER concurrently-joining nodes;
+  (b) each failed joiner runs failed-join cleanup that REMOVES its node and
+  service entries (the distributed deletes themselves take ~2min under
+  pressure, 16:08:08→16:10:08) and then STOPS ITS ROUTER (16:10:08-19);
+  (c) the simultaneous router stops detonate the peers' reconnect burst —
+  15,047 "WebSocket connection closed before open" failures in one 10s
+  bucket at 16:10:10 on node 11601fe0 (17,051 total; 35a891b8 similar) —
+  i.e. the transport storm is a SYMPTOM of the cleanup, not a cause; the
+  steady-state reconnect path has working exponential backoff (1 failure
+  per 20-40s before the detonation);
+  (d) the joiners resume ("Resuming join session after retryable
+  control-plane failure") with external admission CLOSED again
+  (`connect-websocket-phase.js:229`, opened only at the end of
+  `initializeJoinInfrastructure`, `node-joining-admission-readiness.js:214`),
+  re-register from scratch, and the 300s gate budget expires mid-retry.
+  Run 3 shows the identical signature on a different joiner pair
+  (11601fe0, 35a891b8). Throughout, the seed's owner driver was alive,
+  tier0-raft-live, `missingPublishedCount=0` — CORRECT, because the failed
+  joiners genuinely never completed registration (and their cleanup
+  actively deleted what they had registered). Candidate first violated
+  invariant (new record material, not CL-003): join-time service
+  registration must either complete or be resumable WITHOUT identity
+  teardown under formation concurrency — full cleanup + re-entry-from-zero
+  is a formation livelock of period ~4min against a 300s budget. NOTE
+  before any fix: the hard-cutover Membership_Lifecycle_Controller design
+  ("restart = re-entry" into the lifecycle state machine) is the DESIGNED
+  owner of exactly this; the failed-join full-cleanup path is legacy
+  node-joining behavior — do not build a parallel retry/preservation
+  mechanism.
 
 ### Exit Criteria
 
