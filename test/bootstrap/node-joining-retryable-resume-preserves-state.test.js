@@ -199,6 +199,54 @@ test('CL-006: re-running the CDC subscription on a preserved resume does ' +
   }
 });
 
+test('CL-006: a bare join HTTP request timeout is resume-eligible and ' +
+  'preserves join state', async (t) => {
+  initializeTestEnvironment();
+
+  // The exact failure shape from stat-gate-20260610T172830Z runs 1/3/4:
+  // httpPost's abort path threw a bare Error whose message matches no
+  // retryable fragment, so querying_state failures took the destructive
+  // path. The throw site now marks it deferRetry — which the resume
+  // classification honors.
+  const timeoutError = new Error('Request timeout after 8092ms');
+  timeoutError.deferRetry = true;
+
+  const {service, spies} = buildResumableJoinHarness({
+    failures: [timeoutError],
+  });
+
+  const result = await service.join();
+
+  t.equal(result.success, true,
+    'join should succeed on the resume attempt after a request timeout');
+  t.equal(spies.cleanupFailedJoinCalls, 0,
+    'a request timeout must not run the destructive cleanup');
+
+  // And the real throw site produces the marker: drive httpPost into its
+  // abort path via a fetch that never resolves before the timeout.
+  const {service: httpService} = buildResumableJoinHarness({});
+  httpService.config.httpTimeoutMs = 5;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (url, options) => new Promise((resolve, reject) => {
+    options.signal.addEventListener('abort', () => {
+      const abortError = new Error('aborted');
+      abortError.name = 'AbortError';
+      reject(abortError);
+    });
+  });
+  try {
+    await httpService.httpPost('http://localhost:1/x', {});
+    t.fail('httpPost should have timed out');
+  } catch (thrown) {
+    t.match(thrown.message, /Request timeout after \d+ms/,
+      'httpPost abort path should surface the canonical timeout message');
+    t.equal(thrown.deferRetry, true,
+      'httpPost timeout must carry deferRetry so the resume preserves state');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('CL-006: resume attempt-budget exhaustion runs the full destructive ' +
   'cleanup on the final failure', async (t) => {
   initializeTestEnvironment();

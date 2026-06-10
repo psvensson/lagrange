@@ -362,7 +362,17 @@ class NodeJoiningServiceSegment5 extends NodeJoiningPublicationActivation {
       clearTimeout(timeoutId);
       if (error.name === JOINING_ERROR_NAME.ABORT) {
         const httpTimeoutError = JOINING_ERROR_MSG.httpTimeout;
-        throw new Error(httpTimeoutError(timeoutMs));
+        const timeoutError = new Error(httpTimeoutError(timeoutMs));
+        // A request timeout is transient by nature. Mark it so the
+        // join-level retryable-resume classification preserves join state
+        // (CL-006) instead of running the destructive cleanup — phases with
+        // their own classifiers (seed contact, message-group registration)
+        // already treated this message as retryable in-phase, but the
+        // verdict was dropped once the bare error crossed the phase
+        // boundary (witness: querying_state failures in
+        // stat-gate-20260610T172830Z runs 1/3/4).
+        timeoutError.deferRetry = true;
+        throw timeoutError;
       }
       throw error;
     }

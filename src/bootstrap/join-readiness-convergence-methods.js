@@ -283,6 +283,11 @@ class JoinReadinessEvaluatorConvergenceMethods {
       `after ${timeoutMs}ms`,
     );
     error.code = LOCAL_STR_ELZSM;
+    // Readiness not converging YET is transient: the node's join
+    // infrastructure is fully up by this segment, so the retryable resume
+    // (CL-006) should preserve it and re-enter the readiness wait rather
+    // than tear down and re-register under the same pressure.
+    error.deferRetry = true;
     error.joinReadiness = {
       reasons: terminalEvaluation.reasons,
       requiredSchemaVersion:
