@@ -286,7 +286,28 @@ class UnifiedRebalancerPriorityReadinessMethods {
         .map((node) => node?.node_id || node?.nodeId || '')
         .filter(Boolean),
     );
-    const requiredDistinctNodeCount = Math.min(NUM.THREE, readyNodeIds.size);
+    // The spread target must reflect the INTENDED cluster cohort (forming/joining
+    // members included, admission-blocked/dead excluded), NOT only nodes already
+    // ACTIVE/ready. Deriving it from ready nodes alone is self-defeating during
+    // formation: with one ACTIVE node the target collapses to 1, the spread reads
+    // "satisfied", this blocker returns null, the topology-settling gate's
+    // priority-recovery bypass never engages, the spread is never planned — so
+    // nodes never receive replicas and never become ACTIVE (the formation
+    // chicken-and-egg). resolvePriorityRecoveryActiveNodeCohort is the existing
+    // intended-minus-admission-blocked set; max() with readyNodeIds keeps ACTIVE
+    // nodes as a floor so behaviour is never worse than ready-only when the
+    // cohort is unavailable, and never counts a dead node (cohort excludes them).
+    const cohortActiveNodeIds =
+      resolvePriorityRecoveryActiveNodeCohort(planningSnapshot).activeNodeIds;
+    const cohortNodeIds = new Set(
+      (Array.isArray(cohortActiveNodeIds) ? cohortActiveNodeIds : []).filter(
+        (nodeId) => typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
+      ),
+    );
+    const requiredDistinctNodeCount = Math.min(
+      NUM.THREE,
+      Math.max(readyNodeIds.size, cohortNodeIds.size),
+    );
     if (requiredDistinctNodeCount <= NUM.ONE) {
       return null;
     }
