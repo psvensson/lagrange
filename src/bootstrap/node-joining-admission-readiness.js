@@ -159,6 +159,25 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
       getCdcIntegrationService: () => self.cdcIntegrationService,
     };
   }
+  /**
+   * When a preserved retryable resume skips the INFRASTRUCTURE checkpoint
+   * (the infrastructure survived the failed attempt), the lifecycle
+   * transitions that segment owns (CONNECTING→DISCOVERING→JOINING) are
+   * skipped with it — leaving completeSuccessfulJoin's JOINING→READY
+   * transition invalid. Catch the machine up before the MEMBERSHIP segment
+   * runs. No-op on a fresh pass where the infrastructure segment ran.
+   * Closure record CL-006.
+   * @return {void}
+   * @private
+   */
+  advanceLifecycleAfterResumedInfrastructure() {
+    if (this.lifecycleStateMachine.getState() === NodeState.CONNECTING) {
+      this.lifecycleStateMachine.transition(NodeState.DISCOVERING);
+    }
+    if (this.lifecycleStateMachine.getState() === NodeState.DISCOVERING) {
+      this.lifecycleStateMachine.transition(NodeState.JOINING);
+    }
+  }
   async runJoinInfrastructurePhases(startupPipelineRunner, joinPlan) {
     const infraPhases = joinPlan.segments[JOIN_PLAN_SEGMENT.INFRASTRUCTURE];
     await startupPipelineRunner.run({
@@ -337,6 +356,7 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
         phase: JOIN_SESSION_PHASE.MEMBERSHIP_WRITTEN,
         segment: JOIN_PLAN_SEGMENT.MEMBERSHIP,
         run: async () => {
+          this.advanceLifecycleAfterResumedInfrastructure();
           await startupPipelineRunner.run({
             phases: joinPlan.segments[JOIN_PLAN_SEGMENT.MEMBERSHIP],
           });
@@ -447,14 +467,22 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
           lifecycleStateMachine: this.lifecycleStateMachine,
         };
       } catch (error) {
-        const failureResult = await this.handleJoiningFailure(error);
+        // CL-006: decide resume-vs-terminal BEFORE failure handling so a
+        // retryable failure preserves the durable join progress (registered
+        // rows, router, message groups) that the checkpointed re-entry
+        // depends on. Destructive cleanup runs only on the terminal path.
         const resumeDecision = this.resolveRetryableJoinResumeDecision(
           error,
-          failureResult,
+          null,
           attempt,
           resumePolicy,
         );
-        if (resumeDecision.action !== RETRYABLE_JOIN_RESUME_ACTION.RESUME) {
+        const preserveForResume =
+          resumeDecision.action === RETRYABLE_JOIN_RESUME_ACTION.RESUME;
+        const failureResult = await this.handleJoiningFailure(error, {
+          preserveForResume,
+        });
+        if (!preserveForResume) {
           return failureResult;
         }
         const delayMs = this.computeRetryableJoinResumeDelayMs(

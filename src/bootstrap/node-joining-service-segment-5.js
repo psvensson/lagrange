@@ -408,11 +408,12 @@ class NodeJoiningServiceSegment5 extends NodeJoiningPublicationActivation {
   /**
    * Handle joining failure.
    * @param {Error} error - The error that caused failure.
+   * @param {Object} [options] - Severity options (preserveForResume).
    * @return {Object} Failure result.
    * @private
    */
-  async handleJoiningFailure(error) {
-    return this.joinCleanupHandler.handleJoiningFailure(error);
+  async handleJoiningFailure(error, options = {}) {
+    return this.joinCleanupHandler.handleJoiningFailure(error, options);
   }
   /**
    * Clean up a failed join in reverse phase order.

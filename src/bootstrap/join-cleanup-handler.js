@@ -98,10 +98,24 @@ class JoinCleanupHandler {
 
   /**
    * Handle a joining failure: log, cleanup, emit event, return result.
+   *
+   * When `options.preserveForResume` is true the caller has already decided
+   * to re-enter the checkpointed join (retryable failure within the resume
+   * budget): the destructive cleanup is SKIPPED so the durable join progress
+   * survives — registered membership rows stay in place, the router keeps
+   * accepting connections, and `hasJoinInfrastructureReady()` lets the
+   * resume skip straight to the failed segment. Only the lifecycle machine
+   * is driven to STOPPED, which the resume loop's reset path expects.
+   * Destructive cleanup (entry withdrawal, message-group teardown, router
+   * stop, service cleanup) and the FAILED event remain reserved for
+   * terminal failures. Closure record CL-006.
    * @param {Error} error - The error that caused the failure.
+   * @param {Object} [options]
+   * @param {boolean} [options.preserveForResume]
    * @return {Promise<Object>} Joining failure result.
    */
-  async handleJoiningFailure(error) {
+  async handleJoiningFailure(error, options = {}) {
+    const preserveForResume = options.preserveForResume === true;
     const failedPhase = this.delegates.getPhase();
     this.delegates.setPhase(JOINING_PHASE.FAILED);
     this.delegates.setLastError(error);
@@ -113,9 +127,28 @@ class JoinCleanupHandler {
       nodeId: this.nodeId,
       phase: failedPhase,
       duration,
+      preserveForResume,
       error: error.message,
       stack: error.stack,
     });
+
+    if (preserveForResume) {
+      this.transitionJoinCleanupLifecycleToStopped(
+        this.delegates.getLifecycleStateMachine(),
+        logger,
+      );
+      return {
+        success: false,
+        nodeId: this.nodeId,
+        duration,
+        error: error.message,
+        phase: failedPhase,
+        retryable: error?.retryable === true,
+        retryAfterMs: Number.isFinite(error?.retryAfterMs) ?
+          Math.max(NUM.ZERO, Math.floor(error.retryAfterMs)) :
+          NUM.ZERO,
+      };
+    }
 
     // Execute structured reverse-order cleanup before generic cleanup
     const bootstrapResponse =

@@ -228,7 +228,20 @@ class NodeJoiningServiceSegment4 extends NodeJoiningServiceSegment3 {
       CDC_EVENT.UPDATE,
       CDC_EVENT.DELETE,
       CDC_EVENT.UPSERT,
-    ]; // Periodic diagnostic emission during CDC recovery
+    ];
+    // A preserved retryable resume (CL-006) re-runs this subscription
+    // against the SURVIVING cdcIntegrationService — drop the previous
+    // attempt's handler first so resumes do not accumulate duplicates.
+    if (this._joinCdcEventHandler) {
+      for (const eventType of eventTypes) {
+        this.cdcIntegrationService.removeListener(
+          eventType,
+          this._joinCdcEventHandler,
+        );
+      }
+    }
+    this._joinCdcEventHandler = cdcEventHandler;
+    // Periodic diagnostic emission during CDC recovery
     // (Requirement 8.2). Cleared in finally block so it
     // is always cleaned up on success, failure, or timeout.
     const diagnosticIntervalMs = CDC_REESTABLISHMENT.DIAGNOSTIC_INTERVAL_MS;
