@@ -17,7 +17,8 @@ Each record below represents one violated invariant.
 | CL-003 | guarded | placement-priority-spread | Priority control-plane partitions must recover to required distinct-node spread before non-priority closure is considered complete. |
 | CL-004 | narrowed | readiness-projection | Benchmark load-lane admission must become serve-eligible for at least one admitted writer shortly after benchmark table bootstrap and join handoff. |
 | CL-005 | narrowed | readiness-projection | Partitioning pre-load bootstrap must expose the required replica-bearing quorum and at least one benchmark-ready replica-bearing node before scenario load startup begins. |
-| CL-006 | open | membership-join-lifecycle | A retryable failure of a checkpointed join step must not regress durable join progress (destroy join infrastructure or withdraw registered membership rows); only terminal failures may run destructive cleanup. |
+| CL-006 | guarded | membership-join-lifecycle | A retryable failure of a checkpointed join step must not regress durable join progress (destroy join infrastructure or withdraw registered membership rows); only terminal failures may run destructive cleanup. |
+| CL-007 | open | transport-liveness | The ACK-timeout quarantine may sever a connection only on evidence the peer is dead (no inbound traffic within the liveness window) — never for a peer that is demonstrably alive but slow. |
 
 ## CL-001 Published Membership Convergence Under Restart Churn
 
@@ -634,3 +635,104 @@ Each record below represents one violated invariant.
    (JoinCoordinator/JoinSessionStore), the retryable classification, and
    the lifecycle-controller intents already exist — the fix is to stop the
    legacy cleanup from counteracting them.
+
+## CL-007 Transport Quarantine Must Not Sever An Alive Critical Path
+
+- Status: open
+- Concern: transport-liveness
+- Failure Class: formation-livelock
+- First Violated Invariant: The ACK-timeout quarantine may sever a connection
+  only on evidence the peer is DEAD (no inbound traffic within the liveness
+  window) — never for a peer that is demonstrably alive but slow. Severing an
+  alive path converts slow into broken ("never break, only slow") and, during
+  formation, simultaneously cuts every joiner off from the saturated seed.
+- Authoritative Owner: message router connection lifecycle
+  (src/transport/message-router-reconnect-behaviors.js
+  quarantineConnectionAfterAckTimeout).
+- Authoritative State: per-connection ackTimeoutStreak/lastAckAt + per-node
+  inbound-activity timestamps (router.nodeInboundActivityAt).
+- Allowed Evidence: transport logs (quarantine/skip warns with
+  lastInboundAgoMs), per-node reconnect-failure rates, join-step timelines.
+- Forbidden Promotion Inputs: ACK latency alone as death evidence; reconnect
+  storms as a root cause (they are this record's symptom).
+- Convergence Trigger: inbound traffic from the peer within the liveness
+  window resets the death verdict; ws close/error events still tear down
+  truly closed sockets.
+- Stable Witness: count of quarantines vs liveness-skips per run; join-step
+  durations; ROUTER_CONNECTION_CLOSED occurrence rate during formation.
+- Entry Gate: scenario.load-readiness during initial formation.
+- Current Symptom (stat-gate-20260610T180803Z-run1, zero join failures, 4
+  creeping joiners): ALL FOUR joiners quarantined their connection TO THE
+  SEED within one second (~18:08:25), ~1s after starting registration
+  writes — ACK_TIMEOUT_QUARANTINE_THRESHOLD=2 at MESSAGE_TIMEOUT_MS=5000
+  under formation load (the seed's event loop measurably stalls 20-80s; no
+  ACK leaves within 5s regardless of priority — join writes are CRITICAL
+  end-to-end and the outbound queue schedules CRITICAL first, verified, so
+  priority starvation is REFUTED as the cause). Downstream of the
+  quarantine: registration sub-steps fail at 85-88s with
+  ROUTER_CONNECTION_CLOSED/participant-failures, snapshot queries storm
+  (435 pressure deferrals on the worst joiner), the seed's replica-op
+  dispatches to "reconnecting" joiners die at PENDING with shed budgets
+  exhausted, and the quarantine repeats after each reconnect (streak resets
+  on the replacement connection — churn loop acknowledged in code comments).
+- Scope: 5-node formation; the same hair-trigger applies to any
+  load-asymmetric topology (one saturated hub).
+- Next Falsification Step: rerun the stat gate with the liveness guard and
+  compare (a) quarantine count (expect ~0 with skips logged instead),
+  (b) join-step durations, (c) ROUTER_CONNECTION_CLOSED rate; confirm
+  truly-dead-peer quarantine still fires (unit-covered).
+- Required Guard: unit tests proving (1) fresh inbound activity or recent
+  ACK skips the teardown while the message still fails, (2) silent peers
+  quarantine exactly as before, (3) window=0 restores pre-change behavior.
+  (Landed with the fix: test/transport/message-router-quarantine-liveness-guard.test.js.)
+
+### Evidence
+
+1. All-joiners-simultaneous quarantine witness: 4/4 joiners logged
+   "Quarantining target connection after ACK timeout" targeting the seed
+   at 18:08:25.6-25.9 in stat-gate-20260610T180803Z-run1, ~1s after their
+   registration writes began. The seed logged ZERO quarantines (its
+   inbound side was fine) and the harness probes timed out against it
+   (event-loop saturation, driver tick gaps 20-80s measured earlier).
+2. Priority starvation REFUTED by code trace: join writes carry
+   deliveryPriority='critical' end-to-end
+   (node-registration-owner-constants.js:30, preserved by
+   normalizeDeliveryPriority cdc-integration-service-shared.js:285-289),
+   the outbound queue schedules CRITICAL first
+   (message-router-shared-stage-2.js:596-642), and the pressure governor
+   always admits critical work (pressure-governor.js:380-382). The seed is
+   slow to ACK because its EVENT LOOP is saturated, not because join
+   traffic queues behind recovery traffic.
+3. The quarantine replacement connection resets ackTimeoutStreak to zero
+   (message-router-reconnect-behaviors.js:598 area), so the cycle repeats
+   after each reconnect — "quarantine churn" already named in
+   message-router-delivery-behaviors.js:632.
+4. FIX LANDED: per-node inbound-activity liveness evidence
+   (router.nodeInboundActivityAt, stamped in handleMessage which serves
+   both inbound and outbound sockets) + lastAckAt; quarantine skipped with
+   a warn ("Skipping ACK-timeout quarantine: peer demonstrably alive")
+   when evidence is fresher than
+   transport.ackTimeoutQuarantineLivenessWindowMs (default 30000; 0
+   disables = pre-change behavior). The timed-out message still fails and
+   retries; ws close/error teardown is untouched.
+
+### Exit Criteria
+
+1. Formation runs show liveness-skips instead of quarantines against the
+   seed; ROUTER_CONNECTION_CLOSED cascades disappear from the creep window.
+2. Join registration steps no longer fail on severed connections while the
+   peer is alive (85-88s sub-step failures gone or reduced to genuine
+   write timeouts).
+3. Truly dead peers (silent beyond the window) still quarantine (unit
+   guard) and reconnect storms do not regress.
+4. The pressure-creep stall class (CL-001 coupling) either closes or its
+   residual is re-pinned to the seed event-loop saturation layer.
+
+### Notes
+
+1. Opened 2026-06-10 from the two-agent investigation (artifact mining +
+   priority-path code trace) after CL-006 closed the join-failure cascade.
+   The seed event-loop saturation itself (what the seed is busy WITH:
+   321 rebalancing-move executions during formation, planning gate parked
+   at "stabilization") remains a separate concern — likely CL-003-adjacent
+   — if creep persists after this guard.

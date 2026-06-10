@@ -70,6 +70,8 @@ const MESSAGE_ROUTER_LITERAL = Object.freeze({
     'Observed ACK timeout below quarantine threshold',
   STRING_QUARANTINING_TARGET_CONNECTION_AFTER_ACK_TIMEOUT:
     'Quarantining target connection after ACK timeout',
+  STRING_QUARANTINE_SKIPPED_PEER_RECENTLY_ALIVE:
+    'Skipping ACK-timeout quarantine: peer demonstrably alive (slow, not dead)',
   NUMBER_5: 5,
 });
 

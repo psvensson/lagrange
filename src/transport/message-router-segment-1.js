@@ -86,6 +86,29 @@ class MessageRouterSegment1 extends EventEmitter {
             config.get(TRANSPORT_CONFIG_KEY.ACK_TIMEOUT_QUARANTINE_THRESHOLD),
           ) :
           TRANSPORT_DEFAULT.ACK_TIMEOUT_QUARANTINE_THRESHOLD;
+    this.ackTimeoutQuarantineLivenessWindowMs =
+      Number.isFinite(options.ackTimeoutQuarantineLivenessWindowMs) &&
+      options.ackTimeoutQuarantineLivenessWindowMs >= TRANSPORT_NUM.ZERO ?
+        Math.floor(options.ackTimeoutQuarantineLivenessWindowMs) :
+        Number.isFinite(
+          config.get(
+            TRANSPORT_CONFIG_KEY.ACK_TIMEOUT_QUARANTINE_LIVENESS_WINDOW_MS,
+          ),
+        ) &&
+            config.get(
+              TRANSPORT_CONFIG_KEY.ACK_TIMEOUT_QUARANTINE_LIVENESS_WINDOW_MS,
+            ) >= TRANSPORT_NUM.ZERO ?
+          Math.floor(
+            config.get(
+              TRANSPORT_CONFIG_KEY.ACK_TIMEOUT_QUARANTINE_LIVENESS_WINDOW_MS,
+            ),
+          ) :
+          TRANSPORT_DEFAULT.ACK_TIMEOUT_QUARANTINE_LIVENESS_WINDOW_MS;
+    // Per-node timestamp of the most recent inbound traffic (any parsed
+    // message on any socket from that node). Liveness evidence for the
+    // quarantine guard: a peer we are actively receiving from is slow, not
+    // dead, and its connection must not be severed on ACK timeouts.
+    this.nodeInboundActivityAt = new Map();
     const configuredConnectTimeoutMs = config.get(
       WEBSOCKET_CONNECT_TIMEOUT_CONFIG_KEY,
     );
@@ -486,9 +509,28 @@ class MessageRouterSegment1 extends EventEmitter {
    * @param {Buffer|string} data - Message data.
    * @private
    */
+  /**
+   * Record inbound traffic from a peer (any parsed message on any socket).
+   * Used as liveness evidence by the ACK-timeout quarantine guard.
+   * @param {string} nodeId - Peer node id (or connection id pre-identify).
+   * @return {void}
+   */
+  recordNodeInboundActivity(nodeId) {
+    if (typeof nodeId === TRANSPORT_TYPEOF.STRING && nodeId.length > TRANSPORT_NUM.ZERO) {
+      this.nodeInboundActivityAt.set(nodeId, Date.now());
+    }
+  }
+  /**
+   * @param {string} nodeId - Peer node id.
+   * @return {number|null} Timestamp of last inbound traffic from the peer.
+   */
+  getNodeInboundActivityAt(nodeId) {
+    return this.nodeInboundActivityAt.get(nodeId) ?? null;
+  }
   handleMessage(connectionId, ws, data) {
     try {
       const message = JSON.parse(data.toString());
+      this.recordNodeInboundActivity(connectionId);
       this.logger.debug(ROUTER_LOG_MSG.MESSAGE_RECEIVED, {
         connectionId,
         type: message.type,
@@ -579,6 +621,7 @@ class MessageRouterSegment1 extends EventEmitter {
         connection.state = ConnectionState.CLOSED;
         this.retireConnection(connection);
         this.nodeConnections.delete(connectionId);
+        this.nodeInboundActivityAt.delete(connectionId);
         this.logger.info(
           MESSAGE_ROUTER_LITERAL.STRING_REJECTING_INCOMING_CONNECTION_WHILE_EXTERNAL_ADMISSION_IS_CLOSED,
           {
@@ -633,6 +676,20 @@ class MessageRouterSegment1 extends EventEmitter {
           this.nodeConnections.delete(nodeId);
         }
         this.nodeConnections.delete(connectionId);
+        // Migrate the pre-identify inbound-activity stamp to the node key so
+        // raw connection-id keys never accumulate across reconnect churn.
+        const preIdentifyActivityAt =
+          this.nodeInboundActivityAt.get(connectionId);
+        this.nodeInboundActivityAt.delete(connectionId);
+        if (preIdentifyActivityAt) {
+          this.nodeInboundActivityAt.set(
+            nodeId,
+            Math.max(
+              preIdentifyActivityAt,
+              this.nodeInboundActivityAt.get(nodeId) || TRANSPORT_NUM.ZERO,
+            ),
+          );
+        }
         this.nodeConnections.set(nodeId, connection);
         this.logger.info(ROUTER_LOG_MSG.REKEYED_CONNECTION, {
           oldKey: connectionId,
@@ -647,6 +704,7 @@ class MessageRouterSegment1 extends EventEmitter {
         });
         this.retireConnection(connection);
         this.nodeConnections.delete(connectionId);
+        this.nodeInboundActivityAt.delete(connectionId);
         try {
           ws.terminate();
         } catch (error) {

@@ -566,6 +566,42 @@ export function quarantineConnectionAfterAckTimeout(
     );
     return activeConnection;
   }
+  // Liveness guard (CL-007): quarantine exists to stop wasting deliveries on
+  // DEAD/hung peers. A peer we are actively receiving from (any inbound
+  // message, or a recent ACK) is alive but slow — severing its connection
+  // converts slow into broken ("never break, only slow") and, during
+  // formation, cuts every joiner off from the saturated seed at once. The
+  // timed-out message itself still fails and retries; only the connection
+  // teardown is skipped. Truly dead sockets still close via ws close/error
+  // events, and silent-hung peers exceed the liveness window and quarantine.
+  const livenessWindowMs = router.ackTimeoutQuarantineLivenessWindowMs;
+  const lastInboundAt = Math.max(
+    activeConnection.lastAckAt || TRANSPORT_NUM.ZERO,
+    (typeof router.getNodeInboundActivityAt === TRANSPORT_TYPEOF.FUNCTION &&
+      router.getNodeInboundActivityAt(targetNodeId)) || TRANSPORT_NUM.ZERO,
+  );
+  if (
+    Number.isFinite(livenessWindowMs) &&
+    livenessWindowMs > TRANSPORT_NUM.ZERO &&
+    lastInboundAt > TRANSPORT_NUM.ZERO &&
+    Date.now() - lastInboundAt < livenessWindowMs
+  ) {
+    router.logger.warn(
+      MESSAGE_ROUTER_LITERAL.STRING_QUARANTINE_SKIPPED_PEER_RECENTLY_ALIVE,
+      {
+        messageId,
+        targetAddress,
+        targetNodeId,
+        localNodeId: router.nodeId,
+        connectionId: activeConnection.connectionId,
+        ackTimeoutStreak: activeConnection.ackTimeoutStreak,
+        ackTimeoutQuarantineThreshold: router.ackTimeoutQuarantineThreshold,
+        lastInboundAgoMs: Date.now() - lastInboundAt,
+        livenessWindowMs,
+      },
+    );
+    return activeConnection;
+  }
   router.logger.warn(
     MESSAGE_ROUTER_LITERAL.STRING_QUARANTINING_TARGET_CONNECTION_AFTER_ACK_TIMEOUT,
     {

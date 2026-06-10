@@ -45,6 +45,8 @@ const TRANSPORT_CONFIG_KEY = Object.freeze({
   MESSAGE_TIMEOUT_MS: 'transport.messageTimeoutMs',
   ACK_TIMEOUT_QUARANTINE_THRESHOLD:
     'transport.ackTimeoutQuarantineThreshold',
+  ACK_TIMEOUT_QUARANTINE_LIVENESS_WINDOW_MS:
+    'transport.ackTimeoutQuarantineLivenessWindowMs',
   PING_TIMEOUT_MS: 'transport.pingTimeoutMs',
   RECONNECT_INTERVAL_MS: 'transport.reconnectIntervalMs',
   RECONNECT_MAX_ATTEMPTS: 'transport.reconnectMaxAttempts',
@@ -67,6 +69,13 @@ const TRANSPORT_DEFAULT = Object.freeze({
   LOCAL_ADDRESS_PREFIX: 'ws-',
   MESSAGE_TIMEOUT_MS: 5000,
   ACK_TIMEOUT_QUARANTINE_THRESHOLD: 2,
+  // Quarantine requires evidence the peer is DEAD, not merely slow: when any
+  // inbound traffic (ACK or message) from the peer was seen within this
+  // window, an ACK-timeout streak fails the individual messages but must not
+  // sever the connection ("never break, only slow"). During formation all
+  // joiners quarantined the alive-but-saturated seed — their only
+  // control-plane path — within 1s of each other (closure record CL-007).
+  ACK_TIMEOUT_QUARANTINE_LIVENESS_WINDOW_MS: 30000,
   PING_TIMEOUT_MS: 1000,
   RECONNECT_INTERVAL_MS: 1000,
   RECONNECT_MAX_ATTEMPTS: 10,

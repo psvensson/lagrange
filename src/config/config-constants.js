@@ -191,6 +191,7 @@ const DEFAULT_CONFIG = {
     wsHost: null,
     messageTimeoutMs: 5000,
     ackTimeoutQuarantineThreshold: 2,
+    ackTimeoutQuarantineLivenessWindowMs: 30000,
     pingTimeoutMs: 1000,
     reconnectIntervalMs: 1000,
     reconnectMaxAttempts: 10,

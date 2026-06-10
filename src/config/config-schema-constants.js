@@ -107,6 +107,7 @@ const CONFIG_SCHEMA = {
         wsHost: {type: ['string', 'null']},
         messageTimeoutMs: {type: 'number', minimum: 100},
         ackTimeoutQuarantineThreshold: {type: 'number', minimum: 1},
+        ackTimeoutQuarantineLivenessWindowMs: {type: 'number', minimum: 0},
         pingTimeoutMs: {type: 'number', minimum: 100},
         reconnectIntervalMs: {type: 'number', minimum: 100},
         reconnectMaxAttempts: {type: 'number', minimum: 1},
