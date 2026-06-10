@@ -571,6 +571,28 @@ Each record below represents one violated invariant.
    lifecycle intent (MEMBERSHIP_LIFECYCLE_INTENT.REMOVAL) distinct from
    join/restart re-entry — failed-join entry withdrawal is the legacy
    node-joining layer acting as a second, conflicting owner of removal.
+5. FIX LANDED (f18efdb7, 2026-06-10): severity-aware cleanup — resume
+   decision computed before failure handling; preserveForResume skips the
+   destructive cleanup + FAILED event (lifecycle still driven to STOPPED
+   for the existing reset path). Includes the two verification findings:
+   lifecycle catch-up CONNECTING→JOINING when the skipped infrastructure
+   segment owned those transitions, and CDC handler dedupe across resumes.
+   Guarded by test/bootstrap/node-joining-retryable-resume-preserves-state.test.js
+   (red before fix, red on either partial revert — independently verified).
+6. GATE VALIDATION ROUND 1 (stat-gate-20260610T172830Z, 4 runs):
+   2 CONVERGED / 1 SLOW / 1 STALLED, 0 corrupt — stallRate 0.5→0.25,
+   healthyRate 0.75. Where the preserve path ENGAGED (runs 1-2: 3
+   preserved resumes each, all on the participant-failure registration
+   class) reconnect failures collapsed from ~15-17k to ~100-150 and the
+   runs ended SLOW/CONVERGED. The remaining destructive-path failures
+   exposed a CLASSIFICATION GAP: httpPost's abort path threw a bare
+   "Request timeout after Xms" (no retryable fragment match, no marker) —
+   querying_state failures in runs 1/3/4 (5×), driving run 3's 22,662
+   reconnect storm + STALL; plus one join_readiness_timeout (run 4).
+   Both throw sites now carry deferRetry (da8a5d53), which
+   isRetryableControlPlaneError already honors — the phase classifiers
+   had always treated the same message as retryable in-phase; the verdict
+   was dropped at the phase boundary. Gate round 2 pending.
 
 ### Exit Criteria
 
