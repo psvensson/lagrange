@@ -5,6 +5,7 @@ import {
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL,
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_SOURCE,
   GATEWAY_ERROR_MSG,
+  GATEWAY_LOG_MSG,
   NUM,
   PRESSURE_GOVERNOR_ACTION,
   PRESSURE_WORK_CLASS,
@@ -27,6 +28,7 @@ import {
 } from './control-plane-system-table-gateway-shared.js';
 import {
   getSchemaByTableName,
+  SYSTEM_TABLE_NAME,
 } from '../bootstrap/system-table-schemas-constants.js';
 
 function buildSchemaFilteredSqlMutationEntries(tableName, data) {
@@ -209,12 +211,24 @@ const controlPlaneSystemTableGatewaySegment2QueryMethods = {
     return cdcIntegrationService;
   },
 
-  shouldUseSqlMutationFallback(options = {}) {
+  shouldUseSqlMutationFallback(options = {}, tableName = null) {
     if (options?.skipCacheWait !== true) {
       return false;
     }
     const phaseScope = normalizePhaseScope(options?.phaseScope);
     if (!phaseScope) {
+      return false;
+    }
+    // B3 (scale-safety): membership writes must stay on the CDC/Raft
+    // proposeWrite path — the Raft term fence is the single source of truth
+    // for cluster membership, and the SQL fallback would bypass it. Fail loud
+    // (caller throws CDC_REQUIRED) rather than commit an unfenced write.
+    if (tableName === SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS) {
+      this.emitGatewayWarning(GATEWAY_LOG_MSG.MUTATION_FALLBACK_FENCED, {
+        nodeId: this.nodeId,
+        tableName,
+        phaseScope,
+      });
       return false;
     }
     return (

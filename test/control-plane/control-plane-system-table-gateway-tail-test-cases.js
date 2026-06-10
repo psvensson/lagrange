@@ -358,6 +358,45 @@ export function registerControlPlaneSystemTableGatewayTailTests({
     );
   });
 
+  test('ControlPlaneSystemTableGateway submitMutation fences the SQL fallback ' +
+    'for control_plane_publications even inside the startup fallback window',
+  async (t) => {
+    const sqlCalls = [];
+    const gateway = new ControlPlaneSystemTableGateway({
+      nodeId: 'node-gateway',
+      sqlQueryEngine: {
+        async executeQuery(sql, params, options) {
+          sqlCalls.push({sql, params, options});
+          return {success: true, affectedRows: 1};
+        },
+      },
+    });
+
+    await t.rejects(
+      gateway.submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
+        tableName: TABLES.CONTROL_PLANE_PUBLICATIONS,
+        row: {
+          publication_id: 'cluster_membership',
+          published_active_node_ids: ['node-a'],
+          status: 'OPEN',
+        },
+      }, {
+        skipCacheWait: true,
+        phaseScope: CONTROL_PLANE_PHASE_SCOPE.BOOTSTRAP,
+        workClass: PRESSURE_WORK_CLASS.CRITICAL,
+        deliveryPriority: 'critical',
+      }),
+      /requires cdcIntegrationService/,
+      'membership writes must stay on the CDC/Raft path — never the SQL fallback',
+    );
+    t.equal(
+      sqlCalls.length,
+      0,
+      'no SQL statement should be emitted for a fenced membership write',
+    );
+  });
+
   test('ControlPlaneSystemTableGateway submitMutation still fails closed ' +
     'without CDC mutation helpers outside the explicit startup fallback',
   async (t) => {

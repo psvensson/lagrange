@@ -200,6 +200,8 @@ const GATEWAY_LOG_MSG = Object.freeze({
   READ_REJECTED: 'Control-plane metadata read rejected',
   MUTATION_DEFERRED: 'Control-plane metadata mutation deferred',
   MUTATION_REJECTED: 'Control-plane metadata mutation rejected',
+  MUTATION_FALLBACK_FENCED:
+    'Control-plane mutation SQL fallback fenced for membership table',
 });
 const CONTROL_PLANE_GATEWAY_OWNER_OUTCOME = Object.freeze({
   BOUNDARY: 'control_plane_system_table_gateway_mutation_contract',

@@ -49,7 +49,7 @@ make them scale-safe — not to build from scratch.
 
 ## Workstream A — Unconditional periodic owner driver (liveness)
 
-- [ ] **A0 — Pin the host loop. THE TRAP (review finding): every existing host is
+- [x] **A0 — Pin the host loop. THE TRAP (review finding): every existing host is
   gated behind the very metadata-publication readiness that is stalled.** Both
   candidate hosts are disqualified for the *same* reason, and it is NOT the reasons
   I first wrote:
@@ -68,7 +68,7 @@ make them scale-safe — not to build from scratch.
     readiness** — the one host that cannot be gated behind the progress it exists to
     create. This is the literal "liveness owner." Owned by the control-plane
     readiness service / membership coordinator; 5s cadence; `unref`'d.
-- [ ] **A1 — Extract the existing owner-reconcile logic into a reusable method.**
+- [x] **A1 — Extract the existing owner-reconcile logic into a reusable method.**
   `runScheduledMembershipPublicationReconcileTick`
   (`heartbeat-service-lifecycle-methods.js:352`) already has the correct body
   (owner check → if `missingPublishedCount>0`, drive
@@ -77,7 +77,7 @@ make them scale-safe — not to build from scratch.
   `buildPublicationActiveGateHandoffContract`. Factor it onto the membership
   coordinator; call it from the A0 interval AND keep the heartbeat call (harmless
   when the heartbeat does run).
-- [ ] **A2 — Bounded / abortable reconcile (review finding — load-bearing).** The
+- [x] **A2 — Bounded / abortable reconcile (review finding — load-bearing).** The
   tick's in-flight guard `scheduledReconcileTickInFlight` (and the coordinator's
   own queue/lane dedup) means **if one reconcile blocks on a doomed write, every
   later tick no-ops** — an "unconditional" timer still wedges. In the owner-driven
@@ -86,7 +86,7 @@ make them scale-safe — not to build from scratch.
   in-flight guard can never wedge the driver. Without this, neither host fixes the
   stall. The reconcile queue self-drains (`owner-key-reconcile-queue.js:313`); the
   interval only triggers, never blocks.
-- [ ] **A3 — Leadership predicate.** Reuse
+- [x] **A3 — Leadership predicate.** Reuse
   `isControlPlanePublicationsWriteLeader(systemTableCache, nodeId)` (which already
   resolves the partition id via `INITIAL_PARTITION_IDS`, not a literal — correction
   to an earlier draft). Keep Tier-1 (partitions row `leader_node_id`) + Tier-2 (live
@@ -94,7 +94,7 @@ make them scale-safe — not to build from scratch.
   heartbeat tick's `.find()` first-match (`heartbeat-service-lifecycle-methods.js:334-337`),
   which matches ANY partition of the table — fix that in B2. Fail-safe (false on
   uncertainty) — safe because Raft backstops (principle 1).
-- [ ] **A4 — Keep the gate** (`shouldDeferMembershipReconcileToWriteLeader`,
+- [x] **A4 — Keep the gate** (`shouldDeferMembershipReconcileToWriteLeader`,
   `membership-publication-coordinator-class-stage-2.js:439`) so non-leaders stop
   driving doomed writes; document it as an optimization, not the safety guarantee.
 - [ ] **A5 — Validate** against the deterministic 3-node reproducer + the
@@ -103,13 +103,16 @@ make them scale-safe — not to build from scratch.
 
 ## Workstream B — Single-partition guarantee for the membership row (scale-safety)
 
-- [ ] **B4 (do FIRST — review finding: it's a prerequisite for A3, not a follow-on).**
+- [x] **B4 (do FIRST — review finding: it's a prerequisite for A3, not a follow-on).**
   Add a startup/invariant assertion that the `publication_id='cluster_membership'`
   row resolves to exactly ONE partition; hard-fail if not. This guards A3's owner
   resolution: if the table ever became multi-partition without it, the predicate /
   `.find()` could pick the wrong fragment and split the brain. Land the assertion
   before enabling the driver.
-- [ ] **B1 — Make `control_plane_publications` non-splittable via per-table policy.**
+- [x] **B1 — Make `control_plane_publications` non-splittable via per-table policy.**
+  IMPLEMENTED (822aff6f) as an unconditional `isPriorityControlPlanePartition`
+  early-return in `evaluateSplitCriteria` instead of policy thresholds — stronger
+  (covers all priority control-plane tables, immune to policy-row loss/reset).
   `evaluateSplitCriteria` already honors per-partition policy overrides
   `splitStorageThreshold`/`splitTrafficThreshold` resolved via `getPolicyForPartition`
   (`partition-split-merge-manager-core-methods.js:150,468-470`); set them to Infinity
@@ -127,7 +130,7 @@ make them scale-safe — not to build from scratch.
   `partition_key_start`/`partition_key_end`) — a small key→partition helper, not new
   routing. With B1+B4 in place this is belt-and-suspenders, but it removes the
   silent-wrong-fragment hazard for good.
-- [ ] **B3 — Keep all membership writes on the Raft `proposeWrite` path.** The only
+- [x] **B3 — Keep all membership writes on the Raft `proposeWrite` path.** The only
   fence is the Raft term. Ensure membership writes never take the SQL/cache fallback
   (`shouldUseSqlMutationFallback` fires on `skipCacheWait===true` + a `phaseScope`,
   `control-plane-system-table-gateway-segment-2-query-methods.js:212-222`), which

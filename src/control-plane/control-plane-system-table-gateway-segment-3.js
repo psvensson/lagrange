@@ -444,7 +444,7 @@ class ControlPlaneSystemTableGatewaySegment3 extends ControlPlaneSystemTableGate
     }
     const executionFactory = async () => {
       if (!cdcIntegrationService) {
-        if (this.shouldUseSqlMutationFallback(writeOptions)) {
+        if (this.shouldUseSqlMutationFallback(writeOptions, tableName)) {
           return this.executeSqlMutationFallback(
             normalizedMutation,
             writeOptions,
