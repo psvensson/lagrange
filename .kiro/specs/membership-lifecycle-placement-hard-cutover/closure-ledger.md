@@ -25,6 +25,8 @@ Each record below represents one violated invariant.
 | CL-011 | guarded | readiness-observation-hot-path | Read isolation for cached system-table rows must not cost a JSON serialize+parse roundtrip per row per read. |
 | CL-012 | guarded | readiness-read-amplification | The query executor's partition-routing path must not rebuild full node readiness (evidence pipeline + authoritative reads) per service row per routing decision; readiness evaluation must not recursively issue reads that themselves require routing + readiness. |
 | CL-013 | guarded | replica-join-topology | A REPLACE-created replica joining an ESTABLISHED partition must consume the owner-dispatched bootstrap topology; it must never fall back to a locally-filtered cache view that can reduce to self-only and trigger a fresh solo raft bootstrap. |
+| CL-014 | guarded | cdc-fanout-targetability | A joining node must be able to catch up on CDC-propagated rows written inside the (bootstrap-snapshot, fan-out-targetability] window — remote CDC fan-out is point-in-time with no replay. |
+| CL-015 | fix-landed | raft-learner-catchup | Raft catch-up must deliver in batches from the follower's actual position — not a one-entry-per-round-trip backward fail-walk that can never complete a formation-sized log inside the voter-ready budget. |
 
 ## CL-001 Published Membership Convergence Under Restart Churn
 
@@ -1633,3 +1635,84 @@ Each record below represents one violated invariant.
   cumulative post-CL-012 plus 4 more = 11C/1S across 12 runs, zero
   stalls) — formation remains healthy; the scenario still fails at the
   ACTIVE gate on this record.
+
+
+## CL-015 Raft Catch-Up Must Batch From The Follower's Position
+
+- Status: fix-landed (2026-06-11, commit 44d9c37c; gate validation pending)
+- Concern: raft-learner-catchup
+- Failure Class: formation-livelock (voter-ready budget)
+- First Violated Invariant: learner/follower catch-up must deliver log
+  entries in batches starting from the FOLLOWER'S actual position. Base
+  liferaft does the opposite twice over: (a) the follower's append-fail
+  echoes the LEADER'S prevLog info, so the leader re-sends from one index
+  earlier each round — a BACKWARD WALK of (leaderLast − followerLast)
+  round trips that delivers nothing; (b) recovery then proceeds ONE entry
+  per round trip (the append-fail handler replies with a single entry;
+  the follower reads only data[0]). A REPLACE learner with an empty log
+  joining a priority partition with a formation-sized log can never
+  finish inside the 60s voter-ready budget — the deterministic CL-003
+  failure surface after CL-014 closed the publication race. Witness:
+  10k-18k per-source-cap-rejected sends per learner per minute (each head
+  append/heartbeat to the lagging learner spawning another fruitless
+  walk), every REPLACE learner timing out, planner looping r4->r5->r6.
+- Authoritative Owner: the local liferaft patch layer
+  (src/raft/liferaft.js patchIncomingDataListener — the established seam
+  for protocol fixes over @markwylde/liferaft).
+- Design (rubber-duck-reviewed; the reviewer REJECTED the first design —
+  batching forward from failedIndex is cosmetic because the backward walk
+  dominates — and supplied the load-bearing correction): every packet
+  carries the SENDER'S last log info as packet.last, so the leader
+  fast-forwards: batchStart = min(failedIndex, followerLast+1),
+  batchEnd = min(start+63, leaderLast). One round trip collapses the
+  walk; then 64 entries per round trip.
+- Fix Landed (44d9c37c):
+  (1) Leader side: APPEND_FAIL interception gated on state===LEADER &&
+  packet.term===raft.term (anything else delegates to the base handler's
+  step-down/stale logic); fast-forward start; entries via log.getRange
+  (sqlite) or per-entry walk (in-memory adapter, stops at compaction
+  gaps); reply built by appendPacket(firstEntry) with data=batch (fresh
+  term/state; last = leader's info for start-1 — the exact consistency
+  precondition); per-follower in-flight dedupe (tail+TTL 400ms, cleared
+  by tail ack and on state change) so the self-regenerating fails cannot
+  spawn overlapping batches into the already-capped lane.
+  (2) Follower side: batch packets (data.length>1) run the base handler
+  first (canonical preamble, consistency check, truncation, first-entry
+  save+ack, commit catch-up), then apply entries 2..N in ascending order
+  via saveCommand (NEVER the adapter's bulk append — it would persist the
+  leader's committed flags and break the follower's commit emission), ack
+  the TAIL once (prefix-commit semantics make a tail ack a truthful
+  matchIndex claim), and re-run commit catch-up. Guards: a batch whose
+  precondition precedes the committed prefix is DROPPED (no 64-wide
+  truncate-committed exposure); entries <= committedIndex are skipped.
+  (3) Compatibility verified: old follower + new leader reads data[0]
+  and still progresses (and benefits from the fast-forward); new follower
+  + old leader uses the unchanged single-entry path; the transport copies
+  data opaquely and the delivery classifier treats batches as the same
+  BACKGROUND append class.
+- Required Guard: test/raft/liferaft-catchup-batching.test.js — batch
+  starts at follower position (backward walk eliminated), head capping,
+  in-flight dedupe + tail-ack re-arm, stale-term delegation, follower
+  full-batch apply with tail ack + commit catch-up, stale-batch drop
+  without truncation, mismatching batch still emits the base append-fail.
+  Red on revert (14 failures). 3,472 raft/partition/message-group tests
+  green.
+- Adjacent findings from the design review (recorded, not changed here):
+  1. liferaft's consistency check is INDEX-ONLY (never compares
+     packet.last.term) — a divergence from raft sect. 5.3 present in the
+     base single-entry path; the batch path inherits it (a term check at
+     batch apply is a recorded improvement).
+  2. sqlite commandAck unconditionally setCommittedIndex(index) — catch-up
+     acks at old indexes REGRESS the leader's persisted committedIndex
+     until the next head ack (flapping reads for committedIndex
+     consumers; 64x rarer with batching).
+  3. On sqlite FOLLOWERS committedIndex is never persisted by commit(),
+     so every append/heartbeat triggers getUncommittedEntriesUpToIndex —
+     a full-table scan + JSON.parse per row per heartbeat on
+     formation-sized logs; plausible residual contributor to seed loop
+     load (CL-012-adjacent).
+  4. The systemic successor: snapshot-install + log compaction for the
+     sqlite log (no compaction exists; catch-up cost grows with cluster
+     age). liferaft has no InstallSnapshot; partition syncFromLeader is a
+     vestigial placeholder. Batch catch-up is the correct now-fix; record
+     snapshot-install as the long-term replacement.
