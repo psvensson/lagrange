@@ -29,6 +29,7 @@ Each record below represents one violated invariant.
 | CL-015 | fix-landed | raft-learner-catchup | Raft catch-up must deliver in batches from the follower's actual position — not a one-entry-per-round-trip backward fail-walk that can never complete a formation-sized log inside the voter-ready budget. |
 | CL-016 | guarded | replica-activation-evidence | Voter-ready activation must not require a durable services-row round-trip through the control plane being recovered: the priority local-commit fallback must make the LOCAL cache reflect local truth (or the activation check must accept local authoritative evidence). |
 | CL-017 | fix-landed | operation-ledger-self-reference | Operation workflow transitions must complete while the operation ledger's own partition is under modification — replica_operations writes fail with participant failures exactly when replica_operations-p1 is mid-REPLACE (4/3, surplus pending removal), pinning operations in CREATING/SENDING forever and blocking pre-restart quiescence. |
+| CL-018 | open | raft-log-scan-per-heartbeat | A follower's commit catch-up must not rescan and JSON-parse the whole raft log on every heartbeat: sqlite followers never persist committedIndex, so getUncommittedEntriesUpToIndex degenerates to a full-table parse per heartbeat per priority partition on the seed — the top self-time frame in the freeze windows that block CL-017's quiesce. |
 
 ## CL-001 Published Membership Convergence Under Restart Churn
 
@@ -1964,3 +1965,44 @@ Each record below represents one violated invariant.
   data in stat-gate-20260611T153621Z run artifacts) for the 14:0x-14:1x
   freeze windows and open the follow-on record on the top inclusive-time
   frame (CL-012 method, third pass).
+
+
+## CL-018 Follower Commit Catch-Up Must Not Rescan The Whole Log Per Heartbeat
+
+- Status: open (pinned 2026-06-11 from the third-pass freeze profiler
+  re-rank, stat-gate-20260611T153621Z run1 seed; fix not started)
+- Concern: raft-log-scan-per-heartbeat
+- Failure Class: seed event-loop saturation (the CL-017 freeze layer;
+  CL-001 lineage, third profiler pass)
+- Witness: seed gaps now up to 42.9s in the 4/3 window; the profile
+  window at 15:37:42 shows runMicrotasks inclusive 86.8% with
+  getNodeReadinessSync/getControlPlaneParticipationSync/
+  buildEvaluatedNodeReadinessSnapshot dominating inclusive time, and the
+  TOP SELF-TIME frames led by readEntryRow
+  (src/raft/sqlite-log-adapter.js:113, 633 hits/1.2s+ per window) with
+  fastJsonClone second (621 hits) and publication-recovery snapshot
+  builders (normalizeDistinctStringArray,
+  buildPublicationRecoveryGateSnapshot) behind it.
+- First Violated Invariant (pre-traced as CL-015 adjacent finding #3):
+  on sqlite FOLLOWERS, committedIndex is never persisted by commit()
+  (only leader-side commandAck calls setCommittedIndex), so
+  raft.log.committedIndex < packet.last.committedIndex is true on EVERY
+  append/heartbeat forever, and getUncommittedEntriesUpToIndex
+  (sqlite-log-adapter.js:347-359) scans + readEntryRow-parses every row
+  <= index — a full-table JSON parse per heartbeat (50ms) per priority
+  partition replica; the seed hosts 3 replicas of each of 5+ priority
+  partitions.
+- Fix directions: (a) persist committedIndex on follower commit() (same
+  mechanism commandAck uses), making the per-heartbeat scan bounded to
+  genuinely-uncommitted rows; (b) and/or getUncommittedEntriesUpToIndex
+  starts from committedIndex+1 with an indexed range read instead of a
+  full scan; (c) ALSO fix the leader-side committedIndex REGRESSION
+  (CL-015 adjacent #2: commandAck unconditionally setCommittedIndex on
+  OLD-index acks) in the same record — both are committedIndex
+  bookkeeping defects in the same adapter.
+- Secondary candidates from the same windows (record, evaluate after):
+  getNodeReadinessSync inclusive dominance persists despite CL-012's
+  fast path — verify the fast path engages on the line-330 call path in
+  the 4/3 window; publication-recovery gate snapshot building
+  (buildPublicationRecoveryGateSnapshot + normalizeDistinctStringArray)
+  is the next self-time cluster.
