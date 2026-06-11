@@ -232,6 +232,28 @@ Each record below represents one violated invariant.
 - Next Falsification Step: extract a targeted repro that fixes publication
   convergence at `PUBLISHED` with all expected active nodes present and then
   stresses only the missing `sql_write_operations-p1` spread recovery path.
+- FALSIFICATION EXECUTED (2026-06-11, stat-gate-20260611T090827Z runs 1-4 —
+  the first runs to reach this record's surface cleanly after the
+  CL-006..012 formation chain cleared): "did the planner ever plan the
+  spread move?" — YES, fully. Run1 seed witnesses (un-clobbered
+  moveTargetNodeId + operationId): five REPLACE operations created within
+  13s (09:09:33-46), one per priority partition, targets spread across
+  three distinct joiners. Planning, dedup (75 reuses correctly absorbed,
+  rearmActions correct), creation, and dispatch (PENDING->SENDING->CREATING)
+  all work. EVIDENCE ITEM 9 (analyzePrioritySpread ready-only denominator)
+  is FALSIFIED as this record's blocker. The actual failure: the new
+  learner replica on the target joiner fails voter-ready promotion within
+  its 60s budget ("Replica replica_operations-p1-r4 did not become
+  voter-ready within 60000ms"), the CREATE retries wedge on "state
+  transition rejected: creating/failed", and all five partitions sit in
+  recovering_in_flight (largestSpreadGap=0 — the spread summary itself is
+  satisfied; the blocker is operation completion). ROOT: the seed's raft
+  append fan-out to the starving learner is per-source backpressure-capped
+  and the sender hot-retried every rejection — 6,434 rejected sends to
+  sql_write_operations-p1-r4 and 2,943 to sql_transaction_participants-p1-r4
+  in ~3min (CL-009's suppressed counters as the witness) — so learner
+  catch-up starves behind its own doomed re-sends. This is CL-009(ii)
+  promoted to load-bearing for this record; fix landed there.
 - Required Guard: targeted regression proving priority recovery decisions read
   the published summary and refuse stale spread inference, plus a harness-level
   assertion that a converged publication witness with
@@ -990,6 +1012,20 @@ Each record below represents one violated invariant.
   (message-router-shared-stage-3.js:16-31) — the storming sender either does
   not receive these per-entry rejections at its retry decision point or does
   not honor them; the sender-side trace should start there.
+- FIX (ii) LANDED (2026-06-11): per-peer backpressure mute in
+  RaftTransportAdapter.write — on a ROUTER_OUTBOUND_QUEUE_BACKPRESSURED
+  rejection the peer's lane is muted for the error's retryAfterMs (default
+  500ms); BACKGROUND sends (append bulk / learner catch-up) are skipped
+  with a deferRetry error while muted, CRITICAL/READINESS traffic (votes,
+  heartbeat-appends, priority consensus) always attempts since the critical
+  reserve may admit it; any successful delivery clears the mute. Raft
+  tolerates dropped messages by design — muted sends are retransmitted by
+  liferaft — so this is "slow", never "broken". Promoted to load-bearing by
+  CL-003's falsification: the hot-retry storm starved learner voter-ready
+  promotion (6.4k rejected sends to one learner in ~3min). Guard:
+  test/raft/raft-transport-backpressure-mute.test.js (red on revert: mute
+  engages, critical bypasses, window expires, success clears, ordinary
+  errors don't mute). 521 raft + 1428 partition tests green.
 - FIX (i) LANDED (2bfdca12, 2026-06-11): warn emission bounded to one per
   second per target-node queue with a suppressedSinceLastWarn counter, both
   emission sites sharing one per-queue budget; rejections, error fields

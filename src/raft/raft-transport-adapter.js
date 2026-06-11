@@ -7,6 +7,13 @@
 import {AddressManager} from '../address/address-manager.js';
 import {ADDRESS, TABLES} from '../constants/index.js';
 import {
+  OUTBOUND_DELIVERY_PRIORITY,
+  TRANSPORT_DEFAULT,
+} from '../constants/transport.js';
+import {
+  OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE,
+} from '../transport/message-router-shared-stage-1.js';
+import {
   RAFT_PACKET_MESSAGE_TYPE,
   RAFT_TRANSPORT_ERROR_MSG,
   resolveRaftTransportDeliveryOptions,
@@ -16,6 +23,8 @@ const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_STRING = 'string';
 const LOCAL_NUM_ZERO = 0;
 const LOCAL_NUM_ONE = 1;
+const RAFT_TRANSPORT_PEER_MUTED_ERROR_MSG =
+  'Raft send skipped: peer outbound lane backpressure-muted';
 
 /**
  * Transport adapter for liferaft that uses MessageRouter.
@@ -44,6 +53,13 @@ class RaftTransportAdapter {
     this.entityType = options.entityType;
     this.nodeId = options.nodeId;
     this.systemTableCache = options.systemTableCache || null;
+    // CL-009(ii)/CL-003: per-peer mute window honoring outbound backpressure
+    // rejections. Without it, every partition write fan-out re-attempts a
+    // saturated peer lane (witnessed: 6.4k rejected sends to one
+    // REPLACE-created learner in ~3min), starving the learner's catch-up so
+    // it never becomes voter-ready. Raft tolerates dropped messages by
+    // design, so skipping doomed enqueues is "slow", never "broken".
+    this.backpressureMutedUntilMsByPeer = new Map();
   }
 
   /**
@@ -59,6 +75,31 @@ class RaftTransportAdapter {
     // The destination is the peer we're sending to, packet.address is the sender
     const destinationId = packet.destination || packet.address;
     const peerAddress = this.buildPeerAddress(destinationId);
+    const deliveryOptions = resolveRaftTransportDeliveryOptions({
+      ...packet,
+      targetAddress: peerAddress,
+      targetReplicaStatus: this.resolveTargetReplicaStatus(peerAddress),
+    });
+
+    // Only BACKGROUND sends (append bulk / catch-up) respect the mute:
+    // critical and readiness traffic (votes, heartbeat-appends, priority
+    // control-plane consensus) may still be admitted via the critical
+    // reserve even while the per-source lane is saturated.
+    if (
+      deliveryOptions?.deliveryPriority ===
+        OUTBOUND_DELIVERY_PRIORITY.BACKGROUND
+    ) {
+      const mutedRemainingMs = this.getPeerMuteRemainingMs(peerAddress);
+      if (mutedRemainingMs > LOCAL_NUM_ZERO) {
+        const mutedError = new Error(RAFT_TRANSPORT_PEER_MUTED_ERROR_MSG);
+        mutedError.code = OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE;
+        mutedError.retryAfterMs = mutedRemainingMs;
+        mutedError.deferRetry = true;
+        mutedError.peerBackpressureMuted = true;
+        callback(mutedError);
+        return;
+      }
+    }
 
     try {
       // Build the message to send - include all liferaft packet fields
@@ -76,16 +117,41 @@ class RaftTransportAdapter {
       const result = await this.messageRouter.deliver(
         peerAddress,
         message,
-        resolveRaftTransportDeliveryOptions({
-          ...packet,
-          targetAddress: peerAddress,
-          targetReplicaStatus: this.resolveTargetReplicaStatus(peerAddress),
-        }),
+        deliveryOptions,
       );
+      this.backpressureMutedUntilMsByPeer.delete(peerAddress);
       callback(null, result);
     } catch (error) {
+      if (error?.code === OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE) {
+        const retryAfterMs =
+          Number.isFinite(error.retryAfterMs) && error.retryAfterMs > LOCAL_NUM_ZERO ?
+            Math.floor(error.retryAfterMs) :
+            TRANSPORT_DEFAULT.OUTBOUND_QUEUE_BACKPRESSURE_RETRY_AFTER_MS;
+        this.backpressureMutedUntilMsByPeer.set(
+          peerAddress,
+          Date.now() + retryAfterMs,
+        );
+      }
       callback(error);
     }
+  }
+
+  /**
+   * Remaining mute window for one peer, with expired entries cleaned up.
+   * @param {string} peerAddress
+   * @return {number} Remaining milliseconds, 0 when not muted.
+   */
+  getPeerMuteRemainingMs(peerAddress) {
+    const mutedUntilMs = this.backpressureMutedUntilMsByPeer.get(peerAddress);
+    if (!Number.isFinite(mutedUntilMs)) {
+      return LOCAL_NUM_ZERO;
+    }
+    const remainingMs = mutedUntilMs - Date.now();
+    if (remainingMs <= LOCAL_NUM_ZERO) {
+      this.backpressureMutedUntilMsByPeer.delete(peerAddress);
+      return LOCAL_NUM_ZERO;
+    }
+    return remainingMs;
   }
 
   /**
