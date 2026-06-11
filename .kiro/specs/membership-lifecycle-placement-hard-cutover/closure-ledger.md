@@ -27,7 +27,7 @@ Each record below represents one violated invariant.
 | CL-013 | guarded | replica-join-topology | A REPLACE-created replica joining an ESTABLISHED partition must consume the owner-dispatched bootstrap topology; it must never fall back to a locally-filtered cache view that can reduce to self-only and trigger a fresh solo raft bootstrap. |
 | CL-014 | guarded | cdc-fanout-targetability | A joining node must be able to catch up on CDC-propagated rows written inside the (bootstrap-snapshot, fan-out-targetability] window — remote CDC fan-out is point-in-time with no replay. |
 | CL-015 | fix-landed | raft-learner-catchup | Raft catch-up must deliver in batches from the follower's actual position — not a one-entry-per-round-trip backward fail-walk that can never complete a formation-sized log inside the voter-ready budget. |
-| CL-016 | open | replica-activation-evidence | Voter-ready activation must not require a durable services-row round-trip through the control plane being recovered: the priority local-commit fallback must make the LOCAL cache reflect local truth (or the activation check must accept local authoritative evidence). |
+| CL-016 | guarded | replica-activation-evidence | Voter-ready activation must not require a durable services-row round-trip through the control plane being recovered: the priority local-commit fallback must make the LOCAL cache reflect local truth (or the activation check must accept local authoritative evidence). |
 
 ## CL-001 Published Membership Convergence Under Restart Churn
 
@@ -1805,3 +1805,26 @@ Each record below represents one violated invariant.
   service start, marked local-only at factory time; SYNCING lifecycle
   write becomes UPSERT; durable commit clears the marker) — red on src
   revert. 238 replica-handler + 1181 node-suite tests green.
+- GATE VALIDATION (stat-gate-20260611T140359Z, 4 runs, 4/4 publication
+  CONVERGED, 0 corrupt): CL-016 CLOSED AND THE LADDER MOVED TWO RUNGS.
+  (a) VOTER-READY WORKS: 8/9/5/9 'Replica reached voter-ready activation
+  state' per run (the FIRST activations in this work's history) with
+  0/3/0/0 failures.
+  (b) CL-003's SPREAD SURFACE IS GONE: no
+  priority_control_plane_spread_pending in any run — the quiesce
+  diagnostics show priority partitions at 4/3 replicas across FOUR
+  DISTINCT NODES (spread recovered; surplus awaiting source removal).
+  CL-003's primary exit criterion (priority partitions recover to
+  required spread during the red scenarios) is MET at this surface.
+  (c) NEW FRONTIER: runs 1/2/4 fail PRE-RESTART at 'Control plane did not
+  quiesce within 300000ms' with inFlightCount~3 and 4/3 surplus replicas
+  — the REPLACE source-removal half does not complete/quiesce (CL-017
+  candidate: replace source removal + operation quiescence). Run 3 got
+  PAST quiesce, began ACTUAL ROLLING RESTARTS (6 boots = first restarted
+  node ever), and failed at 'Restarted node did not become recovery-ready
+  within 120000ms' — the scenario's true subject is finally exercised
+  (second new record candidate: restart recovery-readiness).
+  (d) CL-015 runtime note: seed suppressed rejects still ~15.7k in run1 —
+  with learners now activating, the residual storm window needs re-pinning
+  (likely the source-removal phase / restart catch-up); evaluate with
+  CL-017.
