@@ -28,6 +28,7 @@ Each record below represents one violated invariant.
 | CL-014 | guarded | cdc-fanout-targetability | A joining node must be able to catch up on CDC-propagated rows written inside the (bootstrap-snapshot, fan-out-targetability] window — remote CDC fan-out is point-in-time with no replay. |
 | CL-015 | fix-landed | raft-learner-catchup | Raft catch-up must deliver in batches from the follower's actual position — not a one-entry-per-round-trip backward fail-walk that can never complete a formation-sized log inside the voter-ready budget. |
 | CL-016 | guarded | replica-activation-evidence | Voter-ready activation must not require a durable services-row round-trip through the control plane being recovered: the priority local-commit fallback must make the LOCAL cache reflect local truth (or the activation check must accept local authoritative evidence). |
+| CL-017 | open | operation-ledger-self-reference | Operation workflow transitions must complete while the operation ledger's own partition is under modification — replica_operations writes fail with participant failures exactly when replica_operations-p1 is mid-REPLACE (4/3, surplus pending removal), pinning operations in CREATING/SENDING forever and blocking pre-restart quiescence. |
 
 ## CL-001 Published Membership Convergence Under Restart Churn
 
@@ -1828,3 +1829,51 @@ Each record below represents one violated invariant.
   with learners now activating, the residual storm window needs re-pinning
   (likely the source-removal phase / restart catch-up); evaluate with
   CL-017.
+
+
+## CL-017 Operation Workflow Transitions Must Survive The Ledger's Own Surgery
+
+- Status: open (pinned 2026-06-11 from stat-gate-20260611T140359Z run1
+  artifacts; fix not started)
+- Concern: operation-ledger-self-reference
+- Failure Class: formation-livelock (pre-restart quiescence; circular
+  dependency class, now SELF-REFERENTIAL)
+- First Violated Invariant: operation workflow step transitions
+  (CREATING -> next, SENDING -> next) must be able to complete while the
+  operation ledger's own partition (replica_operations-p1) is itself
+  under modification. Witness: the TARGET side now completes perfectly
+  (second-round replica_operations-p1-r5 on 35a891b8: created 14:07:30,
+  voter-ready in 2 SECONDS, 'Replica creation completed' 14:07:49 —
+  CL-013..016 chain fully working) but the operation-row UPDATE fails
+  repeatedly with 'Distributed operation failed due to participant
+  failures' on tableName=replica_operations (also seen:
+  query_admission_deferred on nodes) — for 5+ minutes, via the
+  'Deferred retryable replica operation transition failure' retry loop —
+  so the operations stay CREATING/SENDING, the quiesce gate counts
+  inFlight~3 forever, and runs 1/2/4 fail PRE-restart at 'Control plane
+  did not quiesce within 300000ms' while the priority partitions sit at
+  4/3 with the surplus removal never reached.
+- Self-reference: the operation rows for replica_operations-p1's own
+  REPLACE live IN replica_operations-p1 — the partition's surgery must
+  write its progress into the partition being operated on, while that
+  partition is at 4/3 with one stale/pending-removal participant. The
+  'participant failures' likely involve the surplus/retiring replica
+  still counted as a write participant.
+- Next Falsification Step: identify the failing PARTICIPANT in the
+  distributed replica_operations write at 4/3 (which replica NACKs/times
+  out — the retiring source? the new voter? quorum math at 4 voters?);
+  check how distributed writes enumerate participants vs raft voters
+  mid-membership-change; then decide the invariant fix (e.g., write
+  quorum follows raft membership not service rows; or the retiring
+  replica must be excluded from write participation once REPLACE enters
+  the removal phase; or transition writes for an operation may use the
+  same local-truth fallback class as CL-016 when the ledger partition is
+  self-referentially blocked).
+- Related: CL-015 runtime re-pin folds in here (seed suppressed rejects
+  ~15.7k in run1 — measure whether the storm window now coincides with
+  this 4/3 phase); the second new surface (restarted-node
+  recovery-readiness, run3, 120s budget) is SEPARATE and queued after
+  this record.
+- Sequencing note: this record blocks 3/4 runs at the pre-restart gate;
+  the restart-phase ladder (run3's surface) becomes reachable once
+  quiescence closes.
