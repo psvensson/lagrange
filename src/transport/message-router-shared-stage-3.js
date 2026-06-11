@@ -30,6 +30,38 @@ function buildOutboundQueueBackpressureError(
   return error;
 }
 
+const OUTBOUND_SATURATION_WARN_INTERVAL_MS = 1000;
+
+/**
+ * CL-009: warning once per rejected enqueue converts per-source containment
+ * into a log storm on the already-pressured node (5.9k warns in <80s
+ * witnessed against one stillborn replica). Bound emission to one warn per
+ * interval per target-node queue and surface how many were suppressed.
+ * Rejections themselves are unaffected.
+ *
+ * @param {Object} queue - Per-target outbound queue.
+ * @param {number} [nowMs=Date.now()]
+ * @return {{suppressedSinceLastWarn: number}|null} Sample to log, or null
+ *   when this occurrence must stay silent.
+ */
+function takeOutboundSaturationWarnSample(queue, nowMs = Date.now()) {
+  if (!queue.saturationWarnState) {
+    queue.saturationWarnState = {
+      lastWarnAtMs: TRANSPORT_NUM.ZERO,
+      suppressedCount: TRANSPORT_NUM.ZERO,
+    };
+  }
+  const state = queue.saturationWarnState;
+  if (nowMs - state.lastWarnAtMs < OUTBOUND_SATURATION_WARN_INTERVAL_MS) {
+    state.suppressedCount += TRANSPORT_NUM.ONE;
+    return null;
+  }
+  const suppressedSinceLastWarn = state.suppressedCount;
+  state.lastWarnAtMs = nowMs;
+  state.suppressedCount = TRANSPORT_NUM.ZERO;
+  return {suppressedSinceLastWarn};
+}
+
 function countCriticalSourceReserveInFlight(queue) {
   const rawCount = queue?.inFlightCriticalSourceReserve;
   return Number.isFinite(rawCount) && rawCount > TRANSPORT_NUM.ZERO ?
@@ -328,24 +360,83 @@ class OutboundDeliveryRegistryOwner {
           );
           preemptionError.preemptedByCriticalSource = deliverySource;
           preemptedItem.reject(preemptionError);
+          const preemptionWarnSample =
+            takeOutboundSaturationWarnSample(queue);
+          if (preemptionWarnSample) {
+            this.router.logger.warn(
+              MESSAGE_ROUTER_LITERAL
+                .STRING_OUTBOUND_QUEUE_SATURATED_FOR_NODE_DELIVERY,
+              {
+                localNodeId: this.router.nodeId,
+                targetNodeId: nodeId,
+                deliveryPriority: preemptedItem?.priority,
+                attemptedDeliverySource: preemptedItem?.deliverySource,
+                admittedDeliverySource: deliverySource,
+                backpressureScope:
+                  OUTBOUND_QUEUE_BACKPRESSURE_SCOPE.DELIVERY_SOURCE,
+                preemptedForCriticalSourceReserve: true,
+                suppressedSinceLastWarn:
+                  preemptionWarnSample.suppressedSinceLastWarn,
+                pending: queue.pending.length,
+                pendingCritical: countPendingByPriority(
+                  queue,
+                  OutboundDeliveryPriority.CRITICAL,
+                ),
+                pendingBackground,
+                backgroundPendingLimit,
+                criticalReserve: queue.criticalReserve,
+                maxPending: queue.maxPending,
+                inFlight: queue.inFlight,
+                inFlightCritical: countInFlightByPriority(
+                  queue,
+                  OutboundDeliveryPriority.CRITICAL,
+                ),
+                inFlightBackground: countInFlightByPriority(
+                  queue,
+                  OutboundDeliveryPriority.BACKGROUND,
+                ),
+                inFlightForSource,
+                inFlightSourceLimit,
+                pendingSourceSummary: buildPendingSourceSummary(queue),
+              },
+            );
+          }
+        }
+        criticalSourceReserveAdmission =
+          queue.pending.length < criticalPendingCeiling;
+        isNodeBackpressured =
+          queue.pending.length >= criticalPendingCeiling;
+      }
+      if (isNodeBackpressured || isSourceBackpressured) {
+        const error = buildOutboundQueueBackpressureError(
+          nodeId,
+          queue,
+          isSourceBackpressured ?
+            OUTBOUND_QUEUE_BACKPRESSURE_SCOPE.DELIVERY_SOURCE :
+            OUTBOUND_QUEUE_BACKPRESSURE_SCOPE.NODE,
+        );
+        const rejectionWarnSample = takeOutboundSaturationWarnSample(queue);
+        if (rejectionWarnSample) {
           this.router.logger.warn(
-            MESSAGE_ROUTER_LITERAL
-              .STRING_OUTBOUND_QUEUE_SATURATED_FOR_NODE_DELIVERY,
+            MESSAGE_ROUTER_LITERAL.STRING_OUTBOUND_QUEUE_SATURATED_FOR_NODE_DELIVERY,
             {
               localNodeId: this.router.nodeId,
               targetNodeId: nodeId,
-              deliveryPriority: preemptedItem?.priority,
-              attemptedDeliverySource: preemptedItem?.deliverySource,
-              admittedDeliverySource: deliverySource,
-              backpressureScope:
-                OUTBOUND_QUEUE_BACKPRESSURE_SCOPE.DELIVERY_SOURCE,
-              preemptedForCriticalSourceReserve: true,
+              deliveryPriority,
+              attemptedDeliverySource: deliverySource,
+              attemptedTargetAddress: normalizeIdentifier(options.targetAddress),
+              backpressureScope: error.backpressureScope,
+              suppressedSinceLastWarn:
+                rejectionWarnSample.suppressedSinceLastWarn,
               pending: queue.pending.length,
               pendingCritical: countPendingByPriority(
                 queue,
                 OutboundDeliveryPriority.CRITICAL,
               ),
               pendingBackground,
+              pendingForSource: pendingSourceAdmission.pendingForSource,
+              pendingSourceLimit: pendingSourceAdmission.pendingSourceLimit,
+              sourceLimitApplied: pendingSourceAdmission.applySourceLimit,
               backgroundPendingLimit,
               criticalReserve: queue.criticalReserve,
               maxPending: queue.maxPending,
@@ -364,54 +455,6 @@ class OutboundDeliveryRegistryOwner {
             },
           );
         }
-        criticalSourceReserveAdmission =
-          queue.pending.length < criticalPendingCeiling;
-        isNodeBackpressured =
-          queue.pending.length >= criticalPendingCeiling;
-      }
-      if (isNodeBackpressured || isSourceBackpressured) {
-        const error = buildOutboundQueueBackpressureError(
-          nodeId,
-          queue,
-          isSourceBackpressured ?
-            OUTBOUND_QUEUE_BACKPRESSURE_SCOPE.DELIVERY_SOURCE :
-            OUTBOUND_QUEUE_BACKPRESSURE_SCOPE.NODE,
-        );
-        this.router.logger.warn(
-          MESSAGE_ROUTER_LITERAL.STRING_OUTBOUND_QUEUE_SATURATED_FOR_NODE_DELIVERY,
-          {
-            localNodeId: this.router.nodeId,
-            targetNodeId: nodeId,
-            deliveryPriority,
-            attemptedDeliverySource: deliverySource,
-            attemptedTargetAddress: normalizeIdentifier(options.targetAddress),
-            backpressureScope: error.backpressureScope,
-            pending: queue.pending.length,
-            pendingCritical: countPendingByPriority(
-              queue,
-              OutboundDeliveryPriority.CRITICAL,
-            ),
-            pendingBackground,
-            pendingForSource: pendingSourceAdmission.pendingForSource,
-            pendingSourceLimit: pendingSourceAdmission.pendingSourceLimit,
-            sourceLimitApplied: pendingSourceAdmission.applySourceLimit,
-            backgroundPendingLimit,
-            criticalReserve: queue.criticalReserve,
-            maxPending: queue.maxPending,
-            inFlight: queue.inFlight,
-            inFlightCritical: countInFlightByPriority(
-              queue,
-              OutboundDeliveryPriority.CRITICAL,
-            ),
-            inFlightBackground: countInFlightByPriority(
-              queue,
-              OutboundDeliveryPriority.BACKGROUND,
-            ),
-            inFlightForSource,
-            inFlightSourceLimit,
-            pendingSourceSummary: buildPendingSourceSummary(queue),
-          },
-        );
         reject(error);
         return;
       }
@@ -617,5 +660,7 @@ const INCOMING_CONNECTION_ADOPTION = Object.freeze({
 
 export {
   INCOMING_CONNECTION_ADOPTION,
+  OUTBOUND_SATURATION_WARN_INTERVAL_MS,
   OutboundDeliveryRegistryOwner,
+  takeOutboundSaturationWarnSample,
 };
