@@ -19,6 +19,7 @@ Each record below represents one violated invariant.
 | CL-005 | narrowed | readiness-projection | Partitioning pre-load bootstrap must expose the required replica-bearing quorum and at least one benchmark-ready replica-bearing node before scenario load startup begins. |
 | CL-006 | guarded | membership-join-lifecycle | A retryable failure of a checkpointed join step must not regress durable join progress (destroy join infrastructure or withdraw registered membership rows); only terminal failures may run destructive cleanup. |
 | CL-007 | guarded | transport-liveness | The ACK-timeout quarantine may sever a connection only on evidence the peer is dead (no inbound traffic within the liveness window) — never for a peer that is demonstrably alive but slow. |
+| CL-008 | open | placement-planning-feedback | A planning tick must not re-execute a calculated move whose previously-created operation is still in flight (PENDING or dispatch-shed). |
 
 ## CL-001 Published Membership Convergence Under Restart Churn
 
@@ -748,3 +749,55 @@ Each record below represents one violated invariant.
    321 rebalancing-move executions during formation, planning gate parked
    at "stabilization") remains a separate concern — likely CL-003-adjacent
    — if creep persists after this guard.
+
+## CL-008 Planner Must Not Re-Execute Moves Whose Operations Are In Flight
+
+- Status: open (investigated 2026-06-11, fix not started)
+- Concern: placement-planning-feedback
+- Failure Class: seed-saturation
+- First Violated Invariant: A planning tick must not re-execute a calculated
+  move whose previously-created operation is still in flight (PENDING or
+  dispatch-shed) — re-execution without in-flight dedup converts a stuck
+  operation into unbounded operation-row churn at planning cadence.
+- Authoritative Owner: UnifiedRebalancer move execution
+  (unified-rebalancer-segment-4-stage-3.js:795 executeMove →
+  executeMoveViaCoordinator → rebalanceCoordinator.createOperation, NO dedup
+  against in-flight operations) + planning cadence
+  (rebalancer-planning-gate-methods.js:689 advanceCheckCadence — no
+  shed-budget feedback; dispatch shed budget lives below at the dispatch
+  layer and never informs planning).
+- Current Symptom (stat-gate-20260610T192851Z runs 1+3 seed logs): 321 move
+  executions in ~9min across the 5 priority partitions while every created
+  operation died at PENDING ("Deferred replica operation dispatch while
+  control-plane path recovers", per-target shed budgets exhausted). Each
+  re-execution creates a NEW operation record. Composed with the supply-side
+  finding: the seed event loop is blocked 13.4% (run1) to 25.7% (run3) of
+  wall time in >3s gaps whose dominant cluster sits inside CDC event
+  hydration — synchronous better-sqlite3 prepare/get row fetches
+  (partition-cdc-parameterized-sql.js:231-234,298-301, called from
+  partition-cdc-generator.js:361 via partition-service-segment-3-part-2.js:64)
+  with no yielding between events. Mechanism: move churn writes
+  replica_operations rows → CDC hydration sync-fetches wide rows → loop
+  blocked → ACKs >5s for minutes (CL-007's guard now keeps connections up,
+  witnessed by 200-476 liveness-skips/run) → registration writes creep →
+  publication misses joiners.
+- VERIFY BEFORE FIXING (agent overclaim risks): (a) per-call sync fetch
+  latency of 3-10s is implausible — measure whether the blockage is
+  cumulative tight-loop fetches, SQLite lock/WAL contention, or partly gap
+  attribution bias; (b) confirm operation-row accumulation directly
+  (count replica_operations rows created per partition per run); (c) the
+  agent could not confirm same-move-id repetition from logs (EXECUTE_MOVE
+  lacks a move id field — add one if needed for the witness).
+- Fix directions (existing-systems-first): the coordinator/repository
+  already track in-flight operations — consult them before executeMove
+  (dedup, not a new layer); feed the dispatch shed budget back into
+  advanceCheckCadence (backoff when the target is unreachable); CDC
+  hydration yielding (setImmediate between events) or async fetch is a
+  separate, second fix.
+- CL-003 NOTE: evidence item 9 (MovePlanner.analyzePrioritySpread ready-only
+  denominator) is FALSIFIED as the source of these formation moves — primary
+  moves come from standard MovePlanner.calculateMoves replica-count
+  convergence (unified-rebalancer-segment-4-stage-5.js:163);
+  analyzePrioritySpread is only consulted during priority-recovery
+  augmentation (segment-4-stage-5.js:168-171). The denominator defect may
+  still matter for the augmentation path but is not this record's driver.
