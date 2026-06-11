@@ -1225,6 +1225,40 @@ Each record below represents one violated invariant.
   DEFERRED (pending gate measurement): per-(partition,dimension) TTL memo
   of getPartitionRoutingSnapshot — has a real staleness tradeoff, only to
   be taken if the gate shows the remaining volume still dominates.
+- PHASE 1 GATE VALIDATION (stat-gate-20260611T090827Z, 4 runs, clean
+  containers, srcFingerprint 07bd91b10c887565): **4/4 CONVERGED, 0 corrupt
+  — first 4/4 publication convergence in this work's history.** Wall times
+  237-294s for three runs (vs 370-640s in every prior round). Gap
+  STRUCTURE transformed: max single gap collapsed from 70-95s to 13-34s
+  (mostly 13-17s); blockedPercentOfWall remains ~89-92% (the seed still
+  works at capacity during formation) but the gaps are now short enough
+  that registration writes and publication complete inside their budgets —
+  cutting the per-read/per-operation amplification edges broke the
+  COMPOUNDING, which was the load-bearing harm. Inclusive profile shape
+  persists (getNodeReadinessSync 71%, full snapshot rebuilds 45.7%,
+  resolveMembershipPublicationPlanningSnapshot up to 38.5% on the miss
+  path) — phase 2 (stored-snapshot hit-rate measurement, routing-snapshot
+  TTL memo) remains available as hardening if larger clusters need
+  headroom, but is NOT the scenario blocker anymore.
+- SCENARIO RE-PIN (the decisive readout): all four runs now fail the
+  ACTIVE gate at a much later state that the CL-003 guarded witness
+  claims by name: publication=PUBLISHED, publishedActive=5/5,
+  missingPublished=0, coverage=5/5#complete, epoch=4, gateReasons=
+  priority_control_plane_spread_pending,
+  closure=CL-003#publication_converged_priority_spread_pending,
+  priorityRecoveryState=recovering_in_flight. The formation-livelock chain
+  (CL-006 join cleanup -> CL-007 quarantine -> CL-008 rearm -> CL-009
+  storm -> CL-010 epoch dedup -> CL-011 clone cost -> CL-012 read
+  amplification) is cleared; the live blocker for rolling restart is again
+  CL-003 priority spread recovery — exactly the record whose witness
+  infrastructure was built for this moment. CL-003's recorded
+  falsification step (did the planner ever plan the spread move for the
+  gap partition?) is now directly answerable with this session's
+  witnesses: moveTargetNodeId is un-clobbered in EXECUTE_MOVE, in-flight
+  reuse is logged with rearmAction, and the watchdog/profiler stand by.
+  Statistical honesty: N=4 at 4/4 (vs 1-2/4 in recent rounds) plus the
+  structural gap change and the consistent re-pin across all four runs
+  support a real effect; a confirmation round will tighten it.
 - Notes:
   1. CL-010 and CL-011 are now guarded sub-causes of this record's class:
      they cut per-call cost (recovery-epoch dedup, clone cost); this record
