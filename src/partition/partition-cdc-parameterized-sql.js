@@ -4,6 +4,7 @@
 
 import {NUM, TYPEOF} from '../constants/index.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
+import {trackSyncSection} from '../diagnostics/event-loop-gap-watchdog.js';
 import {extractConjunctiveWhereColumns} from './partition-sql-parser.js';
 import {
   PARTITION_SERVICE_ERROR_MSG,
@@ -11,6 +12,11 @@ import {
   PARTITION_SERVICE_SQL_FRAGMENT,
   PARTITION_SERVICE_VALUE,
 } from './partition-service-constants.js';
+
+const CDC_SYNC_SECTION = Object.freeze({
+  INSERT_ROW_FETCH: 'cdc_insert_row_fetch',
+  UPDATE_ROW_FETCH: 'cdc_update_row_fetch',
+});
 
 /**
  * Extract data from parameterized INSERT SQL.
@@ -228,10 +234,12 @@ export function fetchInsertRow({
   }
 
   try {
-    const stmt = db.prepare(
-      `SELECT * FROM ${tableName} WHERE ${keyColumn} = ?`,
-    );
-    const row = stmt.get(keyValue);
+    const row = trackSyncSection(CDC_SYNC_SECTION.INSERT_ROW_FETCH, () => {
+      const stmt = db.prepare(
+        `SELECT * FROM ${tableName} WHERE ${keyColumn} = ?`,
+      );
+      return stmt.get(keyValue);
+    });
     if (row) {
       if (tableName !== SYSTEM_TABLE_NAME.LOGS) {
         logger.info(PARTITION_SERVICE_LOG_MSG.FETCHED_INSERT_ROW, {
@@ -295,10 +303,12 @@ export function fetchUpdatedRow({
   const whereValues = entries.map(([_key, value]) => value);
 
   try {
-    const stmt = db.prepare(
-      `SELECT * FROM ${tableName} WHERE ${whereSql}`,
-    );
-    const row = stmt.get(...whereValues);
+    const row = trackSyncSection(CDC_SYNC_SECTION.UPDATE_ROW_FETCH, () => {
+      const stmt = db.prepare(
+        `SELECT * FROM ${tableName} WHERE ${whereSql}`,
+      );
+      return stmt.get(...whereValues);
+    });
     if (row) {
       if (tableName !== SYSTEM_TABLE_NAME.LOGS) {
         logger.info(PARTITION_SERVICE_LOG_MSG.FETCHED_UPDATE_ROW, {

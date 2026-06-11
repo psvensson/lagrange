@@ -8,6 +8,7 @@ import {
   computeSourceFingerprint,
   SOURCE_FINGERPRINT_ENV_VAR,
 } from './diagnostics/source-fingerprint.js';
+import {EventLoopGapWatchdog} from './diagnostics/event-loop-gap-watchdog.js';
 import {ConfigurationManager} from './config/configuration-manager.js';
 import {CONFIG_KEY} from './config/config-constants.js';
 import {LoggingService} from './logging/logging-service.js';
@@ -767,6 +768,12 @@ async function main() {
     nodeId: config.get(CONFIG_KEY.NODE_ID),
     pid: process.pid,
   }));
+
+  // Loop-blockage attribution for the convergence closure work (CL-008 next
+  // falsification step). Console-only output, silent while the loop is
+  // healthy; LAGRANGE_LOOP_GAP_THRESHOLD_MS=0 disables.
+  const eventLoopGapWatchdog = new EventLoopGapWatchdog();
+  eventLoopGapWatchdog.start();
 
   const selectedRaftProvider = getProcessRaftProvider(process.env);
   mainLogger.info(RAFT_PROVIDER_LOG_MSG.SELECTED, {
