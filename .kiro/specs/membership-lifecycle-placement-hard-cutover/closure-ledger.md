@@ -1446,6 +1446,31 @@ Each record below represents one violated invariant.
   is improbable); (3) when ALL siblings are genuinely dead and hints are
   absent, each create attempt burns syncTimeoutMs then terminal-FAILs
   (planner re-plans) — correct but slower than a DEFER_RETRY shape.
+- GATE VALIDATION (stat-gate-20260611T110228Z, 4 runs): MECHANISM
+  VALIDATED, TOPLINE REGRESSED — the two must be read together.
+  Mechanism: 99 replica creates per run now carry peer topology and reach
+  stage=ready (prior round: EVERY priority create was peers=0/0 and
+  failed); the topology-missing throw fired zero times harmfully; the
+  remaining 4-8 peers=0/0 starts are non-REPLACE provisioning creates
+  (legitimate fresh bootstraps). CL-013's invariant holds.
+  Topline: 1 CONVERGED / 3 STALLED (runs 1+3 on the CL-003 spread
+  surface; runs 2+4 in a publication-missing-all-joiners mode) vs
+  11C/1S/0St across the prior three rounds — a real regression, not N=4
+  noise. DIAGNOSIS HYPOTHESIS (next falsification step): the fix
+  UNBLOCKED real spread-recovery execution during INITIAL FORMATION —
+  replicas now actually move to joiners (raft membership changes, joint
+  consensus, REPLACE source removals on the five priority partitions)
+  concurrently with joiner registration writes. Witness: 37-47 'Became
+  leader (liferaft)' events per run (massive election churn vs settled
+  leadership in the stable rounds), 12-15 voter-ready failures, seed
+  event-loop gaps back up to 37-46/run. The likely next record (CL-014
+  candidate): priority control-plane spread recovery must be PHASED or
+  PACED against formation — control-plane write availability (joiner
+  registration, publication) must not compete with priority-partition
+  membership churn; the existing topology-settling/stabilization planning
+  gates admitted this churn and need a falsification pass on WHY.
+  CL-007's old open question ('why does the rebalancer execute moves
+  during initial formation') is now load-bearing.
 - Relationship to other records: this is the ACTUAL CL-003 blocker (the
   planner and spread summary are exonerated; operations fail at learner
   join). CL-009(ii)'s mute landed correctly but is NOT load-bearing here
