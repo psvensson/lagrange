@@ -1475,17 +1475,36 @@ Each record below represents one violated invariant.
   recovery (created 11:06:55 -> 35a891b8) for the first time. The
   REPLACE-target node's driver correctly defers ('skip not-owner', 232
   traces).
-  CL-014 (re-pinned): after spread recovery executes on the publications
-  partition, the membership-publication owner driver's DEFICIT
-  COMPUTATION no longer sees registered-but-unpublished joiners
-  (missing=0) while the gate's witness does (missing=4). Falsify next:
-  diff the driver's deficit input sources (driveOwnerMembershipReconcile)
-  against the gate's missingPublished witness for the same instant —
-  candidates: the driver reading through the publications partition's NEW
-  replica/quorum (fresh replica lacking rows it considers authoritative),
-  a registration-row visibility lag into the driver's input cache, or the
-  deficit set keyed on a stale cohort. 0 corrupt throughout — rows are
-  not damaged, the OWNER'S VIEW is.
+  CL-014 (FINAL RE-PIN, completed same session — full witness chain from
+  run2 artifacts): the OWNER IS RIGHT and the GATE'S ORACLE IS STALE, and
+  the staleness is itself the new invariant violation:
+  (a) owner driver final trace: publicationEpoch=5,
+  publishedActiveNodeCount=5/5, missing=0, contract pending only on
+  priority_spread_pending — publication genuinely converged at the owner;
+  (b) gate final witness (control snapshot via joiner ebc4aa0b):
+  epoch=1, publishedActive=1/5, missingPublished=4, disagreementNodes=4 —
+  ALL FOUR joiners' caches are FROZEN at the pre-REPLACE publication
+  epoch 1 for the rest of the run (~5min) while epochs 2-5 commit on the
+  seed;
+  (c) the freeze begins in the round where control_plane_publications-p1
+  underwent its first SUCCESSFUL REPLACE (11:06:55 -> 35a891b8, unblocked
+  by CL-013;) joiners completed registration normally;
+  (d) the gate loops handoffOutcome=write_deferred/owner_reconcile_enqueued
+  while the owner answers no-deficit — a stalemate between a correct
+  owner and a stale oracle.
+  CL-014 FIRST VIOLATED INVARIANT (now precise): CDC propagation of
+  control_plane_publications rows to non-owner nodes must survive a
+  membership change (REPLACE) of the publications partition itself —
+  post-REPLACE, the publication CDC fan-out to all four joiners stopped,
+  freezing their caches at epoch 1. Next falsification step: trace the
+  publication-row CDC subscription path on a joiner (who subscribes to
+  control_plane_publications CDC, and how does the subscription re-arm
+  when the partition's replica set / leader changes) and find where the
+  post-REPLACE stream detaches; also check whether the new replica on
+  35a891b8 emits CDC at all. Secondary (CL-002 coupling): the harness
+  gate knowingly used a 'stale_usable' snapshot for minutes — the witness
+  selection should prefer a node whose publication watermark advances, or
+  cross-check the owner's view before declaring no-progress.
 - Relationship to other records: this is the ACTUAL CL-003 blocker (the
   planner and spread summary are exonerated; operations fail at learner
   join). CL-009(ii)'s mute landed correctly but is NOT load-bearing here
