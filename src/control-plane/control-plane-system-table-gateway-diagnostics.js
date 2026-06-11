@@ -48,17 +48,25 @@ function resolveGatewaySystemTablePartitionId(gateway, tableName) {
  * @param {Object} gateway
  * @param {string|null} tableName
  * @param {string|null} routingReadinessDimension
+ * @param {Object} [diagnosticsOptions={}]
+ * @param {boolean} [diagnosticsOptions.includeRoutingSnapshot] - When false,
+ *   skip the live partition routing snapshot (full per-service readiness
+ *   evaluation) and derive every field from cache fallbacks. CL-012: the
+ *   operation-ledger diagnostics run on EVERY gateway operation, so the
+ *   snapshot is reserved for failure diagnosis.
  * @return {Object}
  */
 function buildGatewayFallbackSystemTableRoutingDiagnostics(
   gateway,
   tableName,
   routingReadinessDimension = null,
+  diagnosticsOptions = {},
 ) {
   const partitionId = resolveGatewaySystemTablePartitionId(gateway, tableName);
   let routingSnapshot = null;
   const sqlQueryEngine = gateway.resolveSqlQueryEngine();
   if (
+    diagnosticsOptions.includeRoutingSnapshot !== false &&
     partitionId &&
     sqlQueryEngine?.queryExecutor &&
     typeof sqlQueryEngine.queryExecutor.getPartitionRoutingSnapshot ===
@@ -224,6 +232,12 @@ function buildGatewayOperationLedgerDiagnostics(
     gateway,
     tableName,
     routingReadinessDimension,
+    {
+      // CL-012: live routing snapshots (full per-service readiness) are
+      // reserved for failure diagnosis; successful operations use cache
+      // fallbacks.
+      includeRoutingSnapshot: hasFailureSignals,
+    },
   );
   const canonicalLeaderIdentityState =
     systemTableDiagnostics.canonicalLeaderIdentityState ||

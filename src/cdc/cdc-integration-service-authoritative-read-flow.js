@@ -169,23 +169,13 @@ function buildSystemTableOperationDiagnostics(service, tableName, options = {}) 
   const partitionIds = resolveSystemTablePartitionIds(service, tableName);
   const partitionId = partitionIds[NUM.ZERO] || null;
 
-  let routingSnapshot = null;
-  if (
-    partitionId &&
-    service.sqlQueryEngine?.queryExecutor &&
-    typeof service.sqlQueryEngine.queryExecutor.getPartitionRoutingSnapshot ===
-      TYPEOF.FUNCTION
-  ) {
-    try {
-      routingSnapshot =
-        service.sqlQueryEngine.queryExecutor.getPartitionRoutingSnapshot(
-          partitionId,
-          routingReadinessDimension,
-        );
-    } catch (_error) {
-      routingSnapshot = null;
-    }
-  }
+  // CL-012: these diagnostics are built on EVERY authoritative read, and a
+  // partition routing snapshot evaluates full node readiness per service
+  // row — the inclusive-time profile pinned this eager enrichment inside
+  // the seed's 20-95s event-loop gaps. The routing-snapshot-derived fields
+  // are informational only and every consumer already falls back to the
+  // cache-derived values below, so the snapshot is no longer built here.
+  const routingSnapshot = null;
 
   let partitionRow = null;
   let serviceRows = [];

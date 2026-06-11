@@ -1198,6 +1198,33 @@ Each record below represents one violated invariant.
 - Required Guard (when fixed): profiled gate run shows
   blockedPercentOfWall collapsing from ~94-97%, plus a unit/perf guard on
   the readiness fast path.
+- PHASE 1 FIX LANDED (2026-06-11): three cuts, all verified
+  diagnostics-only or reuse-preserving by code trace before changing:
+  (a) executeAuthoritativeSystemTableRead no longer builds a routing
+  snapshot for its base diagnostics (built on EVERY authoritative read;
+  fields informational with existing cache fallbacks; owner-RPC targeting
+  uses executeOnPartition's own routing, verified unaffected);
+  (b) gateway operation-ledger diagnostics build the live routing snapshot
+  only on failure signals (was unconditional per gateway operation);
+  (c) getNodeReadinessSync consults the stored-snapshot reuse BEFORE the
+  heavy evidence prelude — planning-snapshot resolution (15.9% inclusive),
+  service-row scan, lifecycle, and node evidence now run only on reuse
+  miss; the background-refresh hook receives serviceRows via a lazy getter
+  (consumed only on its doubly-gated repair path).
+  AMPLIFICATION CYCLE STATUS: the direct local-read path is verified
+  non-recursive (partitionService.executeQuery straight to the replica);
+  the eager diagnostics edges (a)+(b) WERE cycle edges and are now cut;
+  the owner-RPC fallback edge (executeOnPartition -> routing -> readiness)
+  remains by design but no longer triggers on local-read happy paths.
+  Guards: readiness-read-amplification-fast-paths.test.js (8 failures on
+  revert of the three cuts; hit path skips prelude, miss path unchanged,
+  lazy serviceRows resolves on access, read-flow never builds the
+  snapshot, gateway gates on failure). 331 readiness + 1248 cdc/gateway +
+  full control-plane suite green (3 pre-existing owner-membership-driver
+  stub failures unrelated, fail identically without these changes).
+  DEFERRED (pending gate measurement): per-(partition,dimension) TTL memo
+  of getPartitionRoutingSnapshot — has a real staleness tradeoff, only to
+  be taken if the gate shows the remaining volume still dominates.
 - Notes:
   1. CL-010 and CL-011 are now guarded sub-causes of this record's class:
      they cut per-call cost (recovery-epoch dedup, clone cost); this record

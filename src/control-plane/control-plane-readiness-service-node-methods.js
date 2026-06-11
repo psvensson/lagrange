@@ -336,6 +336,38 @@ const controlPlaneReadinessNodeMethods = {
       observedAt,
     );
     const persistSnapshot = this.shouldPersistReadinessSnapshot(options);
+
+    // CL-012: consult the stored-snapshot reuse BEFORE the heavy evidence
+    // prelude. This is the query-routing hot path (a routing snapshot
+    // evaluates every service row of a partition, and routing snapshots are
+    // built per query, per ingress admission, and per mutation-readiness
+    // check); the planning-snapshot resolution, service-row scan, lifecycle
+    // and evidence builds below are only needed when a fresh snapshot is
+    // NOT reusable. serviceRows is provided lazily because the background
+    // refresh consumes it only on its doubly-gated repair path.
+    const fresherStoredSnapshot = this.getFresherStoredReadinessSnapshot(
+      nodeId,
+      nodeRow,
+      publication,
+      membershipPublication,
+    );
+
+    if (fresherStoredSnapshot) {
+      const readinessService = this;
+      this.maybeStartBackgroundSyncReadinessRefresh(
+        {
+          nodeId,
+          nodeRow,
+          get serviceRows() {
+            return readinessService.getNodeServiceRows(nodeId);
+          },
+          snapshot: fresherStoredSnapshot,
+        },
+        options,
+      );
+      return fresherStoredSnapshot;
+    }
+
     const membershipPublicationPlanningSnapshot =
       this.resolveNodeMembershipPublicationPlanningAnswerSync(
         nodeId,
@@ -357,25 +389,6 @@ const controlPlaneReadinessNodeMethods = {
         lifecycleState,
         serviceRows,
       });
-    const fresherStoredSnapshot = this.getFresherStoredReadinessSnapshot(
-      nodeId,
-      nodeRow,
-      publication,
-      membershipPublication,
-    );
-
-    if (fresherStoredSnapshot) {
-      this.maybeStartBackgroundSyncReadinessRefresh(
-        {
-          nodeId,
-          nodeRow,
-          serviceRows,
-          snapshot: fresherStoredSnapshot,
-        },
-        options,
-      );
-      return fresherStoredSnapshot;
-    }
 
     if (!nodeRow) {
       if (
