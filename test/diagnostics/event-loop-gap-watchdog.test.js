@@ -156,6 +156,14 @@ test('event loop gap watchdog', async (t) => {
       target && target.share > 0.3,
       `blocking function dominates the window (share=${target?.share})`,
     );
+    const inclusiveTarget = windowReport.topInclusiveFrames.find(
+      (frame) => frame.fn === 'profilerTargetBusyLoop',
+    );
+    t.ok(
+      inclusiveTarget && inclusiveTarget.inclusiveShare > 0.3,
+      'blocking function ranks by inclusive time ' +
+        `(share=${inclusiveTarget?.inclusiveShare})`,
+    );
   });
 
   await t.test('trackSyncSection records into the shared registry and ' +

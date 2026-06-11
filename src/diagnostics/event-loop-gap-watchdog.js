@@ -280,10 +280,81 @@ class GapSamplingProfiler {
       return {
         windowMs,
         ...this.aggregateTopFrames(profile),
+        topInclusiveFrames: this.aggregateTopInclusiveFrames(profile),
       };
     } finally {
       this.rotating = false;
     }
+  }
+
+  /**
+   * Aggregate INCLUSIVE (self + descendants) hit counts per function. Where
+   * self-time is diffuse across many small callees, the inclusive ranking
+   * names the driving loop instead. Functions reached from multiple parents
+   * are summed across their stack nodes; recursive frames may exceed 100%.
+   * Meta frames ((root), (program), (idle), (garbage collector)) excluded.
+   * @param {Object} profile - V8 CPU profile.
+   * @return {Array<Object>}
+   * @private
+   */
+  aggregateTopInclusiveFrames(profile) {
+    const nodes = Array.isArray(profile?.nodes) ? profile.nodes : [];
+    if (nodes.length === 0) {
+      return [];
+    }
+    const nodeById = new Map(nodes.map((node) => [node.id, node]));
+    const subtreeHitsById = new Map();
+    const computeSubtreeHits = (nodeId) => {
+      if (subtreeHitsById.has(nodeId)) {
+        return subtreeHitsById.get(nodeId);
+      }
+      const node = nodeById.get(nodeId);
+      if (!node) {
+        return 0;
+      }
+      let total = Number.isFinite(node.hitCount) ? node.hitCount : 0;
+      for (const childId of node.children || []) {
+        total += computeSubtreeHits(childId);
+      }
+      subtreeHitsById.set(nodeId, total);
+      return total;
+    };
+    let totalSamples = 0;
+    for (const node of nodes) {
+      totalSamples += Number.isFinite(node.hitCount) ? node.hitCount : 0;
+    }
+    const META_FRAMES = new Set([
+      '(root)', '(program)', '(idle)', '(garbage collector)',
+    ]);
+    const inclusiveByKey = new Map();
+    for (const node of nodes) {
+      const callFrame = node.callFrame || {};
+      const fn = callFrame.functionName || '(anonymous)';
+      if (META_FRAMES.has(fn)) {
+        continue;
+      }
+      const url = this.compactUrl(callFrame.url);
+      const line = Number.isFinite(callFrame.lineNumber) ?
+        callFrame.lineNumber + 1 :
+        null;
+      const key = `${fn}@${url}:${line}`;
+      const frame = inclusiveByKey.get(key) ||
+        {fn, url, line, inclusiveHits: 0};
+      frame.inclusiveHits += computeSubtreeHits(node.id);
+      inclusiveByKey.set(key, frame);
+    }
+    return [...inclusiveByKey.values()]
+      .sort((left, right) => right.inclusiveHits - left.inclusiveHits)
+      .slice(0, this.topFrames)
+      .map((frame) => ({
+        ...frame,
+        inclusiveMs: Math.round(
+          (frame.inclusiveHits * this.samplingIntervalUs) / 1000,
+        ),
+        inclusiveShare: totalSamples > 0 ?
+          Number((frame.inclusiveHits / totalSamples).toFixed(3)) :
+          0,
+      }));
   }
 
   /**
@@ -533,6 +604,7 @@ class EventLoopGapWatchdog {
           windowMs: Math.round(windowReport.windowMs),
           totalSamples: windowReport.totalSamples,
           topFrames: windowReport.topFrames,
+          topInclusiveFrames: windowReport.topInclusiveFrames,
         },
       );
     }).catch((error) => {
