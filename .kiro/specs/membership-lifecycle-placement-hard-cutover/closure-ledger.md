@@ -24,7 +24,7 @@ Each record below represents one violated invariant.
 | CL-010 | guarded | readiness-observation-hot-path | Per-observation readiness diagnostics must be O(changes), not O(calls): the recovery-epoch timeline's change check must not allocate and double-JSON.stringify full summaries (including fresh timestamps, so it never matched) on every getNodeReadinessSync. |
 | CL-011 | guarded | readiness-observation-hot-path | Read isolation for cached system-table rows must not cost a JSON serialize+parse roundtrip per row per read. |
 | CL-012 | guarded | readiness-read-amplification | The query executor's partition-routing path must not rebuild full node readiness (evidence pipeline + authoritative reads) per service row per routing decision; readiness evaluation must not recursively issue reads that themselves require routing + readiness. |
-| CL-013 | open | replica-join-topology | A REPLACE-created replica joining an ESTABLISHED partition must consume the owner-dispatched bootstrap topology; it must never fall back to a locally-filtered cache view that can reduce to self-only and trigger a fresh solo raft bootstrap. |
+| CL-013 | guarded | replica-join-topology | A REPLACE-created replica joining an ESTABLISHED partition must consume the owner-dispatched bootstrap topology; it must never fall back to a locally-filtered cache view that can reduce to self-only and trigger a fresh solo raft bootstrap. |
 
 ## CL-001 Published Membership Convergence Under Restart Churn
 
@@ -1588,6 +1588,25 @@ Each record below represents one violated invariant.
   owner-RPC preference for the catch-up read; (3) known-groups set has no
   status filter (decommissioned groups read as perpetually skipped —
   misleading framing in the new warn).
+  GATE VALIDATION (stat-gate-20260611T122403Z, 4 runs): EXACTLY AS
+  PRE-REGISTERED — CL-014 CLOSED AT THE MECHANISM LEVEL AND THE
+  SCENARIO'S NON-DETERMINISM IS GONE. (a) Catch-up engaged on all four
+  joiners in every run: 19/19 tables hydrated, ~285-293 rows applied,
+  zero failed tables, logged at the readiness seam. (b) The publication
+  race is closed: the gate's witness reads the true epoch (7/3/6/3 across
+  runs) with publishedActive=5/5 — owner and gate agree for the first
+  time; no epoch freeze, no publication_missing_active_node anywhere.
+  (c) ALL FOUR runs fail the ACTIVE gate IDENTICALLY at
+  closure=CL-003#publication_converged_priority_spread_pending — a
+  deterministic failure surface after a history of CONVERGED/SLOW/STALLED
+  mixtures. 4/4 publication-classifier CONVERGED, 0 corrupt.
+  STATUS: CL-014 -> guarded. The single remaining rolling-restart blocker
+  is the CL-003/CL-013-residual voter-ready promotion failure: correctly
+  peered REPLACE learners still miss the 60s voter-ready budget
+  (witnessed earlier: the seed's raft stream to the learner is throttled
+  by the per-source cap at 48-pending/8-in-flight while priority
+  partitions carry sizable logs — learner full-log catch-up vs the fixed
+  60s budget is the candidate invariant for the next record).
   REFUTED ALTERNATIVES (for the record): zero-subscriber buffering loss
   (would have warn-logged EVENT_BUFFERED; none), REPLACE-moved CDC source
   (no removes, leader stayed on seed), joiners rejecting stale events (no
