@@ -270,6 +270,8 @@ const REBALANCE_COORDINATOR_LOG_MSG = Object.freeze({
   SHUTDOWN: 'Shutting down RebalanceCoordinator',
   DUPLICATE_OPERATION: 'Duplicate operation detected, reusing existing',
   REUSED_IN_FLIGHT_OPERATION: 'Reusing in-flight operation for planned move',
+  BOOTSTRAP_TOPOLOGY_UNRESOLVED:
+    'Create dispatch proceeding without bootstrap topology',
   STEPS_HISTORY_PARSE_ERROR: 'Failed to parse steps_history JSON',
   QUERY_OPERATION_FAILED: 'Failed to query operation from system table',
   QUERY_OPERATIONS_FAILED: 'Failed to query operations from system table',

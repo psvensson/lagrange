@@ -1403,6 +1403,28 @@ Each record below represents one violated invariant.
   (explicitOperationType is already on the request) — fail/retry instead
   of forming an isolated group; (c) make self-only-context a retryable
   staleness condition; (d) log the null-topology path at the seed.
+- FIX LANDED (2026-06-11): (a) dispatched bootstrap hints now merge
+  UNCONDITIONALLY (replica-handler-runtime-metadata-methods.js — the
+  fresh-window gate on hint consumption removed; the window still governs
+  join-mode semantics only); (b)+(c) an explicit REPLACE join whose
+  resolved topology is SELF-ONLY throws a retryable
+  'Replica join topology unavailable' error (new transient class wired
+  into isTransientMetadataResolutionError, so the existing
+  hydrate-from-authority retry loop engages) instead of solo-bootstrapping;
+  join MODE deliberately unchanged — with peers present but no viable
+  leader, voter-mode re-formation remains the designed dead-leader
+  recovery (the pre-existing guard test for disconnected-leader REPLACE
+  enforced this and was honored, not weakened); (d) the seed's tolerated
+  null-topology paths now warn ('Create dispatch proceeding without
+  bootstrap topology', reasons no_service_rows/incomplete_topology) and
+  the CREATE_OPERATION log carries
+  bootstrapTopologyStamped/bootstrapReplicaIdCount.
+  Guards: three new cases in
+  test/node/replica-handler-create-topology-test-cases.js (established-
+  partition REPLACE consumes hints with full cohort and never self-only;
+  hint-less self-only REPLACE fails retryably with NO partition service
+  created; legacy non-REPLACE fallback unchanged) — 4 failures on fix
+  revert. 1175 node + 224 replace-workflow tests green.
 - Relationship to other records: this is the ACTUAL CL-003 blocker (the
   planner and spread summary are exonerated; operations fail at learner
   join). CL-009(ii)'s mute landed correctly but is NOT load-bearing here

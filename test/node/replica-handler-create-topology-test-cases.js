@@ -616,4 +616,219 @@ export async function registerReplicaHandlerCreateTopologyTests({
       handler.shutdown();
     },
   );
+
+  t.test(
+    'CL-013: explicit REPLACE join into an established partition consumes ' +
+      'dispatched topology hints and joins as learner',
+    async (t) => {
+      const partitionId = 'partition-1';
+      const tableId = 'table-1';
+      const cache = createMetadataOnlyCache({partitionId, tableId});
+      seedReplicaOperation(cache, 'op-1', {partitionId, replicaId: 'replica-4'});
+      const createdAt = Date.now() - 60000;
+      // Established partition: leader set, updated after creation — the
+      // fresh-bootstrap window is CLOSED (the live CL-013 witness state).
+      cache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, 'INSERT', {
+        partition_id: partitionId,
+        table_id: tableId,
+        partition_key_start: null,
+        partition_key_end: null,
+        leader_node_id: 'node-seed',
+        created_at: createdAt,
+        updated_at: createdAt + 5000,
+      });
+      // No sibling SERVICES rows visible locally (cache lag / viability
+      // filtering) — only the dispatched hints know the group.
+      const bootstrapReplicaIds = ['replica-1', 'replica-2', 'replica-3', 'replica-4'];
+      const bootstrapPeerAddresses = [
+        'node-seed/partition/replica-1',
+        'node-seed/partition/replica-2',
+        'node-seed/partition/replica-3',
+        'node-learner/partition/replica-4',
+      ];
+      let capturedOptions = null;
+
+      const handler = new ReplicaHandler({
+        nodeId: 'node-learner',
+        cdcIntegrationService: createMockCDCService(cache),
+        systemTableCache: cache,
+        dataDir: getTempDir(),
+        createPartitionService: async (options) => {
+          capturedOptions = options;
+          return {
+            partitionId: options.partitionId,
+            replicaId: options.replicaId,
+            initialized: true,
+            async shutdown() {},
+            async syncFromLeader() {},
+          };
+        },
+      });
+
+      handler.initialize();
+      const created = waitForReplicaEvent(
+        handler,
+        'replicaCreated',
+        'replicaCreationFailed',
+      );
+      await handler.handleCreateReplica({
+        operationId: 'op-1',
+        operationType: 'REPLACE',
+        partitionId,
+        replicaId: 'replica-4',
+        replicaIds: bootstrapReplicaIds,
+        peerAddresses: bootstrapPeerAddresses,
+      });
+      await created;
+
+      t.ok(capturedOptions, 'partition factory invoked');
+      t.same(
+        capturedOptions.replicaIds.slice().sort(),
+        bootstrapReplicaIds.slice().sort(),
+        'dispatched cohort consumed despite the closed fresh window',
+      );
+      t.same(
+        capturedOptions.peerAddresses.slice().sort(),
+        bootstrapPeerAddresses.slice().sort(),
+        'dispatched peer addresses consumed',
+      );
+      t.equal(
+        capturedOptions.isJoiningExistingGroup,
+        false,
+        'no viable leader in cache view: voter-mode re-formation with the ' +
+          'full dispatched cohort (dead-leader recovery semantics) — the ' +
+          'CL-013 guarantee is peers, never solo',
+      );
+      t.ok(
+        capturedOptions.replicaIds.length > 1,
+        'never a self-only topology',
+      );
+
+      handler.shutdown();
+    },
+  );
+
+  t.test(
+    'CL-013: explicit REPLACE join with no hints and self-only cache view ' +
+      'fails retryably instead of solo-bootstrapping an isolated group',
+    async (t) => {
+      const partitionId = 'partition-1';
+      const tableId = 'table-1';
+      const cache = createMetadataOnlyCache({partitionId, tableId});
+      seedReplicaOperation(cache, 'op-1', {partitionId, replicaId: 'replica-4'});
+      const createdAt = Date.now() - 60000;
+      cache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, 'INSERT', {
+        partition_id: partitionId,
+        table_id: tableId,
+        partition_key_start: null,
+        partition_key_end: null,
+        leader_node_id: 'node-seed',
+        created_at: createdAt,
+        updated_at: createdAt + 5000,
+      });
+      let capturedOptions = null;
+
+      const handler = new ReplicaHandler({
+        nodeId: 'node-learner',
+        cdcIntegrationService: createMockCDCService(cache),
+        systemTableCache: cache,
+        dataDir: getTempDir(),
+        createPartitionService: async (options) => {
+          capturedOptions = options;
+          return {
+            partitionId: options.partitionId,
+            replicaId: options.replicaId,
+            initialized: true,
+            async shutdown() {},
+            async syncFromLeader() {},
+          };
+        },
+      });
+      handler.initialize();
+      handler.syncTimeoutMs = 250;
+
+      const outcome = waitForReplicaEvent(
+        handler,
+        'replicaCreationFailed',
+        'replicaCreated',
+      );
+      await handler.handleCreateReplica({
+        operationId: 'op-1',
+        operationType: 'REPLACE',
+        partitionId,
+        replicaId: 'replica-4',
+      });
+      const failure = await outcome;
+
+      t.equal(
+        capturedOptions,
+        null,
+        'no partition service created — solo bootstrap prevented',
+      );
+      t.match(
+        String(failure?.error || failure?.message || failure),
+        /join topology unavailable/,
+        'failure carries the retryable topology-missing class',
+      );
+
+      handler.shutdown();
+    },
+  );
+
+  t.test(
+    'CL-013: non-REPLACE create on an established partition keeps legacy ' +
+      'fallback behavior',
+    async (t) => {
+      const partitionId = 'partition-1';
+      const tableId = 'table-1';
+      const cache = createMetadataOnlyCache({partitionId, tableId});
+      seedReplicaOperation(cache, 'op-1', {partitionId, replicaId: 'replica-4'});
+      const createdAt = Date.now() - 60000;
+      cache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, 'INSERT', {
+        partition_id: partitionId,
+        table_id: tableId,
+        partition_key_start: null,
+        partition_key_end: null,
+        leader_node_id: 'node-seed',
+        created_at: createdAt,
+        updated_at: createdAt + 5000,
+      });
+      let capturedOptions = null;
+
+      const handler = new ReplicaHandler({
+        nodeId: 'node-learner',
+        cdcIntegrationService: createMockCDCService(cache),
+        systemTableCache: cache,
+        dataDir: getTempDir(),
+        createPartitionService: async (options) => {
+          capturedOptions = options;
+          return {
+            partitionId: options.partitionId,
+            replicaId: options.replicaId,
+            initialized: true,
+            async shutdown() {},
+            async syncFromLeader() {},
+          };
+        },
+      });
+      handler.initialize();
+
+      const created = waitForReplicaEvent(
+        handler,
+        'replicaCreated',
+        'replicaCreationFailed',
+      );
+      await handler.handleCreateReplica({
+        operationId: 'op-1',
+        partitionId,
+        replicaId: 'replica-4',
+      });
+      await created;
+
+      t.ok(capturedOptions, 'legacy path still creates');
+
+      handler.shutdown();
+    },
+  );
 }
+

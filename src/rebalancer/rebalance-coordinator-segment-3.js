@@ -338,6 +338,17 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
     });
     if (!Array.isArray(serviceRows) || serviceRows.length === NUM.ZERO) {
       if (entityType === SERVICE_TYPE.PARTITION) {
+        // CL-013: a silently-unstamped operation forces the target replica
+        // onto its local cache fallback — make the tolerated null loud.
+        this.logger.warn(
+          REBALANCE_COORDINATOR_LOG_MSG.BOOTSTRAP_TOPOLOGY_UNRESOLVED,
+          {
+            partitionId,
+            entityType,
+            entityId,
+            reason: 'no_service_rows',
+          },
+        );
         return null;
       }
       throw new Error(
@@ -360,6 +371,18 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
       peerAddresses.length < replicaIds.length
     ) {
       if (entityType === SERVICE_TYPE.PARTITION) {
+        // CL-013: see above — never drop topology silently.
+        this.logger.warn(
+          REBALANCE_COORDINATOR_LOG_MSG.BOOTSTRAP_TOPOLOGY_UNRESOLVED,
+          {
+            partitionId,
+            entityType,
+            entityId,
+            reason: 'incomplete_topology',
+            replicaIdCount: replicaIds.length,
+            peerAddressCount: peerAddresses.length,
+          },
+        );
         return null;
       }
       throw new Error(
@@ -492,6 +515,10 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
       targetNodeId: move.nodeId,
       entityType: entityType,
       entityId: entityId,
+      bootstrapTopologyStamped: bootstrapTopology !== null,
+      bootstrapReplicaIdCount: bootstrapTopology ?
+        bootstrapTopology.replicaIds.length :
+        NUM.ZERO,
     });
 
     // Persist via SQL engine (writes to partition leader)

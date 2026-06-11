@@ -602,6 +602,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
             bootstrapPeerAddresses,
             bootstrapTableMetadata,
             bootstrapPartitionMetadata,
+            explicitOperationType,
           },
         );
         this.throwIfShuttingDown();

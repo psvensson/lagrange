@@ -1,4 +1,17 @@
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
+// CL-013: explicit REPLACE joins categorically target an EXISTING raft
+// group; they must never fall back to solo bootstrap.
+const EXPLICIT_REPLACE_OPERATION_TYPE = 'REPLACE';
+const REPLICA_JOIN_TOPOLOGY_MISSING_PREFIX =
+  'Replica join topology unavailable for partition ';
+
+function replicaJoinTopologyMissingError(partitionId, replicaId) {
+  return new Error(
+    `${REPLICA_JOIN_TOPOLOGY_MISSING_PREFIX}${partitionId}: explicit ` +
+    `REPLACE join for ${replicaId} resolved no sibling peers (dispatched ` +
+    'bootstrap hints absent and local cache view reduced to self-only)',
+  );
+}
 
 function assignReplicaHandlerRuntimeMetadataMethods(
   ReplicaHandler,
@@ -87,7 +100,8 @@ function assignReplicaHandlerRuntimeMetadataMethods(
           '';
       return (
         message.startsWith(PARTITION_METADATA_MISSING_PREFIX) ||
-        message.startsWith(TABLE_METADATA_MISSING_PREFIX)
+        message.startsWith(TABLE_METADATA_MISSING_PREFIX) ||
+        message.startsWith(REPLICA_JOIN_TOPOLOGY_MISSING_PREFIX)
       );
     }
     /**
@@ -274,17 +288,22 @@ function assignReplicaHandlerRuntimeMetadataMethods(
         null;
       const isFreshBootstrapPartition =
         isFreshPartitionBootstrapWindow(partition);
-      if (isFreshBootstrapPartition) {
-        for (const requestedReplicaId of requestedReplicaIds) {
-          if (!seenReplicaIds.has(requestedReplicaId)) {
-            seenReplicaIds.add(requestedReplicaId);
-            replicaIds.push(requestedReplicaId);
-          }
+      // CL-013: dispatched bootstrap hints come from the placement owner
+      // (the coordinator stamped the canonical topology at create time) and
+      // are authoritative over this node's cache view — which under churn
+      // can be viability-filtered down to self-only. They were previously
+      // merged only inside the fresh-bootstrap window, so every REPLACE
+      // join into an established partition discarded them and could solo-
+      // bootstrap an isolated raft group.
+      for (const requestedReplicaId of requestedReplicaIds) {
+        if (!seenReplicaIds.has(requestedReplicaId)) {
+          seenReplicaIds.add(requestedReplicaId);
+          replicaIds.push(requestedReplicaId);
         }
-        for (const requestedPeerAddress of requestedPeerAddresses) {
-          if (!peerAddresses.includes(requestedPeerAddress)) {
-            peerAddresses.push(requestedPeerAddress);
-          }
+      }
+      for (const requestedPeerAddress of requestedPeerAddresses) {
+        if (!peerAddresses.includes(requestedPeerAddress)) {
+          peerAddresses.push(requestedPeerAddress);
         }
       }
       // Fresh CREATE TABLE provisioning dispatches replica creation before the
@@ -300,6 +319,25 @@ function assignReplicaHandlerRuntimeMetadataMethods(
             REPLICA_HANDLER_SERVICE.TYPE,
             leaderService.service_id,
           );
+      }
+      // CL-013: an explicit REPLACE join targets an EXISTING group by
+      // definition — it must never proceed with a SELF-ONLY topology, which
+      // fresh-bootstraps an isolated single-node raft group that elects
+      // itself and pollutes the canonical leader row. When neither the
+      // dispatched hints nor the local cache yield any sibling peer, the
+      // context is stale: throw retryably so the caller's hydration loop
+      // re-reads authoritative rows instead of proceeding. (Join MODE is
+      // unchanged: with peers present but no viable leader, voter-mode
+      // re-formation remains the designed dead-leader recovery behavior.)
+      const isExplicitReplaceJoin =
+        options.explicitOperationType === EXPLICIT_REPLACE_OPERATION_TYPE;
+      if (isExplicitReplaceJoin) {
+        const siblingPeerCount = replicaIds.filter(
+          (candidateReplicaId) => candidateReplicaId !== replicaId,
+        ).length;
+        if (siblingPeerCount === NUM.ZERO) {
+          throw replicaJoinTopologyMissingError(partitionId, replicaId);
+        }
       }
       return {
         tableId: partition.table_id,
