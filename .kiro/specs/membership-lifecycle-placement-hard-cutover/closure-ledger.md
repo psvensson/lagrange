@@ -27,6 +27,7 @@ Each record below represents one violated invariant.
 | CL-013 | guarded | replica-join-topology | A REPLACE-created replica joining an ESTABLISHED partition must consume the owner-dispatched bootstrap topology; it must never fall back to a locally-filtered cache view that can reduce to self-only and trigger a fresh solo raft bootstrap. |
 | CL-014 | guarded | cdc-fanout-targetability | A joining node must be able to catch up on CDC-propagated rows written inside the (bootstrap-snapshot, fan-out-targetability] window — remote CDC fan-out is point-in-time with no replay. |
 | CL-015 | fix-landed | raft-learner-catchup | Raft catch-up must deliver in batches from the follower's actual position — not a one-entry-per-round-trip backward fail-walk that can never complete a formation-sized log inside the voter-ready budget. |
+| CL-016 | open | replica-activation-evidence | Voter-ready activation must not require a durable services-row round-trip through the control plane being recovered: the priority local-commit fallback must make the LOCAL cache reflect local truth (or the activation check must accept local authoritative evidence). |
 
 ## CL-001 Published Membership Convergence Under Restart Churn
 
@@ -1716,3 +1717,68 @@ Each record below represents one violated invariant.
      age). liferaft has no InstallSnapshot; partition syncFromLeader is a
      vestigial placeholder. Batch catch-up is the correct now-fix; record
      snapshot-install as the long-term replacement.
+
+
+## CL-016 Voter-Ready Activation Must Not Round-Trip Through The Recovering Control Plane
+
+- Status: open (pinned 2026-06-11 from stat-gate-20260611T131558Z artifacts
+  + code trace; fix not started)
+- Concern: replica-activation-evidence
+- Failure Class: formation-livelock (circular dependency class — see
+  systemic pattern note)
+- First Violated Invariant: isReplicaVoterReady
+  (replica-handler-class-part-2.js:555-573) requires a SERVICES row with
+  an address in the LOCAL systemTableCache. For priority control-plane
+  partitions the durable SERVICES status write is EXPECTED to fail
+  retryably during recovery (it writes through the very control plane
+  being recovered) and falls back to
+  commitPriorityReplicaCreateStatusLocally
+  (replica-handler-create-methods.js:407+) — which updates the replica
+  STATE MACHINE and localServices but NEVER seeds a SERVICES row into the
+  systemTableCache. The activation check therefore polls a row that
+  cannot exist within the budget; every priority REPLACE replica fails
+  voter-ready regardless of raft catch-up speed.
+- Witness (131558Z run2, all runs equivalent): 5 replicas reach 'Waiting
+  for replica voter-ready activation'; 0 reach 'Replica reached
+  voter-ready activation state'; every create logs 'Replica create status
+  write deferred after retryable control-plane failure' at creation. The
+  ROLE condition is secondary: 3 of 5 went voter-mode (role != LEARNER
+  immediately — the CL-013 no-viable-leader path), 2 went learner-mode
+  with the 5s priority promotion delay; promotion gating
+  (partition-service-learner-promotion-methods.js:440+) is leader-discovery
+  + voter-count math, NOT catch-up. The missing SERVICES row is the
+  blocking condition in both modes.
+- CL-015 RELATIONSHIP (honest framing): the catch-up batching (44d9c37c)
+  is correct and unit-guarded — the backward fail-walk was real — but it
+  was NOT the load-bearing voter-ready blocker; its gate run showed 0
+  activations unchanged because this record blocks first. Validation of
+  CL-015's runtime effect (storm reduction, catch-up duration) is
+  deferred until this record unblocks activation. Gate topline for
+  131558Z: 4/4 publication CONVERGED, runs 2/3 on the CL-003 surface,
+  runs 1/4 reaching NEW later surfaces ('Control plane did not quiesce',
+  'Cluster load readiness did not stabilize') — the frontier is moving.
+- Fix directions (systemic, existing-mechanisms-first):
+  (a) commitPriorityReplicaCreateStatusLocally additionally applies the
+  SERVICES row into the local systemTableCache (it already computes every
+  field incl. serviceAddress via buildTrackedServiceAddress; the
+  'bootstrap hydration exception' sanctions direct applySystemTableChange
+  call sites — add this one) so the local cache reflects local truth and
+  EVERY consumer (voter-ready, routing viability, fan-out targets)
+  benefits; the durable write confirms later via CDC.
+  (b) Failure-path symmetry: async-creation-failed/cleanup must apply the
+  matching removal/failed transition to the locally-seeded row (no ghost
+  'creating' rows after terminal failure).
+  (c) Alternative (narrower, fallback if (a) has unexpected consumers):
+  isReplicaVoterReady accepts the tracked-service/state-machine evidence
+  when the cache row is absent and the partition is priority.
+  (d) Check the durable-write retry story: deferRetryableReplicaCreateStatusWrite
+  drops without scheduling a retry — the row reaches the DISTRIBUTED
+  services table only if a later workflow step writes it; verify what
+  eventually persists it (status transitions on sync/active?) and whether
+  the seed's peer-reconciliation gets it in time.
+- Systemic pattern: third instance of
+  circular-dependency-class-formation-vs-steady-state — a steady-state
+  invariant (activation requires the durable row visible) goes circular
+  during recovery (the write path for that row IS the thing recovering).
+  The existing local-commit fallback acknowledged the cycle but only
+  half-applied it (state machine yes, cache no).
