@@ -29,7 +29,7 @@ Each record below represents one violated invariant.
 | CL-015 | fix-landed | raft-learner-catchup | Raft catch-up must deliver in batches from the follower's actual position — not a one-entry-per-round-trip backward fail-walk that can never complete a formation-sized log inside the voter-ready budget. |
 | CL-016 | guarded | replica-activation-evidence | Voter-ready activation must not require a durable services-row round-trip through the control plane being recovered: the priority local-commit fallback must make the LOCAL cache reflect local truth (or the activation check must accept local authoritative evidence). |
 | CL-017 | fix-landed | operation-ledger-self-reference | Operation workflow transitions must complete while the operation ledger's own partition is under modification — replica_operations writes fail with participant failures exactly when replica_operations-p1 is mid-REPLACE (4/3, surplus pending removal), pinning operations in CREATING/SENDING forever and blocking pre-restart quiescence. |
-| CL-018 | fix-landed | raft-log-scan-per-heartbeat | A follower's commit catch-up must not rescan and JSON-parse the whole raft log on every heartbeat: sqlite followers never persist committedIndex, so getUncommittedEntriesUpToIndex degenerates to a full-table parse per heartbeat per priority partition on the seed — the top self-time frame in the freeze windows that block CL-017's quiesce. |
+| CL-018 | guarded | raft-log-scan-per-heartbeat | A follower's commit catch-up must not rescan and JSON-parse the whole raft log on every heartbeat: sqlite followers never persist committedIndex, so getUncommittedEntriesUpToIndex degenerates to a full-table parse per heartbeat per priority partition on the seed — the top self-time frame in the freeze windows that block CL-017's quiesce. |
 
 ## CL-001 Published Membership Convergence Under Restart Churn
 
@@ -2026,6 +2026,26 @@ Each record below represents one violated invariant.
   (the premature set WAS the regression wart). Guard added for the exact
   fatal-skip (ack -> watermark unchanged -> entry still visible to the
   commit flow). Smoke run post-fix: CONVERGED wall=249s.
+- GATE VALIDATION (stat-gate-20260611T163020Z, corrected fix): boot
+  restored, 4/4 publication CONVERGED. MECHANISM CLOSED: readEntryRow is
+  GONE from the self-time top of every freeze window (was #1). The
+  freeze itself persists (max gaps 41.7s/37.8s) — it is a HYDRA; the
+  fourth-pass re-rank now shows (run2 worst window, self-time):
+  GC 3.6s, normalizePriorityRecoveryStringList 2.8s
+  (priority-recovery-helpers.js:29), fastJsonClone 2.2s,
+  normalizeDistinctStringArray 1.8s
+  (publication-recovery-stream-evidence.js:33),
+  buildPublicationRecoveryGateSnapshot 1.3s
+  (publication-recovery-gate.js:145); inclusive dominance unchanged:
+  getNodeReadinessSync 43.8s / getPartitionRoutingSnapshot 42.9s — the
+  CL-012 readiness-read-amplification family, now in the
+  priority/publication-recovery snapshot building path. Surfaces: 2
+  quiesce + 1 restart recovery-ready + 1 ACTIVE-wait (mode=load,
+  active=2/5). NEXT RECORD (CL-019 candidate): publication/priority
+  recovery snapshot building is O(call) work with heavy allocation
+  inside the readiness/routing hot path — same invariant family as
+  CL-010/011/012 (per-change not per-call; verify why the CL-012 fast
+  path does not bound this window).
 - Secondary candidates from the same windows (record, evaluate after):
   getNodeReadinessSync inclusive dominance persists despite CL-012's
   fast path — verify the fast path engages on the line-330 call path in
