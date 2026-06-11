@@ -1456,21 +1456,36 @@ Each record below represents one violated invariant.
   Topline: 1 CONVERGED / 3 STALLED (runs 1+3 on the CL-003 spread
   surface; runs 2+4 in a publication-missing-all-joiners mode) vs
   11C/1S/0St across the prior three rounds — a real regression, not N=4
-  noise. DIAGNOSIS HYPOTHESIS (next falsification step): the fix
-  UNBLOCKED real spread-recovery execution during INITIAL FORMATION —
-  replicas now actually move to joiners (raft membership changes, joint
-  consensus, REPLACE source removals on the five priority partitions)
-  concurrently with joiner registration writes. Witness: 37-47 'Became
-  leader (liferaft)' events per run (massive election churn vs settled
-  leadership in the stable rounds), 12-15 voter-ready failures, seed
-  event-loop gaps back up to 37-46/run. The likely next record (CL-014
-  candidate): priority control-plane spread recovery must be PHASED or
-  PACED against formation — control-plane write availability (joiner
-  registration, publication) must not compete with priority-partition
-  membership churn; the existing topology-settling/stabilization planning
-  gates admitted this churn and need a falsification pass on WHY.
-  CL-007's old open question ('why does the rebalancer execute moves
-  during initial formation') is now load-bearing.
+  noise.
+  FIRST HYPOTHESIS FALSIFIED (election churn): stable converged rounds
+  show 42-46 'Became leader' events too — that is normal formation noise,
+  not new churn; the planning-gate bypass review confirmed the gates
+  admit formation-time priority REPLACE BY DESIGN (the ACTIVE gate
+  requires spread, so deferral would be circular) — that design stands.
+  ACTUAL WITNESS (run2, verified): the four joiners COMPLETED
+  registration ('Node endpoint registered in cluster', 'Joining phase
+  completed') — registration is NOT creeping. The stall is the
+  PUBLICATION side: at run end the seed's owner-membership driver traces
+  'skip no-deficit missingPublishedCount=0' (27 traces, all no-deficit)
+  while the gate reports publication_missing_active_node for ALL FOUR
+  registered joiners. Owner and gate disagree about the deficit — the
+  owner-vs-gate mismatch class that the hard-cutover Phase 4 was built to
+  eliminate — and it appears in the round where the
+  control_plane_publications-p1 partition itself underwent REPLACE spread
+  recovery (created 11:06:55 -> 35a891b8) for the first time. The
+  REPLACE-target node's driver correctly defers ('skip not-owner', 232
+  traces).
+  CL-014 (re-pinned): after spread recovery executes on the publications
+  partition, the membership-publication owner driver's DEFICIT
+  COMPUTATION no longer sees registered-but-unpublished joiners
+  (missing=0) while the gate's witness does (missing=4). Falsify next:
+  diff the driver's deficit input sources (driveOwnerMembershipReconcile)
+  against the gate's missingPublished witness for the same instant —
+  candidates: the driver reading through the publications partition's NEW
+  replica/quorum (fresh replica lacking rows it considers authoritative),
+  a registration-row visibility lag into the driver's input cache, or the
+  deficit set keyed on a stale cohort. 0 corrupt throughout — rows are
+  not damaged, the OWNER'S VIEW is.
 - Relationship to other records: this is the ACTUAL CL-003 blocker (the
   planner and spread summary are exonerated; operations fail at learner
   join). CL-009(ii)'s mute landed correctly but is NOT load-bearing here
