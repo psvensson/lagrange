@@ -867,6 +867,25 @@ Each record below represents one violated invariant.
   moves come from standard MovePlanner.calculateMoves replica-count
   convergence; the denominator defect may still matter for the
   priority-recovery augmentation path but is not this record's driver.
+- FIX LANDED (0df23df0, 2026-06-11): (1) rearm guard —
+  maybeRearmReusedPendingOperation consults the workflow owner's live
+  deferred-retry evidence (isOperationDeferredRetryActive PLUS
+  hasActiveCreatedOperationHandoffRetry — the handoff lane is not covered
+  by the former) and skips the redundant rearm; rearm preserved for the
+  missed-handoff state (PENDING, no live timer). (2) Witness — every reuse
+  logs 'Reusing in-flight operation for planned move' with operationId +
+  rearmAction; rebalancer move logs carry the target under moveTargetNodeId
+  (LoggingService overwrites payload 'nodeId' with the local node id).
+  Guard test coordinator-reused-operation-rearm-guard.test.js, red on guard
+  revert. Independent subagent verification PASS: no new stuck state —
+  every predicate input is deleted-at-fire, deleted-on-clear, or
+  deadline-self-expiring (worst false-"live" window ≤8s of transition-retry
+  grace vs ≥1s planning cadence), erroring retry callbacks delete their
+  timer entry first so re-entry rearm stays available, and the 1s
+  checkTimeouts + recovery-reconcile lanes back the guard independently.
+  Witness volume bounded by the ≥1000ms planning cadence clamp. Minor
+  follow-ups noted, not landed: demote skip_not_pending to debug if chatty;
+  MOVE_SKIPPED keeps plain replicaId (only nodeId is clobbered).
 
 ## CL-009 Outbound Backpressure Rejection Must Not Storm Warns Or Hot-Retry A Stillborn Replica
 
@@ -919,3 +938,21 @@ Each record below represents one violated invariant.
   unthrottled ~270/s warn on the saturated seed is itself a perturbation
   hazard; fix (i) is also a measurement-hygiene prerequisite for the CL-008
   supply-side attribution step.
+- NOTE (existing pacing hint, for fix ii): buildOutboundQueueBackpressureError
+  already attaches retryAfterMs + deferRetry to every rejection
+  (message-router-shared-stage-3.js:16-31) — the storming sender either does
+  not receive these per-entry rejections at its retry decision point or does
+  not honor them; the sender-side trace should start there.
+- FIX (i) LANDED (2bfdca12, 2026-06-11): warn emission bounded to one per
+  second per target-node queue with a suppressedSinceLastWarn counter, both
+  emission sites sharing one per-queue budget; rejections, error fields
+  (code/backpressureScope/retryAfterMs/deferRetry), and preemption behavior
+  unchanged. Guard test outbound-saturation-warn-rate-limit.test.js (red on
+  limiter revert; 200-rejection storm → ≤2 warns). Independent subagent
+  verification PASS: queues are long-lived per target node (limiter state
+  survives disconnects; removed only at router stop), no freeze/shape
+  assumptions violated. Known low-severity tradeoff: a rare
+  critical-source-reserve preemption warn can be shadowed by frequent
+  rejection warns within the shared budget (the preempted sender still
+  receives preemptedByCriticalSource on its rejection); trailing suppressed
+  counts after a storm ends are not flushed.
