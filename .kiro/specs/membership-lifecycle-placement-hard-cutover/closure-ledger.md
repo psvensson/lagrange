@@ -21,7 +21,9 @@ Each record below represents one violated invariant.
 | CL-007 | guarded | transport-liveness | The ACK-timeout quarantine may sever a connection only on evidence the peer is dead (no inbound traffic within the liveness window) — never for a peer that is demonstrably alive but slow. |
 | CL-008 | narrowed | placement-planning-feedback | Planning-side reuse of an in-flight operation must be side-effect-free: it must not re-trigger owner reads, claim writes, and remote dispatch attempts at planning cadence while the dispatch layer already has a live retry scheduled. |
 | CL-009 | open | transport-replication-backpressure | Per-source outbound backpressure rejection must not convert every partition write into an unthrottled per-attempt warn + immediate sender retry against a stillborn replica. |
-| CL-010 | fix-landed | readiness-observation-hot-path | Per-observation readiness diagnostics must be O(changes), not O(calls): the recovery-epoch timeline's change check must not allocate and double-JSON.stringify full summaries (including fresh timestamps, so it never matched) on every getNodeReadinessSync. |
+| CL-010 | guarded | readiness-observation-hot-path | Per-observation readiness diagnostics must be O(changes), not O(calls): the recovery-epoch timeline's change check must not allocate and double-JSON.stringify full summaries (including fresh timestamps, so it never matched) on every getNodeReadinessSync. |
+| CL-011 | guarded | readiness-observation-hot-path | Read isolation for cached system-table rows must not cost a JSON serialize+parse roundtrip per row per read. |
+| CL-012 | open | readiness-read-amplification | The query executor's partition-routing path must not rebuild full node readiness (evidence pipeline + authoritative reads) per service row per routing decision; readiness evaluation must not recursively issue reads that themselves require routing + readiness. |
 
 ## CL-001 Published Membership Convergence Under Restart Churn
 
@@ -1138,3 +1140,68 @@ Each record below represents one violated invariant.
   builders (exit criterion 2's pre-registered candidate). Self-time cannot
   name a driving loop -- the profiler now also ranks by INCLUSIVE time;
   the next profiled run names the loop and opens the next record.
+
+
+## CL-012 Query Routing Must Not Rebuild Node Readiness Per Decision
+
+- Status: open (named 2026-06-11 by inclusive-time profiling; fix not
+  started)
+- Concern: readiness-read-amplification
+- Failure Class: formation-livelock (microtask starvation)
+- First Violated Invariant: The query executor's partition-routing path must
+  not rebuild full node readiness (publication diagnostics, membership
+  planning snapshot, evidence pipeline, authoritative system-table reads)
+  per service row per routing decision. Corollary under verification:
+  readiness evaluation must not recursively issue system-table reads that
+  themselves require routing + readiness (amplification cycle).
+- Authoritative Owner: query executor partition routing
+  (src/query/query-executor-partition-routing-snapshot.js:26
+  getPartitionRoutingSnapshot -> evaluatePartitionServiceRoutability per
+  service row -> control-plane-readiness-service-node-methods.js:330
+  getNodeReadinessSync) and the readiness sync evidence pipeline it
+  triggers.
+- Evidence (stat-gate-20260611T080523Z-run1, SLOW, 12 profile windows,
+  220k samples, INCLUSIVE-time ranking aggregated):
+  runMicrotasks 84.6% (the 20-95s gaps are microtask-chain starvation of
+  timers, matching ELU=1.0 with zero I/O yield);
+  getNodeReadinessSync 72.0%; getControlPlaneParticipationSync 65.7%;
+  getPartitionRoutingSnapshot 65.4% / evaluatePartitionServiceRoutability
+  64.8% (the query-routing driver); buildEvaluatedNodeReadinessSnapshot
+  46.5% (full rebuild dominates — the stored-snapshot reuse is either
+  missing or not saving the cost); executeAuthoritativeSystemTableRead
+  36.0% (authoritative reads INSIDE the readiness path — the suspected
+  cycle edge); resolveMembershipPublicationPlanningSnapshot 15.9%.
+- Code-read finding (verified): getNodeReadinessSync computes its heavy
+  evidence pipeline EAGERLY — getPublicationDiagnostics,
+  getMembershipPublicationDiagnosticsSync,
+  resolveNodeMembershipPublicationPlanningAnswerSync, getNodeServiceRows,
+  getLifecycleState, buildNodeEvidence — BEFORE consulting
+  getFresherStoredReadinessSnapshot, so even snapshot-reuse hits pay most
+  of the per-call cost (node-methods.js:330-366).
+- Next Falsification Step (before any fix): (a) measure the stored-snapshot
+  hit rate and the cost split eager-prelude vs post-reuse on a profiled
+  run (cheap counters, console-only); (b) confirm or refute the
+  amplification cycle: does executeAuthoritativeSystemTableRead inside
+  readiness evaluation route through getPartitionRoutingSnapshot ->
+  getNodeReadinessSync again (stack evidence or code trace)? (c) identify
+  WHO issues the routing decisions at this volume during formation (the
+  seed's own control-plane SQL vs harness probes vs benchmark lanes).
+- Fix directions (existing-systems-first, pending falsification):
+  reorder getNodeReadinessSync so the stored-snapshot freshness check runs
+  FIRST with only its required inputs; memoize the per-node readiness
+  answer for the duration of one routing snapshot (a routing snapshot
+  evaluates many service rows of the same few nodes); if the cycle is
+  confirmed, break it with a non-recursive read mode for readiness-internal
+  table reads (cache-visible reads cannot require routing). Respect the
+  circular-dependency systemic pattern
+  ([[circular-dependency-class-formation-vs-steady-state]]).
+- Required Guard (when fixed): profiled gate run shows
+  blockedPercentOfWall collapsing from ~94-97%, plus a unit/perf guard on
+  the readiness fast path.
+- Notes:
+  1. CL-010 and CL-011 are now guarded sub-causes of this record's class:
+     they cut per-call cost (recovery-epoch dedup, clone cost); this record
+     owns per-call VOLUME and the eager prelude.
+  2. The microtask-starvation structure explains why joiners show zero
+     gaps: only the seed both leads the control plane and serves the
+     routing-heavy query load during formation.
