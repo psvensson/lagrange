@@ -19,7 +19,8 @@ Each record below represents one violated invariant.
 | CL-005 | narrowed | readiness-projection | Partitioning pre-load bootstrap must expose the required replica-bearing quorum and at least one benchmark-ready replica-bearing node before scenario load startup begins. |
 | CL-006 | guarded | membership-join-lifecycle | A retryable failure of a checkpointed join step must not regress durable join progress (destroy join infrastructure or withdraw registered membership rows); only terminal failures may run destructive cleanup. |
 | CL-007 | guarded | transport-liveness | The ACK-timeout quarantine may sever a connection only on evidence the peer is dead (no inbound traffic within the liveness window) — never for a peer that is demonstrably alive but slow. |
-| CL-008 | open | placement-planning-feedback | A planning tick must not re-execute a calculated move whose previously-created operation is still in flight (PENDING or dispatch-shed). |
+| CL-008 | narrowed | placement-planning-feedback | Planning-side reuse of an in-flight operation must be side-effect-free: it must not re-trigger owner reads, claim writes, and remote dispatch attempts at planning cadence while the dispatch layer already has a live retry scheduled. |
+| CL-009 | open | transport-replication-backpressure | Per-source outbound backpressure rejection must not convert every partition write into an unthrottled per-attempt warn + immediate sender retry against a stillborn replica. |
 
 ## CL-001 Published Membership Convergence Under Restart Churn
 
@@ -750,54 +751,171 @@ Each record below represents one violated invariant.
    at "stabilization") remains a separate concern — likely CL-003-adjacent
    — if creep persists after this guard.
 
-## CL-008 Planner Must Not Re-Execute Moves Whose Operations Are In Flight
+## CL-008 In-Flight Move Reuse Must Be Side-Effect-Free At Planning Cadence
 
-- Status: open (investigated 2026-06-11, fix not started)
+- Status: narrowed (2026-06-11 artifact verification refuted the headline
+  mechanism; record re-pinned to the two confirmed planning-feedback gaps)
 - Concern: placement-planning-feedback
-- Failure Class: seed-saturation
-- First Violated Invariant: A planning tick must not re-execute a calculated
-  move whose previously-created operation is still in flight (PENDING or
-  dispatch-shed) — re-execution without in-flight dedup converts a stuck
-  operation into unbounded operation-row churn at planning cadence.
-- Authoritative Owner: UnifiedRebalancer move execution
-  (unified-rebalancer-segment-4-stage-3.js:795 executeMove →
-  executeMoveViaCoordinator → rebalanceCoordinator.createOperation, NO dedup
-  against in-flight operations) + planning cadence
-  (rebalancer-planning-gate-methods.js:689 advanceCheckCadence — no
-  shed-budget feedback; dispatch shed budget lives below at the dispatch
-  layer and never informs planning).
-- Current Symptom (stat-gate-20260610T192851Z runs 1+3 seed logs): 321 move
-  executions in ~9min across the 5 priority partitions while every created
-  operation died at PENDING ("Deferred replica operation dispatch while
-  control-plane path recovers", per-target shed budgets exhausted). Each
-  re-execution creates a NEW operation record. Composed with the supply-side
-  finding: the seed event loop is blocked 13.4% (run1) to 25.7% (run3) of
-  wall time in >3s gaps whose dominant cluster sits inside CDC event
-  hydration — synchronous better-sqlite3 prepare/get row fetches
-  (partition-cdc-parameterized-sql.js:231-234,298-301, called from
-  partition-cdc-generator.js:361 via partition-service-segment-3-part-2.js:64)
-  with no yielding between events. Mechanism: move churn writes
-  replica_operations rows → CDC hydration sync-fetches wide rows → loop
-  blocked → ACKs >5s for minutes (CL-007's guard now keeps connections up,
-  witnessed by 200-476 liveness-skips/run) → registration writes creep →
-  publication misses joiners.
-- VERIFY BEFORE FIXING (agent overclaim risks): (a) per-call sync fetch
-  latency of 3-10s is implausible — measure whether the blockage is
-  cumulative tight-loop fetches, SQLite lock/WAL contention, or partly gap
-  attribution bias; (b) confirm operation-row accumulation directly
-  (count replica_operations rows created per partition per run); (c) the
-  agent could not confirm same-move-id repetition from logs (EXECUTE_MOVE
-  lacks a move id field — add one if needed for the witness).
-- Fix directions (existing-systems-first): the coordinator/repository
-  already track in-flight operations — consult them before executeMove
-  (dedup, not a new layer); feed the dispatch shed budget back into
-  advanceCheckCadence (backoff when the target is unreachable); CDC
-  hydration yielding (setImmediate between events) or async fetch is a
-  separate, second fix.
-- CL-003 NOTE: evidence item 9 (MovePlanner.analyzePrioritySpread ready-only
+- Failure Class: redundant-work-amplification (downgraded from
+  seed-saturation: NOT the demonstrated stall driver — see Evidence 4)
+- First Violated Invariant: When a planning tick re-executes a calculated
+  move whose previously-created operation is still in flight, the reuse must
+  be side-effect-free — it must not re-trigger authoritative owner reads,
+  claim writes, and remote dispatch attempts while the dispatch layer
+  already has a live deferred-retry scheduled for that operation.
+- Authoritative Owner: rebalance coordinator create-intent reuse path
+  (rebalance-coordinator-segment-3.js:94-122 createOperation recent-intent
+  hit → rebalance-coordinator-operation-intent-methods.js:410
+  maybeRearmReusedPendingOperation → armCoordinatorCreatedOperationProgress,
+  currently UNCONDITIONAL for any PENDING op) + planning cadence
+  (rebalancer-planning-gate-methods.js:685 advanceCheckCadence — priority
+  partitions use a fixed retry delay in BOTH branches; no dispatch-health
+  feedback exists, and a reused in-flight op counts as executedMoveCount>0,
+  which today only affects the non-priority backoff branch).
+- VERIFICATION RESULTS (2026-06-11, stat-gate-20260610T192851Z runs 1+3 seed
+  full logs + code read, rubber-duck-reviewed):
+  - REFUTED: "each re-execution creates a NEW operation record" and
+    "unbounded operation-row churn". Run1: 96 "Executing rebalancing move"
+    (70 replace + 26 add, 5 priority partitions, ~1 per 14s per partition)
+    but only 10 "Creating operation" (a PRE-persist upper bound —
+    rebalance-coordinator-segment-3.js logs CREATE_OPERATION before
+    persistNewOperation), 7 coordinator skips, 0 move failures, 4 ops
+    completed in 45-55s. Run3: 61 executes / 9 creates / 4 completed. The
+    previously recorded "321 move executions" is unreproducible from the
+    cited artifacts (actual 96+61=157) and conflated executions with
+    creations.
+  - REFUTED: "NO dedup against in-flight operations". Dedup exists at three
+    layers and works: (a) planner hasPendingAddForNode/hasPendingMove
+    (move-planner-move-calculation-methods.js:339,382,432; PENDING REPLACE
+    counts as add-like — isReplaceRemoveDispatchPhase requires
+    ACTIVE/STOPPING, so the phase-misclassification alternative is refuted);
+    (b) coordinator in-memory recent-intent cache with priority-extended TTL
+    (rebalance-coordinator-operation-intent-methods.js:456 — built precisely
+    because owner/cache reads lag under pressure); (c) repository strict
+    in-flight query. The 79 unaccounted executions (96−10−7) were silent
+    layer-(b) absorbs; 0 "Duplicate operation detected" confirms layer (c)
+    was never reached.
+  - CONFIRMED gap 1 (the re-pinned invariant): each layer-(b) absorb calls
+    maybeRearmReusedPendingOperation → armCoordinatorCreatedOperation
+    UNCONDITIONALLY. The DISPATCH_REARM_BUDGET evidence table gates only the
+    progress-reconcile rearm path, and inside
+    armCoordinatorCreatedOperation (operation-workflow-owner-handoff-state.js)
+    the budget gates only WAKE_REMOTE_OWNER — the seed-owned
+    CLAIM_AND_APPLY_LOCAL_PRIME path is not budget-gated. Net per tick per
+    partition: authoritative owner read + claim write + remote dispatch
+    attempt (5s router timeout against a creeping joiner) + deferral
+    bookkeeping (63 "Deferred retryable replica operation dispatch failure"
+    run1). Row-UPDATE churn from claims/deferrals feeds CDC events on the
+    seed (~250 CDC fetch lines in the creep window) — this is the live
+    bridge to the unverified supply-side suspect, kept OPEN for measurement.
+  - CONFIRMED gap 2: no target-side dispatch-health feedback into planning.
+    The existing transport-backpressure planning gate
+    (rebalancer-transport-pressure-methods.js) reads only LOCAL outbound
+    pressure and therefore CORRECTLY did not engage during the creep window
+    (0 gate logs) — do not "fix" it by loosening local thresholds; the
+    missing input is per-target dispatch deferral evidence.
+  - CONFIRMED witness gaps: LoggingService injects the LOCAL nodeId into
+    every payload (logging-service.js:251/297 {...context, nodeId:
+    this.nodeId}), clobbering move.nodeId in EXECUTE_MOVE / MOVE_SKIPPED /
+    MOVE_BLOCKED_BY_SAFETY_POLICY — all 96 run1 EXECUTE_MOVE lines show the
+    seed's own id regardless of the actual move target (the joiners).
+    EXECUTE_MOVE has no operationId; intent-cache reuse logs nothing.
+  - UNSETTLED: WHY the planner-side layer (a) missed every tick. Best
+    surviving hypothesis is systemTableCache lag (CDC visibility of the op
+    row on the creating node), but the skip at
+    move-planner-move-calculation-methods.js:382 is a silent continue, so
+    there is no direct witness; a latent alternative is the snake_case-only
+    target_node_id match in hasPendingAddForNode
+    (unified-rebalancer-segment-4-stage-4.js:149) never matching camelCase
+    cache rows (lag vs never). The new reuse witness log discriminates this.
+  - CAUSALITY (honest framing): move-churn demand is modest (~100 dispatch
+    events/6min) and the outbound saturation storm (now CL-009) starts only
+    in the final ~24s (run1) / ~75s (run3), but planner executions DO start
+    coincident with creep onset (19:29:20) — so CL-008 is exonerated as the
+    creep driver on magnitude grounds, not temporal precedence; the
+    supply-side measurement below will falsify.
+- Next Falsification Step (supply side, unchanged in substance): instrument
+  seed event-loop blockage attribution non-perturbingly — the earlier claim
+  of 13.4-25.7% wall blocked in >3s gaps inside synchronous CDC hydration
+  (partition-cdc-parameterized-sql.js:231-234,298-301 via
+  partition-cdc-generator.js:361) remains UNVERIFIED; measure cumulative
+  tight-loop fetches vs SQLite lock/WAL contention vs gap-attribution bias,
+  and attribute what fraction of CDC event volume is replica_operations
+  row updates from the rearm/deferral churn above.
+- Required Guard: regression test proving (a) a reused PENDING operation
+  with a live dispatch deferred-retry (or created-operation handoff retry)
+  is NOT re-armed, (b) a reused PENDING operation with NO live retry timer
+  IS re-armed (missed-handoff recovery preserved — timer absence is exactly
+  the state the rearm exists for), (c) terminal/non-PENDING reuse behavior
+  unchanged.
+- Fix plan (rubber-duck-reviewed order; cadence backoff deliberately
+  DEFERRED because priority partitions have event-driven wakes
+  (unified-rebalancer-priority-recovery-coordination.js:54-72) making it
+  optional hardening, and landing it together with the rearm guard would
+  mask attribution of any gate-run delta):
+  1. Witness first: un-clobber the move target in rebalancer logs
+     (moveTargetNodeId), add operationId, add an info log on intent-cache
+     reuse with the live-retry decision. Pre-registered expectations for the
+     next gate run: reuse rate unchanged, deferral warns drop after step 2,
+     creep onset UNCHANGED if CL-008 is truly not the driver.
+  2. Rearm guard: skip the redundant re-arm when
+     isOperationDeferredRetryActive(opId) OR an active created-operation
+     handoff retry exists (BOTH timers — the rearm-evidence predicate alone
+     does not cover createdOperationHandoffRetryTimerByOperationId).
+- CL-003 NOTE (unchanged): evidence item 9 (analyzePrioritySpread ready-only
   denominator) is FALSIFIED as the source of these formation moves — primary
   moves come from standard MovePlanner.calculateMoves replica-count
-  convergence (unified-rebalancer-segment-4-stage-5.js:163);
-  analyzePrioritySpread is only consulted during priority-recovery
-  augmentation (segment-4-stage-5.js:168-171). The denominator defect may
-  still matter for the augmentation path but is not this record's driver.
+  convergence; the denominator defect may still matter for the
+  priority-recovery augmentation path but is not this record's driver.
+
+## CL-009 Outbound Backpressure Rejection Must Not Storm Warns Or Hot-Retry A Stillborn Replica
+
+- Status: open (opened 2026-06-11 from CL-008 artifact verification;
+  fix (i) is cheap and should not wait for fix (ii))
+- Concern: transport-replication-backpressure
+- Failure Class: observer-effect-amplification
+- First Violated Invariant (two parts):
+  (i) A saturated per-source outbound lane must rate-limit/aggregate its
+  backpressure warns — emitting one full-payload warn per rejected enqueue
+  converts containment into a log storm on the already-pressured node.
+  (ii) Per-source backpressure rejection must feed back into the sender's
+  retry pacing — the sender currently re-attempts every partition write to
+  a non-absorbing replica immediately, at the partition's write rate.
+- Authoritative Owner: message router outbound queue admission
+  (message-router-shared-stage-3.js:331 and :380 — both emission sites log
+  per rejected enqueue with full pendingSourceSummary payload, no rate
+  limiting) + the partition replication sender that retries against the
+  rejected source (sender-side trace NOT yet done — required before fix ii).
+- Current Symptom (stat-gate-20260610T192851Z, both runs, identical shape):
+  in the final ~24s (run1: 19:34:45→19:35:07, run end 19:35:09) / ~75s
+  (run3), 5,911 / 5,894 "Outbound queue saturated for node delivery" warns —
+  67-69% of the seed's ENTIRE run log — all deliveryPriority=critical, all
+  with attemptedDeliverySource = target:<joiner>/partition/<replica> where
+  <replica> is a REPLACE-created replica that never came up
+  (sql_transactions-p1-r5 on 35a891b8, sql_write_operations-p1-r4 on
+  ebc4aa0b). Aggregate ~80-270 attempts/s. The per-source pending cap
+  (pendingForSource=48=pendingSourceLimit) correctly contains the queue —
+  containment works; the storm is the per-attempt warn + immediate retry.
+  The target joiners were alive through the burst (their logs run past it),
+  so this is live retry-against-stillborn-replica, not teardown noise.
+- Allowed Evidence: per-source admission counters, warn emission rate,
+  sender-side retry traces, replica bootstrap state for the target replica.
+- Forbidden Promotion Inputs: warn line volume as proof of queue
+  malfunction (admission containment demonstrably worked); teardown-window
+  noise without checking target liveness.
+- Stable Witness: warns-per-second per delivery source; suppressed-warn
+  counters once rate-limiting lands; sender retry cadence per rejected
+  source.
+- Entry Gate: scenario.load-readiness during initial formation (same runs
+  as CL-008).
+- Next Falsification Step: trace WHICH sender loop re-attempts at 80-270/s
+  (partition raft replication vs CDC forwarding vs snapshot catch-up) before
+  designing fix (ii); land fix (i) (warn rate-limit/aggregation with a
+  suppressed count) immediately since it is behavior-preserving.
+- Required Guard: unit test that saturated-source warn emission is bounded
+  per interval per target while rejections continue to be returned to
+  callers unchanged.
+- NOTE (observer effect): per [[debug-logs-observer-effect-on-seed]], an
+  unthrottled ~270/s warn on the saturated seed is itself a perturbation
+  hazard; fix (i) is also a measurement-hygiene prerequisite for the CL-008
+  supply-side attribution step.
