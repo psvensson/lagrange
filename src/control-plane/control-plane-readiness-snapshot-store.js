@@ -23,9 +23,12 @@ const {
 
 const controlPlaneReadinessSnapshotStoreMethods = {
   /**
-   * Reuse one previously-computed readiness snapshot when it is fresher than
-   * the currently visible cache row. This bridges short read-cache lag after a
-   * canonical owner-path refresh without reopening the sync call path to I/O.
+   * Reuse one previously-computed readiness snapshot while it still reflects
+   * the visible cache row (CL-019: per-change, not per-call). Reuse holds on
+   * watermark EQUALITY — the steady state between heartbeats — and rebuild is
+   * forced when the row advanced past the snapshot, when any nodes/services/
+   * publication cache change invalidated it, or when the snapshot's own
+   * evidence aged past the health thresholds.
    * @param {string} nodeId
    * @param {Object|null} nodeRow
    * @param {Object|null} publication
@@ -56,11 +59,28 @@ const controlPlaneReadinessSnapshotStoreMethods = {
       return null;
     }
 
-    if (
-      nodeRow &&
-      compareNodeHeartbeatWatermarks(nodeRow, storedWatermark) <= NUM.ZERO
-    ) {
-      return null;
+    if (nodeRow) {
+      const watermarkComparison = compareNodeHeartbeatWatermarks(
+        nodeRow,
+        storedWatermark,
+      );
+      // Rebuild when the visible row is STRICTLY fresher than the stored
+      // snapshot. EQUALITY reuses unless a cache-change marker landed since
+      // capture — a row mutation that does not advance the watermark (e.g. a
+      // status flip) still changes content, and only the marker can see it.
+      // A row that is OLDER than the snapshot (read-cache lag/regression) or
+      // MISSING entirely keeps the original bridge semantics: the stored
+      // snapshot is the best available answer; rebuilding from the lagged
+      // row would move the answer backwards.
+      if (watermarkComparison < NUM.ZERO) {
+        return null;
+      }
+      if (
+        watermarkComparison === NUM.ZERO &&
+        this.isReadinessSnapshotInvalidated(nodeId, capturedAtMs)
+      ) {
+        return null;
+      }
     }
 
     return Object.freeze({
@@ -68,11 +88,11 @@ const controlPlaneReadinessSnapshotStoreMethods = {
       publication:
         publication && typeof publication === TYPEOF.OBJECT ?
           Object.freeze({...publication}) :
-          null,
+          storedSnapshot.publication ?? null,
       membershipPublication:
         membershipPublication && typeof membershipPublication === TYPEOF.OBJECT ?
           Object.freeze({...membershipPublication}) :
-          null,
+          storedSnapshot.membershipPublication ?? null,
       recentTransitions: this.getReadinessTransitionHistory(nodeId),
     });
   },
@@ -99,6 +119,19 @@ const controlPlaneReadinessSnapshotStoreMethods = {
       snapshot?.nodeEvidence?.readyLeaseExpiresAt,
     );
     if (Number.isFinite(readyLeaseExpiresAt) && readyLeaseExpiresAt <= now) {
+      return false;
+    }
+
+    // CL-019: a silently-dead node produces no row change and no cache-change
+    // marker, but the rebuild path flips cluster-member health once the
+    // heartbeat ages past clusterMemberStaleHeartbeatMaxAgeMs (the same
+    // constant isRecentHeartbeat uses). Reuse must expire at that same
+    // instant, not up to a full capture-age window later.
+    const lastHeartbeat = Number(snapshot?.nodeEvidence?.lastHeartbeat);
+    if (
+      Number.isFinite(lastHeartbeat) &&
+      now - lastHeartbeat > this.clusterMemberStaleHeartbeatMaxAgeMs
+    ) {
       return false;
     }
 
@@ -227,17 +260,33 @@ const controlPlaneReadinessSnapshotStoreMethods = {
    * Persist one recent readiness snapshot for hot-path reuse.
    * @param {string} nodeId
    * @param {Object|null} snapshot
+   * @param {number|null} [buildStartedAtMs] When the producing evaluation
+   *   began reading its inputs. The snapshot is stamped as of this instant so
+   *   an invalidation landing MID-build (CL-019 TOCTOU) still marks it stale;
+   *   omitted = legacy behavior (stamped at store time).
    * @private
    */
-  storeReadinessSnapshot(nodeId, snapshot) {
+  storeReadinessSnapshot(nodeId, snapshot, buildStartedAtMs = null) {
     if (!nodeId || !snapshot) {
       return;
     }
-    const capturedAtMs = this.now();
+    const nowMs = this.now();
+    const capturedAtMs =
+      Number.isFinite(buildStartedAtMs) && buildStartedAtMs <= nowMs ?
+        buildStartedAtMs :
+        nowMs;
     this.lastReadinessSnapshotByNodeId.set(nodeId, snapshot);
     this.lastReadinessSnapshotAtMsByNodeId.set(nodeId, capturedAtMs);
-    this.lastReadinessSnapshotInvalidatedAtMsByNodeId.delete(nodeId);
-    this.recordRecoveryEpochObservation(nodeId, snapshot, capturedAtMs);
+    const invalidatedAtMs = Number(
+      this.lastReadinessSnapshotInvalidatedAtMsByNodeId.get(nodeId),
+    );
+    if (!Number.isFinite(invalidatedAtMs) || invalidatedAtMs < capturedAtMs) {
+      // The marker predates this build's input reads: consumed. A marker at
+      // or after capturedAtMs is KEPT so isReadinessSnapshotInvalidated
+      // forces one more rebuild — slower, never wrong.
+      this.lastReadinessSnapshotInvalidatedAtMsByNodeId.delete(nodeId);
+    }
+    this.recordRecoveryEpochObservation(nodeId, snapshot, nowMs);
   },
 
   /**
@@ -565,6 +614,15 @@ const controlPlaneReadinessSnapshotStoreMethods = {
    * @private
    */
   handleCacheChange(tableName, record) {
+    if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
+      // CL-019: publication content feeds the memoized membership-publication
+      // diagnostics AND the publication-derived dimensions baked into every
+      // stored readiness snapshot. Publication rows carry publication_id, not
+      // node_id, so this invalidates cluster-wide.
+      this.membershipPublicationDiagnosticsMemo = null;
+      this.lastReadinessSnapshotClusterInvalidatedAtMs = this.now();
+      return;
+    }
     if (tableName !== TABLES.NODES && tableName !== TABLES.SERVICES) {
       return;
     }
@@ -587,10 +645,17 @@ const controlPlaneReadinessSnapshotStoreMethods = {
     if (!nodeId) {
       return false;
     }
-    const invalidatedAtMs = Number(
+    const perNodeInvalidatedAtMs = Number(
       this.lastReadinessSnapshotInvalidatedAtMsByNodeId.get(nodeId),
     );
-    if (!Number.isFinite(invalidatedAtMs) || invalidatedAtMs <= NUM.ZERO) {
+    const clusterInvalidatedAtMs = Number(
+      this.lastReadinessSnapshotClusterInvalidatedAtMs,
+    );
+    const invalidatedAtMs = Math.max(
+      Number.isFinite(perNodeInvalidatedAtMs) ? perNodeInvalidatedAtMs : NUM.ZERO,
+      Number.isFinite(clusterInvalidatedAtMs) ? clusterInvalidatedAtMs : NUM.ZERO,
+    );
+    if (invalidatedAtMs <= NUM.ZERO) {
       return false;
     }
     const snapshotAtMs = Number.isFinite(capturedAtMs) ?

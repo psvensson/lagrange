@@ -127,10 +127,13 @@ class ControlPlaneReadinessServiceSegment1 {
         Math.floor(options.readinessTransitionHistoryLimit) :
         READINESS_TRANSITION_HISTORY_LIMIT;
     this.readinessTransitionHistoryByNodeId = new Map();
+    this.readinessTransitionHistoryViewByNodeId = new Map();
     this.lastReadinessEvaluationByNodeId = new Map();
     this.lastReadinessSnapshotByNodeId = new Map();
     this.lastReadinessSnapshotAtMsByNodeId = new Map();
     this.lastReadinessSnapshotInvalidatedAtMsByNodeId = new Map();
+    this.lastReadinessSnapshotClusterInvalidatedAtMs = NUM.ZERO;
+    this.membershipPublicationDiagnosticsMemo = null;
     this.lastActivePriorityRecoveryPlanningSnapshotByNodeId = new Map();
     this.lastActivePriorityRecoveryPlanningSnapshotAtMsByNodeId = new Map();
     this.recoveryEpochHistoryLimit =
@@ -308,6 +311,12 @@ class ControlPlaneReadinessServiceSegment1 {
         options.cdcGroupPropagationService || null;
     }
     if (Object.hasOwn(options, LOCAL_STR_13YWM)) {
+      if (
+        this.membershipPublicationService !==
+        (options.membershipPublicationService || null)
+      ) {
+        this.membershipPublicationDiagnosticsMemo = null;
+      }
       this.membershipPublicationService =
         options.membershipPublicationService || null;
     }
@@ -333,6 +342,14 @@ class ControlPlaneReadinessServiceSegment1 {
         previousSystemTableCache.offCacheChange(this.cacheChangeListener);
       }
       this.cacheChangeListener = null;
+      // CL-019: snapshots and memos built from the previous cache must not
+      // survive a cache swap as trusted reuse candidates — the new cache's
+      // change events never covered them.
+      this.lastReadinessSnapshotByNodeId.clear();
+      this.lastReadinessSnapshotAtMsByNodeId.clear();
+      this.lastReadinessSnapshotInvalidatedAtMsByNodeId.clear();
+      this.lastReadinessSnapshotClusterInvalidatedAtMs = NUM.ZERO;
+      this.membershipPublicationDiagnosticsMemo = null;
       this.subscribeToCacheChanges();
     }
   }

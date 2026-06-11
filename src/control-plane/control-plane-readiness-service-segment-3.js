@@ -24,6 +24,7 @@ const {
   createEligibilitySnapshot,
   resolveMembershipPublicationReadLane,
   resolveMembershipPublicationReadOptions,
+  resolveMembershipPublicationReadScope,
 } = CONTROL_PLANE_READINESS_SERVICE_SHARED;
 
 const PRIORITY_CONTROL_PLANE_RECOVERY_DIAGNOSTICS_UNAVAILABLE =
@@ -363,7 +364,13 @@ class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceS
       recentTransitions,
     });
     if (persistSnapshot) {
-      this.storeReadinessSnapshot(context.nodeId, snapshot);
+      this.storeReadinessSnapshot(
+        context.nodeId,
+        snapshot,
+        Number.isFinite(context.buildStartedAtMs) ?
+          context.buildStartedAtMs :
+          null,
+      );
     }
     return snapshot;
   }
@@ -523,20 +530,31 @@ class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceS
       nextHistory.shift();
     }
     this.readinessTransitionHistoryByNodeId.set(context.nodeId, nextHistory);
+    this.readinessTransitionHistoryViewByNodeId.delete(context.nodeId);
     return this.getReadinessTransitionHistory(context.nodeId);
   }
 
   /**
-   * Return one defensive copy of readiness transition history.
+   * Return one defensive copy of readiness transition history. The frozen
+   * view is memoized per node (CL-019): this sits on the snapshot-reuse hot
+   * path via getFresherStoredReadinessSnapshot, and the history mutates only
+   * in recordReadinessTransition (which drops the memo), so rebuilding the
+   * deep-frozen view per call was pure allocation churn.
    * @param {string} nodeId
    * @return {Object[]}
    */
   getReadinessTransitionHistory(nodeId) {
+    const memoizedView = this.readinessTransitionHistoryViewByNodeId.get(
+      nodeId,
+    );
+    if (memoizedView) {
+      return memoizedView;
+    }
     const history = this.readinessTransitionHistoryByNodeId.get(nodeId);
     if (!Array.isArray(history) || history.length === NUM.ZERO) {
       return Object.freeze([]);
     }
-    return Object.freeze(
+    const view = Object.freeze(
       history.map((entry) =>
         Object.freeze({
           ...entry,
@@ -566,6 +584,8 @@ class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceS
         }),
       ),
     );
+    this.readinessTransitionHistoryViewByNodeId.set(nodeId, view);
+    return view;
   }
 
   /**
@@ -640,8 +660,36 @@ class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceS
     observedAt,
     readOptions = {},
   ) {
+    // CL-019: this sits on the getNodeReadinessSync hot path (per routing
+    // decision, per CDC forward selection). The diagnostics are a pure
+    // function of the latest publication row, which changes ~once per epoch
+    // — memoize per change, invalidated by the control_plane_publications
+    // cache-change listener (handleCacheChange). Only the CLUSTER-scope read
+    // is node-independent and memoizable; TARGET_NODE reads recompute.
+    const memoizableRead =
+      resolveMembershipPublicationReadScope(readOptions?.scope) ===
+        MEMBERSHIP_PUBLICATION_READ_SCOPE.CLUSTER &&
+      typeof this.membershipPublicationService
+          ?.getLatestClusterPublicationSync === TYPEOF.FUNCTION;
+    if (memoizableRead && this.membershipPublicationDiagnosticsMemo) {
+      return this.membershipPublicationDiagnosticsMemo.diagnostics;
+    }
     const row = this.getLatestMembershipPublicationRowSync(nodeId, readOptions);
-    return this.buildMembershipPublicationDiagnostics(row, observedAt);
+    const diagnostics = this.buildMembershipPublicationDiagnostics(
+      row,
+      observedAt,
+    );
+    if (memoizableRead) {
+      // Production rows come through normalizeControlPlanePublicationRow,
+      // which emits NO created_at/updated_at — the diagnostics' createdAt/
+      // updatedAt are therefore observedAt-derived on every build already,
+      // and their only consumers are provenance descriptors (enteredAt with
+      // fallbacks), never gating logic. Freezing them at memo-build time is
+      // no staler than today's per-call now(); content staleness is bounded
+      // by the publication-change invalidation that clears this memo.
+      this.membershipPublicationDiagnosticsMemo = {diagnostics};
+    }
+    return diagnostics;
   }
 
   async getControlPlanePublicationStory(nodeId, observedAt, readOptions = {}) {

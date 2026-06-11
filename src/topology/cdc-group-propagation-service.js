@@ -543,6 +543,15 @@ class CDCGroupPropagationService extends EventEmitter {
    * @return {Object}
    */
   getPublicationModeDiagnostics() {
+    // The stored diagnostics are always frozen at write time (constructor +
+    // setPublicationMode), so this read sits on the readiness hot path with
+    // zero per-call allocation (CL-019).
+    if (
+      this.publicationModeDiagnostics &&
+      Array.isArray(this.publicationModeDiagnostics.recentTransitions)
+    ) {
+      return this.publicationModeDiagnostics;
+    }
     return this.freezePublicationModeDiagnostics({
       ...this.publicationModeDiagnostics,
       recentTransitions: Array.isArray(this.publicationModeDiagnostics?.recentTransitions) ?

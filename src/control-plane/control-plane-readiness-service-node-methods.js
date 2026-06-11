@@ -195,7 +195,8 @@ const controlPlaneReadinessNodeMethods = {
    * @private
    */
   async evaluateNodeReadiness(nodeId, options = {}) {
-    const observedAt = normalizeIsoTimestamp(this.now());
+    const buildStartedAtMs = this.now();
+    const observedAt = normalizeIsoTimestamp(buildStartedAtMs);
     const publication = this.getPublicationDiagnostics(observedAt);
     const membershipPublication =
       await this.getMembershipPublicationDiagnostics(nodeId, observedAt);
@@ -259,6 +260,7 @@ const controlPlaneReadinessNodeMethods = {
           missingNodeReadinessState: missingNodeReadiness.state,
           persistSnapshot,
           observedAt,
+          buildStartedAtMs,
         });
       }
       const fresherStoredSnapshot = this.getFresherStoredReadinessSnapshot(
@@ -295,7 +297,7 @@ const controlPlaneReadinessNodeMethods = {
         recentTransitions,
       });
       if (persistSnapshot) {
-        this.storeReadinessSnapshot(nodeId, snapshot);
+        this.storeReadinessSnapshot(nodeId, snapshot, buildStartedAtMs);
       }
       return snapshot;
     }
@@ -313,6 +315,7 @@ const controlPlaneReadinessNodeMethods = {
       membershipPublicationPlanningSnapshot,
       persistSnapshot,
       observedAt,
+      buildStartedAtMs,
     });
   },
 
@@ -328,7 +331,8 @@ const controlPlaneReadinessNodeMethods = {
    * @return {Object|null} Frozen readiness snapshot or null.
    */
   getNodeReadinessSync(nodeId, options = {}) {
-    const observedAt = normalizeIsoTimestamp(this.now());
+    const buildStartedAtMs = this.now();
+    const observedAt = normalizeIsoTimestamp(buildStartedAtMs);
     const nodeRow = this.getNodeRow(nodeId);
     const publication = this.getPublicationDiagnostics(observedAt);
     const membershipPublication = this.getMembershipPublicationDiagnosticsSync(
@@ -409,6 +413,7 @@ const controlPlaneReadinessNodeMethods = {
           missingNodeReadinessState: missingNodeReadiness.state,
           persistSnapshot,
           observedAt,
+          buildStartedAtMs,
         });
       }
       const missingReadiness = this.buildMissingNodeReadiness(
@@ -436,7 +441,7 @@ const controlPlaneReadinessNodeMethods = {
         recentTransitions,
       });
       if (persistSnapshot) {
-        this.storeReadinessSnapshot(nodeId, snapshot);
+        this.storeReadinessSnapshot(nodeId, snapshot, buildStartedAtMs);
       }
       this.maybeStartBackgroundSyncReadinessRefresh(
         {
@@ -463,6 +468,7 @@ const controlPlaneReadinessNodeMethods = {
       membershipPublicationPlanningSnapshot,
       persistSnapshot,
       observedAt,
+      buildStartedAtMs,
     });
     this.maybeStartBackgroundSyncReadinessRefresh(
       {
