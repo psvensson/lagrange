@@ -1944,12 +1944,23 @@ Each record below represents one violated invariant.
   2 CL-017(b) cases in replica-operation-repository.test.js (6 red on
   src revert). Suites green: partition 1428, cdc 1008, node 1181,
   rebalancer 4424, repository 306.
-- Sequencing note: this record blocks 3/4 runs at the pre-restart gate;
-  the restart-phase ladder (run3's surface) becomes reachable once
-  quiescence closes. The seed-freeze primary layer also re-opens the
-  residual seed-saturation question in the 4/3 window (CL-012's ~90%
-  busy + 13-34s max gaps band — the profiler artifacts from this run
-  are available for re-ranking). NOTE: the freeze layer itself is NOT
-  fixed by this record — (c) makes the retry budget survive it; the
-  freeze re-ranking is the follow-on if the gate still shows quiesce
-  timeouts.
+- GATE (stat-gate-20260611T153621Z, post-fix): mechanisms ENGAGED,
+  surface UNCHANGED — as the record itself predicted (the freeze layer
+  is untouched). 4/4 publication CONVERGED; 3 runs quiesce-timeout +
+  1 run restarted-node recovery-ready (same mix). Mechanism evidence
+  (run1): OPERATION_ROW_DIVERGENCE_REINSERT fired 6x (escalation works);
+  the new attribution shows ALL no-row updates land on the SEED'S -r1
+  replica databases across SIX system tables (services 36x,
+  replica_operations 6x, storage_reservations 4x, partitions,
+  message_groups, nodes) — the divergence is not one partition's churn
+  artifact but a seed-r1-wide pattern; NOTE the warn fires for ANY
+  zero-row update (legitimate update-before-insert races included), so
+  the believed-exists correlation (re-insert events, 6x) is the true
+  divergence count. Operation churn shrank (creates 11->6 per run on
+  the seed) but quiesce still times out.
+- STATUS: fix-landed mechanisms guarded; the REMAINING blocker for this
+  record is the SEED FREEZE layer in the 4/3 window — next falsification
+  step: re-rank the gap-profiler artifacts (LAGRANGE_LOOP_GAP_PROFILE
+  data in stat-gate-20260611T153621Z run artifacts) for the 14:0x-14:1x
+  freeze windows and open the follow-on record on the top inclusive-time
+  frame (CL-012 method, third pass).
