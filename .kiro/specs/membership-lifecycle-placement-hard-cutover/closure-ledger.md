@@ -1874,6 +1874,52 @@ Each record below represents one violated invariant.
   this 4/3 phase); the second new surface (restarted-node
   recovery-readiness, run3, 120s budget) is SEPARATE and queued after
   this record.
+- FALSIFICATION EXECUTED (2026-06-11, three-layer subagent trace,
+  code+artifact citations) — the record SPLITS INTO TWO PROVEN LAYERS:
+  (1) PRIMARY (proven): 'participants' are routed service-row replicas on
+  the canonical leader NODE (query-executor-partition-routing-candidates
+  :172-232), and every attributed participant failure in the run points
+  at the SEED — which hosts 3 of the 4 replicas and freezes again in
+  this window (23 event-loop gaps, max 23.5s, 48/48 critical outbound
+  saturation, 41 quarantine liveness-skips). A 23s freeze exceeds the
+  15s query budget, and one such attempt consumes the
+  executeSQLViaQueryEngine retry budget (6 attempts collapsing in the
+  same millisecond — cdc-routed-mutation-readiness.js:370-396,494-523).
+  CL-001-lineage seed saturation surfacing as participant failure;
+  enumeration of FAILED/CREATING rows REFUTED (participants come from
+  routable service rows only); raft quorum shortfall REFUTED (zero raft
+  commit timeouts; 3 of 4 voters co-located on the seed).
+  (2) SECONDARY (proven EFFECT, mechanism candidate — SAFETY-ADJACENT,
+  highest scrutiny next session): operation rows INSERTED at/after the
+  14:05:50-14:06:06 leadership churn are NEVER FOUND by later UPDATEs on
+  the seed ('No row found for CDC update' 144ms after a logged
+  inserted-row CDC fetch; no DELETE, no restart between) while
+  pre-churn rows fetch fine forever. Consistent with two co-located seed
+  replicas applying writes against DIVERGENT SQLite databases, each
+  believing it may emit CDC — candidate paths: the unilateral
+  single-replica direct-apply (partition-replication-handler.js:288-307,
+  taken when isMultiReplica() is false) and local leader-claim
+  heuristics (cdc-routed-mutation-readiness.js:56-122,
+  cdc-integration-service-local-system-table-routing.js:69-105).
+  Even when transport recovers, committed UPDATEs are 0-row no-ops and
+  reconciliation reverts steps ('Cache/authoritative divergence detected'
+  -> step back to creating) — the operation can never durably leave
+  CREATING. INSTRUMENTATION GAP blocking exact attribution: the CDC
+  fetch logs (partition-cdc-parameterized-sql.js:292-328) carry no
+  replicaId/role — add before pinning.
+- CL-017 FIX INVARIANTS (from the trace): (a) a write routed to a
+  partition must be admitted against the raft-committed db — never a
+  unilaterally-applied local db (isMultiReplica() must never be false
+  for a multi-replica group; local leader claims validated against the
+  in-memory raft role before direct apply); (b) a committed UPDATE with
+  affectedRows==0 on a row the coordinator believes exists must surface
+  as a DIVERGENCE ERROR (not success) so the owner re-inserts instead of
+  no-op-retrying forever; (c) the transition path needs a per-attempt
+  timeout smaller than the retry budget so one freeze window cannot
+  consume all attempts.
 - Sequencing note: this record blocks 3/4 runs at the pre-restart gate;
   the restart-phase ladder (run3's surface) becomes reachable once
-  quiescence closes.
+  quiescence closes. The seed-freeze primary layer also re-opens the
+  residual seed-saturation question in the 4/3 window (CL-012's ~90%
+  busy + 13-34s max gaps band — the profiler artifacts from this run
+  are available for re-ranking).
