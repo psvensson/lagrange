@@ -1425,6 +1425,27 @@ Each record below represents one violated invariant.
   hint-less self-only REPLACE fails retryably with NO partition service
   created; legacy non-REPLACE fallback unchanged) — 4 failures on fix
   revert. 1175 node + 224 replace-workflow tests green.
+- SUBAGENT VERIFICATION (PASS): wiring confirmed end-to-end on the real
+  CREATE_REPLICA path (dispatch FIELD operationType -> handler ->
+  context); quorum math verified slow-only — liferaft computes majority
+  from each node's LOCAL peer list and peers join only via explicit
+  join(), so stale hint entries can only inflate the JOINER's own quorum,
+  never the group's; voter-mode join cannot win elections against voters
+  holding committed entries (sect. 5.4 vote restriction present in the
+  fork); the solo-leader break path requires replicaIds.length===1, now
+  unreachable for explicit REPLACE. Post-verification cleanups applied:
+  case-normalized the REPLACE comparison (was fail-open on non-canonical
+  case) and fixed a misleading test title.
+- FOLLOW-UPS recorded, not landed: (1) stamped hints do not filter
+  terminal/failed service rows (buildReplicatedServiceBootstrapTopology /
+  merge time) and peer reconciliation never prunes row-less peers — a
+  stale hint entry persistently inflates the joiner's own quorum
+  (slow-only; filter at stamp or merge); (2) the legacy
+  replica-lifecycle-manager.js:346-373 CREATE path drops operationType
+  (guard inert there; that path always carries replica_ids so self-only
+  is improbable); (3) when ALL siblings are genuinely dead and hints are
+  absent, each create attempt burns syncTimeoutMs then terminal-FAILs
+  (planner re-plans) — correct but slower than a DEFER_RETRY shape.
 - Relationship to other records: this is the ACTUAL CL-003 blocker (the
   planner and spread summary are exonerated; operations fail at learner
   join). CL-009(ii)'s mute landed correctly but is NOT load-bearing here

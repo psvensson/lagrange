@@ -619,7 +619,7 @@ export async function registerReplicaHandlerCreateTopologyTests({
 
   t.test(
     'CL-013: explicit REPLACE join into an established partition consumes ' +
-      'dispatched topology hints and joins as learner',
+      'dispatched topology hints — full cohort, never self-only',
     async (t) => {
       const partitionId = 'partition-1';
       const tableId = 'table-1';

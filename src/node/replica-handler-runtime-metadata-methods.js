@@ -330,7 +330,10 @@ function assignReplicaHandlerRuntimeMetadataMethods(
       // unchanged: with peers present but no viable leader, voter-mode
       // re-formation remains the designed dead-leader recovery behavior.)
       const isExplicitReplaceJoin =
-        options.explicitOperationType === EXPLICIT_REPLACE_OPERATION_TYPE;
+        typeof options.explicitOperationType ===
+          REPLICA_HANDLER_TYPEOF.STRING &&
+        options.explicitOperationType.trim().toUpperCase() ===
+          EXPLICIT_REPLACE_OPERATION_TYPE;
       if (isExplicitReplaceJoin) {
         const siblingPeerCount = replicaIds.filter(
           (candidateReplicaId) => candidateReplicaId !== replicaId,
