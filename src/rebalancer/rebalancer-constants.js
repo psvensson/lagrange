@@ -269,6 +269,7 @@ const REBALANCE_COORDINATOR_LOG_MSG = Object.freeze({
   RECONCILE_IN_PROGRESS: 'SYNCING operation still in progress',
   SHUTDOWN: 'Shutting down RebalanceCoordinator',
   DUPLICATE_OPERATION: 'Duplicate operation detected, reusing existing',
+  REUSED_IN_FLIGHT_OPERATION: 'Reusing in-flight operation for planned move',
   STEPS_HISTORY_PARSE_ERROR: 'Failed to parse steps_history JSON',
   QUERY_OPERATION_FAILED: 'Failed to query operation from system table',
   QUERY_OPERATIONS_FAILED: 'Failed to query operations from system table',

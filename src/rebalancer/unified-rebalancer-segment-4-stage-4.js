@@ -45,7 +45,7 @@ class UnifiedRebalancerSegment4Stage4 extends UnifiedRebalancerSegment4Stage3 {
         entityType: this.entityType,
         partitionId: operationPartitionId,
         moveType: move.type,
-        nodeId: move.nodeId,
+        moveTargetNodeId: move.nodeId || null,
         replicaId: move.replicaId,
         error: safetyError,
       });

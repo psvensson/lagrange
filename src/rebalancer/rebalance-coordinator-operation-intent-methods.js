@@ -6,6 +6,7 @@ const {
   NUM,
   OperationType,
   PRIORITY_RECENT_INTENT_TTL_MS,
+  REBALANCE_COORDINATOR_LOG_MSG,
   RECENT_INTENT_TTL_MS,
   RECENT_OPERATION_INTENT_VISIBILITY_STATE,
   ReplicaStatus,
@@ -15,6 +16,12 @@ const {
 } = REBALANCE_COORDINATOR_SHARED;
 
 const LOCAL_STR_STRING = 'string';
+const LOCAL_STR_FUNCTION = 'function';
+const REUSED_OPERATION_REARM_ACTION = Object.freeze({
+  SKIP_NOT_PENDING: 'skip_not_pending',
+  SKIP_LIVE_DEFERRED_RETRY: 'skip_live_deferred_retry',
+  REARM_DISPATCH: 'rearm_dispatch',
+});
 const LOCAL_STR_1F209 = 'Failed to refresh recent operation intent from cache-visible state';
 const LOCAL_STR_EMPTY = '';
 const PRIORITY_RECENT_INTENT_MISS_REUSE_EXTENDED_OPERATION_TYPES = new Set([
@@ -408,18 +415,93 @@ class RebalanceCoordinatorOperationIntentMethods {
    * @private
    */
   async maybeRearmReusedPendingOperation(operation, _options = {}) {
+    if (!operation) {
+      return operation;
+    }
     const workflowStep = String(
       operation?.workflowStep || operation?.workflow_step || '',
     ).trim();
-    if (
-      !operation ||
-      this.isOperationTerminal(operation) ||
-      workflowStep !== WORKFLOW_STEP.PENDING
-    ) {
+    const rearmAction = this.resolveReusedOperationRearmAction(
+      operation,
+      workflowStep,
+    );
+    this.logger.info(
+      REBALANCE_COORDINATOR_LOG_MSG.REUSED_IN_FLIGHT_OPERATION,
+      {
+        operationId:
+          operation.operationId || operation.operation_id || null,
+        partitionId:
+          operation.partitionId || operation.partition_id || null,
+        moveTargetNodeId:
+          operation.targetNodeId || operation.target_node_id || null,
+        type: operation.type || operation.operation_type || null,
+        workflowStep,
+        rearmAction,
+      },
+    );
+    if (rearmAction !== REUSED_OPERATION_REARM_ACTION.REARM_DISPATCH) {
       return operation;
     }
     await this.armCoordinatorCreatedOperationProgress(operation);
     return operation;
+  }
+
+  /**
+   * Decide whether a reused operation needs a dispatch rearm. A live
+   * deferred retry (dispatch retry, transition retry/grace, or
+   * created-operation handoff retry) means the dispatch layer already owns
+   * the next attempt, so a planning-tick rearm would only add a redundant
+   * authoritative read, claim write, and remote dispatch attempt. Rearm is
+   * reserved for the missed-handoff state: PENDING with no live timer.
+   * @param {Object} operation
+   * @param {string} workflowStep
+   * @return {string} One REUSED_OPERATION_REARM_ACTION value.
+   * @private
+   */
+  resolveReusedOperationRearmAction(operation, workflowStep) {
+    if (
+      this.isOperationTerminal(operation) ||
+      workflowStep !== WORKFLOW_STEP.PENDING
+    ) {
+      return REUSED_OPERATION_REARM_ACTION.SKIP_NOT_PENDING;
+    }
+    if (this.hasLiveDeferredDispatchRetry(operation)) {
+      return REUSED_OPERATION_REARM_ACTION.SKIP_LIVE_DEFERRED_RETRY;
+    }
+    return REUSED_OPERATION_REARM_ACTION.REARM_DISPATCH;
+  }
+
+  /**
+   * Resolve whether the workflow owner already has a live deferred retry
+   * scheduled for one operation. Checks both the dispatch/transition retry
+   * timers and the created-operation handoff retry lane — the latter is not
+   * covered by isOperationDeferredRetryActive.
+   * @param {Object|null} operation
+   * @return {boolean}
+   * @private
+   */
+  hasLiveDeferredDispatchRetry(operation) {
+    const operationId = String(
+      operation?.operationId || operation?.operation_id || LOCAL_STR_EMPTY,
+    ).trim();
+    if (operationId.length === NUM.ZERO) {
+      return false;
+    }
+    const owner = this.workflowOwner;
+    if (!owner) {
+      return false;
+    }
+    if (
+      typeof owner.isOperationDeferredRetryActive === LOCAL_STR_FUNCTION &&
+      owner.isOperationDeferredRetryActive(operationId)
+    ) {
+      return true;
+    }
+    return (
+      typeof owner.hasActiveCreatedOperationHandoffRetry ===
+        LOCAL_STR_FUNCTION &&
+      owner.hasActiveCreatedOperationHandoffRetry(operationId) === true
+    );
   }
 
   /**

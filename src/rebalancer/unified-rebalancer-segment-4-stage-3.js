@@ -800,11 +800,15 @@ class UnifiedRebalancerSegment4Stage3 extends UnifiedRebalancerSegment4Stage2 {
       );
     }
 
+    // LoggingService injects the local nodeId into every payload, so the
+    // move target must use a distinct key to survive in the emitted line.
     this.logger.info(REBALANCER_LOG_MSG.EXECUTE_MOVE, {
       entityId: this.entityId,
       entityType: this.entityType,
       moveType: move.type,
-      nodeId: move.nodeId,
+      moveTargetNodeId: move.nodeId || null,
+      moveSourceNodeId: move.sourceNodeId || null,
+      moveReplicaId: move.replicaId || null,
       reason: move.reason,
       usingCoordinator: !!this.rebalanceCoordinator,
     });
@@ -818,7 +822,7 @@ class UnifiedRebalancerSegment4Stage3 extends UnifiedRebalancerSegment4Stage2 {
         if (skipDetail !== null) {
           this.logger.debug(REBALANCER_LOG_MSG.SKIP_UNREADY_NODE, {
             entityId: this.entityId,
-            nodeId: move.nodeId,
+            moveTargetNodeId: move.nodeId || null,
             moveType: move.type,
             skipDetail,
           });
@@ -851,7 +855,7 @@ class UnifiedRebalancerSegment4Stage3 extends UnifiedRebalancerSegment4Stage2 {
           entityId: this.entityId,
           entityType: this.entityType,
           moveType: move.type,
-          nodeId: move.nodeId,
+          moveTargetNodeId: move.nodeId || null,
           replicaId: move.replicaId || null,
           reason: outcome.reason || null,
           error: outcome.error || null,
@@ -865,7 +869,7 @@ class UnifiedRebalancerSegment4Stage3 extends UnifiedRebalancerSegment4Stage2 {
       this.logger.error(REBALANCER_LOG_MSG.MOVE_FAILED, {
         entityId: this.entityId,
         moveType: move.type,
-        nodeId: move.nodeId,
+        moveTargetNodeId: move.nodeId || null,
         error: error.message,
       });
       throw error;
