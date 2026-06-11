@@ -1782,3 +1782,26 @@ Each record below represents one violated invariant.
   during recovery (the write path for that row IS the thing recovering).
   The existing local-commit fallback acknowledged the cycle but only
   half-applied it (state machine yes, cache no).
+- FIX LANDED (2026-06-11): (a) commitPriorityReplicaCreateStatusLocally
+  now seeds the SERVICES row into the local systemTableCache
+  (seedLocalPriorityServiceRow: service_id/type/partition/node/status/
+  address via buildTrackedServiceAddress; sanctioned direct
+  applySystemTableChange site) — local cache reflects local truth, the
+  durable write's CDC round-trip supersedes later (newer updated_at wins
+  in the cache merge); (b) failure-path symmetry: terminal creation
+  failure re-seeds the row as FAILED (no 'creating' ghosts);
+  (c) INTERACTION FIX the seed exposed: the lifecycle persistence path
+  (replica-state-machine-transition.js updateReplicaStateInCdc) chose
+  UPSERT-vs-UPDATE by LOCAL cache existence — the seeded row would have
+  flipped it to UPDATE against a distributed row that never landed.
+  Resolved with an explicit local-only marker on the state machine
+  (markServiceRowLocalOnly at seed time; lifecycle writes UPSERT while
+  marked; the marker clears when a durable write commits). A
+  previous-state heuristic was tried and rejected — it broke the pinned
+  non-priority semantics (normal flow: SYNCING=update after a successful
+  durable CREATING write).
+  Guards: new CL-016 case in replica-handler-create-admission-test-cases
+  (deferred CREATING write -> local row seeded with address before
+  service start, marked local-only at factory time; SYNCING lifecycle
+  write becomes UPSERT; durable commit clears the marker) — red on src
+  revert. 238 replica-handler + 1181 node-suite tests green.

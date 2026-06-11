@@ -1,4 +1,5 @@
 import {NUM, WORKFLOW_STEP} from '../constants/index.js';
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
   isPriorityControlPlanePartition,
 } from '../bootstrap/system-partition-classification.js';
@@ -24,6 +25,7 @@ import {
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const REPLICA_HANDLER_LITERAL = Object.freeze({
   VALUE: '',
+  UPSERT: 'UPSERT',
 });
 const REPLICA_CREATE_IN_PROGRESS_OUTCOME_BY_STATUS = Object.freeze(
   new Map([
@@ -404,6 +406,55 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
      * @return {Promise<boolean>}
      * @private
      */
+    /**
+     * CL-016: the priority local-commit fallback must make the LOCAL cache
+     * reflect local truth. isReplicaVoterReady, routing viability, and
+     * fan-out target resolution all read the SERVICES row from the local
+     * systemTableCache; during priority recovery the durable row write
+     * EXPECTEDLY defers (it writes through the very control plane being
+     * recovered), so without this seed the voter-ready check polls a row
+     * that cannot exist within its budget — every priority REPLACE replica
+     * timed out regardless of raft catch-up speed.
+     * Bootstrap hydration exception: sanctioned direct
+     * applySystemTableChange call site — local-only truth, superseded later
+     * by the durable write's CDC round-trip (newer updated_at wins in the
+     * cache merge).
+     * @param {string} replicaId
+     * @param {string} partitionId
+     * @param {string} status - ReplicaStatus value reflecting local truth.
+     * @return {boolean} Whether the row was applied.
+     * @private
+     */
+    seedLocalPriorityServiceRow(replicaId, partitionId, status) {
+      if (
+        !this.systemTableCache ||
+        typeof this.systemTableCache.applySystemTableChange !==
+          REPLICA_HANDLER_TYPEOF.FUNCTION
+      ) {
+        return false;
+      }
+      const nowMs = Date.now();
+      this.systemTableCache.applySystemTableChange(
+        SYSTEM_TABLE_NAME.SERVICES,
+        REPLICA_HANDLER_LITERAL.UPSERT,
+        {
+          service_id: replicaId,
+          service_type: REPLICA_HANDLER_SERVICE.TYPE,
+          partition_id: partitionId,
+          node_id: this.nodeId,
+          status,
+          address: this.buildTrackedServiceAddress(replicaId),
+          created_at: nowMs,
+          updated_at: nowMs,
+        },
+        {causeId: `priority-local-create:${replicaId}`},
+      );
+      // Lifecycle persistence must UPSERT for this row until a durable
+      // write confirms remote existence (the local row no longer proxies
+      // it).
+      this.replicaStateMachine?.markServiceRowLocalOnly?.(replicaId);
+      return true;
+    }
     async commitPriorityReplicaCreateStatusLocally(options = {}) {
       const {operationId, partitionId, replicaId, error} = options;
       this.setLocalReplica(replicaId, {
@@ -411,6 +462,11 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         partitionId,
         status: ReplicaStatus.CREATING,
       });
+      this.seedLocalPriorityServiceRow(
+        replicaId,
+        partitionId,
+        ReplicaStatus.CREATING,
+      );
       const transitionContext = {
         partitionId,
         nodeId: this.nodeId,
@@ -813,6 +869,15 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
             partitionId,
             status: ReplicaStatus.FAILED,
           });
+          // CL-016 failure-path symmetry: a locally-seeded SERVICES row must
+          // never linger as a 'creating' ghost after terminal failure.
+          if (this.shouldUsePriorityReplicaCreateStatusFallback(partitionId)) {
+            this.seedLocalPriorityServiceRow(
+              replicaId,
+              partitionId,
+              ReplicaStatus.FAILED,
+            );
+          }
         } finally {
           // Clean up in-progress tracking even when FAILED status persistence is deferred.
           if (operationId) {

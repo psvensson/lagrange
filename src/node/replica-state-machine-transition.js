@@ -253,8 +253,18 @@ async function updateReplicaStateInCdc(
     const cachedService = hasServiceCacheLookup ?
       stateMachine.systemTableCache.get(TABLES.SERVICES, serviceId) :
       null;
+    // CL-016: the local cache no longer proxies REMOTE existence — the
+    // priority create fallback seeds a local-only services row while the
+    // durable write is deferred. For such rows an UPDATE could target a
+    // row the distributed table never received; UPSERT is idempotent and
+    // converges either way. The marker clears when a durable write
+    // commits.
+    const remoteExistenceUnconfirmed =
+      typeof stateMachine.isServiceRowLocalOnly === TYPEOF.FUNCTION &&
+      stateMachine.isServiceRowLocalOnly(serviceId);
     const shouldUpsertMissingServiceRow =
-      hasServiceCacheLookup && !cachedService;
+      (hasServiceCacheLookup && !cachedService) ||
+      remoteExistenceUnconfirmed;
     const mutation = shouldUpsertMissingServiceRow ?
       {
         operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
@@ -276,6 +286,10 @@ async function updateReplicaStateInCdc(
       mutation,
       persistenceOptions,
     );
+    if (typeof stateMachine.clearServiceRowLocalOnly === TYPEOF.FUNCTION) {
+      // Durable write committed — remote existence confirmed (CL-016).
+      stateMachine.clearServiceRowLocalOnly(serviceId);
+    }
     await stateMachine._clearCanonicalPartitionLeaderIfNeeded(replicaState);
 
     stateMachine.logger.debug(REPLICA_STATE_MACHINE_LOG_MSG.STATE_PERSISTED, {

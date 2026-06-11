@@ -115,6 +115,13 @@ class ReplicaStateMachine extends EventEmitter {
       REPLICA_STATE_MACHINE_NOW;
     this.systemTableCache = options.systemTableCache || null;
 
+    // CL-016: service rows seeded into the LOCAL cache by the priority
+    // create fallback, whose durable write is still unconfirmed. The
+    // lifecycle persistence path must UPSERT (not UPDATE) these until a
+    // durable write commits, because the local cache no longer proxies
+    // remote existence for them.
+    this.localOnlyServiceRowIds = new Set();
+
     this.replicas = new Map();
     this.stateCounts = {
       [ReplicaState.PENDING]: REPLICA_STATE_MACHINE_NUM.ZERO,
@@ -336,6 +343,37 @@ class ReplicaStateMachine extends EventEmitter {
 
   checkTimeoutsNow() {
     return this._checkTimeouts();
+  }
+
+  /**
+   * CL-016: mark a service row as seeded locally (durable write deferred);
+   * lifecycle persistence will UPSERT instead of UPDATE for it until a
+   * durable write commits.
+   * @param {string} serviceId
+   * @return {void}
+   */
+  markServiceRowLocalOnly(serviceId) {
+    if (serviceId) {
+      this.localOnlyServiceRowIds.add(serviceId);
+    }
+  }
+
+  /**
+   * @param {string} serviceId
+   * @return {boolean}
+   */
+  isServiceRowLocalOnly(serviceId) {
+    return this.localOnlyServiceRowIds.has(serviceId);
+  }
+
+  /**
+   * A durable write committed for this service row — remote existence is
+   * confirmed, normal UPDATE semantics resume.
+   * @param {string} serviceId
+   * @return {void}
+   */
+  clearServiceRowLocalOnly(serviceId) {
+    this.localOnlyServiceRowIds.delete(serviceId);
   }
 
   async handleNodeRecovery(options = {}) {

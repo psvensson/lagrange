@@ -522,4 +522,131 @@ export async function registerReplicaHandlerCreateAdmissionTests({
       handler.shutdown();
     },
   );
+
+  t.test(
+    'CL-016: priority local-commit fallback seeds the LOCAL services row ' +
+      'so voter-ready activation does not require the recovering control ' +
+      'plane',
+    async (t) => {
+      const cache = createSeededCache({
+        tableId: 'replica_operations',
+        tableName: 'replica_operations',
+        partitionId: TEST_PRIORITY_CREATE_STATUS_PARTITION_ID,
+      });
+      seedReplicaOperation(cache, TEST_PRIORITY_CREATE_STATUS_OPERATION_ID, {
+        partitionId: TEST_PRIORITY_CREATE_STATUS_PARTITION_ID,
+        replicaId: TEST_PRIORITY_CREATE_STATUS_REPLICA_ID,
+      });
+      const mockCDC = createMockCDCService(cache);
+      const replicaStateMachine = new ReplicaStateMachine({
+        nodeId: 'test-node',
+        systemTableCache: cache,
+        controlPlaneSystemTableGateway: {
+          async submitMutation(mutation) {
+            // The CREATING write defers — the recovering control plane is
+            // unavailable at create time (the CL-016 live condition);
+            // later lifecycle writes succeed.
+            const mutationStatus =
+              mutation.row?.status || mutation.data?.status || null;
+            if (
+              mutation.tableName === SYSTEM_TABLE_NAME.SERVICES &&
+              mutationStatus === ReplicaStatus.CREATING
+            ) {
+              const error = new Error(TEST_INITIAL_STATUS_RETRY_ERROR);
+              error.code = TEST_INITIAL_STATUS_RETRY_ERROR_CODE;
+              error.errorCode = TEST_INITIAL_STATUS_RETRY_ERROR_CODE;
+              error.deferRetry = true;
+              error.retryAfterMs = TEST_INITIAL_STATUS_RETRY_AFTER_MS;
+              throw error;
+            }
+            if (mutation.tableName === SYSTEM_TABLE_NAME.SERVICES) {
+              serviceMutations.push({
+                operation: mutation.operation,
+                status: mutationStatus,
+              });
+            }
+            applyGatewayMutationToCache(cache, mutation);
+            return {success: true};
+          },
+        },
+      });
+      const serviceMutations = [];
+      let rowAtFactory = null;
+      let localOnlyAtFactory = null;
+      const handler = new ReplicaHandler({
+        nodeId: 'test-node',
+        cdcIntegrationService: mockCDC,
+        systemTableCache: cache,
+        replicaStateMachine,
+        createPartitionService: async (options) => {
+          rowAtFactory = cache.get(
+            SYSTEM_TABLE_NAME.SERVICES,
+            options.replicaId,
+          );
+          localOnlyAtFactory = replicaStateMachine.isServiceRowLocalOnly(
+            options.replicaId,
+          );
+          return {
+            partitionId: options.partitionId,
+            replicaId: options.replicaId,
+            initialized: true,
+            async shutdown() {},
+            async syncFromLeader() {},
+          };
+        },
+        dataDir: getTempDir(),
+      });
+      handler.initialize();
+
+      const created = waitForReplicaEvent(
+        handler,
+        'replicaCreated',
+        'replicaCreationFailed',
+      );
+      await handler.handleCreateReplica({
+        operationId: TEST_PRIORITY_CREATE_STATUS_OPERATION_ID,
+        // REMOVE skips the voter-ready activation gate (not under test
+        // here); the row-seeding path under test is operation-agnostic.
+        operationType: 'REMOVE',
+        partitionId: TEST_PRIORITY_CREATE_STATUS_PARTITION_ID,
+        replicaId: TEST_PRIORITY_CREATE_STATUS_REPLICA_ID,
+      });
+      await created;
+
+      t.ok(rowAtFactory, 'local services row seeded before service start');
+      t.equal(
+        rowAtFactory.status,
+        ReplicaStatus.CREATING,
+        'seeded row reflects local truth',
+      );
+      t.ok(
+        typeof rowAtFactory.address === 'string' &&
+          rowAtFactory.address.length > 0,
+        'seeded row carries the routable address voter-ready requires',
+      );
+      t.equal(
+        localOnlyAtFactory,
+        true,
+        'row is marked local-only while the durable write is deferred',
+      );
+      const syncingMutation = serviceMutations.find(
+        (mutation) => mutation.status === ReplicaStatus.SYNCING,
+      );
+      t.equal(
+        syncingMutation?.operation,
+        'upsert',
+        'lifecycle write UPSERTs while remote existence is unconfirmed',
+      );
+      t.equal(
+        replicaStateMachine.isServiceRowLocalOnly(
+          TEST_PRIORITY_CREATE_STATUS_REPLICA_ID,
+        ),
+        false,
+        'durable commit clears the local-only marker',
+      );
+
+      await handler.shutdown();
+    },
+  );
 }
+
