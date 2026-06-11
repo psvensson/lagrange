@@ -23,7 +23,8 @@ Each record below represents one violated invariant.
 | CL-009 | open | transport-replication-backpressure | Per-source outbound backpressure rejection must not convert every partition write into an unthrottled per-attempt warn + immediate sender retry against a stillborn replica. |
 | CL-010 | guarded | readiness-observation-hot-path | Per-observation readiness diagnostics must be O(changes), not O(calls): the recovery-epoch timeline's change check must not allocate and double-JSON.stringify full summaries (including fresh timestamps, so it never matched) on every getNodeReadinessSync. |
 | CL-011 | guarded | readiness-observation-hot-path | Read isolation for cached system-table rows must not cost a JSON serialize+parse roundtrip per row per read. |
-| CL-012 | open | readiness-read-amplification | The query executor's partition-routing path must not rebuild full node readiness (evidence pipeline + authoritative reads) per service row per routing decision; readiness evaluation must not recursively issue reads that themselves require routing + readiness. |
+| CL-012 | guarded | readiness-read-amplification | The query executor's partition-routing path must not rebuild full node readiness (evidence pipeline + authoritative reads) per service row per routing decision; readiness evaluation must not recursively issue reads that themselves require routing + readiness. |
+| CL-013 | open | replica-join-topology | A REPLACE-created replica joining an ESTABLISHED partition must consume the owner-dispatched bootstrap topology; it must never fall back to a locally-filtered cache view that can reduce to self-only and trigger a fresh solo raft bootstrap. |
 
 ## CL-001 Published Membership Convergence Under Restart Churn
 
@@ -1325,3 +1326,96 @@ Each record below represents one violated invariant.
   2. The microtask-starvation structure explains why joiners show zero
      gaps: only the seed both leads the control plane and serves the
      routing-heavy query load during formation.
+
+
+## CL-013 Established-Partition Joins Must Consume Owner-Dispatched Topology
+
+- Status: open (named 2026-06-11 by a three-layer subagent trace with run
+  artifacts; fix not started)
+- Concern: replica-join-topology
+- Failure Class: formation-livelock (with a control-row pollution side
+  effect)
+- First Violated Invariant: A REPLACE-created replica joining an
+  ESTABLISHED partition must consume the owner-dispatched bootstrap
+  topology (replicaIds/peerAddresses stamped on the operation by the
+  coordinator). It must never silently fall back to its own locally-
+  filtered SERVICES cache view — which under churn can reduce to
+  self-only — and then run a FRESH solo raft bootstrap that forms an
+  isolated single-node group.
+- Authoritative Owner: replica handler join-context resolution
+  (src/node/replica-handler-runtime-metadata-methods.js:275-289 — the
+  dispatched hints are merged ONLY inside isFreshPartitionBootstrapWindow;
+  src/node/replica-handler-class-part-2.js:120-129 — the window requires
+  leader_node_id unset AND created_at===updated_at, i.e. NEVER true for
+  the REPLACE-spread case) + the priority-partition sibling viability
+  filter (runtime-metadata-methods.js:216-223 +
+  class-part-2.js:152-184) + solo-bootstrap admission
+  (replica-handler-create-methods.js:623 isJoiningExistingGroup).
+- Witness (stat-gate-20260611T100326Z, ALL runs; certainty: the learner's
+  cached partition row in the run1 artifacts proves the fresh window was
+  closed — leader_node_id=seed, created_at!=updated_at): every priority-
+  partition REPLACE create logs stage=starting peers=0/0, then "Became
+  leader (liferaft)" (isolated solo group), then "did not become
+  voter-ready within 60000ms", stage=failed — 10+ creates, zero
+  successes. The solo group also OVERWROTE the canonical partition row's
+  leader_node_id to itself (authoritative row updated at the solo
+  became-leader instant) — an isolated group polluting canonical control
+  rows.
+- Exact live trigger chain: all three existing replicas of each priority
+  partition co-locate on the seed post-formation; the seed's 15s ready
+  lease is chronically expired in peers' cache views (seed still runs
+  5-18s loop gaps; lease renewal + CDC propagation lag); the learner's
+  viability filter (router CONNECTED + node ACTIVE + unexpired
+  ready_lease_expires_at, node-readiness-policy.js:151-170) therefore
+  excludes ALL siblings; replicaIds collapses to [self];
+  existingReplicaCount=0 (hasViableLeader needs a viable row on
+  leader_node_id) -> isJoiningExistingGroup=false -> fresh solo raft
+  bootstrap.
+- Aggravators (recorded for the fix):
+  1. Services-row staleness is NOT a transient error: only partition/table
+     metadata misses throw and trigger resolveReplicaContextWithRetry's
+     hydration (runtime-metadata-methods.js:48-55,83-92,123-140); a
+     self-only context returns "successfully" with no log and no retry
+     (run1: peers=0/0 logged 7ms after the request).
+  2. Seed-side topology stamping can also fail SILENTLY:
+     buildOperationBootstrapTopology returns null for partitions on
+     empty/incomplete cache rows (rebalance-coordinator-segment-3.js:
+     341/363) with ZERO logging, and the "Creating operation" log omits
+     topology — unconfirmable from artifacts (DX gap: add the stamped
+     topology presence to the create log).
+  3. Dispatch re-allocates operation.replicaId on re-dispatch
+     (operation-workflow-dispatch-response-reconcile.js:325-334; run1
+     shows r4->r5) while stepsHistory[0].replicaIds would still name the
+     stale target.
+- Guard Gap (why CL-003 evidence 8's guards missed this): the existing
+  tests prove stamp+forward (replace-replica-workflow.test.js:190-292,
+  pre-seeded complete cache) and hint consumption ONLY in the fresh
+  window (replica-handler-create-topology-test-cases.js:539-616 uses
+  leader_node_id:null, created_at===updated_at). Not covered: hints for an
+  established partition (the actual case — provably dropped at
+  runtime-metadata-methods.js:277), tolerated-null stamping, the
+  viability filter reducing to self-only, and staleness-without-throw.
+- Fix directions (existing-systems-first; next session): (a) merge
+  owner-dispatched hints for REPLACE/ADD joins regardless of the fresh
+  window — the dispatching coordinator IS the placement owner, its
+  topology is authoritative over the learner's cache view; (b) never solo-
+  bootstrap when the operation is an explicit REPLACE join
+  (explicitOperationType is already on the request) — fail/retry instead
+  of forming an isolated group; (c) make self-only-context a retryable
+  staleness condition; (d) log the null-topology path at the seed.
+- Relationship to other records: this is the ACTUAL CL-003 blocker (the
+  planner and spread summary are exonerated; operations fail at learner
+  join). CL-009(ii)'s mute landed correctly but is NOT load-bearing here
+  — gate stat-gate-20260611T100326Z showed the storms are all
+  CRITICAL-priority traffic (heartbeat-appends + priority appends), which
+  the mute exempts by design (0 muted skips); the storm itself is partly
+  DOWNSTREAM of this record (the seed streams to an isolated replica that
+  can never catch up). Same systemic class as
+  [[circular-dependency-class-formation-vs-steady-state]]: a
+  steady-state trust rule (only viable-leased siblings count) goes
+  circular during recovery (the lease provider is the node being
+  recovered around).
+- Topline note: all 4 runs of 100326Z CONVERGED on publication (8/12
+  cumulative post-CL-012 plus 4 more = 11C/1S across 12 runs, zero
+  stalls) — formation remains healthy; the scenario still fails at the
+  ACTIVE gate on this record.
