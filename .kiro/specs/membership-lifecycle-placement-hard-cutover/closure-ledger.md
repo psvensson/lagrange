@@ -834,14 +834,30 @@ Each record below represents one violated invariant.
     coincident with creep onset (19:29:20) — so CL-008 is exonerated as the
     creep driver on magnitude grounds, not temporal precedence; the
     supply-side measurement below will falsify.
-- Next Falsification Step (supply side, unchanged in substance): instrument
-  seed event-loop blockage attribution non-perturbingly — the earlier claim
-  of 13.4-25.7% wall blocked in >3s gaps inside synchronous CDC hydration
-  (partition-cdc-parameterized-sql.js:231-234,298-301 via
-  partition-cdc-generator.js:361) remains UNVERIFIED; measure cumulative
-  tight-loop fetches vs SQLite lock/WAL contention vs gap-attribution bias,
-  and attribute what fraction of CDC event volume is replica_operations
-  row updates from the rearm/deferral churn above.
+- Next Falsification Step (supply side) — EXECUTED 2026-06-11 (watchdog
+  gate stat-gate-20260611T061307Z, 2 CONVERGED / 2 STALLED, 0 corrupt;
+  EventLoopGapWatchdog landed 65691c7f, profiler cfef0e70). RESULTS:
+  (a) CDC-HYDRATION HYPOTHESIS FALSIFIED: the tagged CDC row fetches
+  (partition-cdc-parameterized-sql.js sync prepare/get) measured 97-136
+  calls totaling 1-2 MILLISECONDS per run — 0.0% of gap time. The earlier
+  "13-26% of wall inside CDC hydration" agent claim is refuted.
+  (b) MAGNITUDE FAR WORSE THAN CLAIMED: the seed's event loop is blocked
+  ~95% of wall in STALLED runs (totalGap 341s/323s of ~372s wall; single
+  gaps up to 70.2s) and 380-580s even in CONVERGED runs (max gap 80.3s in
+  a converged run — convergence is surviving the blockage, not avoiding
+  it).
+  (c) IT IS THE SEED EXECUTING JS, NOT THE ENVIRONMENT: ELU=1.0 in 101 of
+  105 gap reports (loop active, not starved), and the four joiners show
+  ZERO gaps — host CPU contention and cgroup throttling are excluded.
+  (d) ATTRIBUTION PENDING: gap-boundary log lines are heterogeneous
+  (lease-service burst before the 70s gap, rebalancer leadership churn
+  before the 29s gap) — boundaries cannot name the blocker. The watchdog
+  now embeds the V8 sampling profiler (LAGRANGE_LOOP_GAP_PROFILE=1,
+  30s windows rotated on the first post-block tick, gap-free windows
+  discarded, top-10 self-time frames console-only); a profiled run will
+  name the function(s). Whatever it names becomes a NEW record — at ~95%
+  blockage it, not anything in CL-008's residue, is the pressure-creep
+  first violated invariant.
 - Required Guard: regression test proving (a) a reused PENDING operation
   with a live dispatch deferred-retry (or created-operation handoff retry)
   is NOT re-armed, (b) a reused PENDING operation with NO live retry timer
