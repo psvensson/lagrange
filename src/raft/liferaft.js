@@ -35,6 +35,46 @@ function getCommittedIndex(raft) {
 
 const NUMERIC_ZERO = 0;
 
+// Catch-up batching (closure record: voter-ready residual). Base liferaft's
+// catch-up is one entry per round trip AND a backward fail-walk: the
+// follower's append-fail echoes the LEADER'S prevLog info, so the leader
+// re-sends from one index earlier each round, delivering nothing until the
+// walk reaches the follower's actual position. A REPLACE learner catching up
+// a formation-sized log therefore can never meet its voter-ready budget
+// (witnessed: 10k-18k per-source-rejected sends per learner per minute, all
+// such learners timing out). Every packet already carries the SENDER'S last
+// log info as packet.last, so the leader can fast-forward to the follower's
+// position and reply with a BATCH; the wire format natively carries data as
+// an array (old followers read data[0] and still progress — slow, not
+// broken).
+const CATCHUP_BATCH_SIZE = 64;
+const CATCHUP_BATCH_INFLIGHT_TTL_MS = 400;
+const RAFT_STATE_CHANGE_EVENT = 'state change';
+
+function resolveFollowerLastIndex(packet) {
+  return hasFiniteNumber(packet?.last?.index) ?
+    packet.last.index :
+    null;
+}
+
+async function readCatchupEntries(raft, startIndex, endIndex) {
+  if (typeof raft.log.getRange === LOCAL_STR_FUNCTION) {
+    const entries = await raft.log.getRange(startIndex, endIndex);
+    return Array.isArray(entries) ? entries : [];
+  }
+  // In-memory adapter (message-group raft) has no range read; walk
+  // individually and stop at the first gap (compaction).
+  const entries = [];
+  for (let index = startIndex; index <= endIndex; index += 1) {
+    const entry = await raft.log.get(index);
+    if (!isRecoverableAppendEntry(entry)) {
+      break;
+    }
+    entries.push(entry);
+  }
+  return entries;
+}
+
 function patchIncomingDataListener(raft) {
   const listeners = raft.listeners(RAFT_EVENT.DATA);
   const originalListener = Array.isArray(listeners) ? listeners[0] : null;
@@ -46,10 +86,146 @@ function patchIncomingDataListener(raft) {
 
   raft.removeListener(RAFT_EVENT.DATA, originalListener);
 
+  // Per-follower in-flight batch dedupe: every head append/heartbeat that
+  // reaches a lagging follower spawns another append-fail; without dedupe
+  // each would trigger a redundant overlapping batch into the exact
+  // per-source lane that is already capping. Fails are self-regenerating,
+  // so suppression can never wedge — worst case is base-speed catch-up.
+  const inflightBatchByAddress = new Map();
+
+  const handleLeaderAppendFailBatch = async (packet, write) => {
+    // Only intercept when the base preamble would be a no-op (we are the
+    // leader in the same term); otherwise the original handler's step-down
+    // and stale-term logic must run.
+    if (
+      raft.state !== BaseLifeRaft.LEADER ||
+      packet?.term !== raft.term ||
+      !raft.log
+    ) {
+      return null;
+    }
+    const failedIndex = packet?.data?.index;
+    if (!hasFiniteNumber(failedIndex)) {
+      return null;
+    }
+    const recoveredEntry = await raft.log.get(failedIndex);
+    if (!isRecoverableAppendEntry(recoveredEntry)) {
+      // Existing unrecoverable guard (compacted/absent index).
+      write();
+      return true;
+    }
+    // Fast-forward to the FOLLOWER'S position: packet.last is the sender's
+    // own last log info. Without this the backward fail-walk persists and
+    // batching is cosmetic.
+    const followerLastIndex = resolveFollowerLastIndex(packet);
+    const startIndex = followerLastIndex === null ?
+      failedIndex :
+      Math.min(failedIndex, followerLastIndex + 1);
+    const lastInfo = await raft.log.getLastInfo();
+    const endIndex = Math.min(
+      startIndex + CATCHUP_BATCH_SIZE - 1,
+      lastInfo.index,
+    );
+    if (endIndex < startIndex) {
+      write();
+      return true;
+    }
+    const inflight = inflightBatchByAddress.get(packet.address);
+    const nowMs = Date.now();
+    if (
+      inflight &&
+      inflight.tailIndex >= startIndex &&
+      nowMs - inflight.sentAtMs < CATCHUP_BATCH_INFLIGHT_TTL_MS
+    ) {
+      write();
+      return true;
+    }
+    const entries = await readCatchupEntries(raft, startIndex, endIndex);
+    if (entries.length === 0) {
+      write();
+      return true;
+    }
+    // appendPacket(firstEntry) supplies fresh state/term/leader and
+    // last = leader's info for (firstEntry.index - 1) — exactly the
+    // consistency precondition the follower checks for the whole batch.
+    const batchPacket = await raft.appendPacket(entries[0]);
+    batchPacket.data = entries;
+    inflightBatchByAddress.set(packet.address, {
+      tailIndex: entries[entries.length - 1].index,
+      sentAtMs: nowMs,
+    });
+    write(batchPacket);
+    return true;
+  };
+
+  const handleFollowerAppendBatch = async (packet, write) => {
+    // Stale-batch guard: a delayed batch whose precondition precedes our
+    // committed prefix must never truncate committed entries (the base
+    // single-entry path has a narrower pre-existing exposure; a 64-wide
+    // version of it is not acceptable).
+    if (packet.last.index < getCommittedIndex(raft)) {
+      write();
+      return undefined;
+    }
+    // Pre-compute whether the base handler will accept this packet. Sound
+    // because both log adapters complete synchronously under the hood, so
+    // no other packet interleaves between this check and the apply below;
+    // revisit if a log adapter ever becomes truly asynchronous.
+    const localLastInfo = await raft.log.getLastInfo();
+    const willAccept =
+      packet.last.index === localLastInfo.index ||
+      packet.last.index === 0 ||
+      (await raft.log.has(packet.last.index));
+    // The original handler performs the canonical preamble, consistency
+    // check, truncation, first-entry save + ack, and commit catch-up.
+    const result = await originalListener(packet, write);
+    if (!willAccept) {
+      return result;
+    }
+    const committedIndex = getCommittedIndex(raft);
+    let lastAppliedEntry = null;
+    for (const entry of packet.data.slice(1)) {
+      if (!isRecoverableAppendEntry(entry)) {
+        break;
+      }
+      if (entry.index <= committedIndex) {
+        continue;
+      }
+      // saveCommand rebuilds follower-local bookkeeping
+      // ({committed:false, responses:[self]}) exactly like the base
+      // handler; the adapter's bulk append() must NOT be used here (it
+      // would persist the leader's committed flags and break commit
+      // emission on the follower).
+      await raft.log.saveCommand(entry.command, entry.term, entry.index);
+      lastAppliedEntry = entry;
+    }
+    if (lastAppliedEntry) {
+      raft.message(
+        BaseLifeRaft.LEADER,
+        await raft.packet(RAFT_PACKET_TYPE.APPEND_ACK, {
+          term: lastAppliedEntry.term,
+          index: lastAppliedEntry.index,
+        }),
+      );
+      if (getCommittedIndex(raft) < packet.last.committedIndex) {
+        const uncommitted = await raft.log.getUncommittedEntriesUpToIndex(
+          packet.last.committedIndex,
+          packet.last.term,
+        );
+        raft.commitEntries(uncommitted);
+      }
+    }
+    return result;
+  };
+
   const patchedListener = async (packet, write = () => {}) => {
     const committedIndexBefore = getCommittedIndex(raft);
 
     if (packet?.type === RAFT_PACKET_TYPE.APPEND_FAIL) {
+      const handled = await handleLeaderAppendFailBatch(packet, write);
+      if (handled === true) {
+        return undefined;
+      }
       const recoveredEntry = await raft.log?.get?.(packet?.data?.index);
       if (!isRecoverableAppendEntry(recoveredEntry)) {
         return write();
@@ -62,6 +238,20 @@ function patchIncomingDataListener(raft) {
       const entry = hasEntries ? packet.data[0] : null;
       if (hasEntries && !isRecoverableAppendEntry(entry)) {
         return write();
+      }
+      if (hasEntries && packet.data.length > 1) {
+        return handleFollowerAppendBatch(packet, write);
+      }
+    }
+
+    if (packet?.type === RAFT_PACKET_TYPE.APPEND_ACK) {
+      const inflight = inflightBatchByAddress.get(packet?.address);
+      if (
+        inflight &&
+        hasFiniteNumber(packet?.data?.index) &&
+        packet.data.index >= inflight.tailIndex
+      ) {
+        inflightBatchByAddress.delete(packet.address);
       }
     }
 
@@ -77,6 +267,10 @@ function patchIncomingDataListener(raft) {
 
     return result;
   };
+
+  raft.on(RAFT_STATE_CHANGE_EVENT, () => {
+    inflightBatchByAddress.clear();
+  });
 
   patchedListener.__lagrangePatched = true;
   raft.on(RAFT_EVENT.DATA, patchedListener);
