@@ -331,7 +331,12 @@ class SQLiteLogAdapter {
     this.db.prepare(
       LOCAL_STR_1FMKR,
     ).run(JSON.stringify(entry), index);
-    this.setCommittedIndex(index);
+    // CL-018: do NOT advance the watermark here. An ack is not a commit —
+    // the premature set made getUncommittedEntriesUpToIndex(index) return
+    // an empty suffix in the same quorum check that was about to commit
+    // this very entry (fatal once the scan was watermark-bounded), and it
+    // was the source of the old watermark-regression wart. The watermark
+    // advances in commit().
 
     return entry;
   }

@@ -2014,6 +2014,18 @@ Each record below represents one violated invariant.
   advance, no-regress, suffix-only scan with parse-count spy, fresh
   adapter reads persisted state) — 4 red on revert. 3,460
   raft/message-group/partition tests green.
+- REGRESSION CAUGHT AND CORRECTED (same day): the first landing kept the
+  pre-existing premature setCommittedIndex(index) in commandAck; once the
+  uncommitted scan was watermark-bounded, the leader's quorum check saw an
+  EMPTY suffix for the entry it was about to commit -> commitEntries
+  applied nothing -> seed bootstrap hung at the API gate (gate 161930Z:
+  4/4 'Seed node bootstrap API did not become join-ready' at ~50s,
+  ~74 attempts). Corrected per real raft semantics: an ACK IS NOT A
+  COMMIT — commandAck no longer touches the watermark at all; it advances
+  only in commit(). This also closes CL-015 adjacent #2 at the true root
+  (the premature set WAS the regression wart). Guard added for the exact
+  fatal-skip (ack -> watermark unchanged -> entry still visible to the
+  commit flow). Smoke run post-fix: CONVERGED wall=249s.
 - Secondary candidates from the same windows (record, evaluate after):
   getNodeReadinessSync inclusive dominance persists despite CL-012's
   fast path — verify the fast path engages on the line-330 call path in

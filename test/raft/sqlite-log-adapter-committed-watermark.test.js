@@ -93,6 +93,35 @@ test('CL-018: committedIndex watermark bookkeeping', async (t) => {
     },
   );
 
+  await t.test(
+    'commandAck must NOT advance the watermark before commit ' +
+      '(quorum-check fatal-skip regression)',
+    async (t) => {
+      const adapter = createAdapter();
+      try {
+        await seed(adapter, 1, 3);
+        // Leader receives the quorum-completing ack for entry 3...
+        await adapter.commandAck(3, 'node-2');
+        t.equal(
+          adapter.getCommittedIndex(),
+          0,
+          'ack alone does not move the watermark',
+        );
+        // ...and the very next quorum check must still SEE entry 3 as
+        // uncommitted so commitEntries can apply it.
+        const uncommitted = adapter.getUncommittedEntriesUpToIndex(3, 2);
+        t.ok(
+          uncommitted.some((entry) => entry.index === 3),
+          'acked-but-uncommitted entry remains visible to the commit flow',
+        );
+        adapter.commit(3);
+        t.equal(adapter.getCommittedIndex(), 3, 'commit moves the watermark');
+      } finally {
+        adapter.end();
+      }
+    },
+  );
+
   await t.test('watermark cache survives reopen from persisted state',
     async (t) => {
       const db = new Database(':memory:');
