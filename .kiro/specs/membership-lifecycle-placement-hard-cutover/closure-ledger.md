@@ -1492,19 +1492,60 @@ Each record below represents one violated invariant.
   (d) the gate loops handoffOutcome=write_deferred/owner_reconcile_enqueued
   while the owner answers no-deficit — a stalemate between a correct
   owner and a stale oracle.
-  CL-014 FIRST VIOLATED INVARIANT (now precise): CDC propagation of
-  control_plane_publications rows to non-owner nodes must survive a
-  membership change (REPLACE) of the publications partition itself —
-  post-REPLACE, the publication CDC fan-out to all four joiners stopped,
-  freezing their caches at epoch 1. Next falsification step: trace the
-  publication-row CDC subscription path on a joiner (who subscribes to
-  control_plane_publications CDC, and how does the subscription re-arm
-  when the partition's replica set / leader changes) and find where the
-  post-REPLACE stream detaches; also check whether the new replica on
-  35a891b8 emits CDC at all. Secondary (CL-002 coupling): the harness
-  gate knowingly used a 'stale_usable' snapshot for minutes — the witness
-  selection should prefer a node whose publication watermark advances, or
-  cross-check the owner's view before declaring no-progress.
+  CL-014 THIRD AND FINAL RE-PIN (same session, three-layer subagent CDC
+  trace, code+artifact evidence): the REPLACE hypothesis is REFUTED — no
+  subscriber was lost, leadership never moved, and the publications
+  REPLACE in run2 in fact FAILED voter-ready (r4 never activated; the
+  'successful REPLACE' framing was wrong for this partition in this run).
+  ACTUAL MECHANISM (verified): publication CDC fan-out to non-hosting
+  nodes is STATELESS POINT-IN-TIME delivery — the partition leader's
+  local subscriber propagates each event to message groups resolved from
+  the SENDER'S services cache at event time
+  (cdc-group-propagation-routing.js:95-133), and groups absent/not-ACTIVE
+  at that instant are skipped SILENTLY with no buffer, retry, or replay
+  (cdc-group-propagation-delivery-methods.js:670-737). In run2 the ENTIRE
+  publication stream (epochs 1-5, 10 events) completed by 11:07:27 —
+  BEFORE two joiners wired CDC at all (11:09:05/11:09:43) and WHILE the
+  other two joiners' message-group rows were not yet ACTIVE-with-address
+  in the seed's post-restart cache (their services rows were still being
+  re-inserted; the seed's own mg ingress was broken 11:06:51-11:07:15).
+  The owner then reached no-deficit via its own authoritative read
+  (11:07:07, epoch 5, 5/5) and NEVER WROTE AGAIN — so no later event
+  could carry the joiners past their epoch-1 bootstrap snapshot.
+  THIS EXPLAINS THE SCENARIO'S NON-DETERMINISM WHOLESALE: a run converges
+  iff the LAST publication write lands after the LAST joiner becomes
+  fan-out-targetable (verified contrast: in converged 100326Z-run1 the
+  final epoch-7 write at 10:05:26 postdated all CDC wiring at 10:05:16
+  and fanned out to everyone; the intermediate epochs were lost there too
+  but the gate reads only the latest row, masking it). The stat-gate
+  CONVERGED/SLOW/STALLED mixture has been sampling this startup RACE.
+  CL-014 FIRST VIOLATED INVARIANT (final): a joining node must be able to
+  CATCH UP on publication rows written inside the (bootstrap-snapshot,
+  CDC-fan-out-targetability] window — point-in-time fan-out plus a
+  one-shot pre-subscription snapshot closes no such window.
+  MINIMAL FIX SURFACE (existing mechanisms, from the trace):
+  (a) re-run the EXISTING join-time snapshot hydration
+  (query-system-state-phase.js:416-499) immediately AFTER 'CDC
+  subscriptions confirmed active' — the read exists, it is merely ordered
+  before the stream arms and never re-run; epoch 5 was in the seed's SQL
+  from 11:07:04, so this alone closes run2's window for all four joiners;
+  (b) CDCPipelineReadinessGate.pipelineProven is satisfied VACUOUSLY by
+  the pre-gate snapshot (cdc-pipeline-readiness-gate.js:74-78) — it
+  should require evidence of live propagation, not just any cached row;
+  (c) longer-term: the remote fan-out leg lacks the replay-on-subscribe
+  analog that the partition-local layer already has
+  (partition-cdc-delivery.js:424-465 catch-up) — recorded, not required
+  for the scenario.
+  REFUTED ALTERNATIVES (for the record): zero-subscriber buffering loss
+  (would have warn-logged EVENT_BUFFERED; none), REPLACE-moved CDC source
+  (no removes, leader stayed on seed), joiners rejecting stale events (no
+  apply activity at all). RESIDUAL noted: voter-ready failures persist
+  even with correct peer topology (12-15/run) — separate from this
+  record, likely the learner-catchup-vs-budget layer.
+  Secondary (CL-002 coupling): the harness gate knowingly used a
+  'stale_usable' snapshot for minutes — witness selection should require
+  an advancing publication watermark or cross-check the owner before
+  declaring no-progress.
 - Relationship to other records: this is the ACTUAL CL-003 blocker (the
   planner and spread summary are exonerated; operations fail at learner
   join). CL-009(ii)'s mute landed correctly but is NOT load-bearing here
