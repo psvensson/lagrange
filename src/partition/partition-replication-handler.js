@@ -28,6 +28,7 @@ import {
 } from './partition-replication-handler-constants.js';
 import {ProposalQueue} from './proposal-queue.js';
 
+const LOCAL_NUM_ZERO = 0;
 const LOCAL_NUM_ONE = 1;
 
 /**
@@ -126,10 +127,26 @@ class PartitionReplicationHandler {
   /**
    * Check if this partition has multiple replicas.
    * Used to decide between Raft consensus and direct commit paths.
+   *
+   * CL-017(a): the local replicaIds list can go stale during membership
+   * churn. A unilateral direct apply against a group that ACTUALLY has
+   * peers writes one replica's database without consensus — the witnessed
+   * post-churn divergence where rows existed in one co-located replica's
+   * db but not in the one later applying updates. Corroborate with the
+   * live raft peer view: if the raft instance knows ANY peer, the group
+   * is multi-replica regardless of the list (a genuine single-voter raft
+   * commits trivially, so preferring consensus is safe either way).
    * @return {boolean} True if the partition has more than one replica.
    */
   isMultiReplica() {
-    return Array.isArray(this.replicaIds) && this.replicaIds.length > LOCAL_NUM_ONE;
+    if (
+      Array.isArray(this.replicaIds) &&
+      this.replicaIds.length > LOCAL_NUM_ONE
+    ) {
+      return true;
+    }
+    const raftNodes = this.raft?.nodes;
+    return Array.isArray(raftNodes) && raftNodes.length > LOCAL_NUM_ZERO;
   }
 
   /**

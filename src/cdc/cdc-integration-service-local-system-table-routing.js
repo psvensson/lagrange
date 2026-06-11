@@ -69,6 +69,17 @@ function resolveLeaderRole(partitionService) {
   if (!isUsablePartitionService(partitionService)) {
     return false;
   }
+  // CL-017(a): the LIVE raft role accessor decides when it exists. The
+  // static flags (isLeader, leaderId===replicaId) can go stale across
+  // leadership churn, and a stale claim here routes local system-table
+  // writes at a replica whose database may have diverged from the group
+  // (the witnessed post-churn 'No row found for CDC update' on rows the
+  // real group committed). Flags remain only as fallback for services
+  // exposing no live accessor.
+  if (typeof partitionService.getRole === TYPEOF.FUNCTION) {
+    const liveRole = String(partitionService.getRole() || '').toLowerCase();
+    return liveRole === CDC_INTEGRATION_SERVICE_LITERAL.LEADER;
+  }
   if (partitionService.isLeader === true) {
     return true;
   }
@@ -79,10 +90,7 @@ function resolveLeaderRole(partitionService) {
     return true;
   }
   const role = String(
-    (typeof partitionService.getRole === TYPEOF.FUNCTION ?
-      partitionService.getRole() :
-      null) ||
-      partitionService.role ||
+    partitionService.role ||
       partitionService.raftRole ||
       '',
   ).toLowerCase();

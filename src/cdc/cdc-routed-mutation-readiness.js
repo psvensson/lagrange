@@ -49,6 +49,8 @@ const {
 } = CDC_INTEGRATION_SERVICE_SHARED;
 
 const CDC_CONTROL_PLANE_WRITE_RESOURCE_KEY = 'control-plane:write';
+// CL-017(c): floor for the per-attempt share of the retry budget.
+const CDC_ROUTED_MUTATION_MIN_ATTEMPT_TIMEOUT_MS = 1000;
 const CDC_CONTROL_PLANE_TABLE_RESOURCE_KEY_PREFIX = 'control-plane:table:';
 const CDC_UNKNOWN_TABLE_RESOURCE_KEY = 'unknown';
 
@@ -466,7 +468,18 @@ class CDCRoutedMutationReadiness extends CDCIntegrationServiceSegment1 {
           ...baseQueryOptions,
         };
         if (remainingBudgetMs !== null) {
-          queryOptions.timeoutMs = remainingBudgetMs;
+          // CL-017(c): one frozen-target attempt must not consume the whole
+          // retry budget (witnessed: a 23s seed freeze ate all 6 attempts in
+          // a single 15s-timeout call). Divide the remaining budget across
+          // the remaining attempts, floored at 1s and capped at the budget.
+          const remainingAttempts = maxAttempts - attempt + NUM.ONE;
+          queryOptions.timeoutMs = Math.min(
+            remainingBudgetMs,
+            Math.max(
+              CDC_ROUTED_MUTATION_MIN_ATTEMPT_TIMEOUT_MS,
+              Math.floor(remainingBudgetMs / remainingAttempts),
+            ),
+          );
         } else if (
           Number.isFinite(queryTimeoutMs) &&
           queryTimeoutMs > NUM.ZERO

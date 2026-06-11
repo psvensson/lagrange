@@ -28,7 +28,7 @@ Each record below represents one violated invariant.
 | CL-014 | guarded | cdc-fanout-targetability | A joining node must be able to catch up on CDC-propagated rows written inside the (bootstrap-snapshot, fan-out-targetability] window — remote CDC fan-out is point-in-time with no replay. |
 | CL-015 | fix-landed | raft-learner-catchup | Raft catch-up must deliver in batches from the follower's actual position — not a one-entry-per-round-trip backward fail-walk that can never complete a formation-sized log inside the voter-ready budget. |
 | CL-016 | guarded | replica-activation-evidence | Voter-ready activation must not require a durable services-row round-trip through the control plane being recovered: the priority local-commit fallback must make the LOCAL cache reflect local truth (or the activation check must accept local authoritative evidence). |
-| CL-017 | open | operation-ledger-self-reference | Operation workflow transitions must complete while the operation ledger's own partition is under modification — replica_operations writes fail with participant failures exactly when replica_operations-p1 is mid-REPLACE (4/3, surplus pending removal), pinning operations in CREATING/SENDING forever and blocking pre-restart quiescence. |
+| CL-017 | fix-landed | operation-ledger-self-reference | Operation workflow transitions must complete while the operation ledger's own partition is under modification — replica_operations writes fail with participant failures exactly when replica_operations-p1 is mid-REPLACE (4/3, surplus pending removal), pinning operations in CREATING/SENDING forever and blocking pre-restart quiescence. |
 
 ## CL-001 Published Membership Convergence Under Restart Churn
 
@@ -1917,9 +1917,39 @@ Each record below represents one violated invariant.
   no-op-retrying forever; (c) the transition path needs a per-attempt
   timeout smaller than the retry budget so one freeze window cannot
   consume all attempts.
+- FIX LANDED (2026-06-11), all three invariants + instrumentation:
+  (i) INSTRUMENTATION: CDC fetch logs now carry cdcPartitionId/
+  cdcReplicaId (partition-cdc-parameterized-sql.js all sites incl. the
+  'No row found for CDC update' divergence witness; threaded from
+  PartitionCDCGenerator) — next divergence is attributable to the exact
+  replica db.
+  (ii) Invariant (c): per-attempt timeout = min(remainingBudget,
+  max(1s, remainingBudget/remainingAttempts)) in
+  cdc-routed-mutation-readiness — one frozen-target attempt can no
+  longer consume all 6 retries.
+  (iii) Invariant (b): persistOperationUpdate's zero-changes branch now
+  ESCALATES when the authoritative read finds NO row: logs
+  OPERATION_ROW_DIVERGENCE_REINSERT and re-inserts the owner copy via
+  persistNewOperationUnlocked (factored from persistNewOperation WITHOUT
+  the transition-exclusive lane — callers may already hold it). Visible
+  row -> no re-insert (guarded both ways).
+  (iv) Invariant (a): isMultiReplica() corroborates the stale-able local
+  replicaIds list with the LIVE raft peer view (any known peer => multi;
+  single-voter raft commits trivially so preferring consensus is safe);
+  resolveLeaderRole() in local system-table routing now lets the LIVE
+  getRole() accessor DECIDE when present (stale isLeader /
+  leaderId===replicaId flags demoted to fallback-only) — local writes
+  can no longer be routed at a stale leader claim.
+  Guards: partition-replication-handler-multireplica-guard.test.js +
+  2 CL-017(b) cases in replica-operation-repository.test.js (6 red on
+  src revert). Suites green: partition 1428, cdc 1008, node 1181,
+  rebalancer 4424, repository 306.
 - Sequencing note: this record blocks 3/4 runs at the pre-restart gate;
   the restart-phase ladder (run3's surface) becomes reachable once
   quiescence closes. The seed-freeze primary layer also re-opens the
   residual seed-saturation question in the 4/3 window (CL-012's ~90%
   busy + 13-34s max gaps band — the profiler artifacts from this run
-  are available for re-ranking).
+  are available for re-ranking). NOTE: the freeze layer itself is NOT
+  fixed by this record — (c) makes the retry budget survive it; the
+  freeze re-ranking is the follow-on if the gate still shows quiesce
+  timeouts.

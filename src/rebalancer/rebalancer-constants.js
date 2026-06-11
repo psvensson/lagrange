@@ -270,6 +270,9 @@ const REBALANCE_COORDINATOR_LOG_MSG = Object.freeze({
   SHUTDOWN: 'Shutting down RebalanceCoordinator',
   DUPLICATE_OPERATION: 'Duplicate operation detected, reusing existing',
   REUSED_IN_FLIGHT_OPERATION: 'Reusing in-flight operation for planned move',
+  OPERATION_ROW_DIVERGENCE_REINSERT:
+    'Operation row missing from authoritative partition after zero-row ' +
+    'update; re-inserting owner copy',
   BOOTSTRAP_TOPOLOGY_UNRESOLVED:
     'Create dispatch proceeding without bootstrap topology',
   STEPS_HISTORY_PARSE_ERROR: 'Failed to parse steps_history JSON',

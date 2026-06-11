@@ -696,6 +696,86 @@ test('persistOperationUpdate requests bounded local replica fallback for authori
 });
 
 
+test('CL-017(b): zero-row update with missing authoritative row re-inserts the owner copy', async (t) => {
+  const executedSql = [];
+  const repo = createTestRepository({
+    authoritativeVisibilityTimeoutMs: 0,
+    controlPlaneSystemTableGateway: {
+      executeQuery: async (sql) => {
+        executedSql.push(sql);
+        if (sql.trim().toUpperCase().startsWith('INSERT')) {
+          return {success: true, changes: 1};
+        }
+        // The UPDATE commits but affects zero rows — the row is missing
+        // from the partition state that applied the write (the post-churn
+        // divergence witness).
+        return {success: true, changes: 0};
+      },
+      readRows: async () => ({success: true, rows: []}),
+    },
+  });
+  const operation = repo.rowToOperation(
+    makeRow({
+      status: 'in_progress',
+      workflow_step: WORKFLOW_STEP.SENDING,
+    }),
+  );
+
+  const persisted = await repo.persistOperationUpdate(operation, {
+    expectedWorkflowStep: WORKFLOW_STEP.CREATING,
+  });
+
+  t.equal(
+    persisted,
+    true,
+    'divergence path recovers by re-inserting instead of failing',
+  );
+  t.ok(
+    executedSql.some((sql) => sql.trim().toUpperCase().startsWith('INSERT')),
+    'owner copy re-inserted after the zero-row update',
+  );
+});
+
+test('CL-017(b): zero-row update with VISIBLE authoritative row does not re-insert', async (t) => {
+  const executedSql = [];
+  const repo = createTestRepository({
+    authoritativeVisibilityTimeoutMs: 0,
+    controlPlaneSystemTableGateway: {
+      executeQuery: async (sql) => {
+        executedSql.push(sql);
+        return {success: true, changes: 0};
+      },
+      readRows: async () => ({
+        success: true,
+        rows: [
+          makeRow({
+            status: 'in_progress',
+            workflow_step: WORKFLOW_STEP.SENDING,
+          }),
+        ],
+      }),
+    },
+  });
+  const operation = repo.rowToOperation(
+    makeRow({
+      status: 'in_progress',
+      workflow_step: WORKFLOW_STEP.SENDING,
+    }),
+  );
+
+  const persisted = await repo.persistOperationUpdate(operation, {
+    expectedWorkflowStep: WORKFLOW_STEP.CREATING,
+  });
+
+  t.equal(persisted, true, 'visible row satisfies the transition');
+  t.ok(
+    !executedSql.some((sql) =>
+      sql.trim().toUpperCase().startsWith('INSERT'),
+    ),
+    'no re-insert when the authoritative row is visible',
+  );
+});
+
 registerReplicaOperationRepositoryTailTests({
   test,
   createTestRepository,

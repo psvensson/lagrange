@@ -629,6 +629,8 @@ class PartitionCDCGenerator {
       fallbackData,
       db: this.db,
       logger: this.logger,
+      partitionId: this.partitionId,
+      replicaId: this.replicaId,
     });
   }
 
@@ -645,6 +647,8 @@ class PartitionCDCGenerator {
       whereClause,
       db: this.db,
       logger: this.logger,
+      partitionId: this.partitionId,
+      replicaId: this.replicaId,
     });
   }
 }

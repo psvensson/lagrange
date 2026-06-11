@@ -228,6 +228,8 @@ export function fetchInsertRow({
   fallbackData,
   db,
   logger,
+  partitionId = null,
+  replicaId = null,
 }) {
   if (!keyColumn || keyValue === null || keyValue === undefined || !db) {
     return fallbackData;
@@ -245,6 +247,10 @@ export function fetchInsertRow({
         logger.info(PARTITION_SERVICE_LOG_MSG.FETCHED_INSERT_ROW, {
           tableName,
           rowKeys: Object.keys(row),
+          // CL-017: which replica's db answered — required to attribute
+          // post-churn row divergence between co-located replicas.
+          cdcPartitionId: partitionId,
+          cdcReplicaId: replicaId,
         });
       }
       return row;
@@ -253,6 +259,8 @@ export function fetchInsertRow({
     logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_FETCH_INSERT_FAILED, {
       tableName,
       error: err.message,
+      cdcPartitionId: partitionId,
+      cdcReplicaId: replicaId,
     });
     throw err;
   }
@@ -274,6 +282,8 @@ export function fetchUpdatedRow({
   whereClause,
   db,
   logger,
+  partitionId = null,
+  replicaId = null,
 }) {
   if (!db ||
     !whereClause ||
@@ -294,6 +304,8 @@ export function fetchUpdatedRow({
       tableName,
       keyColumn,
       keyValue,
+      cdcPartitionId: partitionId,
+      cdcReplicaId: replicaId,
     });
   }
 
@@ -314,6 +326,8 @@ export function fetchUpdatedRow({
         logger.info(PARTITION_SERVICE_LOG_MSG.FETCHED_UPDATE_ROW, {
           tableName,
           rowKeys: Object.keys(row),
+          cdcPartitionId: partitionId,
+          cdcReplicaId: replicaId,
         });
       }
       return row;
@@ -325,10 +339,15 @@ export function fetchUpdatedRow({
         tableName,
         keyColumn,
         keyValue,
+        // CL-017: the divergence witness — which replica's db lacks the row.
+        cdcPartitionId: partitionId,
+        cdcReplicaId: replicaId,
       });
     }
   } catch (err) {
     logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_FETCH_UPDATE_FAILED, {
+      cdcPartitionId: partitionId,
+      cdcReplicaId: replicaId,
       tableName,
       error: err.message,
     });

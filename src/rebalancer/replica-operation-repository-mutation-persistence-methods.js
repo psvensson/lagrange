@@ -27,8 +27,21 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
   class ReplicaOperationRepositoryMutationPersistenceMethods {
     async persistNewOperation(operation) {
       return this.runReplicaOperationTransitionExclusive(
-        async () => {
-          const result =
+        async () => this.persistNewOperationUnlocked(operation),
+        {operation},
+      );
+    }
+
+    /**
+     * Insert the operation row WITHOUT taking the transition-exclusive lane
+     * (CL-017(b): the divergence re-insert path runs from within update
+     * persistence, whose callers may already hold the lane — taking it
+     * again would deadlock the serialized queue).
+     * @param {Object} operation
+     * @return {Promise<boolean>}
+     */
+    async persistNewOperationUnlocked(operation) {
+      const result =
             await this.executeReplicaOperationGatewayMutationWithRetry(
               {
                 operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
@@ -65,48 +78,45 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
                 ],
               },
             );
-          if (!result.success) {
-            const recoveredPersistedMutation =
+      if (!result.success) {
+        const recoveredPersistedMutation =
               await this.recoverPersistedReplicaOperationMutation(
                 operation,
                 result,
               );
-            if (!recoveredPersistedMutation) {
-              const persistError = this.buildOperationPersistError(result);
-              this.logger.error(REBALANCE_COORDINATOR_LOG_MSG.PERSIST_FAILED, {
-                operationId: operation.operationId,
-                ...buildControlPlaneFailurePayload(this.nodeId, result),
-              });
-              throw persistError;
-            }
-            this.syncIncompleteOperationObservation(operation);
-            return true;
-          }
-          if (result.recoveredAfterRetryableFailure === true) {
-            this.syncIncompleteOperationObservation(operation);
-            return true;
-          }
-          this.recordOwnerPersistedTransitionVisibilityWitness(operation);
-          let visibility = null;
-          try {
-            visibility =
+        if (!recoveredPersistedMutation) {
+          const persistError = this.buildOperationPersistError(result);
+          this.logger.error(REBALANCE_COORDINATOR_LOG_MSG.PERSIST_FAILED, {
+            operationId: operation.operationId,
+            ...buildControlPlaneFailurePayload(this.nodeId, result),
+          });
+          throw persistError;
+        }
+        this.syncIncompleteOperationObservation(operation);
+        return true;
+      }
+      if (result.recoveredAfterRetryableFailure === true) {
+        this.syncIncompleteOperationObservation(operation);
+        return true;
+      }
+      this.recordOwnerPersistedTransitionVisibilityWitness(operation);
+      let visibility = null;
+      try {
+        visibility =
               await this.confirmReplicaOperationPersistence(operation);
-          } finally {
-            if (
-              visibility?.confirmationState !==
+      } finally {
+        if (
+          visibility?.confirmationState !==
               REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.DEFERRED
-            ) {
-              this.clearOwnerPersistedTransitionVisibilityWitness(
-                operation.operationId,
-              );
-            }
-          }
-          this.syncIncompleteOperationObservation(operation);
-          const changeCount = this.extractMutationChangeCount(result);
-          return changeCount === null ? true : changeCount > NUM.ZERO;
-        },
-        {operation},
-      );
+        ) {
+          this.clearOwnerPersistedTransitionVisibilityWitness(
+            operation.operationId,
+          );
+        }
+      }
+      this.syncIncompleteOperationObservation(operation);
+      const changeCount = this.extractMutationChangeCount(result);
+      return changeCount === null ? true : changeCount > NUM.ZERO;
     }
 
     async persistOperationUpdate(operation, options = {}) {
@@ -193,6 +203,42 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
             );
           if (visibilitySatisfied) {
             this.syncIncompleteOperationObservation(operation);
+            return visibilitySatisfied;
+          }
+          // CL-017(b): the UPDATE committed but affected zero rows AND the
+          // authoritative read cannot see the row the owner created — the
+          // row is MISSING from the partition state that applied the write
+          // (the post-churn divergence witness: 'No row found for CDC
+          // update' 144ms after the row's own insert-CDC). Retrying the
+          // UPDATE no-ops forever and the operation never durably leaves
+          // its step; re-insert the owner's copy instead of looping.
+          if (!authoritativeOperation) {
+            this.logger.error(
+              REBALANCE_COORDINATOR_LOG_MSG.OPERATION_ROW_DIVERGENCE_REINSERT,
+              {
+                operationId: operation.operationId,
+                partitionId: operation.partitionId,
+                workflowStep: operation.workflowStep,
+                expectedWorkflowStep,
+              },
+            );
+            try {
+              const reinserted =
+                await this.persistNewOperationUnlocked(operation);
+              if (reinserted) {
+                this.syncIncompleteOperationObservation(operation);
+                return true;
+              }
+            } catch (reinsertError) {
+              this.logger.warn(
+                REBALANCE_COORDINATOR_LOG_MSG.PERSIST_FAILED,
+                {
+                  operationId: operation.operationId,
+                  phase: 'divergence_reinsert',
+                  error: reinsertError?.message || String(reinsertError),
+                },
+              );
+            }
           }
           return visibilitySatisfied;
         }
