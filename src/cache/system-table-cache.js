@@ -9,6 +9,7 @@ import {LoggingService} from '../logging/logging-service.js';
 import {COLUMN, NUM, STATE, TABLES, TYPEOF} from '../constants/index.js';
 import {assertCritical} from '../utils/assert.js';
 import {normalizeCauseId} from '../utils/cause-id.js';
+import {fastJsonClone} from '../utils/fast-json-clone.js';
 import {
   CACHE_CDC_OPERATIONS,
   CACHE_DEFAULT,
@@ -625,13 +626,16 @@ class SystemTableCache {
   }
 
   /**
-   * Deep clone an object to prevent external mutation.
+   * Deep clone an object to prevent external mutation. Sits on every cache
+   * read (get/find/filter/getAll), which the readiness/recovery projection
+   * pipeline drives at table-scan frequency — must never JSON-roundtrip
+   * (closure record CL-011: 41% of the stalled seed's gap-window samples).
    * @param {Object} obj - Object to clone.
    * @return {Object} Cloned object.
    * @private
    */
   deepClone(obj) {
-    return JSON.parse(JSON.stringify(obj));
+    return fastJsonClone(obj);
   }
 
   /**

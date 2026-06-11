@@ -4,9 +4,10 @@ import {isNodeHeartbeatWatermarkRegression} from '../node/node-readiness-policy.
 import {
   mergeControlPlanePublicationRows,
 } from '../control-plane/control-plane-publication-merge.js';
+import {fastJsonClone} from '../utils/fast-json-clone.js';
 
 function deepClone(value) {
-  return JSON.parse(JSON.stringify(value));
+  return fastJsonClone(value);
 }
 
 function getRecordTimestamp(record) {

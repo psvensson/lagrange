@@ -11,13 +11,14 @@ import {
   buildPriorityRecoveryCorrelationKey,
   buildPriorityRecoveryPressureConditions,
 } from './priority-recovery-helpers.js';
+import {fastJsonClone} from '../utils/fast-json-clone.js';
 import {LOCAL_EMPTY_LIST, LOCAL_NUM_ONE, LOCAL_NUM_TWO, LOCAL_NUM_ZERO, LOCAL_STR_BLOCKERREASONCODES, LOCAL_STR_EMPTY, LOCAL_STR_SEMANTICSTATEIDS, PRIORITY_RECOVERY_OPERATION_ID_FIELD, PRIORITY_RECOVERY_SNAPSHOT_PROGRESS_FIELD, buildPriorityRecoveryExplicitSemanticStateByPartitionId, collectPriorityRecoveryPartitionIndexes, isRecord, normalizeDistinctStringArray, normalizeNonNegativeInteger, normalizePriorityRecoveryBlockedClassIds, normalizePriorityRecoveryObservationStateValue, normalizePriorityRecoverySemanticStatePartitions, resolvePriorityRecoverySnapshotSemanticState} from './priority-recovery-observation-snapshot-stage-1.js';
 
 function cloneJsonValue(value) {
   if (value === null || value === undefined) {
     return value;
   }
-  return JSON.parse(JSON.stringify(value));
+  return fastJsonClone(value);
 }
 
 function resolvePriorityRecoveryWitnessPartitionIds(
