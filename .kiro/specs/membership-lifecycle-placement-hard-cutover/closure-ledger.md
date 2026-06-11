@@ -30,7 +30,8 @@ Each record below represents one violated invariant.
 | CL-016 | guarded | replica-activation-evidence | Voter-ready activation must not require a durable services-row round-trip through the control plane being recovered: the priority local-commit fallback must make the LOCAL cache reflect local truth (or the activation check must accept local authoritative evidence). |
 | CL-017 | fix-landed | operation-ledger-self-reference | Operation workflow transitions must complete while the operation ledger's own partition is under modification — replica_operations writes fail with participant failures exactly when replica_operations-p1 is mid-REPLACE (4/3, surplus pending removal), pinning operations in CREATING/SENDING forever and blocking pre-restart quiescence. |
 | CL-018 | guarded | raft-log-scan-per-heartbeat | A follower's commit catch-up must not rescan and JSON-parse the whole raft log on every heartbeat: sqlite followers never persist committedIndex, so getUncommittedEntriesUpToIndex degenerates to a full-table parse per heartbeat per priority partition on the seed — the top self-time frame in the freeze windows that block CL-017's quiesce. |
-| CL-019 | open | readiness-snapshot-reuse-per-change | Readiness evaluation must be per-change, not per-call: (1) the CL-012 stored-snapshot reuse predicate rejects watermark EQUALITY (snapshot exactly reflects the current row — the common state between heartbeats), so the sync fast path is structurally a cache-lag bridge with ~0% hit rate and every routing decision runs the full evidence + planning + snapshot build; (2) even on a hit, the pre-check prelude rebuilds the full publication-recovery protocol snapshot (gate + participation maps + normalize/freeze storm) from an effectively-constant membership-publication row, per call. |
+| CL-019 | guarded | readiness-snapshot-reuse-per-change | Readiness evaluation must be per-change, not per-call: (1) the CL-012 stored-snapshot reuse predicate rejects watermark EQUALITY (snapshot exactly reflects the current row — the common state between heartbeats), so the sync fast path is structurally a cache-lag bridge with ~0% hit rate and every routing decision runs the full evidence + planning + snapshot build; (2) even on a hit, the pre-check prelude rebuilds the full publication-recovery protocol snapshot (gate + participation maps + normalize/freeze storm) from an effectively-constant membership-publication row, per call. |
+| CL-020 | open | priority-recovery-event-decision-cost | The rebalancer's priority-recovery visibility cache listener must decide whether an event warrants a rebalance check CHEAPLY: it currently computes the full operation-creation planning-gate snapshot + surrogate follow-up decisions (JSON-parsing steps_history of replica-operation rows) on EVERY cache-change event of EVERY table — during operation churn each row update triggers a full planning re-derive, the residual seed-freeze head after CL-019. |
 
 ## CL-001 Published Membership Convergence Under Restart Churn
 
@@ -2172,3 +2173,55 @@ Each record below represents one violated invariant.
   moves (quiesce should clear or shrink if the freeze was the binding
   constraint; CL-017's divergence re-insert + per-attempt-timeout
   mechanisms stay engaged).
+
+## CL-019 Gate Verdict + CL-020 Opening
+
+- CL-019 GATE (two rounds, 8 runs total, fingerprint-verified fde3a055):
+  195558Z (profiler off): 4/4 publication CONVERGED, 0 corrupt; runs
+  1/3 seed max gap <5s (was 42.9s) — FIRST EVER freeze-free 4/3 runs —
+  with ACTIVE 5/5 coverage complete (was 2/5); runs 2/4 froze (26-30s
+  gaps, blocking 99.99% untagged). 203619Z (LAGRANGE_LOOP_GAP_PROFILE=1):
+  3/4 CONVERGED + 1 NO_REPORT(run3, harness gave up against the frozen
+  seed); runs 1/2/4 max gaps 6.4-7.5s; run3 froze (16s, 218 gaps).
+  **MECHANISM VALIDATED: readiness frames appear in only 6/23 profile
+  windows (was EVERY window, 43.8s inclusive) and are no longer
+  dominant. CL-019 GUARDED.** Freeze-free runs 5/8 post-fix vs 0/12+
+  ever before.
+- NEW DOMINANT SURFACE (5 of 7 reporting runs): 'Cluster ACTIVE wait
+  stalled (mode=load)' with active=5/5 (one 4/5), coverage=5/5
+  complete, publication=PUBLISHED — the wait sees no meaningful
+  progress AFTER full publication/coverage; reason tally shows
+  load_publication_gate_ready + PRIORITY_CONTROL_PLANE_RECOVERY_PENDING.
+  The next ladder rung after the freeze: what does mode=load wait on
+  when active=5/5, and why doesn't priority recovery CLOSE.
+- CL-020 OPENED (residual freeze head, named by run3 profile windows
+  20:51:57/20:52:29): inclusive chain processImmediate →
+  system-table-cache.js:299 (deferred notifyListeners) →
+  priorityRecoveryVisibilityCacheListener
+  (unified-rebalancer-priority-recovery-coordination.js:122) →
+  handlePriorityRecoveryVisibilityEvent (:253) →
+  buildPriorityRecoveryVisibilityRebalanceDecision
+  (unified-rebalancer-segment-5.js:16) →
+  buildPriorityRecoveryOperationCreationPlanningGateSnapshot
+  (unified-rebalancer-priority-recovery-planning-gate-methods.js:214,
+  18/23 windows, ~22s inclusive per 32s window) +
+  buildPriorityRecoverySurrogateFollowUpDecisions
+  (priority-recovery-follow-up-decisions.js:283). Self-time:
+  parseStepsHistory (replica-operation-liveness.js:95) 29% / 8.8s per
+  window + parsePriorityRecoveryStepsHistory
+  (priority-recovery-snapshot-stage-6.js:104) 11% +
+  buildReplicaOperationProgressSnapshot. The listener subscribes to
+  ALL cache changes and computes the full planning tree to decide
+  shouldEnqueue — during operation churn (claims/deferrals update
+  replica_operations rows continuously) every row write triggers a
+  full re-derive: an event→planning amplification, same
+  per-change-not-per-event family as CL-010..012/019. Fix directions:
+  (a) cheap relevance pre-filter (tableName/operation/record) BEFORE
+  any snapshot building — the decision inputs that need the heavy tree
+  belong in the enqueued check itself, not the filter; (b) coalesce:
+  the enqueue is already a dedupe-able reconcile — compute heavy
+  planning once per drained queue tick, not per event; (c) memoize
+  parseStepsHistory per row identity (rows are cache-frozen; CL-011
+  showed the parse cost class). Note the DIAGNOSTIC warn block inside
+  enqueueMembershipPublicationReconcile (publications write-leader
+  snapshot compare) also runs per enqueue — fold into the same cleanup.
