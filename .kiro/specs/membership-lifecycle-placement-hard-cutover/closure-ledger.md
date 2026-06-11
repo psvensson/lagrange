@@ -1124,3 +1124,17 @@ Each record below represents one violated invariant.
   1. The projection pipeline's read volume (whole-table scans per readiness
      evaluation) is a separate latent record; this fix cheapens reads but
      does not reduce their count.
+- GATE VALIDATION (stat-gate-20260611T073605Z, 4 runs: 1C/3St, 0 corrupt):
+  FRAME ELIMINATED, BLOCKAGE UNCHANGED. deepClone vanished from the profile
+  (fastJsonClone now 3.5% self; GC 13.5%->6.1%) -- the fix did what it
+  claimed -- but seed blockedPercentOfWall held at ~94-97% and the
+  self-time profile went DIFFUSE: top-10 frames cover only 33% of samples,
+  spread across the priority/publication-recovery projection builders
+  (normalizePriorityRecoveryStringList 4.9%,
+  buildPriorityRecoverySyntheticSerialWaitWorkflowOwnedOperationContext
+  4.1%, buildPublicationRecoveryGateSnapshot 2.1%, planning projections,
+  raft sqlite readEntryRow 1.8%). VERDICT: the violated invariant is not
+  any single function's COST but the VOLUME of the loop driving these
+  builders (exit criterion 2's pre-registered candidate). Self-time cannot
+  name a driving loop -- the profiler now also ranks by INCLUSIVE time;
+  the next profiled run names the loop and opens the next record.
