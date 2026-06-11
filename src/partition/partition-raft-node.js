@@ -7,7 +7,9 @@
  */
 
 import LifeRaft from '../raft/liferaft.js';
-import {resolveRaftTransportDeliveryOptions} from '../raft/constants.js';
+import {
+  deliverRaftPacketWithBackpressureMute,
+} from '../raft/raft-peer-backpressure-mute.js';
 import {
   PARTITION_RAFT_NODE_LOG_MSG,
 } from './partition-raft-node-constants.js';
@@ -111,14 +113,7 @@ function createPartitionRaftNodeClass(context) {
       // Send packet unchanged - no type conversion
       // Only add destination address for routing, preserve all packet fields
       // Requirements: 10.2, 10.3
-      transport.deliver(
-        peerAddress,
-        packet,
-        resolveRaftTransportDeliveryOptions({
-          ...packet,
-          targetAddress: peerAddress,
-        }),
-      )
+      deliverRaftPacketWithBackpressureMute(transport, peerAddress, packet)
         .then((result) => callback(null, result))
         .catch((err) => callback(err));
     }

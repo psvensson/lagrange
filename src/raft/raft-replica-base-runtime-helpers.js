@@ -2,7 +2,9 @@ import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
 import {NUM, STRING, TABLES} from '../constants/index.js';
 import {ensureLiferaftProviderForRuntime} from './raft-provider-control.js';
-import {resolveRaftTransportDeliveryOptions} from './constants.js';
+import {
+  deliverRaftPacketWithBackpressureMute,
+} from './raft-peer-backpressure-mute.js';
 import {
   RAFT_REPLICA_BASE_ADDRESS,
   RAFT_REPLICA_BASE_DEFAULT,
@@ -107,13 +109,10 @@ function createRaftInstanceForReplica(replica, logAdapter) {
     replicaId: replica.replicaId,
     resolvePeerAddress: (peerId) => replica.buildPeerAddress(peerId),
     deliverPacket: (peerAddress, packet) =>
-      replica.transport.deliver(
+      deliverRaftPacketWithBackpressureMute(
+        replica.transport,
         peerAddress,
         packet,
-        resolveRaftTransportDeliveryOptions({
-          ...packet,
-          targetAddress: peerAddress,
-        }),
       ),
   });
 

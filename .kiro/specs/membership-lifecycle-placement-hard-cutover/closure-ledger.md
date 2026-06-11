@@ -1012,7 +1012,30 @@ Each record below represents one violated invariant.
   (message-router-shared-stage-3.js:16-31) — the storming sender either does
   not receive these per-entry rejections at its retry decision point or does
   not honor them; the sender-side trace should start there.
-- FIX (ii) LANDED (2026-06-11): per-peer backpressure mute in
+- FIX (ii) CORRECTION (same day, caught by independent subagent
+  verification): the first landing (bb458817) wired the mute into
+  RaftTransportAdapter — which is DEAD CODE (never instantiated in src;
+  verified via git log -S: never was). The verifier confirmed the
+  MECHANISM safe (only data-bearing appends and non-priority append-fails
+  can resolve BACKGROUND; votes/acks/heartbeat-appends never mutable;
+  liferaft's heartbeat-driven append-fail loop regenerates muted messages
+  within ~3 heartbeats; the witnessed storm reproduces unchanged until the
+  real paths are wired). RE-LANDED into the three REAL send paths via a
+  shared scope-aware module (src/raft/raft-peer-backpressure-mute.js,
+  process-wide shared state since outbound queues are per node):
+  raft-group.js deliverPacket, raft-replica-base-runtime-helpers.js
+  deliverPacket, partition-raft-node.js write; the adapter now delegates
+  to the same module. Scope-aware keys: 'node'-scoped rejections mute the
+  whole node lane, 'delivery_source'-scoped only the replica address; any
+  success clears both. The raft-group REPLY path stays unmuted
+  deliberately (response-shaped, follower->leader, not the storm
+  direction). Worker bridge verified OUT of production scope (the only
+  new Worker( in src is a test helper). Verifier-noted residual: the
+  RAFT_TRANSPORT_BACKGROUND_APPEND_PARTITION_IDS set makes steady-state
+  appends to healthy voters of sql_transactions/sql_transaction_participants
+  mutable too — bounded at 500ms + one heartbeat and only after a real
+  rejection; acceptable, recorded.
+- FIX (ii) ORIGINAL NOTE (superseded above): per-peer backpressure mute in
   RaftTransportAdapter.write — on a ROUTER_OUTBOUND_QUEUE_BACKPRESSURED
   rejection the peer's lane is muted for the error's retryAfterMs (default
   500ms); BACKGROUND sends (append bulk / learner catch-up) are skipped

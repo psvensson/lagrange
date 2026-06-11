@@ -15,6 +15,9 @@ import {LeaderActivationGate} from './leader-activation-gate.js';
 import {LeaderActivationScheduler} from './leader-activation-scheduler.js';
 import {resolveRaftTransportDeliveryOptions} from './constants.js';
 import {
+  deliverRaftPacketWithBackpressureMute,
+} from './raft-peer-backpressure-mute.js';
+import {
   RAFT_GROUP_ADDRESS,
   RAFT_GROUP_DEFAULT,
   RAFT_GROUP_ERROR_MSG,
@@ -216,13 +219,10 @@ class RaftGroup extends EventEmitter {
         this.peerAddresses,
       ),
       deliverPacket: (peerAddress, packet) =>
-        this.transport.deliver(
+        deliverRaftPacketWithBackpressureMute(
+          this.transport,
           peerAddress,
           packet,
-          resolveRaftTransportDeliveryOptions({
-            ...packet,
-            targetAddress: peerAddress,
-          }),
         ),
     });
 

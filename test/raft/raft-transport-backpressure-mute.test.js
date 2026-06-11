@@ -16,6 +16,10 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {RaftTransportAdapter} from '../../src/raft/raft-transport-adapter.js';
 import {
+  RaftPeerBackpressureMute,
+  deliverRaftPacketWithBackpressureMute,
+} from '../../src/raft/raft-peer-backpressure-mute.js';
+import {
   OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE,
 } from '../../src/transport/message-router-shared-stage-1.js';
 
@@ -147,7 +151,7 @@ test('CL-009(ii): raft transport per-peer backpressure mute', async (t) => {
     t.equal(calls.deliver, 2, 'send resumes after the window');
     t.equal(afterExpiry.error, null, 'send succeeds');
     t.equal(
-      adapter.backpressureMutedUntilMsByPeer.size,
+      adapter.peerBackpressureMute.mutedUntilMsByKey.size,
       0,
       'success clears the mute bookkeeping',
     );
@@ -163,4 +167,62 @@ test('CL-009(ii): raft transport per-peer backpressure mute', async (t) => {
     await writeAsync(adapter, buildAppendPacket());
     t.equal(calls.deliver, 2, 'ordinary failures keep attempting');
   });
+
+  await t.test(
+    'production wrapper: deliverRaftPacketWithBackpressureMute mutes the ' +
+      'raw transport.deliver pattern used by the real raft send paths',
+    async (t) => {
+      let deliverCalls = 0;
+      const transport = {
+        deliver: async () => {
+          deliverCalls += 1;
+          throw buildBackpressureError(200);
+        },
+      };
+      const mute = new RaftPeerBackpressureMute();
+      const packet = buildAppendPacket();
+
+      await deliverRaftPacketWithBackpressureMute(
+        transport, PEER_ADDRESS, packet, mute,
+      ).catch((error) => error);
+      const second = await deliverRaftPacketWithBackpressureMute(
+        transport, PEER_ADDRESS, packet, mute,
+      ).catch((error) => error);
+
+      t.equal(deliverCalls, 1, 'second send muted before the transport');
+      t.equal(second.peerBackpressureMuted, true, 'muted error marked');
+    },
+  );
+
+  await t.test(
+    'node-scoped rejections mute every replica lane on the node',
+    async (t) => {
+      let deliverCalls = 0;
+      const transport = {
+        deliver: async () => {
+          deliverCalls += 1;
+          const error = buildBackpressureError(10_000);
+          error.backpressureScope = 'node';
+          throw error;
+        },
+      };
+      const mute = new RaftPeerBackpressureMute();
+      const packet = buildAppendPacket();
+      const siblingAddress = 'node-b/partition/sql_write_operations-p1-r4';
+
+      await deliverRaftPacketWithBackpressureMute(
+        transport, PEER_ADDRESS, packet, mute,
+      ).catch((error) => error);
+      const sibling = await deliverRaftPacketWithBackpressureMute(
+        transport, siblingAddress, packet, mute,
+      ).catch((error) => error);
+
+      t.equal(
+        deliverCalls,
+        1,
+        'sibling replica on the same node is muted too',
+      );
+      t.equal(sibling.peerBackpressureMuted, true, 'sibling error marked');
+    },
+  );
 });
