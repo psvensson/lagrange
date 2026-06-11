@@ -5,6 +5,10 @@ const LOCAL_STR_EMPTY = '';
 const LOCAL_STR_REFRESH = '::refresh=';
 const LOCAL_STR_STALE = '::stale=';
 const LOCAL_STR_PLANNING = '::planning=';
+const LOCAL_STR_ONE = '1';
+const LOCAL_STR_ZERO = '0';
+const LOCAL_STR_SIGNATURE_FIELD_SEPARATOR = '|';
+const LOCAL_STR_SIGNATURE_LIST_SEPARATOR = ',';
 
 const {
   COLUMN,
@@ -247,18 +251,27 @@ const controlPlaneReadinessSnapshotStoreMethods = {
    * @private
    */
   recordRecoveryEpochObservation(nodeId, snapshot, observedAtMs) {
-    const summary = this.buildRecoveryEpochSummary(
-      nodeId,
-      snapshot,
-      observedAtMs,
-    );
-    const recoveryActive = summary.recoveryActive === true;
+    // This sits on the getNodeReadinessSync hot path (dispatch, admission,
+    // planning). The change check must therefore be allocation-light and
+    // EXCLUDE observation timestamps: the previous full-summary
+    // JSON.stringify compare included observedAtMs, so it never matched —
+    // every observation allocated a frozen summary (embedding the whole
+    // projection contract), stringified it twice, and appended. The V8
+    // profiler pinned this function as the dominant named frame inside the
+    // seed's 20-80s event-loop gaps (closure record CL-010).
+    const signature = this.buildRecoveryEpochSignature(nodeId, snapshot);
+    const recoveryActive = this.isRecoverySnapshotActive(snapshot);
     const currentEpoch = this.currentRecoveryEpochByNodeId.get(nodeId) || null;
     if (!currentEpoch && !recoveryActive) {
       return;
     }
 
     if (!currentEpoch && recoveryActive) {
+      const summary = this.buildRecoveryEpochSummary(
+        nodeId,
+        snapshot,
+        observedAtMs,
+      );
       const history = this.recoveryEpochHistoryByNodeId.get(nodeId) || [];
       const epoch = {
         epochId: `${nodeId}:${history.length + this.currentRecoveryEpochByNodeId.size + 1}`,
@@ -267,6 +280,7 @@ const controlPlaneReadinessSnapshotStoreMethods = {
         startedAtMs: observedAtMs,
         open: true,
         events: [summary],
+        lastEventSignature: signature,
       };
       this.currentRecoveryEpochByNodeId.set(nodeId, epoch);
       return;
@@ -276,10 +290,19 @@ const controlPlaneReadinessSnapshotStoreMethods = {
       return;
     }
 
-    const lastEvent =
-      currentEpoch.events[currentEpoch.events.length - 1] || null;
-    if (!lastEvent || JSON.stringify(lastEvent) !== JSON.stringify(summary)) {
+    if (recoveryActive && signature === currentEpoch.lastEventSignature) {
+      // Steady-state fast path: nothing semantically changed.
+      return;
+    }
+
+    const summary = this.buildRecoveryEpochSummary(
+      nodeId,
+      snapshot,
+      observedAtMs,
+    );
+    if (signature !== currentEpoch.lastEventSignature) {
       currentEpoch.events.push(summary);
+      currentEpoch.lastEventSignature = signature;
       if (currentEpoch.events.length > this.recoveryEpochEventLimit) {
         currentEpoch.events.splice(
           LOCAL_NUM_ZERO,
@@ -293,10 +316,12 @@ const controlPlaneReadinessSnapshotStoreMethods = {
       currentEpoch.endedAt = summary.observedAt;
       currentEpoch.endedAtMs = observedAtMs;
       this.currentRecoveryEpochByNodeId.delete(nodeId);
+      const {lastEventSignature: _lastEventSignature, ...epochForHistory} =
+        currentEpoch;
       const history = this.recoveryEpochHistoryByNodeId.get(nodeId) || [];
       history.push(
         Object.freeze({
-          ...currentEpoch,
+          ...epochForHistory,
           events: Object.freeze(
             currentEpoch.events.map((event) => Object.freeze({...event})),
           ),
@@ -307,6 +332,84 @@ const controlPlaneReadinessSnapshotStoreMethods = {
       }
       this.recoveryEpochHistoryByNodeId.set(nodeId, history);
     }
+  },
+
+  /**
+   * Resolve recovery-open state from a raw snapshot without building the
+   * epoch summary. Must match buildRecoveryEpochSummary's recoveryActive.
+   * @param {Object|null} snapshot
+   * @return {boolean}
+   * @private
+   */
+  isRecoverySnapshotActive(snapshot) {
+    const projectionReadinessContract =
+      snapshot?.projectionReadinessContract &&
+      typeof snapshot.projectionReadinessContract === TYPEOF.OBJECT ?
+        snapshot.projectionReadinessContract :
+        null;
+    return projectionReadinessContract?.recoveryOpen !== false;
+  },
+
+  /**
+   * Cheap semantic-change signature for recovery epoch observations. Covers
+   * exactly the semantic fields of buildRecoveryEpochSummary and excludes
+   * observation timestamps so identical consecutive states compare equal.
+   * @param {string} nodeId
+   * @param {Object|null} snapshot
+   * @return {string}
+   * @private
+   */
+  buildRecoveryEpochSignature(nodeId, snapshot) {
+    const dimensions =
+      snapshot?.dimensions && typeof snapshot.dimensions === TYPEOF.OBJECT ?
+        snapshot.dimensions :
+        {};
+    const projectionReadinessContract =
+      snapshot?.projectionReadinessContract &&
+      typeof snapshot.projectionReadinessContract === TYPEOF.OBJECT ?
+        snapshot.projectionReadinessContract :
+        null;
+    const reasonCodes = Array.isArray(snapshot?.reasons) ?
+      snapshot.reasons
+        .map((reason) => String(reason?.code || LOCAL_STR_EMPTY))
+        .filter(Boolean)
+        .join(LOCAL_STR_SIGNATURE_LIST_SEPARATOR) :
+      LOCAL_STR_EMPTY;
+    const priorityReasonCodes = Array.isArray(
+      projectionReadinessContract?.priorityRecovery?.reasonCodes,
+    ) ?
+      projectionReadinessContract.priorityRecovery.reasonCodes.join(
+        LOCAL_STR_SIGNATURE_LIST_SEPARATOR,
+      ) :
+      LOCAL_STR_EMPTY;
+    const dimensionBits = [
+      CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE,
+      CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY,
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE,
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED,
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+      CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+      CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+    ]
+      .map((dimension) =>
+        dimensions[dimension] === true ? LOCAL_STR_ONE : LOCAL_STR_ZERO,
+      )
+      .join(LOCAL_STR_EMPTY);
+    return [
+      nodeId,
+      snapshot?.lifecycleState || LOCAL_STR_EMPTY,
+      dimensionBits,
+      projectionReadinessContract?.state ||
+        PROJECTION_READINESS_CONTRACT_STATE.BLOCKED,
+      projectionReadinessContract?.priorityRecovery?.active === true ?
+        LOCAL_STR_ONE :
+        LOCAL_STR_ZERO,
+      priorityReasonCodes,
+      reasonCodes,
+      projectionReadinessContract?.recoveryOpen !== false ?
+        LOCAL_STR_ONE :
+        LOCAL_STR_ZERO,
+    ].join(LOCAL_STR_SIGNATURE_FIELD_SEPARATOR);
   },
 
   /**

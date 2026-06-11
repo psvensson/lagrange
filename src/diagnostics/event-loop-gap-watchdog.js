@@ -287,7 +287,11 @@ class GapSamplingProfiler {
   }
 
   /**
-   * Aggregate hit counts per call frame, largest self time first.
+   * Aggregate hit counts per FUNCTION (fn+url+line), largest self time
+   * first. A hot function reached via many call paths appears as many
+   * profile nodes; per-node ranking understates it (observed: the CL-010
+   * culprit occupied 5+ of the top-10 node slots while its per-node shares
+   * looked small).
    * @param {Object} profile - V8 CPU profile.
    * @return {{totalSamples: number, topFrames: Array<Object>}}
    * @private
@@ -295,7 +299,7 @@ class GapSamplingProfiler {
   aggregateTopFrames(profile) {
     const nodes = Array.isArray(profile?.nodes) ? profile.nodes : [];
     let totalSamples = 0;
-    const frames = [];
+    const frameByKey = new Map();
     for (const node of nodes) {
       const hitCount = Number.isFinite(node.hitCount) ? node.hitCount : 0;
       if (hitCount <= 0) {
@@ -303,23 +307,24 @@ class GapSamplingProfiler {
       }
       totalSamples += hitCount;
       const callFrame = node.callFrame || {};
-      frames.push({
-        fn: callFrame.functionName || '(anonymous)',
-        url: this.compactUrl(callFrame.url),
-        line: Number.isFinite(callFrame.lineNumber) ?
-          callFrame.lineNumber + 1 :
-          null,
-        selfMs: Math.round(
-          (hitCount * this.samplingIntervalUs) / 1000,
-        ),
-        hits: hitCount,
-      });
+      const fn = callFrame.functionName || '(anonymous)';
+      const url = this.compactUrl(callFrame.url);
+      const line = Number.isFinite(callFrame.lineNumber) ?
+        callFrame.lineNumber + 1 :
+        null;
+      const key = `${fn}@${url}:${line}`;
+      const frame = frameByKey.get(key) ||
+        {fn, url, line, hits: 0, stackNodes: 0};
+      frame.hits += hitCount;
+      frame.stackNodes += 1;
+      frameByKey.set(key, frame);
     }
-    const topFrames = frames
+    const topFrames = [...frameByKey.values()]
       .sort((left, right) => right.hits - left.hits)
       .slice(0, this.topFrames)
       .map((frame) => ({
         ...frame,
+        selfMs: Math.round((frame.hits * this.samplingIntervalUs) / 1000),
         share: totalSamples > 0 ?
           Number((frame.hits / totalSamples).toFixed(3)) :
           0,
