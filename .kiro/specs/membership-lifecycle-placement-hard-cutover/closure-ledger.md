@@ -886,6 +886,34 @@ Each record below represents one violated invariant.
   Witness volume bounded by the ≥1000ms planning cadence clamp. Minor
   follow-ups noted, not landed: demote skip_not_pending to debug if chatty;
   MOVE_SKIPPED keeps plain replicaId (only nodeId is clobbered).
+- GATE VALIDATION ROUND 1 (stat-gate-20260611T052934Z, 4 runs, clean
+  containers, srcFingerprint 2611afcf2f919ffe): 1 CONVERGED / 1 SLOW /
+  2 STALLED, 0 corrupt. Pre-registered expectations checked against seed
+  full logs:
+  (a) WITNESS WORKS — the reuse log is present in every run (28/60/83/45
+  reuses vs 57/93/104/70 executes and 10/10/6/6 creates), making the
+  formerly-silent layer-(b) absorption directly observable; rearmAction
+  distribution per run: skip_not_pending 11/38/13/28,
+  rearm_dispatch 9/19/70/15, skip_live_deferred_retry 8/3/0/2.
+  (b) GUARD ENGAGES BUT COVERAGE IS PARTIAL (new finding): in run3
+  (STALLED, 120 deferral failures, 0 completions) ALL 70 PENDING reuses
+  rearmed and the skip never fired. Mechanism hypothesis, consistent with
+  the verified timer lifecycle: retry timers delete their map entry as the
+  FIRST statement of the callback, so during each in-flight dispatch
+  attempt (~5s router timeout) the live-timer predicate is false and a
+  planning-tick reuse rearms. Residual cost is bounded by claim semantics
+  (concurrent dispatch is claim-protected; DEFERRED_RETRY_PENDING short-
+  circuits when a deferred retry is active at claim time), but each such
+  rearm still spends an owner read + claim attempt. If a future round
+  needs tighter coverage, add an "attempt in flight" marker to the
+  predicate rather than widening timers.
+  (c) CREEP UNCHANGED, AS PRE-REGISTERED — stall class persists
+  (publication_missing_active_node on the creeping joiners, missing=2/4),
+  topline comparable to pre-fix (N=4 mixtures are not comparable beyond
+  this). CL-008 is CONFIRMED not the stall driver; the supply-side
+  event-loop attribution remains the live falsification step.
+- Topline classifier rates at N=4 sample a mixture of stall modes — judge
+  rounds by the mechanism witnesses above, not CONVERGED/STALLED counts.
 
 ## CL-009 Outbound Backpressure Rejection Must Not Storm Warns Or Hot-Retry A Stillborn Replica
 
@@ -956,3 +984,12 @@ Each record below represents one violated invariant.
   rejection warns within the shared budget (the preempted sender still
   receives preemptedByCriticalSource on its rejection); trailing suppressed
   counts after a storm ends are not flushed.
+- GATE VALIDATION ROUND 1 (stat-gate-20260611T052934Z): rate-limit works —
+  60/39/8/31 emitted warns per run (vs 5,911 pre-fix), every one carrying
+  the suppressed counter; seed run logs shrank ~60% (3.0-4.1k lines vs
+  8.5-8.8k). CRITICAL READING for fix (ii): the suppressed totals show the
+  UNDERLYING rejection storm is alive and larger than the pre-fix log ever
+  revealed — 38,472 / 19,244 / 3,321 / 14,889 suppressed rejections per
+  run. The warn flood is cured; the sender pacing violation (invariant
+  part ii) is now the live remainder of this record and the suppressed
+  counter is its quantitative witness.
