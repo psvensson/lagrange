@@ -52,6 +52,7 @@ class CDCGroupPropagationService extends EventEmitter {
     this.messageRouter = options.messageRouter || null;
     this.latencyTreeService = options.latencyTreeService || null;
     this.nowFn = options.nowFn || Date.now;
+    this.lastSkippedFanoutSignature = '';
     this.config = ConfigurationManager.getInstance();
     this.propagationMode =
       this.config.get(LATENCY_TOPOLOGY_CONFIG_KEY.PROPAGATION_MODE) ===

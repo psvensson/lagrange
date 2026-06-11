@@ -1565,6 +1565,29 @@ Each record below represents one violated invariant.
   throwing reads never escape; keyless rows skipped). 206 node-joining +
   1019 cdc/topology tests green (15 bootstrap-suite failures pre-exist
   identically without these changes).
+  SUBAGENT VERIFICATION (PASS) + post-verification hardening: wiring
+  verified on the REAL join path (READY_LEASE_ASSIGNED checkpoint;
+  cdcIntegrationService assigned in the earlier JOIN_INFRASTRUCTURE_READY
+  checkpoint and covered by resume re-runs; DURABLE_REJOIN passes through
+  the same flow); cache regression safety verified (stale guards on 17/19
+  tables + dedicated publication-epoch and node-heartbeat merges; the
+  'indices' table lacks updated_at — LOW, pre-existing class); load
+  bounded (19 sequential one-shot SELECT*s per join, pressure-governed,
+  not CL-012-class). The verifier's mutation test found the wiring itself
+  UNGUARDED (deleting the call left 219 tests green) — closed with
+  test/bootstrap/node-joining-cdc-catchup-wiring.test.js (order: cdc-gate
+  -> catch-up -> next gate; throwing catch-up never blocks readiness;
+  missing service warns and proceeds; mutation now yields 3 failures).
+  RESIDUALS recorded, not landed: (1) UPSERT-only catch-up cannot remove
+  rows DELETEd inside the window (ghost rows decay via status/lease/epoch
+  filters — slow-only for traced consumers; storage_reservations ghost
+  consumers not fully traced, flagged); (2) DURABLE_REJOIN nodes that
+  restored system-table replicas may serve the catch-up read from their
+  own not-yet-caught-up follower (ANY_REPLICA local preference), making
+  hydration a no-op exactly when stale — consider a caught-up gate or
+  owner-RPC preference for the catch-up read; (3) known-groups set has no
+  status filter (decommissioned groups read as perpetually skipped —
+  misleading framing in the new warn).
   REFUTED ALTERNATIVES (for the record): zero-subscriber buffering loss
   (would have warn-logged EVENT_BUFFERED; none), REPLACE-moved CDC source
   (no removes, leader stayed on seed), joiners rejecting stale events (no
