@@ -8,6 +8,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
   EventLoopGapWatchdog,
+  GapSamplingProfiler,
   SyncSectionRegistry,
   trackSyncSection,
 } from '../../src/diagnostics/event-loop-gap-watchdog.js';
@@ -17,6 +18,15 @@ function busyWaitMs(durationMs) {
   while (Date.now() - start < durationMs) {
     // synchronous block
   }
+}
+
+function profilerTargetBusyLoop(durationMs) {
+  const start = Date.now();
+  let accumulator = 0;
+  while (Date.now() - start < durationMs) {
+    accumulator += Math.sqrt(accumulator + 1);
+  }
+  return accumulator;
 }
 
 test('event loop gap watchdog', async (t) => {
@@ -117,6 +127,35 @@ test('event loop gap watchdog', async (t) => {
 
     const disabled = new EventLoopGapWatchdog({thresholdMs: 0});
     t.equal(disabled.start(), false, 'thresholdMs=0 never starts');
+  });
+
+  await t.test('sampling profiler names the blocking function', async (t) => {
+    const profiler = new GapSamplingProfiler({
+      windowMs: 10,
+      samplingIntervalUs: 1000,
+    });
+    await profiler.start();
+    profilerTargetBusyLoop(150);
+    const windowReport = await profiler.rotateWindow();
+    profiler.stop();
+
+    t.ok(windowReport, 'window report produced');
+    t.ok(
+      windowReport.totalSamples > 0,
+      `samples collected (${windowReport.totalSamples})`,
+    );
+    const target = windowReport.topFrames.find(
+      (frame) => frame.fn === 'profilerTargetBusyLoop',
+    );
+    t.ok(
+      target,
+      'blocking function appears in top frames ' +
+        `(got ${windowReport.topFrames.map((f) => f.fn).join(', ')})`,
+    );
+    t.ok(
+      target && target.share > 0.3,
+      `blocking function dominates the window (share=${target?.share})`,
+    );
   });
 
   await t.test('trackSyncSection records into the shared registry and ' +

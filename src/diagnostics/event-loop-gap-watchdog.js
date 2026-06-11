@@ -21,6 +21,7 @@
  */
 
 import {performance} from 'node:perf_hooks';
+import {Session} from 'node:inspector';
 import {LoggingService} from '../logging/logging-service.js';
 import {SUBSYSTEM} from '../constants/index.js';
 
@@ -28,15 +29,21 @@ const WATCHDOG_DEFAULT = Object.freeze({
   THRESHOLD_MS: 1000,
   INTERVAL_MS: 250,
   MAX_REPORTED_SITES: 12,
+  PROFILE_WINDOW_MS: 30000,
+  PROFILE_SAMPLING_INTERVAL_US: 2000,
+  PROFILE_TOP_FRAMES: 10,
 });
 
 const WATCHDOG_ENV = Object.freeze({
   THRESHOLD_MS: 'LAGRANGE_LOOP_GAP_THRESHOLD_MS',
+  PROFILE: 'LAGRANGE_LOOP_GAP_PROFILE',
 });
 
 const WATCHDOG_LOG_MSG = Object.freeze({
   GAP_DETECTED: 'Event loop gap detected',
   STARTED: 'Event loop gap watchdog started',
+  PROFILE_WINDOW: 'Event loop gap profile window',
+  PROFILE_ERROR: 'Event loop gap profiler error',
 });
 
 const WATCHDOG_LOG_LEVEL = Object.freeze({
@@ -182,6 +189,174 @@ function trackSyncSection(site, fn) {
   }
 }
 
+/**
+ * In-process V8 sampling profiler driven by the watchdog heartbeat. The
+ * profile window rotates on the first tick after windowMs elapses — ticks
+ * starve while the loop is blocked, so a block always lands inside the
+ * window that rotates right after it ends. Windows containing no gap are
+ * discarded silently, so the converged phases cost nothing in output.
+ */
+class GapSamplingProfiler {
+  /**
+   * @param {Object} [options]
+   * @param {number} [options.windowMs]
+   * @param {number} [options.samplingIntervalUs]
+   * @param {number} [options.topFrames]
+   */
+  constructor(options = {}) {
+    this.windowMs = Number.isFinite(options.windowMs) && options.windowMs > 0 ?
+      Math.floor(options.windowMs) :
+      WATCHDOG_DEFAULT.PROFILE_WINDOW_MS;
+    this.samplingIntervalUs = Number.isFinite(options.samplingIntervalUs) &&
+      options.samplingIntervalUs > 0 ?
+      Math.floor(options.samplingIntervalUs) :
+      WATCHDOG_DEFAULT.PROFILE_SAMPLING_INTERVAL_US;
+    this.topFrames = Number.isFinite(options.topFrames) &&
+      options.topFrames > 0 ?
+      Math.floor(options.topFrames) :
+      WATCHDOG_DEFAULT.PROFILE_TOP_FRAMES;
+    this.session = null;
+    this.windowStartedAtMs = 0;
+    this.rotating = false;
+  }
+
+  /**
+   * @param {string} method
+   * @param {Object} [params]
+   * @return {Promise<Object>}
+   * @private
+   */
+  post(method, params = {}) {
+    return new Promise((resolve, reject) => {
+      this.session.post(method, params, (error, result) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve(result);
+      });
+    });
+  }
+
+  /**
+   * @return {Promise<void>}
+   */
+  async start() {
+    this.session = new Session();
+    this.session.connect();
+    await this.post('Profiler.enable');
+    await this.post('Profiler.setSamplingInterval', {
+      interval: this.samplingIntervalUs,
+    });
+    await this.post('Profiler.start');
+    this.windowStartedAtMs = Date.now();
+  }
+
+  /**
+   * @return {boolean} Whether the current window has elapsed.
+   */
+  isWindowElapsed(nowMs) {
+    return this.session !== null &&
+      !this.rotating &&
+      nowMs - this.windowStartedAtMs >= this.windowMs;
+  }
+
+  /**
+   * Stop the current window, aggregate top self-time frames, restart.
+   * @return {Promise<{windowMs: number, totalSamples: number,
+   *   topFrames: Array<Object>}|null>}
+   */
+  async rotateWindow() {
+    if (!this.session || this.rotating) {
+      return null;
+    }
+    this.rotating = true;
+    try {
+      const nowMs = Date.now();
+      const windowMs = nowMs - this.windowStartedAtMs;
+      const {profile} = await this.post('Profiler.stop');
+      await this.post('Profiler.start');
+      this.windowStartedAtMs = Date.now();
+      return {
+        windowMs,
+        ...this.aggregateTopFrames(profile),
+      };
+    } finally {
+      this.rotating = false;
+    }
+  }
+
+  /**
+   * Aggregate hit counts per call frame, largest self time first.
+   * @param {Object} profile - V8 CPU profile.
+   * @return {{totalSamples: number, topFrames: Array<Object>}}
+   * @private
+   */
+  aggregateTopFrames(profile) {
+    const nodes = Array.isArray(profile?.nodes) ? profile.nodes : [];
+    let totalSamples = 0;
+    const frames = [];
+    for (const node of nodes) {
+      const hitCount = Number.isFinite(node.hitCount) ? node.hitCount : 0;
+      if (hitCount <= 0) {
+        continue;
+      }
+      totalSamples += hitCount;
+      const callFrame = node.callFrame || {};
+      frames.push({
+        fn: callFrame.functionName || '(anonymous)',
+        url: this.compactUrl(callFrame.url),
+        line: Number.isFinite(callFrame.lineNumber) ?
+          callFrame.lineNumber + 1 :
+          null,
+        selfMs: Math.round(
+          (hitCount * this.samplingIntervalUs) / 1000,
+        ),
+        hits: hitCount,
+      });
+    }
+    const topFrames = frames
+      .sort((left, right) => right.hits - left.hits)
+      .slice(0, this.topFrames)
+      .map((frame) => ({
+        ...frame,
+        share: totalSamples > 0 ?
+          Number((frame.hits / totalSamples).toFixed(3)) :
+          0,
+      }));
+    return {totalSamples, topFrames};
+  }
+
+  /**
+   * @param {string} url
+   * @return {string}
+   * @private
+   */
+  compactUrl(url) {
+    const normalized = String(url || '');
+    const sourceIndex = normalized.lastIndexOf('/src/');
+    if (sourceIndex >= 0) {
+      return normalized.slice(sourceIndex + 1);
+    }
+    const nodeModulesIndex = normalized.lastIndexOf('/node_modules/');
+    if (nodeModulesIndex >= 0) {
+      return normalized.slice(nodeModulesIndex + 1);
+    }
+    return normalized;
+  }
+
+  stop() {
+    if (this.session) {
+      try {
+        this.session.disconnect();
+      } catch (_error) {
+        // Best-effort teardown.
+      }
+      this.session = null;
+    }
+  }
+}
+
 class EventLoopGapWatchdog {
   /**
    * @param {Object} [options]
@@ -189,6 +364,9 @@ class EventLoopGapWatchdog {
    *   0 disables the watchdog entirely.
    * @param {number} [options.intervalMs] - Heartbeat interval.
    * @param {Object} [options.registry] - Sync-section registry (tests only).
+   * @param {boolean} [options.profileEnabled] - Enable the sampling
+   *   profiler; defaults to the LAGRANGE_LOOP_GAP_PROFILE env switch.
+   * @param {Object} [options.profilerOptions] - GapSamplingProfiler options.
    */
   constructor(options = {}) {
     const envThreshold = Number(process.env[WATCHDOG_ENV.THRESHOLD_MS]);
@@ -202,6 +380,14 @@ class EventLoopGapWatchdog {
       Math.floor(options.intervalMs) :
       WATCHDOG_DEFAULT.INTERVAL_MS;
     this.registry = options.registry || sharedSyncSectionRegistry;
+    const envProfile = process.env[WATCHDOG_ENV.PROFILE];
+    this.profileEnabled = typeof options.profileEnabled === 'boolean' ?
+      options.profileEnabled :
+      envProfile === '1' || envProfile === 'true';
+    this.profiler = this.profileEnabled ?
+      new GapSamplingProfiler(options.profilerOptions) :
+      null;
+    this.gapsInProfileWindow = 0;
     this.intervalHandle = null;
     this.expectedAtMs = 0;
     this.lastRegistrySnapshot = null;
@@ -228,9 +414,20 @@ class EventLoopGapWatchdog {
     if (typeof this.intervalHandle.unref === 'function') {
       this.intervalHandle.unref();
     }
+    if (this.profiler) {
+      this.profiler.start().catch((error) => {
+        this.logConsoleOnly(
+          WATCHDOG_LOG_LEVEL.WARN,
+          WATCHDOG_LOG_MSG.PROFILE_ERROR,
+          {error: error?.message || String(error)},
+        );
+        this.profiler = null;
+      });
+    }
     this.logConsoleOnly(WATCHDOG_LOG_LEVEL.INFO, WATCHDOG_LOG_MSG.STARTED, {
       thresholdMs: this.thresholdMs,
       intervalMs: this.intervalMs,
+      profileEnabled: this.profiler !== null,
     });
     return true;
   }
@@ -239,6 +436,9 @@ class EventLoopGapWatchdog {
     if (this.intervalHandle) {
       clearInterval(this.intervalHandle);
       this.intervalHandle = null;
+    }
+    if (this.profiler) {
+      this.profiler.stop();
     }
   }
 
@@ -251,6 +451,12 @@ class EventLoopGapWatchdog {
     const nowMs = Date.now();
     const gapMs = nowMs - this.expectedAtMs;
     this.expectedAtMs = nowMs + this.intervalMs;
+    if (gapMs >= this.thresholdMs) {
+      this.gapsInProfileWindow += 1;
+    }
+    if (this.profiler && this.profiler.isWindowElapsed(nowMs)) {
+      this.rotateProfileWindow();
+    }
     if (gapMs < this.thresholdMs) {
       return;
     }
@@ -299,6 +505,38 @@ class EventLoopGapWatchdog {
         },
       },
     );
+  }
+
+  /**
+   * Rotate the profile window; emit top frames only when the closed window
+   * contained at least one gap.
+   * @return {void}
+   * @private
+   */
+  rotateProfileWindow() {
+    const gapsInWindow = this.gapsInProfileWindow;
+    this.gapsInProfileWindow = 0;
+    this.profiler.rotateWindow().then((windowReport) => {
+      if (!windowReport || gapsInWindow === 0) {
+        return;
+      }
+      this.logConsoleOnly(
+        WATCHDOG_LOG_LEVEL.WARN,
+        WATCHDOG_LOG_MSG.PROFILE_WINDOW,
+        {
+          gapsInWindow,
+          windowMs: Math.round(windowReport.windowMs),
+          totalSamples: windowReport.totalSamples,
+          topFrames: windowReport.topFrames,
+        },
+      );
+    }).catch((error) => {
+      this.logConsoleOnly(
+        WATCHDOG_LOG_LEVEL.WARN,
+        WATCHDOG_LOG_MSG.PROFILE_ERROR,
+        {error: error?.message || String(error)},
+      );
+    });
   }
 
   /**
@@ -356,6 +594,7 @@ class EventLoopGapWatchdog {
 
 export {
   EventLoopGapWatchdog,
+  GapSamplingProfiler,
   SyncSectionRegistry,
   enterSyncSection,
   exitSyncSection,
