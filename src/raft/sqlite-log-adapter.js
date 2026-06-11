@@ -349,9 +349,13 @@ class SQLiteLogAdapter {
       return [];
     }
     const committedIndex = this.getCommittedIndex();
+    // CL-018: rows at or below the committed watermark are committed by
+    // raft's prefix-commit semantics — scanning and JSON-parsing them on
+    // every heartbeat was the top self-time frame in the seed freeze
+    // windows. Bound the scan to the genuinely-uncommitted suffix.
     const rows = this.db.prepare(
-      'SELECT log_index, term, command FROM _raft_log WHERE log_index <= ? ORDER BY log_index',
-    ).all(index);
+      'SELECT log_index, term, command FROM _raft_log WHERE log_index <= ? AND log_index > ? ORDER BY log_index',
+    ).all(index, committedIndex);
 
     return rows
       .map((row) => this.readEntryRow(row, committedIndex))
@@ -384,6 +388,12 @@ class SQLiteLogAdapter {
     this.db.prepare(
       LOCAL_STR_1FMKR,
     ).run(JSON.stringify(entry), index);
+    // CL-018: followers never persisted the committed watermark (only the
+    // leader-side commandAck did), so every heartbeat saw
+    // committedIndex < packet.last.committedIndex forever and re-scanned
+    // the whole log. Commit is prefix-driven, so advancing the monotonic
+    // watermark here is exact.
+    this.setCommittedIndex(index);
 
     return entry;
   }
@@ -508,10 +518,19 @@ class SQLiteLogAdapter {
     if (!this.isOpen()) {
       return LOCAL_NUM_ZERO;
     }
+    // CL-018: liferaft reads committedIndex on every packet build; a
+    // sqlite SELECT per read is measurable on a saturated seed. The
+    // adapter is the only writer of this key, so an in-memory cache over
+    // the persisted value is safe.
+    if (Number.isFinite(this._committedIndexCache)) {
+      return this._committedIndexCache;
+    }
     const row = this.db.prepare(
       'SELECT value FROM _raft_state WHERE key = ?',
     ).get('committedIndex');
-    return row ? parseInt(row.value, 10) : LOCAL_NUM_ZERO;
+    const value = row ? parseInt(row.value, 10) : LOCAL_NUM_ZERO;
+    this._committedIndexCache = value;
+    return value;
   }
 
   /**
@@ -531,9 +550,19 @@ class SQLiteLogAdapter {
     if (!this.isOpen()) {
       return;
     }
+    // CL-018: the raft committedIndex is monotonic by definition. The
+    // leader's commandAck calls this for EVERY ack — including catch-up
+    // acks at OLD indexes, which used to REGRESS the persisted watermark
+    // until the next head ack (CL-015 adjacent finding #2). Clamp here so
+    // every caller is monotonic.
+    const current = this.getCommittedIndex();
+    if (Number.isFinite(index) && index <= current) {
+      return;
+    }
     this.db.prepare(
       LOCAL_STR_1RR58,
     ).run(LOCAL_STR_COMMITTEDINDEX, String(index));
+    this._committedIndexCache = index;
   }
 
   /**

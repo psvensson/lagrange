@@ -29,7 +29,7 @@ Each record below represents one violated invariant.
 | CL-015 | fix-landed | raft-learner-catchup | Raft catch-up must deliver in batches from the follower's actual position — not a one-entry-per-round-trip backward fail-walk that can never complete a formation-sized log inside the voter-ready budget. |
 | CL-016 | guarded | replica-activation-evidence | Voter-ready activation must not require a durable services-row round-trip through the control plane being recovered: the priority local-commit fallback must make the LOCAL cache reflect local truth (or the activation check must accept local authoritative evidence). |
 | CL-017 | fix-landed | operation-ledger-self-reference | Operation workflow transitions must complete while the operation ledger's own partition is under modification — replica_operations writes fail with participant failures exactly when replica_operations-p1 is mid-REPLACE (4/3, surplus pending removal), pinning operations in CREATING/SENDING forever and blocking pre-restart quiescence. |
-| CL-018 | open | raft-log-scan-per-heartbeat | A follower's commit catch-up must not rescan and JSON-parse the whole raft log on every heartbeat: sqlite followers never persist committedIndex, so getUncommittedEntriesUpToIndex degenerates to a full-table parse per heartbeat per priority partition on the seed — the top self-time frame in the freeze windows that block CL-017's quiesce. |
+| CL-018 | fix-landed | raft-log-scan-per-heartbeat | A follower's commit catch-up must not rescan and JSON-parse the whole raft log on every heartbeat: sqlite followers never persist committedIndex, so getUncommittedEntriesUpToIndex degenerates to a full-table parse per heartbeat per priority partition on the seed — the top self-time frame in the freeze windows that block CL-017's quiesce. |
 
 ## CL-001 Published Membership Convergence Under Restart Churn
 
@@ -2000,6 +2000,20 @@ Each record below represents one violated invariant.
   (CL-015 adjacent #2: commandAck unconditionally setCommittedIndex on
   OLD-index acks) in the same record — both are committedIndex
   bookkeeping defects in the same adapter.
+- FIX LANDED (2026-06-11): one cohesive committedIndex-bookkeeping fix
+  in the sqlite log adapter: (1) follower commit() now advances the
+  persisted watermark (commit is prefix-driven, so monotonic advance is
+  exact); (2) setCommittedIndex is MONOTONIC — old-index catch-up acks
+  can no longer regress it (closes CL-015 adjacent #2 in the same
+  stroke); (3) getUncommittedEntriesUpToIndex scans only the
+  uncommitted suffix (log_index > committedIndex) instead of full-table
+  JSON-parsing per heartbeat; (4) committedIndex is cached in memory
+  over the persisted value (the adapter is the only writer) — liferaft
+  reads it per packet build, which was a sqlite SELECT per read.
+  Guards: sqlite-log-adapter-committed-watermark.test.js (follower
+  advance, no-regress, suffix-only scan with parse-count spy, fresh
+  adapter reads persisted state) — 4 red on revert. 3,460
+  raft/message-group/partition tests green.
 - Secondary candidates from the same windows (record, evaluate after):
   getNodeReadinessSync inclusive dominance persists despite CL-012's
   fast path — verify the fast path engages on the line-330 call path in
