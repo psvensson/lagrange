@@ -251,6 +251,10 @@ const JOINING_LOG_MSG = Object.freeze({
   CDC_READINESS_GATE_DEGRADED:
     'CDC subscriptions not confirmed within timeout, ' +
     'advertising readiness with degraded CDC status',
+  CDC_CATCHUP_HYDRATION_SKIPPED:
+    'CDC catch-up hydration skipped: integration service unavailable',
+  CDC_CATCHUP_HYDRATION_FAILED:
+    'CDC catch-up hydration failed; proceeding with readiness',
 });
 
 const JOINING_ERROR_MSG = Object.freeze({

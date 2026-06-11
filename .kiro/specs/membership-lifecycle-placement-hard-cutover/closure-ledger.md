@@ -1536,6 +1536,35 @@ Each record below represents one violated invariant.
   analog that the partition-local layer already has
   (partition-cdc-delivery.js:424-465 catch-up) — recorded, not required
   for the scenario.
+  FIX LANDED (2026-06-11, systemic per user directive — close the window
+  for ALL propagated tables, not the one that bit):
+  (1) src/cdc/cdc-integration-service-authoritative-catchup.js —
+  hydrateCdcPropagatedTablesFromAuthority(service): re-reads every
+  CDC_PROPAGATED_TABLES table via the existing authoritative read flow
+  (owner-RPC fallback + pressure deferral honored, bounded per-table
+  retries) and applies rows through the existing merge-safe
+  applyAuthoritativeCacheRepair; best-effort by contract (a table that
+  cannot be read is logged and skipped — the live stream and repair paths
+  remain). Exposed as a CDCIntegrationService method.
+  (2) Wired at the join seam: signalReadyForReplicas runs the catch-up
+  immediately after awaitCdcSubscriptionsForReadiness (gate passed OR
+  degraded), before readiness advertisement — pull-on-arm +
+  push-stream-after; never blocks readiness.
+  (3) Fan-out silent-drop observability: resolveKnownMessageGroupIds +
+  CDCGroupPropagationService.recordSkippedFanoutGroups — transition-logged
+  warn ('CDC fan-out skipping known message groups not yet targetable')
+  whenever the skipped-group set changes, so the remaining mid-stream drop
+  class is witnessable instead of silent.
+  DELIBERATELY NOT CHANGED: CDCPipelineReadinessGate.pipelineProven's
+  vacuous constructor satisfaction stands for now — redefining the gate's
+  evidence model is entangled with seed bootstrap (formation-regression
+  risk) and the catch-up defuses the window it mis-certifies; revisit with
+  the Task-28 audit.
+  Guards: test/cdc/cdc-authoritative-catchup-hydration.test.js (applies
+  all rows per table; pressure-deferred reads retry bounded then skip;
+  throwing reads never escape; keyless rows skipped). 206 node-joining +
+  1019 cdc/topology tests green (15 bootstrap-suite failures pre-exist
+  identically without these changes).
   REFUTED ALTERNATIVES (for the record): zero-subscriber buffering loss
   (would have warn-logged EVENT_BUFFERED; none), REPLACE-moved CDC source
   (no removes, leader stayed on seed), joiners rejecting stale events (no

@@ -65,6 +65,8 @@ const CDC_GROUP_PROPAGATION_LOG_MSG = Object.freeze({
   GROUPED_DELIVERY_FAILED: 'Grouped propagation delivery failed',
   RETRYING_DELIVERY_FAILURES: 'Retrying CDC propagation delivery failures',
   DELIVERY_RETRY_EXHAUSTED: 'CDC propagation delivery retries exhausted',
+  FANOUT_SKIPPING_KNOWN_GROUPS:
+    'CDC fan-out skipping known message groups not yet targetable',
 });
 
 const CDC_GROUP_PROPAGATION_ERROR_MSG = Object.freeze({

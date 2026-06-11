@@ -14,6 +14,7 @@ import {
 import {
   buildGroupedContext,
   buildSafeTargets,
+  resolveKnownMessageGroupIds,
   resolveSourceMessageGroupId,
 } from './cdc-group-propagation-routing.js';
 import {
@@ -303,6 +304,51 @@ class CDCGroupPropagationService extends EventEmitter {
     return result;
   }
   /**
+   * Make the fan-out's silent drop class observable (CL-014): when message
+   * groups are KNOWN to the cache but excluded from the resolved targets
+   * (not yet ACTIVE-with-address), every event sent meanwhile is lost to
+   * those groups with no replay. Transition-logged: one warn per change of
+   * the skipped-group set, not per event.
+   * @param {Array<Object>} targets - Resolved fan-out targets.
+   * @param {string|null} sourceGroupId
+   * @param {string} tableName - Table of the triggering event (context).
+   * @return {void}
+   * @private
+   */
+  recordSkippedFanoutGroups(targets, sourceGroupId, tableName) {
+    const knownGroupIds = resolveKnownMessageGroupIds({
+      systemTableCache: this.systemTableCache,
+      messageGroupReplicaSuffix: MESSAGE_GROUP_REPLICA_SUFFIX,
+    });
+    const targetGroupIds = new Set(
+      (targets || []).map((target) => target.groupId),
+    );
+    const skippedGroupIds = [...knownGroupIds]
+      .filter(
+        (groupId) =>
+          groupId !== sourceGroupId && !targetGroupIds.has(groupId),
+      )
+      .sort();
+    const signature = skippedGroupIds.join(',');
+    if (signature === this.lastSkippedFanoutSignature) {
+      return;
+    }
+    this.lastSkippedFanoutSignature = signature;
+    if (skippedGroupIds.length === NUM.ZERO) {
+      return;
+    }
+    this.logger.warn(
+      CDC_GROUP_PROPAGATION_LOG_MSG.FANOUT_SKIPPING_KNOWN_GROUPS,
+      {
+        nodeId: this.nodeId,
+        tableName,
+        skippedGroupIds,
+        targetGroupCount: targetGroupIds.size,
+      },
+    );
+  }
+
+  /**
    * Apply canonical safe propagation path.
    * @param {Object} options
    * @return {Promise<Object>}
@@ -319,6 +365,7 @@ class CDCGroupPropagationService extends EventEmitter {
       systemTableCache: this.systemTableCache,
       messageGroupReplicaSuffix: MESSAGE_GROUP_REPLICA_SUFFIX,
     });
+    this.recordSkippedFanoutGroups(safeTargets, sourceGroupId, options.tableName);
     const deliveryFailures = await this.deliverToTargetsWithRetry({
       tableName: options.tableName,
       operation: options.operation,

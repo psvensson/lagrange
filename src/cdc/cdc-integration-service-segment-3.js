@@ -1,6 +1,8 @@
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
 import {CDCIntegrationServiceSegment2} from './cdc-integration-service-segment-2.js';
 import {buildSystemTableMutationSqlParts} from './cdc-system-table-mutation-sql-helpers.js';
+import {hydrateCdcPropagatedTablesFromAuthority} from
+  './cdc-integration-service-authoritative-catchup.js';
 
 // Import delete and upsert mutation helpers
 import {
@@ -102,6 +104,18 @@ const {
 } = CDC_INTEGRATION_SERVICE_SHARED;
 
 class CDCIntegrationServiceSegment3 extends CDCIntegrationServiceSegment2 {
+  /**
+   * Catch-up hydration of all CDC-propagated tables from the authoritative
+   * owner path (CL-014: closes the bootstrap-snapshot ->
+   * fan-out-targetability window in which remote CDC events are silently
+   * lost to this node). See cdc-integration-service-authoritative-catchup.js.
+   * @param {Object} [options]
+   * @return {Promise<Object>} Hydration summary.
+   */
+  hydrateCdcPropagatedTablesFromAuthority(options = {}) {
+    return hydrateCdcPropagatedTablesFromAuthority(this, options);
+  }
+
   pruneAuthoritativeFallbackHistory(nowMs) {
     this.authoritativeFallbackHistory = pruneAuthoritativeFallbackHistory(
       this.authoritativeFallbackHistory,

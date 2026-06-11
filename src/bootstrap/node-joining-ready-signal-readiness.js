@@ -169,6 +169,16 @@ class NodeJoiningReadySignalReadiness extends NodeJoiningServiceSegment1 {
     // readiness. If not confirmed within timeout, proceed with
     // degraded status rather than blocking indefinitely (Req 5.3).
     await this.awaitCdcSubscriptionsForReadiness();
+    // CL-014: close the (bootstrap-snapshot, fan-out-targetability] window.
+    // Remote CDC fan-out is point-in-time with no replay, so every
+    // CDC-propagated row written between this node's bootstrap snapshot and
+    // the moment its message group became a fan-out target was silently
+    // lost to it (witnessed: joiners frozen at publication epoch 1 while
+    // the owner committed epochs 2-5 inside that window). Now that the
+    // stream is armed, pull the current authoritative state once;
+    // best-effort — readiness must never block on catch-up because the
+    // live stream and the repair paths remain.
+    await this.hydrateCdcPropagatedTablesAfterSubscription();
     try {
       await this.awaitLocalQueryTransportReadinessForReadySignal();
     } catch (error) {
@@ -298,6 +308,40 @@ class NodeJoiningReadySignalReadiness extends NodeJoiningServiceSegment1 {
     });
   }
   /**
+   * CL-014 catch-up hydration: once CDC subscriptions are confirmed (or the
+   * gate degraded), re-read every CDC-propagated table from the
+   * authoritative owner path so rows written before this node became a
+   * fan-out target are not silently missing until the next unrelated write.
+   * Best-effort by contract: failures are logged and readiness proceeds —
+   * the live stream and existing repair paths remain available.
+   * @return {Promise<Object|null>} Hydration summary or null when skipped.
+   * @private
+   */
+  async hydrateCdcPropagatedTablesAfterSubscription() {
+    const cdcIntegrationService = this.cdcIntegrationService;
+    if (
+      !cdcIntegrationService ||
+      typeof cdcIntegrationService.hydrateCdcPropagatedTablesFromAuthority !==
+        TYPEOF.FUNCTION
+    ) {
+      this.logger.warn(JOINING_LOG_MSG.CDC_CATCHUP_HYDRATION_SKIPPED, {
+        nodeId: this.nodeId,
+        hasCdcIntegrationService: !!cdcIntegrationService,
+      });
+      return null;
+    }
+    try {
+      return await cdcIntegrationService
+        .hydrateCdcPropagatedTablesFromAuthority();
+    } catch (error) {
+      this.logger.warn(JOINING_LOG_MSG.CDC_CATCHUP_HYDRATION_FAILED, {
+        nodeId: this.nodeId,
+        error: error?.message || String(error),
+      });
+      return null;
+    }
+  }
+  /**
    * Disable control-plane heartbeat reporting when a caller explicitly wants
    * direct CDC heartbeats to be the active publication path.
    * @return {void}
@@ -374,7 +418,6 @@ class NodeJoiningReadySignalReadiness extends NodeJoiningServiceSegment1 {
   flushDeferredCreateSelfHostedMetadata() {
     return this.runtimeHandoffOwner.flushDeferredCreateSelfHostedMetadata();
   }
-
 }
 
 export {NodeJoiningReadySignalReadiness};

@@ -131,6 +131,32 @@ function buildSafeTargets(options = {}) {
   return targets;
 }
 
+/**
+ * Resolve every message-group id KNOWN to the sender's cache regardless of
+ * row status/address. CL-014: fan-out target resolution silently drops
+ * groups that are not ACTIVE-with-address at event time — comparing this
+ * set against the resolved targets makes that drop observable.
+ * @param {Object} options
+ * @return {Set<string>}
+ */
+function resolveKnownMessageGroupIds(options = {}) {
+  const rows = options.systemTableCache.filter(
+    TABLES.SERVICES,
+    (serviceRow) =>
+      serviceRow?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP,
+  );
+  const groupIds = new Set();
+  for (const serviceRow of rows) {
+    const groupId = resolveMessageGroupId(serviceRow, {
+      messageGroupReplicaSuffix: options.messageGroupReplicaSuffix,
+    });
+    if (groupId) {
+      groupIds.add(groupId);
+    }
+  }
+  return groupIds;
+}
+
 function buildGroupedContext(options = {}) {
   const localNode = options.systemTableCache.get(TABLES.NODES, options.nodeId);
   const sourceGroupId = localNode?.[COLUMN.LATENCY_GROUP_ID] || null;
@@ -213,5 +239,6 @@ function buildGroupedContext(options = {}) {
 export {
   buildGroupedContext,
   buildSafeTargets,
+  resolveKnownMessageGroupIds,
   resolveSourceMessageGroupId,
 };
