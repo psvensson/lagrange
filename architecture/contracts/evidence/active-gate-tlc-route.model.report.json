@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "active-gate-model-report-v1",
+  "modelReport": true,
+  "source": "tlc",
+  "mode": "route",
+  "scenario": "rolling-restart-active-gate-convergence",
+  "owner": "active_gate_owner",
+  "boundary": "snapshot_coverage",
+  "module": "models/active-gate/ActiveGate.tla",
+  "config": "models/active-gate/ActiveGate_route.cfg",
+  "converged": true,
+  "residual": 0,
+  "frontierCount": 0,
+  "livenessHolds": true,
+  "expectConverged": true,
+  "expectedFailurePattern": null,
+  "expectedFailureObserved": false,
+  "expectationMet": true,
+  "temporalViolated": false,
+  "exitCode": 0,
+  "outputTail": "Finished computing initial states: 1 distinct state generated at 2026-06-07 12:25:13.\nProgress(7) at 2026-06-07 12:25:13: 26 states generated, 16 distinct states found, 0 states left on queue.\nChecking temporal properties for the complete state space with 16 total distinct states at (2026-06-07 12:25:13)\nFinished checking temporal properties in 00s at 2026-06-07 12:25:13\nModel checking completed. No error has been found.\n  Estimates of the probability that TLC did not check all reachable states\n  because two distinct states had the same fingerprint:\n  calculated (optimistic):  val = 8.7E-18\n26 states generated, 16 distinct states found, 0 states left on queue.\nThe depth of the complete state graph search is 7.\nThe average outdegree of the complete state graph is 1 (minimum is 0, the maximum 2 and the 95th percentile is 2).\nFinished in 00s at (2026-06-07 12:25:13)"
+}

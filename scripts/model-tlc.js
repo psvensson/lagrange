@@ -24,6 +24,8 @@ const JAR_URL =
   'https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar';
 const REPORTS_DIR = path.resolve('test-output', 'reports');
 const META_ROOT = path.resolve('test-output', 'tlc');
+const CONTRACT_EVIDENCE_DIR =
+  path.resolve('architecture', 'contracts', 'evidence');
 
 const CONFIGS = [
   {
@@ -267,6 +269,13 @@ async function main() {
     const report = buildTlcReport(config, run, verdict);
     const target = path.join(REPORTS_DIR, config.report);
     fs.writeFileSync(target, `${JSON.stringify(report, null, 2)}\n`);
+    // Contract records cite versioned evidence copies (system-contract
+    // validation requires them in fresh checkouts); refresh any that exist
+    // so a re-run can never leave stale evidence behind.
+    const evidenceTarget = path.join(CONTRACT_EVIDENCE_DIR, config.report);
+    if (fs.existsSync(evidenceTarget)) {
+      fs.writeFileSync(evidenceTarget, `${JSON.stringify(report, null, 2)}\n`);
+    }
     const rel = path.relative(process.cwd(), target);
     console.log(
       `  ${config.mode}: converged=${verdict.converged} ` +

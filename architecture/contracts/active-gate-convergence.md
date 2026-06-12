@@ -93,7 +93,7 @@
       "boundary": "snapshot_coverage",
       "selectedLayer": "observation",
       "livenessHolds": true,
-      "evidenceArtifact": "test-output/reports/active-gate-tlc-route.model.report.json",
+      "evidenceArtifact": "architecture/contracts/evidence/active-gate-tlc-route.model.report.json",
       "ledgerRef": "theory-20260529-rolling-restart-active-gate-snapshot-coverage-architecture-gap-stop",
       "note": "TLC proves EventuallyConverged holds when deferred owner re-entry is bounded (AllowUnboundedReentry=FALSE); the unbounded protocol returns the oscillation as a liveness counterexample. The loop must implement the bounded-re-entry route, not re-open analysis."
     }
