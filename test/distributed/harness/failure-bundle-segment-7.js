@@ -358,6 +358,134 @@ async function removeScenarioFailureArtifacts(scenarioDir) {
   }
 }
 
+async function writeScenarioFailureBundleArtifacts({
+  entry,
+  scenarioDir,
+  absoluteReportPath,
+  reportSummary,
+  standardSummary,
+  benchmarkRegressionGate,
+  workspaceRoot,
+}) {
+  const logs = await collectScenarioLogArtifacts(
+    scenarioDir,
+    resolveRelevantNodeIds(entry),
+    workspaceRoot,
+    entry,
+  );
+  const bundleJson = buildScenarioFailureBundle({
+    entry,
+    reportOutputPath: toWorkspaceRelative(absoluteReportPath, workspaceRoot),
+    reportSummary,
+    standardSummary,
+    benchmarkRegressionGate,
+    logs,
+  });
+  applyBundleDiagnosticsToScenarioEntry(entry, bundleJson);
+  const jsonAbsolutePath = join(scenarioDir, FAILURE_BUNDLE_JSON_FILENAME);
+  const markdownAbsolutePath = join(
+    scenarioDir,
+    FAILURE_BUNDLE_MARKDOWN_FILENAME,
+  );
+  const triageJsonAbsolutePath = join(
+    scenarioDir,
+    TRIAGE_SUMMARY_JSON_FILENAME,
+  );
+  const triageMarkdownAbsolutePath = join(
+    scenarioDir,
+    TRIAGE_SUMMARY_MARKDOWN_FILENAME,
+  );
+  await writeFile(
+    jsonAbsolutePath,
+    JSON.stringify(bundleJson, null, 2),
+    UTF8_ENCODING,
+  );
+  await writeFile(
+    markdownAbsolutePath,
+    renderScenarioFailureBundleMarkdown(bundleJson),
+    UTF8_ENCODING,
+  );
+  const triageLinks = {
+    jsonPath: toWorkspaceRelative(jsonAbsolutePath, workspaceRoot),
+    markdownPath: toWorkspaceRelative(markdownAbsolutePath, workspaceRoot),
+  };
+  const triageSummary = buildScenarioTriageSummary(bundleJson, triageLinks);
+  await writeFile(
+    triageJsonAbsolutePath,
+    JSON.stringify(triageSummary, null, 2),
+    UTF8_ENCODING,
+  );
+  await writeFile(
+    triageMarkdownAbsolutePath,
+    renderScenarioTriageSummaryMarkdown(triageSummary),
+    UTF8_ENCODING,
+  );
+  const links = {
+    ...triageLinks,
+    triageJsonPath: toWorkspaceRelative(
+      triageJsonAbsolutePath,
+      workspaceRoot,
+    ),
+    triageMarkdownPath: toWorkspaceRelative(
+      triageMarkdownAbsolutePath,
+      workspaceRoot,
+    ),
+  };
+  entry.failureBundle = links;
+  return {
+    scenario: entry.scenario,
+    summary: bundleJson.summary,
+    links,
+  };
+}
+
+const FALLBACK_BUNDLE_ARTIFACT_TYPE = 'scenario-failure-bundle-fallback';
+const FALLBACK_BUNDLE_NOTE =
+  'Full failure-bundle serialization failed; the scenario failure is ' +
+  'preserved here, and ground truth remains in .full-logs/ and ' +
+  'events.ndjson in the run output directory.';
+
+async function writeScenarioFailureBundleFallback({
+  entry,
+  scenarioDir,
+  workspaceRoot,
+  error,
+}) {
+  const fallbackJson = {
+    artifactType: FALLBACK_BUNDLE_ARTIFACT_TYPE,
+    schemaVersion: FAILURE_BUNDLE_SCHEMA_VERSION,
+    scenario: entry.scenario,
+    passed: false,
+    scenarioError: String(entry.error || ''),
+    bundleWriteError: String(error?.message || error),
+    note: FALLBACK_BUNDLE_NOTE,
+  };
+  const jsonAbsolutePath = join(scenarioDir, FAILURE_BUNDLE_JSON_FILENAME);
+  await writeFile(
+    jsonAbsolutePath,
+    JSON.stringify(fallbackJson, null, 2),
+    UTF8_ENCODING,
+  );
+  const links = {
+    jsonPath: toWorkspaceRelative(jsonAbsolutePath, workspaceRoot),
+    bundleWriteError: fallbackJson.bundleWriteError,
+  };
+  entry.failureBundle = links;
+  console.warn(
+    `[harness] WARNING: failure-bundle write degraded to fallback for ` +
+    `scenario ${entry.scenario}: ${fallbackJson.bundleWriteError}`,
+  );
+  return {
+    scenario: entry.scenario,
+    summary: {
+      scenario: entry.scenario,
+      scenarioError: fallbackJson.scenarioError,
+      bundleWriteError: fallbackJson.bundleWriteError,
+    },
+    links,
+  };
+}
+
 async function writeFailureBundlesForReport({
   scenarios,
   reportOutputPath,
@@ -384,76 +512,32 @@ async function writeFailureBundlesForReport({
       continue;
     }
     await mkdir(scenarioDir, {recursive: true});
-    const logs = await collectScenarioLogArtifacts(
-      scenarioDir,
-      resolveRelevantNodeIds(entry),
-      workspaceRoot,
-      entry,
-    );
-    const bundleJson = buildScenarioFailureBundle({
-      entry,
-      reportOutputPath: toWorkspaceRelative(absoluteReportPath, workspaceRoot),
-      reportSummary,
-      standardSummary,
-      benchmarkRegressionGate,
-      logs,
-    });
-    applyBundleDiagnosticsToScenarioEntry(entry, bundleJson);
-    const jsonAbsolutePath = join(scenarioDir, FAILURE_BUNDLE_JSON_FILENAME);
-    const markdownAbsolutePath = join(
-      scenarioDir,
-      FAILURE_BUNDLE_MARKDOWN_FILENAME,
-    );
-    const triageJsonAbsolutePath = join(
-      scenarioDir,
-      TRIAGE_SUMMARY_JSON_FILENAME,
-    );
-    const triageMarkdownAbsolutePath = join(
-      scenarioDir,
-      TRIAGE_SUMMARY_MARKDOWN_FILENAME,
-    );
-    await writeFile(
-      jsonAbsolutePath,
-      JSON.stringify(bundleJson, null, 2),
-      UTF8_ENCODING,
-    );
-    await writeFile(
-      markdownAbsolutePath,
-      renderScenarioFailureBundleMarkdown(bundleJson),
-      UTF8_ENCODING,
-    );
-    const triageLinks = {
-      jsonPath: toWorkspaceRelative(jsonAbsolutePath, workspaceRoot),
-      markdownPath: toWorkspaceRelative(markdownAbsolutePath, workspaceRoot),
-    };
-    const triageSummary = buildScenarioTriageSummary(bundleJson, triageLinks);
-    await writeFile(
-      triageJsonAbsolutePath,
-      JSON.stringify(triageSummary, null, 2),
-      UTF8_ENCODING,
-    );
-    await writeFile(
-      triageMarkdownAbsolutePath,
-      renderScenarioTriageSummaryMarkdown(triageSummary),
-      UTF8_ENCODING,
-    );
-    const links = {
-      ...triageLinks,
-      triageJsonPath: toWorkspaceRelative(
-        triageJsonAbsolutePath,
-        workspaceRoot,
-      ),
-      triageMarkdownPath: toWorkspaceRelative(
-        triageMarkdownAbsolutePath,
-        workspaceRoot,
-      ),
-    };
-    entry.failureBundle = links;
-    scenarioBundles.push({
-      scenario: entry.scenario,
-      summary: bundleJson.summary,
-      links,
-    });
+    // A bundle that cannot serialize (e.g. RangeError: Invalid string
+    // length on long runs) must degrade to a minimal artifact, never take
+    // down the report: the report records WHAT failed; the bundle is only
+    // the pre-digested HOW.
+    try {
+      scenarioBundles.push(
+        await writeScenarioFailureBundleArtifacts({
+          entry,
+          scenarioDir,
+          absoluteReportPath,
+          reportSummary,
+          standardSummary,
+          benchmarkRegressionGate,
+          workspaceRoot,
+        }),
+      );
+    } catch (bundleError) {
+      scenarioBundles.push(
+        await writeScenarioFailureBundleFallback({
+          entry,
+          scenarioDir,
+          workspaceRoot,
+          error: bundleError,
+        }),
+      );
+    }
   }
 
   if (scenarioBundles.length === ZERO) {
@@ -466,39 +550,50 @@ async function writeFailureBundlesForReport({
 
   const runBundleDir = join(absoluteOutputDir, FAILURE_BUNDLE_RUN_DIRNAME);
   await mkdir(runBundleDir, {recursive: true});
-  const runBundleJson = buildRunFailureBundle({
-    reportOutputPath: toWorkspaceRelative(absoluteReportPath, workspaceRoot),
-    reportSummary,
-    standardSummary,
-    benchmarkRegressionGate,
-    scenarioBundles,
-  });
-  const runJsonAbsolutePath = join(
-    runBundleDir,
-    RUN_FAILURE_BUNDLE_JSON_FILENAME,
-  );
-  const runMarkdownAbsolutePath = join(
-    runBundleDir,
-    RUN_FAILURE_BUNDLE_MARKDOWN_FILENAME,
-  );
-  await writeFile(
-    runJsonAbsolutePath,
-    JSON.stringify(runBundleJson, null, 2),
-    UTF8_ENCODING,
-  );
-  await writeFile(
-    runMarkdownAbsolutePath,
-    renderRunFailureBundleMarkdown(runBundleJson),
-    UTF8_ENCODING,
-  );
+  try {
+    const runBundleJson = buildRunFailureBundle({
+      reportOutputPath: toWorkspaceRelative(absoluteReportPath, workspaceRoot),
+      reportSummary,
+      standardSummary,
+      benchmarkRegressionGate,
+      scenarioBundles,
+    });
+    const runJsonAbsolutePath = join(
+      runBundleDir,
+      RUN_FAILURE_BUNDLE_JSON_FILENAME,
+    );
+    const runMarkdownAbsolutePath = join(
+      runBundleDir,
+      RUN_FAILURE_BUNDLE_MARKDOWN_FILENAME,
+    );
+    await writeFile(
+      runJsonAbsolutePath,
+      JSON.stringify(runBundleJson, null, 2),
+      UTF8_ENCODING,
+    );
+    await writeFile(
+      runMarkdownAbsolutePath,
+      renderRunFailureBundleMarkdown(runBundleJson),
+      UTF8_ENCODING,
+    );
 
-  return {
-    runBundle: {
-      jsonPath: toWorkspaceRelative(runJsonAbsolutePath, workspaceRoot),
-      markdownPath: toWorkspaceRelative(runMarkdownAbsolutePath, workspaceRoot),
-    },
-    scenarioBundles,
-  };
+    return {
+      runBundle: {
+        jsonPath: toWorkspaceRelative(runJsonAbsolutePath, workspaceRoot),
+        markdownPath: toWorkspaceRelative(
+          runMarkdownAbsolutePath,
+          workspaceRoot,
+        ),
+      },
+      scenarioBundles,
+    };
+  } catch (runBundleError) {
+    console.warn(
+      `[harness] WARNING: run failure-bundle write failed: ` +
+      `${String(runBundleError?.message || runBundleError)}`,
+    );
+    return {runBundle: null, scenarioBundles};
+  }
 }
 
 export const FAILURE_BUNDLE_SEGMENT_7 = {

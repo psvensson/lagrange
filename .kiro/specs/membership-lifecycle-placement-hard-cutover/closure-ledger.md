@@ -3475,3 +3475,48 @@ Each record below represents one violated invariant.
 - CL-023 status: GUARDED. The restart-phase frontier is now:
   mode=load owner-reconcile ACTIVE stalls (2/4) -> restart
   slow-rejoin recovery-ready (1/4) -> harness bundle crash (oracle).
+
+## CL-026 Failure-Bundle Serialization Must Not Lose The Run Report
+
+- Status: guarded (2026-06-12; fix + red guard same session —
+  deterministic unit repro, no gate needed beyond the next round's
+  absence of NO_REPORT-with-fatal-error)
+- Concern: harness-control-snapshot
+- Failure Class: harness-oracle-gap
+- First Violated Invariant: a failure-bundle artifact that cannot
+  serialize must degrade to a minimal artifact, never abort report
+  writing — writeFailureBundlesForReport threw RangeError 'Invalid
+  string length' (JSON.stringify(bundleJson),
+  failure-bundle-segment-7.js:417) and killed run.js main AFTER the
+  scenario had completed, losing the report + classification on
+  exactly the deepest/longest runs (131408Z-run2, wall 1253s,
+  class NO_REPORT).
+- RECOVERED EVIDENCE (the surface the crash swallowed, dug from
+  /tmp/stat-gate-20260612T131408Z-run2.log line 48): 'Scenario
+  failed: rolling-restart — Published active-node sets disagree
+  between 7493b0ab (publishes all 5 nodes) and 8be8d30f (publishes 4
+  — missing 35a891b8)'. This fired AFTER 1220/1220 load success, ALL
+  restarts recovered, post-restart waiting-active passed on attempt
+  1, and post-restart load-readiness STABLE — the deepest run ever
+  recorded. That surface is CL-001's invariant VERBATIM (one
+  published active-node set across the gate) with fresh full
+  artifacts at .playback/stat-gate-20260612T131408Z-run2 — start
+  CL-001 work from there.
+- Fix (test/distributed/harness/failure-bundle-segment-7.js):
+  per-scenario try/catch — on bundle build/serialization failure,
+  write 'scenario-failure-bundle-fallback' (scenario, scenarioError,
+  bundleWriteError, pointer note to .full-logs/events.ndjson) + loud
+  '[harness] WARNING: failure-bundle write degraded to fallback';
+  sibling scenarios, the run bundle, and the report all proceed.
+  Run-bundle write separately guarded (returns runBundle:null on
+  failure). The scenario's failure surface is therefore ALWAYS
+  preserved in the report even when the pre-digested bundle is not.
+- Guard: __tests__/failure-bundle-fallback.test.js — a circular-ref
+  poisoned entry (deterministic stand-in for the RangeError class)
+  must yield the fallback artifact with scenarioError preserved while
+  a sibling failing scenario still gets the FULL bundle. Red on
+  revert; failure-bundle suite 100/100 green.
+- Note: the root cause of the bundle's SIZE (which member grows
+  unbounded over a 1253s run) was deliberately not chased — the
+  fallback makes it harmless. If fallbacks become routine in gate
+  rounds, profile bundle members then.
