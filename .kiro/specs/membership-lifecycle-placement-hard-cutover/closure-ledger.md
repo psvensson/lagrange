@@ -2930,3 +2930,146 @@ Each record below represents one violated invariant.
   (4) run4: mode=STARTUP stall at active=4/5 coverage complete,
       observation reasons discovery_node_coverage_gap +
       stale_replica_operations_in_flight + selected_timeout.
+
+## CL-023 REPLACE Terminalization Must Not Assert Retirements That Never Happened
+
+- Status: narrowed (2026-06-12; pinned from 085908Z-run2 artifacts by
+  dedicated investigation — exact arithmetic reproduces the seed's
+  logged counts)
+- Concern: placement-priority-spread
+- Failure Class: mixed-truth
+- First Violated Invariant: A REPLACE replica operation must not reach
+  terminal REMOVED while its source replica remains a live raft
+  member — op f93eec38 (replica_operations-p1, source r1 -> target r4)
+  completed_at 09:05:40.309Z with workflow_step=REMOVED, yet the
+  seed's r1/r2/r3 services rows stayed ACTIVE in every subsequent
+  snapshot, r1 won a liferaft election at 09:09:15.670Z (term 13),
+  and every later op's membership snapshot still lists r1,r2,r3.
+- Authoritative Owner: rebalance operation workflow (the transition
+  that sets REPLACE workflow_step=REMOVED) + the planner retirement
+  projection that trusts it
+  (filterReplicasRetiredByTerminalReplaceOperations,
+  unified-rebalancer-segment-3.js:488).
+- Authoritative State: replica_operations rows (steps_history
+  sourceReplicaId + workflow_step) vs services rows (status=ACTIVE).
+- Allowed Evidence: confirmed source services-row delete + raft
+  membership change before terminal REMOVED.
+- Forbidden Promotion Inputs: target-ACTIVE alone; dispatch-of-removal
+  (vs confirmation); cache visibility of the removal.
+- Convergence Trigger: REPLACE workflow source-removal step.
+- Stable Witness: per priority partition,
+  |{sourceReplicaId of REPLACE ops with workflow_step=REMOVED}
+  INTERSECT {replica_id of ACTIVE services rows}| from any snapshot
+  (both tables in snapshots.ndjson). Run2 final snapshot:
+  replica_operations-p1=4, sql_write_operations-p1=5,
+  sql_transaction_participants-p1=4, control_plane_publications-p1=4
+  (17 ghost retirements). Healthy value: 0.
+- Entry Gate: rolling-restart restart phase (085908Z-run2) — but the
+  ghost retirements PREDATE the restarts (from 09:05:40, formation/
+  load window); restarts only exposed them.
+- Current Symptom: when restarts remove the replacement targets, the
+  planner's healthy-count collapses to 0/0/1/1 (real rows alive) ->
+  38-cycle critical-rebalancing livelock: every planned ADD targets
+  the seed and is admission-blocked target_node_already_occupied
+  (rebalance-coordinator-topology-guard-methods.js:200 merges
+  cache+authoritative rows and SEES the live replicas the planner
+  projected out — planner-vs-admission view inconsistency,
+  CL-021-adjacent); the un-completable REMOVE dispatches to a dead
+  node forever; 0 completions; the churn starves the seed's
+  bootstrap serving (rejoiner contact timeouts -> CL-025 chain).
+- Scope: run2 artifacts; ops f93eec38, 5a0a7486, 50e695b0, 724a84b5,
+  3a1e4360 (replica_operations-p1) + equivalents on the other three
+  priority partitions.
+- Next Falsification Step: find the REPLACE -> REMOVED transition
+  (grep WORKFLOW_STEP REMOVED assignment under src/rebalancer/) and
+  check what source-removed evidence it requires; falsified if it
+  awaits a confirmed source service-row delete + raft membership
+  change (then pivot to 'the confirmation was spoofed by the cache
+  layer').
+- Required Guard: unit/workflow test red when REPLACE terminalizes
+  with the source services row still ACTIVE; plus the stable-witness
+  intersection asserted 0 in run reports.
+
+### Notes
+
+1. The 'surplus awaits source removal' observation in the CL-021 gate
+   verdict (co-location surplus, readyDistinctNodeCount=2 with
+   readyReplicaCount=3) is likely THIS: removals asserted in the op
+   ledger but never executed.
+2. Downstream symptoms (do NOT open separate records for them):
+   planner view-collapse, critical-rebalancing livelock, quiesce
+   control_plane_pressure (085908Z-run3 candidate — verify same
+   witness there), seed bootstrap starvation.
+
+## CL-024 Durable Rejoin Must Not Be Non-Retryably Fatal On A Missing Dynamic-Table Schema
+
+- Status: narrowed (2026-06-12; 085908Z-run2 restart #1)
+- Concern: restart-rejoin-identity
+- Failure Class: priority-invariant-breach (restart=re-entry aborts)
+- First Violated Invariant: A restarted node's durable-rejoin restore
+  must degrade per-partition (skip/defer the unknown table), never
+  abort the whole node: 35a891b8's second boot resolved
+  startupMode=durable_rejoin, then 'Failed to join cluster {error:
+  Missing schema definition for durable rejoin partition
+  tbl-e4468ee2-...-p1, phase: querying_state, retryable: false}' ->
+  process exit code 1 at 09:10:09.715Z (10s after boot).
+- Authoritative Owner: durable-rejoin restore planner
+  (src/bootstrap/shared/durable-rejoin-partition-restore-planner.js:210
+  assertCritical(schema, ...)).
+- Authoritative State: TABLES cache row schema_definition for
+  load-created (dynamic) tables; static fallback getSchemaByTableName
+  does not know dynamic tables.
+- Stable Witness: 'Resolved startup auto-rejoin decision
+  startupMode=durable_rejoin' followed by 'Process exit observed
+  code=1' within the same boot, with the Missing-schema error line.
+- Entry Gate: rolling-restart restart #1 (any restarted node that
+  durably hosts a partition of a load-created table).
+- Current Symptom: the restarted node dies; the cluster silently runs
+  N-2 for the rest of the scenario (masked by CL-025).
+- Scope: deterministic-looking given durable state containing a
+  dynamic table whose TABLES row lacks schema_definition at restore
+  time. Unit-repro: restore planner with a dynamic-table partition +
+  cache row without schema_definition.
+- Next Falsification Step: why is schema_definition missing — never
+  persisted for load-created tables, or not yet hydrated at
+  querying_state time (ordering)? Read where TABLES rows get
+  schema_definition on CREATE TABLE and what the rejoin path has
+  hydrated by then.
+- Required Guard: restore-planner test: unknown-schema partition ->
+  plan proceeds without it (deferred/skipped, retryable), node boots.
+- Notes: 061547Z-run3's restart #1 did NOT crash (no dynamic-table
+  restore there) — explains the sub-mode difference between the two
+  occurrences of the restart-rung failure.
+
+## CL-025 Restart Recovery-Ready Must Not Pass While The Restarted Process Is Dead
+
+- Status: narrowed (2026-06-12; 085908Z-run2)
+- Concern: harness-control-snapshot
+- Failure Class: harness-oracle-gap
+- First Violated Invariant: the harness's restartNode recovery wait
+  must fail (or at minimum not declare recovered) when the restarted
+  node's process has exited: chaos declared 35a891b8 recovered at
+  09:10:11.729 — 2.0s AFTER its process logged 'Process exit observed
+  code=1' (09:10:09.715) — and proceeded to stop the next node,
+  running the rest of the scenario with TWO nodes down (the
+  rolling-restart N-1 premise silently broken; all downstream
+  attribution polluted).
+- Authoritative Owner: harness chaos restartNode recovery-ready wait
+  (test/distributed/harness/chaos.js + the recovery-ready predicate).
+- Stable Witness: node.restart.boundary after_ready carrying an error
+  ('Admin API query connection closed before response') followed by
+  chaos.fault.recovered for the same node; container exit/restart
+  count vs the declaration.
+- Current Symptom: false 'recovered'; next restart proceeds; failure
+  attributed to the NEXT node (11601fe0) whose only sin was a starved
+  seed.
+- Next Falsification Step: read the recovery-ready predicate — which
+  evidence allowed 'recovered' 2s after process exit (stale probe
+  result? bootstrap_health from the dying process? docker container
+  state not consulted?).
+- Required Guard: harness test: restartNode against a process that
+  exits during the wait -> chaos.fault.failed, not recovered; plus
+  the rolling driver must verify the PREVIOUS restart's node is still
+  alive before stopping the next one.
+- Notes: same oracle family as the CL-006-era capture gaps; this one
+  actively GREEN-LIGHTS an N-2 cluster.
