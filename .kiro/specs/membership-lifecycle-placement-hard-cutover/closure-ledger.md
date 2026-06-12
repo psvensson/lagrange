@@ -3965,3 +3965,66 @@ Each record below represents one violated invariant.
 - Incidental: priority remove-safety fails the op when voter
   topology evidence is unreadable (empty services view) — downstream
   of this record; note for the post-fix continuation.
+
+### CL-029 FIX LANDED (2026-06-12, commit 2ba293b7) — status: fix-landed (gate pending)
+
+- FIX SHAPE (three pieces + verification amendments):
+  (1) redriveExecutorOutcomeReconcile — outcome reconciles are
+  re-submitted with the latest retained payload after each lane
+  holder settles (loop with factoryRan flag; awaiting the coalesced
+  promise IS the wait for the holder; exits on consumed / timer
+  armed / payload-unchanged-after-ran / error / 50-wait cap ->
+  timed-retry fallback). Holder rejections are no longer
+  misattributed to the outcome. Chained-persist precedent
+  (replica-state-machine-transition.js), NOT a queue rewrite and NOT
+  a change to runExclusive semantics (other callers rely on its
+  dedup).
+  (2) Evidence cleared only on successful application — pre-action
+  clear removed; UPDATE_STEP + REPLACE-ACTIVE clear rank-aware
+  (clearExecutorOutcomeRetryIfNotAhead: applying SYNCING cannot
+  destroy retained ACTIVE); terminal/COMPLETE/FAIL clear fully;
+  completeOperation/failOperation clear too.
+  (3) reconcileReplaceActualActive returns applied:boolean; false
+  (stale-CAS uncommitted + authoritative replay found nothing) arms
+  the outcome retry — per-op exponential backoff (doubles, cap 30s,
+  reset on consumption; the prior FIXED 250ms cadence with warn per
+  arm was the CL-009-class storm risk).
+- ADVERSARIAL VERIFICATION (two rounds): round 1 NOT-TRUSTED with a
+  CONFIRMED regression repro — reconciling the retained MAX-RANK
+  payload while the FAIL/defer branch did not clear it let a stale
+  FAILED payload (rank 7) mask every later success outcome of a
+  recreated replica, and could FAIL a healthy op whose row had
+  advanced to SYNCING. AMENDED same session: success outcomes
+  supersede retained failure payloads
+  (selectExecutorOutcomeRetryPayload + isFailureExecutorOutcome);
+  FAIL/defer-true, not-locally-owned, unknown-mapping, and
+  non-retryable-error paths clear the retained payload (no
+  driverless evidence — restores eager-clear parity where no driver
+  exists); post-cap fallback respects shutdown. Verifier repros
+  green post-amendment. Termination/shutdown/double-application/
+  one-shot-semantics surfaces all VERIFIED-SAFE (runExclusive
+  deletes the lane key before awaiters resume, so each coalesced
+  wait is a real holder settlement — no hot spin).
+- GUARDS: test/rebalancer/cl-029-target-completion-evidence-retry-
+  owner.test.js, 71 asserts, red-on-revert verified per fix piece
+  AND per amendment (lost-wakeup scenario; exit-(a) defer->backoff->
+  healed-apply cycle; failure-supersede; DEFER_RETRY clear;
+  not-local clear). Routing 81/81; owner-path-convergence 33/33
+  (updated: the outcome path may legitimately re-enter the lane
+  post-fix — set-equality on the shared owner key, transition
+  dedup still pinned by begin-call counts); rebalancer suite 5081
+  pass / 9 known pre-existing fails.
+- GATE EXPECTATION (pre-registered): the run3 signature (mode=load
+  active=0/5, one partition recovering_in_flight wedged at
+  workflowProgressPhaseId=target_sync with
+  actuationState=dispatched_waiting_progress and growing stepAgeMs
+  while the target had already completed) DISAPPEARS — REPLACEs
+  whose targets complete advance to source_removal within seconds,
+  not at the 300s step deadline. Witness when the fix engages on a
+  deferred path: 'Operation transition retry deferred' warn with
+  boundary=executor_outcome. Expect the frontier to move to the
+  remaining surfaces: post-restart convergence-settle over-target
+  drain (145024Z runs 1+4 — NOTE: surplus drain uses this same
+  REPLACE completion path, so this fix may help there too),
+  restart slow-rejoin (run2 class), CL-001 published-set
+  disagreement.
