@@ -60,6 +60,12 @@ import {
 import {
   waitForLoadReadinessStability,
 } from './cluster-segment-7-alpha-load-readiness.js';
+import {
+  buildOracleBlindFailureMessage,
+  createOracleBlindnessTracker,
+  markOracleBlindError,
+  resolveActiveWaitOracleBlindness,
+} from './oracle-blindness.js';
 
 class Cluster extends Cluster5 {
   async _waitForAllActive(options = {}) {
@@ -90,6 +96,11 @@ class Cluster extends Cluster5 {
         null;
     const forceRepairThreshold = Date.now() + forceRepairAfterMs;
     const inactiveSummaryCounts = new Map();
+    // CL-031: when the snapshot-coverage probe fails on EVERY node while
+    // node-level evidence shows nothing wrong, the active-wait oracle is
+    // BLIND — the failure must classify as oracle_blind, never as a cluster
+    // stall/timeout.
+    const oracleBlindnessTracker = createOracleBlindnessTracker();
     const blockerHistoryBySignature = new Map();
     let bestProgressSnapshot = null;
     let bestProgressScore = Number.NEGATIVE_INFINITY;
@@ -417,6 +428,17 @@ class Cluster extends Cluster5 {
             extendStartupActiveGateDeadline :
             null,
         onAttempt: ({attempts, elapsedMs, lastResult}) => {
+          const snapshotBlindness = resolveActiveWaitOracleBlindness({
+            snapshotCoverage: lastResult.snapshotCoverage,
+            nodeDiagnostics: lastResult.nodeDiagnostics,
+          });
+          if (snapshotBlindness.blind) {
+            oracleBlindnessTracker.recordBlindPoll(
+              snapshotBlindness.transportError,
+            );
+          } else {
+            oracleBlindnessTracker.recordSightedPoll();
+          }
           for (const diagnostic of lastResult.nodeDiagnostics || []) {
             if (diagnostic.active === true) {
               continue;
@@ -626,17 +648,27 @@ class Cluster extends Cluster5 {
                 ...stalledActiveGateDetails,
               },
             );
+            const stalledOracleBlind =
+              oracleBlindnessTracker.isBlindAtDecision();
+            const stalledOracleBlindSummary =
+              oracleBlindnessTracker.summarize();
             const stalledError = new Error(
-              ACTIVE_WAIT_STALLED_MESSAGE_PREFIX +
-                'for ' +
-                String(stalledCoordinatorCycles) +
-                ' attempts (mode=' +
-                readinessMode +
-                ', progress=' +
-                formatActiveWaitProgressSnapshot(
-                  stalledProgressSnapshot,
-                ) +
-                ')',
+              stalledOracleBlind ?
+                buildOracleBlindFailureMessage({
+                  oracleName: 'Active wait (mode=' + readinessMode + ')',
+                  summary: stalledOracleBlindSummary,
+                  elapsedMs,
+                }) :
+                ACTIVE_WAIT_STALLED_MESSAGE_PREFIX +
+                  'for ' +
+                  String(stalledCoordinatorCycles) +
+                  ' attempts (mode=' +
+                  readinessMode +
+                  ', progress=' +
+                  formatActiveWaitProgressSnapshot(
+                    stalledProgressSnapshot,
+                  ) +
+                  ')',
             );
             stalledError.diagnostics = {
               activeGate: stalledActiveGateDetails.activeGate,
@@ -645,6 +677,9 @@ class Cluster extends Cluster5 {
               priorityRecoveryInvariants:
                 lastResult?.priorityRecoveryInvariants || null,
             };
+            if (stalledOracleBlind) {
+              markOracleBlindError(stalledError, stalledOracleBlindSummary);
+            }
             throw stalledError;
           }
         },
@@ -830,12 +865,21 @@ class Cluster extends Cluster5 {
       activeGate: timeoutActiveGateDetails.activeGate,
       ...timeoutActiveGateDetails,
     });
+    const timeoutOracleBlind = oracleBlindnessTracker.isBlindAtDecision();
+    const timeoutOracleBlindSummary = oracleBlindnessTracker.summarize();
     const timeoutError = new Error(
-      'Not all nodes reached ' +
-        ACTIVE_STATE +
-        ' state within ' +
-        timeout +
-        'ms' +
+      (timeoutOracleBlind ?
+        buildOracleBlindFailureMessage({
+          oracleName: 'Active wait (mode=' + readinessMode + ')',
+          summary: timeoutOracleBlindSummary,
+          budgetMs: timeout,
+          elapsedMs: pollResult.elapsedMs,
+        }) :
+        'Not all nodes reached ' +
+          ACTIVE_STATE +
+          ' state within ' +
+          timeout +
+          'ms') +
         ' (attempts=' +
         pollResult.attempts +
         ', elapsedMs=' +
@@ -917,6 +961,9 @@ class Cluster extends Cluster5 {
       priorityRecoveryInvariants:
         pollResult.lastResult?.priorityRecoveryInvariants || null,
     };
+    if (timeoutOracleBlind) {
+      markOracleBlindError(timeoutError, timeoutOracleBlindSummary);
+    }
     throw timeoutError;
   }
 

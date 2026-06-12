@@ -103,17 +103,23 @@ for i in $(seq 1 "${N}"); do
     # (hard invariant breaches) FIRST, then PROGRESS (deficit decreasing vs
     # frozen). A converged-but-corrupt run is the worst outcome; a slow run that
     # is still making progress is a pass, a frozen (stalled) run is a fail.
+    # CL-031: an oracle-blind run is UNJUDGEABLE on its face (the harness
+    # could not read snapshot evidence), so it must never be folded into
+    # STALLED — that misattributes a harness/transport defect to the cluster.
     rec=$(jq -c '.scenarios[0] as $sc
       | ($sc.invariantBreaches.hardCount // 0) as $hard
       | ($sc.publicationConvergence.missingPublishedCount) as $missing
       | ($sc.details.diagnostics.activeGate.failedNoProgress) as $fnp
       | ($sc.details.diagnostics.activeGate.coordinatorCyclesSinceProgress // 0) as $cyc
       | ($sc.details.diagnostics.activeGate.state // "") as $gstate
+      | ($sc.classification // $sc.details.diagnostics.oracleBlind.classification // "") as $oblind
       | {passed:($sc.passed // null), missing:$missing, hardBreaches:$hard,
          cyclesNoProgress:$cyc, failedNoProgress:$fnp, gateState:$gstate,
+         oracleBlind:($oblind=="oracle_blind"),
          reason:($sc.dominantReason // "none"), duration:($sc.duration // null),
          class:(if $hard>0 then "CORRUPT"
                 elif $missing==0 then "CONVERGED"
+                elif $oblind=="oracle_blind" then "ORACLE_BLIND"
                 elif ($fnp==true or $cyc>=10 or $gstate=="stalled") then "STALLED"
                 else "SLOW" end)}' "${RUN_REPORT}" 2>/dev/null)
   else
@@ -140,6 +146,7 @@ jq -s '
     runs: length,
     classTally: ( [.[].class] | group_by(.) | map({(.[0]|tostring): length}) | add ),
     corruptCount: ([.[] | select(.class=="CORRUPT")] | length),
+    oracleBlindCount: ([.[] | select(.class=="ORACLE_BLIND")] | length),
     convergeRate: ( (([.[] | select(.missing==0)] | length) ) / (length) ),
     stallRate: ( (([.[] | select(.class=="STALLED")] | length) ) / (length) ),
     healthyRate: ( (([.[] | select(.class=="CONVERGED" or .class=="SLOW")] | length) ) / (length) ),
@@ -162,6 +169,7 @@ jq -s '
     "- srcFingerprint: \(.srcFingerprint) (debugLogs: \(.debugLogs))",
     "- **staleSourceRuns (untrustworthy — must be 0): \(.staleSourceRuns)**",
     "- **CORRUPT (hard invariant breach — must be 0): \(.corruptCount)**",
+    "- **ORACLE_BLIND (unjudgeable — snapshot transport failed, CL-031): \(.oracleBlindCount)**",
     "- stallRate (frozen / gave up): \(.stallRate)",
     "- healthyRate (converged or progressing): \(.healthyRate)",
     "- convergeRate (missing=0): \(.convergeRate)",

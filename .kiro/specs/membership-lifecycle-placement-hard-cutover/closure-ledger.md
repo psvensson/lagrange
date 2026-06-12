@@ -4233,3 +4233,73 @@ Each record below represents one violated invariant.
   the member (a) names. CL-030(a) unexpected-exit watcher also still
   open (design note: failure-time sweep of container states at
   bundle-build beats a steady-state watcher loop for blast radius).
+
+### CL-031 STEP (c) LANDED (2026-06-12) — oracle_blind classification; (d) member cap remains
+
+- Shared module test/distributed/harness/oracle-blindness.js:
+  blindness tracker (blind AT DECISION iff trailing >=2 consecutive
+  blind polls OR every poll blind — one trailing transport hiccup
+  after a sighted run does NOT flip a genuine verdict), message
+  builder (names classification=oracle_blind + the transport error +
+  blind/total counts + last-readable-evidence age, states the surface
+  is NOT adjudicable), error marker (error.classification +
+  error.oracleBlind + diagnostics.oracleBlind merge).
+- Wired into all four oracles, each at its sighted/blind decision
+  point:
+  (1) SETTLE waitForConvergence (assertions-segment-2.js): blind
+  poll = queryReachableClusterSnapshot empty-shell (nodeId null +
+  error — produced ONLY when no node returned ANY readable snapshot;
+  verified the incomplete-topology formation path still re-queries
+  and returns sighted). diagnostics.reason becomes 'oracle_blind'.
+  (2) QUIESCE waitForControlPlaneQuiescence (cluster-segment-7-
+  class-3.js): blind poll = snapshotProbe.error (probe sets it only
+  when zero candidates were readable). Blind runs flow to a new
+  blind-timeout branch (the in-probe no-progress stall throw is
+  reachable only on sighted polls — verified, so it stays genuine).
+  (3)+(4) ACTIVE waits startup+load (cluster-segment-7.js,
+  cluster-segment-7-alpha-load-readiness.js): TWO-CHANNEL rule —
+  blind iff every snapshot-coverage probeWitness failed AND
+  node-level HTTP evidence shows nothing wrong (every probed node
+  active). A non-active node diagnostic is a READABLE cluster-facing
+  fact, so node-down timeouts keep their genuine verdict even with
+  unreadable snapshots; the 173105Z shape (nodes healthy, gate
+  evidence unreadable) classifies blind. This rule was forced by two
+  cluster.test-part-6 unit tests (stub nodes without
+  getControlSnapshot went blind on the coverage channel alone) —
+  the coverage-only first cut was WRONG for active waits.
+- Report + gate plumbing: scenarioResult gains top-level
+  `classification` (run-runtime-helpers.js); err.diagnostics
+  .oracleBlind rides into details.diagnostics automatically;
+  stat-gate classifier (rolling-restart-stat-gate.sh) gains class
+  ORACLE_BLIND (ordered CORRUPT > CONVERGED > ORACLE_BLIND >
+  STALLED > SLOW — blind never inflates stallRate; publication
+  missing==0 still labels CONVERGED since publication evidence is
+  independent) + oracleBlindCount in json/markdown. jq verified on
+  synthetic blind/stalled/converged/null reports.
+- Guards: oracle-blindness-classification.test.js (43 asserts):
+  tracker decision rules, message/marker, coverage + two-channel
+  active-wait blindness, settle oracle END-TO-END blind (stub nodes
+  failing both lanes with the exact 'Max payload size exceeded'
+  shape → classification + transport error named, no stall/timeout
+  claim) and END-TO-END sighted counterfactual (genuine timeout
+  verdict preserved, blind stats still recorded). Red-on-revert
+  EMPIRICALLY verified (stashing the settle wiring → 6 failures).
+- Adversarial verification: TRUSTED-WITH-NOTES. False-blind refuted
+  (empty-shell requires zero readable snapshots); false-sighted
+  refuted for quiesce; ordering at all throw sites verified (marker
+  merges, never clobbered). Notes on record: (i) blind verdict may
+  name a stale loop-1 error string if loop-2 nodes go silently
+  unreachable (classification still correct); (ii) all-nodes-
+  silently-unreachable records SIGHTED (pre-existing class — "all
+  nodes down" is a cluster fact, not the CL-031 transport class);
+  (iii) trailing-2 threshold means a genuine stall whose final 2
+  polls hit transport errors flips blind — by design (decision-time
+  blindness wins; errs toward not blaming the cluster).
+- Suites: full harness __tests__ sweep — only the 5 KNOWN
+  pre-existing failures remain (cluster.test-part-4*,
+  publication-evidence-replay; verified identical on a clean-HEAD
+  worktree).
+- NEXT GATE ROUND now yields: (a)'s >8MB warn NAMES the growing
+  member; blind runs surface as ORACLE_BLIND instead of polluting
+  STALLED; run3-class real residuals stay judgeable. Then (d): cap
+  the named member node-side (visible truncation, never silent).

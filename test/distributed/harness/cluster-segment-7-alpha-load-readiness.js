@@ -5,6 +5,12 @@ import {
   PRIORITY_RECOVERY_ACTIVE_GATE_STATE,
 } from './active-gate-contract.js';
 import {boundedDiagnosticsRetention} from './cluster-active-wait-diagnostics.js';
+import {
+  buildOracleBlindFailureMessage,
+  createOracleBlindnessTracker,
+  markOracleBlindError,
+  resolveActiveWaitOracleBlindness,
+} from './oracle-blindness.js';
 import {CLUSTER_SEGMENT_6} from './cluster-segment-6.js';
 import {
   LOAD_READINESS_STABLE_WINDOW_NO_TIMESTAMP,
@@ -400,6 +406,11 @@ export async function waitForLoadReadinessStability(options = {}) {
   // harness memory nor failed-scenario report details grow with the
   // attempt count while the control snapshot grows unbounded.
   const nodeDiagnosticsRetention = boundedDiagnosticsRetention();
+  // CL-031: when the snapshot-coverage probe fails on EVERY node (e.g. 'Max
+  // payload size exceeded' on both admin lanes) while node-level evidence
+  // shows nothing wrong, the load-readiness oracle is BLIND — the failure
+  // must classify as oracle_blind, never as a cluster stall/timeout.
+  const oracleBlindnessTracker = createOracleBlindnessTracker();
   let bestProgressSnapshot = null;
   let bestProgressScore = Number.NEGATIVE_INFINITY;
   let bestSnapshotCoverageProgressSnapshot = null;
@@ -665,6 +676,17 @@ export async function waitForLoadReadinessStability(options = {}) {
       isSuccess: (result) => result.stable === true,
       extendDeadline: extendLoadReadinessSnapshotRepairDeadline,
       onAttempt: ({attempts, elapsedMs, lastResult}) => {
+        const snapshotBlindness = resolveActiveWaitOracleBlindness({
+          snapshotCoverage: lastResult.snapshotCoverage,
+          nodeDiagnostics: lastResult.nodeDiagnostics,
+        });
+        if (snapshotBlindness.blind) {
+          oracleBlindnessTracker.recordBlindPoll(
+            snapshotBlindness.transportError,
+          );
+        } else {
+          oracleBlindnessTracker.recordSightedPoll();
+        }
         nodeDiagnosticsRetention.append(lastResult.nodeDiagnostics || [], {
           attempt: attempts,
           elapsedMs,
@@ -839,17 +861,25 @@ export async function waitForLoadReadinessStability(options = {}) {
             lastResult.priorityRecoveryInvariants || null,
             ...stalledActiveGateDetails,
           });
+          const stalledOracleBlind = oracleBlindnessTracker.isBlindAtDecision();
+          const stalledOracleBlindSummary = oracleBlindnessTracker.summarize();
           const stalledError = new Error(
-            ACTIVE_WAIT_STALLED_MESSAGE_PREFIX +
-            'for ' +
-            String(stalledAttempts) +
-            ' attempts (mode=' +
-            CLUSTER_READINESS_MODE_LOAD +
-            ', progress=' +
-            formatActiveWaitProgressSnapshot(
-              stalledProgressSnapshot,
-            ) +
-            ')',
+            stalledOracleBlind ?
+              buildOracleBlindFailureMessage({
+                oracleName: 'Load readiness',
+                summary: stalledOracleBlindSummary,
+                elapsedMs,
+              }) :
+              ACTIVE_WAIT_STALLED_MESSAGE_PREFIX +
+              'for ' +
+              String(stalledAttempts) +
+              ' attempts (mode=' +
+              CLUSTER_READINESS_MODE_LOAD +
+              ', progress=' +
+              formatActiveWaitProgressSnapshot(
+                stalledProgressSnapshot,
+              ) +
+              ')',
           );
           stalledError.diagnostics = {
             activeGate: stalledActiveGateDetails.activeGate,
@@ -857,6 +887,9 @@ export async function waitForLoadReadinessStability(options = {}) {
             priorityRecoveryInvariants:
             lastResult?.priorityRecoveryInvariants || null,
           };
+          if (stalledOracleBlind) {
+            markOracleBlindError(stalledError, stalledOracleBlindSummary);
+          }
           throw stalledError;
         }
       },
@@ -965,10 +998,20 @@ export async function waitForLoadReadinessStability(options = {}) {
     activeGate: timeoutActiveGateDetails.activeGate,
     ...timeoutActiveGateDetails,
   });
+  const timeoutOracleBlind = oracleBlindnessTracker.isBlindAtDecision();
+  const timeoutOracleBlindSummary = oracleBlindnessTracker.summarize();
   const timeoutError = new Error(
-    'Cluster load readiness did not stabilize within ' +
-      timeoutMs +
-      'ms (attempts=' +
+    (timeoutOracleBlind ?
+      buildOracleBlindFailureMessage({
+        oracleName: 'Load readiness',
+        summary: timeoutOracleBlindSummary,
+        budgetMs: timeoutMs,
+        elapsedMs: pollResult.elapsedMs,
+      }) + ' ' :
+      'Cluster load readiness did not stabilize within ' +
+        timeoutMs +
+        'ms ') +
+      '(attempts=' +
       pollResult.attempts +
       ', elapsedMs=' +
       pollResult.elapsedMs +
@@ -1021,5 +1064,8 @@ export async function waitForLoadReadinessStability(options = {}) {
     priorityRecoveryInvariants:
       pollResult.lastResult?.priorityRecoveryInvariants || null,
   };
+  if (timeoutOracleBlind) {
+    markOracleBlindError(timeoutError, timeoutOracleBlindSummary);
+  }
   throw timeoutError;
 }

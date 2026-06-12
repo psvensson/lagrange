@@ -7,6 +7,12 @@ import {
   countCacheVisibleSatisfiedPriorityRecoveryOperations,
   isPostRebalanceCdcProjectionVisibleSatisfied,
 } from './post-rebalance-closure-contract.js';
+import {
+  ORACLE_BLIND_CLASSIFICATION,
+  buildOracleBlindFailureMessage,
+  createOracleBlindnessTracker,
+  markOracleBlindError,
+} from './oracle-blindness.js';
 const {
   SERVICES_QUERY,
   NODES_QUERY,
@@ -569,6 +575,10 @@ async function waitForConvergence(nodes, options = {}) {
   let lastProgressToken = null;
   let lastProgressAtMs = startMs;
   let stalledOut = false;
+  // CL-031: when every node's snapshot read fails (e.g. 'Max payload size
+  // exceeded' on both admin lanes) the oracle is BLIND — the failure must
+  // classify as oracle_blind, never as a cluster stall/timeout.
+  const oracleBlindnessTracker = createOracleBlindnessTracker();
 
   while (Date.now() <= deadline) {
     const now = Date.now();
@@ -581,6 +591,11 @@ async function waitForConvergence(nodes, options = {}) {
       forceRepair,
       snapshotTimeoutMs,
     });
+    if (!snapshot.nodeId && snapshot.error) {
+      oracleBlindnessTracker.recordBlindPoll(snapshot.error, now);
+    } else {
+      oracleBlindnessTracker.recordSightedPoll(now);
+    }
     latestRows = snapshot.servicesRows;
     latestExpectedPartitionIds = snapshot.expectedPartitionIds;
     latestOperationRows = snapshot.operationRows;
@@ -831,19 +846,30 @@ async function waitForConvergence(nodes, options = {}) {
     operationHistoryError,
   );
 
-  const failureReason = stalledOut ? 'stalled' : 'timeout';
   const elapsedAtFailureMs = Date.now() - startMs;
-  const headline = stalledOut ?
-    'Convergence stalled after ' +
-      elapsedAtFailureMs +
-      'ms with no progress for >=' +
-      noProgressTimeoutMs +
-      'ms (settle budget ' +
-      settleTimeoutMs +
-      'ms). ' :
-    'Convergence timeout after ' +
-      settleTimeoutMs +
-      'ms. ';
+  const oracleBlindAtDecision = oracleBlindnessTracker.isBlindAtDecision();
+  const oracleBlindSummary = oracleBlindnessTracker.summarize();
+  const failureReason = oracleBlindAtDecision ?
+    ORACLE_BLIND_CLASSIFICATION :
+    stalledOut ? 'stalled' : 'timeout';
+  const headline = oracleBlindAtDecision ?
+    buildOracleBlindFailureMessage({
+      oracleName: 'Convergence settle',
+      summary: oracleBlindSummary,
+      budgetMs: settleTimeoutMs,
+      elapsedMs: elapsedAtFailureMs,
+    }) + ' ' :
+    stalledOut ?
+      'Convergence stalled after ' +
+        elapsedAtFailureMs +
+        'ms with no progress for >=' +
+        noProgressTimeoutMs +
+        'ms (settle budget ' +
+        settleTimeoutMs +
+        'ms). ' :
+      'Convergence timeout after ' +
+        settleTimeoutMs +
+        'ms. ';
   const msg =
     headline +
     'Leader changes: ' +
@@ -929,7 +955,11 @@ async function waitForConvergence(nodes, options = {}) {
     reason: failureReason,
     stalled: stalledOut,
     noProgressTimeoutMs,
+    oracleBlind: oracleBlindSummary,
   };
+  if (oracleBlindAtDecision) {
+    markOracleBlindError(err, oracleBlindSummary);
+  }
   throw err;
 }
 

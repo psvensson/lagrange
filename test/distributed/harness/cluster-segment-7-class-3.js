@@ -3,6 +3,11 @@ import {
   buildControlPlaneQuiescenceCandidateWindowReset,
   buildControlPlaneQuiescenceSnapshot,
 } from './control-plane-quiescence-snapshot.js';
+import {
+  buildOracleBlindFailureMessage,
+  createOracleBlindnessTracker,
+  markOracleBlindError,
+} from './oracle-blindness.js';
 
 const {
   ACTIVE_POLL_INTERVAL_MS,
@@ -99,6 +104,10 @@ class Cluster3 extends Cluster2 {
     let lastOperationTimelineSignature = null;
     let lastOperationProgressAtMs = Date.now();
     let candidateWindowReset = null;
+    // CL-031: when the snapshot probe fails on every node (e.g. 'Max payload
+    // size exceeded') the quiesce oracle is BLIND — the failure must classify
+    // as oracle_blind, never as a quiesce stall/timeout.
+    const oracleBlindnessTracker = createOracleBlindnessTracker();
 
     let pollResult;
     try {
@@ -110,6 +119,11 @@ class Cluster3 extends Cluster2 {
           const snapshotProbe =
             await this._probeControlPlaneQuiescenceSnapshot(deadline);
           const nowMs = Date.now();
+          if (snapshotProbe.error) {
+            oracleBlindnessTracker.recordBlindPoll(snapshotProbe.error, nowMs);
+          } else {
+            oracleBlindnessTracker.recordSightedPoll(nowMs);
+          }
           if (snapshotProbe.error) {
             stableWindowStartedAtMs = null;
             let quiescenceSnapshot = buildControlPlaneQuiescenceSnapshot({
@@ -258,6 +272,10 @@ class Cluster3 extends Cluster2 {
             noProgressTimeoutMs > ZERO &&
             nowMs - lastProgressAtMs >= noProgressTimeoutMs
           ) {
+            // CL-031 note: this stall branch only executes on a SIGHTED poll
+            // (blind polls return early above), so the verdict here is
+            // genuinely evidence-based; the oracle_blind classification for
+            // the quiesce wait lives on the timeout path below.
             const stalledError = new Error(
               'Control plane quiescence stalled for ' +
                 String(nowMs - lastProgressAtMs) +
@@ -368,6 +386,35 @@ class Cluster3 extends Cluster2 {
 
     await this._collectFailureLogs();
     const instabilitySummary = formatCountSummary(instabilitySummaryCounts);
+    const timeoutOracleBlind = oracleBlindnessTracker.isBlindAtDecision();
+    const timeoutOracleBlindSummary = oracleBlindnessTracker.summarize();
+    if (timeoutOracleBlind) {
+      const blindTimeoutError = new Error(
+        buildOracleBlindFailureMessage({
+          oracleName: 'Control plane quiescence',
+          summary: timeoutOracleBlindSummary,
+          budgetMs: timeoutMs,
+          elapsedMs: pollResult.elapsedMs,
+        }) +
+          ' (attempts=' +
+          pollResult.attempts +
+          ', instabilitySummary=' +
+          (instabilitySummary || QUIESCENCE_INSTABILITY_SUMMARY_NONE) +
+          ')',
+      );
+      markOracleBlindError(blindTimeoutError, timeoutOracleBlindSummary);
+      blindTimeoutError.quiescence = {
+        nodeId: pollResult.lastResult?.nodeId || null,
+        inFlightCount: pollResult.lastResult?.inFlightCount ?? null,
+        state: pollResult.lastResult?.state || null,
+        canonicalBlocker: pollResult.lastResult?.canonicalBlocker || null,
+        reasonCodes: pollResult.lastResult?.reasonCodes || [],
+        reasons: pollResult.lastResult?.reasons || [],
+        stableElapsedMs: pollResult.lastResult?.stableElapsedMs ?? ZERO,
+        oracleBlind: timeoutOracleBlindSummary,
+      };
+      throw blindTimeoutError;
+    }
     const timeoutError = new Error(
       'Control plane did not quiesce within ' +
         timeoutMs +

@@ -565,6 +565,10 @@ function createDistributedRunRuntimeBundle(deps = {}) {
           duration,
           startedAt,
           error: err.message,
+          // CL-031: oracle-blind failures carry an explicit classification so
+          // gate tooling never reads them as cluster stalls/timeouts.
+          classification:
+            typeof err.classification === 'string' ? err.classification : null,
           stackTrace: err.stack || null,
           analysisSummary,
           details: mergeFailedScenarioDetails(
