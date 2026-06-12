@@ -4143,3 +4143,70 @@ Each record below represents one violated invariant.
   (~488MB; every other field KB-scale; run3 report carries
   reportWriteDegraded.droppedFieldSizes).
 - CL-030 watch: zero seed FATALs this round (intermittent confirmed).
+
+## CL-031 The Control Snapshot Must Stay Bounded (And Oracles Must Not Go Blind When It Does Not)
+
+- Status: open (2026-06-12; from gate 173105Z all-four-runs evidence +
+  code attribution). UNIFIES the unbounded-diagnostics family:
+  CL-026 (report stringify crash), CL-030-secondary (seed heap OOM
+  at 1.46GB inside JsonStringifier), and this round's blind oracles
+  are THREE SYMPTOMS OF ONE GROWTH.
+- Concern: harness-oracle (blindness) + node-resource-safety (root)
+- Pinned chain (file:line-attributed):
+  (1) NODE-SIDE ROOT: the admin control snapshot
+  (AdminControlSnapshot, src/admin/admin-control-snapshot*.js)
+  grows over run lifetime — controlPlaneDiagnostics +
+  readinessDiagnostics + priorityRecoveryContext decision
+  snapshots + replica operation histories — until a SINGLE
+  response exceeds the websocket maxPayload (~100MB ws default);
+  serialization point admin-websocket-message-dispatch-methods.js
+  :382 JSON.stringify(message). Repeated giant stringifies of the
+  same structure = the seed OOM mechanism (CL-030 secondary).
+  WHICH member grows is NOT yet pinned — that is the falsification
+  step, not a guess.
+  (2) ORACLE BLINDNESS: the settle/quiesce/active oracles query
+  that snapshot lane; on 'Max payload size exceeded' (both snapshot
+  AND default fallback lanes) they observe an EMPTY view (Snapshot
+  node: unknown, Expected partitions: [], inFlightCount=unknown,
+  stableElapsedMs=0) and fail the scenario as stall/quiesce-timeout
+  — gate 173105Z runs 1,2,4 are UNJUDGEABLE on their faces; run1's
+  'over-target 0ms stall' is almost certainly a blind-oracle
+  artifact, not a cluster fact.
+  (3) HARNESS AMPLIFIER: failed scenarios merge per-poll snapshots
+  into details.nodeDiagnostics[] (cluster-segment-7-alpha-load-
+  readiness.js:824,949,1009; details built in run-runtime-helpers
+  .js:500-570 mergeFailedScenarioDetails) — a handful of late-run
+  snapshots = the 488,277,402-byte details member CL-026's
+  droppedFieldSizes named.
+- First Violated Invariant (oracle, fix FIRST per the CL-025/CL-027
+  precedent — gating is untrustworthy until then): a readiness/
+  settle/quiesce oracle that CANNOT READ its evidence must fail the
+  scenario as oracle-blind (naming the transport error), never as a
+  cluster stall/timeout; and the harness must not accumulate
+  unbounded per-poll snapshots into the report (keep
+  first/last/bounded-N + sizes).
+- Second Violated Invariant (node, the root): the served control
+  snapshot must be size-bounded; histories/decision lists it embeds
+  must carry retention caps.
+- Stable Witness: 'Max payload size exceeded' in any oracle error;
+  reportWriteDegraded.droppedFieldSizes.details >> all other
+  fields; heap telemetry curve (landed e438401a) rising
+  monotonically between restarts.
+- Next Falsification Steps (ordered):
+  (a) add size attribution at the admin serialization point: when a
+  response exceeds a threshold (e.g. 8MB), log top-level member
+  byteLengths once per lane per N — the next run NAMES the growing
+  member (mirrors the CL-026 droppedFieldSizes pattern that just
+  paid off);
+  (b) bound harness nodeDiagnostics retention (first/last/N=5 +
+  per-snapshot sizes) — fixes 488MB details regardless of node
+  growth;
+  (c) make oracle snapshot-query failures classify as oracle_blind
+  with the transport error surfaced;
+  (d) after (a) names the member: cap it node-side with explicit
+  retention semantics (never-break: truncation must be visible in
+  the payload, not silent).
+- Cross-refs: CL-026 (same family, harness symptom), CL-030 (seed
+  OOM = node symptom; its unexpected-exit watcher remains separately
+  required), CL-010/011/CL-020 (prior unbounded-diagnostics-on-
+  hot-path instances — this is the at-rest/accumulation variant).
