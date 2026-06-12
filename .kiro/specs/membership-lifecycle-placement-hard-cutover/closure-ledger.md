@@ -4050,3 +4050,61 @@ Each record below represents one violated invariant.
   settle over-target) together. If post-fix runs still stall
   over-target, that residual is a DIFFERENT mechanism and gets a
   new record — do not stretch CL-029.
+
+## CL-030 A Non-Restarted Node's Death Must Fail The Scenario At That Node (And The Seed Must Not OOM)
+
+- Status: open (2026-06-12; pinned from 145024Z-run2 artifacts during
+  CL-029 gate wait). REATTRIBUTES the run2 'restart slow-rejoin'
+  surface: it was never a rejoin-predicate problem.
+- Concern: harness-oracle (primary) + node-resource-safety (secondary)
+- What is PINNED (evidence, 145024Z-run2):
+  (1) The SEED 7493b0ab — NOT a restart target — died of JS heap OOM
+  at 15:03:45.521 (docker stdout: 'FATAL ERROR: Reached heap limit
+  Allocation failed', Mark-Compact 1459.0MB at ~320731ms uptime =
+  boot 14:58:29 + 320s; tipping allocation inside
+  v8 JsonStringifier::Stringify — no JS frames printed). Log ends
+  mid-normal-flow; CL-007 liveness skips fired right up to the
+  death; peers show Connection closed + 12/4 reconnection failures
+  at 15:04/15:05.
+  (2) Restart timeline: restart #1 35a891b8 (stop 15:03:04,
+  after_ready 15:03:53), restart #2 11601fe0 (stop 15:03:56). The
+  seed died BETWEEN them. 11601fe0's fresh boot then looped 'Seed
+  bootstrap not ready (phase: contacting_seed)' x244 + 122
+  join-fail/resume cycles for the whole 120s recovery budget.
+  (3) The scenario failed as 'Restarted node did not become
+  recovery-ready within 120000ms for node 11601fe0 (reachable=true
+  ... BOOTSTRAP_PHASE_INCOMPLETE|SQL_ENGINE_UNAVAILABLE...)' —
+  MISATTRIBUTED to the restartee; nothing watches non-restarted
+  nodes for unexpected exit (CL-025 covers only the restarted
+  node's own death window).
+- First Violated Invariant (harness): any cluster node exiting
+  unexpectedly mid-scenario must fail the scenario AT THAT NODE
+  with its exit evidence (the docker stdout carries the full crash
+  dump — surface it), not as a downstream readiness timeout on a
+  different node. THIRD member of the misattribution family
+  (CL-025 dead-restartee, CL-026/ReportWriter swallowed surface).
+- Secondary (node): seed heap grows to the 1.46GB limit during the
+  restart phase — intermittent (1 of 4 runs in 145024Z; run4's seed
+  ran 18+ min without crashing, so load-shape-correlated, not
+  purely time). Suspect family: unbounded diagnostics accumulation
+  (the same class CL-026 found harness-side: 'runs go deeper now so
+  diagnostics grow'); JSON.stringify is the canary, not the cause.
+  NO heap telemetry exists in any artifact channel (checked node
+  ndjson, samples.ndjson, watchdog lines — ELU only).
+- Stable Witness: docker stdout 'FATAL ERROR: Reached heap limit' /
+  native OOM stack on any node + scenario error naming a DIFFERENT
+  node; log-span end << cluster last activity.
+- Entry Gate: rolling-restart restart phase (any rung).
+- Next Falsification Steps:
+  (a) harness: add an unexpected-exit watcher (container exit or
+  log-stream EOF on a non-restarting node => immediate scenario
+  failure at that node, attaching the stdout tail). Cheap, unblocks
+  trustworthy gating — same rationale as CL-025-first.
+  (b) node: add lightweight heap telemetry to the gap watchdog line
+  (heapUsed/heapTotal/rss come free from process.memoryUsage) so
+  the next occurrence names the growth curve without a profiler;
+  then attribute top retainers (heap snapshot on threshold) in a
+  dedicated run if the curve confirms monotonic growth.
+- Cross-refs: CL-025 (restartee-death predicate), CL-026 (harness
+  stringify crash family), CL-010/CL-011 (prior unbounded-cost
+  diagnostics on the seed).
