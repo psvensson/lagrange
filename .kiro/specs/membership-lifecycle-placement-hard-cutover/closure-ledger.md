@@ -32,7 +32,7 @@ Each record below represents one violated invariant.
 | CL-018 | guarded | raft-log-scan-per-heartbeat | A follower's commit catch-up must not rescan and JSON-parse the whole raft log on every heartbeat: sqlite followers never persist committedIndex, so getUncommittedEntriesUpToIndex degenerates to a full-table parse per heartbeat per priority partition on the seed — the top self-time frame in the freeze windows that block CL-017's quiesce. |
 | CL-019 | guarded | readiness-snapshot-reuse-per-change | Readiness evaluation must be per-change, not per-call: (1) the CL-012 stored-snapshot reuse predicate rejects watermark EQUALITY (snapshot exactly reflects the current row — the common state between heartbeats), so the sync fast path is structurally a cache-lag bridge with ~0% hit rate and every routing decision runs the full evidence + planning + snapshot build; (2) even on a hit, the pre-check prelude rebuilds the full publication-recovery protocol snapshot (gate + participation maps + normalize/freeze storm) from an effectively-constant membership-publication row, per call. |
 | CL-020 | guarded | priority-recovery-event-decision-cost | The rebalancer's priority-recovery visibility cache listener must decide whether an event warrants a rebalance check CHEAPLY: it currently computes the full operation-creation planning-gate snapshot + surrogate follow-up decisions (JSON-parsing steps_history of replica-operation rows) on EVERY cache-change event of EVERY table — during operation churn each row update triggers a full planning re-derive, the residual seed-freeze head after CL-019. |
-| CL-021 | open | active-gate-promotion-closure | The mode=load ACTIVE wait must close once publication, coverage, and priority recovery are green: 4/4 runs stall there with the handoff contract degraded — sub-mode (A) priority partitions wedged at 1 distinct node (spread recovery blocked); sub-mode (B) the catchup fence denies promotion while recoveryProtocolState=steady_published and every owner-visible count is green (reason code aliased to published_active_coverage_incomplete; fence missingProofReasons not yet observable in the trace). |
+| CL-021 | guarded | active-gate-promotion-closure | The mode=load ACTIVE wait must close once publication, coverage, and priority recovery are green: 4/4 runs stall there with the handoff contract degraded — sub-mode (A) priority partitions wedged at 1 distinct node (spread recovery blocked); sub-mode (B) the catchup fence denies promotion while recoveryProtocolState=steady_published and every owner-visible count is green (reason code aliased to published_active_coverage_incomplete; fence missingProofReasons not yet observable in the trace). |
 
 ## CL-001 Published Membership Convergence Under Restart Churn
 
@@ -2660,3 +2660,26 @@ Each record below represents one violated invariant.
 - Gate prediction (pre-registered): raft_role_missing exclusions decay
   to zero within the run; spread surfaces clear; remaining stalls
   shift to the restart-recovery rung / quiesce.
+- VALIDATION GATE (073746Z) — CL-021 GUARDED. 4/4 publication
+  CONVERGED, 0 corrupt, walls 212-555s. Pre-registered prediction
+  CONFIRMED: (1) raft_role_missing DECAYED TO ZERO — runs 1-3 have
+  zero occurrences anywhere; run4 shows it only in MID-RUN snapshots
+  (1 per partition, down from 2) alongside status_syncing=2
+  (legitimate transients in the pre-role-write window), and the FINAL
+  snapshots show EMPTY exclusionReasonCounts with
+  readyDistinctNodeCount=2/readyReplicaCount=3 — co-location surplus
+  awaiting source removal, NOT blindness. (2) The spread surface is
+  GONE as a failure cause (no run failed on it). (3) The CL-021(A)
+  reconcile ENGAGED for the first time (17 'Deferred durable services
+  row converged' witness lines in run4) — with role preservation the
+  whole convergence chain now operates. Surfaces now: run4 quiesce
+  with quiescenceState=leadership_churn /
+  canonicalBlocker=leadership_unstable / inFlightCount=3 (NEW
+  canonical blocker — next record candidate); runs 2/3 mode=load at
+  active=5/5 coverage complete (everything green — the stable-window/
+  gate-flap question from the CL-020 verdict entry); run1 mode=load
+  at active=0/5. NEXT SESSION: (a) the mode=load stable-window
+  question (why no close at active=5/5 — read
+  lastMeaningfulChange timestamps vs gate-green transitions);
+  (b) leadership_unstable quiesce blocker; (c) the restart-recovery
+  rung (pre-analysis above; 061547Z-run3 artifacts).
