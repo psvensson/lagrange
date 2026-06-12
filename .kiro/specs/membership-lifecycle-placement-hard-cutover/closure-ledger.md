@@ -3743,3 +3743,58 @@ Each record below represents one violated invariant.
   target_sync wedge itself. Guard gap closed: bypass test now pins
   partitionId-only AND entityId-only resolution. Minor note: CL-012
   stored-snapshot reuse can delay bypass engagement one refresh cycle.
+
+### Gate Verdict 20260612T145024Z (CL-026/027/028 validation) — CL-027 + CL-028 mechanisms confirmed dead; CL-026 crash DISPLACED to the report writer (amended same session); frontier moved past the restart phase
+
+- 2 CONVERGED + 2 NO_REPORT, 0 corrupt, 0 stale, 0 stalls; walls
+  182-750s.
+- CL-027 CONFIRMED: the everything-green no-progress stall class is
+  GONE (no run shows the green-stall signature; run3's stall is
+  active=0/5 = a different, real surface).
+- CL-028 WITNESS CLEAN: 0 local_mutation_unhealthy skips in 4/4 runs
+  (pinned run had 14). The readyz-closed-during-recovery surface
+  PERSISTS in run3 (mode=load active=0/5, 96 attempts, all five
+  nodes PRIORITY_CONTROL_PLANE_RECOVERY_PENDING, cluster had been
+  fully ready then regressed into spread recovery) — now WITHOUT the
+  veto, so the residual wedge driver is the recorded companion bug:
+  the CL-016-deferred durable services-row write with
+  retryAfterMs=null and NO retry owner (target_sync wedge; CL-028
+  SECONDARY (i)). THAT IS THE NEXT RECORD CANDIDATE for this surface.
+- CL-023 holding: ghost witness 0 in 4/4 (second consecutive clean
+  round; staleRows 1-7/run all corroborated).
+- CL-026 PREDICTION FAILED IN THE LETTER, fix amended same session:
+  the bundle fallback ENGAGED correctly (run1 wrote the 6.5KB
+  fallback artifact) but the giant object reached
+  ReportWriter.write via the scenario entry and the SAME RangeError
+  killed the report there (runs 1+4 — NO_REPORT frequency rose to
+  2/4 because runs now go DEEPER and accumulate more diagnostics).
+  AMENDMENT (same session): (i) ReportWriter.write degrades
+  unserializable/oversized scenario entries to a bounded form
+  (scenario/passed/error/duration preserved; dropped fields replaced
+  by reportWriteDegraded.droppedFieldSizes — the attribution that
+  will NAME the unbounded member on its next occurrence) with a
+  full-degrade fallback if the sum still overflows; (ii)
+  failure-bundle entry mutation reordered AFTER successful bundle
+  serialization so a failed bundle cannot inject giant diagnostics
+  into the report. Guards: report-writer-serialization-degrade
+  .test.js (red on revert), failure-bundle suite 100/100,
+  report-writer suite 41/41. ROOT CAUSE (which member grows
+  unbounded on deep runs) still deliberately unchased — the next
+  degraded report names it via droppedFieldSizes.
+- NEW DEPTH — the frontier moved PAST the restart phase: runs 1+4
+  failed at POST-RESTART replica-convergence settle, a surface never
+  reached before (run1 'Convergence timeout after 120000ms, leader
+  changes 4, max over-target 121876ms'; run4 'Convergence stalled
+  after 155672ms, no progress >=30s, max over-target 16013ms' —
+  over-target = surplus replicas not draining within the settle
+  budget, plausibly the same source-retirement drain now actually
+  RUNNING and needing longer than the budget, or the deferred-write
+  companion bug again). Run2 = restart slow-rejoin
+  (11601fe0 adminReady=false at 120s — the parked CL-025 predicate
+  follow-up, second occurrence).
+- Frontier order after this round: (1) the deferred-durable-write
+  no-retry-owner companion bug (drives run3's recovery
+  non-completion AND plausibly the over-target settle stalls);
+  (2) post-restart convergence-settle surfaces (runs 1+4 artifacts);
+  (3) restart slow-rejoin predicate (run2, two occurrences);
+  (4) CL-001 published-set disagreement (131408Z-run2 artifacts).

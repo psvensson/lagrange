@@ -381,6 +381,10 @@ async function writeScenarioFailureBundleArtifacts({
     benchmarkRegressionGate,
     logs,
   });
+  // Serialize BEFORE mutating the scenario entry: if the bundle cannot
+  // stringify, the entry must not carry the bundle diagnostics into the
+  // report writer (which would hit the same serialization limit there).
+  const serializedBundleJson = JSON.stringify(bundleJson, null, 2);
   applyBundleDiagnosticsToScenarioEntry(entry, bundleJson);
   const jsonAbsolutePath = join(scenarioDir, FAILURE_BUNDLE_JSON_FILENAME);
   const markdownAbsolutePath = join(
@@ -397,7 +401,7 @@ async function writeScenarioFailureBundleArtifacts({
   );
   await writeFile(
     jsonAbsolutePath,
-    JSON.stringify(bundleJson, null, 2),
+    serializedBundleJson,
     UTF8_ENCODING,
   );
   await writeFile(

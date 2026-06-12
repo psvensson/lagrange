@@ -1348,6 +1348,81 @@ const computeOptimizationSummary = createOptimizationSummaryComputer({
   normalizeFiniteNumber,
 });
 
+const REPORT_DEGRADED_SCENARIO_ENTRY_CAP_BYTES = 128 * 1024 * 1024;
+const REPORT_DEGRADED_FIELD_UNSERIALIZABLE = 'unserializable';
+const REPORT_DEGRADED_KEPT_SCENARIO_FIELDS = Object.freeze([
+  'scenario',
+  'passed',
+  'duration',
+  'error',
+  'stackTrace',
+  'startedAt',
+  'rootCauseClass',
+  'dominantReason',
+  'failureClassification',
+  'failureBundle',
+]);
+
+function measureSerializedBytes(value) {
+  try {
+    const serialized = JSON.stringify(value);
+    return typeof serialized === 'string' ? serialized.length : ZERO;
+  } catch {
+    return REPORT_DEGRADED_FIELD_UNSERIALIZABLE;
+  }
+}
+
+function degradeScenarioEntryForSerialization(entry) {
+  const droppedFieldSizes = {};
+  const degraded = {};
+  for (const field of REPORT_DEGRADED_KEPT_SCENARIO_FIELDS) {
+    if (entry[field] !== undefined) {
+      degraded[field] = entry[field];
+    }
+  }
+  for (const [field, value] of Object.entries(entry)) {
+    if (REPORT_DEGRADED_KEPT_SCENARIO_FIELDS.includes(field)) {
+      continue;
+    }
+    droppedFieldSizes[field] = measureSerializedBytes(value);
+  }
+  degraded.reportWriteDegraded = {
+    reason: 'scenario entry exceeded the report serialization limit',
+    droppedFieldSizes,
+  };
+  return degraded;
+}
+
+/**
+ * A report that cannot serialize must degrade per scenario, never be lost:
+ * the report is the gate's classification input, and a RangeError here
+ * turns a classified failure into NO_REPORT on exactly the longest runs.
+ * Dropped fields are replaced with their measured sizes so the unbounded
+ * member is named in the artifact itself.
+ */
+function degradeReportForSerialization(report) {
+  const degradedScenarios = [];
+  for (const entry of Array.isArray(report.scenarios) ?
+    report.scenarios : []) {
+    const entryBytes = measureSerializedBytes(entry);
+    if (
+      entryBytes !== REPORT_DEGRADED_FIELD_UNSERIALIZABLE &&
+      entryBytes <= REPORT_DEGRADED_SCENARIO_ENTRY_CAP_BYTES
+    ) {
+      degradedScenarios.push(entry);
+      continue;
+    }
+    const degraded = degradeScenarioEntryForSerialization(entry);
+    console.warn(
+      '[harness] WARNING: report scenario entry degraded for ' +
+      `serialization (${entry?.scenario}): dropped field sizes ` +
+      `${JSON.stringify(degraded.reportWriteDegraded.droppedFieldSizes)}`,
+    );
+    degradedScenarios.push(degraded);
+  }
+  return {...report, scenarios: degradedScenarios};
+}
+
 class ReportWriter {
   /**
    * @param {string} outputPath - File path for the JSON report
@@ -1406,11 +1481,32 @@ class ReportWriter {
 
     const dir = dirname(this.outputPath);
     await mkdir(dir, {recursive: true});
-    await writeFile(
-      this.outputPath,
-      JSON.stringify(report, null, JSON_INDENT),
-      'utf8',
-    );
+    let serializedReport;
+    try {
+      serializedReport = JSON.stringify(report, null, JSON_INDENT);
+    } catch (serializationError) {
+      console.warn(
+        '[harness] WARNING: report serialization failed ' +
+        `(${String(serializationError?.message || serializationError)}); ` +
+        'degrading oversized scenario entries',
+      );
+      let degradedReport = degradeReportForSerialization(report);
+      try {
+        serializedReport = JSON.stringify(degradedReport, null, JSON_INDENT);
+      } catch {
+        // The sum of under-cap entries can still exceed the limit:
+        // degrade every entry unconditionally.
+        degradedReport = {
+          ...report,
+          scenarios: (Array.isArray(report.scenarios) ?
+            report.scenarios : []).map(degradeScenarioEntryForSerialization),
+        };
+        serializedReport = JSON.stringify(degradedReport, null, JSON_INDENT);
+      }
+      await writeFile(this.outputPath, serializedReport, 'utf8');
+      return degradedReport;
+    }
+    await writeFile(this.outputPath, serializedReport, 'utf8');
     return report;
   }
 }
