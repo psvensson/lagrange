@@ -3926,3 +3926,42 @@ Each record below represents one violated invariant.
   for REPLACEs — the ACTIVE outcome path goes through
   reconcileReplaceActualActive's source-removal flow, NOT
   complete-as-removed).
+
+### CL-029 FALSIFICATION RESULT (2026-06-12) — repro discriminated: the run's exit is a FOURTH path, upstream of (a)/(b)/(c)
+
+- Characterization repro (39/39 assertions):
+  test/rebalancer/cl-029-target-completion-evidence-loss
+  .characterization.test.js (tap; assertions document TODAY'S broken
+  behavior and are expected to flip when the fix lands).
+- PRIMARY (matches the run's zero-warn witness): LANE-COALESCING
+  LOST WAKEUP. handleExecutorOutcome routes the reconcile through
+  operationWorkflowRunExclusive -> DurableWorkflowCoordinator
+  .runExclusive (src/workflow/durable-workflow-coordinator.js:
+  500-521) which does NOT queue: a held key returns the in-flight
+  promise and DISCARDS the new factory. The dispatch step-walk holds
+  the op's lane for its whole ~28s execution, so BOTH outcome
+  reconciles (SYNCING + ACTIVE) were coalesced away —
+  reconcileExecutorOutcome executed 0 times (spy-verified), exits
+  (a)/(b)/(c) unreachable, zero warns/errors. The retained ACTIVE
+  payload in executorOutcomeRetryPayloadByOperationId is ORPHANED:
+  its only consumer is the retry timer armed by
+  scheduleExecutorOutcomeRetry, which is only armed from INSIDE the
+  reconcile that never ran. Bonus instance: an ACTIVE outcome
+  arriving while the SYNCING-outcome reconcile is still in flight
+  coalesces away the same way (production spacing ~140ms apart).
+- Exit (a) ALSO REAL (stale visibility row, e.g. the run's CL-017
+  divergence): updateStep(ACTIVE) CAS expected stale step ->
+  affectedRows 0 -> returns false (no throw) ->
+  replayReplaceActiveSourceRemovalFromAuthoritative reads the same
+  stale row -> silent false. AND the retained payload had already
+  been erased by clearExecutorOutcomeRetry at the START of the
+  reconcile (executor-outcome-reconcile-methods.js:599, BEFORE the
+  action applies) — evidence destroyed even on the path that runs.
+- Exit (b) logs 'Failed to persist operation' (run had zero) — not
+  the run's path. Exit (c) excluded (always warns on arm).
+- CONTROL: lane-free, consistent-view outcomes reconcile correctly
+  (ACTIVE CAS commits, REMOVE dispatched, row -> STOPPING) — the
+  loss requires the lane to be held (lost wakeup), not a data race.
+- Incidental: priority remove-safety fails the op when voter
+  topology evidence is unreadable (empty services view) — downstream
+  of this record; note for the post-fix continuation.
