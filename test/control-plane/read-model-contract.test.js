@@ -11,7 +11,6 @@ import {RebalanceCoordinator} from
   '../../src/rebalancer/rebalance-coordinator.js';
 import {REBALANCE_COORDINATOR_EVENT} from
   '../../src/rebalancer/rebalancer-constants.js';
-import {RaftRoleTracker} from '../../src/policy/raft-role-tracker.js';
 import {TABLES} from '../../src/constants/index.js';
 
 // ── Suite-local fixture constants ──────────────────────────────────
@@ -221,85 +220,6 @@ test('RebalanceCoordinator.getEntityInFlightReplicaIds remains compatible ' +
   }
 });
 
-test('RaftRoleTracker.getServiceRole reads only from ' +
-  'SystemTableCache, not SQL', async (t) => {
-  let cacheGetCalled = false;
-  let sqlQueryCalled = false;
-
-  const tracker = new RaftRoleTracker({
-    systemTableCache: {
-      get(table, key) {
-        cacheGetCalled = true;
-        if (table === TABLES.SERVICES && key === FIXTURE_SERVICE_ID) {
-          return {raft_role: 'leader'};
-        }
-        return null;
-      },
-    },
-    sqlQueryEngine: {
-      async executeQuery() {
-        sqlQueryCalled = true;
-        return {success: true, rows: []};
-      },
-    },
-  });
-  tracker.initialize();
-
-  try {
-    const role = await tracker.getServiceRole(FIXTURE_SERVICE_ID);
-
-    t.equal(role, 'leader', 'role returned from cache');
-    t.equal(
-      cacheGetCalled,
-      true,
-      'getServiceRole must read from SystemTableCache',
-    );
-    t.equal(
-      sqlQueryCalled,
-      false,
-      'getServiceRole must not fall back to SQL',
-    );
-  } finally {
-    tracker.shutdown();
-  }
-});
-
-test('RaftRoleTracker.getServiceRole returns null when cache row ' +
-  'is absent, no SQL fallback', async (t) => {
-  let sqlQueryCalled = false;
-
-  const tracker = new RaftRoleTracker({
-    systemTableCache: {
-      get() {
-        return null;
-      },
-    },
-    sqlQueryEngine: {
-      async executeQuery() {
-        sqlQueryCalled = true;
-        return {success: true, rows: [{raft_role: 'leader'}]};
-      },
-    },
-  });
-  tracker.initialize();
-
-  try {
-    const role = await tracker.getServiceRole(FIXTURE_SERVICE_ID);
-
-    t.equal(
-      role,
-      null,
-      'must return null when cache has no row',
-    );
-    t.equal(
-      sqlQueryCalled,
-      false,
-      'must not fall back to SQL when cache misses',
-    );
-  } finally {
-    tracker.shutdown();
-  }
-});
 
 // ═══════════════════════════════════════════════════════════════════
 // 3. Divergence event diagnostics tests

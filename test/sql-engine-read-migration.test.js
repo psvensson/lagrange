@@ -7,7 +7,6 @@
 
 import {test, beforeEach, afterEach} from '../src/test-helpers/tap.js';
 import {TablePolicyService} from '../src/policy/table-policy-service.js';
-import {RaftRoleTracker} from '../src/policy/raft-role-tracker.js';
 import {DynamicConfigService} from '../src/config/dynamic-config-service.js';
 import {FunctionRegistry} from '../src/function/function-registry.js';
 import {ContextManager, ContextType} from '../src/function/context-manager.js';
@@ -110,50 +109,6 @@ test('TablePolicyService uses SQL engine for getPolicyForPartition',
       'Second query should be tables');
     t.equal(policy.replicaCount, 7,
       'Should return correct policy');
-  });
-
-// --- RaftRoleTracker ---
-
-test('RaftRoleTracker uses SystemTableCache for getServiceRole',
-  async (t) => {
-    const tracker = new RaftRoleTracker({
-      systemTableCache: {
-        get: (_table, key) => {
-          if (key === 'svc-1') {
-            return {service_id: 'svc-1', raft_role: 'leader'};
-          }
-          return null;
-        },
-        filter: () => [],
-      },
-    });
-
-    const role = await tracker.getServiceRole('svc-1');
-
-    t.equal(role, 'leader',
-      'Should return role from cache');
-  });
-
-test('RaftRoleTracker uses SystemTableCache for getServicesByRole',
-  async (t) => {
-    const tracker = new RaftRoleTracker({
-      systemTableCache: {
-        get: () => null,
-        filter: (_table, predicate) => {
-          const rows = [
-            {service_id: 'svc-1', raft_role: 'follower'},
-            {service_id: 'svc-2', raft_role: 'follower'},
-            {service_id: 'svc-3', raft_role: 'leader'},
-          ];
-          return rows.filter(predicate);
-        },
-      },
-    });
-
-    const services = await tracker.getServicesByRole('follower');
-
-    t.equal(services.length, 2,
-      'Should return 2 services');
   });
 
 // --- DynamicConfigService ---
@@ -444,16 +399,6 @@ test('Services return empty results without SQL engine',
     const contexts = await manager.getContextsByOwner('o1');
     t.same(contexts, [],
       'ContextManager returns empty array without engine');
-
-    // RaftRoleTracker
-    const tracker = new RaftRoleTracker();
-    const role = await tracker.getServiceRole('svc-1');
-    t.equal(role, null,
-      'RaftRoleTracker returns null without cache');
-
-    const services = await tracker.getServicesByRole('leader');
-    t.same(services, [],
-      'RaftRoleTracker returns empty array without cache');
 
     // DynamicConfigService
     const configService = new DynamicConfigService();

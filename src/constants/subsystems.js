@@ -226,7 +226,6 @@ const SUBSYSTEM = Object.freeze({
   TABLE_POLICY: 'table-policy',
 
   /** Raft role tracker */
-  RAFT_ROLE_TRACKER: 'raft-role-tracker',
 
   // ============================================================================
   // Cache - System table caching

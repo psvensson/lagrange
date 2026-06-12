@@ -7,7 +7,6 @@ import {RAFT_ROLE} from '../raft/constants.js';
 
 const POLICY_SUBSYSTEM = Object.freeze({
   TABLE_POLICY: 'table-policy',
-  RAFT_ROLE_TRACKER: 'raft-role-tracker',
 });
 
 const POLICY_EVENT = Object.freeze({
@@ -16,16 +15,6 @@ const POLICY_EVENT = Object.freeze({
 });
 
 const POLICY_LOG_MSG = Object.freeze({
-  RAFT_TRACKER_INITIALIZED: 'RaftRoleTracker initialized',
-  SERVICE_ALREADY_REGISTERED: 'Service already registered',
-  SERVICE_REGISTERED: 'Service registered for role tracking',
-  SERVICE_UNREGISTERED: 'Service unregistered from role tracking',
-  INVALID_RAFT_ROLE: 'Invalid Raft role',
-  ROLE_CHANGED: 'Raft role changed',
-  UPDATE_SKIPPED_NO_CDC: 'CDC integration service not available, skipping role update',
-  UPDATED_SERVICE_ROLE: 'Updated service Raft role',
-  UPDATE_SERVICE_ROLE_FAILED: 'Failed to update service Raft role',
-  TRACKER_SHUTDOWN: 'RaftRoleTracker shutdown',
   TABLE_POLICY_INITIALIZED: 'TablePolicyService initialized',
   TABLE_NOT_FOUND_DEFAULT: 'Table not found, using default policy',
   PARTITION_NOT_FOUND_DEFAULT: 'Partition not found, using default policy',
@@ -135,10 +124,6 @@ const MESSAGE_GROUP_POLICY_FIELD_TYPES = Object.freeze({
   placementConstraints: TYPEOF.OBJECT,
 });
 
-const POLICY_RESULT_REASON = Object.freeze({
-  NO_CDC_SERVICE: 'no_cdc_service',
-});
-
 const POLICY_VALUE = Object.freeze({
   EMPTY_POLICY: {},
 });
@@ -152,7 +137,6 @@ export {
   POLICY_EVENT,
   POLICY_FIELD_TYPES,
   POLICY_LOG_MSG,
-  POLICY_RESULT_REASON,
   POLICY_SUBSYSTEM,
   POLICY_VALUE,
   RAFT_ROLE,

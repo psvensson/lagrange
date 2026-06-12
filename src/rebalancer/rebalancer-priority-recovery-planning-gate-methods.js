@@ -107,6 +107,9 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
           readyReplicaCount: partition.readyReplicaCount,
           readyDistinctNodeCount: partition.readyDistinctNodeCount,
           spreadGap: partition.spreadGap,
+          // CL-021 witness: WHY rows were excluded from the ready count
+          // (e.g. raft_role_missing) — the planner-blindness attribution.
+          exclusionReasonCounts: partition.exclusionReasonCounts || null,
         })),
       },
       scheduleDelayMs,

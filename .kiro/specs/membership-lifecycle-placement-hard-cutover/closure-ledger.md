@@ -2504,3 +2504,46 @@ Each record below represents one violated invariant.
   persist failed before commitTransition, the map may hold an earlier
   state and the reconcile converges a non-ACTIVE row (witness lines
   carry the state field).
+- GATE 053704Z (CL-021(A) fix + corrections): 4/4 publication
+  CONVERGED, 0 corrupt — but the FIX DID NOT ENGAGE: zero 'Deferred
+  durable services row converged' witnesses AND zero
+  STATE_PERSIST_FAILED lines across all runs, while 10-16
+  'status write deferred' events/run still occurred and the surface
+  is unchanged (3 mode=load stalls incl. active=0/5 + 1 quiesce).
+  ATTRIBUTION CORRECTED BY DATA: deferred replicas DO transition
+  creating→syncing→active within ~5s and their later transition
+  persists SUCCEED (no failures logged) — markers were being cleared
+  by the NORMAL path all along; the durable rows EXIST. The
+  planner-blindness root is therefore NOT missing rows — the
+  spread-ready predicate excludes the rows for another reason:
+  isPrioritySpreadReadyReplica requires TRUTHY raft_role
+  (membership-publication-priority-partition-summary.js:247) and the
+  lifecycle full-row REPLACE payload OMITS raft_role (nulls it; the
+  verifier's 'column wipe' finding — accepted as residual, actually
+  load-bearing), while the partition service's role-mutation helper
+  (createRoleMutationHelper, partition-service-segment-1-part-1.js)
+  writes it separately as a BACKGROUND deferrable UPDATE that may
+  defer/fail in the 4/3 window or be wiped by a subsequent lifecycle
+  write. The CL-021(A) reconcile mechanism stays (correct, low-cost,
+  closes the real if-rare stranded-marker case) but is NOT the
+  load-bearing fix.
+- WITNESS LANDED for the actual pinning (per-row attribution was the
+  DX gap): the priority spread summary now counts per-partition
+  EXCLUSION REASONS (resolvePrioritySpreadReplicaExclusionReason —
+  invalid_row/not_partition_service/status_*/raft_role_missing/
+  address_missing/node_id_missing/learner_not_promotable/
+  node_not_eligible) and blockedPartitions entries carry
+  exclusionReasonCounts through the normalizer AND the rebalancer's
+  'Deferring non-system rebalancing' diagnostic (zero new log
+  volume). NEXT GATE pins the exclusion reason; if raft_role_missing
+  dominates, fix = include raft_role in the lifecycle persistence
+  payload from the partition service's live role (or stop requiring
+  raft_role for spread-readiness when status=ACTIVE — decide on
+  evidence).
+- DEAD CODE REMOVED on contact: src/policy/raft-role-tracker.js
+  (ZERO production callers — updateServiceRole never invoked; zero
+  'Updated service Raft role' lines in any run) + its test file +
+  tracker sections in sql-engine-read-migration.test.js and
+  read-model-contract.test.js + orphaned policy/subsystem constants.
+  All affected suites green (policy 143, read-model-contract 71,
+  control-plane back to 50 pre-existing).
