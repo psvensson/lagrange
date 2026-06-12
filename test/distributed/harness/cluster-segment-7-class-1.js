@@ -14,6 +14,7 @@ import {
 import {createReadStream, mkdirSync} from 'node:fs';
 import {createGunzip} from 'node:zlib';
 import {createInterface} from 'node:readline';
+import {sweepUnexpectedNodeExits} from './unexpected-node-exit.js';
 
 // Container target of the fast-local live-src bind mount (run.js
 // FAST_LOCAL_SOURCE_CONTAINER_PATH). Used only to detect, defensively, that a
@@ -1350,34 +1351,79 @@ class Cluster1 {
     return assertDataIntegrity(nodes, table, expectedRows);
   }
 
+  // CL-030: nodes the SCENARIO took down (kill/stop/pause/mid-restart) are
+  // EXPECTED down; any other node whose container has exited at scenario-
+  // failure time is an unexpected death the failure must be attributed to.
+  _markNodeExpectedDown(id, action) {
+    (this._expectedDownNodesById ||= new Map()).set(String(id), {
+      action,
+      sinceMs: Date.now(),
+    });
+  }
+
+  _clearNodeExpectedDown(id) {
+    this._expectedDownNodesById?.delete(String(id));
+  }
+
+  _isNodeExpectedDown(id) {
+    return this._expectedDownNodesById?.has(String(id)) === true;
+  }
+
+  /**
+   * CL-030 failure-time sweep: report non-expected-down nodes whose
+   * container has exited, with exit evidence (stdout tail + fatal lines).
+   * Best-effort — never throws.
+   */
+  async sweepUnexpectedNodeExits() {
+    try {
+      return await sweepUnexpectedNodeExits(
+        this._nodes.values(),
+        (id) => this._isNodeExpectedDown(id),
+      );
+    } catch (_error) {
+      return [];
+    }
+  }
+
   async killNode(id) {
+    this._markNodeExpectedDown(id, 'killNode');
     return this._runChaosAction('killNode', id, null, () =>
       this._chaos.killNode(id),
     );
   }
 
   async stopNode(id) {
+    this._markNodeExpectedDown(id, 'stopNode');
     return this._runChaosAction('stopNode', id, null, () =>
       this._chaos.stopNode(id),
     );
   }
 
   async pauseNode(id) {
+    this._markNodeExpectedDown(id, 'pauseNode');
     return this._runChaosAction('pauseNode', id, null, () =>
       this._chaos.pauseNode(id),
     );
   }
 
   async unpauseNode(id) {
-    return this._runChaosAction('unpauseNode', id, null, () =>
+    const result = await this._runChaosAction('unpauseNode', id, null, () =>
       this._chaos.unpauseNode(id),
     );
+    this._clearNodeExpectedDown(id);
+    return result;
   }
 
   async restartNode(id, options = {}) {
-    return this._runChaosAction('restartNode', id, options, () =>
+    // Marked for the whole stop->start->ready window; cleared only on a
+    // SUCCESSFUL restart — a failed restart leaves the node expected-down
+    // (its death is already attributed to the restart action by CL-025).
+    this._markNodeExpectedDown(id, 'restartNode');
+    const result = await this._runChaosAction('restartNode', id, options, () =>
       this._restartNodeWithObservation(id, options),
     );
+    this._clearNodeExpectedDown(id);
+    return result;
   }
 
   async _restartNodeWithObservation(id, options = {}) {

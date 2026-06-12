@@ -1,3 +1,7 @@
+import {
+  buildUnexpectedNodeExitFailure,
+} from './harness/unexpected-node-exit.js';
+
 function createDistributedRunRuntimeBundle(deps = {}) {
   const {
     LIVE_LOG_PREFIX,
@@ -520,6 +524,20 @@ function createDistributedRunRuntimeBundle(deps = {}) {
       } catch (err) {
         const duration = Date.now() - startMs;
         hasFailures = true;
+        // CL-030: sweep container states while they are still alive — a
+        // non-expected-down node whose container EXITED reattributes the
+        // scenario failure to that node with its exit evidence, instead of
+        // letting it surface as a downstream timeout elsewhere.
+        let unexpectedNodeExits = [];
+        if (
+          cluster &&
+          typeof cluster.sweepUnexpectedNodeExits === 'function'
+        ) {
+          unexpectedNodeExits = await cluster.sweepUnexpectedNodeExits();
+        }
+        const unexpectedExitFailure = unexpectedNodeExits.length > 0 ?
+          buildUnexpectedNodeExitFailure(unexpectedNodeExits, err.message) :
+          null;
         const errorDiagnostics = err &&
           typeof err === 'object' &&
           err.diagnostics &&
@@ -527,7 +545,9 @@ function createDistributedRunRuntimeBundle(deps = {}) {
           err.diagnostics :
           null;
         const mergedErrorDiagnostics = mergeErrorDiagnostics(
-          errorDiagnostics,
+          unexpectedExitFailure ?
+            {...(errorDiagnostics || {}), unexpectedNodeExits} :
+            errorDiagnostics,
           resolveErrorQuiescence(err),
         );
         const partialResult = extractScenarioFailurePartialResult(
@@ -564,11 +584,18 @@ function createDistributedRunRuntimeBundle(deps = {}) {
           passed: false,
           duration,
           startedAt,
-          error: err.message,
+          // CL-030: an unexpected node exit outranks the downstream surface.
+          error: unexpectedExitFailure ?
+            unexpectedExitFailure.message :
+            err.message,
           // CL-031: oracle-blind failures carry an explicit classification so
           // gate tooling never reads them as cluster stalls/timeouts.
-          classification:
-            typeof err.classification === 'string' ? err.classification : null,
+          classification: unexpectedExitFailure ?
+            unexpectedExitFailure.classification :
+            typeof err.classification === 'string' ?
+              err.classification :
+              null,
+          ...(unexpectedExitFailure ? {unexpectedNodeExits} : {}),
           stackTrace: err.stack || null,
           analysisSummary,
           details: mergeFailedScenarioDetails(

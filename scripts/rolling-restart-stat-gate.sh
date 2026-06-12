@@ -116,8 +116,10 @@ for i in $(seq 1 "${N}"); do
       | {passed:($sc.passed // null), missing:$missing, hardBreaches:$hard,
          cyclesNoProgress:$cyc, failedNoProgress:$fnp, gateState:$gstate,
          oracleBlind:($oblind=="oracle_blind"),
+         unexpectedNodeExit:($oblind=="unexpected_node_exit"),
          reason:($sc.dominantReason // "none"), duration:($sc.duration // null),
          class:(if $hard>0 then "CORRUPT"
+                elif $oblind=="unexpected_node_exit" then "NODE_EXIT"
                 elif $missing==0 then "CONVERGED"
                 elif $oblind=="oracle_blind" then "ORACLE_BLIND"
                 elif ($fnp==true or $cyc>=10 or $gstate=="stalled") then "STALLED"
@@ -147,6 +149,7 @@ jq -s '
     classTally: ( [.[].class] | group_by(.) | map({(.[0]|tostring): length}) | add ),
     corruptCount: ([.[] | select(.class=="CORRUPT")] | length),
     oracleBlindCount: ([.[] | select(.class=="ORACLE_BLIND")] | length),
+    nodeExitCount: ([.[] | select(.class=="NODE_EXIT")] | length),
     convergeRate: ( (([.[] | select(.missing==0)] | length) ) / (length) ),
     stallRate: ( (([.[] | select(.class=="STALLED")] | length) ) / (length) ),
     healthyRate: ( (([.[] | select(.class=="CONVERGED" or .class=="SLOW")] | length) ) / (length) ),
@@ -170,6 +173,7 @@ jq -s '
     "- **staleSourceRuns (untrustworthy — must be 0): \(.staleSourceRuns)**",
     "- **CORRUPT (hard invariant breach — must be 0): \(.corruptCount)**",
     "- **ORACLE_BLIND (unjudgeable — snapshot transport failed, CL-031): \(.oracleBlindCount)**",
+    "- **NODE_EXIT (unexpected node death — read its exit evidence, CL-030): \(.nodeExitCount)**",
     "- stallRate (frozen / gave up): \(.stallRate)",
     "- healthyRate (converged or progressing): \(.healthyRate)",
     "- convergeRate (missing=0): \(.convergeRate)",

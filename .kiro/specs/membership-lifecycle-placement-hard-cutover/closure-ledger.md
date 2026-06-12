@@ -4109,6 +4109,52 @@ Each record below represents one violated invariant.
   stringify crash family), CL-010/CL-011 (prior unbounded-cost
   diagnostics on the seed).
 
+### CL-030 STEP (a) LANDED (2026-06-12) — failure-time unexpected-exit sweep; (b) heap telemetry landed earlier (e438401a)
+
+- Design per the ledger note: failure-time container-state sweep at
+  scenario failure (containers still alive, teardown is later) beats
+  a steady-state watcher loop for blast radius.
+- test/distributed/harness/unexpected-node-exit.js: sweep inspects
+  every node's container (NodeHandle.inspectContainerState, new —
+  normalizes docker State.{Status,ExitCode,OOMKilled,FinishedAt});
+  a non-expected-down node with status exited/dead yields an exit
+  entry with bounded stdout tail (80 lines / 8KB) + extracted fatal
+  lines (FATAL ERROR / Reached heap limit / heap out of memory /
+  segfault / abort). Best-effort throughout: per-node 5s timeouts,
+  log-read failure keeps the exit fact, sweep never throws.
+- Expected-down ledger on the cluster chaos wrappers
+  (cluster-segment-7-class-1.js): killNode/stopNode/pauseNode mark;
+  unpauseNode clears; restartNode marks for the whole
+  stop->start->ready window and clears ONLY on success — a failed
+  restart leaves the restartee expected-down (CL-025 owns that
+  death). All scenarios go through these wrappers (verified by
+  grep; chaos.startNode is only called inside restartNode).
+- Reattribution at the scenario-failure choke point
+  (run-runtime-helpers.js catch): sweep runs first; if exits found
+  the scenario error BECOMES 'Unexpected node exit: <node> (role,
+  status, exitCode, oomKilled, finishedAt) fatal: <line>...' with
+  the original surface preserved as 'Downstream surface: ...';
+  classification=unexpected_node_exit (outranks oracle_blind — a
+  dead seed also blinds oracles, the death is upstream);
+  unexpectedNodeExits attached to scenarioResult + details
+  .diagnostics. Stat-gate gains class NODE_EXIT ordered CORRUPT >
+  NODE_EXIT > CONVERGED > ORACLE_BLIND > STALLED > SLOW (a crash is
+  never folded into a healthy tally) + nodeExitCount.
+- Guards: unexpected-node-exit-sweep.test.js (28 asserts): fatal
+  extraction, sweep filtering (running/expected-down/inspect-error/
+  stub nodes), exit-fact-survives-log-failure, reattribution
+  message red-on-revert, NodeHandle normalization, chaos-wrapper
+  ledger incl. failed-restart-stays-marked.
+- NOT yet validated live (next 145024Z-run2-shaped occurrence is
+  the witness: scenario error names the dead node, class NODE_EXIT).
+- HARNESS GOTCHA (cost nothing this time, could have): editing
+  scripts/rolling-restart-stat-gate.sh WHILE a gate round is
+  running risks the running bash misparsing its unread tail (the
+  per-run loop is pre-parsed and safe; the post-loop aggregation
+  reads from a shifted byte offset). Per-run class lines in the
+  gate console log allow manual re-aggregation. Never edit the
+  gate script mid-round.
+
 ### CL-029 GATE VERDICT (stat-gate-20260612T173105Z, 4 runs, clean containers, fingerprint 505eb4a0, post-fix 2ba293b7) — CL-029 GUARDED; new binding constraint = oracle blindness (CL-031)
 
 - TOPLINE: 3 CONVERGED + 1 SLOW, 0 corrupt, 0 stale, 0 stalls,

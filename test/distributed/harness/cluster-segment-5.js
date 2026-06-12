@@ -1099,6 +1099,34 @@ class NodeHandle {
   }
 
   /**
+   * Inspect this node's container runtime state (CL-030: the
+   * unexpected-exit sweep reads this at scenario-failure time).
+   * @returns {Promise<Object>} normalized {status, running, exitCode,
+   *   oomKilled, finishedAt, error}
+   */
+  async inspectContainerState() {
+    if (typeof this._dockerProvider?.inspectContainerIfExists !== 'function') {
+      return {status: null, error: 'inspect_unavailable'};
+    }
+    const inspect =
+      await this._dockerProvider.inspectContainerIfExists(this.containerId);
+    if (!inspect) {
+      return {status: null, error: 'container_missing'};
+    }
+    const state = inspect.State || {};
+    return {
+      status: typeof state.Status === 'string' ? state.Status : null,
+      running: state.Running === true,
+      exitCode: Number.isInteger(state.ExitCode) ? state.ExitCode : null,
+      oomKilled: state.OOMKilled === true,
+      finishedAt: typeof state.FinishedAt === 'string' ?
+        state.FinishedAt :
+        null,
+      error: null,
+    };
+  }
+
+  /**
    * Probe node reachability with detailed diagnostics.
    * @returns {Promise<Object>}
    */
