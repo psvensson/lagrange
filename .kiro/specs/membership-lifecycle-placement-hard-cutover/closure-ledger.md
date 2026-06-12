@@ -2823,3 +2823,70 @@ Each record below represents one violated invariant.
    the owner-truth-merged effective actives), rather than weakening
    the fence; do NOT let the empty-input denial be silently treated as
    'incomplete coverage'.
+
+### CL-022 Fix Landed + Verification (2026-06-12)
+
+- ROOT CORRECTED BY PINNING SUBAGENT (my projection-emptiness inference
+  was WRONG; candidates (a) lease-gating and (b) merge-not-engaging
+  both REFUTED by repro through the real resolvers): the build-time
+  contract (part-1.js:486) is HEALTHY (promotion allowed, coverage
+  5/5) and never reaches the wire — EVERY serve path funnels through
+  resolveSharedControlSnapshot -> attachControlSnapshotObservation-
+  ActiveGateHandoff (part-1.js:716, 796-854), which REBUILDS the
+  contract from controlPlaneDiagnostics.activeNodeViews = the
+  serialized summary whose keys DROP the "Active" infix
+  (effectiveNodeIds/publishedNodeIds/projectedNodeIds/
+  authoritativeNodeIds, written at part-1.js:610-627). The fence reads
+  only the resolver-shaped *ActiveNodeIds keys -> coverage evidence
+  empty -> unavailable -> promotion denied on every served snapshot.
+  Field-name contract break; failing this gate on every run since the
+  rebuild landed (d6a4a667, 2026-05-22). NOT a staleness/readiness
+  problem at all; the stall trigger was the ELAPSED no-progress budget
+  (attempts budget deliberately zeroed when the promotion gate is
+  required, rolling-restart.js:525-527).
+- FIX (2a3b3c2b): resolveControlSnapshotObservationActiveNodeViews
+  translates the summary dialect back to resolver-shaped keys at the
+  rebuild boundary (never clobbering canonical keys). Guards:
+  admin-control-snapshot-served-handoff-coverage.test.js (8 asserts,
+  6 red on revert, through the real serve path) +
+  admin-control-snapshot-served-handoff-writer-coupling.test.js
+  (derives the summary through the REAL writer
+  buildLocalControlSnapshot so a writer key rename cannot silently
+  re-open CL-022; red on revert).
+- ADVERSARIAL VERIFICATION (subagent, 6-scenario full-contract
+  deep-diff through the real serve path): PASS on safety — promotion
+  =true can only stop the harness gate from FORCING allActive=false
+  (applyLoadReadinessAdmissionGate:344 returns the probe unchanged);
+  liveness conjuncts computed independently; the only src write path
+  consumes the PRE-attach contract; degraded inputs (missing node,
+  pendingAck, formation-empty) still DENY with sensible reasons; the
+  non-clobber branch fails CLOSED (canonical-empty + summary-populated
+  -> deny). Findings recorded, none safety-blocking:
+  (A) the rebuilt contract's published-active evidence now resolves
+  from the summary's publishedNodeIds AHEAD of publicationConvergence
+  when they diverge (= PARITY with the build-time contract's
+  precedence, but a serve-time behavioral change: a summary-published
+  superset suppresses the served reconcile signal; durable fence still
+  governs promotion). If durable should govern evidence, pass
+  publishedActiveNodeIds: publicationConvergence.publishedActiveNodeIds
+  explicitly at the rebuild site — decide at Task-28.
+  (B) writer<->translator coupling guard — CLOSED by the
+  writer-coupling test above.
+  (C) serve-path staleness blind spot (PRE-EXISTING): the summary
+  carries no fresh/revision markers so fence snapshotCoverage.stale
+  can never trip on served snapshots; staleness visible only in
+  observationMode. Task-28: stamp the summary with snapshotRevision/
+  fresh.
+- ALSO for Task-28 (from the CL-022 investigation, separate latent
+  issue): CONTROL_SNAPSHOT_CACHE_STALE_THRESHOLD_MS (5000) ==
+  CONTROL_PLANE_HEARTBEAT_INTERVAL (5000) + CDC lag means the
+  cache_stale_watermark repair trigger fires chronically in a healthy
+  cluster (observed heartbeat gaps 2-20s) — quiescence misread as
+  staleness; harmless for CL-022 but noisy (repair_deferred/
+  stale_usable observation on most serves).
+- VALIDATION GATE: stat-gate launched 20260612T085908Z (4 runs,
+  pre-registered prediction: the runs-2/3-class mode=load
+  stable-window stalls at active=5/5 disappear; loadReadinessAdmission
+  gate reaches ready; remaining surfaces = quiesce leadership_unstable
+  + restart-recovery rung + possibly the active=0/5 projection
+  sub-case). Run 1: CONVERGED 355s.
