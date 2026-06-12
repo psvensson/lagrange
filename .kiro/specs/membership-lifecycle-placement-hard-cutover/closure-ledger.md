@@ -3720,3 +3720,26 @@ Each record below represents one violated invariant.
   recovery-degraded node. Note the same gate round also validates
   CL-027 (green-stall oracle livelock) — expect mode=load
   everything-green stalls gone as a class.
+- SUBAGENT VERIFICATION: TRUSTED-WITH-NOTES (2026-06-12). Wiring
+  confirmed on the actual veto path with field passthrough verified
+  end-to-end; bypass engagement confirmed against PRODUCTION readiness
+  shapes AND against run3's own report (recoveryEligibleExcludedNodeIds
+  empty on all 13 decision snapshots — the degraded leader's lane was
+  open, the bypass would have engaged); this site was the LAST unwired
+  bypass site (the planning gate has passed it since 878d5280 — which
+  is exactly why run3's moves got planned then died at admission).
+  Sick-node safety layered after the bypass verified: storage
+  admission recheck, dispatch-time recovery-eligible target gating,
+  move-safety pre-check, removal-phase remove-safety; the op-row
+  INSERT is CRITICAL/no-defer so the gateway cannot re-block the
+  admitted op. REUSE QUESTION RESOLVED: with the fix the new leader
+  dedup-reuses the wedged op (no dueling — critical add-like single
+  lane throws on any non-terminal add-like op); PENDING ops get
+  re-armed; an op already at target_sync is reused UNTOUCHED — CL-028
+  does not re-drive it; its convergence path is the 300s step
+  deadline -> replan, which the fix un-vetoes. The companion bug
+  (SECONDARY (i): deferred durable status write with retryAfterMs=null
+  and NO retry owner) remains the open next-record candidate for the
+  target_sync wedge itself. Guard gap closed: bypass test now pins
+  partitionId-only AND entityId-only resolution. Minor note: CL-012
+  stored-snapshot reuse can delay bypass engagement one refresh cycle.

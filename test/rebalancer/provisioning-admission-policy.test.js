@@ -314,8 +314,9 @@ async (t) => {
   const error = await Promise.resolve().then(() => {
     policy.assertLocalControlPlaneMutationReady({
       type: 'REPLACE',
+      // partitionId only (no entityId): the bypass must resolve the
+      // partition from either field alone.
       partitionId: 'sql_transactions-p1',
-      entityId: 'sql_transactions-p1',
       nodeId: 'node-remote',
       sourceNodeId: 'node-source',
       replicaId: 'sql_transactions-p1-r1',
@@ -328,6 +329,21 @@ async (t) => {
     undefined,
     'the recovery actuation that reopens the writability dimensions must ' +
       'not be vetoed by those same dimensions (CL-028)',
+  );
+
+  const entityIdOnlyError = await Promise.resolve().then(() => {
+    policy.assertLocalControlPlaneMutationReady({
+      type: 'REPLACE',
+      entityId: 'sql_transactions-p1',
+      nodeId: 'node-remote',
+      controlPlaneMutationWorkClass: 'background',
+    });
+  }).catch((caught) => caught);
+
+  t.equal(
+    entityIdOnlyError,
+    undefined,
+    'an entityId-only move must resolve the priority partition too',
   );
 });
 
