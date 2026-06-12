@@ -166,19 +166,33 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
         UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
     ).toUpperCase();
     const priorityPartition = this.isControlPlanePriorityPartition() === true;
-    const operationCreationGate = priorityPartition ?
-      this.buildPriorityRecoveryOperationCreationPlanningGateSnapshot(
-        this.entityId,
-      ) :
-      null;
+    const publicationEvent =
+      event?.tableName === SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS;
+    const leaderSatisfied =
+      options?.requireLeader === false || this.isLeader === true;
+    const publicationClosed =
+      publicationStatus === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED;
+    // CL-020: the operation-creation gate walks the full planning snapshot +
+    // surrogate follow-up decisions (parseStepsHistory over every operation
+    // row). Per the scheduling state table its result can only influence the
+    // outcome when ALL the cheap evidence bits above hold — the first four
+    // table rows match on those bits alone. This runs per cache-change event
+    // of every table (visibility listener + isCriticalCDCEvent), so any
+    // other event must never pay the planning re-derive.
+    const operationCreationGate =
+      priorityPartition &&
+      publicationEvent &&
+      leaderSatisfied &&
+      publicationClosed ?
+        this.buildPriorityRecoveryOperationCreationPlanningGateSnapshot(
+          this.entityId,
+        ) :
+        null;
     const evidence = Object.freeze({
       priorityPartition,
-      publicationEvent:
-        event?.tableName === SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
-      leaderSatisfied:
-        options?.requireLeader === false || this.isLeader === true,
-      publicationClosed:
-        publicationStatus === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      publicationEvent,
+      leaderSatisfied,
+      publicationClosed,
       operationCreationRequired:
         operationCreationGate?.operationCreationRequired === true,
     });

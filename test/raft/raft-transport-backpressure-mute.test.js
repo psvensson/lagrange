@@ -1,5 +1,5 @@
 /**
- * CL-009(ii)/CL-003 guard: the raft transport adapter must honor outbound
+ * CL-009(ii)/CL-003 guard: raft packet delivery must honor outbound
  * backpressure rejections with a per-peer mute window instead of
  * re-attempting every fan-out send against a saturated peer lane.
  *
@@ -11,10 +11,15 @@
  * Safety: raft is built on lossy channels; a muted (dropped) send is
  * retransmitted by liferaft. Only BACKGROUND sends are muted — critical and
  * readiness traffic may still pass via the critical reserve.
+ *
+ * Tests exercise deliverRaftPacketWithBackpressureMute, the seam the real
+ * raft send paths use (raft-group deliverPacket, raft-replica-base runtime
+ * helpers, partition-raft-node write). The former RaftTransportAdapter
+ * harness was dead code (never instantiated in src — the CL-003 lesson) and
+ * has been removed per cleanup requirement 5.1.
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {RaftTransportAdapter} from '../../src/raft/raft-transport-adapter.js';
 import {
   RaftPeerBackpressureMute,
   deliverRaftPacketWithBackpressureMute,
@@ -25,19 +30,15 @@ import {
 
 const PEER_ADDRESS = 'node-b/partition/sql_transactions-p1-r4';
 
-function createAdapter({deliverImpl}) {
+function createTransport({deliverImpl}) {
   const calls = {deliver: 0};
-  const adapter = new RaftTransportAdapter({
-    messageRouter: {
-      deliver: async (...args) => {
-        calls.deliver += 1;
-        return deliverImpl(...args);
-      },
+  const transport = {
+    deliver: async (...args) => {
+      calls.deliver += 1;
+      return deliverImpl(...args);
     },
-    entityType: 'partition',
-    nodeId: 'node-a',
-  });
-  return {adapter, calls};
+  };
+  return {transport, calls};
 }
 
 function buildBackpressureError(retryAfterMs = 200) {
@@ -69,18 +70,21 @@ function buildVotePacket() {
   };
 }
 
-function writeAsync(adapter, packet) {
-  return new Promise((resolve) => {
-    adapter.write(packet, (error, result) => resolve({error, result}));
-  });
+function sendViaMute(transport, mute, packet, peerAddress = PEER_ADDRESS) {
+  return deliverRaftPacketWithBackpressureMute(
+    transport, peerAddress, packet, mute,
+  ).then(
+    (result) => ({error: null, result}),
+    (error) => ({error, result: null}),
+  );
 }
 
-test('CL-009(ii): raft transport per-peer backpressure mute', async (t) => {
+test('CL-009(ii): raft per-peer backpressure mute', async (t) => {
   await t.test(
     'backpressure rejection mutes subsequent background sends',
     async (t) => {
       let failNext = true;
-      const {adapter, calls} = createAdapter({
+      const {transport, calls} = createTransport({
         deliverImpl: async () => {
           if (failNext) {
             throw buildBackpressureError(200);
@@ -88,8 +92,9 @@ test('CL-009(ii): raft transport per-peer backpressure mute', async (t) => {
           return {delivered: true};
         },
       });
+      const mute = new RaftPeerBackpressureMute();
 
-      const first = await writeAsync(adapter, buildAppendPacket());
+      const first = await sendViaMute(transport, mute, buildAppendPacket());
       t.equal(
         first.error?.code,
         OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE,
@@ -97,7 +102,7 @@ test('CL-009(ii): raft transport per-peer backpressure mute', async (t) => {
       );
       t.equal(calls.deliver, 1, 'first send reached the router');
 
-      const second = await writeAsync(adapter, buildAppendPacket());
+      const second = await sendViaMute(transport, mute, buildAppendPacket());
       t.equal(calls.deliver, 1, 'muted send never reaches the router');
       t.equal(
         second.error?.peerBackpressureMuted,
@@ -114,15 +119,17 @@ test('CL-009(ii): raft transport per-peer backpressure mute', async (t) => {
   );
 
   await t.test('critical sends bypass the mute', async (t) => {
-    const {adapter, calls} = createAdapter({
+    const {transport, calls} = createTransport({
       deliverImpl: async () => {
         throw buildBackpressureError(10_000);
       },
     });
-    await writeAsync(adapter, buildAppendPacket());
+    const mute = new RaftPeerBackpressureMute();
+
+    await sendViaMute(transport, mute, buildAppendPacket());
     t.equal(calls.deliver, 1, 'background send muted the peer');
 
-    const voteAttempt = await writeAsync(adapter, buildVotePacket());
+    const voteAttempt = await sendViaMute(transport, mute, buildVotePacket());
     t.equal(calls.deliver, 2, 'vote still reaches the router');
     t.equal(
       voteAttempt.error?.code,
@@ -133,7 +140,7 @@ test('CL-009(ii): raft transport per-peer backpressure mute', async (t) => {
 
   await t.test('mute expires and a successful send clears it', async (t) => {
     let failNext = true;
-    const {adapter, calls} = createAdapter({
+    const {transport, calls} = createTransport({
       deliverImpl: async () => {
         if (failNext) {
           throw buildBackpressureError(30);
@@ -141,36 +148,38 @@ test('CL-009(ii): raft transport per-peer backpressure mute', async (t) => {
         return {delivered: true};
       },
     });
+    const mute = new RaftPeerBackpressureMute();
 
-    await writeAsync(adapter, buildAppendPacket());
+    await sendViaMute(transport, mute, buildAppendPacket());
     t.equal(calls.deliver, 1, 'peer muted');
     failNext = false;
 
     await new Promise((resolve) => setTimeout(resolve, 50));
-    const afterExpiry = await writeAsync(adapter, buildAppendPacket());
+    const afterExpiry = await sendViaMute(transport, mute, buildAppendPacket());
     t.equal(calls.deliver, 2, 'send resumes after the window');
     t.equal(afterExpiry.error, null, 'send succeeds');
     t.equal(
-      adapter.peerBackpressureMute.mutedUntilMsByKey.size,
+      mute.mutedUntilMsByKey.size,
       0,
       'success clears the mute bookkeeping',
     );
   });
 
   await t.test('non-backpressure errors do not mute', async (t) => {
-    const {adapter, calls} = createAdapter({
+    const {transport, calls} = createTransport({
       deliverImpl: async () => {
         throw new Error('Message not acknowledged');
       },
     });
-    await writeAsync(adapter, buildAppendPacket());
-    await writeAsync(adapter, buildAppendPacket());
+    const mute = new RaftPeerBackpressureMute();
+
+    await sendViaMute(transport, mute, buildAppendPacket());
+    await sendViaMute(transport, mute, buildAppendPacket());
     t.equal(calls.deliver, 2, 'ordinary failures keep attempting');
   });
 
   await t.test(
-    'production wrapper: deliverRaftPacketWithBackpressureMute mutes the ' +
-      'raw transport.deliver pattern used by the real raft send paths',
+    'default shared mute: omitting the mute argument still mutes',
     async (t) => {
       let deliverCalls = 0;
       const transport = {
@@ -179,14 +188,16 @@ test('CL-009(ii): raft transport per-peer backpressure mute', async (t) => {
           throw buildBackpressureError(200);
         },
       };
-      const mute = new RaftPeerBackpressureMute();
-      const packet = buildAppendPacket();
+      // Distinct peer so the module-level shared mute does not leak state
+      // into other subtests.
+      const sharedPeer = 'node-shared/partition/sql_transactions-p1-r2';
+      const packet = {...buildAppendPacket(), destination: sharedPeer};
 
       await deliverRaftPacketWithBackpressureMute(
-        transport, PEER_ADDRESS, packet, mute,
+        transport, sharedPeer, packet,
       ).catch((error) => error);
       const second = await deliverRaftPacketWithBackpressureMute(
-        transport, PEER_ADDRESS, packet, mute,
+        transport, sharedPeer, packet,
       ).catch((error) => error);
 
       t.equal(deliverCalls, 1, 'second send muted before the transport');

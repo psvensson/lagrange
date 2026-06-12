@@ -2225,3 +2225,48 @@ Each record below represents one violated invariant.
   showed the parse cost class). Note the DIAGNOSTIC warn block inside
   enqueueMembershipPublicationReconcile (publications write-leader
   snapshot compare) also runs per enqueue — fold into the same cleanup.
+
+## CL-020 Fix Landed
+
+- FIX LANDED (2026-06-12, direction (a) cheap pre-filter): in
+  buildPriorityRecoveryPublicationEventSchedulingSnapshot
+  (rebalancer-priority-recovery-planning-gate-methods.js) the heavy
+  operation-creation gate is now computed ONLY when all four cheap
+  evidence bits hold (priorityPartition && publicationEvent &&
+  leaderSatisfied && publicationClosed) — exactly the cases where the
+  scheduling state table can reach a row that reads
+  operationCreationRequired; the first four table rows match on the
+  cheap bits alone, so state/action/shouldEnqueue are bit-identical
+  for every skipped event. Covers BOTH per-event callers (the
+  visibility cache listener and isCriticalCDCEvent, which passes
+  requireLeader:false and therefore always satisfies the leader bit
+  when it needs visibilityProgress). Observable delta: for irrelevant
+  events the frozen snapshot's operationCreationGate is null (was a
+  computed-but-unused gate) and the listener-path decision's
+  visibilityProgress is false for non-leader publication events
+  (consumer discards it — handlePriorityRecoveryVisibilityEvent reads
+  only shouldEnqueue/reconcileReason). Heavy planning remains at its
+  legitimate per-rebalance-pass callers
+  (rebalancer-planning-gate-methods.js bypass snapshot,
+  rebalancer-transport-pressure-methods.js). Directions (b) coalesce
+  and (c) parseStepsHistory memo stay on record if the gate shows
+  residue. Guard: 'CL-020: visibility events pay the heavy planning
+  gate only for PUBLISHED publication events' in
+  test/rebalancer/priority-recovery-visibility-wakeup.test.js —
+  verified red on revert.
+- DEAD CODE REMOVED on contact (new working policy, same change):
+  src/raft/raft-transport-adapter.js (165 lines, never instantiated in
+  src — the CL-003 no-op-landing site; the repo's own
+  raft-cleanup-verification.test.js documents its removal as cleanup
+  requirement 5.1 and now passes via its removed-path) + its
+  adapter-only tests (raft-transport-adapter.test.js,
+  unified-address-format.property.test.js — AddressManager keeps its
+  own test/address/ property suites) + orphaned constants
+  (RAFT_PACKET_MESSAGE_TYPE, RAFT_MESSAGE_TYPE,
+  RAFT_TRANSPORT_ERROR_MSG, RAFT_TRANSPORT_LOG_MSG).
+  raft-transport-backpressure-mute.test.js REWRITTEN against the live
+  seam (deliverRaftPacketWithBackpressureMute — the path raft-group/
+  raft-replica-base/partition-raft-node actually use), preserving all
+  six mute semantics subtests + a new default-shared-mute subtest.
+  Suites: raft 562/562, partition+message-group 3510 pass,
+  rebalancer at baseline.

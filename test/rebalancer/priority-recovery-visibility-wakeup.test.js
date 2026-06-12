@@ -138,3 +138,104 @@ test(
     }
   },
 );
+
+test(
+  'CL-020: visibility events pay the heavy planning gate only for ' +
+    'PUBLISHED publication events',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const systemTableCache = createPriorityPartitionCache();
+    const controlPlaneReadinessService =
+      createMockControlPlaneReadinessService({
+        systemTableCache,
+      });
+    const rebalancer = createTestRebalancer({
+      entityId: TEST_PRIORITY_PARTITION_ID,
+      entityType: EntityType.PARTITION,
+      nodeId: TEST_NODE_ID,
+      systemTableCache,
+      controlPlaneReadinessService,
+    });
+    rebalancer.isLeader = true;
+    rebalancer.enqueueRebalanceCheck = () => true;
+    rebalancer.enqueueMembershipPublicationReconcile = () => true;
+    let gateCalls = 0;
+    rebalancer.buildPriorityRecoveryOperationCreationPlanningGateSnapshot =
+      () => {
+        gateCalls += 1;
+        return Object.freeze({
+          operationCreationRequired: true,
+          operationCreationPartitionId: TEST_PRIORITY_PARTITION_ID,
+          operationCreationScope: 'current_partition',
+        });
+      };
+
+    try {
+      // The production witness (stat-gate-20260611T203619Z run3): every
+      // cache-change event of EVERY table ran the full planning re-derive
+      // (parseStepsHistory 29% of seed self-time in the freeze windows).
+      // Same-partition service visibility must still enqueue via the cheap
+      // base decision WITHOUT touching the planning gate.
+      const handledService = rebalancer.handlePriorityRecoveryVisibilityEvent(
+        buildPriorityServiceVisibilityEvent(TEST_SERVICE_STATUS.ACTIVE),
+      );
+      t.equal(handledService, true, 'service visibility still enqueues');
+      t.equal(gateCalls, 0, 'service event never builds the planning gate');
+
+      rebalancer.handlePriorityRecoveryVisibilityEvent(Object.freeze({
+        tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+        operation: TEST_CACHE_MUTATION_OPERATION,
+        data: Object.freeze({
+          operation_id: 'op-1',
+          partition_id: 'unrelated-partition',
+          status: 'claimed',
+        }),
+      }));
+      t.equal(
+        gateCalls,
+        0,
+        'operation-churn event never builds the planning gate',
+      );
+
+      const handledPublication =
+        rebalancer.handlePriorityRecoveryVisibilityEvent(Object.freeze({
+          tableName: SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
+          operation: TEST_CACHE_MUTATION_OPERATION,
+          data: Object.freeze({
+            publication_id: 'pub-1',
+            status: 'PUBLISHED',
+          }),
+        }));
+      t.equal(
+        handledPublication,
+        true,
+        'PUBLISHED publication event enqueues via the scheduling snapshot',
+      );
+      t.equal(
+        gateCalls,
+        1,
+        'only the PUBLISHED publication event builds the planning gate',
+      );
+
+      rebalancer.isLeader = false;
+      rebalancer.handlePriorityRecoveryVisibilityEvent(Object.freeze({
+        tableName: SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
+        operation: TEST_CACHE_MUTATION_OPERATION,
+        data: Object.freeze({
+          publication_id: 'pub-1',
+          status: 'PUBLISHED',
+        }),
+      }));
+      t.equal(
+        gateCalls,
+        1,
+        'non-leader publication event skips the planning gate (listener path requires leader)',
+      );
+    } finally {
+      rebalancer.shutdown();
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+    }
+  },
+);
