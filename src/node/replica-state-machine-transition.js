@@ -486,7 +486,33 @@ function buildCreateCdcData(
   serviceType,
   address,
 ) {
+  // CL-021: this payload feeds a full-row INSERT OR REPLACE. Columns owned
+  // by OTHER writers (raft_role from the partition service's role-mutation
+  // helper, group_id from registration) were silently NULLED by every
+  // lifecycle upsert — and the priority spread-ready predicate requires a
+  // truthy raft_role, so REPLACE-created replicas stayed invisible to
+  // spread recovery (exclusionReasonCounts = raft_role_missing on every
+  // blocked partition; the mode=load ACTIVE-wait root). Preserve them from
+  // the cached row when present.
+  const cachedRow =
+    typeof stateMachine.systemTableCache?.get === TYPEOF.FUNCTION ?
+      stateMachine.systemTableCache.get(TABLES.SERVICES, serviceId) :
+      null;
+  const preservedColumns = {};
+  if (
+    typeof cachedRow?.raft_role === TYPEOF.STRING &&
+    cachedRow.raft_role.length > LOCAL_NUM_ZERO
+  ) {
+    preservedColumns.raft_role = cachedRow.raft_role;
+  }
+  if (
+    typeof cachedRow?.group_id === TYPEOF.STRING &&
+    cachedRow.group_id.length > LOCAL_NUM_ZERO
+  ) {
+    preservedColumns.group_id = cachedRow.group_id;
+  }
   return {
+    ...preservedColumns,
     ...stateMachine._buildUpdateCdcData(replicaState, null),
     service_id: serviceId,
     service_type: serviceType,

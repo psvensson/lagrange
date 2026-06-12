@@ -32,7 +32,7 @@ Each record below represents one violated invariant.
 | CL-018 | guarded | raft-log-scan-per-heartbeat | A follower's commit catch-up must not rescan and JSON-parse the whole raft log on every heartbeat: sqlite followers never persist committedIndex, so getUncommittedEntriesUpToIndex degenerates to a full-table parse per heartbeat per priority partition on the seed — the top self-time frame in the freeze windows that block CL-017's quiesce. |
 | CL-019 | guarded | readiness-snapshot-reuse-per-change | Readiness evaluation must be per-change, not per-call: (1) the CL-012 stored-snapshot reuse predicate rejects watermark EQUALITY (snapshot exactly reflects the current row — the common state between heartbeats), so the sync fast path is structurally a cache-lag bridge with ~0% hit rate and every routing decision runs the full evidence + planning + snapshot build; (2) even on a hit, the pre-check prelude rebuilds the full publication-recovery protocol snapshot (gate + participation maps + normalize/freeze storm) from an effectively-constant membership-publication row, per call. |
 | CL-020 | guarded | priority-recovery-event-decision-cost | The rebalancer's priority-recovery visibility cache listener must decide whether an event warrants a rebalance check CHEAPLY: it currently computes the full operation-creation planning-gate snapshot + surrogate follow-up decisions (JSON-parsing steps_history of replica-operation rows) on EVERY cache-change event of EVERY table — during operation churn each row update triggers a full planning re-derive, the residual seed-freeze head after CL-019. |
-| CL-021 | open | active-gate-promotion-closure | The mode=load ACTIVE wait must close once publication, coverage, and priority recovery are green: 4/4 runs stall there with the handoff contract degraded — sub-mode (A) priority partitions wedged at 1 distinct node (spread recovery blocked); sub-mode (B) the catchup fence denies promotion while recoveryProtocolState=steady_published and every owner-visible count is green (reason code aliased to published_active_coverage_incomplete; fence missingProofReasons not yet observable in the trace). |
+| CL-021 | guarded | active-gate-promotion-closure | The mode=load ACTIVE wait must close once publication, coverage, and priority recovery are green: 4/4 runs stall there with the handoff contract degraded — sub-mode (A) priority partitions wedged at 1 distinct node (spread recovery blocked); sub-mode (B) the catchup fence denies promotion while recoveryProtocolState=steady_published and every owner-visible count is green (reason code aliased to published_active_coverage_incomplete; fence missingProofReasons not yet observable in the trace). |
 
 ## CL-001 Published Membership Convergence Under Restart Churn
 
@@ -2574,3 +2574,112 @@ Each record below represents one violated invariant.
   often). Treat the remaining mode=load stalls + the NEW restart-phase
   surface (run3 artifacts at stat-gate-20260612T061547Z-run3) as the
   next falsification targets.
+
+## Restart-Phase Rung — Pre-Analysis (061547Z-run3, do not over-claim)
+
+- Harness error: 'Restarted node did not become recovery-ready within
+  120000ms for node 11601fe0' with reachable=true (via
+  bootstrap_health), readinessPhase=INIT, readinessStage=alive,
+  reasons=BOOTSTRAP_PHASE_INCOMPLETE|SQL_ENGINE_UNAVAILABLE|
+  LEADER_METADATA_INCOMPLETE|BOOTSTRAP_NOT_READY,
+  bootstrapJoinProjectionBlocker=control_snapshot_authority_unavailable,
+  lastError=admin probe ECONNREFUSED :8081 — i.e. the probed process
+  looks like a FRESH BOOT stuck before SQL/bootstrap readiness with its
+  admin API not yet listening.
+- Artifacts (timeline): 11601fe0's captured ndjson is CONTINUOUS from
+  formation (06:31:42) through teardown (06:39:10) and shows a
+  CL-006-style 'Reset join lifecycle/Resuming join session' loop x121
+  from 06:37:01 — every attempt 'Seed bootstrap not ready (phase:
+  contacting_seed)'. The SEED's (7493ab) log ends ABRUPTLY at 06:36:03
+  mid-traffic, with partition-service/rebalancer shutdown lines at
+  06:34:52-06:35:14 (the harness was restarting the SEED) and NO
+  post-restart output — the seed's restarted process either never
+  logged or its output is not in the capture.
+- CAPTURE AMBIGUITY TO RESOLVE FIRST (harness mechanics): does the
+  rolling-restart recreate containers, and does .full-logs capture
+  span the recreation? The INIT-phase probe result for 11601fe0
+  contradicts its continuous log unless captures are per-container and
+  the restarted process's log is MISSING. Read the harness restart
+  implementation (test/distributed/harness — restartNode/rolling
+  driver) before pinning; the prior lesson (CL-006 era) was exactly
+  that capture gaps fooled us.
+- Candidate shapes (rank after capture question): (a) the SEED restart
+  never came back (its fresh boot hung pre-logging) and the harness's
+  recovery-ready wait attributed the failure to the NEXT node it
+  probed; (b) 11601fe0's restart boot hung before SQL-engine init
+  (INIT phase) while its OLD process's log is what we read; (c) the
+  rejoin needs the seed's bootstrap API while the seed itself is
+  mid-restart — a rolling-restart ORDERING constraint (don't restart
+  the next node until the seed's join admission is re-open;
+   'Seed bootstrap not ready' x121 supports this).
+- REFINEMENT (report data): stabilityGates.restart_recovery shows
+  restartBoundaryCount=3 with blocker admin_reachability_refused —
+  restart #1 completed (before_stop+after_ready), restart #2
+  (11601fe0) recorded before_stop only. Harness restart = docker
+  stop+start of the SAME container (chaos.js:217+), so captures DO
+  span restarts — 11601fe0's 06:37:01+ resume loop IS its restarted
+  process: fresh boot wedges in the JOIN phase ('Seed bootstrap not
+  ready', x121/2min) so SQL-engine/admin never initialize →
+  recovery-ready timeout. OPEN QUESTION for the rung: which node was
+  restart #1 (the seed's log ends 06:36:03 with NO post-restart
+  output — if the seed was #1 and passed after_ready while logging
+  nothing, the recovery-ready predicate for restart #1 passed on
+  weaker evidence than the bootstrap-not-ready state the rejoiner
+  then hits). Next: read _recordRestartBoundarySnapshot artifacts +
+  the recovery-ready predicate; likely invariant: a restarted SEED
+  must re-open join admission before the next node restarts
+  (rolling-restart ordering/readiness contract).
+
+## CL-021 PINNED + FIX LANDED: raft_role Column Wipe
+
+- PINNING GATE (070804Z, witness plumbing 89147e21): the spread
+  DEFERRING diagnostic never fired (0 lines — the rebalancer blocker
+  path is no longer engaged) but the readiness-side derived summary
+  carried the witness into the run REPORTS: EVERY blocked priority
+  partition in every stalling run shows
+  exclusionReasonCounts={raft_role_missing: N} with exact arithmetic
+  (e.g. readyReplicaCount=3, readyDistinctNodeCount=1,
+  raft_role_missing=2 — three ACTIVE replicas, the two REPLACE-created
+  ones invisible). raft_role_missing is the ONLY exclusion reason that
+  appears. CL-021's First Violated Invariant, FINAL: a lifecycle
+  full-row INSERT OR REPLACE must not NULL columns owned by other
+  writers — buildCreateCdcData omitted raft_role/group_id, so every
+  lifecycle upsert wiped the partition service's role write, and the
+  spread-ready predicate (requires truthy raftRole) excluded the
+  replicas forever. (The verifier flagged this exact wipe in the
+  CL-021(A) review; it was misfiled as 'pre-existing residual'.)
+- FIX LANDED: buildCreateCdcData preserves raft_role + group_id from
+  the cached services row when present (systemTableCache is wired
+  into the production state machine since the CL-021(A) corrections).
+  The UPDATE branch never wiped (column-level). Window remaining:
+  before the role helper's FIRST successful write the row legitimately
+  has no role — the helper retries (roleUpdateRetryTimer) and the next
+  lifecycle upsert no longer destroys it. Guard: 'lifecycle UPSERT
+  preserves raft_role/group_id from the cached row' subtest (red on
+  revert). Node suite 1,208 pass.
+- Gate prediction (pre-registered): raft_role_missing exclusions decay
+  to zero within the run; spread surfaces clear; remaining stalls
+  shift to the restart-recovery rung / quiesce.
+- VALIDATION GATE (073746Z) — CL-021 GUARDED. 4/4 publication
+  CONVERGED, 0 corrupt, walls 212-555s. Pre-registered prediction
+  CONFIRMED: (1) raft_role_missing DECAYED TO ZERO — runs 1-3 have
+  zero occurrences anywhere; run4 shows it only in MID-RUN snapshots
+  (1 per partition, down from 2) alongside status_syncing=2
+  (legitimate transients in the pre-role-write window), and the FINAL
+  snapshots show EMPTY exclusionReasonCounts with
+  readyDistinctNodeCount=2/readyReplicaCount=3 — co-location surplus
+  awaiting source removal, NOT blindness. (2) The spread surface is
+  GONE as a failure cause (no run failed on it). (3) The CL-021(A)
+  reconcile ENGAGED for the first time (17 'Deferred durable services
+  row converged' witness lines in run4) — with role preservation the
+  whole convergence chain now operates. Surfaces now: run4 quiesce
+  with quiescenceState=leadership_churn /
+  canonicalBlocker=leadership_unstable / inFlightCount=3 (NEW
+  canonical blocker — next record candidate); runs 2/3 mode=load at
+  active=5/5 coverage complete (everything green — the stable-window/
+  gate-flap question from the CL-020 verdict entry); run1 mode=load
+  at active=0/5. NEXT SESSION: (a) the mode=load stable-window
+  question (why no close at active=5/5 — read
+  lastMeaningfulChange timestamps vs gate-green transitions);
+  (b) leadership_unstable quiesce blocker; (c) the restart-recovery
+  rung (pre-analysis above; 061547Z-run3 artifacts).

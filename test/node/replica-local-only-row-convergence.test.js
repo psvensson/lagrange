@@ -242,6 +242,40 @@ test('CL-021: deferred durable services rows converge', async (t) => {
   );
 
   await t.test(
+    'lifecycle UPSERT preserves raft_role/group_id from the cached row',
+    async (t) => {
+      // CL-021 root (pinned by exclusionReasonCounts: raft_role_missing on
+      // every blocked partition): the full-row INSERT OR REPLACE nulled
+      // columns owned by other writers, leaving REPLACE-created replicas
+      // invisible to the spread-ready predicate.
+      const nowRef = {value: 1_760_000_000_000};
+      const {gateway, calls} = createGateway();
+      gateway.failNext = false;
+      const stateMachine = createStateMachine({gateway, nowRef});
+      stateMachine.systemTableCache = {
+        get: (table, key) =>
+          table === 'services' && key === REPLICA_ID ?
+            {
+              service_id: REPLICA_ID,
+              raft_role: 'follower',
+              group_id: 'group-7',
+              status: 'active',
+            } :
+            null,
+      };
+      await seedLocalOnlyReplica(stateMachine);
+
+      await stateMachine._reconcileLocalOnlyServiceRows();
+
+      t.equal(calls.mutations.length, 1, 'one durable write');
+      const row = calls.mutations[0].row || calls.mutations[0].data;
+      t.equal(row.raft_role, 'follower', 'raft_role preserved, not nulled');
+      t.equal(row.group_id, 'group-7', 'group_id preserved, not nulled');
+      stateMachine.shutdown?.();
+    },
+  );
+
+  await t.test(
     'reconcile skips rows with an in-flight transition persist',
     async (t) => {
       const nowRef = {value: 1_760_000_000_000};
