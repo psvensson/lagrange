@@ -1,6 +1,7 @@
 import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-service-shared.js';
 import {ControlPlaneReadinessServiceSegment2} from './control-plane-readiness-service-segment-2.js';
 import {installControlPlaneReadinessRuntimeAuthorityMethods} from './control-plane-readiness-service-segment-3-runtime-authority-methods.js';
+import {summarizeProjectionReadinessContractForHistory} from './projection-readiness-state.js';
 
 const LOCAL_STR_BOOLEAN = 'boolean';
 
@@ -514,10 +515,18 @@ class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceS
       serveEligible: currentState.serveEligible,
       previousRepairEligible: previousState.repairEligible,
       repairEligible: currentState.repairEligible,
+      // CL-031(d): history entries carry the bounded contract SUMMARY —
+      // the full contract (~0.5MB of embedded evidence) made each entry
+      // ~1MB and the served snapshot grew past the websocket limit until
+      // nodes OOM-died. The live readiness entry keeps the full contract.
       previousProjectionReadinessContract:
-        previousState.projectionReadinessContract || null,
+        summarizeProjectionReadinessContractForHistory(
+          previousState.projectionReadinessContract,
+        ),
       projectionReadinessContract:
-        currentState.projectionReadinessContract || null,
+        summarizeProjectionReadinessContractForHistory(
+          currentState.projectionReadinessContract,
+        ),
       previousReasonCodes: Object.freeze([...previousState.reasonCodes]),
       reasonCodes: Object.freeze([...currentState.reasonCodes]),
       flippedDimensions: Object.freeze(flippedDimensions),

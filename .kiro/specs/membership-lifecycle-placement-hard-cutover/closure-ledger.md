@@ -4414,3 +4414,63 @@ Each record below represents one violated invariant.
 - FRONTIER unchanged in order: (d) cap the member the next round
   names (now urgent: it OOM-kills joiners, not just the seed);
   then run1's genuine over-target settle residual.
+
+### CL-031 STEP (d) LANDED (2026-06-13) — the growing members NAMED and BOUNDED; gate 220403Z run1 = first NODE_EXIT classification end-to-end
+
+- GATE 220403Z run1 (fingerprint a67a8604473bd468, NODE_EXIT
+  missing=1): the deepened attributionPath NAMED the growth —
+  readiness HISTORY structures inside controlPlaneDiagnostics:
+  (1) readinessByNodeId.<node>.recentTransitions = 34MB/node
+  (same memoized array also served as readinessTransitionsByNodeId
+  — ~1MB PER ENTRY); (2) recoveryEpochsByNodeId events = 10MB
+  (~300KB/event). Counts were already capped (32) — the PER-ENTRY
+  payload was the mass: every entry embeds FULL
+  projectionReadinessContract objects (transitions embed TWO),
+  and the contract embeds its whole evidence chain
+  (projection-readiness-state.js: evidence +
+  publication.boundaryOutcome/streamOutcome/recoveryOutcome) at
+  ~0.5MB and growing with run depth. replicaOperations.rows
+  EXONERATED (the structural suspect was wrong; the data decided).
+  Round deliberately STOPPED after run1 — its questions (member
+  name, NODE_EXIT classification live) were answered; remaining
+  runs would only re-sample a known-unbounded snapshot.
+- FIX: summarizeProjectionReadinessContractForHistory
+  (projection-readiness-state.js) — history entries carry a
+  KB-scale summary (states, eligibility booleans, activeGate.state,
+  reasonCodes, projectionRevision) with contractDetailOmitted:true
+  (visible, never silent). Wired at BOTH history producers:
+  recordReadinessTransition entries (segment-3) and
+  buildRecoveryEpochSummary events (snapshot-store; its scalar
+  extractions still read the FULL contract first). The LIVE
+  readiness entry keeps the full contract — gates read current
+  state, not history.
+- ADVERSARIALLY VERIFIED TRUSTED-WITH-NOTES: (i) traced every
+  buildProjectionReadinessContract/Evidence source — NO production
+  path feeds a history entry's contract back into decision logic
+  (the projection-readiness-evidence.js boundaryOutcome fallback
+  at :109 only ever sees live contracts); (ii) all consumers of
+  the summarized fields are display-only and read kept fields
+  (failure-bundle dedupe/causal extraction uses
+  nodeId/observedAtMs/eligibility/reasonCodes/rawInputs — all
+  kept); (iii) mistaken future use fails CLOSED (lanes duck-typing
+  → BLOCKED, never false-ready); (iv) the bound applies at every
+  nesting depth incl. planning-snapshot-embedded readinessEntries
+  (the multiplicative history×nesting blowup is gone); (v) 184/184
+  targeted suites green, control-plane suite failures identical to
+  clean HEAD (72 pre-existing). Guard:
+  cl-031-readiness-history-bounded-contracts.test.js (17 asserts,
+  red on revert at all three layers).
+- RESIDUAL ON RECORD (verifier, LOW): the live full contract
+  (~0.35-0.5MB/node) remains in readinessByNodeId + nested copies
+  via evidence.raw (projection-readiness-evidence.js:508 freezes
+  the whole build source) — O(cluster size) not O(run time), but
+  if the next gate's >8MB warn still fires with path
+  readinessByNodeId.<node>.projectionReadinessContract, the
+  evidence.raw chain is the next record.
+- VALIDATION ROUND = next gate: pre-registered expectations:
+  (1) attribution warns rare/absent (snapshot should sit well
+  under 8MB; if any fire, the path names the next member);
+  (2) NO kernel-OOM node deaths / seed heap OOMs from snapshot
+  serialization; (3) oracle blindness zero; (4) the genuine
+  over-target settle residual (212016Z-run1 class) becomes the
+  binding constraint.

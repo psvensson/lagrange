@@ -1,4 +1,5 @@
 import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-service-shared.js';
+import {summarizeProjectionReadinessContractForHistory} from './projection-readiness-state.js';
 
 const LOCAL_NUM_ZERO = 0;
 const LOCAL_STR_EMPTY = '';
@@ -512,7 +513,14 @@ const controlPlaneReadinessSnapshotStoreMethods = {
         dimensions[CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE] === true,
       serveEligible:
         dimensions[CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE] === true,
-      projectionReadinessContract,
+      // CL-031(d): epoch events carry the bounded contract SUMMARY — the
+      // full contract embed made each event ~300KB (gate 220403Z measured
+      // 10MB events arrays); the scalar dimensions below already capture
+      // the decision-relevant state.
+      projectionReadinessContract:
+        summarizeProjectionReadinessContractForHistory(
+          projectionReadinessContract,
+        ),
       projectionReadinessState:
         projectionReadinessContract?.state ||
         PROJECTION_READINESS_CONTRACT_STATE.BLOCKED,
