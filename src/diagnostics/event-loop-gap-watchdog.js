@@ -44,7 +44,29 @@ const WATCHDOG_LOG_MSG = Object.freeze({
   STARTED: 'Event loop gap watchdog started',
   PROFILE_WINDOW: 'Event loop gap profile window',
   PROFILE_ERROR: 'Event loop gap profiler error',
+  MEMORY_SAMPLE: 'Process memory sample',
 });
+
+// CL-030: periodic heap telemetry so an unbounded-growth curve is
+// attributable post-mortem without a profiler (the 145024Z-run2 seed
+// OOMed at the 1.46GB heap limit with NO memory series in any artifact
+// channel). Console-only, one line a minute.
+const WATCHDOG_MEMORY_SAMPLE_INTERVAL_MS = 60 * 1000;
+
+const WATCHDOG_BYTES_PER_MB = 1024 * 1024;
+
+/**
+ * @return {Object} process.memoryUsage() rounded to MB for log payloads.
+ */
+function buildMemorySampleMb() {
+  const usage = process.memoryUsage();
+  return {
+    heapUsedMb: Math.round(usage.heapUsed / WATCHDOG_BYTES_PER_MB),
+    heapTotalMb: Math.round(usage.heapTotal / WATCHDOG_BYTES_PER_MB),
+    rssMb: Math.round(usage.rss / WATCHDOG_BYTES_PER_MB),
+    externalMb: Math.round((usage.external || 0) / WATCHDOG_BYTES_PER_MB),
+  };
+}
 
 const WATCHDOG_LOG_LEVEL = Object.freeze({
   WARN: 'warn',
@@ -472,6 +494,7 @@ class EventLoopGapWatchdog {
     this.totalGapMs = 0;
     this.maxGapMs = 0;
     this.startedAtMs = 0;
+    this.lastMemorySampleAtMs = 0;
   }
 
   /**
@@ -533,6 +556,16 @@ class EventLoopGapWatchdog {
     if (this.profiler && this.profiler.isWindowElapsed(nowMs)) {
       this.rotateProfileWindow();
     }
+    if (
+      nowMs - this.lastMemorySampleAtMs >= WATCHDOG_MEMORY_SAMPLE_INTERVAL_MS
+    ) {
+      this.lastMemorySampleAtMs = nowMs;
+      this.logConsoleOnly(
+        WATCHDOG_LOG_LEVEL.INFO,
+        WATCHDOG_LOG_MSG.MEMORY_SAMPLE,
+        buildMemorySampleMb(),
+      );
+    }
     if (gapMs < this.thresholdMs) {
       return;
     }
@@ -568,6 +601,7 @@ class EventLoopGapWatchdog {
         gapMs: Math.round(gapMs),
         taggedExclusiveMs: Math.round(taggedExclusiveDeltaMs),
         unexplainedMs,
+        memory: buildMemorySampleMb(),
         eventLoopUtilization: Number(eluDelta.utilization.toFixed(4)),
         openSections: this.registry.openSections(performance.now()),
         siteDeltas,
