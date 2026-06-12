@@ -2890,3 +2890,43 @@ Each record below represents one violated invariant.
   gate reaches ready; remaining surfaces = quiesce leadership_unstable
   + restart-recovery rung + possibly the active=0/5 projection
   sub-case). Run 1: CONVERGED 355s.
+
+### CL-022 GATE VERDICT (stat-gate-20260612T085908Z) — GUARDED
+
+- 4/4 publication CONVERGED, 0 corrupt, 0 stale-source; walls
+  355/491/747/826s (p50 491 — runs now go DEEPER, reaching phases that
+  were unreachable behind the admission gate).
+- PRE-REGISTERED PREDICTION CONFIRMED: the blocked-admission-gate
+  signature is GONE. loadReadinessAdmissionGate reaches
+  {state:ready, promotionAllowed:true, ownerState:complete,
+  ownerNextAction:admit_active_gate} — first time ever — and holds it
+  for 120+ consecutive attempts (run1 stage records); runs 2/3 passed
+  load-readiness entirely (run2 reached ACTUAL ROLLING RESTARTS,
+  run3 reached the quiesce gate).
+- Status: guarded (fix 2a3b3c2b + guards red-on-revert + gate rerun
+  shows the first violated invariant no longer violated; move to
+  closed after one more confirming round).
+- SURFACES AFTER CL-022 (one record candidate each — split by
+  first-violated invariant, do NOT lump):
+  (1) run1 mode=load stall WITH admission ready: owner reconcile
+      handoffOutcome=write_deferred#owner_reconcile_pending#enqueued
+      forever, ownerQueue=69 (growing), epoch stuck at 2, snapshot
+      observation deferred_refresh/retry + selected_timeout — the
+      membership-publication owner write lane never drains. NEW
+      record candidate: owner reconcile queue drain liveness.
+  (2) run2: restart-recovery rung — 'Restarted node did not become
+      recovery-ready within 120000ms' node 11601fe0, fresh boot
+      wedged INIT/alive with BOOTSTRAP_PHASE_INCOMPLETE|
+      SQL_ENGINE_UNAVAILABLE; SECOND occurrence (artifacts:
+      085908Z-run2 + 061547Z-run3 + pre-analysis in the
+      'Restart-Phase Rung' entry — candidate invariant: restarted
+      seed must re-open join admission before the next node
+      restarts).
+  (3) run3: quiesce 'Control plane did not quiesce within 120000ms',
+      quiescenceState=control_plane_pressure, canonicalBlocker=
+      control_plane_pressure (instabilitySummary also carries
+      leadership_unstable=0:2 — the 073746Z-run4 leadership_unstable
+      blocker may be the same family).
+  (4) run4: mode=STARTUP stall at active=4/5 coverage complete,
+      observation reasons discovery_node_coverage_gap +
+      stale_replica_operations_in_flight + selected_timeout.
