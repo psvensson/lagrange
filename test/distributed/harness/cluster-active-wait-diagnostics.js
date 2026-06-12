@@ -315,8 +315,90 @@ function formatSnapshotCoverage(snapshotCoverage) {
   );
 }
 
+const BOUNDED_DIAGNOSTICS_RETENTION_TAIL_COUNT = 4;
+const BOUNDED_DIAGNOSTICS_RETENTION_APPROX_BYTES_UNAVAILABLE = -1;
+const BOUNDED_DIAGNOSTICS_RETENTION_FIRST_ENTRY_COUNT = 1;
+
+/**
+ * CL-031: bounded retention for per-poll diagnostics snapshots. The control
+ * snapshot grows unbounded, so retaining every poll's snapshot multiplies an
+ * already-huge object by the attempt count in both harness memory and
+ * failed-scenario report `details`. The retention keeps the FIRST snapshot
+ * and the LAST `tailCount` snapshots in full (first + 4 = 5 fulls by
+ * default) and demotes every other snapshot to a small stub
+ * {index, attempt, capturedAt, approxBytes, dropped: true} AT APPEND TIME,
+ * so the buffer never holds more than first+tail full snapshots in memory.
+ * The stubs' approxBytes preserve the growth trajectory as evidence.
+ * @param {{tailCount?: number}} options
+ * @returns {{
+ *   append: function(*, {attempt?: number, elapsedMs?: number,
+ *     capturedAt?: (string|number)}=): void,
+ *   entries: function(): Array<Object>,
+ *   appendedCount: function(): number,
+ * }}
+ */
+function boundedDiagnosticsRetention(options = {}) {
+  const tailCount =
+    Number.isInteger(options.tailCount) && options.tailCount > ZERO ?
+      options.tailCount :
+      BOUNDED_DIAGNOSTICS_RETENTION_TAIL_COUNT;
+  const entries = [];
+  const tailEntries = [];
+  let appendedCount = ZERO;
+
+  const measureApproxBytes = (snapshot) => {
+    try {
+      return Buffer.byteLength(JSON.stringify(snapshot));
+    } catch (_error) {
+      return BOUNDED_DIAGNOSTICS_RETENTION_APPROX_BYTES_UNAVAILABLE;
+    }
+  };
+
+  const demoteToStub = (entry) => {
+    // The dropped snapshot's size is measured here, while the full payload
+    // is about to be released, so stubs document the growth trajectory.
+    entry.approxBytes = measureApproxBytes(entry.snapshot);
+    entry.dropped = true;
+    delete entry.snapshot;
+  };
+
+  return {
+    append(snapshot, meta = {}) {
+      const entry = {index: appendedCount};
+      if (Number.isFinite(meta.attempt)) {
+        entry.attempt = meta.attempt;
+      }
+      if (Number.isFinite(meta.elapsedMs)) {
+        entry.elapsedMs = meta.elapsedMs;
+      }
+      const capturedAt = meta.capturedAt ?? snapshot?.capturedAt ?? null;
+      if (capturedAt !== null) {
+        entry.capturedAt = capturedAt;
+      }
+      entry.snapshot = snapshot;
+      entries.push(entry);
+      appendedCount += 1;
+      if (entries.length === BOUNDED_DIAGNOSTICS_RETENTION_FIRST_ENTRY_COUNT) {
+        // The first snapshot is retained in full permanently.
+        return;
+      }
+      tailEntries.push(entry);
+      if (tailEntries.length > tailCount) {
+        demoteToStub(tailEntries.shift());
+      }
+    },
+    entries() {
+      return entries.slice();
+    },
+    appendedCount() {
+      return appendedCount;
+    },
+  };
+}
+
 export {
   ACTIVE_WAIT_DIAGNOSTIC_TEXT,
+  boundedDiagnosticsRetention,
   resolveMeaningfulProbeTimeoutMs,
   withTimeout,
   formatCountSummary,

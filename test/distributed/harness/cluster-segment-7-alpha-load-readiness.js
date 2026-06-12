@@ -4,6 +4,7 @@ import {
   derivePriorityRecoveryActiveGateReportFields,
   PRIORITY_RECOVERY_ACTIVE_GATE_STATE,
 } from './active-gate-contract.js';
+import {boundedDiagnosticsRetention} from './cluster-active-wait-diagnostics.js';
 import {CLUSTER_SEGMENT_6} from './cluster-segment-6.js';
 import {
   LOAD_READINESS_STABLE_WINDOW_NO_TIMESTAMP,
@@ -394,6 +395,11 @@ export async function waitForLoadReadinessStability(options = {}) {
   let stableWindowResetAt = normalizeStableWindowTimestamp(Date.now());
   const instabilitySummaryCounts = new Map();
   const blockerHistoryBySignature = new Map();
+  // CL-031: per-poll node-diagnostics snapshots are bounded at append time
+  // (first + last 4 in full, byte-sized stubs for the rest) so neither
+  // harness memory nor failed-scenario report details grow with the
+  // attempt count while the control snapshot grows unbounded.
+  const nodeDiagnosticsRetention = boundedDiagnosticsRetention();
   let bestProgressSnapshot = null;
   let bestProgressScore = Number.NEGATIVE_INFINITY;
   let bestSnapshotCoverageProgressSnapshot = null;
@@ -659,6 +665,10 @@ export async function waitForLoadReadinessStability(options = {}) {
       isSuccess: (result) => result.stable === true,
       extendDeadline: extendLoadReadinessSnapshotRepairDeadline,
       onAttempt: ({attempts, elapsedMs, lastResult}) => {
+        nodeDiagnosticsRetention.append(lastResult.nodeDiagnostics || [], {
+          attempt: attempts,
+          elapsedMs,
+        });
         const readinessProgress = observeLoadReadinessProgress(
           attempts,
           elapsedMs,
@@ -821,7 +831,7 @@ export async function waitForLoadReadinessStability(options = {}) {
             lastResult.loadReadinessStableWindow || null,
             loadReadinessAdmissionGate:
             lastResult.loadReadinessAdmissionGate || null,
-            nodeDiagnostics: lastResult.nodeDiagnostics || [],
+            nodeDiagnostics: nodeDiagnosticsRetention.entries(),
             snapshotCoverage: lastResult.snapshotCoverage || null,
             publicationConvergenceGate:
             lastResult.publicationConvergenceGate || null,
@@ -946,7 +956,7 @@ export async function waitForLoadReadinessStability(options = {}) {
       pollResult.lastResult?.loadReadinessStableWindow || null,
     loadReadinessAdmissionGate:
       pollResult.lastResult?.loadReadinessAdmissionGate || null,
-    nodeDiagnostics: pollResult.lastResult?.nodeDiagnostics || [],
+    nodeDiagnostics: nodeDiagnosticsRetention.entries(),
     snapshotCoverage: pollResult.lastResult?.snapshotCoverage || null,
     publicationConvergenceGate:
       pollResult.lastResult?.publicationConvergenceGate || null,
@@ -1006,7 +1016,7 @@ export async function waitForLoadReadinessStability(options = {}) {
       readinessFailure: finalReadinessFailure,
       loadReadinessPhase,
     },
-    nodeDiagnostics: pollResult.lastResult?.nodeDiagnostics || [],
+    nodeDiagnostics: nodeDiagnosticsRetention.entries(),
     snapshotCoverage: pollResult.lastResult?.snapshotCoverage || null,
     priorityRecoveryInvariants:
       pollResult.lastResult?.priorityRecoveryInvariants || null,

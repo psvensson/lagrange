@@ -4,6 +4,50 @@ import {AdminWebSocketAPISegment2} from './admin-websocket-api-segment-2.js';
 
 const STALE_SOCKET_LOG_MSG = 'Closing stale admin socket connection on lane';
 
+// CL-031: the control snapshot grows unbounded and only surfaces as a
+// >100MB websocket frame. When an outgoing payload exceeds this threshold,
+// attribute the size to the payload's top-level members at the single
+// serialization point so the offending member is named in the logs.
+const ADMIN_PAYLOAD_SIZE_ATTRIBUTION_THRESHOLD_BYTES = 8 * 1024 * 1024;
+const ADMIN_PAYLOAD_SIZE_ATTRIBUTION_WARN_INTERVAL_MS = 30 * 1000;
+const ADMIN_PAYLOAD_SIZE_ATTRIBUTION_TOP_MEMBER_COUNT = 8;
+const ADMIN_PAYLOAD_SIZE_ATTRIBUTION_MEMBER_BYTES_UNAVAILABLE = -1;
+const ADMIN_PAYLOAD_SIZE_ATTRIBUTION_LOG_MSG =
+  'Admin websocket payload exceeded size attribution threshold';
+
+/**
+ * Measure the serialized UTF-8 byte length of one payload member.
+ * Members that fail to stringify report -1.
+ * @param {*} value
+ * @returns {number}
+ */
+function measureAdminPayloadMemberBytes(value) {
+  try {
+    return Buffer.byteLength(JSON.stringify(value));
+  } catch (_error) {
+    return ADMIN_PAYLOAD_SIZE_ATTRIBUTION_MEMBER_BYTES_UNAVAILABLE;
+  }
+}
+
+/**
+ * Measure each top-level member of a container, largest first.
+ *
+ * Size attribution re-stringifies an already-huge object: to avoid doubling
+ * peak memory it measures member-by-member (each member's serialization is
+ * released before the next is built) and never stringifies the whole
+ * container a second time.
+ * @param {Object} container
+ * @returns {Array<{key: string, bytes: number}>}
+ */
+function buildAdminPayloadMemberBytes(container) {
+  return Object.keys(container)
+    .map((key) => ({
+      key,
+      bytes: measureAdminPayloadMemberBytes(container[key]),
+    }))
+    .sort((a, b) => b.bytes - a.bytes);
+}
+
 const {
   ADMIN_ERROR_HINT,
   ADMIN_ERROR_MATCH,
@@ -380,6 +424,23 @@ const ADMIN_WEBSOCKET_MESSAGE_DISPATCH_METHODS = {
   sendToClient(clientInfo, message) {
     try {
       const json = JSON.stringify(message);
+      // CL-031 size attribution. json.length is a free lower bound on the
+      // UTF-8 byte length, so under-threshold sends pay no measurement cost
+      // on this hot path; member sizes are only computed past the threshold.
+      if (
+        typeof json === TYPEOF.STRING &&
+        json.length > ADMIN_PAYLOAD_SIZE_ATTRIBUTION_THRESHOLD_BYTES
+      ) {
+        try {
+          this._warnOversizedAdminPayload(
+            clientInfo,
+            message,
+            Buffer.byteLength(json),
+          );
+        } catch (_attributionError) {
+          // Size attribution is best-effort diagnostics only.
+        }
+      }
       clientInfo.socket.send(json);
     } catch (error) {
       this.logger.error(ADMIN_LOG_MSG.SEND_FAILED, {
@@ -388,6 +449,41 @@ const ADMIN_WEBSOCKET_MESSAGE_DISPATCH_METHODS = {
       });
       throw error;
     }
+  },
+
+  _warnOversizedAdminPayload(clientInfo, message, totalBytes) {
+    // Rate-limited to one warn per dispatch instance per window so a polling
+    // oracle that keeps requesting the oversized snapshot cannot warn-storm
+    // (project lesson CL-009).
+    const now = Date.now();
+    const lastWarnAtMs =
+      Number(this._payloadSizeAttributionLastWarnAtMs) || NUM.ZERO;
+    if (now - lastWarnAtMs < ADMIN_PAYLOAD_SIZE_ATTRIBUTION_WARN_INTERVAL_MS) {
+      return;
+    }
+    this._payloadSizeAttributionLastWarnAtMs = now;
+    const messageMemberBytes = buildAdminPayloadMemberBytes(message);
+    const largestMember = messageMemberBytes[NUM.ZERO] || null;
+    const largestValue = largestMember ? message[largestMember.key] : null;
+    // Attribute inside the payload object (the snapshot/result member) when
+    // the largest member is a plain object; otherwise fall back to the
+    // message's own top-level members.
+    const topLevelMemberBytes = (
+      largestValue &&
+      typeof largestValue === TYPEOF.OBJECT &&
+      !Array.isArray(largestValue) ?
+        buildAdminPayloadMemberBytes(largestValue) :
+        messageMemberBytes
+    ).slice(NUM.ZERO, ADMIN_PAYLOAD_SIZE_ATTRIBUTION_TOP_MEMBER_COUNT);
+    this.logger.warn(ADMIN_PAYLOAD_SIZE_ATTRIBUTION_LOG_MSG, {
+      clientId: clientInfo?.id || null,
+      totalBytes,
+      type: typeof message?.type === TYPEOF.STRING ? message.type : null,
+      lane: message?.lane || clientInfo?.lane || null,
+      payloadMember: largestMember ? largestMember.key : null,
+      payloadMemberBytes: largestMember ? largestMember.bytes : null,
+      topLevelMemberBytes,
+    });
   },
 
   broadcastCDCEvent(tableName, operation, record) {
