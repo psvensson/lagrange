@@ -1,0 +1,412 @@
+{
+  "version": 1,
+  "generatedAt": "2026-06-12T06:49:22.773Z",
+  "rawViolationCount": 45,
+  "violations": [
+    {
+      "filePath": "src/cache/system-table-cache.js",
+      "line": 178,
+      "column": 6,
+      "functionName": "updateFromEpoch",
+      "kind": "hot_path_unguarded_log_emission",
+      "reason": "unguarded log emission on a hot path; use logConsoleOnly plus a rate limit or suppressed counter",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/cache/system-table-cache.js",
+      "line": 187,
+      "column": 4,
+      "functionName": "updateFromEpoch",
+      "kind": "hot_path_unguarded_log_emission",
+      "reason": "unguarded log emission on a hot path; use logConsoleOnly plus a rate limit or suppressed counter",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/cache/system-table-cache.js",
+      "line": 200,
+      "column": 4,
+      "functionName": "getReadyNodes",
+      "kind": "hot_path_unguarded_log_emission",
+      "reason": "unguarded log emission on a hot path; use logConsoleOnly plus a rate limit or suppressed counter",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/cache/system-table-cache.js",
+      "line": 305,
+      "column": 10,
+      "functionName": "<anonymous>",
+      "kind": "hot_path_unguarded_log_emission",
+      "reason": "unguarded log emission on a hot path; use logConsoleOnly plus a rate limit or suppressed counter",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/cache/system-table-cache.js",
+      "line": 318,
+      "column": 62,
+      "functionName": "<anonymous>",
+      "kind": "hot_path_deep_clone",
+      "reason": "deep clone on a hot path; reuse or share immutable snapshots instead",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/cache/system-table-cache.js",
+      "line": 333,
+      "column": 20,
+      "functionName": "get",
+      "kind": "hot_path_deep_clone",
+      "reason": "deep clone on a hot path; reuse or share immutable snapshots instead",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/cache/system-table-cache.js",
+      "line": 348,
+      "column": 15,
+      "functionName": "find",
+      "kind": "hot_path_deep_clone",
+      "reason": "deep clone on a hot path; reuse or share immutable snapshots instead",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/cache/system-table-cache.js",
+      "line": 368,
+      "column": 21,
+      "functionName": "filter",
+      "kind": "hot_path_deep_clone",
+      "reason": "deep clone on a hot path; reuse or share immutable snapshots instead",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/cache/system-table-cache.js",
+      "line": 383,
+      "column": 54,
+      "functionName": "<anonymous>",
+      "kind": "hot_path_deep_clone",
+      "reason": "deep clone on a hot path; reuse or share immutable snapshots instead",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/cache/system-table-cache.js",
+      "line": 448,
+      "column": 10,
+      "functionName": "applySystemTableChange",
+      "kind": "hot_path_unguarded_log_emission",
+      "reason": "unguarded log emission on a hot path; use logConsoleOnly plus a rate limit or suppressed counter",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/cache/system-table-cache.js",
+      "line": 458,
+      "column": 8,
+      "functionName": "applySystemTableChange",
+      "kind": "hot_path_unguarded_log_emission",
+      "reason": "unguarded log emission on a hot path; use logConsoleOnly plus a rate limit or suppressed counter",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/cache/system-table-cache.js",
+      "line": 463,
+      "column": 21,
+      "functionName": "applySystemTableChange",
+      "kind": "hot_path_deep_clone",
+      "reason": "deep clone on a hot path; reuse or share immutable snapshots instead",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/cache/system-table-cache.js",
+      "line": 469,
+      "column": 8,
+      "functionName": "applySystemTableChange",
+      "kind": "hot_path_unguarded_log_emission",
+      "reason": "unguarded log emission on a hot path; use logConsoleOnly plus a rate limit or suppressed counter",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/cache/system-table-cache.js",
+      "line": 473,
+      "column": 23,
+      "functionName": "applySystemTableChange",
+      "kind": "hot_path_deep_clone",
+      "reason": "deep clone on a hot path; reuse or share immutable snapshots instead",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/cache/system-table-cache.js",
+      "line": 486,
+      "column": 10,
+      "functionName": "applySystemTableChange",
+      "kind": "hot_path_unguarded_log_emission",
+      "reason": "unguarded log emission on a hot path; use logConsoleOnly plus a rate limit or suppressed counter",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/cache/system-table-cache.js",
+      "line": 503,
+      "column": 23,
+      "functionName": "applySystemTableChange",
+      "kind": "hot_path_deep_clone",
+      "reason": "deep clone on a hot path; reuse or share immutable snapshots instead",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/cache/system-table-cache.js",
+      "line": 516,
+      "column": 10,
+      "functionName": "applySystemTableChange",
+      "kind": "hot_path_unguarded_log_emission",
+      "reason": "unguarded log emission on a hot path; use logConsoleOnly plus a rate limit or suppressed counter",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/cache/system-table-cache.js",
+      "line": 533,
+      "column": 8,
+      "functionName": "applySystemTableChange",
+      "kind": "hot_path_unguarded_log_emission",
+      "reason": "unguarded log emission on a hot path; use logConsoleOnly plus a rate limit or suppressed counter",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/cache/system-table-cache.js",
+      "line": 540,
+      "column": 10,
+      "functionName": "applySystemTableChange",
+      "kind": "hot_path_unguarded_log_emission",
+      "reason": "unguarded log emission on a hot path; use logConsoleOnly plus a rate limit or suppressed counter",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/cache/system-table-cache.js",
+      "line": 555,
+      "column": 4,
+      "functionName": "applySystemTableChange",
+      "kind": "hot_path_unguarded_log_emission",
+      "reason": "unguarded log emission on a hot path; use logConsoleOnly plus a rate limit or suppressed counter",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/cache/system-table-cache.js",
+      "line": 569,
+      "column": 8,
+      "functionName": "applySystemTableChange",
+      "kind": "hot_path_deep_clone",
+      "reason": "deep clone on a hot path; reuse or share immutable snapshots instead",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/cache/system-table-cache.js",
+      "line": 586,
+      "column": 4,
+      "functionName": "clear",
+      "kind": "hot_path_unguarded_log_emission",
+      "reason": "unguarded log emission on a hot path; use logConsoleOnly plus a rate limit or suppressed counter",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/cache/system-table-cache.js",
+      "line": 638,
+      "column": 11,
+      "functionName": "deepClone",
+      "kind": "hot_path_deep_clone",
+      "reason": "deep clone on a hot path; reuse or share immutable snapshots instead",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/logging/logging-service.js",
+      "line": 244,
+      "column": 20,
+      "functionName": "log",
+      "kind": "hot_path_json_stringify",
+      "reason": "JSON.stringify on a hot path; use lazy/semantic signatures instead",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/logging/logging-service.js",
+      "line": 293,
+      "column": 8,
+      "functionName": "logConsoleOnly",
+      "kind": "hot_path_json_stringify",
+      "reason": "JSON.stringify on a hot path; use lazy/semantic signatures instead",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/logging/logging-service.js",
+      "line": 364,
+      "column": 32,
+      "functionName": "<anonymous>",
+      "kind": "hot_path_unguarded_log_emission",
+      "reason": "unguarded log emission on a hot path; use logConsoleOnly plus a rate limit or suppressed counter",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/logging/logging-service.js",
+      "line": 365,
+      "column": 32,
+      "functionName": "<anonymous>",
+      "kind": "hot_path_unguarded_log_emission",
+      "reason": "unguarded log emission on a hot path; use logConsoleOnly plus a rate limit or suppressed counter",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/logging/logging-service.js",
+      "line": 366,
+      "column": 31,
+      "functionName": "<anonymous>",
+      "kind": "hot_path_unguarded_log_emission",
+      "reason": "unguarded log emission on a hot path; use logConsoleOnly plus a rate limit or suppressed counter",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/logging/logging-service.js",
+      "line": 367,
+      "column": 31,
+      "functionName": "<anonymous>",
+      "kind": "hot_path_unguarded_log_emission",
+      "reason": "unguarded log emission on a hot path; use logConsoleOnly plus a rate limit or suppressed counter",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/logging/logging-service.js",
+      "line": 413,
+      "column": 4,
+      "functionName": "onLogsTableReadyWithOptions",
+      "kind": "hot_path_unguarded_log_emission",
+      "reason": "unguarded log emission on a hot path; use logConsoleOnly plus a rate limit or suppressed counter",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/logging/logging-service.js",
+      "line": 454,
+      "column": 4,
+      "functionName": "flushBufferedEntriesInBackground",
+      "kind": "hot_path_unguarded_log_emission",
+      "reason": "unguarded log emission on a hot path; use logConsoleOnly plus a rate limit or suppressed counter",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/logging/logging-service.js",
+      "line": 479,
+      "column": 10,
+      "functionName": "processChunk",
+      "kind": "hot_path_unguarded_log_emission",
+      "reason": "unguarded log emission on a hot path; use logConsoleOnly plus a rate limit or suppressed counter",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/logging/logging-service.js",
+      "line": 492,
+      "column": 8,
+      "functionName": "processChunk",
+      "kind": "hot_path_unguarded_log_emission",
+      "reason": "unguarded log emission on a hot path; use logConsoleOnly plus a rate limit or suppressed counter",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/raft/sqlite-log-adapter.js",
+      "line": 117,
+      "column": 24,
+      "functionName": "readEntryRow",
+      "kind": "hot_path_json_parse",
+      "reason": "JSON.parse on a hot path; cache parsed values or bound the scan",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/raft/sqlite-log-adapter.js",
+      "line": 144,
+      "column": 6,
+      "functionName": "persistEntry",
+      "kind": "hot_path_json_stringify",
+      "reason": "JSON.stringify on a hot path; use lazy/semantic signatures instead",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/raft/sqlite-log-adapter.js",
+      "line": 333,
+      "column": 10,
+      "functionName": "commandAck",
+      "kind": "hot_path_json_stringify",
+      "reason": "JSON.stringify on a hot path; use lazy/semantic signatures instead",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/raft/sqlite-log-adapter.js",
+      "line": 395,
+      "column": 10,
+      "functionName": "commit",
+      "kind": "hot_path_json_stringify",
+      "reason": "JSON.stringify on a hot path; use lazy/semantic signatures instead",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/raft/sqlite-log-adapter.js",
+      "line": 601,
+      "column": 12,
+      "functionName": "<anonymous>",
+      "kind": "hot_path_json_stringify",
+      "reason": "JSON.stringify on a hot path; use lazy/semantic signatures instead",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/topology/cdc-group-propagation-delivery-methods.js",
+      "line": 46,
+      "column": 9,
+      "functionName": "stableSerialize",
+      "kind": "hot_path_json_stringify",
+      "reason": "JSON.stringify on a hot path; use lazy/semantic signatures instead",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/topology/cdc-group-propagation-delivery-methods.js",
+      "line": 91,
+      "column": 6,
+      "functionName": "deliverToTargetsWithRetry",
+      "kind": "hot_path_unguarded_log_emission",
+      "reason": "unguarded log emission on a hot path; use logConsoleOnly plus a rate limit or suppressed counter",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/topology/cdc-group-propagation-delivery-methods.js",
+      "line": 105,
+      "column": 6,
+      "functionName": "deliverToTargetsWithRetry",
+      "kind": "hot_path_unguarded_log_emission",
+      "reason": "unguarded log emission on a hot path; use logConsoleOnly plus a rate limit or suppressed counter",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/topology/cdc-group-propagation-delivery-methods.js",
+      "line": 349,
+      "column": 6,
+      "functionName": "scheduleBackgroundRetry",
+      "kind": "hot_path_unguarded_log_emission",
+      "reason": "unguarded log emission on a hot path; use logConsoleOnly plus a rate limit or suppressed counter",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/topology/cdc-group-propagation-delivery-methods.js",
+      "line": 387,
+      "column": 6,
+      "functionName": "armBackgroundRetryEntry",
+      "kind": "hot_path_unguarded_log_emission",
+      "reason": "unguarded log emission on a hot path; use logConsoleOnly plus a rate limit or suppressed counter",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/topology/cdc-group-propagation-delivery-methods.js",
+      "line": 402,
+      "column": 4,
+      "functionName": "armBackgroundRetryEntry",
+      "kind": "hot_path_unguarded_log_emission",
+      "reason": "unguarded log emission on a hot path; use logConsoleOnly plus a rate limit or suppressed counter",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    },
+    {
+      "filePath": "src/topology/cdc-group-propagation-delivery-methods.js",
+      "line": 567,
+      "column": 6,
+      "functionName": "rescheduleBackgroundRetryEntry",
+      "kind": "hot_path_unguarded_log_emission",
+      "reason": "unguarded log emission on a hot path; use logConsoleOnly plus a rate limit or suppressed counter",
+      "ruleReference": "hot-path diagnostics guideline (closure ledger CL-009/CL-010/CL-011/CL-018/CL-020): allocation-heavy serialization and unthrottled log emission on hot paths cause observer-effect stalls"
+    }
+  ]
+}
