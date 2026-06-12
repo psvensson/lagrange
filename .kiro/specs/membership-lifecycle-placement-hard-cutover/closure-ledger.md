@@ -3390,3 +3390,31 @@ Each record below represents one violated invariant.
   CL-024 wholesale-hydration crash sites (#2 'Leader metadata
   incomplete', #3 'Table not found: nodes') should decay if the
   livelock was starving the seed's serving during rejoin.
+- SUBAGENT VERIFICATION: TRUSTED-WITH-NOTES (2026-06-12). Wiring
+  confirmed single-source across all four production paths (no
+  dead-code landing; the dispatch-pending builder consumes the same
+  shared table and the internal ownerAction guard applies there);
+  staleness inputs verified normalized-camelCase ms on real paths
+  (the feared snake_case hole does not exist — the same objects feed
+  pre-existing timeout math); every claimed mutation has a named red
+  test. Notes added to the record:
+  (e) Residual hold (deliberate, now explicit): remote owner DEAD +
+  completion SPREAD_SATISFIED_IN_FLIGHT + source EVIDENCE_UNAVAILABLE
+  at non-pre-sync steps (e.g. ABSENT@SYNCING) is held indefinitely —
+  the escape is CONVERGED-only and the release path needs
+  REMOVAL_REQUIRED/IN_FLIGHT. Pre-fix this combination
+  ghost-completed; if it surfaces as a quiesce wedge, widen the
+  escape deliberately rather than re-admitting the ghost.
+  (f) Remote stale-FAIL persist carries no expectedWorkflowStep CAS —
+  a revived owner's concurrent REMOVED completion can be clobbered by
+  FAILED in the unavailability-check->persist window. Traced
+  slow-only (a genuinely retired source has no services row; planner
+  replans from actuals). Optional hardening: expectedWorkflowStep on
+  the remote stale-FAIL persist.
+  (g) NEW GHOST VECTOR FOUND OUTSIDE THE DRAIN (verifier):
+  applyReconciledReplicaStatus (stage-2.js:146-156) completes a
+  non-ADD op as REMOVED when the TARGET replica reconciles as
+  REMOVED — target-removed is not source-retired. Joins follow-up (a)
+  (ACTIVE-step ABSENT-complete) and OWNER_UNAVAILABLE_RELEASED as the
+  candidate set for the next record if the ghost witness stays
+  nonzero post-fix. The witness script catches all three in run data.
