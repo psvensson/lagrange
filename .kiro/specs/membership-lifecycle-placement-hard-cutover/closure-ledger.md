@@ -32,6 +32,7 @@ Each record below represents one violated invariant.
 | CL-018 | guarded | raft-log-scan-per-heartbeat | A follower's commit catch-up must not rescan and JSON-parse the whole raft log on every heartbeat: sqlite followers never persist committedIndex, so getUncommittedEntriesUpToIndex degenerates to a full-table parse per heartbeat per priority partition on the seed — the top self-time frame in the freeze windows that block CL-017's quiesce. |
 | CL-019 | guarded | readiness-snapshot-reuse-per-change | Readiness evaluation must be per-change, not per-call: (1) the CL-012 stored-snapshot reuse predicate rejects watermark EQUALITY (snapshot exactly reflects the current row — the common state between heartbeats), so the sync fast path is structurally a cache-lag bridge with ~0% hit rate and every routing decision runs the full evidence + planning + snapshot build; (2) even on a hit, the pre-check prelude rebuilds the full publication-recovery protocol snapshot (gate + participation maps + normalize/freeze storm) from an effectively-constant membership-publication row, per call. |
 | CL-020 | guarded | priority-recovery-event-decision-cost | The rebalancer's priority-recovery visibility cache listener must decide whether an event warrants a rebalance check CHEAPLY: it currently computes the full operation-creation planning-gate snapshot + surrogate follow-up decisions (JSON-parsing steps_history of replica-operation rows) on EVERY cache-change event of EVERY table — during operation churn each row update triggers a full planning re-derive, the residual seed-freeze head after CL-019. |
+| CL-021 | open | active-gate-promotion-closure | The mode=load ACTIVE wait must close once publication, coverage, and priority recovery are green: 4/4 runs stall there with the handoff contract degraded — sub-mode (A) priority partitions wedged at 1 distinct node (spread recovery blocked); sub-mode (B) the catchup fence denies promotion while recoveryProtocolState=steady_published and every owner-visible count is green (reason code aliased to published_active_coverage_incomplete; fence missingProofReasons not yet observable in the trace). |
 
 ## CL-001 Published Membership Convergence Under Restart Churn
 
@@ -2348,3 +2349,56 @@ Each record below represents one violated invariant.
   seed event-loop saturation layer (CL-010..012, 017..020 lineage) is
   RETIRED as the binding constraint — first gate round ever with zero
   frozen runs and a deterministic downstream surface.
+
+## CL-021 Active-Gate Promotion Closure (mode=load ACTIVE wait)
+
+- Status: open (2026-06-12; surface deterministic since CL-020 gate —
+  4/4 runs; pre-analysis in 'Surface Analysis' + 'CL-020 Gate Verdict'
+  entries above)
+- Concern: active-gate-promotion-closure
+- Failure Class: liveness — runtime promotion never admitted
+  (CL-001/CL-003 lineage)
+- Witness (per run, stable): harness 'Cluster ACTIVE wait stalled
+  (mode=load)' with coverage=5/5 complete, publication=PUBLISHED;
+  seed convergence decision trace contractState=degraded,
+  contractReason=published_active_coverage_incomplete, missing=0.
+  Sub-mode (A): recoveryProtocolState=priority_spread_pending,
+  blocked priority partitions readyDistinctNodeCount=1 spreadGap=2.
+  Sub-mode (B): recoveryProtocolState=steady_published, reasons
+  EMPTY — pure fence denial.
+- First Violated Invariant: NOT YET PINNED. Two candidates, one per
+  sub-mode; the fence's missingProofReasons (which of
+  targets/presence/durable-publication/snapshot-coverage proofs is
+  failing) are computed but UNOBSERVABLE in the trace.
+- Step 1 (instrumentation, this session): surface the catchup fence
+  evidence in the convergence decision trace
+  (_buildPublicationReadinessTraceFields,
+  membership-publication-coordinator-class-stage-2.js) — fence state,
+  promotionAllowed, missingProofReasons, presence counts,
+  durable/snapshot covered+stale bits. Then re-gate, split (A)/(B),
+  and pin.
+- Step 1 LANDED (2026-06-12): fence evidence in the decision trace
+  (fenceState/fencePromotionAllowed/fenceMissingProofReasons/
+  durable+coverage states+missing counts/presence). Smoke: a contract
+  built with the owner driver's exact input shape (stage-2.js:905 — no
+  snapshotCoverage/activeNodeViews input) yields
+  missingProofReasons=['snapshot_coverage_unavailable'] — the
+  owner-driver call site CANNOT prove coverage by construction; the
+  admin-snapshot site (admin-control-snapshot-class-part-3.js:206)
+  passes activeNodeViews and can. Whether that matters is open:
+  runtimePromotionAllowed is consumed ONLY by admin/diagnostics.
+- CONSUMPTION CHAIN MAPPED (harness side): the mode=load wait's
+  allActive requires publicationConvergenceGate.ready
+  (cluster-active-wait-publication-gate.js:561-567) = the NODE's
+  publication recovery gate record with ready=true AND reasons EMPTY
+  AND status PUBLISHED AND pendingAckCount=0 AND missing=0; the
+  progress string's active=N/5 is a PROJECTION
+  (projectLoadPublicationGateDiagnostic flips nodes inactive when the
+  gate is not ready) — active=0/5 means gate-not-ready, NOT nodes
+  leaving ACTIVE. So sub-mode (A) (spread_pending reason codes) blocks
+  the harness DIRECTLY via gate reasons; the catchup fence is NOT in
+  the harness predicate. Sub-mode (B) candidate mechanism: the gate
+  flaps / goes green only after the harness's 150s no-progress budget
+  (final traces show steady_published+empty reasons in runs that
+  STALLED — 'green at the end'); check lastMeaningfulChange timestamps
+  vs gate-green transition in the next gated run.

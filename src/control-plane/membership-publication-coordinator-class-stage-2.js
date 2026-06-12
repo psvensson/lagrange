@@ -789,6 +789,13 @@ class MembershipPublicationCoordinatorClassStage2 extends
   // pending-recovery) so it can be read from a low-volume --capture-logs run.
   _buildPublicationReadinessTraceFields(handoffContract, planningSnapshot) {
     const prs = planningSnapshot?.priorityRecoveryPlanningSnapshot || null;
+    // CL-021: the contract reasonCode ALIASES catchup-fence denial as
+    // published_active_coverage_incomplete even when missing=0 (the
+    // promotionDeniedByFence path in the handoff contract), so the fence's
+    // own evidence must be observable here — otherwise sub-mode (B), where
+    // the fence denies while everything the owner sees is green, cannot be
+    // attributed from a captured run.
+    const fence = handoffContract?.activeGateCatchupFence || null;
     return {
       contractState: handoffContract?.state ?? null,
       contractReason: handoffContract?.reasonCode ?? null,
@@ -797,6 +804,19 @@ class MembershipPublicationCoordinatorClassStage2 extends
       publishedActiveNodeCount: handoffContract?.publishedActiveNodeCount ?? null,
       pendingRecoveryCount: handoffContract?.pendingRecoveryCount ?? null,
       pendingReconcileCount: handoffContract?.pendingReconcileCount ?? null,
+      fenceState: fence?.state ?? null,
+      fencePromotionAllowed: fence?.promotionAllowed ?? null,
+      fenceMissingProofReasons: Array.isArray(fence?.missingProofReasons) ?
+        fence.missingProofReasons :
+        null,
+      fenceDurablePublicationState: fence?.durablePublication?.state ?? null,
+      fenceDurablePublicationMissingCount:
+        fence?.durablePublication?.missingNodeCount ?? null,
+      fenceSnapshotCoverageState: fence?.snapshotCoverage?.state ?? null,
+      fenceSnapshotCoverageMissingCount:
+        fence?.snapshotCoverage?.missingNodeCount ?? null,
+      fencePresenceComplete: fence?.presence?.complete ?? null,
+      fencePresenceMissingCount: fence?.presence?.missingNodeCount ?? null,
       // The priority-recovery projection nests the gate snapshot under
       // publicationRecoveryGate; prioritySpreadPending (the formation blocker) +
       // reasonCodes live THERE, not at the top level. Top level exposes the
