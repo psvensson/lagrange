@@ -11,6 +11,12 @@ const STALE_SOCKET_LOG_MSG = 'Closing stale admin socket connection on lane';
 const ADMIN_PAYLOAD_SIZE_ATTRIBUTION_THRESHOLD_BYTES = 8 * 1024 * 1024;
 const ADMIN_PAYLOAD_SIZE_ATTRIBUTION_WARN_INTERVAL_MS = 30 * 1000;
 const ADMIN_PAYLOAD_SIZE_ATTRIBUTION_TOP_MEMBER_COUNT = 8;
+// Gate 212016Z: single-level attribution named only the generic 'results'
+// wrapper (the snapshot row rides inside an array). Descend through the
+// dominant member — arrays via their largest element — while the mass keeps
+// concentrating, so the warn names the actual growing snapshot member.
+const ADMIN_PAYLOAD_SIZE_ATTRIBUTION_MAX_DEPTH = 4;
+const ADMIN_PAYLOAD_SIZE_ATTRIBUTION_ARRAY_SCAN_LIMIT = 64;
 const ADMIN_PAYLOAD_SIZE_ATTRIBUTION_MEMBER_BYTES_UNAVAILABLE = -1;
 const ADMIN_PAYLOAD_SIZE_ATTRIBUTION_LOG_MSG =
   'Admin websocket payload exceeded size attribution threshold';
@@ -464,17 +470,50 @@ const ADMIN_WEBSOCKET_MESSAGE_DISPATCH_METHODS = {
     this._payloadSizeAttributionLastWarnAtMs = now;
     const messageMemberBytes = buildAdminPayloadMemberBytes(message);
     const largestMember = messageMemberBytes[NUM.ZERO] || null;
-    const largestValue = largestMember ? message[largestMember.key] : null;
-    // Attribute inside the payload object (the snapshot/result member) when
-    // the largest member is a plain object; otherwise fall back to the
-    // message's own top-level members.
-    const topLevelMemberBytes = (
-      largestValue &&
-      typeof largestValue === TYPEOF.OBJECT &&
-      !Array.isArray(largestValue) ?
-        buildAdminPayloadMemberBytes(largestValue) :
-        messageMemberBytes
-    ).slice(NUM.ZERO, ADMIN_PAYLOAD_SIZE_ATTRIBUTION_TOP_MEMBER_COUNT);
+    const attributionPath = [];
+    let attributionMemberBytes = messageMemberBytes;
+    let container = message;
+    for (
+      let depth = NUM.ZERO;
+      depth < ADMIN_PAYLOAD_SIZE_ATTRIBUTION_MAX_DEPTH;
+      depth += 1
+    ) {
+      const largest = attributionMemberBytes[NUM.ZERO];
+      if (
+        !largest ||
+        largest.bytes < ADMIN_PAYLOAD_SIZE_ATTRIBUTION_THRESHOLD_BYTES
+      ) {
+        break;
+      }
+      let value = container[largest.key];
+      let pathSegment = largest.key;
+      if (Array.isArray(value)) {
+        let largestIndex = -1;
+        let largestElementBytes = -1;
+        const scanCount = Math.min(
+          value.length,
+          ADMIN_PAYLOAD_SIZE_ATTRIBUTION_ARRAY_SCAN_LIMIT,
+        );
+        for (let i = NUM.ZERO; i < scanCount; i += 1) {
+          const elementBytes = measureAdminPayloadMemberBytes(value[i]);
+          if (elementBytes > largestElementBytes) {
+            largestElementBytes = elementBytes;
+            largestIndex = i;
+          }
+        }
+        if (largestIndex < NUM.ZERO) {
+          break;
+        }
+        value = value[largestIndex];
+        pathSegment = largest.key + '[' + largestIndex + ']';
+      }
+      if (!value || typeof value !== TYPEOF.OBJECT || Array.isArray(value)) {
+        break;
+      }
+      attributionPath.push(pathSegment);
+      container = value;
+      attributionMemberBytes = buildAdminPayloadMemberBytes(container);
+    }
     this.logger.warn(ADMIN_PAYLOAD_SIZE_ATTRIBUTION_LOG_MSG, {
       clientId: clientInfo?.id || null,
       totalBytes,
@@ -482,7 +521,11 @@ const ADMIN_WEBSOCKET_MESSAGE_DISPATCH_METHODS = {
       lane: message?.lane || clientInfo?.lane || null,
       payloadMember: largestMember ? largestMember.key : null,
       payloadMemberBytes: largestMember ? largestMember.bytes : null,
-      topLevelMemberBytes,
+      attributionPath: attributionPath.join('.'),
+      topLevelMemberBytes: attributionMemberBytes.slice(
+        NUM.ZERO,
+        ADMIN_PAYLOAD_SIZE_ATTRIBUTION_TOP_MEMBER_COUNT,
+      ),
     });
   },
 

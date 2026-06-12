@@ -111,6 +111,48 @@ test('an over-threshold message logs exactly one warn naming the largest ' +
   );
 });
 
+test('attribution descends through arrays into the dominant snapshot ' +
+  'member (gate 212016Z named only the results wrapper)', async (t) => {
+  const {dispatch, clientInfo, warns} = buildDispatchHarness();
+
+  dispatch.sendToClient(clientInfo, {
+    type: TEST_MESSAGE_TYPE,
+    queryId: 'query-attribution-array',
+    results: [
+      {
+        nodeId: 'seed-1',
+        replicaOperations: {
+          rows: [{stepsHistory: 'x'.repeat(OVER_THRESHOLD_MEMBER_BYTES)}],
+          inFlightCount: 1,
+        },
+        partitions: ['p1'],
+      },
+    ],
+  });
+
+  t.equal(warns.length, 1, 'should warn exactly once');
+  const fields = warns[0].fields;
+  t.equal(
+    fields.payloadMember,
+    'results',
+    'the top-level member is still named for compatibility',
+  );
+  t.equal(
+    fields.attributionPath,
+    'results[0].replicaOperations.rows[0]',
+    'the descent path names the dominant chain through arrays',
+  );
+  t.equal(
+    fields.topLevelMemberBytes[0].key,
+    'stepsHistory',
+    'the deepest level names the actual growing member',
+  );
+  t.ok(
+    fields.topLevelMemberBytes[0].bytes >= OVER_THRESHOLD_MEMBER_BYTES,
+    'with its byte size',
+  );
+});
+
 test('a second over-threshold message within the rate window logs nothing',
   async (t) => {
     const {dispatch, clientInfo, warns, sent} = buildDispatchHarness();

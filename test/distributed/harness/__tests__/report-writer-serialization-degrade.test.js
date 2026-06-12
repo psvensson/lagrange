@@ -87,6 +87,54 @@ describe('report-writer serialization degrade', () => {
     },
   );
 
+  it(
+    'attributes INSIDE unserializable dropped fields and keeps ' +
+      'classification + unexpectedNodeExits (CL-030/CL-031)',
+    async () => {
+      const reportPath = join(tempDir, 'degrade-attribution-report.json');
+      const writer = new ReportWriter(reportPath);
+      const circularDiagnostics = {
+        attempts: [],
+        hugeMember: {timeline: 'x'.repeat(9 * 1024 * 1024)},
+      };
+      circularDiagnostics.self = circularDiagnostics;
+      writer.addResult(POISONED_SCENARIO, {
+        passed: false,
+        duration: 455000,
+        error: POISONED_ERROR,
+        classification: 'unexpected_node_exit',
+        unexpectedNodeExits: [{nodeId: 'seed-1', exitCode: 139}],
+        details: {diagnostics: circularDiagnostics},
+      });
+      await writer.write();
+      const persisted = JSON.parse(await readFile(reportPath, UTF8_ENCODING));
+      const poisoned = persisted.scenarios[0];
+      assert.equal(
+        poisoned.classification,
+        'unexpected_node_exit',
+        'classification must survive degradation (gate input)',
+      );
+      assert.equal(
+        poisoned.unexpectedNodeExits[0].nodeId,
+        'seed-1',
+        'exit evidence must survive degradation',
+      );
+      const detailsAttribution =
+        poisoned.reportWriteDegraded.droppedFieldSizes.details;
+      assert.equal(typeof detailsAttribution, 'object',
+        'an unserializable field must descend into member attribution');
+      const diagnosticsAttribution =
+        detailsAttribution.members.diagnostics;
+      assert.equal(typeof diagnosticsAttribution, 'object');
+      assert.ok(
+        diagnosticsAttribution.members.hugeMember.totalBytes >
+          8 * 1024 * 1024,
+        'the growing member inside the unserializable field is NAMED ' +
+          'with its size (red on attribution revert)',
+      );
+    },
+  );
+
   it('writes a fully-intact report when nothing is oversized', async () => {
     const reportPath = join(tempDir, 'healthy-report.json');
     const writer = new ReportWriter(reportPath);

@@ -4349,3 +4349,68 @@ Each record below represents one violated invariant.
   member; blind runs surface as ORACLE_BLIND instead of polluting
   STALLED; run3-class real residuals stay judgeable. Then (d): cap
   the named member node-side (visible truncation, never silent).
+
+### GATE 20260612T212016Z (4 runs, fingerprint 3c0885e30db93c92) — CL-030(a) FIRED LIVE; CL-031 root now kills nodes cluster-wide; attribution deepened
+
+- TOPLINE (script-as-parsed): 1 CONVERGED / 2 SLOW / 1 STALLED, 0
+  corrupt, 0 stale, 0 ORACLE_BLIND. RE-CLASSIFIED with the fixed
+  classifier (verified by jq on the run reports): run2 CONVERGED
+  226s; run1 SLOW = GENUINE SIGHTED over-target settle timeout
+  (122s over-target, 7 leader changes, snapshot node named —
+  correctly NOT blind; the 173105Z-run3 residual class, now
+  judgeable); run3 NODE_EXIT; run4 NODE_EXIT (top-level
+  classification was whitelisted away by the report writer this
+  round — fixed below — but both error messages lead with the
+  exits).
+- CL-030(a) VALIDATED ON ITS FIRST ROUND: run3's scenario error =
+  'Unexpected node exit: 7493b0ab (seed, exitCode=139, FATAL:
+  Reached heap limit) + ebc4aa0b (joiner, exitCode=1)... Downstream
+  surface: ACTIVE wait stalled' — the 145024Z-run2 misattribution
+  class is dead. NEW FACTS the sweep exposed: (i) run3's joiner
+  ebc4aa0b died POST-readiness with non-retryable 'Failed to
+  register node: Distributed operation failed due to participant
+  failures' (phase querying_state, retryable:false → process exit
+  1) = the CL-024 non-retryable join assert-site family, triggered
+  by the dead seed; (ii) run4: TWO JOINERS kernel-OOM-killed
+  (11601fe0 exitCode=137 oomKilled=TRUE + ebc4aa0b) — THE CL-031
+  GROWTH IS CLUSTER-WIDE, not seed-only. Every node serves the
+  ever-growing snapshot to the polling oracles.
+- CL-031(a) WITNESS DATA (the warn fired 9-13x/node/run): snapshot
+  responses grow ~10-30MB/min under load on ALL nodes; seed hit
+  121MB at +2min and 233MB at +8min (past the ~100MB ws limit —
+  its sends were client-rejected; oracles survived via joiner
+  fallback, which themselves reached 100-125MB late-run); even the
+  converged 226s run peaked at 27.5MB. BUT the warn named only the
+  generic 'results' wrapper — single-level attribution stops at
+  the query-result envelope (the snapshot row rides inside an
+  array).
+- FIXES LANDED THIS COMMIT (all guard-tested, 138 asserts green):
+  (1) attribution DEEPENED node-side (admin-websocket-message-
+  dispatch-methods.js): descends the dominant member through
+  arrays via their largest element (depth 4, array scan cap 64,
+  stop when mass < 8MiB) and logs attributionPath (e.g.
+  'results[0].replicaOperations.rows[0]') + the deepest level's
+  member sizes — NEXT ROUND NAMES THE REAL MEMBER. Structural
+  suspect from code read: replicaOperations.rows carries EVERY
+  operation row with full parsed stepsHistory
+  (replica-operation-liveness.js summarize → normalize), but
+  controlPlaneDiagnostics remains in contention — let the data
+  decide. (2) report writer: classification + unexpectedNodeExits
+  added to buildScenarioEntry AND to the degraded-entry kept
+  fields (run4 lost both when its entry degraded);
+  droppedFieldSizes now descends INTO oversized/unserializable
+  fields (depth 3, 8MiB descend threshold) — run4's
+  details='unserializable' would have named its inner member.
+  (3) exit evidence properly docker-frame-demuxed (reuses
+  log-collector extractContainerLogLines; run3's fatal line
+  carried raw multiplex header bytes). (4) stat-gate jq falls back
+  to details.diagnostics.unexpectedNodeExits for reports written
+  by pre-fix code.
+- CL-024 follow-up REINFORCED (do not fix yet, record): joiner
+  process EXITS on non-retryable register failure when
+  participants die — a node should degrade/retry, not exit
+  (circular-dependency class: registration needs the very nodes
+  that are recovering).
+- FRONTIER unchanged in order: (d) cap the member the next round
+  names (now urgent: it OOM-kills joiners, not just the seed);
+  then run1's genuine over-target settle residual.

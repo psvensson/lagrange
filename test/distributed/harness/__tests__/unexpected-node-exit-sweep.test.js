@@ -40,6 +40,18 @@ test('extractFatalLines surfaces native crash markers', async (t) => {
   t.same(extractFatalLines('a\n' + OOM_FATAL_LINE + '\nb'), [OOM_FATAL_LINE]);
   t.same(extractFatalLines('all healthy\nlines only\n'), []);
   t.same(extractFatalLines(null), []);
+  const framedPayload = Buffer.from(OOM_FATAL_LINE + '\n', 'utf8');
+  const frameHeader = Buffer.alloc(8);
+  frameHeader[0] = 2;
+  frameHeader.writeUInt32BE(framedPayload.length, 4);
+  const multiplexed = Buffer.concat([frameHeader, framedPayload])
+    .toString('latin1');
+  t.same(
+    extractFatalLines(multiplexed),
+    [OOM_FATAL_LINE],
+    'docker multiplex frame headers are demuxed out of the evidence ' +
+      '(gate 212016Z-run3 surfaced them verbatim in the scenario error)',
+  );
 });
 
 test('sweep reports only non-expected-down exited containers', async (t) => {

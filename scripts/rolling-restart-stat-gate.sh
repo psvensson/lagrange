@@ -112,7 +112,11 @@ for i in $(seq 1 "${N}"); do
       | ($sc.details.diagnostics.activeGate.failedNoProgress) as $fnp
       | ($sc.details.diagnostics.activeGate.coordinatorCyclesSinceProgress // 0) as $cyc
       | ($sc.details.diagnostics.activeGate.state // "") as $gstate
-      | ($sc.classification // $sc.details.diagnostics.oracleBlind.classification // "") as $oblind
+      | ($sc.classification
+         // (if (($sc.details.diagnostics.unexpectedNodeExits // []) | length) > 0
+             then "unexpected_node_exit" else null end)
+         // $sc.details.diagnostics.oracleBlind.classification
+         // "") as $oblind
       | {passed:($sc.passed // null), missing:$missing, hardBreaches:$hard,
          cyclesNoProgress:$cyc, failedNoProgress:$fnp, gateState:$gstate,
          oracleBlind:($oblind=="oracle_blind"),

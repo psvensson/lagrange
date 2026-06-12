@@ -179,6 +179,10 @@ function buildScenarioEntry(scenarioName, result) {
     details: normalizedDetails,
     invariantBreaches,
     failureClassification: result.failureClassification || null,
+    // CL-030/CL-031: harness-level failure classification + unexpected-exit
+    // evidence must survive into the report (the gate classifier reads them).
+    classification: result.classification || null,
+    unexpectedNodeExits: result.unexpectedNodeExits || null,
     publicationConvergence: result.publicationConvergence || null,
     priorityRecoveryObservation,
     priorityRecoveryProgressSummary:
@@ -1361,6 +1365,11 @@ const REPORT_DEGRADED_KEPT_SCENARIO_FIELDS = Object.freeze([
   'dominantReason',
   'failureClassification',
   'failureBundle',
+  // CL-030/CL-031: classification + exit evidence are the gate classifier's
+  // inputs and are bounded (exit tails capped at 8KB/node) — they must
+  // survive degradation (gate 212016Z-run4 lost both with details).
+  'classification',
+  'unexpectedNodeExits',
 ]);
 
 function measureSerializedBytes(value) {
@@ -1370,6 +1379,65 @@ function measureSerializedBytes(value) {
   } catch {
     return REPORT_DEGRADED_FIELD_UNSERIALIZABLE;
   }
+}
+
+// CL-031: a flat 'unserializable'/huge-byte-count names only the FIELD; the
+// next session needs the MEMBER inside it (gate 212016Z-run4: details =
+// 'unserializable', growth member unnamed). Descend into oversized or
+// unserializable values member-by-member, depth-capped — same pattern as
+// the node-side payload-size attribution.
+const REPORT_DEGRADED_ATTRIBUTION_MAX_DEPTH = 3;
+const REPORT_DEGRADED_ATTRIBUTION_ARRAY_SCAN_LIMIT = 64;
+// Descend whenever a dropped field is big enough to matter (mirrors the
+// node-side 8MiB payload-attribution threshold), not only past the entry cap.
+const REPORT_DEGRADED_ATTRIBUTION_DESCEND_BYTES = 8 * 1024 * 1024;
+
+function buildDroppedFieldAttribution(value, depth = 0) {
+  const bytes = measureSerializedBytes(value);
+  const oversized =
+    bytes === REPORT_DEGRADED_FIELD_UNSERIALIZABLE ||
+    bytes > REPORT_DEGRADED_ATTRIBUTION_DESCEND_BYTES;
+  if (
+    !oversized ||
+    depth >= REPORT_DEGRADED_ATTRIBUTION_MAX_DEPTH ||
+    !value ||
+    typeof value !== 'object'
+  ) {
+    return bytes;
+  }
+  if (Array.isArray(value)) {
+    let largestIndex = -1;
+    let largestBytes = -1;
+    const scanCount = Math.min(
+      value.length,
+      REPORT_DEGRADED_ATTRIBUTION_ARRAY_SCAN_LIMIT,
+    );
+    for (let i = 0; i < scanCount; i++) {
+      const elementBytes = measureSerializedBytes(value[i]);
+      if (
+        elementBytes === REPORT_DEGRADED_FIELD_UNSERIALIZABLE ||
+        elementBytes > largestBytes
+      ) {
+        largestBytes = elementBytes === REPORT_DEGRADED_FIELD_UNSERIALIZABLE ?
+          Number.MAX_SAFE_INTEGER :
+          elementBytes;
+        largestIndex = i;
+      }
+    }
+    return {
+      totalBytes: bytes,
+      arrayLength: value.length,
+      largestElementIndex: largestIndex,
+      largestElement: largestIndex >= 0 ?
+        buildDroppedFieldAttribution(value[largestIndex], depth + 1) :
+        null,
+    };
+  }
+  const members = {};
+  for (const [key, member] of Object.entries(value)) {
+    members[key] = buildDroppedFieldAttribution(member, depth + 1);
+  }
+  return {totalBytes: bytes, members};
 }
 
 function degradeScenarioEntryForSerialization(entry) {
@@ -1384,7 +1452,7 @@ function degradeScenarioEntryForSerialization(entry) {
     if (REPORT_DEGRADED_KEPT_SCENARIO_FIELDS.includes(field)) {
       continue;
     }
-    droppedFieldSizes[field] = measureSerializedBytes(value);
+    droppedFieldSizes[field] = buildDroppedFieldAttribution(value);
   }
   degraded.reportWriteDegraded = {
     reason: 'scenario entry exceeded the report serialization limit',

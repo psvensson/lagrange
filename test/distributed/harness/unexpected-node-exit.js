@@ -13,6 +13,8 @@
  * failure if a non-expected-down node's container has exited.
  */
 
+import {extractContainerLogLines} from './log-collector.js';
+
 const UNEXPECTED_NODE_EXIT_CLASSIFICATION = 'unexpected_node_exit';
 const EXIT_EVIDENCE_TAIL_LINES = 80;
 const EXIT_EVIDENCE_TAIL_MAX_CHARS = 8192;
@@ -31,12 +33,24 @@ function isExitedContainerStatus(status) {
     status === CONTAINER_STATUS_DEAD;
 }
 
-function extractFatalLines(logTail) {
+// docker logs returns a MULTIPLEXED stream whose 8-byte frame headers
+// survive a plain toString() (observed verbatim in gate 212016Z-run3:
+// '\x02\x00...RFATAL ERROR: ...'). extractContainerLogLines demuxes the
+// frames (with raw fallback for non-framed strings); the control-byte strip
+// covers the fallback path.
+// eslint-disable-next-line no-control-regex
+const CONTROL_BYTES_PATTERN = /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g;
+
+function decodeExitEvidenceLines(logTail) {
   if (typeof logTail !== 'string' || logTail.length === ZERO) {
     return [];
   }
-  return logTail
-    .split('\n')
+  return extractContainerLogLines(logTail)
+    .map((line) => line.replace(CONTROL_BYTES_PATTERN, ''));
+}
+
+function extractFatalLines(logTail) {
+  return decodeExitEvidenceLines(logTail)
     .filter((line) => FATAL_LINE_PATTERN.test(line))
     .map((line) => line.trim());
 }
@@ -45,9 +59,10 @@ function boundExitEvidenceTail(logTail) {
   if (typeof logTail !== 'string') {
     return null;
   }
-  return logTail.length > EXIT_EVIDENCE_TAIL_MAX_CHARS ?
-    logTail.slice(logTail.length - EXIT_EVIDENCE_TAIL_MAX_CHARS) :
-    logTail;
+  const decoded = decodeExitEvidenceLines(logTail).join('\n');
+  return decoded.length > EXIT_EVIDENCE_TAIL_MAX_CHARS ?
+    decoded.slice(decoded.length - EXIT_EVIDENCE_TAIL_MAX_CHARS) :
+    decoded;
 }
 
 function withSweepTimeout(promise, timeoutMs, label) {
