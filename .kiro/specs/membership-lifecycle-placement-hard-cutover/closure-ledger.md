@@ -3798,3 +3798,131 @@ Each record below represents one violated invariant.
   (2) post-restart convergence-settle surfaces (runs 1+4 artifacts);
   (3) restart slow-rejoin predicate (run2, two occurrences);
   (4) CL-001 published-set disagreement (131408Z-run2 artifacts).
+
+## CL-029 Target-Completion Evidence Must Retain A Retry Owner Until Applied To The Durable Workflow Row
+
+- Status: narrowed (2026-06-12; pinned by dedicated investigation on
+  145024Z-run3 — full per-node log chain + code trace, all loci
+  file:line-verified). REVISES CL-028 SECONDARY (i): the recorded
+  "deferred durable services-row write with NO retry owner" is NOT
+  what target_sync promotion consumes. The target's SERVICES-row
+  lifecycle completed normally (CREATING deferred via the CL-016
+  fallback at 15:07:35.946, marker set; SYNCING persisted; ACTIVE
+  persisted CRITICAL-class at 15:07:36.085 — commitTransition logged,
+  i.e. the persist promise RESOLVED; CL-021's reconcile had nothing
+  left to do, which is why it converged 0 rows: 14 deferred CREATE
+  writes run-wide, every one superseded by a later successful
+  transition persist within ~100ms). What was actually lost is the
+  EXECUTOR-OUTCOME COMPLETION EVIDENCE on the replica_operations
+  workflow row.
+- Concern: placement-priority-spread (operation workflow liveness)
+- Failure Class: priority-invariant-breach (lost-wakeup race; the
+  formation-vs-steady-state circular class only as aggravator — the
+  recovering control plane makes the owner's durable step writes
+  slow, which is what opens the race window)
+- First Violated Invariant: a dispatched priority-recovery operation
+  whose target has emitted terminal-success executor evidence
+  (REPLICA_CREATE_ACTIVE) must retain a live driver that eventually
+  applies that evidence to the durable workflow row. Today the
+  evidence is applied at most ONCE, near-synchronously, and every
+  not-yet-applicable / raced / failed application exits SILENTLY
+  (debug-only) with no retry owner; the owner's target_sync wait is
+  event_driven with no target-state re-check; the only fallback is
+  the 300s step deadline (> the gate's 150s no-progress budget).
+- Run evidence (145024Z-run3, mode=load ACTIVE wait, active=0/5 x96
+  attempts, all five nodes PRIORITY_CONTROL_PLANE_RECOVERY_PENDING):
+  op 04115c4d REPLACE control_plane_publications-p1 ->
+  target 35a891b8. Seed 7493b0ab created the op 15:07:18; coordinator
+  ownership resolves to the TARGET for unsettled priority REPLACEs
+  (replica-operation-repository-row-methods.js:124-151), so 35a891b8
+  is both executor and workflow owner. Timeline: dispatch claims via
+  priority_claim_cas and walks the durable step row PENDING->SENDING
+  15:07:35.937 -> CREATING 15:07:49.700 -> SYNCING 15:08:03.605
+  (~14s per durable step write — control plane recovering); the
+  TARGET handled CREATE_REPLICA at 15:07:35.941 and completed at
+  15:07:36.085 (voter-ready 142ms; CL-013/15/16 all demonstrably
+  working), emitting REPLICA_CREATE_SYNCING + REPLICA_CREATE_ACTIVE
+  ~27s BEFORE the workflow row reached SYNCING. After 15:08:03 the
+  row never advances; witness snapshot pins workflowProgressPhaseId=
+  target_sync, actuationState=dispatched_waiting_progress,
+  nextRequiredAction=wait_for_operation_progress, waitMode=
+  event_driven, stepAgeMs 113613 of 300000. ZERO
+  'Operation transition retry deferred' and ZERO
+  'transition failed' warns for the op ANYWHERE -> no retryable-error
+  path ever engaged; the ACTIVE outcome died on a silent debug-only
+  exit. Planner reuse fired ~6s apart but refuses to re-arm
+  non-PENDING ops (rearmAction=skip_not_pending — CL-008 dedup, by
+  design); new REPLACE planning for the partition skipped
+  budget_exceeded (the wedged op holds the budget) — the wedge is
+  self-sustaining. Aggravating divergence: the seed's
+  replica_operations-p1-r1 store has NO row for the op ('No row
+  found for CDC update' x3, the CL-017 witness with replica
+  attribution), so any authoritative-read fallback that routes to
+  the seed's replica reads NOTHING.
+- Candidate silent exits (discriminate via repro; all in
+  operation-workflow-executor-outcome-reconcile-methods.js +
+  operation-workflow-owner-segment-6.js:575):
+  (a) reconcileExecutorOutcome ran while the dispatch step-walk was
+  mutating the row: reconcileReplaceActualActive ->
+  updateStep(op, ACTIVE) lost an expectedWorkflowStep CAS to the
+  concurrent dispatch write -> returned uncommitted ->
+  replayReplaceActiveSourceRemovalFromAuthoritative read the
+  divergent/recovering authoritative row -> silently nothing
+  (no retry scheduled);
+  (b) updateStep threw retryable -> inner catch ->
+  replayReplaceActiveSourceRemovalFromObservedTarget returned true
+  without effect (swallows; no retry);
+  (c) visibility observation at outcome time returned EMPTY ->
+  SKIP_OUTCOME ('operation not found', debug) — clearExecutorOutcome
+  Retry erases the retained payload permanently.
+  ALSO STRUCTURAL, regardless of which exit fired: the DESIGNED
+  recovery for late wakes — dispatch-wake progress preempt
+  ('wakeups can arrive after cache evidence has already moved the
+  replica beyond the current durable step', operation-workflow-
+  dispatch-wake-preemption.js) — only covers workflow steps
+  {PENDING, SENDING, CREATING}
+  (DISPATCH_WAKE_PROGRESS_PREEMPT_WORKFLOW_STEPS) and the
+  PENDING-step target-progress reconcile only covers PENDING:
+  coverage stops exactly one step short of target_sync, the same
+  built-but-unwired shape as CL-028's bypass.
+- Authoritative Owner: operation_workflow_owner on the operation's
+  resolved owner node (= target for unsettled priority REPLACEs).
+- Authoritative State: replica_operations row workflow_step +
+  retained executor-outcome payload
+  (executorOutcomeRetryPayloadByOperationId).
+- Forbidden Promotion Inputs: none new — this is a liveness loss,
+  not a wrong promotion; the step-rank guard
+  (isExecutorOutcomeStepBehindOperation) correctly admits
+  ahead-of-step outcomes and must stay.
+- Stable Witness: per-partition priority witness tuple
+  (workflowProgressPhaseId=target_sync, actuationState=
+  dispatched_waiting_progress, growing stepAgeMs) + target-side
+  'Replica creation completed' for the op's replicaId PREDATING the
+  row's SYNCING transition + zero transition-retry warns for the op.
+- Entry Gate: rolling-restart mode=load ACTIVE wait (CL-003 witness
+  class), formation/recovery window; also a candidate mechanism for
+  the post-restart convergence-settle over-target stalls (145024Z
+  runs 1+4) — surplus drains require the same REPLACE completion
+  path.
+- Next Falsification Step: characterization repro on the real
+  coordinator classes — op row at SENDING with a slow in-flight
+  dispatch step-walk; emit REPLICA_CREATE_ACTIVE; assert the
+  completion evidence is lost (no durable ACTIVE, no retained retry,
+  no timer) and identify which exit (a)/(b)/(c) fired. Falsified if
+  the outcome is applied or retried by a path the investigation
+  missed.
+- Required Guard (fix locus, never-break): completion evidence must
+  be retained-and-retried until applied or the op is terminal —
+  candidate fixes: (1) on ANY non-committed application
+  (CAS loss, replay no-op, deferred visibility) keep/re-arm the
+  retained executor-outcome payload via the EXISTING
+  scheduleExecutorOutcomeRetry machinery instead of silent return;
+  (2) extend the dispatch-wake progress preempt set to include
+  SYNCING so any wake (planner reuse fires every ~6s) reconciles
+  observed target progress at target_sync. Never-break: keep CL-008
+  dedup (no re-dispatch of in-flight work — this is evidence
+  APPLICATION, not re-execution); keep step-rank monotonicity; keep
+  CL-023 drain semantics (completion must still observe the source
+  for REPLACEs — the ACTIVE outcome path goes through
+  reconcileReplaceActualActive's source-removal flow, NOT
+  complete-as-removed).
