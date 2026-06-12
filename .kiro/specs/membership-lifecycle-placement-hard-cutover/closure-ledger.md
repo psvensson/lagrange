@@ -4210,3 +4210,26 @@ Each record below represents one violated invariant.
   OOM = node symptom; its unexpected-exit watcher remains separately
   required), CL-010/011/CL-020 (prior unbounded-diagnostics-on-
   hot-path instances — this is the at-rest/accumulation variant).
+
+### CL-031 STEPS (a)+(b) LANDED (2026-06-12) — attribution + bounded retention; steps (c)+(d) remain
+
+- (a) admin-websocket-message-dispatch-methods.js sendToClient: payloads
+  >8MiB warn once/30s/instance with totalBytes + biggest member +
+  top-8 member byteLengths (computed member-by-member only past the
+  gate — no hot-path cost, no peak-memory doubling). Next blind-oracle
+  occurrence NAMES the growing snapshot member (the droppedFieldSizes
+  pattern, node-side).
+- (b) per-poll readiness snapshots bounded AT APPEND TIME
+  (boundedDiagnosticsRetention in cluster-active-wait-diagnostics.js):
+  first + last-4 full, dropped entries demoted in place to
+  {index, attempt, elapsedMs, approxBytes} stubs — bounds BOTH the
+  488MB report details and harness memory; the playback-events sink
+  (line 709) deliberately left raw (file-streamed, parsed by
+  failure-bundle-segment-2.js:587). Guards: 18+34 asserts; admin
+  part-file failures pre-existing (verified on clean tree).
+- REMAINING: (c) oracle_blind classification on snapshot-query
+  transport failures (settle/quiesce/active waits must name the
+  transport error, not report stall/timeout); (d) node-side cap of
+  the member (a) names. CL-030(a) unexpected-exit watcher also still
+  open (design note: failure-time sweep of container states at
+  bundle-build beats a steady-state watcher loop for blast radius).
