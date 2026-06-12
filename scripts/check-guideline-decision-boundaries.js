@@ -611,7 +611,35 @@ function formatHumanSummary(report) {
   ].join('\n');
 }
 
+const UPDATE_BASELINE_FLAG = '--update-baseline';
+const BASELINE_VERSION = 1;
+const BASELINE_JSON_INDENT = 2;
+
+async function writeDecisionBoundaryBaseline(pathsToScan) {
+  const report = await collectDecisionBoundaryViolations(pathsToScan, {});
+  const baseline = {
+    version: BASELINE_VERSION,
+    generatedAt: new Date().toISOString(),
+    rawViolationCount: report.totalViolationCount,
+    violations: report.violations,
+  };
+  await fs.writeFile(
+    DECISION_BASELINE_FILE_URL,
+    JSON.stringify(baseline, null, BASELINE_JSON_INDENT) + '\n',
+    'utf8',
+  );
+  process.stdout.write(
+    `Wrote ${report.totalViolationCount} decision-boundary baseline entries\n`,
+  );
+}
+
 async function main(argv = process.argv.slice(LOCAL_NUM_TWO)) {
+  if (argv.includes(UPDATE_BASELINE_FLAG)) {
+    await writeDecisionBoundaryBaseline(
+      argv.filter((arg) => arg !== UPDATE_BASELINE_FLAG),
+    );
+    return NUMERIC_LITERAL_ZERO;
+  }
   return runGuidelineCheck(
     argv,
     collectDecisionBoundaryViolationsWithBaseline,
