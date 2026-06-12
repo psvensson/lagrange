@@ -194,11 +194,29 @@ function normalizePriorityRecoveryBlockedPartitions(blockedPartitions = []) {
       blockedPartition.readyDistinctNodeCount ??
         blockedPartition.ready_distinct_node_count,
     );
+    const readyReplicaCount = normalizeNonNegativeInteger(
+      blockedPartition.readyReplicaCount ??
+        blockedPartition.ready_replica_count,
+    );
+    // CL-021 witness pass-through (see
+    // resolvePrioritySpreadReplicaExclusionReason): per-row exclusion
+    // attribution must survive summary normalization.
+    const exclusionReasonCounts = isRecord(
+      blockedPartition.exclusionReasonCounts ??
+        blockedPartition.exclusion_reason_counts,
+    ) ?
+      Object.freeze({
+        ...(blockedPartition.exclusionReasonCounts ??
+          blockedPartition.exclusion_reason_counts),
+      }) :
+      null;
     normalizedBlockedPartitions.push(Object.freeze({
       partitionId,
       ...(spreadGap !== null ? {spreadGap} : {}),
       ...(requiredDistinctNodeCount !== null ? {requiredDistinctNodeCount} : {}),
       ...(readyDistinctNodeCount !== null ? {readyDistinctNodeCount} : {}),
+      ...(readyReplicaCount !== null ? {readyReplicaCount} : {}),
+      ...(exclusionReasonCounts ? {exclusionReasonCounts} : {}),
       blockerReasonCodes: Object.freeze(
         normalizeDistinctStringArray(
           blockedPartition.blockerReasonCodes ||

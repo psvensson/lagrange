@@ -378,6 +378,16 @@ function buildPriorityRecoveryPlannerByPartitionId(priorityPartitionSummary) {
       readyDistinctNodeCount: normalizePriorityRecoveryInteger(
         partition?.readyDistinctNodeCount,
       ),
+      readyReplicaCount: normalizePriorityRecoveryInteger(
+        partition?.readyReplicaCount,
+      ),
+      // CL-021 witness pass-through: WHY rows were excluded from the ready
+      // count (e.g. raft_role_missing) — without it the planner-blindness
+      // cause is stripped before reaching the rebalancer diagnostics.
+      ...(partition?.exclusionReasonCounts &&
+        typeof partition.exclusionReasonCounts === TYPEOF.OBJECT ?
+        {exclusionReasonCounts: {...partition.exclusionReasonCounts}} :
+        {}),
       spreadGap,
       ready: spreadGap === NUM.ZERO,
       reasons:

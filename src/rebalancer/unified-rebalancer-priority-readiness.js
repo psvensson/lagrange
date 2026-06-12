@@ -333,6 +333,13 @@ class UnifiedRebalancerPriorityReadinessMethods {
           spreadGap: Number.isFinite(partition?.spreadGap) ?
             partition.spreadGap :
             null,
+          // CL-021 witness: per-row exclusion attribution from the spread
+          // summary (raft_role_missing etc.), when the source carried it.
+          exclusionReasonCounts:
+            partition?.exclusionReasonCounts &&
+            typeof partition.exclusionReasonCounts === TYPEOF.OBJECT ?
+              Object.freeze({...partition.exclusionReasonCounts}) :
+              null,
         }),
       )
       .filter((partition) => partition.partitionId.length > NUM.ZERO);
