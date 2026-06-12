@@ -2547,3 +2547,30 @@ Each record below represents one violated invariant.
   read-model-contract.test.js + orphaned policy/subsystem constants.
   All affected suites green (policy 143, read-model-contract 71,
   control-plane back to 50 pre-existing).
+- WITNESS GATE (061547Z): 4/4 publication CONVERGED, 0 corrupt. THE
+  SURFACE MIX MOVED AGAIN — spread blocking nearly VANISHED (ONE
+  'Deferring non-system rebalancing' diagnostic across all 4 runs, was
+  ~constant; spreadGap now 1, was 2): run1 mode=load active=4/5; run2
+  quiesce (300s budget now); run3 PERFORMED ACTUAL ROLLING RESTARTS
+  (second time ever) and failed at 'Restarted node did not become
+  recovery-ready within 120000ms' (node 11601fe0, reachable=true) —
+  THE RESTART-PHASE LADDER RUNG IS LIVE; run4 mode=load active=5/5.
+  WITNESS PLUMBING GAP FOUND: the one blocked diagnostic carries
+  exclusionReasonCounts:null AND readyReplicaCount:null — the
+  rebalancer's blocker (getControlPlanePrioritySpreadBlocker,
+  unified-rebalancer-priority-readiness.js:166) consumes the
+  priorityPartitionSummary from the PLANNING ANSWER (the published
+  row's serialized summary), whose serializer strips per-row fields
+  (even the pre-existing readyReplicaCount). NEXT STEP: carry
+  exclusionReasonCounts + readyReplicaCount through the publication
+  row's priority_partition_summary serializer (find where the
+  published summary is built from buildDerivedPriorityPartitionSummary
+  output and stops carrying per-row fields), or log the OWNER-side
+  derived summary (which has the counts) when blocked. Then one gate
+  round pins raft_role_missing vs other exclusion.
+- NOTE: with spread mostly recovering this round, CL-021's binding
+  constraint may be dissolving for OTHER reasons (CL-021(A) reconcile
+  is in the build; the role-update race may simply be winning more
+  often). Treat the remaining mode=load stalls + the NEW restart-phase
+  surface (run3 artifacts at stat-gate-20260612T061547Z-run3) as the
+  next falsification targets.
