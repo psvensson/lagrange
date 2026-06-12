@@ -44,12 +44,18 @@ function normalizeBlockedPriorityPartition(
     entry.spreadGap ?? entry.spread_gap,
     Math.max(NUM.ZERO, normalizedRequiredDistinctNodeCount - readyDistinctNodeCount),
   );
+  const exclusionReasonCounts =
+    entry.exclusionReasonCounts &&
+    typeof entry.exclusionReasonCounts === TYPEOF.OBJECT ?
+      {...entry.exclusionReasonCounts} :
+      null;
   return {
     partitionId,
     requiredDistinctNodeCount: normalizedRequiredDistinctNodeCount,
     readyDistinctNodeCount,
     readyReplicaCount,
     spreadGap,
+    ...(exclusionReasonCounts ? {exclusionReasonCounts} : {}),
   };
 }
 
@@ -237,23 +243,51 @@ function buildPrioritySpreadEligibleNodeIdSet(options = {}, helperFns = {}) {
   return new Set(promotableNodeIds);
 }
 
-function isPrioritySpreadReadyReplica(normalizedService, readinessByNodeId = {}) {
+/**
+ * CL-021 witness: name WHY a priority service row is excluded from the
+ * spread-ready count. The mode=load wedge presented as
+ * readyDistinctNodeCount=1 while REPLACE-created replicas were ACTIVE and
+ * in raft — without per-row exclusion attribution the blindness cause
+ * (e.g. raft_role never written / wiped by full-row lifecycle REPLACE)
+ * is invisible in run artifacts.
+ * @return {string|null} Exclusion reason code, or null when ready.
+ */
+function resolvePrioritySpreadReplicaExclusionReason(
+  normalizedService,
+  readinessByNodeId = {},
+) {
   if (!normalizedService || typeof normalizedService !== TYPEOF.OBJECT) {
-    return false;
+    return 'invalid_row';
+  }
+  if (normalizedService.serviceType !== SERVICE_TYPE.PARTITION) {
+    return 'not_partition_service';
+  }
+  if (normalizedService.status !== SERVICE_STATUS.ACTIVE) {
+    return `status_${normalizedService.status || 'missing'}`;
+  }
+  if (!normalizedService.raftRole) {
+    return 'raft_role_missing';
+  }
+  if (!normalizedService.address) {
+    return 'address_missing';
+  }
+  if (!normalizedService.nodeId) {
+    return 'node_id_missing';
   }
   if (
-    normalizedService.serviceType !== SERVICE_TYPE.PARTITION ||
-    normalizedService.status !== SERVICE_STATUS.ACTIVE ||
-    !normalizedService.raftRole ||
-    !normalizedService.address ||
-    !normalizedService.nodeId
+    normalizedService.raftRole === RAFT_ROLE.LEARNER &&
+    !isReadinessPromotable(readinessByNodeId[normalizedService.nodeId] || null)
   ) {
-    return false;
+    return 'learner_not_promotable';
   }
-  if (normalizedService.raftRole !== RAFT_ROLE.LEARNER) {
-    return true;
-  }
-  return isReadinessPromotable(readinessByNodeId[normalizedService.nodeId] || null);
+  return null;
+}
+
+function isPrioritySpreadReadyReplica(normalizedService, readinessByNodeId = {}) {
+  return resolvePrioritySpreadReplicaExclusionReason(
+    normalizedService,
+    readinessByNodeId,
+  ) === null;
 }
 
 function buildDerivedPriorityPartitionSummary(options = {}, helperFns = {}) {
@@ -278,19 +312,28 @@ function buildDerivedPriorityPartitionSummary(options = {}, helperFns = {}) {
       continue;
     }
     observedPriorityServiceRow = true;
-    if (!isPrioritySpreadReadyReplica(normalizedService, readinessByNodeId)) {
-      continue;
-    }
-    if (eligibleNodeIds.size > NUM.ZERO && !eligibleNodeIds.has(normalizedService.nodeId)) {
-      continue;
-    }
     if (!readyReplicaStatsByPartitionId.has(partitionId)) {
       readyReplicaStatsByPartitionId.set(partitionId, {
         readyReplicaCount: NUM.ZERO,
         nodeIds: new Set(),
+        exclusionReasonCounts: {},
       });
     }
     const stats = readyReplicaStatsByPartitionId.get(partitionId);
+    const exclusionReason = resolvePrioritySpreadReplicaExclusionReason(
+      normalizedService,
+      readinessByNodeId,
+    ) || (
+      eligibleNodeIds.size > NUM.ZERO &&
+      !eligibleNodeIds.has(normalizedService.nodeId) ?
+        'node_not_eligible' :
+        null
+    );
+    if (exclusionReason !== null) {
+      stats.exclusionReasonCounts[exclusionReason] =
+        (stats.exclusionReasonCounts[exclusionReason] || NUM.ZERO) + NUM.ONE;
+      continue;
+    }
     stats.readyReplicaCount += NUM.ONE;
     stats.nodeIds.add(normalizedService.nodeId);
   }
@@ -322,6 +365,7 @@ function buildDerivedPriorityPartitionSummary(options = {}, helperFns = {}) {
     const stats = readyReplicaStatsByPartitionId.get(partitionId) || {
       readyReplicaCount: NUM.ZERO,
       nodeIds: new Set(),
+      exclusionReasonCounts: {},
     };
     const readyDistinctNodeCount = stats.nodeIds.size;
     const spreadGap = Math.max(NUM.ZERO, requiredDistinctNodeCount - readyDistinctNodeCount);
@@ -332,6 +376,7 @@ function buildDerivedPriorityPartitionSummary(options = {}, helperFns = {}) {
       partitionId,
       requiredDistinctNodeCount,
       readyDistinctNodeCount,
+      exclusionReasonCounts: {...stats.exclusionReasonCounts},
       readyReplicaCount: stats.readyReplicaCount,
       spreadGap,
     });

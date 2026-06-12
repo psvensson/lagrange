@@ -2504,3 +2504,73 @@ Each record below represents one violated invariant.
   persist failed before commitTransition, the map may hold an earlier
   state and the reconcile converges a non-ACTIVE row (witness lines
   carry the state field).
+- GATE 053704Z (CL-021(A) fix + corrections): 4/4 publication
+  CONVERGED, 0 corrupt — but the FIX DID NOT ENGAGE: zero 'Deferred
+  durable services row converged' witnesses AND zero
+  STATE_PERSIST_FAILED lines across all runs, while 10-16
+  'status write deferred' events/run still occurred and the surface
+  is unchanged (3 mode=load stalls incl. active=0/5 + 1 quiesce).
+  ATTRIBUTION CORRECTED BY DATA: deferred replicas DO transition
+  creating→syncing→active within ~5s and their later transition
+  persists SUCCEED (no failures logged) — markers were being cleared
+  by the NORMAL path all along; the durable rows EXIST. The
+  planner-blindness root is therefore NOT missing rows — the
+  spread-ready predicate excludes the rows for another reason:
+  isPrioritySpreadReadyReplica requires TRUTHY raft_role
+  (membership-publication-priority-partition-summary.js:247) and the
+  lifecycle full-row REPLACE payload OMITS raft_role (nulls it; the
+  verifier's 'column wipe' finding — accepted as residual, actually
+  load-bearing), while the partition service's role-mutation helper
+  (createRoleMutationHelper, partition-service-segment-1-part-1.js)
+  writes it separately as a BACKGROUND deferrable UPDATE that may
+  defer/fail in the 4/3 window or be wiped by a subsequent lifecycle
+  write. The CL-021(A) reconcile mechanism stays (correct, low-cost,
+  closes the real if-rare stranded-marker case) but is NOT the
+  load-bearing fix.
+- WITNESS LANDED for the actual pinning (per-row attribution was the
+  DX gap): the priority spread summary now counts per-partition
+  EXCLUSION REASONS (resolvePrioritySpreadReplicaExclusionReason —
+  invalid_row/not_partition_service/status_*/raft_role_missing/
+  address_missing/node_id_missing/learner_not_promotable/
+  node_not_eligible) and blockedPartitions entries carry
+  exclusionReasonCounts through the normalizer AND the rebalancer's
+  'Deferring non-system rebalancing' diagnostic (zero new log
+  volume). NEXT GATE pins the exclusion reason; if raft_role_missing
+  dominates, fix = include raft_role in the lifecycle persistence
+  payload from the partition service's live role (or stop requiring
+  raft_role for spread-readiness when status=ACTIVE — decide on
+  evidence).
+- DEAD CODE REMOVED on contact: src/policy/raft-role-tracker.js
+  (ZERO production callers — updateServiceRole never invoked; zero
+  'Updated service Raft role' lines in any run) + its test file +
+  tracker sections in sql-engine-read-migration.test.js and
+  read-model-contract.test.js + orphaned policy/subsystem constants.
+  All affected suites green (policy 143, read-model-contract 71,
+  control-plane back to 50 pre-existing).
+- WITNESS GATE (061547Z): 4/4 publication CONVERGED, 0 corrupt. THE
+  SURFACE MIX MOVED AGAIN — spread blocking nearly VANISHED (ONE
+  'Deferring non-system rebalancing' diagnostic across all 4 runs, was
+  ~constant; spreadGap now 1, was 2): run1 mode=load active=4/5; run2
+  quiesce (300s budget now); run3 PERFORMED ACTUAL ROLLING RESTARTS
+  (second time ever) and failed at 'Restarted node did not become
+  recovery-ready within 120000ms' (node 11601fe0, reachable=true) —
+  THE RESTART-PHASE LADDER RUNG IS LIVE; run4 mode=load active=5/5.
+  WITNESS PLUMBING GAP FOUND: the one blocked diagnostic carries
+  exclusionReasonCounts:null AND readyReplicaCount:null — the
+  rebalancer's blocker (getControlPlanePrioritySpreadBlocker,
+  unified-rebalancer-priority-readiness.js:166) consumes the
+  priorityPartitionSummary from the PLANNING ANSWER (the published
+  row's serialized summary), whose serializer strips per-row fields
+  (even the pre-existing readyReplicaCount). NEXT STEP: carry
+  exclusionReasonCounts + readyReplicaCount through the publication
+  row's priority_partition_summary serializer (find where the
+  published summary is built from buildDerivedPriorityPartitionSummary
+  output and stops carrying per-row fields), or log the OWNER-side
+  derived summary (which has the counts) when blocked. Then one gate
+  round pins raft_role_missing vs other exclusion.
+- NOTE: with spread mostly recovering this round, CL-021's binding
+  constraint may be dissolving for OTHER reasons (CL-021(A) reconcile
+  is in the build; the role-update race may simply be winning more
+  often). Treat the remaining mode=load stalls + the NEW restart-phase
+  surface (run3 artifacts at stat-gate-20260612T061547Z-run3) as the
+  next falsification targets.
