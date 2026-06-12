@@ -793,6 +793,40 @@ function buildControlSnapshotObservationReadinessByNodeId(
     },
   };
 }
+function resolveControlSnapshotObservationActiveNodeViews(
+  activeNodeViews = null,
+) {
+  if (!isControlSnapshotPlainRecord(activeNodeViews)) {
+    return activeNodeViews;
+  }
+  // controlPlaneDiagnostics.activeNodeViews is the serialized diagnostics
+  // summary whose keys drop the "Active" infix (effectiveNodeIds,
+  // publishedNodeIds, projectedNodeIds, authoritativeNodeIds); the handoff
+  // contract's catchup fence reads only the resolver-shaped *ActiveNodeIds
+  // keys, so feeding the summary into the serve-time contract rebuild leaves
+  // the fence's snapshot-coverage evidence empty and permanently denies
+  // runtime promotion (CL-022). Restore the resolver-shaped keys without
+  // clobbering them when a resolver-shaped record is passed directly.
+  return {
+    ...activeNodeViews,
+    ...(!Array.isArray(activeNodeViews.effectiveActiveNodeIds) &&
+      Array.isArray(activeNodeViews.effectiveNodeIds) ?
+      {effectiveActiveNodeIds: activeNodeViews.effectiveNodeIds} :
+      {}),
+    ...(!Array.isArray(activeNodeViews.publishedActiveNodeIds) &&
+      Array.isArray(activeNodeViews.publishedNodeIds) ?
+      {publishedActiveNodeIds: activeNodeViews.publishedNodeIds} :
+      {}),
+    ...(!Array.isArray(activeNodeViews.projectedActiveNodeIds) &&
+      Array.isArray(activeNodeViews.projectedNodeIds) ?
+      {projectedActiveNodeIds: activeNodeViews.projectedNodeIds} :
+      {}),
+    ...(!Array.isArray(activeNodeViews.authoritativeActiveNodeIds) &&
+      Array.isArray(activeNodeViews.authoritativeNodeIds) ?
+      {authoritativeActiveNodeIds: activeNodeViews.authoritativeNodeIds} :
+      {}),
+  };
+}
 function attachControlSnapshotObservationActiveGateHandoff(
   snapshot = null,
   owner = null,
@@ -819,7 +853,9 @@ function attachControlSnapshotObservationActiveGateHandoff(
   const publicationActiveGateHandoff =
     owner.resolvePublicationActiveGateHandoffContract({
       controlPlaneDiagnostics,
-      activeNodeViews: controlPlaneDiagnostics.activeNodeViews,
+      activeNodeViews: resolveControlSnapshotObservationActiveNodeViews(
+        controlPlaneDiagnostics.activeNodeViews,
+      ),
       publicationConvergence:
         controlPlaneDiagnostics[
           CONTROL_SNAPSHOT_PUBLICATION_CONVERGENCE_FIELD

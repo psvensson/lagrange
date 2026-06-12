@@ -2683,3 +2683,143 @@ Each record below represents one violated invariant.
   lastMeaningfulChange timestamps vs gate-green transitions);
   (b) leadership_unstable quiesce blocker; (c) the restart-recovery
   rung (pre-analysis above; 061547Z-run3 artifacts).
+
+## CL-022 Load Admission Must Not Be Fenced By An Unprovable Snapshot-Coverage Input
+
+- Status: narrowed (2026-06-12; opened from 073746Z runs 2/3 — the
+  mode=load stable-window question, answered)
+- Concern: readiness-projection
+- Failure Class: witness-gap
+- First Violated Invariant: The active-gate handoff contract embedded
+  in the seed's control snapshot must be able to prove snapshot
+  coverage whenever the snapshot itself observes full node coverage;
+  instead the fence's coverage-evidence input is EMPTY in steady
+  state, so the catchup fence denies runtime promotion forever
+  (aliased as published_active_coverage_incomplete) while presence
+  5/5 and durable publication 5/5 (epoch 4) are both complete.
+- Authoritative Owner: AdminControlSnapshot (seed) —
+  resolvePublicationActiveGateHandoffContract
+  (admin-control-snapshot-class-part-1.js:486) feeding
+  buildPublicationActiveGateCatchupFence
+  (publication-active-gate-handoff-contract-fence.js:384).
+- Authoritative State: the embedded
+  controlPlaneDiagnostics.publicationActiveGateHandoff record
+  (state/reasonCode/runtimePromotionAllowed + activeGateCatchupFence
+  .snapshotCoverage) served by the seed's control snapshot.
+- Allowed Evidence: activeNodeViews effective/covered node id lists,
+  snapshot revision, node rows, durable publication row.
+- Forbidden Promotion Inputs: none new — the bug is the inverse
+  (a structurally-absent input acting as a permanent DENIAL).
+- Convergence Trigger: every getControlSnapshot rebuild (snapshot is
+  rebuilt per request — buildLocalControlSnapshot); nothing converges
+  because the input is empty on every rebuild.
+- Stable Witness: fence record in the run failure bundle:
+  snapshotCoverage={state:unavailable, nodeIds:[], missingNodeCount:5}
+  with presence.complete=true AND durablePublication.covered=true;
+  harness-side loadReadinessAdmissionGate {state:blocked,
+  reasonCode:inactive, ownerState:degraded,
+  ownerReasonCode:published_active_coverage_incomplete,
+  promotionAllowed:false} on every periodic load-readiness.waiting
+  stage record.
+- Entry Gate: rolling-restart mode=load load-readiness stability wait
+  (pre_load), stat-gate-20260612T073746Z runs 2/3.
+- Current Symptom: 'Cluster ACTIVE wait stalled with no meaningful
+  progress' at active=5/5, coverage=5/5#complete,
+  publication=PUBLISHED, gateReasons=none — 46/32 consecutive
+  no-progress attempts; the stable window NEVER starts
+  (stableElapsedMs=0, startedAt unavailable for the entire wait).
+- Scope: deterministic in the stalling runs (every attempt that
+  selects the SEED's snapshot is denied; the one green attempt —
+  run2 attempt 47, blockers=['ready'] — selected joiner ebc4aa0b's
+  snapshot instead). Unit-repro candidate: build the contract with
+  production-shaped inputs (activeNodeViews with empty lists +
+  complete publicationConvergence) and assert the denial.
+- Next Falsification Step: pin WHY the seed's
+  activeNodeViews.effectiveActiveNodeIds (and the other 3 coverage
+  fields the fence reads) are empty at steady state —
+  candidates: (a) ready-lease/connection gating inside
+  resolveActiveNodeViews (active-node-projection.js, the known
+  7-source mixer) chronically excluding peers on the seed;
+  (b) mergeControlSnapshotActiveNodeViewsWithPublicationOwnerTruth
+  not engaging (shouldMergeControlSnapshotPublicationOwnerTruth
+  requires ackComplete+prioritySpreadSatisfied evidence SHAPE that
+  the served publicationConvergence may not carry) — if it engaged,
+  owner-truth ids (5/5) would have populated the projection.
+- Required Guard: unit test on the admin-snapshot handoff build path
+  with production-shaped snapshot inputs asserting
+  runtimePromotionAllowed=true (fence coverage provable) when the
+  snapshot covers all expected nodes; plus a harness-side guard that
+  loadReadinessAdmissionGate cannot stay ownerState=degraded while
+  presence+durablePublication are complete for N consecutive attempts.
+
+### Evidence
+
+1. CONSUMPTION CHAIN (falsifies CL-021 sub-mode (B) verdict
+   "the harness never consumes that contract"): the load-readiness
+   stability wait builds loadReadinessAdmissionGate
+   (cluster-segment-7-alpha-load-readiness.js:300 —
+   requireActiveGatePromotion) from
+   snapshotCoverage.selectedPublicationActiveGateHandoff
+   (resolveActiveGateOwnerCohort:280); when promotion is denied,
+   applyLoadReadinessAdmissionGate:364 FORCES allActive=false. The
+   contract's promotion flag IS load-bearing in mode=load.
+2. Fence record consumed by the harness (run2 failure-bundle,
+   /diagnostics/controlPlaneDiagnostics/activeGateSnapshotCoverage/
+   selectedPublicationActiveGateHandoff): presence complete 5/5,
+   durablePublication available+covered 5/5 epoch=4 revision=0,
+   snapshotCoverage state=unavailable available=false nodeIds=[]
+   missingNodeCount=5 → promotion_denied → contract degraded /
+   published_active_coverage_incomplete (the documented aliasing,
+   publication-active-gate-handoff-contract.js:274-290).
+3. The denial is NOT the stale watermark: snapshotCoverage.stale=false
+   — it is UNAVAILABLE (empty input), not stale. cache_stale_watermark
+   (threshold CONTROL_SNAPSHOT_CACHE_STALE_THRESHOLD_MS=5000 vs
+   CONTROL_PLANE_HEARTBEAT_INTERVAL=5000 + CDC lag → chronically
+   stale by construction, observed heartbeat gaps 2-20s in healthy
+   snapshots) explains the repair_deferred/stale_usable observation
+   noise but NOT the fence denial. Separate latent issue; note for
+   Task-28.
+4. Blocker history (run2): signature 'none' (zero blockers, allActive
+   false) covers 67 attempts spanning 1→93; 'ready' (allActive TRUE)
+   exactly once at attempt 47 (elapsed 123.9s) when the probe selected
+   joiner ebc4aa0b's snapshot with snapshotObservation=none. The
+   load-mode probe only queries nodes past the first when the first
+   result is missing nodes (cluster-segment-7-class-5.js:548) — so the
+   seed's denied snapshot is selected on essentially every attempt.
+5. The mode=load _waitForAllActive allActive conjuncts were all green
+   (activeByStatus true — no inactive_nodes blocker; gateReasons
+   empty → publicationConvergenceGate.ready true; coverage complete)
+   — the stall lives in the LOAD-READINESS wait's admission gate, not
+   in the publication gate. The CL-021 'gate flaps green' hypothesis
+   is refuted: the gate was green almost the whole time; the ADMISSION
+   gate never was.
+6. The snapshot is rebuilt per request (buildLocalControlSnapshot via
+   getControlSnapshot; prepareVisibleMembershipPublicationHandoffRefresh
+   rebuilds again) — the empty coverage input is recomputed live every
+   time, not a frozen formation-era snapshot.
+
+### Exit Criteria
+
+1. The fence's snapshot-coverage evidence is provable (covered=true)
+   on the seed's served snapshot whenever the snapshot observes all
+   expected nodes.
+2. loadReadinessAdmissionGate reaches state=ready and the stable
+   window closes in mode=load runs at active=5/5.
+3. Guard tests red on revert; gate rerun shows runs 2/3-class stalls
+   gone (remaining surfaces: quiesce leadership_unstable, restart
+   rung).
+
+### Notes
+
+1. CL-021 record correction: sub-mode (B) was RESOLVED AS ARTIFACT on
+   the claim the contract is diagnostic-only — WRONG for mode=load
+   (evidence 1). The owner-driver call-site shape (stage-2.js:905,
+   no activeNodeViews) and the admin-snapshot call-site (passes
+   activeNodeViews that turn out EMPTY) produce the SAME unprovable
+   fence; the admin one is the load-bearing instance.
+2. Fix direction (after falsification step): make the admin-snapshot
+   call site pass a provable coverage source (e.g. the snapshot's own
+   observed node coverage / snapshot revision it is ABOUT to serve, or
+   the owner-truth-merged effective actives), rather than weakening
+   the fence; do NOT let the empty-input denial be silently treated as
+   'incomplete coverage'.
