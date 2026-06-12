@@ -2574,3 +2574,41 @@ Each record below represents one violated invariant.
   often). Treat the remaining mode=load stalls + the NEW restart-phase
   surface (run3 artifacts at stat-gate-20260612T061547Z-run3) as the
   next falsification targets.
+
+## Restart-Phase Rung — Pre-Analysis (061547Z-run3, do not over-claim)
+
+- Harness error: 'Restarted node did not become recovery-ready within
+  120000ms for node 11601fe0' with reachable=true (via
+  bootstrap_health), readinessPhase=INIT, readinessStage=alive,
+  reasons=BOOTSTRAP_PHASE_INCOMPLETE|SQL_ENGINE_UNAVAILABLE|
+  LEADER_METADATA_INCOMPLETE|BOOTSTRAP_NOT_READY,
+  bootstrapJoinProjectionBlocker=control_snapshot_authority_unavailable,
+  lastError=admin probe ECONNREFUSED :8081 — i.e. the probed process
+  looks like a FRESH BOOT stuck before SQL/bootstrap readiness with its
+  admin API not yet listening.
+- Artifacts (timeline): 11601fe0's captured ndjson is CONTINUOUS from
+  formation (06:31:42) through teardown (06:39:10) and shows a
+  CL-006-style 'Reset join lifecycle/Resuming join session' loop x121
+  from 06:37:01 — every attempt 'Seed bootstrap not ready (phase:
+  contacting_seed)'. The SEED's (7493ab) log ends ABRUPTLY at 06:36:03
+  mid-traffic, with partition-service/rebalancer shutdown lines at
+  06:34:52-06:35:14 (the harness was restarting the SEED) and NO
+  post-restart output — the seed's restarted process either never
+  logged or its output is not in the capture.
+- CAPTURE AMBIGUITY TO RESOLVE FIRST (harness mechanics): does the
+  rolling-restart recreate containers, and does .full-logs capture
+  span the recreation? The INIT-phase probe result for 11601fe0
+  contradicts its continuous log unless captures are per-container and
+  the restarted process's log is MISSING. Read the harness restart
+  implementation (test/distributed/harness — restartNode/rolling
+  driver) before pinning; the prior lesson (CL-006 era) was exactly
+  that capture gaps fooled us.
+- Candidate shapes (rank after capture question): (a) the SEED restart
+  never came back (its fresh boot hung pre-logging) and the harness's
+  recovery-ready wait attributed the failure to the NEXT node it
+  probed; (b) 11601fe0's restart boot hung before SQL-engine init
+  (INIT phase) while its OLD process's log is what we read; (c) the
+  rejoin needs the seed's bootstrap API while the seed itself is
+  mid-restart — a rolling-restart ORDERING constraint (don't restart
+  the next node until the seed's join admission is re-open;
+   'Seed bootstrap not ready' x121 supports this).
