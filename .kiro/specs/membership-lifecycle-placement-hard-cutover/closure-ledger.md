@@ -4108,3 +4108,38 @@ Each record below represents one violated invariant.
 - Cross-refs: CL-025 (restartee-death predicate), CL-026 (harness
   stringify crash family), CL-010/CL-011 (prior unbounded-cost
   diagnostics on the seed).
+
+### CL-029 GATE VERDICT (stat-gate-20260612T173105Z, 4 runs, clean containers, fingerprint 505eb4a0, post-fix 2ba293b7) — CL-029 GUARDED; new binding constraint = oracle blindness (CL-031)
+
+- TOPLINE: 3 CONVERGED + 1 SLOW, 0 corrupt, 0 stale, 0 stalls,
+  healthyRate 1.0, walls 393-700s (p50 586) — best round ever at
+  this depth; prior round was 2C/2NO_REPORT with run3 wedged at the
+  ACTIVE wait.
+- PRE-REGISTERED EXPECTATION 1 MET: the mode=load active=0/5
+  recovering_in_flight target_sync wedge is GONE AS A CLASS — no
+  run failed at the load ACTIVE wait at all; all four runs
+  progressed into the restart + settle/quiesce phases. Witness
+  LIVE: 'Deferred retryable replica operation transition failure'
+  boundary=executor_outcome fired (run1 x2) — the outcome-retry
+  path engaging where the old code dropped evidence silently; the
+  two run1 ops whose rows last logged SYNCING show VISIBLE persist
+  -failure warns (the un-silenced exit-(a)/(b) class) and the run
+  converged regardless. CL-029 status: GUARDED.
+- PRE-REGISTERED EXPECTATION 2 (settle over-target) PARTIALLY
+  JUDGEABLE ONLY: run3 still shows a real over-target 64.6s with
+  4 leader changes (residual candidate, artifacts at
+  173105Z-run3); run1 reports over-target 0ms — but its settle
+  oracle was BLIND (below), so the settle surface cannot be
+  verdicted this round. Do NOT stretch CL-029 over it.
+- ALL FOUR scenario failures carry blind-oracle evidence -> CL-031
+  opened: 'Admin API query failed ... on lane snapshot: Max payload
+  size exceeded; fallback lane default failed: ... Max payload size
+  exceeded' (runs 1,2 x4 each; run4 x2; run3 classified
+  snapshot_query_error). Settle saw Snapshot node: unknown /
+  Expected partitions: [] / Voter counts: {}; quiesce saw
+  inFlightCount=unknown, stableElapsedMs=0 across 11 attempts.
+- CL-026's degraded-report attribution FIRED AS DESIGNED and NAMED
+  the unbounded member: scenario entry details = 488,277,402 bytes
+  (~488MB; every other field KB-scale; run3 report carries
+  reportWriteDegraded.droppedFieldSizes).
+- CL-030 watch: zero seed FATALs this round (intermittent confirmed).
