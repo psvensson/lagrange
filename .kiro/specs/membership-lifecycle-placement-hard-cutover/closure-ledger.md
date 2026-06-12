@@ -2629,3 +2629,34 @@ Each record below represents one violated invariant.
   the recovery-ready predicate; likely invariant: a restarted SEED
   must re-open join admission before the next node restarts
   (rolling-restart ordering/readiness contract).
+
+## CL-021 PINNED + FIX LANDED: raft_role Column Wipe
+
+- PINNING GATE (070804Z, witness plumbing 89147e21): the spread
+  DEFERRING diagnostic never fired (0 lines — the rebalancer blocker
+  path is no longer engaged) but the readiness-side derived summary
+  carried the witness into the run REPORTS: EVERY blocked priority
+  partition in every stalling run shows
+  exclusionReasonCounts={raft_role_missing: N} with exact arithmetic
+  (e.g. readyReplicaCount=3, readyDistinctNodeCount=1,
+  raft_role_missing=2 — three ACTIVE replicas, the two REPLACE-created
+  ones invisible). raft_role_missing is the ONLY exclusion reason that
+  appears. CL-021's First Violated Invariant, FINAL: a lifecycle
+  full-row INSERT OR REPLACE must not NULL columns owned by other
+  writers — buildCreateCdcData omitted raft_role/group_id, so every
+  lifecycle upsert wiped the partition service's role write, and the
+  spread-ready predicate (requires truthy raftRole) excluded the
+  replicas forever. (The verifier flagged this exact wipe in the
+  CL-021(A) review; it was misfiled as 'pre-existing residual'.)
+- FIX LANDED: buildCreateCdcData preserves raft_role + group_id from
+  the cached services row when present (systemTableCache is wired
+  into the production state machine since the CL-021(A) corrections).
+  The UPDATE branch never wiped (column-level). Window remaining:
+  before the role helper's FIRST successful write the row legitimately
+  has no role — the helper retries (roleUpdateRetryTimer) and the next
+  lifecycle upsert no longer destroys it. Guard: 'lifecycle UPSERT
+  preserves raft_role/group_id from the cached row' subtest (red on
+  revert). Node suite 1,208 pass.
+- Gate prediction (pre-registered): raft_role_missing exclusions decay
+  to zero within the run; spread surfaces clear; remaining stalls
+  shift to the restart-recovery rung / quiesce.
