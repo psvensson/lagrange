@@ -31,7 +31,7 @@ Each record below represents one violated invariant.
 | CL-017 | fix-landed | operation-ledger-self-reference | Operation workflow transitions must complete while the operation ledger's own partition is under modification — replica_operations writes fail with participant failures exactly when replica_operations-p1 is mid-REPLACE (4/3, surplus pending removal), pinning operations in CREATING/SENDING forever and blocking pre-restart quiescence. |
 | CL-018 | guarded | raft-log-scan-per-heartbeat | A follower's commit catch-up must not rescan and JSON-parse the whole raft log on every heartbeat: sqlite followers never persist committedIndex, so getUncommittedEntriesUpToIndex degenerates to a full-table parse per heartbeat per priority partition on the seed — the top self-time frame in the freeze windows that block CL-017's quiesce. |
 | CL-019 | guarded | readiness-snapshot-reuse-per-change | Readiness evaluation must be per-change, not per-call: (1) the CL-012 stored-snapshot reuse predicate rejects watermark EQUALITY (snapshot exactly reflects the current row — the common state between heartbeats), so the sync fast path is structurally a cache-lag bridge with ~0% hit rate and every routing decision runs the full evidence + planning + snapshot build; (2) even on a hit, the pre-check prelude rebuilds the full publication-recovery protocol snapshot (gate + participation maps + normalize/freeze storm) from an effectively-constant membership-publication row, per call. |
-| CL-020 | open | priority-recovery-event-decision-cost | The rebalancer's priority-recovery visibility cache listener must decide whether an event warrants a rebalance check CHEAPLY: it currently computes the full operation-creation planning-gate snapshot + surrogate follow-up decisions (JSON-parsing steps_history of replica-operation rows) on EVERY cache-change event of EVERY table — during operation churn each row update triggers a full planning re-derive, the residual seed-freeze head after CL-019. |
+| CL-020 | guarded | priority-recovery-event-decision-cost | The rebalancer's priority-recovery visibility cache listener must decide whether an event warrants a rebalance check CHEAPLY: it currently computes the full operation-creation planning-gate snapshot + surrogate follow-up decisions (JSON-parsing steps_history of replica-operation rows) on EVERY cache-change event of EVERY table — during operation churn each row update triggers a full planning re-derive, the residual seed-freeze head after CL-019. |
 
 ## CL-001 Published Membership Convergence Under Restart Churn
 
@@ -2315,3 +2315,36 @@ Each record below represents one violated invariant.
   4/3 churn, recovery never re-admits because spread moves are
   blocked by the very state they would fix — circular-dependency
   class candidate).
+
+## CL-020 Gate Verdict (stat-gate-20260612T041945Z) — GUARDED
+
+- 4/4 publication CONVERGED, 0 corrupt, 0 stale; walls 233-306s
+  (p95 298s — the 845-870s frozen-run outliers are GONE).
+- Pre-registered prediction CONFIRMED: zero frozen runs (seed max gaps
+  2.3-7.8s across all four; was 16-30s in 3 of the prior 8 runs); the
+  visibility-listener chain
+  (priorityRecoveryVisibilityCacheListener →
+  buildPriorityRecoveryOperationCreationPlanningGateSnapshot) has NO
+  top-3 inclusive appearances in any of 30 profile windows;
+  parseStepsHistory residual 1.0-1.6s self in 4 windows (via the
+  legitimate per-rebalance-pass callers — direction (c) memo remains
+  optional). Most frequent top-3 self frame is now fastJsonClone
+  (19/30 windows, CL-011 family residual; not currently binding).
+- THE SCENARIO IS DETERMINISTIC AT ONE SURFACE: all four runs fail the
+  mode=load ACTIVE wait. TWO SUB-MODES inside it (CL-021 work):
+  (A) runs 2/3 — recoveryProtocolState=priority_spread_pending with
+  blocked priority partitions at readyDistinctNodeCount=1 (run2:
+  control_plane_publications-p1 + replica_operations-p1 +
+  sql_write_operations-p1, spreadGap=2 each);
+  (B) runs 1/4 — PURE catchup-fence denial: contract degraded with
+  published_active_coverage_incomplete while
+  recoveryProtocolState=steady_published, priorityRecoveryReasonCodes
+  EMPTY, missing=0 — every owner-visible quantity green, the fence
+  still denies. Sub-mode (B) cannot be pinned until the decision trace
+  carries the fence gap reasons
+  (resolvePublicationActiveGateCatchupFenceMissingProofReasons) —
+  THAT INSTRUMENTATION IS THE FIRST STEP OF CL-021.
+- Freeze hydra status: with CL-019 + CL-020 both guarded, the
+  seed event-loop saturation layer (CL-010..012, 017..020 lineage) is
+  RETIRED as the binding constraint — first gate round ever with zero
+  frozen runs and a deterministic downstream surface.
