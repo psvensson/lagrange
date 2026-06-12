@@ -304,13 +304,16 @@ function resolveLoadReadinessStableWindowStart({
   });
   const mayBackdateToSnapshot =
     currentSource !== LOAD_READINESS_STABLE_WINDOW_SOURCE_OBSERVED_PROBE;
+  // The snapshot timestamp may only BACKDATE the window start (credit for
+  // green observed before this wait's first probe). Adopting a NEWER capture
+  // restarts the clock on every poll once forced repair re-captures the
+  // snapshot per attempt, capping stableElapsedMs at one probe round-trip —
+  // the window can then never close against a continuously green cluster
+  // (CL-027).
   if (
     isStableWindowTimestampAvailable(snapshotStartedAt) &&
-    (
-      snapshotStartedAt.timestampMs < observedStartedAt.timestampMs ?
-        mayBackdateToSnapshot :
-        true
-    )
+    snapshotStartedAt.timestampMs < observedStartedAt.timestampMs &&
+    mayBackdateToSnapshot
   ) {
     return {
       startedAt: snapshotStartedAt,
