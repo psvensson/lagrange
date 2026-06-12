@@ -3182,3 +3182,40 @@ Each record below represents one violated invariant.
   harness patch.
 - Gate evidence: next stat-gate round (any) — a CL-024-style rejoin
   crash must now surface as chaos.fault.failed on the CRASHED node.
+
+### CL-024 FIX LANDED (2026-06-12) — status: guarded
+
+- FALSIFICATION ANSWER (partial): CREATE TABLE DOES persist
+  schema_definition in the TABLES row
+  (table-creation-service-create-table.js:103), so the gap at restore
+  time is either join-cache hydration ORDERING (schema not yet
+  hydrated at querying_state; the CL-014 catch-up runs later) or a
+  column WIPE by a later full-row writer (CL-021 pattern; TABLES rows
+  not audited). OPEN sub-question, slow-only either way after this
+  fix: if it is a wipe, the replica is skipped on EVERY restart —
+  witness for the next gated run: count of 'Durable rejoin restore
+  skipped' warns per node per boot (should be 0 or transient).
+- Context detail: the dynamic table's replica landed on the restarted
+  node ~35s before its restart (a rebalancer ADD during load) —
+  freshly-placed replicas are the likeliest to hit the gap.
+- FIX (durable-rejoin-partition-restore-planner.js): per-partition
+  fail-closed — the restore loop wraps eligibility + plan build per
+  service row; ANY metadata gap (missing partition row, table ref, or
+  schema) skips THAT partition's restore with a structured warn
+  ('Durable rejoin restore skipped for partition with incomplete
+  metadata' {nodeId, partitionId, replicaId, error}) and the node
+  continues its rejoin. The skipped replica is re-established by
+  post-join repair (rebalancer ADD) — slow-only; the previous
+  behavior was process exit code 1 (and, pre-CL-025, a silent N-2
+  cluster). Caller passes this.logger
+  (node-joining-publication-activation.js:52).
+- Guards (red on revert, 4 failures): planner test updated —
+  'fails closed PER PARTITION' (zero plans + warn carries the gap) +
+  NEW exact-case test (schema-less dynamic table skipped, healthy
+  partition still restored). Suite 16/16; bootstrap-suite failures
+  are the known pre-existing set (fail on clean tree).
+- Never-break check: skipping a restore cannot create wrong state —
+  no partition service is created for the skipped replica (fail
+  closed per partition preserved); the only cost is temporary RF-1
+  on that partition until repair, which is the same state the
+  cluster was already in while the node was down.

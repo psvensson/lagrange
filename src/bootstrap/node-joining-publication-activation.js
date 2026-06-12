@@ -53,6 +53,7 @@ class NodeJoiningPublicationActivation extends NodeJoiningServiceSegment4 {
       systemTableCache,
       nodeId: this.nodeId,
       dataDir: this.dataDir,
+      logger: this.logger,
     });
     if (restorePlans.length === NUM.ZERO) {
       this.durableRejoinRestoreState =

@@ -113,8 +113,11 @@ test('buildDurableRejoinPartitionRestorePlans derives canonical local restore pl
     );
   });
 
-test('buildDurableRejoinPartitionRestorePlans fails closed when partition metadata is missing',
+test('buildDurableRejoinPartitionRestorePlans fails closed PER PARTITION when metadata is missing',
   async (t) => {
+    // CL-024: incomplete metadata must skip that partition's restore (the
+    // replica is re-established by post-join repair), never throw out of the
+    // planner — the throw aborted the whole rejoin and exited the node.
     const rowsByTable = new Map([
       [TABLES.TABLES, []],
       [TABLES.PARTITIONS, []],
@@ -128,16 +131,100 @@ test('buildDurableRejoinPartitionRestorePlans fails closed when partition metada
       }]],
     ]);
 
-    t.throws(
-      () => buildDurableRejoinPartitionRestorePlans({
-        systemTableCache: createCache(rowsByTable),
-        nodeId: 'durable-node',
-        dataDir: '/tmp/durable-rejoin-data',
-      }),
+    const warns = [];
+    const restorePlans = buildDurableRejoinPartitionRestorePlans({
+      systemTableCache: createCache(rowsByTable),
+      nodeId: 'durable-node',
+      dataDir: '/tmp/durable-rejoin-data',
+      logger: {warn: (msg, fields) => warns.push({msg, fields})},
+    });
+
+    t.same(restorePlans, [],
+      'a partition with missing metadata must not be restored');
+    t.equal(warns.length, 1, 'the skip must be logged');
+    t.match(
+      warns[0].fields.error,
       /Missing partition metadata for durable rejoin replica nodes-p1-r1/,
-      'restore planning should fail closed when canonical metadata is incomplete',
+      'the skip log must carry the metadata gap',
     );
   });
+
+test('buildDurableRejoinPartitionRestorePlans skips a schema-less partition ' +
+  'and still restores the healthy one', async (t) => {
+  // CL-024 exact case (stat-gate 085908Z-run2): a load-created table whose
+  // TABLES row lacks schema_definition in the join cache at restore time
+  // crashed the rejoining node with a non-retryable 'Missing schema
+  // definition' abort. The healthy partition must restore; the schema-less
+  // one must be skipped with a warn.
+  const schemaDefinition = {
+    tableName: 'nodes',
+    columns: [{name: 'node_id', type: 'TEXT', primaryKey: true}],
+  };
+  const rowsByTable = new Map([
+    [TABLES.TABLES, [{
+      table_id: 'nodes',
+      table_name: 'nodes',
+      schema_definition: JSON.stringify(schemaDefinition),
+    }, {
+      table_id: 'tbl-dynamic',
+      table_name: 'benchmark_events',
+      schema_definition: null,
+    }]],
+    [TABLES.PARTITIONS, [{
+      partition_id: 'nodes-p1',
+      table_id: 'nodes',
+      table_name: 'nodes',
+      partition_key_start: null,
+      partition_key_end: null,
+      leader_node_id: 'durable-node',
+    }, {
+      partition_id: 'tbl-dynamic-p1',
+      table_id: 'tbl-dynamic',
+      table_name: 'benchmark_events',
+      partition_key_start: null,
+      partition_key_end: null,
+      leader_node_id: 'durable-node',
+    }]],
+    [TABLES.SERVICES, [{
+      service_id: 'nodes-p1-r1',
+      replica_id: 'nodes-p1-r1',
+      service_type: SERVICE_TYPE.PARTITION,
+      node_id: 'durable-node',
+      partition_id: 'nodes-p1',
+      status: 'active',
+      address: 'durable-node/partition/nodes-p1-r1',
+    }, {
+      service_id: 'tbl-dynamic-p1-r1',
+      replica_id: 'tbl-dynamic-p1-r1',
+      service_type: SERVICE_TYPE.PARTITION,
+      node_id: 'durable-node',
+      partition_id: 'tbl-dynamic-p1',
+      status: 'active',
+      address: 'durable-node/partition/tbl-dynamic-p1-r1',
+    }]],
+  ]);
+
+  const warns = [];
+  const restorePlans = buildDurableRejoinPartitionRestorePlans({
+    systemTableCache: createCache(rowsByTable),
+    nodeId: 'durable-node',
+    dataDir: '/tmp/durable-rejoin-data',
+    logger: {warn: (msg, fields) => warns.push({msg, fields})},
+  });
+
+  t.equal(restorePlans.length, 1,
+    'the healthy partition must still be restored');
+  t.equal(restorePlans[0].partitionId, 'nodes-p1',
+    'the restored plan is the partition with a known schema');
+  t.equal(warns.length, 1, 'exactly one skip must be logged');
+  t.equal(warns[0].fields.partitionId, 'tbl-dynamic-p1',
+    'the skip names the schema-less partition');
+  t.match(
+    warns[0].fields.error,
+    /Missing schema definition for durable rejoin partition tbl-dynamic-p1/,
+    'the skip log carries the schema gap',
+  );
+});
 
 test('buildDurableRejoinPartitionRestorePlans skips over-target local restore ' +
   'without an active replica-operation owner', async (t) => {

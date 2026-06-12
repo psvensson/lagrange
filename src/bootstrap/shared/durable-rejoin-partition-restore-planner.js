@@ -272,10 +272,14 @@ function buildDurableRejoinPartitionRestoreOptions({
   };
 }
 
+const DURABLE_REJOIN_RESTORE_SKIPPED_MSG =
+  'Durable rejoin restore skipped for partition with incomplete metadata';
+
 function buildDurableRejoinPartitionRestorePlans(options = {}) {
   const systemTableCache = options.systemTableCache || null;
   const nodeId = normalizeJoinMetadataString(options.nodeId);
   const dataDir = options.dataDir || null;
+  const logger = options.logger || null;
   const serviceRows = readJoinCacheRows(
     systemTableCache,
     TABLES.SERVICES,
@@ -310,48 +314,63 @@ function buildDurableRejoinPartitionRestorePlans(options = {}) {
       continue;
     }
 
-    if (!restoreEligibilityByPartitionId.has(partitionId)) {
-      const partitionRow = getJoinCacheRow(
-        systemTableCache,
-        TABLES.PARTITIONS,
-        partitionId,
-        (row) => normalizeJoinMetadataString(
-          row?.partition_id,
-        ) === partitionId,
-      );
-      assertCritical(
-        partitionRow,
-        `Missing partition metadata for durable rejoin replica ${replicaId}`,
-      );
-      restoreEligibilityByPartitionId.set(
-        partitionId,
-        shouldRestoreDurableRejoinPartition({
+    try {
+      if (!restoreEligibilityByPartitionId.has(partitionId)) {
+        const partitionRow = getJoinCacheRow(
           systemTableCache,
+          TABLES.PARTITIONS,
           partitionId,
+          (row) => normalizeJoinMetadataString(
+            row?.partition_id,
+          ) === partitionId,
+        );
+        assertCritical(
           partitionRow,
-          partitionServiceRows: filterRestorablePartitionServiceRows(
-            serviceRows,
+          `Missing partition metadata for durable rejoin replica ${replicaId}`,
+        );
+        restoreEligibilityByPartitionId.set(
+          partitionId,
+          shouldRestoreDurableRejoinPartition({
+            systemTableCache,
             partitionId,
-          ),
+            partitionRow,
+            partitionServiceRows: filterRestorablePartitionServiceRows(
+              serviceRows,
+              partitionId,
+            ),
+          }),
+        );
+      }
+      if (restoreEligibilityByPartitionId.get(partitionId) !== true) {
+        continue;
+      }
+
+      seenReplicaIds.add(replicaId);
+      restorePlans.push(
+        buildDurableRejoinPartitionRestoreOptions({
+          systemTableCache,
+          serviceRows,
+          serviceRow,
+          partitionId,
+          replicaId,
+          nodeId,
+          dataDir,
         }),
       );
-    }
-    if (restoreEligibilityByPartitionId.get(partitionId) !== true) {
-      continue;
-    }
-
-    seenReplicaIds.add(replicaId);
-    restorePlans.push(
-      buildDurableRejoinPartitionRestoreOptions({
-        systemTableCache,
-        serviceRows,
-        serviceRow,
+    } catch (error) {
+      // CL-024: incomplete metadata for ONE partition (e.g. a load-created
+      // table whose TABLES row lacks schema_definition in the join cache at
+      // restore time) must fail closed for THAT partition only — its restore
+      // is skipped and the replica is re-established by post-join repair.
+      // Aborting the whole rejoin here exits the node process.
+      restoreEligibilityByPartitionId.set(partitionId, false);
+      logger?.warn?.(DURABLE_REJOIN_RESTORE_SKIPPED_MSG, {
+        nodeId,
         partitionId,
         replicaId,
-        nodeId,
-        dataDir,
-      }),
-    );
+        error: error?.message || String(error),
+      });
+    }
   }
 
   return restorePlans;
